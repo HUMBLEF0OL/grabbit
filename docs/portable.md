@@ -20,8 +20,6 @@ Delete the `data` folder (or make it read-only) and the same copy behaves like t
 2. Unzip it where you want MDM to live, for example `E:\MDM` on a USB stick.
 3. Run `misterdownloadmanager.exe` from there.
 
-On the first start MDM asks for the language; see [Languages](languages.md).
-
 ## What is different
 
 - **Downloads still go to the computer's Downloads folder** unless you change it. To keep them with MDM, set each category's folder in **Options → Save to**. [Carry MDM on a USB stick](guide-usb-stick.md) shows how.

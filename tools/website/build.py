@@ -3,7 +3,7 @@
 pages.yml). No framework: website/ holds the hand-written home page, styles, scripts and assets;
 website/content/ the pages written as Markdown (FAQ, legal); the rest comes from the repository
 itself so the site never drifts from it: docs/*.md become the help pages, CHANGELOG.md the news
-page, i18n/languages.tsv the languages page. Every page gets the shared header and footer, its
+page. Every page gets the shared header and footer, its
 own title, description, canonical address, social card and structured data, and goes into
 sitemap.xml.
 
@@ -36,7 +36,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import barcode  # noqa: E402
 import contributors  # noqa: E402  (tools/contributors.py: the people the site thanks)
-import sitei18n  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 WEB = ROOT / "website"
@@ -284,8 +283,7 @@ def old_aliases(out: str) -> str:
         # A heading with an id of its own (`{#not-running}`) never had another.
         if not old or old == m.group(2) or not m.group(2).startswith(github_slug(text)):
             return m.group(0)
-        # Before the heading, not inside it: the heading's text stays one segment, translated
-        # as it was (sitei18n).
+        # Before the heading, not inside it: the heading's text stays one segment.
         return f'<span id="{esc(old)}" class="anchor-alias"></span>{m.group(0)}'
 
     return re.sub(r'(<h[1-6] id="([^"]*)">)(.*?)(</h[1-6]>)', alias, out, flags=re.S)
@@ -437,7 +435,6 @@ def header(section: str = "") -> str:
         {links}
       </nav>
       <div class="top-actions">
-        <!--@langs-->
         <button class="icon-btn theme" type="button" aria-label="Switch between light and dark" title="Light / dark">
           <svg class="for-light-i" aria-hidden="true"><use href="#i-moon"/></svg><svg class="for-dark-i" aria-hidden="true"><use href="#i-sun"/></svg>
         </button>
@@ -448,7 +445,6 @@ def header(section: str = "") -> str:
           <summary class="icon-btn" aria-label="Menu"><svg aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
           <nav class="menu-panel" aria-label="Main">
             {links}
-            <a href="/languages.html">Languages</a>
             <a href="/contributing.html">Contribute</a>
             <a href="{REPO}">GitHub</a>
             <a href="{SPONSORS}">Sponsor</a>
@@ -461,13 +457,12 @@ def header(section: str = "") -> str:
 
 
 # Right after the header, before the first paint: the header gives up, one step at a time, what
-# doesn't fit its row in this language at this width (the Sponsor heart, then some spacing, then
-# the links for the menu, then the language's name beside its flag), so no language runs past the
-# page (#168). The media queries in styles.css are the floor, and all there is without scripts.
+# doesn't fit its row at this width (the Sponsor heart, then some spacing, then the links for the
+# menu), so nothing runs past the page (#168). The media queries in styles.css are the floor, and all there is without scripts.
 HEADER_FIT = """<script>
     (function () {
       var top = document.currentScript.previousElementSibling, row = top.firstElementChild;
-      var steps = ['fit-sponsor', 'fit-tight', 'fit-menu', 'fit-flag'];
+      var steps = ['fit-sponsor', 'fit-tight', 'fit-menu'];
       // Its pieces, end to end, against the row's content box (overflow into the padding counts).
       function over() {
         var s = getComputedStyle(row), lo = Infinity, hi = -Infinity;
@@ -522,7 +517,6 @@ def footer() -> str:
             <li><a href="/faq/">FAQ</a></li>
             <li><a href="/help/troubleshooting.html">Troubleshooting</a></li>
             <li><a href="/help/keyboard-shortcuts.html">Keyboard shortcuts</a></li>
-            <li><a href="/languages.html">Languages</a></li>
           </ul>
         </div>
         <div>
@@ -713,7 +707,7 @@ SOFTWARE_LD = {
         "Up to 128 connections per download with dynamic re-splitting",
         "Crash-safe resume", "HTTP, HTTPS, FTP and FTPS", "BitTorrent and magnet links",
         "Video downloads from web pages (yt-dlp)", "Browser extension for Chrome, Edge, Brave, Opera, Vivaldi and Firefox",
-        "Queues and scheduler", "Speed limiter", "86 interface languages", "Portable mode",
+        "Queues and scheduler", "Speed limiter", "Portable mode",
         "Command line and automation API", "MCP server for AI assistants",
     ],
     "inLanguage": "en",
@@ -1110,8 +1104,7 @@ def build_contributors() -> None:
             counts = "".join(
                 f'<li><b translate="no">{p[k]}</b> {w[0] if p[k] == 1 else w[1]}</li>'
                 for k, w in words.items() if p[k])
-            # The login in a block of its own marked translate="no": an inline one alone in its
-            # block would still go to the translators (sitei18n unwraps a lone element).
+            # The login in a block of its own marked translate="no" (browsers' page translators).
             # The photo links there too, for the pointer only (the login is the link to tab to).
             rows.append(f'<li><a class="roster-pic" href="{esc(p["profile"])}" tabindex="-1" aria-hidden="true"><img src="{esc(contributors.avatar(p["avatar"], 96))}" '
                         f'width="48" height="48" alt="" loading="lazy" decoding="async"></a>'
@@ -1141,42 +1134,6 @@ def build_contributors() -> None:
     </div>""", jsonld=[crumbs_ld(trail)], priority="0.5")
 
 
-# ---- Languages: i18n/languages.tsv ---------------------------------------------------------------
-
-def build_languages() -> None:
-    rows = [l.split("\t") for l in (ROOT / "i18n" / "languages.tsv").read_text("utf-8").splitlines()
-            if l and not l.startswith("#")]
-    flags = ROOT / "crates" / "app" / "assets" / "flags"
-    (OUT / "assets" / "flags").mkdir(parents=True, exist_ok=True)
-    items = []
-    for code, english, native, flag, *_ in sorted(rows, key=lambda r: r[1]):
-        src = flags / f"{flag}.svg"
-        img = ""
-        if src.is_file():
-            shutil.copy2(src, OUT / "assets" / "flags" / src.name)
-            img = f'<img src="/assets/flags/{flag}.svg" width="24" height="18" alt="" loading="lazy">'
-        tsv = f"{REPO}/blob/main/i18n/{code}.tsv"
-        items.append(f'<li>{img}<span><a href="{tsv}" lang="{esc(code)}">{esc(native)}</a><small>{esc(english)}</small></span></li>')
-    trail = [("Home", "/"), ("Languages", "/languages.html")]
-    body = f"""{page_head(f"{NAME} in {len(rows)} languages", "Every display language Windows 11 offers, chosen by flag on the first start or any time in View → Language. Arabic, Hebrew, Persian, Urdu and Uyghur are laid out right to left.", trail)}
-    <div class="wrap prose page-body" style="max-width:1180px">
-      <h2>Every language</h2>
-      <ul class="lang-grid" translate="no">{"".join(items)}</ul>
-      <h2>Help translate</h2>
-      <p>Most translations were made by machine and are waiting for a native speaker. If MDM speaks your language a little oddly, you can fix it in a few minutes, no programming needed:</p>
-      <ol>
-        <li>Click your language above: it opens its file on GitHub, one text per row.</li>
-        <li>Correct the translation in the third column and delete the row's <code>#, machine</code> line.</li>
-        <li>Propose the change with GitHub's pencil button. Your name goes into the release notes.</li>
-      </ol>
-      <p>The full guide is in the <a href="/contributing.html">contributing guide</a>, and <a href="/help/languages.html">Languages</a> in the help explains the picker and right-to-left layouts.</p>
-      {cta_band()}
-    </div>"""
-    write("/languages.html", f"{NAME} in {len(rows)} languages — translations",
-          f"{NAME} speaks {len(rows)} languages, every one Windows 11 offers, right to left included. See them all and help improve your own.",
-          body, jsonld=[crumbs_ld(trail)], priority="0.6")
-
-
 # ---- Repository documents shown as pages --------------------------------------------------------
 
 def build_repo_pages() -> None:
@@ -1189,13 +1146,12 @@ def build_repo_pages() -> None:
     rest = "\n".join(lines[1:]).strip().split("\n\n", 1)[1]
     path = "/contributing.html"
     trail = [("Home", "/"), ("Contributing", path)]
-    lede = ("Bug reports, ideas, translation fixes and pull requests are all welcome. "
+    lede = ("Bug reports, ideas and pull requests are all welcome. "
             f'Everything happens in the open on <a href="{REPO}">GitHub</a>.')
     body = f"""{page_head("Contribute to Mister Download Manager", lede, trail)}
     <div class="wrap narrow prose page-body">
       <div class="contrib-ways">
         <a href="{REPO}/issues/new?template=bug.yml"><b>Report a bug</b><span>Something broken or odd? Tell us what you saw.</span></a>
-        <a href="/languages.html"><b>Fix a translation</b><span>Five minutes on GitHub, no programming.</span></a>
         <a href="{REPO}/issues"><b>Pick an issue</b><span>See what's open and lend a hand.</span></a>
         <a href="{REPO}"><b>Star the project</b><span>It helps other people find it.</span></a>
       </div>
@@ -1696,10 +1652,15 @@ def bust_caches() -> None:
             page.write_text(new, "utf-8", newline="\n")
 
 
-def finish(available: dict[str, list[str]]) -> None:
+def finish() -> None:
     bust_caches()
-    # One sitemap per language under an index, each page with its languages (sitei18n).
-    sitei18n.sitemaps(OUT, SITE, PAGES, available, TODAY)
+    urls = "\n".join(f"  <url>\n    <loc>{SITE}{path}</loc>\n    <lastmod>{TODAY}</lastmod>\n"
+                     f"    <priority>{pr}</priority>\n  </url>"
+                     for path, pr in sorted(PAGES, key=lambda x: (-float(x[1]), x[0])))
+    (OUT / "sitemap.xml").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{urls}\n</urlset>\n',
+        "utf-8", newline="\n")
     (OUT / "robots.txt").write_text(f"User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n", "utf-8")
 
 
@@ -1715,7 +1676,6 @@ def main() -> None:
     build_help()
     build_faq()
     build_news()
-    build_languages()
     build_repo_pages()
     build_contributors()
     build_content_pages()
@@ -1723,14 +1683,8 @@ def main() -> None:
     build_themes()
     copy_feature_images()
     build_llms()
-    # The same pages in every language with a catalog (i18n/site/<lang>.json), under /<lang>/.
-    # MDM_SITE_ENGLISH_ONLY=1 (translate_site.py's own build): English pages only.
-    only = ["none"] if os.environ.get("MDM_SITE_ENGLISH_ONLY") == "1" else None
-    # MDM_SITE_PREVIEW=1: the English pages with their language picker, nothing translated (fast).
-    available = sitei18n.localize(OUT, SITE, only, translated=os.environ.get("MDM_SITE_PREVIEW") != "1")
-    finish(available)
-    langs = len({c for v in available.values() for c in v})
-    print(f"{len(PAGES)} pages in {langs} language(s) -> {OUT}")
+    finish()
+    print(f"{len(PAGES)} pages -> {OUT}")
     if "--serve" in sys.argv:
         import functools
         import http.server

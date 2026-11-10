@@ -54,7 +54,6 @@ body:
         - Torrents
         - Queues and the Scheduler
         - The window, menus and dialogs
-        - Languages and translations
         - Installing, updating or removing MDM
         - Command line, automation API or MCP server
         - Something else

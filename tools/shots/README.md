@@ -71,7 +71,6 @@ release's.
 2. `python tools/shots/make.py --only <id>`, then look at `docs/images/help/<id>.webp`.
 3. `python tools/shots/make.py snippet <id>` prints its Markdown; paste it into the page under
    its heading.
-4. `python tools/website/translate_site.py --all` translates its alt text and caption.
 
 ## In the Markdown
 

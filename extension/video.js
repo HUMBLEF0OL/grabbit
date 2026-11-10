@@ -265,8 +265,8 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   const more = shadow.querySelector(".more");
   const menu = shadow.querySelector(".menu");
   const item = (act) => menu.querySelector(`[data-act="${act}"]`);
-  pill.dir = ext.i18n.getMessage("@@bidi_dir") || "ltr";
-  menu.dir = pill.dir;
+  pill.dir = "ltr";
+  menu.dir = "ltr";
   const idleLabel = t("video_download");
   label.textContent = idleLabel;
   go.title = `${idleLabel} — ${t("video_drag")}`;

@@ -34,9 +34,6 @@ if (-not $NoBuild) {
 }
 & (Join-Path $root "tools\extension\pack.ps1") | Out-Null
 
-# The installer's languages (tools/installer/languages.py writes them; committed, so no key needed).
-if (-not (Test-Path (Join-Path $PSScriptRoot "languages.iss"))) { throw "run python tools/installer/languages.py first" }
-
 $iscc = @($env:ISCC, (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source,
   "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
   "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe") |

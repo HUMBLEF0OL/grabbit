@@ -25,7 +25,7 @@ The other buttons copy the report, open its folder, or start MDM again.
 - **What happened:** the error and the place in MDM's code where it happened.
 - **The stack:** the place in MDM's code where it crashed or froze, and what every other part of it was doing.
 - **MDM's recent log:** for example "command AddUrl" or "window opened: add-url".
-- **The system:** MDM's version and how you installed it, your operating system and its version, the processor, the language and theme, and how many downloads and queues you have. These are counts only.
+- **The system:** MDM's version and how you installed it, your operating system and its version, the processor, the theme, and how many downloads and queues you have. These are counts only.
 
 It does **not** contain:
 

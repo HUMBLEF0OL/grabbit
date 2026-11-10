@@ -11,8 +11,8 @@ const $ = (id) => document.getElementById(id);
 const ask = (m) => ext.runtime.sendMessage(m).catch(() => ({ ok: false }));
 const lang = ext.i18n.getUILanguage();
 
-document.documentElement.lang = lang;
-document.documentElement.dir = t("@@bidi_dir") === "rtl" ? "rtl" : "ltr";
+// The texts are English only (_locales/en); sizes keep the browser's number format.
+document.documentElement.lang = "en";
 for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
 for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);
 $("help").href = HELP;

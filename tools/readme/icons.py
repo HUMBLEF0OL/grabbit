@@ -1,12 +1,11 @@
-"""The README's four block icons (faster, languages, free, torrent), drawn in the art style of
+"""The README's block icons (faster, free, torrent), drawn in the art style of
 Mister Download Manager's own icon (art/Mister Download Manager.png, given to the model as the
 reference): the same glossy 3D rendering, lighting, colours and its green arrow. Our own
 pictures; nothing taken from any other program.
 
     python tools/readme/icons.py [--variants 2] [--only faster,torrent]
 
-Uses OpenRouter (the key in %USERPROFILE%\\.mdm-dev\\openrouter.key, as tools/i18n/translate.py
-does) with OpenAI's GPT-5 Image Mini, which draws on a transparent background, about $0.04 a
+Uses OpenRouter (the key in %USERPROFILE%\\.mdm-dev\\openrouter.key) with OpenAI's GPT-5 Image Mini, which draws on a transparent background, about $0.04 a
 picture. Each variant goes to target/readme-icons/<name>-<n>.png; the chosen one is copied by
 hand to docs/images/icons/<name>.png.
 """
@@ -37,9 +36,6 @@ STYLE = (
 ICONS = {
     "faster": "Subject: the green arrow from the icon, shooting forward fast to the right with "
     "motion streaks and a small golden lightning bolt: speed.",
-    "languages": "Subject: a glossy blue-and-green Earth globe like the one in the icon (without "
-    "the face, hat or moustache), with three small colourful 3D speech bubbles around it holding "
-    "only dots: many languages.",
     "free": "Subject: a glossy gift box wrapped in the icon's green, with a shiny ribbon and bow: "
     "free of charge.",
     "torrent": "Subject: a glossy red-and-silver horseshoe magnet with the icon's green arrows "

@@ -15,7 +15,7 @@ No. MDM is an independent program written from scratch in Rust, with no connecti
 
 ### How is MDM different from IDM? {#mdm-vs-idm}
 
-The layout is familiar on purpose: the toolbar, the categories, the download list, the progress window with every connection, queues and the scheduler. The differences: MDM is free and open source, downloads BitTorrent and magnet links in the same list, finished faster in [our benchmark](/benchmark.html), speaks 86 languages and has builds for Linux and macOS. IDM is the more mature product, refined over many years. See the full [comparison](/idm-alternative.html).
+The layout is familiar on purpose: the toolbar, the categories, the download list, the progress window with every connection, queues and the scheduler. The differences: MDM is free and open source, downloads BitTorrent and magnet links in the same list, finished faster in [our benchmark](/benchmark.html) and has builds for Linux and macOS. IDM is the more mature product, refined over many years. See the full [comparison](/idm-alternative.html).
 
 ### Is it safe? Does it contain adware or spyware? {#is-it-safe}
 
@@ -27,7 +27,7 @@ No. MDM has no accounts, no analytics and no telemetry. It connects to the serve
 
 ### Who makes Mister Download Manager? {#who-makes-it}
 
-MDM is made by Ahmed Nefzaoui, an independent developer, and is open to contributions from anyone on [GitHub]({{REPO}}). Bug reports, translations and code are all welcome.
+MDM is made by Ahmed Nefzaoui, an independent developer, and is open to contributions from anyone on [GitHub]({{REPO}}). Bug reports and code are all welcome.
 
 ## Installing
 
@@ -125,7 +125,7 @@ No, unless you want it to. While a torrent downloads it trades pieces with other
 
 ### Is MDM available in my language? {#languages}
 
-Very likely: MDM speaks 86 languages, every display language Windows 11 offers, chosen on the first start or any time in **View → Language**. Arabic, Hebrew, Persian, Urdu and Uyghur are laid out right to left. See [all the languages](/languages.html) and how to help improve yours.
+Not yet: MDM, its installer, the browser extension and this site are in English only. File names in any language and script show as they are.
 
 ### Can other programs or scripts control MDM? {#automation}
 

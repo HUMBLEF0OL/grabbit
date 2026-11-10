@@ -24,18 +24,9 @@
 #            lossless for every window
 #   alt      what the picture shows, for whoever can't see it
 #   caption  the line under it (in a step strip: what to do)
-# The page carries alt and caption as Markdown (`make.py snippet <id>` prints it); the site's
-# translations (tools/website/translate_site.py) translate them with the page.
+# The page carries alt and caption as Markdown (`make.py snippet <id>` prints it).
 
 # ---- Getting started ----------------------------------------------------------------------------
-
-[[shot]]
-id = "first-language"
-page = "getting-started.md"
-under = "First start and the language"
-take = "language"
-alt = "The language list on first start: every language with its flag, its own name and its English name"
-caption = "Pick your language. View → Language changes it later."
 
 [[shot]]
 id = "first-helpers"

@@ -197,7 +197,7 @@ function fakeApi({
       onClicked: event("menu"),
     },
     // The browser's language: German here.
-    i18n: { getMessage: (key) => ({ menu: "Mit Mister Download Manager herunterladen" })[key] ?? "" },
+    i18n: { getMessage: (key) => ({ menu: "Download with Mister Download Manager" })[key] ?? "" },
   };
   if (safari) delete api.downloads;
   if (!firefox && !safari) api.declarativeNetRequest = { getSessionRules: async () => [], updateSessionRules: async (r) => calls.push(["dnr", r]) };
@@ -1288,20 +1288,17 @@ const MPD = (protect) => `<?xml version="1.0"?>
   ok("nothing of IDM's in the extension");
 }
 
-// The right-click command in the browser's language, and every locale complete: the same keys
-// as English, which both manifests' __MSG_…__ names exist in.
+// The right-click command from the extension's texts (English only), which both manifests'
+// __MSG_…__ names exist in.
 {
   const { api, calls, listeners } = fakeApi({ firefox: false });
   load(api, false);
   await listeners.installed({ reason: "update" });
   const item = calls.find((c) => c[0] === "menu-item")[1];
-  assert.equal(item.title, "Mit Mister Download Manager herunterladen");
+  assert.equal(item.title, "Download with Mister Download Manager");
   const dir = new URL("../../extension/_locales/", import.meta.url);
+  assert.deepEqual(readdirSync(dir), ["en"], "English only");
   const english = JSON.parse(readFileSync(new URL("en/messages.json", dir), "utf8"));
-  for (const locale of readdirSync(dir)) {
-    const m = JSON.parse(readFileSync(new URL(`${locale}/messages.json`, dir), "utf8"));
-    assert.deepEqual(Object.keys(m).sort(), Object.keys(english).sort(), `${locale} has every text`);
-  }
   for (const name of ["manifest.json", "manifest.firefox.json"]) {
     const text = readFileSync(new URL(`../../extension/${name}`, import.meta.url), "utf8");
     for (const [, key] of text.matchAll(/__MSG_(\w+)__/g)) assert.ok(english[key], `${name}: ${key}`);
@@ -1314,7 +1311,7 @@ const MPD = (protect) => `<?xml version="1.0"?>
   for (const why of ["not_installed", "forbidden", "not_running", "host_failed", "too_large", "update_app"]) {
     assert.ok(english[`status_${why}`], `status_${why}`);
   }
-  ok("translations complete");
+  ok("texts complete");
 }
 
 // #42: the browser's proxy goes with the download, so the app uses the same one: an opt-in, the

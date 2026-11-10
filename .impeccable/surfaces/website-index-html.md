@@ -9,7 +9,7 @@ related_targets: ["website/download.html","website/idm-alternative.html","websit
 
 Scope: every page `tools/website/build.py` makes. Home, download, IDM alternative and
 benchmark are Persuade; help, FAQ, news and legal pages are Read and take the same world with
-restraint. 21 languages, Arabic and Persian right to left; light and dark.
+restraint. English only; light and dark.
 
 Visitor: an IDM user, often non-technical, looking for a free replacement that works the same.
 Action: Download (Windows installer from GitHub Releases). Proof: the real app window, the

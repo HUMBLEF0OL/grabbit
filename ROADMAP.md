@@ -485,6 +485,13 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   ([#311](https://github.com/anefzaoui/misterdownloadmanager/issues/311))
 - ✅ The Download video button on YouTube in Chrome, Edge, Brave, Opera and Vivaldi
 
+## Next version (on `dev`)
+
+- ✅ English only: the other languages, the language picker (View → Language and the first
+  start's), the right-to-left interface, the installer's languages, the extension's translations, the
+  translated website and the translation tools are removed. File names in any script still show
+  as they are. The earlier state is kept on the `archive/multiplatform-i18n` branch.
+
 ## Being worked on
 
 These ship in a later version, when they're ready.

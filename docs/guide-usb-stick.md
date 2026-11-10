@@ -9,7 +9,7 @@ The portable copy runs straight from a USB stick and keeps its list and settings
 1. Download `MisterDownloadManager-<version>-portable.zip` from [Releases](https://github.com/anefzaoui/misterdownloadmanager/releases).
 2. Unzip it onto the stick, for example to `E:\MDM`.
 3. Check that there is a `data` folder next to `misterdownloadmanager.exe`. That folder is what makes MDM portable. Don't delete it.
-4. Run `misterdownloadmanager.exe` and pick your language.
+4. Run `misterdownloadmanager.exe`.
 
 ## 2. Save downloads to the stick
 

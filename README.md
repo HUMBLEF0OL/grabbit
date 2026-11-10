@@ -29,13 +29,12 @@
 
 <p align="center">
   Windows 10 and 11 · Linux (Ubuntu, Debian, Mint, Fedora, openSUSE, Arch and more) · macOS (Apple Silicon and Intel, experimental)<br>
-  86 languages · no ads, no trial, no sign-up
+  no ads, no trial, no sign-up
 </p>
 
 <table align="center">
   <tr>
     <td align="center" width="210"><img src="docs/images/icons/faster.png" width="76" alt=""><h1>5×</h1><b>Faster</b><br><sub>a 1 GB file: 1 s instead of 5.5 s</sub></td>
-    <td align="center" width="210"><img src="docs/images/icons/languages.png" width="76" alt=""><h1>+46</h1><b>More languages</b><br><sub>86 instead of IDM's 40</sub></td>
     <td align="center" width="210"><img src="docs/images/icons/free.png" width="76" alt=""><h1>100%</h1><b>Cheaper (free!)</b><br><sub>no licence, no trial, ever</sub></td>
     <td align="center" width="210"><img src="docs/images/icons/torrent.png" width="76" alt=""><h1>Torrent</h1><b>Supported fully</b><br><sub>magnet links, .torrent files, seeding</sub></td>
   </tr>
@@ -144,103 +143,6 @@ help make them as solid as the Windows and Linux versions.
 | `...-macos-arm64-experimental.dmg` | Mac with Apple Silicon (M1 or later). Open it and drag MDM to Applications. The first time, right-click the app and choose **Open**. |
 | `...-macos-x86_64-experimental.dmg` | Mac with an Intel processor, the same way. |
 
-## 🌍 In your language
-
-Every language Windows 11 offers, **86 in all**. MDM asks on its first start, and you can change
-it any time in **View → Language**. Arabic, Hebrew, Persian, Urdu and Uyghur get a fully mirrored,
-right-to-left window.
-
-<!-- languages:start -->
-<p align="center">
-<img src="crates/app/assets/flags/za.svg" width="28" height="21" alt="Afrikaans" title="Afrikaans">
-<img src="crates/app/assets/flags/al.svg" width="28" height="21" alt="Shqip (Albanian)" title="Shqip (Albanian)">
-<img src="crates/app/assets/flags/et.svg" width="28" height="21" alt="አማርኛ (Amharic)" title="አማርኛ (Amharic)">
-<img src="crates/app/assets/flags/sa.svg" width="28" height="21" alt="العربية (Arabic)" title="العربية (Arabic)">
-<img src="crates/app/assets/flags/am.svg" width="28" height="21" alt="Հայերեն (Armenian)" title="Հայերեն (Armenian)">
-<img src="crates/app/assets/flags/in.svg" width="28" height="21" alt="অসমীয়া (Assamese)" title="অসমীয়া (Assamese)">
-<img src="crates/app/assets/flags/az.svg" width="28" height="21" alt="Azərbaycan (Azerbaijani)" title="Azərbaycan (Azerbaijani)">
-<img src="crates/app/assets/flags/bd.svg" width="28" height="21" alt="বাংলা (Bangla)" title="বাংলা (Bangla)">
-<img src="crates/app/assets/flags/es-pv.svg" width="28" height="21" alt="Euskara (Basque)" title="Euskara (Basque)">
-<img src="crates/app/assets/flags/by.svg" width="28" height="21" alt="Беларуская (Belarusian)" title="Беларуская (Belarusian)">
-<img src="crates/app/assets/flags/ba.svg" width="28" height="21" alt="Bosanski (Bosnian)" title="Bosanski (Bosnian)">
-<img src="crates/app/assets/flags/bg.svg" width="28" height="21" alt="Български (Bulgarian)" title="Български (Bulgarian)">
-<img src="crates/app/assets/flags/es-ct.svg" width="28" height="21" alt="Català (Catalan)" title="Català (Catalan)">
-<img src="crates/app/assets/flags/us.svg" width="28" height="21" alt="ᏣᎳᎩ (Cherokee)" title="ᏣᎳᎩ (Cherokee)">
-<img src="crates/app/assets/flags/cn.svg" width="28" height="21" alt="简体中文 (Chinese (Simplified))" title="简体中文 (Chinese (Simplified))">
-<img src="crates/app/assets/flags/tw.svg" width="28" height="21" alt="繁體中文 (Chinese (Traditional))" title="繁體中文 (Chinese (Traditional))">
-<img src="crates/app/assets/flags/hr.svg" width="28" height="21" alt="Hrvatski (Croatian)" title="Hrvatski (Croatian)">
-<img src="crates/app/assets/flags/cz.svg" width="28" height="21" alt="Čeština (Czech)" title="Čeština (Czech)">
-<img src="crates/app/assets/flags/dk.svg" width="28" height="21" alt="Dansk (Danish)" title="Dansk (Danish)">
-<img src="crates/app/assets/flags/nl.svg" width="28" height="21" alt="Nederlands (Dutch)" title="Nederlands (Dutch)">
-<img src="crates/app/assets/flags/gb.svg" width="28" height="21" alt="English" title="English">
-<img src="crates/app/assets/flags/ee.svg" width="28" height="21" alt="Eesti (Estonian)" title="Eesti (Estonian)">
-<img src="crates/app/assets/flags/ph.svg" width="28" height="21" alt="Filipino" title="Filipino">
-<img src="crates/app/assets/flags/fi.svg" width="28" height="21" alt="Suomi (Finnish)" title="Suomi (Finnish)">
-<img src="crates/app/assets/flags/ca.svg" width="28" height="21" alt="Français (Canada) (French (Canada))" title="Français (Canada) (French (Canada))">
-<img src="crates/app/assets/flags/fr.svg" width="28" height="21" alt="Français (France) (French (France))" title="Français (France) (French (France))">
-<img src="crates/app/assets/flags/es-ga.svg" width="28" height="21" alt="Galego (Galician)" title="Galego (Galician)">
-<img src="crates/app/assets/flags/ge.svg" width="28" height="21" alt="ქართული (Georgian)" title="ქართული (Georgian)">
-<img src="crates/app/assets/flags/de.svg" width="28" height="21" alt="Deutsch (German)" title="Deutsch (German)">
-<img src="crates/app/assets/flags/gr.svg" width="28" height="21" alt="Ελληνικά (Greek)" title="Ελληνικά (Greek)">
-<img src="crates/app/assets/flags/in.svg" width="28" height="21" alt="ગુજરાતી (Gujarati)" title="ગુજરાતી (Gujarati)">
-<img src="crates/app/assets/flags/il.svg" width="28" height="21" alt="עברית (Hebrew)" title="עברית (Hebrew)">
-<img src="crates/app/assets/flags/in.svg" width="28" height="21" alt="हिन्दी (Hindi)" title="हिन्दी (Hindi)">
-<img src="crates/app/assets/flags/hu.svg" width="28" height="21" alt="Magyar (Hungarian)" title="Magyar (Hungarian)">
-<img src="crates/app/assets/flags/is.svg" width="28" height="21" alt="Íslenska (Icelandic)" title="Íslenska (Icelandic)">
-<img src="crates/app/assets/flags/id.svg" width="28" height="21" alt="Bahasa Indonesia (Indonesian)" title="Bahasa Indonesia (Indonesian)">
-<img src="crates/app/assets/flags/ie.svg" width="28" height="21" alt="Gaeilge (Irish)" title="Gaeilge (Irish)">
-<img src="crates/app/assets/flags/it.svg" width="28" height="21" alt="Italiano (Italian)" title="Italiano (Italian)">
-<img src="crates/app/assets/flags/jp.svg" width="28" height="21" alt="日本語 (Japanese)" title="日本語 (Japanese)">
-<img src="crates/app/assets/flags/in.svg" width="28" height="21" alt="ಕನ್ನಡ (Kannada)" title="ಕನ್ನಡ (Kannada)">
-<img src="crates/app/assets/flags/kz.svg" width="28" height="21" alt="Қазақ тілі (Kazakh)" title="Қазақ тілі (Kazakh)">
-<img src="crates/app/assets/flags/kh.svg" width="28" height="21" alt="ខ្មែរ (Khmer)" title="ខ្មែរ (Khmer)">
-<img src="crates/app/assets/flags/in.svg" width="28" height="21" alt="कोंकणी (Konkani)" title="कोंकणी (Konkani)">
-<img src="crates/app/assets/flags/kr.svg" width="28" height="21" alt="한국어 (Korean)" title="한국어 (Korean)">
-<img src="crates/app/assets/flags/la.svg" width="28" height="21" alt="ລາວ (Lao)" title="ລາວ (Lao)">
-<img src="crates/app/assets/flags/lv.svg" width="28" height="21" alt="Latviešu (Latvian)" title="Latviešu (Latvian)">
-<img src="crates/app/assets/flags/lt.svg" width="28" height="21" alt="Lietuvių (Lithuanian)" title="Lietuvių (Lithuanian)">
-<img src="crates/app/assets/flags/lu.svg" width="28" height="21" alt="Lëtzebuergesch (Luxembourgish)" title="Lëtzebuergesch (Luxembourgish)">
-<img src="crates/app/assets/flags/mk.svg" width="28" height="21" alt="Македонски (Macedonian)" title="Македонски (Macedonian)">
-<img src="crates/app/assets/flags/my.svg" width="28" height="21" alt="Bahasa Melayu (Malay)" title="Bahasa Melayu (Malay)">
-<img src="crates/app/assets/flags/in.svg" width="28" height="21" alt="മലയാളം (Malayalam)" title="മലയാളം (Malayalam)">
-<img src="crates/app/assets/flags/mt.svg" width="28" height="21" alt="Malti (Maltese)" title="Malti (Maltese)">
-<img src="crates/app/assets/flags/nz.svg" width="28" height="21" alt="Māori (Maori)" title="Māori (Maori)">
-<img src="crates/app/assets/flags/in.svg" width="28" height="21" alt="मराठी (Marathi)" title="मराठी (Marathi)">
-<img src="crates/app/assets/flags/np.svg" width="28" height="21" alt="नेपाली (Nepali)" title="नेपाली (Nepali)">
-<img src="crates/app/assets/flags/no.svg" width="28" height="21" alt="Norsk bokmål (Norwegian Bokmål)" title="Norsk bokmål (Norwegian Bokmål)">
-<img src="crates/app/assets/flags/no.svg" width="28" height="21" alt="Norsk nynorsk (Norwegian Nynorsk)" title="Norsk nynorsk (Norwegian Nynorsk)">
-<img src="crates/app/assets/flags/in.svg" width="28" height="21" alt="ଓଡ଼ିଆ (Odia)" title="ଓଡ଼ିଆ (Odia)">
-<img src="crates/app/assets/flags/ir.svg" width="28" height="21" alt="فارسی (Persian)" title="فارسی (Persian)">
-<img src="crates/app/assets/flags/pl.svg" width="28" height="21" alt="Polski (Polish)" title="Polski (Polish)">
-<img src="crates/app/assets/flags/br.svg" width="28" height="21" alt="Português (Brasil) (Portuguese (Brazil))" title="Português (Brasil) (Portuguese (Brazil))">
-<img src="crates/app/assets/flags/pt.svg" width="28" height="21" alt="Português (Portugal) (Portuguese (Portugal))" title="Português (Portugal) (Portuguese (Portugal))">
-<img src="crates/app/assets/flags/in.svg" width="28" height="21" alt="ਪੰਜਾਬੀ (Punjabi)" title="ਪੰਜਾਬੀ (Punjabi)">
-<img src="crates/app/assets/flags/pe.svg" width="28" height="21" alt="Runasimi (Quechua)" title="Runasimi (Quechua)">
-<img src="crates/app/assets/flags/ro.svg" width="28" height="21" alt="Română (Romanian)" title="Română (Romanian)">
-<img src="crates/app/assets/flags/ru.svg" width="28" height="21" alt="Русский (Russian)" title="Русский (Russian)">
-<img src="crates/app/assets/flags/gb-sct.svg" width="28" height="21" alt="Gàidhlig (Scottish Gaelic)" title="Gàidhlig (Scottish Gaelic)">
-<img src="crates/app/assets/flags/rs.svg" width="28" height="21" alt="Српски (ћирилица) (Serbian (Cyrillic))" title="Српски (ћирилица) (Serbian (Cyrillic))">
-<img src="crates/app/assets/flags/rs.svg" width="28" height="21" alt="Srpski (latinica) (Serbian (Latin))" title="Srpski (latinica) (Serbian (Latin))">
-<img src="crates/app/assets/flags/sk.svg" width="28" height="21" alt="Slovenčina (Slovak)" title="Slovenčina (Slovak)">
-<img src="crates/app/assets/flags/si.svg" width="28" height="21" alt="Slovenščina (Slovenian)" title="Slovenščina (Slovenian)">
-<img src="crates/app/assets/flags/mx.svg" width="28" height="21" alt="Español (México) (Spanish (Mexico))" title="Español (México) (Spanish (Mexico))">
-<img src="crates/app/assets/flags/es.svg" width="28" height="21" alt="Español (España) (Spanish (Spain))" title="Español (España) (Spanish (Spain))">
-<img src="crates/app/assets/flags/se.svg" width="28" height="21" alt="Svenska (Swedish)" title="Svenska (Swedish)">
-<img src="crates/app/assets/flags/in.svg" width="28" height="21" alt="தமிழ் (Tamil)" title="தமிழ் (Tamil)">
-<img src="crates/app/assets/flags/ru.svg" width="28" height="21" alt="Татар (Tatar)" title="Татар (Tatar)">
-<img src="crates/app/assets/flags/in.svg" width="28" height="21" alt="తెలుగు (Telugu)" title="తెలుగు (Telugu)">
-<img src="crates/app/assets/flags/th.svg" width="28" height="21" alt="ไทย (Thai)" title="ไทย (Thai)">
-<img src="crates/app/assets/flags/tr.svg" width="28" height="21" alt="Türkçe (Turkish)" title="Türkçe (Turkish)">
-<img src="crates/app/assets/flags/ua.svg" width="28" height="21" alt="Українська (Ukrainian)" title="Українська (Ukrainian)">
-<img src="crates/app/assets/flags/pk.svg" width="28" height="21" alt="اردو (Urdu)" title="اردو (Urdu)">
-<img src="crates/app/assets/flags/cn.svg" width="28" height="21" alt="ئۇيغۇرچە (Uyghur)" title="ئۇيغۇرچە (Uyghur)">
-<img src="crates/app/assets/flags/uz.svg" width="28" height="21" alt="Oʻzbek (Uzbek)" title="Oʻzbek (Uzbek)">
-<img src="crates/app/assets/flags/es.svg" width="28" height="21" alt="Valencià (Valencian)" title="Valencià (Valencian)">
-<img src="crates/app/assets/flags/vn.svg" width="28" height="21" alt="Tiếng Việt (Vietnamese)" title="Tiếng Việt (Vietnamese)">
-<img src="crates/app/assets/flags/gb-wls.svg" width="28" height="21" alt="Cymraeg (Welsh)" title="Cymraeg (Welsh)">
-</p>
-<!-- languages:end -->
-
 ## Screenshots
 
 <table>
@@ -259,10 +161,6 @@ right-to-left window.
   <tr>
     <td><img src="docs/images/progress-torrent.webp" alt="A torrent's progress window"><br><sub><b>A torrent's progress</b>: its files, peers, trackers and pieces, in tabs.</sub></td>
     <td><img src="docs/images/progress-video.webp" alt="A video's progress window"><br><sub><b>A video's progress</b>: speed and time left while yt-dlp brings it in.</sub></td>
-  </tr>
-  <tr>
-    <td><img src="docs/images/language-picker.webp" alt="Language picker"><br><sub><b>86 languages</b>, chosen by flag on the first start.</sub></td>
-    <td><img src="docs/images/arabic-main.webp" alt="Arabic interface"><br><sub><b>Right to left</b> for Arabic, Hebrew, Persian, Urdu and Uyghur.</sub></td>
   </tr>
   <tr>
     <td><img src="docs/images/scheduler.webp" alt="Scheduler"><br><sub><b>Download overnight</b>: queues that start and stop on their own.</sub></td>
@@ -295,7 +193,7 @@ right-to-left window.
 - **Leaves you some speed**: limit one download or all of them, only while you're at the computer.
 - **Day and dark mode, and themes**: Classic, Native, High contrast, Metro, Adwaita, Breeze,
   Luna, Aero and Aqua, or your own in a text file ([how](docs/themes.md)). Everything larger, up
-  to 200 %, with **View → Interface size**. 86 languages, and a portable version for USB sticks.
+  to 200 %, with **View → Interface size**. And a portable version for USB sticks.
 - **Works from the keyboard and with screen readers** (Narrator, NVDA): every window, dialog and
   menu ([the keys](docs/keyboard-shortcuts.md)).
 - **No ads, no trial, no account**. Free and open source.
@@ -401,17 +299,14 @@ pieces fit.
 |---|---|
 | `tools\dev\check-cross.ps1` | Checks the code for Linux and macOS from Windows (with [Zig](https://ziglang.org) as the C compiler) |
 | `node tools/extension/e2e.mjs` | The browser extension in real Chrome, Brave, Edge and Firefox, headless: a link's download must reach MDM (or another MDM, a server); on Windows and Linux |
-| `python tools/i18n/extract.py` | Lists every interface text in `i18n/en.tsv` (CI checks it matches the code) |
-| `python tools/i18n/translate.py` | Translates what the catalogs lack (checks every row in code) |
-| `python tools/installer/languages.py` | The installer's messages in every language |
-| `node tools/readme/build.mjs` | This page's pictures, comparison table and flags, from the benchmark data |
+| `node tools/readme/build.mjs` | This page's pictures and comparison table, from the benchmark data |
 | `tools\lab\docs-shots.ps1` | The screenshots, from a separate test instance (`/show <window>` opens each window), off the screen |
 | `python tools/shots/make.py` | The help pages' pictures, from one list (`tools/shots/shots.toml`): shot, cropped, annotated, lossless WebP; `make.py check` keeps them in step |
 | `tools/lab/wsl/` | A WSL2 machine that builds MDM for Linux in minutes and shoots its windows on a virtual screen ([README](tools/lab/wsl/README.md)) |
 | `tools\lab\progress-shots.ps1` | The progress window of a video (yt-dlp) and of a torrent, from a swarm on this computer (`cargo run -p mdm-torrent --example swarm`) |
 | `python tools/website/build.py --serve` | misterdownloadmanager.com into `target/site` (help pages from `docs/`, news from the CHANGELOG, FAQ and legal pages from `website/content/`), served on http://127.0.0.1:8765; GitHub Pages publishes it (`pages.yml`) |
 | `python tools/readme/social.py` | The repository's social preview card (`docs/images/social-preview.png`) |
-| `MDM_FIT_AUDIT=<file>` | Lists every text that doesn't fit its window or runs over another, for checking a translation |
+| `MDM_FIT_AUDIT=<file>` | Lists every text that doesn't fit its window or runs over another |
 | `MDM_OFFSCREEN=1` | Opens every window off the screen, without focus, tray icon or sound (screenshots and checks) |
 | `MDM_TEST_TRASH_DIR=<folder>` | Tests only: archives deleted after extracting go into this folder, never into the real Recycle Bin or Trash |
 | `MDM_TEST_7ZIP=<program>\|none` | Tests only: the 7-Zip program to use for 7z and RAR archives, or `none` to act as if 7-Zip weren't installed |
@@ -423,9 +318,8 @@ pieces fit.
 MDM is young: the engine, the main window and the browser integration are solid on Windows and
 Linux, and some corners are still "good enough for now".
 
-- **Translations are machine-made.** Rows marked `#, machine` in [`i18n/`](i18n) wait for a
-  native speaker; fixing one is a one-line pull request ([how](docs/languages.md)). Malay's
-  menus, toolbar and download-list columns have been reviewed by a native speaker.
+- **English only.** The interface, the installer, the extension and the website are in English;
+  the earlier translations are kept on the `archive/multiplatform-i18n` branch.
 - Not yet: code signing. The macOS builds are untested; on Linux, screen readers (Orca) and
   Flatpak browsers aren't supported yet.
 

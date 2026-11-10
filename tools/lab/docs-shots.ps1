@@ -11,12 +11,10 @@
 # own command line (/show <window>), so nothing is clicked or typed on the screen.
 #
 #   tools\lab\docs-shots.ps1 -Exe target\release\misterdownloadmanager.exe -Server target\release\labserver.exe
-#   tools\lab\docs-shots.ps1 ... -Lang ar -Only arabic-main
 param(
   [Parameter(Mandatory)][string]$Exe,
   [Parameter(Mandatory)][string]$Server,
   [string]$OutDir = "docs\images",
-  [string]$Lang = "en",
   [int]$Port = 8099,
   # The name the downloads' addresses use for the lab server (it listens on 127.0.0.1): one the
   # hosts file points there gives the shots a neutral address (docs-shots.yml: downloads.example).
@@ -154,7 +152,7 @@ $srv = $null; $app = $null
 try {
   if (Test-Path $work) { Remove-Item $work -Recurse -Force }
   New-Item -ItemType Directory -Force "$work\data", "$work\Downloads" | Out-Null
-  # The language is chosen (no first-start picker); light mode unless asked, dark with View →
+  # Nothing asked at the first start; light mode unless asked, dark with View →
   # Always dark, whatever Windows' own mode. Every category's folder is under $work, so no shot
   # shows the user's own folders (or name). Nothing reaches out: no update check, and the torrent
   # engine neither listens nor uses the DHT, UPnP or local discovery (no firewall prompt).
@@ -166,8 +164,8 @@ try {
       "[" + (& $q $_) + "," + (& $q $d) + "]"
     }
   Set-Content -Encoding utf8 "$work\data\downloads.json" (
-    '{"next_id":1,"items":[],"version":2,"settings":{"language":' + (& $q $Lang) +
-    ',"language_asked":true,"helpers_asked":true,"extension_never_ask":true,"dark_mode_support":' + $dark.ToString().ToLower() +
+    '{"next_id":1,"items":[],"version":2,"settings":{' +
+    '"helpers_asked":true,"extension_never_ask":true,"dark_mode_support":' + $dark.ToString().ToLower() +
     ',"always_dark":' + $dark.ToString().ToLower() +
     ',"update_check":false,"torrent_incoming":false,"torrent_upnp":false,"torrent_dht":false,"torrent_lsd":false,"torrent_stop_idle":true' +
     ',"category_dirs":[' + ($dirs -join ",") + ']' + $(if ($Settings) { ",$Settings" } else { "" }) + '}}')
@@ -214,7 +212,7 @@ try {
   $windows = [ordered]@{
     "add-url" = "addurl"; "speed-limiter" = "speedlimit"; "scheduler" = "scheduler"
     "options-connection" = "options:connection"; "options-remote" = "options:remote"; "grabber" = "grabber"
-    "language-picker" = "language"; "progress" = "progress"
+    "progress" = "progress"
   }
   if ($Torrent -and (Want "add-torrent")) {
     $before = @(Titles $app.Id)
@@ -324,8 +322,8 @@ try {
   }
   # The main window last: by now every small file has finished (a fresh .zip can sit at 100%
   # for a moment while an antivirus scan holds it).
-  if ((Want "main-light") -or (Want "main-dark") -or (Want "arabic-main")) {
-    $name = if ($Lang -eq "ar") { "arabic-main" } elseif ($dark) { "main-dark" } else { "main-light" }
+  if ((Want "main-light") -or (Want "main-dark")) {
+    $name = if ($dark) { "main-dark" } else { "main-light" }
     # Shot alone (no windows before it): give the last small files their moment too.
     if ($Only.Count -eq 1) { Start-Sleep 10 }
     if (Want $name) { Shot $app.Id $main $name }

@@ -1700,7 +1700,7 @@ if (FIREFOX && ext.webRequest && ext.webRequest.onHeadersReceived) {
 // ---- right-click menus -------------------------------------------------------------------
 
 // Created at install and update (removed first: they persist, and a second create fails), in
-// the browser's language (_locales, from the app's catalogs by tools/extension/locales.py).
+// the extension's texts (_locales/en).
 function createMenus() {
   ext.contextMenus.removeAll(() => {
     const add = (id, contexts, key) =>

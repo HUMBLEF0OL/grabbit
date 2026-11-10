@@ -13,8 +13,8 @@ craft-libs), laid out the way Internet Download Manager users expect. Start by r
    One exception, the maintainer's: the website's comparison page may show the other download
    managers' own logos (never IDM's), small, to identify them, with a notice that they belong to
    their owners and their sources in `website/assets/alts/SOURCES.txt`.
-2. Every user-visible text goes through `crate::i18n`; run `python tools/i18n/extract.py`
-   after adding one.
+2. Every user-visible text goes through `crate::i18n` (`t`, `tc`, `tn`, `fmt`; data inside a
+   sentence through `ltr`/`isolate`). MDM is English only: the helpers return the English text.
 3. Windows-only calls live in `crates/app/src/win32.rs`, their Linux and macOS counterparts in
    `unix.rs`; the rest of the workspace is safe, portable Rust (`unsafe_code = "deny"`). A
    feature works on every system, or says why it can't (`cfg` with a comment).
@@ -23,9 +23,9 @@ craft-libs), laid out the way Internet Download Manager users expect. Start by r
 5. Every PR updates [ROADMAP.md](ROADMAP.md): move its item to done (or add it), keep the
    statuses true. Public file: no security details beyond CHANGELOG's wording, no private notes.
 6. Every PR description shows what it changed in screenshots, as many as it takes: each changed
-   window and state, before and after, light and dark, a long language (de) and right to left (ar);
-   phone width for the website. The images live on the `pr-shots` branch (`<pr>/<name>.png`, never
-   merged) and are embedded from `raw.githubusercontent.com/anefzaoui/misterdownloadmanager/pr-shots/`.
+   window and state, before and after, light and dark; phone width for the website. The images
+   live on the `pr-shots` branch (`<pr>/<name>.png`, never merged) and are embedded from
+   `raw.githubusercontent.com/anefzaoui/misterdownloadmanager/pr-shots/`.
    Neutral test folders in shots, no IDM artwork. A change with nothing to see shows its proof
    (tables, logs) instead and says so.
 
@@ -44,10 +44,7 @@ craft-libs), laid out the way Internet Download Manager users expect. Start by r
 - `tools/extension/pack.ps1` — build the extension for Chromium and Firefox into
   `target/extension/`; `node tools/extension/test.mjs` — its logic against fake browser APIs.
 - `tools/installer/build.ps1` — the Windows installer and portable zip into `target/dist/`.
-- `python tools/website/build.py --serve` — the website (and its 21 languages) on 127.0.0.1:8765;
-  after changing its English (website/, docs/, CHANGELOG.md), `python tools/website/translate_site.py
-  --all` sends only the new or changed texts (`--status` shows what each language lacks).
-  `MDM_SITE_PREVIEW=1` builds the English pages with their language picker only (fast).
+- `python tools/website/build.py --serve` — the website (English only) on 127.0.0.1:8765.
 - Website design goes through the Impeccable skill (`/impeccable`, `.claude/skills/impeccable`):
   product truth in [PRODUCT.md](PRODUCT.md), the visual system in DESIGN.md, the site's
   direction contract in `.impeccable/surfaces/`; its hook checks every website edit.

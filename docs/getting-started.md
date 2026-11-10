@@ -113,14 +113,13 @@ Browser integration is set up by MDM itself at each start (the browsers installe
 ## Install with the setup
 
 1. Run `MisterDownloadManager-<version>-setup.exe`.
-2. Choose the language. Windows' display language is already selected. The setup offers every language MDM has, and MDM starts in the one you pick.
-3. Choose whether to install for you only or for everyone on the computer. For you only needs no administrator rights and goes to `%LOCALAPPDATA%\Programs\Mister Download Manager`. For everyone goes to `Program Files`.
-4. Pick what the setup should do:
+2. Choose whether to install for you only or for everyone on the computer. For you only needs no administrator rights and goes to `%LOCALAPPDATA%\Programs\Mister Download Manager`. For everyone goes to `Program Files`.
+3. Pick what the setup should do:
    - **Set up browser integration (Chrome, Edge, Brave, Firefox)**
    - **Open .torrent files and magnet links with Mister Download Manager**
    - **Start Mister Download Manager when Windows starts**
    - **Create a desktop shortcut** (off unless you tick it)
-5. Click **Install**, then **Finish** to start MDM.
+4. Click **Install**, then **Finish** to start MDM.
 
 If MDM is already running, the setup asks it to save and close first. To update, use **Help → Check for updates → Update now**, or run the setup of the new version; your list and settings stay.
 
@@ -136,16 +135,6 @@ Uninstall MDM from Windows **Settings → Apps**. The uninstaller asks whether t
 2. Run `misterdownloadmanager.exe`.
 
 The zips hold the same programs as the setup: the app, `misterdownloadmanager-cli.exe` (downloads from the command line; see [Command line and automation](command-line.md)) and the `extension` folder.
-
-## First start and the language
-
-- **Installed with the setup:** MDM starts in the language you chose in the setup.
-- **Otherwise:** MDM shows the list of languages, each with its flag and its own name. Pick yours.
-
-You can change it at any time in **View → Language**. More in [Languages](languages.md).
-
-![The language list on first start: every language with its flag, its own name and its English name](images/help/first-language.webp)
-*Pick your language. View → Language changes it later.*
 
 ## The video helpers
 
@@ -169,7 +158,7 @@ From top to bottom:
   - **File** — the selected download: **Stop Download**, **Remove**, **Download Now**, **Redownload**.
   - **Downloads** — **Pause All**, **Stop All**, **Delete All Completed**, **Find**, the **Scheduler**, queues, the **Speed Limiter** and **Options**.
   - **View** — show or hide the categories, sort the list (**Arrange files**), **Dark Mode support**, **Always dark**, **Theme**, **Interface size** (every window larger, 100 % to 200 %; **Ctrl +**, **Ctrl −** and **Ctrl 0** too), **Draw with** (OpenGL, or Direct3D on Windows, Vulkan on Linux, Metal on macOS) and **Language**.
-  - **Help** — help pages and tutorials (on the website, in your language when it has it), **Keyboard shortcuts**, **Report a problem**, **Check for updates**, **About**, **Tell a friend** and **Support MDM** (its creator's GitHub Sponsors page: optional, nothing in MDM changes).
+  - **Help** — help pages and tutorials (on the website), **Keyboard shortcuts**, **Report a problem**, **Check for updates**, **About**, **Tell a friend** and **Support MDM** (its creator's GitHub Sponsors page: optional, nothing in MDM changes).
 - **Toolbar.** **Add URL**, **Add Torrent**, **Resume**, **Stop**, **Stop All**, **Delete**, **Delete Completed**, **Options**, **Scheduler**, **Start Queue**, **Stop Queue**. The small arrow next to **Add Torrent**, **Start Queue** and **Stop Queue** opens more choices.
 - **Categories** (left). Choose what the list shows: **All Downloads**, **Unfinished**, **Finished** and **Queues**, each with its categories. Drag the gap between the pane and the list to make it wider.
 - **Download list** (right). One row per download. See [The download list](download-list.md).

@@ -8,7 +8,7 @@ These pages explain each part of the program. The tutorials walk through the thi
 
 ## Start here
 
-- **[Getting started](getting-started.md)** — install MDM (setup, portable or zip on Windows; the packages on Linux; the .dmg on a Mac), choose a language and find your way around the main window.
+- **[Getting started](getting-started.md)** — install MDM (setup, portable or zip on Windows; the packages on Linux; the .dmg on a Mac), and find your way around the main window.
 - **[Your first download](guide-first-download.md)** — a two-minute walk-through from copied link to opened file.
 
 ## Downloading
@@ -40,7 +40,6 @@ These pages explain each part of the program. The tutorials walk through the thi
 
 - **[Options](options.md)** — every page of the Options window.
 - **[Themes](themes.md)** — the built-in looks (Classic, Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero, Aqua), and how to make your own in a text file.
-- **[Languages](languages.md)** — the 86 interface languages, numbers and dates, right-to-left layouts, and how to help translate.
 - **[Portable mode](portable.md)** — run MDM from a folder or a USB stick without installing it.
 - **[Keyboard shortcuts](keyboard-shortcuts.md)** — every key the main window answers, and screen readers.
 - **[Command line and automation](command-line.md)** — IDM's command-line switches, the `misterdownloadmanager-cli` tool, and the automation API other programs can use.

@@ -1,8 +1,8 @@
 // The README's figures, as SVG in a light and a dark version (GitHub picks one with <picture>),
-// and its row of language flags (from i18n/languages.tsv):
+// and its comparison table:
 //   docs/images/races-{light,dark}.svg       three everyday races, MDM vs IDM, in seconds
 //   docs/images/bench-time-{light,dark}.svg  time to finish, IDM vs MDM, every scenario
-// Every number comes from docs/bench/run5/results.json and i18n/languages.tsv; nothing is typed
+// Every number comes from docs/bench/run5/results.json; nothing is typed
 // in by hand. The races are sketched with rough.js (fixed seeds: the same drawing every build) and
 // their words are Patrick Hand (SIL OFL) turned into outlines by opentype.js, since GitHub's
 // image sandbox blocks fonts inside SVGs. The detailed chart is Vega-Lite. No browser needed.
@@ -24,8 +24,6 @@ const out = path.join(root, "docs/images");
 fs.mkdirSync(out, { recursive: true });
 
 const bench = JSON.parse(fs.readFileSync(path.join(root, "docs/bench/run5/results.json"), "utf8"));
-const languages = fs.readFileSync(path.join(root, "i18n/languages.tsv"), "utf8")
-  .split("\n").filter((l) => l.trim() && !l.startsWith("#")).length;
 
 // GitHub's page surfaces and text, and the categorical slots 1 (blue, MDM) and 2 (orange, IDM),
 // validated on these surfaces (dataviz validate_palette.js: all checks pass in both modes).
@@ -207,28 +205,9 @@ function compareTable() {
   ].join("\n");
 }
 
-// The README's row of languages, between its <!-- languages:start/end --> markers: every row of
-// i18n/languages.tsv as its flag, with the language's own and English names on hover.
-function languageRow() {
-  const lines = fs.readFileSync(path.join(root, "i18n/languages.tsv"), "utf8").split("\n");
-  const header = lines.find((l) => l.startsWith("# code\t")).slice(2).split("\t");
-  const rows = lines.filter((l) => l.trim() && !l.startsWith("#")).map((l) => {
-    const cols = l.split("\t");
-    return Object.fromEntries(header.map((h, i) => [h, cols[i]]));
-  });
-  rows.sort((a, b) => a.english.localeCompare(b.english));
-  const attr = (s) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-  const flags = rows.map((r) => {
-    const name = r.native === r.english ? r.english : `${r.native} (${r.english})`;
-    return `<img src="crates/app/assets/flags/${r.flag}.svg" width="28" height="21" alt="${attr(name)}" title="${attr(name)}">`;
-  });
-  fill("languages", `<p align="center">\n${flags.join("\n")}\n</p>`);
-}
-
 for (const [mode, t] of Object.entries(THEMES)) {
   fs.writeFileSync(path.join(out, `races-${mode}.svg`), races(t));
   await render(timeChart(t), `bench-time-${mode}.svg`);
 }
-languageRow();
 fill("compare", compareTable());
-console.log(`wrote README.md's comparison table, language row and docs/images/{races,bench-time}-{light,dark}.svg (${languages} languages)`);
+console.log("wrote README.md's comparison table and docs/images/{races,bench-time}-{light,dark}.svg");

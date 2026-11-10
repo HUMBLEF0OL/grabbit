@@ -1,14 +1,10 @@
 // Mister Download Manager — site behaviour: light/dark, the download for your system, the
-// split button's menu, the "What do you download?" chips and the rotating hello.
+// split button's menu, the "What do you download?" chips and the tour.
 (function () {
   "use strict";
   var root = document.documentElement;
-  // Words for people in the page's language: a translated page carries its own (MDM_I18N,
-  // tools/website/sitei18n.py); English otherwise. Every such string goes through t().
-  var I18N = window.MDM_I18N || {};
-  function t(s) { return I18N[s] || s; }
   // Visitors who asked for less motion get every moving part at rest: the race at its finish,
-  // the tour still, the hello on its first word.
+  // the tour still.
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   function each(selector, fn) {
@@ -32,81 +28,6 @@
   }
   document.addEventListener("pointerover", nudge);
   document.addEventListener("focusin", nudge);
-
-  // ---- Your language ---------------------------------------------------------------------------
-  // An English page offers its copy in the visitor's language once (the first language the
-  // browser asks for, unless that is English), in that language's words (the language menu's
-  // data-offer/-yes/-no, sitei18n.py). Picking a language, or No, is remembered.
-  (function () {
-    var links = document.querySelectorAll(".lang-pick a[hreflang]");
-    if (!links.length) return;
-    function remember(code) { try { localStorage.setItem("mdm-lang", code); } catch (e) { /* asked again */ } }
-    for (var i = 0; i < links.length; i++) {
-      links[i].addEventListener("click", function () { remember(this.getAttribute("hreflang")); });
-    }
-    var chosen = null;
-    try { chosen = localStorage.getItem("mdm-lang"); } catch (e) { /* none */ }
-    if (chosen || (root.getAttribute("lang") || "en").toLowerCase() !== "en") return;
-    var wanted = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
-    var match = null;
-    for (var w = 0; w < wanted.length && !match; w++) {
-      var tag = String(wanted[w]).toLowerCase();
-      var base = tag.split("-")[0];
-      if (base === "en") return;
-      // Chinese: only the simplified script's places; Portuguese: Brazil's copy for every place.
-      if (base === "zh" && /-(tw|hk|mo|hant)/.test(tag)) continue;
-      for (var k = 0; k < links.length; k++) {
-        var h = links[k].getAttribute("hreflang").toLowerCase();
-        if (h !== "en" && h.split("-")[0] === base) { match = links[k]; break; }
-      }
-    }
-    if (!match || !match.getAttribute("data-offer")) return;
-    var bar = document.createElement("div");
-    bar.className = "lang-offer";
-    bar.setAttribute("role", "region");
-    bar.setAttribute("lang", match.getAttribute("hreflang"));
-    if (/^(ar|fa)/.test(match.getAttribute("hreflang"))) bar.setAttribute("dir", "rtl");
-    var p = document.createElement("p");
-    p.textContent = match.getAttribute("data-offer");
-    var yes = document.createElement("a");
-    yes.className = "btn btn-primary";
-    yes.href = match.getAttribute("href");
-    yes.className = "btn btn-line";
-    yes.textContent = match.getAttribute("data-yes") + " · " + match.querySelector("span").textContent;
-    yes.addEventListener("click", function () { remember(match.getAttribute("hreflang")); });
-    var no = document.createElement("button");
-    no.type = "button";
-    no.className = "btn btn-ghost";
-    no.style.boxShadow = "none";
-    no.textContent = match.getAttribute("data-no");
-    no.addEventListener("click", function () { remember("en"); bar.parentNode.removeChild(bar); });
-    bar.appendChild(p);
-    bar.appendChild(yes);
-    bar.appendChild(no);
-    document.body.appendChild(bar);
-  })();
-
-  // ---- The language picker: a dialog over the page ------------------------------------------
-  // The header's button opens it (without scripts it is a link to the languages page). The
-  // browser's own modal dialog keeps the focus inside and closes on Escape; a click on the
-  // backdrop closes it too, and the focus goes back to the button.
-  each("[data-lang-open]", function (btn) {
-    var dialog = btn.parentNode.querySelector(".lang-dialog");
-    if (!dialog || typeof dialog.showModal !== "function") return;
-    btn.setAttribute("role", "button");
-    function open(e) {
-      e.preventDefault();
-      dialog.showModal();
-      root.classList.add("dialog-on");
-      var cur = dialog.querySelector("[aria-current]");
-      if (cur) cur.focus();
-    }
-    btn.addEventListener("click", open);
-    btn.addEventListener("keydown", function (e) { if (e.key === " ") open(e); });
-    dialog.addEventListener("close", function () { root.classList.remove("dialog-on"); btn.focus(); });
-    dialog.addEventListener("click", function (e) { if (e.target === dialog) dialog.close(); });
-    dialog.querySelector("[data-lang-close]").addEventListener("click", function () { dialog.close(); });
-  });
 
   // ---- Light / dark ------------------------------------------------------------------------
   // The page follows the system until the visitor picks; the pick is remembered.
@@ -143,11 +64,11 @@
   // the app gets going, solid while the file comes in, stamped where it is delivered. Its scan
   // events (request sent, receiving at what rate, delivered) appear as they are reached.
   var RACES = [
-    { label: "faster", note: t("1 GiB over a fast link. IDM spends 3 s before its first request reaches the server."),
+    { label: "faster", note: "1 GiB over a fast link. IDM spends 3 s before its first request reaches the server.",
       mdm: [14, 438, 556], idm: [3076, 1831, 545], e2e: [1009, 5456], ratio: 5.41, bytes: 1073741824 },
-    { label: "faster", note: t("A 256 KiB file. MDM is done in 30 ms; IDM is still starting."),
+    { label: "faster", note: "A 256 KiB file. MDM is done in 30 ms; IDM is still starting.",
       mdm: [14, 7, 8], idm: [3090, 25, 32], e2e: [30, 3141], ratio: 105.9, bytes: 262144 },
-    { label: "faster", note: t("A server that allows two connections. MDM learns it and keeps to two; IDM opened 480."),
+    { label: "faster", note: "A server that allows two connections. MDM learns it and keeps to two; IDM opened 480.",
       mdm: [14, 12546, 9], idm: [3069, 12733, 48], e2e: [12568, 15864], ratio: 1.26, bytes: 52428800 }
   ];
   // mdmRace(box, races): sets up one race box; the benchmark page calls it with every scenario
@@ -198,11 +119,11 @@
       lane.querySelector(".lane-stamp").style.setProperty("--at", all / axis);
       lane.classList.toggle("done", done);
       lane.querySelector("[data-time]").textContent = fmt(at);
-      lane.querySelector("[data-state]").textContent = done ? t("Done") : now < start ? t("Starting\u2026") : now < start + xfer ? t("Downloading") : t("Finishing");
+      lane.querySelector("[data-state]").textContent = done ? "Done" : now < start ? "Starting\u2026" : now < start + xfer ? "Downloading" : "Finishing";
       var ev = lane.querySelectorAll(".lane-events li");
-      var words = [t("Request sent") + " \u00b7 " + fmt(start),
-                   t("Receiving") + (bytes ? " \u00b7 " + rate(bytes, xfer) : ""),
-                   t("Delivered") + " \u00b7 " + fmt(all)];
+      var words = ["Request sent" + " \u00b7 " + fmt(start),
+                   "Receiving" + (bytes ? " \u00b7 " + rate(bytes, xfer) : ""),
+                   "Delivered" + " \u00b7 " + fmt(all)];
       var reached = [now >= start, now >= start, done];
       for (var i = 0; i < ev.length; i++) {
         ev[i].textContent = words[i];
@@ -244,33 +165,6 @@
   };
   each("[data-race]:not([data-race-src])", function (box) { window.mdmRace(box, RACES); });
 
-  // ---- Hello in the app's languages: each word written in, its chip lit -----------------------
-  var stage = document.querySelector("[data-hello]");
-  if (stage && !reduce) {
-    var words = [["Hello", "en"], ["مرحبا", "ar"], ["Bonjour", "fr"], ["Hallo", "de"], ["Hola", "es"],
-      ["こんにちは", "ja"], ["Olá", "pt"], ["Привет", "ru"], ["नमस्ते", "hi"], ["Merhaba", "tr"], ["你好", "zh"]];
-    var chips = document.querySelectorAll("[data-hello-chips] [lang]");
-    var n = 0;
-    setInterval(function () {
-      var old = stage.querySelector('[data-pos="current"]');
-      if (old) {
-        old.setAttribute("data-pos", "past");
-        setTimeout(function () { if (old.parentNode) old.parentNode.removeChild(old); }, 450);
-      }
-      n = (n + 1) % words.length;
-      var word = document.createElement("span");
-      word.className = "hello-word";
-      word.setAttribute("data-pos", "current");
-      word.setAttribute("lang", words[n][1]);
-      word.textContent = words[n][0];
-      stage.appendChild(word);
-      for (var i = 0; i < chips.length; i++) {
-        if (chips[i].getAttribute("lang") === words[n][1]) chips[i].setAttribute("data-on", "");
-        else chips[i].removeAttribute("data-on");
-      }
-    }, 2600);
-  }
-
   // ---- Themes: every tile in its light or its dark side, and the prompt to copy -----------------
   // The tiles follow the site's light or dark at first; the switch shows them all in the other.
   (function () {
@@ -304,9 +198,9 @@
     btn.hidden = false;
     btn.addEventListener("click", function () {
       navigator.clipboard.writeText(src.textContent.trim() + "\n").then(function () {
-        label.textContent = t("Copied");
+        label.textContent = "Copied";
       }, function () {
-        label.textContent = t("Select the text and copy it");
+        label.textContent = "Select the text and copy it";
       }).then(function () {
         clearTimeout(timer);
         timer = setTimeout(function () { label.textContent = idle; }, 2200);
@@ -347,14 +241,14 @@
       box.className = "lb";
       box.setAttribute("role", "dialog");
       box.setAttribute("aria-modal", "true");
-      box.setAttribute("aria-label", t("Image viewer"));
+      box.setAttribute("aria-label", "Image viewer");
       box.innerHTML =
         '<div class="lb-stage"><img class="lb-pic" alt=""></div>' +
         '<div class="lb-bar"><span class="lb-count"></span><p class="lb-cap"></p>' +
-        '<span class="lb-hint">' + t("Click to zoom · drag to move") + '</span>' +
-        '<button type="button" class="lb-btn lb-close" aria-label="' + t("Close") + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>' +
-        '<button type="button" class="lb-btn lb-nav lb-prev" aria-label="' + t("Previous image") + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>' +
-        '<button type="button" class="lb-btn lb-nav lb-next" aria-label="' + t("Next image") + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>';
+        '<span class="lb-hint">' + "Click to zoom · drag to move" + '</span>' +
+        '<button type="button" class="lb-btn lb-close" aria-label="' + "Close" + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>' +
+        '<button type="button" class="lb-btn lb-nav lb-prev" aria-label="' + "Previous image" + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>' +
+        '<button type="button" class="lb-btn lb-nav lb-next" aria-label="' + "Next image" + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>';
       document.body.appendChild(box);
       stage = box.querySelector(".lb-stage");
       pic = box.querySelector(".lb-pic");
@@ -507,7 +401,7 @@
   // picture stops it for good, as someone reading shouldn't have it change under them. Panels
   // left behind stay laid out, only faded, inert and hidden from screen readers: the stage keeps
   // its height, and the lightbox still goes through every picture. Never on its own with reduced
-  // motion (`reduce`, the hello's).
+  // motion (`reduce`).
   each("[data-tour]", function (tour) {
     var DWELL = 6000;
     var list = tour.querySelector('[role="tablist"]');

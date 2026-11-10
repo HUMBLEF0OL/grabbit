@@ -22,7 +22,7 @@ How Mister Download Manager's pieces fit together.
 | `crates/labserver` | `mdm-labserver` | An HTTP Range server with a request log and fault injection, and an FTP/FTPS server with its own faults, for tests and benchmarks |
 | `extension/` | — | The Chromium (MV3) and Firefox extension |
 | `docs/` | — | The user guide and tutorials, this file, the benchmark data; the website makes the guide its help pages, which Help opens |
-| `website/` | — | misterdownloadmanager.com's own pages (home, download, features, themes, FAQ); `tools/website/build.py` adds the help from `docs/` and the news from the CHANGELOG, in 22 languages, and GitHub Pages publishes it |
+| `website/` | — | misterdownloadmanager.com's own pages (home, download, features, themes, FAQ); `tools/website/build.py` adds the help from `docs/` and the news from the CHANGELOG, in English, and GitHub Pages publishes it |
 
 Dependencies point inward: `app`, `cli`, `mcp`, `nmhost` and `remote` use `engine` and `ipc`; the engine knows
 nothing of the UI. The app sees the engine only through its events (progress, segment table
@@ -137,7 +137,7 @@ keychain (or with a locked one, never unlocked for MDM) the secret stays in the 
 before.
 
 A download's server location (#140) is the country of the address it connected to, looked up in
-`mdm-geo`'s table on this computer (`countries.rs` names it in the interface language); the
+`mdm-geo`'s table on this computer (`countries.rs` names it); the
 release job builds the table again from the month's data (`tools/geo/build.py --release`).
 
 ## Browser integration
@@ -174,17 +174,16 @@ The server runs on the app's Tokio runtime, one listener per local network addre
 is checked (`Host`, `Origin`, token), turned into an `mdm_ipc::Command` marked `remote` (a field
 no request line can set) and handed to the app through the same channel as the command line's;
 the app answers it on its next frame, as it answers the automation API. Its page is built in
-(`crates/remote/web`) and its texts come from the app's catalogs (`remote.rs`).
+(`crates/remote/web`) and its texts come from the app (`remote.rs`).
 
-## Translations
+## Texts
 
-Every text the UI shows goes through `crate::i18n` (craft-i18n catalogs, `i18n/<locale>.tsv`).
-`tools/i18n/extract.py` rebuilds `i18n/en.tsv` from the source, with a note for translators on
-each text (what it is, where it shows, its placeholders). `tools/i18n/translate.py` fills what
-the other catalogs lack (rows marked `#, machine`), following each language's style guide
-(`i18n/style/`) and the glossary; a row a person reviewed is never replaced, and CI
-(`reviewed_guard.py`) fails a change that drops one. The website has its own catalogs
-(`i18n/site/`, `tools/website/translate_site.py`).
+MDM is English only. Every text the UI shows still goes through `crate::i18n` (`t`, `tc`, `tn`,
+`fmt`), which returns the English text; craft-i18n is kept for what isn't translation: filling
+`{placeholders}`, English plurals, the bidi isolates around data (`ltr`, `isolate`, so a file
+name in Arabic can't reorder a sentence) and numbers written the system region's way. The
+translations, the language picker and their tools are on the `archive/multiplatform-i18n`
+branch.
 
 ## Pictures
 

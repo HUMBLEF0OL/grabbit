@@ -720,7 +720,7 @@
   ],
   "narrative": {
     "northStar": "The Waybill on the Parcel",
-    "overview": "A download is a delivery. The page is the board the parcel sits on, in the logo's blue; the real app window is the parcel; what the visitor reads is printed on thermal-label sheets stuck to it, in black ink with hairline field rules, ranked like a courier label: who sends it, the headline, the fine print, the fields, a real barcode. The benchmark is tracking: two shipments scanned event by event to the measured times, each event showing its rate as well as its time.\n\nThe world is the owner's choice. The blue board (#1f63d6) replaced kraft brown after four rendered options; dark theme is a navy depot where the same labels print in reverse (near-black stock, cool white ink). Density is a label's, not a brochure's: few elements, each one a field with a name and a value, numbers in tabular figures. Every screenshot is the real, unretouched app, shown at full content width; the site never draws a fake window, a glowing mock-up or a row of icon cards. Reading pages (help, FAQ, news, legal) take the same world with restraint: the board above, one sheet to read.\n\nThe site ships in 21 languages, Arabic and Persian right to left. Every direction-bound value is a logical property; labels tilt the other way in RTL; only native language names are isolated with `bdi`.",
+    "overview": "A download is a delivery. The page is the board the parcel sits on, in the logo's blue; the real app window is the parcel; what the visitor reads is printed on thermal-label sheets stuck to it, in black ink with hairline field rules, ranked like a courier label: who sends it, the headline, the fine print, the fields, a real barcode. The benchmark is tracking: two shipments scanned event by event to the measured times, each event showing its rate as well as its time.\n\nThe world is the owner's choice. The blue board (#1f63d6) replaced kraft brown after four rendered options; dark theme is a navy depot where the same labels print in reverse (near-black stock, cool white ink). Density is a label's, not a brochure's: few elements, each one a field with a name and a value, numbers in tabular figures. Every screenshot is the real, unretouched app, shown at full content width; the site never draws a fake window, a glowing mock-up or a row of icon cards. Reading pages (help, FAQ, news, legal) take the same world with restraint: the board above, one sheet to read.\n\nThe site ships in English. Direction-bound values stay logical properties.",
     "keyCharacteristics": [
       "Blue board, white label stock, black ink; green only for Download and delivered.",
       "One self-hosted face, Archivo, condensed by its width axis for headings and field names.",
@@ -765,8 +765,8 @@
       "Do keep green for the Download action and delivered states only, with Go Ink text on it.",
       "Do use on-board / on-board-2 for text on the board and ink / ink-2 / ink-3 on sheets; check AA in both themes.",
       "Do present facts as fields: a 12px condensed uppercase name over a 650-weight tabular value, 1.5px ink rules between.",
-      "Do show only the real, unretouched app in screenshots, in its day and night versions, left to right even on RTL pages.",
-      "Do use logical properties for every direction, mirror tilts in RTL, and drop tracking, uppercase and condensing for Arabic, Persian, Indic, Thai and CJK scripts.",
+      "Do show only the real, unretouched app in screenshots, in its day and night versions.",
+      "Do use logical properties for every direction.",
       "Do keep the barcode a real, scannable Code 128 of what it says.",
       "Do honour reduced motion: the race shows its finish, the label does not feed, bars and grids sit at rest."
     ],

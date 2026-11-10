@@ -41,8 +41,6 @@ SHOTS = [
     ("add-torrent", "screens/add-torrent-light.webp", "screens/add-torrent-dark.webp"),
     ("scheduler", "screens/scheduler-light.webp", "screens/scheduler-dark.webp"),
     ("options-connection", "screens/options-light.webp", "screens/options-dark.webp"),
-    ("arabic-main", "screens/arabic-main.webp", None),
-    ("language-picker", "win/language-picker.webp", None),
 ]
 # docs-shots.ps1 names the main window's night shot main-dark (in docs/images and in a -Dark run).
 NIGHT_MAIN = ("main-dark", "screens/main-dark.webp")

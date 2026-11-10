@@ -63,7 +63,7 @@ Task Manager shows several figures, and they mean different things:
 - **Working set** (Details tab, add the column) adds memory shared with other programs. MDM draws its windows with the graphics card, so the graphics driver's memory counts here too, about 120 MB in all.
 - **Commit size** is memory MDM has reserved, whether in use or not.
 
-Closed to the notification area, MDM gives its memory back to Windows: **Memory** drops to under 10 MB within seconds and stays low while it waits. Downloads, queues and the scheduler go on as before. The list of every language (**View → Language**) loads fonts for every script while it's open; MDM lets them go when it closes.
+Closed to the notification area, MDM gives its memory back to Windows: **Memory** drops to under 10 MB within seconds and stays low while it waits. Downloads, queues and the scheduler go on as before.
 
 ## The text is too small or blurry
 
@@ -148,7 +148,7 @@ The AppImage can also be updated by AppImage tools (AppImageLauncher, Gear Lever
 
 ## Reporting a problem
 
-Choose **Help → Report a problem**. It opens the bug report form on GitHub with your MDM version, your system and its version, how MDM was installed and its interface language already filled in. Describe what happened, what you expected and the steps that make it happen. For a download, include the address if you can share it, and the reason shown under **Status**.
+Choose **Help → Report a problem**. It opens the bug report form on GitHub with your MDM version, your system and its version, how MDM was installed already filled in. Describe what happened, what you expected and the steps that make it happen. For a download, include the address if you can share it, and the reason shown under **Status**.
 
 You can also [open the form yourself](https://github.com/anefzaoui/misterdownloadmanager/issues/new?template=bug.yml); it asks for the same details.
 

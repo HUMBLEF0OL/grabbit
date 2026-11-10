@@ -64,17 +64,17 @@ SignedUninstaller=yes
   #define SignFlag ""
 #endif
 
-; Every interface language (i18n/languages.tsv): tools/installer/languages.py writes the list and
-; the translations of the messages below. The wizard starts in Windows' display language.
-#include "languages.iss"
+; English only (the other languages live on the archive/multiplatform-i18n branch).
+[Languages]
+Name: "en"; MessagesFile: "compiler:Default.isl"
 
 [CustomMessages]
-lang_en.TaskBrowser=Set up &browser integration (Chrome, Edge, Brave, Firefox)
-lang_en.TaskTorrents=Open .&torrent files and magnet links with {#AppName}
-lang_en.TaskStartup=Start {#AppName} when &Windows starts
-lang_en.TaskGroupOther=Other:
-lang_en.Launch=Start {#AppName}
-lang_en.KeepData=Also delete your download list and settings?%n%nYour downloaded files are not touched either way.
+TaskBrowser=Set up &browser integration (Chrome, Edge, Brave, Firefox)
+TaskTorrents=Open .&torrent files and magnet links with {#AppName}
+TaskStartup=Start {#AppName} when &Windows starts
+TaskGroupOther=Other:
+Launch=Start {#AppName}
+KeepData=Also delete your download list and settings?%n%nYour downloaded files are not touched either way.
 
 [Tasks]
 Name: "browser"; Description: "{cm:TaskBrowser}"
@@ -99,10 +99,6 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Registry]
-; The language chosen in the wizard ({language}: "lang_" + a languages.tsv code with "_" for "-",
-; see languages.py inno_name). The app
-; takes it on its first start, when it has no language setting yet (settings.rs), then deletes it.
-Root: HKCU; Subkey: "Software\MisterDownloadManager"; ValueType: string; ValueName: "InstallLanguage"; ValueData: "{language}"; Flags: uninsdeletevalue uninsdeletekeyifempty
 ; Start with Windows: the same value Options -> "Launch on startup" writes and reads, with the
 ; argument that starts MDM in the notification area (#226; win32.rs startup_command).
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "MisterDownloadManager"; ValueData: """{app}\{#AppExe}"" /startup"; Flags: uninsdeletevalue; Tasks: startup

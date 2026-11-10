@@ -132,10 +132,9 @@ jobs:
           # On the screen, as nobody watches it: llvmpipe draws nothing off the screens.
           $at = "40,40"
           # Every window of docs-shots.ps1's own list, light (docs/images) and dark (the site's
-          # night pictures, and the README's dark main window), then the Arabic main window.
+          # night pictures, and the README's dark main window).
           tools\lab\docs-shots.ps1 -Exe $exe -Server $srv -Torrent $torrent -Work $work -At $at @net -OutDir "$out\docs"
           tools\lab\docs-shots.ps1 -Exe $exe -Server $srv -Torrent $torrent -Work $work -At $at @net -Dark -OutDir "$out\site-dark"
-          tools\lab\docs-shots.ps1 -Exe $exe -Server $srv -Work $work -At $at @net -OutDir "$out\docs" -Lang ar -Only arabic-main
           # A video's and a torrent's progress window (with the torrent's Pieces tab), light and dark.
           $bin = "target\debug"
           # One that fails is reported, and the help pages' pictures are still taken.

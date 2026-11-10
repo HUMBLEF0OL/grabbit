@@ -55,7 +55,7 @@ another. To keep the page one tap away, add it to the phone's home screen (the b
 Downloads added from the phone are like the ones you add on the computer: they go into the
 category's folder, follow the queues, the Scheduler and the speed limits, and go through the
 network adapter you chose in **Options → Proxy / Socks** (and stop when it disconnects). The
-page shows the language your phone uses when MDM has it, and follows its light or dark mode.
+page follows your phone's light or dark mode.
 
 ## Your paired devices
 
