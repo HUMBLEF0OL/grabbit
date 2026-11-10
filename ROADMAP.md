@@ -271,6 +271,8 @@ Everything below ships together, in version 0.5.0.
   fallback to OpenGL as Direct3D on Windows; OpenGL stays their default for now, and the menu
   says why when one can't start here
   ([#206](https://github.com/anefzaoui/misterdownloadmanager/issues/206))
+- ⛔ Malay: a native speaker's check of the menus, toolbar and list columns (MDM is English
+  only now)
 - ✅ Screen readers see a window's contents the first time they read it, not only its title bar
   ([#131](https://github.com/anefzaoui/misterdownloadmanager/issues/131))
 - ✅ Magnet links get their file list in seconds again: the DHT keeps going after a computer it
@@ -511,7 +513,6 @@ These ship in a later version, when they're ready.
 - 🔄 A torrent's upload speed, peers and share ratio as columns in the download list
   ([#357](https://github.com/anefzaoui/misterdownloadmanager/issues/357)): the last one in review
 - 🔄 The browser extension's media list naming a file after its page, as an option: in review
-- 🔄 Malay: a native speaker's check of the menus, toolbar and list columns: in review
 
 ### Bugs being looked into
 
@@ -640,5 +641,8 @@ kept on the `archive/multiplatform-i18n` branch.
 
 ### Look and performance
 
+- 📋 A new look, "Graphite": a theme with its own colours, icons and typeface, the main window
+  and every dialog restyled, with an optional paste bar and details pane; the plan and mockups are
+  in `design/graphite/`
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))
