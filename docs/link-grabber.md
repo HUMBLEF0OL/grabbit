@@ -44,7 +44,7 @@ The box under the list edits the package you selected:
 - **Save to**: the folder its files go to. When a package holds several kinds of files, the box says **Each file's category folder**: each file goes to its category's folder (**Options → Save to**), as Import always did.
 - **Password**: the archives' password, if they have one. It is kept in memory only, never written to disk.
 - **Extract when done**: ticked by itself when the package holds an archive.
-- **Delete archives after extracting**: once extracted, the archives go to the Recycle Bin (the Trash on macOS and Linux).
+- **Delete archives after extracting**: once extracted, the archives go to the Recycle Bin.
 
 ## Adding the links
 

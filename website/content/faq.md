@@ -15,7 +15,7 @@ No. MDM is an independent program written from scratch in Rust, with no connecti
 
 ### How is MDM different from IDM? {#mdm-vs-idm}
 
-The layout is familiar on purpose: the toolbar, the categories, the download list, the progress window with every connection, queues and the scheduler. The differences: MDM is free and open source, downloads BitTorrent and magnet links in the same list, finished faster in [our benchmark](/benchmark.html) and has builds for Linux and macOS. IDM is the more mature product, refined over many years. See the full [comparison](/idm-alternative.html).
+The layout is familiar on purpose: the toolbar, the categories, the download list, the progress window with every connection, queues and the scheduler. The differences: MDM is free and open source, downloads BitTorrent and magnet links in the same list, and finished faster in [our benchmark](/benchmark.html). IDM is the more mature product, refined over many years. See the full [comparison](/idm-alternative.html).
 
 ### Is it safe? Does it contain adware or spyware? {#is-it-safe}
 
@@ -33,7 +33,7 @@ MDM is made by Ahmed Nefzaoui, an independent developer, and is open to contribu
 
 ### Which systems does it run on? {#systems}
 
-Windows 10 and 11, 64-bit, is the main platform. Builds for Linux (AppImage, .deb, .rpm and .tar.gz) and macOS (.dmg) come with every release too; today's are marked experimental. From version 0.5.0, Linux isn't experimental any more: it is checked on GNOME, KDE Plasma, Xfce and Cinnamon, in Wayland sessions too, and its packages in clean Ubuntu, Debian and Fedora systems. Still to come there: the Flatpak Firefox isn't checked yet, and screen readers (Orca) don't read MDM's windows yet. macOS stays experimental. See [Windows, Mac and Linux](/features/systems.html) and [Download](/download.html).
+No: MDM is made for 64-bit Windows 10 and 11 only, as an installer, a portable copy or a plain zip. See [Windows 10 and 11](/features/systems.html) and [Download](/download.html).
 
 ### Does it run on Windows 7 or 8? {#windows-7}
 
@@ -49,7 +49,7 @@ Yes. In IDM, export your list with **Tasks → Export → To IDM export file**. 
 
 ### How do I uninstall it? {#uninstall}
 
-Open Windows **Settings → Apps**, find Mister Download Manager and choose Uninstall. The uninstaller asks whether to delete your download list and settings as well. Files you downloaded are never touched. For the portable copy, delete its folder. On Linux, remove the package with your package manager, or delete the AppImage; [Uninstall on Linux](/help/getting-started.html#uninstall-linux) says what stays in your home folder and how to remove it.
+Open Windows **Settings → Apps**, find Mister Download Manager and choose Uninstall. The uninstaller asks whether to delete your download list and settings as well. Files you downloaded are never touched. For the portable copy, delete its folder.
 
 ## Browsers
 

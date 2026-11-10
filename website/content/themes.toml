@@ -12,7 +12,7 @@ shot = "images/help/site-theme-classic.webp"
 [[theme]]
 id = "native"
 name = "Native"
-feel = "Your system's accent colour and contrast setting, followed as you change them, on Windows, Linux and macOS."
+feel = "Windows' accent colour and contrast setting, followed as you change them."
 shot = "images/help/site-theme-native.webp"
 
 [[theme]]

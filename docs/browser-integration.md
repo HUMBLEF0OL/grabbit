@@ -4,15 +4,15 @@
 
 With the MDM extension, clicking a download link in your browser hands the download to MDM. MDM gets the address together with the page it came from (the referrer), your cookies for the site and the browser's User-Agent, so downloads that need you to be signed in still work.
 
-The extension works in **Google Chrome**, **Microsoft Edge**, **Brave**, **Opera** and **Vivaldi**, in **Firefox** 140 or later, and in **Safari** 17 or later on a Mac (see [Safari](#safari-macos)).
+The extension works in **Google Chrome**, **Microsoft Edge**, **Brave**, **Opera** and **Vivaldi**, and in **Firefox** 140 or later.
 
-Browsers built on them work too: Chromium and Helium take the extension as Chrome does, Brave Origin as Brave does, Zen and LibreWolf as Firefox does. On Windows, Zen has a bug of its own (see [The browser and MDM aren't connected](browser-help.md#not-installed)).
+Browsers built on them work too: Chromium and Helium take the extension as Chrome does, Brave Origin as Brave does, Zen and LibreWolf as Firefox does. Zen has a bug of its own (see [The browser and MDM aren't connected](browser-help.md#not-installed)).
 
 ## Set it up
 
 Browser integration has two parts: a small helper program that the browser talks to, and the extension itself.
 
-1. Install MDM with the setup and keep **Set up browser integration (Chrome, Edge, Brave, Firefox)** ticked. This registers the helper. (The portable copy can't do this; see [Portable mode](portable.md).) On Linux and macOS MDM registers it itself, each time it starts, for the browsers installed then.
+1. Install MDM with the setup and keep **Set up browser integration (Chrome, Edge, Brave, Firefox)** ticked. This registers the helper. (The portable copy can't do this; see [Portable mode](portable.md).)
 2. Add the extension to each browser you use, as below: Firefox from its add-ons store, the others from the Chrome Web Store. Until a browser's extension has reached MDM, MDM's **Add Mister Download Manager to your browser** window opens at each start: it lists the browsers it found, and **Add the extension** opens the store's page in that browser. **Install it by hand** opens the steps for loading it without the store; **Don't ask again** stops the window.
 
 ![Add Mister Download Manager to your browser: each browser found, with a button to its store page](images/help/browser-offer.webp)
@@ -33,20 +33,6 @@ To load it by hand instead (a browser that can't use the store, or a build of yo
 3. Click **Load unpacked** and choose the `extension\chromium` folder.
 
 **Mister Download Manager** appears in the list. Leave it turned on. Pin its button to the toolbar to see at a glance whether the browser reaches MDM.
-
-### Safari (macOS)
-
-The Mac app carries the Safari extension: there is nothing to download. Safari 17 or later and macOS 14 or later are needed.
-
-1. Drag MDM to Applications and start it once. MDM's **Add Mister Download Manager to your browser** window lists Safari: **How to Add** shows the steps below.
-2. In Safari open **Settings → Extensions** and tick **Mister Download Manager**. Click **Always Allow on Every Website**: the extension needs to read the site to pass your sign-in on.
-3. While the app is not notarized by Apple (the experimental builds are not), Safari lists the extension only with unsigned extensions allowed: **Settings → Advanced** → **Show features for web developers**, then **Settings → Developer** → **Allow unsigned extensions**. Safari forgets that setting each time it quits.
-
-Safari lets an extension neither see nor stop the browser's downloads, so what works differs from the other browsers:
-
-- **Works as in the other browsers:** the right-click items, the button over videos, **Media on this page**, the toolbar button, **Alt**-click, MDM starting by itself, and every rule in Options.
-- **A click on a link to a file type MDM takes** goes to MDM. A download the page starts by itself (a script, or a link with no file name in its address that the server answers with a file) stays with Safari: use right-click → **Download with Mister Download Manager** for those.
-- **Not available:** sharing the browser's proxy or VPN, and a download from a form.
 
 ### From the plain zip
 

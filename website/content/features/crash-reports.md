@@ -22,7 +22,6 @@ Download Manager closed unexpectedly**. When its window hasn't answered for 8 se
 copy and starts a fresh one. If MDM comes back by itself, the window says so.
 
 The report names what happened and where in MDM's code, so the problem can be found and fixed.
-It works on Windows, Linux and macOS.
 
 ## You read it first, and you send it
 
@@ -58,6 +57,6 @@ attach the crash data**.
 A freeze report will say whether MDM's window ran all along (a loop), waited (on a lock, the disk
 or the network), or hardly ran at all. That last kind usually means a computer too busy to run
 MDM, most likely not a bug in MDM, and those reports share one signature so they find one issue
-instead of many. macOS doesn't measure this yet. The window's title will be in MDM's language
+instead of many. The window's title will be in MDM's language
 too, and the report will keep its own lines in every language, left to right in Arabic and
 Persian.

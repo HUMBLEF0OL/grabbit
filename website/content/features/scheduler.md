@@ -52,10 +52,8 @@ the start time, so the network is back when the queue begins. It stays awake whi
 runs; afterwards its own sleep settings apply again. The line under the option says when the
 next wake is, or why there can't be one.
 
-The computer has to be asleep, not shut down. On Windows the power plan must allow wake timers:
-the Scheduler says when it doesn't, and **Change** opens the setting. On Linux an administrator
-allows it once. On macOS only an administrator can schedule a wake, so the option is greyed
-there. MDM never asks for an administrator's password.
+The computer has to be asleep, not shut down. The power plan must allow wake timers:
+the Scheduler says when it doesn't, and **Change** opens the setting. MDM never asks for an administrator's password.
 
 ## Under a data cap
 

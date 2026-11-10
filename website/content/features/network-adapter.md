@@ -36,9 +36,8 @@ connections through the adapter as it opens its own. Video formats that can't go
 
 ## How it holds
 
-On Windows, MDM binds the adapter's own address, and Windows then sends those packets only
-through that adapter. Linux binds the device itself (Linux 5.7 or newer), and macOS binds the
-interface. An address of a kind the adapter doesn't have, such as IPv6 on a VPN that has only
+MDM binds the adapter's own address, and Windows then sends those packets only
+through that adapter. An address of a kind the adapter doesn't have, such as IPv6 on a VPN that has only
 IPv4, is refused, not sent around it.
 
 ## Keep your lookups inside too
@@ -51,5 +50,4 @@ through the adapter. See [DNS and proxies](/features/dns-proxies.html).
 
 `ftps://` addresses (implicit TLS) don't start while an adapter is chosen; `ftp://` with TLS is
 fine. Connections to this computer itself aren't bound, so a proxy running on this computer
-decides where your downloads go from there. On macOS, a VPN that reconnects may come back as a
-new interface (`utun5` instead of `utun4`): pick it again.
+decides where your downloads go from there.

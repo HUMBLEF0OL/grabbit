@@ -21,15 +21,14 @@ when you sign in, hidden, its icon in the notification area. Its downloads, queu
 **Scheduler** and downloads from the browser all run from there. Click the icon, or start MDM
 again, and the window opens as usual.
 
-The option is off until you tick it. On Linux and macOS MDM starts with your session the same
-way. A [portable copy](portable.md) can't start with Windows, since that needs the registry, so
+The option is off until you tick it. A [portable copy](portable.md) can't start with Windows, since that needs the registry, so
 the option is greyed there.
 
 ## One click hides a download's window
 
 A download's progress window has a **Hide to the notification area** button: a short dash with
-an arrow down to the corner. On Windows it sits in the title bar, left of Minimize, and in the
-title bar's menu (Alt+Space). On Linux and macOS it is at the end of the tab row. The download
+an arrow down to the corner. It sits in the title bar, left of Minimize, and in the
+title bar's menu (Alt+Space). The download
 carries on.
 
 To see it again, right-click the tray icon and choose it under **Downloads in progress**, which
@@ -50,13 +49,10 @@ The tray menu also has **Add new download**, **Add batch download**, the **Speed
 
 Hidden in the notification area, MDM hands the memory it isn't using back to the system.
 Task Manager's **Memory** for MDM drops from about 50 MB to under 10 MB there, and MDM gives
-memory back again every 10 minutes while it stays hidden. On Linux it does the same with its
-free memory.
+memory back again every 10 minutes while it stays hidden.
 
 ## Where there is no tray
 
-All of this needs a notification area that shows MDM's icon. Windows and macOS have one, and so
-do most Linux desktops (KDE, GNOME with its AppIndicator extension, waybar's tray). On a desktop
-without one, MDM starts minimized instead, closing the window quits MDM, and **Minimize to the
-notification area** is greyed. In a Wayland session the main window stays minimized in the dock,
-because Wayland can't hide a window.
+All of this needs the notification area to show MDM's icon. Without one (Explorer not running),
+MDM starts minimized instead, closing the window quits MDM, and **Minimize to the notification
+area** is greyed.

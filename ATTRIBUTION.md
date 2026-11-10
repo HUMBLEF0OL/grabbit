@@ -40,7 +40,6 @@ It is neither bundled nor linked: UnRAR's licence doesn't allow its code in a GP
 built-in 7z decoder made MDM about 1 MB larger.
 
 System resources used at run time and **not** bundled: Windows fonts (Segoe UI, Tahoma,
-Arial) and each system's own file-type icons (the Windows shell's, macOS Finder's, the Linux
-desktop's icon theme).
+Arial) and the Windows shell's file-type icons.
 
 MDM contains no artwork, text or code from Internet Download Manager (see the README).

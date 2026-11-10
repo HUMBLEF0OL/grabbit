@@ -65,34 +65,7 @@ Tick **Wake the computer to run this queue**, under the start time, and a comput
 - MDM has to be running (it can sit in the notification area). The computer has to be asleep, not shut down.
 - The wake follows the schedule: change the start time or the days, untick the option or delete the queue, and the wake moves or goes away. MDM sets it again each time it starts. Nothing stays behind in the system when MDM quits or is uninstalled.
 
-### Windows
-
 Windows wakes a computer only if its power plan allows wake timers. If it doesn't, the Scheduler says so, and **Change** opens the setting: **Power Options → Change plan settings → Change advanced power settings → Sleep → Allow wake timers**. Choose **Enable**: **Important Wake Timers Only** lets only Windows' own important timers wake the computer. On laptops the setting is often off on battery, so the computer is woken only while plugged in.
-
-### Linux
-
-On Linux only an administrator may set the computer's wake alarm, so the option is greyed until an administrator allows it. To let the users in a `wakealarm` group set it, an administrator runs, once:
-
-```sh
-sudo groupadd --system wakealarm
-sudo usermod -aG wakealarm "$USER"
-echo 'z /sys/class/rtc/rtc0/wakealarm 0664 root wakealarm -' | sudo tee /etc/tmpfiles.d/wakealarm.conf
-sudo systemd-tmpfiles --create /etc/tmpfiles.d/wakealarm.conf
-```
-
-then signs out and in again. The setting stays after a restart. The computer has one wake alarm: if another program has set it, MDM leaves it alone and says so.
-
-A user's systemd timer can't wake the computer, and `rtcwake` needs root, so without this setting MDM can't wake the computer. MDM never asks for an administrator's password.
-
-### macOS
-
-On macOS only an administrator can schedule a wake, so the option is greyed. MDM doesn't ask for an administrator's password. An administrator can have the Mac wake every day a minute before the queue starts, for example at 10:59 PM for a queue that starts at 11:00 PM:
-
-```sh
-sudo pmset repeat wakeorpoweron MTWRFSU 22:59:00
-```
-
-`sudo pmset repeat cancel` removes it.
 
 ## Schedule: when the queue is done
 

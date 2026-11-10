@@ -63,10 +63,9 @@ headers, and sessions are pooled per download and reused between segments.
 One egui window painted to fixed pixel coordinates, plus one immediate viewport per dialog.
 `app.rs` holds the state (downloads, queues, settings, the list's selection) and turns menu,
 toolbar, key and IPC commands into actions. Each dialog is its own module and returns an
-`Outcome` (open, closed, done with a value). Windows-only calls are confined to `win32.rs` and
-their Linux and macOS counterparts to `unix.rs` (starting with the session, the browsers' host,
-sounds, show in folder, the crash handler); every other file is safe, portable Rust. Fonts come from the system:
-Windows' Fonts folder, macOS's system fonts, fontconfig on Linux (`theme.rs`). On Windows, Latin,
+`Outcome` (open, closed, done with a value). MDM is Windows only. Windows calls are confined to `win32.rs`
+(starting with the session, the browsers' host, sounds, show in folder, the crash handler); every
+other file is safe, portable Rust. Fonts come from Windows' Fonts folder (`theme.rs`). Latin,
 Greek and Cyrillic text is drawn by DirectWrite in GDI-classic mode (`win32.rs`, through egui's
 glyph rasterizer hook), so each letter's hinted shape and whole-pixel width come together; other
 scripts are shaped and drawn by egui.
@@ -84,11 +83,10 @@ light and a dark palette, metrics, control styles and an icon style (`palette.rs
 - **Derived palettes.** `derive.rs` makes a whole palette from a few seeds (background, surface,
   text, accent…), mixing every other role in OKLab and keeping WCAG contrast (4.5:1 for text, 3:1
   for edges); High contrast strengthens every edge on top. `native.rs` seeds the Native theme from
-  the system's accent and contrast (Windows' settings, the freedesktop portal on Linux, macOS's
-  accent).
+  Windows' accent and contrast settings.
 - **Control styles.** `palette::Controls` names each control's shape (text boxes, check boxes,
   buttons, progress bars, scroll bars, the focus mark, the title bar); the style themes (Metro,
-  Adwaita, Breeze, Luna, Aero, Aqua) pick theirs, and on Windows MDM then draws the title bar
+  Adwaita, Breeze, Luna, Aero, Aqua) pick theirs, and MDM then draws the title bar
   itself (the `caption.*` roles).
 - **Theme files.** `themefile.rs` reads TOML or JSON from the data folder's `themes` (one file,
   or `<id>/theme.toml` with icons beside it). A file names only what it changes; the rest comes
@@ -100,18 +98,14 @@ light and a dark palette, metrics, control styles and an icon style (`palette.rs
   where the classic look draws its own; a need the set lacks keeps the classic icon.
 
 Where a window puts its controls stays its layout. So do the icons
-before file names (`fileicons.rs`): the Windows shell's system image lists, macOS Finder's
-(NSWorkspace), the Linux desktop's icon theme (`xdgicons.rs`, shared-mime-info and the Icon
-Theme Specification). Each type is looked up once per pixel size, on a background thread. Tango's
+before file names (`fileicons.rs`): the Windows shell's system image lists. Each type is looked up once per pixel size, on a background thread. Tango's
 icons (bundled) stand in until the system's icon is ready, and wherever the system has none.
 
 ### Drawing
 
 The windows are drawn with OpenGL (eframe's glow) or with the system's own graphics API through
-eframe's wgpu, with that one backend only: Direct3D 12 on Windows (the default there), Vulkan on
-Linux, Metal on macOS (choices there; OpenGL stays their default until real graphics cards have
-tried them, #206). View → Draw with picks one, from the next start. One code path does it on
-every system (`crates/app/src/renderer.rs`): when the chosen one can't start, the other one is
+eframe's wgpu, with that one backend only: Direct3D 12 (the default). View → Draw with picks one,
+from the next start (`crates/app/src/renderer.rs`): when the chosen one can't start, the other one is
 tried, so the windows always open. A watched start with the system's API leaves a marker until
 its first frame is drawn: a start that ends before it (a crash inside the driver), one whose
 first frame doesn't come within 10 seconds (MDM then starts again with OpenGL), or a graphics
@@ -124,16 +118,14 @@ scrolls.
 ### Data
 
 The download list and settings are saved atomically to the data folder (`downloads.json`):
-`%APPDATA%\misterdownloadmanager\` on Windows, `~/.local/share/misterdownloadmanager` on Linux,
-`~/Library/Application Support/misterdownloadmanager` on macOS, a `data` folder beside a portable
+`%APPDATA%\misterdownloadmanager\`, a `data` folder beside a portable
 copy, or `MDM_DATA_DIR` (`mdm_ipc::data_dir`). The browser host reads the same file for the
 capture rules, so a change in Options applies to the next captured download.
 
-Sign-in secrets (debrid accounts, Sites Logins' and the proxy's passwords) live in the system's
-keychain (`secrets.rs`, #44): Windows Credential Manager (`win32.rs`), the Secret Service on Linux
-or the macOS keychain (`unix.rs`). The settings keep a `keychain:<service>/<scope>/<key>`
-reference in their place, written only once the keychain has confirmed the secret; without a
-keychain (or with a locked one, never unlocked for MDM) the secret stays in the settings as
+Sign-in secrets (debrid accounts, Sites Logins' and the proxy's passwords) live in Windows
+Credential Manager (`secrets.rs`, `win32.rs`, #44). The settings keep a `keychain:<service>/<scope>/<key>`
+reference in their place, written only once Credential Manager has confirmed the secret; without
+it the secret stays in the settings as
 before.
 
 A download's server location (#140) is the country of the address it connected to, looked up in
@@ -167,8 +159,7 @@ phone ──HTTPS (paired token)──► mdm-remote ──ipc::Sink──► ap
 `--headless` (`headless.rs`, #157) runs the same `App` without eframe: a loop calls its
 `tick` (what `logic` runs at every frame) on a bare `egui::Context`, woken by the command
 channel, and never its `ui`; commands are added as the remote control adds them (no window).
-The `Dockerfile` and `docker/` (Compose, Unraid's template) run it on a server
-([server.md](server.md)).
+[server.md](server.md) runs it on a computer that stays on.
 
 The server runs on the app's Tokio runtime, one listener per local network address. Each request
 is checked (`Host`, `Origin`, token), turned into an `mdm_ipc::Command` marked `remote` (a field

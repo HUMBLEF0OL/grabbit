@@ -51,8 +51,7 @@ Sharing an account or its links breaks the services' terms and can get the accou
 
 ## Your sign-in stays private
 
-The sign-in is kept in the system's keychain: Windows Credential Manager, the keyring on Linux,
-the macOS keychain. Without an unlocked one, it stays in MDM's own settings, and
+The sign-in is kept in Windows Credential Manager. Without an unlocked one, it stays in MDM's own settings, and
 **Options → Accounts** says where it is. MDM sends a service only the links you download through it, with your token.
 The direct link is never shown or copied, since the services forbid sharing it, and the token is
 never written to MDM's log, crash reports or the command line's output. MDM asks each service

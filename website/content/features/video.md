@@ -31,8 +31,7 @@ for later. The video gets its own row and progress window, like any other downlo
 MDM doesn't do this alone, and doesn't pretend to. **yt-dlp** reads the page and downloads the
 video. **ffmpeg** joins the picture and the sound when a site keeps them apart, which most sites
 do for their higher qualities. MDM offers both on its first start and downloads them from their
-official releases, checked against what their publishers sign before it uses them. On Linux and
-macOS MDM uses the system's ffmpeg.
+official releases, checked against what their publishers sign before it uses them.
 
 Without ffmpeg you still get the qualities that come with their sound.
 

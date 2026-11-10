@@ -52,9 +52,8 @@ Keep changes focused and match the code around them. A few rules hold everywhere
   English only, so they return the English text. Data inside a sentence (a file name, an
   address, a size) goes in through `i18n::ltr` or `i18n::isolate`, so a file name in Arabic or
   Hebrew can't reorder the sentence around it.
-- **Windows-only calls live in `crates/app/src/win32.rs`**, their Linux and macOS counterparts
-  in `unix.rs`; the rest of the workspace is safe, portable Rust (`unsafe_code = "deny"`).
-  On Windows, `tools\dev\check-cross.ps1` checks that it still builds for Linux and macOS.
+- **MDM is Windows only. Windows-only calls live in `crates/app/src/win32.rs`**; the rest of the
+  workspace is safe, portable Rust (`unsafe_code = "deny"`).
 - **Fix causes, not cases**, and keep producers and consumers of shared data (the download list,
   the browser extension's messages, the catalogs) in step.
 

@@ -8,9 +8,7 @@ MDM can be driven without its window in three ways:
 - **`misterdownloadmanager-cli`**, a separate command-line tool: download files, videos and torrents in a terminal, with progress, without the app.
 - **The automation API**: other programs list the running app's downloads (as JSON) and pause, start, remove or delete them, over a local, token-protected channel. AI assistants use it through MDM's MCP server: see [AI assistants](ai-assistants.md).
 
-To run the whole app without a window, on a home server or a NAS, see [Run MDM on a server](server.md) (`misterdownloadmanager --headless`); to control it from a phone, [Control MDM from your phone](remote-control.md).
-
-The examples use Windows' paths; on macOS and Linux the programs have the same names without `.exe`.
+To run the whole app without a window, on a computer that stays on, see [Run MDM on a server](server.md) (`misterdownloadmanager --headless`); to control it from a phone, [Control MDM from your phone](remote-control.md).
 
 ## The app's command line
 
@@ -27,7 +25,7 @@ misterdownloadmanager.exe /d URL [/p folder] [/f name] [/a] [/n] [/s]
 | `/n` | Silent: no **Download File Info** window, the download starts (or is queued, with `/a`) at once. |
 | `/s` | Start the main download queue. |
 | `/exit` | Save and close the running app (the installer uses it before an upgrade). |
-| `/startup` | Start in the notification area, the window hidden: what **Launch Mister Download Manager on startup** starts MDM with when you sign in. Where no notification area shows MDM's icon (some Linux desktops), MDM starts minimized. A running MDM stays as it is. |
+| `/startup` | Start in the notification area, the window hidden: what **Launch Mister Download Manager on startup** starts MDM with when you sign in. Where no notification area shows MDM's icon, MDM starts minimized. A running MDM stays as it is. |
 | *a `.torrent` file or `magnet:` link* | Open it in **Add torrent** (what Windows passes when MDM opens torrents). |
 
 Switches can start with `/` or `-`, in any case. If MDM is running, the command goes to it; if not, MDM starts and carries it out. For example:
@@ -46,13 +44,13 @@ It comes with every download of MDM, next to the app (the installer puts it in M
 |---|---|
 | `get URL [-o folder\|file] [-c connections] [-H "Header: value"]... [--checksum hash] [--dns choice] [--adapter name]` | Download a file with up to 8 connections (`-c`, 1 to 128), showing progress. `Ctrl+C` pauses it; `resume` continues. `--checksum` checks the finished file: hex MD5, SHA-1, SHA-256, SHA-512 or CRC32, optionally named (`sha256:…`). `--dns` picks the DNS: `system` (the default); a service and how to ask it, `cloudflare-https`, `quad9-tls`, `google-plain`, `adguard-https`, `nextdns-tls`; DNS servers' addresses, `9.9.9.9,149.112.112.112`; or a DNS-over-HTTPS address. It never falls back to the system's DNS. `--adapter` sends every connection through one network adapter, by its name (`Ethernet`, `wg0`) or one of its addresses; when it isn't connected, nothing is sent and the download fails. A link from a file host that one of your debrid accounts (**Options → Accounts**) supports goes through that account, as in the app, and `get` says `through Real-Debrid`; `--direct` downloads the address itself ([Debrid service accounts](debrid.md)). |
 | `resume file.mdm.json [-c connections] [-H ...] [--direct]` | Continue a paused or broken download from the `.mdm.json` file next to it. Through a debrid account, as `get`: the service gives a new link when the old one expired; `--direct` continues from the address itself. |
-| `install-gallery-dl` | Install or update gallery-dl, for image galleries: its checksum list is checked against its author's signing key, the program against that list (Windows and Linux x86-64; elsewhere install it yourself). |
+| `install-gallery-dl` | Install or update gallery-dl, for image galleries: its checksum list is checked against its author's signing key, the program against that list. |
 | `gallery-get URL [-o folder] [--limit N] [--adapter name]` | Download a gallery's pictures (a Wikimedia Commons category, a Flickr album, ...) into a folder named after it inside `-o`; `--limit` takes at most that many, the first the site lists. Started again, it fetches only the new ones. `--adapter` sends gallery-dl's connections through one network adapter, as for `get`. |
 | `video-info URL` | What video a page holds (YouTube, Vimeo, ...), and the qualities to choose from. |
 | `playlist-info URL [--from N] [--count N]` | A playlist's or channel's videos, one line each as they're listed: its place, length, title and address. |
 | `playlist-get URL [-f selector] [-o folder] [-c pieces] [--from N] [--count N]` | Download a playlist's or channel's videos one after another, into a folder named after the list inside `-o`. `-f` is one quality for all, as for `video-get` (by default each video's best; `bv*[height<=720]+ba/b[height<=720]` = up to 720p; `ba` = the original sound; `mp3:320`, `opus:`, `flac:` as for `video-get`). `-c` as for `video-get`. |
 | `video-get URL [-f selector] [-o folder] [-c pieces] [--subs langs] [--auto-subs] [--embed-subs] [--adapter name]` | Download a video; `-f` takes a quality's selector from `video-info` (`b` = the best single file; `ba` = the sound alone as the site has it, not converted; `mp3:320`, `mp3:256`, `mp3:192` or `mp3:128` = the sound as an MP3 at that bitrate, `mp3:0` at its best variable one; `opus:` = as Opus; `flac:` = as FLAC, lossless but no better than the site's sound; conversions need ffmpeg). `-c`: a video the site sends in pieces (HLS, DASH) comes down this many pieces at once (8 by default, 1 to 128); a video in one file is one connection whatever it says. `--subs` saves subtitles beside it: language codes from `video-info` (`en,fr`), or `all` for every one the uploader gave; `--auto-subs` takes the site's automatic captions instead; `--embed-subs` puts them into the video (needs ffmpeg, MP4 or MKV). `--adapter` sends yt-dlp's connections (and ffmpeg's) through one network adapter, as for `get`; when it isn't connected, nothing starts. |
-| `install-ytdlp`, `install-ffmpeg` | Install or update the helpers videos need: yt-dlp (checked against its signing key) and ffmpeg (Windows; on macOS and Linux MDM uses the system's). |
+| `install-ytdlp`, `install-ffmpeg` | Install or update the helpers videos need: yt-dlp (checked against its signing key) and ffmpeg. |
 | `torrent-info SOURCE` | A torrent's name, files (numbered) and size; `SOURCE` is a magnet link or a `.torrent` file. |
 | `torrent-get SOURCE [-o folder] [--files 0,2] [--use-existing]` | Download a torrent, or only some of its files. If some of its files are already in the folder, it stops and names them; `--use-existing` uses them instead (what matches is kept, the rest downloaded). |
 | `torrent-create PATH -o file.torrent` | Make a `.torrent` of a file or folder (peers find it through the DHT). |
@@ -101,8 +99,6 @@ Other programs can ask the running app what it is downloading, and pause, start,
 
 1. While it runs, MDM listens on a port of `127.0.0.1` (this computer only) and writes the port and a secret token to `ipc.json` in its data folder:
    - Windows: `%APPDATA%\misterdownloadmanager\ipc.json`
-   - macOS: `~/Library/Application Support/misterdownloadmanager/ipc.json`
-   - Linux: `~/.local/share/misterdownloadmanager/ipc.json`
    - A [portable copy](portable.md): `data\ipc.json` next to the program.
 
    The token changes at every start; only programs that can read your data folder (yours) can use it.

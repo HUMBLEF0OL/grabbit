@@ -35,8 +35,7 @@ has to be running: the server can't start it for you.
 
 ## Set up once
 
-The server, `misterdownloadmanager-mcp`, sits next to the app on Windows, macOS and Linux (on
-Linux use the `.deb`, `.rpm` or `.tar.gz`: the AppImage doesn't expose it). You turn on the
+The server, `misterdownloadmanager-mcp`, sits next to the app. You turn on the
 automation API once with `misterdownloadmanager-cli api on`, then tell your assistant where the
 server is. The assistant starts it by itself from then on. The [set-up
 guide](ai-assistants.md#set-it-up) has the path for each kind of install and the exact entry for

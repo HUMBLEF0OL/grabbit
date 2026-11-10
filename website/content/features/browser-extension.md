@@ -66,5 +66,5 @@ outside its folder.
 - PDFs, music and videos the browser would open itself, and downloads from forms, go to MDM
   too. Hold **Alt** while clicking to let the browser have one.
 - Browsers built on Firefox or Chromium, such as Zen, LibreWolf, Floorp, Waterfox and Helium,
-  reach MDM. Flatpak browsers on Linux can't start MDM's helper.
+  reach MDM.
 - **Test browser integration...** in **Options → General** checks MDM's side.

@@ -36,7 +36,7 @@ A `.torrent` file fetched from a web address goes through the same checks as one
 
 - MDM refuses a torrent with file names your system can't write safely, says which name, and writes nothing.
 - MDM never writes into a file that's already there without asking.
-- Files from torrents are marked as **downloaded from the internet**, like a browser's downloads. Windows SmartScreen checks a program before it first runs, and Office opens documents in Protected View. On a Mac, Gatekeeper checks apps.
+- Files from torrents are marked as **downloaded from the internet**, like a browser's downloads. Windows SmartScreen checks a program before it first runs, and Office opens documents in Protected View.
 - A torrent can contain anything, and anyone can make one. Only open programs from people you trust, and scan them if in doubt.
 
 ## Proxies
@@ -47,7 +47,7 @@ To route *everything* through another network, use a VPN for the whole computer.
 
 ## A network adapter
 
-**Options → Proxy / Socks → Network adapter** holds MDM's connections to one adapter, usually a VPN's ([Options](options.md#proxy--socks)). The torrent engine binds every socket to it: peers (TCP, and through a SOCKS proxy), HTTP and UDP trackers, the DHT and the listening port. On Linux and macOS it binds the adapter itself. On Windows it binds the adapter's address (its IPv4 one when it has one), and Windows sends a packet only through the adapter that has its source address. UPnP and local peer discovery are turned off then, because they talk to the local network rather than through the adapter.
+**Options → Proxy / Socks → Network adapter** holds MDM's connections to one adapter, usually a VPN's ([Options](options.md#proxy--socks)). The torrent engine binds every socket to it: peers (TCP, and through a SOCKS proxy), HTTP and UDP trackers, the DHT and the listening port. It binds the adapter's address (its IPv4 one when it has one), and Windows sends a packet only through the adapter that has its source address. UPnP and local peer discovery are turned off then, because they talk to the local network rather than through the adapter.
 
 It works as a kill switch. When the adapter disconnects, running torrents stop with "… is not connected; it goes on when it is back", and they start again through the adapter when it is. Until MDM notices (within a second), the engine's sockets are still bound to an address that is gone, so nothing can leave another way. A torrent added while the adapter isn't connected doesn't start, and says why. Tracker names are still looked up by the system's DNS.
 

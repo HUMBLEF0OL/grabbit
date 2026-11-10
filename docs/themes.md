@@ -26,9 +26,7 @@ opens it (and makes it the first time). It is in MDM's data folder:
 
 | System | Folder |
 |---|---|
-| Windows | `%APPDATA%\misterdownloadmanager\themes` |
-| Linux | `~/.local/share/misterdownloadmanager/themes` |
-| macOS | `~/Library/Application Support/misterdownloadmanager/themes` |
+| Installed or the plain zip | `%APPDATA%\misterdownloadmanager\themes` |
 | [Portable copy](portable.md) | `data\themes` beside the program |
 
 Within two seconds a new file shows in **View → Theme**, under the built-in themes, by the `name`

@@ -507,9 +507,8 @@
   });
 
   // ---- Your system -------------------------------------------------------------------------
-  // Each system's card (.os-card[data-os]) carries its main file and label; the download
-  // buttons take the visitor's, and the cards mark it. Phones and tablets keep Windows and see
-  // that it's a desktop app.
+  // The Windows card (.os-card[data-os]) carries the main file and label; the download buttons
+  // take it, and the card is marked. Phones and tablets see that it's a desktop app.
   function detect() {
     var uad = navigator.userAgentData;
     var platform = ((uad && uad.platform) || navigator.platform || "").toLowerCase();
@@ -517,9 +516,6 @@
     if (/android|iphone|ipad|ipod|mobile/.test(ua) || (uad && uad.mobile)) return "mobile";
     // iPadOS reports a Mac; a touch screen gives it away.
     if (platform.indexOf("mac") === 0 && navigator.maxTouchPoints > 1) return "mobile";
-    if (platform.indexOf("win") === 0 || ua.indexOf("windows") >= 0) return "windows";
-    if (platform.indexOf("mac") === 0 || ua.indexOf("mac os") >= 0) return "macos";
-    if (/linux|x11|cros|bsd/.test(platform + " " + ua)) return "linux";
     return "windows";
   }
 

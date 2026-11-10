@@ -28,10 +28,7 @@ same progress window.
 - `ftpes://` — FTP secured with TLS from the start of the session (explicit FTPS, `AUTH TLS`, usually port 21). Use it when the server says it supports TLS.
 - `ftps://` — implicit FTPS, port 990 unless the address gives another.
 
-The server's certificate is checked against Windows' (or the system's) trusted certificates, as
-for `https://`. A Linux system without them (a minimal install without the `ca-certificates`
-package) still downloads over plain HTTP and FTP; each secure download then fails at once, saying
-to install that package.
+The server's certificate is checked against Windows' trusted certificates, as for `https://`.
 
 **Logging in.** Write the login in the address (`ftp://user:password@server/folder/file.iso`),
 tick **Use authorization**, or save it in **Options → Sites Logins**. Without one, MDM logs in as

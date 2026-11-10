@@ -41,8 +41,7 @@ extension's popup. Chrome, Edge, Brave, Opera and Vivaldi can't hand the proxy o
 same proxy in MDM there. A proxy that needs the VPN extension's own login can't be shared, and
 the download says so rather than going without it.
 
-The proxy's password moves to the system's keychain: Windows Credential Manager, the keyring on
-Linux, the macOS keychain.
+The proxy's password moves to Windows Credential Manager.
 
 ## Choose who looks up names
 

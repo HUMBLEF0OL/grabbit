@@ -33,8 +33,6 @@ Both are kept in a `tools` folder in MDM's data folder.
 
 ### Use your own copies
 
-On Linux and macOS, MDM finds yt-dlp and ffmpeg on your `PATH` and in the usual package-manager folders, including Homebrew's. A program you selected yourself takes priority, followed by MDM's own installed copy. The system copy is used when neither is present, and your package manager keeps it up to date: MDM never downloads over it on its own. If your distribution's yt-dlp is old, **Use MDM's own copy** in Helpers downloads MDM's, which keeps itself current and is used from then on.
-
 Already have yt-dlp or ffmpeg for another program? Use those instead of a second copy: in **Download video from a page**, click **Helpers...**, then **Use another program...** beside yt-dlp or ffmpeg, and choose the program. MDM runs it once to check that it is that program, and uses it from then on, the command line too. MDM doesn't update a program you chose: keep it up to date yourself (yt-dlp: `yt-dlp -U`, or your package manager). **Use MDM's own copy** goes back to the one MDM downloads and checks.
 
 ![The video helpers window: yt-dlp and ffmpeg, each with its version and Use another program...](images/help/video-helpers.webp)
@@ -117,21 +115,19 @@ log names only the browser they came from.
 ### Which browsers
 
 **From browser** lists the browsers yt-dlp reads: Firefox, Chrome, Edge, Brave, Opera, Vivaldi,
-Chromium and Whale, and Safari on macOS. **Profile** is optional: a profile's name (`Profile 1`)
+Chromium and Whale. **Profile** is optional: a profile's name (`Profile 1`)
 or its folder; empty, the profile used last.
 
-- **Firefox** works on every system. If you signed in only moments ago with Firefox open, close
+- **Firefox** works. If you signed in only moments ago with Firefox open, close
   it once so it writes the sign-in to its files.
-- **Chrome, Edge and Brave on Windows** lock their cookies to themselves (Chrome 127 and later,
+- **Chrome, Edge and Brave** lock their cookies to themselves (Chrome 127 and later,
   "app-bound encryption"), and yt-dlp can't read them while the browser is open either. The
   window says so; choose Firefox, or use the button over the video, which works with any
   browser.
-- **On Linux**, Chrome-family browsers keep the key to their cookies in the system's keyring
-  (GNOME Keyring, KWallet); yt-dlp asks it, so it must be unlocked.
 - **Another browser built on Chromium** (Helium, Thorium, ungoogled-chromium...): choose
   **Chromium** and that browser's profile folder (its `Default` folder, or `Profile 1`...;
-  under `~/.config` on Linux, `%LOCALAPPDATA%` on Windows). yt-dlp reads the folder, but a browser that keeps its
-  key under its own name in the keyring, or locks its cookies as Chrome does, can't be read
+  under `%LOCALAPPDATA%`). yt-dlp reads the folder, but a browser that locks its cookies as
+  Chrome does can't be read
   this way: use its extension's button.
 
 ## When a video server can't be reached

@@ -8,8 +8,6 @@
 
 <p align="center">
   <a href="https://github.com/anefzaoui/misterdownloadmanager/releases/latest"><img src="https://img.shields.io/badge/Download%20for-Windows-2a78d6?style=flat-square&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0yIDMuNWw4LjUtMS4ydjguMkgyek0xMS41IDIuMkwyMiAuOHY5LjdIMTEuNXpNMiAxMS41aDguNXY4LjJMMiAxOC41ek0xMS41IDExLjVIMjJ2OS43bC0xMC41LTEuNHoiLz48L3N2Zz4%3D" alt="Download for Windows" height="34"></a>
-  <a href="https://github.com/anefzaoui/misterdownloadmanager/releases/latest"><img src="https://img.shields.io/badge/Download%20for-macOS-2a78d6?style=flat-square&logo=apple&logoColor=white" alt="Download for macOS" height="34"></a>
-  <a href="https://github.com/anefzaoui/misterdownloadmanager/releases/latest"><img src="https://img.shields.io/badge/Download%20for-Linux-2a78d6?style=flat-square&logo=linux&logoColor=white" alt="Download for Linux" height="34"></a>
 </p>
 
 <p align="center">
@@ -28,7 +26,7 @@
 </p>
 
 <p align="center">
-  Windows 10 and 11 · Linux (Ubuntu, Debian, Mint, Fedora, openSUSE, Arch and more) · macOS (Apple Silicon and Intel, experimental)<br>
+  Windows 10 and 11<br>
   no ads, no trial, no sign-up
 </p>
 
@@ -91,8 +89,6 @@ programs at their default settings ([how we measured](#the-benchmark-in-detail))
 
 <p align="center">
   <a href="https://github.com/anefzaoui/misterdownloadmanager/releases/latest"><img src="https://img.shields.io/badge/Download%20for-Windows-2a78d6?style=flat-square&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0yIDMuNWw4LjUtMS4ydjguMkgyek0xMS41IDIuMkwyMiAuOHY5LjdIMTEuNXpNMiAxMS41aDguNXY4LjJMMiAxOC41ek0xMS41IDExLjVIMjJ2OS43bC0xMC41LTEuNHoiLz48L3N2Zz4%3D" alt="Download for Windows" height="34"></a>
-  <a href="https://github.com/anefzaoui/misterdownloadmanager/releases/latest"><img src="https://img.shields.io/badge/Download%20for-macOS-2a78d6?style=flat-square&logo=apple&logoColor=white" alt="Download for macOS" height="34"></a>
-  <a href="https://github.com/anefzaoui/misterdownloadmanager/releases/latest"><img src="https://img.shields.io/badge/Download%20for-Linux-2a78d6?style=flat-square&logo=linux&logoColor=white" alt="Download for Linux" height="34"></a>
 </p>
 
 On the [download page](https://github.com/anefzaoui/misterdownloadmanager/releases/latest), pick
@@ -108,40 +104,6 @@ one:
 > [!NOTE]
 > Windows may say *"Windows protected your PC"* the first time, because this early version isn't
 > code-signed yet. Click **More info**, then **Run anyway**.
-
-### On Linux
-
-MDM runs on Linux too, tested on Ubuntu 24.04, Debian 12 and Fedora with GNOME, KDE Plasma, Xfce
-and Cinnamon, on X11 and in Wayland sessions: the tray, dark mode, browser integration (Ubuntu's
-Snap Firefox included) and the packages' installs. Not there yet: screen readers (Orca) don't
-read its windows, and Flatpak browsers can't reach it ([more](docs/getting-started.md#on-linux)).
-Up to version 0.2.4, the files' names end in `-experimental`.
-
-| File | For |
-| --- | --- |
-| `...-linux-x86_64.deb` | Ubuntu, Debian, Mint, Pop!_OS: `sudo apt install ./<file>.deb`. |
-| `...-linux-x86_64.rpm` | Fedora, openSUSE, RHEL: `sudo dnf install ./<file>.rpm`. |
-| `...-linux-x86_64.AppImage` | Any Linux. Make it executable and run it. |
-| `...-linux-x86_64.tar.gz` | The plain programs, for any distribution. |
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/main-linux-dark.webp">
-    <img src="docs/images/main-linux.webp" alt="Mister Download Manager's main window on Ubuntu's GNOME desktop" width="620">
-  </picture>
-</p>
-
-### On a Mac? Be the first to try it
-
-Fresh builds for **macOS** (Apple Silicon and Intel) are on the same download page, marked
-`-experimental`: we haven't tried them on a Mac ourselves yet. Give them a go and
-[tell us how it went](https://github.com/anefzaoui/misterdownloadmanager/issues/new/choose); you'll
-help make them as solid as the Windows and Linux versions.
-
-| File | For |
-| --- | --- |
-| `...-macos-arm64-experimental.dmg` | Mac with Apple Silicon (M1 or later). Open it and drag MDM to Applications. The first time, right-click the app and choose **Open**. |
-| `...-macos-x86_64-experimental.dmg` | Mac with an Intel processor, the same way. |
 
 ## Screenshots
 
@@ -187,7 +149,7 @@ help make them as solid as the Windows and Linux versions.
 - **Through your VPN only**, if you want: hold every download to one network adapter, with a kill
   switch, and choose an encrypted DNS. Each download shows its server's country.
 - **From your phone, or on a server**: control MDM from a phone on your home network, or run it
-  without a window on a NAS (Docker, Unraid) ([how](docs/server.md)).
+  without a window on a PC that stays on ([how](docs/server.md)).
 - **Works from scripts too**: IDM's command-line switches, a command-line tool, and a local API for other programs ([how](docs/command-line.md)).
 - **Works with your AI assistant**: an MCP server lets Claude, Cursor or VS Code list, add, pause and remove your downloads ([set it up](docs/ai-assistants.md)).
 - **Leaves you some speed**: limit one download or all of them, only while you're at the computer.
@@ -297,31 +259,30 @@ pieces fit.
 
 | Tool | What it does |
 |---|---|
-| `tools\dev\check-cross.ps1` | Checks the code for Linux and macOS from Windows (with [Zig](https://ziglang.org) as the C compiler) |
-| `node tools/extension/e2e.mjs` | The browser extension in real Chrome, Brave, Edge and Firefox, headless: a link's download must reach MDM (or another MDM, a server); on Windows and Linux |
+| `node tools/extension/e2e.mjs` | The browser extension in real Chrome, Brave, Edge and Firefox, headless: a link's download must reach MDM (or another MDM, a server) |
 | `node tools/readme/build.mjs` | This page's pictures and comparison table, from the benchmark data |
 | `tools\lab\docs-shots.ps1` | The screenshots, from a separate test instance (`/show <window>` opens each window), off the screen |
 | `python tools/shots/make.py` | The help pages' pictures, from one list (`tools/shots/shots.toml`): shot, cropped, annotated, lossless WebP; `make.py check` keeps them in step |
-| `tools/lab/wsl/` | A WSL2 machine that builds MDM for Linux in minutes and shoots its windows on a virtual screen ([README](tools/lab/wsl/README.md)) |
 | `tools\lab\progress-shots.ps1` | The progress window of a video (yt-dlp) and of a torrent, from a swarm on this computer (`cargo run -p mdm-torrent --example swarm`) |
 | `python tools/website/build.py --serve` | misterdownloadmanager.com into `target/site` (help pages from `docs/`, news from the CHANGELOG, FAQ and legal pages from `website/content/`), served on http://127.0.0.1:8765; GitHub Pages publishes it (`pages.yml`) |
 | `python tools/readme/social.py` | The repository's social preview card (`docs/images/social-preview.png`) |
 | `MDM_FIT_AUDIT=<file>` | Lists every text that doesn't fit its window or runs over another |
 | `MDM_OFFSCREEN=1` | Opens every window off the screen, without focus, tray icon or sound (screenshots and checks) |
-| `MDM_TEST_TRASH_DIR=<folder>` | Tests only: archives deleted after extracting go into this folder, never into the real Recycle Bin or Trash |
+| `MDM_TEST_TRASH_DIR=<folder>` | Tests only: archives deleted after extracting go into this folder, never into the real Recycle Bin |
 | `MDM_TEST_7ZIP=<program>\|none` | Tests only: the 7-Zip program to use for 7z and RAR archives, or `none` to act as if 7-Zip weren't installed |
 
 </details>
 
 ## Status and helping out
 
-MDM is young: the engine, the main window and the browser integration are solid on Windows and
-Linux, and some corners are still "good enough for now".
+MDM is young: the engine, the main window and the browser integration are solid on Windows, and
+some corners are still "good enough for now".
 
 - **English only.** The interface, the installer, the extension and the website are in English;
   the earlier translations are kept on the `archive/multiplatform-i18n` branch.
-- Not yet: code signing. The macOS builds are untested; on Linux, screen readers (Orca) and
-  Flatpak browsers aren't supported yet.
+- **Windows only.** Linux and macOS builds are no longer made; the code that ran there is kept on
+  the `archive/multiplatform-i18n` branch.
+- Not yet: code signing.
 
 Bug reports and ideas are welcome in
 [Issues](https://github.com/anefzaoui/misterdownloadmanager/issues/new/choose): **Help → Report a problem**

@@ -20,7 +20,7 @@ branches and the category or queue you were looking at.
 | Column | What it shows |
 |---|---|
 | **Source** | **Web** (a web server) or **Torrent**. |
-| **File Name** | The file's name, after its type's icon: your system's own (Windows Explorer's, macOS Finder's, your Linux desktop's icon theme), or MDM's where the system has none. |
+| **File Name** | The file's name, after its type's icon: Windows Explorer's, or MDM's where the system has none. |
 | **Q** | A queue icon when the download is in a queue. |
 | **Size** | The file's size, when the server told it. |
 | **Status** | How far it is, or **Complete**, **Error** and so on. |
@@ -85,8 +85,7 @@ the whole window.
 Drag a link from a browser (or a page's text with links in it) onto the list to add it: one
 link opens **Download File Info**, several open **Link grabber** to choose which to add. Drop a
 `.torrent` file to add the torrent, or a list of addresses (`.txt`, `.ef2`) to import it. The
-list is outlined while something you can drop is over it. On macOS and Linux, files can be
-dropped (links from a browser only on Windows).
+list is outlined while something you can drop is over it.
 
 Right-click the list's blank space for **Add new download**, **Select all**, **Arrange files**,
 **Clear all filters** and **Delete All Completed**.

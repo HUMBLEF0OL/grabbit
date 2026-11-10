@@ -25,7 +25,7 @@ Mister Download Manager ("MDM") is free, open-source software made by Ahmed Nefz
 
 ### What stays on your computer
 
-Your download list, settings, logins you save in **Sites Logins**, the history of each download and the files you download are stored only on your computer: in `%APPDATA%\misterdownloadmanager` on Windows (or the `data` folder of the portable copy), and in the usual application-data folder on macOS and Linux. Nothing is uploaded anywhere. Uninstalling offers to delete them. From version 0.5.0, the passwords of Sites Logins, the proxy and debrid accounts go into the system's keychain instead (Windows Credential Manager, the keyring on Linux, the macOS keychain), still on your computer, when one is there and unlocked.
+Your download list, settings, logins you save in **Sites Logins**, the history of each download and the files you download are stored only on your computer: in `%APPDATA%\misterdownloadmanager` on Windows (or the `data` folder of the portable copy). Nothing is uploaded anywhere. Uninstalling offers to delete them. From version 0.5.0, the passwords of Sites Logins, the proxy and debrid accounts go into the system's keychain instead (Windows Credential Manager), still on your computer, when one is there and unlocked.
 
 ### Who the app talks to, and why
 

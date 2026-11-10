@@ -1,6 +1,6 @@
 # Mister Download Manager — documentation
 
-Mister Download Manager (MDM) is a free download manager for Windows and Linux (and, still experimental, macOS). It is laid out the way Internet Download Manager users expect: a toolbar, categories on the left, one list of downloads and a browser extension that hands downloads to it.
+Mister Download Manager (MDM) is a free download manager for Windows 10 and 11. It is laid out the way Internet Download Manager users expect: a toolbar, categories on the left, one list of downloads and a browser extension that hands downloads to it.
 
 These pages explain each part of the program. The tutorials walk through the things people do most, one task each.
 
@@ -8,7 +8,7 @@ These pages explain each part of the program. The tutorials walk through the thi
 
 ## Start here
 
-- **[Getting started](getting-started.md)** — install MDM (setup, portable or zip on Windows; the packages on Linux; the .dmg on a Mac), and find your way around the main window.
+- **[Getting started](getting-started.md)** — install MDM (setup, portable or zip), and find your way around the main window.
 - **[Your first download](guide-first-download.md)** — a two-minute walk-through from copied link to opened file.
 
 ## Downloading
@@ -16,7 +16,7 @@ These pages explain each part of the program. The tutorials walk through the thi
 - **[Adding downloads](adding-downloads.md)** — Add URL, the clipboard, the drop target, batch downloads and lists of links, and Start Download versus Download Later.
 - **[Link grabber and archives](link-grabber.md)** — many links at once, in packages; zip, 7z and rar archives extracted when they are downloaded.
 - **[Browser integration](browser-integration.md)** — the extension for Firefox (from addons.mozilla.org), Chrome, Edge, Brave, Opera and Vivaldi (from the Chrome Web Store), which downloads it takes, and what happens when MDM isn't running.
-- **[Run MDM on a server](server.md)** — MDM without a window on a home server or NAS (Docker, Unraid), downloading into its folders; send it downloads from your phone or browser.
+- **[Run MDM on a server](server.md)** — MDM without a window on a Windows PC that stays on, downloading into its folders; send it downloads from your phone or browser.
 - **[Control MDM from your phone](remote-control.md)** — add links, magnets and torrents from a phone or another computer at home, and watch and control the list.
 
 ## Organising

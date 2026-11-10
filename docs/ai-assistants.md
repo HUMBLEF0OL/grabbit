@@ -45,9 +45,6 @@ misterdownloadmanager-cli api on
 | Windows, for you only (the installer's default) | `%LOCALAPPDATA%\Programs\Mister Download Manager\misterdownloadmanager-mcp.exe` |
 | Windows, for everyone | `C:\Program Files\Mister Download Manager\misterdownloadmanager-mcp.exe` |
 | Windows, a zip or [portable copy](portable.md) | `misterdownloadmanager-mcp.exe` in its folder |
-| macOS | `/Applications/Mister Download Manager.app/Contents/MacOS/misterdownloadmanager-mcp` |
-| Linux, the .deb or .rpm | `/usr/bin/misterdownloadmanager-mcp` |
-| Linux, the .tar.gz | `misterdownloadmanager-mcp` in its folder (the AppImage doesn't expose it: use the .tar.gz) |
 
 A portable copy's server finds the portable copy's MDM by itself, from its own folder.
 

@@ -41,7 +41,7 @@ A name that would lead outside the folder is left out, and so is a link to somew
 disk. An archive that would write far more than its size, or more than the disk has room for,
 stops before it fills it. Extracted files are marked as coming from the internet, as the archive
 is, so Windows still warns before running a program from them. The archive itself goes to the
-Recycle Bin (the Trash on macOS and Linux) only if you ask.
+Recycle Bin only if you ask.
 
 ## Packages that know their archives
 

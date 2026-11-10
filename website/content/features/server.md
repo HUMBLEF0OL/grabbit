@@ -1,10 +1,10 @@
 ---
 name: Server mode
-title: Run MDM on a home server, NAS, Docker or Unraid
+title: Run MDM on a home server
 headline: Let the home server do the downloading.
-line: MDM without a window on a NAS, in Docker or on Unraid, fed from your phone or browser.
-lede: Run MDM without a window on a home server or a NAS, and send it downloads from your phone or your browser. The files land in the server's own folders, such as a network share.
-description: Run Mister Download Manager without a window on a home server, NAS, Docker or Unraid, and send it downloads from your phone or your browser.
+line: MDM without a window on a Windows PC that stays on, fed from your phone or browser.
+lede: Run MDM without a window on a Windows computer that stays on, and send it downloads from your phone or your browser. The files land in its own folders, such as a network share.
+description: Run Mister Download Manager without a window on a Windows home server, and send it downloads from your phone or your browser.
 group: network
 order: 240
 since: 0.5
@@ -16,18 +16,10 @@ help: server.md
 
 `misterdownloadmanager --headless` runs MDM with its list, categories, queues, Scheduler, speed
 limits and torrents, but no window. Its folders and port come from flags or the environment. It
-stops cleanly, saving its list, when the system stops it. It runs on any Linux machine with MDM
-installed, and on Windows and macOS the same way.
-
-## Docker and Unraid
-
-A `Dockerfile` and a Compose file come with MDM's source. For now you build the image yourself; a
-published image comes later. The first build is long, up to an hour on a small server, and the
-image is small, about 175 MB, with no desktop libraries.
+stops cleanly, saving its list, when it is stopped.
 
 Give it a folder for its settings and one for the downloads, where each category gets its own
-folder. Mount a network share there and the files land straight on it. On Unraid, a template
-maps the folders and runs MDM as `nobody:users`, as Unraid's shares expect.
+folder. Point the downloads at a network share and the files land straight on it.
 
 ## Control it from your phone or your browser
 
@@ -42,8 +34,7 @@ computer.
 
 ## What a server doesn't do
 
-Video pages and image galleries need helpers that the image doesn't include. Nothing opens a
-window, so a download that would ask a question, such as a duplicate, takes the choice set in the
+Nothing opens a window, so a download that would ask a question, such as a duplicate, takes the choice set in the
 settings, or isn't added. Don't publish the port on the internet: reach your home network through
 a VPN instead.
 

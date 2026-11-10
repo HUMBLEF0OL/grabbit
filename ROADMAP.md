@@ -5,7 +5,7 @@ issue, where the details and the discussion are. Released changes are in
 [CHANGELOG.md](CHANGELOG.md). Ideas and bug reports are welcome in
 [Issues](https://github.com/anefzaoui/misterdownloadmanager/issues).
 
-✅ done · 🔄 being built · 📋 planned · 🔍 looking into it
+✅ done · 🔄 being built · 📋 planned · 🔍 looking into it · ⛔ dropped
 
 ## Version 0.5.0
 
@@ -491,6 +491,10 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   start's), the right-to-left interface, the installer's languages, the extension's translations, the
   translated website and the translation tools are removed. File names in any script still show
   as they are. The earlier state is kept on the `archive/multiplatform-i18n` branch.
+- ✅ Windows only: the Linux and macOS builds (AppImage, .deb, .rpm, tar.gz, .dmg), the Safari
+  extension and the Docker image are no longer made, and their code, packaging, CI jobs and help
+  pages are removed. MDM on Windows works as before. The multi-platform state is kept on the
+  `archive/multiplatform-i18n` branch.
 
 ## Being worked on
 
@@ -501,27 +505,9 @@ These ship in a later version, when they're ready.
 - 🔄 Videos sent in pieces (HLS, DASH) downloading several pieces at once, as many as a file's
   connections ([#531](https://github.com/anefzaoui/misterdownloadmanager/issues/531)): in review;
   a video in one file (most of YouTube's) still comes over one connection
-- 🔄 Linux and macOS: the system's yt-dlp used when MDM has none of its own, with Helpers able\n  to switch to MDM's copy ([#452](https://github.com/anefzaoui/misterdownloadmanager/issues/452)): in review
-- 🔄 macOS: video look-ups in a copy of MDM a browser downloaded, without the Terminal command
-  ([#330](https://github.com/anefzaoui/misterdownloadmanager/issues/330),
-  [#339](https://github.com/anefzaoui/misterdownloadmanager/issues/339)): yt-dlp's folder build,
-  unpacked once and checked against its signed list; built and checked on macOS, still to
-  confirm on a person's Mac
 - 🔄 In English, the list's dates on the system's 12- or 24-hour clock
   ([#392](https://github.com/anefzaoui/misterdownloadmanager/issues/392)): in review
 - 🔄 Help: when an antivirus or VirusTotal flags MDM
-- 🔄 Linux, what's left ([#164](https://github.com/anefzaoui/misterdownloadmanager/issues/164)):
-  screen readers (Orca) reading MDM's windows; browsers installed as a Flatpak (Firefox from
-  Flathub may reach MDM through the desktop, as the Snap does: to check); native Wayland windows
-  (`MDM_WAYLAND=1`) placing their menus, which needs popup windows the window library doesn't
-  have yet, so XWayland stays the default; Vulkan as the default renderer (below)
-
-- 🔄 The Safari extension (macOS), part of the app: a click on a link to a listed file type, the
-  right-click items, the button over videos, Media on this page and the toolbar button, from one
-  source with the other browsers' extension. Safari gives extensions no way to see its downloads,
-  so a download a page starts by itself stays with Safari. Built and its relay to the helper
-  checked in the sandbox Safari uses; still to check in Safari itself, signed with a Developer ID
-
 - 🔄 A torrent's upload speed, peers and share ratio as columns in the download list
   ([#357](https://github.com/anefzaoui/misterdownloadmanager/issues/357)): the last one in review
 - 🔄 The browser extension's media list naming a file after its page, as an option: in review
@@ -533,17 +519,8 @@ These ship in a later version, when they're ready.
   ([#540](https://github.com/anefzaoui/misterdownloadmanager/issues/540)): a window with a title of
   256 characters or more got the system's title bar above MDM's own; that part is fixed, in review.
   Still to find: whether the reporter's window was one of them
-- 🔄 macOS 15 and later: PingFang moved into the system's font assets, so Chinese text lost its
-  font ([#541](https://github.com/anefzaoui/misterdownloadmanager/issues/541)): fix in review
 - 🔄 The video button still showing after it was switched off, or its site listed, in Options
   ([#532](https://github.com/anefzaoui/misterdownloadmanager/issues/532)): fix in review
-- 🔄 macOS: Persian and other Arabic-script file names drawn as boxes in the download list
-  ([#533](https://github.com/anefzaoui/misterdownloadmanager/issues/533)): fix in review, to
-  confirm on a Mac
-- 🔄 macOS: Download File Info opening behind the browser that asked for it\n  ([#484](https://github.com/anefzaoui/misterdownloadmanager/issues/484)): fix in review
-- 🔄 macOS: no icon in the menu bar, so closing the window quit MDM
-  ([#529](https://github.com/anefzaoui/misterdownloadmanager/issues/529)): fix in review, still to
-  confirm on a Mac
 - 🔄 The browser tests: the video button's focus case ran after the one that turns the button
   off for the test site, and timed out in a full run ([#480](https://github.com/anefzaoui/misterdownloadmanager/issues/480)): fix in review
 - 🔄 The video button vanishing over a hover-to-play preview (YouTube's thumbnails) before it
@@ -576,8 +553,6 @@ These ship in a later version, when they're ready.
   ([#507](https://github.com/anefzaoui/misterdownloadmanager/issues/507)): fix in review
 - 🔄 A freeze when a video finishes, while its file is marked as downloaded from the web
   ([#510](https://github.com/anefzaoui/misterdownloadmanager/issues/510)): fix in review
-- 🔄 Linux: Dark Mode support on window managers such as Hyprland and sway, which often have no
-  desktop portal to say dark or light ([#324](https://github.com/anefzaoui/misterdownloadmanager/issues/324)): fix in review
 - 🔄 A bright white line under the menu bar in dark mode
   ([#379](https://github.com/anefzaoui/misterdownloadmanager/issues/379)): fix in review
 - 🔄 Closing the main window follows a setting (on by default, MDM keeps running), and with no
@@ -636,12 +611,34 @@ These ship in a later version, when they're ready.
   cleaned up instead of staying beside MDM: fix in review
   ([#458](https://github.com/anefzaoui/misterdownloadmanager/pull/458))
 
+## Dropped
+
+MDM is Windows only now. These were being built or planned for Linux and macOS; their work is
+kept on the `archive/multiplatform-i18n` branch.
+
+- ⛔ Linux and macOS: the system's yt-dlp used when MDM has none of its own
+  ([#452](https://github.com/anefzaoui/misterdownloadmanager/issues/452))
+- ⛔ macOS: video look-ups in a copy of MDM a browser downloaded
+  ([#330](https://github.com/anefzaoui/misterdownloadmanager/issues/330),
+  [#339](https://github.com/anefzaoui/misterdownloadmanager/issues/339))
+- ⛔ Linux, what was left: screen readers (Orca), Flatpak browsers, native Wayland windows
+  ([#164](https://github.com/anefzaoui/misterdownloadmanager/issues/164))
+- ⛔ The Safari extension (macOS)
+- ⛔ macOS 15 and later: Chinese text's font (PingFang)
+  ([#541](https://github.com/anefzaoui/misterdownloadmanager/issues/541))
+- ⛔ macOS: Persian and other Arabic-script file names drawn as boxes
+  ([#533](https://github.com/anefzaoui/misterdownloadmanager/issues/533))
+- ⛔ macOS: Download File Info opening behind the browser
+  ([#484](https://github.com/anefzaoui/misterdownloadmanager/issues/484))
+- ⛔ macOS: no icon in the menu bar ([#529](https://github.com/anefzaoui/misterdownloadmanager/issues/529))
+- ⛔ Linux: Dark Mode support on Hyprland and sway
+  ([#324](https://github.com/anefzaoui/misterdownloadmanager/issues/324))
+- ⛔ Vulkan the default on Linux and Metal on macOS
+  ([#206](https://github.com/anefzaoui/misterdownloadmanager/issues/206))
+
 ## Planned
 
 ### Look and performance
 
-- 📋 Vulkan the default on Linux and Metal on macOS, once real graphics cards have tried them (AMD,
-  Intel and NVIDIA, X11 and Wayland, older cards without Vulkan)
-  ([#206](https://github.com/anefzaoui/misterdownloadmanager/issues/206))
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))

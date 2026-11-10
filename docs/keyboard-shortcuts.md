@@ -3,15 +3,13 @@
 [← Back to docs index](README.md)
 
 The same list is in MDM under **Help → Keyboard shortcuts**, and the menus show each command's
-keys beside it. On a Mac, **⌘** (Command) takes the place of **Ctrl**: **⌘N** adds a download.
+keys beside it.
 
 Everything can be done from the keyboard, and MDM works with screen readers (such as
 Narrator and NVDA on Windows): its windows, dialogs and menus tell them what each control is
 and its state, and the download list reads each download's name, status and size. The
 **Categories** pane reads as a tree (each category with its count, open or shut, selected or
 not), and the menu bar and every right-click menu as menus whose items can be run from there.
-On Linux, screen readers (Orca) don't read MDM's windows yet; the keyboard works there as
-everywhere.
 
 ## Adding and finding
 
@@ -56,8 +54,8 @@ a branch, and **Home** / **End** go to the first / last node.
 
 | Keys | What they do |
 |---|---|
-| **F10**, or **Alt** pressed alone | Open the first menu (**Tasks**); on a Mac **Ctrl+F2** |
-| **Alt** + a menu's underlined letter | Open that menu (Windows and Linux) |
+| **F10**, or **Alt** pressed alone | Open the first menu (**Tasks**) |
+| **Alt** + a menu's underlined letter | Open that menu |
 | **Up** / **Down** | Move through an open menu |
 | **Home** / **End** | The first / last item of an open menu |
 | **Left** / **Right** | The menu before / after; in a submenu, **Left** closes it |

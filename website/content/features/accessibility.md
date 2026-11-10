@@ -20,8 +20,7 @@ Every window of MDM, its dialogs and menus included, tells a screen reader what 
 its name and its state. The download list reads each download's name, status and size, so you
 know what is running and how far it has got without looking.
 
-The help names Windows' screen readers, Narrator and NVDA. If you use a screen reader on Linux
-or macOS, please [tell us how it goes](https://github.com/anefzaoui/misterdownloadmanager/issues/new/choose).
+The help names Windows' screen readers, Narrator and NVDA.
 
 ## No mouse needed
 
@@ -34,7 +33,7 @@ tree answers the arrow keys.
 In dialogs, **Tab** moves between controls, the arrows go through radio groups and tab strips,
 **Ctrl+Tab** changes tabs, and typing a name jumps to it in any list or drop-down. **Add URL**'s
 address and **Save As** keep a history you can walk with **Up** and **Down**, and the Scheduler's
-calendar works from the keyboard. On a Mac, **⌘** takes the place of **Ctrl**.
+calendar works from the keyboard.
 
 ## The keys are written down
 

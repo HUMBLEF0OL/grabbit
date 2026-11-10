@@ -75,25 +75,22 @@ MDM tells Windows it draws for each monitor's own scale, so Windows never stretc
 
 ## The window freezes or draws wrongly
 
-On Windows, MDM draws its windows with Direct3D 12; on Linux and macOS, with OpenGL, or with Vulkan (Linux) or Metal (macOS) when you choose them. A graphics driver can still misbehave: a window that holds still for seconds, flickers, or shows wrong colours or blocks. Try the other one: choose **View → Draw with → OpenGL** (or **Direct3D**, **Vulkan**, **Metal**), then quit MDM (**Tasks → Exit**) and start it again. Choosing the first one goes back the same way.
+MDM draws its windows with Direct3D 12. A graphics driver can still misbehave: a window that holds still for seconds, flickers, or shows wrong colours or blocks. Try the other one: choose **View → Draw with → OpenGL** (or **Direct3D**), then quit MDM (**Tasks → Exit**) and start it again. Choosing the first one goes back the same way.
 
 ![View → Draw with open: OpenGL and Direct3D](images/help/draw-with.webp)
 *View → Draw with: the other way of drawing.*
 
-- If Direct3D, Vulkan or Metal can't start on your computer (no driver for it, some virtual machines), or its first window doesn't show within 10 seconds of its own (the time MDM spends loading your list and its icons doesn't count, however slow the computer is just after it starts), MDM draws with OpenGL, and **View → Draw with** says so and why. Choosing it again tries it again at the next start.
-- On Linux, Vulkan needs your graphics card's Vulkan driver: Mesa's (`mesa-vulkan-drivers` on Ubuntu and Debian, `vulkan-radeon` or `vulkan-intel` on Arch) for AMD and Intel, NVIDIA's own driver for NVIDIA.
-- If neither can start, MDM draws with a software renderer (Microsoft's on Windows, Mesa's on Linux), so the window still opens (Remote Desktop, a virtual machine without a graphics driver). It works, but keeps the processor busier.
+- If Direct3D can't start on your computer (no driver for it, some virtual machines), or its first window doesn't show within 10 seconds of its own (the time MDM spends loading your list and its icons doesn't count, however slow the computer is just after it starts), MDM draws with OpenGL, and **View → Draw with** says so and why. Choosing it again tries it again at the next start.
+- If neither can start, MDM draws with a software renderer (Microsoft's), so the window still opens (Remote Desktop, a virtual machine without a graphics driver). It works, but keeps the processor busier.
 - If the graphics card is reset while MDM runs (a driver update), MDM starts again by itself. Lost twice in 10 minutes, it goes back to OpenGL, and **View → Draw with** says why.
 - Updating the graphics driver from the card maker's site (Intel, AMD or NVIDIA) fixes many of these problems.
-- A freeze whose report shows the window thread inside the graphics driver as it shows a frame (`ig4icd64.dll` or `ig9icd64.dll` for Intel, `nvoglv64.dll` for NVIDIA, `atio6axx.dll` for AMD, under `opengl32.dll`) is the driver's OpenGL stuck, not MDM: on Windows, choose **View → Draw with → Direct3D** (the default) and restart MDM, and update the graphics driver. If **Draw with** says Direct3D didn't start there, the line under it says why.
+- A freeze whose report shows the window thread inside the graphics driver as it shows a frame (`ig4icd64.dll` or `ig9icd64.dll` for Intel, `nvoglv64.dll` for NVIDIA, `atio6axx.dll` for AMD, under `opengl32.dll`) is the driver's OpenGL stuck, not MDM: choose **View → Draw with → Direct3D** (the default) and restart MDM, and update the graphics driver. If **Draw with** says Direct3D didn't start there, the line under it says why.
 - A freeze or crash report says which one was drawing, on which graphics card and driver, and why that one (chosen, the default, or the other one failing), on its `Drawing with:` line near the top: include it when you report a problem. A freeze report also says whether MDM was busy, waiting, or hardly ran at all (a computer too busy to run it); see [Crash reports](crash-reports.md).
 
 ## The setup or MDM won't start
 
 - If Windows says **Windows protected your PC**, click **More info**, check that the file is `MisterDownloadManager-<version>-setup.exe` from the [Releases](https://github.com/anefzaoui/misterdownloadmanager/releases) page, then click **Run anyway**.
 - MDM runs only once. Starting it again brings the running copy's window to the front. If nothing appears, look for MDM's icon in the notification area.
-- **Linux, from the AppImage or the tar.gz:** if the system lacks a library MDM's window needs (such as `libxkbcommon-x11`), MDM names it on the terminal and in a message box, with the command that installs it (`sudo apt install libxkbcommon-x11-0`, or your distribution's). The .deb and .rpm bring these libraries themselves. In a Wayland session MDM opens its window on Wayland instead.
-- **Linux, the first start is slow:** MDM looks up the system's fonts for every script once, all together, while it starts (fontconfig); a first start on a busy computer can take a few seconds more. Install your distribution's Noto fonts if some scripts or symbols show as boxes.
 
 ## My antivirus or VirusTotal flags MDM {#antivirus}
 
@@ -102,23 +99,18 @@ A few antivirus programs flag new installers just because they have rarely seen 
 To check that your copy is the real one:
 
 1. Download MDM only from [the website](https://misterdownloadmanager.com) or [GitHub Releases](https://github.com/anefzaoui/misterdownloadmanager/releases).
-2. Get your file's SHA-256. On Windows, run `certutil -hashfile "MisterDownloadManager-0.5.0-setup.exe" SHA256`; on Linux, `sha256sum` and the file's name.
+2. Get your file's SHA-256: run `certutil -hashfile "MisterDownloadManager-0.5.0-setup.exe" SHA256`.
 3. Compare it with the same file's line in that release's `SHA256SUMS.txt`.
 
 If they match, it is the file we published. Every release is built on GitHub from the [public source code](https://github.com/anefzaoui/misterdownloadmanager), so anyone can read what went into it.
 
 If your antivirus quarantined MDM, restore it and add an exception for its folder. If it flags something other than the setup or MDM's own programs, or a copy from anywhere else, don't run it, and please [tell us](https://github.com/anefzaoui/misterdownloadmanager/issues).
 
-## HTTPS downloads fail with "no certificates" (Linux)
-
-A minimal Linux system (often with the AppImage, the tar.gz or a build from source) may have no CA certificates, which MDM needs to check a secure server. Plain `http://` and `ftp://` downloads still work; each `https://` or `ftps://` one stops at once saying the computer has no certificates to check the server with. Install the `ca-certificates` package (`sudo apt install ca-certificates`, `sudo dnf install ca-certificates`), then resume the download. The .deb and .rpm bring it.
-
 ## Where your data is
 
 - Installed or the plain zip: `%APPDATA%\misterdownloadmanager`. The list and settings are in `downloads.json`.
 - Portable: the `data` folder next to `misterdownloadmanager.exe`.
-- Linux: `~/.local/share/misterdownloadmanager`; a Mac: `~/Library/Application Support/misterdownloadmanager`.
-- Passwords (Sites Logins, the proxy, debrid accounts) are in the system's keychain, not in `downloads.json`; see [Options → Sites Logins](options.md#sites-logins).
+- Passwords (Sites Logins, the proxy, debrid accounts) are in Windows Credential Manager, not in `downloads.json`; see [Options → Sites Logins](options.md#sites-logins).
 
 To back up your list, quit MDM (**Tasks → Exit**) and copy `downloads.json`.
 
@@ -130,16 +122,10 @@ When there is one, **Update now** downloads it, checks it, puts it in place and 
 
 | You installed | What Update now does |
 |---|---|
-| Windows, the setup | Runs the new setup without its windows. An installation for all users asks for the administrator's permission. |
-| Windows, the portable or plain zip | Replaces the programs in their folder (a portable copy's `data` folder is kept). |
-| Mac | Replaces the app in Applications. |
-| Linux, the AppImage or the .tar.gz | Replaces the AppImage, or the programs in their folder. |
-| Linux, the .deb or .rpm | Opens the checked package in your system's package installer, which asks for your password. |
-| Linux, another package manager's package (pacman, ...) | Nothing: the window says so, and your system's updates bring the new version. |
+| The setup | Runs the new setup without its windows. An installation for all users asks for the administrator's permission. |
+| The portable or plain zip | Replaces the programs in their folder (a portable copy's `data` folder is kept). |
 
 MDM installs an update only when the release's list of checksums is signed by MDM's release key and the file matches it; anything else is refused, and **Download** opens the [Releases](https://github.com/anefzaoui/misterdownloadmanager/releases) page instead. Updating this way starts with version 0.2.1: earlier versions open the Releases page.
-
-The AppImage can also be updated by AppImage tools (AppImageLauncher, Gear Lever, AppImageUpdate): it carries the address of its updates, and each release has its `.AppImage.zsync` file, so those tools download only the parts that changed. This starts with the AppImage of the version after 0.2.4.
 
 **Help → About Mister Download Manager** shows the version you have.
 

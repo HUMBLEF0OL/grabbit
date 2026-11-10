@@ -115,8 +115,6 @@ The same window has the network switches (incoming connections, the port, UPnP, 
 
 MDM starts its torrent engine the first time you add a torrent. If you never use torrents, it never listens for peers.
 
-On a Linux system without CA certificates (a minimal install without the `ca-certificates` package), torrents still work: peers, the DHT and `http://` trackers. An `https://` tracker can't be checked there, so MDM skips it; install that package to use those too.
-
 With a debrid account, torrents and magnet links can go to the service instead of to peers, and MDM downloads the files from it over HTTP: see [Torrents through the service](debrid.md#torrents-through-the-service).
 
 ## Next steps

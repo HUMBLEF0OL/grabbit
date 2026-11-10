@@ -23,8 +23,7 @@ IDM this way can drive MDM by changing the program's name.
 misterdownloadmanager.exe /d https://example.com/files/report.pdf /p D:\Reports /n
 ```
 
-If MDM is running, the command goes to it; if not, MDM starts and carries it out. On macOS and
-Linux the program has the same name, without `.exe`.
+If MDM is running, the command goes to it; if not, MDM starts and carries it out.
 
 ## A downloader for the terminal
 

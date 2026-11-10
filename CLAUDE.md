@@ -15,9 +15,8 @@ craft-libs), laid out the way Internet Download Manager users expect. Start by r
    their owners and their sources in `website/assets/alts/SOURCES.txt`.
 2. Every user-visible text goes through `crate::i18n` (`t`, `tc`, `tn`, `fmt`; data inside a
    sentence through `ltr`/`isolate`). MDM is English only: the helpers return the English text.
-3. Windows-only calls live in `crates/app/src/win32.rs`, their Linux and macOS counterparts in
-   `unix.rs`; the rest of the workspace is safe, portable Rust (`unsafe_code = "deny"`). A
-   feature works on every system, or says why it can't (`cfg` with a comment).
+3. MDM is Windows only. Windows-only calls live in `crates/app/src/win32.rs`; the rest of the
+   workspace is safe, portable Rust (`unsafe_code = "deny"`).
 4. Fix root causes, keep data contracts aligned between producers and consumers, and verify the
    whole system end to end after each change.
 5. Every PR updates [ROADMAP.md](ROADMAP.md): move its item to done (or add it), keep the
@@ -36,8 +35,7 @@ craft-libs), laid out the way Internet Download Manager users expect. Start by r
 ## Commands
 
 - `cargo build` / `cargo test` / `cargo clippy --all-targets` / `cargo fmt --all` — workspace.
-- `tools/dev/check-cross.ps1` — clippy for Linux and macOS from Windows (needs Zig, see the
-  script); `node tools/extension/e2e.mjs` — the extension in real headless browsers.
+- `node tools/extension/e2e.mjs` — the extension in real headless browsers.
 - `cargo run -p mdm-labserver -- --faults "rate=2M"` — test server (GET / lists the faults).
 - `cargo run -p mdm-app -- --cli get <url> -o <dir>` — headless download with progress (the
   app's program runs the command line; `misterdownloadmanager-cli` is only its launcher).
@@ -48,8 +46,6 @@ craft-libs), laid out the way Internet Download Manager users expect. Start by r
 - Website design goes through the Impeccable skill (`/impeccable`, `.claude/skills/impeccable`):
   product truth in [PRODUCT.md](PRODUCT.md), the visual system in DESIGN.md, the site's
   direction contract in `.impeccable/surfaces/`; its hook checks every website edit.
-- `tools/installer/build-linux.sh` / `build-macos.sh` — the Linux (AppImage, tar.gz, .deb, .rpm)
-  and the experimental macOS (.dmg) downloads; run by `release.yml` on GitHub's runners.
 - Windows: if `cargo` isn't on PATH in an old shell, prefix
   `$env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"`.
 

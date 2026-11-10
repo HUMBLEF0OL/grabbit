@@ -41,11 +41,9 @@ own address, one ending in `.jpg` or `.png`, still downloads as a single file.
 
 ## A helper you can check
 
-gallery-dl is an optional helper, like yt-dlp for [videos](/features/video.html). On Windows and
-Linux, MDM installs it the first time you need it, from its releases on Codeberg, and only when
-the release is signed by its author's key. On macOS, install it with Homebrew or pip and choose
-it in **Helpers...**, which also takes your own copy on any system, such as the gallery-dl your
-Linux distribution ships (version 1.20 or later).
+gallery-dl is an optional helper, like yt-dlp for [videos](/features/video.html). MDM installs it
+the first time you need it, from its releases on Codeberg, and only when the release is signed
+by its author's key. **Helpers...** also takes your own copy (version 1.20 or later).
 
 It asks sites for one picture a second at most, and names itself as MDM, because some servers,
 Wikimedia's among them, refuse tools that ask faster or without a name. It uses no
