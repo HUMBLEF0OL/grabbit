@@ -1637,7 +1637,7 @@ const popupState = (listeners) =>
 // ("site-access"), and a popup text for each.
 {
   const rust = readFileSync(new URL("../../crates/ipc/src/capture.rs", import.meta.url), "utf8");
-  const body = /pub fn code\(self\)[\s\S]*?\n    \}\n/.exec(rust)[0];
+  const body = /pub fn code\(self\)[\s\S]*?\r?\n    \}\r?\n/.exec(rust)[0];
   const codes = [...body.matchAll(/=> "([a-z-]+)"/g)].map((m) => m[1]);
   assert.deepEqual(codes, ["integration-off", "browser", "file-type", "site", "address", "small"]);
   const en = JSON.parse(readFileSync(new URL("../../extension/_locales/en/messages.json", import.meta.url), "utf8"));

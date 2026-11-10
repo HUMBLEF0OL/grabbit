@@ -42,7 +42,8 @@ craft-libs), laid out the way Internet Download Manager users expect. Start by r
 - `tools/extension/pack.ps1` — build the extension for Chromium and Firefox into
   `target/extension/`; `node tools/extension/test.mjs` — its logic against fake browser APIs.
 - `tools/installer/build.ps1` — the Windows installer and portable zip into `target/dist/`.
-- `python tools/website/build.py --serve` — the website (English only) on 127.0.0.1:8765.
+- `python tools/website/build.py --serve` — the website (English only) on 127.0.0.1:8765; needs
+  Python 3.12 or newer (as CI uses), with `markdown` installed.
 - Website design goes through the Impeccable skill (`/impeccable`, `.claude/skills/impeccable`):
   product truth in [PRODUCT.md](PRODUCT.md), the visual system in DESIGN.md, the site's
   direction contract in `.impeccable/surfaces/`; its hook checks every website edit.

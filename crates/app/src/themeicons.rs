@@ -280,14 +280,13 @@ fn colour(s: &str) -> Option<(usize, bool)> {
 /// (`assets/themes/<set>/icons/<size>/<name>`).
 macro_rules! builtin_files {
     ($dir:literal; $($px:literal: [$($f:literal),* $(,)?]);* $(;)?) => {{
-        let mut files: Vec<(u32, &'static str, Arc<[u8]>)> = Vec::new();
-        $($(files.push((
+        let files: Vec<(u32, &'static str, Arc<[u8]>)> = vec![$($((
             $px,
             $f,
             Arc::from(&include_bytes!(concat!(
                 "../assets/themes/", $dir, "/icons/", stringify!($px), "/", $f
             ))[..]),
-        ));)*)*
+        ),)*)*];
         files
     }};
 }
