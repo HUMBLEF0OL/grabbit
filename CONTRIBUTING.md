@@ -23,6 +23,14 @@ cargo run -p mdm-app
 generated files with whatever trouble you ask for (slow connections, cuts, busy answers, no
 ranges; `GET /` lists them), so downloads can be tested without the internet.
 
+## Branches
+
+- **`dev`** is where work lands. Branch from it and open your pull request against it.
+- **`main`** is what's released: the website publishes from it and release tags (`vX.Y.Z`) are
+  cut on it. It only moves by a pull request from `dev` (a release) or a hotfix.
+- **Hotfix:** branch from `main`, open the pull request against `main`, then merge `main` back
+  into `dev`.
+
 ## Before you open a pull request
 
 These are the checks CI runs; each works on a clean clone:

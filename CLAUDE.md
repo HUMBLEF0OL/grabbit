@@ -29,6 +29,10 @@ craft-libs), laid out the way Internet Download Manager users expect. Start by r
    Neutral test folders in shots, no IDM artwork. A change with nothing to see shows its proof
    (tables, logs) instead and says so.
 
+7. **Branches:** work branches from `dev` and its PRs target `dev`. `main` is the release branch
+   (website, tags): it takes only a `dev` → `main` release PR or a hotfix from `main`, which is
+   then merged back into `dev`. See [CONTRIBUTING.md](CONTRIBUTING.md#branches).
+
 ## Commands
 
 - `cargo build` / `cargo test` / `cargo clippy --all-targets` / `cargo fmt --all` — workspace.

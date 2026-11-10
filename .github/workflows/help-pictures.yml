@@ -14,7 +14,7 @@ on:
       - "tools/shots/**"
       - ".github/workflows/help-pictures.yml"
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - "docs/**"
       - "README.md"

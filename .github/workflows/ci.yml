@@ -1,14 +1,14 @@
-# Build, lint and test main and every pull request: Windows and Linux, which must pass, and the
+# Build, lint and test main, dev and every pull request: Windows and Linux, which must pass, and the
 # experimental macOS build (its failures are reported but don't fail the run).
 name: CI
 
-# Pushes to main only: a pull request's branch is tested once as the pull request (a bare push:
+# Pushes to main and dev only: a pull request's branch is tested once as the pull request (a bare push:
 # ran everything twice), and a release tag's commit was already tested on main.
 # A change to the website or the docs alone builds nothing here (the app embeds none of it; the
 # Website workflow builds the site). The app's own catalogs, i18n/*.tsv, still run everything.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths-ignore:
       - "website/**"
       - "tools/website/**"
@@ -23,7 +23,7 @@ on:
       - "docs/**"
       - "**/*.md"
 
-# A newer commit on a pull request makes its older run moot: cancel it (main runs to the end).
+# A newer commit on a pull request makes its older run moot: cancel it (main and dev run to the end).
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
