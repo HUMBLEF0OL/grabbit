@@ -1,5 +1,4 @@
-# Build, lint and test main, dev and every pull request: Windows and Linux, which must pass, and the
-# experimental macOS build (its failures are reported but don't fail the run).
+# Build, lint and test main, dev and every pull request on Windows.
 name: CI
 
 # Pushes to main and dev only: a pull request's branch is tested once as the pull request (a bare push:
@@ -34,18 +33,9 @@ env:
 
 jobs:
   rust:
-    name: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-          - os: ubuntu-latest
-          - os: macos-latest
-            experimental: true
-    runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.experimental == true }}
-    # A cold build takes about 10 minutes; a hung runner (apt-get once hung for hours) is cut off
+    name: windows-latest
+    runs-on: windows-latest
+    # A cold build takes about 10 minutes; a hung runner is cut off
     # instead of running to GitHub's 6 hours.
     timeout-minutes: 45
     steps:
@@ -64,16 +54,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      - name: Linux libraries
-        if: runner.os == 'Linux'
-        timeout-minutes: 10
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev \
-            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
-
       - name: Format
-        if: runner.os == 'Windows'
         run: cargo fmt --all --check
 
       - name: Clippy
@@ -81,14 +62,6 @@ jobs:
 
       - name: Tests
         run: cargo test --workspace
-
-      # Safari's extension (macOS): its native half relays to the helper from inside the
-      # sandbox Safari makes it run in. Safari itself isn't needed.
-      - name: Safari extension's relay and helper, sandboxed
-        if: runner.os == 'macOS'
-        run: |
-          cargo build --release -p mdm-nmhost
-          tools/safari/selftest.sh target/release/misterdownloadmanager-nmhost
 
   extension:
     name: browser extension

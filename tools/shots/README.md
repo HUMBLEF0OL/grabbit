@@ -99,12 +99,3 @@ figure with its caption, with the picture's width and height (no layout shift), 
 after a page's first picture, and the night version beside it, shown with the site's dark theme
 (the visitor's system choice, or the header's switch). Clicking a picture opens it larger.
 
-## Linux
-
-The list's pictures are Windows'. Linux differs where the desktop takes part (the tray, the
-file chooser, the window frames), and those can't be taken on a virtual screen: the WSL2 lab's
-Xvfb has no tray host and no desktop portal (`tools/lab/wsl/README.md`). The Linux pictures
-(`docs/images/*-linux.webp`, the site's `website/assets/screens/*-linux-*.webp`) are taken on a
-real desktop in the lab's virtual machines instead: `tools/lab/linux-vm/docs-shots-host.ps1`
-(its header says how), GNOME for the whole list, KDE Plasma, Cinnamon and Xfce for their main
-window.

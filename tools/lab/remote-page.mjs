@@ -34,10 +34,6 @@ const candidates = [
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
   `${process.env.LOCALAPPDATA}\\Google\\Chrome\\Application\\chrome.exe`,
   "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-  "/usr/bin/chromium",
-  "/usr/bin/chromium-browser",
-  "/usr/bin/google-chrome",
-  "/snap/bin/chromium",
 ].filter(Boolean);
 const browser = candidates.find((p) => fs.existsSync(p));
 if (!browser) throw new Error("no Chromium found (--browser)");

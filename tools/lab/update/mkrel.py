@@ -2,41 +2,39 @@
 """A fake MDM release for Update now's end-to-end tests (never a real one): the asset, its
 SHA256SUMS.txt signed with a throwaway key, and GitHub's latest-release JSON for MDM_UPDATE_FEED.
 
-    mkrel.py --keys DIR --out DIR --base URL --asset NAME --kind zip|targz|file --program FILE
+    mkrel.py --keys DIR --out DIR --base URL --asset NAME --program FILE
              [--version 9.9.9] [--sums good|bad] [--signer test|other] [--asset-base URL] [--pad MB]
 
 --keys: a folder of this run's own. Its first use makes two throwaway Ed25519 keys there, "test"
 (its public half in test-key.asc, for MDM_TEST_UPDATE_KEY) and "other" (a stranger's: a release
 it signs must be refused). Never MDM's release key: that one isn't read or needed.
 
-zip / targz: a folder named after the asset holding the program and a NEW-COPY.txt marker (the
-portable zip, the .tar.gz). file: the program itself with a marker appended (an AppImage's place).
+The asset is a zip: a folder named after it holding the program and a NEW-COPY.txt marker (the
+portable zip).
 --sums bad lists a wrong checksum; --asset-base serves the asset elsewhere (a slow server);
 --pad adds that many MB of random bytes to the archive (a long download).
 
-gpg is needed: Linux's, or Git for Windows' (usr/bin/gpg.exe).
+gpg is needed: Git for Windows has one (usr/bin/gpg.exe).
 """
 import argparse
 import hashlib
-import io
 import json
 import os
 import shutil
 import subprocess
-import tarfile
 import zipfile
 
 
 def find_gpg():
     gpg = shutil.which("gpg")
-    if not gpg and os.name == "nt":
+    if not gpg:
         for base in (os.environ.get("ProgramFiles", r"C:\Program Files"), r"C:\Program Files (x86)"):
             cand = os.path.join(base, "Git", "usr", "bin", "gpg.exe")
             if os.path.exists(cand):
                 gpg = cand
                 break
     if not gpg:
-        raise SystemExit("gpg not found (Linux: apt install gnupg; Windows: Git for Windows has one)")
+        raise SystemExit("gpg not found (Git for Windows has one)")
     return gpg
 
 
@@ -92,7 +90,6 @@ def main():
     ap.add_argument("--base", required=True)
     ap.add_argument("--version", default="9.9.9")
     ap.add_argument("--asset", required=True)
-    ap.add_argument("--kind", choices=["zip", "targz", "file"], required=True)
     ap.add_argument("--program", required=True)
     ap.add_argument("--program-name", default=None)
     ap.add_argument("--sums", choices=["good", "bad"], default="good")
@@ -107,30 +104,15 @@ def main():
     prog = open(a.program, "rb").read()
     name = a.program_name or os.path.basename(a.program)
     folder = a.asset
-    for ext in (".tar.gz", ".zip"):
-        if folder.endswith(ext):
-            folder = folder[: -len(ext)]
+    if folder.endswith(".zip"):
+        folder = folder[:-4]
     asset_path = os.path.join(a.out, a.asset)
     pad = os.urandom(a.pad * 1024 * 1024) if a.pad else b""
-    if a.kind == "zip":
-        with zipfile.ZipFile(asset_path, "w", zipfile.ZIP_DEFLATED) as z:
-            z.writestr(f"{folder}/{name}", prog)
-            z.writestr(f"{folder}/NEW-COPY.txt", marker)
-            if pad:
-                z.writestr(f"{folder}/padding.bin", pad, compress_type=zipfile.ZIP_STORED)
-    elif a.kind == "targz":
-        files = [(name, prog, 0o755), ("NEW-COPY.txt", marker, 0o644)]
+    with zipfile.ZipFile(asset_path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(f"{folder}/{name}", prog)
+        z.writestr(f"{folder}/NEW-COPY.txt", marker)
         if pad:
-            files.append(("padding.bin", pad, 0o644))
-        with tarfile.open(asset_path, "w:gz") as t:
-            for n, data, mode in files:
-                info = tarfile.TarInfo(f"{folder}/{n}")
-                info.size, info.mode = len(data), mode
-                t.addfile(info, io.BytesIO(data))
-    else:
-        open(asset_path, "wb").write(prog + b"\n" + marker)
-        if os.name != "nt":
-            os.chmod(asset_path, 0o755)
+            z.writestr(f"{folder}/padding.bin", pad, compress_type=zipfile.ZIP_STORED)
 
     digest = hashlib.sha256(open(asset_path, "rb").read()).hexdigest()
     if a.sums == "bad":

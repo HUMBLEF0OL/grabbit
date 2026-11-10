@@ -1,4 +1,4 @@
-"""One file of a GitHub release, for the release builds' helpers (dump_syms, appimagetool).
+"""One file of a GitHub release, for the release builds' helpers (dump_syms).
 
     python tools/installer/fetch_release.py <owner/repo> <tag> <file name> <output path>
 

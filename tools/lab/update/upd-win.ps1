@@ -71,7 +71,7 @@ $base = "http://127.0.0.1:$Port/files"
 $asset = "MisterDownloadManager-9.9.9-portable.zip"
 function Release([string]$name, [string[]]$more) {
   $out = "$Work\rel-$name"
-  & python "$PSScriptRoot\mkrel.py" --keys $keys --out $out --base $base --asset $asset --kind zip `
+  & python "$PSScriptRoot\mkrel.py" --keys $keys --out $out --base $base --asset $asset `
     --program $Exe --program-name misterdownloadmanager.exe @more | ForEach-Object { Log "  $_" }
   if ($LASTEXITCODE) { throw "mkrel.py failed" }
   $out

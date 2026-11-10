@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Writes website/content/third-party.tsv: every Rust library compiled into the app, the CLI and
-the browser helper (normal and build dependencies, every target), with its version, licence and
+the browser helper (normal and build dependencies, for 64-bit Windows), with its version, licence and
 repository, for the site's License page. Run after changing dependencies:
 
     python tools/website/third_party.py
@@ -14,7 +14,7 @@ OURS = {"mdm-app", "mdm-cli", "mdm-nmhost", "mdm-engine", "mdm-ipc", "mdm-tools"
 rows = set()
 for package in ("mdm-app", "mdm-cli", "mdm-nmhost"):
     out = subprocess.run(
-        ["cargo", "tree", "-p", package, "-e", "normal,build", "--prefix", "none", "--target", "all",
+        ["cargo", "tree", "-p", package, "-e", "normal,build", "--prefix", "none", "--target", "x86_64-pc-windows-msvc",
          "-f", "{p}\t{l}\t{r}"],
         cwd=ROOT, capture_output=True, text=True, check=True).stdout
     for line in out.splitlines():

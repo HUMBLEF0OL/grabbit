@@ -109,25 +109,6 @@ def setup_size() -> str:
     return ""
 
 
-def mac_file(arch: str) -> str:
-    """The .dmg for a Mac with `arch` (arm64, x86_64): one per processor (#25), or the one
-    universal .dmg of a release from before."""
-    universal = f"MisterDownloadManager-{VERSION}-macos-universal-experimental.dmg"
-    if any(a.get("name") == universal for a in LATEST.get("assets", [])):
-        return f"{RELEASE}-macos-universal-experimental.dmg"
-    return f"{RELEASE}-macos-{arch}-experimental.dmg"
-
-
-def linux_file(ext: str) -> str:
-    """The Linux file ending in `ext` (.AppImage, .deb, .rpm, .tar.gz): named without
-    "-experimental" from the release after 0.2.4 (tools/installer/build-linux.sh), with it in a
-    release from before."""
-    old = f"MisterDownloadManager-{VERSION}-linux-x86_64-experimental{ext}"
-    if any(a.get("name") == old for a in LATEST.get("assets", [])):
-        return f"{RELEASE}-linux-x86_64-experimental{ext}"
-    return f"{RELEASE}-linux-x86_64{ext}"
-
-
 VERSION = published_version()
 SETUP_SIZE = setup_size()
 TODAY = datetime.date.today().isoformat()
@@ -136,12 +117,6 @@ FILES = {
     "setup": f"{RELEASE}-setup.exe",
     "portable": f"{RELEASE}-portable.zip",
     "zip": f"{RELEASE}-x64.zip",
-    "dmg_arm64": mac_file("arm64"),
-    "dmg_intel": mac_file("x86_64"),
-    "appimage": linux_file(".AppImage"),
-    "deb": linux_file(".deb"),
-    "rpm": linux_file(".rpm"),
-    "tar": linux_file(".tar.gz"),
     "chromium": f"{RELEASE}-extension-chromium.zip",
     "firefox": f"{RELEASE}-extension-firefox.xpi",
     "sums": f"{REPO}/releases/download/v{VERSION}/SHA256SUMS.txt",
@@ -320,8 +295,6 @@ def clip(text: str, n: int = 158) -> str:
 
 ICONS = """<svg width="0" height="0" class="defs" aria-hidden="true">
   <symbol id="os-windows" viewBox="0 0 24 24"><path d="M2 4.6 10 3.5v7.9H2zM11 3.4 22 2v9.4H11zM2 12.4h8v7.9l-8-1.1zM11 12.4h11V22l-11-1.5z"/></symbol>
-  <symbol id="os-macos" viewBox="0 0 24 24"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></symbol>
-  <symbol id="os-linux" viewBox="0 0 24 24"><path d="M12 1.5c-2.6 0-4.3 2-4.3 4.6 0 1.4.3 2.3-.6 3.6C5.6 11.9 4.6 14 4.6 16.3c0 3.2 3.1 5.7 7.4 5.7s7.4-2.5 7.4-5.7c0-2.3-1-4.4-2.5-6.6-.9-1.3-.6-2.2-.6-3.6 0-2.6-1.7-4.6-4.3-4.6z"/><path d="M12 9.6c-2.4 0-4.1 2.9-4.1 6.2 0 2.6 1.8 4.4 4.1 4.4s4.1-1.8 4.1-4.4c0-3.3-1.7-6.2-4.1-6.2z" fill="var(--paper)"/><circle cx="10.5" cy="5.6" r=".95" fill="var(--paper)"/><circle cx="13.5" cy="5.6" r=".95" fill="var(--paper)"/><path d="M10.3 7.3h3.4L12 9.2z" fill="#f2b630"/><path d="M3.6 21.6c.4-2.2 2.6-3.3 4.6-2.3-.2 2-2.6 3.3-4.6 2.3zm16.8 0c-.4-2.2-2.6-3.3-4.6-2.3.2 2 2.6 3.3 4.6 2.3z" fill="#f2b630"/></symbol>
   <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></symbol>
   <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2.8l2.84 5.76 6.36.92-4.6 4.49 1.08 6.33L12 17.31l-5.68 2.99 1.08-6.33-4.6-4.49 6.36-.92z"/></symbol>
   <symbol id="i-fork" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 3v4a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4V3M12 11v10"/><circle cx="6" cy="4" r="2"/><circle cx="18" cy="4" r="2"/><circle cx="12" cy="20" r="2"/></symbol>
@@ -368,14 +341,10 @@ def gh_pill(cls: str = "gh-pill") -> str:
 
 
 def os_menu() -> str:
-    """The split download button's list: every system and file (hero, final call)."""
+    """The split download button's list: every file (hero, final call)."""
     rows = [
         ("windows", "Windows installer", "setup.exe · Windows 10 and 11", FILES["setup"]),
         ("windows", "Windows portable", "portable.zip · runs from a folder or USB stick", FILES["portable"]),
-        ("macos", "macOS Apple Silicon", ".dmg · M1 and later · experimental", FILES["dmg_arm64"]),
-        ("macos", "macOS Intel", ".dmg · Macs with an Intel processor · experimental", FILES["dmg_intel"]),
-        ("linux", "Linux AppImage", "any distribution · experimental", FILES["appimage"]),
-        ("linux", "Linux .deb / .rpm", "Debian, Ubuntu · Fedora, openSUSE", "/download.html#linux"),
     ]
     items = "".join(
         f'<li><a href="{href}"><svg class="os-ico" aria-hidden="true"><use href="#os-{os_}"/></svg>'
@@ -385,14 +354,14 @@ def os_menu() -> str:
 
 
 def split_button(extra_class: str = "") -> str:
-    """Download for <your system>, with the other systems under its arrow."""
+    """Download for Windows, with the other files under its arrow."""
     return f"""<div class="split{extra_class}">
           <a class="btn btn-go split-main" href="/download.html" data-os-cta>
             <svg class="os-ico" aria-hidden="true"><use href="#os-windows" data-os-cta-icon/></svg>
             <span data-os-label>Download for Windows</span>
           </a>
           <details class="split-more">
-            <summary class="btn btn-go" aria-label="Other systems and files"><svg aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+            <summary class="btn btn-go" aria-label="Other files"><svg aria-hidden="true"><use href="#i-chevron"/></svg></summary>
             {os_menu()}
           </details>
         </div>"""
@@ -500,8 +469,6 @@ def footer() -> str:
           <ul>
             <li><a href="/download.html">Download</a></li>
             <li><a href="/download.html#windows">Windows</a></li>
-            <li><a href="/download.html#macos">macOS</a></li>
-            <li><a href="/download.html#linux">Linux</a></li>
             <li><a href="/download.html#extension">Browser extension</a></li>
             <li><a href="/features/">Features</a></li>
             <li><a href="/themes.html">Themes</a></li>
@@ -692,7 +659,7 @@ SOFTWARE_LD = {
     "alternateName": "MDM",
     "applicationCategory": "UtilitiesApplication",
     "applicationSubCategory": "Download manager",
-    "operatingSystem": "Windows 10, Windows 11, macOS (experimental), Linux (experimental)",
+    "operatingSystem": "Windows 10, Windows 11",
     "softwareVersion": VERSION,
     "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
     "license": "https://www.gnu.org/licenses/gpl-3.0.html",
@@ -984,7 +951,7 @@ def build_faq() -> None:
                         "acceptedAnswer": {"@type": "Answer", "text": md(a)}} for question, _, a in allq],
     }]
     write("/faq/", f"Questions and answers — {NAME}",
-          f"Answers about {NAME}: is it free, is it safe, how it compares with IDM, browsers, videos, torrents, speed, Mac and Linux, and more.",
+          f"Answers about {NAME}: is it free, is it safe, how it compares with IDM, browsers, videos, torrents, speed, and more.",
           f"""{page_head("Questions and answers", "Short answers to what people ask most, each with a link to the full guide.", trail)}
     <div class="wrap narrow prose page-body">
       {"".join(parts)}
@@ -1540,8 +1507,6 @@ def build_themes() -> None:
           <p>Put the file in MDM's themes folder. <b>View → Theme → Open themes folder</b> opens it, and makes it the first time. It is in MDM's data folder:</p>
           <dl class="fields os-paths">
             <div><dt>Windows</dt><dd><code translate="no">%APPDATA%\\misterdownloadmanager\\themes</code></dd></div>
-            <div><dt>Linux</dt><dd><code translate="no">~/.local/share/misterdownloadmanager/themes</code></dd></div>
-            <div><dt>macOS</dt><dd><code translate="no">~/Library/Application Support/misterdownloadmanager/themes</code></dd></div>
             <div><dt>Portable copy</dt><dd><code translate="no">data\\themes</code> beside the program</dd></div>
           </dl>
           <p>Within two seconds it shows in <b>View → Theme</b>, under the built-in themes, by the <code>name</code> it gives itself. Pick it and the whole window changes at once. After you edit the file, pick it again in <b>View → Theme</b> to see the change. <b>View → Dark Mode support</b> and <b>Always dark</b> switch between its light and dark side.</p>

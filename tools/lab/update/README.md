@@ -27,15 +27,10 @@ These checks need the **`test-update`** cargo feature. It is off by default, and
 The build must be release mode. A debug build is "built from source", and those never update.
 
 ```powershell
-# Windows
 cargo build --release -p mdm-app --features test-update -p mdm-labserver
 ```
-```bash
-# Linux (mdm-lab: the vmtest profile)
-cargo build --profile vmtest -p mdm-app --features test-update -p mdm-labserver
-```
 
-## Windows: the portable zip
+## The portable zip
 
 ```powershell
 tools\lab\update\upd-win.ps1 -Exe target\release\misterdownloadmanager.exe -Server target\release\labserver.exe
@@ -49,36 +44,20 @@ Each copy is portable (`data\` beside its program), so `Install::PortableZip`. T
 
 `-Shots` also captures Download complete and the "Installing the update..." state in English, German and Arabic, light and dark, with PrintWindow (`tools\lab\cap-own.ps1`).
 
-## Linux: the .tar.gz and the AppImage
-
-```bash
-tools/lab/update/upd-lin.sh ~/src/mdm/target/vmtest                     # every scenario
-tools/lab/update/upd-lin.sh ~/src/mdm/target/vmtest targz-good          # one
-```
-
-Needs Xvfb, dbus-daemon, Metacity (wmctrl needs a window manager), wmctrl, Python 3 and gpg. mdm-lab has them all.
-
-The script runs on a virtual screen of its own (`:96`), never the desktop's or WSLg's. Its work folder is `$MDM_UPDATE_E2E_WORK`, else `/tmp/mdm-update-e2e`.
-
-- A copy run from its folder is `Install::TarGz`.
-- With `APPIMAGE` pointing at the copy, it is `Install::AppImage`. The fake AppImage is the same program with a marker appended, so it can be told apart once replaced.
-
-macOS (the .dmg: `hdiutil`, `ditto`) has no runner yet: build and clippy only.
-
 ## Scenarios and what each must show
 
-Each runner prints `PASS` or `FAIL` per scenario and exits with 1 when any fails.
+The runner prints `PASS` or `FAIL` per scenario and exits with 1 when any fails.
 
-| Windows | Linux | Must show |
-|---|---|---|
-| `good` | `targz-good`, `appimage-good` | downloaded, checked, put in place; the new copy started with `/updated`; the old one ended |
-| `bad-hash` | `targz-bad-hash` | refused ("the downloaded program doesn't match its signed checksum"); nothing replaced, nothing started |
-| `other-key` | `appimage-other-key` | refused ("the release's checksum list is not signed by its publisher's key"); nothing replaced or started |
-| `close-download` | `targz-close-download` | the update window closed while it downloads (the asset served at 1 MB/s by `slowserve.py`); nothing replaced or started |
-| `close-install` | `appimage-close-install` | the window closed during "Installing the update..." (held 8 s): the files are put in place, since that can't stop half-way, but nothing is started; the running copy stays and the next start is the new version |
+| Scenario | Must show |
+|---|---|
+| `good` | downloaded, checked, put in place; the new copy started with `/updated`; the old one ended |
+| `bad-hash` | refused ("the downloaded program doesn't match its signed checksum"); nothing replaced, nothing started |
+| `other-key` | refused ("the release's checksum list is not signed by its publisher's key"); nothing replaced or started |
+| `close-download` | the update window closed while it downloads (the asset served at 1 MB/s by `slowserve.py`); nothing replaced or started |
+| `close-install` | the window closed during "Installing the update..." (held 8 s): the files are put in place, since that can't stop half-way, but nothing is started; the running copy stays and the next start is the new version |
 
 ## The files
 
 - `mkrel.py`: makes a fake release (the asset, `SHA256SUMS.txt` and its signature, `latest.json`). On its first use in a work folder it also makes the throwaway keys there.
 - `slowserve.py`: serves a folder slowly (the cancel-while-downloading scenario).
-- `upd-win.ps1`, `upd-lin.sh`: the runners.
+- `upd-win.ps1`: the runner.

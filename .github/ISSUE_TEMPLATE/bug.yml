@@ -15,7 +15,7 @@ body:
     id: os
     attributes:
       label: System
-      description: "Windows 11, Windows 10, macOS (Apple Silicon), macOS (Intel), Linux or Other."
+      description: "Windows 11, Windows 10 or Other."
       placeholder: Windows 11
     validations:
       required: true
@@ -23,8 +23,8 @@ body:
     id: os-version
     attributes:
       label: System version
-      description: Windows' version and build, macOS' version, or your Linux distribution and its version.
-      placeholder: Windows 11 24H2 (26100), macOS 15.1, Ubuntu 24.04
+      description: Windows' version and build.
+      placeholder: Windows 11 24H2 (26100)
     validations:
       required: true
   - type: input
@@ -39,7 +39,7 @@ body:
     id: install
     attributes:
       label: Installed with
-      description: "The installer (setup.exe), The portable zip, The plain zip, The .dmg, The AppImage, The .deb, The .rpm, The .tar.gz, Another package manager or Built from source."
+      description: "The installer (setup.exe), The portable zip, The plain zip, Another package manager or Built from source."
       placeholder: The installer (setup.exe)
     validations:
       required: true

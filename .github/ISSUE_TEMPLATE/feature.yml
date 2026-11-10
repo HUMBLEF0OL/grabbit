@@ -24,8 +24,6 @@ body:
       multiple: true
       options:
         - Windows
-        - macOS
-        - Linux
   - type: input
     id: elsewhere
     attributes:

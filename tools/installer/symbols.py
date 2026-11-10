@@ -4,20 +4,17 @@ it), zipped as MisterDownloadManager-<version>-symbols-<platform>.zip beside the
 downloads. The crash report window fetches the zip for its own version to make its stacks
 readable (crates/crash/src/symbols.rs); the programs themselves ship without their debug info.
 
-    python tools/installer/symbols.py <platform> <version> <out dir> <file>[:<arch>] ...
+    python tools/installer/symbols.py <platform> <version> <out dir> <file> ...
 
-<file> is a program built with debug info (Windows: its .pdb beside it; Linux: an ELF before
-stripping; macOS: a .dSYM, with :x86_64 / :arm64 to pick one half of a universal one).
+<file> is a program built with debug info (its .pdb beside it).
 dump_syms (Mozilla, pinned below) is fetched and its checksum checked first.
 """
 import hashlib
 import io
 import os
-import platform
 import shutil
 import subprocess
 import sys
-import tarfile
 import tempfile
 import zipfile
 
@@ -28,32 +25,18 @@ DUMP_SYMS = "v2.3.9"
 
 
 def fetch_dump_syms(work):
-    if sys.platform == "win32":
-        name = "dump_syms-x86_64-pc-windows-msvc.zip"
-    elif sys.platform == "darwin":
-        name = ("dump_syms-aarch64-apple-darwin.tar.xz" if platform.machine() == "arm64"
-                else "dump_syms-x86_64-apple-darwin.tar.xz")
-    else:
-        name = "dump_syms-x86_64-unknown-linux-gnu.tar.xz"
+    name = "dump_syms-x86_64-pc-windows-msvc.zip"
     data = fetch("mozilla/dump_syms", DUMP_SYMS, name)
     want = fetch("mozilla/dump_syms", DUMP_SYMS, name + ".sha256").decode().split()[0]
     got = hashlib.sha256(data).hexdigest()
     if got != want:
         sys.exit(f"dump_syms checksum mismatch: {got} != {want}")
-    exe = "dump_syms.exe" if sys.platform == "win32" else "dump_syms"
-    if name.endswith(".zip"):
-        with zipfile.ZipFile(io.BytesIO(data)) as z:
-            member = next(m for m in z.namelist() if m.endswith(exe))
-            out = os.path.join(work, exe)
-            with open(out, "wb") as f:
-                f.write(z.read(member))
-    else:
-        with tarfile.open(fileobj=io.BytesIO(data), mode="r:xz") as t:
-            member = next(m for m in t.getmembers() if m.name.endswith("/" + exe) or m.name == exe)
-            out = os.path.join(work, exe)
-            with open(out, "wb") as f:
-                f.write(t.extractfile(member).read())
-        os.chmod(out, 0o755)
+    exe = "dump_syms.exe"
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        member = next(m for m in z.namelist() if m.endswith(exe))
+        out = os.path.join(work, exe)
+        with open(out, "wb") as f:
+            f.write(z.read(member))
     return out
 
 
@@ -65,14 +48,8 @@ def main():
     work = tempfile.mkdtemp()
     store = os.path.join(work, "store")
     dump_syms = fetch_dump_syms(work)
-    for item in inputs:
-        # Only a trailing :x86_64 / :arm64 picks an architecture (C:\… is a drive letter).
-        path, arch = item, ""
-        for a in ("x86_64", "arm64"):
-            if item.endswith(":" + a):
-                path, arch = item[: -len(a) - 1], a
-        cmd = [dump_syms, path] + (["-a", arch] if arch else [])
-        sym = subprocess.run(cmd, check=True, capture_output=True).stdout
+    for path in inputs:
+        sym = subprocess.run([dump_syms, path], check=True, capture_output=True).stdout
         first = sym.split(b"\n", 1)[0].decode().split()
         # MODULE <os> <arch> <id> <debug file>
         if len(first) != 5 or first[0] != "MODULE":
