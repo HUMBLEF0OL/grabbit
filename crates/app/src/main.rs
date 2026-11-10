@@ -25,7 +25,6 @@ mod help;
 mod helpers;
 mod i18n;
 mod icons;
-mod langpick;
 mod launch;
 mod list;
 mod model;
@@ -349,17 +348,13 @@ fn app() -> eframe::Result {
         );
         crash::start(
             &data,
-            crash::session(
-                loaded.settings.language.as_deref().unwrap_or("system"),
-                loaded.settings.dark_mode_support,
-            ),
+            crash::session("en", loaded.settings.dark_mode_support),
         );
     }
     // Linux: the libraries the window loads when it opens (#265). Without them it can't open
-    // (winit stopped at start): MDM says what's missing, in its language, and how to install it.
+    // (winit stopped at start): MDM says what's missing and how to install it.
     #[cfg(target_os = "linux")]
     {
-        i18n::set_lang(loaded.settings.language.as_deref());
         let ws = unix::window_system();
         if !ws.missing.is_empty() {
             crash::clean_exit();

@@ -247,9 +247,9 @@ impl Extension {
                 *open_steps = true;
             } else if add.clicked() {
                 // No store page: the tutorial on the website, in the interface language.
-                let url = page.clone().unwrap_or_else(|| {
-                    crate::help::page_url(mdm_ipc::extension::GUIDE_DOC, crate::i18n::code())
-                });
+                let url = page
+                    .clone()
+                    .unwrap_or_else(|| crate::help::page_url(mdm_ipc::extension::GUIDE_DOC));
                 let url = url.as_str();
                 match program {
                     #[cfg(windows)]

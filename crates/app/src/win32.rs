@@ -2431,41 +2431,6 @@ fn reg_string(key: &str, name: &str) -> Option<String> {
     )
 }
 
-/// The language the installer's wizard ran in (tools/installer/mdm.iss writes it on every
-/// install), taken once: read, then deleted. A languages.tsv code (`pt-br`); Inno's language
-/// names have `_` for `-`.
-pub fn take_install_language() -> Option<String> {
-    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteKeyValueW};
-    const KEY: &str = r"Software\MisterDownloadManager";
-    const NAME: &str = "InstallLanguage";
-    let value = reg_string(KEY, NAME)?;
-    let w = |s: &str| -> Vec<u16> { s.encode_utf16().chain(Some(0)).collect() };
-    let (key, name) = (w(KEY), w(NAME));
-    // SAFETY: NUL-terminated key and value names.
-    unsafe {
-        RegDeleteKeyValueW(HKEY_CURRENT_USER, key.as_ptr(), name.as_ptr());
-    }
-    Some(install_language_code(&value))
-}
-
-/// An Inno language name (`lang_pt_br`, tools/installer/languages.py) as a languages.tsv code.
-fn install_language_code(inno: &str) -> String {
-    inno.strip_prefix("lang_").unwrap_or(inno).replace('_', "-")
-}
-
-#[cfg(test)]
-mod install_language_tests {
-    #[test]
-    fn inno_names_become_codes() {
-        assert_eq!(super::install_language_code("lang_pt_br"), "pt-br");
-        assert_eq!(super::install_language_code("lang_or"), "or");
-        assert_eq!(
-            super::install_language_code("lang_ca_es_valencia"),
-            "ca-es-valencia"
-        );
-    }
-}
-
 /// The user's Windows region (Control Panel → Region): its short date's order, whether its
 /// clock is 24-hour, and the first day of the week (0 = Sunday). None if Windows can't say.
 pub fn region_formats() -> Option<(crate::regional::DateOrder, bool, u8)> {
@@ -2496,54 +2461,6 @@ pub fn region_formats() -> Option<(crate::regional::DateOrder, bool, u8)> {
         .and_then(|s| s.trim().parse::<u8>().ok())
         .map_or(0, |n| (n + 1) % 7);
     Some((order, clock24, first))
-}
-
-/// `t` (local time) as the user's Windows region writes a short date and a time with seconds
-/// (Control Panel → Region): `30/10/2026 00:38:09`, `2026/10/30 0:38:09`… None if Windows can't.
-pub fn local_date_time(t: chrono::NaiveDateTime) -> Option<String> {
-    use chrono::{Datelike, Timelike};
-    use windows_sys::Win32::Foundation::SYSTEMTIME;
-    use windows_sys::Win32::Globalization::{DATE_SHORTDATE, GetDateFormatEx, GetTimeFormatEx};
-    let st = SYSTEMTIME {
-        wYear: t.year() as u16,
-        wMonth: t.month() as u16,
-        wDayOfWeek: t.weekday().num_days_from_sunday() as u16,
-        wDay: t.day() as u16,
-        wHour: t.hour() as u16,
-        wMinute: t.minute() as u16,
-        wSecond: t.second() as u16,
-        wMilliseconds: 0,
-    };
-    let mut date = [0u16; 80];
-    let mut time = [0u16; 80];
-    // SAFETY: null locale = the user's; the buffers' lengths are passed in characters.
-    let (d, h) = unsafe {
-        (
-            GetDateFormatEx(
-                std::ptr::null(),
-                DATE_SHORTDATE,
-                &st,
-                std::ptr::null(),
-                date.as_mut_ptr(),
-                date.len() as i32,
-                std::ptr::null(),
-            ),
-            GetTimeFormatEx(
-                std::ptr::null(),
-                0,
-                &st,
-                std::ptr::null(),
-                time.as_mut_ptr(),
-                time.len() as i32,
-            ),
-        )
-    };
-    if d <= 1 || h <= 1 {
-        return None;
-    }
-    let date = String::from_utf16_lossy(&date[..d as usize - 1]);
-    let time = String::from_utf16_lossy(&time[..h as usize - 1]);
-    Some(format!("{date} {time}"))
 }
 
 /// Windows' edition, release and build, e.g. "Windows 11 Pro 24H2 (build 26200)" — for problem
@@ -4520,12 +4437,9 @@ pub fn keep_awake(reason: Option<&str>) -> bool {
 /// a pixel, so letters touched in one place ("download") and stood apart in another ("Resum e").
 ///
 /// `None` from DirectWrite's factory or a font's file keeps egui's rasterizer. A cluster it isn't
-/// for ([`classic_char`]) is left to egui too, which shapes it. The rasterizer is told the
-/// interface's direction: a bracket in a right-to-left line is mirrored by the shaper, so those
-/// stay with egui there.
+/// for ([`classic_char`]) is left to egui too, which shapes it.
 pub fn text_rasterizer(
     font_dir: std::path::PathBuf,
-    rtl: bool,
 ) -> Option<egui::epaint::text::GlyphRasterizer> {
     let glyphs = classic_text::Glyphs::new(font_dir)
         .map_err(|e| tracing::warn!("text: DirectWrite unavailable, egui draws the text ({e})"))
@@ -4535,7 +4449,7 @@ pub fn text_rasterizer(
         egui::epaint::text::GlyphRasterizer::new(
             "mdm::win32::classic_text",
             move |req: &egui::epaint::text::GlyphRasterizerRequest<'_>| {
-                glyphs.lock().ok()?.glyph(req, rtl)
+                glyphs.lock().ok()?.glyph(req)
             },
         )
         .with_priority(egui::epaint::text::FontPriority::Highest),
@@ -4544,17 +4458,8 @@ pub fn text_rasterizer(
 
 /// Does [`text_rasterizer`] draw this character? One code point that needs no shaping: Latin,
 /// Greek and Cyrillic letters, digits and punctuation. Scripts whose letters change shape (Arabic,
-/// Indic, ...) and the invisible marks are left to egui and its shaper; so are the brackets of a
-/// right-to-left line, which the shaper mirrors.
-fn classic_char(c: char, rtl: bool) -> bool {
-    if rtl
-        && matches!(
-            c,
-            '(' | ')' | '[' | ']' | '{' | '}' | '<' | '>' | '«' | '»' | '‹' | '›'
-        )
-    {
-        return false;
-    }
+/// Indic, ...) and the invisible marks are left to egui and its shaper.
+fn classic_char(c: char) -> bool {
     matches!(c,
         ' '..='~'
         | '\u{A0}'..='\u{AC}' // Latin-1, without the soft hyphen
@@ -4648,14 +4553,10 @@ mod classic_text {
                 .clone()
         }
 
-        pub fn glyph(
-            &mut self,
-            req: &GlyphRasterizerRequest<'_>,
-            rtl: bool,
-        ) -> Option<RasterizedGlyph> {
+        pub fn glyph(&mut self, req: &GlyphRasterizerRequest<'_>) -> Option<RasterizedGlyph> {
             let mut chars = req.cluster.chars();
             let ch = chars.next()?;
-            if chars.next().is_some() || !super::classic_char(ch, rtl) {
+            if chars.next().is_some() || !super::classic_char(ch) {
                 return None;
             }
             if req.font_size_px.is_nan() || req.font_size_px < 1.0 {
@@ -4887,7 +4788,7 @@ mod classic_text_tests {
             for size in [11.0, 12.0, 13.2, 15.0, 16.5, 18.0, 24.0] {
                 for ch in "downloadefaultakeDRsum".chars() {
                     let text = ch.to_string();
-                    let glyph = g.glyph(&req(&text, &family, size), false).unwrap();
+                    let glyph = g.glyph(&req(&text, &family, size)).unwrap();
                     assert_eq!(glyph.advance_px.fract(), 0.0, "{ch} at {size}");
                     assert!(glyph.advance_px >= 1.0, "{ch} at {size}");
                     let right = glyph.bitmap.offset_px.x + glyph.bitmap.image.size[0] as f32;
@@ -4904,9 +4805,7 @@ mod classic_text_tests {
     #[test]
     fn a_space_keeps_its_advance() {
         let mut g = glyphs();
-        let s = g
-            .glyph(&req(" ", &FontFamily::Proportional, 12.0), false)
-            .unwrap();
+        let s = g.glyph(&req(" ", &FontFamily::Proportional, 12.0)).unwrap();
         assert!(s.advance_px > 0.0);
     }
 
@@ -4922,13 +4821,11 @@ mod classic_text_tests {
             "e\u{301}",
             "\u{1F600}",
         ] {
-            assert!(g.glyph(&req(not, &f, 12.0), false).is_none(), "{not:?}");
+            assert!(g.glyph(&req(not, &f, 12.0)).is_none(), "{not:?}");
         }
-        // A bracket is mirrored by the shaper in a right-to-left line, only.
-        assert!(g.glyph(&req("(", &f, 12.0), false).is_some());
-        assert!(g.glyph(&req("(", &f, 12.0), true).is_none());
+        assert!(g.glyph(&req("(", &f, 12.0)).is_some());
         // A family it isn't told about stays with egui.
         let other = FontFamily::Name("other".into());
-        assert!(g.glyph(&req("a", &other, 12.0), false).is_none());
+        assert!(g.glyph(&req("a", &other, 12.0)).is_none());
     }
 }

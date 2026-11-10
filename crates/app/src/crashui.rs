@@ -83,11 +83,8 @@ pub fn monitor_main(m: MonitorArgs) -> eframe::Result {
     };
     tracing::warn!("crash monitor: {} report", kind.word());
 
-    // The window speaks MDM's language and follows its theme. The language first: the title
-    // below is translated before the window exists, and Windows' caption is found by it
-    // (`win32::caption_dark` in `update`).
+    // The window follows MDM's theme.
     let settings = crate::store::load().settings;
-    crate::i18n::set_lang(settings.language.as_deref());
     // And its interface size (#262): the window is made before the zoom applies, so its size is
     // given zoomed (brought inside the screen at its first frame).
     let zoom = crate::scale::startup(settings.interface_size);
@@ -124,7 +121,6 @@ pub fn monitor_main(m: MonitorArgs) -> eframe::Result {
         crate::scale::start(&cc.egui_ctx, zoom);
         crate::theme::select(&crate::theme::startup_id(&settings.theme), &cc.egui_ctx);
         crate::theme::apply(&cc.egui_ctx);
-        crate::theme::language_fonts(&cc.egui_ctx);
         crate::theme::update(
             settings.dark_mode_support,
             settings.always_dark,

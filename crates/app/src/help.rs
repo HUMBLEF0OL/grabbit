@@ -28,31 +28,10 @@ pub const CHECK_AFTER_START: std::time::Duration = std::time::Duration::from_sec
 /// tools/website/build.py. GitHub (REPO) keeps what is GitHub's: issues, releases, the source.
 pub const SITE: &str = "https://misterdownloadmanager.com";
 
-/// The website's languages besides English, its folders (`/de/help/`): tools/website/sitei18n.py's
-/// LANGS, which a test keeps this list equal to. English is at the root.
-const SITE_LANGS: &[&str] = &[
-    "es", "pt-br", "pt", "fr", "de", "ru", "ar", "zh-hans", "ja", "ko", "tr", "it", "id", "vi",
-    "hi", "fa", "pl", "uk", "nl", "th", "bn",
-];
-
-/// The website's folder for the interface language `code` (a catalog's code: `de`, `pt-br`,
-/// `es-mx`…): the language itself, else its base language (`es-mx` reads `/es/`, `fr-ca`
-/// `/fr/`), else none, English. `zh-hant` stays English: the site has Simplified Chinese only.
-fn site_lang(code: &str) -> Option<&'static str> {
-    let code = code.to_ascii_lowercase();
-    let base = code.split(['-', '_']).next().unwrap_or_default();
-    SITE_LANGS
-        .iter()
-        .find(|l| **l == code)
-        .or_else(|| SITE_LANGS.iter().find(|l| **l == base))
-        .copied()
-}
-
-/// The website's address of a user guide page in the language `lang` (an interface language
-/// code): `doc` is the page's file in docs/ with an optional section (`"video.md"`,
+/// The website's address of a user guide page: `doc` is the page's file in docs/ with an optional section (`"video.md"`,
 /// `"README.md#tutorials"`; the guide's contents are README.md), `""` the home page. The mapping
 /// is build.py's: docs/README.md is /help/, docs/<page>.md /help/<page>.html.
-pub fn page_url(doc: &str, lang: &str) -> String {
+pub fn page_url(doc: &str) -> String {
     let (file, anchor) = match doc.split_once('#') {
         Some((file, anchor)) => (file, format!("#{anchor}")),
         None => (doc, String::new()),
@@ -62,17 +41,15 @@ pub fn page_url(doc: &str, lang: &str) -> String {
         "README.md" => "/help/".to_owned(),
         page => format!("/help/{}.html", page.strip_suffix(".md").unwrap_or(page)),
     };
-    let folder = site_lang(lang).map(|l| format!("/{l}")).unwrap_or_default();
-    format!("{SITE}{folder}{path}{anchor}")
+    format!("{SITE}{path}{anchor}")
 }
 
-/// Open a page of the user guide on the website, in the interface language when the site has
-/// it (`doc` as page_url takes it: `"video.md"`, `"README.md#tutorials"`, `""` the home page).
+/// Open a page of the user guide on the website (`doc` as page_url takes it: `"video.md"`, `"README.md#tutorials"`, `""` the home page).
 /// Never in an off-screen test run (MDM_OFFSCREEN), whose clicks come from scripts, not from a
 /// person at the browser.
 pub fn open_page(doc: &str) {
     if !crate::offscreen() {
-        crate::launch::open(page_url(doc, crate::i18n::code()));
+        crate::launch::open(page_url(doc));
     }
 }
 
@@ -132,7 +109,6 @@ fn report_fields() -> Vec<(&'static str, String)> {
         ("os", os.to_owned()),
         ("os-version", os_version),
         ("version", format!("{VERSION} ({COMMIT})")),
-        ("language", crate::i18n::code().to_owned()),
     ];
     fields.push((
         "install",
@@ -1201,65 +1177,25 @@ mod tests {
     }
 
     #[test]
-    fn help_pages_are_the_websites_in_the_interface_language() {
-        let at = |doc, lang| page_url(doc, lang);
+    fn help_pages_are_the_websites() {
         assert_eq!(
-            at("README.md", "en"),
+            page_url("README.md"),
             "https://misterdownloadmanager.com/help/"
         );
         assert_eq!(
-            at("README.md#tutorials", "en"),
+            page_url("README.md#tutorials"),
             "https://misterdownloadmanager.com/help/#tutorials"
         );
         assert_eq!(
-            at("video.md", "de"),
-            "https://misterdownloadmanager.com/de/help/video.html"
+            page_url("video.md"),
+            "https://misterdownloadmanager.com/help/video.html"
         );
-        assert_eq!(
-            at("queues-and-scheduler.md#the-scheduler-window", "ar"),
-            "https://misterdownloadmanager.com/ar/help/queues-and-scheduler.html#the-scheduler-window"
-        );
-        assert_eq!(at("", "fr"), "https://misterdownloadmanager.com/fr/");
-        assert_eq!(at("", "en"), "https://misterdownloadmanager.com/");
-        // The site's folders: its own codes, a region read as its language, else English.
-        for (lang, folder) in [
-            ("pt-br", "/pt-br"),
-            ("pt", "/pt"),
-            ("zh-hans", "/zh-hans"),
-            ("es-mx", "/es"),
-            ("fr-ca", "/fr"),
-            ("zh-hant", ""),
-            ("sv", ""),
-            ("ca-es-valencia", ""),
-            ("he", ""),
-            ("", ""),
-        ] {
-            assert_eq!(
-                at("options.md", lang),
-                format!("https://misterdownloadmanager.com{folder}/help/options.html"),
-                "{lang}"
-            );
-        }
+        assert_eq!(page_url(""), "https://misterdownloadmanager.com/");
     }
 
     /// The repository's root.
     fn root() -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-    }
-
-    #[test]
-    fn the_site_languages_are_the_websites() {
-        // tools/website/sitei18n.py: `LANGS = [` then one `("code", …),` per language.
-        let py = std::fs::read_to_string(root().join("tools/website/sitei18n.py")).unwrap();
-        let list = py.split("\nLANGS = [").nth(1).unwrap();
-        let codes: Vec<&str> = list
-            .split("\n]")
-            .next()
-            .unwrap()
-            .lines()
-            .filter_map(|l| l.trim().strip_prefix("(\"")?.split('"').next())
-            .collect();
-        assert_eq!(codes, SITE_LANGS);
     }
 
     /// Every user guide page the program links to (`doc` as page_url takes it): the literal
@@ -1357,7 +1293,7 @@ mod tests {
     fn linked_help_pages_are_on_the_built_site() {
         let out = std::path::PathBuf::from(std::env::var("MDM_SITE_DIR").expect("MDM_SITE_DIR"));
         for doc in linked_docs() {
-            let url = page_url(&doc, "en");
+            let url = page_url(&doc);
             let path = url.strip_prefix(SITE).unwrap();
             let (path, anchor) = path.split_once('#').unwrap_or((path, ""));
             let mut file = out.join(path.trim_start_matches('/'));

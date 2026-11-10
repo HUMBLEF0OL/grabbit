@@ -1037,14 +1037,9 @@ fn status_page(ui: &Ui, o: Pos2, item: &Item, snap: Option<&Snapshot>, frac: Opt
             match frac {
                 // No size: only how much has come, no 0 % that never moves.
                 None => size3(item.downloaded),
-                Some(frac) if crate::i18n::code() == "en" => {
-                    format!("{} ( {:.2} % )", size3(item.downloaded), frac * 100.0) // not translated: English path (IDM's spacing)
+                Some(frac) => {
+                    format!("{} ( {:.2} % )", size3(item.downloaded), frac * 100.0) // not translated: IDM's spacing
                 }
-                Some(frac) => format!(
-                    "{} ( {} )",
-                    size3(item.downloaded),
-                    crate::i18n::percent(frac, 2)
-                ),
             },
         ),
         (

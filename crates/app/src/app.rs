@@ -116,10 +116,6 @@ enum Cmd {
     DrawWith(crate::renderer::Api),
     /// View → Interface size → a size in percent (#262).
     InterfaceSize(u16),
-    /// View → Language: a catalog's code, or follow Windows (`None`).
-    Language(Option<&'static str>),
-    /// View → Language...: the language picker.
-    ChooseLanguage,
     Open,
     OpenWith,
     OpenFolder,
@@ -449,9 +445,7 @@ pub struct App {
     updates: Option<crate::help::Updates>,
     shortcuts: Option<crate::help::Shortcuts>,
     tell_friend: Option<crate::help::TellFriend>,
-    /// The language picker (first start, View → Language...).
-    lang_picker: Option<crate::langpick::Picker>,
-    /// The video helpers' offer (the first start's, after the language).
+    /// The video helpers' offer (the first start's).
     helpers: Option<crate::helpers::Helpers>,
     /// "Files already there", opened on its own by `/show existing-files` (screenshots and the
     /// translations' fit check); Add torrent asks it itself.
@@ -967,26 +961,6 @@ impl App {
         if settings.limiter_on_startup {
             settings.speed_limit_on = true;
         }
-        // The language (D-019): the installer's wizard says which on its first start (it always
-        // leaves the value; take it so an upgrade's can't override a later choice); a portable
-        // copy writes nothing to the registry. With neither, the first start asks.
-        #[cfg(windows)]
-        let installer = mdm_ipc::portable_dir()
-            .is_none()
-            .then(crate::win32::take_install_language)
-            .flatten();
-        #[cfg(not(windows))]
-        let installer: Option<String> = None;
-        if !settings.language_asked
-            && let Some(code) = installer.filter(|c| crate::i18n::i18n().from_code(c).is_some())
-        {
-            // Windows' own language is kept as "follow Windows".
-            settings.language = (code != crate::i18n::system_code()).then_some(code);
-            settings.language_asked = true;
-        }
-        let ask_language = !settings.language_asked;
-        crate::i18n::set_lang(settings.language.as_deref());
-        crate::theme::language_fonts(ctx);
         crate::regional::set(&settings.regional);
         if settings.proxy_mode == 2 {
             crate::pacfetch::refresh(&settings.proxy_script, &rt);
@@ -1088,7 +1062,6 @@ impl App {
             updates: None,
             shortcuts: None,
             tell_friend: None,
-            lang_picker: ask_language.then(|| crate::langpick::Picker::new(true, None)),
             helpers: None,
             shown_existing: None,
             extension: None,
@@ -2145,7 +2118,6 @@ impl App {
                 offer.open_safari_steps();
                 self.extension = Some(offer);
             }
-            "language" => self.run(Cmd::ChooseLanguage, None, ctx),
             "move-rename" => self.run(Cmd::MoveRename, None, ctx),
             "shortcuts" => self.run(Cmd::Shortcuts, None, ctx),
             // The Help menu's windows and Download a gallery, for screenshots (#192). updates
@@ -5134,25 +5106,6 @@ impl App {
                 self.dirty = true;
             }
             Cmd::ToggleCategories => self.show_categories = !self.show_categories,
-            Cmd::ChooseLanguage => {
-                if self.lang_picker.is_none() {
-                    self.lang_picker = Some(crate::langpick::Picker::new(
-                        false,
-                        self.settings.language.as_deref(),
-                    ));
-                }
-            }
-            Cmd::Language(code) => {
-                self.settings.language = code.map(str::to_owned);
-                self.settings.language_asked = true;
-                crate::i18n::set_lang(code);
-                crate::theme::language_fonts(ctx);
-                if let Some(tray) = &self.tray {
-                    tray.relabel();
-                }
-                self.dirty = true;
-                ctx.request_repaint();
-            }
             Cmd::ToggleDarkMode => {
                 self.settings.dark_mode_support = !self.settings.dark_mode_support;
                 self.theme_checked = None;
@@ -5813,10 +5766,6 @@ impl App {
                 ),
                 // i18n: noun: the list's font (submenu)
                 Sub("Font", false, vec![]),
-                Sep,
-                // IDM's place for it; a window rather than IDM's submenu, which 86 languages
-                // would make taller than the screen (langpick.rs).
-                I("&Language...", Cmd::ChooseLanguage, true, false),
             ],
             // IDM's Help menu, ours (D-020): pages of the user guide (docs/); "Video downloads" stands
             // where IDM has "Grabber Help"; "Report a problem" where "Contact IDM Support";
@@ -6572,7 +6521,7 @@ impl App {
             .memory(|m| m.focused())
             .is_some_and(|id| egui::TextEdit::load_state(&ctx, id).is_some());
         if self.open_menu.is_none() && self.popup.is_none() && !typing {
-            let labels: Vec<String> = chrome::menus(ui.painter())
+            let labels: Vec<String> = chrome::menus()
                 .iter()
                 .map(|(l, ..)| chrome::menu_letter(l))
                 .collect();
@@ -6652,7 +6601,7 @@ impl App {
         // without a menu closed it, a new window opening for the next (#277).
         for _ in 0..2 {
             let Some(i) = self.open_menu else { break };
-            let x = chrome::menus(ui.painter())[i].1;
+            let x = chrome::menus()[i].1;
             let entries = self.menu_entries(i);
             // Under the item's leading edge (the menu's top-right in RTL).
             let at = pos2(winui::mx(o.x + x), o.y + chrome::MENU_H - 1.0);
@@ -6666,7 +6615,7 @@ impl App {
             ) {
                 PopupResult::Open => None,
                 PopupResult::Neighbor(d) => {
-                    let n = chrome::menus(ui.painter()).len() as i32;
+                    let n = chrome::menus().len() as i32;
                     let j = (i as i32 + d).rem_euclid(n) as usize;
                     chrome::start_keyboard(&ctx, &format!("menu-{j}"));
                     Some(MenuBarEvent::Open(j))
@@ -6680,8 +6629,8 @@ impl App {
                     // by Escape with the pointer merely resting on the bar.
                     let press =
                         ui.input(|x| x.pointer.press_origin().filter(|_| x.pointer.any_pressed()));
-                    let press_on_title = press
-                        .is_some_and(|at| chrome::menubar_title_at(ui.painter(), o, at).is_some());
+                    let press_on_title =
+                        press.is_some_and(|at| chrome::menubar_title_at(o, at).is_some());
                     Some(MenuBarEvent::Dismissed { press_on_title })
                 }
             };
@@ -7306,8 +7255,8 @@ impl App {
     /// The window's place and size, the Categories pane and the node shown, kept in the
     /// settings as they change (so they come back at the next start).
     fn remember_layout(&mut self, ctx: &egui::Context) {
-        // Screen readers speak in the interface's language (its voice for Arabic, Japanese...).
-        let lang = crate::i18n::code();
+        // Screen readers speak the interface's language.
+        let lang = "en";
         if self.a11y_lang != lang {
             ctx.set_language(Some(lang.to_owned()));
             self.a11y_lang = lang;
@@ -7895,34 +7844,8 @@ impl App {
     }
 
     fn help_dialogs(&mut self, ctx: &egui::Context) {
-        if let Some(d) = &mut self.lang_picker {
-            let first = !self.settings.language_asked;
-            match d.show(ctx) {
-                Outcome::Open => {}
-                Outcome::Done(code) => {
-                    // On the first start, keeping the preselected Windows language follows
-                    // Windows from then on.
-                    let code = code.filter(|c| !(first && *c == crate::i18n::system_code()));
-                    self.lang_picker = None;
-                    self.run(Cmd::Language(code), None, ctx);
-                    crate::theme::interface_fonts(ctx);
-                }
-                Outcome::Closed => {
-                    self.lang_picker = None;
-                    crate::theme::interface_fonts(ctx);
-                    // Cancelled on the first start: Windows' language, and don't ask again.
-                    if first {
-                        self.settings.language_asked = true;
-                        self.dirty = true;
-                    }
-                }
-            }
-        }
-        // Once the language is settled: the video helpers, offered once (helpers.rs).
-        if self.lang_picker.is_none()
-            && self.settings.language_asked
-            && !self.settings.helpers_asked
-        {
+        // The video helpers, offered once (helpers.rs).
+        if !self.settings.helpers_asked {
             self.settings.helpers_asked = true;
             self.dirty = true;
             if crate::helpers::worth_asking() {
@@ -7940,11 +7863,7 @@ impl App {
             self.shown_existing = None;
         }
         // Then the browser extension, once per start until a browser has it (extension.rs).
-        if self.lang_picker.is_none()
-            && self.helpers.is_none()
-            && self.settings.language_asked
-            && !self.extension_weighed
-        {
+        if self.helpers.is_none() && !self.extension_weighed {
             self.extension_weighed = true;
             if crate::extension::worth_asking(&self.settings) {
                 self.extension = Some(crate::extension::Extension::new());

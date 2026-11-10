@@ -171,33 +171,9 @@ const MENUS: [(&str, f32, f32, f32); 5] = [
     ("&Help", 186.0, 39.0, 193.0),
 ];
 
-/// The menu bar in the interface language: English keeps the measured rects; a translation is
-/// laid out by the same rule (Win32's: text at item.x + 7, width = text + 14) from the translated label's width: GDI's, or the
-/// width it is drawn at when wider (a script drawn in a fallback font, such as Japanese).
-pub fn menus(p: &egui::Painter) -> Vec<(&'static str, f32, f32, f32)> {
-    let table = &MENUS;
-    let translated: Vec<&'static str> = table
-        .iter()
-        .map(|(l, ..)| crate::i18n::tc("menubar", l))
-        .collect();
-    if translated
-        .iter()
-        .zip(table.iter())
-        .all(|(t, (l, ..))| t == l)
-    {
-        return table.to_vec();
-    }
-    let (pad, inset) = (14.0, 7.0);
-    let mut x = 0.0;
-    translated
-        .into_iter()
-        .map(|label| {
-            let w = menu_width(p, &plain(label).0) + pad;
-            let item = (label, x, w, x + inset);
-            x += w;
-            item
-        })
-        .collect()
+/// The menu bar: the measured rects.
+pub fn menus() -> Vec<(&'static str, f32, f32, f32)> {
+    MENUS.to_vec()
 }
 
 /// Paint the menu bar; returns what happened to its titles this frame, for [`menubar_next`]: a
@@ -241,7 +217,7 @@ pub fn menu_bar(ui: &mut Ui, o: Pos2, width: f32, open: Option<usize>) -> Option
     winui::expose(&bar, egui::Role::MenuBar, "", true, None);
     let titles_ui = ui.new_child(egui::UiBuilder::new().accessibility_parent(bar.id));
     let released = ui.input(|x| x.pointer.any_released());
-    for (i, (label, x, w, tx)) in menus(&p).iter().enumerate() {
+    for (i, (label, x, w, tx)) in menus().iter().enumerate() {
         // From the leading edge: the first menu at the right in RTL.
         let rc = winui::rect(Rect::from_min_size(o + vec2(*x, 0.0), vec2(*w, MENU_H)));
         let resp = titles_ui.interact(rc, egui::Id::unique(("menubar", i)), winui::pointer_only());
@@ -292,8 +268,8 @@ pub fn menu_bar(ui: &mut Ui, o: Pos2, width: f32, open: Option<usize>) -> Option
 
 /// The menu-bar title under `pos` (main-window coordinates), as [`menu_bar`] lays them out at
 /// `o`: the first menu at the right in RTL.
-pub fn menubar_title_at(p: &egui::Painter, o: Pos2, pos: Pos2) -> Option<usize> {
-    menus(p).iter().position(|(_, x, w, _)| {
+pub fn menubar_title_at(o: Pos2, pos: Pos2) -> Option<usize> {
+    menus().iter().position(|(_, x, w, _)| {
         winui::rect(Rect::from_min_size(o + vec2(*x, 0.0), vec2(*w, MENU_H))).contains(pos)
     })
 }
@@ -983,8 +959,7 @@ pub fn show_popup(ctx: &egui::Context, vid: egui::ViewportId) {
 
 /// Place a menu of `size` at screen point `at`, flipped to stay inside the monitor's work area:
 /// up (or left) of the point, or for a submenu (`parent`: the parent menu's screen rect) to the
-/// parent's left side. In a right-to-left interface `at` is the menu's top-right: it opens to
-/// the left, and flips to the right (a submenu to the parent's right side). All in points: the
+/// parent's left side. All in points: the
 /// work area too (it was taken in pixels, which differ at a display or interface scale other
 /// than 100 %, #262).
 fn place_menu(ctx: &egui::Context, at: Pos2, size: egui::Vec2, parent: Option<Rect>) -> Pos2 {
@@ -994,15 +969,7 @@ fn place_menu(ctx: &egui::Context, at: Pos2, size: egui::Vec2, parent: Option<Re
     if let Some(area) = crate::scale::work_area(ctx, at) {
         let (l, t, r, b) = (area.min.x, area.min.y, area.max.x, area.max.y);
         let mut p = at;
-        if crate::i18n::rtl() {
-            p.x = at.x - size.x;
-            if p.x < l {
-                p.x = match parent {
-                    Some(pr) => pr.right() - 4.0,
-                    None => at.x,
-                };
-            }
-        } else if p.x + size.x > r {
+        if p.x + size.x > r {
             p.x = match parent {
                 Some(pr) => pr.left() - size.x + 4.0,
                 None => at.x - size.x,
@@ -1014,15 +981,9 @@ fn place_menu(ctx: &egui::Context, at: Pos2, size: egui::Vec2, parent: Option<Re
                 None => at.y - size.y,
             };
         }
-        if crate::i18n::rtl() {
-            p.x = p.x.min(r - size.x);
-        }
         return pos2(p.x.max(l), p.y.max(t));
     }
     let _ = parent;
-    if crate::i18n::rtl() {
-        return pos2(at.x - size.x, at.y);
-    }
     at
 }
 
@@ -1373,13 +1334,8 @@ fn popup_level<C: Clone>(
     if let Some((i, slot_y)) = sub_at
         && let MenuEntry::Sub(_, _, children) = &entries[i]
     {
-        // The submenu's top-left: parent right − 6, slot top − 3 (as measured); in RTL its
-        // top-right at parent left + 6.
-        let x = if crate::i18n::rtl() {
-            screen.min.x + 6.0
-        } else {
-            screen.max.x - 6.0
-        };
+        // The submenu's top-left: parent right − 6, slot top − 3 (as measured).
+        let x = screen.max.x - 6.0;
         let at = pos2(x, screen.min.y + slot_y - 3.0);
         popup_level(
             ctx,

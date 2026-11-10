@@ -989,21 +989,14 @@ pub fn date_text(stored: &str) -> String {
     when_text(t)
 }
 
-/// A local time as the interface writes dates and times (Options → Regional; IDM's text in
-/// English, on the system's clock; the Windows region's elsewhere).
+/// A local time as the interface writes dates and times (Options → Regional; else IDM's text,
+/// on the system's clock).
 pub fn when_text(t: chrono::NaiveDateTime) -> String {
     let formats = crate::regional::current();
     if formats.custom {
         return crate::i18n::ltr(&crate::regional::short_date_time(t));
     }
-    if english() {
-        return stamp_text(t, formats.clock24);
-    }
-    #[cfg(windows)]
-    if let Some(s) = crate::win32::local_date_time(t) {
-        return crate::i18n::ltr(&s);
-    }
-    crate::i18n::ltr(&crate::regional::short_date_time(t))
+    stamp_text(t, formats.clock24)
 }
 
 /// IDM's text for a time, as stored (`Oct 28 21:44:12 2026`) on a 24-hour clock, and with the
@@ -1018,46 +1011,22 @@ fn stamp_text(t: chrono::NaiveDateTime, clock24: bool) -> String {
     )
 }
 
-/// Whether numbers are written IDM's way (English): `7.05 MB`, `13.38%`, `1 min 22 sec`.
-/// Every other language writes them as its region does (digits, decimal mark, unit names; D-019).
-fn english() -> bool {
-    crate::i18n::code() == "en"
-}
-
-/// `13.38%` (IDM), or the interface language's percentage (`13,38 %`).
+/// `13.38%` (IDM).
 pub fn percent(ratio: f64) -> String {
     crate::i18n::percent(ratio, 2)
 }
 
-/// `{n} MB`-style unit text in the interface language (catalog context `unit`).
-fn unit(n: f64, decimals: usize, template: &str) -> String {
-    crate::i18n::i18n().measure(crate::i18n::lang(), n, decimals, template)
-}
-
 /// `7.05 MB`, `412.20 KB`, `1.97 GB` — IDM shows two decimals.
 pub fn size(b: u64) -> String {
-    if !english() {
-        let v = b as f64;
-        let k = 1024.0;
-        return if v >= k * k * k {
-            unit(v / (k * k * k), 2, "{n} GB")
-        } else if v >= k * k {
-            unit(v / (k * k), 2, "{n} MB")
-        } else if v >= k {
-            unit(v / k, 2, "{n} KB")
-        } else {
-            crate::i18n::tn(b, "{n} byte", "{n} bytes")
-        };
-    }
     let b = b as f64;
     if b >= 1024.0 * 1024.0 * 1024.0 {
-        format!("{:.2} GB", b / (1024.0 * 1024.0 * 1024.0)) // not translated: English path
+        format!("{:.2} GB", b / (1024.0 * 1024.0 * 1024.0)) // not translated: IDM's text
     } else if b >= 1024.0 * 1024.0 {
-        format!("{:.2} MB", b / (1024.0 * 1024.0)) // not translated: English path
+        format!("{:.2} MB", b / (1024.0 * 1024.0)) // not translated: IDM's text
     } else if b >= 1024.0 {
-        format!("{:.2} KB", b / 1024.0) // not translated: English path
+        format!("{:.2} KB", b / 1024.0) // not translated: IDM's text
     } else {
-        format!("{b} Bytes") // not translated: English path
+        format!("{b} Bytes") // not translated: IDM's text
     }
 }
 
@@ -1065,66 +1034,36 @@ pub fn size(b: u64) -> String {
 pub fn size3(b: u64) -> String {
     let v = b as f64;
     let k = 1024.0;
-    if !english() {
-        return if v >= k * k * k {
-            unit(v / (k * k * k), 3, "{n} GB")
-        } else if v >= k * k {
-            unit(v / (k * k), 3, "{n} MB")
-        } else {
-            unit(v / k, 3, "{n} KB")
-        };
-    }
     if v >= k * k * k {
-        format!("{:.3} GB", v / (k * k * k)) // not translated: English path
+        format!("{:.3} GB", v / (k * k * k)) // not translated: IDM's text
     } else if v >= k * k {
-        format!("{:.3} MB", v / (k * k)) // not translated: English path
+        format!("{:.3} MB", v / (k * k)) // not translated: IDM's text
     } else {
-        format!("{:.3} KB", v / k) // not translated: English path
+        format!("{:.3} KB", v / k) // not translated: IDM's text
     }
 }
 
 /// `11.623 MB/sec`, `512.000 KB/sec` (IDM's progress dialog uses three decimals).
 pub fn rate(bps: f64) -> String {
-    if !english() {
-        return if bps >= 1024.0 * 1024.0 {
-            unit(bps / (1024.0 * 1024.0), 3, "{n} MB/sec")
-        } else {
-            unit(bps / 1024.0, 3, "{n} KB/sec")
-        };
-    }
     if bps >= 1024.0 * 1024.0 {
-        format!("{:.3} MB/sec", bps / (1024.0 * 1024.0)) // not translated: English path
+        format!("{:.3} MB/sec", bps / (1024.0 * 1024.0)) // not translated: IDM's text
     } else {
-        format!("{:.3} KB/sec", bps / 1024.0) // not translated: English path
+        format!("{:.3} KB/sec", bps / 1024.0) // not translated: IDM's text
     }
 }
 
 /// The list's Size column: IDM puts two spaces before the unit (`200.00  MB`).
 pub fn size_list(b: u64) -> String {
-    if english() {
-        size(b).replacen(' ', "  ", 1)
-    } else {
-        size(b)
-    }
+    size(b).replacen(' ', "  ", 1)
 }
 
 /// `14 sec`, `1 min 22 sec`, `2 hour(s) 5 min`.
 pub fn time(secs: f64) -> String {
     let s = secs.round() as u64;
-    if !english() {
-        let n = crate::i18n::integer;
-        let (h, m, sec) = (n(s / 3600), n((s % 3600) / 60), n(s % 60));
-        let t = crate::i18n::t;
-        return match s {
-            0..60 => crate::i18n::fmt(t("{s} sec"), &[("s", &sec)]),
-            60..3600 => crate::i18n::fmt(t("{m} min {s} sec"), &[("m", &m), ("s", &sec)]),
-            _ => crate::i18n::fmt(t("{h} hour(s) {m} min"), &[("h", &h), ("m", &m)]),
-        };
-    }
     match s {
-        0..60 => format!("{s} sec"), // not translated: English path
-        60..3600 => format!("{} min {} sec", s / 60, s % 60), // not translated: English path
-        _ => format!("{} hour(s) {} min", s / 3600, (s % 3600) / 60), // not translated: English path
+        0..60 => format!("{s} sec"), // not translated: IDM's text
+        60..3600 => format!("{} min {} sec", s / 60, s % 60), // not translated: IDM's text
+        _ => format!("{} hour(s) {} min", s / 3600, (s % 3600) / 60), // not translated: IDM's text
     }
 }
 

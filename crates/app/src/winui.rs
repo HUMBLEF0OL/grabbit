@@ -110,7 +110,8 @@ pub struct Surface(());
 
 impl Surface {
     pub fn enter(left: f32, right: f32) -> Self {
-        Self::enter_if(crate::i18n::rtl(), left, right)
+        // ponytail: the interface is English, never mirrored; the mirroring stays for enter_if.
+        Self::enter_if(false, left, right)
     }
 
     /// [`Surface::enter`] with the direction given (tests; a surface that is never mirrored).
@@ -209,20 +210,10 @@ pub fn r(origin: Pos2, x: f32, y: f32, w: f32, h: f32) -> Rect {
     rect(Rect::from_min_size(origin + vec2(x, y), vec2(w, h)))
 }
 
-/// The paragraph direction of interface text: the interface's.
-pub fn direction() -> egui::epaint::text::TextDirection {
-    use egui::epaint::text::TextDirection;
-    if crate::i18n::rtl() {
-        TextDirection::RightToLeft
-    } else {
-        TextDirection::LeftToRight
-    }
-}
-
-/// `s` laid out on one line in the interface's direction.
+/// `s` laid out on one line, left to right as the interface reads.
 pub fn galley(p: &Painter, font: FontId, s: &str, color: Color32) -> std::sync::Arc<egui::Galley> {
     let mut job = egui::text::LayoutJob::simple(s.to_owned(), font, color, f32::INFINITY);
-    job.direction = direction();
+    job.direction = egui::epaint::text::TextDirection::LeftToRight;
     p.layout_job(job)
 }
 
@@ -448,7 +439,7 @@ fn fit_audit(p: &Painter, drawn: Rect, text: &str) {
     };
     let mut audit = audit.lock().unwrap();
     let (file, seen, passes) = &mut *audit;
-    let lang = crate::i18n::code();
+    let lang = "en";
     let clip = p.clip_rect();
     if (drawn.left() < clip.left() - 1.0 || drawn.right() > clip.right() + 1.0)
         && seen.insert(text.to_owned())
@@ -499,31 +490,13 @@ fn fit_audit(p: &Painter, drawn: Rect, text: &str) {
 }
 
 /// The screen x range of the `n`-th character of `s` drawn in `drawn` (a mnemonic's underline):
-/// by the width of what comes before it in a left-to-right interface (as Windows does), by the
-/// glyph itself in RTL, where the letters before it are to its right.
+/// by the width of what comes before it, as Windows does.
 pub fn char_span(p: &Painter, font: &FontId, s: &str, n: usize, drawn: Rect) -> (f32, f32) {
     let before: String = s.chars().take(n).collect();
     let ch: String = s.chars().skip(n).take(1).collect();
     let cw = text_width_font(p, font.clone(), &ch);
-    if !crate::i18n::rtl() {
-        let x0 = drawn.left() + text_width_font(p, font.clone(), &before);
-        return (x0, x0 + cw - 1.0);
-    }
-    // The glyph itself, in the form it takes in the word (a joined Arabic letter is narrower
-    // than alone); the row keeps its glyphs in reading order.
-    let g = galley(p, font.clone(), s, TEXT());
-    let c = ch.chars().next();
-    let glyph = g.rows.first().and_then(|r| {
-        let k = before.chars().filter(|b| Some(*b) == c).count();
-        r.row.glyphs.iter().filter(|gl| Some(gl.chr) == c).nth(k)
-    });
-    match glyph {
-        Some(gl) => {
-            let x0 = drawn.left() + gl.pos.x;
-            (x0, x0 + gl.advance_width.round().max(1.0) - 1.0)
-        }
-        None => (drawn.left(), drawn.left() + cw - 1.0),
-    }
+    let x0 = drawn.left() + text_width_font(p, font.clone(), &before);
+    (x0, x0 + cw - 1.0)
 }
 
 pub fn text_width(p: &Painter, s: &str) -> f32 {
@@ -642,49 +615,6 @@ pub fn label_into(
     }
     let start = (end - w).max(min_x);
     text_fit(p, start, baseline, s, color, end)
-}
-
-/// `s` with its single line breaks joined (a space, or nothing between letters of scripts
-/// written without spaces: Chinese, Japanese, Thai…), blank lines kept as paragraph breaks.
-fn reflow(s: &str) -> String {
-    let spaceless = |c: char| {
-        matches!(c as u32,
-            0x0E00..=0x0EFF   // Thai, Lao
-            | 0x1780..=0x17FF // Khmer
-            | 0x3040..=0x30FF // Hiragana, Katakana
-            | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF // Han
-            | 0x3000..=0x303F | 0xFF00..=0xFFEF) // CJK punctuation, full-width forms
-    };
-    s.split("\n\n")
-        .map(|para| {
-            let mut out = String::new();
-            for (k, line) in para.split('\n').enumerate() {
-                let line = line.trim();
-                if k > 0 && !out.is_empty() && !line.is_empty() {
-                    let before = out.chars().last().is_some_and(spaceless);
-                    let after = line.chars().next().is_some_and(spaceless);
-                    if !(before && after) {
-                        out.push(' ');
-                    }
-                }
-                out.push_str(line);
-            }
-            out
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n")
-}
-
-#[cfg(test)]
-mod reflow_tests {
-    #[test]
-    fn hard_breaks_flow_again() {
-        assert_eq!(
-            super::reflow("one two\nthree\n\nnew"),
-            "one two three\n\nnew"
-        );
-        assert_eq!(super::reflow("日本語の\n文章"), "日本語の文章");
-    }
 }
 
 /// Chinese and Japanese (Han, kana, their punctuation and full-width forms): broken between any
@@ -878,15 +808,7 @@ pub fn paragraph(
     right: f32,
     line_h: f32,
 ) -> usize {
-    // IDM's English is hard-wrapped; a translation's copy of those breaks is flowed again (a
-    // blank line still starts a new paragraph). English keeps its own lines.
-    let flowed;
-    let s = if crate::i18n::code() == "en" {
-        s
-    } else {
-        flowed = reflow(s);
-        flowed.as_str()
-    };
+    // IDM's English is hard-wrapped: its own lines are kept.
     let lines = wrap_lines(p, s, (right - x).max(1.0));
     for (i, l) in lines.iter().enumerate() {
         text(p, x, baseline + line_h * i as f32, l, color);

@@ -211,7 +211,7 @@ impl VideoDialog {
         self.error = choices
             .is_empty()
             .then(|| crate::i18n::t("No video this can download on that page").into());
-        self.subs = mdm_tools::resolve::sub_choices(&v, crate::i18n::code());
+        self.subs = mdm_tools::resolve::sub_choices(&v, "en");
         self.sub_pick = pick_for(&self.subs, &self.pref);
         self.video = Some((v, choices));
         self.name_from_choice();

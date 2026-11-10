@@ -122,11 +122,6 @@ pub struct Settings {
     /// General: start with Windows. IDM's default is on; ours is off until the user asks
     /// (a download manager shouldn't register itself silently).
     pub launch_on_startup: bool,
-    /// View → Language: a catalog's code (`ar`, `pt-br`…); `None` follows Windows.
-    pub language: Option<String>,
-    /// The language has been chosen once (in the installer's wizard or the first start's
-    /// picker); until then the first start asks (langpick.rs).
-    pub language_asked: bool,
     /// The video helpers (yt-dlp, ffmpeg) have been offered once, at a start (helpers.rs).
     pub helpers_asked: bool,
     /// The browser extension is offered at each start until a browser has it, unless "Don't ask
@@ -374,8 +369,6 @@ impl Default for Settings {
             limits_hours: 5,
             limits_warn: true,
             launch_on_startup: false,
-            language: None,
-            language_asked: false,
             helpers_asked: false,
             extension_never_ask: false,
             clipboard_autostart: true,
@@ -1036,6 +1029,22 @@ mod tests {
         assert_eq!(s.category_dir(Category::Video, downloads), chosen);
         assert_ne!(s.category_dir(Category::Music, downloads), chosen);
         assert!(!s.keep_category_dir(Category::Video, chosen, downloads));
+    }
+
+    /// A settings file from a version with View → Language still loads: its language fields are
+    /// ignored (MDM is English only), the rest is read.
+    #[test]
+    fn an_old_settings_file_with_a_language_loads() {
+        let s: super::Settings = serde_json::from_str(
+            r#"{"language": "de", "language_asked": true, "max_connections": 3}"#,
+        )
+        .unwrap();
+        assert_eq!(s.max_connections, 3);
+        assert!(
+            !serde_json::to_string(&s)
+                .unwrap()
+                .contains("language_asked")
+        );
     }
 
     #[test]

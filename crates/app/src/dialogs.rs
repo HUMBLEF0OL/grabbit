@@ -2033,15 +2033,7 @@ impl LimitNotice {
                 ),
                 crate::i18n::fmt(
                     crate::i18n::t("Downloads stopped and will resume automatically at {time}."),
-                    &[(
-                        "time",
-                        &at.format(if crate::i18n::code() == "en" {
-                            "%-I:%M %p"
-                        } else {
-                            "%H:%M"
-                        })
-                        .to_string(),
-                    )],
+                    &[("time", &at.format("%-I:%M %p").to_string())],
                 ),
             ],
         }
@@ -3154,7 +3146,7 @@ mod tests {
             let mut out = ctx.run_ui(input, |ui| ui_cb(ui));
             out.textures_delta.clear();
         });
-        // A test-only title, kept out of the catalog (extract.py reads literal titles).
+        // A test-only title.
         let title = String::from("test window 440");
         let title = title.as_str();
         let id = "test-440";
@@ -3312,7 +3304,7 @@ mod tests {
                 painted.borrow_mut().push(out.shapes.len());
             });
         }
-        // A test-only title, kept out of the catalog (extract.py reads literal titles).
+        // A test-only title.
         let title = String::from("test window");
         let title = title.as_str();
         let ctx = egui::Context::default();

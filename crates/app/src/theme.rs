@@ -262,104 +262,7 @@ macro_rules! themed {
 }
 pub(crate) use themed;
 
-/// The system's fonts for the scripts the UI font lacks (D-019; nothing bundled): a key, the
-/// files to try (in the fonts folder), the interface languages that need it. CJK fonts are large
-/// (13–20 MB), so only the interface language's are loaded, and all of them while the language
-/// picker shows every language by its own name ([`all_scripts`]). Windows: Segoe UI and Tahoma
-/// already cover Arabic, Hebrew, Armenian and Georgian.
-#[cfg(windows)]
-const SCRIPT_FONTS: &[(&str, &[&str], &[&str])] = &[
-    ("han-sc", &["msyh.ttc"], &["zh-hans"]),
-    ("han-tc", &["msjh.ttc"], &["zh-hant"]),
-    (
-        "japanese",
-        &["YuGothM.ttc", "meiryo.ttc", "msgothic.ttc"],
-        &["ja"],
-    ),
-    ("hangul", &["malgun.ttf"], &["ko"]),
-    (
-        "indic",
-        &["Nirmala.ttc", "Nirmala.ttf"],
-        &[
-            "as", "bn", "gu", "hi", "kn", "kok", "ml", "mr", "ne", "or", "pa", "ta", "te",
-        ],
-    ),
-    ("southeast-asian", &["LeelawUI.ttf"], &["km", "lo", "th"]),
-    ("ethiopic", &["ebrima.ttf"], &["am"]),
-    ("cherokee", &["gadugi.ttf"], &["chr"]),
-];
-
-/// macOS's fonts, in /System/Library/Fonts: the specific ones first, then Arial Unicode for
-/// every other script the system font lacks.
-#[cfg(target_os = "macos")]
-const SCRIPT_FONTS: &[(&str, &[&str], &[&str])] = &[
-    (
-        "han",
-        &[
-            "PingFang.ttc",
-            "Hiragino Sans GB.ttc",
-            "STHeiti Light.ttc",
-            "Supplemental/Songti.ttc",
-        ],
-        &["zh-hans", "zh-hant"],
-    ),
-    ("japanese", &["ヒラギノ角ゴシック W3.ttc"], &["ja"]),
-    ("hangul", &["AppleSDGothicNeo.ttc"], &["ko"]),
-    ("khmer", &["Supplemental/Khmer Sangam MN.ttf"], &["km"]),
-    ("lao", &["Supplemental/Lao Sangam MN.ttf"], &["lo"]),
-    ("ethiopic", &["Supplemental/Kefa.ttc", "Kefa.ttc"], &["am"]),
-    (
-        "cherokee",
-        &["Supplemental/Plantagenet Cherokee.ttf"],
-        &["chr"],
-    ),
-    (
-        "unicode",
-        &["Supplemental/Arial Unicode.ttf"],
-        &[
-            "ar", "fa", "ur", "ug", "he", "hy", "ka", "as", "bn", "gu", "hi", "kn", "kok", "ml",
-            "mr", "ne", "or", "pa", "ta", "te", "th", "ja", "ko", "zh-hans", "zh-hant",
-        ],
-    ),
-];
-
-/// Linux: fontconfig names the font for each language (`fc-match :lang=…`), whatever the
-/// distribution installs; these are the languages whose script needs one, as fontconfig names
-/// them (one per script is enough for the picker's list of all languages).
-#[cfg(not(any(windows, target_os = "macos")))]
-const SCRIPT_LANGS: &[(&str, &str)] = &[
-    ("ar", "ar"),
-    ("fa", "fa"),
-    ("ur", "ur"),
-    ("ug", "ug"),
-    ("he", "he"),
-    ("hy", "hy"),
-    ("ka", "ka"),
-    ("am", "am"),
-    ("chr", "chr"),
-    ("km", "km"),
-    ("lo", "lo"),
-    ("th", "th"),
-    ("ja", "ja"),
-    ("ko", "ko"),
-    ("zh-hans", "zh-cn"),
-    ("zh-hant", "zh-tw"),
-    ("hi", "hi"),
-    ("mr", "mr"),
-    ("ne", "ne"),
-    ("kok", "kok"),
-    ("as", "as"),
-    ("bn", "bn"),
-    ("gu", "gu"),
-    ("pa", "pa"),
-    ("or", "or"),
-    ("ta", "ta"),
-    ("te", "te"),
-    ("kn", "kn"),
-    ("ml", "ml"),
-];
-
-/// Marks that neither the interface font nor the script fonts have (✔ ✖ ↩ ⇧ ⌘ ⌥ ⌦, and → on
+/// Marks that the interface font doesn't have (✔ ✖ ↩ ⇧ ⌘ ⌥ ⌦, and → on
 /// Linux: #185): the system's symbol fonts, last in every family's chain, in every language,
 /// each one that is there. macOS keeps ✔ and ✖ in Zapf Dingbats, not in Apple Symbols.
 #[cfg(windows)]
@@ -421,10 +324,9 @@ fn font_path(dir: &std::path::Path, rel: &str) -> std::path::PathBuf {
     direct
 }
 
-/// The fonts for scripts outside the interface language, loaded the first time a character
-/// needs one (#405): a file or video named in Bangla, Japanese, Thai... The interface language's
-/// own script fonts are loaded up front ([`SCRIPT_FONTS`], kept small for #72); anything else
-/// comes from the system on demand, only when text in that script is shown.
+/// The fonts for scripts the interface font lacks, loaded the first time a character needs one
+/// (#405): a file or video named in Bangla, Japanese, Thai... They come from the system on
+/// demand, only when text in that script is shown (CJK fonts are 13–20 MB each, #72).
 ///
 /// Windows and macOS: the blocks below name the system's font for each script. Linux: fontconfig
 /// is asked for a font that has the character (`:charset=`), one question per Unicode block.
@@ -562,8 +464,7 @@ const MACOS_FALLBACK_FONTS: &[FallbackFont] = &[
         files: &["Supplemental/Kefa.ttc", "Kefa.ttc"],
     },
     // Armenian, Hebrew and the Arabic script (Persian, Urdu: #533) too: the system font (SF)
-    // has none of them, and Windows' Segoe UI, which has them, isn't there. The same font an
-    // Arabic or Persian interface loads ([`SCRIPT_FONTS`]).
+    // has none of them, and Windows' Segoe UI, which has them, isn't there.
     FallbackFont {
         key: "unicode",
         ranges: &[
@@ -656,7 +557,7 @@ impl egui::FontProvider for ScriptFallback {
     }
 }
 
-/// Tell the text system where the scripts outside the interface language come from, once.
+/// Tell the text system where the scripts the interface font lacks come from, once.
 fn add_script_fallback(ctx: &egui::Context) {
     static ADDED: std::sync::Once = std::sync::Once::new();
     ADDED.call_once(|| ctx.add_font_provider(std::sync::Arc::new(ScriptFallback)));
@@ -674,41 +575,6 @@ fn ui_font() -> Option<Vec<u8>> {
     return fc_match("sans-serif").and_then(|f| std::fs::read(f).ok());
 }
 
-/// The script fonts for `code` (every language's with `all`): (key, bytes), in fallback order.
-fn script_fonts(code: &str, all: bool) -> Vec<(String, Vec<u8>)> {
-    #[cfg(any(windows, target_os = "macos"))]
-    {
-        let dir = font_dir();
-        SCRIPT_FONTS
-            .iter()
-            .filter(|(_, _, langs)| all || langs.contains(&code))
-            // The first file there is used (older systems name some differently); a .ttc's
-            // first face is the regular one.
-            .filter_map(|(key, files, _)| {
-                let bytes = files
-                    .iter()
-                    .find_map(|f| std::fs::read(font_path(&dir, f)).ok())?;
-                Some(((*key).to_owned(), bytes))
-            })
-            .collect()
-    }
-    #[cfg(not(any(windows, target_os = "macos")))]
-    {
-        let mut seen = std::collections::HashSet::new();
-        SCRIPT_LANGS
-            .iter()
-            .filter(|(ours, _)| all || *ours == code)
-            .filter_map(|(_, fc)| fc_match(&format!(":lang={fc}")))
-            // Several languages share a font (Devanagari, the CJK collection): loaded once.
-            .filter(|f| seen.insert(f.clone()))
-            .filter_map(|f| {
-                let bytes = std::fs::read(&f).ok()?;
-                Some((format!("fc:{}", f.display()), bytes))
-            })
-            .collect()
-    }
-}
-
 /// The font file fontconfig picks for `pattern` (one of [`fc_files`]'s).
 #[cfg(not(any(windows, target_os = "macos")))]
 fn fc_match(pattern: &str) -> Option<std::path::PathBuf> {
@@ -716,7 +582,7 @@ fn fc_match(pattern: &str) -> Option<std::path::PathBuf> {
 }
 
 /// Every font file the windows may need, as fontconfig picks it: the interface font
-/// (`sans-serif`) and each script's (`:lang=…`). Each answer is an `fc-match` program; asked one
+/// (`sans-serif`) and the symbols'. Each answer is an `fc-match` program; asked one
 /// after the other on the window's thread, the thirty of them held up MDM's first frame for 2 s
 /// on an idle computer and past the freeze report's 8 s on a busy one (#164). So they are asked
 /// once, all together (a third of the time), and [`prepare_fonts`] starts that while the window
@@ -731,7 +597,6 @@ fn fc_files() -> &'static std::collections::HashMap<String, std::path::PathBuf> 
         let running: Vec<_> = ["sans-serif", SYMBOL_PATTERN]
             .into_iter()
             .map(str::to_owned)
-            .chain(SCRIPT_LANGS.iter().map(|(_, fc)| format!(":lang={fc}")))
             .filter_map(|pattern| {
                 let child = Command::new("fc-match")
                     .args(["-f", "%{file}", &pattern])
@@ -764,63 +629,18 @@ pub fn prepare_fonts() {
     });
 }
 
-/// The script fonts loaded now: the interface language's, or all of them.
-static LOADED: std::sync::Mutex<Option<(String, bool)>> = std::sync::Mutex::new(None);
-
-/// Load the fonts the interface language needs (after it changed).
-pub fn language_fonts(ctx: &egui::Context) {
-    let all = LOADED.lock().unwrap().as_ref().is_some_and(|l| l.1);
-    load_fonts(ctx, all);
-}
-
-/// Load every script font, for a list of all languages by their own names, until
-/// [`interface_fonts`] lets them go.
-pub fn all_scripts(ctx: &egui::Context) {
-    load_fonts(ctx, true);
-}
-
-/// Back to the interface language's script fonts only, once no list of every language shows
-/// (#72: CJK fonts alone are 13–20 MB each; the language picker had kept them all loaded).
-pub fn interface_fonts(ctx: &egui::Context) {
-    load_fonts(ctx, false);
-}
-
-fn load_fonts(ctx: &egui::Context, all: bool) {
+/// The interface's fonts, set up for `ctx`.
+fn load_fonts(ctx: &egui::Context) {
     #[cfg(windows)]
     classic_text(ctx);
-    let code = crate::i18n::code().to_owned();
-    let mut loaded = LOADED.lock().unwrap();
-    // Only the script fonts depend on the language: rebuild when that set changes.
-    let needs = |code: &str| -> Vec<&str> {
-        #[cfg(any(windows, target_os = "macos"))]
-        return SCRIPT_FONTS
-            .iter()
-            .filter(|(_, _, langs)| all || langs.contains(&code))
-            .map(|(key, ..)| *key)
-            .collect();
-        #[cfg(not(any(windows, target_os = "macos")))]
-        return SCRIPT_LANGS
-            .iter()
-            .filter(|(ours, _)| all || *ours == code)
-            .map(|(ours, _)| *ours)
-            .collect();
-    };
-    if let Some((old, old_all)) = loaded.as_ref()
-        && *old_all == all
-        && needs(old) == needs(&code)
-    {
-        *loaded = Some((code, all));
-        return;
-    }
-    fonts(ctx, &code, all);
-    *loaded = Some((code, all));
+    fonts(ctx);
 }
 
 /// IDM draws with Segoe UI 9 pt (12 px at 100 %): the system's own copy, nothing bundled
 /// (elsewhere the system's interface font, [`ui_font`]; else egui's default font). Every family
-/// falls back to it (Tahoma has no Armenian or Georgian), then to the script fonts for `code`
-/// (all with `all`).
-fn fonts(ctx: &egui::Context, code: &str, all: bool) {
+/// falls back to it (Tahoma has no Armenian or Georgian), then to the symbol fonts; other
+/// scripts (a file named in Japanese) come on demand ([`ScriptFallback`]).
+fn fonts(ctx: &egui::Context) {
     let mut defs = egui::FontDefinitions::default();
     let ui = ui_font();
     if let Some(bytes) = &ui {
@@ -852,10 +672,6 @@ fn fonts(ctx: &egui::Context, code: &str, all: bool) {
             .insert("segoe-ui-fallback".into(), on_baseline(bytes));
         fallbacks.push("segoe-ui-fallback".into());
     }
-    for (key, bytes) in script_fonts(code, all) {
-        defs.font_data.insert(key.clone(), on_baseline(bytes));
-        fallbacks.push(key);
-    }
     for (k, bytes) in symbol_fonts().into_iter().enumerate() {
         let key = format!("symbols-{k}");
         defs.font_data.insert(key.clone(), on_baseline(bytes));
@@ -881,20 +697,17 @@ fn fonts(ctx: &egui::Context, code: &str, all: bool) {
 /// Latin, Greek and Cyrillic text drawn the way Windows' classic controls draw it (#262, #323,
 /// #334), by DirectWrite ([`crate::win32::text_rasterizer`]): the fonts' shapes and, with them,
 /// whole-pixel widths, so a letter's width and the place it is drawn for finally agree. That
-/// disagreement is what glued some letters together and pushed others apart. Set again when the
-/// interface's direction changes: a right-to-left line needs its brackets mirrored by the shaper.
+/// disagreement is what glued some letters together and pushed others apart. Set once.
 #[cfg(windows)]
 fn classic_text(ctx: &egui::Context) {
-    use std::sync::atomic::{AtomicI8, Ordering};
-    static RTL: AtomicI8 = AtomicI8::new(-1);
-    let rtl = crate::i18n::rtl();
-    if RTL.swap(i8::from(rtl), Ordering::Relaxed) != i8::from(rtl) {
+    static SET: std::sync::Once = std::sync::Once::new();
+    SET.call_once(|| {
         ctx.set_glyph_rasterizers(
-            crate::win32::text_rasterizer(font_dir(), rtl)
+            crate::win32::text_rasterizer(font_dir())
                 .into_iter()
                 .collect(),
         );
-    }
+    });
 }
 
 /// The text [`classic_text`] leaves to egui (Arabic, Hebrew, Indic, Thai, CJK; marks clustered
@@ -936,7 +749,7 @@ fn text_styles(ctx: &egui::Context) {
 
 pub fn apply(ctx: &egui::Context) {
     add_script_fallback(ctx);
-    load_fonts(ctx, false);
+    load_fonts(ctx);
     // A press held for a while is still a click when let go over the control, as in Windows
     // (egui gives it up after 0.8 s).
     ctx.options_mut(|o| {
@@ -1019,12 +832,12 @@ mod mode_tests {
 }
 
 /// Every mark a window draws (punctuation, arrows, ✔, quotation marks…: what isn't a letter or a
-/// digit) has a glyph in every language's font chain, so none comes out as an empty box (#185:
+/// digit) has a glyph in the interface's font chain, so none comes out as an empty box (#185:
 /// "✔ Connected" in the browser offer window; "→" on Linux).
 #[cfg(test)]
 mod glyph_tests {
 
-    /// #405: a script the interface language doesn't use: Bangla in a file name, Japanese in a
+    /// #405: a script the interface font lacks: Bangla in a file name, Japanese in a
     /// playlist, under an English interface. Before: nothing loaded it, so boxes.
     #[cfg(windows)]
     #[test]
@@ -1063,8 +876,7 @@ mod glyph_tests {
             for c in text.chars().filter(|c| !c.is_whitespace()) {
                 let font = super::fallback_entry(super::MACOS_FALLBACK_FONTS, c)
                     .unwrap_or_else(|| panic!("no macOS font for U+{:04X} in {text}", c as u32));
-                // The file macOS ships (/System/Library/Fonts/Supplemental), which an Arabic or
-                // Persian interface already loads.
+                // The file macOS ships (/System/Library/Fonts/Supplemental).
                 assert!(
                     font.files.contains(&"Supplemental/Arial Unicode.ttf"),
                     "U+{:04X}: {:?}",
@@ -1117,18 +929,7 @@ mod glyph_tests {
         }
     }
 
-    /// A catalog's texts: the translations (and the English sources, which a missing row shows).
-    fn catalog(code: &str) -> String {
-        let file = Path::new(ROOT).join("i18n").join(format!("{code}.tsv"));
-        let text = std::fs::read_to_string(&file).unwrap();
-        text.lines()
-            .filter(|l| !l.starts_with('#') && !l.starts_with('@'))
-            .flat_map(|l| l.split('\t').skip(1))
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    /// The marks the code draws itself, beside the catalogs' ("\u{2714} {}", "→"): every
+    /// The marks the code draws ("\u{2714} {}", "→"): every
     /// string literal in the app's sources, escapes read.
     fn literals() -> BTreeSet<char> {
         let mut out = BTreeSet::new();
@@ -1156,81 +957,47 @@ mod glyph_tests {
                     rest = &rest[(end + 1).min(rest.len())..];
                 }
                 s.push_str(rest);
-                // Only what isn't plain ASCII: every font has that.
+                // Only what isn't plain ASCII: every font has that. Nor CJK punctuation (the line
+                // breaker's table in winui.rs): it only ever shows inside CJK text, a file name
+                // whose font comes on demand (ScriptFallback).
                 let mut found = BTreeSet::new();
                 marks(&s, &mut found);
-                out.extend(found.into_iter().filter(|c| !c.is_ascii()));
+                out.extend(found.into_iter().filter(|c| {
+                    !c.is_ascii() && !matches!(*c as u32, 0x3000..=0x30FF | 0xFF00..=0xFFEF)
+                }));
             }
         }
         out
     }
 
-    fn languages() -> Vec<String> {
-        let file = Path::new(ROOT).join("i18n/languages.tsv");
-        std::fs::read_to_string(file)
-            .unwrap()
-            .lines()
-            .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
-            .filter_map(|l| l.split('\t').next().map(str::to_owned))
-            .collect()
-    }
-
     #[test]
-    fn every_language_draws_its_marks() {
-        let code_marks = literals();
+    fn every_mark_has_a_glyph() {
+        let needed = literals();
         let families = [
             egui::FontFamily::Name("tahoma".into()),
             egui::FontFamily::Name("tahoma-bold".into()),
             egui::FontFamily::Proportional,
         ];
+        let ctx = egui::Context::default();
+        super::fonts(&ctx);
+        let mut out = ctx.run_ui(Default::default(), |_| {});
+        out.textures_delta.clear();
         let mut missing: BTreeMap<String, BTreeSet<char>> = BTreeMap::new();
-        let mut skipped = Vec::new();
-        for code in languages() {
-            let text = catalog(&code);
-            let mut needed = code_marks.clone();
-            marks(&text, &mut needed);
-            let ctx = egui::Context::default();
-            super::fonts(&ctx, &code, false);
-            let mut out = ctx.run_ui(Default::default(), |_| {});
-            out.textures_delta.clear();
-            // A computer without the language's script font draws none of it (a CI image without
-            // CJK fonts): nothing to check there.
-            let letters: Vec<char> = text
-                .chars()
-                .filter(|c| c.is_alphabetic() && !c.is_ascii())
-                .take(200)
-                .collect();
-            let has_script = ctx.fonts_mut(|f| {
-                let id = egui::FontId::new(11.0, families[0].clone());
-                letters.is_empty()
-                    || letters.iter().filter(|c| f.has_glyph(&id, **c)).count() * 10
-                        >= letters.len() * 9
+        for family in &families {
+            let id = egui::FontId::new(11.0, family.clone());
+            let lacks: Vec<char> = ctx.fonts_mut(|f| {
+                needed
+                    .iter()
+                    .copied()
+                    .filter(|c| !f.has_glyph(&id, *c))
+                    .collect()
             });
-            if !has_script {
-                skipped.push(code);
-                continue;
+            if !lacks.is_empty() {
+                missing
+                    .entry(format!("{family:?}"))
+                    .or_default()
+                    .extend(lacks);
             }
-            for family in &families {
-                let id = egui::FontId::new(11.0, family.clone());
-                let lacks: Vec<char> = ctx.fonts_mut(|f| {
-                    needed
-                        .iter()
-                        .copied()
-                        .filter(|c| !f.has_glyph(&id, *c))
-                        .collect()
-                });
-                if !lacks.is_empty() {
-                    missing
-                        .entry(format!("{code} ({family:?})"))
-                        .or_default()
-                        .extend(lacks);
-                }
-            }
-        }
-        if !skipped.is_empty() {
-            eprintln!(
-                "no font for these languages' script on this computer, not checked: {skipped:?}"
-            );
         }
         let report: Vec<String> = missing
             .iter()

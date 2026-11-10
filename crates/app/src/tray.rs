@@ -106,8 +106,6 @@ pub struct Tray {
     downloads: Submenu,
     shown_downloads: std::cell::RefCell<Vec<(u64, String)>>,
     download_ids: Arc<Mutex<Vec<(MenuId, u64)>>>,
-    /// Every entry with its English text, to translate again when the language changes.
-    labels: Vec<(Entry, &'static str)>,
     /// What [`Tray::visible`] last saw and when: the minimize path asks every frame, and the
     /// shell shouldn't be asked that often (a second of staleness is enough).
     #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -118,13 +116,6 @@ pub struct Tray {
     /// The icon's id with the shell, once found (`win32::tray_icon_held`).
     #[cfg(windows)]
     icon_id: std::cell::Cell<Option<u32>>,
-}
-
-/// A menu entry whose text is translated.
-enum Entry {
-    Item(MenuItem),
-    Check(CheckMenuItem),
-    Sub(Submenu),
 }
 
 impl Tray {
@@ -193,13 +184,10 @@ impl Tray {
     pub fn new(ctx: &egui::Context, limiter: bool) -> Option<Tray> {
         let menu = Menu::new();
         let mut items = Vec::new();
-        let mut labels = Vec::new();
-        // Labels are translated here and again by `relabel` when the language changes.
         let mut add = |m: &Menu, label: &'static str, cmd: TrayCmd| {
             let item = MenuItem::new(crate::i18n::t(label), true, None);
             items.push((item.id().clone(), cmd));
             m.append(&item).ok();
-            labels.push((Entry::Item(item.clone()), label));
             item
         };
         add(
@@ -240,7 +228,6 @@ impl Tray {
         menu.append(&PredefinedMenuItem::separator()).ok();
         // i18n: verb: quit the app
         add(&menu, mark("Exit"), TrayCmd::Exit);
-        drop(add);
         items.push((limiter_on.id().clone(), TrayCmd::LimiterOn));
         items.push((limiter_off.id().clone(), TrayCmd::LimiterOff));
 
@@ -299,10 +286,6 @@ impl Tray {
                 menu_ctx.request_repaint();
             }
         }));
-        labels.push((Entry::Sub(limiter_menu), limiter_label));
-        labels.push((Entry::Sub(downloads.clone()), downloads_label));
-        labels.push((Entry::Check(limiter_on.clone()), on_label));
-        labels.push((Entry::Check(limiter_off.clone()), off_label));
         Some(Tray {
             tray,
             tip: Default::default(),
@@ -315,7 +298,6 @@ impl Tray {
             downloads,
             shown_downloads: Default::default(),
             download_ids,
-            labels,
             #[cfg(any(target_os = "windows", target_os = "macos"))]
             visible_checked: Default::default(),
             #[cfg(any(target_os = "windows", target_os = "macos"))]
@@ -328,18 +310,6 @@ impl Tray {
     /// The commands since the last call.
     pub fn poll(&self) -> Vec<TrayCmd> {
         self.rx.try_iter().collect()
-    }
-
-    /// Translate the menu again (the interface language changed).
-    pub fn relabel(&self) {
-        for (entry, source) in &self.labels {
-            let text = crate::i18n::t(source);
-            match entry {
-                Entry::Item(i) => i.set_text(text),
-                Entry::Check(i) => i.set_text(text),
-                Entry::Sub(i) => i.set_text(text),
-            }
-        }
     }
 
     /// Keep Start / Stop main download queue in step with the queue (the menu is only told

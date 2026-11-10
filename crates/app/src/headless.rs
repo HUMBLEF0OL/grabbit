@@ -107,8 +107,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
     if let Some(l) = setting(&args, "listen", "MDM_REMOTE_LISTEN") {
         s.remote_listen = l.trim().to_owned();
     }
-    // No one to ask: the language is the system's, and nothing opens a window.
-    s.language_asked = true;
+    // No one to ask: nothing opens a window.
     s.show_start_dialog = false;
     s.show_complete = false;
     let hosts = setting(&args, "hosts", "MDM_REMOTE_HOSTS");

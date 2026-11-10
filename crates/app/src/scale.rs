@@ -257,11 +257,9 @@ pub fn pane<R>(
     if !need_v && !need_h {
         return body(ui, view.min);
     }
-    let rtl = crate::i18n::rtl();
-    let lead_bar = if need_v && rtl { THICK } else { 0.0 };
-    let trail_bar = if need_v && !rtl { THICK } else { 0.0 };
+    let trail_bar = if need_v { THICK } else { 0.0 };
     let port = Rect::from_min_max(
-        pos2(view.min.x + lead_bar, view.min.y),
+        pos2(view.min.x, view.min.y),
         pos2(
             view.max.x - trail_bar,
             view.max.y - if need_h { THICK } else { 0.0 },
@@ -274,14 +272,7 @@ pub fn pane<R>(
         .data(|d| d.get_temp::<Vec2>(key))
         .unwrap_or_default()
         .clamp(Vec2::ZERO, max);
-    let origin = |off: Vec2| {
-        let x = if rtl {
-            port.max.x - content.x + off.x
-        } else {
-            port.min.x - off.x
-        };
-        pos2(x.round(), (port.min.y - off.y).round())
-    };
+    let origin = |off: Vec2| pos2((port.min.x - off.x).round(), (port.min.y - off.y).round());
     let at = origin(off);
     let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_size(at, content)));
     inner.set_clip_rect(port.intersect(ui.clip_rect()));
@@ -301,7 +292,7 @@ pub fn pane<R>(
             .and_then(|f| ui.ctx().read_response(f))
             .map(|r| r.rect)
         {
-            off += into_view(r, port, rtl);
+            off += into_view(r, port);
         }
     }
     // The wheel, unless a list inside took it.
@@ -311,10 +302,10 @@ pub fn pane<R>(
     if hovered && need_v && !crate::winui::wheel_taken(ui) {
         off.y += crate::winui::wheel_rows(ui, 16.0, (port.height() / 16.0).floor().max(1.0)) * 16.0;
     }
-    // The bars, in the window's direction.
+    // The bars.
     let _surface = crate::winui::Surface::enter(view.min.x, view.max.x);
     if need_v {
-        let x = if rtl { view.min.x } else { port.max.x };
+        let x = port.max.x;
         let track = Rect::from_min_max(pos2(x, view.min.y), pos2(x + THICK, port.max.y));
         crate::scrollbar::bar(
             ui,
@@ -341,7 +332,7 @@ pub fn pane<R>(
         );
     }
     if need_v && need_h {
-        let x = if rtl { view.min.x } else { port.max.x };
+        let x = port.max.x;
         crate::winui::fill(
             ui.painter(),
             x,
@@ -369,9 +360,8 @@ fn bars(content: Vec2, view: Vec2) -> (bool, bool) {
     (v, h)
 }
 
-/// How far to scroll (offset change) to bring `r` inside `port`, with a little margin; along x
-/// from the trailing side in a right-to-left window (its offset runs leftwards).
-fn into_view(r: Rect, port: Rect, rtl: bool) -> Vec2 {
+/// How far to scroll (offset change) to bring `r` inside `port`, with a little margin.
+fn into_view(r: Rect, port: Rect) -> Vec2 {
     const MARGIN: f32 = 4.0;
     let along = |lo: f32, hi: f32, plo: f32, phi: f32| {
         if lo < plo {
@@ -384,7 +374,7 @@ fn into_view(r: Rect, port: Rect, rtl: bool) -> Vec2 {
     };
     let dx = along(r.min.x, r.max.x, port.min.x, port.max.x);
     let dy = along(r.min.y, r.max.y, port.min.y, port.max.y);
-    vec2(if rtl { -dx } else { dx }, dy)
+    vec2(dx, dy)
 }
 
 #[cfg(test)]
@@ -504,13 +494,12 @@ mod tests {
     fn the_focused_control_is_scrolled_into_view() {
         let port = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
         let below = Rect::from_min_max(pos2(10.0, 320.0), pos2(80.0, 341.0));
-        assert_eq!(into_view(below, port, false), vec2(0.0, 45.0));
+        assert_eq!(into_view(below, port), vec2(0.0, 45.0));
         let above = Rect::from_min_max(pos2(10.0, -30.0), pos2(80.0, -9.0));
-        assert_eq!(into_view(above, port, false), vec2(0.0, -34.0));
+        assert_eq!(into_view(above, port), vec2(0.0, -34.0));
         let inside = Rect::from_min_max(pos2(10.0, 10.0), pos2(80.0, 31.0));
-        assert_eq!(into_view(inside, port, false), Vec2::ZERO);
+        assert_eq!(into_view(inside, port), Vec2::ZERO);
         let right = Rect::from_min_max(pos2(420.0, 10.0), pos2(480.0, 31.0));
-        assert_eq!(into_view(right, port, false), vec2(84.0, 0.0));
-        assert_eq!(into_view(right, port, true), vec2(-84.0, 0.0));
+        assert_eq!(into_view(right, port), vec2(84.0, 0.0));
     }
 }
