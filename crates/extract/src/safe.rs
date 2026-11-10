@@ -250,18 +250,7 @@ fn read_error(e: io::Error) -> Error {
     }
 }
 
-/// Unix: only the execute bits are kept (never setuid, setgid or sticky). Elsewhere nothing.
-#[cfg(unix)]
-fn set_mode(path: &Path, mode: Option<u32>) {
-    use std::os::unix::fs::PermissionsExt;
-    if let Some(m) = mode {
-        let keep = if m & 0o111 != 0 { 0o755 } else { 0o644 };
-        let _ = fs::set_permissions(path, fs::Permissions::from_mode(keep));
-    }
-}
-
 /// Windows has no permission bits for an archive to carry.
-#[cfg(not(unix))]
 fn set_mode(_path: &Path, _mode: Option<u32>) {}
 
 /// `name (1).ext`, `name (2).ext`… the first free one beside `path`.

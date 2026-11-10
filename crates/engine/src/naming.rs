@@ -200,12 +200,9 @@ fn is_format(c: char) -> bool {
 /// ".mdm.part" (9) and a duplicate may add " (NNN)" (6). The extension is kept.
 const MAX_NAME: usize = 230;
 
-/// Longest full path we create, in UTF-16 units. On Windows: `MAX_PATH` (260) without the
-/// terminating NUL, so Explorer and other programs can still open the file.
-#[cfg(windows)]
+/// Longest full path we create, in UTF-16 units: `MAX_PATH` (260) without the terminating NUL,
+/// so Explorer and other programs can still open the file.
 const MAX_PATH_LEN: usize = 259;
-#[cfg(not(windows))]
-const MAX_PATH_LEN: usize = 4095;
 /// What our files add to a destination: ".mdm.part" / ".mdm.json".
 const SIDECAR: usize = 9;
 /// What a duplicate's number adds: " (NNN)".
@@ -490,7 +487,6 @@ mod tests {
         assert!(path_fits(&named) && named.extension().is_some_and(|e| e == "zip"));
     }
 
-    #[cfg(windows)]
     #[test]
     fn a_folder_too_deep_for_any_name_is_refused() {
         let deeper = PathBuf::from(format!(r"C:\{}", "d".repeat(240)));

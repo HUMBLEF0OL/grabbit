@@ -1,6 +1,6 @@
 //! Crash and freeze reports, the app's side (mdm-crash has the rest). At start MDM launches its
 //! monitor (itself with `--crash-monitor`), which writes a minidump when MDM:
-//! - crashes natively (win32.rs / unix.rs catch it through crash-handler),
+//! - crashes natively (win32.rs catches it through crash-handler),
 //! - panics (the hook here sends the message, then asks for the dump),
 //! - or freezes: a watchdog thread sees a frame of the window run past [`FREEZE_AFTER`] and asks
 //!   for a dump of every thread while MDM is still stuck (a deadlock, an endless loop). A frame
@@ -54,10 +54,7 @@ fn now_ms() -> u64 {
 /// this process became MDM's instance.
 pub fn start(data: &Path, session: Session) {
     let _ = EPOCH.set(Instant::now());
-    #[cfg(windows)]
     let _ = UI_THREAD.set(crate::win32::thread_id());
-    #[cfg(unix)]
-    let _ = UI_THREAD.set(crate::unix::thread_id());
     let Some(exe) = std::env::current_exe().ok() else {
         return;
     };
@@ -69,10 +66,7 @@ pub fn start(data: &Path, session: Session) {
         *s = Some(session);
     }
     let reporter = Arc::new(reporter);
-    #[cfg(windows)]
     let attached = crate::win32::attach_crash_handler(reporter.clone());
-    #[cfg(unix)]
-    let attached = crate::unix::attach_crash_handler(reporter.clone());
     if !attached {
         tracing::warn!("crash reports: native crashes won't be caught");
     }
@@ -97,10 +91,7 @@ pub fn renderer(detail: &str) {
 
 /// Ask the monitor for a dump of every thread now.
 fn dump_now() -> bool {
-    #[cfg(windows)]
-    return crate::win32::dump_now();
-    #[cfg(unix)]
-    return crate::unix::dump_now();
+    crate::win32::dump_now()
 }
 
 /// A panic: its message and Rust's backtrace to the monitor, then a dump; then the default hook
@@ -317,36 +308,22 @@ pub struct Usage {
     pub faults: Option<u64>,
 }
 
-/// The window thread's use so far. None on macOS: the dump can't name the window thread there
-/// (`thread_id` is 0), so its use isn't measured either.
+/// The window thread's use so far. None when the window thread isn't known (`thread_id` 0).
 fn usage(ui_thread: u32) -> Option<Usage> {
     if ui_thread == 0 {
         return None;
     }
-    #[cfg(windows)]
-    return crate::win32::thread_usage(ui_thread);
-    #[cfg(unix)]
-    return crate::unix::thread_usage(ui_thread);
+    crate::win32::thread_usage(ui_thread)
 }
 
 /// The session's description for the monitor.
 pub fn session(language: &str, dark: bool) -> Session {
-    #[cfg(windows)]
     let os_version = crate::win32::windows_version();
-    #[cfg(unix)]
-    let os_version = crate::unix::os_version();
     Session {
         version: crate::help::VERSION.to_owned(),
         commit: crate::help::COMMIT.to_owned(),
         install: mdm_tools::update::Install::detect().label().to_owned(),
-        os: if cfg!(windows) {
-            "Windows"
-        } else if cfg!(target_os = "macos") {
-            "macOS"
-        } else {
-            "Linux"
-        }
-        .to_owned(),
+        os: "Windows".to_owned(),
         os_version,
         arch: std::env::consts::ARCH.to_owned(),
         language: language.to_owned(),
@@ -372,10 +349,7 @@ pub fn test(what: &str) {
     match what {
         "panic" => panic!("crash test: a panic on purpose"),
         "crash" => {
-            #[cfg(windows)]
             crate::win32::crash_now();
-            #[cfg(unix)]
-            crate::unix::crash_now();
         }
         "freeze" => crash_test_freeze(),
         "spin" => crash_test_spin(),

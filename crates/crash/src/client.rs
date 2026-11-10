@@ -1,5 +1,5 @@
 //! The app's side: start the monitor, connect to it, tell it what it needs to know, ask it for
-//! dumps. (Catching native crashes is the app's platform layer, win32.rs / unix.rs: it hands
+//! dumps. (Catching native crashes is the app's platform layer, win32.rs: it hands
 //! [`Reporter::dump`] to crash-handler.)
 
 use std::path::Path;
@@ -134,12 +134,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         // A system program that starts and exits at once; the monitor's arguments mean nothing
         // to it.
-        let exe = if cfg!(windows) {
-            "whoami.exe"
-        } else {
-            // macOS has no /bin/true: found on the PATH.
-            "true"
-        };
+        let exe = "whoami.exe";
         let started = Instant::now();
         assert!(Reporter::start(Path::new(exe), dir.path()).is_none());
         assert!(

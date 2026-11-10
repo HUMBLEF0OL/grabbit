@@ -101,8 +101,7 @@ fn own_window(title: &str, known: Option<HWND>) -> Option<HWND> {
 /// The address a connection to `dst` would leave from (PAC's `myIpAddress`), asked of the
 /// routing table (GetBestRoute2). No socket is opened: a UDP socket, the usual way to ask, is a
 /// listening socket to Windows' firewall, which would ask the user about MDM. Installed as the
-/// engine's lookup at start (`mdm_engine::net::set_source_lookup`); unix.rs has none (the
-/// engine's UDP way raises no prompt there).
+/// engine's lookup at start (`mdm_engine::net::set_source_lookup`).
 pub fn source_address(dst: std::net::IpAddr) -> Option<std::net::IpAddr> {
     use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
     use windows_sys::Win32::NetworkManagement::IpHelper::{GetBestRoute2, MIB_IPFORWARD_ROW2};
@@ -2154,9 +2153,7 @@ pub fn drag_file_out(title: &str, file: &std::path::Path) -> Result<(), String> 
     let what = crate::fileicons::What::of(crate::fileicons::Kind::File(name));
     let preview = file_icon(&what, 32)
         .and_then(|icon| {
-            let crate::fileicons::Native::Rgba { side, rgba, .. } = icon else {
-                return None;
-            };
+            let crate::fileicons::Native::Rgba { side, rgba, .. } = icon;
             let img = image::RgbaImage::from_raw(side, side, rgba)?;
             let mut png = Vec::new();
             img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
@@ -3797,7 +3794,7 @@ pub fn cli_console(launcher: Option<u32>) {
 
 /// The OpenGL driver in its own words, for the log and the crash reports (#280): its renderer
 /// (the graphics card) and version, which on Windows carries the driver's build (Intel's
-/// "4.6.0 - Build 31.0.101.…", NVIDIA's "4.6.0 NVIDIA 5xx.xx"). Linux and macOS: unix.rs.
+/// "4.6.0 - Build 31.0.101.…", NVIDIA's "4.6.0 NVIDIA 5xx.xx").
 pub fn gl_driver(gl: &eframe::glow::Context) -> String {
     use eframe::glow::{self, HasContext as _};
     // SAFETY: called while eframe makes the app, with its context current on this thread;

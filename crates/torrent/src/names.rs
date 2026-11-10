@@ -21,11 +21,7 @@ where
     I: IntoIterator<Item = P>,
     P: AsRef<[String]>,
 {
-    check_for(
-        files,
-        cfg!(windows),
-        cfg!(any(windows, target_os = "macos")),
-    )
+    check_for(files, true, true)
 }
 
 /// `check` for Windows' rules (`windows`) and a file system that ignores letter case

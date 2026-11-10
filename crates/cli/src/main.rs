@@ -20,8 +20,8 @@ fn main() {
     fail(json, &format!("can't start {} ({e})", program.display()))
 }
 
-/// The app's program in this launcher's folder (the installer's or a zip's, a tarball's,
-/// /usr/bin, a Mac app's Contents/MacOS); started through a link, in the folder it points into.
+/// The app's program in this launcher's folder (the installer's or a zip's); started through a
+/// link, in the folder it points into.
 fn program() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let name = format!("misterdownloadmanager{}", std::env::consts::EXE_SUFFIX);
@@ -32,18 +32,9 @@ fn program() -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
-/// Linux and macOS: this process becomes the program (exec), so a terminal's Ctrl+C, a `kill`,
-/// the process id and the exit code are the program's own. Returns only if it can't.
-#[cfg(unix)]
-fn run(program: &std::path::Path, args: Vec<OsString>) -> std::io::Error {
-    use std::os::unix::process::CommandExt;
-    Command::new(program).arg(mdm_cli::FLAG).args(args).exec()
-}
-
-/// Windows: the program runs as a child, on this console. Ctrl+C reaches both: the program pauses
+/// The program runs as a child, on this console. Ctrl+C reaches both: the program pauses
 /// its download and ends, and this launcher, which ignores it, waits for that and passes its exit
 /// code on. Given this process's id (`--cli=<id>`), the program ends if the launcher is killed.
-#[cfg(windows)]
 fn run(program: &std::path::Path, args: Vec<OsString>) -> std::io::Error {
     // A handler that does nothing: Ctrl+C and Ctrl+Break don't end this process. Unlike
     // ignoring them outright, it isn't inherited by the program.

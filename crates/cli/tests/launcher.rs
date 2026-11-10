@@ -43,7 +43,7 @@ fn main() {
         "{stdout}"
     );
     // Windows: the launcher waits for the program, which knows it; elsewhere it became it.
-    let expected = if cfg!(windows) { Some(pid) } else { None };
+    let expected = Some(pid);
     assert!(
         stdout.contains(&format!("launcher {expected:?}")),
         "{stdout}"

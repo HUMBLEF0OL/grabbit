@@ -15,16 +15,7 @@
 //! - `misterdownloadmanager-nmhost --register` / `--unregister`: writes / removes the host
 //!   manifests (Chromium's names the extension's origin, Firefox's its add-on ID). Windows: beside
 //!   this exe, with the per-user (HKCU) registry entries the browsers look up; with `--all-users`
-//!   (the installer, installing for everyone, elevated) under HKLM instead. Linux and macOS: in
-//!   each installed browser's own host folder (the app does it at every start, as there is no
-//!   installer step), or the system-wide ones with `--all-users`. A browser that reads a
-//!   system-wide manifest naming this same program (the .deb's or .rpm's) gets none in the home
-//!   folder: the package manager removes the package's with it (#266).
-//! - `misterdownloadmanager-nmhost --safari` (macOS): the same host for Safari, started by the
-//!   app's Safari extension (tools/safari), which passes each message on; nothing to register.
-//! - `misterdownloadmanager-nmhost --package-manifests <root>` (Linux, the .deb and .rpm build):
-//!   writes the system-wide manifests under `<root>`, naming the packaged helper
-//!   (`/usr/bin/misterdownloadmanager-nmhost`). Nothing else.
+//!   (the installer, installing for everyone, elevated) under HKLM instead.
 
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
@@ -32,7 +23,6 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(windows)]
 mod win32;
 
 const HOST_NAME: &str = "com.misterdownloadmanager.host";
@@ -41,7 +31,6 @@ use mdm_ipc::extension::{FIREFOX_ID, STORE_ID, STORE_UPDATE_URL, chromium_ids, s
 /// user) or HKLM (everyone). Chromium-branded builds (Chromium, Helium, Thorium, and Brave and
 /// Brave Origin with every channel) read Chromium's first, then Chrome's, as most other forks do
 /// (Chromium's launch_context_win.cc). Brave's own key is kept for builds that read it.
-#[cfg(windows)]
 const REGISTRY_KEYS: [&str; 4] = [
     r"Software\Google\Chrome\NativeMessagingHosts",
     r"Software\Chromium\NativeMessagingHosts",
@@ -49,12 +38,10 @@ const REGISTRY_KEYS: [&str; 4] = [
     r"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts",
 ];
 /// Where Firefox looks.
-#[cfg(windows)]
 const FIREFOX_KEY: &str = r"Software\Mozilla\NativeMessagingHosts";
 /// Chrome's external extensions: an entry naming the store's extension makes Chrome offer it at
 /// its next start ("New extension added"), the user turning it on there. HKLM's is read from the
 /// 32-bit view on 64-bit Windows, hence /reg:32 (HKCU has one view).
-#[cfg(windows)]
 const CHROME_EXTERNAL_KEY: &str = r"Software\Google\Chrome\Extensions";
 
 /// A message from the extension.
@@ -571,23 +558,9 @@ enum Undelivered {
 /// slow disk or an antivirus scan can take a while); the browser's download waits meanwhile.
 const START_WAIT: Duration = Duration::from_secs(20);
 
-/// Started by Safari's app extension (`--safari`): inside its sandbox, which a program started from
-/// here would inherit, so the app is started through LaunchServices (`open`) instead.
-static SAFARI: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// The app this helper belongs to, when it is the copy inside Safari's extension
-/// (`X.app/Contents/PlugIns/Y.appex/Contents/MacOS/this`): its bundle.
-fn bundle_of(exe: &std::path::Path) -> Option<PathBuf> {
-    exe.ancestors()
-        .find(|p| p.extension().is_some_and(|e| e == "app"))
-        .map(PathBuf::from)
-}
-
 /// Hand `cmd` to Mister Download Manager, starting it only if none is running.
 fn deliver(cmd: &mdm_ipc::Command) -> Result<(), Undelivered> {
-    // Whatever it asks may open a window: the app may bring it to the front (Windows only: Linux
-    // and macOS have no foreground lock for a host to lift).
-    #[cfg(windows)]
+    // Whatever it asks may open a window: the app may bring it to the front.
     if let Some(pid) = mdm_ipc::app_pid() {
         win32::allow_foreground(pid);
     }
@@ -597,34 +570,9 @@ fn deliver(cmd: &mdm_ipc::Command) -> Result<(), Undelivered> {
         Err(mdm_ipc::SendError::NotRunning(_)) => {}
     }
     let dir = exe_dir().map_err(Undelivered::NotRunning)?;
-    // Beside the app, or (an AppImage's host, copied out of its mount: unix.rs) the path
-    // written next to this copy.
-    let app = match std::fs::read_to_string(dir.join("app-path")) {
-        Ok(path) if !path.trim().is_empty() => PathBuf::from(path.trim()),
-        _ => dir.join(if cfg!(windows) {
-            "misterdownloadmanager.exe"
-        } else {
-            "misterdownloadmanager"
-        }),
-    };
-    let safari = SAFARI.load(std::sync::atomic::Ordering::Relaxed);
-    let mut child = if safari {
-        let exe = this_program().map_err(Undelivered::NotRunning)?;
-        let bundle = bundle_of(&exe)
-            .ok_or_else(|| Undelivered::NotRunning(format!("{} is in no app", exe.display())))?;
-        // -g: the app opens behind Safari, as it does for the other browsers.
-        std::process::Command::new("/usr/bin/open")
-            .arg("-g")
-            .arg(&bundle)
-            .spawn()
-            .map_err(|e| {
-                Undelivered::NotRunning(format!("cannot start {}: {e}", bundle.display()))
-            })?
-    } else {
-        start_detached(&app)
-            .map_err(|e| Undelivered::NotRunning(format!("cannot start {}: {e}", app.display())))?
-    };
-    #[cfg(windows)]
+    let app = dir.join("misterdownloadmanager.exe");
+    let mut child = start_detached(&app)
+        .map_err(|e| Undelivered::NotRunning(format!("cannot start {}: {e}", app.display())))?;
     win32::allow_foreground(child.id());
     let started = std::time::Instant::now();
     while started.elapsed() < START_WAIT {
@@ -635,11 +583,7 @@ fn deliver(cmd: &mdm_ipc::Command) -> Result<(), Undelivered> {
             Err(mdm_ipc::SendError::NotRunning(_)) => {}
         }
         // It quit (another copy took over, or it failed to start): that one may answer still.
-        // (`open` returns at once, the app being another process.)
-        if !safari
-            && child.try_wait().is_ok_and(|s| s.is_some())
-            && started.elapsed() > START_WAIT / 4
-        {
+        if child.try_wait().is_ok_and(|s| s.is_some()) && started.elapsed() > START_WAIT / 4 {
             break;
         }
     }
@@ -648,8 +592,8 @@ fn deliver(cmd: &mdm_ipc::Command) -> Result<(), Undelivered> {
     ))
 }
 
-/// Start the app outside the browser's reach: browsers end a host's whole process tree (on
-/// Windows a job object, elsewhere its process group) once it has answered, which would end an
+/// Start the app outside the browser's reach: browsers end a host's whole process tree (a job
+/// object) once it has answered, which would end an
 /// app this host started along with it (MDN, "Native messaging": closing the native app).
 fn start_detached(app: &std::path::Path) -> io::Result<std::process::Child> {
     use std::process::{Command, Stdio};
@@ -658,7 +602,6 @@ fn start_detached(app: &std::path::Path) -> io::Result<std::process::Child> {
     cmd.stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const DETACHED_PROCESS: u32 = 0x0000_0008;
@@ -673,11 +616,6 @@ fn start_detached(app: &std::path::Path) -> io::Result<std::process::Child> {
             return Ok(child);
         }
         cmd.creation_flags(flags);
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        cmd.process_group(0);
     }
     cmd.spawn()
 }
@@ -782,9 +720,8 @@ fn our_caller(args: &[String]) -> bool {
         || args.get(1).is_some_and(|a| a == FIREFOX_ID)
 }
 
-/// Windows: the manifests beside this exe, and the registry entries naming them, per user
+/// The manifests beside this exe, and the registry entries naming them, per user
 /// (HKCU) or for everyone (HKLM).
-#[cfg(windows)]
 fn register(all_users: bool) -> Result<(), String> {
     portable_refused()?;
     let root = if all_users { "HKLM" } else { "HKCU" };
@@ -838,7 +775,6 @@ fn register(all_users: bool) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(windows)]
 fn unregister(all_users: bool) -> Result<(), String> {
     let root = if all_users { "HKLM" } else { "HKCU" };
     for key in REGISTRY_KEYS.into_iter().chain([FIREFOX_KEY]) {
@@ -856,7 +792,6 @@ fn unregister(all_users: bool) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(windows)]
 fn reg(args: &[&str]) -> Result<(), String> {
     let out = std::process::Command::new("reg")
         .args(args)
@@ -869,188 +804,12 @@ fn reg(args: &[&str]) -> Result<(), String> {
     }
 }
 
-/// Linux and macOS: the folders the browsers there read host manifests from, for one user (in
-/// the home folder) or for everyone, each with whether it is Firefox's (`mdm_ipc::browsers`).
-/// With `host`, a user's folder is left out for a browser that reads a manifest for everyone
-/// naming it (the package's, #266).
-#[cfg(not(windows))]
-fn host_dirs(all_users: bool, host: Option<&std::path::Path>) -> Vec<(PathBuf, bool)> {
-    let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
-    let config = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .unwrap_or_else(|| home.join(".config"));
-    mdm_ipc::browsers::host_dirs(&home, &config, cfg!(target_os = "macos"), all_users, host)
-        .into_iter()
-        .map(|(d, f)| (d, f == mdm_ipc::browsers::Family::Gecko))
-        .collect()
-}
-
-/// Linux and macOS: the folder Chrome reads external extensions from (an `<id>.json` naming
-/// the store's update service makes Chrome offer that extension at its next start), when
-/// Chrome is there. macOS has one per user and one for everyone; Linux Chrome reads only the
-/// system's, so a per-user registration there leaves it to the app's own offer (extension.rs).
-#[cfg(not(windows))]
-fn chrome_external_dir(all_users: bool) -> Option<PathBuf> {
-    let home = PathBuf::from(std::env::var_os("HOME").unwrap_or_default());
-    let (dir, chrome) = if cfg!(target_os = "macos") {
-        if all_users {
-            (
-                PathBuf::from("/Library/Application Support/Google/Chrome/External Extensions"),
-                PathBuf::from("/Applications/Google Chrome.app"),
-            )
-        } else {
-            let chrome = home.join("Library/Application Support/Google/Chrome");
-            (chrome.join("External Extensions"), chrome)
-        }
-    } else if all_users {
-        (
-            PathBuf::from("/usr/share/google-chrome/extensions"),
-            PathBuf::from("/opt/google/chrome"),
-        )
-    } else {
-        return None;
-    };
-    chrome.exists().then_some(dir)
-}
-
-/// Linux: this program runs from inside an AppImage's mount (`APPDIR`), which is gone once the
-/// AppImage quits: a manifest naming it would name a program that no longer exists (#253). The
-/// app registers a copy outside it instead (unix.rs).
-#[cfg(not(windows))]
-fn mount_refused() -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    match std::env::var_os("APPDIR").map(PathBuf::from) {
-        Some(mount) if !mount.as_os_str().is_empty() && exe.starts_with(&mount) => Err(format!(
-            "{} is inside the AppImage's mount, which is gone once it quits: register a copy \
-             outside it",
-            exe.display()
-        )),
-        _ => Ok(()),
-    }
-}
-
-#[cfg(not(windows))]
-fn register(all_users: bool) -> Result<(), String> {
-    portable_refused()?;
-    mount_refused()?;
-    let program = this_program()?;
-    let (chromium, firefox) = (chromium_manifest(&program), firefox_manifest(&program));
-    let dirs = host_dirs(all_users, Some(&program));
-    // A browser that reads the package's manifest for everyone, naming this program, needs none
-    // in the home folder: one written there before is taken away, so uninstalling the package
-    // leaves nothing behind (#266). The browser reads a user's manifest first, so one naming
-    // another program (an earlier MDM, an AppImage's copy) would win over the package's: the MDM
-    // registered last is the one the browsers start, as when each wrote its own.
-    let mut covered = 0;
-    if !all_users {
-        for (dir, _) in host_dirs(false, None) {
-            if dirs.iter().any(|(d, _)| *d == dir) {
-                continue;
-            }
-            covered += 1;
-            let manifest = dir.join(format!("{HOST_NAME}.json"));
-            if std::fs::remove_file(&manifest).is_ok() {
-                println!(
-                    "removed {} (the browser reads the one for everyone)",
-                    manifest.display()
-                );
-            }
-        }
-    }
-    if covered > 0 {
-        println!(
-            "registered {HOST_NAME} for everyone by the package: {covered} of this user's \
-             browser folders need nothing"
-        );
-    }
-    // One browser's folder that can't be written doesn't keep the others from theirs.
-    let mut failed = Vec::new();
-    for (dir, is_firefox) in &dirs {
-        let manifest = if *is_firefox { &firefox } else { &chromium };
-        let written = std::fs::create_dir_all(dir)
-            .map_err(|e| format!("{}: {e}", dir.display()))
-            .and_then(|()| write_json(&dir.join(format!("{HOST_NAME}.json")), manifest));
-        match written {
-            Ok(()) => println!("registered {HOST_NAME} in {}", dir.display()),
-            Err(e) => failed.push(e),
-        }
-    }
-    if dirs.is_empty() && covered == 0 {
-        println!("registered {HOST_NAME} for no browser: none found");
-    }
-    if !failed.is_empty() {
-        return Err(failed.join("; "));
-    }
-    if let (Some(dir), Some(id)) = (chrome_external_dir(all_users), store_id()) {
-        std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-        write_json(
-            &dir.join(format!("{id}.json")),
-            &serde_json::json!({ "external_update_url": STORE_UPDATE_URL }),
-        )?;
-        println!("offered the extension to Chrome in {}", dir.display());
-    }
-    Ok(())
-}
-
-#[cfg(not(windows))]
-fn unregister(all_users: bool) -> Result<(), String> {
-    for (dir, _) in host_dirs(all_users, None) {
-        let _ = std::fs::remove_file(dir.join(format!("{HOST_NAME}.json")));
-    }
-    if let Some(dir) = chrome_external_dir(all_users) {
-        let _ = std::fs::remove_file(dir.join(format!("{STORE_ID}.json")));
-    }
-    println!("unregistered {HOST_NAME}");
-    Ok(())
-}
-
-/// Linux: where the .deb and .rpm install this program, which their manifests name.
-#[cfg(target_os = "linux")]
-const PACKAGED_HOST: &str = "/usr/bin/misterdownloadmanager-nmhost";
-
-/// Linux (the .deb and .rpm build, tools/installer/build-linux.sh): the manifests for everyone,
-/// in each folder the browsers read them from (`mdm_ipc::browsers::LINUX_SYSTEM_HOST_DIRS`),
-/// under `root`, naming the packaged helper. The package owns them, so the package manager
-/// removes them with it (#266).
-#[cfg(target_os = "linux")]
-fn package_manifests(root: Option<&str>) -> Result<(), String> {
-    let root = std::path::Path::new(root.ok_or("--package-manifests needs a folder")?);
-    let program = std::path::Path::new(PACKAGED_HOST);
-    for (dir, family) in mdm_ipc::browsers::LINUX_SYSTEM_HOST_DIRS {
-        let dir = root.join(dir.trim_start_matches('/'));
-        std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-        let manifest = match family {
-            mdm_ipc::browsers::Family::Chromium => chromium_manifest(program),
-            mdm_ipc::browsers::Family::Gecko => firefox_manifest(program),
-        };
-        let path = dir.join(format!("{HOST_NAME}.json"));
-        write_json(&path, &manifest)?;
-        println!("{}", path.display());
-    }
-    Ok(())
-}
-
-/// The system-wide manifests are packaged for Linux only (macOS's and Windows' installers
-/// register with `--register --all-users`).
-#[cfg(not(target_os = "linux"))]
-fn package_manifests(_: Option<&str>) -> Result<(), String> {
-    Err("--package-manifests: the .deb and .rpm are Linux's".into())
-}
-
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let all_users = args.iter().any(|a| a == "--all-users");
     let result = match args.first().map(String::as_str).unwrap_or_default() {
         "--register" => register(all_users),
         "--unregister" => unregister(all_users),
-        "--package-manifests" => package_manifests(args.get(1).map(String::as_str)),
-        // Safari's extension has no host manifest: its app extension (tools/safari) starts this
-        // program from inside the app, which is the only caller there is.
-        "--safari" => {
-            SAFARI.store(true, std::sync::atomic::Ordering::Relaxed);
-            serve().map_err(|e| e.to_string())
-        }
         // Browsers start the host naming the caller: serve only our own extension (the
         // manifests' allowed_origins / allowed_extensions say the same; this is a second check).
         _ if our_caller(&args) => serve().map_err(|e| e.to_string()),
@@ -1076,19 +835,6 @@ fn downloadable(url: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Safari's copy of the helper, inside the app's extension, finds the app it opens.
-    #[test]
-    fn safari_helper_finds_its_app() {
-        let exe = std::path::Path::new(
-            "/Applications/Mister Download Manager.app/Contents/PlugIns/Mister Download Manager.appex/Contents/MacOS/misterdownloadmanager-nmhost",
-        );
-        assert_eq!(
-            bundle_of(exe),
-            Some(PathBuf::from("/Applications/Mister Download Manager.app"))
-        );
-        assert_eq!(bundle_of(std::path::Path::new("/usr/bin/nmhost")), None);
-    }
 
     /// The Chrome Web Store's copy and the app folder's (unpacked) both connect, and both are
     /// served: the manifest's allowed_origins and the host's own caller check agree.

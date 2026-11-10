@@ -1136,18 +1136,10 @@ impl TorrentSettings {
                     &p,
                     o.x + 32.0,
                     o.y + 136.0,
-                    // What the switch does is the system's: Windows asks per account, macOS and
-                    // Linux register MDM as the handler.
-                    if cfg!(windows) {
-                        crate::i18n::t(
-                            "For your Windows account only. Another app chosen in \"Open with\" stays first.",
-                        )
-                    } else {
-                        // i18n: Torrent settings, under the switch that makes MDM open magnet links and .torrent files (macOS, Linux)
-                        crate::i18n::t(
-                            "For your account only. Another app set as the default stays first.",
-                        )
-                    },
+                    // What the switch does is the system's: Windows asks per account.
+                    crate::i18n::t(
+                        "For your Windows account only. Another app chosen in \"Open with\" stays first.",
+                    ),
                     winui::MUTED(),
                     o.x + 456.0,
                     ("torrent-settings", 2),

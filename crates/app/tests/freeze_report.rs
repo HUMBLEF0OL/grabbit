@@ -75,12 +75,9 @@ fn monitor_pid(data: &Path) -> Option<u32> {
 
 /// End a process this test started indirectly (the monitor, the app's child).
 fn end(pid: u32) {
-    #[cfg(windows)]
     let _ = Command::new("taskkill")
         .args(["/F", "/PID", &pid.to_string()])
         .output();
-    #[cfg(unix)]
-    let _ = Command::new("kill").args(["-9", &pid.to_string()]).output();
 }
 
 /// The app with the main window `state` ("visible", or "minimized" with `/show minimized`), then

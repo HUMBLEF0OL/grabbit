@@ -35,17 +35,9 @@ pub const USER_AGENT: &str = concat!(
     " (+https://misterdownloadmanager.com) gallery-dl"
 );
 
-/// gallery-dl's program for this system in its releases. None on macOS (it publishes no build
-/// for it: Homebrew's `gallery-dl`, chosen in Helpers, works there) and on Linux other than
-/// x86-64 (the same, from the system's packages or pip).
+/// gallery-dl's program in its releases.
 pub fn asset() -> Option<&'static str> {
-    if cfg!(windows) {
-        Some("gallery-dl.exe")
-    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        Some("gallery-dl.bin")
-    } else {
-        None
-    }
+    Some("gallery-dl.exe")
 }
 
 /// Whether `sums` carries a valid signature `sig` by gallery-dl's author's key.
@@ -144,7 +136,7 @@ pub async fn install_latest(
     }
     let Some(asset) = asset() else {
         return Err(Error::Missing(
-            "build for this system: install gallery-dl with the system's packages (Homebrew, pip) and choose it in Helpers".into(),
+            "build for this system: install gallery-dl yourself and choose it in Helpers".into(),
         ));
     };
     let client = mdm_engine::net::client_builder(&net.dns, &net.route, RELEASES)?
@@ -595,11 +587,7 @@ mod tests {
 
     #[test]
     fn its_lines_are_files_saved_or_already_there() {
-        let saved = if cfg!(windows) {
-            r"C:\Users\x\Pictures\wikimediacommons\Birds\Rhea (de11b288).jpg"
-        } else {
-            "/home/x/Pictures/wikimediacommons/Birds/Rhea (de11b288).jpg"
-        };
+        let saved = r"C:\Users\x\Pictures\wikimediacommons\Birds\Rhea (de11b288).jpg";
         assert_eq!(
             parse_line(&format!("{saved}\r\n")),
             Some(Line::Saved(PathBuf::from(saved)))

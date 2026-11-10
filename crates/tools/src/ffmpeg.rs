@@ -58,14 +58,10 @@ fn best_build(release: &Release) -> Option<&Asset> {
 }
 
 /// The ffmpeg to use: the person's own (`chosen`, #51), else MDM's install in `dir`
-/// (`dir/ffmpeg/current.json`), if any and still there; on Linux and macOS, else the system's
-/// own. Its `exe` is `ffmpeg(.exe)`; yt-dlp is given its folder.
+/// (`dir/ffmpeg/current.json`), if any and still there. Its `exe` is `ffmpeg.exe`; yt-dlp is
+/// given its folder.
 pub fn installed(dir: &Path) -> Option<Installed> {
-    let own = crate::chosen::chosen(dir, crate::chosen::Helper::Ffmpeg).or_else(|| own(dir));
-    #[cfg(unix)]
-    return own.or_else(|| crate::system::installed("ffmpeg"));
-    #[cfg(not(unix))]
-    own
+    crate::chosen::chosen(dir, crate::chosen::Helper::Ffmpeg).or_else(|| own(dir))
 }
 
 /// MDM's own install in `dir`.
@@ -86,11 +82,6 @@ pub async fn install_latest(
     // The person's own copy: theirs to update (#51).
     if let Some(mine) = crate::chosen::chosen(dir, crate::chosen::Helper::Ffmpeg) {
         return Ok(mine);
-    }
-    if !cfg!(windows) {
-        return Err(Error::Missing(
-            "ffmpeg build for this system (install ffmpeg)".into(),
-        ));
     }
     let client = mdm_engine::net::client_builder(&net.dns, &net.route, RELEASES)?
         .user_agent(crate::USER_AGENT)

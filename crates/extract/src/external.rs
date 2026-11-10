@@ -10,22 +10,15 @@ use std::process::{Command, Stdio};
 use crate::Error;
 use crate::safe::{self, Writer};
 
-/// 7-Zip's program: in its usual install folders on Windows, else `7zz`, `7z` or `7za` on the
-/// PATH (Linux and macOS packages name it so).
+/// 7-Zip's program: in its usual install folders, else `7z.exe` or `7za.exe` on the PATH.
 pub fn find_7zip() -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
-    if cfg!(windows) {
-        for var in ["ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"] {
-            if let Some(dir) = std::env::var_os(var) {
-                candidates.push(PathBuf::from(dir).join("7-Zip").join("7z.exe"));
-            }
+    for var in ["ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"] {
+        if let Some(dir) = std::env::var_os(var) {
+            candidates.push(PathBuf::from(dir).join("7-Zip").join("7z.exe"));
         }
     }
-    let names: &[&str] = if cfg!(windows) {
-        &["7z.exe", "7za.exe"]
-    } else {
-        &["7zz", "7z", "7za"]
-    };
+    let names: &[&str] = &["7z.exe", "7za.exe"];
     if let Some(path) = std::env::var_os("PATH") {
         for dir in std::env::split_paths(&path) {
             for n in names {
@@ -57,7 +50,6 @@ pub fn extract(
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
     // No console window flashing up for it.
-    #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;

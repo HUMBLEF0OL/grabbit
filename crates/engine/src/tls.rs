@@ -23,9 +23,8 @@ pub(crate) fn provider() -> Arc<CryptoProvider> {
     Arc::new(rustls::crypto::aws_lc_rs::default_provider())
 }
 
-/// Whether the system has certificates to check servers with. Windows and macOS always do
-/// (their verifiers ask the system at each connection); Linux reads its CA bundle, which can be
-/// missing. Asked again until it's found, so installing the certificates while MDM runs is seen
+/// Whether the system has certificates to check servers with (Windows' verifier asks the system
+/// at each connection). Asked again until it's found, so installing the certificates while MDM runs is seen
 /// by the next download.
 pub fn system_has_roots() -> bool {
     static FOUND: AtomicBool = AtomicBool::new(false);

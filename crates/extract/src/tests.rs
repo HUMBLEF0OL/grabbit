@@ -336,15 +336,6 @@ fn tar_gz_and_links() {
     assert_eq!(std::fs::read(dest.join("pack/run.sh")).unwrap(), b"hello");
     assert!(std::fs::symlink_metadata(dest.join("pack/evil")).is_err());
     assert_eq!(r.skipped.len(), 1);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let m = std::fs::metadata(dest.join("pack/run.sh"))
-            .unwrap()
-            .permissions()
-            .mode();
-        assert_eq!(m & 0o777, 0o755);
-    }
 }
 
 #[test]

@@ -99,7 +99,7 @@ impl GalleryDialog {
             |ui, o| self.body(ui, o, rt),
         );
         if let Some(h) = &mut self.helpers
-            && !matches!(h.show(ctx, rt), Outcome::Open)
+            && !matches!(h.show(ctx), Outcome::Open)
         {
             self.helpers = None;
             self.tool = None;
@@ -174,17 +174,10 @@ impl GalleryDialog {
             let msg = crate::i18n::t("Downloading and verifying gallery-dl...");
             text(&p, o.x + 31.0, line_y, msg, winui::TEXT());
         } else if tool.is_none() {
-            let msg = if can_install {
-                // i18n: in Download a gallery, before gallery-dl is installed
-                crate::i18n::t(
-                    "Galleries use gallery-dl (about 23 MB, checked against its signature).",
-                )
-            } else {
-                // i18n: in Download a gallery, on macOS and Linux other than x86-64 (no build to install)
-                crate::i18n::t(
-                    "Galleries use gallery-dl: install it with your system's packages (Homebrew, pip), then choose it in Helpers.",
-                )
-            };
+            // i18n: in Download a gallery, before gallery-dl is installed
+            let msg = crate::i18n::t(
+                "Galleries use gallery-dl (about 23 MB, checked against its signature).",
+            );
             // The Install button, as wide as its label in this language (#192), and the line
             // up to 9 px before it.
             let install_at = can_install.then(|| {

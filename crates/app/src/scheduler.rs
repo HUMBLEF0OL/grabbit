@@ -808,15 +808,14 @@ impl Scheduler {
         if let Some(path) = winui::picked(ui.ctx(), "sched-open-file") {
             f.open_file = path.display().to_string();
         }
-        // Dial-up is hung up through Windows' rasdial; macOS and Linux have no such command.
-        let hang_up = winui::checkbox_light(
+        // Dial-up is hung up through Windows' rasdial.
+        winui::checkbox_light(
             ui,
             at(228.0, 348.0 + DY),
             &mut f.hang_up,
             "Hang up modem when done",
-            cfg!(windows),
+            true,
         );
-        winui::why_disabled(hang_up, !cfg!(windows), crate::progress::NO_DIAL_UP);
         winui::checkbox_light(
             ui,
             at(228.0, 366.0 + DY),
@@ -891,12 +890,6 @@ impl Scheduler {
         // The line under it: a problem (in the error colour when it stops the wake), else when
         // the computer wakes.
         let (note, link, error): (String, Option<&str>, bool) = match &support {
-            Support::NeedsAdmin | Support::NoAlarm | Support::MacAdmin => (
-                crate::i18n::t(support_reason(&support).unwrap_or("")).to_owned(),
-                // i18n: link after why the computer can't be woken (Linux, macOS): opens the guide's page that shows how an administrator can allow it
-                (support != Support::NoAlarm).then_some(crate::i18n::mark("How to allow it")),
-                false,
-            ),
             _ if !(f.wake && f.start_at_on) => (String::new(), None, false),
             Support::TimersOff { .. } | Support::NotOnBattery => (
                 crate::i18n::t(support_reason(&support).unwrap_or("")).to_owned(),
@@ -940,17 +933,7 @@ impl Scheduler {
         };
         let end = x + winui::text_width(&p, &note).ceil().min(room) + 8.0;
         if winui::link(ui, &p, o.x + end, o.y + baseline, l, "sched-wake-link") {
-            match support {
-                #[cfg(windows)]
-                Support::TimersOff { .. } | Support::NotOnBattery => {
-                    crate::win32::open_power_options()
-                }
-                // The guide's section on it (never from an off-screen test run).
-                _ if !crate::offscreen() => crate::help::open_page(
-                    "queues-and-scheduler.md#wake-the-computer-to-run-a-queue",
-                ),
-                _ => {}
-            }
+            crate::win32::open_power_options()
         }
     }
 
@@ -1369,18 +1352,6 @@ fn support_reason(s: &crate::wake::Support) -> Option<&'static str> {
         Support::NotOnBattery => {
             // i18n: the Scheduler, under "Wake the computer to run this queue" (Windows): "Allow wake timers" is on when plugged in, off on battery
             crate::i18n::mark("Windows allows wake timers only while plugged in")
-        }
-        Support::NeedsAdmin => {
-            // i18n: the Scheduler, under "Wake the computer to run this queue" (Linux): the computer's wake alarm can be set by an administrator only
-            crate::i18n::mark("Only an administrator can allow this")
-        }
-        Support::NoAlarm => {
-            // i18n: the Scheduler, under "Wake the computer to run this queue" (Linux): the computer has no clock chip with a wake alarm that Linux shows
-            crate::i18n::mark("This computer has no wake alarm that programs can set")
-        }
-        Support::MacAdmin => {
-            // i18n: the Scheduler, under "Wake the computer to run this queue" (macOS): scheduling a wake needs an administrator's password
-            crate::i18n::mark("On macOS, only an administrator can schedule a wake")
         }
     })
 }

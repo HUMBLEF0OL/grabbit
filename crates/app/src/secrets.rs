@@ -1,20 +1,19 @@
 //! Sign-in secrets in the system's keychain (#44): the debrid accounts' credentials, Sites
 //! Logins' passwords and the proxy's password. The settings keep a reference in a secret's
 //! place, `keychain:<service>/<scope>/<key>`, and the secret lives in Windows Credential
-//! Manager (win32.rs), the Secret Service keyring on Linux or the macOS keychain (unix.rs).
+//! Manager (win32.rs).
 //!
 //! - In memory a secret is the secret itself (`settings::sealed` opens a reference when the
 //!   settings are read), so nothing that reads the settings changes.
 //! - Writes happen off the window's thread (the worker here). Until the keychain confirmed one
 //!   (written, then read back the same), the settings keep that secret as before (sealed with
-//!   DPAPI on Windows, as it is in the owner-only data folder elsewhere): a secret is always in
-//!   one place at least. Once confirmed, the next save writes the reference.
+//!   DPAPI): a secret is always in one place at least. Once confirmed, the next save writes the reference.
 //! - A reference that can't be read (a locked keyring, an entry removed meanwhile) is written
 //!   back as it was, so the secret comes back once the keyring opens again.
 //! - Entries this data folder no longer refers to (an account removed) are deleted after the
 //!   list without them is on the disk.
-//! - Where no keychain answers (no Secret Service running, a locked keyring: never unlocked
-//!   from here, that would prompt) secrets stay in the settings. A portable copy writes nothing
+//! - Where no keychain answers (a locked one is never unlocked from here, that would prompt)
+//!   secrets stay in the settings. A portable copy writes nothing
 //!   outside its folder: it keeps them there too.
 //!
 //! Nothing here writes a secret to the log: only keys, references and error codes.
@@ -22,13 +21,9 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
-#[cfg(unix)]
-use crate::unix as os;
-#[cfg(windows)]
 use crate::win32 as os;
 
-/// The keychain's name for MDM's entries (Credential Manager's targets start with it; Secret
-/// Service's `service` attribute; the macOS keychain's service).
+/// The keychain's name for MDM's entries (Credential Manager's targets start with it).
 pub const SERVICE: &str = "Mister Download Manager";
 /// What the settings hold in a secret's place.
 pub const REF: &str = "keychain:";
@@ -51,7 +46,7 @@ pub enum Kept {
 /// Why the keychain didn't do something. Never holds a secret: an error code at most.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Fault {
-    /// No keychain here (no Secret Service running, no session).
+    /// No keychain here (no session).
     Missing,
     /// It is there but locked; opening it would prompt the user.
     Locked,
@@ -83,7 +78,7 @@ pub trait Store: Send + Sync {
     fn list(&self, service: &str) -> Result<Vec<String>, Fault>;
 }
 
-/// The system's keychain (win32.rs, unix.rs).
+/// The system's keychain (win32.rs).
 pub struct System;
 
 impl Store for System {
@@ -493,11 +488,7 @@ fn scope() -> String {
     let path = mdm_ipc::data_dir()
         .map(|d| d.to_string_lossy().into_owned())
         .unwrap_or_default();
-    let path = if cfg!(windows) {
-        path.to_lowercase()
-    } else {
-        path
-    };
+    let path = path.to_lowercase();
     let h = crate::settings::fnv(&path);
     format!("{:08x}", (h ^ (h >> 32)) as u32)
 }
@@ -1100,7 +1091,7 @@ mod tests {
         }
     }
 
-    /// The system's own keychain (Credential Manager, the Secret Service, the macOS keychain),
+    /// The system's own keychain (Credential Manager),
     /// under a service of its own (`MDM-test-<random>`): only its entries are listed, and every
     /// one is deleted again. Skipped where there is none (a CI runner without a keyring).
     #[test]

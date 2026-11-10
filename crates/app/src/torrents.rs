@@ -360,20 +360,13 @@ pub fn route_bind(route: &mdm_engine::Route) -> Result<Option<mdm_torrent::Bind>
     match route {
         mdm_engine::Route::Any => Ok(None),
         mdm_engine::Route::Down { label } => Err(down(label)),
-        // Windows: its address (strong host model, see mdm_engine::net); IPv4 when it has one.
-        #[cfg(windows)]
+        // Its address (strong host model, see mdm_engine::net); IPv4 when it has one.
         mdm_engine::Route::Bound(b) => {
             b.v4.map(std::net::IpAddr::V4)
                 .or(b.v6.map(std::net::IpAddr::V6))
                 .map(|ip| Some(mdm_torrent::Bind::Address(ip)))
                 .ok_or_else(|| down(&b.label))
         }
-        // Linux and macOS: its device.
-        #[cfg(not(windows))]
-        mdm_engine::Route::Bound(b) => Ok(Some(mdm_torrent::Bind::Device {
-            name: b.name.clone(),
-            v4_only: b.v6.is_none(),
-        })),
     }
 }
 
@@ -743,8 +736,7 @@ pub struct Run {
 const TORRENT_ORIGIN: &str = "about:internet";
 
 /// Mark `files` (padding left out) under `folder` as downloaded from the internet, as web
-/// downloads are (Windows' zone, so SmartScreen and Office's Protected View check them; macOS'
-/// quarantine; Linux's origin attribute, which nothing enforces). Every file of the torrent,
+/// downloads are (Windows' zone, so SmartScreen and Office's Protected View check them). Every file of the torrent,
 /// ticked or not: librqbit creates them all.
 fn mark_files(folder: &Path, files: &[mdm_torrent::FileEntry]) {
     for f in files.iter().filter(|f| !f.padding) {
@@ -752,10 +744,7 @@ fn mark_files(folder: &Path, files: &[mdm_torrent::FileEntry]) {
         if !path.is_file() {
             continue;
         }
-        #[cfg(windows)]
         crate::win32::mark_downloaded(&path, TORRENT_ORIGIN, None);
-        #[cfg(unix)]
-        crate::unix::mark_downloaded(&path, TORRENT_ORIGIN, None);
     }
 }
 
@@ -1285,7 +1274,6 @@ mod tests {
 
     /// #40: a torrent's files get the internet zone, with no address but `about:internet`
     /// (never the magnet link); padding files and files not there are left alone.
-    #[cfg(windows)]
     #[test]
     fn torrent_files_are_marked_from_the_internet() {
         let dir = tempfile::tempdir().unwrap();

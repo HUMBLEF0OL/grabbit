@@ -79,10 +79,6 @@ fn body(answer: &[u8]) -> &[u8] {
 
 #[test]
 fn plain_and_tunnelled_requests_leave_from_the_adapter() {
-    if cfg!(target_os = "macos") {
-        // 127.0.0.2 only answers there once aliased.
-        return;
-    }
     let (_rt, lab) = lab();
     let at = lab_addr(&lab);
     let route = Arc::new(Mutex::new(bound()));
@@ -131,16 +127,14 @@ fn plain_and_tunnelled_requests_leave_from_the_adapter() {
 
     let log = lab.log();
     assert_eq!(log.len(), 2, "{log:?}");
-    // Windows binds the address; Linux binds the device (`lo`), whose source is 127.0.0.1.
-    if cfg!(windows) {
-        let from: Vec<IpAddr> = log.iter().map(|e| e.peer.ip()).collect();
-        assert!(from.iter().all(|ip| *ip == TWO), "{from:?}");
-        for e in &log {
-            println!(
-                "#35: {} {} reached the lab from {}",
-                e.method, e.path, e.peer
-            );
-        }
+    // Windows binds the address.
+    let from: Vec<IpAddr> = log.iter().map(|e| e.peer.ip()).collect();
+    assert!(from.iter().all(|ip| *ip == TWO), "{from:?}");
+    for e in &log {
+        println!(
+            "#35: {} {} reached the lab from {}",
+            e.method, e.path, e.peer
+        );
     }
     // The relay's password never reaches the server.
     assert!(log.iter().all(|e| e.authorization.is_none()));
@@ -205,9 +199,6 @@ fn nothing_goes_without_the_password_or_the_adapter() {
 
 #[test]
 fn a_route_change_closes_what_is_open() {
-    if cfg!(target_os = "macos") {
-        return;
-    }
     // A server that accepts and never answers: the tunnel stays open until the relay closes it.
     let server = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let at = server.local_addr().unwrap();
@@ -239,9 +230,7 @@ fn a_route_change_closes_what_is_open() {
     let (peer, n) = held.join().unwrap();
     assert!(rest.is_empty() && n == 0);
     assert!(t.elapsed() < Duration::from_secs(2), "{:?}", t.elapsed());
-    if cfg!(windows) {
-        assert_eq!(peer.ip(), TWO);
-    }
+    assert_eq!(peer.ip(), TWO);
     println!(
         "#35: the tunnel closed {:?} after the route changed",
         t.elapsed()
@@ -357,12 +346,10 @@ fn real_helpers_go_through_the_relay() {
     // version (6.1, Ubuntu 24.04's, as 8.0).
     assert!(ok2, "{why2}");
     assert!(dir.path().join("hls.mp4").is_file(), "the stream saved");
-    if cfg!(windows) {
-        assert!(
-            log.iter().all(|e| e.peer.ip() == TWO),
-            "every request from the adapter"
-        );
-    }
+    assert!(
+        log.iter().all(|e| e.peer.ip() == TWO),
+        "every request from the adapter"
+    );
 
     // 2. Formats over what can't go through the relay are refused, never handed to a program
     //    that ignores the proxy (rtmpdump, yt-dlp's own FTP, mpv): nothing may connect to the
@@ -397,9 +384,7 @@ fn real_helpers_go_through_the_relay() {
             .find(|e| e.file_name().to_string_lossy().contains("picture"))
             .expect("the picture saved");
         assert_eq!(saved.metadata().unwrap().len(), 64 * 1024);
-        if cfg!(windows) {
-            assert!(log.iter().all(|e| e.peer.ip() == TWO));
-        }
+        assert!(log.iter().all(|e| e.peer.ip() == TWO));
     }
 
     // 4. The adapter down: refused before yt-dlp starts.

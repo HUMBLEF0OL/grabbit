@@ -97,8 +97,8 @@ rustls-platform-verifier = "0.7.1"
 # platform's certificate checks, the same as downloads. Not its system config: "the system's DNS"
 # stays tokio's own lookup.
 hickory-resolver = { version = "0.26.3", default-features = false, features = ["tokio", "tls-aws-lc-rs", "https-aws-lc-rs", "rustls-platform-verifier"] }
-# Network adapter binding (#35, crates/engine/src/net.rs): sockets held to a device (Linux) or
-# an interface index (macOS) need socket2's "all"; the adapter list; the system proxy resolved
+# Network adapter binding (#35, crates/engine/src/net.rs): sockets bound before they connect
+# (socket2's "all"); the adapter list; the system proxy resolved
 # before a bound client is built. All three are already in the tree (tokio, hyper, librqbit).
 socket2 = { version = "0.6.5", features = ["all"] }
 network-interface = "2.0.5"
@@ -140,7 +140,7 @@ lto = "fat"
 codegen-units = 1
 # Function names and file:line for crash reports. The debug info doesn't ship: CI turns it into the
 # release's symbols zip (tools/installer/symbols.py); Windows keeps it in the .pdb, which no
-# download includes, and Linux and macOS strip it from the programs they ship.
+# download includes.
 debug = "line-tables-only"
 # The whole program optimised for size (#158): with fat LTO it is optimised as one unit, at the
 # program's own level, so this is what decides. It took 9 MB (21 %) off the app's program and

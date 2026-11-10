@@ -317,8 +317,7 @@ pub fn make(
             .and_then(|d| d.file_name())
             .map(|n| n.to_string_lossy().into_owned()),
     };
-    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
-        .map(std::path::PathBuf::from);
+    let home = std::env::var_os("USERPROFILE").map(std::path::PathBuf::from);
     let text = text(&input, home.as_deref());
     let signature = signature(kind, &input);
     let path = match dump {

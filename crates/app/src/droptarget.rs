@@ -29,16 +29,12 @@ pub enum Event {
 }
 
 /// Links and files dropped on one of the app's windows (the drop target, the main window).
-/// On Windows through the window's own OLE `IDropTarget` (browsers hand links over that way);
-/// macOS and Linux have no such hook here: winit passes dropped files only, which the main
-/// window reads from egui itself.
+/// Through the window's own OLE `IDropTarget` (browsers hand links over that way).
 pub struct Drops {
     rx: Receiver<Dropped>,
-    #[cfg_attr(not(windows), allow(dead_code))]
     tx: Sender<Dropped>,
     /// Something droppable is being dragged over the window (highlight).
     over: Arc<AtomicBool>,
-    #[cfg(windows)]
     ole: Option<crate::win32::ole::Registration>,
 }
 
@@ -49,7 +45,6 @@ impl Default for Drops {
             rx,
             tx,
             over: Arc::new(AtomicBool::new(false)),
-            #[cfg(windows)]
             ole: None,
         }
     }
@@ -58,9 +53,7 @@ impl Default for Drops {
 impl Drops {
     /// What was dropped on the window titled `title` since the last call (it is registered
     /// as a drop target once it exists).
-    #[cfg_attr(not(windows), allow(unused_variables))]
     pub fn poll(&mut self, ctx: &egui::Context, title: &str) -> Vec<Dropped> {
-        #[cfg(windows)]
         if self.ole.is_none() {
             self.ole = crate::win32::ole::Registration::new(
                 title,
@@ -82,7 +75,6 @@ pub struct DropTarget {
     drops: Drops,
     pos: Pos2,
     /// MDM_TEST_DROP's link was dropped (once).
-    #[cfg(windows)]
     test_dropped: bool,
 }
 
@@ -91,7 +83,6 @@ impl DropTarget {
         DropTarget {
             drops: Drops::default(),
             pos: pos.unwrap_or(pos2(200.0, 200.0)),
-            #[cfg(windows)]
             test_dropped: false,
         }
     }
@@ -116,7 +107,6 @@ impl DropTarget {
         // Off-screen test copies: MDM_TEST_DROP=<link> is dropped on the box once, through its
         // OLE drop target, as a browser drops one (#208's checks: it still takes links as a
         // popup window). Taken at the next poll, as a real drop is.
-        #[cfg(windows)]
         if !self.test_dropped
             && let Some(ole) = &self.drops.ole
             && crate::offscreen()
@@ -127,9 +117,8 @@ impl DropTarget {
         }
         // A borderless window as menus are (a plain popup on Windows, #208).
         let builder = crate::chrome::popup_viewport(TITLE)
-            // Windows: our own OLE target takes links and files; elsewhere winit's own
-            // (files only: macOS and Linux hand links over no other way here).
-            .with_drag_and_drop(!cfg!(windows))
+            // Our own OLE target takes links and files.
+            .with_drag_and_drop(false)
             .with_position(self.pos)
             .with_inner_size(vec2(SIZE, SIZE));
         let over = self.drops.over();
@@ -167,19 +156,7 @@ impl DropTarget {
                     ui.scope_id().with("drop-target"),
                     crate::winui::pointer_drag(),
                 )
-                .on_hover_text(if cfg!(windows) {
-                    crate::i18n::t("Drag links here to download them")
-                } else {
-                    // i18n: the drop target's tooltip on macOS and Linux (they hand over files only)
-                    crate::i18n::t("Drag .torrent files or lists of addresses here")
-                });
-            #[cfg(not(windows))]
-            for f in ui.ctx().input(|i| i.raw.dropped_files.clone()) {
-                let path = f.path().display().to_string();
-                if !path.is_empty() {
-                    events.push(Event::Drop(path));
-                }
-            }
+                .on_hover_text(crate::i18n::t("Drag links here to download them"));
             if resp.drag_started() {
                 ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
             }

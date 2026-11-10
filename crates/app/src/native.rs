@@ -1,8 +1,6 @@
 //! The Native theme (#45): the classic layout and controls in the system's own colours. On
-//! Windows its accent (Settings → Personalization → Colors) and, when it is on, its high
-//! contrast theme; on Linux the desktop's accent and its "higher contrast" setting (the
-//! freedesktop portal); on macOS the accent chosen in System Settings. Light or dark follows the
-//! system as every theme's mode does (`theme::update`).
+//! Windows' accent (Settings → Personalization → Colors) and, when it is on, its high contrast
+//! theme. Light or dark follows the system as every theme's mode does (`theme::update`).
 
 use egui::Color32;
 
@@ -19,8 +17,8 @@ pub struct Accent {
 }
 
 impl Accent {
-    /// An accent the system gives as one colour: its shades mixed in (Linux, macOS; Windows
-    /// gives its shades).
+    /// An accent given as one colour (MDM_NATIVE_ACCENT): its shades mixed in (Windows gives
+    /// its own).
     pub fn from_color(base: Color32) -> Self {
         use crate::derive::shade;
         Accent {
@@ -38,14 +36,13 @@ pub struct System {
     /// The system's high-contrast colours, when high contrast is on: background, text,
     /// selection, selection's text, links, greyed text.
     pub high_contrast: Option<[Color32; 6]>,
-    /// High contrast is asked for without colours of its own (Linux's portal): the built-in
+    /// High contrast is asked for without colours of its own (MDM_NATIVE_CONTRAST): the built-in
     /// High contrast theme's then.
     pub more_contrast: bool,
 }
 
 /// Windows' `AccentPalette` bytes: 8 colours of R G B and an unused byte, lightest first
 /// (Light3, Light2, Light1, the accent, Dark1, Dark2, Dark3, one more).
-#[cfg_attr(not(windows), allow(dead_code))]
 pub fn accent_palette_bytes(b: &[u8; 32]) -> [[u8; 3]; 7] {
     let mut out = [[0u8; 3]; 7];
     for (i, c) in out.iter_mut().enumerate() {
@@ -72,36 +69,16 @@ pub fn system(ctx: &egui::Context) -> System {
 }
 
 fn system_says(ctx: &egui::Context) -> System {
-    #[cfg(windows)]
-    {
-        let _ = ctx;
-        let rgb = |c: [u8; 3]| Color32::from_rgb(c[0], c[1], c[2]);
-        System {
-            accent: crate::win32::accent_palette().map(|p| Accent {
-                base: rgb(p[3]),
-                light: [rgb(p[2]), rgb(p[1]), rgb(p[0])],
-                dark: [rgb(p[4]), rgb(p[5]), rgb(p[6])],
-            }),
-            high_contrast: crate::win32::high_contrast_colors(),
-            more_contrast: false,
-        }
-    }
-    #[cfg(target_os = "linux")]
-    {
-        System {
-            accent: crate::unix::desktop_accent(ctx).map(Accent::from_color),
-            high_contrast: None,
-            more_contrast: crate::unix::desktop_contrast(ctx),
-        }
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let _ = ctx;
-        System {
-            accent: crate::unix::mac_accent().map(Accent::from_color),
-            high_contrast: None,
-            more_contrast: false,
-        }
+    let _ = ctx;
+    let rgb = |c: [u8; 3]| Color32::from_rgb(c[0], c[1], c[2]);
+    System {
+        accent: crate::win32::accent_palette().map(|p| Accent {
+            base: rgb(p[3]),
+            light: [rgb(p[2]), rgb(p[1]), rgb(p[0])],
+            dark: [rgb(p[4]), rgb(p[5]), rgb(p[6])],
+        }),
+        high_contrast: crate::win32::high_contrast_colors(),
+        more_contrast: false,
     }
 }
 

@@ -1,9 +1,6 @@
 //! What draws the windows (#89, #206): OpenGL (eframe's glow), or the system's own graphics API
-//! through eframe's wgpu with that one backend only ([`GPU`]): Direct3D 12 on Windows, Vulkan on
-//! Linux (Wayland and X11 windows alike), Metal on macOS. View → Draw with picks one, from the
-//! next start. Windows draws with Direct3D by default (#89); Linux and macOS keep OpenGL by
-//! default until Vulkan and Metal have clean reports from real graphics cards (#206), as
-//! Direct3D had before it became Windows' default.
+//! through eframe's wgpu with that one backend only ([`GPU`]): Direct3D 12. View → Draw with
+//! picks one, from the next start; Direct3D is the default (#89).
 //!
 //! The windows always open: when the chosen way can't start (no driver for it, a virtual
 //! machine, Remote Desktop), the other is tried, and the reason is logged. A start with the
@@ -11,15 +8,13 @@
 //! remembered, and so is one whose first frame doesn't come within [`FIRST_FRAME_WITHIN`] (MDM
 //! starts again, with OpenGL): the next starts draw with OpenGL until that API is chosen again,
 //! and View → Draw with says why. A graphics card lost while MDM runs (a driver update or reset)
-//! starts MDM again; a second loss soon after counts as the API failing. The same code does all
-//! of this on every system: only [`GPU`] and the backend in `gpu::options` differ.
+//! starts MDM again; a second loss soon after counts as the API failing.
 //!
 //! Testing overrides, in this order: `/renderer <name>` on the command line, then
-//! `MDM_RENDERER=<name>`. Names: `opengl` (`gl`); `direct3d` (`d3d`) on Windows, `vulkan` (`vk`)
-//! on Linux, `metal` on macOS, or `gpu` for whichever this system has; `warp` (Windows),
-//! `vulkan-software` (`lavapipe`, Linux) or `software`: the system's API drawn by a software
-//! renderer (Microsoft's WARP, Mesa's lavapipe), as on a computer without a graphics driver.
-//! Another system's name is ignored.
+//! `MDM_RENDERER=<name>`. Names: `opengl` (`gl`); `direct3d` (`d3d`) or `gpu`; `warp` or
+//! `software`: Direct3D drawn by Microsoft's WARP software renderer, as on a computer without a
+//! graphics driver. Another system's name (`vulkan`, `metal`, from the multi-platform builds) is
+//! ignored.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -62,26 +57,11 @@ impl Api {
     }
 }
 
-/// The system's own graphics API, through wgpu (build.rs sets `gpu` where wgpu is built):
-/// Direct3D 12 on Windows, Vulkan on Linux, Metal on macOS. None elsewhere (the BSDs: OpenGL
-/// only).
-pub const GPU: Option<Api> = if !cfg!(gpu) {
-    None
-} else if cfg!(windows) {
-    Some(Api::Direct3D)
-} else if cfg!(target_os = "macos") {
-    Some(Api::Metal)
-} else {
-    Some(Api::Vulkan)
-};
+/// The system's own graphics API, through wgpu: Direct3D 12.
+pub const GPU: Option<Api> = Some(Api::Direct3D);
 
-/// What draws when the user chose nothing (the settings' `renderer: None`): Direct3D on Windows
-/// (#89), OpenGL elsewhere (#206: Vulkan and Metal are choices until real cards have tried them).
-pub const DEFAULT: Api = if cfg!(windows) {
-    Api::Direct3D
-} else {
-    Api::OpenGl
-};
+/// What draws when the user chose nothing (the settings' `renderer: None`): Direct3D (#89).
+pub const DEFAULT: Api = Api::Direct3D;
 
 /// What the setting means here: OpenGL, or this system's API; [`DEFAULT`] when nothing was
 /// chosen, or another system's API was (a settings file brought from another computer).
@@ -94,7 +74,6 @@ pub fn chosen(setting: Option<Api>) -> Api {
 /// How long a watched start with the system's API may take to its first frame before MDM starts
 /// again with OpenGL (a driver stuck in its first present, a window that never shows). Generous:
 /// a slow computer just after it starts (#57) can take seconds.
-#[cfg(gpu)]
 const FIRST_FRAME_WITHIN: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// Which graphics adapters a start with the system's API may use.
@@ -339,7 +318,6 @@ fn set_failed(why: Option<Why>) {
 }
 
 /// For View → Draw with's note: why the system's API doesn't draw here, if it failed.
-#[cfg(gpu)]
 pub fn gpu_failed() -> Option<Why> {
     GPU_FAILED.lock().ok().and_then(|f| *f)
 }
@@ -389,7 +367,6 @@ fn remember_failure(why: Why, details: &str) {
 }
 
 /// The system's API chosen again (View → Draw with): its next start is tried.
-#[cfg(gpu)]
 pub fn forget_failure() {
     set_failed(None);
     for name in [FAILED, STARTING] {
@@ -421,7 +398,6 @@ pub fn test_slow_start() {
 /// The pass itself is MDM's own work, not the API's (see [`FirstFrameClock`]).
 pub fn frame_begin() {
     own_work_begin();
-    #[cfg(gpu)]
     gpu::poll();
 }
 
@@ -540,7 +516,6 @@ fn since_start() -> u128 {
 /// What draws now (set once the window started), for View → Draw with.
 static ACTIVE: OnceLock<Api> = OnceLock::new();
 
-#[cfg(gpu)]
 pub fn active() -> Option<Api> {
     ACTIVE.get().copied()
 }
@@ -549,7 +524,6 @@ pub fn active() -> Option<Api> {
 /// (no driver, `VK_ICD_FILENAMES` pointing at nothing, only a software renderer when a card was
 /// wanted), or something else.
 fn why_failed(e: &eframe::Error) -> Why {
-    #[cfg(gpu)]
     {
         use eframe::egui_wgpu::WgpuError;
         if let eframe::Error::Wgpu(
@@ -585,14 +559,12 @@ pub fn run<A: eframe::App + 'static>(
             let _ = std::fs::write(f, "");
         }
         // A watched start must show its first frame in time, or MDM starts again.
-        #[cfg(gpu)]
         if n == 0 && plan.watched {
             if let Ok(mut c) = CLOCK.lock() {
                 *c = Some(FirstFrameClock::started(std::time::Instant::now()));
             }
             gpu::watch_first_frame();
         }
-        #[cfg(gpu)]
         gpu::TRYING.store(attempt != Attempt::OpenGl, Ordering::Relaxed);
         let mut opts = options();
         configure(&mut opts, attempt);
@@ -651,32 +623,20 @@ fn configure(opts: &mut eframe::NativeOptions, attempt: Attempt) {
                 opts.stencil_buffer = 255;
             }
         }
-        #[cfg(gpu)]
         Attempt::Gpu(adapters) => {
             opts.renderer = eframe::Renderer::Wgpu;
             opts.wgpu_options = gpu::options(adapters);
         }
-        // Not built here (plan() never asks for it).
-        #[cfg(not(gpu))]
-        Attempt::Gpu(_) => opts.renderer = eframe::Renderer::Glow,
     }
 }
 
 /// The app is being made: what draws is known.
 /// `why`: why this way (the plan's reason, or why the way before it didn't start).
 fn started(cc: &eframe::CreationContext<'_>, attempt: Attempt, why: String) {
-    #[cfg(gpu)]
     let gpu = cc
         .wgpu_render_state
         .as_ref()
         .map(|rs| gpu::describe(&rs.adapter.get_info()));
-    #[cfg(not(gpu))]
-    let gpu: Option<String> = None;
-    // OpenGL names its card and driver too (#280: a freeze inside Intel's OpenGL driver came
-    // with "OpenGL" alone).
-    #[cfg(unix)]
-    use crate::unix::gl_driver;
-    #[cfg(windows)]
     use crate::win32::gl_driver;
     let detail = gpu
         .or_else(|| {
@@ -693,7 +653,6 @@ fn started(cc: &eframe::CreationContext<'_>, attempt: Attempt, why: String) {
     // — Direct3D 12 failed here before: …").
     crate::crash::renderer(&format!("{detail} — {why}"));
     // Errors are logged, not panics, and a lost graphics card starts MDM again.
-    #[cfg(gpu)]
     if let Some(rs) = &cc.wgpu_render_state {
         gpu::watch_device(&rs.device);
     }
@@ -702,13 +661,11 @@ fn started(cc: &eframe::CreationContext<'_>, attempt: Attempt, why: String) {
 
 /// `/show renderer-lost` (off-screen test copies): the system's API's device lost on purpose
 /// (MDM starts again).
-#[cfg(gpu)]
 pub fn test_device_lost() {
     gpu::lose_device();
 }
 
 /// eframe's wgpu set up for the system's API only: Direct3D 12, Vulkan or Metal.
-#[cfg(gpu)]
 mod gpu {
     use super::{
         Adapters, DRAWN, FIRST_FRAME_WITHIN, GPU, Why, clock_counted, file, remember_failure,
@@ -821,11 +778,7 @@ mod gpu {
     /// an update), and draws as the failure markers now say.
     fn start_again(why: &str) {
         tracing::warn!("{why}: starting MDM again");
-        // The AppImage file itself on Linux (this program sits in its temporary mount).
-        #[cfg(windows)]
         let program = std::env::current_exe().ok();
-        #[cfg(unix)]
-        let program = crate::unix::program();
         let started = program.and_then(|exe| {
             std::process::Command::new(exe)
                 .arg(crate::update::UPDATED)
@@ -839,10 +792,7 @@ mod gpu {
         }
         crate::crash::clean_exit();
         // The window thread may be stuck in the driver: end at once, without unwinding.
-        #[cfg(windows)]
         crate::win32::end_process(std::process::id());
-        #[cfg(unix)]
-        crate::unix::end_process(std::process::id());
         std::process::exit(1);
     }
 
@@ -851,7 +801,6 @@ mod gpu {
         let desc = &mut setup.instance_descriptor;
         // The system's API only, and nothing from WGPU_* variables: what draws is MDM's choice.
         desc.flags = wgpu::InstanceFlags::from_build_config();
-        #[cfg(windows)]
         {
             desc.backends = wgpu::Backends::DX12;
             desc.backend_options = wgpu::BackendOptions {
@@ -864,16 +813,6 @@ mod gpu {
                 ..Default::default()
             };
         }
-        // Vulkan's loader still reads its own variables (VK_ICD_FILENAMES, VK_LOADER_*): the
-        // system's way to pick a driver, and the lab's to take it away (#206).
-        #[cfg(target_os = "linux")]
-        {
-            desc.backends = wgpu::Backends::VULKAN;
-        }
-        #[cfg(target_os = "macos")]
-        {
-            desc.backends = wgpu::Backends::METAL;
-        }
         setup.power_preference = wgpu::PowerPreference::LowPower;
         setup.native_adapter_selector = Some(Arc::new(move |list, surface| {
             let kinds: Vec<(wgpu::DeviceType, bool)> = list
@@ -883,7 +822,7 @@ mod gpu {
                     (a.get_info().device_type, fits)
                 })
                 .collect();
-            match super::choose(&kinds, adapters, cfg!(target_os = "macos")) {
+            match super::choose(&kinds, adapters, false) {
                 Some(i) => Ok(list[i].clone()),
                 None => Err(format!(
                     "no {} {} adapter among [{}]",
@@ -947,12 +886,8 @@ mod gpu {
 }
 
 /// The adapter to draw with, among (kind, can draw to the window) in the system's order (the
-/// one showing the main screen first on Windows; Mesa's device-select layer puts the default
-/// one, or `DRI_PRIME`'s, first on Linux): the first fitting one of the kinds `adapters`
-/// allows. `integrated_first` (macOS, whose order puts no card first): of the cards, a built-in
-/// one before a separate one, as macOS itself picks for a program that asks for little, so a
-/// Mac's separate card can sleep.
-#[cfg(gpu)]
+/// one showing the main screen first): the first fitting one of the kinds `adapters` allows.
+/// `integrated_first`: of the cards, a built-in one before a separate one (MDM passes false).
 fn choose(
     list: &[(eframe::wgpu::DeviceType, bool)],
     adapters: Adapters,
@@ -1013,16 +948,12 @@ mod tests {
         let p = plan(Some(api), None, true);
         assert_eq!(p.attempts, [Attempt::OpenGl, any]);
         assert!(!p.watched);
-        // Nothing chosen: Direct3D on Windows (#89), OpenGL on Linux and macOS (#206).
+        // Nothing chosen: Direct3D (#89).
         let p = plan(None, None, false);
-        if cfg!(windows) {
-            assert_eq!(p.attempts, [gpu, Attempt::OpenGl, soft]);
-            assert!(p.watched);
-            assert_eq!(plan(None, None, true).attempts, [Attempt::OpenGl, any]);
-        } else {
-            assert_eq!(p.attempts, [Attempt::OpenGl, any]);
-            assert!(!p.watched);
-        }
+        assert_eq!(p.attempts, [gpu, Attempt::OpenGl, soft]);
+        assert!(p.watched);
+        assert_eq!(plan(None, None, true).attempts, [Attempt::OpenGl, any]);
+
         // OpenGL chosen: kept, the system's API only if OpenGL can't start.
         let p = plan(Some(Api::OpenGl), None, false);
         assert_eq!(p.attempts, [Attempt::OpenGl, any]);
@@ -1067,7 +998,6 @@ mod tests {
 
     /// Windows' plans are what they were before Vulkan and Metal (#206): the same attempts for
     /// every setting, failure and override.
-    #[cfg(windows)]
     #[test]
     fn windows_plans_unchanged() {
         let d3d = Attempt::Gpu(Adapters::Hardware);
@@ -1131,7 +1061,6 @@ mod tests {
         assert_eq!(Why::read("  \n"), (Why::Other, ""));
     }
 
-    #[cfg(gpu)]
     #[test]
     fn adapters_in_the_systems_order() {
         use eframe::wgpu::DeviceType::*;
@@ -1145,8 +1074,8 @@ mod tests {
         assert_eq!(choose(&warp, Adapters::Hardware, false), None);
         assert_eq!(choose(&warp, Adapters::Any, false), Some(0));
         assert_eq!(choose(&l, Adapters::Nothing, false), None);
-        // macOS: the built-in card before a separate one, whatever the order; the separate one
-        // when it is the only one that fits.
+        // `integrated_first`: the built-in card before a separate one, whatever the order; the
+        // separate one when it is the only one that fits.
         let mac = [(DiscreteGpu, true), (IntegratedGpu, true)];
         assert_eq!(choose(&mac, Adapters::Hardware, true), Some(1));
         assert_eq!(choose(&mac, Adapters::Hardware, false), Some(0));

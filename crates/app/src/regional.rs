@@ -79,7 +79,6 @@ pub fn effective(r: &Regional) -> Formats {
 /// (`LC_ALL`, `LC_TIME`, `LANG`): the United States and a few others month first and 12-hour,
 /// East Asia and Hungary year first, the rest day first and 24-hour.
 pub fn system() -> Regional {
-    #[cfg(windows)]
     if let Some((order, clock24, week_start)) = crate::win32::region_formats() {
         return Regional {
             custom: false,

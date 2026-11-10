@@ -67,18 +67,14 @@ fn dns() -> mdm_engine::DnsChoice {
 }
 
 /// The browsers yt-dlp reads cookies from (`--cookies-from-browser`; yt-dlp's
-/// `cookies.SUPPORTED_BROWSERS`), in the order Options lists them. Safari only on macOS.
-pub const COOKIE_BROWSERS: [&str; 9] = [
-    "firefox", "chrome", "edge", "brave", "opera", "vivaldi", "chromium", "whale", "safari",
+/// `cookies.SUPPORTED_BROWSERS`), in the order Options lists them.
+pub const COOKIE_BROWSERS: [&str; 8] = [
+    "firefox", "chrome", "edge", "brave", "opera", "vivaldi", "chromium", "whale",
 ];
 
-/// The browsers this system offers (Safari is macOS's only).
+/// The browsers this system offers.
 pub fn cookie_browsers() -> Vec<&'static str> {
-    COOKIE_BROWSERS
-        .iter()
-        .copied()
-        .filter(|b| *b != "safari" || cfg!(target_os = "macos"))
-        .collect()
+    COOKIE_BROWSERS.to_vec()
 }
 
 /// Options → Sites Logins → Cookies for video sites (#229): the browser whose cookies yt-dlp
@@ -617,9 +613,6 @@ fn cookie_file(text: &str) -> std::io::Result<CookieFile> {
     ));
     let mut open = std::fs::OpenOptions::new();
     open.write(true).create_new(true);
-    // The temporary folder is the user's own on Windows; elsewhere it may be shared.
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::mode(&mut open, 0o600);
     let file = CookieFile(path);
     open.open(&file.0)?.write_all(text.as_bytes())?;
     Ok(file)
@@ -713,8 +706,7 @@ fn usable_dir(dir: &Path) -> Option<PathBuf> {
     if !std::fs::metadata(dir).ok()?.is_dir() {
         return None;
     }
-    // Only Windows refuses mount points (Redirection Guard); elsewhere a link is just followed.
-    #[cfg(windows)]
+    // Windows refuses mount points (Redirection Guard).
     if dir.is_absolute()
         && dir.ancestors().any(reparse_point)
         && let Ok(real) = std::fs::canonicalize(dir)
@@ -725,7 +717,6 @@ fn usable_dir(dir: &Path) -> Option<PathBuf> {
 }
 
 /// A junction, a link or a mounted volume's folder.
-#[cfg(windows)]
 fn reparse_point(p: &Path) -> bool {
     use std::os::windows::fs::MetadataExt;
     const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
@@ -735,7 +726,6 @@ fn reparse_point(p: &Path) -> bool {
 
 /// `\\?\C:\x` as `C:\x` and `\\?\UNC\server\share` as `\\server\share`, the way PATH writes
 /// them (`canonicalize` gives the long forms).
-#[cfg(windows)]
 fn without_verbatim(p: PathBuf) -> PathBuf {
     let s = p.to_string_lossy();
     if let Some(unc) = s.strip_prefix(r"\\?\UNC\") {
@@ -756,13 +746,7 @@ fn child_path(path: &std::ffi::OsStr) -> Option<std::ffi::OsString> {
 /// Give `cmd` the PATH of [`child_path`]: of the one it was given, else of MDM's own. Every
 /// helper starts here ([`spawn`]), and ffmpeg, started by yt-dlp, inherits it.
 fn with_usable_path(cmd: &mut Command) {
-    let is_path = |k: &std::ffi::OsStr| {
-        if cfg!(windows) {
-            k.eq_ignore_ascii_case("PATH")
-        } else {
-            k == "PATH"
-        }
-    };
+    let is_path = |k: &std::ffi::OsStr| k.eq_ignore_ascii_case("PATH");
     let path = match cmd.get_envs().find(|(k, _)| is_path(k)) {
         Some((_, Some(given))) => given.to_owned(),
         Some((_, None)) => return,
@@ -842,7 +826,6 @@ pub fn ytdlp_info(
 /// is a launcher whose child does the work, and ffmpeg runs under that child. Closing the job
 /// (`Spawned::kill`, or MDM ending in any way) ends them all; ending the launcher alone left the
 /// download running, holding its file and the bandwidth.
-#[cfg(windows)]
 fn new_job() -> Option<win32job::Job> {
     let mut info = win32job::ExtendedLimitInfo::new();
     info.limit_kill_on_job_close();
@@ -859,16 +842,13 @@ pub struct Spawned {
     /// The stderr reader has read to the end (the helper and all it started closed it).
     stderr_done: Arc<std::sync::atomic::AtomicBool>,
     name: String,
-    #[cfg(windows)]
     job: Option<win32job::Job>,
 }
 
 impl Spawned {
-    /// End the helper and everything it started (Windows: its job; elsewhere yt-dlp runs as one
-    /// process, its ffmpeg ending with it).
+    /// End the helper and everything it started (its job).
     pub fn kill(&mut self) {
         let _ = self.child.kill();
-        #[cfg(windows)]
         drop(self.job.take());
     }
 
@@ -940,7 +920,6 @@ pub fn spawn(mut cmd: Command, name: &str) -> Result<Spawned, ProcError> {
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -949,7 +928,6 @@ pub fn spawn(mut cmd: Command, name: &str) -> Result<Spawned, ProcError> {
     let mut child = cmd
         .spawn()
         .map_err(|e| ProcError::Start(name.to_owned(), e))?;
-    #[cfg(windows)]
     let job = new_job().filter(|job| {
         use std::os::windows::io::AsRawHandle;
         job.assign_process(child.as_raw_handle() as isize).is_ok()
@@ -984,7 +962,6 @@ pub fn spawn(mut cmd: Command, name: &str) -> Result<Spawned, ProcError> {
         warnings,
         stderr_done,
         name: name.to_owned(),
-        #[cfg(windows)]
         job,
     })
 }
@@ -1341,10 +1318,6 @@ mod tests {
         let bad = BrowserCookies::new("firefox", "a\nb").unwrap();
         let mut cmd = Command::new("yt-dlp");
         assert!(layers_with(&mut cmd, &[], &[], Some(&bad)).is_err());
-        assert_eq!(
-            cookie_browsers().contains(&"safari"),
-            cfg!(target_os = "macos")
-        );
     }
 
     /// #360: yt-dlp is told of Node.js or Bun, from the PATH or nvm, and left alone with Deno.
@@ -1415,7 +1388,6 @@ mod tests {
     /// the guard on for itself, then opening each PATH folder) fails on a PATH through a
     /// junction made here, and passes once started as MDM starts helpers: given the junction's
     /// real folder, in the same place.
-    #[cfg(windows)]
     #[test]
     fn a_helper_held_to_redirection_guard_walks_its_path() {
         let root = tempfile::tempdir().unwrap();
@@ -1600,7 +1572,6 @@ foreach ($d in $env:PATH.Split(';')) {
         );
     }
 
-    #[cfg(windows)]
     #[test]
     fn output_and_failures_of_a_real_process() {
         let mut ok = Command::new("cmd");
@@ -1620,7 +1591,6 @@ foreach ($d in $env:PATH.Split(';')) {
     /// #61: killing a helper ends what it started too (yt-dlp.exe is a launcher whose child
     /// downloads). Here a script starts a child that writes a line every second: once killed,
     /// the file stops growing.
-    #[cfg(windows)]
     #[test]
     fn killing_a_helper_ends_its_children() {
         let dir = tempfile::tempdir().unwrap();

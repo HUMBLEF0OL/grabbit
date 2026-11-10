@@ -209,39 +209,13 @@ pub fn system_theme(dark: bool) -> egui::SystemTheme {
     }
 }
 
-/// Decide the mode from the setting and the system's: Windows' app mode; on Linux the desktop's
-/// preference (the freedesktop portal), else what the window system reports; on macOS the
-/// appearance the window system reports (light when nothing says). True if it changed.
-/// `always_dark` (View → Always dark, #60): dark whatever the system says, for desktops that
-/// report no preference.
+/// Decide the mode from the setting and the system's: Windows' app mode. True if it changed.
+/// `always_dark` (View → Always dark, #60): dark whatever the system says.
 pub fn update(dark_mode_support: bool, always_dark: bool, ctx: &egui::Context) -> bool {
-    #[cfg(windows)]
-    let system_dark = {
-        let _ = ctx;
-        crate::win32::apps_use_dark()
-    };
-    #[cfg(target_os = "linux")]
-    let system_dark = crate::unix::desktop_dark(ctx)
-        .unwrap_or_else(|| ctx.system_theme() == Some(egui::Theme::Dark));
-    #[cfg(not(any(windows, target_os = "linux")))]
-    let system_dark = ctx.system_theme() == Some(egui::Theme::Dark);
+    let _ = ctx;
+    let system_dark = crate::win32::apps_use_dark();
     let want = wanted(dark_mode_support, always_dark, system_dark);
     DARK.swap(want, Ordering::Relaxed) != want
-}
-
-/// Did the desktop say its look changed since the last call? On Linux, the portal's and the theme
-/// settings' watchers count each change (`unix::desktop_generation`), and the app's theme check,
-/// otherwise every 2 s, then runs in the frame the change woke (#156). Elsewhere false: the check's
-/// 2 s are its only clock there.
-pub fn system_changed() -> bool {
-    #[cfg(target_os = "linux")]
-    {
-        static SEEN: AtomicU64 = AtomicU64::new(0);
-        let now = crate::unix::desktop_generation();
-        SEEN.swap(now, Ordering::Relaxed) != now
-    }
-    #[cfg(not(target_os = "linux"))]
-    false
 }
 
 /// Dark or not: View → Always dark, else the system's mode while Dark Mode support is on.
@@ -262,78 +236,33 @@ macro_rules! themed {
 }
 pub(crate) use themed;
 
-/// Marks that the interface font doesn't have (✔ ✖ ↩ ⇧ ⌘ ⌥ ⌦, and → on
-/// Linux: #185): the system's symbol fonts, last in every family's chain, in every language,
-/// each one that is there. macOS keeps ✔ and ✖ in Zapf Dingbats, not in Apple Symbols.
-#[cfg(windows)]
+/// Marks that the interface font doesn't have (✔ ✖ ↩ ⇧ ⌘ ⌥ ⌦): the system's symbol fonts, last
+/// in every family's chain, in every language, each one that is there.
 const SYMBOL_FONTS: &[&str] = &["seguisym.ttf"];
-#[cfg(target_os = "macos")]
-const SYMBOL_FONTS: &[&str] = &["Apple Symbols.ttf", "ZapfDingbats.ttf"];
-/// Linux: the font fontconfig picks for those marks (glyph_tests lists every one the windows
-/// draw; a new one goes here too).
-#[cfg(not(any(windows, target_os = "macos")))]
-const SYMBOL_PATTERN: &str = ":charset=2024 2192 21a9 21e7 2318 2325 2326 2714 2716";
 
-/// The symbol fonts' bytes, in fallback order ([`SYMBOL_FONTS`], [`SYMBOL_PATTERN`]).
+/// The symbol fonts' bytes, in fallback order ([`SYMBOL_FONTS`]).
 fn symbol_fonts() -> Vec<Vec<u8>> {
-    #[cfg(any(windows, target_os = "macos"))]
-    return SYMBOL_FONTS
+    SYMBOL_FONTS
         .iter()
         .filter_map(|f| std::fs::read(font_dir().join(f)).ok())
-        .collect();
-    #[cfg(not(any(windows, target_os = "macos")))]
-    return fc_match(SYMBOL_PATTERN)
-        .and_then(|f| std::fs::read(f).ok())
-        .into_iter()
-        .collect();
+        .collect()
 }
 
 /// The folder the font tables name files in.
-#[cfg(any(windows, target_os = "macos"))]
 fn font_dir() -> std::path::PathBuf {
-    #[cfg(windows)]
-    return std::env::var_os("WINDIR")
+    std::env::var_os("WINDIR")
         .map(|w| std::path::PathBuf::from(w).join("Fonts"))
-        .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows\Fonts"));
-    #[cfg(target_os = "macos")]
-    return std::path::PathBuf::from("/System/Library/Fonts");
-}
-
-/// Resolves a font file path in `dir`. On macOS 15+ (Sequoia / Tahoe), `PingFang.ttc` moved out
-/// of `/System/Library/Fonts/PingFang.ttc` into `/System/Library/AssetsV2/com_apple_MobileAsset_Font*`.
-#[cfg(any(windows, target_os = "macos"))]
-fn font_path(dir: &std::path::Path, rel: &str) -> std::path::PathBuf {
-    let direct = dir.join(rel);
-    #[cfg(target_os = "macos")]
-    if rel == "PingFang.ttc" && !direct.exists() {
-        for base in [
-            "/System/Library/AssetsV2/com_apple_MobileAsset_Font8",
-            "/System/Library/AssetsV2/com_apple_MobileAsset_Font7",
-            "/System/Library/AssetsV2/com_apple_MobileAsset_Font6",
-        ] {
-            if let Ok(entries) = std::fs::read_dir(base) {
-                for entry in entries.flatten() {
-                    let p = entry.path().join("AssetData/PingFang.ttc");
-                    if p.is_file() {
-                        return p;
-                    }
-                }
-            }
-        }
-    }
-    direct
+        .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows\Fonts"))
 }
 
 /// The fonts for scripts the interface font lacks, loaded the first time a character needs one
 /// (#405): a file or video named in Bangla, Japanese, Thai... They come from the system on
 /// demand, only when text in that script is shown (CJK fonts are 13–20 MB each, #72).
 ///
-/// Windows and macOS: the blocks below name the system's font for each script. Linux: fontconfig
-/// is asked for a font that has the character (`:charset=`), one question per Unicode block.
+/// The blocks below name the system's font for each script.
 struct ScriptFallback;
 
 /// One script's fonts on demand: a key, its code points, the files to try (in order).
-#[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 struct FallbackFont {
     key: &'static str,
     ranges: &'static [(u32, u32)],
@@ -341,7 +270,6 @@ struct FallbackFont {
 }
 
 /// Windows' fonts for the scripts egui's fonts and Segoe UI don't cover.
-#[cfg(windows)]
 const FALLBACK_FONTS: &[FallbackFont] = &[
     FallbackFont {
         key: "indic",
@@ -408,77 +336,7 @@ const FALLBACK_FONTS: &[FallbackFont] = &[
     },
 ];
 
-/// macOS's fonts for the same scripts; Arial Unicode for what isn't listed. Compiled everywhere,
-/// so the tests check it on every system.
-#[cfg(target_os = "macos")]
-const FALLBACK_FONTS: &[FallbackFont] = MACOS_FALLBACK_FONTS;
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-const MACOS_FALLBACK_FONTS: &[FallbackFont] = &[
-    FallbackFont {
-        key: "japanese",
-        ranges: &[(0x3040, 0x30FF), (0x31F0, 0x31FF), (0xFF66, 0xFF9F)],
-        files: &["ヒラギノ角ゴシック W3.ttc", "Hiragino Sans GB.ttc"],
-    },
-    FallbackFont {
-        key: "hangul",
-        ranges: &[
-            (0x1100, 0x11FF),
-            (0x3130, 0x318F),
-            (0xA960, 0xA97F),
-            (0xAC00, 0xD7FF),
-        ],
-        files: &["AppleSDGothicNeo.ttc"],
-    },
-    FallbackFont {
-        key: "han",
-        ranges: &[
-            (0x2E80, 0x303F),
-            (0x3100, 0x312F),
-            (0x3200, 0x4DBF),
-            (0x4E00, 0x9FFF),
-            (0xF900, 0xFAFF),
-            (0xFE30, 0xFE4F),
-            (0xFF00, 0xFFEF),
-            (0x20000, 0x3FFFF),
-        ],
-        files: &[
-            "PingFang.ttc",
-            "Hiragino Sans GB.ttc",
-            "STHeiti Light.ttc",
-            "Supplemental/Songti.ttc",
-        ],
-    },
-    FallbackFont {
-        key: "khmer",
-        ranges: &[(0x1780, 0x17FF), (0x19E0, 0x19FF)],
-        files: &["Supplemental/Khmer Sangam MN.ttf"],
-    },
-    FallbackFont {
-        key: "lao",
-        ranges: &[(0x0E80, 0x0EFF)],
-        files: &["Supplemental/Lao Sangam MN.ttf"],
-    },
-    FallbackFont {
-        key: "ethiopic",
-        ranges: &[(0x1200, 0x139F), (0x2D80, 0x2DDF), (0xAB00, 0xAB2F)],
-        files: &["Supplemental/Kefa.ttc", "Kefa.ttc"],
-    },
-    // Armenian, Hebrew and the Arabic script (Persian, Urdu: #533) too: the system font (SF)
-    // has none of them, and Windows' Segoe UI, which has them, isn't there.
-    FallbackFont {
-        key: "unicode",
-        ranges: &[
-            (0x0530, 0x13FF),
-            (0x1800, 0x1FFF),
-            (0xFB1D, 0xFDFF),
-            (0xFE70, 0xFEFF),
-        ],
-        files: &["Supplemental/Arial Unicode.ttf"],
-    },
-];
-
 /// The font in `fonts` for `c`: the first that lists its code point.
-#[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 fn fallback_entry(fonts: &'static [FallbackFont], c: char) -> Option<&'static FallbackFont> {
     let cp = c as u32;
     fonts
@@ -492,24 +350,12 @@ fn fallback_font(c: char) -> Option<(String, egui::FontData)> {
     use std::sync::Mutex;
     static LOADED: Mutex<Option<HashMap<String, Option<egui::FontData>>>> = Mutex::new(None);
 
-    #[cfg(any(windows, target_os = "macos"))]
     let (key, files): (String, Vec<std::path::PathBuf>) = {
         let font = fallback_entry(FALLBACK_FONTS, c)?;
         let dir = font_dir();
         (
             format!("fallback:{}", font.key),
-            font.files.iter().map(|f| font_path(&dir, f)).collect(),
-        )
-    };
-    #[cfg(not(any(windows, target_os = "macos")))]
-    let (key, files): (String, Vec<std::path::PathBuf>) = {
-        // One question per Unicode block: a script's letters don't each need an fc-match.
-        let block = (c as u32) >> 8;
-        (
-            format!("fallback:{block:x}"),
-            fc_lookup(&format!(":charset={:x}", c as u32))
-                .into_iter()
-                .collect(),
+            font.files.iter().map(|f| dir.join(f)).collect(),
         )
     };
 
@@ -521,32 +367,17 @@ fn fallback_font(c: char) -> Option<(String, egui::FontData)> {
             let bytes = files.iter().find_map(|f| std::fs::read(f).ok())?;
             let mut tweak = egui::FontTweak::default();
             tweak.set_baseline_fallback(true);
-            #[cfg(windows)]
-            {
-                tweak.hinting_target =
-                    egui::epaint::text::HintingTarget::Smooth(egui::epaint::text::SmoothHinting {
-                        light: false,
-                        symmetric_rendering: false,
-                        preserve_linear_metrics: false,
-                    });
-                tweak.subpixel_binning = Some(false);
-            }
+            tweak.hinting_target =
+                egui::epaint::text::HintingTarget::Smooth(egui::epaint::text::SmoothHinting {
+                    light: false,
+                    symmetric_rendering: false,
+                    preserve_linear_metrics: false,
+                });
+            tweak.subpixel_binning = Some(false);
             Some(egui::FontData::from_owned(bytes).tweak(tweak))
         })
         .clone()?;
     Some((key, font))
-}
-
-/// `fc-match` for one pattern, asked right now (Linux, a character no loaded font has).
-#[cfg(not(any(windows, target_os = "macos")))]
-fn fc_lookup(pattern: &str) -> Option<std::path::PathBuf> {
-    let out = std::process::Command::new("fc-match")
-        .args(["-f", "%{file}", pattern])
-        .output()
-        .ok()?;
-    let file = String::from_utf8(out.stdout).ok()?;
-    let file = file.trim();
-    (out.status.success() && !file.is_empty()).then(|| file.into())
 }
 
 impl egui::FontProvider for ScriptFallback {
@@ -563,81 +394,19 @@ fn add_script_fallback(ctx: &egui::Context) {
     ADDED.call_once(|| ctx.add_font_provider(std::sync::Arc::new(ScriptFallback)));
 }
 
-/// The interface font: Segoe UI as IDM has it on Windows, the system's own elsewhere.
+/// The interface font: Segoe UI as IDM has it.
 fn ui_font() -> Option<Vec<u8>> {
-    #[cfg(windows)]
-    return std::fs::read(font_dir().join("segoeui.ttf")).ok();
-    #[cfg(target_os = "macos")]
-    return ["SFNS.ttf", "Helvetica.ttc"]
-        .iter()
-        .find_map(|f| std::fs::read(font_dir().join(f)).ok());
-    #[cfg(not(any(windows, target_os = "macos")))]
-    return fc_match("sans-serif").and_then(|f| std::fs::read(f).ok());
-}
-
-/// The font file fontconfig picks for `pattern` (one of [`fc_files`]'s).
-#[cfg(not(any(windows, target_os = "macos")))]
-fn fc_match(pattern: &str) -> Option<std::path::PathBuf> {
-    fc_files().get(pattern).cloned()
-}
-
-/// Every font file the windows may need, as fontconfig picks it: the interface font
-/// (`sans-serif`) and the symbols'. Each answer is an `fc-match` program; asked one
-/// after the other on the window's thread, the thirty of them held up MDM's first frame for 2 s
-/// on an idle computer and past the freeze report's 8 s on a busy one (#164). So they are asked
-/// once, all together (a third of the time), and [`prepare_fonts`] starts that while the window
-/// opens; the fonts only wait for what is still running. A font installed while MDM runs is
-/// used from its next start.
-#[cfg(not(any(windows, target_os = "macos")))]
-fn fc_files() -> &'static std::collections::HashMap<String, std::path::PathBuf> {
-    use std::process::{Command, Stdio};
-    static FILES: std::sync::OnceLock<std::collections::HashMap<String, std::path::PathBuf>> =
-        std::sync::OnceLock::new();
-    FILES.get_or_init(|| {
-        let running: Vec<_> = ["sans-serif", SYMBOL_PATTERN]
-            .into_iter()
-            .map(str::to_owned)
-            .filter_map(|pattern| {
-                let child = Command::new("fc-match")
-                    .args(["-f", "%{file}", &pattern])
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::null())
-                    .spawn()
-                    .ok()?;
-                Some((pattern, child))
-            })
-            .collect();
-        running
-            .into_iter()
-            .filter_map(|(pattern, child)| {
-                let out = child.wait_with_output().ok()?;
-                let file = String::from_utf8(out.stdout).ok()?;
-                let file = file.trim();
-                (out.status.success() && !file.is_empty()).then(|| (pattern, file.into()))
-            })
-            .collect()
-    })
-}
-
-/// Start looking up the system's fonts while the window opens (Linux: [`fc_files`]); Windows and
-/// macOS read theirs from known files, quickly, when the fonts load.
-pub fn prepare_fonts() {
-    #[cfg(not(any(windows, target_os = "macos")))]
-    let _ = std::thread::Builder::new().name("fonts".into()).spawn(|| {
-        fc_files();
-    });
+    std::fs::read(font_dir().join("segoeui.ttf")).ok()
 }
 
 /// The interface's fonts, set up for `ctx`.
 fn load_fonts(ctx: &egui::Context) {
-    #[cfg(windows)]
     classic_text(ctx);
     fonts(ctx);
 }
 
 /// IDM draws with Segoe UI 9 pt (12 px at 100 %): the system's own copy, nothing bundled
-/// (elsewhere the system's interface font, [`ui_font`]; else egui's default font). Every family
+/// (else egui's default font). Every family
 /// falls back to it (Tahoma has no Armenian or Georgian), then to the symbol fonts; other
 /// scripts (a file named in Japanese) come on demand ([`ScriptFallback`]).
 fn fonts(ctx: &egui::Context) {
@@ -655,10 +424,7 @@ fn fonts(ctx: &egui::Context) {
                 .insert(0, "segoe-ui".into());
         }
     }
-    #[cfg(windows)]
     crate::winui::install_fonts(&mut defs, Some(&font_dir()));
-    #[cfg(not(windows))]
-    crate::winui::install_fonts(&mut defs, None);
     // A fallback's glyphs sit on the baseline of the family's first font (Japanese next to
     // Latin digits, Georgian in a Tahoma line), not centred in its row.
     let on_baseline = |bytes: Vec<u8>| {
@@ -688,7 +454,6 @@ fn fonts(ctx: &egui::Context) {
             }
         }
     }
-    #[cfg(windows)]
     sharp_text(&mut defs);
     ctx.set_fonts(defs);
     text_styles(ctx);
@@ -698,7 +463,6 @@ fn fonts(ctx: &egui::Context) {
 /// #334), by DirectWrite ([`crate::win32::text_rasterizer`]): the fonts' shapes and, with them,
 /// whole-pixel widths, so a letter's width and the place it is drawn for finally agree. That
 /// disagreement is what glued some letters together and pushed others apart. Set once.
-#[cfg(windows)]
 fn classic_text(ctx: &egui::Context) {
     static SET: std::sync::Once = std::sync::Once::new();
     SET.call_once(|| {
@@ -715,9 +479,7 @@ fn classic_text(ctx: &egui::Context) {
 /// Mono hinting targets black-and-white bitmaps: at small sizes it can distort curves and make
 /// diagonals jagged. Smooth hinting keeps those outlines suited to coverage rendering, while
 /// allowing horizontal grid-fitting so upright strokes stay sharp. Keep whole-pixel glyph origins
-/// and the shaper's advances, so this changes neither layout nor the interface size. Linux and
-/// macOS keep egui's defaults.
-#[cfg(windows)]
+/// and the shaper's advances, so this changes neither layout nor the interface size.
 fn sharp_text(defs: &mut egui::FontDefinitions) {
     for data in defs.font_data.values_mut() {
         let data = std::sync::Arc::make_mut(data);
@@ -833,13 +595,12 @@ mod mode_tests {
 
 /// Every mark a window draws (punctuation, arrows, ✔, quotation marks…: what isn't a letter or a
 /// digit) has a glyph in the interface's font chain, so none comes out as an empty box (#185:
-/// "✔ Connected" in the browser offer window; "→" on Linux).
+/// "✔ Connected" in the browser offer window).
 #[cfg(test)]
 mod glyph_tests {
 
     /// #405: a script the interface font lacks: Bangla in a file name, Japanese in a
     /// playlist, under an English interface. Before: nothing loaded it, so boxes.
-    #[cfg(windows)]
     #[test]
     fn text_in_other_scripts_gets_its_font_on_demand() {
         use egui::epaint::text::{Fonts, TextOptions};
@@ -858,49 +619,6 @@ mod glyph_tests {
         }
     }
 
-    /// Names in the Arabic script (a Persian file name, #533), Hebrew and Armenian, under an
-    /// English interface on macOS: its system font has none of them, so the fallback must name a
-    /// font for every letter. Before, macOS's list started at Devanagari, and they were boxes.
-    /// Checked on every system (the table is data); the font itself in the macOS test below.
-    const OTHER_SCRIPTS: [&str; 5] = [
-        "\u{0641}\u{0627}\u{06CC}\u{0644} \u{067E}\u{0698}\u{0648}\u{0647}\u{0634}\u{06CC} \u{06F1}\u{06F4}\u{06F0}\u{06F3}", // Persian, with Persian digits
-        "\u{06AF}\u{0632}\u{0627}\u{0631}\u{0634} \u{0686}\u{06A9}", // Persian
-        "\u{0645}\u{0644}\u{0641}",                                  // Arabic
-        "\u{05E7}\u{05D5}\u{05D1}\u{05E5}",                          // Hebrew
-        "\u{0586}\u{0561}\u{0575}\u{056C}",                          // Armenian
-    ];
-
-    #[test]
-    fn macos_names_a_font_for_the_arabic_script() {
-        for text in OTHER_SCRIPTS {
-            for c in text.chars().filter(|c| !c.is_whitespace()) {
-                let font = super::fallback_entry(super::MACOS_FALLBACK_FONTS, c)
-                    .unwrap_or_else(|| panic!("no macOS font for U+{:04X} in {text}", c as u32));
-                // The file macOS ships (/System/Library/Fonts/Supplemental).
-                assert!(
-                    font.files.contains(&"Supplemental/Arial Unicode.ttf"),
-                    "U+{:04X}: {:?}",
-                    c as u32,
-                    font.files
-                );
-            }
-        }
-    }
-
-    /// The same names drawn with macOS's own fonts: the fallback finds a file that is there and
-    /// has the letters.
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn persian_names_get_a_font_on_macos() {
-        use egui::epaint::text::{Fonts, TextOptions};
-        use egui::{FontFamily, FontId};
-        let mut fonts = Fonts::new(TextOptions::default(), egui::FontDefinitions::default())
-            .with_font_providers(vec![std::sync::Arc::new(super::ScriptFallback)]);
-        let id = FontId::new(13.0, FontFamily::Proportional);
-        for text in OTHER_SCRIPTS {
-            assert!(fonts.has_glyphs(&id, text), "no font for {text}");
-        }
-    }
     use std::collections::{BTreeMap, BTreeSet};
     use std::path::Path;
     use unicode_segmentation::UnicodeSegmentation;

@@ -392,7 +392,7 @@ impl VideoDialog {
         );
         // Helpers... open: on Close, the helpers are read again (another program, or MDM's own).
         if let Some(h) = &mut self.helpers
-            && !matches!(h.show(ctx, rt), Outcome::Open)
+            && !matches!(h.show(ctx), Outcome::Open)
         {
             self.helpers = None;
             self.tools = None;
@@ -581,21 +581,11 @@ impl VideoDialog {
                     "Video lookups use yt-dlp (about 23 MB, checked against its signature).",
                 ),
             )),
-            // MDM installs ffmpeg on Windows only (its builds are Windows ones); elsewhere the
-            // system's package manager has it, and the note says so instead of a button.
-            (Some(_), None) if cfg!(windows) => Some((
+            (Some(_), None) => Some((
                 Tool::Ffmpeg,
                 // i18n: button: download and install the ffmpeg program
                 crate::i18n::mark("Install ffmpeg"),
                 crate::i18n::t("The best qualities, MP3, Opus and FLAC need ffmpeg (about 80 MB)."),
-            )),
-            (Some(_), None) => Some((
-                Tool::Ffmpeg,
-                "",
-                // i18n: in Download video, on macOS and Linux (no button: the system installs it)
-                crate::i18n::t(
-                    "The best qualities, MP3, Opus and FLAC need ffmpeg: install it with your system's package manager (or Homebrew).",
-                ),
             )),
             _ => None,
         };
@@ -1146,7 +1136,6 @@ pub fn browser_label(name: &str) -> &'static str {
         "vivaldi" => "Vivaldi",
         "chromium" => "Chromium",
         "whale" => "Whale",
-        "safari" => "Safari",
         _ => "?",
     }
 }
@@ -1171,20 +1160,10 @@ fn lookup_error(e: &str, sent: bool, store: Option<&mdm_tools::proc::BrowserCook
             named(
                 "yt-dlp found no cookies of {browser} on this computer. Check the browser and its profile in Options → Sites Logins.",
             )
-        } else if cfg!(windows)
-            && (lower.contains("decrypt") || lower.contains("unknown cookie version"))
-        {
+        } else if lower.contains("decrypt") || lower.contains("unknown cookie version") {
             // i18n: the Download video window: Chrome 127 and later (and Edge, Brave) on Windows encrypt their cookies so only they can read them; {browser} = its name
             named(
                 "{browser} keeps its cookies locked to itself on Windows, so yt-dlp can't read them. Choose Firefox in Options → Sites Logins, or use the Download video button over the video in {browser}.",
-            )
-        } else if ["keyring", "secretstorage", "kwallet", "decrypt"]
-            .iter()
-            .any(|k| lower.contains(k))
-        {
-            // i18n: the Download video window (Linux, macOS): the key to the browser's cookies is in the system's keyring (GNOME Keyring, KWallet, the macOS keychain), which didn't give it; {browser} = its name
-            named(
-                "yt-dlp couldn't get the key to {browser}'s cookies from the system's keyring. Unlock the keyring and look the page up again.",
             )
         } else {
             crate::i18n::fmt(
@@ -1320,29 +1299,19 @@ mod tests {
         // Chrome's app-bound cookies: only a warning, kept on the error (proc::with_cookie_trouble).
         let v20 = format!("{bot} (unknown cookie version: \"b'v20'\")");
         let said = lookup_error(&v20, false, Some(&chrome));
-        if cfg!(windows) {
-            assert!(
-                said.starts_with("Chrome keeps its cookies locked"),
-                "{said}"
-            );
-        } else {
-            // No app-bound encryption elsewhere: yt-dlp's own words.
-            assert!(
-                said.starts_with("yt-dlp couldn't read Chrome's cookies: "),
-                "{said}"
-            );
-        }
-        // Linux: the key wasn't in the keyring.
+        assert!(
+            said.starts_with("Chrome keeps its cookies locked"),
+            "{said}"
+        );
+
+        // A key that couldn't be read: the same.
         let v11 = format!("{bot} (cannot decrypt v11 cookies: no key found)");
         let said = lookup_error(&v11, false, Some(&chrome));
-        if cfg!(windows) {
-            assert!(
-                said.starts_with("Chrome keeps its cookies locked"),
-                "{said}"
-            );
-        } else {
-            assert!(said.contains("system's keyring"), "{said}");
-        }
+        assert!(
+            said.starts_with("Chrome keeps its cookies locked"),
+            "{said}"
+        );
+
         assert!(
             lookup_error(
                 "yt-dlp failed: failed to load cookies (Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info)",
@@ -1359,12 +1328,6 @@ mod tests {
             )
             .starts_with("yt-dlp found no cookies of Firefox")
         );
-        let keyring = lookup_error(
-            "yt-dlp failed: Sign in (failed to read from keyring)",
-            false,
-            Some(&chrome),
-        );
-        assert!(keyring.contains("system's keyring"), "{keyring}");
         // Anything else stays yt-dlp's own words.
         assert_eq!(
             lookup_error("yt-dlp failed: Video unavailable", false, Some(&firefox)),

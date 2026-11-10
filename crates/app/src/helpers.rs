@@ -37,14 +37,12 @@ pub struct Helpers {
     job: Option<Job>,
 }
 
-/// Whether to offer the helpers at this start: never asked, and one of them is missing (ffmpeg
-/// counts only where MDM installs it; elsewhere the system's is used).
+/// Whether to offer the helpers at this start: never asked, and one of them is missing.
 pub fn worth_asking() -> bool {
     let Some(dir) = mdm_tools::tools_dir() else {
         return false;
     };
-    mdm_tools::installed(&dir).is_none()
-        || (cfg!(windows) && mdm_tools::ffmpeg::installed(&dir).is_none())
+    mdm_tools::installed(&dir).is_none() || mdm_tools::ffmpeg::installed(&dir).is_none()
 }
 
 impl Helpers {
@@ -65,8 +63,7 @@ impl Helpers {
         if mdm_tools::installed(&dir).is_none() {
             list.push("yt-dlp");
         }
-        // ffmpeg: MDM's own on Windows; elsewhere the system's.
-        if cfg!(windows) && mdm_tools::ffmpeg::installed(&dir).is_none() {
+        if mdm_tools::ffmpeg::installed(&dir).is_none() {
             list.push("ffmpeg");
         }
         let job = Job {
@@ -178,12 +175,6 @@ impl Helpers {
         // Everything below it moves down with a taller banner.
         let o = o + egui::vec2(0.0, extra);
 
-        let ffmpeg_here = !cfg!(windows)
-            && self
-                .dir
-                .as_deref()
-                .and_then(mdm_tools::ffmpeg::installed)
-                .is_some();
         let rows: [(Icon, &str, String); 3] = [
             (
                 Icon::HelperVideo,
@@ -198,17 +189,10 @@ impl Helpers {
                 Icon::HelperMerge,
                 // i18n: helper name and what it does (ffmpeg is a program's name)
                 "ffmpeg: joins picture and sound",
-                if cfg!(windows) || ffmpeg_here {
-                    crate::i18n::t(
-                        "Sites send their best quality as separate video and audio. ffmpeg puts them together into one file that plays anywhere.",
-                    )
-                    .to_owned()
-                } else {
-                    crate::i18n::t(
-                        "Sites send their best quality as separate video and audio, and ffmpeg joins them. On this system MDM uses yours: install ffmpeg with your package manager.",
-                    )
-                    .to_owned()
-                },
+                crate::i18n::t(
+                    "Sites send their best quality as separate video and audio. ffmpeg puts them together into one file that plays anywhere.",
+                )
+                .to_owned(),
             ),
             (
                 Icon::HelperChecked,
@@ -434,8 +418,6 @@ pub struct Programs {
     found: [Option<mdm_tools::Installed>; 3],
     /// A chosen program being checked (`--version`), and what it answered.
     checking: Option<(Helper, Answer)>,
-    /// MDM's own yt-dlp being downloaded in place of the system's (#452), and how that went.
-    installing: Option<Answer>,
     error: Option<String>,
 }
 
@@ -450,7 +432,6 @@ impl Programs {
             dir: mdm_tools::tools_dir(),
             found: [None, None, None],
             checking: None,
-            installing: None,
             error: None,
         };
         p.look();
@@ -468,31 +449,8 @@ impl Programs {
         ];
     }
 
-    /// MDM's own yt-dlp in place of the system's (#452): downloaded and checked as usual, from
-    /// then on the one used (`mdm_tools::installed`). It goes on if the window is closed.
-    fn install_own(
-        &mut self,
-        dir: std::path::PathBuf,
-        rt: &tokio::runtime::Handle,
-        ctx: &egui::Context,
-    ) {
-        let slot: Answer = Arc::new(Mutex::new(None));
-        let (out, wake) = (slot.clone(), ctx.clone());
-        let net = crate::settings::own_net();
-        rt.spawn(async move {
-            let res = mdm_tools::install_latest(&dir, &net, None)
-                .await
-                .map(|_| ())
-                .map_err(|e| crate::errors::tools(&e));
-            *out.lock().unwrap() = Some(res);
-            wake.request_repaint();
-        });
-        self.installing = Some(slot);
-        self.error = None;
-    }
-
     /// Open until Close.
-    pub fn show(&mut self, ctx: &egui::Context, rt: &tokio::runtime::Handle) -> Outcome<()> {
+    pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         let answered = self
             .checking
             .as_ref()
@@ -500,15 +458,6 @@ impl Programs {
         if let Some(res) = answered {
             self.error = res.err();
             self.checking = None;
-            self.look();
-        }
-        let installed = self
-            .installing
-            .as_ref()
-            .and_then(|slot| slot.lock().unwrap().take());
-        if let Some(res) = installed {
-            self.error = res.err();
-            self.installing = None;
             self.look();
         }
         for h in HELPERS {
@@ -536,11 +485,11 @@ impl Programs {
             [500.0, 292.0],
             false,
             winui::BG(),
-            |ui, o| self.body(ui, o, rt),
+            |ui, o| self.body(ui, o),
         )
     }
 
-    fn body(&mut self, ui: &mut Ui, o: Pos2, rt: &tokio::runtime::Handle) -> Outcome<()> {
+    fn body(&mut self, ui: &mut Ui, o: Pos2) -> Outcome<()> {
         let p = ui.painter().clone();
         for (k, h) in HELPERS.into_iter().enumerate() {
             let y = o.y + 8.0 + k as f32 * 78.0;
@@ -563,14 +512,7 @@ impl Programs {
                 .as_ref()
                 .filter(|c| h == Helper::GalleryDl && mdm_tools::gallery::too_old(&c.version));
             let checking = self.checking.as_ref().is_some_and(|(c, _)| *c == h);
-            let downloading = h == Helper::YtDlp && self.installing.is_some();
-            // The system's yt-dlp may be old: MDM's own copy can replace it (#452).
-            let system = h == Helper::YtDlp && found.is_some_and(mdm_tools::Installed::is_system);
             let status = match (too_old, found) {
-                _ if downloading => {
-                    // i18n: Video helpers: MDM's own yt-dlp is being downloaded
-                    crate::i18n::t("Downloading MDM's own copy...").to_owned()
-                }
                 _ if checking => {
                     // i18n: Video helpers: a program just chosen is being checked
                     crate::i18n::t("Checking the program...").to_owned()
@@ -593,11 +535,6 @@ impl Programs {
                         ("version", &i.version),
                     ],
                 ),
-                (None, Some(i)) if i.is_system() => crate::i18n::fmt(
-                    // i18n: Video helpers (macOS, Linux): {path} = the system's ffmpeg
-                    crate::i18n::t("Your system's: {path}"),
-                    &[("path", &crate::i18n::ltr(&i.exe.display().to_string()))],
-                ),
                 (None, Some(i)) => crate::i18n::fmt(
                     // i18n: Video helpers: {version} = the version of MDM's own copy
                     crate::i18n::t("Mister Download Manager's own copy, version {version}"),
@@ -616,7 +553,7 @@ impl Programs {
                 o.x + 486.0,
                 ("helper", k),
             );
-            let busy = self.checking.is_some() || self.installing.is_some();
+            let busy = self.checking.is_some();
             // As wide as their labels in this language (#192), side by side from the left.
             let [other_at, own_at] = winui::button_row_from_left(
                 &p,
@@ -657,7 +594,7 @@ impl Programs {
                 r(o, own_at.0, y - o.y + 46.0, own_at.1, 21.0),
                 // i18n: Video helpers: button: go back to the copy MDM downloads and checks itself
                 "Use MDM's own copy",
-                if (mine || system) && !busy {
+                if mine && !busy {
                     ButtonKind::Normal
                 } else {
                     ButtonKind::Disabled
@@ -668,14 +605,10 @@ impl Programs {
             .clicked()
                 && let Some(dir) = self.dir.clone()
             {
-                if mine {
-                    self.error = mdm_tools::chosen::forget(&dir, h)
-                        .err()
-                        .map(|e| crate::errors::tools(&e));
-                    self.look();
-                } else {
-                    self.install_own(dir, rt, ui.ctx());
-                }
+                self.error = mdm_tools::chosen::forget(&dir, h)
+                    .err()
+                    .map(|e| crate::errors::tools(&e));
+                self.look();
             }
             if k + 1 < HELPERS.len() {
                 winui::etched_h(&p, o.x + 14.0, o.y + 82.0 + k as f32 * 78.0, 472.0);

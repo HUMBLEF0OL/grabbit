@@ -382,12 +382,8 @@ pub fn restored_names() -> String {
 #[cfg(test)]
 mod tests {
     // Whole paths on the system the tests run on.
-    const SONGS: &str = if cfg!(windows) {
-        r"E:\Songs"
-    } else {
-        "/mnt/Songs"
-    };
-    const ALL: &str = if cfg!(windows) { r"F:\All" } else { "/mnt/All" };
+    const SONGS: &str = r"E:\Songs";
+    const ALL: &str = r"F:\All";
 
     use super::*;
 

@@ -96,10 +96,6 @@ pub fn keys(ctx: &egui::Context) {
 /// What a window's frame adds around its client, in screen pixels at 100 % display scale: the
 /// title bar and borders (Windows draws them at the display's scale, never the interface's).
 const FRAME: Vec2 = vec2(16.0, 40.0);
-/// Linux and macOS, where the work area isn't known here: the frame and the desktop's panels
-/// (a top bar, a dock or a taskbar) together, an estimate.
-#[cfg(not(windows))]
-const FRAME_AND_PANELS: Vec2 = vec2(32.0, 120.0);
 
 /// MDM_TEST_SCREEN=1366x768, for off-screen test runs: windows are sized for a screen that size
 /// (at 100 %, with a 40 px taskbar) instead of this computer's, to check them on a small one.
@@ -113,13 +109,11 @@ fn test_screen() -> Option<Vec2> {
 }
 
 /// The monitor's work area around `at` (the screen without the taskbar), in points of the
-/// window being drawn; where the window manager doesn't say (Linux, macOS), and in an off-screen
-/// test run (its windows are far off the screens, and must stay there), none.
+/// window being drawn; in an off-screen test run (its windows are far off the screens, and must stay there), none.
 pub fn work_area(ctx: &egui::Context, at: Pos2) -> Option<Rect> {
     if crate::offscreen() {
         return None;
     }
-    #[cfg(windows)]
     {
         let ppp = ctx.pixels_per_point();
         let [l, t, r, b] =
@@ -128,11 +122,6 @@ pub fn work_area(ctx: &egui::Context, at: Pos2) -> Option<Rect> {
             pos2(l as f32, t as f32) / ppp,
             pos2(r as f32, b as f32) / ppp,
         ))
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = (ctx, at);
-        None
     }
 }
 
@@ -145,20 +134,11 @@ pub fn room(ctx: &egui::Context, at: Pos2) -> Option<Vec2> {
         let ppp = ctx.pixels_per_point();
         return Some(vec2(screen.x, screen.y - 40.0) / ppp - FRAME / zoom);
     }
-    #[cfg(windows)]
     {
         let ppp = ctx.pixels_per_point();
         let [l, t, r, b] =
             crate::win32::work_area((at.x * ppp).round() as i32, (at.y * ppp).round() as i32)?;
         Some(vec2((r - l) as f32, (b - t) as f32) / ppp - FRAME / zoom)
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = at;
-        let monitor = ctx
-            .input_for(egui::ViewportId::ROOT, |i| i.viewport().monitor_size)
-            .filter(|m| m.x > 0.0 && m.y > 0.0)?;
-        Some(monitor - FRAME_AND_PANELS / zoom)
     }
 }
 

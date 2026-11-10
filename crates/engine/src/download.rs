@@ -139,8 +139,8 @@ pub struct Options {
     /// Called with the part file's path right after the engine creates it, before any data
     /// is written: once per new download (`Download::start`, `fetch`), never by a resume, which
     /// writes into the part file it finds. The part file is renamed (never copied) to the final
-    /// name, so whatever the hook attaches to it — Windows' Mark of the Web stream, macOS'
-    /// quarantine attribute — stays with the finished file.
+    /// name, so whatever the hook attaches to it — Windows' Mark of the Web stream — stays with
+    /// the finished file.
     pub on_file_created: Option<FileHook>,
     /// From the browser: the MIME type its own download had. A web page where it had another
     /// type is the server refusing MDM (a firewall's "The requested URL was rejected"), an error
@@ -496,15 +496,7 @@ impl From<io::Error> for Error {
     fn from(e: io::Error) -> Self {
         // NOT_READY, BAD_NETPATH, DEV_NOT_EXIST, NETNAME_DELETED, BAD_NET_NAME,
         // DEVICE_NOT_CONNECTED: the drive or share is gone, not a disk fault.
-        #[cfg(windows)]
         if matches!(e.raw_os_error(), Some(21 | 53 | 55 | 64 | 67 | 1167)) {
-            return Error::DriveGone;
-        }
-        // ENXIO, ENODEV (both systems); ENOMEDIUM (Linux): the device is gone.
-        #[cfg(unix)]
-        if matches!(e.raw_os_error(), Some(6 | 19))
-            || (cfg!(target_os = "linux") && e.raw_os_error() == Some(123))
-        {
             return Error::DriveGone;
         }
         match e.kind() {
@@ -2174,7 +2166,6 @@ fn finish(
     // The server's date (Options::server_time), set before the rename moves the file.
     if let Some(t) = stamp {
         let times = std::fs::FileTimes::new().set_modified(t).set_accessed(t);
-        #[cfg(windows)]
         let times = {
             use std::os::windows::fs::FileTimesExt;
             times.set_created(t)
@@ -3543,10 +3534,7 @@ fn read_at(file: &File, mut at: u64, len: usize) -> io::Result<Vec<u8>> {
     let mut buf = vec![0u8; len];
     let mut got = 0;
     while got < len {
-        #[cfg(windows)]
         let n = std::os::windows::fs::FileExt::seek_read(file, &mut buf[got..], at)?;
-        #[cfg(unix)]
-        let n = std::os::unix::fs::FileExt::read_at(file, &mut buf[got..], at)?;
         if n == 0 {
             return Err(io::ErrorKind::UnexpectedEof.into());
         }
@@ -3558,10 +3546,7 @@ fn read_at(file: &File, mut at: u64, len: usize) -> io::Result<Vec<u8>> {
 
 fn write_all_at(file: &File, mut at: u64, mut data: &[u8]) -> io::Result<()> {
     while !data.is_empty() {
-        #[cfg(windows)]
         let n = std::os::windows::fs::FileExt::seek_write(file, data, at)?;
-        #[cfg(unix)]
-        let n = std::os::unix::fs::FileExt::write_at(file, data, at)?;
         if n == 0 {
             return Err(io::ErrorKind::WriteZero.into());
         }

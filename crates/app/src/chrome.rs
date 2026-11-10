@@ -391,20 +391,10 @@ pub enum PopupResult<C> {
     Neighbor(i32),
 }
 
-/// A key or key combination as written in the shortcuts list ("Ctrl+N", "Shift+Delete"), as
-/// this system shows it: macOS's symbols (⌘N, ⇧⌦), elsewhere the translated key names.
+/// A key or key combination as written in the shortcuts list ("Ctrl+N", "Shift+Delete"): the
+/// translated key names.
 pub fn key_label(spec: &'static str) -> String {
-    if cfg!(target_os = "macos") {
-        // Translated first ("Drag on blank space", "Home / End"...), then the Mac's symbols.
-        crate::i18n::tc("key", spec)
-            .replace("Ctrl+", "\u{2318}")
-            .replace("Shift+", "\u{21e7}")
-            .replace("Alt+", "\u{2325}")
-            .replace("Delete", "\u{2326}")
-            .replace("Enter", "\u{21a9}")
-    } else {
-        crate::i18n::tc("key", spec).to_owned()
-    }
+    crate::i18n::tc("key", spec).to_owned()
 }
 
 /// A menu label without the shortcut IDM writes into some labels ("Find (Ctrl-F)"), when the
@@ -703,8 +693,8 @@ pub fn popup<C: Clone>(
     // whose press may be the very click that opened it.
     let pass = ctx.cumulative_pass_nr();
     let shown = sub_key.with("shown");
-    // Focus in the menu's own windows is still ours: on macOS and Linux a click in a menu window
-    // gives that window the focus, and must not count as clicking away.
+    // Focus in the menu's own windows is still ours: a click in a menu window may give that
+    // window the focus, and must not count as clicking away.
     let focused = ctx.input(|i| i.viewport().focused) == Some(true)
         || ctx.data(|d| d.get_temp::<bool>(window_focus).unwrap_or(false));
     // (first pass, last pass, the focus): focus is only *lost* if it was had, and only when no
@@ -753,8 +743,7 @@ pub fn popup<C: Clone>(
 }
 
 /// How long the focus may be away from every window of ours before an open menu counts as left.
-/// On Linux a window manager may give a menu's window the focus (KWin, sway, and GNOME under
-/// Wayland give it to a submenu's as it opens). When that submenu closes (the pointer back on
+/// A menu's window may get the focus as it opens. When a submenu closes (the pointer back on
 /// another item of its parent), its window passes the focus on, and for a frame or more no
 /// window of ours has it: counted as the app losing the focus, it closed the whole menu (#250).
 const FOCUS_GRACE: f64 = 0.4;
@@ -843,14 +832,9 @@ pub fn popup_surface(p: &egui::Painter, rc: egui::Rect) {
 /// Japanese).
 fn menu_width(p: &egui::Painter, label: &str) -> f32 {
     let drawn = text_width_font(p, winui::segoe(), label).ceil();
-    #[cfg(windows)]
     {
         let gdi = crate::win32::menu_text_width(label) as f32;
         if drawn > gdi + 1.0 { drawn } else { gdi }
-    }
-    #[cfg(not(windows))]
-    {
-        drawn
     }
 }
 
@@ -914,37 +898,31 @@ pub fn popup_viewport(title: &str) -> egui::ViewportBuilder {
         .with_taskbar(false)
         .with_always_on_top()
         // Hidden until styled, then shown (show_popup).
-        .with_visible(!cfg!(windows))
+        .with_visible(false)
 }
 
 /// Call first in the pass of a borderless window titled `title` (made with [`popup_viewport`]),
-/// before anything is drawn in it. On Windows it becomes a plain popup window, its client the
+/// before anything is drawn in it. It becomes a plain popup window, its client the
 /// whole window (win32::popup_window): winit's borderless windows keep a caption style, which
 /// on a Windows 11 Insider build (22635) put a black band a title bar tall across the top of
 /// every menu and of the drop target, their picture moved down by as much (#208). Styled in
 /// the window's own pass: its frame changes, and a picture drawn before that was lost with the
 /// old frame (black until something made it draw again). True on the pass that styled it: show
-/// it then ([`show_popup`]). Elsewhere nothing to do (false).
-#[cfg_attr(not(windows), allow(unused_variables))]
+/// it then ([`show_popup`]).
 pub fn style_popup(title: &str, look: PopupLook) -> bool {
-    #[cfg(windows)]
-    {
-        use crate::win32::Popup;
-        let kind = match look {
-            PopupLook::Menu => Popup::Menu {
-                border: u32::from_le_bytes([
-                    POPUP_BORDER().r(),
-                    POPUP_BORDER().g(),
-                    POPUP_BORDER().b(),
-                    0,
-                ]),
-            },
-            PopupLook::Floating => Popup::Floating,
-        };
-        crate::win32::popup_window(title, kind)
-    }
-    #[cfg(not(windows))]
-    false
+    use crate::win32::Popup;
+    let kind = match look {
+        PopupLook::Menu => Popup::Menu {
+            border: u32::from_le_bytes([
+                POPUP_BORDER().r(),
+                POPUP_BORDER().g(),
+                POPUP_BORDER().b(),
+                0,
+            ]),
+        },
+        PopupLook::Floating => Popup::Floating,
+    };
+    crate::win32::popup_window(title, kind)
 }
 
 /// Show the borderless window `vid` [`style_popup`] just styled (from its parent's pass).
@@ -987,23 +965,7 @@ fn place_menu(ctx: &egui::Context, at: Pos2, size: egui::Vec2, parent: Option<Re
     at
 }
 
-/// Whether the menu bar's menus share one window per level ([`menu_viewport`]): on X11 and
-/// XWayland, where MDM places its menus itself.
-fn bar_shares_window() -> bool {
-    #[cfg(target_os = "linux")]
-    {
-        !crate::unix::on_wayland()
-    }
-    // Windows and macOS: one window per menu, as before. Native Wayland (MDM_WAYLAND=1) too: a
-    // program can't move its windows there (winit 0.30 has no popup windows on Wayland), so a
-    // shared window would stay where the first menu opened.
-    #[cfg(not(target_os = "linux"))]
-    {
-        false
-    }
-}
-
-/// The window menu `id`'s level `depth` is drawn in. With `bar_shared` (X11: [`bar_shares_window`])
+/// The window menu `id`'s level `depth` is drawn in. With `bar_shared`
 /// every menu of the bar is drawn in one window per level, moved and resized as the pointer or
 /// the arrow keys go from title to title, as a submenu's window already is from item to item.
 /// A window of its own for each menu was mapped and unmapped at every switch, and a compositor
@@ -1042,9 +1004,6 @@ fn popup_level<C: Clone>(
         .with_active(false)
         .with_position(screen.min)
         .with_inner_size(size);
-    // Linux: a menu window as X11 menus are (unix::menu_window).
-    #[cfg(target_os = "linux")]
-    let builder = crate::unix::menu_window(builder, kind);
     let open_sub = if depth == 0 {
         ctx.data(|d| d.get_temp::<usize>(sub_key))
     } else {
@@ -1052,7 +1011,8 @@ fn popup_level<C: Clone>(
     };
     // (index, slot top) of the submenu to show beside this menu.
     let mut sub_at: Option<(usize, f32)> = None;
-    let vid = menu_viewport(kind, id, depth, bar_shares_window());
+    // One window per menu (`bar_shared` off).
+    let vid = menu_viewport(kind, id, depth, false);
     let parent_vid = ctx.viewport_id();
     // Set when this pass made the new (hidden) window a menu window: shown below. (Elsewhere a
     // menu's window is created visible.)
@@ -2169,7 +2129,7 @@ mod tests {
             assert_eq!(bar(0, 1, true), bar(i, 1, true));
         }
         assert_ne!(bar(0, 0, true), bar(0, 1, true));
-        // Without sharing (Windows, macOS, native Wayland): one per menu, as before.
+        // Without sharing: one per menu, as before.
         assert_ne!(bar(0, 0, false), bar(1, 0, false));
         assert_eq!(
             bar(2, 0, false),

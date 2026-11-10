@@ -67,8 +67,8 @@ pub fn support() {
 /// language. The parameters are the form's field ids (all text fields: GitHub's page drops a
 /// dropdown's value from the address).
 pub fn report_problem() {
-    // On a thread of its own: the fields ask the system (macOS: `sw_vers`), which the window's
-    // thread doesn't wait for (#222).
+    // On a thread of its own: the fields ask the system, which the window's thread doesn't wait
+    // for (#222).
     let _ = std::thread::Builder::new()
         .name("report-problem".into())
         .spawn(|| {
@@ -84,26 +84,11 @@ pub fn report_problem() {
 
 /// The Bug report form's fields MDM fills in: (field id, value).
 fn report_fields() -> Vec<(&'static str, String)> {
-    #[cfg(windows)]
     let os_version = crate::win32::windows_version();
-    #[cfg(unix)]
-    let os_version = crate::unix::os_version();
-    let os = if cfg!(windows) {
-        if os_version.contains("Windows 10") {
-            "Windows 10"
-        } else {
-            "Windows 11"
-        }
-    } else if cfg!(target_os = "macos") {
-        if cfg!(target_arch = "aarch64") {
-            "macOS (Apple Silicon)"
-        } else {
-            "macOS (Intel)"
-        }
-    } else if cfg!(target_os = "linux") {
-        "Linux"
+    let os = if os_version.contains("Windows 10") {
+        "Windows 10"
     } else {
-        "Other"
+        "Windows 11"
     };
     let mut fields = vec![
         ("os", os.to_owned()),
@@ -251,8 +236,6 @@ pub struct Updates {
 #[derive(Clone, Debug)]
 enum UpdateStatus {
     Failed(String),
-    /// A .deb or .rpm, opened in the system's package installer.
-    Opened,
 }
 
 impl Updates {
@@ -305,11 +288,9 @@ impl Updates {
                     .spawn()
                     .map(|_| crate::update::Next::Restart(cmd))
                     .map_err(|e| e.to_string()),
-                opened => Ok(opened),
             });
             match started {
                 Ok(crate::update::Next::Restart(_)) => return Outcome::Done(true),
-                Ok(crate::update::Next::Opened) => self.status = Some(UpdateStatus::Opened),
                 Err(e) => self.status = Some(UpdateStatus::Failed(e)),
             }
         }
@@ -381,21 +362,10 @@ impl Updates {
                             right,
                             "update-line",
                         );
-                        // A package of another package manager (pacman, …): that one updates it.
-                        let have = if install == mdm_tools::update::Install::System {
-                            crate::i18n::fmt(
-                                // i18n: Check for updates, under the new version's line, when MDM was installed by the Linux system's package manager (pacman, ...), which MDM can't update itself
-                                crate::i18n::t(
-                                    "You have version {version}, from your system's package manager: update it there.",
-                                ),
-                                &[("version", VERSION)],
-                            )
-                        } else {
-                            crate::i18n::fmt(
-                                crate::i18n::t("You have version {version}."),
-                                &[("version", VERSION)],
-                            )
-                        };
+                        let have = crate::i18n::fmt(
+                            crate::i18n::t("You have version {version}."),
+                            &[("version", VERSION)],
+                        );
                         winui::fit(
                             ui,
                             &p,
@@ -439,12 +409,10 @@ impl Updates {
                     crate::update::asset_for(install, &rel.version, &rel.assets)
                         .filter(|_| !matches!(self.status, Some(UpdateStatus::Failed(_))))
                 });
-                // Another package manager's copy: no Update now nor Download, the notes only.
-                let managed = install == mdm_tools::update::Install::System;
                 let close_label = if self.job.is_some() {
                     // i18n: button: stop downloading the update
                     crate::i18n::mark("Cancel")
-                } else if download.is_some() && !managed {
+                } else if download.is_some() {
                     // i18n: button: not now (download the update later)
                     crate::i18n::mark("Later")
                 } else {
@@ -454,7 +422,7 @@ impl Updates {
                 // version.
                 let first = if matches!(result, Some(Err(_))) {
                     Some("Retry")
-                } else if download.is_some() && !managed {
+                } else if download.is_some() {
                     Some(if asset.is_some() {
                         "Update now"
                     } else {
@@ -516,10 +484,6 @@ impl Updates {
                             crate::i18n::t("The update couldn't be installed: {error}"),
                             &[("error", e)],
                         ),
-                        UpdateStatus::Opened => {
-                            crate::i18n::t("The update is open in your system's package installer.")
-                                .to_owned()
-                        }
                     };
                     let (rect, cut) = winui::text_fit(
                         &p,
@@ -557,7 +521,7 @@ impl Updates {
                         enter = false;
                     }
                 }
-                if let Some(rel) = download.as_ref().filter(|_| !managed) {
+                if let Some(rel) = download.as_ref() {
                     if let Some(asset) = asset {
                         let idle = self.job.is_none();
                         let kind = if idle {
@@ -860,7 +824,7 @@ impl Shortcuts {
                 let ink = winui::TEXT();
                 for (i, (keys, what)) in SHORTCUTS.iter().enumerate() {
                     let y = o.y + 24.0 + 18.0 * i as f32;
-                    // As this system writes it: ⌘N on macOS, the translated key names elsewhere.
+                    // The translated key names.
                     let keys = crate::chrome::key_label(keys);
                     winui::fit(
                         ui,
@@ -1164,14 +1128,7 @@ mod tests {
         for install in mdm_tools::update::Install::ALL {
             assert!(named(install.label()), "{}", install.label());
         }
-        for option in [
-            "Windows 11",
-            "Windows 10",
-            "macOS (Apple Silicon)",
-            "macOS (Intel)",
-            "Linux",
-            "Other",
-        ] {
+        for option in ["Windows 11", "Windows 10", "Other"] {
             assert!(named(option), "{option}");
         }
     }

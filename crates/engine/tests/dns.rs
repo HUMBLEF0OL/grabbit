@@ -154,8 +154,7 @@ async fn a_dead_dns_fails_the_download_and_names_itself() {
 }
 
 /// Options → Proxy / Socks → Network adapter (#35), on this computer's loopback: 127.0.0.2
-/// stands for the adapter's address (Windows and Linux answer on all of 127/8; macOS doesn't,
-/// so the bound download runs elsewhere). `loopback_too` binds what is otherwise left unbound.
+/// stands for the adapter's address (Windows answers on all of 127/8). `loopback_too` binds what is otherwise left unbound.
 fn bound(v4: [u8; 4]) -> mdm_engine::Route {
     mdm_engine::Route::Bound(Arc::new(mdm_engine::net::Binding {
         label: "the test adapter".into(),
@@ -177,9 +176,6 @@ fn get(url: String, dir: &std::path::Path) -> Request {
 
 #[tokio::test]
 async fn a_bound_download_asks_and_fetches_through_the_adapter() {
-    if cfg!(target_os = "macos") {
-        return;
-    }
     let lab = LabServer::start(Config::default()).await.unwrap();
     let port = lab.url("/").parse::<url::Url>().unwrap().port().unwrap();
     let (dns, asked, dns_peers) = fake_dns().await;
@@ -199,20 +195,17 @@ async fn a_bound_download_asks_and_fetches_through_the_adapter() {
     assert!(data.len() == 1 << 20 && data == want, "content mismatch");
     assert!(asked.lock().unwrap().iter().any(|n| n == "files.mdm.test"));
     // Windows binds the address: every connection, the DNS's and the file's, came from it.
-    // (Linux binds the device, `lo`, and the system picks 127.0.0.1 as the source.)
-    if cfg!(windows) {
-        let two = IpAddr::from([127, 0, 0, 2]);
-        let from: Vec<IpAddr> = lab.log().iter().map(|e| e.peer.ip()).collect();
-        assert!(
-            !from.is_empty() && from.iter().all(|ip| *ip == two),
-            "{from:?}"
-        );
-        let dns_from = dns_peers.lock().unwrap().clone();
-        assert!(
-            !dns_from.is_empty() && dns_from.iter().all(|ip| *ip == two),
-            "{dns_from:?}"
-        );
-    }
+    let two = IpAddr::from([127, 0, 0, 2]);
+    let from: Vec<IpAddr> = lab.log().iter().map(|e| e.peer.ip()).collect();
+    assert!(
+        !from.is_empty() && from.iter().all(|ip| *ip == two),
+        "{from:?}"
+    );
+    let dns_from = dns_peers.lock().unwrap().clone();
+    assert!(
+        !dns_from.is_empty() && dns_from.iter().all(|ip| *ip == two),
+        "{dns_from:?}"
+    );
 }
 
 #[tokio::test]

@@ -7,7 +7,6 @@
 pub mod chosen;
 pub mod ffmpeg;
 pub mod gallery;
-mod macos;
 mod openpgp;
 pub mod pages;
 pub mod playlist;
@@ -15,9 +14,6 @@ pub mod proc;
 pub mod relay;
 pub mod resolve;
 pub mod servers;
-// System helper discovery is for Linux and macOS; Windows keeps its verified managed copies.
-#[cfg(unix)]
-mod system;
 pub mod update;
 pub mod video;
 
@@ -74,31 +70,14 @@ pub struct Installed {
     pub exe: PathBuf,
 }
 
-/// `Installed::version` of a program found on the system: its package manager's, not asked (#452).
-const SYSTEM: &str = "system";
-
-impl Installed {
-    /// Whether this is the system's copy (Linux and macOS), kept current by its package manager.
-    pub fn is_system(&self) -> bool {
-        self.version == SYSTEM
-    }
-}
-
 /// `<data dir>/tools`.
 pub fn tools_dir() -> Option<PathBuf> {
     mdm_ipc::data_dir().map(|d| d.join("tools"))
 }
 
-/// yt-dlp's file name for this platform in its releases. On macOS, its folder build: why, in
-/// `macos`.
+/// yt-dlp's file name in its releases.
 pub fn ytdlp_asset() -> &'static str {
-    if cfg!(windows) {
-        "yt-dlp.exe"
-    } else if cfg!(target_os = "macos") {
-        "yt-dlp_macos.zip"
-    } else {
-        "yt-dlp_linux"
-    }
+    "yt-dlp.exe"
 }
 
 /// Whether `sums` carries a valid signature `sig` (binary OpenPGP) by yt-dlp's key or one of its
@@ -242,22 +221,14 @@ pub fn sum_for(sums: &str, name: &str) -> Option<[u8; 32]> {
 }
 
 /// The yt-dlp to use: the person's own (`chosen`), else MDM's install in `dir`
-/// (`dir/yt-dlp/current.json`), if any and still there; on Linux and macOS, else the system's.
+/// (`dir/yt-dlp/current.json`), if any and still there.
 pub fn installed(dir: &Path) -> Option<Installed> {
-    let own = chosen::chosen(dir, chosen::Helper::YtDlp).or_else(|| own_ytdlp(dir));
-    #[cfg(unix)]
-    return own.or_else(|| system::installed("yt-dlp"));
-    #[cfg(not(unix))]
-    own
+    chosen::chosen(dir, chosen::Helper::YtDlp).or_else(|| own_ytdlp(dir))
 }
 
 fn own_ytdlp(dir: &Path) -> Option<Installed> {
     let text = std::fs::read(dir.join("yt-dlp").join("current.json")).ok()?;
     let i: Installed = serde_json::from_slice(&text).ok()?;
-    // macOS: the one-file build earlier versions installed can't run from a downloaded app (`macos`).
-    if cfg!(target_os = "macos") && macos::one_file_build(&i.exe) {
-        return None;
-    }
     i.exe.is_file().then_some(i)
 }
 
@@ -279,10 +250,9 @@ struct Asset {
     browser_download_url: String,
 }
 
-/// Whether the once-per-session update has a yt-dlp to refresh: not the system's, which is its
-/// package manager's to update (#452), and which only an explicit [`install_latest`] replaces.
+/// Whether the once-per-session update has a yt-dlp to refresh.
 pub fn refreshable(dir: &Path) -> bool {
-    installed(dir).is_some_and(|i| !i.is_system())
+    installed(dir).is_some()
 }
 
 /// Install the latest yt-dlp release into `dir` unless the installed one is as new, the program
@@ -344,9 +314,6 @@ pub async fn install_latest(
     if Sha256::digest(&program).as_slice() != expected {
         return Err(Error::BadChecksum);
     }
-    #[cfg(target_os = "macos")]
-    return macos::put_folder(dir, &release.tag_name, &program);
-    #[cfg(not(target_os = "macos"))]
     put(dir, "yt-dlp", &release.tag_name, asset, &program, &exe_url)
 }
 
@@ -369,11 +336,6 @@ pub(crate) fn put(
     let exe = folder.join(asset);
     craft_atomic::atomic_write(&exe, program)?;
     mark_downloaded(&exe, from);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755))?;
-    }
     make_current(
         &root,
         Installed {
@@ -410,17 +372,12 @@ pub(crate) fn make_current(root: &Path, now: Installed) -> Result<Installed, Err
 /// Mark-of-the-Web: the program came from the internet (Windows checks it like a browser
 /// download).
 pub(crate) fn mark_downloaded(path: &Path, from: &str) {
-    #[cfg(windows)]
-    {
-        let mut stream = path.as_os_str().to_owned();
-        stream.push(":Zone.Identifier");
-        let _ = std::fs::write(
-            stream,
-            format!("[ZoneTransfer]\r\nZoneId=3\r\nHostUrl={from}\r\n"),
-        );
-    }
-    #[cfg(not(windows))]
-    let _ = (path, from);
+    let mut stream = path.as_os_str().to_owned();
+    stream.push(":Zone.Identifier");
+    let _ = std::fs::write(
+        stream,
+        format!("[ZoneTransfer]\r\nZoneId=3\r\nHostUrl={from}\r\n"),
+    );
 }
 
 #[cfg(test)]
@@ -505,9 +462,6 @@ mod tests {
             "https://x/",
         )
         .unwrap();
-        // macOS installs the folder build (`macos`), with a folder beside the program.
-        #[cfg(target_os = "macos")]
-        std::fs::create_dir_all(now.exe.with_file_name("_internal")).unwrap();
         assert_eq!(installed(dir.path()).unwrap(), now);
         assert_eq!(std::fs::read(&now.exe).unwrap(), b"three");
         let root = dir.path().join("yt-dlp");

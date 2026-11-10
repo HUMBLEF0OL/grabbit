@@ -112,7 +112,6 @@ enum Cmd {
     /// into the themes folder and picked.
     AddThemeFile,
     /// View → Draw with → OpenGL / Direct3D, Vulkan or Metal (#89, #206), from the next start.
-    #[cfg(gpu)]
     DrawWith(crate::renderer::Api),
     /// View → Interface size → a size in percent (#262).
     InterfaceSize(u16),
@@ -358,9 +357,8 @@ fn next_trim(done: u32) -> Duration {
 }
 
 /// Started with the session (#226), the window waits hidden until the notification area is
-/// known: MDM's own tray icon created and a tray there to show it. A desktop's tray can come
-/// after MDM (GNOME's AppIndicator extension at sign-in answered 11.5 s after MDM's icon, on
-/// the lab's VM), and MDM's icon after its own first look: this long they are waited for,
+/// known: MDM's own tray icon created and a tray there to show it. The taskbar can come after
+/// MDM at sign-in, and MDM's icon after its own first look: this long they are waited for,
 /// counted from MDM's icon (from the start while it has none), the window still hidden,
 /// before it shows minimized.
 const TRAY_GRACE: Duration = Duration::from_secs(30);
@@ -377,7 +375,7 @@ enum AtLogin {
 }
 
 /// `since` the start, and since MDM's tray `icon` was created (None: not yet): whether a tray
-/// `host` shows it (Windows, macOS: always one; Linux: a StatusNotifierWatcher, #59). The
+/// `host` shows it. The
 /// grace counts from the icon, so a slow start of MDM's own doesn't eat the desktop's time.
 fn at_login(since: Duration, icon: Option<Duration>, host: bool) -> AtLogin {
     if icon.is_some() && host {
@@ -391,10 +389,7 @@ fn at_login(since: Duration, icon: Option<Duration>, host: bool) -> AtLogin {
 
 /// Hand the memory the process isn't using now back to the system (#72).
 fn trim_memory() {
-    #[cfg(windows)]
     crate::win32::trim_working_set();
-    #[cfg(unix)]
-    crate::unix::trim_heap();
 }
 
 /// Tree rows carry what they select and which branch they toggle.
@@ -640,11 +635,9 @@ pub struct App {
     ticked: Option<Instant>,
     /// The main window's caption matches the mode.
     caption_set: bool,
-    /// Windows: whether the main window's title bar is ours (a style theme's, #45), as applied
-    /// to its frame; None until the window exists. And the window, once it is.
-    #[cfg_attr(not(windows), allow(dead_code))]
+    /// Whether the main window's title bar is ours (a style theme's, #45), as applied to its
+    /// frame; None until the window exists. And the window, once it is.
     drawn_frame: Option<bool>,
-    #[cfg_attr(not(windows), allow(dead_code))]
     main_hwnd: Option<isize>,
     list: list::ListState,
     icons: ShellIcons,
@@ -745,17 +738,14 @@ pub(crate) fn mark_finished(
         .name("mark-downloaded".into())
         .spawn(move || {
             for f in files.iter().filter(|f| f.is_file()) {
-                #[cfg(windows)]
                 crate::win32::mark_downloaded(f, &url, referrer.as_deref());
-                #[cfg(unix)]
-                crate::unix::mark_downloaded(f, &url, referrer.as_deref());
             }
         })
         .ok()
 }
 
-/// Marks each file the engine starts writing as downloaded from the web (Mark-of-the-Web, macOS'
-/// quarantine: win32 / unix `mark_downloaded`), as browsers mark theirs. Only http(s) addresses
+/// Marks each file the engine starts writing as downloaded from the web (Mark-of-the-Web:
+/// win32 `mark_downloaded`), as browsers mark theirs. Only http(s) addresses
 /// (an FTP address may carry its login).
 pub(crate) fn mark_hook(url: &url::Url, referrer: Option<&str>) -> mdm_engine::FileHook {
     let web = matches!(url.scheme(), "http" | "https");
@@ -764,10 +754,7 @@ pub(crate) fn mark_hook(url: &url::Url, referrer: Option<&str>) -> mdm_engine::F
         if !web {
             return;
         }
-        #[cfg(windows)]
         crate::win32::mark_downloaded(path, &url, referrer.as_deref());
-        #[cfg(unix)]
-        crate::unix::mark_downloaded(path, &url, referrer.as_deref());
     })
 }
 
@@ -965,28 +952,14 @@ impl App {
         if settings.proxy_mode == 2 {
             crate::pacfetch::refresh(&settings.proxy_script, &rt);
         }
-        // "Launch on startup" is whatever the Run key says (the installer may have set it); on
-        // Linux and macOS, the autostart entry / LaunchAgent.
+        // "Launch on startup" is whatever the Run key says (the installer may have set it).
         // An entry written before #226 (by versions before 0.5.0, or by their installer) starts MDM
         // with its window in front: written again, with the argument that starts it in the
         // notification area. Only an entry for this very program (not one a copy elsewhere
         // wrote), and never by a portable copy, which writes nothing outside its folder.
-        #[cfg(windows)]
-        {
-            settings.launch_on_startup = crate::win32::run_at_startup();
-            if settings.launch_on_startup && mdm_ipc::portable_dir().is_none() {
-                crate::win32::update_run_at_startup();
-            }
-        }
-        #[cfg(unix)]
-        {
-            settings.launch_on_startup = crate::unix::run_at_startup();
-            if settings.launch_on_startup && mdm_ipc::portable_dir().is_none() {
-                crate::unix::update_run_at_startup();
-            }
-            if mdm_ipc::portable_dir().is_none() && !crate::offscreen() {
-                crate::unix::register_browsers();
-            }
+        settings.launch_on_startup = crate::win32::run_at_startup();
+        if settings.launch_on_startup && mdm_ipc::portable_dir().is_none() {
+            crate::win32::update_run_at_startup();
         }
         let mut queues = loaded.queues;
         if queues.len() < 2 {
@@ -1034,11 +1007,6 @@ impl App {
         let show_categories = settings.show_categories;
         // The remote control (#141): off unless Options → Remote turned it on.
         let remote = crate::remote::start(&rt, sink, &settings);
-        // Started with the session where a window can't be hidden (Wayland, #226): minimized.
-        if start == crate::Start::Minimized {
-            tracing::info!("started with the session: minimized (a window can't be hidden here)");
-            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-        }
         App {
             rt,
             items,
@@ -2020,7 +1988,6 @@ impl App {
             }
             // The system's graphics API's device lost on purpose (Direct3D, Vulkan, Metal); MDM
             // starts again (renderer.rs).
-            #[cfg(gpu)]
             "renderer-lost" if crate::offscreen() => crate::renderer::test_device_lost(),
             "helpers" => self.helpers = Some(crate::helpers::Helpers::new()),
             "torrent-settings" => self.run(Cmd::TorrentSettings, None, ctx),
@@ -2112,12 +2079,6 @@ impl App {
                 ]));
             }
             "extension" => self.extension = Some(crate::extension::Extension::new()),
-            // The Safari row's "How to Add" steps, open (screenshots).
-            "safari-steps" => {
-                let mut offer = crate::extension::Extension::new();
-                offer.open_safari_steps();
-                self.extension = Some(offer);
-            }
             "move-rename" => self.run(Cmd::MoveRename, None, ctx),
             "shortcuts" => self.run(Cmd::Shortcuts, None, ctx),
             // The Help menu's windows and Download a gallery, for screenshots (#192). updates
@@ -2782,10 +2743,7 @@ impl App {
     /// download limit, file downloads' as the global limiter they wait on.
     fn apply_global_limit(&mut self) {
         let s = &self.settings;
-        #[cfg(windows)]
         let active = crate::win32::idle_seconds() < 60;
-        #[cfg(not(windows))]
-        let active = true;
         let rate = (s.global_limit_on && (!s.global_only_active || active))
             .then(|| s.global_limit_kb.max(1) * 1024);
         let torrents = self.torrent_speed();
@@ -2873,9 +2831,7 @@ impl App {
     }
 
     /// Progress of all running downloads together (bytes done / bytes in all), None when
-    /// nothing runs or no size is known. For the taskbar button's progress, which only Windows
-    /// has (macOS and Linux docks have no common way to show one).
-    #[cfg_attr(not(windows), allow(dead_code))]
+    /// nothing runs or no size is known. For the taskbar button's progress.
     fn overall_progress(&self) -> Option<f64> {
         let (done, total) = self
             .items
@@ -2886,17 +2842,8 @@ impl App {
         (total > 0).then(|| done as f64 / total as f64)
     }
 
-    /// The main window into the tray: downloads, queues and schedules go on. Wayland can't hide a
-    /// window, so there it goes to the dock / task list instead.
+    /// The main window into the tray: downloads, queues and schedules go on.
     fn hide_to_tray(&mut self, ctx: &egui::Context) {
-        #[cfg(target_os = "linux")]
-        let wayland = crate::unix::on_wayland();
-        #[cfg(not(target_os = "linux"))]
-        let wayland = false;
-        if wayland {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-            return;
-        }
         ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
         self.hidden = true;
         self.start_trimming();
@@ -2923,26 +2870,16 @@ impl App {
         }
     }
 
-    /// Whether the tray icon is shown somewhere (Linux: a tray host is there; asked when the
-    /// window is closed, the host may come and go). On Windows and macOS the icon itself is
-    /// asked: the shell can accept it and still show nothing, and a window hidden with no icon
+    /// Whether the tray icon is shown somewhere. The icon itself is asked: the shell can accept it and still show nothing, and a window hidden with no icon
     /// to click has no way back. Cached for the per-frame minimize path.
     fn tray_shown(&self) -> bool {
-        #[cfg(any(target_os = "windows", target_os = "macos"))]
-        if let Some(tray) = &self.tray {
-            return tray.visible();
-        }
-        crate::tray::available()
+        self.tray.as_ref().is_none_or(|tray| tray.visible())
     }
 
     /// [`tray_shown`] without the cache, for the close decision: an icon can disappear between
     /// the cached answer and the close, and hiding then would be a ghost window.
     fn tray_shown_now(&self) -> bool {
-        #[cfg(any(target_os = "windows", target_os = "macos"))]
-        if let Some(tray) = &self.tray {
-            return tray.visible_now();
-        }
-        crate::tray::available()
+        self.tray.as_ref().is_none_or(|tray| tray.visible_now())
     }
 
     /// Started with the session (#226): once a second, until it is known, where the window goes
@@ -3052,19 +2989,16 @@ impl App {
             self.run(cmd, None, ctx);
         }
         // Closing hides the window in the tray; downloads and queues go on. With no icon the shell
-        // shows (Windows, macOS: a tray that exists but says it has none) the window goes to the
-        // taskbar or the Dock instead: still reachable, downloads still going. Everywhere else
-        // closing closes, as any window's does: Options' "Keep running when closing the window"
-        // off, no tray at all, or Linux with no tray host (#59: a hidden window couldn't come
-        // back, and one that merely minimized could never be closed).
+        // shows (a tray that exists but says it has none) the window goes to the taskbar
+        // instead: still reachable, downloads still going. Otherwise closing closes, as any
+        // window's does: Options' "Keep running when closing the window" off, or no tray at all.
         if !self.exiting && ctx.input(|i| i.viewport().close_requested()) {
             use crate::tray::OnClose;
             let keep = self.settings.close_to_tray;
             let tray = self.tray.is_some();
             // The shell is asked afresh, and only when its answer matters.
             let shown = keep && tray && self.tray_shown_now();
-            let taskbar = cfg!(not(target_os = "linux"));
-            match crate::tray::on_close(keep, tray, shown, taskbar) {
+            match crate::tray::on_close(keep, tray, shown) {
                 OnClose::Hide => {
                     tracing::info!("close: hidden to the notification area");
                     ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -3082,32 +3016,14 @@ impl App {
             }
         }
         // Options → General → "Minimize to the notification area" (#63): Minimize hides the
-        // window there too, where a tray shows the icon. Wayland can't hide a window: there it
-        // stays minimized, in the dock, as it was.
-        #[cfg(target_os = "linux")]
-        let can_hide = !crate::unix::on_wayland();
-        #[cfg(not(target_os = "linux"))]
-        let can_hide = true;
+        // window there too, where a tray shows the icon.
         let wanted = self.tray.is_some()
             && self.settings.minimize_to_tray
-            && can_hide
             && !self.exiting
             && self.tray_shown();
-        // Windows: the minimize command itself is caught (win32), so the window goes straight to
-        // the tray, never minimized (an idle app runs no frame while minimized: it wouldn't see).
-        #[cfg(windows)]
+        // The minimize command itself is caught (win32), so the window goes straight to the tray,
+        // never minimized (an idle app runs no frame while minimized: it wouldn't see).
         let minimize = crate::win32::main_minimize_to_tray(ctx, wanted);
-        // Elsewhere: on the change to minimized (brought back, the window may still read
-        // minimized for a frame or two). It is seen at the next frame the app runs; macOS doesn't
-        // report it at all while running (egui#3494), so there Minimize stays in the Dock.
-        #[cfg(not(windows))]
-        let minimize = {
-            let minimized = ctx.input(|i| i.viewport().minimized == Some(true));
-            let was = egui::Id::unique("main-was-minimized");
-            let was_minimized = ctx.data(|d| d.get_temp::<bool>(was)).unwrap_or(false);
-            ctx.data_mut(|d| d.insert_temp(was, minimized));
-            wanted && minimized && !was_minimized
-        };
         if minimize && !self.hidden {
             tracing::info!("minimized to the notification area");
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
@@ -3138,10 +3054,7 @@ impl App {
             return;
         }
         self.assistive_checked = Some(Instant::now());
-        #[cfg(windows)]
         let listening = crate::win32::assistive_technology_listening();
-        #[cfg(not(windows))]
-        let listening = crate::unix::assistive_technology_listening();
         if listening {
             ctx.enable_accesskit();
         }
@@ -4742,10 +4655,7 @@ impl App {
         if new.launch_on_startup != self.settings.launch_on_startup
             && mdm_ipc::portable_dir().is_none()
         {
-            #[cfg(windows)]
             crate::win32::set_run_at_startup(new.launch_on_startup);
-            #[cfg(unix)]
-            crate::unix::set_run_at_startup(new.launch_on_startup);
         }
         self.settings = new;
         crate::regional::set(&self.settings.regional);
@@ -4988,9 +4898,7 @@ impl App {
     /// A queue's, or a download's (its progress window's Options on completion), "when done":
     /// hang up, turn the computer off (a countdown first), or exit.
     fn when_done(&mut self, w: crate::queue::WhenDone) {
-        // Ends dial-up (RAS) connections; nothing happens without one. Windows only: macOS and
-        // Linux have no dial-up command to call.
-        #[cfg(windows)]
+        // Ends dial-up (RAS) connections; nothing happens without one.
         if w.hang_up {
             let _ = std::process::Command::new("rasdial")
                 .arg("/disconnect")
@@ -5158,7 +5066,6 @@ impl App {
             }
             // Every window at once (the frames after this one); saved by `follow_zoom`.
             Cmd::InterfaceSize(percent) => crate::scale::set(ctx, percent),
-            #[cfg(gpu)]
             Cmd::DrawWith(api) => {
                 // Chosen again after it failed here: its next start is tried.
                 if Some(api) == crate::renderer::GPU {
@@ -5803,15 +5710,13 @@ impl App {
                 I("Support &MDM", Cmd::Support, true, false),
             ],
         };
-        // View → Theme (MDM's, #45), after Always dark; then Draw with (#89, #206), where wgpu is
-        // built (Windows, Linux, macOS: renderer.rs).
+        // View → Theme (MDM's, #45), after Always dark; then Draw with (#89, renderer.rs).
         if let Some(at) = menu
             .iter()
             .position(|e| matches!(e, I(_, Cmd::ToggleAlwaysDark, ..)))
         {
             menu.insert(at + 1, self.theme_menu());
             menu.insert(at + 2, self.interface_size_menu());
-            #[cfg(gpu)]
             menu.insert(at + 3, self.draw_with_menu());
         }
         menu
@@ -5890,11 +5795,9 @@ impl App {
         MenuEntry::Sub("&Interface size", true, items)
     }
 
-    /// View → Draw with (#89, #206): OpenGL or the system's own graphics API (Direct3D on
-    /// Windows, Vulkan on Linux, Metal on macOS), used from the next start. Greyed lines say when
+    /// View → Draw with (#89): OpenGL or Direct3D, used from the next start. Greyed lines say when
     /// what draws now isn't the choice: the system's API failed here (and why), or the choice
     /// waits for the next start.
-    #[cfg(gpu)]
     fn draw_with_menu(&self) -> MenuEntry<Cmd> {
         use crate::renderer::{self, Api, Why};
         use MenuEntry::{Item as I, Radio, Sep, Sub};
@@ -6420,7 +6323,6 @@ impl App {
     /// window manager owns the title bar): the frame is switched to ours or back as the theme
     /// changes, the bar drawn at the top of `full`; returns what is left for the layout.
     fn drawn_caption(&mut self, ui: &mut Ui, full: egui::Rect) -> egui::Rect {
-        #[cfg(windows)]
         {
             use crate::winui::caption::{self, CAPTION_H, CaptionButton};
             let want =
@@ -6483,11 +6385,6 @@ impl App {
             }
             egui::Rect::from_min_max(egui::pos2(full.min.x, full.min.y + CAPTION_H), full.max)
         }
-        #[cfg(not(windows))]
-        {
-            let _ = ui;
-            full
-        }
     }
 
     fn toggle(&mut self, b: Branch) {
@@ -6513,8 +6410,7 @@ impl App {
         let mut chosen: Option<(Cmd, Option<u64>)> = None;
 
         // The menu bar from the keyboard: F10 or Alt pressed alone opens its first menu, Alt and a
-        // menu's underlined letter that menu (Windows and Linux); on macOS, whose apps have no
-        // Alt keys, Ctrl+F2 (the system's key for the menu bar).
+        // menu's underlined letter that menu.
         // A focused button or list (Tab, a screen reader, #328) leaves these keys to the menu bar;
         // only a text box keeps them.
         let typing = ctx
@@ -6525,7 +6421,7 @@ impl App {
                 .iter()
                 .map(|(l, ..)| chrome::menu_letter(l))
                 .collect();
-            let (alt, other, f10, ctrl_f2, letter) = ctx.input(|i| {
+            let (alt, other, f10, letter) = ctx.input(|i| {
                 let mut letter = None;
                 let mut other = false;
                 for e in &i.events {
@@ -6553,33 +6449,26 @@ impl App {
                     i.modifiers.alt,
                     other,
                     i.key_pressed(egui::Key::F10) && i.modifiers.is_none(),
-                    i.key_pressed(egui::Key::F2) && i.modifiers.ctrl,
                     letter,
                 )
             });
             let mut open = None;
-            if cfg!(target_os = "macos") {
-                if ctrl_f2 {
-                    open = Some(0);
-                }
-            } else {
-                if alt && !self.alt_down {
-                    self.alt_alone = true;
-                    // The keyboard is in use: access letters show (light mode too).
-                    crate::chrome::show_cues(&ctx);
-                }
-                if alt && other {
-                    self.alt_alone = false;
-                }
-                if !alt && self.alt_down && self.alt_alone {
-                    open = Some(0);
-                }
-                if f10 {
-                    open = Some(0);
-                }
-                if let Some(l) = letter {
-                    open = labels.iter().position(|m| *m == l).or(open);
-                }
+            if alt && !self.alt_down {
+                self.alt_alone = true;
+                // The keyboard is in use: access letters show (light mode too).
+                crate::chrome::show_cues(&ctx);
+            }
+            if alt && other {
+                self.alt_alone = false;
+            }
+            if !alt && self.alt_down && self.alt_alone {
+                open = Some(0);
+            }
+            if f10 {
+                open = Some(0);
+            }
+            if let Some(l) = letter {
+                open = labels.iter().position(|m| *m == l).or(open);
             }
             self.alt_down = alt;
             if let Some(i) = open {
@@ -7012,7 +6901,7 @@ impl App {
             let (del, shift_del) = ctx.input(|i| {
                 (
                     i.key_pressed(egui::Key::Delete) && !i.modifiers.shift,
-                    // Windows reports it as Cut; macOS and Linux as the key.
+                    // Windows reports it as Cut.
                     i.modifiers.shift
                         && !i.modifiers.command
                         && (i.events.iter().any(|e| matches!(e, egui::Event::Cut))
@@ -7353,20 +7242,9 @@ impl App {
         false
     }
 
-    /// What was dropped on the main window (its OLE target on Windows; winit's dropped files on
-    /// macOS and Linux, which hand over files only).
+    /// What was dropped on the main window (its OLE target).
     fn main_drops(&mut self, ctx: &egui::Context) {
-        #[cfg_attr(windows, allow(unused_mut))]
-        let mut got = self.drops.poll(ctx, crate::MAIN_TITLE);
-        #[cfg(not(windows))]
-        got.extend(ctx.input(|i| {
-            i.raw
-                .dropped_files
-                .iter()
-                .map(|f| f.path().display().to_string())
-                .filter(|p| !p.is_empty())
-                .collect::<Vec<_>>()
-        }));
+        let got = self.drops.poll(ctx, crate::MAIN_TITLE);
         if !got.is_empty() {
             self.dropped(got, ctx);
         }
@@ -8221,10 +8099,7 @@ impl App {
             self.torrents_started = true;
             // The handlers follow the exe (a portable copy may have moved).
             if self.settings.torrent_associations {
-                #[cfg(windows)]
                 crate::win32::set_torrent_handlers(true);
-                #[cfg(unix)]
-                crate::unix::set_torrent_handlers(true);
             }
             if self.settings.torrent_keep_sharing {
                 self.torrent_host.set_sharing(
@@ -8284,10 +8159,7 @@ impl App {
                     }
                     if assoc != self.settings.torrent_associations {
                         self.settings.torrent_associations = assoc;
-                        #[cfg(windows)]
                         crate::win32::set_torrent_handlers(assoc);
-                        #[cfg(unix)]
-                        crate::unix::set_torrent_handlers(assoc);
                     }
                     self.dirty = true;
                 }
@@ -8534,7 +8406,7 @@ impl App {
         // A progress window can be hidden in the tray only when there is one to bring it back.
         // Off-screen test copies have no tray icon: their windows are drawn as if they had one
         // (the captures and the accessibility checks see the hide button).
-        let tray = (self.tray.is_some() || crate::offscreen()) && crate::tray::available();
+        let tray = self.tray.is_some() || crate::offscreen();
         for p in &mut self.progress {
             p.keep_sharing = self.settings.torrent_keep_sharing;
             if p.host.is_none() {
@@ -8672,7 +8544,6 @@ impl App {
             self.watch_clipboard(ctx);
             self.tray(ctx);
             // The taskbar button's green bar: everything running, as one.
-            #[cfg(windows)]
             crate::win32::taskbar_progress(crate::MAIN_TITLE, self.overall_progress());
         }
         if self
@@ -8704,10 +8575,7 @@ impl App {
         crate::crash::frame_begin();
         // A lost graphics device is noticed before this frame paints (renderer.rs).
         crate::renderer::frame_begin();
-        // Off-screen test runs: no window of ours may become the foreground one (win32.rs). Linux
-        // and macOS need no such pass: their off-screen windows open inactive (main.rs `quiet`)
-        // and nothing raises them then (dialogs::raise).
-        #[cfg(windows)]
+        // Off-screen test runs: no window of ours may become the foreground one (win32.rs).
         if crate::offscreen() {
             crate::win32::keep_from_foreground();
         }
@@ -8725,13 +8593,10 @@ impl App {
         self.main_drops(&ctx);
         self.remember_layout(&ctx);
         // Light or dark: IDM follows Windows' app mode (checked every 2 s) unless View → Dark
-        // Mode support is off. Switches live (IDM asks to restart). On Linux the desktop's own
-        // change wakes a frame, and the check runs in it rather than at its next 2 s (#156).
-        let desktop_changed = crate::theme::system_changed();
-        if desktop_changed
-            || self
-                .theme_checked
-                .is_none_or(|t| t.elapsed() > Duration::from_secs(2))
+        // Mode support is off. Switches live (IDM asks to restart).
+        if self
+            .theme_checked
+            .is_none_or(|t| t.elapsed() > Duration::from_secs(2))
         {
             self.theme_checked = Some(Instant::now());
             // A theme file added, removed or renamed, pywal's colours written or taken away:
@@ -8761,17 +8626,8 @@ impl App {
                 crate::theme::apply_mode(&ctx);
             }
             // Re-asserted on every check (a no-op when already right).
-            {
-                #[cfg(windows)]
-                {
-                    self.caption_set =
-                        crate::win32::caption_dark(crate::MAIN_TITLE, crate::theme::dark_surface());
-                }
-                #[cfg(not(windows))]
-                {
-                    self.caption_set = true;
-                }
-            }
+            self.caption_set =
+                crate::win32::caption_dark(crate::MAIN_TITLE, crate::theme::dark_surface());
             if changed {
                 ctx.request_repaint();
             }
@@ -8850,7 +8706,7 @@ impl Drop for App {
     fn drop(&mut self) {
         // An archive being extracted stops; its staging folder goes with it.
         self.extracts.stop();
-        // No wake for a queue MDM won't be there to start (Linux's alarm would outlive it).
+        // No wake for a queue MDM won't be there to start.
         self.wake.clear();
         self.keep_unseen();
         // The feeds as last handed to their saver.
@@ -9251,7 +9107,6 @@ mod mark_finished_tests {
         .join()
         .unwrap();
         assert!(!gone.exists(), "a moved file's old path stays empty");
-        #[cfg(windows)]
         {
             let mut stream = here.as_os_str().to_owned();
             stream.push(":Zone.Identifier");

@@ -13,14 +13,8 @@ use crate::winui::{self, ButtonKind, fill_l as fill, px_l as px, r, text};
 
 use crate::winui::caption::CaptionButton;
 
-/// The drawn title bar's height (#63): Windows only, where the frame is ours
-/// (win32::progress_frame); Linux and macOS keep the system's decorations, which take no buttons
-/// of ours (Wayland even places them itself), so the hide button sits in the tab row there.
-const TITLE_H: f32 = if cfg!(windows) {
-    crate::winui::caption::CAPTION_H
-} else {
-    0.0
-};
+/// The drawn title bar's height (#63): the frame is ours (win32::progress_frame).
+const TITLE_H: f32 = crate::winui::caption::CAPTION_H;
 
 /// The frame applied to a progress window (Windows): its client size, pixels per point × 1000
 /// and its system menu's "Hide to the notification area" (translated, when there is one).
@@ -38,12 +32,8 @@ fn window_title(frac: Option<f64>, name: &str) -> String {
 }
 
 /// The title bar's buttons, from the window's end: Close, Maximize (greyed: a fixed size, as
-/// IDM's), Minimize, and with a tray our "hide to the notification area". None where the system
-/// draws the title bar.
+/// IDM's), Minimize, and with a tray our "hide to the notification area".
 fn caption_buttons(tray: bool) -> Vec<(CaptionButton, bool)> {
-    if !cfg!(windows) {
-        return Vec::new();
-    }
     let mut b = vec![
         (CaptionButton::Close, true),
         (CaptionButton::Maximize, false),
@@ -55,7 +45,7 @@ fn caption_buttons(tray: bool) -> Vec<(CaptionButton, bool)> {
     b
 }
 
-/// The title bar where it's ours (Windows), `width` points wide at `o`; the button pressed. Where
+/// The title bar, `width` points wide at `o`; the button pressed. Where
 /// its buttons and icon are goes to the window's hit test (win32::set_caption_hits), in client
 /// pixels, each frame (`hwnd`: the window, once its frame is applied).
 fn draw_caption(
@@ -66,9 +56,6 @@ fn draw_caption(
     buttons: &[(CaptionButton, bool)],
     hwnd: Option<isize>,
 ) -> Option<CaptionButton> {
-    if !cfg!(windows) {
-        return None;
-    }
     // The one drawn title bar of every window (dialogs.rs), with its hit test.
     crate::dialogs::drawn_title(ui, o, width, title, buttons, hwnd)
 }
@@ -131,9 +118,6 @@ enum TTab {
     Pieces,
     General,
 }
-
-/// Why "Hang up modem when done" is greyed off Windows.
-pub const NO_DIAL_UP: &str = crate::i18n::mark("This system has no dial-up connections to hang up");
 
 pub struct Progress {
     pub id: u64,
@@ -257,12 +241,10 @@ impl Progress {
             .with_visible(false)
             .with_title(title)
             .with_inner_size(shown)
-            // IDM's progress window has 2 px borders and a fixed size. On Windows the sizing
-            // frame is asked for and win32::progress_frame trims its borders, disables resizing
-            // and gives the caption to the client, which draws it; elsewhere the window is simply
-            // not resizable (its contents are laid out for one size: Show/Hide details switches
-            // between two).
-            .with_resizable(cfg!(windows))
+            // IDM's progress window has 2 px borders and a fixed size. The sizing frame is asked
+            // for and win32::progress_frame trims its borders, disables resizing and gives the
+            // caption to the client, which draws it.
+            .with_resizable(true)
             .with_icon(crate::app_icon())
             .with_maximize_button(false);
         if let Some(p) = crate::dialogs::place(ctx, key, [548.0, 412.0]) {
@@ -295,7 +277,6 @@ impl Progress {
                         self.body(ui, o, item, snap, frac)
                     });
                     // The system menu's "Hide to the notification area" (Alt+Space).
-                    #[cfg(windows)]
                     if let Some(h) = hwnd
                         && crate::win32::take_hide_asked(h)
                     {
@@ -329,7 +310,6 @@ impl Progress {
         // Apply the frame while the window is still hidden, and again whenever the client size
         // (details), the scale (another display, the interface size) or the system menu's item
         // changes.
-        #[cfg(windows)]
         {
             let scale = ctx.input_for(vid, |i| i.pixels_per_point);
             let hide = buttons
@@ -381,7 +361,6 @@ impl Progress {
         }
         // Gone (hidden keeps its place): the next window gets its thin frame again.
         if closing {
-            #[cfg(windows)]
             if let Some(h) = hwnd {
                 crate::win32::forget_caption(h);
             }
@@ -402,7 +381,7 @@ impl Progress {
         frac: Option<f64>,
     ) -> Action {
         let p = ui.painter().clone();
-        let hide = self.tabs(ui, o);
+        self.tabs(ui, o);
         let hide_tab = match self.tab {
             Tab::Status => {
                 status_page(ui, o, item, snap, frac);
@@ -427,7 +406,7 @@ impl Progress {
             frac.unwrap_or(0.0) as f32,
         );
 
-        let mut action = if hide { Action::Hide } else { Action::None };
+        let mut action = Action::None;
         let details_label = if self.details {
             crate::i18n::mark("<< Hide details")
         } else {
@@ -528,9 +507,8 @@ impl Progress {
         action
     }
 
-    /// Classic 3-D tabs over a raised page frame (spec "Tab strip"); with a tray, the "hide to
-    /// the notification area" button at the row's end. True when that button is pressed.
-    fn tabs(&mut self, ui: &mut Ui, o: Pos2) -> bool {
+    /// Classic 3-D tabs over a raised page frame (spec "Tab strip").
+    fn tabs(&mut self, ui: &mut Ui, o: Pos2) {
         // The shared tab strip (the torrent tabs' too): one look in both themes, one Tab stop with
         // the arrows, sized to the translated labels. It had two of its own (classic 3-D in dark).
         let tabs: Vec<(Tab, &str)> = [
@@ -546,10 +524,7 @@ impl Progress {
         .collect();
         let p = ui.painter().clone();
         let english: Vec<&str> = tabs.iter().map(|t| t.1).collect();
-        // The hide button sits here where the system draws the title bar (Linux, macOS; on
-        // Windows it's in ours); the tabs end before it (long translations shorten first).
-        let tab_button = self.tray && !cfg!(windows);
-        let right = if tab_button { 500.0 } else { 525.0 };
+        let right = 525.0;
         let light: Vec<winui::LightTab> = winui::tab_row(&p, &english, 20.0, right, 2.0, 8.0)
             .into_iter()
             .zip(tabs.iter())
@@ -565,17 +540,6 @@ impl Progress {
             self.tab = tabs[i].0;
         }
         self.tab_row_menu(ui, r(o, 18.0, 6.0, 514.0, 22.0));
-        // MDM's (#63): IDM puts this in its title bar, which here is the system's own (it takes
-        // no buttons of ours), so it sits at the tab row's end, over the page's corner.
-        tab_button
-            && winui::to_tray_button(
-                ui,
-                r(o, 507.0, 6.0, 22.0, 20.0),
-                "progress-hide",
-                // i18n: tooltip of a button in a download's progress window: hides the window to the notification area (system tray); the download goes on
-                crate::i18n::mark("Hide to the notification area"),
-            )
-            .clicked()
     }
 
     /// The tab row's right-click menu (#326): "Show hidden tabs" puts back the tabs hidden in
@@ -907,15 +871,14 @@ impl Progress {
         );
         // Used when the complete dialog is off (it asks what to do itself).
         let on = !self.show_complete;
-        // Dial-up is hung up through Windows' rasdial; macOS and Linux have no such command.
-        let hang_up = winui::checkbox(
+        // Dial-up is hung up through Windows' rasdial.
+        winui::checkbox(
             ui,
             o + vec2(33.0, 96.0),
             &mut self.hang_up,
             "Hang up modem when done",
-            on && cfg!(windows),
+            on,
         );
-        winui::why_disabled(hang_up, on && !cfg!(windows), NO_DIAL_UP);
         winui::checkbox(
             ui,
             o + vec2(33.0, 114.0),

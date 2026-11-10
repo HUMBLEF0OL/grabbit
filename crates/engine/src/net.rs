@@ -6,16 +6,12 @@
 //! switch, and it fails closed: when the adapter is gone, has lost its address, or has no route
 //! to a server, the connection fails instead of taking the normal one.
 //!
-//! - **Windows** binds the adapter's own address (`local_address`). From Vista on, Windows uses
+//! Windows binds the adapter's own address (`local_address`). From Vista on, Windows uses
 //!   the strong host model: a packet with an adapter's source address only leaves through that
 //!   adapter. hyper (under reqwest) binds one address only, so a client bound to an IPv4 address
 //!   must never be handed an IPv6 one (it would bind `[::]` and take the normal route): the
 //!   resolver keeps only the bound family, and IP literals in addresses, proxies and redirects are
 //!   checked ([`Binding::allows`]).
-//! - **Linux** binds the device (`SO_BINDTODEVICE`, allowed without privileges since Linux 5.7).
-//!   An address alone would not be enough there: Linux routes by destination (weak host model), so
-//!   a packet with the VPN's address could still leave through the Ethernet adapter.
-//! - **macOS** binds the interface index (`IP_BOUND_IF` / `IPV6_BOUND_IF`).
 //!
 //! Connections to this computer itself (127.0.0.0/8, ::1) are never bound: they don't leave it,
 //! and binding them fails. A proxy on this computer therefore carries downloads unbound; where
@@ -42,9 +38,9 @@ pub enum Route {
 pub struct Binding {
     /// Its name as the system shows it ("Ethernet", "ProtonVPN", "wg0"), for messages.
     pub label: String,
-    /// The system's name for it: what Linux binds (`wg0`).
+    /// The system's name for it.
     pub name: String,
-    /// Its interface index: what macOS binds.
+    /// Its interface index.
     pub index: u32,
     pub v4: Option<Ipv4Addr>,
     pub v6: Option<Ipv6Addr>,
@@ -94,20 +90,13 @@ impl Route {
 impl Binding {
     /// Whether a connection to `dst` can go through this adapter: a connection to this computer
     /// always can (it isn't bound); otherwise the adapter needs an address of `dst`'s family.
-    /// On Windows only the family that is bound counts (see the module's notes).
+    /// Only the family that is bound counts (see the module's notes).
     pub fn allows(&self, dst: IpAddr) -> bool {
         if self.exempt(dst) {
             return true;
         }
-        if cfg!(windows) {
-            return self
-                .windows_local()
-                .is_some_and(|l| l.is_ipv4() == dst.is_ipv4());
-        }
-        match dst {
-            IpAddr::V4(_) => self.v4.is_some(),
-            IpAddr::V6(_) => self.v6.is_some(),
-        }
+        self.windows_local()
+            .is_some_and(|l| l.is_ipv4() == dst.is_ipv4())
     }
 
     /// A connection to this computer, left unbound.
@@ -122,45 +111,13 @@ impl Binding {
 
     /// Bind `socket` (not yet connected) so that it can only reach `dst` through this adapter.
     fn pin(&self, socket: &socket2::Socket, dst: SocketAddr) -> std::io::Result<()> {
-        // Windows: the strong host model makes the source address enough.
-        #[cfg(windows)]
-        {
-            let local = match dst {
-                SocketAddr::V4(_) => self.v4.map(IpAddr::V4),
-                SocketAddr::V6(_) => self.v6.map(IpAddr::V6),
-            }
-            .ok_or_else(|| std::io::Error::other("no address of that family"))?;
-            socket.bind(&SocketAddr::new(local, 0).into())
+        // The strong host model makes the source address enough.
+        let local = match dst {
+            SocketAddr::V4(_) => self.v4.map(IpAddr::V4),
+            SocketAddr::V6(_) => self.v6.map(IpAddr::V6),
         }
-        // Linux: the device itself (an address alone would not hold, see the module's notes).
-        #[cfg(any(target_os = "linux", target_os = "android"))]
-        {
-            let _ = dst;
-            socket.bind_device(Some(self.name.as_bytes()))
-        }
-        // macOS: the interface by index.
-        #[cfg(target_os = "macos")]
-        {
-            let index = std::num::NonZeroU32::new(self.index)
-                .ok_or_else(|| std::io::Error::other("no interface index"))?;
-            match dst {
-                SocketAddr::V4(_) => socket.bind_device_by_index_v4(Some(index)),
-                SocketAddr::V6(_) => socket.bind_device_by_index_v6(Some(index)),
-            }
-        }
-        // Elsewhere there is no way to hold a socket to an adapter that MDM knows of: refuse.
-        #[cfg(not(any(
-            windows,
-            target_os = "linux",
-            target_os = "android",
-            target_os = "macos"
-        )))]
-        {
-            let _ = (socket, dst);
-            Err(std::io::Error::other(
-                "binding to an adapter isn't supported on this system",
-            ))
-        }
+        .ok_or_else(|| std::io::Error::other("no address of that family"))?;
+        socket.bind(&SocketAddr::new(local, 0).into())
     }
 }
 
@@ -196,7 +153,7 @@ pub fn check_url(route: &Route, url: &url::Url) -> Result<(), NetError> {
     }
 }
 
-/// The system's proxy for `url` (Windows' or macOS' settings, or the environment's
+/// The system's proxy for `url` (Windows' settings, or the environment's
 /// `HTTPS_PROXY`…), as reqwest would use it; None: straight to the server.
 pub fn system_proxy(url: &url::Url) -> Option<String> {
     let uri: http::Uri = url.as_str().parse().ok()?;
@@ -221,28 +178,7 @@ pub fn bind_client(
             label: label.clone(),
         }),
         Route::Bound(_) if to_this_computer => Ok(builder),
-        Route::Bound(b) => {
-            #[cfg(windows)]
-            {
-                Ok(builder.local_address(b.windows_local()))
-            }
-            #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos"))]
-            {
-                Ok(builder.interface(&b.name))
-            }
-            #[cfg(not(any(
-                windows,
-                target_os = "linux",
-                target_os = "android",
-                target_os = "macos"
-            )))]
-            {
-                let _ = builder;
-                Err(NetError::Down {
-                    label: b.label.clone(),
-                })
-            }
-        }
+        Route::Bound(b) => Ok(builder.local_address(b.windows_local())),
     }
 }
 
@@ -333,8 +269,7 @@ pub fn tcp_connect_blocking(
 /// An adapter of this computer, as [`adapters`] lists it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Adapter {
-    /// Windows: the name shown in Network Connections ("Ethernet", "ProtonVPN"); Linux and
-    /// macOS: the interface's name ("wg0", "utun4").
+    /// The name shown in Network Connections ("Ethernet", "ProtonVPN").
     pub name: String,
     pub index: u32,
     /// Its addresses that can reach other computers (no link-local 169.254.x.x or fe80::).
@@ -353,7 +288,7 @@ pub fn adapters() -> Vec<Adapter> {
         if nic.internal {
             continue;
         }
-        // Linux lists an interface once per address: gather them.
+        // An interface may be listed once per address: gather them.
         let at = match out.iter().position(|a| a.name == nic.name) {
             Some(i) => i,
             None => {
@@ -458,29 +393,13 @@ pub fn set_source_lookup(f: fn(IpAddr) -> Option<IpAddr>) {
 }
 
 /// The address a connection to `dst` would leave from (PAC's `myIpAddress`). Nothing is sent, and
-/// on Windows no socket is opened: a UDP socket there is a listening socket to the firewall, which
+/// no socket is opened: a UDP socket is a listening socket to the firewall, which
 /// would ask the user about MDM.
 pub fn source_address(dst: IpAddr) -> Option<IpAddr> {
     if let Some(f) = SOURCE.get() {
         return f(dst);
     }
-    // Linux and macOS: a UDP socket "connected" to `dst` (no packet goes out; their firewalls
-    // don't ask about it) tells the system's choice.
-    #[cfg(not(windows))]
-    {
-        let unspecified: SocketAddr = match dst {
-            IpAddr::V4(_) => (Ipv4Addr::UNSPECIFIED, 0).into(),
-            IpAddr::V6(_) => (Ipv6Addr::UNSPECIFIED, 0).into(),
-        };
-        if let Ok(ip) = std::net::UdpSocket::bind(unspecified)
-            .and_then(|s| s.connect((dst, 9)).map(|_| s))
-            .and_then(|s| s.local_addr())
-            .map(|a| a.ip())
-        {
-            return Some(ip);
-        }
-    }
-    // Windows without the lookup installed (the engine alone): the first adapter's address.
+    // Without the lookup installed (the engine alone): the first adapter's address.
     adapters().into_iter().find_map(|a| match dst {
         IpAddr::V4(_) => a.v4.first().copied().map(IpAddr::V4),
         IpAddr::V6(_) => a.v6.first().copied().map(IpAddr::V6),
@@ -560,10 +479,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_bound_connection_leaves_from_the_adapter() {
-        // 127.0.0.2 answers on Windows and Linux; macOS only has 127.0.0.1 unless aliased.
-        if cfg!(target_os = "macos") {
-            return;
-        }
+        // 127.0.0.2 answers on Windows.
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let route = Route::Bound(Arc::new(Binding {
@@ -577,9 +493,7 @@ mod tests {
         let (conn, accepted) = tokio::join!(tcp_connect(&route, addr), listener.accept());
         let conn = conn.unwrap();
         let (_, peer) = accepted.unwrap();
-        if cfg!(windows) {
-            assert_eq!(peer.ip(), IpAddr::from([127, 0, 0, 2]));
-        }
+        assert_eq!(peer.ip(), IpAddr::from([127, 0, 0, 2]));
         assert_eq!(conn.peer_addr().unwrap(), addr);
         // The adapter is gone: nothing connects.
         let down = Route::Down {

@@ -78,7 +78,7 @@ enum Cmd {
     /// LGPL build, checked against its release's SHA-256 list (Windows; elsewhere the system's).
     InstallFfmpeg,
     /// Install (or update) gallery-dl for image galleries: its checksum list is verified against
-    /// its author's signing key, the program against that list (Windows and Linux x86-64).
+    /// its author's signing key, the program against that list.
     InstallGalleryDl,
     /// Download an image gallery's files with gallery-dl (needs `install-gallery-dl`).
     GalleryGet {
@@ -385,12 +385,11 @@ pub struct Launch {
 }
 
 /// Was the app's program started for the command line? `args` are its own (`std::env::args_os`):
-/// [`FLAG`] first, or on Linux and macOS a program named [`NAME`] (a link to the app's program
-/// works as the launcher there; on Windows the app is a windowed program, which a console
-/// doesn't wait for, so it needs the launcher).
+/// [`FLAG`] first (the app is a windowed program, which a console doesn't wait for, so it needs
+/// the launcher).
 pub fn launched(args: Vec<OsString>) -> Option<Launch> {
     let mut args = args.into_iter();
-    let program = args.next()?;
+    args.next()?;
     let rest: Vec<OsString> = args.collect();
     if let Some(first) = rest.first().and_then(|a| a.to_str()) {
         let launcher = if first == FLAG {
@@ -409,13 +408,7 @@ pub fn launched(args: Vec<OsString>) -> Option<Launch> {
             });
         }
     }
-    let by_name = std::path::Path::new(&program)
-        .file_name()
-        .is_some_and(|n| n == NAME);
-    (cfg!(unix) && by_name).then_some(Launch {
-        launcher: None,
-        args: rest,
-    })
+    None
 }
 
 /// Run the command line `args` (without the program's name): what `misterdownloadmanager-cli`
@@ -1353,8 +1346,6 @@ mod tests {
         assert!(launched(args(&["mdm", "/d", "--cli"])).is_none());
         assert!(launched(args(&["mdm", "--cli=x"])).is_none());
         assert!(launched(args(&["mdm", "--client"])).is_none());
-        // A link named as the launcher (Linux and macOS).
-        let named = launched(args(&["/usr/bin/misterdownloadmanager-cli", "status"]));
-        assert_eq!(named.is_some(), cfg!(unix));
+        assert!(launched(args(&["/x/misterdownloadmanager-cli", "status"])).is_none());
     }
 }

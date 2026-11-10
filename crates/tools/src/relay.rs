@@ -1,11 +1,10 @@
 //! The helpers through the chosen network adapter (#35). yt-dlp, gallery-dl and the ffmpeg that
 //! yt-dlp starts can't be held to an adapter themselves: yt-dlp's `--source-address` was seen not
 //! to hold on Windows (#108: given an address without a route, it still connected from the
-//! Ethernet adapter's), an address alone doesn't hold on Linux (it routes by destination, the weak
-//! host model), and none of them can bind a device or an interface. So while an adapter is chosen
+//! Ethernet adapter's), and none of them can bind a device or an interface. So while an adapter is chosen
 //! they are given this proxy (`--proxy`, and `HTTP_PROXY`… for what they start), and it opens
-//! their connections through [`mdm_engine::net`], bound as MDM's own are, with the chosen DNS. The
-//! same code holds them on Windows, Linux and macOS, IPv4 and IPv6: the binding is the engine's.
+//! their connections through [`mdm_engine::net`], bound as MDM's own are, with the chosen DNS,
+//! IPv4 and IPv6: the binding is the engine's.
 //!
 //! - It listens on 127.0.0.1 only, on a port the system picks (no firewall asks about a socket
 //!   that only this computer can reach), and wants a password of its own (Basic proxy

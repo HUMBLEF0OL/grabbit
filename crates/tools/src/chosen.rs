@@ -247,11 +247,7 @@ mod tests {
     #[test]
     fn chosen_programs_are_kept_and_forgotten() {
         let dir = tempfile::tempdir().unwrap();
-        let exe = dir.path().join(if cfg!(windows) {
-            "ffmpeg.exe"
-        } else {
-            "ffmpeg"
-        });
+        let exe = dir.path().join("ffmpeg.exe");
         std::fs::write(&exe, b"x").unwrap();
         let p = Programs {
             ytdlp: None,

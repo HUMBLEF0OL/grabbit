@@ -1,10 +1,8 @@
 //! The icon before a file's name, in every list that shows files (the download list, Download
 //! File Info, Properties, a torrent's files, the Scheduler's): the system's own icon for its type,
-//! the one its file manager shows. Windows' shell (win32.rs), macOS Finder (unix.rs), the Linux
-//! desktop's icon theme (unix.rs, xdgicons.rs). Each type is looked up once per pixel size, on a
+//! the one its file manager shows: Windows' shell (win32.rs). Each type is looked up once per pixel size, on a
 //! background thread (a type's first lookup can load its shell handler), and kept. Until its
-//! icon is ready, and wherever the system has none (a Linux desktop without an icon theme), a
-//! Tango icon the app carries is drawn (public domain, assets/icons/tango/).
+//! icon is ready, and wherever the system has none, a Tango icon the app carries is drawn (public domain, assets/icons/tango/).
 
 use std::collections::HashMap;
 use std::sync::mpsc::{Sender, channel};
@@ -47,15 +45,11 @@ impl What {
 /// An icon as a system gives it.
 pub enum Native {
     /// `side` × `side` RGBA pixels, alpha premultiplied or not; any size, fitted here.
-    #[cfg_attr(target_os = "linux", allow(dead_code))]
     Rgba {
         side: u32,
         rgba: Vec<u8>,
         premultiplied: bool,
     },
-    /// A file of the desktop's icon theme (SVG or PNG), drawn through egui's image loaders.
-    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-    File(std::path::PathBuf),
 }
 
 /// The system's icon for `what` at about `px` pixels (None: it has none).
@@ -64,14 +58,7 @@ pub(crate) fn system(what: &What, px: u32) -> Option<Native> {
     if std::env::var_os("MDM_SYSTEM_ICONS").is_some_and(|v| v == "0") {
         return None;
     }
-    #[cfg(windows)]
-    {
-        crate::win32::file_icon(what, px)
-    }
-    #[cfg(unix)]
-    {
-        crate::unix::file_icon(what, px)
-    }
+    crate::win32::file_icon(what, px)
 }
 
 /// The extension of `name` (after its last dot, lowercase), if it has one.
@@ -91,7 +78,6 @@ fn extension(name: &str) -> Option<String> {
 #[derive(Clone)]
 enum Shown {
     Texture(egui::TextureHandle),
-    Image(ImageSource<'static>),
     /// The system has none: the Tango icon.
     Fallback,
 }
@@ -128,7 +114,7 @@ fn shown(ctx: &egui::Context, what: &What, px: u32) -> Option<Shown> {
     c.icons
         .iter()
         .filter_map(|((w, p), s)| match s {
-            Some(s @ (Shown::Texture(_) | Shown::Image(_))) if w == what => Some((*p, s)),
+            Some(s @ Shown::Texture(_)) if w == what => Some((*p, s)),
             _ => None,
         })
         .min_by_key(|(p, _)| p.abs_diff(px))
@@ -171,14 +157,6 @@ fn to_shown(ctx: &egui::Context, what: &What, px: u32, got: Option<Native>) -> S
             let name = format!("file-icon-{what:?}-{px}");
             Shown::Texture(ctx.load_texture(name, img, egui::TextureOptions::LINEAR))
         }
-        Some(Native::File(path)) => match std::fs::read(&path) {
-            Ok(bytes) => Shown::Image(ImageSource::Bytes {
-                // The file's own name ends the address: the loaders go by its extension.
-                uri: format!("bytes://mdm/file-icon/system/{}", path.display()).into(),
-                bytes: egui::load::Bytes::Shared(bytes.into()),
-            }),
-            Err(_) => Shown::Fallback,
-        },
         _ => Shown::Fallback,
     }
 }
@@ -233,7 +211,6 @@ pub fn paint(ui: &Ui, painter: &Painter, kind: Kind, rc: Rect) {
             let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
             painter.image(t.id(), rc, uv, Color32::WHITE);
         }
-        Some(Shown::Image(src)) => paint_source(ui, painter, src, rc),
         _ => paint_source(ui, painter, fallback(&what, px), rc),
     }
 }
@@ -509,8 +486,7 @@ mod tests {
         assert!(shown(&ctx, &none, 16).is_none());
     }
 
-    /// This system's own icons, for real (Windows' shell here; macOS Finder and the Linux
-    /// desktop's theme on their CI runners, where one is installed). Every type at 16 and 32
+    /// This system's own icons, for real (Windows' shell). Every type at 16 and 32
     /// pixels, the sizes at 100 %; larger ones as the system has them (a CI runner's session,
     /// without a desktop, may lack the larger lists). What is missing is named.
     #[test]
@@ -539,12 +515,11 @@ mod tests {
                             small.push(format!("{what:?} at {px}: {side}"));
                         }
                     }
-                    Some(Native::File(path)) => assert!(path.is_file(), "{path:?}"),
                     None => missing.push((what.clone(), px)),
                 }
             }
         }
-        if cfg!(any(windows, target_os = "macos")) {
+        {
             let needed: Vec<_> = missing
                 .iter()
                 .filter(|(_, px)| *px == 16 || *px == 32)

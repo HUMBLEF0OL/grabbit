@@ -59,40 +59,25 @@ mod torrentfiles;
 mod torrents;
 mod transfer;
 mod tray;
-#[cfg(unix)]
-mod unix;
 mod update;
 mod videodlg;
 mod wake;
 mod whereis;
-#[cfg(windows)]
 mod win32;
 mod winui;
-#[cfg(any(target_os = "linux", test))]
-mod xdgicons;
 
 /// The main window's title (dialogs find their owner by it).
 pub const MAIN_TITLE: &str = concat!("Mister Download Manager ", env!("CARGO_PKG_VERSION"));
 
 /// The app icon (art/, made with ChatGPT; sizes by tools/icon/build_icon.py), for windows that
 /// show one as IDM's do: the 256 px size, which the system scales down for the title bar, the
-/// taskbar and Alt+Tab at any display scaling. On macOS none: the Dock keeps the app bundle's own
-/// icon (AppIcon.icns, every size, tools/installer/build-macos.sh), which an icon set at run
-/// time would replace.
+/// taskbar and Alt+Tab at any display scaling.
 pub fn app_icon() -> std::sync::Arc<egui::IconData> {
-    if cfg!(target_os = "macos") {
-        // eframe takes an empty icon as "none" (AppTitleIconSetter).
-        static NONE: std::sync::OnceLock<std::sync::Arc<egui::IconData>> =
-            std::sync::OnceLock::new();
-        return NONE.get_or_init(Default::default).clone();
-    }
     app_picture()
 }
 
-/// The app icon's picture, the 256 px size, on every system: what MDM draws or hands over as a
-/// picture (the tray's icon, macOS's menu bar item; the crash report window's heading). Not
-/// [`app_icon`], empty on macOS: an empty picture can't be made into the menu bar item, so macOS
-/// had none and closing the window quit (#529).
+/// The app icon's picture, the 256 px size: what MDM draws or hands over as a picture (the tray's
+/// icon; the crash report window's heading).
 pub fn app_picture() -> std::sync::Arc<egui::IconData> {
     static ICON: std::sync::OnceLock<std::sync::Arc<egui::IconData>> = std::sync::OnceLock::new();
     ICON.get_or_init(|| {
@@ -185,45 +170,26 @@ pub enum Start {
     /// queues and the Scheduler running. It stays in the notification area once MDM's icon is
     /// there, or shows minimized if none comes (app.rs `at_login`, decided there alone).
     Session,
-    /// Started with the session where a window can't be hidden (Wayland): minimized.
-    Minimized,
 }
 
-/// How a start shows the main window: `at_login` when the startup entry started it, `can_hide`
-/// where a window can be hidden (not on Wayland).
-fn start_mode(at_login: bool, can_hide: bool) -> Start {
-    match (at_login, can_hide) {
-        (false, _) => Start::Shown,
-        (true, true) => Start::Session,
-        (true, false) => Start::Minimized,
+/// How a start shows the main window: `at_login` when the startup entry started it.
+fn start_mode(at_login: bool) -> Start {
+    if at_login {
+        Start::Session
+    } else {
+        Start::Shown
     }
-}
-
-/// Whether a window can be hidden here (Wayland can't hide one: it can only be minimized).
-fn can_hide() -> bool {
-    #[cfg(target_os = "linux")]
-    return !unix::on_wayland();
-    #[cfg(not(target_os = "linux"))]
-    true
-}
-
-/// Whether the main window can wait hidden in the notification area (Options' tooltip): a tray
-/// shows MDM's icon (Linux: a tray host is there, #59) and the window can be hidden.
-pub fn can_start_in_tray() -> bool {
-    can_hide() && tray::available()
 }
 
 fn main() -> std::process::ExitCode {
     renderer::mark_start();
     // PAC's myIpAddress from the routing table, not a UDP socket (a firewall prompt, #35).
-    #[cfg(windows)]
     mdm_engine::net::set_source_lookup(win32::source_address);
     // misterdownloadmanager-cli's commands (crates/cli): its launcher starts this program for
     // them. Nothing of the app's runs: no window, instance, crash monitor or crash log.
     if let Some(cli) = mdm_cli::launched(std::env::args_os().collect()) {
         // A windowed program has no console: the launcher's, unless the output goes to a file
-        // or a pipe. On Linux and macOS the launcher became this process, terminal and all.
-        #[cfg(windows)]
+        // or a pipe.
         win32::cli_console(cli.launcher);
         // Downloads go through the debrid accounts of Options → Accounts (#44).
         return mdm_cli::main_with(cli.args, Some(&debrid::CliAccounts));
@@ -299,17 +265,10 @@ fn app() -> eframe::Result {
         let _ = mdm_ipc::send_waiting(&cmd.unwrap_or_default(), std::time::Duration::from_secs(10));
         return Ok(());
     };
-    #[cfg(windows)]
     win32::mark_running();
     // Started with the session (#226): in the notification area, not in front.
-    let start = start_mode(cmd.as_ref().is_some_and(|c| c.startup), can_hide());
-    // This launch is MDM: its fonts are looked up while the rest starts (only the instance pays
-    // for them, not a launch that hands its command over).
-    theme::prepare_fonts();
-    // And the file icons' themes (Linux: gsettings), off the window's thread.
-    #[cfg(target_os = "linux")]
-    unix::prepare_file_icons();
-    // What an earlier update set aside (old programs, a Mac's old app, downloaded files).
+    let start = start_mode(cmd.as_ref().is_some_and(|c| c.startup));
+    // What an earlier update set aside (old programs, downloaded files).
     update::tidy();
     // The command channel opens now, before the window: the browser's host that started MDM
     // waits for it, and what arrives meanwhile is handled at the first frame. Without it the
@@ -351,28 +310,9 @@ fn app() -> eframe::Result {
             crash::session("en", loaded.settings.dark_mode_support),
         );
     }
-    // Linux: the libraries the window loads when it opens (#265). Without them it can't open
-    // (winit stopped at start): MDM says what's missing and how to install it.
-    #[cfg(target_os = "linux")]
-    {
-        let ws = unix::window_system();
-        if !ws.missing.is_empty() {
-            crash::clean_exit();
-            unix::tell_window_failed(&unix::missing_text(&ws.missing, true));
-            std::process::exit(1);
-        }
-        if !ws.x11_missing.is_empty() {
-            let text = unix::missing_text(&ws.x11_missing, false);
-            eprintln!("{text}");
-            tracing::warn!("{text}");
-        }
-    }
     // Secrets from before (sealed, or kept as they were) go to the system's keychain now; the
     // list is saved with their references once it holds them (secrets.rs, #44).
     let _ = loaded.settings.for_disk();
-    #[cfg(unix)]
-    use unix::on_a_screen;
-    #[cfg(windows)]
     use win32::on_a_screen;
     let saved = loaded
         .settings
@@ -408,13 +348,9 @@ fn app() -> eframe::Result {
     );
     let options = || eframe::NativeOptions {
         viewport: viewport.clone(),
-        // Linux: X11 (XWayland) over Wayland when both are there, so menus open where clicked.
-        #[cfg(target_os = "linux")]
-        event_loop_builder: unix::event_loop_hook(),
         ..Default::default()
     };
     let result = renderer::run("misterdownloadmanager", &plan, options, move |cc| {
-        #[cfg(windows)]
         win32::set_main_window(cc);
         scale::start(&cc.egui_ctx, z);
         let _ = window.set(cc.egui_ctx.clone());
@@ -429,14 +365,12 @@ fn app() -> eframe::Result {
 mod tests {
     use super::{Start, start_mode};
 
-    /// Started with the session (#226): hidden (the tray decided by the app), or minimized
-    /// where a window can't be hidden; a start by the user shows the window.
+    /// Started with the session (#226): hidden (the tray decided by the app); a start by the
+    /// user shows the window.
     #[test]
     fn a_start_with_the_session_waits_in_the_tray() {
-        assert_eq!(start_mode(true, true), Start::Session);
-        assert_eq!(start_mode(true, false), Start::Minimized);
-        assert_eq!(start_mode(false, true), Start::Shown);
-        assert_eq!(start_mode(false, false), Start::Shown);
+        assert_eq!(start_mode(true), Start::Session);
+        assert_eq!(start_mode(false), Start::Shown);
     }
 
     /// An off-screen run neither reads the clipboard (Add URL, Batch, the clipboard monitor…)

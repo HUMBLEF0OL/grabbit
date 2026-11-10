@@ -17,23 +17,12 @@ pub enum Install {
     PortableZip,
     /// Windows, the plain zip.
     PlainZip,
-    /// macOS, the app from the .dmg.
-    Dmg,
-    AppImage,
-    Deb,
-    Rpm,
-    /// Linux, the plain programs.
-    TarGz,
-    /// Linux, a package of another package manager (pacman, …): that package manager updates
-    /// it, never MDM.
-    System,
     /// Built here: never updated from a release.
     Source,
 }
 
 impl Install {
-    /// This copy's, from where its program is (found once: on Linux it asks the package
-    /// managers).
+    /// This copy's, from where its program is (found once).
     pub fn detect() -> Install {
         static FOUND: std::sync::OnceLock<Install> = std::sync::OnceLock::new();
         *FOUND.get_or_init(Install::find)
@@ -50,33 +39,12 @@ impl Install {
             return Install::Source;
         };
         let dir = exe.parent().unwrap_or(Path::new("."));
-        if cfg!(windows) {
-            // The installer leaves its uninstaller next to the program; the zips don't.
-            return if dir.join("unins000.exe").is_file() {
-                Install::Installer
-            } else {
-                Install::PlainZip
-            };
+        // The installer leaves its uninstaller next to the program; the zips don't.
+        if dir.join("unins000.exe").is_file() {
+            Install::Installer
+        } else {
+            Install::PlainZip
         }
-        if cfg!(target_os = "macos") {
-            return if app_bundle(&exe).is_some() {
-                Install::Dmg
-            } else {
-                Install::Source
-            };
-        }
-        if std::env::var_os("APPIMAGE").is_some() {
-            return Install::AppImage;
-        }
-        linux_package(&exe, &|tool, args| {
-            std::process::Command::new(tool)
-                .args(args)
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status()
-                .is_ok_and(|s| s.success())
-        })
     }
 
     /// As the bug report form words it (.github/ISSUE_TEMPLATE/bug.yml, "Installed with").
@@ -85,85 +53,28 @@ impl Install {
             Install::Installer => "The installer (setup.exe)",
             Install::PortableZip => "The portable zip",
             Install::PlainZip => "The plain zip",
-            Install::Dmg => "The .dmg",
-            Install::AppImage => "The AppImage",
-            Install::Deb => "The .deb",
-            Install::Rpm => "The .rpm",
-            Install::TarGz => "The .tar.gz",
-            Install::System => "Another package manager",
             Install::Source => "Built from source",
         }
     }
 
-    pub const ALL: [Install; 10] = [
+    pub const ALL: [Install; 4] = [
         Install::Installer,
         Install::PortableZip,
         Install::PlainZip,
-        Install::Dmg,
-        Install::AppImage,
-        Install::Deb,
-        Install::Rpm,
-        Install::TarGz,
-        Install::System,
         Install::Source,
     ];
 
-    /// The release files of `version` that replace this kind of copy (the names
-    /// tools/installer/*.sh and build.ps1 give them), the one to take first first. The Linux files
-    /// are named without "-experimental" from the release after 0.2.4 (build-linux.sh), and the
-    /// macOS ones may lose it too: the plain name is looked for first, then the `…-experimental`
-    /// one of the releases before. None for a build from source.
+    /// The release file of `version` that replaces this kind of copy (the names build.ps1 gives
+    /// them). None for a build from source.
     pub fn assets(self, version: &str) -> Vec<String> {
-        let (tail, ext) = match self {
-            Install::Installer => ("setup", ".exe"),
-            Install::PortableZip => ("portable", ".zip"),
-            Install::PlainZip => ("x64", ".zip"),
-            // One app per processor (tools/installer/build-macos.sh, #25). 0.2.4 and older look
-            // for the universal one, find it missing and offer the release's page instead.
-            Install::Dmg if cfg!(target_arch = "aarch64") => ("macos-arm64", ".dmg"),
-            Install::Dmg => ("macos-x86_64", ".dmg"),
-            Install::AppImage => ("linux-x86_64", ".AppImage"),
-            Install::Deb => ("linux-x86_64", ".deb"),
-            Install::Rpm => ("linux-x86_64", ".rpm"),
-            Install::TarGz => ("linux-x86_64", ".tar.gz"),
-            Install::System | Install::Source => return Vec::new(),
+        let tail = match self {
+            Install::Installer => "setup.exe",
+            Install::PortableZip => "portable.zip",
+            Install::PlainZip => "x64.zip",
+            Install::Source => return Vec::new(),
         };
-        let name = |tail: &str| format!("MisterDownloadManager-{version}-{tail}{ext}");
-        match self {
-            Install::Installer | Install::PortableZip | Install::PlainZip => vec![name(tail)],
-            _ => vec![name(tail), name(&format!("{tail}-experimental"))],
-        }
+        vec![format!("MisterDownloadManager-{version}-{tail}")]
     }
-}
-
-/// Linux: which package manager's package `exe` is, asking each whether it owns the file
-/// (`owns(program, arguments)`: it ran and said yes). The .deb's (dpkg), the .rpm's (rpm), or
-/// another's (pacman; a program in /usr/bin none of them owns): those MDM leaves to the system's
-/// updates. Else the plain programs (.tar.gz), which MDM replaces itself. A path that isn't
-/// UTF-8 is never one of the packages'.
-fn linux_package(exe: &Path, owns: &dyn Fn(&str, &[&str]) -> bool) -> Install {
-    let Some(path) = exe.to_str() else {
-        return Install::TarGz;
-    };
-    if owns("dpkg-query", &["--search", path]) {
-        Install::Deb
-    } else if owns("rpm", &["--query", "--file", path]) {
-        Install::Rpm
-    } else if owns("pacman", &["--query", "--owns", path])
-        || exe.parent() == Some(Path::new("/usr/bin"))
-    {
-        Install::System
-    } else {
-        Install::TarGz
-    }
-}
-
-/// The `.app` bundle a macOS program runs from (`X.app/Contents/MacOS/program`).
-pub fn app_bundle(exe: &Path) -> Option<PathBuf> {
-    let bundle = exe.parent()?.parent()?.parent()?;
-    (bundle.extension().is_some_and(|e| e == "app")
-        && exe.parent()?.file_name().is_some_and(|n| n == "MacOS"))
-    .then(|| bundle.to_owned())
 }
 
 /// How far a download is: bytes so far, and of how many (0 while unknown).
@@ -425,113 +336,9 @@ Connection: close
             Install::PlainZip.assets("0.2.2"),
             ["MisterDownloadManager-0.2.2-x64.zip"]
         );
-        // Linux and macOS: the plain name first, then the one up to 0.2.x.
-        for (install, ext) in [
-            (Install::TarGz, ".tar.gz"),
-            (Install::AppImage, ".AppImage"),
-            (Install::Deb, ".deb"),
-            (Install::Rpm, ".rpm"),
-        ] {
-            assert_eq!(
-                install.assets("1.0.0"),
-                [
-                    format!("MisterDownloadManager-1.0.0-linux-x86_64{ext}"),
-                    format!("MisterDownloadManager-1.0.0-linux-x86_64-experimental{ext}"),
-                ]
-            );
-        }
-        // The .dmg for the Mac's own processor.
-        let arch = if cfg!(target_arch = "aarch64") {
-            "arm64"
-        } else {
-            "x86_64"
-        };
-        assert_eq!(
-            Install::Dmg.assets("1.0.0"),
-            [
-                format!("MisterDownloadManager-1.0.0-macos-{arch}.dmg"),
-                format!("MisterDownloadManager-1.0.0-macos-{arch}-experimental.dmg"),
-            ]
-        );
         assert!(Install::Source.assets("1.0.0").is_empty());
         let labels: std::collections::HashSet<_> = Install::ALL.iter().map(|i| i.label()).collect();
         assert_eq!(labels.len(), Install::ALL.len());
-    }
-
-    /// The Linux names looked for first are the ones tools/installer/build-linux.sh gives its
-    /// files ("$name" plus the extension), so a release and Update now agree.
-    #[test]
-    fn the_linux_names_are_build_linux_sh_s() {
-        let script = include_str!("../../../tools/installer/build-linux.sh").replace("\r\n", "\n");
-        assert!(
-            script.contains("\nname=\"MisterDownloadManager-$version-linux-x86_64\"\n"),
-            "build-linux.sh names its files differently"
-        );
-        for (install, ext) in [
-            (Install::TarGz, ".tar.gz"),
-            (Install::AppImage, ".AppImage"),
-            (Install::Deb, ".deb"),
-            (Install::Rpm, ".rpm"),
-        ] {
-            assert!(
-                script.contains(&format!("\"$dist/$name{ext}\"")),
-                "build-linux.sh makes no {ext}"
-            );
-            assert_eq!(
-                install.assets("1.0.0")[0],
-                format!("MisterDownloadManager-1.0.0-linux-x86_64{ext}")
-            );
-        }
-    }
-
-    /// Linux: the package manager that owns the program decides; the plain programs elsewhere.
-    #[test]
-    fn a_linux_copy_knows_its_package_manager() {
-        let owner = |who: &'static str| {
-            move |tool: &str, args: &[&str]| {
-                assert_eq!(args.last(), Some(&"/usr/bin/misterdownloadmanager"));
-                tool == who
-            }
-        };
-        let exe = Path::new("/usr/bin/misterdownloadmanager");
-        assert_eq!(linux_package(exe, &owner("dpkg-query")), Install::Deb);
-        assert_eq!(linux_package(exe, &owner("rpm")), Install::Rpm);
-        // An Arch package (pacman), or in /usr/bin with no package manager MDM knows: the
-        // system's.
-        assert_eq!(linux_package(exe, &owner("pacman")), Install::System);
-        assert_eq!(linux_package(exe, &owner("none")), Install::System);
-        // On Debian with rpm's tools installed too: still the .deb's.
-        let both = |tool: &str, _: &[&str]| tool == "dpkg-query" || tool == "rpm";
-        assert_eq!(linux_package(exe, &both), Install::Deb);
-        // The .tar.gz unpacked in the home folder, /opt or /usr/local: MDM's own to replace.
-        let nobody = |_: &str, _: &[&str]| false;
-        let home = Path::new("/home/me/MisterDownloadManager/misterdownloadmanager");
-        assert_eq!(linux_package(home, &nobody), Install::TarGz);
-        assert_eq!(
-            linux_package(Path::new("/opt/mdm/misterdownloadmanager"), &nobody),
-            Install::TarGz
-        );
-        assert_eq!(
-            linux_package(Path::new("/usr/local/bin/misterdownloadmanager"), &nobody),
-            Install::TarGz
-        );
-        // MDM updates neither another package manager's copy nor a build of its own.
-        assert!(Install::System.assets("1.0.0").is_empty());
-    }
-
-    #[test]
-    fn bundles_on_a_mac() {
-        let exe = Path::new(
-            "/Applications/Mister Download Manager.app/Contents/MacOS/misterdownloadmanager",
-        );
-        assert_eq!(
-            app_bundle(exe).as_deref(),
-            Some(Path::new("/Applications/Mister Download Manager.app"))
-        );
-        assert_eq!(
-            app_bundle(Path::new("/usr/bin/misterdownloadmanager")),
-            None
-        );
     }
 
     #[test]

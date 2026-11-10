@@ -110,19 +110,12 @@ async fn the_computer_is_woken_for_the_queue_and_kept_awake_while_it_runs() {
             assert!(set.contains(&wake), "{set:?} is not for {wake} UTC");
             assert!(set.contains("Main download queue"), "{set}");
             // Windows: the timer itself goes off then (the computer, awake, just goes on).
-            #[cfg(windows)]
             wait_for(
                 &mut app,
                 &data,
                 "wake: the wake timer went off",
                 Duration::from_secs(40),
             );
-            // Linux, where users may set the wake alarm: the chip has it.
-            #[cfg(target_os = "linux")]
-            if std::fs::OpenOptions::new()
-                .write(true)
-                .open("/sys/class/rtc/rtc0/wakealarm")
-                .is_ok()
             {
                 let alarm = std::fs::read_to_string("/sys/class/rtc/rtc0/wakealarm").unwrap();
                 println!("wakealarm: {}", alarm.trim());

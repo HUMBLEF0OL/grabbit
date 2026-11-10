@@ -43,13 +43,8 @@ native-symbols = ["minidump-unwind/debuginfo"]
 
 [dev-dependencies]
 tempfile.workspace = true
-
 # examples/crashy.rs (the end-to-end test's crashing program) names its own threads.
-[target.'cfg(windows)'.dev-dependencies]
 windows-sys.workspace = true
-
-[target.'cfg(unix)'.dev-dependencies]
-libc = "0.2.191"
 
 [lints]
 workspace = true

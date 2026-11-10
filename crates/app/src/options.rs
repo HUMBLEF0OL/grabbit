@@ -123,7 +123,6 @@ fn cookie_browser_at(s: &Settings) -> usize {
             "Microsoft Edge" => "edge",
             "Brave Browser" => "brave",
             "Opera" => "opera",
-            "Apple Safari" => "safari",
             _ => return None,
         };
         browsers.iter().position(|b| *b == ytdlp)
@@ -479,26 +478,18 @@ impl OptionsDialog {
                 crate::i18n::mark("Keep running when closing the window"),
             ),
         ];
-        // Greyed where no tray shows MDM's icon (some Linux desktops): nothing could bring the
-        // window back from there.
-        let tray = crate::tray::available();
         for (i, (y, v, label)) in checks.into_iter().enumerate() {
             // Portable: nothing is written to the registry, so no start with Windows. Manifest 2
             // extensions: an IDM-era Chrome policy with no meaning for MDM's extension (MV3):
             // shown as IDM has it, greyed (D-021).
-            let enabled = !(portable && i == 0) && i != 2 && (i < 5 || tray);
+            let enabled = !(portable && i == 0) && i != 2;
             let check = winui::checkbox_light(ui, o + vec2(30.0, y), v, label, enabled);
             // Where a start with the session leaves the window (#226).
             if i == 0 && enabled && check.hovered() {
-                check.on_hover_text(if crate::can_start_in_tray() {
+                check.on_hover_text(
                     // i18n: tooltip of "Launch Mister Download Manager on startup": started with the computer, MDM's window stays hidden, its icon in the notification area (system tray)
-                    crate::i18n::t("Started with the computer, it waits in the notification area")
-                } else {
-                    // i18n: the same tooltip where no notification area (system tray) shows MDM's icon (some Linux desktops): its window starts minimized instead
-                    crate::i18n::t(
-                        "Started with the computer, it starts minimized: no notification area shows its icon here",
-                    )
-                });
+                    crate::i18n::t("Started with the computer, it waits in the notification area"),
+                );
             } else if i == 6 && check.hovered() {
                 // i18n: tooltip of the close-setting: checked keeps MDM running when the window closes, in the notification area when available or else the taskbar; downloads continue; unchecked closing quits
                 check.on_hover_text(crate::i18n::t(
@@ -1720,7 +1711,7 @@ impl OptionsDialog {
                         if vault.unread(&format!("debrid/{}", a.id))
                             && vault.kept() == crate::secrets::Kept::Locked
                         {
-                            // i18n: Options → Accounts: the account's sign-in is in the system's keyring (Linux), which is locked now; MDM never unlocks it
+                            // i18n: Options → Accounts: the account's sign-in is in the system's keyring, which is locked now; MDM never unlocks it
                             crate::i18n::t("in the locked keyring").to_owned()
                         } else {
                             // i18n: Options → Accounts: the account's sign-in can't be read (signed out, or the settings came from another computer)
@@ -2063,8 +2054,8 @@ impl OptionsDialog {
         }
         // What to expect: Chrome-family browsers on Windows lock their cookies (Chrome 127 and
         // later's app-bound encryption); yt-dlp says so when it meets it, Options says so first.
-        let chromium = on && !matches!(self.s.video_cookies.as_str(), "firefox" | "safari");
-        let (note, ink) = if cfg!(windows) && chromium {
+        let chromium = on && self.s.video_cookies != "firefox";
+        let (note, ink) = if chromium {
             (
                 // i18n: Options → Sites Logins → Cookies for video sites, a Chrome-like browser chosen on Windows
                 crate::i18n::t(
@@ -2115,13 +2106,8 @@ impl OptionsDialog {
             ui,
             o + vec2(30.0, 134.0),
             &mut s.extract_delete,
-            if cfg!(windows) {
-                // i18n: Options → Archives check box
-                "Then move the archives to the Recycle Bin"
-            } else {
-                // i18n: Options → Archives check box (Linux and macOS)
-                "Then move the archives to the Trash"
-            },
+            // i18n: Options → Archives check box
+            "Then move the archives to the Recycle Bin",
             true,
         );
         text(
@@ -3515,20 +3501,14 @@ impl OptionsDialog {
 
 /// Proxy / Socks → Get System: Windows' own proxy (host, port), if one is set.
 fn system_proxy() -> Option<(String, String)> {
-    #[cfg(windows)]
-    return crate::win32::system_proxy();
-    #[cfg(not(windows))]
-    None
+    crate::win32::system_proxy()
 }
 
 pub fn play_sound(file: &str) {
     if crate::offscreen() {
         return;
     }
-    #[cfg(windows)]
     crate::win32::play_sound(file);
-    #[cfg(unix)]
-    crate::unix::play_sound(file);
 }
 
 /// A folder as the dialogs show it: the full path, as IDM's Options shows it, ending in the
@@ -4521,44 +4501,21 @@ fn kept_text(kept: crate::secrets::Kept) -> Option<&'static str> {
     use crate::secrets::Kept;
     Some(match kept {
         Kept::Looking => return None,
-        #[cfg(windows)]
         Kept::Keychain => {
             // i18n: Options → Accounts: where the debrid accounts' sign-ins and the other passwords are kept (Windows' own Credential Manager, in Control Panel)
             crate::i18n::mark("Sign-ins and passwords are kept in Windows Credential Manager.")
         }
-        #[cfg(target_os = "macos")]
-        Kept::Keychain => {
-            // i18n: Options → Accounts: where the debrid accounts' sign-ins and the other passwords are kept (the macOS login keychain)
-            crate::i18n::mark("Sign-ins and passwords are kept in the macOS keychain.")
-        }
-        #[cfg(target_os = "linux")]
-        // i18n: Options → Accounts: where the debrid accounts' sign-ins and the other passwords are kept (Linux: GNOME Keyring, KeePassXC... through the Secret Service)
-        Kept::Keychain => crate::i18n::mark(
-            "Sign-ins and passwords are kept in the system keyring (Secret Service).",
-        ),
-        #[cfg(windows)]
         // i18n: Options → Accounts: a portable copy (it writes nothing outside its folder) keeps the sign-ins in its own settings, encrypted so that only this Windows account can read them
         Kept::Portable => crate::i18n::mark(
             "This portable copy keeps sign-ins and passwords in its own settings, encrypted for your Windows account.",
         ),
-        #[cfg(not(windows))]
-        // i18n: Options → Accounts: a portable copy (it writes nothing outside its folder) keeps the sign-ins in its own settings folder, which only the user's account may read
-        Kept::Portable => crate::i18n::mark(
-            "This portable copy keeps sign-ins and passwords in its own settings, which only you can read.",
-        ),
-        // i18n: Options → Accounts (Linux): the system keyring is locked (MDM never unlocks it: that would ask for its password), so the sign-ins stay in MDM's settings folder, which only the user's account may read
+        // i18n: Options → Accounts: the system keyring is locked (MDM never unlocks it: that would ask for its password), so the sign-ins stay in MDM's settings folder, which only the user's account may read
         Kept::Locked => crate::i18n::mark(
             "The system keyring is locked and MDM doesn't unlock it, so sign-ins and passwords are kept in MDM's settings, which only you can read.",
         ),
-        #[cfg(windows)]
         // i18n: Options → Accounts: Windows Credential Manager didn't answer, so the sign-ins stay in MDM's settings, encrypted so that only this Windows account can read them
         Kept::Missing => crate::i18n::mark(
             "Windows Credential Manager didn't answer, so sign-ins and passwords are kept in MDM's settings, encrypted for your Windows account.",
-        ),
-        #[cfg(not(windows))]
-        // i18n: Options → Accounts: no system keyring/keychain answered (none runs, e.g. a desktop without one), so the sign-ins stay in MDM's settings folder, which only the user's account may read
-        Kept::Missing => crate::i18n::mark(
-            "No system keyring answered, so sign-ins and passwords are kept in MDM's settings, which only you can read.",
         ),
     })
 }

@@ -1236,15 +1236,13 @@ mod sealed_logins {
 /// One secret on disk (the proxy's password, a debrid account's credential, #44). In the
 /// system's keychain once it holds it: the settings then keep its reference (secrets.rs,
 /// `keychain:…`, written by [`Settings::for_disk`]). Until then, and where no keychain is used:
-/// Windows seals it with DPAPI, for this account on this computer; Linux and macOS keep it as it
-/// is, in the data folder only its owner may read (mdm_ipc::private_dir). A secret that can't be
+/// it is sealed with DPAPI, for this account on this computer. A secret that can't be
 /// opened (the file copied to another account) reads as none: sign in again.
 pub(crate) mod sealed {
     use serde::{Deserialize, Deserializer, Serializer};
 
     use crate::secrets::REF;
 
-    #[cfg(windows)]
     const SEALED: &str = "dpapi:";
     /// Before a secret kept as it is that would read as a reference (`keychain:…`), or as one
     /// of these.
@@ -1262,7 +1260,6 @@ pub(crate) mod sealed {
     }
 
     pub(crate) fn seal(pw: &str) -> String {
-        #[cfg(windows)]
         if !pw.is_empty()
             && let Some(sealed) = crate::win32::protect(pw)
         {
@@ -1297,7 +1294,6 @@ pub(crate) mod sealed {
         if let Some(plain) = escaped(stored) {
             return plain.to_owned();
         }
-        #[cfg(windows)]
         if let Some(b64) = stored.strip_prefix(SEALED) {
             use base64::Engine as _;
             return base64::engine::general_purpose::STANDARD
@@ -1324,9 +1320,8 @@ pub(crate) mod sealed {
                 ..Default::default()
             };
             let json = serde_json::to_string(&s).unwrap();
-            if cfg!(windows) {
-                assert!(!json.contains("proxy-s3cret") && !json.contains("rd-s3cret"));
-            }
+            assert!(!json.contains("proxy-s3cret") && !json.contains("rd-s3cret"));
+
             let back: crate::settings::Settings = serde_json::from_str(&json).unwrap();
             assert_eq!(back.proxy_pass, "proxy-s3cret");
             assert!(back.debrid_accounts[0].account().is_some());
@@ -1337,12 +1332,10 @@ pub(crate) mod sealed {
             let old: crate::settings::Settings =
                 serde_json::from_value(serde_json::json!({ "proxy_pass": "plain" })).unwrap();
             assert_eq!(old.proxy_pass, "plain");
-            if cfg!(windows) {
-                let foreign =
-                    serde_json::json!({ "debrid_accounts": [{ "id": 2, "secret": "dpapi:AAAA" }] });
-                let s: crate::settings::Settings = serde_json::from_value(foreign).unwrap();
-                assert!(s.debrid_accounts[0].account().is_none());
-            }
+            let foreign =
+                serde_json::json!({ "debrid_accounts": [{ "id": 2, "secret": "dpapi:AAAA" }] });
+            let s: crate::settings::Settings = serde_json::from_value(foreign).unwrap();
+            assert!(s.debrid_accounts[0].account().is_none());
         }
 
         #[test]
@@ -1352,9 +1345,8 @@ pub(crate) mod sealed {
                 ..Default::default()
             };
             let json = serde_json::to_string(&s).unwrap();
-            if cfg!(windows) {
-                assert!(!json.contains("s3cret") && json.contains("dpapi:"));
-            }
+            assert!(!json.contains("s3cret") && json.contains("dpapi:"));
+
             let back: crate::settings::Settings = serde_json::from_str(&json).unwrap();
             assert_eq!(back.site_logins, s.site_logins);
             // A list from before (plain) still reads.

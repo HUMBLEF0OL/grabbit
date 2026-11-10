@@ -141,17 +141,11 @@ pub fn monitor_main(m: MonitorArgs) -> eframe::Result {
 }
 
 fn alive(pid: u32) -> bool {
-    #[cfg(windows)]
-    return crate::win32::process_alive(pid);
-    #[cfg(unix)]
-    return crate::unix::process_alive(pid);
+    crate::win32::process_alive(pid)
 }
 
 fn end(pid: u32) -> bool {
-    #[cfg(windows)]
-    return crate::win32::end_process(pid);
-    #[cfg(unix)]
-    return crate::unix::end_process(pid);
+    crate::win32::end_process(pid)
 }
 
 struct Job {
@@ -322,7 +316,6 @@ impl eframe::App for ReportWindow {
             crate::scale::fit_window(ui.ctx(), egui::vec2(120.0, 120.0), Some(layout));
         }
         // Re-asserted as the main window does (winit can set it back from Windows' own mode).
-        #[cfg(windows)]
         crate::win32::caption_dark(
             crate::i18n::t("Mister Download Manager crash report"),
             crate::theme::dark_surface(),

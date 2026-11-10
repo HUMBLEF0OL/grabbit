@@ -53,7 +53,7 @@ pub fn tahoma_title() -> FontId {
 }
 
 /// Tahoma (IDM's dialogs), Tahoma Bold and Arial Bold from Windows' fonts folder. A family
-/// whose file isn't there (macOS, Linux) is the interface font's, so drawing with it never fails.
+/// whose file isn't there is the interface font's, so drawing with it never fails.
 pub fn install_fonts(defs: &mut egui::FontDefinitions, font_dir: Option<&std::path::Path>) {
     let ui = defs
         .families
@@ -4652,10 +4652,7 @@ pub fn opener_click(ui: &Ui, mut resp: Response) -> Response {
 /// `page` rows, a trackpad its own travel. A Ctrl wheel (zoom) or a Shift wheel (sideways)
 /// isn't counted.
 pub fn wheel_rows(ui: &Ui, row_h: f32, page: f32) -> f32 {
-    #[cfg(windows)]
     let lines = crate::win32::wheel_lines();
-    #[cfg(unix)]
-    let lines = crate::unix::wheel_lines();
     let notch = lines.unwrap_or(page);
     let rows = ui.input(|i| {
         i.events
@@ -5402,34 +5399,13 @@ pub fn icon_button_light(ui: &mut Ui, rc: Rect, id: &str, enabled: bool, tip: &s
     resp.on_hover_text(crate::i18n::t(tip))
 }
 
-/// The flat icon button with our "to the notification area" glyph, drawn in the text ink: hides
-/// a window to the tray (#63) where the system draws the title bar (Linux, macOS). `tip` is
-/// English, translated here.
-#[cfg_attr(windows, allow(dead_code))]
-pub fn to_tray_button(ui: &mut Ui, rc: Rect, id: &str, tip: &str) -> Response {
-    let resp = icon_button_light(ui, rc, id, true, tip);
-    to_tray_glyph(
-        ui.painter(),
-        rc.center().round(),
-        Stroke::new(1.0, LIGHT_TEXT()),
-        rtl(),
-    );
-    resp
-}
-
 /// Our "minimize it away to the notification area" glyph (#63; our own drawing): Minimize's dash
 /// at its height, shortened to 6 of its 10 px on the start side, and from its end a 45° arrow
 /// (shaft about 5.7 px, open head) down towards the screen's corner where the tray is. No
 /// vertical arrow and no tray box, so it reads neither as "download" nor as "restore". Right to
 /// left it is mirrored, pointing down to the left: Windows in a right-to-left language mirrors its
 /// taskbar, the notification area at the bottom left, and our caption mirrors with it. Centred on
-/// `c` in `ink`. The title bar's hide button, and the tab-row button where the system draws the
-/// title bar.
-fn to_tray_glyph(p: &Painter, c: Pos2, ink: Stroke, rtl: bool) {
-    to_tray_glyph_sized(p, c, ink, rtl, 1.0);
-}
-
-/// [`to_tray_glyph`] `size` times as large.
+/// `c` in `ink`, `size` times as large. The title bar's hide button.
 fn to_tray_glyph_sized(p: &Painter, c: Pos2, ink: Stroke, rtl: bool, size: f32) {
     let s = if rtl { -size } else { size };
     let at = |x: f32, y: f32| c + vec2(s * x, size * y);
@@ -5444,12 +5420,9 @@ fn to_tray_glyph_sized(p: &Painter, c: Pos2, ink: Stroke, rtl: bool, size: f32) 
     ));
 }
 
-/// A title bar we draw ourselves, with Windows 11's caption buttons (#63). Used on Windows,
-/// where the progress window's frame is ours (win32::progress_frame); Linux and macOS keep the
-/// system's decorations, whose title bars take no buttons of ours (and Wayland places them
-/// itself), so the hide button sits in the tab row there.
+/// A title bar we draw ourselves, with Windows 11's caption buttons (#63), where the progress
+/// window's frame is ours (win32::progress_frame).
 pub mod caption {
-    #![cfg_attr(not(windows), allow(dead_code))]
     use super::*;
 
     crate::theme::themed! {
@@ -5736,7 +5709,7 @@ pub mod caption {
     /// accessibility tree there; only our own button (Hide) is exposed. Brave and VS Code have no
     /// such TitleBar only because Chromium's own provider replaces the window's; AccessKit's
     /// doesn't, and the system menu, Alt+Space and taskbar minimize need the styles kept.
-    const SYSTEM_SPEAKS: bool = cfg!(windows);
+    const SYSTEM_SPEAKS: bool = true;
 
     thread_local! {
         /// The next title bar's Maximize as the window's frame sees it (hot, pressed): where the
@@ -5969,8 +5942,7 @@ pub mod caption {
         pub buttons: Vec<Rect>,
         pub icon: Rect,
         /// The colour along the bar's top edge (the sizing frame above the main window's bar
-        /// takes it: win32::caption_colour). Only Windows draws title bars (elsewhere unread).
-        #[cfg_attr(not(windows), allow(dead_code))]
+        /// takes it: win32::caption_colour).
         pub top: Color32,
     }
 
@@ -6159,7 +6131,7 @@ mod tests {
         assert!(found.is_empty(), "rect(r(...)) mirrors twice: {found:?}");
     }
 
-    /// `f` with a painter whose Tahoma is the interface font (as on macOS and Linux).
+    /// `f` with a painter whose Tahoma is the interface font (as where Tahoma is missing).
     fn with_painter(f: impl FnOnce(&Painter)) {
         let ctx = egui::Context::default();
         let mut defs = egui::FontDefinitions::default();

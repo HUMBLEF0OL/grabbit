@@ -323,26 +323,21 @@ fn job_checks(me: &Path) {
     assert_eq!(files, ["Şirin ğüş.mp4"]);
 
     // It falls over mid-way: the failure is told, and what it left running is ended with it
-    // (Windows: the job; elsewhere yt-dlp is one process, so there's no child to leave).
+    // (the job).
     let (p, _files, out) = download_as(me, "crash", &none, "b", "Talk");
     match &p.state {
         State::Failed(e) => assert!(e.contains("HTTP Error 500"), "{e}"),
         other => panic!("crash: {other:?}"),
     }
-    #[cfg(windows)]
-    {
-        let size = || std::fs::metadata(out.path().join("linger.log")).map_or(0, |m| m.len());
-        std::thread::sleep(Duration::from_millis(800));
-        let after = size();
-        std::thread::sleep(Duration::from_millis(1500));
-        assert_eq!(
-            size(),
-            after,
-            "the helper it left was ended with the download"
-        );
-    }
-    #[cfg(not(windows))]
-    let _ = out;
+    let size = || std::fs::metadata(out.path().join("linger.log")).map_or(0, |m| m.len());
+    std::thread::sleep(Duration::from_millis(800));
+    let after = size();
+    std::thread::sleep(Duration::from_millis(1500));
+    assert_eq!(
+        size(),
+        after,
+        "the helper it left was ended with the download"
+    );
 
     // The chosen height isn't offered (a reroute left it out): the nearest below, said so.
     let (p, files, _o) = download_as(

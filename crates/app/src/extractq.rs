@@ -290,19 +290,12 @@ impl Extracts {
             );
         }
         if let Some(gone) = trashed {
-            let text = match (gone, cfg!(windows)) {
+            let text = if gone {
                 // i18n: in a download's log: the downloaded archive, after it was extracted
-                (true, true) => crate::i18n::t("The archive was moved to the Recycle Bin"),
-                // i18n: in a download's log (Linux and macOS): the downloaded archive, after it was extracted
-                (true, false) => crate::i18n::t("The archive was moved to the Trash"),
+                crate::i18n::t("The archive was moved to the Recycle Bin")
+            } else {
                 // i18n: in a download's log: the downloaded archive, after it was extracted
-                (false, true) => {
-                    crate::i18n::t("The archive could not be moved to the Recycle Bin: it was kept")
-                }
-                // i18n: in a download's log (Linux and macOS): the downloaded archive, after it was extracted
-                (false, false) => {
-                    crate::i18n::t("The archive could not be moved to the Trash: it was kept")
-                }
+                crate::i18n::t("The archive could not be moved to the Recycle Bin: it was kept")
             };
             note(items, text.to_owned());
         }
@@ -339,7 +332,7 @@ pub fn seven_zip() -> Option<PathBuf> {
 /// fills the real (per-user, shared) Recycle Bin or Trash. Never set for users.
 const TEST_TRASH: &str = "MDM_TEST_TRASH_DIR";
 
-/// Move `files` to the Recycle Bin (the Trash), or into `MDM_TEST_TRASH_DIR` when a test set it.
+/// Move `files` to the Recycle Bin, or into `MDM_TEST_TRASH_DIR` when a test set it.
 fn to_trash(files: &[PathBuf]) -> bool {
     if let Some(dir) = std::env::var_os(TEST_TRASH).filter(|d| !d.is_empty()) {
         let dir = PathBuf::from(dir);
@@ -349,10 +342,7 @@ fn to_trash(files: &[PathBuf]) -> bool {
                 std::fs::rename(f, dir.join(name)).is_ok()
             });
     }
-    #[cfg(windows)]
-    return crate::win32::to_recycle_bin(files);
-    #[cfg(unix)]
-    return crate::unix::to_trash(files);
+    crate::win32::to_recycle_bin(files)
 }
 
 /// Why `name` wasn't extracted, for its download's log.

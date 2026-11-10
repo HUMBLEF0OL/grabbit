@@ -22,8 +22,6 @@ pub enum Next {
     /// Started by the window when it takes the result, so an update cancelled meanwhile starts
     /// nothing.
     Restart(Command),
-    /// Handed to the system's package installer (a .deb or .rpm): MDM stays open.
-    Opened,
 }
 
 /// The release file this copy updates from, when `assets` (name, address) has it (by either of
@@ -163,73 +161,6 @@ fn apply(install: Install, file: &Path) -> Result<Next, String> {
             mdm_tools::update::replace_files(&new, &dir, &["data"]).map_err(|e| e.to_string())?;
             restart(&exe)
         }
-        Install::TarGz => {
-            let out = unpack_dir()?;
-            let ok = Command::new("tar")
-                .arg("-xzf")
-                .arg(file)
-                .arg("-C")
-                .arg(&out)
-                .status()
-                .is_ok_and(|s| s.success());
-            if !ok {
-                return Err("couldn't unpack the update".into());
-            }
-            let new = mdm_tools::update::single_folder(&out);
-            mdm_tools::update::replace_files(&new, &dir, &[]).map_err(|e| e.to_string())?;
-            restart(&exe)
-        }
-        Install::AppImage => {
-            let target = std::env::var_os("APPIMAGE")
-                .map(PathBuf::from)
-                .ok_or("not running as an AppImage")?;
-            let staged = target.with_extension("AppImage.new");
-            std::fs::copy(file, &staged).map_err(|e| e.to_string())?;
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o755))
-                    .map_err(|e| e.to_string())?;
-            }
-            std::fs::rename(&staged, &target).map_err(|e| e.to_string())?;
-            restart(&target)
-        }
-        Install::Dmg => {
-            let bundle = mdm_tools::update::app_bundle(&exe).ok_or("not in an app bundle")?;
-            let mount = folder().ok_or("no data folder")?.join("mount");
-            std::fs::create_dir_all(&mount).map_err(|e| e.to_string())?;
-            let run = |c: &mut Command| c.status().is_ok_and(|s| s.success());
-            if !run(Command::new("hdiutil")
-                .args(["attach", "-nobrowse", "-readonly", "-mountpoint"])
-                .arg(&mount)
-                .arg(file))
-            {
-                return Err("couldn't open the update's disk image".into());
-            }
-            let name = bundle.file_name().ok_or("no app name")?.to_owned();
-            let staged = bundle.with_extension("app.new");
-            let _ = std::fs::remove_dir_all(&staged);
-            let copied = run(Command::new("ditto").arg(mount.join(&name)).arg(&staged));
-            run(Command::new("hdiutil").arg("detach").arg(&mount));
-            if !copied {
-                return Err("couldn't copy the new app".into());
-            }
-            // The running app is renamed aside (removed on the next start), the new one takes
-            // its place.
-            let old = bundle.with_extension("app.old");
-            let _ = std::fs::remove_dir_all(&old);
-            std::fs::rename(&bundle, &old).map_err(|e| e.to_string())?;
-            std::fs::rename(&staged, &bundle).map_err(|e| e.to_string())?;
-            let mut cmd = Command::new("open");
-            cmd.arg("-n").arg(&bundle).args(["--args", UPDATED]);
-            Ok(Next::Restart(cmd))
-        }
-        // Installing a package needs the administrator: the system's installer asks.
-        Install::Deb | Install::Rpm => {
-            open::that_detached(file).map_err(|e| e.to_string())?;
-            Ok(Next::Opened)
-        }
-        Install::System => Err("installed by the system's package manager: update it there".into()),
         Install::Source => Err("built from source: update it from the repository".into()),
     }
 }
@@ -249,17 +180,14 @@ pub fn lock_after_update() -> Option<std::fs::File> {
     }
 }
 
-/// At start, once this is the running copy: what an update set aside (the old programs, a
-/// Mac's old app) and its downloaded files are removed.
+/// At start, once this is the running copy: what an update set aside (the old programs) and its
+/// downloaded files are removed.
 pub fn tidy() {
     let Ok(exe) = std::env::current_exe() else {
         return;
     };
     if let Some(dir) = exe.parent() {
         mdm_tools::update::remove_old(dir);
-    }
-    if let Some(bundle) = mdm_tools::update::app_bundle(&exe) {
-        let _ = std::fs::remove_dir_all(bundle.with_extension("app.old"));
     }
     if let Some(dir) = folder() {
         // A running installer (it starts the new copy before it ends) keeps its file: the next
@@ -294,40 +222,5 @@ mod tests {
         assert_eq!(asset_for(Install::Installer, "0.2.2", &unsigned), None);
         assert_eq!(asset_for(Install::PortableZip, "0.2.2", &full), None);
         assert_eq!(asset_for(Install::Source, "0.2.2", &full), None);
-    }
-
-    /// Linux's and macOS's files lose "-experimental" in a release: a copy finds its file by
-    /// either name, the plain one first.
-    #[test]
-    fn a_release_names_linux_files_either_way() {
-        let release = |names: &[&str]| -> Vec<(String, String)> {
-            names
-                .iter()
-                .chain(&["SHA256SUMS.txt", "SHA256SUMS.txt.sig"])
-                .map(|n| (n.to_string(), format!("https://x/{n}")))
-                .collect()
-        };
-        let old = "MisterDownloadManager-0.3.0-linux-x86_64-experimental.AppImage";
-        let new = "MisterDownloadManager-0.3.0-linux-x86_64.AppImage";
-        let deb = "MisterDownloadManager-0.3.0-linux-x86_64.deb";
-        for (assets, want) in [
-            (release(&[old]), Some(old)),
-            (release(&[new, deb]), Some(new)),
-            (release(&[old, new]), Some(new)),
-            (release(&[deb]), None),
-        ] {
-            assert_eq!(
-                asset_for(Install::AppImage, "0.3.0", &assets).as_deref(),
-                want,
-                "{assets:?}"
-            );
-        }
-        assert_eq!(
-            asset_for(Install::Deb, "0.3.0", &release(&[new, deb])).as_deref(),
-            Some(deb)
-        );
-        // Unsigned: neither.
-        let unsigned = vec![(new.to_string(), format!("https://x/{new}"))];
-        assert_eq!(asset_for(Install::AppImage, "0.3.0", &unsigned), None);
     }
 }

@@ -1,19 +1,12 @@
 //! Scheduler → "Wake the computer to run this queue" (#142): the computer, asleep, is woken
 //! shortly before a queue's start time, and kept awake while that queue runs.
 //!
-//! The times are worked out here, the same on every system; the waking itself is the system's:
-//! - Windows: a waitable timer that resumes the computer (`win32::wake_at`), owned by MDM's
-//!   process, as the Scheduler's starts are (MDM has to be running, in the tray if need be).
-//!   Windows' power options must allow wake timers; when they don't, the Scheduler says so.
-//! - Linux: the clock chip's wake alarm (`/sys/class/rtc/rtc0/wakealarm`), which only an
-//!   administrator may set unless they let users set it (the guide shows how). A systemd user
-//!   timer can't wake the system (`WakeSystem=` needs the system manager), nor can `rtcwake`
-//!   or a timer on an alarm clock without root or CAP_WAKE_ALARM.
-//! - macOS: `pmset schedule wake` and IOKit's scheduled power events need an administrator;
-//!   MDM never asks for one by itself, so the option says why.
+//! The times are worked out here; the waking itself is a waitable timer that resumes the computer
+//! (`win32::wake_at`), owned by MDM's process, as the Scheduler's starts are (MDM has to be
+//! running, in the tray if need be). Windows' power options must allow wake timers; when they
+//! don't, the Scheduler says so.
 //!
-//! While a queue with the option runs, the computer is kept from sleeping (Windows: a power
-//! request; Linux: logind's sleep and idle inhibitor; macOS: `caffeinate`), so a computer woken
+//! While a queue with the option runs, the computer is kept from sleeping (a power request), so a computer woken
 //! for it doesn't fall asleep again before the downloads are done. Afterwards the system's own
 //! sleep settings apply again, and the queue's "Turn off computer when done" can put it to
 //! sleep at once.
@@ -30,19 +23,13 @@ pub const LEAD: Duration = Duration::seconds(60);
 /// Whether this computer can be woken by MDM, and if not, why.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Support {
-    // macOS never can (see unix::wake_support).
-    #[cfg_attr(target_os = "macos", allow(dead_code))]
     Ready,
     /// Windows' power options don't allow wake timers now (on battery: `battery`).
-    TimersOff { battery: bool },
+    TimersOff {
+        battery: bool,
+    },
     /// Windows allows wake timers on mains power only, and this computer has a battery.
     NotOnBattery,
-    /// Linux: the wake alarm is the administrator's (the guide shows how to allow it).
-    NeedsAdmin,
-    /// Linux: no clock chip with a wake alarm.
-    NoAlarm,
-    /// macOS: only an administrator can schedule a wake.
-    MacAdmin,
 }
 
 impl Support {
@@ -132,9 +119,8 @@ pub fn support() -> Support {
     s
 }
 
-/// An off-screen test run (MDM_OFFSCREEN) may play another system's answer with MDM_TEST_WAKE
-/// (`timers-off`, `battery-off`, `not-on-battery`, `needs-admin`, `no-alarm`, `mac-admin`), so
-/// every state of the Scheduler's line can be shown and checked on one computer.
+/// An off-screen test run (MDM_OFFSCREEN) may play another answer with MDM_TEST_WAKE
+/// (`timers-off`, `battery-off`, `not-on-battery`), so every state of the Scheduler's line can be shown and checked on one computer.
 fn test_support() -> Option<Support> {
     if !crate::offscreen() {
         return None;
@@ -143,14 +129,10 @@ fn test_support() -> Option<Support> {
         "timers-off" => Support::TimersOff { battery: false },
         "battery-off" => Support::TimersOff { battery: true },
         "not-on-battery" => Support::NotOnBattery,
-        "needs-admin" => Support::NeedsAdmin,
-        "no-alarm" => Support::NoAlarm,
-        "mac-admin" => Support::MacAdmin,
         _ => return None,
     })
 }
 
-#[cfg(windows)]
 fn ask_support() -> Support {
     // 0 off, 1 on, 2 "important wake timers only" (Windows' own, not an app's).
     let w = crate::win32::wake_timers();
@@ -166,11 +148,6 @@ fn ask_support() -> Support {
     }
 }
 
-#[cfg(unix)]
-fn ask_support() -> Support {
-    crate::unix::wake_support()
-}
-
 /// What the app keeps: the wake asked of the system, and whether it keeps the computer awake.
 #[derive(Default)]
 pub struct Waker {
@@ -180,8 +157,7 @@ pub struct Waker {
     armed: bool,
     /// Why the last attempt failed (shown in the Scheduler), if it did.
     pub error: Option<String>,
-    /// The wake is asked for again at least every minute (the system may have dropped it: a
-    /// Linux alarm used up by another wake, an alarm another program set has gone off).
+    /// The wake is asked for again at least every minute (the system may have dropped it).
     checked: Option<std::time::Instant>,
     awake: bool,
     /// When keeping the computer awake was last refused, and how often in a row (asked again
@@ -217,7 +193,7 @@ impl Waker {
         let stale = self
             .checked
             .is_none_or(|t| t.elapsed() > std::time::Duration::from_secs(60));
-        // Once its time has come, a wake isn't set again (a Linux alarm in the past is refused).
+        // Once its time has come, a wake isn't set again.
         let passed = want.as_ref().is_some_and(|w| w.0 <= Utc::now());
         if want == self.wanted && (!stale || passed) {
             return;
@@ -225,7 +201,7 @@ impl Waker {
         self.checked = Some(std::time::Instant::now());
         let changed = want != self.wanted;
         self.wanted = want.clone();
-        // Nothing to set where waking isn't possible (Linux, macOS without the rights).
+        // Nothing to set where waking isn't possible (wake timers off).
         if want.is_some() && !support().can_tick() {
             if std::mem::take(&mut self.armed) {
                 let _ = arm(None);
@@ -308,7 +284,7 @@ impl Waker {
         self.refused = Some((std::time::Instant::now(), n + 1));
     }
 
-    /// Cancel the wake (MDM is quitting: Linux's alarm would outlive it). The computer may sleep
+    /// Cancel the wake (MDM is quitting). The computer may sleep
     /// again: waited for at most a second (the system lets go of it when MDM ends anyway).
     pub fn clear(&mut self) {
         self.wanted = None;
@@ -475,26 +451,12 @@ impl Holder {
 
 /// Set the system's wake for `at` (UTC), or cancel it (None).
 fn arm(at: Option<(DateTime<Utc>, &str)>) -> Result<(), String> {
-    #[cfg(windows)]
-    {
-        crate::win32::wake_at(at.map(|(t, q)| (t.timestamp(), q)))
-    }
-    #[cfg(unix)]
-    {
-        crate::unix::wake_at(at.map(|(t, _)| t.timestamp()))
-    }
+    crate::win32::wake_at(at.map(|(t, q)| (t.timestamp(), q)))
 }
 
 /// Keep the computer awake (`reason`) or let it sleep (None); false when the system refused.
 fn hold_awake(reason: Option<&str>) -> bool {
-    #[cfg(windows)]
-    {
-        crate::win32::keep_awake(reason)
-    }
-    #[cfg(unix)]
-    {
-        crate::unix::keep_awake(reason)
-    }
+    crate::win32::keep_awake(reason)
 }
 
 #[cfg(test)]

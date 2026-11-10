@@ -47,7 +47,6 @@ fn setting(args: &[String], name: &str, var: &str) -> Option<String> {
 
 pub fn main(args: Vec<String>) -> ExitCode {
     // A Windows server has no console for a windowed program: the one it was started from.
-    #[cfg(windows)]
     crate::win32::cli_console(None);
     if let Some(dir) = setting(&args, "data", "MDM_DATA_DIR") {
         mdm_ipc::set_data_dir(PathBuf::from(dir));
@@ -124,14 +123,11 @@ pub fn main(args: Vec<String>) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    // Stopped by the system (docker stop, systemctl stop, Ctrl+C): the list is saved first.
+    // Stopped by Ctrl+C: the list is saved first.
     let stop = Arc::new(AtomicBool::new(false));
     {
         let (stop, wake) = (stop.clone(), wake.clone());
         rt.spawn(async move {
-            #[cfg(unix)]
-            crate::unix::terminated().await;
-            #[cfg(not(unix))]
             let _ = tokio::signal::ctrl_c().await;
             stop.store(true, Ordering::SeqCst);
             wake();

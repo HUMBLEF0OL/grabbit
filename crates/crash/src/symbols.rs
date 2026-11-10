@@ -9,18 +9,7 @@ use crate::github::REPO;
 
 /// This build's system in the zip's name.
 pub fn platform() -> &'static str {
-    if cfg!(windows) {
-        "windows-x64"
-    } else if cfg!(target_os = "macos") {
-        // One zip per processor, as the .dmg (tools/installer/build-macos.sh).
-        if cfg!(target_arch = "aarch64") {
-            "macos-arm64"
-        } else {
-            "macos-x86_64"
-        }
-    } else {
-        "linux-x86_64"
-    }
+    "windows-x64"
 }
 
 /// The release asset holding `version`'s symbols for this system.

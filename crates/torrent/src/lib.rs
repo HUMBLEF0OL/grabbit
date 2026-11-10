@@ -356,10 +356,7 @@ pub struct Config {
 /// How a session is held to the chosen network adapter (`Config::bind`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Bind {
-    /// Linux and macOS: its device (librqbit's `bind_device_name`: SO_BINDTODEVICE,
-    /// IP_BOUND_IF), and whether it has IPv4 only.
-    Device { name: String, v4_only: bool },
-    /// Windows: its address (librqbit's `bind_ip`). Windows sends a packet only through the
+    /// Its address (librqbit's `bind_ip`). Windows sends a packet only through the
     /// adapter that has its source address (strong host model), so a socket bound to it can't
     /// leave another way; when the address is gone, nothing is sent. One family: IPv4 when the
     /// adapter has it (IPv6 peers are then skipped), else IPv6.
@@ -368,10 +365,8 @@ pub enum Bind {
 
 impl Bind {
     fn v4_only(&self) -> bool {
-        match self {
-            Bind::Device { v4_only, .. } => *v4_only,
-            Bind::Address(ip) => ip.is_ipv4(),
-        }
+        let Bind::Address(ip) = self;
+        ip.is_ipv4()
     }
 }
 
@@ -490,10 +485,7 @@ impl Torrents {
         std::fs::create_dir_all(&cfg.state_dir).map_err(engine)?;
         let proxied = cfg.proxy.is_some();
         let v4_only = cfg.bind.as_ref().is_some_and(Bind::v4_only);
-        let bind_ip = match &cfg.bind {
-            Some(Bind::Address(ip)) => Some(*ip),
-            _ => None,
-        };
+        let bind_ip = cfg.bind.as_ref().map(|Bind::Address(ip)| *ip);
         // Offline only without one named: a test's DHT on loopback is still on.
         let dht_on = cfg.dht && !proxied && (!cfg.offline || cfg.dht_bootstrap.is_some());
         let dht = dht_on.then(|| librqbit::DhtSessionConfig {
@@ -557,10 +549,7 @@ impl Torrents {
                 || cfg.bind.is_some(),
             ipv4_only: cfg.offline || v4_only,
             // Every socket of the session held to the chosen adapter (#35, #143).
-            bind_device_name: match &cfg.bind {
-                Some(Bind::Device { name, .. }) => Some(name.clone()),
-                _ => None,
-            },
+            bind_device_name: None,
             bind_ip,
             fastresume: true,
             persistence: Some(SessionPersistenceConfig::Json {
@@ -1081,8 +1070,6 @@ mod tests {
             Recorder { addr, from }
         }
 
-        // Its tests bind 127.0.0.2, which macOS hasn't.
-        #[cfg(not(target_os = "macos"))]
         async fn tcp(reply: &'static [u8]) -> Recorder {
             let l = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
                 .await
@@ -1110,9 +1097,8 @@ mod tests {
 
     /// #143: a session bound to an address (Windows' way of holding it to a network adapter)
     /// sends everything from that address: its listener, outgoing peer connections, the DHT, UDP
-    /// and HTTP trackers. 127.0.0.2 stands for the adapter's address: Windows and Linux route
-    /// all of 127.0.0.0/8 to loopback (macOS only 127.0.0.1, so not there).
-    #[cfg(not(target_os = "macos"))]
+    /// and HTTP trackers. 127.0.0.2 stands for the adapter's address: Windows routes all of
+    /// 127.0.0.0/8 to loopback.
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn a_bound_session_sends_only_from_its_address() {
         let bound: std::net::IpAddr = Ipv4Addr::new(127, 0, 0, 2).into();
@@ -1222,7 +1208,6 @@ mod tests {
 
     /// #143: through a SOCKS5 proxy (Torrent settings), the proxy is reached from the bound
     /// address too, for peers and HTTP trackers alike.
-    #[cfg(not(target_os = "macos"))]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn a_bound_session_reaches_its_proxy_from_its_address() {
         let bound: std::net::IpAddr = Ipv4Addr::new(127, 0, 0, 2).into();
@@ -1355,11 +1340,7 @@ mod tests {
             .await
             .unwrap();
         let out = tmp.path().join("out");
-        let bad = if cfg!(windows) {
-            ["Q:mdm-test.bin", "x.bin:hidden", "NUL.txt"].as_slice()
-        } else {
-            ["tab\there.bin"].as_slice()
-        };
+        let bad = ["Q:mdm-test.bin", "x.bin:hidden", "NUL.txt"];
         for name in bad {
             let bytes = torrent_naming(name);
             let listed = t
@@ -1412,11 +1393,7 @@ mod tests {
         let entry = saved.values().next().unwrap().clone();
         assert_eq!(entry["info_hash"], good.as_str(), "librqbit's format");
         // Names librqbit itself would write (inside `out`), so the check is what refuses them.
-        let bad = torrent_naming(if cfg!(windows) {
-            "x.bin:hidden"
-        } else {
-            "tab\there.bin"
-        });
+        let bad = torrent_naming("x.bin:hidden");
         let bad_hash = librqbit::torrent_from_bytes(&bad)
             .unwrap()
             .info_hash

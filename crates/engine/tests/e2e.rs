@@ -1255,7 +1255,6 @@ async fn a_missing_folder_is_reported_and_nothing_restarts() {
     );
 }
 
-#[cfg(windows)]
 #[tokio::test]
 async fn a_path_too_long_for_windows_is_refused_before_anything_is_created() {
     let s = server("").await;
@@ -1521,7 +1520,6 @@ async fn the_finished_file_can_take_the_servers_date() {
     let meta = std::fs::metadata(&out.path).unwrap();
     let server = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_790_000_000);
     assert_eq!(meta.modified().unwrap(), server);
-    #[cfg(windows)]
     assert_eq!(meta.created().unwrap(), server);
     // Without the option the file keeps the time it was written.
     let dir = tempfile::tempdir().unwrap();

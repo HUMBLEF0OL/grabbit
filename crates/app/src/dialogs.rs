@@ -100,12 +100,7 @@ pub fn follow_scale(ctx: &egui::Context, vid: ViewportId, key: egui::Id, shown: 
     let seen = ctx.data(|d| d.get_temp::<f32>(k));
     ctx.data_mut(|d| d.insert_temp(k, scale));
     let changed = seen.is_some_and(|s| s != scale);
-    if changed && !cfg!(windows) {
-        ctx.send_viewport_cmd_to(
-            vid,
-            egui::ViewportCommand::InnerSize(vec2(shown[0], shown[1])),
-        );
-    }
+    let _ = shown;
     changed
 }
 
@@ -160,7 +155,6 @@ pub fn keep_theme(
     // it). Not in off-screen test runs, whose windows stay out of the way. Elsewhere the window
     // manager places a new window and decides on its focus; an app has no say there.
     // Looked for in a few frames at most (its title may change meanwhile: a progress window's).
-    #[cfg(windows)]
     {
         const TRIES: u32 = 30;
         let tries = ctx.data(|d| d.get_temp::<u32>(front_key).unwrap_or(0));
@@ -180,13 +174,8 @@ pub fn keep_theme(
             ctx.data_mut(|d| d.insert_temp(front_key, tries));
         }
     }
-    #[cfg(not(windows))]
-    let _ = front_key;
     // Belt and braces: a no-op when the caption is already right.
-    #[cfg(windows)]
     crate::win32::caption_dark(title, dark);
-    #[cfg(not(windows))]
-    let _ = title;
 }
 
 /// Whether the window `key` is drawn again after a pass that didn't draw it: egui destroys a
@@ -204,14 +193,12 @@ fn window_was_gone(ctx: &egui::Context, key: egui::Id) -> bool {
 /// The dialogs later downloads wait behind (`Download File Info`, the duplicate question): they
 /// must be on the screen, even while the main window is minimized (Windows hides a window's owned
 /// windows with it, leaving the downloads waiting behind one nobody can see, #440).
-#[cfg(windows)]
 const QUEUE_GATES: [&str; 2] = ["file-info", "duplicate"];
 
 /// A window that must be on the screen and isn't (hidden, not minimized): shown again after a
 /// moment, however it got that way, directly: winit believes it is still visible and ignores
 /// `Visible(true)`. The other platforms have nothing to ask: MDM's windows have no owner there,
 /// and the window manager doesn't say whether it shows a window.
-#[cfg(windows)]
 fn keep_on_screen(ctx: &egui::Context, key: egui::Id, title: &str) {
     const AFTER_SECONDS: f64 = 1.5;
     let since_key = key.with("hidden-since");
@@ -248,8 +235,7 @@ pub(crate) fn window<T>(
 
 /// A question that must be answered (Yes / No, a countdown): a `window` that stays above the
 /// app's other windows and takes the focus when it opens, so a click on the dialog that asked
-/// it, or on the main window, never hides it behind them (on Windows it is also owned by the
-/// main window; macOS and Linux have no owner to keep it in front).
+/// it, or on the main window, never hides it behind them (it is also owned by the main window).
 pub(crate) fn question<T>(
     ctx: &egui::Context,
     id: &str,
@@ -409,12 +395,8 @@ fn dialog_window<T>(
         if close { Outcome::Closed } else { out }
     });
     let rescaled = follow_scale(ctx, vid, key, shown);
-    // Elsewhere follow_scale asked the window manager itself.
-    #[cfg(not(windows))]
-    let _ = rescaled;
     // Give the window IDM's modal-dialog frame (3 px borders, 26 px caption) once it exists,
     // and again at a new size (a dialog that grows: the frame is sized from the client).
-    #[cfg(windows)]
     {
         let framed = key.with("framed");
         let scale = ctx.input_for(vid, |i| i.pixels_per_point);
@@ -444,19 +426,16 @@ fn dialog_window<T>(
         crate::theme::dark_surface(),
         matches!(out, Outcome::Open),
     );
-    // A question takes the focus once it is shown (not while hidden for its theme), and so does
-    // Download File Info outside Windows (#484): asked for from the browser, it opened behind
-    // it. Windows lifts it in keep_theme instead.
+    // A question takes the focus once it is shown (not while hidden for its theme). Download File
+    // Info is lifted in keep_theme instead.
     let focused = key.with("focus-sent");
-    let takes_focus = modal || (cfg!(not(windows)) && id == "file-info");
-    if takes_focus && matches!(out, Outcome::Open) && !crate::offscreen() {
+    if modal && matches!(out, Outcome::Open) && !crate::offscreen() {
         let shown = ctx.data(|d| d.get_temp::<bool>(key.with("shown")).unwrap_or(false));
         if shown && !ctx.data(|d| d.get_temp::<bool>(focused).unwrap_or(false)) {
             ctx.send_viewport_cmd_to(ViewportId::from_hash_of(id), egui::ViewportCommand::Focus);
             ctx.data_mut(|d| d.insert_temp(focused, true));
         }
     }
-    #[cfg(windows)]
     if matches!(out, Outcome::Open) && QUEUE_GATES.contains(&id) {
         keep_on_screen(ctx, key, title);
     }
@@ -476,17 +455,15 @@ fn forget_window(ctx: &egui::Context, vid: ViewportId, key: egui::Id) {
         d.remove::<bool>(key.with("focus-sent"));
     });
     forget_place(ctx, key);
-    #[cfg(windows)]
     ctx.data_mut(|d| {
         d.remove::<[f32; 2]>(key.with("framed"));
         d.remove::<isize>(key.with("hwnd"));
     });
 }
 
-/// Whether the windows' title bars are ours: a style theme's on Windows (#45). Elsewhere the
-/// window manager draws them, which takes no style of ours (Wayland places its own buttons).
+/// Whether the windows' title bars are ours: a style theme's (#45).
 pub fn drawn_captions() -> bool {
-    cfg!(windows) && crate::theme::current().controls.caption != crate::palette::CaptionLook::System
+    crate::theme::current().controls.caption != crate::palette::CaptionLook::System
 }
 
 /// A title bar we draw (where the window's frame is ours: win32::thin_frame), `width` points
@@ -504,7 +481,6 @@ pub fn drawn_title(
     use crate::winui::caption::CAPTION_H;
     let rect = egui::Rect::from_min_size(o, egui::vec2(width, CAPTION_H));
     let bar = crate::winui::caption::title_bar(ui, rect, title, buttons);
-    #[cfg(windows)]
     if let Some(hwnd) = hwnd {
         let ppp = ui.ctx().pixels_per_point();
         let px = |r: egui::Rect| {
@@ -526,16 +502,13 @@ pub fn drawn_title(
             },
         );
     }
-    #[cfg(not(windows))]
-    let _ = hwnd;
     bar.pressed
 }
 
 /// Whether the window manager asked this window to close (its title bar's ×, Alt+F4, a
 /// `WM_DELETE_WINDOW`). The window must still be painted in that pass, and the request honoured
 /// after it: egui clears a dialog's window to transparent black before each pass, so a pass that
-/// paints nothing leaves a black window on screen until the window is destroyed (#207: one to
-/// several seconds on Linux).
+/// paints nothing leaves a black window on screen until the window is destroyed (#207).
 pub(crate) fn close_requested(ui: &Ui) -> bool {
     ui.ctx().input(|i| i.viewport().close_requested())
 }
@@ -1712,10 +1685,7 @@ impl Complete {
                 );
 
                 // Drag handle: white box with a 1 px #828790 border; drag it to drop the file into
-                // Explorer, a mail or a chat (IDM 5.05). Windows only: dragging a file out to
-                // another app goes through OLE there; Linux and macOS have no such drag built
-                // yet, so the handle isn't shown (Open folder is the way there).
-                #[cfg(windows)]
+                // Explorer, a mail or a chat (IDM 5.05), through OLE.
                 {
                     let handle = r(o, 414.0, 187.0, 27.0, 20.0);
                     let grip = ui
@@ -2183,7 +2153,6 @@ impl TurnOffCountdown {
     /// Shut down, sleep or hibernate now.
     pub fn execute(&self) {
         use crate::queue::TurnOff;
-        #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
             let mut cmd = std::process::Command::new("shutdown");
@@ -2205,37 +2174,6 @@ impl TurnOffCountdown {
             // No console window flashing up (CREATE_NO_WINDOW).
             cmd.creation_flags(0x0800_0000);
             run_or_tell(cmd);
-        }
-        // Linux: systemd, as the desktop's own menu does; forcing ignores the programs that ask
-        // to delay it (inhibitors).
-        #[cfg(target_os = "linux")]
-        {
-            let verb = match self.mode {
-                TurnOff::ShutDown => "poweroff",
-                TurnOff::Hibernate => "hibernate",
-                TurnOff::Sleep => "suspend",
-            };
-            let mut cmd = std::process::Command::new("systemctl");
-            cmd.arg(verb);
-            if self.force {
-                cmd.arg("--ignore-inhibitors");
-            }
-            run_or_tell(cmd);
-        }
-        // macOS: through System Events, as the Apple menu does (macOS has no separate
-        // hibernate: its sleep writes memory to disk as set up); apps can still object.
-        #[cfg(target_os = "macos")]
-        {
-            let script = match self.mode {
-                TurnOff::ShutDown => "tell application \"System Events\" to shut down",
-                TurnOff::Hibernate | TurnOff::Sleep => {
-                    "tell application \"System Events\" to sleep"
-                }
-            };
-            let mut cmd = std::process::Command::new("osascript");
-            cmd.args(["-e", script]);
-            run_or_tell(cmd);
-            let _ = self.force;
         }
     }
 }
@@ -2365,7 +2303,7 @@ it from Mister Download Manager list of downloads?",
     }
 }
 
-/// Select the file in Explorer (Finder, the Linux file manager). A file that is gone: its
+/// Select the file in Explorer. A file that is gone: its
 /// folder, if that is still there.
 /// Bring an open window to the front (and back from the taskbar): asked for again, it came
 /// to nothing while it sat behind the main window.
@@ -2426,7 +2364,7 @@ pub fn told() -> Vec<(&'static str, String)> {
 
 /// Open a downloaded file with its program, or say why not (moved or deleted since, no
 /// program for it): it did nothing at all. True when it was handed to the system. Waited for
-/// (the `open` crate's launcher, at most 250 ms each on Windows and Linux), unlike
+/// (the `open` crate's launcher, at most 250 ms), unlike
 /// crate::launch's: whether it failed decides whether Download complete stays open.
 pub fn open_file(path: &Path) -> bool {
     let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
@@ -2451,7 +2389,6 @@ pub fn open_file(path: &Path) -> bool {
 }
 
 pub fn show_in_folder(path: &Path) {
-    #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         if !path.exists() {
@@ -2479,21 +2416,14 @@ pub fn show_in_folder(path: &Path) {
             .raw_arg(format!("/select,\"{}\"", path.display()))
             .spawn();
     }
-    #[cfg(unix)]
-    crate::unix::show_in_folder(path);
 }
 
 pub fn open_with(path: &Path) {
-    #[cfg(windows)]
     {
         let _ = std::process::Command::new("rundll32")
             .arg("shell32.dll,OpenAs_RunDLL")
             .arg(path)
             .spawn();
-    }
-    #[cfg(not(windows))]
-    {
-        crate::launch::open(path);
     }
 }
 
@@ -3276,7 +3206,7 @@ mod tests {
     /// #207: a dialog closed by the window manager (its title bar's ×) is painted in the pass
     /// that closes it. The dialog's window is rendered as eframe renders it: its own pass, after
     /// the window was cleared to transparent black. A pass that painted nothing left the window
-    /// black on screen until it was destroyed (seconds, on Linux).
+    /// black on screen until it was destroyed.
     #[test]
     fn a_dialog_closed_by_the_window_manager_is_painted_in_its_last_pass() {
         use std::cell::{Cell, RefCell};

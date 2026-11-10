@@ -240,20 +240,14 @@ pub fn data_dir() -> Option<PathBuf> {
     Some(dir)
 }
 
-/// Create the data folder `dir`, readable by its owner only on Linux and macOS (it holds the
-/// command channel's token and the saved logins; a home folder is often open to other users).
+/// Create the data folder `dir` (it holds the command channel's token and the saved logins; the
+/// profile's own access rules keep it to its owner).
 pub fn private_dir(dir: &std::path::Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(dir)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
-    }
-    Ok(())
+    std::fs::create_dir_all(dir)
 }
 
-/// Write `bytes` to `path` atomically, readable by its owner only (Linux and macOS: mode 0600;
-/// Windows: the profile's own access rules).
+/// Write `bytes` to `path` atomically, readable by its owner only (the profile's own access
+/// rules).
 pub fn private_write(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     craft_atomic::WriteOptions::default()
         .with_new_file_permissions(craft_atomic::NewFilePermissions::Private)
@@ -478,7 +472,7 @@ fn handle(conn: &TcpStream, token: &str, tx: &Sender<Incoming>, wake: &dyn Fn())
 
 /// Close after an answer given before the request was read to its end: no more writing, then
 /// what the client still sends is read and dropped (up to a limit, for a second at most).
-/// Closing with it unread makes the system reset the connection (macOS at once), and a reset can
+/// Closing with it unread makes the system reset the connection , and a reset can
 /// lose the answer before the client reads it.
 fn linger_close(conn: &TcpStream) {
     use std::io::Read;
@@ -583,8 +577,7 @@ fn random_token() -> String {
         .collect()
 }
 
-/// The argument every startup entry passes (the Run key, the XDG autostart entry, the
-/// LaunchAgent, the installer's): MDM starts in the notification area ([`Command::startup`]).
+/// The argument every startup entry passes (the Run key, the installer's): MDM starts in the notification area ([`Command::startup`]).
 pub const STARTUP: &str = "/startup";
 
 /// Parse IDM's command line: `/d URL [/p dir] [/f name] [/a] [/n] [/q] [/s]` (case-insensitive;
@@ -646,7 +639,7 @@ mod tests {
         assert!(c.later && c.silent && !c.start_queue);
         assert!(parse_args(&a("/s")).unwrap().start_queue);
         assert!(parse_args(&a("/exit")).unwrap().exit);
-        // The startup entries' argument (#226), as written and as a Linux user might.
+        // The startup entries' argument (#226), as written and with two dashes.
         assert!(parse_args(&[STARTUP.into()]).unwrap().startup);
         assert!(parse_args(&a("--startup")).unwrap().startup);
         assert!(!parse_args(&a("/s")).unwrap().startup);

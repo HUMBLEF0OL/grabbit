@@ -4,7 +4,7 @@
 //! (`<data>/crashes/*.txt`) and exits when this process is gone.
 //!
 //! Test code: it may use `unsafe` (the crash handler, a null write, the thread id), MDM's own code
-//! keeps that in win32.rs / unix.rs.
+//! keeps that in win32.rs.
 #![allow(unsafe_code)]
 
 use std::path::PathBuf;
@@ -38,8 +38,6 @@ fn main() {
         })
         .unwrap(),
     );
-    #[cfg(target_os = "linux")]
-    handler.set_ptracer(reporter.monitor_pid());
 
     match mode.as_str() {
         "freeze" => {
@@ -104,25 +102,11 @@ fn crashy_crashes_here() {
 }
 
 fn simulate(h: &CrashHandler) {
-    #[cfg(target_os = "linux")]
-    h.simulate_signal(libc::SIGUSR2 as u32);
-    #[cfg(any(windows, target_os = "macos"))]
     h.simulate_exception(None);
 }
 
-#[cfg(windows)]
 fn os_thread_id() -> u32 {
     unsafe { windows_sys::Win32::System::Threading::GetCurrentThreadId() }
-}
-
-#[cfg(target_os = "linux")]
-fn os_thread_id() -> u32 {
-    unsafe { libc::gettid() as u32 }
-}
-
-#[cfg(target_os = "macos")]
-fn os_thread_id() -> u32 {
-    0
 }
 
 fn run_monitor(m: mdm_crash::MonitorArgs) {

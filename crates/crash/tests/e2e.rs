@@ -12,11 +12,7 @@ fn crashy() -> PathBuf {
     p.pop();
     p.pop();
     p.push("examples");
-    p.push(if cfg!(windows) {
-        "crashy.exe"
-    } else {
-        "crashy"
-    });
+    p.push("crashy.exe");
     p
 }
 

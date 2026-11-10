@@ -57,28 +57,20 @@ fn env<'a>(cmd: &'a mut Command, data: &Path, startup: &Startup) -> &'a mut Comm
         .env("MDM_TEST_TRAY", "1")
         // A test's shell isn't asked where the icon is: say it is shown (app.rs tray_shown).
         .env("MDM_TEST_TRAY_VISIBLE", "1");
-    #[cfg(windows)]
     cmd.env("MDM_TEST_RUN_VALUE", &startup.name);
-    #[cfg(unix)]
-    cmd.env("XDG_CONFIG_HOME", &startup.config);
     cmd
 }
 
 /// Where the test's startup entry is, deleted when the test ends (passed or not).
 struct Startup {
-    #[cfg(windows)]
     name: String,
-    #[cfg(unix)]
-    config: std::path::PathBuf,
 }
 
-#[cfg(windows)]
 const RUN: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 
 impl Startup {
     /// The entry versions before 0.5.0 wrote for this program: the program alone, no argument.
     fn old(_dir: &Path) -> Startup {
-        #[cfg(windows)]
         {
             let name = format!("MisterDownloadManagerTest{}", std::process::id());
             let status = Command::new("reg")
@@ -89,27 +81,10 @@ impl Startup {
             assert!(status.success());
             Startup { name }
         }
-        #[cfg(unix)]
-        {
-            let config = _dir.join("config");
-            let auto = config.join("autostart");
-            std::fs::create_dir_all(&auto).unwrap();
-            std::fs::write(
-                auto.join("misterdownloadmanager.desktop"),
-                format!(
-                    "[Desktop Entry]\nType=Application\nName=Mister Download Manager\n\
-                     Exec=\"{APP}\"\nIcon=misterdownloadmanager\nTerminal=false\n\
-                     X-GNOME-Autostart-enabled=true\n"
-                ),
-            )
-            .unwrap();
-            Startup { config }
-        }
     }
 
     /// The entry as it is now.
     fn read(&self) -> String {
-        #[cfg(windows)]
         {
             let out = Command::new("reg")
                 .args(["query", RUN, "/v", &self.name])
@@ -120,15 +95,11 @@ impl Startup {
                 .find_map(|l| l.split_once("REG_SZ").map(|(_, v)| v.trim().to_owned()))
                 .unwrap_or_default()
         }
-        #[cfg(unix)]
-        std::fs::read_to_string(self.config.join("autostart/misterdownloadmanager.desktop"))
-            .unwrap_or_default()
     }
 }
 
 impl Drop for Startup {
     fn drop(&mut self) {
-        #[cfg(windows)]
         let _ = Command::new("reg")
             .args(["delete", RUN, "/v", &self.name, "/f"])
             .output();
@@ -140,7 +111,6 @@ impl Drop for Startup {
 /// Event Target", isn't counted: winit makes it visible, but it is a 6 px, fully transparent
 /// window that lets every click through, in every program made with winit.
 fn visible_windows(pid: u32, title: &str) -> Option<usize> {
-    #[cfg(windows)]
     {
         let script = format!(
             "Add-Type @'\n\
@@ -167,23 +137,6 @@ fn visible_windows(pid: u32, title: &str) -> Option<usize> {
             .output()
             .ok()?;
         String::from_utf8_lossy(&out.stdout).trim().parse().ok()
-    }
-    #[cfg(unix)]
-    {
-        // xdotool, where the lab has it (X11, Xvfb).
-        let out = Command::new("xdotool")
-            .args([
-                "search",
-                "--onlyvisible",
-                "--pid",
-                &pid.to_string(),
-                "--name",
-            ])
-            .arg(format!("^{title}"))
-            .output()
-            .ok()?;
-        out.status.code()?;
-        Some(String::from_utf8_lossy(&out.stdout).lines().count())
     }
 }
 
@@ -230,7 +183,7 @@ fn a_start_with_the_session_waits_in_the_tray() {
             assert!(Instant::now() < until, "not settled:\n{text}");
             std::thread::sleep(Duration::from_millis(200));
         };
-        assert!(tray || cfg!(unix), "Windows always has a notification area");
+        assert!(tray, "Windows always has a notification area");
         if tray {
             wait_for(&mut app, &data, "tray icon shown", wait);
             // A few seconds on: still no window (the main one, or any other).
