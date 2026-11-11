@@ -31,6 +31,22 @@ WARNING = {"light": "#9d5d00", "dark": "#f5a524"}
 # a0 (63 %): 3.2 to 3.4:1 light, 3.5 to 3.6:1 dark.
 RING = "acc@a0"
 
+# The toolbar's faces. Its band is the window (`bg`) until plan 05 puts it on a panel, and
+# `hover` is made for panels (`surface`): on `bg` it is 5 apart in light, not seen. So the
+# faces are the window shaded toward the ink, as much as `hover` is from `surface` (about 14),
+# pressed twice that, the other half of a split button half of it.
+TOOLBAR_HOT = ("mix", "bg", "ink", 0.06)
+TOOLBAR_PRESSED = ("mix", "bg", "ink", 0.12)
+TOOLBAR_FAINT = ("mix", "bg", "ink", 0.03)
+
+# Faces that must be told apart by eye (pal.STEP), beyond pal.py's own (pal.APART).
+FACES_APART = [
+    ("toolbar hot / band", TOOLBAR_HOT, "bg"),
+    ("toolbar pressed / hot", TOOLBAR_PRESSED, TOOLBAR_HOT),
+    ("toolbar faint / band", TOOLBAR_FAINT, "bg"),
+    ("toolbar faint / hot", TOOLBAR_FAINT, TOOLBAR_HOT),
+]
+
 SEEDS = [
     ("background", "bg"),
     ("surface", "surface"),
@@ -93,8 +109,8 @@ ROLES = [
         ("menu.hot", "sel"), ("menu.border", "line"), ("menu.text.disabled", "dis"),
     ]),
     ("Toolbar: a neutral face under the pointer, no border", [
-        ("toolbar.hot", "hover"), ("toolbar.pressed", "press"),
-        ("toolbar.hot.faint", ("mix", "hover", "bg", 0.5)), ("toolbar.hot.edge", "line"),
+        ("toolbar.hot", TOOLBAR_HOT), ("toolbar.pressed", TOOLBAR_PRESSED),
+        ("toolbar.hot.faint", TOOLBAR_FAINT), ("toolbar.hot.edge", "line"),
         ("toolbar.hot.border", "none"),
         ("toolbar.text.disabled", "dis"), ("icon.disabled", "dis"),
     ]),
@@ -238,9 +254,11 @@ def check() -> list[str]:
                 bad.append(rows[-1])
         # Issue #7: a pressed face is told by eye from the pointer over it, from the face at
         # rest and from its border (pal.py asks it of every palette; here, for this one).
-        for a, b in pal.APART:
-            s = pal.step(t[a], t[b])
-            rows.append(f"{variant:5} {a + ' apart from ' + b:34} {t[a]} vs {t[b]}  step {s}  (needs {pal.STEP})")
+        apart = [(f"{a} / {b}", a, b) for a, b in pal.APART] + FACES_APART
+        for what, a, b in apart:
+            x, y = colour(t, variant, a), colour(t, variant, b)
+            s = pal.step(x, y)
+            rows.append(f"{variant:5} {what:34} {x} vs {y}  step {s}  (needs {pal.STEP})")
             if s < pal.STEP:
                 bad.append(rows[-1])
     print("\n".join(rows))

@@ -167,6 +167,9 @@ $states = @(
   @("friend", "tell-friend", ""),
   @("safari", "-", "macOS only: not on Windows")
 )
+# Every state, for INDEX.md: a -Shots run keeps the other states' pictures, so the index lists
+# them all.
+$all = $states
 if ($Shots.Count) {
   $names = $states | ForEach-Object { $_[0] }
   $unknown = @($Shots | Where-Object { $names -notcontains $_ })
@@ -384,12 +387,13 @@ foreach ($m in $modes) {
 }
 $rows = @()
 $taken = 0
-foreach ($s in $states) {
+foreach ($s in $all) {
   $name, $what, $note = $s
   $files = @(@("$name.png", "$name-dark.png") | Where-Object { Test-Path (Join-Path $out $_) })
   if ($files.Count) { $taken++ }
   $how = if ($what -eq "-") { "" } else { "``$what``" }
-  $shot = if ($files.Count) { ($files | ForEach-Object { "``$_``" }) -join ", " } elseif ($what -eq "-") { "none today" } else { "**not taken**" }
+  $asked = @($states | Where-Object { $_[0] -eq $name }).Count -gt 0
+  $shot = if ($files.Count) { ($files | ForEach-Object { "``$_``" }) -join ", " } elseif ($what -eq "-") { "none today" } elseif (-not $asked) { "not in this run" } else { "**not taken**" }
   $rows += "| ``$name`` | $how | $shot | $note |"
 }
 $commit = (& git -C $root rev-parse --short HEAD).Trim()
@@ -399,11 +403,11 @@ $index = @(
   "Made by ``design/graphite/source/baseline.ps1`` from $commit; last run on $(Get-Date -Format yyyy-MM-dd) ($($modes -join ' and ')):",
   "The ``$Theme`` theme, interface size 100 %, light (``<state>.png``) and dark (``<state>-dark.png``).",
   "Windows' display scale was $([math]::Round($dpi / 96 * 100)) %, so the pictures are $([math]::Round($dpi / 96, 2))x the mockup's CSS pixels.",
-  "$taken of $($states.Count) mock states have a picture; the rest have no equivalent today or no way to open it",
-  "from the command line (the reason is in the last column).",
+  "$taken of $($all.Count) mock states have a picture; the rest have no equivalent today or no way to open it",
+  "from the command line (the reason is in the last column), or weren't asked for in a -Shots run.",
   "",
   "| Mock state | Opened with | Pictures | Note |",
   "| --- | --- | --- | --- |"
 ) + $rows
 Set-Content -Encoding utf8 (Join-Path $out "INDEX.md") ($index -join "`n")
-"$taken of $($states.Count) mock states taken; $out\INDEX.md"
+"$taken of $($all.Count) mock states have a picture ($($states.Count) taken in this run); $out\INDEX.md"

@@ -698,14 +698,6 @@ take = "theme:aqua+@main"
 crop = [0, 0, 930, 300]
 alt = "The main window in the Aqua theme"
 caption = "Aqua"
-[[shot]]
-id = "site-theme-graphite"
-page = "website/content/themes.toml"
-take = "theme:graphite+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Graphite theme"
-caption = "Graphite"
 
 [[shot]]
 id = "site-gallery"

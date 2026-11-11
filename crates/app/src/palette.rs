@@ -999,6 +999,14 @@ mod tests {
                     p.dark
                 );
             }
+            // The toolbar's band is the window (chrome::toolbar): its hover is seen on it.
+            assert!(
+                channel_step(p.toolbar_hot, p.window) >= SEEN_STEP,
+                "dark {}: toolbar hot {:?} on the window {:?}",
+                p.dark,
+                p.toolbar_hot,
+                p.window
+            );
             // The outlaw colour throughout: no accent-tinted edge on its buttons.
             assert_eq!(p.button_default_bottom, p.button_default_border);
             assert_eq!(p.button_accent_bottom, p.button_accent);
