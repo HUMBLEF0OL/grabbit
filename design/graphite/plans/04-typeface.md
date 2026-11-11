@@ -152,8 +152,15 @@ Line numbers drift as phases land: find each item by its name first.
   heads nearly touch. Progress window: "Resume capability" nearly touches its value.
 - Every other window of the 56 Graphite states shot (light, 100 %; `pr-shots` `04-typeface/all/`):
   nothing clipped.
-- 200 %: checked by scaling, not by pictures. Text and layout scale together with the zoom
-  (`scale.rs`), and DirectWrite's advances are whole pixels at every size, so a label that fits at
-  100 % fits at 200 %. Pictures were tried (`docs-shots.ps1 -Zoom 2`): off the screens the
-  capture comes back black, and on the screen (`-At 0,0`) it comes back cut to part of the
-  window, on this machine as in 03. Left to a run on GitHub's runner (`docs-shots.yml`).
+- 200 % (every Graphite state, light, by `baseline.ps1` with `interface_size` 200, plus the main
+  window, Options and Download File Info dark; `pr-shots` `04-typeface/200/`): Geist sharp at
+  every size. The 100 % list above holds (Save to's and Remote's paragraphs fit at 200 %), and:
+  - Main window: the toolbar is wider than the window, which the screen caps: "Add Torr…",
+    "Delete C…", "Start Qu…" and Stop Queue cut at the edge. The same with Segoe UI before 04
+    (`03-icons/main-plain-200.png`): not Geist's; 05b's toolbar.
+  - RSS: "Add feed" cut at the window's edge. Scheduler: "Files in the queue" runs past its tab.
+    Playlist: "5 of 6 chosen" a few pixels past the list. Add category: the hint ends on the
+    field's edge. Progress window: Status's value starts left of the others.
+  - Windows taller than the screen at 200 % (every Options page, the progress window, torrent,
+    video, playlist, batch, shortcuts, crash report, Scheduler, pair, RSS): their bottom rows are
+    off the screen, a size question for 07 and 08, not a font one.
