@@ -159,8 +159,9 @@ A theme in a folder of its own (`harbour/theme.toml`) can bring its icons in `ic
 `icons/24` (and, for PNG pictures, `icons/32` and `icons/48`, used on a screen scaled to 150 % and
 more), each named for what it shows (`tb-add-url.svg`, `cat-music.png`…). SVG and PNG files keep
 their colours; `-symbolic.svg` and `-symbolic.png` ones, as GNOME and KDE name them, take the
-theme's text colour. An icon the set lacks is drawn as the classic look draws it. The full list of
-names is in [themeicons.rs](https://github.com/anefzaoui/misterdownloadmanager/blob/main/crates/app/src/themeicons.rs) (`NEEDS`).
+theme's text colour. An icon the set lacks is drawn as the classic look draws it. In the
+categories, Finished keeps its tick and Queues its page stack over your icons, as in the classic
+look. The full list of names is in [themeicons.rs](https://github.com/anefzaoui/misterdownloadmanager/blob/main/crates/app/src/themeicons.rs) (`NEEDS`).
 
 ## Make one
 
