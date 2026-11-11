@@ -5754,6 +5754,13 @@ impl App {
         items.push(Radio("Aero", Cmd::Theme("aero"), true, on("aero")));
         // i18n: View → Theme: a style theme's name (Mac OS X's look), a name: keep "Aqua" as written
         items.push(Radio("Aqua", Cmd::Theme("aqua"), true, on("aqua")));
+        // i18n: View → Theme: MDM's own new look (rounded, amethyst and cyan), a name: keep "Graphite" as written
+        items.push(Radio(
+            "Graphite",
+            Cmd::Theme("graphite"),
+            true,
+            on("graphite"),
+        ));
         let wal = crate::themefile::PYWAL;
         for e in self.theme_list.iter().filter(|e| e.path.is_some()) {
             if !files {

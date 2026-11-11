@@ -6878,6 +6878,21 @@ mod tests {
                         pressed.fill, rest.fill,
                         "a flat button's pressed face differs"
                     );
+                    // ... and from the pointer over it, to the eye: issue #7 was one step
+                    // (#f5f5f5 against #f6f6f6).
+                    let step = |a: Color32, b: Color32| {
+                        [(a.r(), b.r()), (a.g(), b.g()), (a.b(), b.b())]
+                            .into_iter()
+                            .map(|(x, y)| x.abs_diff(y))
+                            .max()
+                            .unwrap_or(0)
+                    };
+                    assert!(
+                        step(pressed.fill, hot.fill) >= 6,
+                        "a flat button's pressed face differs from hot: {:?} {:?}",
+                        pressed.fill,
+                        hot.fill
+                    );
                 }
                 assert_ne!(hot.fill, rest.fill, "hot differs from rest");
             }

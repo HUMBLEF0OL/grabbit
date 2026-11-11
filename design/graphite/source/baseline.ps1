@@ -12,6 +12,10 @@
 #   cargo build --release -p mdm-torrent --example swarm        # for -Torrents
 #   powershell -ExecutionPolicy Bypass -File design\graphite\source\baseline.ps1 -Torrents
 #
+# A phase's after-shots come from the same script in its theme, for the states its plan names:
+#
+#   ...\baseline.ps1 -Theme graphite -Shots main-plain,addurl,fileinfo,progress-status
+#
 # The output (design/graphite/baseline/) is not committed: it goes to the pr-shots branch as
 # baseline/. The raw pictures stay in target\graphite-baseline\{light,dark}.
 param(
@@ -26,7 +30,12 @@ param(
   # Also Help → Check for updates, which asks GitHub.
   [switch]$Updates,
   # Only light or only dark ("light", "dark"); both when empty.
-  [string]$Mode = ""
+  [string]$Mode = "",
+  # The theme to shoot in: "classic" for the baseline, a phase's theme ("graphite") for its
+  # after-shots, which then go to design/graphite/shots-<theme>/ unless -OutDir says otherwise.
+  [string]$Theme = "classic",
+  # Only these mock states (file names, "main-plain", "addurl"); all of them when empty.
+  [string[]]$Shots = @()
 )
 $ErrorActionPreference = "Stop"
 $graphite = Split-Path -Parent $PSScriptRoot
@@ -39,9 +48,11 @@ $Bin = (Resolve-Path $Bin).Path
 $exe = Join-Path $Bin "misterdownloadmanager.exe"
 $server = Join-Path $Bin "labserver.exe"
 foreach ($f in $exe, $server) { if (-not (Test-Path $f)) { throw "no ${f}: build it first (see the header)" } }
-$out = if ($OutDir) { $OutDir } else { Join-Path $graphite "baseline" }
+if ($Theme -notmatch '^[a-z0-9-]+$') { throw "-Theme takes a theme id (classic, graphite)" }
+$base = $Theme -eq "classic"
+$out = if ($OutDir) { $OutDir } elseif ($base) { Join-Path $graphite "baseline" } else { Join-Path $graphite "shots-$Theme" }
 New-Item -ItemType Directory -Force $out | Out-Null
-$raw = Join-Path $root "target\graphite-baseline"
+$raw = Join-Path $root $(if ($base) { "target\graphite-baseline" } else { "target\graphite-shots-$Theme" })
 if (Test-Path $Work) { throw "$Work exists: give -Work a folder that doesn't (the run deletes it)" }
 
 # Every mock state (grabbit-design.html: its 60 windows, the states of the five that have them),
@@ -152,6 +163,14 @@ $states = @(
   @("friend", "tell-friend", ""),
   @("safari", "-", "macOS only: not on Windows")
 )
+if ($Shots.Count) {
+  $names = $states | ForEach-Object { $_[0] }
+  $unknown = @($Shots | Where-Object { $names -notcontains $_ })
+  if ($unknown.Count) { throw "no such mock state: $($unknown -join ', ')" }
+  $keep = @()
+  foreach ($s in $states) { if ($Shots -contains $s[0]) { $keep += , $s } }
+  $states = $keep
+}
 
 # docs-shots.ps1's -Show list: the plain triggers first, then the addresses handed over, then
 # Download complete last of all (it adds a row at the list's end, and the progress window
@@ -214,7 +233,7 @@ function With-App([bool]$dark, [scriptblock]$body) {
   $d = $dark.ToString().ToLower()
   Set-Content -Encoding utf8 "$Work\data\downloads.json" (
     '{"next_id":1,"items":[],"version":2,"settings":{"helpers_asked":true,"extension_never_ask":true' +
-    ',"dark_mode_support":' + $d + ',"always_dark":' + $d + ',"update_check":false,"theme":"classic"' +
+    ',"dark_mode_support":' + $d + ',"always_dark":' + $d + ',"update_check":false,"theme":"' + $Theme + '"' +
     ',"interface_size":100,"torrent_incoming":false,"torrent_upnp":false,"torrent_dht":false,"torrent_lsd":false' +
     ',"category_dirs":[["General","' + ("$Work\Downloads" -replace '\\', '\\') + '"]]}}')
   $env:MDM_DATA_DIR = "$Work\data"
@@ -284,17 +303,21 @@ foreach ($m in $modes) {
   $p = @{
     Exe = $exe; Server = $server; Torrent = (Join-Path $lab "Open Movie Night.torrent")
     OutDir = $dir; Work = $Work; Only = @($crash); Show = $show; Dark = $dark
-    Settings = '"theme":"classic","interface_size":100'
+    Settings = '"theme":"' + $Theme + '","interface_size":100'
   }
   & (Join-Path $lab "docs-shots.ps1") @p
   $c = Join-Path $dir "$crash.png"
   if (Test-Path $c) { Move-Item -Force $c (Join-Path $dir "crash.png") }
 
   # A first start: the main window with nothing in the list.
+  $empty = @($states | Where-Object { $_[1] -eq "empty" }).Count -gt 0
+  $subs = @($states | Where-Object { $_[1] -like "sub:*" }).Count -gt 0
+  if ($empty -or $subs) {
   "== ${m}: the empty main window, the dialogs over Options"
   With-App $dark {
     param($app, $main)
-    if (Capture $app.Id ([WildcardPattern]::Escape($main)) (Join-Path $dir "main-empty.png")) { "  main-empty.png" }
+    if (-not $empty) { }
+    elseif (Capture $app.Id ([WildcardPattern]::Escape($main)) (Join-Path $dir "main-empty.png")) { "  main-empty.png" }
     else { Write-Warning "main-empty: no picture" }
     # A dialog over Options (docs-shots.ps1 shoots the first new window, Options itself): the
     # window that is neither the main window nor Options.
@@ -315,6 +338,7 @@ foreach ($m in $modes) {
       Close-All $app.Id $before
       Start-Sleep -Milliseconds 600
     }
+  }
   }
 
   if ($Torrents) {
@@ -359,10 +383,10 @@ foreach ($s in $states) {
 }
 $commit = (& git -C $root rev-parse --short HEAD).Trim()
 $index = @(
-  "# Graphite baseline: today's app",
+  $(if ($base) { "# Graphite baseline: today's app" } else { "# Graphite shots: the $Theme theme" }),
   "",
   "Made by ``design/graphite/source/baseline.ps1`` from $commit; last run on $(Get-Date -Format yyyy-MM-dd) ($($modes -join ' and ')):",
-  "Classic theme, interface size 100 %, light (``<state>.png``) and dark (``<state>-dark.png``).",
+  "The ``$Theme`` theme, interface size 100 %, light (``<state>.png``) and dark (``<state>-dark.png``).",
   "Windows' display scale was $([math]::Round($dpi / 96 * 100)) %, so the pictures are $([math]::Round($dpi / 96, 2))x the mockup's CSS pixels.",
   "$taken of $($states.Count) mock states have a picture; the rest have no equivalent today or no way to open it",
   "from the command line (the reason is in the last column).",

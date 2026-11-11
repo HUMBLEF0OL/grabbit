@@ -1,9 +1,10 @@
-"""Write design/graphite/assets/graphite.toml, the draft Graphite theme file, from pal.py.
+"""Write crates/app/assets/themes/graphite.toml, the built-in Graphite theme, from pal.py.
 
 The palette is the one chosen in PLAN.md (Colour direction). The token -> theme key mapping is
 plans/01-prepare.md section 3 and plans/02-theme.md steps 1 to 3. After writing, it runs
 pal.py's own check and a contrast check on the mapped values (the pairs the app's palette tests
-look at, where the role is set here rather than derived).
+look at, where the role is set here rather than derived). The app's tests check the file again
+(`cargo test -p mdm-app palette`).
 
     python design/graphite/source/make_theme.py
 """
@@ -16,7 +17,8 @@ sys.path.insert(0, str(HERE))
 import pal  # noqa: E402
 
 PALETTE = "amethyst"
-OUT = HERE.parent / "assets" / "graphite.toml"
+REPO = HERE.parent.parent.parent
+OUT = REPO / "crates" / "app" / "assets" / "themes" / "graphite.toml"
 
 # Warning text: the palettes have only a warning background (warnSoft). Amber, readable on the
 # window (4.5:1): the classic look's light amber, and the Obsidian palette's dark one.
@@ -57,9 +59,10 @@ ROLES = [
         ("field.disabled.border", "line2"), ("button.disabled", "surface"),
         ("button.disabled.border", "line"), ("check.on.disabled", "dis"),
     ]),
-    ("Buttons: the default one filled with the outlaw colour", [
+    # Pressed is `press`, a step deeper than the pointer's `hover` (issue #7: never the same).
+    ("Buttons: the default one filled with the outlaw colour; pressed a step deeper than hot", [
         ("button", "surface"), ("button.border", "line"), ("button.bottom", "line"),
-        ("button.hot", "hover"), ("button.pressed", "tile"), ("button.accent", "out"),
+        ("button.hot", "hover"), ("button.pressed", "press"), ("button.accent", "out"),
         ("button.accent.text", "onout"), ("button.accent.hot", "out2"),
         ("button.default.border", "out"),
     ]),
@@ -82,7 +85,7 @@ ROLES = [
         ("menu.hot", "sel"), ("menu.border", "line"), ("menu.text.disabled", "dis"),
     ]),
     ("Toolbar", [
-        ("toolbar.hot", "hover"), ("toolbar.pressed", "tile"),
+        ("toolbar.hot", "hover"), ("toolbar.pressed", "press"),
         ("toolbar.text.disabled", "dis"), ("icon.disabled", "dis"),
     ]),
     ("Categories tree", [("tree", "surface"), ("tree.expander", "ink3")]),
@@ -93,11 +96,16 @@ ROLES = [
 ]
 
 HEADER = """\
-# Graphite: the draft of Grabbit's new look (design/graphite), for plan 02 to ship as a
-# built-in theme. Its colours, corners and layout are our own design; it borrows nothing.
-# Written by design/graphite/source/make_theme.py from source/pal.py, palette "{name}":
-# edit the palette or the mapping there, not here. Icons (icon-set) come in plan 03, the
-# typeface (font) in plan 04.
+# Graphite: one of Mister Download Manager's built-in themes, its own new look (design/graphite):
+# colours and shapes of our own design, light and dark (jet black, royal amethyst, electric
+# cyan); it borrows nothing. Icons are the mono set until Graphite's own come, and the typeface
+# is the app's usual one for now.
+# It is also an example of a theme file: seeds for the colours, many roles set by hand (the
+# outlaw colour on the default button and the progress bars), rounded corners, Windows 11's
+# controls with a focus ring, taller list rows and a flat drawn title bar on Windows.
+# Written by design/graphite/source/make_theme.py from source/pal.py, palette "{name}": edit
+# the palette or the mapping there, not here.
+
 name = "Graphite"
 icons = "mono"
 
@@ -120,7 +128,7 @@ radius = 8
 "radius.menu-item" = 6
 "radius.popup" = 8
 "radius.egui" = 8
-# The mockup's row height; check the list still fits at 200 %.
+# The mockup's row height.
 "list.row" = 32
 """
 
@@ -176,6 +184,7 @@ def check() -> list[str]:
         ("text / list", "ink", "bg", 4.5),
         ("selection text / selection", "ink", "sel", 4.5),
         ("button text / button", "ink", "surface", 4.5),
+        ("button text / pressed", "ink", "press", 4.5),
         ("muted / window", "ink3", "bg", 4.5),
         ("link / window", "acct", "bg", 4.5),
         ("accent / window", "acc", "bg", 3.0),
@@ -207,17 +216,20 @@ def check() -> list[str]:
             rows.append(f"{variant:5} {what:34} {f} on {t[bg]}  {r:5.2f}  (needs {need})")
             if r < need:
                 bad.append(rows[-1])
+        # Issue #7: a pressed face is told from the pointer over it and from the face at rest.
+        for other in ("hover", "surface"):
+            if t["press"] == t[other]:
+                bad.append(f"{variant:5} pressed face {t['press']} is the same as {other}")
     print("\n".join(rows))
     return bad
 
 
 def main() -> None:
-    OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(render(), encoding="utf8", newline="\n")
     bad = check()
     if bad:
         sys.exit("contrast fails:\n" + "\n".join(bad))
-    print(f"wrote {OUT.relative_to(HERE.parent.parent.parent)}; every pair passes")
+    print(f"wrote {OUT.relative_to(REPO).as_posix()}; every pair passes")
 
 
 if __name__ == "__main__":

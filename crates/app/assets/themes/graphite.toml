@@ -1,8 +1,13 @@
-# Graphite: the draft of Grabbit's new look (design/graphite), for plan 02 to ship as a
-# built-in theme. Its colours, corners and layout are our own design; it borrows nothing.
-# Written by design/graphite/source/make_theme.py from source/pal.py, palette "amethyst":
-# edit the palette or the mapping there, not here. Icons (icon-set) come in plan 03, the
-# typeface (font) in plan 04.
+# Graphite: one of Mister Download Manager's built-in themes, its own new look (design/graphite):
+# colours and shapes of our own design, light and dark (jet black, royal amethyst, electric
+# cyan); it borrows nothing. Icons are the mono set until Graphite's own come, and the typeface
+# is the app's usual one for now.
+# It is also an example of a theme file: seeds for the colours, many roles set by hand (the
+# outlaw colour on the default button and the progress bars), rounded corners, Windows 11's
+# controls with a focus ring, taller list rows and a flat drawn title bar on Windows.
+# Written by design/graphite/source/make_theme.py from source/pal.py, palette "amethyst": edit
+# the palette or the mapping there, not here.
+
 name = "Graphite"
 icons = "mono"
 
@@ -25,7 +30,7 @@ radius = 8
 "radius.menu-item" = 6
 "radius.popup" = 8
 "radius.egui" = 8
-# The mockup's row height; check the list still fits at 200 %.
+# The mockup's row height.
 "list.row" = 32
 
 
@@ -70,12 +75,12 @@ field = "#ffffff"
 "button.disabled" = "#ffffff"
 "button.disabled.border" = "#e3e0ec"
 "check.on.disabled" = "#a5a0b6"
-# Buttons: the default one filled with the outlaw colour.
+# Buttons: the default one filled with the outlaw colour; pressed a step deeper than hot.
 button = "#ffffff"
 "button.border" = "#e3e0ec"
 "button.bottom" = "#e3e0ec"
 "button.hot" = "#f3f1f9"
-"button.pressed" = "#f2f0f8"
+"button.pressed" = "#eae7f2"
 "button.accent" = "#00788e"
 "button.accent.text" = "#ffffff"
 "button.accent.hot" = "#00829a"
@@ -112,7 +117,7 @@ menu = "#ffffff"
 "menu.text.disabled" = "#a5a0b6"
 # Toolbar.
 "toolbar.hot" = "#f3f1f9"
-"toolbar.pressed" = "#f2f0f8"
+"toolbar.pressed" = "#eae7f2"
 "toolbar.text.disabled" = "#a5a0b6"
 "icon.disabled" = "#a5a0b6"
 # Categories tree.
@@ -144,12 +149,12 @@ field = "#0c0b11"
 "button.disabled" = "#121019"
 "button.disabled.border" = "#262233"
 "check.on.disabled" = "#5e596c"
-# Buttons: the default one filled with the outlaw colour.
+# Buttons: the default one filled with the outlaw colour; pressed a step deeper than hot.
 button = "#121019"
 "button.border" = "#262233"
 "button.bottom" = "#262233"
 "button.hot" = "#1c1828"
-"button.pressed" = "#1c1828"
+"button.pressed" = "#2a2538"
 "button.accent" = "#1fe0f0"
 "button.accent.text" = "#00171c"
 "button.accent.hot" = "#7af3ff"
@@ -186,7 +191,7 @@ menu = "#121019"
 "menu.text.disabled" = "#5e596c"
 # Toolbar.
 "toolbar.hot" = "#1c1828"
-"toolbar.pressed" = "#1c1828"
+"toolbar.pressed" = "#2a2538"
 "toolbar.text.disabled" = "#5e596c"
 "icon.disabled" = "#5e596c"
 # Categories tree.

@@ -101,6 +101,11 @@ MDM follows your system: when Windows is set to dark mode, so is MDM. To keep MD
 - **Aqua**: Mac OS X's look: gel buttons round at the ends (the default one blue), glossy check
   boxes, a blue focus ring, a blue gel progress bar, a grey title bar with small round buttons
   (on Windows), and icons drawn for MDM in that manner.
+- **Graphite**: MDM's own new look: near-black and white with royal amethyst for what you chose
+  (the selection, ticked boxes, the focus ring) and electric cyan for what moves (progress, the
+  default button), rounded corners, a focus ring, taller rows in the download list, a flat title
+  bar in the window's colour (on Windows), and one-colour icons. Its own icons and typeface come
+  later.
 
 ![View → Theme open: Classic, Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero and Aqua, and Open themes folder](images/help/view-theme.webp)
 *View → Theme switches at once, keeping the layout.*

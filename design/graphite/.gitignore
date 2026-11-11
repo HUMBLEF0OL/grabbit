@@ -1,2 +1,4 @@
-# The baseline screenshots go to the pr-shots branch (baseline/), never into dev.
+# The baseline screenshots go to the pr-shots branch (baseline/), never into dev; so do a
+# phase's after-shots (shots-<theme>/).
 baseline/
+shots-*/

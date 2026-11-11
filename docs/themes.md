@@ -15,7 +15,8 @@ for the classic look ([Dark mode](getting-started.md#dark-mode)).
 The built-in themes are **Classic** (MDM's own look, the default), **Native** (your system's
 accent colour and contrast), **High contrast**, and the style themes **Metro**, **Adwaita**,
 **Breeze**, **Luna**, **Aero** and **Aqua**, each with its own control shapes and icons, and on
-Windows its own title bar. [Getting started](getting-started.md#themes) describes each one; the
+Windows its own title bar, and **Graphite**, MDM's own new look (its icons and typeface still to
+come). [Getting started](getting-started.md#themes) describes each one; the
 website's [Themes page](https://misterdownloadmanager.com/themes.html) shows them all, light and
 dark.
 
@@ -126,7 +127,8 @@ focus = "ring"
 
 - **`name`** — what **View → Theme** lists; the file's name when there is none.
 - **`inherits`** — the theme yours starts from: `classic` (the default when it's left out), a
-  built-in theme's id (`metro`, `adwaita`, `breeze`, `luna`, `aero`, `aqua`, `high-contrast`), or
+  built-in theme's id (`metro`, `adwaita`, `breeze`, `luna`, `aero`, `aqua`, `graphite`,
+  `high-contrast`), or
   another theme file in the same folder, by its file name without `.toml`. A file that inherits
   another can be inherited in turn; a theme can't inherit itself.
 - **`[seeds]`** — a handful of colours (`background`, `surface`, `header`, `text`, `accent`,

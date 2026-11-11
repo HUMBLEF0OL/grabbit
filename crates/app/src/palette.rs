@@ -622,7 +622,7 @@ pub static CLASSIC: Theme = Theme {
 /// (written out above), then the ones shipped as theme files (`assets/themes/`, in the format
 /// users write, so they double as examples). Native follows the system and is made when chosen
 /// (`crate::native`).
-pub fn builtins() -> [&'static Theme; 8] {
+pub fn builtins() -> [&'static Theme; 9] {
     static HIGH_CONTRAST: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
         crate::themefile::builtin(
             "high-contrast",
@@ -648,6 +648,10 @@ pub fn builtins() -> [&'static Theme; 8] {
     static AQUA: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
         crate::themefile::builtin("aqua", include_str!("../assets/themes/aqua.toml"))
     });
+    // MDM's own new look (design/graphite), appended: the ones above keep their places.
+    static GRAPHITE: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
+        crate::themefile::builtin("graphite", include_str!("../assets/themes/graphite.toml"))
+    });
     [
         &CLASSIC,
         &HIGH_CONTRAST,
@@ -657,6 +661,7 @@ pub fn builtins() -> [&'static Theme; 8] {
         &LUNA,
         &AERO,
         &AQUA,
+        &GRAPHITE,
     ]
 }
 
@@ -859,6 +864,11 @@ mod tests {
             ("luna", "Luna", include_str!("../assets/themes/luna.toml")),
             ("aero", "Aero", include_str!("../assets/themes/aero.toml")),
             ("aqua", "Aqua", include_str!("../assets/themes/aqua.toml")),
+            (
+                "graphite",
+                "Graphite",
+                include_str!("../assets/themes/graphite.toml"),
+            ),
         ] {
             let v: serde_json::Value = toml::from_str(text).unwrap();
             let l = crate::themefile::parse(id, &v, |_| {
@@ -933,6 +943,35 @@ mod tests {
         assert_eq!(builtins()[7].controls.focus, FocusLook::Ring);
         assert_eq!(builtins()[5].controls.focus, FocusLook::Dotted);
         assert_eq!(builtins()[6].controls.focus, FocusLook::Dotted);
+    }
+
+    /// Graphite, MDM's own new look, comes last (the others keep their places): rounded corners,
+    /// a focus ring, a flat drawn title bar, the mockup's taller rows, and pressed faces told
+    /// from the pointer over them (issue #7) on its buttons and toolbar.
+    #[test]
+    fn graphite_is_built_in() {
+        let t = builtins()[8];
+        assert_eq!((t.id.as_ref(), t.name.as_ref()), ("graphite", "Graphite"));
+        assert_eq!(t.metrics.control_radius, 8.0);
+        assert_eq!(t.metrics.list_row, 32.0);
+        assert_eq!(t.icons, IconStyle::Mono);
+        assert_eq!(t.icon_set, None);
+        assert_eq!(
+            t.controls,
+            Controls {
+                field_focus: FieldFocus::Ring,
+                check: CheckLook::Fluent,
+                progress: ProgressLook::Line,
+                scroll: ScrollLook::Overlay,
+                caption: CaptionLook::Metro,
+                focus: FocusLook::Ring,
+                button: ButtonLook::Fluent,
+            }
+        );
+        for p in [&t.light, &t.dark] {
+            assert_ne!(p.button_pressed, p.button_hot, "dark {}", p.dark);
+            assert_ne!(p.toolbar_pressed, p.toolbar_hot, "dark {}", p.dark);
+        }
     }
 
     /// The classic look's dark secondary and error texts read on every dark surface they sit on

@@ -15,7 +15,7 @@ Rows marked "Decided in 01" took the recommendation in `plans/01-prepare.md` sec
 | Icon set: Tabler outline, stroke 1.75 | Decided | 53 icon slots mapped, MIT licence |
 | Default button last in every window | Decided | Under the Graphite look; Classic keeps IDM's order |
 | App name: Grabbit | Decided in the mockups | Renaming code, installer, extension and website is phase 10 |
-| Colour direction: jet black, royal amethyst, electric cyan | Decided in 01 | `source/pal.py` `amethyst`; draft theme `assets/graphite.toml` (blocks 02) |
+| Colour direction: jet black, royal amethyst, electric cyan | Decided in 01 | `source/pal.py` `amethyst`; the theme `crates/app/assets/themes/graphite.toml` (02) |
 | Light or dark: follow the system | Decided in 01 | Today's behaviour; the palette is designed dark first (02) |
 | Graphite as the default theme | Decided in 01 | Opt-in under View, Theme from 02; the default for new installs in 09b, once 05 to 08 have shipped; existing users keep their theme and are offered it once |
 | Typeface: Geist | Decided in 01 | Bundled (SIL OFL), Regular, Medium, SemiBold in `assets/fonts/`; needs engine work (04) |
@@ -53,7 +53,7 @@ What can run side by side: after 02, the tracks **03 → 04 → 05 → 06** (mai
 ## Progress
 
 - [x] 01 Prepare
-- [ ] 02 Theme
+- [x] 02 Theme
 - [ ] 03 Icons
 - [ ] 04 Typeface
 - [ ] 05a Layout model
@@ -78,10 +78,9 @@ What can run side by side: after 02, the tracks **03 → 04 → 05 → 06** (mai
 | `grabbit-design.html` | The mockup page: 60 windows, 54 states, light, dark, right to left, 4 palettes |
 | `DESIGN.md` | The design rules the build phases follow: colour jobs, radii, sizes, type, icons |
 | `assets/icons/` | The 53 icons at 16 and 24 (106 SVGs), `SOURCES.txt`, Tabler's `LICENSE` (for 03) |
-| `assets/graphite.toml` | The draft theme file in the chosen palette (for 02) |
 | `assets/fonts/` | Geist Regular, Medium, SemiBold (TTF), `OFL.txt`, `SOURCES.txt` (for 04) |
 | `source/export_icons.py` | Writes `assets/icons/` from the Tabler package, `iconmap.py` and `gen3.py`'s `REFINE` |
-| `source/make_theme.py` | Writes `assets/graphite.toml` from `pal.py` and checks its contrast |
+| `source/make_theme.py` | Writes the app's theme file `crates/app/assets/themes/graphite.toml` from `pal.py` and checks its contrast |
 | `baseline/` | Today's app in every mock state, light and dark (not committed; on `pr-shots` as `baseline/`) |
 | `source/pal.py` | The 4 palettes, every token in light and dark, with the contrast check (`python pal.py`) |
 | `source/iconmap.py` | Each of the 53 icon slots to its Tabler icon name; `gen3.py` holds the review changes (`REFINE`) |

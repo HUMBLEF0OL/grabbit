@@ -515,8 +515,9 @@ These ship in a later version, when they're ready.
 - 🔄 The browser extension's media list naming a file after its page, as an option: in review
 - 🔄 A new look, "Graphite": a theme with its own colours, icons and typeface, the main window
   and every dialog restyled, with an optional paste bar and details pane; the plan and mockups are
-  in `design/graphite/`. Prepared, not in the app yet: the colours, the icons, the typeface and
-  the design rules; next, the theme itself
+  in `design/graphite/`. Done: the Graphite theme in **View → Theme** (its colours, rounded
+  corners and controls, light and dark, in today's layout). Prepared, not in the app yet: the
+  icons and the typeface; next, the icons
 
 ### Bugs being looked into
 

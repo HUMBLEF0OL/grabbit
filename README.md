@@ -154,7 +154,7 @@ one:
 - **Works with your AI assistant**: an MCP server lets Claude, Cursor or VS Code list, add, pause and remove your downloads ([set it up](docs/ai-assistants.md)).
 - **Leaves you some speed**: limit one download or all of them, only while you're at the computer.
 - **Day and dark mode, and themes**: Classic, Native, High contrast, Metro, Adwaita, Breeze,
-  Luna, Aero and Aqua, or your own in a text file ([how](docs/themes.md)). Everything larger, up
+  Luna, Aero, Aqua and Graphite, or your own in a text file ([how](docs/themes.md)). Everything larger, up
   to 200 %, with **View → Interface size**. And a portable version for USB sticks.
 - **Works from the keyboard and with screen readers** (Narrator, NVDA): every window, dialog and
   menu ([the keys](docs/keyboard-shortcuts.md)).

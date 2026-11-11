@@ -13,7 +13,7 @@ and dark, designed dark first. Each token has one job:
 
 | Token | Job |
 | --- | --- |
-| `bg`, `surface`, `field`, `tile`, `hover` | Window, panels (title bar, toolbar, side lists, footers), text boxes, icon tiles and pressed faces, pointer-over faces |
+| `bg`, `surface`, `field`, `tile`, `hover`, `press` | Window, panels (title bar, toolbar, side lists, footers), text boxes, icon tiles, pointer-over faces, pressed faces (a step deeper than `hover`, never the same) |
 | `line`, `line2` | Borders and dividers; the faint row lines in lists |
 | `ink`, `ink2`, `ink3` | Text: body, secondary (toolbar labels, field labels), muted (column heads, hints, counts) |
 | `dis` | Every greyed thing: text, icons, check-box borders |
@@ -23,8 +23,8 @@ and dark, designed dark first. Each token has one job:
 | `err`, `dng`, `ondng`, `errSoft`, `warnSoft` | Errors (their own hue), the danger button and its text, error and warning backgrounds |
 | `okt`, `chip`, `chipt` | Success text; the Web chip and its text |
 
-`assets/graphite.toml` maps these to the app's theme keys (`source/make_theme.py`, which also
-checks the contrast). Two deliberate differences from the mockup:
+The app's theme file `crates/app/assets/themes/graphite.toml` maps these to its theme keys
+(written by `source/make_theme.py`, which also checks the contrast). Two deliberate differences from the mockup:
 
 - **Focus ring**: the mockup draws focus as an `acc` border with a 3 px `ring` halo (25 % light,
   33 % dark). The app draws a ring alone, and needs it seen at 3:1, so `focus.ring` is `acc` at
