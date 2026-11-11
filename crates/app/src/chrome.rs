@@ -2,8 +2,9 @@
 //! notes/ui-spec/menus.md): menu bar, popup menus, toolbar, Categories tree, shell icons.
 //!
 //! Our client area also holds the menu bar (IDM's is non-client), so every main-window
-//! spec y is shifted by `MENU_H` = 20. Main-window spec "baseline" is origin + ascent (the row
-//! under the glyphs); `winui::text_font` takes the last ink row, i.e. spec baseline − 1.
+//! spec y is shifted by the menu bar's height ([`Layout::menu_h`], 20). Main-window spec
+//! "baseline" is origin + ascent (the row under the glyphs); `winui::text_font` takes the last
+//! ink row, i.e. spec baseline − 1.
 
 use egui::{Color32, Pos2, Rect, Stroke, Ui, pos2, vec2};
 
@@ -11,8 +12,88 @@ use crate::icons::Icon;
 use crate::scrollbar;
 use crate::winui::{self, text_font, text_width_font};
 
-/// Height of our menu bar band incl. its #f0f0f0 bottom line (IDM: non-client y −20…−1).
-pub const MENU_H: f32 = 20.0;
+/// Where the main window's bands and panes are, worked out once a frame from the theme
+/// (plan 05a): `App::paint` and the painters here read every place from it, none repeats a
+/// number. Heights and x are in points; y are from the top of the client area under a drawn
+/// title bar (the `o` every painter gets).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Layout {
+    /// A drawn title bar's height (the system's own title bar is outside the client area).
+    pub caption_h: f32,
+    /// The menu bar's row, its bottom line included (IDM's: non-client y −20…−1).
+    pub menu_h: f32,
+    /// The toolbar under it: its two etched lines and its band.
+    pub toolbar_h: f32,
+    /// A toolbar button's drop-down menu: its top, down from the toolbar's top.
+    pub drop_y: f32,
+    /// The status strip under the panes.
+    pub strip_h: f32,
+    /// The Categories pane's frame, and the list's left edge while the pane is hidden.
+    pub tree_left: f32,
+    /// The splitter between the pane and the list.
+    pub splitter_w: f32,
+    /// From the panes' bottom to the strip.
+    pub pane_gap: f32,
+    /// From the list's right edge to the window's.
+    pub list_right: f32,
+}
+
+impl Layout {
+    /// Today's layout (IDM's), in every theme.
+    pub const CLASSIC: Layout = Layout {
+        caption_h: winui::caption::CAPTION_H,
+        menu_h: 20.0,
+        toolbar_h: 70.0,
+        drop_y: 65.0,
+        strip_h: 22.0,
+        tree_left: 6.0,
+        splitter_w: 4.0,
+        pane_gap: 5.0,
+        list_right: 7.0,
+    };
+
+    /// The active theme's layout, this frame.
+    pub fn current() -> Layout {
+        Layout::CLASSIC
+    }
+
+    /// The toolbar's top, down from the client area's.
+    pub fn toolbar_top(&self) -> f32 {
+        self.menu_h
+    }
+
+    /// Where the panes (Categories, the list) start, down from the client area's top.
+    pub fn panes_top(&self) -> f32 {
+        self.menu_h + self.toolbar_h
+    }
+
+    /// The strip's top in a client area `h` high.
+    pub fn strip_top(&self, h: f32) -> f32 {
+        h - self.strip_h
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::Layout;
+
+    /// The numbers the main window was laid out with before they were shared (plan 05a): the
+    /// menu bar 20 high, the panes from client y 90, the strip 22, the pane at x 6, a
+    /// drop-down's menu at client y 85.
+    #[test]
+    fn the_classic_layout_keeps_its_numbers() {
+        let l = Layout::CLASSIC;
+        assert_eq!(l.toolbar_top(), 20.0);
+        assert_eq!(l.panes_top(), 90.0);
+        assert_eq!(l.toolbar_top() + l.drop_y, 85.0);
+        assert_eq!(l.strip_top(600.0), 578.0);
+        assert_eq!(
+            (l.tree_left, l.splitter_w, l.pane_gap, l.list_right),
+            (6.0, 4.0, 5.0, 7.0)
+        );
+        assert_eq!(l.caption_h, 32.0);
+    }
+}
 
 const fn rgb(r: u8, g: u8, b: u8) -> Color32 {
     Color32::from_rgb(r, g, b)
@@ -179,38 +260,45 @@ pub fn menus() -> Vec<(&'static str, f32, f32, f32)> {
 /// Paint the menu bar; returns what happened to its titles this frame, for [`menubar_next`]: a
 /// title clicked (or opened and shut by a screen reader), or the pointer over one (which only
 /// moves to it from another open menu).
-pub fn menu_bar(ui: &mut Ui, o: Pos2, width: f32, open: Option<usize>) -> Option<MenuBarEvent> {
+pub fn menu_bar(
+    ui: &mut Ui,
+    layout: &Layout,
+    o: Pos2,
+    width: f32,
+    open: Option<usize>,
+) -> Option<MenuBarEvent> {
     let p = ui.painter().clone();
+    let menu_h = layout.menu_h;
     fill(
         &p,
         o.x,
         o.y,
         o.x + width - 1.0,
-        o.y + MENU_H - 2.0,
+        o.y + menu_h - 2.0,
         MENUBAR_BG(),
     );
     // The bar's last row (light: #f2f2f2; dark: the bar's own).
     fill(
         &p,
         o.x,
-        o.y + MENU_H - 2.0,
+        o.y + menu_h - 2.0,
         o.x + width - 1.0,
-        o.y + MENU_H - 2.0,
+        o.y + menu_h - 2.0,
         MENUBAR_BOTTOM(),
     );
     fill(
         &p,
         o.x,
-        o.y + MENU_H - 1.0,
+        o.y + menu_h - 1.0,
         o.x + width - 1.0,
-        o.y + MENU_H - 1.0,
+        o.y + menu_h - 1.0,
         MENUBAR_LINE(),
     );
     let mut hit = None;
     // For screen readers and UI Automation (#113): a menu bar whose titles are menu items that
     // open their menus (Click, as with the mouse).
     let bar = ui.interact(
-        winui::rect(Rect::from_min_size(o, vec2(width, MENU_H))),
+        winui::rect(Rect::from_min_size(o, vec2(width, menu_h))),
         egui::Id::unique("menubar-node"),
         egui::Sense::hover(),
     );
@@ -219,7 +307,7 @@ pub fn menu_bar(ui: &mut Ui, o: Pos2, width: f32, open: Option<usize>) -> Option
     let released = ui.input(|x| x.pointer.any_released());
     for (i, (label, x, w, tx)) in menus().iter().enumerate() {
         // From the leading edge: the first menu at the right in RTL.
-        let rc = winui::rect(Rect::from_min_size(o + vec2(*x, 0.0), vec2(*w, MENU_H)));
+        let rc = winui::rect(Rect::from_min_size(o + vec2(*x, 0.0), vec2(*w, menu_h)));
         let resp = titles_ui.interact(rc, egui::Id::unique(("menubar", i)), winui::pointer_only());
         winui::expose(&resp, egui::Role::MenuItem, &plain(label).0, true, None);
         ui.ctx().accesskit_node_builder(resp.id, |n| {
@@ -268,9 +356,13 @@ pub fn menu_bar(ui: &mut Ui, o: Pos2, width: f32, open: Option<usize>) -> Option
 
 /// The menu-bar title under `pos` (main-window coordinates), as [`menu_bar`] lays them out at
 /// `o`: the first menu at the right in RTL.
-pub fn menubar_title_at(o: Pos2, pos: Pos2) -> Option<usize> {
+pub fn menubar_title_at(layout: &Layout, o: Pos2, pos: Pos2) -> Option<usize> {
     menus().iter().position(|(_, x, w, _)| {
-        winui::rect(Rect::from_min_size(o + vec2(*x, 0.0), vec2(*w, MENU_H))).contains(pos)
+        winui::rect(Rect::from_min_size(
+            o + vec2(*x, 0.0),
+            vec2(*w, layout.menu_h),
+        ))
+        .contains(pos)
     })
 }
 
@@ -1316,24 +1408,22 @@ fn popup_level<C: Clone>(
 
 pub enum ToolbarEvent {
     Click(usize),
-    /// A drop-down button's arrow: its menu opens at this point (button left, y 87).
+    /// A drop-down button's arrow: its menu opens at this point (the button's left edge,
+    /// [`Layout::drop_y`] under the toolbar's top).
     Drop(usize, Pos2),
 }
 
-/// Paint the etch (y 20, 21) and the toolbar band (y 22–91).
-/// Client y where the panes (Categories, list) start: below the toolbar band, in both modes.
-pub fn pane_top() -> f32 {
-    70.0
-}
-
+/// Paint the etch (the toolbar's first two rows, client y 20 and 21 under the menu bar) and the
+/// toolbar band under it, down to where the panes start ([`Layout::panes_top`]).
 pub fn toolbar(
     ui: &mut Ui,
+    layout: &Layout,
     o: Pos2,
     width: f32,
     buttons: &[(Icon, &str, bool)],
 ) -> Option<ToolbarEvent> {
     let p = ui.painter().clone();
-    let top = o.y + MENU_H;
+    let top = o.y + layout.toolbar_top();
     let c = crate::theme::colors();
     fill(&p, o.x, top, o.x + width - 1.0, top, c.toolbar_line);
     fill(
@@ -1345,8 +1435,8 @@ pub fn toolbar(
         c.toolbar_line_light,
     );
     // Both modes (light-main.md; dark changes only colours): Tahoma labels, 66 px buttons, a
-    // 68 px band.
-    let (font, base_w, band_h) = (winui::tahoma(), 66.0f32, 68.0);
+    // 68 px band under the etch's two rows.
+    let (font, base_w, band_h) = (winui::tahoma(), 66.0f32, layout.toolbar_h - 2.0);
     let band = Rect::from_min_size(pos2(o.x, top + 2.0), vec2(width, band_h));
     p.rect_filled(band, 0.0, WINDOW_BG());
     let mut x = o.x;
@@ -1496,10 +1586,10 @@ pub fn toolbar(
         // The arrow is a button of its own (a split button): its menu lists every queue, so it
         // works while the main one's button is greyed.
         if resp.clicked() && (*enabled || on_arrow) {
-            // The drop-down menu's top-left is the button's left edge at client y 85; in RTL its
-            // top-right at the button's right edge.
+            // The drop-down menu's top-left is the button's left edge, `drop_y` under the
+            // toolbar's top (client y 85); in RTL its top-right at the button's right edge.
             event = Some(if on_arrow {
-                ToolbarEvent::Drop(i, pos2(winui::mx(x), o.y + 85.0))
+                ToolbarEvent::Drop(i, pos2(winui::mx(x), top + layout.drop_y))
             } else {
                 ToolbarEvent::Click(i)
             });
@@ -1583,10 +1673,14 @@ pub enum TreeEvent {
     Context(usize, Pos2),
 }
 
-/// The Categories pane: frame x 6 .. `right` (IDM: 148, resizable by the splitter), caption, close "x", tree (rows 16 px, indent 19).
+/// The Categories pane: frame x [`Layout::tree_left`] .. `right` (IDM: 6 .. 148, resizable by
+/// the splitter), from the panes' top to `bottom` (the strip's top) less the pane gap; caption,
+/// close "x", tree (rows 16 px, indent 19).
+#[allow(clippy::too_many_arguments)]
 pub fn categories(
     ui: &mut Ui,
     icons: &mut ShellIcons,
+    layout: &Layout,
     o: Pos2,
     bottom: f32,
     right: f32,
@@ -1595,12 +1689,13 @@ pub fn categories(
     keys: bool,
 ) -> Option<TreeEvent> {
     let p = ui.painter().clone();
-    let y0 = o.y + pane_top() + MENU_H; // frame top
+    let y0 = o.y + layout.panes_top(); // frame top
+    let left = o.x + layout.tree_left;
     // Laid out in English (frame x 6 .. right); every part made where it is on screen — the pane
     // on the right in RTL, its tree indenting from the right.
     let frame = winui::rect(Rect::from_min_max(
-        pos2(o.x + 6.0, y0),
-        pos2(right, bottom - 5.0),
+        pos2(left, y0),
+        pos2(right, bottom - layout.pane_gap),
     ));
     p.rect_stroke(
         frame,
@@ -1608,19 +1703,12 @@ pub fn categories(
         Stroke::new(1.0, CAT_FRAME()),
         egui::StrokeKind::Inside,
     );
-    winui::fill_l(
-        &p,
-        o.x + 6.0,
-        y0 + 18.0,
-        right - 1.0,
-        y0 + 18.0,
-        CAT_FRAME(),
-    ); // caption underline
+    winui::fill_l(&p, left, y0 + 18.0, right - 1.0, y0 + 18.0, CAT_FRAME()); // caption underline
     // i18n: title of the side pane that lists the categories
     let caption = crate::i18n::t("Categories");
     // Short of the close box: in a narrow pane or a long translation, "..." and whole on hover.
-    let shown = winui::ellipsize(&p, &winui::tahoma(), caption, right - 21.0 - (o.x + 12.0));
-    let drawn = text_font(&p, winui::tahoma(), o.x + 12.0, y0 + 13.0, &shown, TEXT());
+    let shown = winui::ellipsize(&p, &winui::tahoma(), caption, right - 21.0 - (left + 6.0));
+    let drawn = text_font(&p, winui::tahoma(), left + 6.0, y0 + 13.0, &shown, TEXT());
     if shown != caption {
         winui::full_on_hover(ui, drawn, "categories-caption", caption);
     }
@@ -1647,7 +1735,11 @@ pub fn categories(
     if cr.clicked() {
         event = Some(TreeEvent::Close);
     }
-    let tree = Rect::from_min_max(pos2(o.x + 8.0, y0 + 18.0), pos2(right - 3.0, bottom - 9.0));
+    // Inside the frame: 2 from its start, 3 from its end and 4 from its bottom.
+    let tree = Rect::from_min_max(
+        pos2(left + 2.0, y0 + 18.0),
+        pos2(right - 3.0, bottom - layout.pane_gap - 4.0),
+    );
     p.rect_filled(winui::rect(tree), 0.0, TREE_BG());
 
     // Scroll bars (notes/ui-spec/scrollbars.md "Categories tree"): by rows vertically, by

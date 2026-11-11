@@ -304,9 +304,6 @@ fn place_to_take(item: &Item, items: &[Item]) -> Option<PathBuf> {
     }
 }
 
-/// The status strip's height, under the list and the Categories pane.
-const STRIP_H: f32 = 22.0;
-
 impl Cmd {
     /// The key that runs this command anywhere in the main window, as the shortcuts list writes
     /// it (Help → Keyboard shortcuts); menus show it beside the item.
@@ -1256,11 +1253,19 @@ impl App {
 
     /// The strip under the list: how many downloads are shown and selected, how many run and
     /// how fast in all (beyond IDM, which has no status bar).
-    fn status_strip(&self, ui: &Ui, o: Pos2, w: f32, h: f32, shown: usize) {
+    fn status_strip(
+        &self,
+        ui: &Ui,
+        layout: &chrome::Layout,
+        o: Pos2,
+        w: f32,
+        h: f32,
+        shown: usize,
+    ) {
         let p = ui.painter();
-        let top = o.y + h - STRIP_H;
-        // Centred in the band it reads as: the strip and the 5 px gap above it, under the panes.
-        let baseline = winui::baseline_in(top - 5.0, STRIP_H + 5.0);
+        let top = o.y + layout.strip_top(h);
+        // Centred in the band it reads as: the strip and the gap above it, under the panes.
+        let baseline = winui::baseline_in(top - layout.pane_gap, layout.strip_h + layout.pane_gap);
         let n = shown as u64;
         let mut left = crate::i18n::tn(n, "{n} download", "{n} downloads");
         let selected = self.selection.ids().len() as u64;
@@ -6335,9 +6340,15 @@ impl App {
     /// The main window's title bar where the theme draws its own (Windows only: elsewhere the
     /// window manager owns the title bar): the frame is switched to ours or back as the theme
     /// changes, the bar drawn at the top of `full`; returns what is left for the layout.
-    fn drawn_caption(&mut self, ui: &mut Ui, full: egui::Rect) -> egui::Rect {
+    fn drawn_caption(
+        &mut self,
+        ui: &mut Ui,
+        layout: &chrome::Layout,
+        full: egui::Rect,
+    ) -> egui::Rect {
         {
-            use crate::winui::caption::{self, CAPTION_H, CaptionButton};
+            use crate::winui::caption::{self, CaptionButton};
+            let caption_h = layout.caption_h;
             let want =
                 crate::theme::current().controls.caption != crate::palette::CaptionLook::System;
             if self.drawn_frame != Some(want)
@@ -6350,7 +6361,7 @@ impl App {
             if !want || self.drawn_frame != Some(true) {
                 return full;
             }
-            let rect = egui::Rect::from_min_size(full.min, egui::vec2(full.width(), CAPTION_H));
+            let rect = egui::Rect::from_min_size(full.min, egui::vec2(full.width(), caption_h));
             if let Some(h) = self.main_hwnd {
                 let m = crate::win32::max_button_state(h);
                 caption::frame_maximize(m.hot, m.pressed);
@@ -6377,7 +6388,7 @@ impl App {
                 crate::win32::set_caption_hits(
                     h,
                     crate::win32::CaptionHits {
-                        strip_h: (CAPTION_H * ppp).round() as i32,
+                        strip_h: (caption_h * ppp).round() as i32,
                         icon: px(bar.icon),
                         buttons: bar.buttons.iter().map(|r| px(*r)).collect(),
                         max_button: Some(1),
@@ -6396,7 +6407,7 @@ impl App {
                 }
                 _ => {}
             }
-            egui::Rect::from_min_max(egui::pos2(full.min.x, full.min.y + CAPTION_H), full.max)
+            egui::Rect::from_min_max(egui::pos2(full.min.x, full.min.y + caption_h), full.max)
         }
     }
 
@@ -6415,9 +6426,11 @@ impl App {
         let full = ui.max_rect();
         // The client area, laid out from the right in a right-to-left interface (winui).
         let _surface = winui::Surface::enter(full.min.x, full.max.x);
+        // Where every band and pane goes this frame (chrome::Layout).
+        let layout = chrome::Layout::current();
         // A style theme's title bar, drawn above the layout (Windows; #45), mirrored right to
         // left as the progress window's.
-        let full = self.drawn_caption(ui, full);
+        let full = self.drawn_caption(ui, &layout, full);
         let o = full.min;
         let (w, h) = (full.width(), full.height());
         let mut chosen: Option<(Cmd, Option<u64>)> = None;
@@ -6495,18 +6508,18 @@ impl App {
         }
 
         // Menu bar and its popups: which menu is open is chrome::menubar_next's to say.
-        if let Some(event) = chrome::menu_bar(ui, o, w, self.open_menu) {
+        if let Some(event) = chrome::menu_bar(ui, &layout, o, w, self.open_menu) {
             self.open_menu = chrome::menubar_next(self.open_menu, event);
         }
         // A menu opened by Left or Right is drawn in the same pass as the one it replaces (a
-        // second turn): on X11 the bar's menus share one window (chrome::popup), and a pass
-        // without a menu closed it, a new window opening for the next (#277).
+        // second turn): a pass without the old menu, then one with the new, closed one menu
+        // window and opened another, where they can be shown in turn.
         for _ in 0..2 {
             let Some(i) = self.open_menu else { break };
             let x = chrome::menus()[i].1;
             let entries = self.menu_entries(i);
-            // Under the item's leading edge (the menu's top-right in RTL).
-            let at = pos2(winui::mx(o.x + x), o.y + chrome::MENU_H - 1.0);
+            // Under the item's leading edge (the menu's top-right in RTL), on the bar's last row.
+            let at = pos2(winui::mx(o.x + x), o.y + layout.menu_h - 1.0);
             let event = match chrome::popup(
                 &ctx,
                 MenuKind::Bar,
@@ -6532,7 +6545,7 @@ impl App {
                     let press =
                         ui.input(|x| x.pointer.press_origin().filter(|_| x.pointer.any_pressed()));
                     let press_on_title =
-                        press.is_some_and(|at| chrome::menubar_title_at(o, at).is_some());
+                        press.is_some_and(|at| chrome::menubar_title_at(&layout, o, at).is_some());
                     Some(MenuBarEvent::Dismissed { press_on_title })
                 }
             };
@@ -6587,7 +6600,7 @@ impl App {
             ),
         ];
         let tb: Vec<(Icon, &str, bool)> = buttons.iter().map(|(i, l, e, _)| (*i, *l, *e)).collect();
-        match chrome::toolbar(ui, o, w, &tb) {
+        match chrome::toolbar(ui, &layout, o, w, &tb) {
             Some(ToolbarEvent::Click(k)) => chosen = Some((buttons[k].3, None)),
             Some(ToolbarEvent::Drop(k, at)) => match buttons[k].0 {
                 Icon::AddTorrent => self.open_popup(Popup::TorrentDrop, at),
@@ -6603,10 +6616,13 @@ impl App {
             // The splitter: the 4 px gap between the pane and the list, dragged sideways.
             let max_w = (w * 0.6).max(100.0);
             let cat_w = (self.settings.categories_width as f32).clamp(100.0, max_w);
-            let right = o.x + 6.0 + cat_w;
+            let right = o.x + layout.tree_left + cat_w;
             let split = winui::rect(egui::Rect::from_min_max(
-                pos2(right, o.y + chrome::MENU_H + chrome::pane_top()),
-                pos2(right + 4.0, o.y + h - STRIP_H - 5.0),
+                pos2(right, o.y + layout.panes_top()),
+                pos2(
+                    right + layout.splitter_w,
+                    o.y + layout.strip_top(h) - layout.pane_gap,
+                ),
             ));
             let sr = ui.interact(
                 split,
@@ -6621,7 +6637,7 @@ impl App {
             {
                 // The pointer stays on the splitter's middle (the pane's width from its leading
                 // edge: the right in RTL).
-                let nw = (winui::mx(p.x) - o.x - 6.0 - 2.0)
+                let nw = (winui::mx(p.x) - o.x - layout.tree_left - layout.splitter_w / 2.0)
                     .round()
                     .clamp(100.0, max_w);
                 self.settings.categories_width = nw as u32;
@@ -6681,8 +6697,9 @@ impl App {
             if let Some(ev) = chrome::categories(
                 ui,
                 &mut self.icons,
+                &layout,
                 o,
-                o.y + h - STRIP_H,
+                o.y + layout.strip_top(h),
                 right,
                 &tree,
                 self.tree_keys && free,
@@ -6709,18 +6726,22 @@ impl App {
                     }
                 }
             }
-            6.0 + cat_w + 4.0
+            layout.tree_left + cat_w + layout.splitter_w
         } else {
-            6.0
+            layout.tree_left
         };
 
         // Download list.
         let (ids, rows) = self.list_rows();
         self.selection.retain(&ids);
         let (selected, focus) = self.selection.rows(&ids);
+        // Its bottom edge is exclusive: the frame's last row on the pane's.
         let outer = egui::Rect::from_min_max(
-            pos2(o.x + list_left, o.y + chrome::MENU_H + chrome::pane_top()),
-            pos2(o.x + w - 7.0, o.y + h - STRIP_H - 4.0),
+            pos2(o.x + list_left, o.y + layout.panes_top()),
+            pos2(
+                o.x + w - layout.list_right,
+                o.y + layout.strip_top(h) - layout.pane_gap + 1.0,
+            ),
         );
         self.list.menu_open = self.popup.is_some() || self.open_menu.is_some();
         // Another node shows from its top (its rows aren't the last one's).
@@ -6786,7 +6807,7 @@ impl App {
         {
             chosen = Some((cmd, None));
         }
-        self.status_strip(ui, o, w, h, ids.len());
+        self.status_strip(ui, &layout, o, w, h, ids.len());
         if let Some((i, pos)) = r.context {
             self.open_popup(Popup::Item(i.map(|i| ids[i])), pos);
         }
