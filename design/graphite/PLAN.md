@@ -72,10 +72,12 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
 
 - [x] 01 Prepare
 - [x] 02 Theme (complete, in origin's `dev` since 2026-11-11, pushed directly instead of a PR)
-- [ ] 02b Chrome gate and roles
+- [x] 02b Chrome gate and roles (complete, in origin's `dev` since 2026-11-11, pushed directly
+      instead of a PR; nothing on screen changes, proof in its plan)
 - [x] 03 Icons (complete, in origin's `dev` since 2026-11-11, pushed directly instead of a PR;
       checks in its plan)
-- [ ] 03b Extra glyphs
+- [x] 03b Extra glyphs (complete, in origin's `dev` since 2026-11-11, pushed directly instead of
+      a PR; nothing on screen changes)
 - [ ] 04 Typeface
 - [ ] 05a Layout model
 - [ ] 05b Main window
