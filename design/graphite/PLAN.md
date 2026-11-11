@@ -54,7 +54,7 @@ What can run side by side: after 02, the tracks **03 → 04 → 05 → 06** (mai
 
 - [x] 01 Prepare
 - [x] 02 Theme
-- [ ] 03 Icons
+- [x] 03 Icons
 - [ ] 04 Typeface
 - [ ] 05a Layout model
 - [ ] 05b Main window
