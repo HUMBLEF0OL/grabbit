@@ -152,7 +152,7 @@ Line numbers drift as phases land: find each item by its name first.
   heads nearly touch. Progress window: "Resume capability" nearly touches its value.
 - Every other window of the 56 Graphite states shot (light, 100 %; `pr-shots` `04-typeface/all/`):
   nothing clipped.
-- 200 % (every Graphite state, light, by `baseline.ps1` with `interface_size` 200, plus the main
+- 200 % (every Graphite state, light, by `baseline.ps1 -InterfaceSize 200`, plus the main
   window, Options and Download File Info dark; `pr-shots` `04-typeface/200/`): Geist sharp at
   every size. The 100 % list above holds (Save to's and Remote's paragraphs fit at 200 %), and:
   - Main window: the toolbar is wider than the window, which the screen caps: "Add Torr…",

@@ -36,7 +36,9 @@ param(
   # after-shots, which then go to design/graphite/shots-<theme>/ unless -OutDir says otherwise.
   [string]$Theme = "classic",
   # Only these mock states (file names, "main-plain", "addurl"); all of them when empty.
-  [string[]]$Shots = @()
+  [string[]]$Shots = @(),
+  # View → Interface size, percent (100, 125, 150, 175 or 200): 200 for a phase's 200 % check.
+  [ValidateSet(100, 125, 150, 175, 200)][int]$InterfaceSize = 100
 )
 $ErrorActionPreference = "Stop"
 $graphite = Split-Path -Parent $PSScriptRoot
@@ -246,7 +248,7 @@ function With-App([bool]$dark, [scriptblock]$body) {
   Set-Content -Encoding utf8 "$Work\data\downloads.json" (
     '{"next_id":1,"items":[],"version":2,"settings":{"helpers_asked":true,"extension_never_ask":true' +
     ',"dark_mode_support":' + $d + ',"always_dark":' + $d + ',"update_check":false,"theme":"' + $Theme + '"' +
-    ',"interface_size":100,"torrent_incoming":false,"torrent_upnp":false,"torrent_dht":false,"torrent_lsd":false' +
+    ',"interface_size":' + $InterfaceSize + ',"torrent_incoming":false,"torrent_upnp":false,"torrent_dht":false,"torrent_lsd":false' +
     ',"category_dirs":[["General","' + ("$Work\Downloads" -replace '\\', '\\') + '"]]}}')
   $env:MDM_DATA_DIR = "$Work\data"
   $env:MDM_OFFSCREEN = "1"
@@ -315,7 +317,7 @@ foreach ($m in $modes) {
   $p = @{
     Exe = $exe; Server = $server; Torrent = (Join-Path $lab "Open Movie Night.torrent")
     OutDir = $dir; Work = $Work; Only = @($crash); Show = $show; Dark = $dark
-    Settings = '"theme":"' + $Theme + '","interface_size":100'
+    Settings = '"theme":"' + $Theme + '","interface_size":' + $InterfaceSize
   }
   & (Join-Path $lab "docs-shots.ps1") @p
   $c = Join-Path $dir "$crash.png"
