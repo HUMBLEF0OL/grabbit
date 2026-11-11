@@ -426,6 +426,7 @@ pub fn strengthen(p: &mut Palette) {
     p.button_default_border = p.accent;
     p.muted = readable(p.muted, p.window, 7.0);
     p.menu_shortcut = readable(p.menu_shortcut, p.menu, 7.0);
+    p.button_danger = readable(p.button_danger, p.button_danger_text, 7.0);
     p.chevron = p.text;
     p.combo_chevron = p.text;
     p.sort_arrow = p.text;

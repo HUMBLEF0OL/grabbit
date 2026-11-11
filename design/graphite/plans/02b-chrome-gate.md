@@ -52,7 +52,9 @@ buttons, banners). Adding them inside one track would make the other wait for it
 
 ## Done when
 
-- [ ] Graphite reports `ChromeLook::Graphite`, every other theme `Classic`; the new roles exist with
+- [x] Graphite reports `ChromeLook::Graphite`, every other theme `Classic`; the new roles exist with
       defaults for every theme and Graphite's values from `pal.py`
-- [ ] Nothing on screen changes (one Classic and one Graphite pair show it; no CHANGELOG line)
-- [ ] docs/themes.md lists the key and roles
+- [x] Nothing on screen changes (no CHANGELOG line). Proof instead of a shot pair: nothing that
+      draws reads `chrome` or the new roles (only `derive.rs`, `palette.rs`, the uncalled
+      `theme::chrome` and `winui::icon_tile`); `themeicons::paint` passes the same ink as before
+- [x] docs/themes.md lists the key and roles

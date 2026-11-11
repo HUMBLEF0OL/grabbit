@@ -749,7 +749,8 @@ pub fn paint(
     paint_in(ui, painter, need, rc, ink(enabled), enabled)
 }
 
-/// [`paint`], a one-colour icon in `ink` rather than the text's colour.
+/// [`paint`], a one-colour icon in `ink` rather than the text's colour (a colour icon keeps
+/// its own colours).
 pub fn paint_in(
     ui: &egui::Ui,
     painter: &egui::Painter,

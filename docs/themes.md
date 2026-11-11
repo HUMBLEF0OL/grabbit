@@ -140,11 +140,12 @@ focus = "ring"
 - **`[sizes]`** — corner radii, border widths, font sizes and row heights, in pixels.
 - **`[controls]`** — the shape of text boxes, check boxes, buttons, progress bars, scroll bars,
   the focus mark and the title bar; and `chrome`, the windows' layout: `classic` (IDM's, the
-  default) or `graphite` (Graphite's). The layout changes nothing yet: the coming Graphite look
-  draws its title bar, toolbar, footers and banners by it, with the roles `panel`, `tile`,
-  `menu.shortcut`, `toolbar.checked`, `button.danger`, `button.danger.text`, `banner.error`,
-  `banner.info`, `banner.warning`, `glow`, `button.accent.top` and `progress.bar.end`
-  (`glow`, `button.accent.top` and `progress.bar.end` transparent: none, the face flat).
+  default) or `graphite` (Graphite's). The layout changes nothing yet: the Graphite theme's
+  coming layout draws its title bar, toolbar, footers and banners by it, with the roles `panel`,
+  `tile`, `menu.shortcut`, `toolbar.checked`, `button.danger`, `button.danger.text`,
+  `banner.error`, `banner.info`, `banner.warning`, `glow`, `button.accent.top` and
+  `progress.bar.end` (`glow`, `button.accent.top` and `progress.bar.end` are transparent by
+  default: no glow, a flat face).
 - **`icons`** — `color`, `mono` (one colour) or `accent`.
 - **`contrast = "high"`** — strengthens every edge and text colour on top of the rest.
 

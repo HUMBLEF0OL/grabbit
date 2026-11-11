@@ -311,17 +311,17 @@ palette! {
     caption_inactive: "caption.inactive", "A title bar MDM draws, while its window isn't the active one (transparent: as when active)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
     // ---- other ----
     drop_edge: "drop-target.edge", "The drop target's edge at rest" = grey(0x8d), grey(0x8d);
-    // ---- the Graphite layout's parts (`[controls] chrome = "graphite"`); other themes keep
-    // today's colours, so nothing they draw changes ----
-    panel: "panel", "A band behind the title bar, toolbar, status bar and dialog footers" = grey(0x39), grey(0xf0);
-    tile: "tile", "The square behind a dialog's or an empty list's icon" = grey(0x44), grey(0xe6);
-    menu_shortcut: "menu.shortcut", "A menu item's keyboard shortcut, and Find's" = grey(0xab), grey(0x6d);
-    toolbar_checked: "toolbar.checked", "A toolbar toggle that is on" = rgb(0x2a, 0x36, 0x40), rgb(0xcc, 0xe8, 0xff);
-    button_danger: "button.danger", "A button that deletes: its face" = rgb(0xc4, 0x2b, 0x1c), rgb(0xc4, 0x2b, 0x1c);
-    button_danger_text: "button.danger.text", "A button that deletes: its text" = grey(0xff), grey(0xff);
-    banner_error: "banner.error", "A banner telling of an error, behind its text" = rgb(0x44, 0x27, 0x26), rgb(0xfd, 0xe7, 0xe9);
-    banner_info: "banner.info", "A banner telling of a state, behind its text" = rgb(0x2d, 0x4a, 0x60), rgb(0xe5, 0xf1, 0xfb);
-    banner_warning: "banner.warning", "A banner warning, behind its text" = rgb(0x43, 0x35, 0x19), rgb(0xff, 0xf4, 0xce);
+    // ---- the Graphite layout's parts: drawn only where `[controls] chrome = "graphite"`. The
+    // classic look keeps today's colours, derived themes get theirs from derive.rs ----
+    panel: "panel", "A band behind the title bar, toolbar, status bar and dialog footers (Graphite layout)" = grey(0x39), grey(0xf0);
+    tile: "tile", "The square behind a dialog's or an empty list's icon (Graphite layout)" = grey(0x44), grey(0xe6);
+    menu_shortcut: "menu.shortcut", "A menu item's keyboard shortcut, and Find's (Graphite layout)" = grey(0xab), grey(0x6d);
+    toolbar_checked: "toolbar.checked", "A toolbar toggle that is on (Graphite layout)" = rgb(0x2a, 0x36, 0x40), rgb(0xcc, 0xe8, 0xff);
+    button_danger: "button.danger", "A button that deletes: its face (Graphite layout)" = rgb(0xc4, 0x2b, 0x1c), rgb(0xc4, 0x2b, 0x1c);
+    button_danger_text: "button.danger.text", "A button that deletes: its text (Graphite layout)" = grey(0xff), grey(0xff);
+    banner_error: "banner.error", "A banner telling of an error, behind its text (Graphite layout)" = rgb(0x44, 0x27, 0x26), rgb(0xfd, 0xe7, 0xe9);
+    banner_info: "banner.info", "A banner telling of a state, behind its text (Graphite layout)" = rgb(0x2d, 0x4a, 0x60), rgb(0xe5, 0xf1, 0xfb);
+    banner_warning: "banner.warning", "A banner warning, behind its text (Graphite layout)" = rgb(0x43, 0x35, 0x19), rgb(0xff, 0xf4, 0xce);
     glow: "glow", "The soft shadow under the default button and a progress bar's fill, where the style draws one (transparent: none)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
     button_accent_top: "button.accent.top", "An accent button's face at its top, where the style shades it (transparent: flat, the face's colour)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
     progress_bar_end: "progress.bar.end", "A progress bar's fill at its end, where the style shades it (transparent: flat, the fill's colour)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
@@ -856,9 +856,10 @@ mod tests {
                     ("text / warning banner", p.text, p.banner_warning),
                     ("text / panel", p.text, p.panel),
                     ("text / tile", p.text, p.tile),
+                    ("toolbar text / checked", p.text, p.toolbar_checked),
                 ] {
                     let r = contrast(fg, bg);
-                    assert!(r >= 4.5, "{} {}: {what} {r:.2}", t.id, p.dark);
+                    assert!(r >= min, "{} {}: {what} {r:.2}", t.id, p.dark);
                 }
             }
         }

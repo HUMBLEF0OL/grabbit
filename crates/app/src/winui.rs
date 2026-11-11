@@ -5377,7 +5377,8 @@ pub fn spin_arrows(ui: &mut Ui, rc: Rect, enabled: bool, id: &str) -> i32 {
 
 /// A square in the theme's `tile` colour holding the icon set's `need` in `tint`, half the
 /// tile's size: a dialog's icon (40, radius 8), an empty list's or About's (56, radius 14).
-/// False when the theme's icon set lacks `need` (the tile is drawn, empty).
+/// The tint applies to one-colour sets; a colour set draws its own colours. False when the
+/// theme has no icon set or its set lacks `need` (the tile is drawn, empty).
 // ponytail: no caller until 05b and 07a (plans/02b-chrome-gate.md), one painter for both.
 #[allow(dead_code)]
 pub fn icon_tile(ui: &Ui, rc: Rect, need: &str, tint: Color32, radius: f32) -> bool {
