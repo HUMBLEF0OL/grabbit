@@ -86,6 +86,59 @@ pub const NEEDS: &[(&str, &str)] = &[
     ("ui-to-tray", "Title bar: Hide to the notification area"),
 ];
 
+/// Icons only the Graphite layout draws (`[controls] chrome = "graphite"`): its menu rows,
+/// buttons, Options pages, banners and tiles. No classic need stands for them, so a set that
+/// lacks one draws nothing there; only Graphite's set carries them.
+pub const EXTRAS: &[(&str, &str)] = &[
+    (
+        "gx-link",
+        "An address: the paste field, address boxes, Refresh download address",
+    ),
+    (
+        "gx-download",
+        "Download: the paste bar's button, updates, the drop target",
+    ),
+    ("gx-search", "Find, Find next, Look up"),
+    ("gx-sidebar", "Toolbar: the details pane"),
+    ("gx-refresh", "Synchronization queue, Redownload"),
+    ("gx-gauge", "Download limits, Speed limiter"),
+    ("gx-filter", "A filtered column, Clear all filters"),
+    ("gx-window", "Show progress window, Open MDM"),
+    ("gx-external", "Open"),
+    ("gx-apps", "Open with…"),
+    ("gx-edit", "Move/Rename, Edit queue"),
+    ("gx-shield", "Verify checksum, Options: Proxy / Socks"),
+    ("gx-info", "Properties, Help contents"),
+    ("gx-plus", "Add: a category, a queue"),
+    ("gx-minus", "Delete from queue"),
+    ("gx-dots", "Browse (…)"),
+    ("gx-grip", "Download complete: the drag handle"),
+    ("gx-pointer", "On double-click"),
+    ("gx-hash", "Add batch download"),
+    ("gx-copy", "Add batch download from clipboard"),
+    ("gx-rss", "RSS feeds"),
+    ("gx-upload", "Export"),
+    ("gx-merge", "Video helpers (joining streams)"),
+    ("gx-power", "When the queue is done: the countdown"),
+    ("gx-browser", "A browser extension"),
+    ("gx-bug", "Report a problem"),
+    ("gx-keyboard", "Keyboard shortcuts"),
+    ("gx-world", "Home page, Options: Regional"),
+    ("gx-send", "Tell a friend"),
+    ("gx-gift", "Support MDM"),
+    ("gx-adjust", "Options: General"),
+    ("gx-network", "Options: Connection"),
+    ("gx-device", "Options: Remote"),
+    ("gx-key", "Options: Sites logins"),
+    ("gx-user", "Options: Accounts"),
+    ("gx-volume", "Options: Sounds"),
+];
+
+/// Whether a set's file named for `need` is read: a need, or an extra.
+fn known(need: &str) -> bool {
+    NEEDS.iter().chain(EXTRAS).any(|(n, _)| *n == need)
+}
+
 /// One icon file of a set: its bytes, whether it is a picture (PNG) rather than a drawing (SVG),
 /// and whether it is drawn in one colour (white, tinted with the theme's text colour).
 #[derive(Clone)]
@@ -99,7 +152,7 @@ struct File {
 /// pictures, which don't scale cleanly, 32 and 48 (a screen at 150 % to 300 %).
 pub const SIZES: [u32; 4] = [16, 24, 32, 48];
 
-/// One set: each need's icon at the sizes it has ([`SIZES`]).
+/// One set: each need's (and extra's, [`EXTRAS`]) icon at the sizes it has ([`SIZES`]).
 #[derive(Default)]
 pub struct Set {
     files: HashMap<(String, u32), File>,
@@ -141,7 +194,7 @@ impl Set {
     /// icon themes' one-colour icons, GNOME's and KDE's): its greys take the theme's ink when
     /// drawn. A PNG keeps its colours, unless its name ends in `-symbolic`: its greys are made
     /// white, to be tinted with the ink.
-    /// Files of no known need are left out.
+    /// Files of no known need (nor extra, [`EXTRAS`]) are left out.
     fn from_files<'a>(
         files: impl IntoIterator<Item = (u32, &'a str, Arc<[u8]>)>,
         mono: bool,
@@ -155,7 +208,7 @@ impl Set {
                 Some(n) => (n, true),
                 None => (stem, false),
             };
-            if !NEEDS.iter().any(|(n, _)| *n == need) {
+            if !known(need) {
                 continue;
             }
             let file = match ext.to_ascii_lowercase().as_str() {
@@ -568,8 +621,9 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "tb-stop.png", "ui-to-tray.png"]);
     sets.insert("aqua".to_owned(), Arc::new(Set::from_files(aqua, false)));
     // Tabler Icons 3.31.0's outline icons (Paweł Kuna, MIT, assets/themes/graphite/icons/LICENSE),
-    // drawn white at stroke 1.75 to be tinted, every need at 16 and 24 pixels; SOURCES.txt says
-    // which icon each need is. Written by design/graphite/source/export_icons.py.
+    // drawn white at stroke 1.75 to be tinted, every need and extra (EXTRAS) at 16 and 24
+    // pixels; SOURCES.txt says which icon each is. Written by
+    // design/graphite/source/export_icons.py.
     let graphite = builtin_files!("graphite";
         16: ["cat-all.svg", "cat-compressed.svg", "cat-documents.svg", "cat-finished.svg",
             "cat-folder-open.svg", "cat-folder.svg", "cat-music.svg", "cat-programs.svg",
@@ -577,7 +631,16 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "ft-archive.svg", "ft-audio.svg", "ft-code.svg", "ft-disk-image.svg", "ft-document.svg",
             "ft-executable.svg", "ft-font.svg", "ft-generic.svg", "ft-image.svg", "ft-pdf.svg",
             "ft-presentation.svg", "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.svg",
-            "ft-video.svg", "misc-down.svg", "misc-emblem-ok.svg", "misc-remove.svg", "misc-up.svg",
+            "ft-video.svg",
+            "gx-adjust.svg", "gx-apps.svg", "gx-browser.svg", "gx-bug.svg", "gx-copy.svg",
+            "gx-device.svg", "gx-dots.svg", "gx-download.svg", "gx-edit.svg", "gx-external.svg",
+            "gx-filter.svg", "gx-gauge.svg", "gx-gift.svg", "gx-grip.svg", "gx-hash.svg",
+            "gx-info.svg", "gx-key.svg", "gx-keyboard.svg", "gx-link.svg", "gx-merge.svg",
+            "gx-minus.svg", "gx-network.svg", "gx-plus.svg", "gx-pointer.svg", "gx-power.svg",
+            "gx-refresh.svg", "gx-rss.svg", "gx-search.svg", "gx-send.svg", "gx-shield.svg",
+            "gx-sidebar.svg", "gx-upload.svg", "gx-user.svg", "gx-volume.svg", "gx-window.svg",
+            "gx-world.svg",
+            "misc-down.svg", "misc-emblem-ok.svg", "misc-remove.svg", "misc-up.svg",
             "st-complete.svg", "st-downloading.svg", "st-error.svg", "st-paused.svg",
             "st-queued.svg", "st-seeding.svg", "tb-add-torrent.svg", "tb-add-url.svg",
             "tb-delete-completed.svg", "tb-delete.svg", "tb-options.svg", "tb-resume.svg",
@@ -590,7 +653,16 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "ft-archive.svg", "ft-audio.svg", "ft-code.svg", "ft-disk-image.svg", "ft-document.svg",
             "ft-executable.svg", "ft-font.svg", "ft-generic.svg", "ft-image.svg", "ft-pdf.svg",
             "ft-presentation.svg", "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.svg",
-            "ft-video.svg", "misc-down.svg", "misc-emblem-ok.svg", "misc-remove.svg", "misc-up.svg",
+            "ft-video.svg",
+            "gx-adjust.svg", "gx-apps.svg", "gx-browser.svg", "gx-bug.svg", "gx-copy.svg",
+            "gx-device.svg", "gx-dots.svg", "gx-download.svg", "gx-edit.svg", "gx-external.svg",
+            "gx-filter.svg", "gx-gauge.svg", "gx-gift.svg", "gx-grip.svg", "gx-hash.svg",
+            "gx-info.svg", "gx-key.svg", "gx-keyboard.svg", "gx-link.svg", "gx-merge.svg",
+            "gx-minus.svg", "gx-network.svg", "gx-plus.svg", "gx-pointer.svg", "gx-power.svg",
+            "gx-refresh.svg", "gx-rss.svg", "gx-search.svg", "gx-send.svg", "gx-shield.svg",
+            "gx-sidebar.svg", "gx-upload.svg", "gx-user.svg", "gx-volume.svg", "gx-window.svg",
+            "gx-world.svg",
+            "misc-down.svg", "misc-emblem-ok.svg", "misc-remove.svg", "misc-up.svg",
             "st-complete.svg", "st-downloading.svg", "st-error.svg", "st-paused.svg",
             "st-queued.svg", "st-seeding.svg", "tb-add-torrent.svg", "tb-add-url.svg",
             "tb-delete-completed.svg", "tb-delete.svg", "tb-options.svg", "tb-resume.svg",
@@ -607,11 +679,12 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
 
 /// Reads the set in `dir` (`16/<need>.svg`, `.png`, `-symbolic.svg` or `-symbolic.png`, the
 /// same in `24`, and in `32` and `48` for pictures) under `name`, for a theme file's own folder.
-/// Only the known needs are read; other files are left alone. False when the folder holds none.
+/// Only the known needs and extras are read; other files are left alone. False when the folder
+/// holds none.
 pub fn load_folder(name: &str, dir: &Path, mono: bool) -> bool {
     let mut files = Vec::new();
     for px in SIZES {
-        for (need, _) in NEEDS {
+        for (need, _) in NEEDS.iter().chain(EXTRAS) {
             for f in [
                 format!("{need}-symbolic.svg"),
                 format!("{need}-symbolic.png"),
@@ -834,15 +907,15 @@ mod tests {
         }
     }
 
-    /// Graphite has every need at 16 and 24 pixels: Tabler's outline drawings, one colour. As
-    /// carried, each is stroked white once (on its root) and fills nothing (no part names a fill
-    /// but `none`, which the ink would fill), and names no other colour; inked, the stroke is
-    /// the ink and no white is left. The 16-pixel one is drawn up to 20 pixels on screen, the
-    /// 24-pixel one above.
+    /// Graphite has every need and every extra at 16 and 24 pixels: Tabler's outline drawings,
+    /// one colour. As carried, each is stroked white once (on its root) and fills nothing (no
+    /// part names a fill but `none`, which the ink would fill), and names no other colour;
+    /// inked, the stroke is the ink and no white is left. The 16-pixel one is drawn up to 20
+    /// pixels on screen, the 24-pixel one above.
     #[test]
     fn graphite_has_every_need_in_one_colour() {
         let set = set("graphite").unwrap();
-        for (need, _) in NEEDS {
+        for (need, _) in NEEDS.iter().chain(EXTRAS) {
             for px in [16u32, 24] {
                 let f = set.files.get(&((*need).to_owned(), px));
                 let f = f.unwrap_or_else(|| panic!("graphite lacks {need} at {px}"));
@@ -963,10 +1036,7 @@ mod tests {
                     let file = entry.unwrap().file_name().into_string().unwrap();
                     let stem = file.rsplit_once('.').unwrap().0;
                     let need = stem.strip_suffix("-symbolic").unwrap_or(stem);
-                    assert!(
-                        NEEDS.iter().any(|(id, _)| *id == need),
-                        "{name}/{px}/{file}: no such need"
-                    );
+                    assert!(known(need), "{name}/{px}/{file}: no such need or extra");
                     assert!(
                         carried.files.contains_key(&(need.to_owned(), px)),
                         "{name}/{px}/{file} isn't in the program"
@@ -975,6 +1045,36 @@ mod tests {
                 }
             }
             assert_eq!(n, carried.files.len(), "{name}: one file per need and size");
+        }
+    }
+
+    /// The extras (plan 03b) have ids of their own, none a need's, and only Graphite's set
+    /// carries them, at 16 and 24 pixels: every other set's lookup finds none, so the classic
+    /// layout, which never asks, would draw nothing for one.
+    #[test]
+    fn only_graphite_carries_the_extras() {
+        let mut ids: Vec<&str> = NEEDS.iter().chain(EXTRAS).map(|(n, _)| *n).collect();
+        ids.sort_unstable();
+        let n = ids.len();
+        ids.dedup();
+        assert_eq!(ids.len(), n, "an id twice");
+        assert_eq!(EXTRAS.len(), 36);
+        let graphite = set("graphite").unwrap();
+        for (extra, _) in EXTRAS {
+            assert!(extra.starts_with("gx-"), "{extra}");
+            for px in [16u32, 24] {
+                assert!(
+                    graphite.files.contains_key(&((*extra).to_owned(), px)),
+                    "graphite lacks {extra} at {px}"
+                );
+            }
+            for name in ["metro", "adwaita", "breeze", "luna", "aero", "aqua"] {
+                let s = set(name).unwrap();
+                assert!(
+                    !s.has(extra) && s.file(extra, 16.0).is_none(),
+                    "{name} {extra}"
+                );
+            }
         }
     }
 

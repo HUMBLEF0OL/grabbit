@@ -13,7 +13,8 @@ def load(n):
     v=re.sub(r' class="[^"]*"',"",v);v=re.sub(r' stroke-width="2"',"",v);v=re.sub(r' (width|height)="24"',"",v)
     return v.strip()
 IC={k:load(v) for k,v in {**MAP,**EXTRA}.items()}
-labels=dict(re.findall(r'\(\s*"([a-z-]+)",\s*"([^"]+)",?\s*\)',open(f"{REPO}/crates/app/src/themeicons.rs",encoding="utf8").read()))
+_rs=open(f"{REPO}/crates/app/src/themeicons.rs",encoding="utf8").read();_at=_rs.index("pub const NEEDS")
+labels=dict(re.findall(r'\(\s*"([a-z-]+)",\s*"([^"]+)",?\s*\)',_rs[_at:_rs.index("];",_at)]))
 import pal as PALMOD
 css,rows=PALMOD.build()
 VERDICT={

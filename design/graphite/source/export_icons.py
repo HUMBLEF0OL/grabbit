@@ -1,13 +1,13 @@
 """Export the Graphite icon set from the vendored Tabler Icons package.
 
 Writes design/graphite/assets/icons/{16,24}/<need>.svg for every need in
-crates/app/src/themeicons.rs NEEDS, plus SOURCES.txt and LICENSE beside them, and the same files
-into the app's built-in Graphite set (crates/app/assets/themes/graphite/icons/, carried by
-themeicons.rs), so the two never differ.
+crates/app/src/themeicons.rs NEEDS and every extra in its EXTRAS (plan 03b), plus SOURCES.txt
+and LICENSE beside them, and the same files into the app's built-in Graphite set
+(crates/app/assets/themes/graphite/icons/, carried by themeicons.rs), so the two never differ.
 
-The names come from iconmap.py (MAP, first column) with gen3.py's REFINE applied. Both files
-are read as source (not imported: they run their own work on import). Run it again after any
-mapping change:
+The needs' names come from iconmap.py (MAP, first column) with gen3.py's REFINE applied; the
+extras' from gen3.py's EXTRA (`x-<name>` there is `gx-<name>` here). Both files are read as
+source (not imported: they run their own work on import). Run it again after any mapping change:
 
     python design/graphite/source/export_icons.py
 """
@@ -46,10 +46,10 @@ def literal(path: Path, name: str):
     sys.exit(f"{path.name}: no {name}")
 
 
-def needs() -> list[str]:
-    """The need ids in themeicons.rs NEEDS, in order."""
+def needs(const: str = "NEEDS") -> list[str]:
+    """The ids in themeicons.rs `const` (NEEDS or EXTRAS), in order."""
     src = NEEDS_RS.read_text(encoding="utf8")
-    start = src.index("pub const NEEDS")
+    start = src.index(f"pub const {const}")
     body = src[start : src.index("];", start)]
     return re.findall(r'\(\s*"([a-z0-9-]+)",', body)
 
@@ -59,6 +59,13 @@ def mapping() -> dict[str, str]:
     names = {need: pair[0] for need, pair in literal(HERE / "iconmap.py", "MAP").items()}
     names.update(literal(HERE / "gen3.py", "REFINE"))
     return names
+
+
+def extra_mapping(extras: list[str]) -> dict[str, str]:
+    """extra -> Tabler outline name, from gen3.py's EXTRA (`x-<name>` there, `gx-<name>` here).
+    EXTRA's others (the check mark, the chevrons, the arrow) are drawn by code: not slots."""
+    pairs = {"gx-" + k[2:]: v for k, v in literal(HERE / "gen3.py", "EXTRA").items()}
+    return {k: v for k, v in pairs.items() if k in extras}
 
 
 def convert(svg: str, px: int) -> str:
@@ -87,7 +94,7 @@ def convert(svg: str, px: int) -> str:
 
 
 def check(ids: list[str], out: Path) -> None:
-    """Every need at both sizes and nothing else; each file well-formed SVG as written."""
+    """Every need and extra at both sizes and nothing else; each file well-formed SVG as written."""
     import xml.etree.ElementTree as ET
 
     ns = "{http://www.w3.org/2000/svg}"
@@ -95,7 +102,7 @@ def check(ids: list[str], out: Path) -> None:
         folder = out / str(px)
         found = sorted(p.stem for p in folder.glob("*.svg"))
         if found != sorted(ids):
-            sys.exit(f"{folder}: files and NEEDS differ")
+            sys.exit(f"{folder}: files and NEEDS + EXTRAS differ")
         for need in ids:
             root = ET.parse(folder / f"{need}.svg").getroot()
             want = {
@@ -125,6 +132,14 @@ def main() -> None:
     missing = [n for n in ids if n not in names]
     if unknown or missing:
         sys.exit(f"mapping and NEEDS differ: not needs {unknown}, unmapped {missing}")
+    extras = needs("EXTRAS")
+    extra_names = extra_mapping(extras)
+    missing = [n for n in extras if n not in extra_names]
+    if missing or set(extras) & set(ids):
+        sys.exit(f"EXTRAS: not in gen3.py's EXTRA {missing}, or named like a need")
+    needs_only = ids
+    ids = ids + extras
+    names.update(extra_names)
 
     data = TGZ.read_bytes()
     sha256 = hashlib.sha256(data).hexdigest()
@@ -179,7 +194,9 @@ def main() -> None:
         "",
         "need -> Tabler outline icon",
     ]
-    lines += [f"{need.ljust(width)}  {names[need]}" for need in ids]
+    lines += [f"{need.ljust(width)}  {names[need]}" for need in needs_only]
+    lines += ["", "extra (drawn only where the Graphite layout asks) -> Tabler outline icon"]
+    lines += [f"{need.ljust(width)}  {names[need]}" for need in extras]
     (OUT / "SOURCES.txt").write_text("\n".join(lines) + "\n", encoding="utf8", newline="\n")
     shutil.copyfile(LICENSE, OUT / "LICENSE")
 
@@ -195,7 +212,8 @@ def main() -> None:
 
     written = len(ids) * len(SIZES)
     print(
-        f"{len(ids)} needs, {written} files in {OUT.relative_to(REPO).as_posix()}"
+        f"{len(needs_only)} needs and {len(extras)} extras, {written} files in"
+        f" {OUT.relative_to(REPO).as_posix()}"
         f" and {APP.relative_to(REPO).as_posix()}"
     )
 

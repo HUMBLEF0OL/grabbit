@@ -71,5 +71,6 @@ spin, submenu and tree arrows). `x-arrow` exists only on the mock page.
 
 ## Done when
 
-- [ ] 36 extra slots, each at 16 and 24, in the Graphite set; the icon tests pass
-- [ ] No window changes yet (the phases that use them draw them); no CHANGELOG line
+- [x] 36 extra slots, each at 16 and 24, in the Graphite set; the icon tests pass
+- [x] No window changes yet (the phases that use them draw them; nothing asks for a `gx-` slot);
+      no CHANGELOG line

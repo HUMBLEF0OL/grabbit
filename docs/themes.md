@@ -168,6 +168,9 @@ their colours; `-symbolic.svg` and `-symbolic.png` ones, as GNOME and KDE name t
 theme's text colour. An icon the set lacks is drawn as the classic look draws it. In the
 categories, Finished keeps its tick and Queues its page stack over your icons, as in the classic
 look. The full list of names is in [themeicons.rs](https://github.com/anefzaoui/misterdownloadmanager/blob/main/crates/app/src/themeicons.rs) (`NEEDS`).
+Its `EXTRAS` (`gx-link.svg`, `gx-search.svg`…) are drawn only where the theme's layout asks for
+them: Graphite's menu rows, buttons, Options pages, banners and tiles. A set without them draws no
+icon there; the classic layout never asks.
 
 ## Make one
 
