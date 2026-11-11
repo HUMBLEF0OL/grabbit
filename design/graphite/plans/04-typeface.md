@@ -67,8 +67,8 @@ Line numbers drift as phases land: find each item by its name first.
 
 - [x] Graphite draws in Geist on Windows; every other theme still draws in Segoe UI (Classic pixel-identical)
 - [x] Switching themes swaps the face without a restart
-- [x] No label newly clipped in the main window (file names end in "…" sooner; sizes left to 05b, step 6 below); overflow list for later phases written below
-- [x] Digits decision recorded; size budget met; frame time measured as a CPU proxy (40 rows, debug build, below: +0.2 %), not by the live 1,000-row `unstable_dt` run
+- [x] No clipped labels in the main window (Graphite's sizes set, step 6 below); overflow list for later phases written below
+- [x] Digits decision recorded; size and frame-time budgets met (1,000 rows, 10 running: +0.9 % `unstable_dt`, +0.6 % frame CPU)
 - [x] Screenshots before and after (main window, Options, Download File Info), light and dark
 - [x] ATTRIBUTION, ROADMAP, CHANGELOG updated
 
@@ -88,8 +88,21 @@ Line numbers drift as phases land: find each item by its name first.
   | (b) Geist by egui's rasterizer | 18.923 ms (+117 %) | 11.655 ms |
 
   (b) shapes every new galley in egui, which the DirectWrite path skips: it fails the 5 % budget.
-  (a) is about 40 lines more than (b). Not run: the plan's live measurement (`unstable_dt` with
-  the lab server feeding 10 downloads): at 60 Hz it is vsync's interval either way.
+  (a) is about 40 lines more than (b).
+
+  The plan's budget, measured on (a) in a thin-LTO release build: the main window off the screens
+  with 1,000 downloads (990 queued, 10 running from `labserver --faults rate=2M`, each at
+  200 KB/s), continuous repaints, Graphite with the system font (a theme file inheriting Graphite
+  without `font`) and Graphite with Geist, switched live twice through `/show theme:`; 3,600
+  frames each (six windows of 600), the mean of `ctx.input(|i| i.unstable_dt)` and of the main
+  window's `ui` CPU time (temporary code, not kept):
+
+  | Graphite with | `unstable_dt` mean | Frame CPU mean |
+  | --- | --- | --- |
+  | Segoe UI (today) | 11.161 ms | 7.510 ms |
+  | Geist | 11.264 ms (+0.9 %) | 7.554 ms (+0.6 %) |
+
+  The display runs at 90 Hz (11.11 ms), so `unstable_dt` is mostly vsync; both are within 5 %.
 - **Families** (`theme.rs` `fonts_for`): with a bundled font, Regular leads Proportional,
   Monospace and `tahoma`; SemiBold `tahoma-bold` and `arial-bold`; Medium the new `geist-medium`
   (Segoe UI in every other theme, unused until 05b). Segoe UI follows each as the first fallback
@@ -99,10 +112,12 @@ Line numbers drift as phases land: find each item by its name first.
   egui takes the new families at the next frame while DirectWrite's face changes at once, so
   glyphs first drawn in the rest of the switching frame can come in the other face; the next
   frame (asked for by the switch) makes a new atlas. Accepted: one frame at most.
-- **Step 6, sizes**: Graphite keeps the classic sizes (`font.ui` 12, `font.body` 12,
-  `font.small` 11, `font.heading` 16). In IDM's layout Geist at 12 already ends more file names
-  in "…" than Segoe UI did; the mock's 11.5 toolbar labels, 13 body and 12 column heads need 05b's
-  layout (its step 5 and 7), which sets them.
+- **Step 6, sizes** (`graphite.toml` through `make_theme.py`): `font.ui` 12 (the main window's
+  text and column heads, the mock's 12; its toolbar labels share the size until 05b gives them
+  the mock's 11.5, the toolbar having one font today), `font.body` 13 (the mock's body: egui's
+  tooltips and multi-line boxes), `font.small` 11.5, `font.heading` 16. No main-window label is
+  clipped: the toolbar's buttons size to their labels, the column heads fit, list cells end in "…"
+  as before (file names a few letters sooner than with Segoe UI).
 - **Step 7, digits**: Geist's default figures are proportional (Regular: 1 is 384 units, 0 is
   663; Segoe UI's are all 1104). Decision (PLAN.md): Geist Mono is not bundled; 05b draws the
   list's numeric cells in a `numbers` family on Segoe UI.

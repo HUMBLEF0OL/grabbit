@@ -1019,6 +1019,11 @@ mod tests {
         assert_eq!(t.icon_set.as_deref(), Some("graphite"));
         // Plan 04: Geist, bundled; every other built-in keeps the system's font.
         assert_eq!(t.font.as_deref(), Some("geist"));
+        let m = &t.metrics;
+        assert_eq!(
+            (m.font_ui, m.font_body, m.font_small, m.font_heading),
+            (12.0, 13.0, 11.5, 16.0)
+        );
         assert!(builtins()[..8].iter().all(|b| b.font.is_none()));
         assert_eq!(
             t.controls,

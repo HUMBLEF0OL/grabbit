@@ -38,6 +38,12 @@ radius = 8
 "radius.egui" = 8
 # The mockup's row height.
 "list.row" = 32
+# Geist's sizes (plan 04, step 6): the main window's text and column heads at the mock's 12
+# (its toolbar labels share the size until 05b gives them 11.5), egui's body text at 13.
+"font.ui" = 12
+"font.body" = 13
+"font.small" = 11.5
+"font.heading" = 16
 
 
 [seeds.light]
