@@ -583,6 +583,7 @@ fn colors(table_name: &str, v: &Value, pal: &mut Palette, warnings: &mut Vec<Str
             "focus-line-straight" => Some(&mut pal.focus_line_straight),
             "access-keys-always" => Some(&mut pal.access_keys_always),
             "tree-chevrons" => Some(&mut pal.tree_chevrons),
+            "tree-badges" => Some(&mut pal.tree_badges),
             _ => None,
         };
         if let Some(flag) = flag {

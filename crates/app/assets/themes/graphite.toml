@@ -142,6 +142,8 @@ caption = "#ffffff"
 "caption.text.inactive" = "#625d78"
 "caption.hot" = "#0d0b140f"
 "caption.pressed" = "#0d0b141f"
+# Categories tree: each row's icon alone.
+tree-badges = false
 
 [dark]
 # Text.
@@ -227,3 +229,5 @@ caption = "#121019"
 "caption.text.inactive" = "#948ea8"
 "caption.hot" = "#f0eef70f"
 "caption.pressed" = "#f0eef71f"
+# Categories tree: each row's icon alone.
+tree-badges = false

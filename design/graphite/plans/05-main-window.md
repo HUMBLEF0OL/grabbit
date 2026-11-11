@@ -68,12 +68,10 @@ Gate everything below on a new theme control, `[controls] chrome = "classic" | "
 4. **Categories**: no "Categories" caption bar (View, Hide categories still closes the pane); 28 px rows,
    chevrons (no dotted lines), 16 px icons, the selected row filled with `selection` and its icon in
    `accent`, counts "(n)" muted on top-level rows only (unchanged rule).
-   Left from 03: the tree still draws its badges over the set's icons (`app.rs` `branch`/`row`,
-   drawn in `chrome::categories`): Finished gets `misc-emblem-ok` (a circled tick) over
-   `cat-finished` (also a circled tick), and Queues Silk's coloured `page_white_stack`. The mock
-   draws no badges: drop them under Graphite. Its queue rows use `cat-queues` for a queue and
-   `x-refresh` for a synchronized one, which is not one of the 53 needs (add it to `NEEDS` and the
-   Graphite set, or keep `cat-queues`).
+   From 03: Graphite sets `tree-badges = false`, so Finished and Queues show their icon alone and
+   each queue the Queues icon (`app.rs` `tree_rows`); a synchronized queue keeps its tick badge.
+   The mock draws that one as `x-refresh` instead, which is not one of the 53 needs: add it to
+   `NEEDS` and the Graphite set, or keep the tick.
 5. **List**: `list.row = 32` (theme), header in `text.muted` 12 px with a bottom rule only; rows separated by a
    hairline `list.grid`; the Source chip as a pill.
 6. **Status cell with progress**: give `list::Row` a `progress: Option<f32>` and a status kind; in

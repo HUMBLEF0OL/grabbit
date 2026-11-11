@@ -804,9 +804,11 @@ mod tests {
         }
     }
 
-    /// Graphite has every need at 16 and 24 pixels: Tabler's outline drawings, one colour, their
-    /// white stroke taking the ink (nothing left white, nothing filled black), the 16-pixel one up
-    /// to 20 pixels on screen and the 24-pixel one above.
+    /// Graphite has every need at 16 and 24 pixels: Tabler's outline drawings, one colour. As
+    /// carried, each is stroked white once (on its root) and fills nothing (no part names a fill
+    /// but `none`, which the ink would fill), and names no other colour; inked, the stroke is
+    /// the ink and no white is left. The 16-pixel one is drawn up to 20 pixels on screen, the
+    /// 24-pixel one above.
     #[test]
     fn graphite_has_every_need_in_one_colour() {
         let set = set("graphite").unwrap();
@@ -815,12 +817,23 @@ mod tests {
                 let f = set.files.get(&((*need).to_owned(), px));
                 let f = f.unwrap_or_else(|| panic!("graphite lacks {need} at {px}"));
                 assert!(!f.png && f.mono, "{need} {px}");
+                let raw = std::str::from_utf8(&f.bytes).unwrap();
+                let count = |s: &str| raw.matches(s).count();
+                assert_eq!(
+                    count("fill="),
+                    count(r#"fill="none""#),
+                    "{need} {px}: a fill"
+                );
+                assert_eq!(count("stroke="), 1, "{need} {px}: one stroke, the root's");
+                assert_eq!(count(r##"stroke="#ffffff""##), 1, "{need} {px}");
+                assert_eq!(count("#"), 1, "{need} {px}: another colour");
+                for no in ["currentColor", "style=", "color", "url("] {
+                    assert!(!raw.contains(no), "{need} {px}: {no}");
+                }
                 let out = inked(&f.bytes, "#123456");
                 let text = std::str::from_utf8(&out).unwrap();
                 assert!(text.contains(r##"stroke="#123456""##), "{need} {px}");
-                assert!(text.contains(r#"fill="none""#), "{need} {px}");
                 assert!(!text.to_ascii_lowercase().contains("#fff"), "{need} {px}");
-                assert!(!text.contains("currentColor"), "{need} {px}");
             }
             for (px, size) in [(16.0, 16), (20.0, 16), (21.0, 24), (32.0, 24), (48.0, 24)] {
                 assert_eq!(set.file(need, px).unwrap().0, size, "{need} {px}");
@@ -929,6 +942,8 @@ mod tests {
     /// drawing's largest scales cleanly), so no picture is stretched.
     #[test]
     fn pictures_come_in_every_size_the_loader_asks_for() {
+        // Graphite's are all drawings today (graphite_has_every_need_in_one_colour checks its
+        // sizes); listed so a picture added to it later is held to the same rule.
         for name in [
             "metro", "adwaita", "breeze", "luna", "aero", "aqua", "graphite",
         ] {

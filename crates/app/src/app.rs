@@ -6219,6 +6219,8 @@ impl App {
             count: None,
         };
         let mut rows = Vec::new();
+        // The badges that repeat their icon, unless the theme leaves them out (tree-badges).
+        let badges = crate::theme::colors().tree_badges;
         // Silk icons in IDM's roles: folder, folder + green arrow, folder + tick, page stacks.
         let mut branch =
             |label, open: bool, icon, badge, view: View, b: Branch, child: fn(Category) -> View| {
@@ -6270,12 +6272,16 @@ impl App {
             "Finished",
             self.finished_open,
             IconKey::Themed("cat-finished", "folder"),
-            Some("tick"),
+            badges.then_some("tick"),
             View::Finished(None),
             Branch::Finished,
             |c| View::Finished(Some(c)),
         );
-        let stack = IconKey::Silk("page_white_stack");
+        let stack = if badges {
+            IconKey::Silk("page_white_stack")
+        } else {
+            IconKey::Themed("cat-queues", "page_white_stack")
+        };
         rows.push((
             row(
                 0,
@@ -6283,7 +6289,7 @@ impl App {
                 "Queues",
                 Some(self.queues_open),
                 IconKey::Themed("cat-queues", "folder"),
-                Some("page_white_stack"),
+                badges.then_some("page_white_stack"),
                 None,
             ),
             None,

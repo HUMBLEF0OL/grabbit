@@ -517,7 +517,7 @@ These ship in a later version, when they're ready.
   and every dialog restyled, with an optional paste bar and details pane; the plan and mockups are
   in `design/graphite/`. Done: the Graphite theme in **View → Theme** (its colours, rounded
   corners and controls, light and dark, in today's layout) and its icons (Tabler's outline
-  icons, in one colour). Prepared, not in the app yet: the typeface; next, the typeface
+  icons, in one colour). Prepared, not in the app yet, and next: the typeface
 
 ### Bugs being looked into
 
