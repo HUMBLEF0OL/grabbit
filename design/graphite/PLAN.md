@@ -71,9 +71,10 @@ track (07, 08) are independent; 04 must land before 05b and before the 07 waves 
 A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
 
 - [x] 01 Prepare
-- [x] 02 Theme
+- [ ] 02 Theme (merged into the local `dev`; not on origin yet, no PR)
 - [ ] 02b Chrome gate and roles
-- [ ] 03 Icons (built on `ui/03-icons`, in review)
+- [ ] 03 Icons (complete and merged into the local `dev` on 2026-11-11, checks in its plan; not on
+      origin yet, no PR)
 - [ ] 03b Extra glyphs
 - [ ] 04 Typeface
 - [ ] 05a Layout model
