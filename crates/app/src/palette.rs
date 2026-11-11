@@ -623,6 +623,8 @@ pub struct Theme {
     pub icons: IconStyle,
     /// The theme's icon set (`crate::themeicons`), by name; None: the classic icons.
     pub icon_set: Option<Cow<'static, str>>,
+    /// A font bundled with MDM (`crate::theme::bundled_font`), by name; None: the system's.
+    pub font: Option<Cow<'static, str>>,
     /// How each kind of control is drawn.
     pub controls: Controls,
 }
@@ -643,6 +645,7 @@ pub static CLASSIC: Theme = Theme {
     metrics: Metrics::CLASSIC,
     icons: IconStyle::Color,
     icon_set: None,
+    font: None,
     controls: Controls::CLASSIC,
 };
 
@@ -1014,6 +1017,9 @@ mod tests {
         assert_eq!(t.metrics.list_row, 32.0);
         assert_eq!(t.icons, IconStyle::Mono);
         assert_eq!(t.icon_set.as_deref(), Some("graphite"));
+        // Plan 04: Geist, bundled; every other built-in keeps the system's font.
+        assert_eq!(t.font.as_deref(), Some("geist"));
+        assert!(builtins()[..8].iter().all(|b| b.font.is_none()));
         assert_eq!(
             t.controls,
             Controls {

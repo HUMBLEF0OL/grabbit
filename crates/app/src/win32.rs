@@ -4470,17 +4470,42 @@ fn classic_char(c: char) -> bool {
     )
 }
 
-/// The font file of a family `theme.rs` sets up (Segoe UI leads the two built-in ones).
-fn classic_font_file(family: &egui::FontFamily) -> Option<&'static str> {
-    match family {
-        egui::FontFamily::Proportional | egui::FontFamily::Monospace => Some("segoeui.ttf"),
-        egui::FontFamily::Name(name) => match &**name {
-            "tahoma" => Some("tahoma.ttf"),
-            "tahoma-bold" => Some("tahomabd.ttf"),
-            "arial-bold" => Some("arialbd.ttf"),
-            _ => None,
-        },
+/// Where DirectWrite reads a face: a file in Windows' fonts folder, or a font MDM carries.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum FaceKey {
+    File(&'static str),
+    /// The bytes' address and length (`include_bytes!`, so the same every time).
+    Bundled(usize, usize),
+}
+
+/// The face of a family `theme.rs` sets up (Segoe UI leads the two built-in ones). While a
+/// theme's bundled font leads every family (Graphite's Geist, plan 04), its Regular, Medium or
+/// SemiBold, read from memory.
+fn classic_face(family: &egui::FontFamily) -> Option<(FaceKey, Option<&'static [u8]>)> {
+    let name = match family {
+        egui::FontFamily::Proportional | egui::FontFamily::Monospace => "",
+        egui::FontFamily::Name(name) => name,
+    };
+    if let Some([regular, medium, semibold]) = crate::theme::bundled_face() {
+        let bytes = match name {
+            "" | "tahoma" => regular,
+            "geist-medium" => medium,
+            "tahoma-bold" | "arial-bold" => semibold,
+            _ => return None,
+        };
+        return Some((
+            FaceKey::Bundled(bytes.as_ptr() as usize, bytes.len()),
+            Some(bytes),
+        ));
     }
+    let file = match name {
+        "" | "geist-medium" => "segoeui.ttf",
+        "tahoma" => "tahoma.ttf",
+        "tahoma-bold" => "tahomabd.ttf",
+        "arial-bold" => "arialbd.ttf",
+        _ => return None,
+    };
+    Some((FaceKey::File(file), None))
 }
 
 mod classic_text {
@@ -4495,14 +4520,19 @@ mod classic_text {
         DWRITE_FONT_SIMULATIONS_NONE, DWRITE_GLYPH_METRICS, DWRITE_GLYPH_OFFSET, DWRITE_GLYPH_RUN,
         DWRITE_GRID_FIT_MODE_ENABLED, DWRITE_MEASURING_MODE_GDI_CLASSIC,
         DWRITE_RENDERING_MODE_GDI_CLASSIC, DWRITE_TEXT_ANTIALIAS_MODE_GRAYSCALE,
-        DWRITE_TEXTURE_ALIASED_1x1, DWriteCreateFactory, IDWriteFactory2, IDWriteFontFace,
+        DWRITE_TEXTURE_ALIASED_1x1, DWriteCreateFactory, IDWriteFactory2, IDWriteFactory5,
+        IDWriteFontFace, IDWriteInMemoryFontFileLoader,
     };
+    use windows::core::Interface as _;
 
     pub struct Glyphs {
         factory: IDWriteFactory2,
         dir: PathBuf,
-        /// The font files opened so far; `None` for one DirectWrite can't use.
-        faces: HashMap<&'static str, Option<IDWriteFontFace>>,
+        /// The faces opened so far; `None` for one DirectWrite can't use.
+        faces: HashMap<super::FaceKey, Option<IDWriteFontFace>>,
+        /// Reads the fonts MDM carries from memory (Windows 10 1703 and later), made and
+        /// registered with the factory the first time one is drawn.
+        memory: Option<Option<(IDWriteFactory5, IDWriteInMemoryFontFileLoader)>>,
     }
 
     // SAFETY: DirectWrite's shared factory and the objects it makes are free-threaded
@@ -4518,36 +4548,73 @@ mod classic_text {
                 factory,
                 dir,
                 faces: HashMap::new(),
+                memory: None,
             })
         }
 
-        fn face(&mut self, file: &'static str) -> Option<IDWriteFontFace> {
-            let (factory, dir) = (&self.factory, &self.dir);
-            self.faces
-                .entry(file)
-                .or_insert_with(|| {
-                    let path: Vec<u16> = dir
+        fn face(
+            &mut self,
+            (key, bytes): (super::FaceKey, Option<&'static [u8]>),
+        ) -> Option<IDWriteFontFace> {
+            if let Some(face) = self.faces.get(&key) {
+                return face.clone();
+            }
+            let font = match (key, bytes) {
+                (super::FaceKey::File(file), _) => {
+                    let path: Vec<u16> = self
+                        .dir
                         .join(file)
                         .as_os_str()
                         .encode_wide()
                         .chain([0])
                         .collect();
-                    // SAFETY: `path` is NUL-terminated and outlives the calls; plain COM calls.
+                    // SAFETY: `path` is NUL-terminated and outlives the call; a plain COM call.
                     unsafe {
-                        let font = factory
+                        self.factory
                             .CreateFontFileReference(windows::core::PCWSTR(path.as_ptr()), None)
-                            .ok()?;
-                        factory
-                            .CreateFontFace(
-                                DWRITE_FONT_FACE_TYPE_TRUETYPE,
-                                &[Some(font)],
-                                0,
-                                DWRITE_FONT_SIMULATIONS_NONE,
-                            )
-                            .ok()
                     }
-                })
-                .clone()
+                    .ok()
+                }
+                (super::FaceKey::Bundled(..), Some(bytes)) => {
+                    let factory = &self.factory;
+                    let memory = self.memory.get_or_insert_with(|| {
+                        let f5: IDWriteFactory5 = factory.cast().ok()?;
+                        // SAFETY: plain COM calls; the loader stays registered (and held) for
+                        // the factory's life.
+                        unsafe {
+                            let loader = f5.CreateInMemoryFontFileLoader().ok()?;
+                            f5.RegisterFontFileLoader(&loader).ok()?;
+                            Some((f5, loader))
+                        }
+                    });
+                    let (f5, loader) = memory.as_ref()?;
+                    // SAFETY: `bytes` is 'static (`include_bytes!`); without an owner object
+                    // DirectWrite keeps its own copy anyway.
+                    unsafe {
+                        loader.CreateInMemoryFontFileReference(
+                            f5,
+                            bytes.as_ptr().cast(),
+                            bytes.len() as u32,
+                            None,
+                        )
+                    }
+                    .ok()
+                }
+                _ => None,
+            };
+            // SAFETY: a plain COM call.
+            let face = font.and_then(|font| unsafe {
+                self.factory
+                    .CreateFontFace(
+                        DWRITE_FONT_FACE_TYPE_TRUETYPE,
+                        &[Some(font)],
+                        0,
+                        DWRITE_FONT_SIMULATIONS_NONE,
+                    )
+                    .ok()
+            });
+            self.faces.insert(key, face.clone());
+            face
         }
 
         pub fn glyph(&mut self, req: &GlyphRasterizerRequest<'_>) -> Option<RasterizedGlyph> {
@@ -4559,7 +4626,7 @@ mod classic_text {
             if req.font_size_px.is_nan() || req.font_size_px < 1.0 {
                 return None;
             }
-            let face = self.face(super::classic_font_file(req.family)?)?;
+            let face = self.face(super::classic_face(req.family)?)?;
             // GDI's sizes are whole pixels.
             let em = req.font_size_px.round();
             let mut id = 0u16;
@@ -4780,6 +4847,8 @@ mod classic_text_tests {
     /// apart any more. The letters of the words the report names, at the sizes of 100 % to 200 %.
     #[test]
     fn letters_have_whole_pixel_advances_and_stay_inside_them() {
+        // System fonts: no bundled face from a theme test meanwhile.
+        let _one = crate::theme::font_tests();
         let mut g = glyphs();
         for family in [FontFamily::Proportional, FontFamily::Name("tahoma".into())] {
             for size in [11.0, 12.0, 13.2, 15.0, 16.5, 18.0, 24.0] {
@@ -4801,6 +4870,8 @@ mod classic_text_tests {
 
     #[test]
     fn a_space_keeps_its_advance() {
+        // System fonts: no bundled face from a theme test meanwhile.
+        let _one = crate::theme::font_tests();
         let mut g = glyphs();
         let s = g.glyph(&req(" ", &FontFamily::Proportional, 12.0)).unwrap();
         assert!(s.advance_px > 0.0);
@@ -4808,6 +4879,8 @@ mod classic_text_tests {
 
     #[test]
     fn what_needs_shaping_stays_with_egui() {
+        // System fonts: no bundled face from a theme test meanwhile.
+        let _one = crate::theme::font_tests();
         let mut g = glyphs();
         let f = FontFamily::Proportional;
         for not in [

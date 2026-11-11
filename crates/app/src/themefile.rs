@@ -468,6 +468,18 @@ pub fn parse(
                 Some(name) => theme.icon_set = Some(name.to_owned().into()),
                 None => warnings.push("icon-set: a set's name".into()),
             },
+            // A font bundled with MDM; an unknown one keeps the system's.
+            "font" => match value.as_str() {
+                Some(name) if crate::theme::bundled_font(name).is_some() => {
+                    theme.font = Some(name.to_owned().into());
+                }
+                _ => {
+                    theme.font = None;
+                    warnings.push(format!(
+                        "font: {value} is not a font MDM carries (geist); the system's is used"
+                    ));
+                }
+            },
             "icons" => match value.as_str().and_then(IconStyle::from_key) {
                 Some(s) => theme.icons = s,
                 None => warnings.push(format!("icons: {value} is not color, mono or accent")),
@@ -686,6 +698,21 @@ mod tests {
             [Color32::from_rgb(0x3f, 0xa8, 0x64); 13]
         );
         assert_eq!(t.dark.text, CLASSIC.dark.text);
+    }
+
+    /// Plan 04: a theme names a bundled font; one MDM doesn't carry warns and keeps the system's.
+    #[test]
+    fn a_theme_names_a_bundled_font() {
+        let l = toml_theme("g", r#"font = "geist""#).unwrap();
+        assert!(l.warnings.is_empty(), "{:?}", l.warnings);
+        assert_eq!(l.theme.font.as_deref(), Some("geist"));
+        let l = toml_theme("c", "").unwrap();
+        assert_eq!(l.theme.font, None);
+        for bad in [r#"font = "comic-sans""#, "font = 3"] {
+            let l = toml_theme("u", bad).unwrap();
+            assert_eq!(l.theme.font, None, "{bad}");
+            assert!(l.warnings.iter().any(|w| w.starts_with("font:")), "{bad}");
+        }
     }
 
     #[test]

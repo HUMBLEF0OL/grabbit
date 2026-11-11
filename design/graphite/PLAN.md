@@ -20,14 +20,14 @@ phase that must decide them before it starts.
 | Colour direction: jet black, royal amethyst, electric cyan | Decided in 01 | `source/pal.py` `amethyst`; the theme `crates/app/assets/themes/graphite.toml` (02) |
 | Light or dark: follow the system | Decided in 01 | Today's behaviour; the palette is designed dark first (02) |
 | Graphite as the default theme | Decided in 01 | Opt-in under View, Theme from 02; the default for new installs (no settings file) in 09b; existing users keep their theme and are offered it once |
-| Typeface: Geist | Decided in 01 | Bundled (SIL OFL), Regular, Medium, SemiBold in `assets/fonts/`; needs engine work (04) |
+| Typeface: Geist | Decided in 01 | Bundled (SIL OFL), Regular, Medium, SemiBold, in the app since 04 (`crates/app/assets/fonts/geist/`); a theme names it (`font = "geist"`), DirectWrite draws it from memory |
 | Paste bar and details pane defaults | Decided in 01 | Paste bar on, details pane off, width 276, for new and existing users (06); both only under the Graphite look |
 | The two proposal dialogs | Decided in 01 | Not built; Advanced / Socks... and Virus checking settings stay greyed as today (08) |
 | When to rename to Grabbit | Decided in 01 | Last (10): it touches data paths and the extension |
 | Tray menu | Decided (audit) | Stays native (`tray_icon`): the mock's tray menu is not built (07e) |
 | Safari steps, Linux and macOS wake lines | Decided (audit) | Not built: `dev` is Windows only (07e) |
 | Options: a Cancel button under Graphite | **Open, owner 08** | Decide before 08a; recommended: none (Escape and the close box already discard changes, `options.rs:3`) |
-| Tabular digits: Geist's own or Geist Mono | **Open, owner 04** | Decide in 04 step 7; default: Geist Mono not bundled |
+| Tabular digits: Geist's own or Geist Mono | Decided in 04 | Geist's default figures are proportional (a 1 is 384 units wide, a 0 663), so the list's numeric cells (sizes, rates, time left, percent) keep Segoe UI's tabular figures; Geist Mono is not bundled. 05b draws those cells in the `numbers` family it adds (Segoe UI, falling back like the others) |
 | Which repository the app points at (updates, crash reports); exe and crate names | **Open, owner 10** | Decide before 10a; recommended: keep names, change repository constants only when that repository publishes Grabbit releases |
 
 ## Build order
@@ -78,7 +78,7 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
       checks in its plan)
 - [x] 03b Extra glyphs (complete, in origin's `dev` since 2026-11-11, pushed directly instead of
       a PR; nothing on screen changes)
-- [ ] 04 Typeface
+- [x] 04 Typeface (complete on the local `dev`, not pushed yet; checks in its plan)
 - [ ] 05a Layout model
 - [ ] 05b Main window
 - [ ] 06 Paste bar and details pane
@@ -119,8 +119,8 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
 - **The main window's layout numbers are duplicated** (05a exists to fix that before anything moves).
 - **Dialogs are laid out in absolute pixels** with per-dialog key wiring (07a's kit exists so each
   dialog changes once, in a small diff, and keeps its keys).
-- **Fonts**: Windows draws Latin text through a DirectWrite path tied to system font files (04 must
-  change it, or Geist never shows).
+- **Fonts**: Windows draws Latin text through DirectWrite (GDI-classic metrics); since 04 it reads a
+  bundled font from memory too (`win32.rs` `classic_face`), so Geist keeps the same text path.
 - **Classic must not move**: every layout phase gates on 02b's chrome control and shows Classic
   pixel-identical in its PR.
 - **The rename moves users' data and integrations** (saved logins, autostart, native messaging host,

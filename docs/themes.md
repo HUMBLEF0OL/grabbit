@@ -147,6 +147,8 @@ focus = "ring"
   `progress.bar.end` (`glow`, `button.accent.top` and `progress.bar.end` are transparent by
   default: no glow, a flat face).
 - **`icons`** — `color`, `mono` (one colour) or `accent`.
+- **`font`** — a font MDM carries, for every text: `"geist"` (Geist, as the Graphite theme has it).
+  Without it, or with a name MDM doesn't carry, the windows keep Windows' own fonts.
 - **`contrast = "high"`** — strengthens every edge and text colour on top of the rest.
 
 Every colour role, size and control style, with what it sets, is listed on the website's

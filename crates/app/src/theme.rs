@@ -406,17 +406,89 @@ fn ui_font() -> Option<Vec<u8>> {
     std::fs::read(font_dir().join("segoeui.ttf")).ok()
 }
 
+/// A font MDM carries for a theme to name (`font = "geist"`): its Regular, Medium and SemiBold.
+/// Geist, by Vercel, under the SIL Open Font License 1.1 (`assets/fonts/geist/OFL.txt`).
+pub fn bundled_font(name: &str) -> Option<[&'static [u8]; 3]> {
+    match name {
+        "geist" => Some([
+            include_bytes!("../assets/fonts/geist/Geist-Regular.ttf"),
+            include_bytes!("../assets/fonts/geist/Geist-Medium.ttf"),
+            include_bytes!("../assets/fonts/geist/Geist-SemiBold.ttf"),
+        ]),
+        _ => None,
+    }
+}
+
+/// The bundled font leading the families now (set by [`fonts_for`]), which DirectWrite then
+/// draws from these bytes instead of a system font file (`crate::win32::text_rasterizer`).
+static BUNDLED: std::sync::Mutex<Option<[&'static [u8]; 3]>> = std::sync::Mutex::new(None);
+
+pub fn bundled_face() -> Option<[&'static [u8]; 3]> {
+    *BUNDLED.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Tests that draw text or make fonts share the process-wide [`BUNDLED`]: one at a time, each
+/// starting and ending with the system's fonts.
+#[cfg(test)]
+pub fn font_tests() -> impl Drop {
+    struct One(#[allow(dead_code)] std::sync::MutexGuard<'static, ()>);
+    impl Drop for One {
+        fn drop(&mut self) {
+            *BUNDLED.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        }
+    }
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let one = One(LOCK.lock().unwrap_or_else(|e| e.into_inner()));
+    *BUNDLED.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    one
+}
+
+/// The font the families were last made with: a theme switch remakes them only when it differs.
+static LOADED_FONT: std::sync::Mutex<Option<Option<String>>> = std::sync::Mutex::new(None);
+
 /// The interface's fonts, set up for `ctx`.
 fn load_fonts(ctx: &egui::Context) {
     classic_text(ctx);
     fonts(ctx);
 }
 
-/// IDM draws with Segoe UI 9 pt (12 px at 100 %): the system's own copy, nothing bundled
-/// (else egui's default font). Every family
+/// The active theme's fonts.
+fn fonts(ctx: &egui::Context) {
+    load_font(ctx, current().font.as_deref());
+}
+
+/// The families made with `font`, which is remembered for [`fonts_if_changed`].
+fn load_font(ctx: &egui::Context, font: Option<&str>) {
+    *LOADED_FONT.lock().unwrap_or_else(|e| e.into_inner()) = Some(font.map(str::to_owned));
+    fonts_for(ctx, font);
+}
+
+/// A theme switch to a theme whose font is `font`: the fonts are made again only when it isn't
+/// theirs.
+fn fonts_if_changed(ctx: &egui::Context, font: Option<&str>) {
+    let loaded = LOADED_FONT
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    if needs_reload(loaded.as_ref(), font) {
+        load_font(ctx, font);
+    }
+}
+
+/// `loaded`: the font the families were made with (None: not made yet; Some(None): the system's).
+fn needs_reload(loaded: Option<&Option<String>>, wanted: Option<&str>) -> bool {
+    loaded.is_none_or(|l| l.as_deref() != wanted)
+}
+
+/// IDM draws with Segoe UI 9 pt (12 px at 100 %): the system's own copy (else egui's default
+/// font). Every family
 /// falls back to it (Tahoma has no Armenian or Georgian), then to the symbol fonts; other
 /// scripts (a file named in Japanese) come on demand ([`ScriptFallback`]).
-fn fonts(ctx: &egui::Context) {
+///
+/// A theme's bundled `font` ([`bundled_font`]) leads instead: Regular for the two built-in
+/// families and Tahoma's, SemiBold for the bold ones, and `geist-medium` (Medium) for buttons,
+/// column heads and chips; Segoe UI is then the first fallback, on the bundled font's baseline.
+fn fonts_for(ctx: &egui::Context, font: Option<&str>) {
     let mut defs = egui::FontDefinitions::default();
     let ui = ui_font();
     if let Some(bytes) = &ui {
@@ -432,6 +504,46 @@ fn fonts(ctx: &egui::Context) {
         }
     }
     crate::winui::install_fonts(&mut defs, Some(&font_dir()));
+    // Without a bundled font, Medium is the interface font itself.
+    let medium = egui::FontFamily::Name("geist-medium".into());
+    let ui_list = defs.families[&egui::FontFamily::Proportional].clone();
+    defs.families.insert(medium.clone(), ui_list);
+    let faces = font.and_then(bundled_font);
+    if let Some([regular, medium_face, semibold]) = faces {
+        use egui::FontFamily::{Monospace, Name, Proportional};
+        for (key, bytes) in [
+            ("bundled", regular),
+            ("bundled-medium", medium_face),
+            ("bundled-semibold", semibold),
+        ] {
+            defs.font_data.insert(
+                key.into(),
+                std::sync::Arc::new(egui::FontData::from_static(bytes)),
+            );
+        }
+        // Segoe UI right after it, for the letters it lacks, before egui's own fonts.
+        let lead = |list: &mut Vec<String>, key: &str| {
+            list.retain(|f| f != "segoe-ui");
+            list.insert(0, key.into());
+            if ui.is_some() {
+                list.insert(1, "segoe-ui-fallback".into());
+            }
+        };
+        for (family, key) in [
+            (Proportional, "bundled"),
+            (Monospace, "bundled"),
+            (Name("tahoma".into()), "bundled"),
+            (Name("tahoma-bold".into()), "bundled-semibold"),
+            (Name("arial-bold".into()), "bundled-semibold"),
+            (medium, "bundled-medium"),
+        ] {
+            let list = defs.families.entry(family).or_default();
+            // Tahoma's own files give way too: the family is the bundled face's alone.
+            list.retain(|f| !matches!(f.as_str(), "tahoma" | "tahoma-bold" | "arial-bold"));
+            lead(list, key);
+        }
+    }
+    *BUNDLED.lock().unwrap_or_else(|e| e.into_inner()) = faces;
     // A fallback's glyphs sit on the baseline of the family's first font (Japanese next to
     // Latin digits, Georgian in a Tahoma line), not centred in its row.
     let on_baseline = |bytes: Vec<u8>| {
@@ -534,6 +646,8 @@ pub fn apply(ctx: &egui::Context) {
 /// egui's own visuals from the active theme: each variant into its egui theme (the mode
 /// switches between them), so tooltips and a multi-line box's scroll bar follow the theme too.
 pub fn apply_theme(ctx: &egui::Context) {
+    // Choosing Graphite or leaving it swaps the face live.
+    fonts_if_changed(ctx, current().font.as_deref());
     let theme = current();
     let m = &theme.metrics;
     let radius = |r: f32| CornerRadius::same(r.round().clamp(0.0, 255.0) as u8);
@@ -702,26 +816,31 @@ mod glyph_tests {
             egui::FontFamily::Name("tahoma".into()),
             egui::FontFamily::Name("tahoma-bold".into()),
             egui::FontFamily::Proportional,
+            egui::FontFamily::Name("geist-medium".into()),
         ];
+        let _one = super::font_tests();
         let ctx = egui::Context::default();
-        super::fonts(&ctx);
-        let mut out = ctx.run_ui(Default::default(), |_| {});
-        out.textures_delta.clear();
         let mut missing: BTreeMap<String, BTreeSet<char>> = BTreeMap::new();
-        for family in &families {
-            let id = egui::FontId::new(11.0, family.clone());
-            let lacks: Vec<char> = ctx.fonts_mut(|f| {
-                needed
-                    .iter()
-                    .copied()
-                    .filter(|c| !f.has_glyph(&id, *c))
-                    .collect()
-            });
-            if !lacks.is_empty() {
-                missing
-                    .entry(format!("{family:?}"))
-                    .or_default()
-                    .extend(lacks);
+        // The system's font and Graphite's bundled one (plan 04).
+        for font in [None, Some("geist")] {
+            super::fonts_for(&ctx, font);
+            let mut out = ctx.run_ui(Default::default(), |_| {});
+            out.textures_delta.clear();
+            for family in &families {
+                let id = egui::FontId::new(11.0, family.clone());
+                let lacks: Vec<char> = ctx.fonts_mut(|f| {
+                    needed
+                        .iter()
+                        .copied()
+                        .filter(|c| !f.has_glyph(&id, *c))
+                        .collect()
+                });
+                if !lacks.is_empty() {
+                    missing
+                        .entry(format!("{font:?} {family:?}"))
+                        .or_default()
+                        .extend(lacks);
+                }
             }
         }
         let report: Vec<String> = missing
@@ -741,5 +860,72 @@ mod glyph_tests {
             "marks without a glyph:\n{}",
             report.join("\n")
         );
+    }
+
+    /// Plan 04, step 4: DirectWrite draws Geist from MDM's own bytes, as it draws Segoe UI from
+    /// its file: whole-pixel advances (egui's own are fractional), and Geist's figures, unlike
+    /// Segoe UI's, are not all one width.
+    #[test]
+    fn directwrite_draws_the_bundled_face() {
+        let _one = super::font_tests();
+        let width = |font: Option<&str>, text: &str| {
+            let ctx = egui::Context::default();
+            ctx.set_glyph_rasterizers(
+                crate::win32::text_rasterizer(super::font_dir())
+                    .into_iter()
+                    .collect(),
+            );
+            super::fonts_for(&ctx, font);
+            let mut out = ctx.run_ui(Default::default(), |_| {});
+            out.textures_delta.clear();
+            let id = egui::FontId::proportional(12.0);
+            ctx.fonts_mut(|f| {
+                f.layout_no_wrap(text.into(), id, egui::Color32::WHITE)
+                    .rect
+                    .width()
+            })
+        };
+        let (zero, one) = (width(Some("geist"), "0"), width(Some("geist"), "1"));
+        assert_eq!((zero.fract(), one.fract()), (0.0, 0.0), "{zero} {one}");
+        assert!(one < zero, "Geist's 1 is narrower than its 0: {one} {zero}");
+        assert_eq!(width(None, "0"), width(None, "1"), "Segoe UI's figures");
+    }
+
+    /// Plan 04, step 5: a theme switch remakes the fonts only when the font changes.
+    #[test]
+    fn fonts_are_remade_only_when_the_font_changes() {
+        use super::needs_reload;
+        let (system, geist) = (None::<String>, Some("geist".to_owned()));
+        assert!(needs_reload(None, None), "not made yet");
+        assert!(!needs_reload(Some(&system), None), "Classic to Metro");
+        assert!(needs_reload(Some(&system), Some("geist")), "to Graphite");
+        assert!(!needs_reload(Some(&geist), Some("geist")), "Graphite again");
+        assert!(needs_reload(Some(&geist), None), "leaving Graphite");
+    }
+
+    /// Plan 04: from Classic to Graphite and back, the first Proportional font is Geist, then the
+    /// system's again; DirectWrite draws Geist's bytes only while Geist leads.
+    #[test]
+    fn a_theme_switch_swaps_the_face() {
+        let first = |ctx: &egui::Context| {
+            let mut out = ctx.run_ui(Default::default(), |_| {});
+            out.textures_delta.clear();
+            ctx.fonts(|f| f.definitions().families[&egui::FontFamily::Proportional][0].clone())
+        };
+        let _one = super::font_tests();
+        let themes = crate::palette::builtins();
+        let (classic, graphite) = (themes[0], themes[8]);
+        let ctx = egui::Context::default();
+        // As `apply` at start, then `apply_theme` at each switch.
+        super::load_font(&ctx, classic.font.as_deref());
+        let system = first(&ctx);
+        assert!(super::bundled_face().is_none());
+        super::fonts_if_changed(&ctx, graphite.font.as_deref());
+        assert_eq!(first(&ctx), "bundled");
+        assert_eq!(super::bundled_face(), super::bundled_font("geist"));
+        super::fonts_if_changed(&ctx, classic.font.as_deref());
+        assert_eq!(first(&ctx), system);
+        assert_ne!(system, "bundled");
+        assert!(super::bundled_face().is_none());
     }
 }

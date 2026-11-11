@@ -5,7 +5,7 @@ twelve pages listed down the side, in the same order, under the Graphite chrome.
 controls and wording; Classic keeps the tabs, pixel for pixel.
 
 - Branches: `ui/08a-options-list` (side list, pages unchanged inside), `ui/08b-options-pages` (pages on `form`)
-- Needs: 07a (the kit: footer, form, icon_tile, status_banner), 02b, 03b (page icons); 04 before final sizes
+- Needs: 07a (the kit: footer, form, icon_tile, status_banner), 02b, 03b (page icons); 04 before final sizes (04's plan lists the Options labels Geist overflows)
 - Unblocks: 09
 
 ## Facts this plan relies on (paths under `crates/app/src/options.rs`, checked on `ui/03-icons` c3541d0)

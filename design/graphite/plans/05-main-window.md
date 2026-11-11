@@ -94,7 +94,10 @@ Everything below draws only when `theme::chrome()` is `ChromeLook::Graphite` (02
    (unchanged rule). The Synchronization queue draws `gx-refresh` (03b) instead of the tick badge.
 7. **List**: header in `text.muted` 12 px with a bottom rule only, the sort chevron after the sorted
    column's title, `gx-filter` after a filtered column's title; rows separated by a hairline
-   `list.grid`; the Source chip as a pill.
+   `list.grid`; the Source chip as a pill. Numeric cells (size, rate, time left, percent) in a
+   `numbers` family that keeps Segoe UI's tabular figures (04's digits decision: Geist's are
+   proportional), so they line up as they change; `win32.rs` `classic_face` maps `numbers` to
+   `segoeui.ttf` in both its branches, or egui would draw it with fractional advances. 04's main-window overflow (in its plan) is fixed here.
 8. **Status cell with progress**: give `list::Row` a `progress: Option<f32>` and a status kind; in
    column 3 draw: a running download, a 4 px bar (`progress.track` / `progress.bar`) and the percent;
    a stopped one, the `st-paused` icon, the word, then the bar in `text.muted` and the percent; every

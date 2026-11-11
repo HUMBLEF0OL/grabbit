@@ -134,8 +134,8 @@ ROLES = [
 HEADER = """\
 # Graphite: one of Mister Download Manager's built-in themes, its own new look (design/graphite):
 # colours and shapes of our own design, light and dark (jet black, royal amethyst, electric
-# cyan); it borrows nothing but its MIT-licensed Tabler icons (graphite/icons/SOURCES.txt). The
-# typeface is the app's usual one for now.
+# cyan); it borrows nothing but its MIT-licensed Tabler icons (graphite/icons/SOURCES.txt) and
+# its typeface, Geist (Vercel, SIL Open Font License 1.1), which MDM carries (assets/fonts/geist).
 # It is also an example of a theme file: seeds for the colours, many roles set by hand (the
 # outlaw colour on the default button and the progress bars), rounded corners, Windows 11's
 # controls with a focus ring, taller list rows, a flat drawn title bar on Windows and an icon
@@ -144,6 +144,8 @@ HEADER = """\
 # the palette or the mapping there, not here.
 
 name = "Graphite"
+# A font MDM carries: Geist (Regular, Medium, SemiBold for the bold texts).
+font = "geist"
 icon-set = "graphite"
 icons = "mono"
 

@@ -8,7 +8,8 @@ Escape behaviour.
 
 - Branches: `ui/07a-dialog-kit`, then one per wave (`ui/07b-…` to `ui/07e-…`)
 - Needs: 02b (chrome gate and the Graphite roles), 03 (`st-*` and file icons), 03b (`gx-*` glyphs);
-  04 before final sizes. Independent of 05 and 06.
+  04 before final sizes (04's plan lists the labels Geist overflows: limiter, gallery, Scheduler,
+  grabber, progress window). Independent of 05 and 06.
 - Unblocks: 08 (needs 07a), 09
 
 ## Facts this plan relies on (paths under `crates/app/src/`, checked on `ui/03-icons` c3541d0)
