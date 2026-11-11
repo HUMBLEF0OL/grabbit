@@ -202,7 +202,6 @@ pub fn derive(s: &Seeds) -> Palette {
         focus_line_straight: false,
         access_keys_always: false,
         tree_chevrons: dark,
-        tree_badges: true,
         segments,
         window: bg,
         text,

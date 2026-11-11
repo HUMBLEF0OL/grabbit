@@ -68,8 +68,9 @@ Gate everything below on a new theme control, `[controls] chrome = "classic" | "
 4. **Categories**: no "Categories" caption bar (View, Hide categories still closes the pane); 28 px rows,
    chevrons (no dotted lines), 16 px icons, the selected row filled with `selection` and its icon in
    `accent`, counts "(n)" muted on top-level rows only (unchanged rule).
-   From 03: Graphite sets `tree-badges = false`, so Finished and Queues show their icon alone and
-   each queue the Queues icon (`app.rs` `tree_rows`); a synchronized queue keeps its tick badge.
+   From 03: with Graphite's icon set (`themeicons::tree_badges`), Finished and Queues show their
+   icon alone and each queue the Queues icon (`app.rs` `tree_rows`); a synchronized queue keeps
+   its tick badge.
    The mock draws that one as `x-refresh` instead, which is not one of the 53 needs: add it to
    `NEEDS` and the Graphite set, or keep the tick.
 5. **List**: `list.row = 32` (theme), header in `text.muted` 12 px with a bottom rule only; rows separated by a

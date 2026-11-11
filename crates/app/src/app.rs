@@ -6219,8 +6219,8 @@ impl App {
             count: None,
         };
         let mut rows = Vec::new();
-        // The badges that repeat their icon, unless the theme leaves them out (tree-badges).
-        let badges = crate::theme::colors().tree_badges;
+        // The badges that repeat their icon, unless the theme's icon set has no need of them.
+        let badges = crate::themeicons::tree_badges();
         // Silk icons in IDM's roles: folder, folder + green arrow, folder + tick, page stacks.
         let mut branch =
             |label, open: bool, icon, badge, view: View, b: Branch, child: fn(Category) -> View| {

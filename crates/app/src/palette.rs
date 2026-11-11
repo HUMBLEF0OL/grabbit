@@ -100,11 +100,6 @@ macro_rules! palette {
             pub access_keys_always: bool,
             /// The category tree's expanders: chevrons (dark look) or classic +/- boxes.
             pub tree_chevrons: bool,
-            /// The category tree's badges that repeat their icon: Finished's tick and Queues'
-            /// page stack over the folder, and each queue drawn as the stack. Off (an icon set
-            /// whose Finished and Queues icons say so already), those rows show their icon alone
-            /// and a queue the Queues icon; a synchronized queue keeps its tick.
-            pub tree_badges: bool,
             /// The progress window's segment bar.
             pub segments: Segments,
             $(#[doc = $doc] pub $field: Color32,)*
@@ -140,7 +135,6 @@ macro_rules! palette {
                     focus_line_straight: dark,
                     access_keys_always: dark,
                     tree_chevrons: dark,
-                    tree_badges: true,
                     segments: classic_segments(dark),
                     $($field: if dark { $dark } else { $light },)*
                 }
@@ -968,8 +962,8 @@ mod tests {
 
     /// Graphite, MDM's own new look, comes last (the others keep their places): rounded corners,
     /// a focus ring, a flat drawn title bar, the mockup's taller rows, its own one-colour icon
-    /// set (Tabler's, themeicons.rs) with no badges over it in the tree, and pressed faces told
-    /// from the pointer over them (issue #7) on its buttons and toolbar.
+    /// set (Tabler's, themeicons.rs), and pressed faces told from the pointer over them (issue
+    /// #7) on its buttons and toolbar.
     #[test]
     fn graphite_is_built_in() {
         let t = builtins()[8];
@@ -1017,14 +1011,6 @@ mod tests {
             // The outlaw colour throughout: no accent-tinted edge on its buttons.
             assert_eq!(p.button_default_bottom, p.button_default_border);
             assert_eq!(p.button_accent_bottom, p.button_accent);
-            // The mock's category tree: no badge repeating its icon.
-            assert!(!p.tree_badges, "dark {}", p.dark);
-        }
-        // Every other theme keeps the tree's badges.
-        for t in &builtins()[..8] {
-            for p in [&t.light, &t.dark] {
-                assert!(p.tree_badges, "{} dark {}", t.id, p.dark);
-            }
         }
     }
 

@@ -121,13 +121,6 @@ ROLES = [
     ]),
 ]
 
-# (comment, [(flag, value)]) in both variants, after the roles.
-FLAGS = [
-    # The mock's category tree: no badge repeating its icon (Tabler's Finished is a circled tick
-    # already, as the tick badge is); a queue drawn as the Queues icon, not Silk's page stack.
-    ("Categories tree: each row's icon alone", [("tree-badges", False)]),
-]
-
 HEADER = """\
 # Graphite: one of Mister Download Manager's built-in themes, its own new look (design/graphite):
 # colours and shapes of our own design, light and dark (jet black, royal amethyst, electric
@@ -215,9 +208,6 @@ def render() -> str:
         for comment, roles in ROLES:
             out.append(f"# {comment}.")
             out += [f'{key(r)} = "{colour(tokens, variant, tok)}"' for r, tok in roles]
-        for comment, flags in FLAGS:
-            out.append(f"# {comment}.")
-            out += [f"{key(f)} = {str(v).lower()}" for f, v in flags]
     return "\n".join(out) + "\n"
 
 
