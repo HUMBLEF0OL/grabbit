@@ -59,3 +59,10 @@ name = "Aqua"
 feel = "Mac OS X's feel: gel buttons round at the ends, a blue focus ring and a blue gel progress bar."
 shot = "images/help/site-theme-aqua.webp"
 tag = true
+
+[[theme]]
+id = "graphite"
+name = "Graphite"
+feel = "MDM's own new look: royal amethyst for what you chose, electric cyan for what moves, rounded corners."
+shot = "images/help/site-theme-graphite.webp"
+tag = true

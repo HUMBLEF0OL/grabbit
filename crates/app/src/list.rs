@@ -20,6 +20,13 @@ pub fn header_h() -> f32 {
 pub fn row_h() -> f32 {
     crate::theme::metrics().list_row
 }
+/// How far a row's contents (icon, text, chip: laid out for the classic 17) sit down in a taller
+/// row, to stay centred in it; 0 in the classic look.
+fn row_inset() -> f32 {
+    ((row_h() - crate::palette::Metrics::CLASSIC.list_row) / 2.0)
+        .max(0.0)
+        .floor()
+}
 
 // The active theme's colours (crate::palette, #45).
 themed! {
@@ -912,10 +919,12 @@ pub fn show(
                     winui::SELECTED_INACTIVE(),
                 );
             }
+            // The row's contents, centred in a row taller than the classic one.
+            let inner = top + row_inset();
             for (c, x0, x1) in &cols {
                 // The file-type icon sits in the File Name column, wherever it is.
                 let tx = if *c == 0 {
-                    icons.paint_in(ui, &bp, row.icon.clone(), pos2(x0 + 4.0, top));
+                    icons.paint_in(ui, &bp, row.icon.clone(), pos2(x0 + 4.0, inner));
                     x0 + 22.0
                 } else {
                     x0 + 6.0
@@ -925,7 +934,7 @@ pub fn show(
                         ui,
                         &bp,
                         IconKey::Silk("page_white_stack"),
-                        pos2(x0 + 2.0, top),
+                        pos2(x0 + 2.0, inner),
                     );
                 }
                 let cell = Rect::from_min_max(pos2(*x0, top), pos2(*x1 - 1.0, top + row_h()));
@@ -934,7 +943,7 @@ pub fn show(
                         &bp.with_clip_rect(screen(cell.intersect(body))),
                         &font,
                         (*x0, *x1),
-                        top,
+                        inner,
                         &row.cells[*c],
                     );
                     let hovered = resp
@@ -976,7 +985,7 @@ pub fn show(
                 } else {
                     TEXT()
                 };
-                text_font(&clip, font.clone(), tx, top + 12.0, &s, ink);
+                text_font(&clip, font.clone(), tx, inner + 12.0, &s, ink);
             }
         }
         // The grid line is the item's own last row (top + 16), so icons are not clipped; in
@@ -1236,8 +1245,9 @@ fn dotted(p: &egui::Painter, l: f32, t: f32, r: f32, b: f32, color: Color32) {
 }
 
 /// A Source chip: a rounded pill, green "Web" or purple "Torrent", white text, at the cell's
-/// left of the cell `x0..x1`. A label too long for the cell (a translation in a narrow column)
-/// is cut with "..."; returns whether it was.
+/// left of the cell `x0..x1`, `top` the top of the row's contents (a classic row's height:
+/// centred by the caller in a taller row). A label too long for the cell (a translation in a
+/// narrow column) is cut with "..."; returns whether it was.
 fn chip(
     p: &egui::Painter,
     font: &egui::FontId,
@@ -1258,11 +1268,9 @@ fn chip(
     // Room: the pill starts 5 px in, pads its text 6 px each side, and ends 3 px before the cell.
     let label = &winui::ellipsize(p, font, full, (x1 - x0 - 5.0 - 12.0 - 3.0).max(0.0));
     let w = winui::text_width_font(p, font.clone(), label).round();
-    let pill = Rect::from_min_size(
-        pos2(x0 + 5.0, top + 2.0),
-        egui::vec2(w + 12.0, row_h() - 4.0),
-    );
-    p.rect_filled(winui::rect(pill), (row_h() - 4.0) / 2.0, fill);
+    let h = row_h().min(crate::palette::Metrics::CLASSIC.list_row) - 4.0;
+    let pill = Rect::from_min_size(pos2(x0 + 5.0, top + 2.0), egui::vec2(w + 12.0, h));
+    p.rect_filled(winui::rect(pill), h / 2.0, fill);
     text_font(
         p,
         font.clone(),

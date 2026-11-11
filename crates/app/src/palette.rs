@@ -687,6 +687,21 @@ pub fn to_hex(c: Color32) -> String {
     }
 }
 
+/// How far apart two faces are to the eye, as the tests measure it: the largest difference of
+/// one channel. Issue #7's pressed and hot buttons were 1 apart (#f5f5f5, #f6f6f6); 6 is seen.
+#[cfg(test)]
+pub(crate) fn channel_step(a: Color32, b: Color32) -> u8 {
+    [(a.r(), b.r()), (a.g(), b.g()), (a.b(), b.b())]
+        .into_iter()
+        .map(|(x, y)| x.abs_diff(y))
+        .max()
+        .unwrap_or(0)
+}
+
+/// [`channel_step`] two faces must have between them to be told apart.
+#[cfg(test)]
+pub(crate) const SEEN_STEP: u8 = 6;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -969,8 +984,24 @@ mod tests {
             }
         );
         for p in [&t.light, &t.dark] {
-            assert_ne!(p.button_pressed, p.button_hot, "dark {}", p.dark);
-            assert_ne!(p.toolbar_pressed, p.toolbar_hot, "dark {}", p.dark);
+            for (what, pressed, hot) in [
+                ("button", p.button_pressed, p.button_hot),
+                ("toolbar", p.toolbar_pressed, p.toolbar_hot),
+                (
+                    "accent button",
+                    p.button_accent_pressed,
+                    p.button_accent_hot,
+                ),
+            ] {
+                assert!(
+                    channel_step(pressed, hot) >= SEEN_STEP,
+                    "dark {}: {what} pressed {pressed:?} against hot {hot:?}",
+                    p.dark
+                );
+            }
+            // The outlaw colour throughout: no accent-tinted edge on its buttons.
+            assert_eq!(p.button_default_bottom, p.button_default_border);
+            assert_eq!(p.button_accent_bottom, p.button_accent);
         }
     }
 

@@ -51,7 +51,8 @@ The new layout applies only when the theme asks for it; Classic and the era them
 ## 05b · The Graphite main window
 
 Gate everything below on a new theme control, `[controls] chrome = "classic" | "graphite"` (new
-`ChromeLook` in `palette.rs`, parsed in `Controls::set`); `graphite.toml` sets `chrome = "graphite"`.
+`ChromeLook` in `palette.rs`, parsed in `Controls::set`); `graphite.toml` sets `chrome = "graphite"`
+(in `make_theme.py`'s `HEADER`, which writes the file).
 
 1. **Menus in the title bar** (drawn caption only). Draw `menu_bar` inside the caption rect after the
    app mark and name; add each title's rect to `CaptionHits.buttons` so it is client area; keep

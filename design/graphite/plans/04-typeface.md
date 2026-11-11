@@ -41,8 +41,8 @@ look phase that changes engine code: today no font is bundled and a theme cannot
    `font.heading` so the main window's labels fit as in the mock (11.5 toolbar labels, 13 body, 12
    column heads). Check every dialog for clipped labels at 100% and 200%; widen nothing in this phase:
    list any overflow for 05 and 07.
-7. `graphite.toml`: `font = "geist"`. `ATTRIBUTION.md`: Geist, Vercel, SIL OFL 1.1. Note the added
-   installer size in the PR.
+7. `graphite.toml`: `font = "geist"` (through `make_theme.py`'s `HEADER`, which writes the file).
+   `ATTRIBUTION.md`: Geist, Vercel, SIL OFL 1.1. Note the added installer size in the PR.
 
 ## Tests
 

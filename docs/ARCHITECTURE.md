@@ -86,7 +86,7 @@ light and a dark palette, metrics, control styles and an icon style (`palette.rs
   Windows' accent and contrast settings.
 - **Control styles.** `palette::Controls` names each control's shape (text boxes, check boxes,
   buttons, progress bars, scroll bars, the focus mark, the title bar); the style themes (Metro,
-  Adwaita, Breeze, Luna, Aero, Aqua) pick theirs, and MDM then draws the title bar
+  Adwaita, Breeze, Luna, Aero, Aqua, Graphite) pick theirs, and MDM then draws the title bar
   itself (the `caption.*` roles).
 - **Theme files.** `themefile.rs` reads TOML or JSON from the data folder's `themes` (one file,
   or `<id>/theme.toml` with icons beside it). A file names only what it changes; the rest comes

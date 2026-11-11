@@ -1,6 +1,6 @@
 # The baseline screenshots for the Graphite phases (plans/01-prepare.md, section 6): today's app
 # in every window and state the mockup shows that it can open, Classic theme, light and dark,
-# interface size 100 %. Each file is named after its mock state (`main-plain.png`,
+# interface size 100 %; with -Theme, a phase's after-shots in its theme (below). Each file is named after its mock state (`main-plain.png`,
 # `progress-status.png`; `-dark` before `.png` for the dark one), so a PR pairs it with its
 # after-shot. INDEX.md beside them lists every mock state, its file or why there is none.
 #
@@ -16,8 +16,9 @@
 #
 #   ...\baseline.ps1 -Theme graphite -Shots main-plain,addurl,fileinfo,progress-status
 #
-# The output (design/graphite/baseline/) is not committed: it goes to the pr-shots branch as
-# baseline/. The raw pictures stay in target\graphite-baseline\{light,dark}.
+# The output (design/graphite/baseline/, or shots-<theme>/ for another theme) is not committed:
+# it goes to the pr-shots branch (baseline/, or the PR's folder). The raw pictures stay in
+# target\graphite-baseline\{light,dark} (target\graphite-shots-<theme>\ for another theme).
 param(
   # Where the release build is (CARGO_TARGET_DIR's release folder when it is set elsewhere).
   [string]$Bin = "",
@@ -48,7 +49,10 @@ $Bin = (Resolve-Path $Bin).Path
 $exe = Join-Path $Bin "misterdownloadmanager.exe"
 $server = Join-Path $Bin "labserver.exe"
 foreach ($f in $exe, $server) { if (-not (Test-Path $f)) { throw "no ${f}: build it first (see the header)" } }
-if ($Theme -notmatch '^[a-z0-9-]+$') { throw "-Theme takes a theme id (classic, graphite)" }
+# Theme ids are lower case and compared exactly by the app.
+if ($Theme -cnotmatch '^[a-z0-9-]+$') { throw "-Theme takes a theme id in lower case (classic, graphite)" }
+# Under `powershell -File`, "-Shots a,b" arrives as one string.
+$Shots = @($Shots | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $base = $Theme -eq "classic"
 $out = if ($OutDir) { $OutDir } elseif ($base) { Join-Path $graphite "baseline" } else { Join-Path $graphite "shots-$Theme" }
 New-Item -ItemType Directory -Force $out | Out-Null
@@ -190,10 +194,13 @@ foreach ($s in $states) {
 }
 # The progress window's tabs apart, other windows between them: a /show progress right after
 # the last one's window was closed can find it still closing and open nothing.
-$step = [math]::Floor($show.Count / ($prog.Count + 1))
+# At least one window apart (a short -Shots list), and none before the first ($show[0..-1] would
+# be the first and the last again).
+$step = [math]::Max(1, [math]::Floor($show.Count / ($prog.Count + 1)))
 for ($i = $prog.Count - 1; $i -ge 0; $i--) {
   $at = [math]::Min($show.Count, ($i + 1) * $step)
-  $show = @($show[0..($at - 1)]) + @($prog[$i]) + @(if ($at -lt $show.Count) { $show[$at..($show.Count - 1)] })
+  $head = if ($at -gt 0) { @($show[0..($at - 1)]) } else { @() }
+  $show = $head + @($prog[$i]) + @(if ($at -lt $show.Count) { $show[$at..($show.Count - 1)] })
 }
 $show += $late + $last
 
@@ -313,32 +320,33 @@ foreach ($m in $modes) {
   $empty = @($states | Where-Object { $_[1] -eq "empty" }).Count -gt 0
   $subs = @($states | Where-Object { $_[1] -like "sub:*" }).Count -gt 0
   if ($empty -or $subs) {
-  "== ${m}: the empty main window, the dialogs over Options"
-  With-App $dark {
-    param($app, $main)
-    if (-not $empty) { }
-    elseif (Capture $app.Id ([WildcardPattern]::Escape($main)) (Join-Path $dir "main-empty.png")) { "  main-empty.png" }
-    else { Write-Warning "main-empty: no picture" }
-    # A dialog over Options (docs-shots.ps1 shoots the first new window, Options itself): the
-    # window that is neither the main window nor Options.
-    foreach ($s in $states | Where-Object { $_[1] -like "sub:*" }) {
-      $name, $what = $s[0], $s[1].Substring(4)
-      $before = @(Titles $app.Id)
-      & $exe /show $what
-      $t = $null
-      for ($i = 0; $i -lt 50 -and -not $t; $i++) {
-        Start-Sleep -Milliseconds 200
-        $t = @(Titles $app.Id | Where-Object { $before -notcontains $_ -and $_ -notlike "*Configuration" })[0]
+    "== ${m}: the empty main window, the dialogs over Options"
+    With-App $dark {
+      param($app, $main)
+      if ($empty) {
+        if (Capture $app.Id ([WildcardPattern]::Escape($main)) (Join-Path $dir "main-empty.png")) { "  main-empty.png" }
+        else { Write-Warning "main-empty: no picture" }
       }
-      if ($t -and (Capture $app.Id ([WildcardPattern]::Escape($t)) (Join-Path $dir "$name.png"))) {
-        "  $name.png  ($t)"
-      } else { Write-Warning "${name}: no dialog over Options" }
-      Close-All $app.Id $before
-      Start-Sleep -Milliseconds 800
-      Close-All $app.Id $before
-      Start-Sleep -Milliseconds 600
+      # A dialog over Options (docs-shots.ps1 shoots the first new window, Options itself): the
+      # window that is neither the main window nor Options.
+      foreach ($s in $states | Where-Object { $_[1] -like "sub:*" }) {
+        $name, $what = $s[0], $s[1].Substring(4)
+        $before = @(Titles $app.Id)
+        & $exe /show $what
+        $t = $null
+        for ($i = 0; $i -lt 50 -and -not $t; $i++) {
+          Start-Sleep -Milliseconds 200
+          $t = @(Titles $app.Id | Where-Object { $before -notcontains $_ -and $_ -notlike "*Configuration" })[0]
+        }
+        if ($t -and (Capture $app.Id ([WildcardPattern]::Escape($t)) (Join-Path $dir "$name.png"))) {
+          "  $name.png  ($t)"
+        } else { Write-Warning "${name}: no dialog over Options" }
+        Close-All $app.Id $before
+        Start-Sleep -Milliseconds 800
+        Close-All $app.Id $before
+        Start-Sleep -Milliseconds 600
+      }
     }
-  }
   }
 
   if ($Torrents) {
@@ -363,8 +371,11 @@ foreach ($m in $modes) {
 # run took (a -Mode run keeps the other mode's pictures as they were); then the index.
 foreach ($m in $modes) {
   $pattern = if ($m -eq "dark") { "*-dark.png" } else { "*.png" }
+  # A -Shots run replaces only its own states' pictures.
+  $mine = @($states | ForEach-Object { if ($m -eq "dark") { "$($_[0])-dark" } else { $_[0] } })
   Get-ChildItem $out -Filter $pattern -ErrorAction SilentlyContinue |
-    Where-Object { $m -eq "dark" -or $_.BaseName -notlike "*-dark" } | Remove-Item
+    Where-Object { $m -eq "dark" -or $_.BaseName -notlike "*-dark" } |
+    Where-Object { -not $Shots.Count -or $mine -contains $_.BaseName } | Remove-Item
   foreach ($s in $states) {
     $f = Join-Path (Join-Path $raw $m) "$($s[0]).png"
     $to = if ($m -eq "dark") { "$($s[0])-dark.png" } else { "$($s[0]).png" }

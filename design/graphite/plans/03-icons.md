@@ -27,7 +27,8 @@ stroke 1.75, tinted with the theme's ink.
    and `sets.insert("graphite".to_owned(), Arc::new(Set::from_files(graphite, true)));`, with a comment
    naming the source and licence like Metro's.
 3. Add `"graphite"` to the name lists of the two tests above.
-4. In `graphite.toml`: `icon-set = "graphite"` and `icons = "mono"`.
+4. In `graphite.toml`: `icon-set = "graphite"` and `icons = "mono"`. The file is written by
+   `design/graphite/source/make_theme.py`: change its `HEADER` and run it, not the file.
 5. `ATTRIBUTION.md`: Tabler Icons 3.31.0, Paweł Kuna, MIT, used for the Graphite theme's icons.
 6. Check the title-bar glyphs (`ui-minimize`, `ui-maximize`, `ui-restore`, `ui-close`, `ui-to-tray`)
    in the drawn caption, and the file-type icons in the list (`ft-*`), at 100% and 200%.

@@ -6878,17 +6878,11 @@ mod tests {
                         pressed.fill, rest.fill,
                         "a flat button's pressed face differs"
                     );
-                    // ... and from the pointer over it, to the eye: issue #7 was one step
-                    // (#f5f5f5 against #f6f6f6).
-                    let step = |a: Color32, b: Color32| {
-                        [(a.r(), b.r()), (a.g(), b.g()), (a.b(), b.b())]
-                            .into_iter()
-                            .map(|(x, y)| x.abs_diff(y))
-                            .max()
-                            .unwrap_or(0)
-                    };
+                    // A flat button has only its face to show it is pressed (no bottom edge
+                    // to flatten), so that face is told by eye from the pointer over it too.
+                    use crate::palette::{SEEN_STEP, channel_step};
                     assert!(
-                        step(pressed.fill, hot.fill) >= 6,
+                        channel_step(pressed.fill, hot.fill) >= SEEN_STEP,
                         "a flat button's pressed face differs from hot: {:?} {:?}",
                         pressed.fill,
                         hot.fill

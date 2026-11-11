@@ -3,7 +3,7 @@ You are making a theme file for Mister Download Manager (MDM), a free, open-sour
 THE FORMAT
 A theme names only what it changes; everything else comes from the theme it inherits.
 - name = "Display name"
-- inherits = "classic" (the default), "high-contrast", "metro", "adwaita", "breeze", "luna", "aero" or "aqua"
+- inherits = "classic" (the default), "high-contrast", "metro", "adwaita", "breeze", "luna", "aero", "aqua" or "graphite"
 - icons = "color" | "mono" | "accent"
 - contrast = "high" (optional: strengthens every edge and text colour)
 - [seeds] a few colours MDM spreads over every control: background, surface, header, text, accent, selection, error, warning, success. Use [seeds.light] and [seeds.dark] to give each side its own.

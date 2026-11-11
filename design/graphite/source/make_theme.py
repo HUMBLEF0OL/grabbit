@@ -43,7 +43,10 @@ SEEDS = [
     ("success", "okt"),
 ]
 
-# (comment, [(role, token)]); a token "ink@0f" is the ink at that alpha.
+# (comment, [(role, token)]); a token "ink@0f" is the ink at that alpha, ("mix", a, b, t) the
+# token a moved toward b by t (0 to 1), "none" transparent. Roles left out are derived from the
+# seeds (crates/app/src/derive.rs), which tints them with the accent: every role a painter of
+# the chosen controls reads in an outlaw colour or a neutral is set here.
 ROLES = [
     ("Text", [
         ("text.disabled", "dis"), ("text.muted", "ink3"), ("link", "acct"),
@@ -59,21 +62,26 @@ ROLES = [
         ("field.disabled.border", "line2"), ("button.disabled", "surface"),
         ("button.disabled.border", "line"), ("check.on.disabled", "dis"),
     ]),
-    # Pressed is `press`, a step deeper than the pointer's `hover` (issue #7: never the same).
-    ("Buttons: the default one filled with the outlaw colour; pressed a step deeper than hot", [
+    # Pressed is `press`, told from the pointer's `hover` (issue #7: never the same), its label
+    # the secondary ink; an accent button pressed is `outp`, a step deeper than `out`.
+    ("Buttons: the default one outlined in the outlaw colour, an accent one filled with it", [
         ("button", "surface"), ("button.border", "line"), ("button.bottom", "line"),
-        ("button.hot", "hover"), ("button.pressed", "press"), ("button.accent", "out"),
+        ("button.hot", "hover"), ("button.pressed", "press"), ("button.text.pressed", "ink2"),
+        ("button.default.border", "out"), ("button.default.bottom", "out"),
+        ("button.accent", "out"), ("button.accent.bottom", "out"),
         ("button.accent.text", "onout"), ("button.accent.hot", "out2"),
-        ("button.default.border", "out"),
+        ("button.accent.pressed", "outp"), ("button.accent.text.pressed", "onout"),
     ]),
-    ("Check boxes and radios", [
+    ("Check boxes and radios: the border kept under the pointer, fainter pressed", [
         ("check.on", "acc"), ("check.mark", "onacc"), ("check.border", "ctl"),
+        ("check.border.hot", "ctl"), ("check.border.pressed", ("mix", "ctl", "surface", 0.3)),
         ("check.border.disabled", "dis"),
     ]),
     ("Progress: the outlaw colour on the track", [
         ("progress.track", "track"), ("meter.track", "track"), ("progress.bar", "out"),
         ("meter.fill", "out"), ("segments.done", "out"), ("segments.missing", "track"),
-        ("pieces.have", "out"), ("pieces.missing", "track"),
+        ("pieces.have", "out"), ("pieces.partial", ("mix", "out", "surface", 0.55)),
+        ("pieces.missing", "track"),
     ]),
     ("Lists", [
         ("list", "bg"), ("header", "bg"), ("header.line", "line"), ("grid", "line2"),
@@ -84,8 +92,10 @@ ROLES = [
         ("menubar", "surface"), ("menubar.line", "line"), ("menu", "surface"),
         ("menu.hot", "sel"), ("menu.border", "line"), ("menu.text.disabled", "dis"),
     ]),
-    ("Toolbar", [
+    ("Toolbar: a neutral face under the pointer, no border", [
         ("toolbar.hot", "hover"), ("toolbar.pressed", "press"),
+        ("toolbar.hot.faint", ("mix", "hover", "bg", 0.5)), ("toolbar.hot.edge", "line"),
+        ("toolbar.hot.border", "none"),
         ("toolbar.text.disabled", "dis"), ("icon.disabled", "dis"),
     ]),
     ("Categories tree", [("tree", "surface"), ("tree.expander", "ink3")]),
@@ -136,6 +146,15 @@ radius = 8
 def colour(tokens: dict, variant: str, token) -> str:
     if token is None:
         return WARNING[variant]
+    if token == "none":
+        return "#00000000"
+    if isinstance(token, tuple):
+        _, a, b, t = token
+        x, y = colour(tokens, variant, a), colour(tokens, variant, b)
+        return "#" + "".join(
+            f"{round(int(x[i : i + 2], 16) * (1 - t) + int(y[i : i + 2], 16) * t):02x}"
+            for i in (1, 3, 5)
+        )
     if "@" in token:
         base, alpha = token.split("@")
         return tokens[base][:7] + alpha
@@ -184,12 +203,13 @@ def check() -> list[str]:
         ("text / list", "ink", "bg", 4.5),
         ("selection text / selection", "ink", "sel", 4.5),
         ("button text / button", "ink", "surface", 4.5),
-        ("button text / pressed", "ink", "press", 4.5),
+        ("button text pressed / pressed", "ink2", "press", 4.5),
         ("muted / window", "ink3", "bg", 4.5),
         ("link / window", "acct", "bg", 4.5),
         ("accent / window", "acc", "bg", 3.0),
         ("accent button text", "onout", "out", 4.5),
         ("accent button text, hot", "onout", "out2", 4.5),
+        ("accent button text, pressed", "onout", "outp", 4.5),
         ("check mark / check", "onacc", "acc", 4.5),
         ("check border / window", "ctl", "bg", 3.0),
         ("progress bar / track", "out", "track", 3.0),
@@ -216,10 +236,13 @@ def check() -> list[str]:
             rows.append(f"{variant:5} {what:34} {f} on {t[bg]}  {r:5.2f}  (needs {need})")
             if r < need:
                 bad.append(rows[-1])
-        # Issue #7: a pressed face is told from the pointer over it and from the face at rest.
-        for other in ("hover", "surface"):
-            if t["press"] == t[other]:
-                bad.append(f"{variant:5} pressed face {t['press']} is the same as {other}")
+        # Issue #7: a pressed face is told by eye from the pointer over it, from the face at
+        # rest and from its border (pal.py asks it of every palette; here, for this one).
+        for a, b in pal.APART:
+            s = pal.step(t[a], t[b])
+            rows.append(f"{variant:5} {a + ' apart from ' + b:34} {t[a]} vs {t[b]}  step {s}  (needs {pal.STEP})")
+            if s < pal.STEP:
+                bad.append(rows[-1])
     print("\n".join(rows))
     return bad
 
