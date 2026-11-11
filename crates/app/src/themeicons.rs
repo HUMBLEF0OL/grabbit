@@ -746,8 +746,20 @@ pub fn paint(
     rc: egui::Rect,
     enabled: bool,
 ) -> bool {
+    paint_in(ui, painter, need, rc, ink(enabled), enabled)
+}
+
+/// [`paint`], a one-colour icon in `ink` rather than the text's colour.
+pub fn paint_in(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    need: &str,
+    rc: egui::Rect,
+    ink: Color32,
+    enabled: bool,
+) -> bool {
     let px = rc.width() * ui.ctx().pixels_per_point();
-    let Some((src, tint)) = source(need, px, ink(enabled), enabled) else {
+    let Some((src, tint)) = source(need, px, ink, enabled) else {
         return false;
     };
     let img = egui::Image::new(src);

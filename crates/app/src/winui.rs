@@ -5375,6 +5375,18 @@ pub fn spin_arrows(ui: &mut Ui, rc: Rect, enabled: bool, id: &str) -> i32 {
     step
 }
 
+/// A square in the theme's `tile` colour holding the icon set's `need` in `tint`, half the
+/// tile's size: a dialog's icon (40, radius 8), an empty list's or About's (56, radius 14).
+/// False when the theme's icon set lacks `need` (the tile is drawn, empty).
+// ponytail: no caller until 05b and 07a (plans/02b-chrome-gate.md), one painter for both.
+#[allow(dead_code)]
+pub fn icon_tile(ui: &Ui, rc: Rect, need: &str, tint: Color32, radius: f32) -> bool {
+    let painter = ui.painter();
+    painter.rect_filled(rc, radius, crate::theme::colors().tile);
+    let glyph = Rect::from_center_size(rc.center(), rc.size() * 0.5);
+    crate::themeicons::paint_in(ui, painter, need, glyph, tint, true)
+}
+
 /// A flat 19 × 21 button with a 16 × 16 icon (the Scheduler's move up / down / remove), its
 /// `tip` (English, translated here) on hover.
 pub fn icon_button_light(ui: &mut Ui, rc: Rect, id: &str, enabled: bool, tip: &str) -> Response {

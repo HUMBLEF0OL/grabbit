@@ -119,6 +119,16 @@ ROLES = [
         ("caption", "surface"), ("caption.text", "ink"), ("caption.text.inactive", "ink3"),
         ("caption.hot", "ink@0f"), ("caption.pressed", "ink@1f"),
     ]),
+    # Plan 02b: the roles the Graphite layout (chrome = "graphite") draws with; nothing reads
+    # them before 05b, 07a and 09a.
+    ("The Graphite layout: panels, icon tiles, shortcuts, danger buttons, banners", [
+        ("panel", "surface"), ("tile", "tile"), ("menu.shortcut", "ink3"),
+        ("toolbar.checked", "sel"), ("button.danger", "dng"), ("button.danger.text", "ondng"),
+        ("banner.error", "errSoft"), ("banner.info", "sel"), ("banner.warning", "warnSoft"),
+    ]),
+    ("Two-tone finish and glow (09a): the outlaw colour's lighter stop, a glow in dark only", [
+        ("glow", "glow"), ("button.accent.top", "out2"), ("progress.bar.end", "out2"),
+    ]),
 ]
 
 HEADER = """\
@@ -146,6 +156,8 @@ progress = "line"
 scroll = "overlay"
 # A drawn, flat title bar coloured by the caption roles.
 caption = "metro"
+# Graphite's layout (title-bar menus, a toolbar on a panel, dialog footers), not IDM's.
+chrome = "graphite"
 
 [sizes]
 radius = 8
@@ -164,7 +176,7 @@ radius = 8
 def colour(tokens: dict, variant: str, token) -> str:
     if token is None:
         return WARNING[variant]
-    if token == "none":
+    if token == "none" or tokens.get(token) == "transparent":
         return "#00000000"
     if isinstance(token, tuple):
         _, a, b, t = token
@@ -238,6 +250,13 @@ def check() -> list[str]:
         ("warning / window", None, "bg", 4.5),
         ("error / window", "err", "bg", 4.5),
         ("success / window", "okt", "bg", 4.5),
+        ("menu shortcut / menu", "ink3", "surface", 4.5),
+        ("danger button text / danger", "ondng", "dng", 4.5),
+        ("text / error banner", "ink", "errSoft", 4.5),
+        ("text / info banner", "ink", "sel", 4.5),
+        ("text / warning banner", "ink", "warnSoft", 4.5),
+        ("text / tile", "ink", "tile", 4.5),
+        ("toolbar label / checked", "ink2", "sel", 4.5),
     ]
     pairs += [
         ("focus ring / window", RING, "bg", 3.0),

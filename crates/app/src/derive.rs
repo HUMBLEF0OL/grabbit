@@ -355,6 +355,20 @@ pub fn derive(s: &Seeds) -> Palette {
         caption_close_text: Color32::WHITE,
         caption_inactive: Color32::TRANSPARENT,
         drop_edge: toward(bg, 0.4),
+        panel: surface,
+        tile: toward(surface, 0.05),
+        menu_shortcut: readable(mix(text, surface, 0.3), surface, 4.5),
+        toolbar_checked: tint(bg, 0.18),
+        // Deep enough under white text: the error colour darkened to 4.5:1 against white.
+        button_danger: readable(s.error, Color32::WHITE, 4.5),
+        button_danger_text: Color32::WHITE,
+        banner_error: mix(bg, s.error, 0.12),
+        banner_info: tint(bg, 0.12),
+        banner_warning: mix(bg, s.warning, 0.14),
+        glow: Color32::TRANSPARENT,
+        // Flat: the face's own colour (transparent), whatever later sets the face.
+        button_accent_top: Color32::TRANSPARENT,
+        progress_bar_end: Color32::TRANSPARENT,
         egui_panel: bg,
         egui_window: surface,
         egui_window_border: toward(surface, 0.14),
@@ -411,6 +425,7 @@ pub fn strengthen(p: &mut Palette) {
     p.button_bottom = p.accent;
     p.button_default_border = p.accent;
     p.muted = readable(p.muted, p.window, 7.0);
+    p.menu_shortcut = readable(p.menu_shortcut, p.menu, 7.0);
     p.chevron = p.text;
     p.combo_chevron = p.text;
     p.sort_arrow = p.text;

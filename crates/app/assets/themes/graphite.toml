@@ -22,6 +22,8 @@ progress = "line"
 scroll = "overlay"
 # A drawn, flat title bar coloured by the caption roles.
 caption = "metro"
+# Graphite's layout (title-bar menus, a toolbar on a panel, dialog footers), not IDM's.
+chrome = "graphite"
 
 [sizes]
 radius = 8
@@ -142,6 +144,20 @@ caption = "#ffffff"
 "caption.text.inactive" = "#625d78"
 "caption.hot" = "#0d0b140f"
 "caption.pressed" = "#0d0b141f"
+# The Graphite layout: panels, icon tiles, shortcuts, danger buttons, banners.
+panel = "#ffffff"
+tile = "#f2f0f8"
+"menu.shortcut" = "#625d78"
+"toolbar.checked" = "#f0e9fe"
+"button.danger" = "#c62828"
+"button.danger.text" = "#ffffff"
+"banner.error" = "#fdeaea"
+"banner.info" = "#f0e9fe"
+"banner.warning" = "#fdf3e1"
+# Two-tone finish and glow (09a): the outlaw colour's lighter stop, a glow in dark only.
+glow = "#00000000"
+"button.accent.top" = "#00829a"
+"progress.bar.end" = "#00829a"
 
 [dark]
 # Text.
@@ -227,3 +243,17 @@ caption = "#121019"
 "caption.text.inactive" = "#948ea8"
 "caption.hot" = "#f0eef70f"
 "caption.pressed" = "#f0eef71f"
+# The Graphite layout: panels, icon tiles, shortcuts, danger buttons, banners.
+panel = "#121019"
+tile = "#1c1828"
+"menu.shortcut" = "#948ea8"
+"toolbar.checked" = "#231a3a"
+"button.danger" = "#d92d20"
+"button.danger.text" = "#ffffff"
+"banner.error" = "#3a1b1b"
+"banner.info" = "#231a3a"
+"banner.warning" = "#3a2d14"
+# Two-tone finish and glow (09a): the outlaw colour's lighter stop, a glow in dark only.
+glow = "#1fe0f055"
+"button.accent.top" = "#7af3ff"
+"progress.bar.end" = "#7af3ff"

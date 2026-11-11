@@ -56,6 +56,13 @@ pub fn metrics() -> &'static Metrics {
     &current().metrics
 }
 
+/// The active theme's layout: IDM's or Graphite's.
+// ponytail: no caller until 05b and 07a lay windows out by it (plans/02b-chrome-gate.md).
+#[allow(dead_code)]
+pub fn chrome() -> crate::palette::ChromeLook {
+    current().controls.chrome
+}
+
 /// Is what is drawn now a dark surface (light text on dark)? The classic look's dark variant
 /// is; a theme says for each of its variants. Glyph rendering and the window captions follow it.
 pub fn dark_surface() -> bool {

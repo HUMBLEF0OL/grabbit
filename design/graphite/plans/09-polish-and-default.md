@@ -65,7 +65,8 @@ Line numbers drift as phases land: find each item by its name first.
    ships it, add its tile to `website/content/themes.toml` (and the "Nine looks" line of
    `website/content/features/themes.md`), its `site-theme-graphite` shot to `tools/shots/shots.toml`
    (`take = "theme:graphite+@main"`, as the other themes'), `"graphite"` to the `inherits` list of
-   `website/content/theme-prompt.txt`, and Graphite to the themes in `website/llms.txt`.
+   `website/content/theme-prompt.txt` (and `chrome = classic | graphite` to its `[controls]`
+   line, from 02b), and Graphite to the themes in `website/llms.txt`.
 5. CHANGELOG entry for the new look; ROADMAP's "A new look, 'Graphite'" item marked ✅.
 
 ## Done when
