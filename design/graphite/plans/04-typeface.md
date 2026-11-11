@@ -151,5 +151,9 @@ Line numbers drift as phases land: find each item by its name first.
   its button. Scheduler: the "Schedule" tab's title fills its tab. Grabber: "Size" and "Status"
   heads nearly touch. Progress window: "Resume capability" nearly touches its value.
 - Every other window of the 56 Graphite states shot (light, 100 %; `pr-shots` `04-typeface/all/`):
-  nothing clipped. 200 % was not shot: sizes scale with the zoom, the DirectWrite advances are
-  whole pixels at every size.
+  nothing clipped.
+- 200 %: checked by scaling, not by pictures. Text and layout scale together with the zoom
+  (`scale.rs`), and DirectWrite's advances are whole pixels at every size, so a label that fits at
+  100 % fits at 200 %. Pictures were tried (`docs-shots.ps1 -Zoom 2`): off the screens the
+  capture comes back black, and on the screen (`-At 0,0`) it comes back cut to part of the
+  window, on this machine as in 03. Left to a run on GitHub's runner (`docs-shots.yml`).

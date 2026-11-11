@@ -390,7 +390,7 @@ metrics! {
     font_dialog_bold: "font.dialog.bold", "Options pages' titles" = 13.0;
     font_title: "font.title", "A window's headline (Tahoma Bold): the browser extension's, the helpers'" = 16.0;
     font_code: "font.code", "A sign-in code to type at a service's page" = 22.0;
-    font_ui: "font.ui", "Menus and the main window's text (Segoe UI)" = 12.0;
+    font_ui: "font.ui", "Menus and the main window's text (Segoe UI, or the theme's font)" = 12.0;
     font_ui_bold: "font.ui.bold", "Bold headings in the main window" = 13.0;
     font_small: "font.small", "egui's small text" = 11.0;
     font_body: "font.body", "egui's body text: tooltips, multi-line boxes" = 12.0;
