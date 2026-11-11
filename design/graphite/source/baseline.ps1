@@ -397,10 +397,21 @@ foreach ($s in $all) {
   $rows += "| ``$name`` | $how | $shot | $note |"
 }
 $commit = (& git -C $root rev-parse --short HEAD).Trim()
+# What this run took: a state with a raw picture in one of its modes ("-" states and failed
+# captures have none).
+$tookNames = @($states | ForEach-Object { $_[0] } | Where-Object {
+    $n = $_
+    @($modes | Where-Object { Test-Path (Join-Path (Join-Path $raw $_) "$n.png") }).Count -gt 0
+  })
+$took = $tookNames.Count
+$made = "Made by ``design/graphite/source/baseline.ps1``"
+$when = "on $(Get-Date -Format yyyy-MM-dd) ($($modes -join ' and '))"
 $index = @(
   $(if ($base) { "# Graphite baseline: today's app" } else { "# Graphite shots: the $Theme theme" }),
   "",
-  "Made by ``design/graphite/source/baseline.ps1`` from $commit; last run on $(Get-Date -Format yyyy-MM-dd) ($($modes -join ' and ')):",
+  $(if ($Shots.Count) {
+      "$made. Retaken from $commit $when`: $(if ($took) { $tookNames -join ', ' } else { 'none' }); the other pictures are from earlier runs."
+    } else { "$made from $commit; last run $when`:" }),
   "The ``$Theme`` theme, interface size 100 %, light (``<state>.png``) and dark (``<state>-dark.png``).",
   "Windows' display scale was $([math]::Round($dpi / 96 * 100)) %, so the pictures are $([math]::Round($dpi / 96, 2))x the mockup's CSS pixels.",
   "$taken of $($all.Count) mock states have a picture; the rest have no equivalent today or no way to open it",
@@ -410,4 +421,4 @@ $index = @(
   "| --- | --- | --- | --- |"
 ) + $rows
 Set-Content -Encoding utf8 (Join-Path $out "INDEX.md") ($index -join "`n")
-"$taken of $($all.Count) mock states have a picture ($($states.Count) taken in this run); $out\INDEX.md"
+"$taken of $($all.Count) mock states have a picture ($took taken in this run); $out\INDEX.md"

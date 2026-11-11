@@ -43,6 +43,11 @@ does a full review against the mockup, and switches new installs to Graphite.
    `dialogs::notice` with Try it / Not now) offers Graphite; "Try it" runs `Cmd::Theme("graphite")`.
    Remember the answer in settings.
 3. Website and docs screenshots (`tools/shots/`, `docs/`) retaken in Graphite; `docs/` theme help lists Graphite.
+   Left from 02, which kept Graphite off the website until a release has it: with the release that
+   ships it, add its tile to `website/content/themes.toml` (and the "Nine looks" line of
+   `website/content/features/themes.md`), its `site-theme-graphite` shot to `tools/shots/shots.toml`
+   (`take = "theme:graphite+@main"`, as the other themes'), `"graphite"` to the `inherits` list of
+   `website/content/theme-prompt.txt`, and Graphite to the themes in `website/llms.txt`.
 4. CHANGELOG entry for the new look; ROADMAP item done.
 
 ## Done when

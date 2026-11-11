@@ -43,4 +43,8 @@ right-click menu, a few dialogs with icons (Download complete, Scheduler queue l
 - [ ] All 53 needs come from the Graphite set when the theme is chosen; other themes unchanged
 - [ ] Icon tests pass with "graphite" listed
 - [ ] Screenshots before and after, light and dark
+- [ ] Left from 02: the help's View → Theme picture (`view-theme` in `tools/shots/shots.toml`)
+      still lists nine themes without Graphite. Retake it with the Docs screenshots workflow (a local
+      run on the maintainer's machine gave one-colour pictures for every submenu shot), and update
+      its alt text in `shots.toml` and in `docs/getting-started.md` with it
 - [ ] ATTRIBUTION, ROADMAP, CHANGELOG updated
