@@ -108,3 +108,11 @@ from the command line (the reason is in the last column), or weren't asked for i
 | `shortcuts` | `shortcuts` | not in this run |  |
 | `friend` | `tell-friend` | not in this run |  |
 | `safari` |  | none today | macOS only: not on Windows |
+
+## Added for the final checks (2026-11-11)
+
+- `before-main-ctx`, `before-complete` (light, `-dark`): Graphite at the branch point ecc0166, the
+  before-shots `02-theme/` lacks. The other before-shots are `02-theme/`.
+- `main-plain-200`, `progress-status-200`: Graphite at View, Interface size 200 % (plan step 6).
+- `classic-main-empty` (light, `-dark`): Classic on dev after phase 03; pixel-identical to
+  `baseline/main-empty*.png` (0 pixels differ of 1862 x 998, light and dark).
