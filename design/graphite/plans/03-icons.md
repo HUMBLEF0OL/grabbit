@@ -6,8 +6,8 @@ stroke 1.75, tinted with the theme's ink.
 - Branch: `ui/03-icons`
 - Needs: 01 (the 106 exported SVGs, SOURCES.txt, LICENSE), 02 (the theme file)
 - Unblocks: 03b, 05b, 07a
-- Status: complete, merged into the local `dev` on 2026-11-11 (not on origin yet, no PR); the checks
-  are under "Checks done" below. The facts below describe the code before it; the set now lives at
+- Status: complete, merged into `dev` and pushed to origin's `dev` on 2026-11-11 (pushed directly,
+  no PR); the checks are under "Checks done" below. The facts below describe the code before it; the set now lives at
   `themeicons.rs` `SETS` (Graphite at about 573-604) and the tests at `:937`, `:972`.
 
 ## Facts this plan relies on (paths under `crates/app/`)
@@ -58,7 +58,8 @@ from 03"), whose icons are 03b slots.
       run on the maintainer's machine gave one-colour pictures for every submenu shot), and update
       its alt text in `shots.toml` and in `docs/getting-started.md` with it
 - [x] ATTRIBUTION, ROADMAP, CHANGELOG updated
-- [ ] On origin: the PR into `dev` (00, Paperwork), its screenshot folder renamed to the PR's number
+- [x] On origin: in `dev` (pushed directly on 2026-11-11 instead of a PR; the screenshot folder
+      keeps its name, `pr-shots` `03-icons/`)
 
 ## Checks done (2026-11-11, on `dev` at 15141cf)
 
