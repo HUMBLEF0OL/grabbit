@@ -1,42 +1,50 @@
 # 05 · Main window layout
 
 Rebuilds the main window to the mock: menus in the title bar, a grouped toolbar, a flatter category
-list, progress inside the Status cell, a quieter status bar. Same commands, order and shortcuts.
-The new layout applies only when the theme asks for it; Classic and the era themes keep IDM's layout.
+list, progress inside the Status cell, a quieter status bar, icons and shortcuts in menus. Same
+commands, order and shortcuts. The new layout applies only under the Graphite chrome (02b); Classic
+and the era themes keep IDM's layout, pixel for pixel.
 
 - Branches: `ui/05a-layout-model` (refactor, no visual change), then `ui/05b-main-window`
-- Needs: 02, 03, 04
+- Needs: 05a needs 02 only; 05b needs 02b (the chrome gate), 03 and 03b (icons, extra glyphs), 04 (sizes), 05a
 - Unblocks: 06
 
-## Facts this plan relies on (paths under `crates/app/src/`)
+## Facts this plan relies on (paths under `crates/app/src/`, checked on `ui/03-icons` c3541d0)
 
-- `fn paint` is `app.rs:6503`. Order: `Surface::enter` (6507), `drawn_caption` (6510), menu keys
-  (6520-6593), `chrome::menu_bar` (6596) and its popup (6602-6644), toolbar array (6653-6686) and
-  `chrome::toolbar` (6688), splitter (6705-6729), tree keys (6732-6778), `chrome::categories` (6779),
-  `list::show` (6837), drag border (6873), `empty_state` (6882), `status_strip` (6887), popups
-  (6899-6978), shortcut keys (6981-7027), `run` (7029).
+Line numbers drift as phases land: find each item by its name first.
+
+- `fn paint` is `app.rs:6413`. Order: `Surface::enter` (6417), `drawn_caption` (6420), menu keys
+  (6425-6495), `chrome::menu_bar` (6498) and its popup (6505-6545), toolbar array (6548-6588) and
+  `chrome::toolbar` (6590), splitter (6603-6631), tree keys (6632-6680), `chrome::categories` (6681),
+  `list::show` (6739), drag border (6775), `empty_state` (6785), `status_strip` (6789), popups
+  (6801-6880), shortcut keys (6881-6930), `run` (about 6931).
 - Layout numbers are repeated, not shared: `chrome::MENU_H = 20` (`chrome.rs:15`), `chrome::pane_top()
-  = 70` (`chrome.rs:1365`), `STRIP_H = 22` (`app.rs:309`), the popup anchor `o.y + MENU_H - 1`
-  (`app.rs:6607`), the toolbar drop anchor `o.y + 85` (`chrome.rs:1542`), `menubar_title_at`
+  = 70` (`chrome.rs:1325`), `STRIP_H = 22` (`app.rs:308`), the popup anchor `o.y + MENU_H - 1`
+  (`app.rs:6509`), the toolbar drop anchor `o.y + 85` (`chrome.rs:1502`), `menubar_title_at`
   (`chrome.rs:271`), the splitter rect vs the tree frame (x 6, `right`).
-- Menu bar: `chrome::menu_bar` (`chrome.rs:182-267`) from the fixed `MENUS` table (`:166-172`); it is
-  exposed as `Role::MenuBar` with `MenuItem` children.
-- Drawn title bar (Windows, any theme whose `caption` is not `system`): `drawn_caption`
-  (`app.rs:6422-6491`) → `win32::drawn_frame` (`win32.rs:650`), `winui::caption::title_bar`
-  (`winui.rs:5982`, `CAPTION_H = 32`), hit areas published with `win32::set_caption_hits`
-  (`win32.rs:346`); a rect in `buttons` is client area, the rest of the strip drags the window
-  (`frame_hit`, `win32.rs:381-391`).
-- Toolbar: `chrome::toolbar` (`chrome.rs:1369-1550`), 11 buttons back to back, 68 px band, 32 px icons,
+- Menu bar: `chrome::menu_bar` (`chrome.rs:182-267`) from the fixed `MENUS` table (`:166-172`); exposed
+  as `Role::MenuBar` with `MenuItem` children. Menu rows are `MenuEntry` (`chrome.rs:330`): label,
+  command, enabled, checked; **no icon and no shortcut column** (shortcuts come from `Cmd::hint`).
+- Drawn title bar (any theme whose `caption` is not `system`; Graphite's is `metro`): `drawn_caption`
+  (`app.rs:6338-6401`) → `win32::drawn_frame` (`win32.rs:649`), `winui::caption::title_bar`
+  (`winui.rs:5954`, `CAPTION_H = 32` at `:5454`), hit areas published with `win32::set_caption_hits`
+  (`win32.rs:345`); a rect in `buttons` is client area, the rest of the strip drags the window
+  (`frame_hit`, `win32.rs:380-390`).
+- Toolbar: `chrome::toolbar` (`chrome.rs:1329-1510`), 11 buttons back to back, 68 px band, 32 px icons,
   Tahoma labels, split drop arrows on Add Torrent, Start Queue and Stop Queue; **not exposed to
   accessibility**.
-- Tree: `chrome::categories` (`chrome.rs:1627`), `TreeRow` (`:1600-1611`), 16 px rows, "Categories"
+- Tree: `chrome::categories` (`chrome.rs:1587`), `TreeRow` (`:1560-1571`), 16 px rows, "Categories"
   caption with a close box, dotted connectors or chevrons per `tree_chevrons`; rows from `tree_rows`
-  (`app.rs:6300-6412`), counts on level-0 rows only.
-- List: `list.rs` `COLS = 13`, `TITLES` (53-76), `DEFAULT_ORDER` (96), row height from
-  `theme::metrics().list_row`; cells drawn at 915-980; **Status is text only**; Source chip `chip()` (1241-1275).
-- Status strip: `status_strip` (`app.rs:1291-1316`), no background.
-- Right-to-left mirroring is switched off (`winui.rs:112-115`) but new code still goes through
-  `winui::rect` / `mx`.
+  (`app.rs:6210-6333`), counts on level-0 rows only. 03 already gives Finished and Queues their icon
+  alone (`themeicons::tree_badges`); a synchronized queue keeps a tick badge.
+- List: `list.rs` `COLS = 13`, `TITLES` (60-83), `DEFAULT_ORDER` (103), row height from
+  `theme::metrics().list_row` (Graphite already sets `list.row = 32` in 02); cells drawn at about
+  930-995; **Status is text only**; Source chip `chip()` (1251-1283).
+- Status strip: `status_strip` (`app.rs:1259-1284`), no background. There is no `surface` palette
+  role (it is only a seed); the nearest roles are `window` and `list`.
+- Empty states: `empty_state` (`app.rs:1195-1255`).
+- Right-to-left mirroring is switched off (`winui.rs:113`) but new code still goes through
+  `winui::rect` / `mx`. A comment at `app.rs:6501-6503` still mentions X11: tidy it in 05a.
 
 ## 05a · One layout model (refactor, no visual change)
 
@@ -45,57 +53,72 @@ The new layout applies only when the theme asks for it; Classic and the era them
 2. Replace every repeated number above with the struct: `paint`, `menu_bar`, `menubar_title_at`,
    `toolbar` and its drop anchor, `categories`, the splitter, `list::show`'s rect, `status_strip`,
    the popup anchor.
-3. Test: screenshots of every main-window state before and after are identical (pixel diff) in Classic,
-   Metro and Aqua.
+3. Test: screenshots of every main-window state before and after are identical in Classic, Metro, Aqua
+   and Graphite, taken with `design/graphite/source/baseline.ps1` and compared by a small
+   `source/pixel_diff.py` (PIL, exits non-zero on any differing pixel) written in this phase.
+   No CHANGELOG line.
 
 ## 05b · The Graphite main window
 
-Gate everything below on a new theme control, `[controls] chrome = "classic" | "graphite"` (new
-`ChromeLook` in `palette.rs`, parsed in `Controls::set`); `graphite.toml` sets `chrome = "graphite"`
-(in `make_theme.py`'s `HEADER`, which writes the file).
+Everything below draws only when `theme::chrome()` is `ChromeLook::Graphite` (02b).
 
-1. **Menus in the title bar** (drawn caption only). Draw `menu_bar` inside the caption rect after the
+1. **Roles**: draw with the roles 02b added: `panel` (status bar, title-bar band) and `menu.shortcut`
+   (shortcut column, Find's "Ctrl+F").
+2. **Menus in the title bar** (drawn caption only). Draw `menu_bar` inside the caption rect after the
    app mark and name; add each title's rect to `CaptionHits.buttons` so it is client area; keep
    `max_button` pointing at Maximize; move the popup anchor and `menubar_title_at` to the new row.
    `layout.menu_h = 0` so the panes move up. Fallback: when the caption is the system's, keep the menu row.
-2. **Find button** in the title bar (between the menus and the window buttons): runs `Cmd::Find`, shows
-   "Ctrl+F", added to `CaptionHits.buttons`.
-3. **Toolbar**: 20 px icons, 11.5 px labels, button 62 px wide, band height 58; groups
-   [Add URL, Add Torrent] [Resume, Stop, Stop All] [Delete, Delete Completed] [Options, Scheduler]
-   [Start Queue, Stop Queue] with a 1 px rule between groups; hover = `toolbar.hot` rounded 8; the
-   drop arrow drawn inside the button's right edge. Add the Details toggle at the end only after 06.
-   **Expose each button** (`Role::Button`, name, disabled state) through `winui::expose`.
-4. **Categories**: no "Categories" caption bar (View, Hide categories still closes the pane); 28 px rows,
-   chevrons (no dotted lines), 16 px icons, the selected row filled with `selection` and its icon in
-   `accent`, counts "(n)" muted on top-level rows only (unchanged rule).
-   From 03: with Graphite's icon set (`themeicons::tree_badges`), Finished and Queues show their
-   icon alone and each queue the Queues icon (`app.rs` `tree_rows`); a synchronized queue keeps
-   its tick badge.
-   The mock draws that one as `x-refresh` instead, which is not one of the 53 needs: add it to
-   `NEEDS` and the Graphite set, or keep the tick.
-5. **List**: `list.row = 32` (theme), header in `text.muted` 12 px with a bottom rule only; rows separated by a
-   hairline `list.grid`; the Source chip as a pill.
-6. **Status cell with progress**: give `list::Row` a `progress: Option<f32>` and a status kind; in
-   column 3 draw, for running and stopped downloads, a 4 px bar (`progress.track` / `progress.bar`,
-   stopped in `text.muted`) and the percent; for the other kinds an icon (`st-*` needs) and the word.
-   Error keeps `winui::ERROR()`. The text in the cell stays the same for screen readers.
-7. **Status bar**: `surface` background, top rule, 12 px muted text; content unchanged.
-8. **Empty states**: centred icon tile, title, reason and link as in the mock (`empty_state`, `app.rs:1227-1287`).
+   Under Graphite the title bar is 36 high (`layout.caption_h`; `CAPTION_H = 32` stays for other
+   themes) with 42 x 35 window buttons, as DESIGN.md.
+3. **Find button** in the title bar (between the menus and the window buttons), a new route to the
+   existing `Cmd::Find` (00's accepted exception): `window` face, `button.border`, radius 6, 26 high,
+   `gx-search` icon, the label "Find" and "Ctrl+F" in `menu.shortcut`; added to `CaptionHits.buttons`;
+   exposed as `Role::Button` "Find".
+4. **Menu rows**: give `MenuEntry::Item` an optional icon (a need or `gx-*` slot) and show the shortcut
+   from `Cmd::hint` in its own right-aligned column in `menu.shortcut`. Under Graphite draw a 16 px icon
+   at the row's start; labels keep their wording (for example "Move/Rename (Ctrl-M)"). The icons per row
+   are those in the mock (`MENUS` and the right-click menus in `design/graphite/source/graphite.html`);
+   under Classic menus look as today.
+5. **Toolbar**: 20 px icons, 11.5 px labels, buttons at least 60 px wide (8 px padding each side), band
+   height 58; groups [Add URL, Add Torrent] [Resume, Stop, Stop All] [Delete, Delete Completed]
+   [Options, Scheduler] [Start Queue, Stop Queue] (today's order) with a 1 px rule between groups;
+   the band on `panel` with a bottom rule (then remove `make_theme.py`'s "until plan 05" mix of the
+   toolbar faces on `bg` and regenerate); hover = `toolbar.hot` rounded 8; the drop arrow drawn inside
+   the button's right edge. The Details toggle at the end comes with 06. **Expose each button**
+   (`Role::Button`, name, disabled state) through `winui::expose`, in every theme (00's accessibility
+   exception: invisible, the tree only gains nodes).
+6. **Categories**: under Graphite the pane width is its own setting, `graphite_categories_width`
+   (default 224, saved like `categories_width`, whose default 143 stays for Classic); no "Categories" caption bar (View, Hide
+   categories still closes the pane); 28 px rows, chevrons (no dotted lines), 16 px icons, the selected
+   row filled with `selection` and its icon in `accent`, counts "(n)" muted on top-level rows only
+   (unchanged rule). The Synchronization queue draws `gx-refresh` (03b) instead of the tick badge.
+7. **List**: header in `text.muted` 12 px with a bottom rule only, the sort chevron after the sorted
+   column's title, `gx-filter` after a filtered column's title; rows separated by a hairline
+   `list.grid`; the Source chip as a pill.
+8. **Status cell with progress**: give `list::Row` a `progress: Option<f32>` and a status kind; in
+   column 3 draw: a running download, a 4 px bar (`progress.track` / `progress.bar`) and the percent;
+   a stopped one, the `st-paused` icon, the word, then the bar in `text.muted` and the percent; every
+   other kind, its `st-*` icon and the word. Error keeps `winui::ERROR()`. The cell's text stays the
+   same for screen readers.
+9. **Status bar**: `panel` background, top rule, 12 px muted text; content unchanged.
+10. **Empty states**: centred `icon_tile` (02b; 56 px, radius 14) with `gx-download` (no downloads yet)
+    or `gx-filter` (filters hide all), title, reason and link, as in the mock.
 
 ## Mock states to compare
 
-Main window: Without it (details off), Tasks / File / Downloads / View / Help menus, right-click a
-download, blank space, a category, a queue, Column chooser, Column filter, First start, Filters hide
-all: light and dark, at 100% and 200%.
+Main window: Without it (details off), Tasks / File / Downloads / View / Help menus with the Speed
+Limiter and Arrange files submenus, right-click a download, blank space, a category, a queue, Column
+chooser, Column filter, First start, Filters hide all: light and dark, at 100% and 200%.
 
 ## Tests
 
-- 05a: pixel-identical screenshots (Classic, Metro, Aqua) before and after.
+- 05a: pixel-identical screenshots (Classic, Metro, Aqua, Graphite) before and after.
 - Hit testing: with Graphite, a click on each menu title opens its menu; a drag on empty caption moves
-  the window; double-click maximises.
+  the window; double-click maximises; the Find button opens Find file.
 - Accessibility: the toolbar exposes 11 buttons with names and disabled states; the menu bar still
-  exposes `MenuBar` / `MenuItem`; the list still exposes its rows.
+  exposes `MenuBar` / `MenuItem`; the list still exposes its rows; the Find button is a `Button`.
 - Keyboard: Alt, F10, Alt+letter open the title-bar menus; Tab still moves between tree and list.
+- Classic: every main-window state pixel-identical to the 01 baseline.
 
 ## Done when
 

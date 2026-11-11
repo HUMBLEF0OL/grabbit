@@ -5,7 +5,7 @@ Colours and shapes only: no new icons (03), no font (04), no layout change (05+)
 
 - Branch: `ui/02-theme`
 - Needs: 01 (palette chosen, draft `design/graphite/assets/graphite.toml`, DESIGN.md)
-- Unblocks: 03, 04, 05, 07
+- Unblocks: 02b, 03, 04, 05a
 
 ## Facts this plan relies on (paths under `crates/app/`)
 
@@ -25,8 +25,8 @@ Colours and shapes only: no new icons (03), no font (04), no layout change (05+)
 - Built-ins: `palette.rs:625-661` `builtins() -> [&'static Theme; 8]`, order CLASSIC, HIGH_CONTRAST,
   METRO, ADWAITA, BREEZE, LUNA, AERO, AQUA. Tests index by position (`palette.rs:875-935`,
   `native.rs:112,132`), so the new theme is **appended** as index 8.
-- View, Theme is hand-written: `app.rs:5822-5875` `theme_menu`; the handler is `app.rs:5119` `Cmd::Theme`.
-- The choice is saved as `settings.theme` (`settings.rs:105-107`); screenshot automation takes `theme:<id>` (`app.rs:2161`).
+- View, Theme is hand-written: `app.rs:5727` `theme_menu`; the handler is `app.rs:5027` `Cmd::Theme` (as of c3541d0).
+- The choice is saved as `settings.theme` (`settings.rs:105-107`); screenshot automation takes `theme:<id>` (`app.rs:2124`, as of c3541d0).
 - "graphite" is free as an id (only comments mention it).
 
 ## Steps
@@ -65,7 +65,7 @@ Colours and shapes only: no new icons (03), no font (04), no layout change (05+)
    - Selection: `selection.text` = `ink`, `selection.inactive` = `hover`
    - Fields: `field` = `field`, `field.border` and `field.bottom` = `line`, `field.disabled` = `tile`
    - Buttons: `button` = `surface`, `button.border`/`button.bottom` = `line`, `button.hot` = `hover`,
-     `button.pressed` = `tile`, `button.accent` = `out`, `button.accent.text` = `onout`,
+     `button.pressed` = `press`, `button.accent` = `out`, `button.accent.pressed` = `outp`, `button.accent.text` = `onout`,
      `button.accent.hot` = `out2`, `button.default.border` = `out`
    - Checks: `check.on` = `acc`, `check.mark` = `onacc`, `check.border` = `ctl`, `check.border.disabled` = `dis`
    - Progress: `progress.track` and `meter.track` = `track`, `progress.bar` and `meter.fill` = `out`,
@@ -74,7 +74,7 @@ Colours and shapes only: no new icons (03), no font (04), no layout change (05+)
      `chip.web` = `chip`, `chip.text` = `chipt`, `chip.torrent` = `tile`
    - Menus: `menubar` = `surface`, `menubar.line` = `line`, `menu` = `surface`, `menu.hot` = `sel`,
      `menu.border` = `line`, `menu.text.disabled` = `dis`
-   - Toolbar: `toolbar.hot` = `hover`, `toolbar.pressed` = `tile`, `toolbar.text.disabled` = `dis`, `icon.disabled` = `dis`
+   - Toolbar: `toolbar.hot` = `hover`, `toolbar.pressed` = `press`, `toolbar.text.disabled` = `dis`, `icon.disabled` = `dis`
    - Tree: `tree` = `surface`, `tree.expander` = `ink3`
    - Caption: `caption` = `surface`, `caption.text` = `ink`, `caption.text.inactive` = `ink3`,
      `caption.hot` = ink at 6% alpha, `caption.pressed` = ink at 12%

@@ -5,7 +5,9 @@ stroke 1.75, tinted with the theme's ink.
 
 - Branch: `ui/03-icons`
 - Needs: 01 (the 106 exported SVGs, SOURCES.txt, LICENSE), 02 (the theme file)
-- Unblocks: 05
+- Unblocks: 03b, 05b, 07a
+- Status: built on `ui/03-icons` (in review). The facts below describe the code before it; the set now
+  lives at `themeicons.rs` `SETS` (Graphite at about 573-604) and the tests at `:937`, `:972`.
 
 ## Facts this plan relies on (paths under `crates/app/`)
 

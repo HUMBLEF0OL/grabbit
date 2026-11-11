@@ -19,7 +19,7 @@ and dark, designed dark first. Each token has one job:
 | `dis` | Every greyed thing: text, icons, check-box borders |
 | `ctl` | Check-box and radio borders at rest |
 | `acc`, `acct`, `onacc`, `sel`, `ring` | The primary colour: what you chose (selection, checked boxes, focus, links), its text, the mark on it, the selected row, the focus halo |
-| `out`, `out2`, `onout`, `glow` | The outlaw colour: what is moving or what you will do (progress, the default button), its lighter end, the text on it, the dark-only glow |
+| `out`, `out2`, `outp`, `onout`, `glow` | The outlaw colour: what is moving or what you will do (progress, the default button), its lighter end, its pressed face, the text on it, the dark-only glow |
 | `err`, `dng`, `ondng`, `errSoft`, `warnSoft` | Errors (their own hue), the danger button and its text, error and warning backgrounds |
 | `okt`, `chip`, `chipt` | Success text; the Web chip and its text |
 
@@ -53,8 +53,11 @@ Gradients and the glow are phase 09's; until then the theme is flat (`out` alone
 | Buttons and text boxes | 30 high; buttons 14 padding each side, an icon button 30 × 30; text boxes 10 |
 | Paste bar's box | 32 high |
 | List rows | 32 high, 10 padding each side; column heads 7 above and below |
-| Toolbar buttons | 60 wide at least (8 padding each side), grouped, a 1 px `line` divider between groups; plans 01 and 05 say 62, the mockup's 60 wins |
-| Categories pane | 224 wide; details pane 276 wide |
+| Toolbar buttons | 60 wide at least (8 padding each side), grouped, a 1 px `line` divider between groups; the band on `panel` |
+| Categories pane | 224 wide by default, rows 28, chevrons, no caption bar |
+| Details pane | 276 wide |
+| Icon tiles | 40 px, radius 8 in dialogs; 56 px, radius 14 for empty states and the About mark |
+| Title bar | 36 high, window buttons 42 x 35 |
 | Label column | 112; 240 for sentence-length labels; 12 between label and field, 10 between rows |
 | Key and value lists | 132 label column (96 in the details pane), 12 across, 7 down |
 | Dialog body | 16 padding, 14 between blocks |
@@ -65,8 +68,10 @@ Gradients and the glow are phase 09's; until then the theme is flat (`out` alone
 - A footer holds secondary buttons at the start edge, then a gap, then the main ones at the end.
 - The default button is **last** in every footer, filled with the outlaw colour (`out`, text
   `onout`), its border `out`. Other buttons are `surface` with a `line` border. A footer with
-  one button centres it.
+  one button puts it at the end, like the others; only the generic notice (`dialogs::notice`)
+  centres its OK.
 - This order holds under Graphite only; Classic keeps IDM's order.
+- Keys never move with the order: Enter and Escape do what they did before in each window (plan 07a).
 
 ## Greyed
 
@@ -75,7 +80,7 @@ is filled `dis`). Greyed text boxes are `tile` with a `line2` border. No opacity
 
 ## Status
 
-Colour never alone: every state except downloading shows its icon (15) and its word (Complete,
+Colour never alone: every state except downloading shows its icon (16) and its word (Complete,
 Waiting, Error…).
 In the list's Status cell, a download that is moving shows a 4 high meter and its percentage
 instead; a stopped one shows the icon, the word, then the meter and the percentage.
