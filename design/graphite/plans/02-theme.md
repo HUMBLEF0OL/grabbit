@@ -6,6 +6,8 @@ Colours and shapes only: no new icons (03), no font (04), no layout change (05+)
 - Branch: `ui/02-theme`
 - Needs: 01 (palette chosen, draft `design/graphite/assets/graphite.toml`, DESIGN.md)
 - Unblocks: 02b, 03, 04, 05a
+- Status: complete, in origin's `dev` since 2026-11-11 (f97c476 to ecc0166, pushed directly, no PR).
+  Shots on `pr-shots` `02-theme/`; tests pass with 03's run (03-icons.md, "Checks done").
 
 ## Facts this plan relies on (paths under `crates/app/`)
 
@@ -104,7 +106,7 @@ Graphite the default theme (decided in 01; switched for new installs in 09b).
 
 ## Done when
 
-- [ ] View, Theme lists Graphite; choosing it restyles every window live; the choice survives a restart
-- [ ] All palette and winui tests pass, including the new one
-- [ ] Screenshots of the states above, before (Classic) and after (Graphite), light and dark
-- [ ] ROADMAP item "Graphite theme" done; CHANGELOG line
+- [x] View, Theme lists Graphite; choosing it restyles every window live; the choice survives a restart
+- [x] All palette and winui tests pass, including the new one
+- [x] Screenshots of the states above, before (Classic) and after (Graphite), light and dark
+- [x] ROADMAP item "Graphite theme" done; CHANGELOG line

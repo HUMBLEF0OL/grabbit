@@ -6,6 +6,9 @@ consume, and records the decisions they depend on.
 - Branch: `ui/01-prepare` (only adds files under `design/graphite/`; may be merged as docs)
 - Needs: nothing
 - Unblocks: every later phase
+- Status: complete (811f5cb, on origin's `dev`). The draft `assets/graphite.toml` was removed in 02:
+  `source/make_theme.py` now writes the theme straight to `crates/app/assets/themes/graphite.toml`,
+  with the contrast check on the mapped values. The baseline is on `pr-shots` as `baseline/`.
 
 ## 1. Decisions to record (in `../PLAN.md`, Goal and decisions table)
 
@@ -79,9 +82,9 @@ them with the after-shots.
 
 ## Done when
 
-- [ ] Every decision in section 1 recorded
-- [ ] 106 icon SVGs, SOURCES.txt, LICENSE
-- [ ] Draft `graphite.toml` whose contrast check passes
-- [ ] Geist files and OFL.txt
-- [ ] DESIGN.md
-- [ ] Baseline screenshots
+- [x] Every decision in section 1 recorded
+- [x] 106 icon SVGs, SOURCES.txt, LICENSE
+- [x] Draft `graphite.toml` whose contrast check passes (now written by `make_theme.py`, see Status)
+- [x] Geist files and OFL.txt
+- [x] DESIGN.md
+- [x] Baseline screenshots

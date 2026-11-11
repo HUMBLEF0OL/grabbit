@@ -71,8 +71,7 @@ track (07, 08) are independent; 04 must land before 05b and before the 07 waves 
 A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
 
 - [x] 01 Prepare
-- [ ] 02 Theme (in origin's `dev` since 2026-11-11, pushed directly, no PR; its Done-when list is
-      still open)
+- [x] 02 Theme (complete, in origin's `dev` since 2026-11-11, pushed directly instead of a PR)
 - [ ] 02b Chrome gate and roles
 - [x] 03 Icons (complete, in origin's `dev` since 2026-11-11, pushed directly instead of a PR;
       checks in its plan)
