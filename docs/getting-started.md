@@ -107,7 +107,7 @@ MDM follows your system: when Windows is set to dark mode, so is MDM. To keep MD
   bar in the panels' colour (on Windows), and thin outline icons in one colour (Tabler's). Its
   typeface comes later.
 
-![View → Theme open: Classic, Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero and Aqua, and Open themes folder](images/help/view-theme.webp)
+![View → Theme open: Classic, Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero, Aqua and Graphite, Add a theme file… and Open themes folder](images/help/view-theme.webp)
 *View → Theme switches at once, keeping the layout.*
 
 <!-- pictures -->
