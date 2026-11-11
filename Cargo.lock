@@ -1889,7 +1889,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 [[package]]
 name = "ecolor"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=d110a3ccf2f1710f3e67db3f910b18003732c1df#d110a3ccf2f1710f3e67db3f910b18003732c1df"
+source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
 dependencies = [
  "bytemuck",
  "emath",
@@ -1898,7 +1898,7 @@ dependencies = [
 [[package]]
 name = "eframe"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=d110a3ccf2f1710f3e67db3f910b18003732c1df#d110a3ccf2f1710f3e67db3f910b18003732c1df"
+source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -1934,7 +1934,7 @@ dependencies = [
 [[package]]
 name = "egui"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=d110a3ccf2f1710f3e67db3f910b18003732c1df#d110a3ccf2f1710f3e67db3f910b18003732c1df"
+source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
 dependencies = [
  "accesskit",
  "ahash",
@@ -1953,7 +1953,7 @@ dependencies = [
 [[package]]
 name = "egui-wgpu"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=d110a3ccf2f1710f3e67db3f910b18003732c1df#d110a3ccf2f1710f3e67db3f910b18003732c1df"
+source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -1972,7 +1972,7 @@ dependencies = [
 [[package]]
 name = "egui-winit"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=d110a3ccf2f1710f3e67db3f910b18003732c1df#d110a3ccf2f1710f3e67db3f910b18003732c1df"
+source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
 dependencies = [
  "accesskit_winit",
  "arboard",
@@ -1997,7 +1997,7 @@ dependencies = [
 [[package]]
 name = "egui_extras"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=d110a3ccf2f1710f3e67db3f910b18003732c1df#d110a3ccf2f1710f3e67db3f910b18003732c1df"
+source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
 dependencies = [
  "ahash",
  "egui",
@@ -2013,7 +2013,7 @@ dependencies = [
 [[package]]
 name = "egui_glow"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=d110a3ccf2f1710f3e67db3f910b18003732c1df#d110a3ccf2f1710f3e67db3f910b18003732c1df"
+source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
 dependencies = [
  "bytemuck",
  "egui",
@@ -2040,7 +2040,7 @@ dependencies = [
 [[package]]
 name = "emath"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=d110a3ccf2f1710f3e67db3f910b18003732c1df#d110a3ccf2f1710f3e67db3f910b18003732c1df"
+source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
 dependencies = [
  "bytemuck",
 ]
@@ -2109,7 +2109,7 @@ dependencies = [
 [[package]]
 name = "epaint"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=d110a3ccf2f1710f3e67db3f910b18003732c1df#d110a3ccf2f1710f3e67db3f910b18003732c1df"
+source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -2135,7 +2135,7 @@ dependencies = [
 [[package]]
 name = "epaint_default_fonts"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=d110a3ccf2f1710f3e67db3f910b18003732c1df#d110a3ccf2f1710f3e67db3f910b18003732c1df"
+source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
 
 [[package]]
 name = "equivalent"
@@ -4364,6 +4364,7 @@ dependencies = [
  "drag",
  "eframe",
  "egui",
+ "egui-winit",
  "egui_extras",
  "image",
  "mdm-cli",
