@@ -1,0 +1,200 @@
+# Graphite: the draft of Grabbit's new look (design/graphite), for plan 02 to ship as a
+# built-in theme. Its colours, corners and layout are our own design; it borrows nothing.
+# Written by design/graphite/source/make_theme.py from source/pal.py, palette "amethyst":
+# edit the palette or the mapping there, not here. Icons (icon-set) come in plan 03, the
+# typeface (font) in plan 04.
+name = "Graphite"
+icons = "mono"
+
+[controls]
+field-focus = "ring"
+focus = "ring"
+check = "fluent"
+button = "fluent"
+progress = "line"
+scroll = "overlay"
+# A drawn, flat title bar coloured by the caption roles.
+caption = "metro"
+
+[sizes]
+radius = 8
+"radius.button" = 8
+"radius.part" = 6
+"radius.check" = 4
+"radius.flyout" = 10
+"radius.menu-item" = 6
+"radius.popup" = 8
+"radius.egui" = 8
+# The mockup's row height; check the list still fits at 200 %.
+"list.row" = 32
+
+
+[seeds.light]
+background = "#f7f6fb"
+surface = "#ffffff"
+header = "#ffffff"
+text = "#0d0b14"
+accent = "#6527d4"
+selection = "#f0e9fe"
+error = "#c62828"
+warning = "#9d5d00"
+success = "#15803d"
+
+[seeds.dark]
+background = "#09080d"
+surface = "#121019"
+header = "#121019"
+text = "#f0eef7"
+accent = "#b08cff"
+selection = "#231a3a"
+error = "#ff7b7b"
+warning = "#f5a524"
+success = "#4ade80"
+
+[light]
+# Text.
+"text.disabled" = "#a5a0b6"
+"text.muted" = "#625d78"
+link = "#6527d4"
+"focus.ring" = "#6527d4a0"
+# Selection.
+"selection.text" = "#0d0b14"
+"selection.inactive" = "#f3f1f9"
+# Fields.
+field = "#ffffff"
+"field.border" = "#e3e0ec"
+"field.bottom" = "#e3e0ec"
+"field.disabled" = "#f2f0f8"
+# Greyed controls: the one greyed colour, no fading.
+"field.disabled.border" = "#f1eff7"
+"button.disabled" = "#ffffff"
+"button.disabled.border" = "#e3e0ec"
+"check.on.disabled" = "#a5a0b6"
+# Buttons: the default one filled with the outlaw colour.
+button = "#ffffff"
+"button.border" = "#e3e0ec"
+"button.bottom" = "#e3e0ec"
+"button.hot" = "#f3f1f9"
+"button.pressed" = "#f2f0f8"
+"button.accent" = "#00788e"
+"button.accent.text" = "#ffffff"
+"button.accent.hot" = "#00829a"
+"button.default.border" = "#00788e"
+# Check boxes and radios.
+"check.on" = "#6527d4"
+"check.mark" = "#ffffff"
+"check.border" = "#8a849f"
+"check.border.disabled" = "#a5a0b6"
+# Progress: the outlaw colour on the track.
+"progress.track" = "#e4e1ed"
+"meter.track" = "#e4e1ed"
+"progress.bar" = "#00788e"
+"meter.fill" = "#00788e"
+"segments.done" = "#00788e"
+"segments.missing" = "#e4e1ed"
+"pieces.have" = "#00788e"
+"pieces.missing" = "#e4e1ed"
+# Lists.
+list = "#f7f6fb"
+header = "#f7f6fb"
+"header.line" = "#e3e0ec"
+grid = "#f1eff7"
+"list.grid" = "#f1eff7"
+"chip.web" = "#f0e9fe"
+"chip.text" = "#5317b8"
+"chip.torrent" = "#f2f0f8"
+# Menus.
+menubar = "#ffffff"
+"menubar.line" = "#e3e0ec"
+menu = "#ffffff"
+"menu.hot" = "#f0e9fe"
+"menu.border" = "#e3e0ec"
+"menu.text.disabled" = "#a5a0b6"
+# Toolbar.
+"toolbar.hot" = "#f3f1f9"
+"toolbar.pressed" = "#f2f0f8"
+"toolbar.text.disabled" = "#a5a0b6"
+"icon.disabled" = "#a5a0b6"
+# Categories tree.
+tree = "#ffffff"
+"tree.expander" = "#625d78"
+# The drawn title bar: the panel colour, its buttons a tint of the ink (6 %, 12 %).
+caption = "#ffffff"
+"caption.text" = "#0d0b14"
+"caption.text.inactive" = "#625d78"
+"caption.hot" = "#0d0b140f"
+"caption.pressed" = "#0d0b141f"
+
+[dark]
+# Text.
+"text.disabled" = "#5e596c"
+"text.muted" = "#948ea8"
+link = "#b996ff"
+"focus.ring" = "#b08cffa0"
+# Selection.
+"selection.text" = "#f0eef7"
+"selection.inactive" = "#1c1828"
+# Fields.
+field = "#0c0b11"
+"field.border" = "#262233"
+"field.bottom" = "#262233"
+"field.disabled" = "#1c1828"
+# Greyed controls: the one greyed colour, no fading.
+"field.disabled.border" = "#1b1824"
+"button.disabled" = "#121019"
+"button.disabled.border" = "#262233"
+"check.on.disabled" = "#5e596c"
+# Buttons: the default one filled with the outlaw colour.
+button = "#121019"
+"button.border" = "#262233"
+"button.bottom" = "#262233"
+"button.hot" = "#1c1828"
+"button.pressed" = "#1c1828"
+"button.accent" = "#1fe0f0"
+"button.accent.text" = "#00171c"
+"button.accent.hot" = "#7af3ff"
+"button.default.border" = "#1fe0f0"
+# Check boxes and radios.
+"check.on" = "#b08cff"
+"check.mark" = "#12081f"
+"check.border" = "#78728e"
+"check.border.disabled" = "#5e596c"
+# Progress: the outlaw colour on the track.
+"progress.track" = "#272336"
+"meter.track" = "#272336"
+"progress.bar" = "#1fe0f0"
+"meter.fill" = "#1fe0f0"
+"segments.done" = "#1fe0f0"
+"segments.missing" = "#272336"
+"pieces.have" = "#1fe0f0"
+"pieces.missing" = "#272336"
+# Lists.
+list = "#09080d"
+header = "#09080d"
+"header.line" = "#262233"
+grid = "#1b1824"
+"list.grid" = "#1b1824"
+"chip.web" = "#231a3a"
+"chip.text" = "#d0b8ff"
+"chip.torrent" = "#1c1828"
+# Menus.
+menubar = "#121019"
+"menubar.line" = "#262233"
+menu = "#121019"
+"menu.hot" = "#231a3a"
+"menu.border" = "#262233"
+"menu.text.disabled" = "#5e596c"
+# Toolbar.
+"toolbar.hot" = "#1c1828"
+"toolbar.pressed" = "#1c1828"
+"toolbar.text.disabled" = "#5e596c"
+"icon.disabled" = "#5e596c"
+# Categories tree.
+tree = "#121019"
+"tree.expander" = "#948ea8"
+# The drawn title bar: the panel colour, its buttons a tint of the ink (6 %, 12 %).
+caption = "#121019"
+"caption.text" = "#f0eef7"
+"caption.text.inactive" = "#948ea8"
+"caption.hot" = "#f0eef70f"
+"caption.pressed" = "#f0eef71f"

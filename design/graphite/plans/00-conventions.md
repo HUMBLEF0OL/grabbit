@@ -37,6 +37,8 @@ the decisions in `../PLAN.md`; when those files change, they win.
   `raw.githubusercontent.com/anefzaoui/misterdownloadmanager/pr-shots/`, never merged.
 - Neutral test folders and files (as in the mockup: `D:\Downloads`, example.org addresses), no IDM artwork.
 - Before-shots come from the baseline set made in phase 01, so every PR compares against the same starting point.
+  Take after-shots with the same scripts at the same Windows display scale (the baseline's `INDEX.md`
+  says which: 200 %), or the pairs don't match pixel for pixel.
 
 ## Paperwork in every PR
 

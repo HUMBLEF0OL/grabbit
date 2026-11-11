@@ -513,6 +513,10 @@ These ship in a later version, when they're ready.
 - 🔄 A torrent's upload speed, peers and share ratio as columns in the download list
   ([#357](https://github.com/anefzaoui/misterdownloadmanager/issues/357)): the last one in review
 - 🔄 The browser extension's media list naming a file after its page, as an option: in review
+- 🔄 A new look, "Graphite": a theme with its own colours, icons and typeface, the main window
+  and every dialog restyled, with an optional paste bar and details pane; the plan and mockups are
+  in `design/graphite/`. Prepared, not in the app yet: the colours, the icons, the typeface and
+  the design rules; next, the theme itself
 
 ### Bugs being looked into
 
@@ -641,8 +645,5 @@ kept on the `archive/multiplatform-i18n` branch.
 
 ### Look and performance
 
-- 📋 A new look, "Graphite": a theme with its own colours, icons and typeface, the main window
-  and every dialog restyled, with an optional paste bar and details pane; the plan and mockups are
-  in `design/graphite/`
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))

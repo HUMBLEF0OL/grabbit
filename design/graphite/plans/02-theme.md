@@ -84,7 +84,10 @@ Colours and shapes only: no new icons (03), no font (04), no layout change (05+)
 5. **Menu**: in `app.rs` `theme_menu`, add `Radio("Graphite", Cmd::Theme("graphite"), true, on("graphite"))`
    after Aqua, with the comment convention the file uses now.
 6. **Tests** (in `palette.rs` tests): a `graphite_is_built_in` test checks index 8 is "graphite", radius 8,
-   focus ring, caption Metro. The existing whole-set tests already cover it: WCAG contrast
+   focus ring, caption Metro. Known from 01: the step 3 mapping makes pressed equal to hot (`hover` and
+   `tile` are both `#1c1828` in dark, one step apart in light: issue #7's problem), and
+   `button_states_differ` never compares the two. Give pressed its own value in `pal.py` (a deeper tile)
+   and add that comparison. The existing whole-set tests already cover it: WCAG contrast
    (`palette.rs:748`), focus ring 3:1 (`:810`), no bright menu-bar line in dark (`:970`),
    `winui.rs:6858` pressed buttons. Fix any colour they reject in the theme file, not in the tests.
 
@@ -97,7 +100,7 @@ layout; check colours, corners, focus ring, checkboxes, progress, title bar and 
 ## Not in this phase
 
 Icons (03), Geist (04), gradients and glow (09: the theme ships flat), layout (05+), making
-Graphite the default theme (decided in 01; switched in 10 at the earliest).
+Graphite the default theme (decided in 01; switched for new installs in 09b).
 
 ## Done when
 

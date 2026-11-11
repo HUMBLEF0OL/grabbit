@@ -6,17 +6,23 @@ per phase, in the order they are built. Start with `plans/00-conventions.md`.
 
 ## Decisions
 
+Rows marked "Decided in 01" took the recommendation in `plans/01-prepare.md` section 1 on
+2026-11-10; changing one means changing the phases it blocks before they start.
+
 | Decision | State | Note |
 | --- | --- | --- |
 | Layout direction: Graphite | Decided | IDM layout kept; paste bar and details pane added, both optional |
 | Icon set: Tabler outline, stroke 1.75 | Decided | 53 icon slots mapped, MIT licence |
 | Default button last in every window | Decided | Under the Graphite look; Classic keeps IDM's order |
 | App name: Grabbit | Decided in the mockups | Renaming code, installer, extension and website is phase 10 |
-| Colour direction | **Open** (blocks 02) | Recommended: jet black, royal amethyst, electric cyan, dark first |
-| Typeface: Geist | Proposed | Bundled (SIL OFL); needs engine work (04) |
-| Paste bar and details pane defaults | Open | Recommended: paste bar on, details pane off |
-| The two proposal dialogs | Open | Recommended: not built now |
-| Graphite as the default theme | Open | Recommended: after 09, new installs only |
+| Colour direction: jet black, royal amethyst, electric cyan | Decided in 01 | `source/pal.py` `amethyst`; draft theme `assets/graphite.toml` (blocks 02) |
+| Light or dark: follow the system | Decided in 01 | Today's behaviour; the palette is designed dark first (02) |
+| Graphite as the default theme | Decided in 01 | Opt-in under View, Theme from 02; the default for new installs in 09b, once 05 to 08 have shipped; existing users keep their theme and are offered it once |
+| Typeface: Geist | Decided in 01 | Bundled (SIL OFL), Regular, Medium, SemiBold in `assets/fonts/`; needs engine work (04) |
+| Paste bar and details pane defaults | Decided in 01 | Paste bar on, details pane off, for new and existing users (06) |
+| The two proposal dialogs | Decided in 01 | Not built; revisit with the proxy work (07, 08) |
+| When to rename to Grabbit | Decided in 01 | Last (10): it touches data paths and the extension |
+| Options: a Cancel button under Graphite | Open | Raised by plan 08, which builds without one unless it is decided; Options has no Cancel today |
 
 ## Build order
 
@@ -46,7 +52,7 @@ What can run side by side: after 02, the tracks **03 → 04 → 05 → 06** (mai
 
 ## Progress
 
-- [ ] 01 Prepare
+- [x] 01 Prepare
 - [ ] 02 Theme
 - [ ] 03 Icons
 - [ ] 04 Typeface
@@ -70,6 +76,13 @@ What can run side by side: after 02, the tracks **03 → 04 → 05 → 06** (mai
 | `PLAN.md` | This index |
 | `plans/` | One plan per phase, with file and line references taken from the code on 2026-11-10 (re-check them when starting a phase: `dev` moves) |
 | `grabbit-design.html` | The mockup page: 60 windows, 54 states, light, dark, right to left, 4 palettes |
+| `DESIGN.md` | The design rules the build phases follow: colour jobs, radii, sizes, type, icons |
+| `assets/icons/` | The 53 icons at 16 and 24 (106 SVGs), `SOURCES.txt`, Tabler's `LICENSE` (for 03) |
+| `assets/graphite.toml` | The draft theme file in the chosen palette (for 02) |
+| `assets/fonts/` | Geist Regular, Medium, SemiBold (TTF), `OFL.txt`, `SOURCES.txt` (for 04) |
+| `source/export_icons.py` | Writes `assets/icons/` from the Tabler package, `iconmap.py` and `gen3.py`'s `REFINE` |
+| `source/make_theme.py` | Writes `assets/graphite.toml` from `pal.py` and checks its contrast |
+| `baseline/` | Today's app in every mock state, light and dark (not committed; on `pr-shots` as `baseline/`) |
 | `source/pal.py` | The 4 palettes, every token in light and dark, with the contrast check (`python pal.py`) |
 | `source/iconmap.py` | Each of the 53 icon slots to its Tabler icon name; `gen3.py` holds the review changes (`REFINE`) |
 | `source/graphite.html`, `source/gen3.py` | The page template and the script that builds the mockup (update the `S` paths before reuse) |
