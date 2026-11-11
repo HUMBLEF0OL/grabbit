@@ -9,3 +9,4 @@ sizes (thin-LTO release build), interface size 100 %, Windows display scale 200 
   `03-icons/classic-main-empty*`.
 - `all/`: every Graphite state the script opens (56), light, for the overflow list in
   `design/graphite/plans/04-typeface.md`.
+- `200/`: the same 56 states at interface size 200 % (`baseline.ps1 -InterfaceSize 200`), light, plus `main-plain`, `options-general`, `fileinfo` dark; what overflows there is in the plan.
