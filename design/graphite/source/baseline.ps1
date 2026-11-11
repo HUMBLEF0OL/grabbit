@@ -202,7 +202,9 @@ foreach ($s in $states) {
 $step = [math]::Max(1, [math]::Floor($show.Count / ($prog.Count + 1)))
 for ($i = $prog.Count - 1; $i -ge 0; $i--) {
   $at = [math]::Min($show.Count, ($i + 1) * $step)
-  $head = if ($at -gt 0) { @($show[0..($at - 1)]) } else { @() }
+  # @() around the if: assigned alone, a one-entry head would come out a string, and + would
+  # then join strings instead of lists.
+  $head = @(if ($at -gt 0) { $show[0..($at - 1)] })
   $show = $head + @($prog[$i]) + @(if ($at -lt $show.Count) { $show[$at..($show.Count - 1)] })
 }
 $show += $late + $last

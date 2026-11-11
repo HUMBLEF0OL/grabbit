@@ -104,8 +104,8 @@ MDM follows your system: when Windows is set to dark mode, so is MDM. To keep MD
 - **Graphite**: MDM's own new look: near-black and white with royal amethyst for what you chose
   (the selection, ticked boxes, the focus ring) and electric cyan for what moves (progress, the
   default button), rounded corners, a focus ring, taller rows in the download list, a flat title
-  bar in the panels' colour (on Windows), and one-colour icons. Its own icons and typeface come
-  later.
+  bar in the panels' colour (on Windows), and thin outline icons in one colour (Tabler's). Its
+  typeface comes later.
 
 ![View → Theme open: Classic, Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero and Aqua, and Open themes folder](images/help/view-theme.webp)
 *View → Theme switches at once, keeping the layout.*

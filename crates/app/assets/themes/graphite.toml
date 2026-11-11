@@ -1,14 +1,16 @@
 # Graphite: one of Mister Download Manager's built-in themes, its own new look (design/graphite):
 # colours and shapes of our own design, light and dark (jet black, royal amethyst, electric
-# cyan); it borrows nothing. Icons are the mono set until Graphite's own come, and the typeface
-# is the app's usual one for now.
+# cyan); it borrows nothing but its MIT-licensed Tabler icons (graphite/icons/SOURCES.txt). The
+# typeface is the app's usual one for now.
 # It is also an example of a theme file: seeds for the colours, many roles set by hand (the
 # outlaw colour on the default button and the progress bars), rounded corners, Windows 11's
-# controls with a focus ring, taller list rows and a flat drawn title bar on Windows.
+# controls with a focus ring, taller list rows, a flat drawn title bar on Windows and an icon
+# set in one colour.
 # Written by design/graphite/source/make_theme.py from source/pal.py, palette "amethyst": edit
 # the palette or the mapping there, not here.
 
 name = "Graphite"
+icon-set = "graphite"
 icons = "mono"
 
 [controls]

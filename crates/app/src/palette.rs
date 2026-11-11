@@ -961,8 +961,9 @@ mod tests {
     }
 
     /// Graphite, MDM's own new look, comes last (the others keep their places): rounded corners,
-    /// a focus ring, a flat drawn title bar, the mockup's taller rows, and pressed faces told
-    /// from the pointer over them (issue #7) on its buttons and toolbar.
+    /// a focus ring, a flat drawn title bar, the mockup's taller rows, its own one-colour icon
+    /// set (Tabler's, themeicons.rs), and pressed faces told from the pointer over them (issue
+    /// #7) on its buttons and toolbar.
     #[test]
     fn graphite_is_built_in() {
         let t = builtins()[8];
@@ -970,7 +971,7 @@ mod tests {
         assert_eq!(t.metrics.control_radius, 8.0);
         assert_eq!(t.metrics.list_row, 32.0);
         assert_eq!(t.icons, IconStyle::Mono);
-        assert_eq!(t.icon_set, None);
+        assert_eq!(t.icon_set.as_deref(), Some("graphite"));
         assert_eq!(
             t.controls,
             Controls {

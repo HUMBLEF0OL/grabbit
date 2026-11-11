@@ -1,7 +1,9 @@
 """Export the Graphite icon set from the vendored Tabler Icons package.
 
 Writes design/graphite/assets/icons/{16,24}/<need>.svg for every need in
-crates/app/src/themeicons.rs NEEDS, plus SOURCES.txt and LICENSE beside them.
+crates/app/src/themeicons.rs NEEDS, plus SOURCES.txt and LICENSE beside them, and the same files
+into the app's built-in Graphite set (crates/app/assets/themes/graphite/icons/, carried by
+themeicons.rs), so the two never differ.
 
 The names come from iconmap.py (MAP, first column) with gen3.py's REFINE applied. Both files
 are read as source (not imported: they run their own work on import). Run it again after any
@@ -26,6 +28,7 @@ VERSION = "3.31.0"
 TGZ = GRAPHITE / "vendor" / f"tabler-icons-{VERSION}.tgz"
 LICENSE = GRAPHITE / "vendor" / "TABLER-LICENSE"
 OUT = GRAPHITE / "assets" / "icons"
+APP = REPO / "crates" / "app" / "assets" / "themes" / "graphite" / "icons"
 NEEDS_RS = REPO / "crates" / "app" / "src" / "themeicons.rs"
 SIZES = (16, 24)
 STROKE_WIDTH = "1.75"
@@ -83,13 +86,13 @@ def convert(svg: str, px: int) -> str:
     return "\n".join(lines) + "\n"
 
 
-def check(ids: list[str]) -> None:
+def check(ids: list[str], out: Path) -> None:
     """Every need at both sizes and nothing else; each file well-formed SVG as written."""
     import xml.etree.ElementTree as ET
 
     ns = "{http://www.w3.org/2000/svg}"
     for px in SIZES:
-        folder = OUT / str(px)
+        folder = out / str(px)
         found = sorted(p.stem for p in folder.glob("*.svg"))
         if found != sorted(ids):
             sys.exit(f"{folder}: files and NEEDS differ")
@@ -180,9 +183,21 @@ def main() -> None:
     (OUT / "SOURCES.txt").write_text("\n".join(lines) + "\n", encoding="utf8", newline="\n")
     shutil.copyfile(LICENSE, OUT / "LICENSE")
 
-    check(ids)
+    check(ids, OUT)
+
+    # The app's copy: the same files, nothing else in its folders.
+    for px in SIZES:
+        shutil.rmtree(APP / str(px), ignore_errors=True)
+        shutil.copytree(OUT / str(px), APP / str(px))
+    for name in ("SOURCES.txt", "LICENSE"):
+        shutil.copyfile(OUT / name, APP / name)
+    check(ids, APP)
+
     written = len(ids) * len(SIZES)
-    print(f"{len(ids)} needs, {written} files in {OUT.relative_to(REPO)}")
+    print(
+        f"{len(ids)} needs, {written} files in {OUT.relative_to(REPO).as_posix()}"
+        f" and {APP.relative_to(REPO).as_posix()}"
+    )
 
 
 if __name__ == "__main__":

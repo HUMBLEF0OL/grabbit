@@ -89,6 +89,12 @@ For each dialog in a wave:
 4. Status words get their `st-*` icon (progress window status, error banner).
 5. Size from `dialog_size`; check at 100% and 200% and with the longest strings (the app is English only).
 
+Left from 03 for 07e: the Scheduler's queue list draws Silk's coloured folders in every theme
+(`scheduler.rs`, `IconKey::Silk(icon)` with `folder`, `folder_link`, `folder_delete`). The mock
+draws `cat-queues`, `x-refresh` and `x-gauge`; the last two are not among the 53 needs, so 07e adds
+them to `NEEDS` and the Graphite set (`export_icons.py`), or the list takes `IconKey::Themed`
+with `cat-queues` for all three.
+
 ## Done when
 
 - [ ] Every dialog listed matches its mock state in Graphite, light and dark

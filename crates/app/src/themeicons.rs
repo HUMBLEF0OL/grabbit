@@ -564,6 +564,40 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "tb-scheduler.png", "tb-start-queue.png", "tb-stop-all.png", "tb-stop-queue.png",
             "tb-stop.png", "ui-to-tray.png"]);
     sets.insert("aqua".to_owned(), Arc::new(Set::from_files(aqua, false)));
+    // Tabler Icons 3.31.0's outline icons (Paweł Kuna, MIT, assets/themes/graphite/icons/LICENSE),
+    // drawn white at stroke 1.75 to be tinted, every need at 16 and 24 pixels; SOURCES.txt says
+    // which icon each need is. Written by design/graphite/source/export_icons.py.
+    let graphite = builtin_files!("graphite";
+        16: ["cat-all.svg", "cat-compressed.svg", "cat-documents.svg", "cat-finished.svg",
+            "cat-folder-open.svg", "cat-folder.svg", "cat-music.svg", "cat-programs.svg",
+            "cat-queues.svg", "cat-torrents.svg", "cat-unfinished.svg", "cat-video.svg",
+            "ft-archive.svg", "ft-audio.svg", "ft-code.svg", "ft-disk-image.svg", "ft-document.svg",
+            "ft-executable.svg", "ft-font.svg", "ft-generic.svg", "ft-image.svg", "ft-pdf.svg",
+            "ft-presentation.svg", "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.svg",
+            "ft-video.svg", "misc-down.svg", "misc-emblem-ok.svg", "misc-remove.svg", "misc-up.svg",
+            "st-complete.svg", "st-downloading.svg", "st-error.svg", "st-paused.svg",
+            "st-queued.svg", "st-seeding.svg", "tb-add-torrent.svg", "tb-add-url.svg",
+            "tb-delete-completed.svg", "tb-delete.svg", "tb-options.svg", "tb-resume.svg",
+            "tb-scheduler.svg", "tb-start-queue.svg", "tb-stop-all.svg", "tb-stop-queue.svg",
+            "tb-stop.svg", "ui-close.svg", "ui-maximize.svg", "ui-minimize.svg", "ui-restore.svg",
+            "ui-to-tray.svg"];
+        24: ["cat-all.svg", "cat-compressed.svg", "cat-documents.svg", "cat-finished.svg",
+            "cat-folder-open.svg", "cat-folder.svg", "cat-music.svg", "cat-programs.svg",
+            "cat-queues.svg", "cat-torrents.svg", "cat-unfinished.svg", "cat-video.svg",
+            "ft-archive.svg", "ft-audio.svg", "ft-code.svg", "ft-disk-image.svg", "ft-document.svg",
+            "ft-executable.svg", "ft-font.svg", "ft-generic.svg", "ft-image.svg", "ft-pdf.svg",
+            "ft-presentation.svg", "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.svg",
+            "ft-video.svg", "misc-down.svg", "misc-emblem-ok.svg", "misc-remove.svg", "misc-up.svg",
+            "st-complete.svg", "st-downloading.svg", "st-error.svg", "st-paused.svg",
+            "st-queued.svg", "st-seeding.svg", "tb-add-torrent.svg", "tb-add-url.svg",
+            "tb-delete-completed.svg", "tb-delete.svg", "tb-options.svg", "tb-resume.svg",
+            "tb-scheduler.svg", "tb-start-queue.svg", "tb-stop-all.svg", "tb-stop-queue.svg",
+            "tb-stop.svg", "ui-close.svg", "ui-maximize.svg", "ui-minimize.svg", "ui-restore.svg",
+            "ui-to-tray.svg"]);
+    sets.insert(
+        "graphite".to_owned(),
+        Arc::new(Set::from_files(graphite, true)),
+    );
     Mutex::new(sets)
 });
 
@@ -770,6 +804,30 @@ mod tests {
         }
     }
 
+    /// Graphite has every need at 16 and 24 pixels: Tabler's outline drawings, one colour, their
+    /// white stroke taking the ink (nothing left white, nothing filled black), the 16-pixel one up
+    /// to 20 pixels on screen and the 24-pixel one above.
+    #[test]
+    fn graphite_has_every_need_in_one_colour() {
+        let set = set("graphite").unwrap();
+        for (need, _) in NEEDS {
+            for px in [16u32, 24] {
+                let f = set.files.get(&((*need).to_owned(), px));
+                let f = f.unwrap_or_else(|| panic!("graphite lacks {need} at {px}"));
+                assert!(!f.png && f.mono, "{need} {px}");
+                let out = inked(&f.bytes, "#123456");
+                let text = std::str::from_utf8(&out).unwrap();
+                assert!(text.contains(r##"stroke="#123456""##), "{need} {px}");
+                assert!(text.contains(r#"fill="none""#), "{need} {px}");
+                assert!(!text.to_ascii_lowercase().contains("#fff"), "{need} {px}");
+                assert!(!text.contains("currentColor"), "{need} {px}");
+            }
+            for (px, size) in [(16.0, 16), (20.0, 16), (21.0, 24), (32.0, 24), (48.0, 24)] {
+                assert_eq!(set.file(need, px).unwrap().0, size, "{need} {px}");
+            }
+        }
+    }
+
     /// A one-colour picture as the set holds it: its greys white, so the ink tints them.
     fn assert_white(png: &[u8], need: &str) {
         let img = image::load_from_memory(png).unwrap().to_rgba8();
@@ -837,7 +895,9 @@ mod tests {
     #[test]
     fn every_built_in_icon_file_is_a_need_and_carried() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/themes");
-        for name in ["metro", "adwaita", "breeze", "luna", "aero", "aqua"] {
+        for name in [
+            "metro", "adwaita", "breeze", "luna", "aero", "aqua", "graphite",
+        ] {
             let carried = set(name).unwrap();
             let mut n = 0;
             for px in SIZES {
@@ -869,7 +929,9 @@ mod tests {
     /// drawing's largest scales cleanly), so no picture is stretched.
     #[test]
     fn pictures_come_in_every_size_the_loader_asks_for() {
-        for name in ["metro", "adwaita", "breeze", "luna", "aero", "aqua"] {
+        for name in [
+            "metro", "adwaita", "breeze", "luna", "aero", "aqua", "graphite",
+        ] {
             let set = set(name).unwrap();
             for (need, _) in NEEDS {
                 let sizes: Vec<u32> = SIZES

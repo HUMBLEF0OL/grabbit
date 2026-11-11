@@ -83,6 +83,8 @@ instead; a stopped one shows the icon, the word, then the meter and the percenta
 ## Icons
 
 Tabler outline, stroke **1.75**, tinted with the theme's ink (`assets/icons/`, `SOURCES.txt`).
+The app carries the same files as the Graphite icon set (`crates/app/assets/themes/graphite/icons/`);
+`source/export_icons.py` writes both.
 
 - **20** in the toolbar, **16** in lists, categories and menus.
 - The mockup draws icons inside buttons, fields and menu rows at 15; the set is exported at 16

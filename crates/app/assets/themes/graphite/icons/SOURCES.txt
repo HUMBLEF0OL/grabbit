@@ -1,0 +1,69 @@
+The Graphite theme's icons: Tabler Icons, outline style.
+
+Source:   @tabler/icons 3.31.0, npm tarball (design/graphite/vendor/tabler-icons-3.31.0.tgz)
+          https://registry.npmjs.org/@tabler/icons/-/icons-3.31.0.tgz
+Homepage: https://tabler.io/icons (https://github.com/tabler/tabler-icons)
+Author:   Paweł Kuna
+Licence:  MIT (LICENSE in this folder)
+Tarball SHA-256: ff1057024d11d9eb36e2292433aa4c1488a7c29f2378dd42d8a0be2623cc3819
+Tarball SHA-1 (npm shasum): 92d39dc336f2e3e312170420b00ffe9ca474925e
+Tarball integrity (npm): sha512-dblAdeKY3+GA1U+Q9eziZ0ooVlZMHsE8dqP0RkwvRtEsAULoKOYaCUOcJ4oW1DjWegdxk++UAt2SlQVnmeHv+g==
+
+Changed from the originals: the empty bounding-box path and the class attribute removed,
+stroke="#ffffff" (the app tints white), stroke-width="1.75", width and height
+16 or 24; viewBox 0 0 24 24 kept. Made by design/graphite/source/export_icons.py.
+
+need -> Tabler outline icon
+tb-add-url           link-plus
+tb-add-torrent       magnet
+tb-resume            player-play
+tb-stop              player-pause
+tb-stop-all          player-stop
+tb-delete            trash
+tb-delete-completed  checks
+tb-options           settings
+tb-scheduler         calendar-time
+tb-start-queue       clock-play
+tb-stop-queue        clock-pause
+cat-all              stack-2
+cat-compressed       file-zip
+cat-documents        file-text
+cat-music            music
+cat-programs         app-window
+cat-video            movie
+cat-torrents         magnet
+cat-unfinished       progress-down
+cat-finished         circle-check
+cat-queues           list-numbers
+cat-folder           folder
+cat-folder-open      folder-open
+misc-emblem-ok       circle-check
+misc-up              arrow-up
+misc-down            arrow-down
+misc-remove          x
+ft-generic           file
+ft-archive           file-zip
+ft-audio             file-music
+ft-video             movie
+ft-image             photo
+ft-document          file-text
+ft-pdf               file-type-pdf
+ft-spreadsheet       file-spreadsheet
+ft-presentation      presentation
+ft-text              file-description
+ft-code              file-code
+ft-executable        box
+ft-disk-image        disc
+ft-font              file-typography
+ft-torrent           magnet
+st-complete          circle-check
+st-downloading       circle-arrow-down
+st-paused            player-pause
+st-queued            clock-hour-4
+st-error             alert-circle
+st-seeding           circle-arrow-up
+ui-minimize          minus
+ui-maximize          square
+ui-restore           squares
+ui-close             x
+ui-to-tray           layout-bottombar-collapse

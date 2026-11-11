@@ -11,7 +11,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ### Added
 
-- **View → Theme → Graphite**, the first part of MDM's new look: near-black or white with royal amethyst for what you chose (the selection, ticked boxes, the focus ring) and electric cyan for what moves (progress, the default button), rounded corners, taller rows in the download list and a flat title bar, light and dark. Its own icons and typeface come later; the windows keep their layout.
+- **View → Theme → Graphite**, the first part of MDM's new look: near-black or white with royal amethyst for what you chose (the selection, ticked boxes, the focus ring) and electric cyan for what moves (progress, the default button), rounded corners, taller rows in the download list, a flat title bar and its own thin outline icons in one colour (Tabler Icons) in the toolbar, the categories, the download list and the title bar, light and dark. Its typeface comes later; the windows keep their layout.
 - Videos a site sends in pieces (HLS and DASH streams, as many sites other than YouTube do) download several pieces at once, as many as **Options → Connection** gives a file (8 by default): against a test server that slows each connection, 4 at once took under a third of the time, 8 under a fifth. With a speed limit on, they still come one at a time, so the limit holds; a video in one file, as most of YouTube's are, is unchanged. The command line's `video-get` and `playlist-get` take `-c` for it ([#531](https://github.com/anefzaoui/misterdownloadmanager/issues/531)).
 
 ### Fixed
