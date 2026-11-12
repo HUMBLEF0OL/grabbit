@@ -51,7 +51,8 @@ pub fn accent_palette_bytes(b: &[u8; 32]) -> [[u8; 3]; 7] {
     out
 }
 
-/// What the system says now (a few registry reads, or what the portal's thread last heard).
+/// What the system says (what the watcher of Windows' registry or the portal's thread last
+/// heard: never read on the window's thread, #719).
 /// For tests and screenshots, `MDM_NATIVE_ACCENT=#rrggbb` stands for the system's accent and
 /// `MDM_NATIVE_CONTRAST=1` for its high contrast, so no system setting is touched.
 pub fn system(ctx: &egui::Context) -> System {
@@ -69,7 +70,12 @@ pub fn system(ctx: &egui::Context) -> System {
 }
 
 fn system_says(ctx: &egui::Context) -> System {
-    let _ = ctx;
+    crate::lookwatch::system(ctx).native
+}
+
+/// What Windows says now: its accent from the registry, its high-contrast colours. For the
+/// thread that watches them (`lookwatch`): a registry read can wait for seconds.
+pub fn windows_now() -> System {
     let rgb = |c: [u8; 3]| Color32::from_rgb(c[0], c[1], c[2]);
     System {
         accent: crate::win32::accent_palette().map(|p| Accent {
