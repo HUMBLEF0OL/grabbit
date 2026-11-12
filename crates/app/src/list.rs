@@ -98,10 +98,11 @@ pub const UPLOAD: usize = 12;
 pub const DEFAULT_WIDTHS: [f32; COLS] = [
     150.0, 20.0, 75.0, 65.0, 75.0, 95.0, 65.0, 200.0, 145.0, 62.0, 64.0, 92.0, 100.0,
 ];
-/// Graphite's (plan 05b, the mockup's): its padded cells and the Status cell's icon, word and
-/// bar need more room. Kept apart from IDM's, as the Categories pane's width is.
+/// Graphite's (plan 05b, the mockup's; Status 30 wider, for Geist's "Stopped" with its bar and
+/// percentage): its padded cells need more room. Kept apart from IDM's, as the Categories
+/// pane's width is.
 pub const GRAPHITE_WIDTHS: [f32; COLS] = [
-    280.0, 34.0, 90.0, 170.0, 110.0, 110.0, 160.0, 160.0, 160.0, 70.0, 80.0, 100.0, 110.0,
+    280.0, 34.0, 90.0, 200.0, 110.0, 110.0, 160.0, 160.0, 160.0, 70.0, 80.0, 100.0, 110.0,
 ];
 /// The default widths of IDM's look or Graphite's.
 fn default_widths(graphite: bool) -> [f32; COLS] {
