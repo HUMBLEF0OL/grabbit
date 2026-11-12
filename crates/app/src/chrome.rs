@@ -2,8 +2,9 @@
 //! notes/ui-spec/menus.md): menu bar, popup menus, toolbar, Categories tree, shell icons.
 //!
 //! Our client area also holds the menu bar (IDM's is non-client), so every main-window
-//! spec y is shifted by `MENU_H` = 20. Main-window spec "baseline" is origin + ascent (the row
-//! under the glyphs); `winui::text_font` takes the last ink row, i.e. spec baseline − 1.
+//! spec y is shifted by the menu bar's height ([`Layout::menu_h`], 20). Main-window spec
+//! "baseline" is origin + ascent (the row under the glyphs); `winui::text_font` takes the last
+//! ink row, i.e. spec baseline − 1.
 
 use egui::{Color32, Pos2, Rect, Stroke, Ui, pos2, vec2};
 
@@ -11,8 +12,349 @@ use crate::icons::Icon;
 use crate::scrollbar;
 use crate::winui::{self, text_font, text_width_font};
 
-/// Height of our menu bar band incl. its #f0f0f0 bottom line (IDM: non-client y −20…−1).
-pub const MENU_H: f32 = 20.0;
+/// Where the main window's bands and panes are, worked out once a frame from the theme
+/// (plan 05a): `App::paint` and the painters here read every place from it, none repeats a
+/// number. Heights and x are in points; y are from the top of the client area under a drawn
+/// title bar (the `o` every painter gets).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Layout {
+    /// A drawn title bar's height (the system's own title bar is outside the client area).
+    pub caption_h: f32,
+    /// The menu bar's row, its bottom line included (IDM's: non-client y −20…−1).
+    pub menu_h: f32,
+    /// The toolbar under it: its two etched lines and its band.
+    pub toolbar_h: f32,
+    /// A toolbar button's drop-down menu: its top, down from the toolbar's top.
+    pub drop_y: f32,
+    /// The status strip under the panes.
+    pub strip_h: f32,
+    /// The Categories pane's frame, and the list's left edge while the pane is hidden.
+    pub tree_left: f32,
+    /// The splitter between the pane and the list.
+    pub splitter_w: f32,
+    /// From the Categories pane's and the splitter's bottom to the strip (the list's frame
+    /// ends one row lower: its exclusive edge is `pane_gap - 1` above the strip).
+    pub pane_gap: f32,
+    /// From the list's right edge to the window's.
+    pub list_right: f32,
+    /// From the list's bottom edge (exclusive) to the strip.
+    pub list_gap: f32,
+    /// Graphite's layout (plan 05b): its painters draw the bands, the tree and the list.
+    pub graphite: bool,
+    /// The menus are in the drawn title bar (Graphite's, `menu_h` 0), not in a row of their own.
+    pub menus_in_caption: bool,
+}
+
+impl Layout {
+    /// Today's layout (IDM's), in every theme but Graphite.
+    pub const CLASSIC: Layout = Layout {
+        caption_h: winui::caption::CAPTION_H,
+        menu_h: 20.0,
+        toolbar_h: 70.0,
+        drop_y: 65.0,
+        strip_h: 22.0,
+        tree_left: 6.0,
+        splitter_w: 4.0,
+        pane_gap: 5.0,
+        list_right: 7.0,
+        list_gap: 4.0,
+        graphite: false,
+        menus_in_caption: false,
+    };
+
+    /// Graphite's (DESIGN.md, the mockup's main window): a 36-point title bar that holds the
+    /// menus, a 58-point toolbar band, the panes edge to edge, a 28-point status bar.
+    pub const GRAPHITE: Layout = Layout {
+        caption_h: 36.0,
+        menu_h: 0.0,
+        toolbar_h: 58.0,
+        drop_y: TB_BUTTON_TOP + TB_BUTTON_H + 1.0,
+        strip_h: 28.0,
+        tree_left: 0.0,
+        splitter_w: 0.0,
+        pane_gap: 0.0,
+        list_right: 0.0,
+        list_gap: 0.0,
+        graphite: true,
+        menus_in_caption: true,
+    };
+
+    /// The active theme's layout, this frame. `drawn_caption`: the title bar is ours (else
+    /// the system's, and Graphite keeps a menu row under it).
+    pub fn current(drawn_caption: bool) -> Layout {
+        if crate::theme::chrome() != crate::palette::ChromeLook::Graphite {
+            return Layout::CLASSIC;
+        }
+        if drawn_caption {
+            Layout::GRAPHITE
+        } else {
+            Layout {
+                menu_h: Layout::CLASSIC.menu_h,
+                menus_in_caption: false,
+                ..Layout::GRAPHITE
+            }
+        }
+    }
+
+    /// The list's bottom edge (exclusive) in a client area `h` high.
+    pub fn list_bottom(&self, h: f32) -> f32 {
+        self.strip_top(h) - self.list_gap
+    }
+
+    /// The toolbar's top, down from the client area's.
+    pub fn toolbar_top(&self) -> f32 {
+        self.menu_h
+    }
+
+    /// Where the panes (Categories, the list) start, down from the client area's top.
+    pub fn panes_top(&self) -> f32 {
+        self.menu_h + self.toolbar_h
+    }
+
+    /// The strip's top in a client area `h` high.
+    pub fn strip_top(&self, h: f32) -> f32 {
+        h - self.strip_h
+    }
+}
+
+/// Plan 05b's accessibility and hit tests, headless: what the main window's bars give screen
+/// readers and the window's hit test, in IDM's layout and Graphite's.
+#[cfg(test)]
+mod a11y_tests {
+    use super::*;
+    use egui::accesskit::{Node, NodeId, Role};
+
+    /// One frame of `paint` in a 1240 × 700 window, AccessKit on; its nodes by id, and what
+    /// `paint` returned. `events`: this frame's input.
+    fn frame<R>(
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+        paint: impl FnOnce(&mut Ui) -> R,
+    ) -> (std::collections::HashMap<NodeId, Node>, R) {
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1240.0, 700.0))),
+            events,
+            ..Default::default()
+        };
+        let mut out = None;
+        let mut paint = Some(paint);
+        let mut full = ctx.run_ui(input, |ui| {
+            if let Some(p) = paint.take() {
+                out = Some(p(ui));
+            }
+        });
+        full.textures_delta.clear();
+        let update = full
+            .platform_output
+            .accesskit_update
+            .expect("AccessKit is on");
+        (update.nodes.into_iter().collect(), out.expect("painted"))
+    }
+
+    fn named(nodes: &std::collections::HashMap<NodeId, Node>, role: Role) -> Vec<(String, bool)> {
+        let mut v: Vec<(String, bool)> = nodes
+            .values()
+            .filter(|n| n.role() == role)
+            .map(|n| (n.label().unwrap_or_default().to_owned(), n.is_disabled()))
+            .collect();
+        v.sort();
+        v
+    }
+
+    const BUTTONS: [(Icon, &str, bool); 11] = [
+        (Icon::AddUrl, "Add URL", true),
+        (Icon::AddTorrent, "Add Torrent", true),
+        (Icon::Resume, "Resume", false),
+        (Icon::Stop, "Stop", false),
+        (Icon::StopAll, "Stop All", false),
+        (Icon::Delete, "Delete", true),
+        (Icon::DeleteCompleted, "Delete Completed", true),
+        (Icon::Options, "Options", true),
+        (Icon::Scheduler, "Scheduler", true),
+        (Icon::StartQueue, "Start Queue", true),
+        (Icon::StopQueue, "Stop Queue", false),
+    ];
+
+    /// The toolbar's 11 buttons are buttons for screen readers, by their labels, greyed as
+    /// drawn: in IDM's layout and in Graphite's (00's accessibility exception: every theme).
+    #[test]
+    fn the_toolbar_exposes_its_eleven_buttons() {
+        let _fonts = crate::theme::font_tests();
+        for layout in [Layout::CLASSIC, Layout::GRAPHITE] {
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            let mut nodes = Default::default();
+            for _ in 0..2 {
+                (nodes, _) = frame(&ctx, vec![], |ui| {
+                    toolbar(ui, &layout, Pos2::ZERO, 1240.0, &BUTTONS)
+                });
+            }
+            let mut want: Vec<(String, bool)> = BUTTONS
+                .iter()
+                .map(|(_, l, on)| ((*l).to_owned(), !on))
+                .collect();
+            want.sort();
+            assert_eq!(
+                named(&nodes, Role::Button),
+                want,
+                "graphite {}",
+                layout.graphite
+            );
+        }
+    }
+
+    /// 04's overflow (plans/04-typeface.md): at 200 % the window is about 710 points wide, and
+    /// Graphite's toolbar keeps every button inside it, the labels cut.
+    #[test]
+    fn the_graphite_toolbar_fits_a_narrow_window() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut nodes = Default::default();
+        for _ in 0..2 {
+            (nodes, _) = frame(&ctx, vec![], |ui| {
+                toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 710.0, &BUTTONS)
+            });
+        }
+        let rights: Vec<f64> = nodes
+            .values()
+            .filter(|n| n.role() == Role::Button)
+            .filter_map(|n| n.bounds().map(|b| b.x1))
+            .collect();
+        assert_eq!(rights.len(), 11);
+        assert!(rights.iter().all(|r| *r <= 710.0), "{rights:?}");
+    }
+
+    /// Graphite's title-bar menus: still a menu bar of five menu items for screen readers, and
+    /// each title's rect (the one the window's hit test is given, App::publish_caption) finds
+    /// that title again ([`menubar_title_at`]); a screen reader's Click on a title opens it.
+    #[test]
+    fn the_title_bar_menus_are_a_menu_bar() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let (nodes, (_, titles)) = frame(&ctx, vec![], |ui| {
+            let rel = caption_titles(ui.painter(), 0.0, 0.0);
+            caption_menu_bar(ui, &rel, 300.0, 17.0, None)
+        });
+        assert_eq!(named(&nodes, Role::MenuBar).len(), 1);
+        let mut items: Vec<String> = named(&nodes, Role::MenuItem)
+            .into_iter()
+            .map(|(n, _)| n)
+            .collect();
+        items.sort();
+        assert_eq!(items, ["Downloads", "File", "Help", "Tasks", "View"]);
+        assert_eq!(titles.len(), 5);
+        for (i, t) in titles.iter().enumerate() {
+            assert_eq!(menubar_title_at(&titles, winui::rect(*t).center()), Some(i));
+            assert!(
+                t.top() >= 4.0 && t.bottom() <= 31.0,
+                "inside the bar: {t:?}"
+            );
+        }
+        // Between two titles: none (the window's caption, which drags it).
+        let gap = pos2(titles[0].right() + 0.5, titles[0].center().y);
+        assert_eq!(menubar_title_at(&titles, gap), None);
+        // Click (a screen reader's or UI Automation's) on File: its menu opens.
+        let file = nodes
+            .iter()
+            .find(|(_, n)| n.role() == Role::MenuItem && n.label() == Some("File"))
+            .map(|(id, _)| *id)
+            .unwrap();
+        let click = egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Expand,
+            target_tree: egui::accesskit::TreeId::ROOT,
+            target_node: file,
+            data: None,
+        });
+        let (_, (event, _)) = frame(&ctx, vec![click], |ui| {
+            let rel = caption_titles(ui.painter(), 0.0, 0.0);
+            caption_menu_bar(ui, &rel, 300.0, 17.0, None)
+        });
+        assert_eq!(
+            event,
+            Some(MenuBarEvent::Title {
+                i: 1,
+                released: false
+            })
+        );
+    }
+
+    /// Graphite's Find button is a button named Find, and a screen reader's Click presses it
+    /// (Cmd::Find, as Ctrl+F).
+    #[test]
+    fn the_find_button_is_a_button() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let rc = Rect::from_min_size(pos2(800.0, 5.0), vec2(120.0, 26.0));
+        let (nodes, clicked) = frame(&ctx, vec![], |ui| find_button(ui, rc, "Ctrl+F"));
+        assert!(!clicked);
+        let (id, _) = nodes
+            .iter()
+            .find(|(_, n)| n.role() == Role::Button && n.label() == Some("Find"))
+            .expect("a Find button");
+        let click = egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Click,
+            target_tree: egui::accesskit::TreeId::ROOT,
+            target_node: *id,
+            data: None,
+        });
+        let (_, clicked) = frame(&ctx, vec![click], |ui| find_button(ui, rc, "Ctrl+F"));
+        assert!(clicked);
+    }
+
+    /// Graphite's menus draw each item's icon by its command; a submenu's and a greyed
+    /// placeholder's by their labels, which are the app's own.
+    #[test]
+    fn menu_icons_for_submenus_and_placeholders() {
+        assert_eq!(menu_icon("Speed &Limiter"), Some("gx-gauge"));
+        assert_eq!(menu_icon("E&xport"), Some("gx-upload"));
+        assert_eq!(menu_icon("Delete"), Some("tb-delete"));
+        // A label no menu has (a queue named so is a command's item): none.
+        assert_eq!(menu_icon("My downloads"), None);
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::Layout;
+
+    /// The numbers the main window was laid out with before they were shared (plan 05a): the
+    /// menu bar 20 high, the panes from client y 90, the strip 22, the pane at x 6, a
+    /// drop-down's menu at client y 85.
+    #[test]
+    fn the_classic_layout_keeps_its_numbers() {
+        let l = Layout::CLASSIC;
+        assert_eq!(l.toolbar_top(), 20.0);
+        assert_eq!(l.panes_top(), 90.0);
+        assert_eq!(l.toolbar_top() + l.drop_y, 85.0);
+        assert_eq!(l.strip_top(600.0), 578.0);
+        assert_eq!(
+            (l.tree_left, l.splitter_w, l.pane_gap, l.list_right),
+            (6.0, 4.0, 5.0, 7.0)
+        );
+        assert_eq!(l.caption_h, 32.0);
+        assert_eq!(l.list_bottom(600.0), 574.0);
+        assert!(!l.graphite && !l.menus_in_caption);
+    }
+
+    /// Graphite's (plan 05b): the menus in a 36-point title bar, so the toolbar starts at the
+    /// client's top; its band 58; the panes edge to edge down to a 28-point status bar; a
+    /// drop-down's menu just under its button.
+    #[test]
+    fn the_graphite_layout_moves_the_panes_up() {
+        let l = Layout::GRAPHITE;
+        assert_eq!((l.caption_h, l.menu_h, l.toolbar_top()), (36.0, 0.0, 0.0));
+        assert_eq!(l.panes_top(), 58.0);
+        assert_eq!(l.drop_y, super::TB_BUTTON_TOP + super::TB_BUTTON_H + 1.0);
+        assert!(l.drop_y < l.toolbar_h);
+        assert_eq!(l.strip_top(600.0), 572.0);
+        assert_eq!(l.list_bottom(600.0), 572.0);
+        assert_eq!((l.tree_left, l.list_right), (0.0, 0.0));
+        assert!(l.graphite && l.menus_in_caption);
+    }
+}
 
 const fn rgb(r: u8, g: u8, b: u8) -> Color32 {
     Color32::from_rgb(r, g, b)
@@ -159,89 +501,240 @@ pub fn paint_image(ui: &Ui, painter: &egui::Painter, src: egui::ImageSource<'sta
 
 // ---- menu bar --------------------------------------------------------------------------------
 
-/// Top-level menus: label, item rect x and width, text x (measured, "Ta" kerned by the font):
-/// the standard Win32 bar (text at item.x + 7, width = text + 14; light-main.md), in both modes
+/// Top-level menus: label, item rect x and width (measured, "Ta" kerned by the font): the
+/// standard Win32 bar (text at item.x + 7, width = text + 14; light-main.md), in both modes
 /// (user decision 2026-11-01: dark mode only changes colours, never sizes or places; IDM's dark
 /// bar was wider).
-const MENUS: [(&str, f32, f32, f32); 5] = [
-    ("&Tasks", 0.0, 42.0, 7.0),
-    ("&File", 42.0, 32.0, 49.0),
-    ("&Downloads", 74.0, 73.0, 81.0),
-    ("&View", 147.0, 39.0, 154.0),
-    ("&Help", 186.0, 39.0, 193.0),
+const MENUS: [(&str, f32, f32); 5] = [
+    ("&Tasks", 0.0, 42.0),
+    ("&File", 42.0, 32.0),
+    ("&Downloads", 74.0, 73.0),
+    ("&View", 147.0, 39.0),
+    ("&Help", 186.0, 39.0),
 ];
 
 /// The menu bar: the measured rects.
-pub fn menus() -> Vec<(&'static str, f32, f32, f32)> {
+pub fn menus() -> Vec<(&'static str, f32, f32)> {
     MENUS.to_vec()
 }
 
-/// Paint the menu bar; returns what happened to its titles this frame, for [`menubar_next`]: a
-/// title clicked (or opened and shut by a screen reader), or the pointer over one (which only
-/// moves to it from another open menu).
-pub fn menu_bar(ui: &mut Ui, o: Pos2, width: f32, open: Option<usize>) -> Option<MenuBarEvent> {
+/// Paint the menu bar in its own row; returns what happened to its titles this frame, for
+/// [`menubar_next`] (a title clicked, or opened and shut by a screen reader, or the pointer over
+/// one, which only moves to it from another open menu), and the titles' rects (English).
+pub fn menu_bar(
+    ui: &mut Ui,
+    layout: &Layout,
+    o: Pos2,
+    width: f32,
+    open: Option<usize>,
+) -> (Option<MenuBarEvent>, Vec<Rect>) {
     let p = ui.painter().clone();
+    let menu_h = layout.menu_h;
     fill(
         &p,
         o.x,
         o.y,
         o.x + width - 1.0,
-        o.y + MENU_H - 2.0,
+        o.y + menu_h - 2.0,
         MENUBAR_BG(),
     );
     // The bar's last row (light: #f2f2f2; dark: the bar's own).
     fill(
         &p,
         o.x,
-        o.y + MENU_H - 2.0,
+        o.y + menu_h - 2.0,
         o.x + width - 1.0,
-        o.y + MENU_H - 2.0,
+        o.y + menu_h - 2.0,
         MENUBAR_BOTTOM(),
     );
     fill(
         &p,
         o.x,
-        o.y + MENU_H - 1.0,
+        o.y + menu_h - 1.0,
         o.x + width - 1.0,
-        o.y + MENU_H - 1.0,
+        o.y + menu_h - 1.0,
         MENUBAR_LINE(),
     );
+    // From the leading edge: the first menu at the right in RTL.
+    let titles: Vec<Rect> = menus()
+        .iter()
+        .map(|(_, x, w)| Rect::from_min_size(o + vec2(*x, 0.0), vec2(*w, menu_h)))
+        .collect();
+    let bar = Rect::from_min_size(o, vec2(width, menu_h));
+    let hit = bar_titles(ui, bar, &titles, open, false);
+    (hit, titles)
+}
+
+/// Graphite's menu titles, in its title bar after the window's title (plan 05b, the mockup's
+/// `.menu`): from English x `x`, each its text with 8 either side, 1 apart, 26 high, centred
+/// on the bar's middle `mid`.
+pub fn caption_titles(p: &egui::Painter, x: f32, mid: f32) -> Vec<Rect> {
+    let mut x = x;
+    menus()
+        .iter()
+        .map(|(label, ..)| {
+            let w = text_width_font(p, winui::segoe(), &plain(label).0).ceil() + 16.0;
+            let rc = Rect::from_min_size(pos2(x, (mid - 13.0).round()), vec2(w, 26.0));
+            x += w + 1.0;
+            rc
+        })
+        .collect()
+}
+
+/// The room Graphite's menu titles take after the window's title: the gap before them and the
+/// titles themselves (`rel`: [`caption_titles`] at 0, 0).
+pub fn caption_menus_width(rel: &[Rect]) -> f32 {
+    CAPTION_MENUS_GAP + rel.last().map_or(0.0, |r| r.right())
+}
+
+/// From the window's title to the first menu title (the mockup's 10 + 8).
+pub const CAPTION_MENUS_GAP: f32 = 18.0;
+
+/// Paint Graphite's menu titles in the title bar (`rel`: [`caption_titles`] at 0, 0, placed from
+/// English x `x`, centred on `mid`); what happened to them, as [`menu_bar`], and their rects
+/// (English).
+pub fn caption_menu_bar(
+    ui: &mut Ui,
+    rel: &[Rect],
+    x: f32,
+    mid: f32,
+    open: Option<usize>,
+) -> (Option<MenuBarEvent>, Vec<Rect>) {
+    let by = vec2(x, (mid - 13.0).round() + 13.0);
+    let titles: Vec<Rect> = rel.iter().map(|r| r.translate(by)).collect();
+    let bar = titles.iter().fold(Rect::NOTHING, |a, r| a.union(*r));
+    let hit = bar_titles(ui, bar, &titles, open, true);
+    (hit, titles)
+}
+
+/// Graphite's Find button, in the title bar between the menus and the window's buttons (plan
+/// 05b; 00's accepted exception: a new way to Downloads → Find): its size for the label and
+/// `key` ("Ctrl+F").
+pub fn find_button_size(p: &egui::Painter, key: &str) -> egui::Vec2 {
+    let label = text_width_font(p, winui::segoe(), crate::i18n::t("Find")).ceil();
+    let key = text_width_font(p, key_font(), key).ceil();
+    vec2(9.0 + 14.0 + 7.0 + label + 7.0 + key + 9.0, 26.0)
+}
+
+/// The font of a Graphite menu's shortcut column and of the Find button's key.
+fn key_font() -> egui::FontId {
+    egui::FontId::proportional(crate::theme::metrics().font_small)
+}
+
+/// Paint the Find button in English rect `rc` ([`find_button_size`]): the window's face, the
+/// buttons' border, radius 6, a magnifier, "Find" and its key in the shortcuts' ink. Exposed as
+/// a button named Find. True when clicked (or invoked by a screen reader).
+pub fn find_button(ui: &mut Ui, rc: Rect, key: &str) -> bool {
+    let p = ui.painter().clone();
+    let screen = winui::rect(rc);
+    let resp = ui.interact(
+        screen,
+        egui::Id::unique("caption-find"),
+        winui::pointer_only(),
+    );
+    // i18n: the title bar's button that opens Find file (Ctrl+F)
+    let label = crate::i18n::t("Find");
+    winui::expose(&resp, egui::Role::Button, label, true, None);
+    let c = crate::theme::colors();
+    let face = if resp.is_pointer_button_down_on() {
+        c.button_pressed
+    } else if resp.hovered() {
+        c.button_hot
+    } else {
+        c.window
+    };
+    let radius = crate::theme::metrics().part_radius;
+    p.rect_filled(screen, radius, face);
+    p.rect_stroke(
+        screen,
+        radius,
+        Stroke::new(1.0, c.button_border),
+        egui::StrokeKind::Inside,
+    );
+    let mid = rc.center().y;
+    let icon = Rect::from_min_size(pos2(rc.left() + 9.0, (mid - 7.0).round()), vec2(14.0, 14.0));
+    // The mockup's: the icon and the label in the secondary ink, the key in the shortcuts'.
+    let ink = c.text_secondary;
+    crate::themeicons::paint_in(ui, &p, "gx-search", winui::rect(icon), ink, true);
+    let baseline = rc.top() + 17.0;
+    let drawn = text_font(&p, winui::segoe(), icon.right() + 7.0, baseline, label, ink);
+    text_font(
+        &p,
+        key_font(),
+        winui::rect(drawn).right() + 7.0,
+        baseline,
+        key,
+        c.menu_shortcut,
+    );
+    resp.clicked()
+}
+
+/// The menu bar's titles in `titles` (English rects; `bar` around them all), drawn IDM's way
+/// or Graphite's (`graphite`), with what happened to them this frame.
+fn bar_titles(
+    ui: &mut Ui,
+    bar: Rect,
+    titles: &[Rect],
+    open: Option<usize>,
+    graphite: bool,
+) -> Option<MenuBarEvent> {
+    let p = ui.painter().clone();
     let mut hit = None;
     // For screen readers and UI Automation (#113): a menu bar whose titles are menu items that
     // open their menus (Click, as with the mouse).
     let bar = ui.interact(
-        winui::rect(Rect::from_min_size(o, vec2(width, MENU_H))),
+        winui::rect(bar),
         egui::Id::unique("menubar-node"),
         egui::Sense::hover(),
     );
     winui::expose(&bar, egui::Role::MenuBar, "", true, None);
     let titles_ui = ui.new_child(egui::UiBuilder::new().accessibility_parent(bar.id));
     let released = ui.input(|x| x.pointer.any_released());
-    for (i, (label, x, w, tx)) in menus().iter().enumerate() {
-        // From the leading edge: the first menu at the right in RTL.
-        let rc = winui::rect(Rect::from_min_size(o + vec2(*x, 0.0), vec2(*w, MENU_H)));
+    for (i, ((label, ..), english)) in menus().iter().zip(titles).enumerate() {
+        let rc = winui::rect(*english);
         let resp = titles_ui.interact(rc, egui::Id::unique(("menubar", i)), winui::pointer_only());
         winui::expose(&resp, egui::Role::MenuItem, &plain(label).0, true, None);
         ui.ctx().accesskit_node_builder(resp.id, |n| {
             n.set_has_popup(egui::accesskit::HasPopup::Menu);
             n.set_expanded(open == Some(i));
         });
-        if open == Some(i) {
-            p.rect_filled(rc, 0.0, MENUBAR_OPEN());
-        } else if open.is_none() && resp.hovered() {
-            let hot = Rect::from_min_max(rc.min + vec2(0.0, 1.0), rc.max - vec2(0.0, 1.0));
-            p.rect_filled(hot, 0.0, MENUBAR_HOT());
-        }
+        // The title's text start and its last ink row.
+        let (tx, baseline) = if graphite {
+            // Open: the selection's fill; under the pointer, the caption buttons' tint.
+            let radius = crate::theme::metrics().menu_item_radius;
+            if open == Some(i) {
+                p.rect_filled(rc, radius, winui::SELECTION());
+            } else if open.is_none() && resp.hovered() {
+                p.rect_filled(rc, radius, crate::theme::colors().caption_hot);
+            }
+            (english.left() + 8.0, english.top() + 17.0)
+        } else {
+            if open == Some(i) {
+                p.rect_filled(rc, 0.0, MENUBAR_OPEN());
+            } else if open.is_none() && resp.hovered() {
+                let hot = Rect::from_min_max(rc.min + vec2(0.0, 1.0), rc.max - vec2(0.0, 1.0));
+                p.rect_filled(hot, 0.0, MENUBAR_HOT());
+            }
+            (english.left() + 7.0, english.top() + 13.0)
+        };
+        // Graphite's titles in the secondary ink, the open one in the caption's.
+        let ink = if graphite && open == Some(i) {
+            winui::caption::CAPTION_INK()
+        } else if graphite {
+            crate::theme::colors().text_secondary
+        } else {
+            TEXT()
+        };
         // The title without its "&", its access letter underlined (each language marks its
         // own: French Tâches and Téléchargements both had T).
         let (shown, letter) = plain(label);
-        let drawn = text_font(&p, winui::segoe(), o.x + tx, o.y + 13.0, &shown, TEXT());
+        let drawn = text_font(&p, winui::segoe(), tx, baseline, &shown, ink);
         // Dark mode always underlines mnemonics (1 px under the letter's advance); light mode
         // follows the Windows rule: once the keyboard is in use (`cues`).
         if cues(ui.ctx()) {
             let (x0, x1) =
                 winui::char_span(&p, &winui::segoe(), &shown, letter.unwrap_or(0), drawn);
-            fill(&p, x0, o.y + 15.0, x1, o.y + 15.0, TEXT());
+            fill(&p, x0, baseline + 2.0, x1, baseline + 2.0, ink);
         }
         // A screen reader or UI Automation opens a title's menu with Expand (or Click) and
         // shuts it with Collapse.
@@ -266,12 +759,10 @@ pub fn menu_bar(ui: &mut Ui, o: Pos2, width: f32, open: Option<usize>) -> Option
     hit
 }
 
-/// The menu-bar title under `pos` (main-window coordinates), as [`menu_bar`] lays them out at
-/// `o`: the first menu at the right in RTL.
-pub fn menubar_title_at(o: Pos2, pos: Pos2) -> Option<usize> {
-    menus().iter().position(|(_, x, w, _)| {
-        winui::rect(Rect::from_min_size(o + vec2(*x, 0.0), vec2(*w, MENU_H))).contains(pos)
-    })
+/// The menu-bar title under `pos` (on screen), of `titles` as [`menu_bar`] or
+/// [`caption_menu_bar`] laid them out this frame (English): the first menu at the right in RTL.
+pub fn menubar_title_at(titles: &[Rect], pos: Pos2) -> Option<usize> {
+    titles.iter().position(|r| winui::rect(*r).contains(pos))
 }
 
 /// What happened to the menu bar this frame, for [`menubar_next`].
@@ -631,6 +1122,21 @@ pub fn popup<C: Clone>(
     entries: &[MenuEntry<C>],
     hint: &dyn Fn(&C) -> Option<&'static str>,
 ) -> PopupResult<C> {
+    popup_with_icons(ctx, kind, id, pos, entries, hint, &|_, _| None)
+}
+
+/// [popup], with the icon a Graphite menu draws at each item's start: `icon` gives it for an
+/// item from its command and its label (a submenu's from its label, [menu_icon]).
+#[allow(clippy::too_many_arguments)]
+pub fn popup_with_icons<C: Clone>(
+    ctx: &egui::Context,
+    kind: MenuKind,
+    id: &str,
+    pos: Pos2,
+    entries: &[MenuEntry<C>],
+    hint: &dyn Fn(&C) -> Option<&'static str>,
+    icon: &dyn Fn(&C, &str) -> Option<&'static str>,
+) -> PopupResult<C> {
     let sub_key = egui::Id::unique(("popup-sub", id));
     // The control that has the keys while the menu is open (a drop-down list, a text box): the
     // menu's windows never take them, so Escape reached its window, and egui let them go there
@@ -679,6 +1185,7 @@ pub fn popup<C: Clone>(
         &mut result,
         0,
         hint,
+        icon,
     );
     if let Some(c) = result {
         ctx.data_mut(|d| {
@@ -838,16 +1345,119 @@ fn menu_width(p: &egui::Painter, label: &str) -> f32 {
     }
 }
 
-/// Size of a menu window: the check column (38), the widest label, then 30 to the edge (48 when an
-/// item opens a submenu: its arrow), slots of 22 (separators 9), 3 px top and bottom. Fitted to
-/// its texts, so they don't float in a wide window.
+/// How a menu's window is laid out: IDM's (Win32's), or Graphite's (plan 05b, the mockup's
+/// `.menu-pop`) for the menu bar's and the right-click menus while the theme's layout is
+/// Graphite's (drop-down lists keep Win32's until the dialogs get theirs, plan 07).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct MenuLook {
+    graphite: bool,
+    /// Above the first slot and below the last; a slot's inset from the sides.
+    pad: f32,
+    /// An item's height, and a separator's.
+    slot: f32,
+    sep: f32,
+    /// Where an item's label starts.
+    text_x: f32,
+    /// The window's least width.
+    min_w: f32,
+}
+
+impl MenuLook {
+    fn of(kind: MenuKind) -> MenuLook {
+        let graphite = crate::theme::chrome() == crate::palette::ChromeLook::Graphite;
+        match kind {
+            MenuKind::Bar | MenuKind::Context if graphite => MenuLook {
+                graphite,
+                pad: 5.0,
+                slot: 28.0,
+                sep: 11.0,
+                text_x: 39.0,
+                min_w: if kind == MenuKind::Bar { 258.0 } else { 240.0 },
+            },
+            _ => MenuLook {
+                graphite: false,
+                pad: 3.0,
+                slot: SLOT,
+                sep: SEP,
+                text_x: 38.0,
+                min_w: 0.0,
+            },
+        }
+    }
+}
+
+/// The icon a Graphite menu draws at a submenu's start, or at a greyed placeholder's (an item
+/// with no command, which [`popup_with_icons`]'s caller can't tell by its command), by its
+/// label: the English text the menus are built with, all the app's own (a queue's name, a
+/// user's word, never reaches here). The mockup's (`MENUS` and the right-click menus in
+/// `design/graphite/source/graphite.html`). None for the rest.
+pub fn menu_icon(label: &str) -> Option<&'static str> {
+    Some(match label {
+        // Submenus.
+        "E&xport" => "gx-upload",
+        "&Import" => "gx-download",
+        "Start &queue" | "Start now" => "tb-start-queue",
+        "S&top queue" | "Stop" => "tb-stop-queue",
+        "Speed &Limiter" => "gx-gauge",
+        "Add to queue" | "Move to queue" => "cat-queues",
+        "On Double click" => "gx-pointer",
+        // A category's and a queue's greyed items.
+        "Browse" => "cat-folder-open",
+        "Properties" => "gx-info",
+        "Delete" => "tb-delete",
+        "Edit queue" => "gx-edit",
+        "Schedule" => "tb-scheduler",
+        _ => return None,
+    })
+}
+
+/// Size of a menu window. IDM's: the check column (38), the widest label, then 30 to the edge
+/// (48 when an item opens a submenu: its arrow), slots of 22 (separators 9), 3 px top and
+/// bottom. Graphite's: the icon column (39), the widest label with its shortcut (18 before it)
+/// or its submenu's chevron, 14 to the edge, at least 240 wide (258 for the menu bar's); slots
+/// of 28 (separators 11), 5 top and bottom. Fitted to its texts, so they don't float in a wide
+/// window.
 fn menu_size<C>(
     ctx: &egui::Context,
+    look: MenuLook,
     entries: &[MenuEntry<C>],
     hint: &dyn Fn(&C) -> Option<&'static str>,
 ) -> egui::Vec2 {
     let painter = ctx.layer_painter(egui::LayerId::background());
     let width = |t: &str| menu_width(&painter, t);
+    if look.graphite {
+        let widest = entries
+            .iter()
+            .filter_map(|e| match e {
+                MenuEntry::Item(l, c, ..) | MenuEntry::Radio(l, c, ..) => Some(match hint(c) {
+                    Some(k) => {
+                        width(without_shortcut(&plain(crate::i18n::tc("menu", l)).0))
+                            + 18.0
+                            + text_width_font(&painter, key_font(), &key_label(k)).ceil()
+                    }
+                    None => width(&plain(crate::i18n::tc("menu", l)).0),
+                }),
+                MenuEntry::Sub(l, ..) => {
+                    Some(width(&plain(crate::i18n::tc("menu", l)).0) + 18.0 + 13.0)
+                }
+                MenuEntry::Sep => None,
+            })
+            .fold(0.0, f32::max);
+        let h: f32 = entries
+            .iter()
+            .map(|e| {
+                if matches!(e, MenuEntry::Sep) {
+                    look.sep
+                } else {
+                    look.slot
+                }
+            })
+            .sum();
+        return vec2(
+            (look.text_x + widest + 14.0).max(look.min_w),
+            h + 2.0 * look.pad,
+        );
+    }
     let widest = entries
         .iter()
         .filter_map(|e| match e {
@@ -992,8 +1602,11 @@ fn popup_level<C: Clone>(
     result: &mut Option<C>,
     depth: usize,
     hint: &dyn Fn(&C) -> Option<&'static str>,
+    icon: &dyn Fn(&C, &str) -> Option<&'static str>,
 ) {
-    let size = menu_size(ctx, entries, hint);
+    let look = MenuLook::of(kind);
+    let g = look.graphite;
+    let size = menu_size(ctx, look, entries, hint);
     let kb_key = sub_key.with("kb");
     let kb: Option<usize> = ctx
         .data(|d| d.get_temp::<(Option<usize>, Option<usize>)>(kb_key))
@@ -1068,18 +1681,32 @@ fn popup_level<C: Clone>(
         );
         winui::expose(&menu_node, egui::Role::Menu, "", true, None);
         let items_ui = ui.new_child(egui::UiBuilder::new().accessibility_parent(menu_node.id));
-        let mut y = o.y + 3.0;
+        let mut y = o.y + look.pad;
+        // Graphite's rows are 6 taller: what is centred in a row moves down by half of it.
+        let (dy, inset) = if g { (3.0, look.pad) } else { (0.0, 6.0) };
         for (i, e) in entries.iter().enumerate() {
             if matches!(e, MenuEntry::Sep) {
-                winui::fill_l(
-                    &painter,
-                    o.x + 9.0,
-                    y + 4.0,
-                    o.x + w - 10.0,
-                    y + 4.0,
-                    POPUP_SEP(),
-                );
-                y += SEP;
+                if g {
+                    // The mockup's `hr`: the menu's border colour, 4 in from the slots.
+                    winui::fill_l(
+                        &painter,
+                        o.x + inset + 4.0,
+                        y + 5.0,
+                        o.x + w - inset - 5.0,
+                        y + 5.0,
+                        POPUP_BORDER(),
+                    );
+                } else {
+                    winui::fill_l(
+                        &painter,
+                        o.x + 9.0,
+                        y + 4.0,
+                        o.x + w - 10.0,
+                        y + 4.0,
+                        POPUP_SEP(),
+                    );
+                }
+                y += look.sep;
                 continue;
             }
             let (label, enabled, checked) = match e {
@@ -1087,7 +1714,8 @@ fn popup_level<C: Clone>(
                 MenuEntry::Sub(l, en, _) => (*l, *en, false),
                 MenuEntry::Sep => unreachable!(),
             };
-            let slot = Rect::from_min_max(pos2(o.x + 6.0, y), pos2(o.x + w - 6.0, y + SLOT));
+            let slot =
+                Rect::from_min_max(pos2(o.x + inset, y), pos2(o.x + w - inset, y + look.slot));
             let hovered = pointer.is_some_and(|p| slot.contains(p));
             if hovered && moving && kb.is_some() && kb != Some(i) {
                 ui.ctx().data_mut(|d| {
@@ -1114,7 +1742,7 @@ fn popup_level<C: Clone>(
                     crate::theme::metrics().menu_item_radius,
                     POPUP_HOVER(),
                 );
-            } else {
+            } else if !g {
                 // Spec: an item's normal background is one level lighter than the padding.
                 fill(
                     &painter,
@@ -1188,27 +1816,74 @@ fn popup_level<C: Clone>(
                 }
                 _ => {}
             }
-            let drawn = text_font(&painter, winui::segoe(), o.x + 38.0, y + 14.0, &t, color);
-            // The shortcut at the trailing edge, in the menu's quieter ink.
+            let baseline = y + 14.0 + if g { 4.0 } else { 0.0 };
+            let drawn = text_font(
+                &painter,
+                winui::segoe(),
+                o.x + look.text_x,
+                baseline,
+                &t,
+                color,
+            );
+            // The shortcut at the trailing edge, in the menu's quieter ink (Graphite's own
+            // role for it, `menu.shortcut`, in its smaller size).
             if let Some(k) = keys {
-                winui::text_right(
-                    &painter,
-                    o.x + w - 24.0,
-                    y + 14.0,
-                    &key_label(k),
-                    TEXT_DISABLED_MENU(),
-                );
+                let key = key_label(k);
+                if g {
+                    let ink = crate::theme::colors().menu_shortcut;
+                    let x = o.x + w - 14.0 - text_width_font(&painter, key_font(), &key);
+                    text_font(&painter, key_font(), x, baseline, &key, ink);
+                } else {
+                    winui::text_right(
+                        &painter,
+                        o.x + w - 24.0,
+                        y + 14.0,
+                        &key,
+                        TEXT_DISABLED_MENU(),
+                    );
+                }
             }
             // Underlined mnemonics: always in dark mode, once the keyboard is in use in light.
             if let Some(m) = mn
                 && cues(ctx)
             {
                 let (x0, x1) = winui::char_span(&painter, &winui::segoe(), &t, m, drawn);
-                fill(&painter, x0, y + 16.0, x1, y + 16.0, color);
+                fill(&painter, x0, baseline + 2.0, x1, baseline + 2.0, color);
             }
+            // Graphite: the item's icon at its start (16, the icon column 14..30), where it
+            // has one and no check mark takes the column.
+            let marked = checked || matches!(e, MenuEntry::Radio(..));
+            if g && !marked
+                && let Some(need) = match e {
+                    MenuEntry::Item(l, c, ..) | MenuEntry::Radio(l, c, ..) => icon(c, l),
+                    MenuEntry::Sub(l, ..) => menu_icon(l),
+                    MenuEntry::Sep => None,
+                }
+            {
+                let ink = if enabled {
+                    crate::theme::colors().text_secondary
+                } else {
+                    TEXT_DISABLED_MENU()
+                };
+                let rc = winui::rect(Rect::from_min_size(
+                    pos2(o.x + 14.0, y + 6.0),
+                    vec2(16.0, 16.0),
+                ));
+                crate::themeicons::paint_in(ui, &painter, need, rc, ink, enabled);
+            }
+            // Graphite's check marks in the accent (the mockup's), IDM's in the glyphs' ink.
+            let glyph = if g && enabled {
+                crate::theme::colors().accent
+            } else {
+                glyph
+            };
             // The check box column: x 12..21 from the leading edge (the glyphs keep their
-            // shape).
-            let gx = |x: f32| if rtl { x + w - 33.0 } else { x };
+            // shape); Graphite's icon column, 14..30.
+            let gx = |x: f32| {
+                let x = if g { x + 6.0 } else { x };
+                if rtl { x + w - 33.0 } else { x }
+            };
+            let gy = y + dy;
             if checked && matches!(e, MenuEntry::Radio(..)) {
                 // Measured 4×4 bullet at rel x 15..18, slot rows 9..12 (ink over #2c).
                 const BULLET: [[u8; 4]; 4] = [
@@ -1221,15 +1896,20 @@ fn popup_level<C: Clone>(
                     for (dx, v) in row.iter().enumerate() {
                         let a = ((*v as f32 - 44.0) / (255.0 - 44.0) * 255.0).round() as u8;
                         let c = Color32::from_rgba_unmultiplied(glyph.r(), glyph.g(), glyph.b(), a);
-                        px(&painter, gx(o.x + 15.0 + dx as f32), y + 9.0 + dy as f32, c);
+                        px(
+                            &painter,
+                            gx(o.x + 15.0 + dx as f32),
+                            gy + 9.0 + dy as f32,
+                            c,
+                        );
                     }
                 }
             } else if checked {
                 painter.line(
                     vec![
-                        pos2(gx(o.x + 12.5), y + 11.5),
-                        pos2(gx(o.x + 15.5), y + 14.5),
-                        pos2(gx(o.x + 20.5), y + 8.5),
+                        pos2(gx(o.x + 12.5), gy + 11.5),
+                        pos2(gx(o.x + 15.5), gy + 14.5),
+                        pos2(gx(o.x + 20.5), gy + 8.5),
                     ],
                     Stroke::new(1.3, glyph),
                 );
@@ -1239,11 +1919,18 @@ fn popup_level<C: Clone>(
                     // At the trailing edge, pointing where the submenu opens.
                     painter.line(
                         vec![
-                            pos2(winui::mx(o.x + w - 20.5), y + 7.5),
-                            pos2(winui::mx(o.x + w - 16.5), y + 11.5),
-                            pos2(winui::mx(o.x + w - 20.5), y + 15.5),
+                            pos2(winui::mx(o.x + w - 20.5), gy + 7.5),
+                            pos2(winui::mx(o.x + w - 16.5), gy + 11.5),
+                            pos2(winui::mx(o.x + w - 20.5), gy + 15.5),
                         ],
-                        Stroke::new(1.2, glyph),
+                        Stroke::new(
+                            1.2,
+                            if g {
+                                crate::theme::colors().menu_shortcut
+                            } else {
+                                glyph
+                            },
+                        ),
                     );
                     if depth == 0 && enabled && hovered && (kb.is_none() || moving) {
                         ui.ctx().data_mut(|d| d.insert_temp(sub_key, i));
@@ -1285,7 +1972,7 @@ fn popup_level<C: Clone>(
                 }
                 MenuEntry::Sep => {}
             }
-            y += SLOT;
+            y += look.slot;
         }
     });
     if styled {
@@ -1294,9 +1981,10 @@ fn popup_level<C: Clone>(
     if let Some((i, slot_y)) = sub_at
         && let MenuEntry::Sub(_, _, children) = &entries[i]
     {
-        // The submenu's top-left: parent right − 6, slot top − 3 (as measured).
+        // The submenu's top-left: parent right − 6, slot top less the padding (3, as measured;
+        // Graphite's 5).
         let x = screen.max.x - 6.0;
-        let at = pos2(x, screen.min.y + slot_y - 3.0);
+        let at = pos2(x, screen.min.y + slot_y - look.pad);
         popup_level(
             ctx,
             kind,
@@ -1308,6 +1996,7 @@ fn popup_level<C: Clone>(
             result,
             depth + 1,
             hint,
+            icon,
         );
     }
 }
@@ -1316,24 +2005,25 @@ fn popup_level<C: Clone>(
 
 pub enum ToolbarEvent {
     Click(usize),
-    /// A drop-down button's arrow: its menu opens at this point (button left, y 87).
+    /// A drop-down button's arrow: its menu opens at this point (the button's left edge,
+    /// [`Layout::drop_y`] under the toolbar's top).
     Drop(usize, Pos2),
 }
 
-/// Paint the etch (y 20, 21) and the toolbar band (y 22–91).
-/// Client y where the panes (Categories, list) start: below the toolbar band, in both modes.
-pub fn pane_top() -> f32 {
-    70.0
-}
-
+/// Paint the etch (the toolbar's first two rows, client y 20 and 21 under the menu bar) and the
+/// toolbar band under it, down to where the panes start ([`Layout::panes_top`]).
 pub fn toolbar(
     ui: &mut Ui,
+    layout: &Layout,
     o: Pos2,
     width: f32,
     buttons: &[(Icon, &str, bool)],
 ) -> Option<ToolbarEvent> {
+    if layout.graphite {
+        return toolbar_graphite(ui, layout, o, width, buttons);
+    }
     let p = ui.painter().clone();
-    let top = o.y + MENU_H;
+    let top = o.y + layout.toolbar_top();
     let c = crate::theme::colors();
     fill(&p, o.x, top, o.x + width - 1.0, top, c.toolbar_line);
     fill(
@@ -1345,8 +2035,8 @@ pub fn toolbar(
         c.toolbar_line_light,
     );
     // Both modes (light-main.md; dark changes only colours): Tahoma labels, 66 px buttons, a
-    // 68 px band.
-    let (font, base_w, band_h) = (winui::tahoma(), 66.0f32, 68.0);
+    // 68 px band under the etch's two rows.
+    let (font, base_w, band_h) = (winui::tahoma(), 66.0f32, layout.toolbar_h - 2.0);
     let band = Rect::from_min_size(pos2(o.x, top + 2.0), vec2(width, band_h));
     p.rect_filled(band, 0.0, WINDOW_BG());
     let mut x = o.x;
@@ -1386,6 +2076,9 @@ pub fn toolbar(
             vec2(total, band_h),
         ));
         let resp = ui.interact(rc, egui::Id::unique(("tb", i)), winui::pointer_only());
+        // For screen readers and UI Automation (plan 05b, in every theme): a button by its
+        // whole label, greyed as drawn.
+        winui::expose(&resp, egui::Role::Button, full, *enabled, None);
         let resp = if cut { resp.on_hover_text(full) } else { resp };
         let past_button = |q: Pos2| winui::mx(q.x) >= x + bw;
         if *enabled && resp.hovered() {
@@ -1496,15 +2189,235 @@ pub fn toolbar(
         // The arrow is a button of its own (a split button): its menu lists every queue, so it
         // works while the main one's button is greyed.
         if resp.clicked() && (*enabled || on_arrow) {
-            // The drop-down menu's top-left is the button's left edge at client y 85; in RTL its
-            // top-right at the button's right edge.
+            // The drop-down menu's top-left is the button's left edge, `drop_y` under the
+            // toolbar's top (client y 85); in RTL its top-right at the button's right edge.
             event = Some(if on_arrow {
-                ToolbarEvent::Drop(i, pos2(winui::mx(x), o.y + 85.0))
+                ToolbarEvent::Drop(i, pos2(winui::mx(x), top + layout.drop_y))
             } else {
                 ToolbarEvent::Click(i)
             });
         }
         x += total;
+    }
+    event
+}
+
+/// Graphite's toolbar buttons: their top inside the band and their height (DESIGN.md: the
+/// band 58, its rule included).
+pub const TB_BUTTON_TOP: f32 = 5.0;
+pub const TB_BUTTON_H: f32 = 47.0;
+
+/// The buttons that end a group of Graphite's toolbar (a rule after each): [Add URL, Add
+/// Torrent] [Resume, Stop, Stop All] [Delete, Delete Completed] [Options, Scheduler] [Start
+/// Queue, Stop Queue], IDM's order.
+fn ends_group(icon: Icon) -> bool {
+    matches!(
+        icon,
+        Icon::AddTorrent | Icon::StopAll | Icon::DeleteCompleted | Icon::Scheduler
+    )
+}
+
+/// Graphite's toolbar (plan 05b, the mockup's `.tools`): the band on `panel` with a rule
+/// under it, 20-point icons over 11.5-point labels, buttons at least 60 wide (8 either side of
+/// the label), 2 apart in a group and a 1-point rule between groups; under the pointer the
+/// toolbar's hot face rounded 8; a drop-down's arrow inside its button's end, which is its own
+/// part (a split button, as IDM's layout has it).
+fn toolbar_graphite(
+    ui: &mut Ui,
+    layout: &Layout,
+    o: Pos2,
+    width: f32,
+    buttons: &[(Icon, &str, bool)],
+) -> Option<ToolbarEvent> {
+    let p = ui.painter().clone();
+    let c = crate::theme::colors();
+    let top = o.y + layout.toolbar_top();
+    let band = Rect::from_min_size(pos2(o.x, top), vec2(width, layout.toolbar_h));
+    p.rect_filled(winui::rect(band), 0.0, c.panel);
+    fill(
+        &p,
+        o.x,
+        band.bottom() - 1.0,
+        o.x + width - 1.0,
+        band.bottom() - 1.0,
+        c.menubar_line,
+    );
+    let font = egui::FontId::proportional(crate::theme::metrics().font_small);
+    const MIN_W: f32 = 60.0;
+    const PAD: f32 = 16.0;
+    // A drop-down's arrow part, at the button's end.
+    const ARROW_W: f32 = 14.0;
+    // In a group 2 apart; a group ends 6 before its rule, the next starts 6 after it.
+    const GAP: f32 = 2.0;
+    const RULE_GAP: f32 = 6.0;
+    const SIDE: f32 = 10.0;
+    let is_dropdown =
+        |icon: &Icon| matches!(icon, Icon::StartQueue | Icon::StopQueue | Icon::AddTorrent);
+    let fixed: f32 = 2.0 * SIDE
+        + buttons
+            .iter()
+            .enumerate()
+            .map(|(i, (icon, ..))| {
+                if i + 1 == buttons.len() {
+                    0.0
+                } else if ends_group(*icon) {
+                    2.0 * RULE_GAP + 1.0
+                } else {
+                    GAP
+                }
+            })
+            .sum::<f32>();
+    // A toolbar wider than the window (long labels, 200 %): the longest labels give way first.
+    let natural: Vec<(f32, f32)> = buttons
+        .iter()
+        .map(|(icon, label, _)| {
+            let ext = text_width_font(&p, font.clone(), crate::i18n::tc("toolbar", label)).ceil();
+            // label_cap pads a label by 12: Graphite's by PAD. A drop-down's arrow is a part of
+            // its own at the button's end, past the label.
+            (
+                ext + PAD - 12.0,
+                if is_dropdown(icon) { ARROW_W } else { 0.0 },
+            )
+        })
+        .collect();
+    // Narrower than 60 only in a window too small for them all (200 %, a narrow window): down
+    // to the icon's room, the labels cut with "..." and whole on hover.
+    let room = (width - fixed).max(0.0);
+    let arrows: f32 = natural.iter().map(|n| n.1).sum();
+    let min_w = MIN_W
+        .min(((room - arrows) / buttons.len().max(1) as f32).floor())
+        .max(36.0);
+    let cap = label_cap(&natural, min_w, room);
+    let mut x = o.x + SIDE;
+    let mut event = None;
+    let pointer_down = ui.input(|i| i.pointer.primary_down());
+    for (i, (icon, label, enabled)) in buttons.iter().enumerate() {
+        let full = crate::i18n::tc("toolbar", label);
+        let dropdown = is_dropdown(icon);
+        let full_ext = text_width_font(&p, font.clone(), full).ceil();
+        // The icon and the label in the main part; a drop-down's arrow part after it.
+        let main_w = min_w.max((full_ext + PAD).min(cap));
+        let bw = main_w + if dropdown { ARROW_W } else { 0.0 };
+        let cut = full_ext + PAD > main_w;
+        let shown = if cut {
+            winui::ellipsize(&p, &font, full, (main_w - PAD).max(0.0))
+        } else {
+            full.to_owned()
+        };
+        let english = Rect::from_min_size(pos2(x, top + TB_BUTTON_TOP), vec2(bw, TB_BUTTON_H));
+        let rc = winui::rect(english);
+        let resp = ui.interact(rc, egui::Id::unique(("tb", i)), winui::pointer_only());
+        winui::expose(&resp, egui::Role::Button, full, *enabled, None);
+        let resp = if cut { resp.on_hover_text(full) } else { resp };
+        let past = |q: Pos2| winui::mx(q.x) >= english.right() - ARROW_W;
+        let on_arrow = dropdown && resp.hover_pos().is_some_and(past);
+        let radius = crate::theme::metrics().button_radius;
+        if (*enabled || (dropdown && on_arrow)) && resp.hovered() {
+            let down = resp.is_pointer_button_down_on() && pointer_down;
+            let face = if down {
+                c.toolbar_pressed
+            } else {
+                c.toolbar_hot
+            };
+            if dropdown {
+                // The part under the pointer lit, the other faintly, as IDM's layout does.
+                let split = english.right() - ARROW_W;
+                let main = Rect::from_min_max(english.min, pos2(split, english.bottom()));
+                let arrow = Rect::from_min_max(pos2(split, english.top()), english.max);
+                // A greyed button's arrow still opens its menu: only the arrow part lights.
+                let (main_c, arrow_c) = if on_arrow && !*enabled {
+                    (Color32::TRANSPARENT, face)
+                } else if on_arrow {
+                    (c.toolbar_hot_faint, face)
+                } else {
+                    (face, c.toolbar_hot_faint)
+                };
+                let r = radius as u8;
+                let left = egui::CornerRadius {
+                    nw: r,
+                    sw: r,
+                    ne: 0,
+                    se: 0,
+                };
+                let right = egui::CornerRadius {
+                    nw: 0,
+                    sw: 0,
+                    ne: r,
+                    se: r,
+                };
+                let (lc, rc2) = if winui::rtl() {
+                    (right, left)
+                } else {
+                    (left, right)
+                };
+                p.rect_filled(winui::rect(main), lc, main_c);
+                p.rect_filled(winui::rect(arrow), rc2, arrow_c);
+            } else {
+                p.rect_filled(rc, radius, face);
+            }
+        }
+        // The icon, 20, 6 under the button's top, centred (a drop-down's in what is left of
+        // its arrow's part).
+        let cx = english.left() + main_w / 2.0;
+        let icon_rc = Rect::from_min_size(
+            pos2((cx - 10.0).round(), english.top() + 6.0),
+            vec2(20.0, 20.0),
+        );
+        icon.image(*enabled).paint_at(ui, winui::rect(icon_rc));
+        let ext = text_width_font(&p, font.clone(), &shown).ceil();
+        let ink = if *enabled {
+            c.text_secondary
+        } else {
+            TB_DISABLED()
+        };
+        text_font(
+            &p,
+            font.clone(),
+            (cx - ext / 2.0).round(),
+            english.top() + 39.0,
+            &shown,
+            ink,
+        );
+        if dropdown {
+            // A chevron, 10 across at the icon's height, inside the button's end.
+            let ax = english.right() - 7.0;
+            let ay = english.top() + 14.0;
+            let s = Stroke::new(1.5, winui::MUTED());
+            p.line(
+                vec![
+                    pos2(winui::mx(ax - 3.0), ay - 1.5),
+                    pos2(winui::mx(ax), ay + 1.5),
+                    pos2(winui::mx(ax + 3.0), ay - 1.5),
+                ],
+                s,
+            );
+        }
+        let on_arrow = dropdown && resp.interact_pointer_pos().is_some_and(past);
+        if resp.clicked() && (*enabled || on_arrow) {
+            // The drop-down menu's top-left: the button's start, just under it.
+            event = Some(if on_arrow {
+                ToolbarEvent::Drop(i, pos2(winui::mx(english.left()), top + layout.drop_y))
+            } else {
+                ToolbarEvent::Click(i)
+            });
+        }
+        x += bw;
+        if i + 1 < buttons.len() {
+            if ends_group(*icon) {
+                let rx = x + RULE_GAP;
+                fill(
+                    &p,
+                    rx,
+                    top + TB_BUTTON_TOP + 4.0,
+                    rx,
+                    top + TB_BUTTON_TOP + TB_BUTTON_H - 5.0,
+                    c.menubar_line,
+                );
+                x = rx + 1.0 + RULE_GAP;
+            } else {
+                x += GAP;
+            }
+        }
     }
     event
 }
@@ -1583,10 +2496,14 @@ pub enum TreeEvent {
     Context(usize, Pos2),
 }
 
-/// The Categories pane: frame x 6 .. `right` (IDM: 148, resizable by the splitter), caption, close "x", tree (rows 16 px, indent 19).
+/// The Categories pane: frame x [`Layout::tree_left`] .. `right` (IDM: 6 .. 148, resizable by
+/// the splitter), from the panes' top to `bottom` (the strip's top) less the pane gap; caption,
+/// close "x", tree (rows 16 px, indent 19).
+#[allow(clippy::too_many_arguments)]
 pub fn categories(
     ui: &mut Ui,
     icons: &mut ShellIcons,
+    layout: &Layout,
     o: Pos2,
     bottom: f32,
     right: f32,
@@ -1594,13 +2511,17 @@ pub fn categories(
     // The tree has the keys (its chosen node shows the focus).
     keys: bool,
 ) -> Option<TreeEvent> {
+    if layout.graphite {
+        return categories_graphite(ui, icons, layout, o, bottom, right, rows, keys);
+    }
     let p = ui.painter().clone();
-    let y0 = o.y + pane_top() + MENU_H; // frame top
-    // Laid out in English (frame x 6 .. right); every part made where it is on screen — the pane
+    let y0 = o.y + layout.panes_top(); // frame top
+    let left = o.x + layout.tree_left;
+    // Laid out in English (frame `left` .. right); every part made where it is on screen — the pane
     // on the right in RTL, its tree indenting from the right.
     let frame = winui::rect(Rect::from_min_max(
-        pos2(o.x + 6.0, y0),
-        pos2(right, bottom - 5.0),
+        pos2(left, y0),
+        pos2(right, bottom - layout.pane_gap),
     ));
     p.rect_stroke(
         frame,
@@ -1608,19 +2529,12 @@ pub fn categories(
         Stroke::new(1.0, CAT_FRAME()),
         egui::StrokeKind::Inside,
     );
-    winui::fill_l(
-        &p,
-        o.x + 6.0,
-        y0 + 18.0,
-        right - 1.0,
-        y0 + 18.0,
-        CAT_FRAME(),
-    ); // caption underline
+    winui::fill_l(&p, left, y0 + 18.0, right - 1.0, y0 + 18.0, CAT_FRAME()); // caption underline
     // i18n: title of the side pane that lists the categories
     let caption = crate::i18n::t("Categories");
     // Short of the close box: in a narrow pane or a long translation, "..." and whole on hover.
-    let shown = winui::ellipsize(&p, &winui::tahoma(), caption, right - 21.0 - (o.x + 12.0));
-    let drawn = text_font(&p, winui::tahoma(), o.x + 12.0, y0 + 13.0, &shown, TEXT());
+    let shown = winui::ellipsize(&p, &winui::tahoma(), caption, right - 21.0 - (left + 6.0));
+    let drawn = text_font(&p, winui::tahoma(), left + 6.0, y0 + 13.0, &shown, TEXT());
     if shown != caption {
         winui::full_on_hover(ui, drawn, "categories-caption", caption);
     }
@@ -1647,7 +2561,11 @@ pub fn categories(
     if cr.clicked() {
         event = Some(TreeEvent::Close);
     }
-    let tree = Rect::from_min_max(pos2(o.x + 8.0, y0 + 18.0), pos2(right - 3.0, bottom - 9.0));
+    // Inside the frame: 2 from its start, 3 from its end and 4 from its bottom.
+    let tree = Rect::from_min_max(
+        pos2(left + 2.0, y0 + 18.0),
+        pos2(right - 3.0, bottom - layout.pane_gap - 4.0),
+    );
     p.rect_filled(winui::rect(tree), 0.0, TREE_BG());
 
     // Scroll bars (notes/ui-spec/scrollbars.md "Categories tree"): by rows vertically, by
@@ -1660,7 +2578,8 @@ pub fn categories(
             let count = r.count.map_or(0.0, |n| {
                 5.0 + text_width_font(&p, winui::tahoma(), &count_text(n))
             });
-            text_x - 8.0
+            // From the tree's start (the rows count from 6 before the frame).
+            left - 6.0 + text_x - tree.left()
                 + text_width_font(&p, winui::tahoma(), crate::i18n::t(&r.label))
                 + count
                 + 5.0
@@ -1692,8 +2611,9 @@ pub fn categories(
     vpos = vpos.clamp(0.0, (rows.len() as f32 - page_rows).max(0.0));
     hpos = hpos.clamp(0.0, (content_w - area.width()).max(0.0)).round();
     let first_row = vpos.round();
-    // Everything below is laid out from a horizontally scrolled origin.
-    let o = pos2(o.x - hpos, o.y);
+    // Everything below is laid out from a horizontally scrolled origin: the rows' spec x
+    // (connectors at 19, icons at 30 and 49, text at 51 and 70) count from 6 before the frame.
+    let o = pos2(left - 6.0 - hpos, o.y);
     let tp = p.with_clip_rect(winui::rect(area));
     let row_top = |k: usize| area.top() + 16.0 * (k as f32 - first_row);
     // Blank space (registered first, so the rows sit above it): the selected node's menu, at
@@ -1840,76 +2760,18 @@ pub fn categories(
         let row = winui::rect(
             Rect::from_min_size(pos2(area.left(), top), vec2(area.width(), 16.0)).intersect(area),
         );
-        let resp = rows_ui.interact(
+        // The row's events and its node; its expander at x 11..26 (the scrolled origin's).
+        tree_row(
+            ui,
+            &rows_ui,
+            r,
+            k,
             row,
-            egui::Id::unique(("tree-row", k)),
-            winui::pointer_only(),
+            (o.x + 11.0, o.x + 26.0),
+            None,
+            &mut event,
+            &mut selected_at,
         );
-        // A tree item: its name (with its count), selected, open or shut, its level; Click
-        // selects it (egui's own), Expand / Collapse open and shut it, Show context menu opens
-        // its menu.
-        {
-            use egui::accesskit::Action;
-            let name = match r.count {
-                Some(n) => format!("{} {}", crate::i18n::t(&r.label), count_text(n)),
-                None => crate::i18n::t(&r.label).to_owned(),
-            };
-            winui::expose(&resp, egui::Role::TreeItem, &name, true, None);
-            let (expand, collapse, menu) = ui.input(|i| {
-                (
-                    i.has_accesskit_action_request(resp.id, Action::Expand),
-                    i.has_accesskit_action_request(resp.id, Action::Collapse),
-                    i.has_accesskit_action_request(resp.id, Action::ShowContextMenu),
-                )
-            });
-            let (level, selected, open) = (r.level, r.selected, r.expander);
-            ui.ctx().accesskit_node_builder(resp.id, |n| {
-                n.set_selected(selected);
-                n.set_level(level + 1);
-                n.add_action(Action::ShowContextMenu);
-                if let Some(open) = open {
-                    n.set_expanded(open);
-                    n.add_action(if open {
-                        Action::Collapse
-                    } else {
-                        Action::Expand
-                    });
-                }
-            });
-            let under = resp.rect.left_bottom() + vec2(24.0, 0.0);
-            if r.selected {
-                selected_at = Some((k, under));
-            }
-            if (expand && r.expander == Some(false)) || (collapse && r.expander == Some(true)) {
-                event = Some(TreeEvent::Toggle(k));
-            }
-            if menu {
-                event = Some(TreeEvent::Context(k, under));
-            }
-            // An assistive action moves no pointer: the frame showing its result is asked for.
-            if expand || collapse || menu {
-                ui.ctx().request_repaint();
-            }
-        }
-        if resp.clicked() {
-            let on_expander = resp.interact_pointer_pos().is_some_and(|q| {
-                let x = winui::mx(q.x);
-                x >= o.x + 11.0 && x <= o.x + 26.0
-            });
-            event = Some(if on_expander && r.expander.is_some() {
-                TreeEvent::Toggle(k)
-            } else {
-                TreeEvent::Select(k)
-            });
-        }
-        if resp.double_clicked() && r.expander.is_some() {
-            event = Some(TreeEvent::Toggle(k));
-        }
-        if resp.secondary_clicked()
-            && let Some(at) = resp.interact_pointer_pos()
-        {
-            event = Some(TreeEvent::Context(k, at));
-        }
     }
     // The selected node's menu from the keyboard, under the node: Shift+F10 or the Menu key.
     if keys
@@ -1967,6 +2829,307 @@ pub fn categories(
     }
     ui.ctx()
         .data_mut(|d| d.insert_temp(scroll_id, (vpos, hpos)));
+    event
+}
+
+/// One Categories row's events and its node, IDM's tree and Graphite's alike: a tree item with
+/// its name (and count), selected, open or shut, its level; Click selects it (on its expander,
+/// English x `chevron`, toggles it), a double-click toggles it, a right-click and Show context
+/// menu open its menu, Expand / Collapse open and shut it. `hit`: the row on screen; `tip`: its
+/// whole label, when cut.
+#[allow(clippy::too_many_arguments)]
+fn tree_row(
+    ui: &Ui,
+    rows_ui: &Ui,
+    r: &TreeRow<'_>,
+    k: usize,
+    hit: Rect,
+    chevron: (f32, f32),
+    tip: Option<&str>,
+    event: &mut Option<TreeEvent>,
+    selected_at: &mut Option<(usize, Pos2)>,
+) {
+    use egui::accesskit::Action;
+    let resp = rows_ui.interact(
+        hit,
+        egui::Id::unique(("tree-row", k)),
+        winui::pointer_only(),
+    );
+    let resp = match tip {
+        Some(t) => resp.on_hover_text(t),
+        None => resp,
+    };
+    let label = crate::i18n::t(&r.label);
+    let name = match r.count {
+        Some(n) => format!("{label} {}", count_text(n)),
+        None => label.to_owned(),
+    };
+    winui::expose(&resp, egui::Role::TreeItem, &name, true, None);
+    let (expand, collapse, menu) = ui.input(|i| {
+        (
+            i.has_accesskit_action_request(resp.id, Action::Expand),
+            i.has_accesskit_action_request(resp.id, Action::Collapse),
+            i.has_accesskit_action_request(resp.id, Action::ShowContextMenu),
+        )
+    });
+    let (level, selected, open) = (r.level, r.selected, r.expander);
+    ui.ctx().accesskit_node_builder(resp.id, |n| {
+        n.set_selected(selected);
+        n.set_level(level + 1);
+        n.add_action(Action::ShowContextMenu);
+        if let Some(open) = open {
+            n.set_expanded(open);
+            n.add_action(if open {
+                Action::Collapse
+            } else {
+                Action::Expand
+            });
+        }
+    });
+    let under = resp.rect.left_bottom() + vec2(24.0, 0.0);
+    if r.selected {
+        *selected_at = Some((k, under));
+    }
+    if (expand && r.expander == Some(false)) || (collapse && r.expander == Some(true)) {
+        *event = Some(TreeEvent::Toggle(k));
+    }
+    if menu {
+        *event = Some(TreeEvent::Context(k, under));
+    }
+    // An assistive action moves no pointer: the frame showing its result is asked for.
+    if expand || collapse || menu {
+        ui.ctx().request_repaint();
+    }
+    if resp.clicked() {
+        let on_expander = resp.interact_pointer_pos().is_some_and(|q| {
+            let x = winui::mx(q.x);
+            x >= chevron.0 && x <= chevron.1
+        });
+        *event = Some(if on_expander && r.expander.is_some() {
+            TreeEvent::Toggle(k)
+        } else {
+            TreeEvent::Select(k)
+        });
+    }
+    if resp.double_clicked() && r.expander.is_some() {
+        *event = Some(TreeEvent::Toggle(k));
+    }
+    if resp.secondary_clicked()
+        && let Some(at) = resp.interact_pointer_pos()
+    {
+        *event = Some(TreeEvent::Context(k, at));
+    }
+}
+/// Graphite's Categories pane (plan 05b, the mockup's `aside.cats`): on `panel` from the
+/// window's start to `right`, a rule at its end; no caption bar (View → Hide categories closes
+/// it); rows 28 high, 1 apart, 10 under the pane's top and 8 in from its sides, each a chevron
+/// (branches), a 16-point icon, the label and, on the top rows, the count muted; children 20
+/// further in. The chosen row is filled with the selection, rounded 6, its icon in the accent.
+/// The same events, keys and accessibility tree as IDM's.
+#[allow(clippy::too_many_arguments)]
+fn categories_graphite(
+    ui: &mut Ui,
+    icons: &mut ShellIcons,
+    layout: &Layout,
+    o: Pos2,
+    bottom: f32,
+    right: f32,
+    rows: &[TreeRow<'_>],
+    keys: bool,
+) -> Option<TreeEvent> {
+    const ROW: f32 = 28.0;
+    const STRIDE: f32 = 29.0;
+    let p = ui.painter().clone();
+    let c = crate::theme::colors();
+    let top = o.y + layout.panes_top();
+    let left = o.x + layout.tree_left;
+    let pane = Rect::from_min_max(pos2(left, top), pos2(right, bottom));
+    p.rect_filled(winui::rect(pane), 0.0, c.panel);
+    fill(
+        &p,
+        right - 1.0,
+        top,
+        right - 1.0,
+        bottom - 1.0,
+        c.menubar_line,
+    );
+    let area = Rect::from_min_max(pos2(left, top), pos2(right - 1.0, bottom));
+    let inner_top = top + 10.0;
+    let content_h = rows.len() as f32 * STRIDE + 10.0;
+    let need_v = content_h > area.height();
+    let rows_right = area.right() - 8.0 - if need_v { scrollbar::THICK + 6.0 } else { 0.0 };
+    let scroll_id = egui::Id::unique("tree-scroll");
+    let mut vpos = ui
+        .ctx()
+        .data(|d| d.get_temp::<(f32, f32)>(scroll_id))
+        .unwrap_or_default()
+        .0;
+    let page_rows = ((area.height() - 10.0) / STRIDE).floor().max(1.0);
+    if ui.rect_contains_pointer(winui::rect(area)) {
+        vpos += winui::wheel_rows(ui, STRIDE, page_rows);
+    }
+    vpos = vpos
+        .clamp(0.0, (rows.len() as f32 - page_rows).max(0.0))
+        .round();
+    let row_top = |k: usize| inner_top + STRIDE * (k as f32 - vpos);
+    let tp = p.with_clip_rect(winui::rect(area));
+    let mut event = None;
+    let blank = ui.interact(
+        winui::rect(area),
+        egui::Id::unique("tree-blank"),
+        winui::pointer_only(),
+    );
+    if blank.secondary_clicked()
+        && let Some(k) = rows.iter().position(|r| r.selected)
+        && let Some(at) = blank.interact_pointer_pos()
+    {
+        event = Some(TreeEvent::Context(k, at));
+    }
+    winui::expose(
+        &blank,
+        egui::Role::Tree,
+        crate::i18n::t("Categories"),
+        true,
+        None,
+    );
+    let rows_ui = ui.new_child(egui::UiBuilder::new().accessibility_parent(blank.id));
+    let mut selected_at: Option<(usize, Pos2)> = None;
+    let font = winui::segoe();
+    let medium = egui::FontId::new(font.size, egui::FontFamily::Name("geist-medium".into()));
+    let radius = crate::theme::metrics().part_radius;
+    for (k, r) in rows.iter().enumerate() {
+        let y = row_top(k);
+        if y + ROW <= area.top() || y >= area.bottom() {
+            continue;
+        }
+        let row = Rect::from_min_max(pos2(left + 8.0, y), pos2(rows_right, y + ROW));
+        if r.selected {
+            tp.rect_filled(winui::rect(row), radius, winui::SELECTION());
+        }
+        let indent = if r.level == 0 { 0.0 } else { 20.0 };
+        let chev_x = row.left() + 6.0 + indent;
+        let mid = y + ROW / 2.0;
+        if let Some(open) = r.expander {
+            // The mockup's chevron-down / -right, 13 across, in the expander's ink.
+            let s = Stroke::new(1.5, TREE_EXPANDER());
+            let cx = chev_x + 6.5;
+            let pts = if open {
+                vec![
+                    pos2(cx - 3.5, mid - 1.75),
+                    pos2(cx, mid + 1.75),
+                    pos2(cx + 3.5, mid - 1.75),
+                ]
+            } else {
+                vec![
+                    pos2(cx - 1.75, mid - 3.5),
+                    pos2(cx + 1.75, mid),
+                    pos2(cx - 1.75, mid + 3.5),
+                ]
+            };
+            tp.line(
+                pts.into_iter().map(|q| pos2(winui::mx(q.x), q.y)).collect(),
+                s,
+            );
+        }
+        let icon_x = chev_x + 13.0 + 7.0;
+        let icon_rc = Rect::from_min_size(pos2(icon_x, (mid - 8.0).round()), vec2(16.0, 16.0));
+        // The chosen row's icon in the accent, its label in the text's ink; the others in the
+        // secondary ink (the mockup's).
+        let ink = if r.selected {
+            crate::theme::colors().accent
+        } else {
+            crate::theme::colors().text_secondary
+        };
+        let label_ink = if r.selected {
+            TEXT()
+        } else {
+            crate::theme::colors().text_secondary
+        };
+        let drawn_themed = match &r.icon {
+            IconKey::Themed(need, _) => {
+                crate::themeicons::paint_in(ui, &tp, need, winui::rect(icon_rc), ink, true)
+            }
+            _ => false,
+        };
+        if !drawn_themed {
+            icons.paint_in(ui, &tp, r.icon.clone(), icon_rc.min);
+        }
+        let text_x = icon_rc.right() + 7.0;
+        let label = crate::i18n::t(&r.label);
+        let count = r.count.map(count_text);
+        let count_w = count
+            .as_ref()
+            .map_or(0.0, |s| 5.0 + text_width_font(&p, font.clone(), s).ceil());
+        let row_font = if r.selected {
+            medium.clone()
+        } else {
+            font.clone()
+        };
+        let shown = winui::ellipsize(
+            &p,
+            &row_font,
+            label,
+            (row.right() - 6.0 - text_x - count_w).max(0.0),
+        );
+        let baseline = (mid + 4.0).round();
+        let drawn = text_font(&tp, row_font, text_x, baseline, &shown, label_ink);
+        if let Some(s) = &count {
+            text_font(
+                &tp,
+                font.clone(),
+                winui::rect(drawn).right() + 5.0,
+                baseline,
+                s,
+                winui::MUTED(),
+            );
+        }
+        if keys && r.selected {
+            winui::focus_ring(&tp, winui::rect(row));
+        }
+        let hit = winui::rect(row.intersect(area));
+        let tip = (shown != label).then_some(label);
+        tree_row(
+            ui,
+            &rows_ui,
+            r,
+            k,
+            hit,
+            (chev_x - 4.0, chev_x + 17.0),
+            tip,
+            &mut event,
+            &mut selected_at,
+        );
+    }
+    if keys
+        && let Some((k, at)) = selected_at
+        && ui.input_mut(|i| {
+            i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10)
+                || i.consume_key(egui::Modifiers::NONE, egui::Key::Menu)
+        })
+    {
+        event = Some(TreeEvent::Context(k, at));
+    }
+    if need_v {
+        // Clear of the splitter's grip, the pane's last 6 points (App::paint).
+        let track = winui::rect(Rect::from_min_max(
+            pos2(area.right() - 6.0 - scrollbar::THICK, area.top()),
+            pos2(area.right() - 6.0, area.bottom()),
+        ));
+        if scrollbar::bar(
+            ui,
+            scroll_id.with("v"),
+            track,
+            true,
+            rows.len() as f32 + 10.0 / STRIDE,
+            page_rows,
+            1.0,
+            &mut vpos,
+        ) {
+            vpos = vpos.round();
+            ui.ctx().request_repaint();
+        }
+    }
+    ui.ctx().data_mut(|d| d.insert_temp(scroll_id, (vpos, 0.0)));
     event
 }
 

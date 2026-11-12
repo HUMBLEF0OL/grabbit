@@ -140,9 +140,10 @@ focus = "ring"
 - **`[sizes]`** — corner radii, border widths, font sizes and row heights, in pixels.
 - **`[controls]`** — the shape of text boxes, check boxes, buttons, progress bars, scroll bars,
   the focus mark and the title bar; and `chrome`, the windows' layout: `classic` (IDM's, the
-  default) or `graphite` (Graphite's). The layout changes nothing yet: the Graphite theme's
-  coming layout draws its title bar, toolbar, footers and banners by it, with the roles `panel`,
-  `tile`, `menu.shortcut`, `toolbar.checked`, `button.danger`, `button.danger.text`,
+  default) or `graphite` (Graphite's). Under `graphite` the main window has its menus and a Find
+  button in the title bar, a grouped toolbar, a flatter Categories tree and progress in the Status
+  column (its dialogs, footers and banners come later), drawn with the roles `panel`, `tile`,
+  `text.secondary`, `menu.shortcut`, `toolbar.checked`, `button.danger`, `button.danger.text`,
   `banner.error`, `banner.info`, `banner.warning`, `glow`, `button.accent.top` and
   `progress.bar.end` (`glow`, `button.accent.top` and `progress.bar.end` are transparent by
   default: no glow, a flat face).

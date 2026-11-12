@@ -80,8 +80,8 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
       a PR; nothing on screen changes)
 - [x] 04 Typeface (complete, in origin's `dev` since 2026-11-11, pushed directly instead of a PR;
       checks in its plan, shots in `pr-shots` `04-typeface/`)
-- [ ] 05a Layout model
-- [ ] 05b Main window
+- [x] 05a Layout model (ticked in its PR; done once merged)
+- [x] 05b Main window (ticked in its PR; done once merged)
 - [ ] 06 Paste bar and details pane
 - [ ] 07a Dialog kit
 - [ ] 07b Adding

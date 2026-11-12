@@ -88,6 +88,9 @@ pub struct Settings {
     pub delete_files_too: bool,
     /// Categories pane frame width (IDM: 143, frame x 6..149); dragged with the splitter.
     pub categories_width: u32,
+    /// The same pane's width under the Graphite layout (plan 05b: 224 by default, the mockup's),
+    /// kept apart so Classic's stays IDM's.
+    pub graphite_categories_width: u32,
     /// The main window as last left: position and size (x, y, width, height, in points at 100 %
     /// interface size: the system's own logical pixels), and maximized.
     pub window: Option<[i32; 4]>,
@@ -354,6 +357,7 @@ impl Default for Settings {
             confirm_delete: true,
             delete_files_too: false,
             categories_width: 143,
+            graphite_categories_width: 224,
             window: None,
             window_maximized: false,
             show_categories: true,

@@ -1230,6 +1230,44 @@ mod frame_tests {
         // Nothing published yet: everything the client's (frame_hit isn't asked then).
         assert_eq!(frame_hit(300, 10, &CaptionHits::default()), HTCLIENT);
     }
+
+    /// Graphite's main window (plan 05b): the menu titles and Find in the bar are the client's
+    /// (egui opens their menus and Find), the bar between them still drags the window, and
+    /// Maximize is still the second button.
+    #[test]
+    fn graphite_menus_and_find_in_the_bar_are_the_clients() {
+        // 1240 × 36 points at 2 px per point: Close, Maximize, Minimize of 42, then Tasks..Help
+        // and Find (as App::publish_caption appends them).
+        let mut buttons: Vec<[i32; 4]> = (0..3)
+            .map(|i| {
+                let x1 = 2480 - i * 84;
+                [x1 - 84, 0, x1, 70]
+            })
+            .collect();
+        let titles = [[490, 10, 570, 62], [572, 10, 640, 62], [642, 10, 800, 62]];
+        buttons.extend(titles);
+        buttons.push([1190, 10, 1400, 62]);
+        let h = CaptionHits {
+            strip_h: 72,
+            icon: [0, 0, 66, 72],
+            buttons,
+            max_button: Some(1),
+        };
+        // A title, its edge, the gap between two titles, Find, the bar elsewhere.
+        assert_eq!(frame_hit(530, 36, &h), HTCLIENT);
+        assert_eq!(frame_hit(490, 10, &h), HTCLIENT);
+        assert_eq!(frame_hit(571, 36, &h), HTCAPTION);
+        assert_eq!(frame_hit(1300, 36, &h), HTCLIENT);
+        assert_eq!(frame_hit(1000, 36, &h), HTCAPTION);
+        // Above and below a title, still in the bar: the caption's.
+        assert_eq!(frame_hit(530, 5, &h), HTCAPTION);
+        assert_eq!(frame_hit(530, 66, &h), HTCAPTION);
+        assert_eq!(frame_hit(30, 36, &h), HTSYSMENU);
+        assert_eq!(
+            h.max_button.map(|i| h.buttons[i]),
+            Some([2312, 0, 2396, 70])
+        );
+    }
 }
 
 #[cfg(test)]
@@ -4486,6 +4524,12 @@ fn classic_face(family: &egui::FontFamily) -> Option<(FaceKey, Option<&'static [
         egui::FontFamily::Proportional | egui::FontFamily::Monospace => "",
         egui::FontFamily::Name(name) => name,
     };
+    // The list's numbers keep Segoe UI's tabular figures whatever the theme's font (theme.rs
+    // NUMBERS): drawn from its file in both branches, or egui would draw them with fractional
+    // advances.
+    if name == crate::theme::NUMBERS {
+        return Some((FaceKey::File("segoeui.ttf"), None));
+    }
     if let Some([regular, medium, semibold]) = crate::theme::bundled_face() {
         let bytes = match name {
             "" | "tahoma" => regular,

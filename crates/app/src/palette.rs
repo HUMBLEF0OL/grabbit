@@ -315,6 +315,7 @@ palette! {
     // classic look keeps today's colours, derived themes get theirs from derive.rs ----
     panel: "panel", "A band behind the title bar, toolbar, status bar and dialog footers (Graphite layout)" = grey(0x39), grey(0xf0);
     tile: "tile", "The square behind a dialog's or an empty list's icon (Graphite layout)" = grey(0x44), grey(0xe6);
+    text_secondary: "text.secondary", "Secondary text: toolbar labels, menu titles and icons, the Categories tree, the Status column, the status bar, the empty list's reason (Graphite layout)" = grey(0xd8), grey(0x40);
     menu_shortcut: "menu.shortcut", "A menu item's keyboard shortcut, and Find's (Graphite layout)" = grey(0xab), grey(0x6d);
     toolbar_checked: "toolbar.checked", "A toolbar toggle that is on (Graphite layout)" = rgb(0x2a, 0x36, 0x40), rgb(0xcc, 0xe8, 0xff);
     button_danger: "button.danger", "A button that deletes: its face (Graphite layout)" = rgb(0xc4, 0x2b, 0x1c), rgb(0xc4, 0x2b, 0x1c);
@@ -1045,6 +1046,11 @@ mod tests {
             assert_eq!(p.banner_info, p.selection, "banner.info: `sel`");
             assert_eq!(p.menu_shortcut, p.muted, "menu.shortcut: `ink3`");
             assert_eq!(
+                p.text_secondary, p.button_text_pressed,
+                "text.secondary: `ink2`"
+            );
+            assert!(p.text_secondary != p.text && p.text_secondary != p.muted);
+            assert_eq!(
                 p.button_accent_top, p.button_accent_hot,
                 "accent top: `out2`"
             );
@@ -1068,14 +1074,16 @@ mod tests {
                     p.dark
                 );
             }
-            // The toolbar's band is the window (chrome::toolbar): its hover is seen on it.
-            assert!(
-                channel_step(p.toolbar_hot, p.window) >= SEEN_STEP,
-                "dark {}: toolbar hot {:?} on the window {:?}",
-                p.dark,
-                p.toolbar_hot,
-                p.window
-            );
+            // The toolbar's band is a panel (chrome::toolbar_graphite, plan 05b): its hover and
+            // a split button's other half are seen on it.
+            for (what, face) in [("hot", p.toolbar_hot), ("hot faint", p.toolbar_hot_faint)] {
+                assert!(
+                    channel_step(face, p.panel) >= SEEN_STEP,
+                    "dark {}: toolbar {what} {face:?} on the panel {:?}",
+                    p.dark,
+                    p.panel
+                );
+            }
             // The outlaw colour throughout: no accent-tinted edge on its buttons.
             assert_eq!(p.button_default_bottom, p.button_default_border);
             assert_eq!(p.button_accent_bottom, p.button_accent);

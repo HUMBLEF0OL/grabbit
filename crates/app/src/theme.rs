@@ -56,9 +56,11 @@ pub fn metrics() -> &'static Metrics {
     &current().metrics
 }
 
+/// The font family of numbers that must line up as they change (the download list's sizes,
+/// rates, time left and percentages): Segoe UI, whatever the theme's font.
+pub const NUMBERS: &str = "numbers";
+
 /// The active theme's layout: IDM's or Graphite's.
-// ponytail: no caller until 05b and 07a lay windows out by it (plans/02b-chrome-gate.md).
-#[allow(dead_code)]
 pub fn chrome() -> crate::palette::ChromeLook {
     current().controls.chrome
 }
@@ -507,7 +509,11 @@ fn fonts_for(ctx: &egui::Context, font: Option<&str>) {
     // Without a bundled font, Medium is the interface font itself.
     let medium = egui::FontFamily::Name("geist-medium".into());
     let ui_list = defs.families[&egui::FontFamily::Proportional].clone();
-    defs.families.insert(medium.clone(), ui_list);
+    defs.families.insert(medium.clone(), ui_list.clone());
+    // The list's numbers (sizes, rates, time left, percentages; plan 05b) keep Segoe UI's
+    // tabular figures in every theme: a bundled font's may be proportional (Geist's are, 04).
+    defs.families
+        .insert(egui::FontFamily::Name(NUMBERS.into()), ui_list);
     let faces = font.and_then(bundled_font);
     if let Some([regular, medium_face, semibold]) = faces {
         use egui::FontFamily::{Monospace, Name, Proportional};

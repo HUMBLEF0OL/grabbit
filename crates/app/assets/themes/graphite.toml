@@ -36,10 +36,11 @@ radius = 8
 "radius.menu-item" = 6
 "radius.popup" = 8
 "radius.egui" = 8
-# The mockup's row height.
+# The mockup's row height, and its column heads' (7 above and below the title, the rule).
 "list.row" = 32
-# Geist's sizes (plan 04, step 6): the main window's text and column heads at the mock's 12
-# (its toolbar labels share the size until 05b gives them 11.5), egui's body text at 13.
+"list.header" = 31
+# Geist's sizes (plan 04, step 6): the main window's text and column heads at the mock's 12,
+# its toolbar labels at 11.5 (`font.small`, plan 05b), egui's body text at 13.
 "font.ui" = 12
 "font.body" = 13
 "font.small" = 11.5
@@ -136,9 +137,9 @@ menu = "#ffffff"
 "menu.border" = "#e3e0ec"
 "menu.text.disabled" = "#a5a0b6"
 # Toolbar: a neutral face under the pointer, no border.
-"toolbar.hot" = "#e9e8ed"
-"toolbar.pressed" = "#dbdadf"
-"toolbar.hot.faint" = "#f0eff4"
+"toolbar.hot" = "#f3f1f9"
+"toolbar.pressed" = "#ebe8f3"
+"toolbar.hot.faint" = "#f9f8fc"
 "toolbar.hot.edge" = "#e3e0ec"
 "toolbar.hot.border" = "#00000000"
 "toolbar.text.disabled" = "#a5a0b6"
@@ -155,6 +156,7 @@ caption = "#ffffff"
 # The Graphite layout: panels, icon tiles, shortcuts, danger buttons, banners.
 panel = "#ffffff"
 tile = "#f2f0f8"
+"text.secondary" = "#4b4760"
 "menu.shortcut" = "#625d78"
 "toolbar.checked" = "#f0e9fe"
 "button.danger" = "#c62828"
@@ -235,9 +237,9 @@ menu = "#121019"
 "menu.border" = "#262233"
 "menu.text.disabled" = "#5e596c"
 # Toolbar: a neutral face under the pointer, no border.
-"toolbar.hot" = "#17161b"
-"toolbar.pressed" = "#252429"
-"toolbar.hot.faint" = "#100f14"
+"toolbar.hot" = "#1c1828"
+"toolbar.pressed" = "#312c41"
+"toolbar.hot.faint" = "#171420"
 "toolbar.hot.edge" = "#262233"
 "toolbar.hot.border" = "#00000000"
 "toolbar.text.disabled" = "#5e596c"
@@ -254,6 +256,7 @@ caption = "#121019"
 # The Graphite layout: panels, icon tiles, shortcuts, danger buttons, banners.
 panel = "#121019"
 tile = "#1c1828"
+"text.secondary" = "#bab4cc"
 "menu.shortcut" = "#948ea8"
 "toolbar.checked" = "#231a3a"
 "button.danger" = "#d92d20"
