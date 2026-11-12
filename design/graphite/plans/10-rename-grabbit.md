@@ -97,6 +97,18 @@ ProgID) that ends in the new state with nothing lost; the existing startup tests
    rename entry and keeps old entries as written; ROADMAP gets its own item for the rename.
 5. Crate names `mdm-*`: per the decision above.
 
+## Left from 05.5
+
+- `tools/shots/shots.toml`'s `theme:*` takes (the help's View, Theme pictures) and the docs pages
+  that show them still name the removed themes: rewrite them with the docs here. Until then,
+  don't run `make.py shoot` for them (they would show Graphite under the old names).
+- The website's themes and licence pages, README, PRODUCT.md and CLAUDE.md wording about the old
+  themes and "IDM's look" (KNOWN-GAPS G3).
+- The control styles of the removed themes (`[controls]` `check`, `button`, `progress`,
+  `caption` = `luna`, `aero`, `aqua`, `adwaita`, `breeze`, `metro`) stay as theme-file vocabulary
+  with their drawing code: 05.5c kept them, to stay under its size limit. Decide here whether a
+  theme file still offers them, and remove them with their drawing if not.
+
 ## Done when
 
 - [ ] No user-visible "Mister Download Manager" or "MDM" left in the app, installer, extension, website, docs

@@ -15,11 +15,11 @@ phase that must decide them before it starts.
 | --- | --- | --- |
 | Layout direction: Graphite | Decided | IDM layout kept; paste bar and details pane added, both optional |
 | Icon set: Tabler outline, stroke 1.75 | Decided | 53 icon slots (03) plus 36 extra `gx-*` slots carried only by the Graphite set (03b) |
-| Default button last in every window | Decided | Under the Graphite look, filled; Classic keeps IDM's order. Keys (Enter, Escape) never move (07a) |
+| Default button last in every window | Decided | Filled (Graphite is the only look since 05.5c). Keys (Enter, Escape) never move (07a) |
 | App name: Grabbit | Decided in the mockups | Renaming code, installer, extension and website is phase 10 |
 | Colour direction: jet black, royal amethyst, electric cyan | Decided in 01 | `source/pal.py` `amethyst`; the theme `crates/app/assets/themes/graphite.toml` (02) |
 | Light or dark: follow the system | Decided in 01 | Today's behaviour; the palette is designed dark first (02) |
-| Graphite as the default theme | Decided in 01 | Opt-in under View, Theme from 02; the default for new installs (no settings file) in 09b; existing users keep their theme and are offered it once |
+| Graphite as the default theme | Decided in 01; done in 05.5c | Graphite is the only built-in look and the default since 05.5c: a setting naming a removed theme gets Graphite (no migration); 09b keeps only what is left of it |
 | Typeface: Geist | Decided in 01 | Bundled (SIL OFL), Regular, Medium, SemiBold, in the app since 04 (`crates/app/assets/fonts/geist/`); a theme names it (`font = "geist"`), DirectWrite draws it from memory |
 | Paste bar and details pane defaults | Decided in 01 | Paste bar on, details pane off, width 276, for new and existing users (06); both only under the Graphite look |
 | The two proposal dialogs | Decided in 01 | Not built; Advanced / Socks... and Virus checking settings stay greyed as today (08) |
@@ -46,7 +46,7 @@ phase that must decide them before it starts.
 | 06 | [Paste bar and details pane](plans/06-paste-bar-details-pane.md) | The two optional panes, toggled in View and the toolbar | 05a, 05b (and 02b, 03b through 05b) | `ui/06-panes` |
 | 07 | [Dialogs](plans/07-dialogs.md) | The dialog kit (07a: footer, keys as today, danger/ghost/icon buttons, form, file card, icon tile, banners), then every dialog in four waves (07b to 07e) | 02b, 03, 03b; 04 before final sizes | `ui/07a-dialog-kit`, `ui/07b…07e` |
 | 08 | [Options](plans/08-options.md) | Side list with pages unchanged inside (08a), then pages on the form and sub-dialogs (08b) | 07a, 02b, 03b; 04 before final sizes | `ui/08a-options-list`, `ui/08b-options-pages` |
-| 09 | [Polish and default](plans/09-polish-and-default.md) | Two-tone hot colour, dark glow, app mark, full visual/keyboard/accessibility review (09a); Graphite for new installs (09b) | 06, 07e, 08b | `ui/09a-finish`, `ui/09b-default` |
+| 09 | [Polish and default](plans/09-polish-and-default.md) | Two-tone hot colour, dark glow, app mark, full visual/keyboard/accessibility review (09a); what is left of 09b now that 05.5c made Graphite the default | 06, 07e, 08b | `ui/09a-finish`, `ui/09b-default` |
 | 10 | [Rename to Grabbit](plans/10-rename-grabbit.md) | Display text, assets, migrated identifiers, distribution | 09b; the logo (maintainer) before 10b | `rename/10a…10d` |
 
 Tracks:
@@ -85,7 +85,7 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
 - [x] 05b Main window (ticked in its PR; done once merged)
 - [x] 05.5a Graphite icons everywhere (ticked in its PR; done once merged)
 - [ ] 05.5b Upstream sync ready for the removal
-- [ ] 05.5c Classic removed
+- [x] 05.5c Classic removed (ticked in its PR; done once merged)
 - [ ] 06 Paste bar and details pane
 - [ ] 07a Dialog kit
 - [ ] 07b Adding
