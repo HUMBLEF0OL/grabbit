@@ -87,6 +87,8 @@ pub struct VideoDialog {
     embed: bool,
     /// The last video's choice (settings.video_subs), applied to each video looked up.
     pref: Subs,
+    /// The clipboard's page address, read off the window's thread (#661).
+    clip: crate::clipboard::Prefill,
 }
 
 /// What is installed in the tools folder: (folder, yt-dlp, ffmpeg).
@@ -125,13 +127,30 @@ fn tools() -> Tools {
 }
 
 impl VideoDialog {
+    /// Opened from the menu: a video page's address on the clipboard is taken (read off the
+    /// window's thread, put in the box on the frame it comes).
     pub fn new(folder: PathBuf) -> Self {
-        let page = crate::clipboard_text()
-            .map(|t| t.trim().to_owned())
-            .filter(|t| url::Url::parse(t).is_ok_and(|u| matches!(u.scheme(), "http" | "https")))
-            .unwrap_or_default();
         VideoDialog {
-            page,
+            clip: crate::clipboard::Prefill::ask(),
+            ..Self::blank(folder)
+        }
+    }
+
+    /// The clipboard's text as the page, when it is a web address and the box is still empty
+    /// (nothing typed meanwhile).
+    fn fill_from_clipboard(&mut self, clip: &str) {
+        let clip = clip.trim();
+        if self.page.is_empty()
+            && url::Url::parse(clip).is_ok_and(|u| matches!(u.scheme(), "http" | "https"))
+        {
+            self.page = clip.to_owned();
+        }
+    }
+
+    /// No address yet, saving into `folder` (the Video category's).
+    fn blank(folder: PathBuf) -> Self {
+        VideoDialog {
+            page: String::new(),
             context: Default::default(),
             from_browser: String::new(),
             folder: folder.display().to_string(),
@@ -156,6 +175,7 @@ impl VideoDialog {
             sub_pick: 0,
             embed: false,
             pref: Subs::default(),
+            clip: Default::default(),
         }
     }
 
@@ -181,7 +201,7 @@ impl VideoDialog {
             from_browser: page,
             context,
             auto_look: true,
-            ..Self::new(folder)
+            ..Self::blank(folder)
         }
     }
 
@@ -318,6 +338,9 @@ impl VideoDialog {
     }
 
     pub fn show(&mut self, ctx: &egui::Context, rt: &tokio::runtime::Handle) -> Outcome<VideoOut> {
+        if let Some(clip) = self.clip.take() {
+            self.fill_from_clipboard(&clip);
+        }
         // Results from the background work.
         let looked = self.lookup.as_ref().and_then(|s| s.lock().unwrap().take());
         if let Some(res) = looked {
@@ -1388,7 +1411,7 @@ mod tests {
     /// Each entry stands for what yt-dlp is asked.
     #[test]
     fn entries_ask_for_their_subtitles() {
-        let mut d = VideoDialog::new(PathBuf::from("."));
+        let mut d = VideoDialog::blank(PathBuf::from("."));
         d.subs = vec![sub("de", false), sub("fr", false), sub("en-orig", true)];
         d.embed = true;
         let mut at = |i: usize| {
@@ -1401,5 +1424,26 @@ mod tests {
         let auto = at(4);
         assert_eq!(auto.langs, ["en-orig"]);
         assert!(auto.automatic && auto.embed);
+    }
+
+    /// A page's address from the clipboard comes a frame or more after the window opens: it
+    /// fills an empty box only, and only with a web address.
+    #[test]
+    fn the_clipboard_fills_only_an_empty_page_box() {
+        let video = std::env::temp_dir().join("mdm-688").join("Video");
+        let mut d = VideoDialog::blank(video.clone());
+        d.fill_from_clipboard(
+            " https://video.example/talk 
+",
+        );
+        assert_eq!(d.page, "https://video.example/talk");
+        d.fill_from_clipboard("https://video.example/other");
+        assert_eq!(
+            d.page, "https://video.example/talk",
+            "not over what is there"
+        );
+        let mut d = VideoDialog::blank(video);
+        d.fill_from_clipboard("ftp://files.example/a.mp4");
+        assert_eq!(d.page, "");
     }
 }
