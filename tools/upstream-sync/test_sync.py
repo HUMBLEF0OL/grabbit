@@ -482,6 +482,53 @@ def lock_case() -> None:
     print("ok: a lock-only conflict is picked with --lock")
 
 
+def graphite_only_case() -> None:
+    """Plan 05.5b: the fork deletes an old theme and adds Graphite's, whose licence is near
+    identical. An upstream change to the old licence, or a new file in the old theme's folder,
+    sorts removed (the licence pair is no move), and a theme commit carries the theme note."""
+    mit = "".join(f"MIT licence line {i}\n" for i in range(40))
+    with tempfile.TemporaryDirectory() as tmp:
+        r = Path(tmp)
+        git(r, "init", "-q", "-b", "main")
+        for k, v in {"user.name": "T", "user.email": "t@example.com", "commit.gpgsign": "false",
+                     "core.autocrlf": "false", "protocol.https.allow": "never"}.items():
+            git(r, "config", k, v)
+        t = "crates/app/assets/themes/"
+        write(r, t + "x/icons/LICENSE", "Copyright X\n" + mit)
+        write(r, t + "x/icons/16/a.svg", "<svg/>\n")
+        write(r, t + "x.toml", "name = 'x'\n")
+        write(r, "keep.rs", LINES)
+        commit(r, "base")
+
+        git(r, "checkout", "-q", "-b", "dev")
+        git(r, "rm", "-rq", t + "x", t + "x.toml")
+        write(r, t + "graphite/icons/LICENSE", "Copyright G\n" + mit)
+        write(r, t + "graphite.toml", "name = 'graphite'\n")
+        write(r, LEDGER, HEADER)
+        commit(r, "fork: Graphite only")
+        git(r, "update-ref", "refs/remotes/origin/dev", "HEAD")
+
+        git(r, "checkout", "-q", "main")
+        write(r, t + "x/icons/LICENSE", "Copyright X 2026\n" + mit)
+        lic = commit(r, "x: licence year")
+        write(r, t + "x/icons/16/b.svg", "<svg/>\n")
+        new = commit(r, "x: a new icon")
+        write(r, t + "emerald.toml", "name = 'emerald'\n")
+        write(r, "keep.rs", edit(LINES, 3, "line 3 fixed"))
+        theme = commit(r, "Emerald, a new theme")
+        git(r, "update-ref", "refs/remotes/upstream/main", "HEAD")
+
+        git(r, "checkout", "-q", "-b", "upstream-sync/graphite", "dev")
+        by = status(r)["by"]
+        assert by[lic]["kind"] == "removed", by[lic]
+        assert by[new]["kind"] == "removed", by[new]
+        note = "a theme other than Graphite (emerald): this fork keeps Graphite only (plan 05.5): skip"
+        assert note in by[theme]["notes"], by[theme]
+        assert any("(x)" in n for n in by[new]["notes"]), by[new]
+    print("ok: an old theme's licence is no move, and a theme commit says Graphite only")
+
+
 if __name__ == "__main__":
     main()
+    graphite_only_case()
     lock_case()

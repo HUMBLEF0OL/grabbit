@@ -95,6 +95,9 @@ SENSITIVE = re.compile(
     re.I,  # Windows' file names ignore case: .Claude/ is .claude/
 )
 # What cargo reads before it builds anything: never run cargo over it unread.
+# A theme's file or folder (crates/app/assets/themes/<id>.toml or <id>/): this fork keeps
+# Graphite only (plan 05.5b).
+OTHER_THEME = re.compile(r"^crates/app/assets/themes/([^/]+?)(?:\.toml$|/)")
 CARGO_CONFIG = re.compile(r"(^|/)\.cargo/|(^|/)rust-toolchain", re.I)
 OTHER_PLATFORMS = re.compile(r"^(linux|macos|mac|ubuntu|flatpak|safari|helium)\b|linux and macos",
                              re.I)
@@ -229,10 +232,21 @@ def renames(base: str, head: str, threshold: str) -> list[tuple[int, str, str]]:
     return [(int(items[i][1:] or 0), items[i + 1], items[i + 2]) for i in range(0, len(items), 3)]
 
 
+def licence_text(path: str) -> bool:
+    """A licence or notice file: alike in every folder (MIT texts, credits), so git's pairing of
+    two of them says nothing about a move (plan 05.5b: an old theme's icon licence is not
+    Graphite's)."""
+    name = path.rsplit("/", 1)[-1]
+    return (name.startswith(("LICENSE", "COPYING", "AUTHORS"))
+            or name in ("README.txt", "readme.txt", "SOURCES.txt"))
+
+
 def fork_state(base: str, head: str) -> Fork:
     deleted = set(zlist("diff", "--no-renames", "--diff-filter=D", "--name-only", "-z", base, head))
     moved, rewritten = {}, {}
     for score, src, dst in renames(base, head, "50%"):
+        if licence_text(src) and licence_text(dst):
+            continue  # deleted here: the source counts as gone
         (moved if score >= 90 else rewritten)[src] = dst
     gone = deleted - moved.keys() - rewritten.keys()
     then_dirs = set(zlist("ls-tree", "-r", "-d", "--name-only", "-z", base))
@@ -638,6 +652,10 @@ def sort_commit(c: Commit, onto: str, fork: Fork, fork_point: str, t: Taken,
     if areas:
         c.notes.append("touches " + ", ".join(areas) + " (security, IPC, crash or release code): "
                        "read it for a fix that matters even when its subject doesn't say so")
+    themes = sorted({m.group(1) for p in paths if (m := OTHER_THEME.match(p))} - {"graphite"})
+    if themes:
+        c.notes.append(f"a theme other than Graphite ({', '.join(themes)}): this fork keeps "
+                       "Graphite only (plan 05.5): skip")
     is_gone = gone_checker(fork, c.sha, paths)
     own = [p for p in paths if p in OWN]
     gone = [p for p in paths if p not in OWN and is_gone(p)]

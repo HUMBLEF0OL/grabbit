@@ -42,6 +42,8 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
   templates, the website); changing those is the owner's separate work, not a sync's, so a sync
   neither removes them nor adds to them. The git dependencies the fork shares
   (`anefzaoui/egui.git`, `anefzaoui/rqbit.git`) are dependencies, not identity.
+- Bring back a removed theme, the Classic layout, or Silk, Tango or Lucide icons: this fork keeps
+  Graphite only (plan 05.5).
 
 ## A run
 
@@ -67,7 +69,7 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
    - `watch` lists upstream's open PRs and branches not merged there. Nothing unmerged is picked;
      a critical-looking one is reported to the owner, who decides whether to port it early.
 
-4. **Decide, in three tiers.**
+4. **Decide, in four groups.**
    - **Critical** (security; downloads lost, corrupted, cut short or not resumed; crashes,
      freezes, hangs, a window that stops answering; the app not starting): taken this run,
      picked or ported, even when it touches the fork's code. A port gets its own PR (step 6).
@@ -76,6 +78,10 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
    - **Upstream's features** (new themes, services, dialogs, rows): skipped by default
      (`record <sha> skipped --note "feature; revisit on request"`). First read its CHANGELOG
      lines: a feature commit often carries fixes too; decide each of those as a fix.
+   - **Graphite only**: fixes that apply only to the Classic layout, an old theme (Classic,
+     Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero, Aqua), Native or high contrast,
+     and **every new theme** (`status` notes "a theme other than Graphite"), are skipped
+     (`record <sha> skipped --note "Graphite only"`): this fork keeps Graphite only (plan 05.5).
    Commits that share an issue (`same issue as` in `status`) are decided together: a fix split
    over several commits, or a follow-up, is taken whole or not at all.
 
@@ -109,8 +115,8 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
      `Upstream-Port: <40-character sha>`. Open the PR (`sync.py pr`), then on the same branch
      `record <sha> ported --ref "PR <n>" --note "…"` with the number it printed, commit and push
      again. Until that PR merges, `status` shows it as `ported?`.
-   - A port into Graphite's files (crates/app/src): say so in the PR, so the Graphite session
-     sees it.
+   - The app's interface is Graphite's alone (plan 05.5), so a port into crates/app/src changes
+     Graphite's code: say in the PR which window it changes.
 
 7. **The fork's own record.** Upstream's CHANGELOG.md and ROADMAP.md lines are never picked.
    - CHANGELOG.md: one line per user-visible fix taken, in the fork's next-version section,

@@ -84,7 +84,7 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
 - [x] 05a Layout model (ticked in its PR; done once merged)
 - [x] 05b Main window (ticked in its PR; done once merged)
 - [ ] 05.5a Graphite icons everywhere
-- [ ] 05.5b Upstream sync ready for the removal
+- [x] 05.5b Upstream sync ready for the removal (ticked in its PR; done once merged)
 - [ ] 05.5c Classic removed
 - [ ] 06 Paste bar and details pane
 - [ ] 07a Dialog kit
