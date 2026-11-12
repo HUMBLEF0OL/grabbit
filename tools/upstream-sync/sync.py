@@ -35,7 +35,8 @@ in the fork or a port PR closed unmerged can't make a fix look taken when it isn
     python tools/upstream-sync/sync.py record <sha> <skipped|covered|deferred|ported> --note "…"
     python tools/upstream-sync/sync.py pr --title "…" --body-file F [--draft] [--force]
 
-Python 3.10 or later; a git whose merge-tree takes --merge-base and -X (`doctor` checks).
+Python 3.10 or later; a git whose merge-tree takes --merge-base and -X (`doctor` checks); gh for
+`watch`, `pr` and the PR states (UPSTREAM_SYNC_OFFLINE=1: never call gh, as the self-check does).
 """
 from __future__ import annotations
 
@@ -82,9 +83,13 @@ CRITICAL_AREAS = ("crates/debrid/", "crates/ipc/", "crates/nmhost/", "crates/cra
                   "crates/remote/", "crates/app/src/help.rs", "extension/background.js",
                   "tools/installer/", ".github/workflows/")
 SENSITIVE = re.compile(
-    r"^(\.claude/|\.github/|\.cargo/|\.vscode/|tools/|CLAUDE\.md$|AGENTS\.md$|\.gitattributes$|"
-    r"rust-toolchain(\.toml)?$|\.gitmodules$)|(^|/)(build\.rs|package(-lock)?\.json)$"
+    r"^(\.claude/|\.github/|\.cargo/|\.vscode/|tools/|\.gitattributes$|\.gitmodules$|"
+    r"rust-toolchain(\.toml)?$|\.mcp\.json$)|"
+    r"(^|/)(claude\.md|agents\.md|build\.rs|package(-lock)?\.json)$",
+    re.I,  # Windows' file names ignore case: .Claude/ is .claude/
 )
+# What cargo reads before it builds anything: never run cargo over it unread.
+CARGO_CONFIG = re.compile(r"(^|/)\.cargo/|(^|/)rust-toolchain", re.I)
 OTHER_PLATFORMS = re.compile(r"^(linux|macos|mac|ubuntu|flatpak|safari|helium)\b|linux and macos",
                              re.I)
 ADDED_LINTS = (
@@ -93,10 +98,11 @@ ADDED_LINTS = (
     ("I", re.compile(r"anefzaoui(?!/[\w.-]+\.git)", re.I)),
 )
 ISSUE = re.compile(r"(?<![\w/])#(\d+)")
-PICK_TRAILER = re.compile(r"^Upstream-Pick:\s*([0-9a-f]{40})\s*$", re.M)
-PORT_TRAILER = re.compile(r"^Upstream-Port:\s*([0-9a-f]{40})\s*$", re.M)
-REVERTS = re.compile(r"This reverts commit ([0-9a-f]{40})")
-MARKERS = re.compile(r"^(?=Upstream-(Pick|Port):|.*cherry picked from commit)", re.M | re.I)
+PICK_TRAILER = re.compile(r"^Upstream-Pick:\s*([0-9a-fA-F]{40})\s*$", re.M)
+PORT_TRAILER = re.compile(r"^Upstream-Port:\s*([0-9a-fA-F]{7,40})\s*$", re.M)
+REVERTS = re.compile(r"^This reverts commit ([0-9a-fA-F]{40})", re.M)
+MARKERS = re.compile(r"^(?=Upstream-(Pick|Port):|This reverts commit|.*cherry picked from commit)",
+                     re.M | re.I)
 ROW = re.compile(r"^\|\s*([0-9a-fA-F]{7,40})\s*\|\s*([\w?-]+)\s*\|(.*)\|\s*$")
 # A reference GitHub would turn into a link, and so a mention on the original's issue or PR.
 UPSTREAM_LINK = re.compile(
@@ -111,14 +117,17 @@ class Fail(Exception):
 def git(*args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
     # Paths come back as they are (no "\303\251" quoting) and go in as they are (no globbing:
     # `git rm "img[1].txt"` must never remove img1.txt).
-    r = subprocess.run(
-        ["git", "-c", "core.quotepath=off", *args],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        env={**os.environ, "GIT_LITERAL_PATHSPECS": "1", **(env or {})},
-    )
+    try:
+        r = subprocess.run(
+            ["git", "-c", "core.quotepath=off", *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env={**os.environ, "GIT_LITERAL_PATHSPECS": "1", **(env or {})},
+        )
+    except OSError as e:
+        raise Fail(f"git {' '.join(args[:3])}…: {e}")
     if check and r.returncode != 0:
         raise Fail(f"git {' '.join(args)}: {r.stderr.strip() or r.stdout.strip()}")
     return r
@@ -188,6 +197,8 @@ class Fork:
     moved: dict[str, str]          # upstream path -> the fork's (git sure: 90 % or more alike)
     rewritten: dict[str, str]      # deleted here, perhaps rewritten as (50-90 % alike)
     changed: set[str]              # every path the fork changed, both names of a move
+    added: set[str]                # files the fork added
+    by_case: dict[str, str]        # lower-case path (files and folders) -> as the fork has it
 
     def is_gone(self, path: str) -> bool:
         if path in self.moved or path in self.rewritten:
@@ -224,7 +235,40 @@ def fork_state(base: str, head: str) -> Fork:
         n = 2 if status[0] in "RC" else 1
         changed.update(items[i + 1:i + 1 + n])
         i += 1 + n
-    return Fork(gone, (then_dirs - now_dirs) - alive, moved, rewritten, changed)
+    added = set(zlist("diff", "--no-renames", "--diff-filter=A", "--name-only", "-z", base, head))
+    by_case = {}
+    for path in zlist("ls-tree", "-r", "--name-only", "-z", head) + sorted(now_dirs):
+        by_case.setdefault(path.lower(), path)
+    return Fork(gone, (then_dirs - now_dirs) - alive, moved, rewritten, changed, added, by_case)
+
+
+def tree_paths(rev: str) -> tuple[set[str], set[str]]:
+    """Files and folders in a commit's tree."""
+    files = set(git("ls-tree", "-r", "--name-only", "-z", rev, check=False).stdout.split("\0"))
+    dirs = set(git("ls-tree", "-r", "-d", "--name-only", "-z", rev, check=False).stdout.split("\0"))
+    return files - {""}, dirs - {""}
+
+
+def gone_checker(fork: Fork, sha: str):
+    """Gone here because the fork removed it, not because upstream did before this commit (a
+    file upstream deleted and brings back, a folder it dropped and starts again)."""
+    files, dirs = tree_paths(f"{sha}^")
+
+    def in_upstream(path: str) -> bool:
+        parts = path.split("/")
+        return path in files or any("/".join(parts[:i]) in dirs for i in range(1, len(parts)))
+    return lambda path: fork.is_gone(path) and in_upstream(path)
+
+
+def case_clash(fork: Fork, path: str) -> str | None:
+    """The fork's path that `path` would land on in Windows' case-blind file system, if another."""
+    parts = path.split("/")
+    for i in range(1, len(parts) + 1):
+        prefix = "/".join(parts[:i])
+        have = fork.by_case.get(prefix.lower())
+        if have and have != prefix:
+            return have
+    return None
 
 
 # ---------------------------------------------------------------------------------------------
@@ -279,30 +323,52 @@ def taken(refs: list[str], fork_point: str, up: str, in_range: set[str], ledger:
     t = Taken()
     refs = [r for r in dict.fromkeys(refs) if has_ref(r)]
     picked, ported, reverted = set(), set(), set()
+
+    def upstream_sha(sha: str) -> str:
+        sha = sha.lower()
+        if len(sha) < 40:
+            full = full_sha(sha)
+            return full if full in in_range else sha
+        return sha
+
     if refs:
-        # Oldest first, so a later revert undoes an earlier pick, and a pick again redoes it.
+        # Oldest first, so a later revert undoes an earlier pick, a revert of that revert
+        # redoes it, and a pick again redoes it too. effect: commit -> (+1 or -1, picks, ports).
         raw = out("log", "--reverse", "--topo-order", "--format=%H%x1f%B%x1e", f"^{fork_point}",
                   *refs)
-        by_commit: dict[str, tuple[set[str], set[str]]] = {}
+        effect: dict[str, tuple[int, set[str], set[str]]] = {}
         for record in raw.split("\x1e"):
             if "\x1f" not in record:
                 continue
             sha, body = record.strip().split("\x1f", 1)
-            p, q = set(PICK_TRAILER.findall(body)), set(PORT_TRAILER.findall(body))
-            by_commit[sha] = (p, q)
             for r in REVERTS.findall(body):
-                rp, rq = by_commit.get(r, (set(), set()))
+                r = r.lower()
+                undone = effect.get(r)
                 parents = out("rev-list", "--parents", "-n", "1", r).split()[1:] if full_sha(r) else []
-                if len(parents) == 2:  # a merged PR reverted: everything the merge brought in
+                if undone is None and len(parents) == 2:  # a merged PR reverted: all it brought
+                    rp, rq = set(), set()
                     for inner in out("rev-list", f"{parents[0]}..{parents[1]}").splitlines():
-                        ip, iq = by_commit.get(inner, (set(), set()))
-                        rp, rq = rp | ip, rq | iq
-                picked -= rp
-                ported -= rq
-                reverted |= rp | rq
-            picked |= p
-            ported |= q
-            reverted -= p | q
+                        e = effect.get(inner)
+                        if e and e[0] > 0:
+                            rp, rq = rp | e[1], rq | e[2]
+                    undone = (1, rp, rq) if rp or rq else None
+                if undone:
+                    effect[sha] = (-undone[0], undone[1], undone[2])
+                    if undone[0] > 0:
+                        picked.difference_update(undone[1])
+                        ported.difference_update(undone[2])
+                        reverted.update(undone[1] | undone[2])
+                    else:
+                        picked.update(undone[1])
+                        ported.update(undone[2])
+                        reverted.difference_update(undone[1] | undone[2])
+            p = {upstream_sha(x) for x in PICK_TRAILER.findall(body)}
+            q = {upstream_sha(x) for x in PORT_TRAILER.findall(body)}
+            if p or q:
+                effect.setdefault(sha, (1, p, q))
+                picked |= p
+                ported |= q
+                reverted -= p | q
     for sha in sorted(picked | ported):
         if sha not in in_range:
             t.warnings.append(f"a trailer names {sha[:12]}, not an upstream commit since the fork "
@@ -317,15 +383,26 @@ def taken(refs: list[str], fork_point: str, up: str, in_range: set[str], ledger:
         for line in out("cherry", ref, up, fork_point).splitlines():
             if line.startswith("- ") and line[2:].strip() not in reverted:
                 t.status.setdefault(line[2:].strip(), "equivalent")
-    # Picks on other sync branches whose PRs haven't merged: taken there, not here yet.
+    # Picks on other sync branches whose PRs are open: taken there, not here yet.
     current = current_branch()
+    target = slug(remote_url(FORK_REMOTE))
     for ref in out("for-each-ref", "--format=%(refname:short)",
                    f"refs/remotes/{FORK_REMOTE}/{SYNC_PREFIX}").splitlines():
-        if not refs or ref.split("/", 1)[1] == current:
+        branch = ref.split("/", 1)[1]
+        if not refs or branch == current:
             continue
         log = out("log", "--format=%B", f"^{refs[0]}", ref)
-        for sha in set(PICK_TRAILER.findall(log)) | set(PORT_TRAILER.findall(log)):
-            t.status.setdefault(sha, "in-pr")
+        shas = {upstream_sha(x) for x in PICK_TRAILER.findall(log) + PORT_TRAILER.findall(log)}
+        if not shas:
+            continue
+        prs = gh_json(["pr", "list", "-R", target, "--state", "open", "--head", branch,
+                       "--json", "number"]) if target else None
+        if prs:
+            for sha in shas:
+                t.status.setdefault(sha, "in-pr")
+        elif prs is None:
+            t.warnings.append(f"{branch} holds picks not in dev, and gh can't tell whether its PR "
+                              "is open: don't pick them twice")
     rows, problems = read_ledger(ledger)
     t.warnings += problems
     for row in rows:
@@ -440,8 +517,9 @@ def sort_commit(c: Commit, onto: str, fork: Fork, fork_point: str, t: Taken,
     if areas:
         c.notes.append("touches " + ", ".join(areas) + " (security, IPC, crash or release code): "
                        "read it for a fix that matters even when its subject doesn't say so")
+    is_gone = gone_checker(fork, c.sha)
     own = [p for p in paths if p in OWN]
-    gone = [p for p in paths if p not in OWN and fork.is_gone(p)]
+    gone = [p for p in paths if p not in OWN and is_gone(p)]
     rest = [p for p in paths if p not in OWN and p not in gone]
     c.left_out = gone + own
     c.touches_fork = [p for p in rest if p in fork.changed]
@@ -453,7 +531,20 @@ def sort_commit(c: Commit, onto: str, fork: Fork, fork_point: str, t: Taken,
         if src in fork.rewritten:
             c.notes.append(f"{src} was deleted here, perhaps rewritten as {fork.rewritten[src]}: "
                            "check whether the fix belongs there")
+        elif src in gone and "/" in src:
+            folder = src.rsplit("/", 1)[0] + "/"
+            near = sorted(a for a in fork.added if a.startswith(folder))[:3]
+            if near:
+                c.notes.append(f"{src} was deleted here, and the fork added {', '.join(near)} "
+                               "beside it: check whether the fix belongs in one of them")
+    clashes = [(p, case_clash(fork, p)) for p in rest if case_clash(fork, p)]
+    c.notes += [f"{p} would land on the fork's {h} (Windows ignores case): read it as a port"
+                for p, h in clashes]
     look = rest or paths
+    if len(look) > 100:  # Windows' command line: the folders instead of every file
+        look = sorted({p.rsplit("/", 1)[0] if "/" in p else p for p in look})
+        if len(look) > 100:
+            look = sorted({p.split("/", 1)[0] for p in look})
     earlier = out("rev-list", "--reverse", "--no-merges", f"{fork_point}..{c.sha}^", "--",
                   *look, *crate_tomls(look))
     c.after = [s for s in earlier.splitlines() if t.of(s) not in DONE]
@@ -461,11 +552,13 @@ def sort_commit(c: Commit, onto: str, fork: Fork, fork_point: str, t: Taken,
         c.kind = "removed" if gone else "nothing"
     else:
         moves_out = [(src, dst) for st, src, dst in ch
-                     if st == "R" and dst and (dst in OWN or fork.is_gone(dst)) and src in rest]
+                     if st == "R" and dst and (dst in OWN or is_gone(dst)) and src in rest]
         moves_own = [(src, dst) for st, src, dst in ch if st == "R" and src in OWN]
         conflicts = simulate(c.sha, onto)
-        c.conflicts = [p for p in conflicts if p not in OWN and not fork.is_gone(p)]
-        if moves_out or moves_own:
+        c.conflicts = [p for p in conflicts if p not in OWN and not is_gone(p)]
+        if clashes:
+            c.kind = "port"
+        elif moves_out or moves_own:
             c.kind = "port"
             c.notes += [f"upstream moves {s} to {d}, which this fork doesn't keep: a pick would "
                         "delete the fork's file" for s, d in moves_out + moves_own]
@@ -773,6 +866,7 @@ def neutralise(msg: str) -> str:
     msg = re.sub(r"(https?://)?(www\.)?github\.com/anefzaoui/misterdownloadmanager/"
                  r"(issues|pull|discussions)/(\d+)\S*", r"upstream \3 \4", msg, flags=re.I)
     msg = re.sub(r"anefzaoui/misterdownloadmanager#(\d+)", r"upstream issue \1", msg, flags=re.I)
+    msg = re.sub(r"\bGH-(\d+)\b", r"upstream \1", msg, flags=re.I)
     return ISSUE.sub(lambda m: f"upstream {m.group(1)}", msg)
 
 
@@ -797,6 +891,8 @@ def apply_lock(sha: str) -> str | None:
     """The fork's Cargo.lock kept, then upstream's version bumps made in it. None when done."""
     if not shutil.which("cargo"):
         return "cargo is not on PATH"
+    if any(CARGO_CONFIG.search(p) for _, a, b in changes(sha) for p in (a, b) if p):
+        return "it changes cargo's own configuration: port it by hand after reading it"
     git("checkout", "HEAD", "--", "Cargo.lock")
     cmds = [["cargo", "metadata", "--format-version", "1"]]
     cmds += [["cargo", "update", "-p", f"{n}@{o}", "--precise", v] for n, o, v in lock_bumps(sha)]
@@ -831,6 +927,7 @@ def pick_one(sha: str, ctx: Context, commits: list[Commit], messages: dict[str, 
                        "then pick it alone with --allow-sensitive")
     if c.kind == "lock" and not a.lock:
         return False, f"{sha[:12]} conflicts only in Cargo.lock: pick it with --lock"
+    gone = set(c.left_out) - set(OWN)
     r = git("cherry-pick", "--no-commit", "-X", RENAMES, sha, check=False)
     conflicted = set(zlist("diff", "--name-only", "--diff-filter=U", "-z"))
     if r.returncode != 0 and not conflicted:
@@ -844,7 +941,7 @@ def pick_one(sha: str, ctx: Context, commits: list[Commit], messages: dict[str, 
             else:
                 git("rm", "-f", "--quiet", "--", path)
             left_out.append(path)
-        elif ctx.fork.is_gone(path):
+        elif path in gone:
             git("rm", "-f", "--quiet", "--", path)
             left_out.append(path)
     if c.kind == "lock" and "Cargo.lock" in conflicted:
@@ -913,6 +1010,8 @@ def cmd_pick(a) -> int:
     if dirty:
         raise Fail("uncommitted changes (" + ", ".join(dirty) + "): commit or stash them first "
                    "(only the ledger may stay uncommitted)")
+    if a.allow_sensitive and len(set(a.sha)) > 1:
+        raise Fail("--allow-sensitive takes one commit, read line by line: never a batch")
     ctx = context()
     shas = []
     for s in a.sha:
@@ -946,11 +1045,12 @@ def cmd_pick(a) -> int:
 def write_row(sha: str, status: str, ref: str, note: str) -> str:
     """The commit's row, replacing every earlier one for it, at the end of the ledger."""
     path = root() / LEDGER
+    path.parent.mkdir(parents=True, exist_ok=True)
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     kept = []
     for ln in lines:
         m = ROW.match(ln)
-        if m and (m.group(1).lower() == sha or full_sha(m.group(1)) == sha):
+        if m and sha.startswith(m.group(1).lower()):
             continue
         kept.append(ln)
     subject = out("log", "-1", "--format=%s", sha)
@@ -1023,7 +1123,8 @@ def cmd_pr(a) -> int:
     if not body.is_file():
         raise Fail(f"no body file {a.body_file}: nothing pushed")
     text = body.read_text(encoding="utf-8")
-    bare = re.sub(r"```.*?```|`[^`\n]*`", "", text, flags=re.S)
+    bare = re.sub(r"```.*?```|(?<!\\)`[^`\n]*(?<!\\)`|<(code|pre)>.*?</\1>", "",
+                  text.replace("\\`", "\x00"), flags=re.S | re.I)
     for t in (bare, a.title):
         m = UPSTREAM_LINK.search(t)
         if m:

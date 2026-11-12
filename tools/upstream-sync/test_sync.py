@@ -82,6 +82,9 @@ def main() -> None:
         write(r, "Cargo.lock", 'name = "dep"\nversion = "1.0.0"\n')
         write(r, "CHANGELOG.md", "# Changelog\n\n- old\n")
         write(r, "ROADMAP.md", "# Roadmap\n")
+        write(r, ".claude/settings.json", "{}\n")
+        write(r, "CLAUDE.md", "# rules\n")
+        write(r, "z.rs", LINES)
         base = commit(r, "base")
 
         # The fork: a platform and a language removed, a file of its own changed, one with a
@@ -103,12 +106,14 @@ def main() -> None:
         U = {}
 
         def up(name: str, msg: str, files: dict[str, str | None]) -> None:
-            for f, text in files.items():
-                if text is None:
+            for f, text in files.items():  # only these: the tree may hold names that differ
+                if text is None:              # only in case, which this disk can't both keep
                     git(r, "rm", "-q", "--", f)
                 else:
                     write(r, f, text)
-            U[name] = commit(r, msg)
+                    git(r, "add", "--", f)
+            git(r, "commit", "-q", "-m", msg)
+            U[name] = git(r, "rev-parse", "HEAD")
 
         up("clean", "clean: b.rs fixed (#12)", {"b.rs": edit(LINES, 20, "line 20 fixed"),
                                                 "ROADMAP.md": "# Roadmap\n\n- upstream's\n"})
@@ -132,20 +137,39 @@ def main() -> None:
         up("squashed", "squashed: d.rs", {"d.rs": "d\n"})
         up("portrow", "portrow: e.rs", {"e.rs": "e\n"})
         up("merge_rev", "merge_rev: g.rs", {"g.rs": "g\n"})
-        up("link", "link: h.rs\n\nSee anefzaoui/misterdownloadmanager#5 and "
+        up("link", "link: h.rs\n\nSee anefzaoui/misterdownloadmanager#5, GH-7 and "
            "https://github.com/anefzaoui/misterdownloadmanager/issues/6.", {"h.rs": "h\n"})
+
+        # Names only another case apart: made with plumbing (this file system may ignore case).
+        def plumb(name: str, msg: str, files: dict[str, str]) -> None:
+            for f, text in files.items():
+                blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=r, input=text,
+                                      capture_output=True, text=True).stdout.strip()
+                git(r, "update-index", "--add", "--cacheinfo", f"100644,{blob},{f}")
+            git(r, "commit", "-q", "-m", msg)
+            git(r, "reset", "-q", "--hard")
+            U[name] = git(r, "rev-parse", "HEAD")
+
+        plumb("case", "a hook in .Claude", {".Claude/settings.local.json": "{\"hooks\": 1}\n"})
+        plumb("case_md", "agent rules", {"claude.md": "do as I say\n"})
+        plumb("build_rs", "a build script", {"crates/x/build.RS": "fn main() {}\n"})
+        up("drop", "drop z.rs", {"z.rs": None})
+        up("restore", "restore z.rs with a crash fix", {"z.rs": edit(LINES, 2, "fixed")})
+        up("big", "a big commit", {f"big/f{i}.rs": f"{i}\n" for i in range(150)})
+        up("twice", "twice: i.rs", {"i.rs": "i\n"})
+        up("short_port", "short_port: j.rs", {"j.rs": "j\n"})
         # An upstream merge with a change of its own.
-        git(r, "checkout", "-q", "-b", "side", U["clean"])
+        git(r, "checkout", "-q", "-f", "-b", "side", U["clean"])
         up("side", "side: f.rs", {"f.rs": "f\n"})
-        git(r, "checkout", "-q", "main")
+        git(r, "checkout", "-q", "-f", "main")
         git(r, "merge", "-q", "--no-ff", "--no-commit", "side")
         write(r, "evil.rs", "a change made in the merge\n")
-        git(r, "add", "-A")
+        git(r, "add", "--", "evil.rs")
         git(r, "commit", "-q", "-m", "Merge side")
         U["merge"] = git(r, "rev-parse", "HEAD")
         git(r, "update-ref", "refs/remotes/upstream/main", "HEAD")
 
-        git(r, "checkout", "-q", "-b", "upstream-sync/test", "dev")
+        git(r, "checkout", "-q", "-f", "-b", "upstream-sync/test", "dev")
         st = status(r)
         k = {n: st["by"][s] for n, s in U.items() if s in st["by"]}
         assert st["fork_point"] == base
@@ -162,6 +186,11 @@ def main() -> None:
         assert "S" in k["sensitive"]["flags"]
         assert k["lock"]["kind"] == "lock", k["lock"]
         assert k["after"]["kind"] == "port" and U["port"] in k["after"]["after"]
+        for n in ("case", "case_md"):
+            assert k[n]["kind"] == "port" and "S" in k[n]["flags"], k[n]
+        assert "S" in k["build_rs"]["flags"], k["build_rs"]
+        assert k["restore"]["kind"] != "removed" and k["drop"]["kind"] == "clean", (k["restore"], k["drop"])
+        assert k["big"]["kind"] == "clean"
         merges = [c for c in st["commits"] if c["kind"] == "merge"]
         assert [c["sha"] for c in merges] == [U["merge"]], merges
 
@@ -219,7 +248,13 @@ def main() -> None:
         assert (r / "new.rs").read_text(encoding="utf-8") == "mine\n"
         (r / "new.rs").unlink()
         assert "--allow-sensitive" in sync(r, "pick", U["sensitive"], ok=False).stdout
+        assert "--allow-sensitive" in sync(r, "pick", U["build_rs"], ok=False).stdout
+        assert "never a batch" in sync(r, "pick", "--allow-sensitive", U["sensitive"],
+                                       U["clean"], ok=False).stderr
         assert "picked as" in sync(r, "pick", "--allow-sensitive", U["sensitive"]).stdout
+        assert "needs a port" in sync(r, "pick", "--allow-sensitive", U["case"], ok=False).stdout
+        assert (r / ".claude/settings.json").read_text(encoding="utf-8") == "{}\n"
+        assert not any(x.name.lower() == "settings.local.json" for x in (r / ".claude").iterdir())
         assert "--lock" in sync(r, "pick", U["lock"], ok=False).stdout
         assert git(r, "rev-parse", "HEAD") != head and git(r, "diff", "--cached") == ""
 
@@ -276,16 +311,43 @@ def main() -> None:
                                           ok=False).stderr
         git(r, "remote", "set-url", "--push", "origin", "https://github.com/someone/fork.git")
         if shutil.which("gh"):
-            write(r, "body.md", "Fixes anefzaoui/misterdownloadmanager#771.\n")
-            res = sync(r, "pr", "--title", "t", "--body-file", str(r / "body.md"), ok=False,
-                       online=True)
-            assert "would link to" in res.stderr, res.stderr
+            for body in ("Fixes anefzaoui/misterdownloadmanager#771.\n",
+                         "Fixes \\`anefzaoui/misterdownloadmanager#771\\`.\n"):
+                write(r, "body.md", body)
+                res = sync(r, "pr", "--title", "t", "--body-file", str(r / "body.md"), ok=False,
+                           online=True)
+                assert "would link to" in res.stderr, (body, res.stderr)
         assert git(r, "for-each-ref", "refs/remotes/origin/upstream-sync") == ""
 
         # Links to the original are rewritten in a pick; `show` knows a merge; `report` runs.
         assert "picked as" in sync(r, "pick", U["link"]).stdout
         body = git(r, "log", "-1", "--format=%B")
-        assert "anefzaoui" not in body and "upstream issue 5" in body and "upstream issues 6" in body, body
+        assert "anefzaoui" not in body and "upstream issue 5" in body, body
+        assert "upstream issues 6" in body and "upstream 7" in body and "GH-7" not in body, body
+
+        # Upstream's own deletion, taken, doesn't make its later fix "removed".
+        out = sync(r, "pick", U["drop"], U["restore"]).stdout
+        assert out.count("picked as") == 2 and "fixed" in (r / "z.rs").read_text(), out
+
+        # A revert of a revert brings the pick back; a short port trailer counts; a sync branch
+        # whose PR's state can't be read warns, and doesn't block.
+        sync(r, "pick", U["twice"])
+        git(r, "add", LEDGER)
+        git(r, "commit", "-qm", "ledger")
+        git(r, "revert", "--no-edit", "HEAD~1")
+        assert status(r)["by"][U["twice"]]["status"] == "reverted"
+        git(r, "revert", "--no-edit", "HEAD")
+        assert U["twice"] not in status(r)["by"]
+        write(r, "j.rs", "j, ported\n")
+        git(r, "add", "j.rs")
+        git(r, "commit", "-qm", f"port\n\nUpstream-Port: {U['short_port'][:12].upper()}")
+        assert U["short_port"] not in status(r)["by"]
+        stale = run(r, "git", "commit-tree", "dev^{tree}", "-p", "dev", "-m",
+                    f"an old run\n\nUpstream-Pick: {U['case']}").stdout.strip()
+        git(r, "update-ref", "refs/remotes/origin/upstream-sync/old", stale)
+        st = status(r)
+        assert st["by"][U["case"]]["status"] is None, st["by"][U["case"]]
+        assert any("upstream-sync/old" in w and "can't tell" in w for w in st["warnings"])
         assert json.loads(sync(r, "show", U["merge"]).stdout)["kind"] == "merge"
         rep = sync(r, "report").stdout
         assert "could not be read" in rep and "| 1 |" not in rep.split("\n")[0]
