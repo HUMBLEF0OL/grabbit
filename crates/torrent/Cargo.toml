@@ -19,6 +19,8 @@ flate2.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+# A warning when the thread that reads the torrents' numbers can't start (watch.rs).
+tracing.workspace = true
 # The blocklist file's URL, and trackers' hosts (lib.rs, trackers.rs).
 url.workspace = true
 

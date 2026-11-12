@@ -312,18 +312,32 @@ fn upper_list(exts: &[String]) -> String {
         .join(" ")
 }
 
+/// The base folder that categories without their own folder live under (#556): General's
+/// folder when one was chosen in Options → Save to, else `downloads`.
+pub fn default_downloads<'a>(
+    downloads: &'a Path,
+    dirs: &'a [(String, String)],
+) -> std::borrow::Cow<'a, Path> {
+    let general = Category::General.key();
+    dirs.iter()
+        .find(|(c, _)| *c == *general)
+        .map(|(_, d)| std::borrow::Cow::Owned(crate::dialogs::resolve_path(d)))
+        .unwrap_or(std::borrow::Cow::Borrowed(downloads))
+}
+
 /// The category's folder: the one chosen in Options → Save to (or remembered from Download
-/// File Info), else the default.
+/// File Info), else the default under [`default_downloads`] (#556).
 pub fn category_folder(cat: Category, downloads: &Path, dirs: &[(String, String)]) -> PathBuf {
+    let base = default_downloads(downloads, dirs);
     if cat.is_custom() {
-        return cat.folder(downloads);
+        return cat.folder(&base);
     }
     let key = cat.key();
     dirs.iter()
         .find(|(c, _)| *c == *key)
         // A folder may be saved as shown, relative to the user's home.
         .map(|(_, d)| crate::dialogs::resolve_path(d))
-        .unwrap_or_else(|| cat.folder(downloads))
+        .unwrap_or_else(|| cat.folder(&base))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -536,8 +550,15 @@ impl Job {
         }
     }
 
-    /// The speed limit can change while a file downloads; yt-dlp takes it at the start; a
-    /// torrent's applies to the whole torrent session.
+    /// A helper program downloads it (yt-dlp, gallery-dl): it takes a speed limit only as it
+    /// starts, so a new limit starts it again (#708, `App::reapply_helper_limits`).
+    pub fn is_helper(&self) -> bool {
+        matches!(self, Job::Video { .. } | Job::Gallery { .. })
+    }
+
+    /// The speed limit can change while a file downloads; yt-dlp and gallery-dl take it at the
+    /// start (the app starts them again, `is_helper`); a torrent's applies to the whole torrent
+    /// session.
     pub fn set_speed_limit(&self, rate: Option<u64>) {
         match self {
             Job::File(d) => d.set_speed_limit(rate),

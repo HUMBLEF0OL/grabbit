@@ -306,15 +306,10 @@ pub fn dialog_frame(title: &str, client: [f32; 2], light: bool, scale: f32) -> b
     true
 }
 
-/// How much of the standard 8 px sizing border IDM's progress window does not have: its frame
-/// is 2 px (1 px border + 1 px frame line) left, right and bottom (spec "Conventions").
-const THIN_TRIM: i32 = 6;
-
 /// Hit-test results (winuser.h).
 const HTCLIENT: LRESULT = 1;
 const HTCAPTION: LRESULT = 2;
 const HTSYSMENU: LRESULT = 3;
-const HTBORDER: LRESULT = 18;
 
 /// The system menu's "Hide to the notification area" (#63): a command id of ours (below
 /// 0xF000, its low 4 bits clear, as WM_SYSCOMMAND wants).
@@ -387,71 +382,6 @@ fn frame_hit(x: i32, y: i32, hits: &CaptionHits) -> LRESULT {
     } else {
         HTCLIENT
     }
-}
-
-/// IDM's progress-window frame (2 px borders, fixed size) with the title bar ours (#63, the
-/// approach Windows Terminal, Zed and WezTerm take): the window keeps its system frame and
-/// WS_CAPTION (Aero Snap, shake, the system menu and Alt+Space, the DWM shadow and rounded
-/// corners), its caption given to the client, which draws it; the hit test reads where the
-/// drawn parts are.
-unsafe extern "system" fn thin_frame_proc(
-    hwnd: HWND,
-    msg: u32,
-    wparam: WPARAM,
-    lparam: LPARAM,
-    _id: usize,
-    _data: usize,
-) -> LRESULT {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{WM_NCACTIVATE, WM_SYSCOMMAND};
-    if msg == WM_NCCALCSIZE && wparam != 0 {
-        // SAFETY: with wParam TRUE, lParam points to NCCALCSIZE_PARAMS (Win32 contract).
-        let p = unsafe { &mut *(lparam as *mut NCCALCSIZE_PARAMS) };
-        let top = p.rgrc[0].top;
-        let res = unsafe { DefSubclassProc(hwnd, msg, wparam, lparam) };
-        p.rgrc[0].left -= THIN_TRIM;
-        p.rgrc[0].right += THIN_TRIM;
-        p.rgrc[0].bottom += THIN_TRIM;
-        // No system caption: the client starts at the window's top.
-        p.rgrc[0].top = top;
-        return res;
-    }
-    // Activation changes repaint the non-client area: with lParam -1 the system skips that,
-    // so its own caption never flashes over ours.
-    if msg == WM_NCACTIVATE {
-        return unsafe { DefSubclassProc(hwnd, msg, wparam, -1) };
-    }
-    if msg == WM_SYSCOMMAND && (wparam & 0xFFF0) == SC_HIDE_TO_TRAY {
-        HIDE_ASKED.with(|s| {
-            if let Ok(mut s) = s.try_borrow_mut() {
-                s.insert(hwnd as isize);
-            }
-        });
-        return 0;
-    }
-    let res = unsafe { DefSubclassProc(hwnd, msg, wparam, lparam) };
-    if msg == WM_NCHITTEST {
-        // Fixed size, like IDM's: the sizing edges (HTLEFT..HTBOTTOMRIGHT) act as plain border.
-        if (10..=17).contains(&res) {
-            return HTBORDER;
-        }
-        if res == HTCLIENT {
-            use windows_sys::Win32::Foundation::POINT;
-            use windows_sys::Win32::Graphics::Gdi::ScreenToClient;
-            let mut pt = POINT {
-                x: (lparam & 0xffff) as i16 as i32,
-                y: ((lparam >> 16) & 0xffff) as i16 as i32,
-            };
-            // SAFETY: our own window; the point is a local.
-            unsafe { ScreenToClient(hwnd, &mut pt) };
-            let hit = CAPTION_HITS.with(|m| {
-                m.try_borrow()
-                    .ok()
-                    .and_then(|m| m.get(&(hwnd as isize)).map(|h| frame_hit(pt.x, pt.y, h)))
-            });
-            return hit.unwrap_or(HTCLIENT);
-        }
-    }
-    res
 }
 
 /// The Maximize button of a resizable window whose title bar is ours: under the pointer, or
@@ -649,7 +579,7 @@ unsafe extern "system" fn drawn_frame_proc(
 pub fn drawn_frame(title: &str, on: bool) -> Option<isize> {
     use windows_sys::Win32::UI::Shell::RemoveWindowSubclass;
     let hwnd = find_own_window(title)?;
-    if caption_less_frames() {
+    if windows_11() {
         // SAFETY: our own window, on its thread.
         unsafe {
             if on {
@@ -688,8 +618,8 @@ pub fn drawn_frame(title: &str, on: bool) -> Option<isize> {
     Some(hwnd as isize)
 }
 
-/// Give our window titled `title` IDM's thin progress-window frame with its title bar drawn by
-/// us (winui::caption, #63): 2 px borders, no system caption, the client staying `client`
+/// Give our window titled `title`, whose title bar is drawn by us (winui::caption, #63), its fixed
+/// frame without a caption style ([`caption_less`], #208, #620), the client staying `client`
 /// points (the drawn title bar included) at `scale` pixels per point. With `hide_item` (the
 /// translated "Hide to the notification area"), the system menu gets it, Alt+Space reaching it
 /// from the keyboard; None takes it out. Call while the window is still hidden, and again when
@@ -700,18 +630,22 @@ pub fn thin_frame(
     scale: f32,
     hide_item: Option<&str>,
 ) -> Option<isize> {
-    use windows_sys::Win32::UI::HiDpi::GetDpiForWindow;
+    use windows_sys::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForWindow};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         AppendMenuW, DeleteMenu, GetSystemMenu, MF_BYCOMMAND, MF_STRING,
     };
     let hwnd = find_own_window(title)?;
-    let plain = caption_less_frames();
+    // Windows 11 draws its 1 px border round a window without a caption style; Windows 10 draws
+    // none, so there it has the system's own (WS_BORDER).
+    let kind = if windows_11() {
+        Drawn::Fixed
+    } else {
+        Drawn::Edged
+    };
+    // SAFETY: our own window, on its thread; the menu text and the rectangle are locals read
+    // during the calls.
     unsafe {
-        if plain {
-            caption_less(hwnd, Drawn::Fixed);
-        } else {
-            SetWindowSubclass(hwnd, Some(thin_frame_proc), 0x1d6, 0);
-        }
+        caption_less(hwnd, kind);
         let menu = GetSystemMenu(hwnd, 0);
         if !menu.is_null() {
             DeleteMenu(menu, SC_HIDE_TO_TRAY as u32, MF_BYCOMMAND);
@@ -720,29 +654,40 @@ pub fn thin_frame(
                 AppendMenuW(menu, MF_STRING, SC_HIDE_TO_TRAY, w.as_ptr());
             }
         }
-        // The thin frame's 2 px each side but the top, or none: a plain window is all client
-        // (Windows 11 draws its 1 px border over the client's edge).
-        let dpi = GetDpiForWindow(hwnd).max(96) as f32 / 96.0;
-        let (fw, fh) = if plain { (0.0, 0.0) } else { (4.0, 2.0) };
+        // The window is the client and the frame its styles describe round it, for its own DPI:
+        // none on Windows 11, the 1 px border on Windows 10.
+        let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
+        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
+        let mut rc = RECT {
+            left: 0,
+            top: 0,
+            right: (client[0] * scale).round() as i32,
+            bottom: (client[1] * scale).round() as i32,
+        };
+        AdjustWindowRectExForDpi(&mut rc, style, 0, ex, GetDpiForWindow(hwnd).max(96));
         SetWindowPos(
             hwnd,
             std::ptr::null_mut(),
             0,
             0,
-            (client[0] * scale + fw * dpi).round() as i32,
-            (client[1] * scale + fh * dpi).round() as i32,
+            rc.right - rc.left,
+            rc.bottom - rc.top,
             SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
         );
     }
     Some(hwnd as isize)
 }
 
-/// Whether the windows whose title bar is ours are framed without a caption style
-/// ([`caption_less`], #208): on Windows 11 (build 22000 on), which rounds such a window when asked
-/// and draws its border. Windows 10 does neither for a window without a caption style, so it
-/// keeps the frames above (the caption style, its caption given to the client): the band they
-/// showed was seen on a Windows 11 build only.
-fn caption_less_frames() -> bool {
+/// Windows 11 (build 22000 on). Every window whose title bar is ours and that keeps its size
+/// (the progress window, a style theme's dialogs) is framed without a caption style on every
+/// version ([`thin_frame`]): with the caption style hidden by our WM_NCCALCSIZE, a Windows 11
+/// Insider build (#208) and Windows 10 22H2 (#620) showed the window's picture where the style's
+/// client would have been, a black band a title bar tall above it, every click landing above what
+/// it showed. The resizable main window with a style theme is framed so on Windows 11 only
+/// ([`drawn_frame`]), which colours the sizing frame's strip above its title bar
+/// ([`caption_colour`]); Windows 10 can't (DWMWA_CAPTION_COLOR is Windows 11's), so there it keeps
+/// its caption style, given to the client.
+fn windows_11() -> bool {
     use windows_sys::Win32::System::Registry::HKEY_LOCAL_MACHINE;
     static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *ON.get_or_init(|| {
@@ -760,8 +705,12 @@ fn caption_less_frames() -> bool {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Drawn {
     /// A fixed size (the progress window, a dialog with a style theme's title bar): a plain
-    /// popup, all client, as the drop target and the menus are (#210, #231).
+    /// popup, all client, as the drop target and the menus are (#210, #231). Windows 11 draws
+    /// its border, over the client's edge.
     Fixed,
+    /// The same with the system's 1 px border round the client (WS_BORDER): Windows 10, which
+    /// draws no border round a window without a caption style (#620).
+    Edged,
     /// Resizable (the main window with a style theme): a popup with the system's sizing frame,
     /// for resizing on every edge, Aero Snap and Snap Layouts, the shadow, and maximizing.
     Sizable,
@@ -775,6 +724,15 @@ impl Drawn {
         match self {
             Drawn::Fixed => 0,
             Drawn::Sizable => 1,
+            Drawn::Edged => 2,
+        }
+    }
+
+    fn of(data: usize) -> Drawn {
+        match data {
+            1 => Drawn::Sizable,
+            2 => Drawn::Edged,
+            _ => Drawn::Fixed,
         }
     }
 }
@@ -788,10 +746,12 @@ impl Drawn {
 /// drop target (#231). Here what the styles describe is what the window is: the system's own
 /// WM_NCCALCSIZE frames it, no other reading can differ.
 pub(crate) fn drawn_style(style: u32, kind: Drawn) -> u32 {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{WS_CAPTION, WS_POPUP};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{WS_BORDER, WS_CAPTION, WS_POPUP};
+    // WS_CAPTION is WS_BORDER | WS_DLGFRAME: both go, and the border comes back where wanted.
     let plain = (style & !(WS_CAPTION | WS_THICKFRAME)) | WS_POPUP;
     match kind {
         Drawn::Fixed => plain,
+        Drawn::Edged => plain | WS_BORDER,
         Drawn::Sizable => plain | WS_THICKFRAME,
     }
 }
@@ -903,7 +863,7 @@ thread_local! {
 /// a caption style in its caption colour). Cheap: DWM is asked only when it changes.
 pub fn caption_colour(hwnd: isize, rgb: [u8; 3]) {
     use windows_sys::Win32::Graphics::Dwm::{DWMWA_CAPTION_COLOR, DwmSetWindowAttribute};
-    if !caption_less_frames() {
+    if !windows_11() {
         return;
     }
     let colour = u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 0]);
@@ -998,12 +958,8 @@ unsafe extern "system" fn caption_less_proc(
         WM_STYLECHANGING, WM_SYSCOMMAND,
     };
     const HT_MAX: LRESULT = HTMAXBUTTON as LRESULT;
-    let sizable = data == Drawn::Sizable.data();
-    let kind = if sizable {
-        Drawn::Sizable
-    } else {
-        Drawn::Fixed
-    };
+    let kind = Drawn::of(data);
+    let sizable = kind == Drawn::Sizable;
     let at = |lp: LPARAM| {
         (
             (lp & 0xffff) as i16 as i32,
@@ -1275,7 +1231,8 @@ mod caption_less_tests {
     use super::*;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         AdjustWindowRectEx, CreateWindowExW, DestroyWindow, GetClientRect, GetWindowRect,
-        MINMAXINFO, SendMessageW, WM_GETMINMAXINFO, WS_CAPTION, WS_EX_APPWINDOW, WS_POPUP,
+        MINMAXINFO, SendMessageW, WM_GETMINMAXINFO, WS_BORDER, WS_CAPTION, WS_EX_APPWINDOW,
+        WS_POPUP,
     };
 
     /// The styles winit gives the progress window (a caption, a sizing frame trimmed by us, a
@@ -1305,6 +1262,13 @@ mod caption_less_tests {
         // The system menu and Minimize stay (Alt+Space, the taskbar's commands).
         assert_eq!(fixed & 0x000A_0000, 0x000A_0000);
         assert_eq!(styles_frame(fixed, drawn_ex_style(WINIT_EX)), [0, 0, 0, 0]);
+        // Windows 10's (#620): the same with the system's 1 px border, the same on every side.
+        let edged = drawn_style(WINIT_PROGRESS, Drawn::Edged);
+        assert_eq!(edged & WS_CAPTION, WS_BORDER);
+        assert_eq!(edged & WS_THICKFRAME, 0);
+        assert_ne!(edged & WS_POPUP, 0);
+        assert_eq!(edged & 0x000A_0000, 0x000A_0000);
+        assert_eq!(styles_frame(edged, drawn_ex_style(WINIT_EX)), [1, 1, 1, 1]);
         // Resizable: the sizing frame, the same on every side (none taller at the top).
         let sizable = drawn_style(WINIT_MAIN, Drawn::Sizable);
         assert_eq!(sizable & WS_CAPTION, 0);
@@ -1314,6 +1278,10 @@ mod caption_less_tests {
         assert!(l > 0 && l == t && t == r && r == b, "{l} {t} {r} {b}");
         // Applied again (winit setting its own styles once more), nothing changes.
         assert_eq!(drawn_style(fixed, Drawn::Fixed), fixed);
+        assert_eq!(drawn_style(edged, Drawn::Edged), edged);
+        for kind in [Drawn::Fixed, Drawn::Edged, Drawn::Sizable] {
+            assert_eq!(Drawn::of(kind.data()), kind);
+        }
         assert_eq!(drawn_style(sizable, Drawn::Sizable), sizable);
         // IDM's dialog frame goes; the taskbar button stays.
         let ex = drawn_ex_style(WINIT_EX | WS_EX_DLGMODALFRAME);
@@ -1328,9 +1296,13 @@ mod caption_less_tests {
     #[test]
     fn caption_less_frames_a_real_window_as_its_styles_say() {
         use windows_sys::Win32::UI::WindowsAndMessaging::{HTBOTTOMRIGHT, HTLEFT, HTTOP};
-        for (n, (style, kind)) in [(WINIT_PROGRESS, Drawn::Fixed), (WINIT_MAIN, Drawn::Sizable)]
-            .into_iter()
-            .enumerate()
+        for (n, (style, kind)) in [
+            (WINIT_PROGRESS, Drawn::Fixed),
+            (WINIT_PROGRESS, Drawn::Edged),
+            (WINIT_MAIN, Drawn::Sizable),
+        ]
+        .into_iter()
+        .enumerate()
         {
             let title = format!("mdm caption-less test {n} {}", std::process::id());
             let wide: Vec<u16> = title.encode_utf16().chain(Some(0)).collect();
@@ -2178,15 +2150,96 @@ impl raw_window_handle::HasWindowHandle for OwnWindow {
     }
 }
 
+/// A drag out of Download complete is under way ([`drag_file_out`]): one at a time, the mouse
+/// holds only one.
+static DRAGGING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// When the last drag out ended.
+static DRAG_ENDED: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+/// A drag out is under way, or ended a moment ago. Its keys are its own: Escape cancels the
+/// drag in OLE's loop, on the drag's thread, while the window (whose thread the keys go to)
+/// sees them too, often after the drag already ended, and must not take Escape as Close.
+pub fn dragging_out() -> bool {
+    use std::sync::atomic::Ordering;
+    DRAGGING.load(Ordering::Acquire)
+        || DRAG_ENDED
+            .lock()
+            .ok()
+            .and_then(|t| *t)
+            .is_some_and(|t| t.elapsed() < std::time::Duration::from_millis(500))
+}
+
 /// Start dragging `file` out of our window (to Explorer, a mail, a chat…), like IDM's Download
 /// complete grip. The drag preview is the file's shell icon. The window is the one holding the
 /// mouse (the button is down on its grip: winit captured the mouse for it), so it is the right
 /// one when several show the same title; else our window titled `title`, given in the interface
 /// language, as it shows.
+///
+/// The drag runs on a thread of its own (#561): OLE's drag loop lasts as long as the button is
+/// held, and each step calls the program under the pointer (its drop target, in its own process),
+/// so on the window thread a busy or hung target, or a target that copies the file before it
+/// answers the drop, froze every window until it answered. That thread shares the window
+/// thread's input ([`with_shared_input`]): OLE reads the held button and takes the mouse from
+/// there, as it did from the window thread.
 pub fn drag_file_out(title: &str, file: &std::path::Path) -> Result<(), String> {
+    use std::sync::atomic::Ordering;
     let hwnd = own_capture()
         .or_else(|| find_own_window(title))
-        .ok_or("window not found")?;
+        .ok_or("window not found")? as isize;
+    if DRAGGING.swap(true, Ordering::AcqRel) {
+        return Ok(());
+    }
+    let file = file.to_path_buf();
+    let started = with_shared_input("drag out", move |shared| {
+        if !shared {
+            tracing::warn!("drag out: the window's input isn't shared");
+        }
+        let result = drag_on_this_thread(hwnd as HWND, &file);
+        if let Ok(mut t) = DRAG_ENDED.lock() {
+            *t = Some(std::time::Instant::now());
+        }
+        DRAGGING.store(false, Ordering::Release);
+        // OLE's drag loop took the button's release, so the window never saw it: without it
+        // the next press on the grip only ended the drag the window still thought was on, and
+        // the grip worked every other time.
+        release_button(hwnd as HWND);
+        if let Err(e) = result {
+            tracing::warn!("drag out: {e}");
+        }
+    });
+    if started.is_err() {
+        DRAGGING.store(false, Ordering::Release);
+    }
+    started
+}
+
+/// Tell `hwnd` the left button is up, at the pointer, as Windows would have done had OLE's
+/// drag loop not taken the release. A move first: the pointer left the window during the drag,
+/// and a release with no pointer position is dropped before it reaches the interface.
+fn release_button(hwnd: HWND) {
+    use windows_sys::Win32::Foundation::POINT;
+    use windows_sys::Win32::Graphics::Gdi::ScreenToClient;
+    // The left button's flag in a mouse message's wParam (MK_LBUTTON, winuser.h).
+    const MK_LBUTTON: usize = 0x0001;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetCursorPos, PostMessageW, WM_LBUTTONUP, WM_MOUSEMOVE,
+    };
+    let mut pt = POINT { x: 0, y: 0 };
+    // SAFETY: reads into a local; `hwnd` is our own window (a closed one fails harmlessly).
+    unsafe {
+        GetCursorPos(&mut pt);
+        ScreenToClient(hwnd, &mut pt);
+    }
+    let lparam = (((pt.y as u16 as u32) << 16) | pt.x as u16 as u32) as isize;
+    // SAFETY: messages posted to our own window.
+    unsafe {
+        PostMessageW(hwnd, WM_MOUSEMOVE, MK_LBUTTON, lparam);
+        PostMessageW(hwnd, WM_LBUTTONUP, 0, lparam);
+    }
+}
+
+/// The drag itself, on the thread [`drag_file_out`] started (OLE initialised there).
+fn drag_on_this_thread(hwnd: HWND, file: &std::path::Path) -> Result<(), String> {
     let name = file.file_name().and_then(|n| n.to_str()).unwrap_or("");
     let what = crate::fileicons::What::of(crate::fileicons::Kind::File(name));
     let preview = file_icon(&what, 32)
@@ -2207,6 +2260,92 @@ pub fn drag_file_out(title: &str, file: &std::path::Path) -> Result<(), String> 
         drag::Options::default(),
     )
     .map_err(|e| e.to_string())
+}
+
+/// Run `work` on a new thread named `name`, with OLE (a single-threaded apartment) and the
+/// calling thread's input state: the keys and mouse buttons held, the mouse capture and the
+/// focus (AttachThreadInput), as a modal loop like OLE's drag needs when the button went down in
+/// the caller's window. `work` is told whether the input is shared. Returns at once; the input
+/// is detached and OLE closed when `work` ends. The caller has a message queue (a window thread).
+fn with_shared_input(name: &str, work: impl FnOnce(bool) + Send + 'static) -> Result<(), String> {
+    use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MSG, PM_NOREMOVE, PeekMessageW};
+    #[link(name = "ole32")]
+    unsafe extern "system" {
+        fn OleInitialize(reserved: *mut c_void) -> i32;
+        fn OleUninitialize();
+    }
+    // SAFETY: a plain query.
+    let caller = unsafe { GetCurrentThreadId() };
+    std::thread::Builder::new()
+        .name(name.to_owned())
+        .spawn(move || {
+            // SAFETY: OLE for this new thread, closed below on the same thread when it took.
+            let ole = unsafe { OleInitialize(std::ptr::null_mut()) } >= 0;
+            // A thread is given its message queue by its first window call, and only threads
+            // with one can share input: a look at the (empty) queue makes it.
+            // SAFETY: a read into a local MSG; nothing is removed.
+            let mut msg: MSG = unsafe { zeroed() };
+            unsafe { PeekMessageW(&mut msg, std::ptr::null_mut(), 0, 0, PM_NOREMOVE) };
+            // SAFETY: plain calls with two live threads of this process; undone below.
+            let me = unsafe { GetCurrentThreadId() };
+            let attached = unsafe { AttachThreadInput(me, caller, 1) } != 0;
+            work(attached);
+            if attached {
+                // SAFETY: as above.
+                unsafe { AttachThreadInput(me, caller, 0) };
+            }
+            if ole {
+                // SAFETY: matches the OleInitialize above, on this thread.
+                unsafe { OleUninitialize() };
+            }
+        })
+        .map(drop)
+        .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod drag_thread_tests {
+    use super::*;
+
+    /// The drag's thread (#561): another thread than the window's, which goes on at once, in a
+    /// single-threaded apartment (OLE's drag needs one), sharing the window thread's input.
+    #[test]
+    fn the_drag_runs_beside_the_window_thread_with_its_input() {
+        use windows_sys::Win32::System::Com::{APTTYPE, APTTYPEQUALIFIER, CoGetApartmentType};
+        use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{MSG, PM_NOREMOVE, PeekMessageW};
+        // This test's thread stands for the window thread: it has a message queue.
+        // SAFETY: a read into a local MSG; nothing is removed.
+        let mut msg: MSG = unsafe { zeroed() };
+        unsafe { PeekMessageW(&mut msg, std::ptr::null_mut(), 0, 0, PM_NOREMOVE) };
+        // SAFETY: a plain query.
+        let window_thread = unsafe { GetCurrentThreadId() };
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (go_tx, go_rx) = std::sync::mpsc::channel::<()>();
+        with_shared_input("drag test", move |shared| {
+            // Held until the caller has gone on: the work doesn't hold the caller up.
+            go_rx.recv().unwrap();
+            let mut kind: APTTYPE = 0;
+            let mut qualifier: APTTYPEQUALIFIER = 0;
+            // SAFETY: reads into two locals.
+            let hr = unsafe { CoGetApartmentType(&mut kind, &mut qualifier) };
+            // SAFETY: a plain query.
+            let me = unsafe { GetCurrentThreadId() };
+            tx.send((me, shared, hr, kind)).unwrap();
+        })
+        .unwrap();
+        go_tx.send(()).unwrap();
+        let (me, shared, hr, kind) = rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
+        assert_ne!(me, window_thread);
+        assert!(shared, "the input is shared with the window thread");
+        assert_eq!(hr, 0);
+        // APTTYPE_STA (0); the first apartment of the process would be APTTYPE_MAINSTA (3).
+        assert!(
+            kind == 0 || kind == 3,
+            "a single-threaded apartment, not {kind}"
+        );
+    }
 }
 
 /// Windows' "Choose your app mode": true when apps should be dark (`AppsUseLightTheme` = 0).
