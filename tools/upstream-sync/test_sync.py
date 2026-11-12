@@ -279,8 +279,9 @@ def main() -> None:
         assert f"upstream's text: Upstream-Pick: {other}" in body and "upstream 77" in body, body
         assert other not in json.dumps(status(r)["warnings"])
 
-        # A pick reverted here shows again; a picked row whose trailer a squash lost doesn't; a
-        # ported row without its trailer in dev shows again, with a warning.
+        # A pick reverted here shows again; so does a picked row whose pick isn't here (a squash
+        # dropped it, a reset, a row from another branch) and a ported row without its trailer,
+        # each with a warning.
         sync(r, "pick", U["revert_me"])
         git(r, "add", LEDGER)
         git(r, "commit", "-qm", "ledger")
@@ -291,7 +292,8 @@ def main() -> None:
             f.write(squash_row)
         st = status(r)
         assert st["by"][U["revert_me"]]["status"] == "reverted", st["by"][U["revert_me"]]
-        assert U["squashed"] not in st["by"]
+        assert st["by"][U["squashed"]]["status"] == "picked?", st["by"][U["squashed"]]
+        assert any("recorded picked" in w and U["squashed"][:12] in w for w in st["warnings"])
         assert st["by"][U["portrow"]]["status"] == "ported?"
         assert any("ported" in w and U["portrow"][:12] in w for w in st["warnings"])
 
