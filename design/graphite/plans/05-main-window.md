@@ -126,7 +126,51 @@ chooser, Column filter, First start, Filters hide all: light and dark, at 100% a
 
 ## Done when
 
-- [ ] 05a merged with no visual change
-- [ ] Every main-window mock state matches in Graphite; Classic and era themes unchanged
-- [ ] Hit, keyboard and accessibility tests above pass
-- [ ] Screenshots before and after; ROADMAP, CHANGELOG
+- [x] 05a with no visual change (80 of 80 pictures identical; merged with its PR)
+- [x] Every main-window mock state built in Graphite (the Details toggle and the paste bar: 06);
+      Classic and era themes unchanged (60 of 60 pictures identical, 05a against 05b)
+- [x] Hit and accessibility tests above pass (headless, below); keyboard by code review, below
+- [x] Screenshots before and after; ROADMAP, CHANGELOG
+
+## What was built (2026-11-12, branches `ui/05a-layout-model`, `ui/05b-main-window`)
+
+- **05a**: `chrome::Layout` (caption, menu row, toolbar, drop-down anchor, strip, the pane's and
+  the list's edges, gaps), `Layout::CLASSIC` with today's numbers; `paint`, `menu_bar`,
+  `menubar_title_at`, `toolbar`, `categories`, the splitter, the list's rect and `status_strip`
+  read it. Checked by `source/main_shots.ps1` (a fixed list, nothing moving; states plain, the five
+  menus, a download's menu, a first start, the pane hidden, the pane widened) and
+  `source/pixel_diff.py` (every channel; exits 1 on any difference): Classic, Metro, Aqua and
+  Graphite, light and dark, 80 of 80 identical. No CHANGELOG line.
+- **05b**, all gated on `ChromeLook::Graphite` (`Layout::GRAPHITE`): the menus and Find in a
+  36-point drawn title bar (`winui::caption::main_bar`, 42 × 35 buttons; the titles and Find given
+  to the window's hit test as the client's, `App::publish_caption`, the rest of the bar still
+  drags and double-click maximises); menus 258 / 240 wide with 28-point rows, a 16-point icon per
+  item (by command, `Cmd::menu_icon`; submenus and greyed placeholders by label,
+  `chrome::menu_icon`) and the shortcut in its own column in `menu.shortcut`; the toolbar on
+  `panel` in five groups with rules, 20-point icons, 11.5-point labels, split drop-downs with an
+  arrow part of their own, narrower than 60 only when the window is (200 %); the Categories pane
+  224 wide (`graphite_categories_width`), no caption bar, 28-point rows, chevrons, the chosen row
+  on the selection with its icon in the accent, the synchronization queue as `gx-refresh`; the
+  list edge to edge, heads in Medium 12 in the muted ink with the sort chevron and a filtered
+  column's funnel after the title, hairline rows, a pill chip, numbers right-aligned in the
+  `numbers` family (Segoe UI's tabular figures, mapped in `win32::classic_face` in both branches),
+  Graphite's own column widths (`list::Layout.graphite_widths`, saved only once changed); the
+  Status cell's bar and percentage (`Row.kind`, `Row.progress`); the status bar on `panel`; the
+  empty states on a 56-point tile. A new role, `text.secondary` (`ink2`: toolbar labels, menu
+  titles and icons, the tree, the Status cell, the status bar). `make_theme.py`'s toolbar faces are
+  now `hover` / `press` on the panel, and `list.header` is 31. 04's overflow: the toolbar fits at
+  200 %.
+- **Accessibility, in every theme**: the toolbar's 11 buttons are Buttons by their labels with
+  their disabled state (00's exception). Under Graphite the menu bar is still a MenuBar of
+  MenuItems, Find a Button. Tests: `chrome::a11y_tests` (the toolbar in both layouts, the
+  title-bar menus and their rects, Find, the toolbar fitting 710 points), `win32::frame_tests`
+  (`graphite_menus_and_find_in_the_bar_are_the_clients`), `chrome::layout_tests`,
+  `list::tests::each_look_keeps_its_column_widths`.
+- **Keyboard**: Alt, F10, Alt+letter, Left / Right and Tab go through the same code as before
+  (`App::paint` opens `open_menu` by index, whichever bar draws it); not driven in a live window
+  (that needs the desktop's focus): 09a's full keyboard pass.
+- **Left**: the Details toggle and the paste bar (06); the column filter box and the dialogs (07);
+  the split arrows are not separate nodes for screen readers (their menus are reachable from
+  Downloads → Start queue / Stop queue and Tasks); a part-done waiting download shows "Waiting"
+  without its percentage (the plan's "every other kind: icon and word"; screen readers hear the
+  cell's text).
