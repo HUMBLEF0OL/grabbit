@@ -25,6 +25,8 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ### Fixed
 
+- Torrents: pausing a torrent just as one of its pieces was being checked no longer leaves it one piece short for good. That piece was neither counted as downloaded nor asked for again, so the torrent stopped just before the end, and only restarting MDM helped; a pause now puts that piece back to be downloaded again (upstream issue 706).
+- Torrents: the DHT stops asking a bootstrap node that never answers once another one has, instead of logging "error in bootstrap" every minute or two, and loads the IPv6 nodes it saved at the last start too (part of upstream issue 650).
 - The window no longer waits for a program that holds the clipboard without answering: a text box's right-click menu (to offer **Paste**), **Add URL**, **Add batch download**, **Add torrent** and **Download video** (to fill in a copied link) read the clipboard beside the window, as the clipboard monitor does; a link copied just before still fills the box as the window opens (upstream issue 688).
 - MDM no longer crashes ("crash in ntdll.dll", the heap corrupted) when the clipboard is read in two places at once, as when **Add URL** opened while the clipboard monitor looked for a copied link: MDM's own clipboard reads and the window's copy and paste now take turns (upstream issue 629).
 - MDM starts on a PC without Microsoft's Visual C++ runtime, or with a 32-bit copy where the 64-bit one belongs: its programs carry the C runtime inside them instead of loading `VCRUNTIME140.dll` (upstream issue 785).
