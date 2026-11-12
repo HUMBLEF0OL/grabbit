@@ -311,7 +311,7 @@ impl Icon {
         Image::new(self.source(enabled))
     }
 
-    /// The icon as an image source (fileicons.rs shows Add Torrent's magnet for a .torrent).
+    /// The icon as an image source.
     /// Made once per icon and ink (a theme's change makes new ones): drawing it again each frame
     /// allocates nothing.
     pub fn source(self, enabled: bool) -> ImageSource<'static> {

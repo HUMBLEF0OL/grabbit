@@ -441,8 +441,7 @@ fn silk(name: &str) -> Option<egui::ImageSource<'static>> {
 }
 
 /// The small icons drawn by key: Silk's (the Categories tree), Graphite's (the Scheduler's
-/// queues) and the
-/// file types', which fileicons.rs draws (the system's own).
+/// queues) and the file types', which fileicons.rs draws (the system's own).
 #[derive(Default)]
 pub struct ShellIcons;
 
