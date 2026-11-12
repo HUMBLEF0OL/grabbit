@@ -518,8 +518,10 @@ These ship in a later version, when they're ready.
   in `design/graphite/`. Done: the Graphite theme in **View → Theme** (its colours, rounded
   corners and controls, light and dark, in today's layout) and its icons (Tabler's outline
   icons, in one colour), its typeface (Geist, built in, a theme's choice), and the theme switch,
-  colours and extra icons its new layout will use (no change on screen yet). Next: the main
-  window
+  colours and extra icons its new layout will use, and the main window's new layout under Graphite
+  (menus and a Find button in the title bar, icons and shortcuts in the menus, a grouped toolbar,
+  a flatter Categories tree, progress in the Status column, a quieter status bar). Next: the
+  paste bar and details pane, then the dialogs
 
 ### Bugs being looked into
 
