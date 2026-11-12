@@ -9094,13 +9094,13 @@ impl App {
             } else {
                 changed
             };
-            // The caption follows (first check: the window may not exist yet; retried).
+            // The caption follows (first check: the window may not exist yet; retried). Only
+            // then: asking DWM every 2 s caught the window's thread in a stalled system (#633).
             if changed || !self.caption_set {
                 crate::theme::apply_mode(&ctx);
+                self.caption_set =
+                    crate::win32::caption_dark(crate::MAIN_TITLE, crate::theme::dark_surface());
             }
-            // Re-asserted on every check (a no-op when already right).
-            self.caption_set =
-                crate::win32::caption_dark(crate::MAIN_TITLE, crate::theme::dark_surface());
             if changed {
                 ctx.request_repaint();
             }
