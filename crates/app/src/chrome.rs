@@ -1591,19 +1591,27 @@ fn menu_viewport(kind: MenuKind, id: &str, depth: usize, bar_shared: bool) -> eg
 }
 
 /// The entry under `p` in a menu drawn at `o`, `w` wide: its index, none on a separator or the
-/// padding (the slots as `popup_level` lays them out).
-fn item_at<C>(entries: &[MenuEntry<C>], o: Pos2, w: f32, p: Pos2) -> Option<usize> {
-    let mut y = o.y + 3.0;
+/// padding (the slots as `popup_level` lays them out, in the menu's `look`: Graphite's rows are
+/// taller and inset by its padding, the other looks' 22 high, 6 in).
+fn item_at<C>(
+    entries: &[MenuEntry<C>],
+    look: &MenuLook,
+    o: Pos2,
+    w: f32,
+    p: Pos2,
+) -> Option<usize> {
+    let inset = if look.graphite { look.pad } else { 6.0 };
+    let mut y = o.y + look.pad;
     for (i, e) in entries.iter().enumerate() {
         if matches!(e, MenuEntry::Sep) {
-            y += SEP;
+            y += look.sep;
             continue;
         }
-        let slot = Rect::from_min_max(pos2(o.x + 6.0, y), pos2(o.x + w - 6.0, y + SLOT));
+        let slot = Rect::from_min_max(pos2(o.x + inset, y), pos2(o.x + w - inset, y + look.slot));
         if slot.contains(p) {
             return Some(i);
         }
-        y += SLOT;
+        y += look.slot;
     }
     None
 }
@@ -1714,7 +1722,7 @@ fn popup_level<C: Clone>(
         let pointer = ui.ctx().pointer_hover_pos();
         // The item under the pointer (none on a separator or the padding): one item is lit at a
         // time, so an open submenu's entry gives up its light to it (#579).
-        let under = pointer.and_then(|p| item_at(entries, o, w, p));
+        let under = pointer.and_then(|p| item_at(entries, &look, o, w, p));
         // An open submenu stays open while the pointer is on another item only as long as it
         // heads into the submenu (#579): from where it left the submenu's entry, inside the
         // triangle to the submenu's near edge. Its screen rect, from the pass that drew it, in
@@ -3696,13 +3704,63 @@ mod tests {
             MenuEntry::Item(c, 1, true, false),
         ];
         let o = pos2(0.0, 0.0);
-        assert_eq!(item_at(&entries, o, 200.0, pos2(50.0, 10.0)), Some(0));
+        let classic = MenuLook {
+            graphite: false,
+            pad: 3.0,
+            slot: SLOT,
+            sep: SEP,
+            text_x: 38.0,
+            min_w: 0.0,
+        };
+        assert_eq!(
+            item_at(&entries, &classic, o, 200.0, pos2(50.0, 10.0)),
+            Some(0)
+        );
         // The separator: 25..34.
-        assert_eq!(item_at(&entries, o, 200.0, pos2(50.0, 29.0)), None);
-        assert_eq!(item_at(&entries, o, 200.0, pos2(50.0, 40.0)), Some(2));
-        assert_eq!(item_at(&entries, o, 200.0, pos2(50.0, 60.0)), Some(3));
+        assert_eq!(
+            item_at(&entries, &classic, o, 200.0, pos2(50.0, 29.0)),
+            None
+        );
+        assert_eq!(
+            item_at(&entries, &classic, o, 200.0, pos2(50.0, 40.0)),
+            Some(2)
+        );
+        assert_eq!(
+            item_at(&entries, &classic, o, 200.0, pos2(50.0, 60.0)),
+            Some(3)
+        );
         // The padding at the sides.
-        assert_eq!(item_at(&entries, o, 200.0, pos2(3.0, 40.0)), None);
+        assert_eq!(item_at(&entries, &classic, o, 200.0, pos2(3.0, 40.0)), None);
+        // Graphite's taller rows (05b): a at 5..33, the separator 33..44, b 44..72, c 72..100,
+        // inset 5 from the sides: the rows the menu draws, not the classic ones.
+        let graphite = MenuLook {
+            graphite: true,
+            pad: 5.0,
+            slot: 28.0,
+            sep: 11.0,
+            text_x: 39.0,
+            min_w: 240.0,
+        };
+        assert_eq!(
+            item_at(&entries, &graphite, o, 240.0, pos2(50.0, 30.0)),
+            Some(0)
+        );
+        assert_eq!(
+            item_at(&entries, &graphite, o, 240.0, pos2(50.0, 38.0)),
+            None
+        );
+        assert_eq!(
+            item_at(&entries, &graphite, o, 240.0, pos2(50.0, 70.0)),
+            Some(2)
+        );
+        assert_eq!(
+            item_at(&entries, &graphite, o, 240.0, pos2(50.0, 90.0)),
+            Some(3)
+        );
+        assert_eq!(
+            item_at(&entries, &graphite, o, 240.0, pos2(4.0, 50.0)),
+            None
+        );
     }
 
     /// With a menu open, the pointer moves it from title to title, as in Windows' menu bars
