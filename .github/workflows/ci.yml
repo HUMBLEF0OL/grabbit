@@ -63,6 +63,19 @@ jobs:
       - name: Tests
         run: cargo test --workspace
 
+  upstream-sync:
+    name: upstream sync tool
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # tools/upstream-sync/sync.py against a throwaway repository (sorts, picks, records, refuses).
+      - name: Self-check
+        run: python tools/upstream-sync/test_sync.py
+
   extension:
     name: browser extension
     runs-on: ubuntu-latest

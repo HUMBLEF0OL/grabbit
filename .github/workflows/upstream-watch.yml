@@ -1,0 +1,57 @@
+# Once a day: the original MDM's commits not yet decided here (critical-looking ones first) and
+# its open PRs that look critical, kept in one issue on this fork, labelled upstream-watch. It
+# only reads the original; nothing is picked here (that is /upstream-sync, by a person, through
+# a PR). Scheduled workflows run from the default branch: this starts once it reaches main.
+name: Upstream watch
+
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: upstream-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: The original, read only
+        run: |
+          git remote add upstream https://github.com/anefzaoui/misterdownloadmanager.git
+          git remote set-url --push upstream DISABLED
+          git fetch --no-tags upstream main
+      - name: Report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python tools/upstream-sync/sync.py report > "$RUNNER_TEMP/report.md"
+      - name: The tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        # -R always: in a fork, gh's default repository is the original.
+        run: |
+          gh label create upstream-watch -R "$REPO" --color BFD4F2 \
+            --description "The upstream watch's daily report" 2>/dev/null || true
+          n=$(gh issue list -R "$REPO" --label upstream-watch --state open --json number \
+            --jq '.[0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue edit "$n" -R "$REPO" --body-file "$RUNNER_TEMP/report.md"
+          else
+            gh issue create -R "$REPO" --title "Upstream fixes waiting" --label upstream-watch \
+              --body-file "$RUNNER_TEMP/report.md"
+          fi

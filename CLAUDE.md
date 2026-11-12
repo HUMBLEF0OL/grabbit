@@ -24,13 +24,20 @@ craft-libs), laid out the way Internet Download Manager users expect. Start by r
 6. Every PR description shows what it changed in screenshots, as many as it takes: each changed
    window and state, before and after, light and dark; phone width for the website. The images
    live on the `pr-shots` branch (`<pr>/<name>.png`, never merged) and are embedded from
-   `raw.githubusercontent.com/anefzaoui/misterdownloadmanager/pr-shots/`.
+   `raw.githubusercontent.com/HUMBLEF0OL/grabbit/pr-shots/`.
    Neutral test folders in shots, no IDM artwork. A change with nothing to see shows its proof
    (tables, logs) instead and says so.
 
 7. **Branches:** work branches from `dev` and its PRs target `dev`. `main` is the release branch
    (website, tags): it takes only a `dev` → `main` release PR or a hotfix from `main`, which is
    then merged back into `dev`. See [CONTRIBUTING.md](CONTRIBUTING.md#branches).
+8. **This repository is the fork HUMBLEF0OL/grabbit; it is its own project.** Branches, PRs and
+   pr-shots go to `origin` (HUMBLEF0OL/grabbit) only. The original, anefzaoui/misterdownloadmanager
+   (the `upstream` remote), is read, never written to: no push, PR, issue, comment, or link that
+   GitHub would turn into a mention there (write `upstream issue 668`, or put it in `code`); and
+   never "Sync fork" or `gh repo sync`. On GitHub a new PR defaults to the original: always name
+   this fork (`gh pr create -R HUMBLEF0OL/grabbit --base dev`). Its fixes come in only through
+   `/upstream-sync`.
 
 ## Commands
 

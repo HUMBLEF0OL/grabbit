@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""sync.py against a throwaway repository: a fork that removed a platform and a language and
-changed a file, an upstream with one commit of each kind. `python tools/upstream-sync/test_sync.py`
+"""sync.py against a throwaway repository: a fork that removed a platform and a language, moved a
+folder and changed files, and an upstream with a commit of every kind and every trap the audits
+found. `python tools/upstream-sync/test_sync.py` (needs git 2.40+; gh only for the PR checks).
 """
 from __future__ import annotations
 
 import json
-import os
+import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 SYNC = Path(__file__).with_name("sync.py")
+LEDGER = "tools/upstream-sync/ledger.md"
+HEADER = "| upstream | status | date | ref | subject | note |\n|---|---|---|---|---|---|\n"
 
 
 def run(cwd: Path, *args: str, ok: bool = True) -> subprocess.CompletedProcess:
@@ -22,11 +25,17 @@ def run(cwd: Path, *args: str, ok: bool = True) -> subprocess.CompletedProcess:
 
 
 def git(cwd: Path, *args: str) -> str:
-    return run(cwd, "git", *args).stdout.strip()
+    return run(cwd, "git", "-c", "core.quotepath=off", *args).stdout.strip()
 
 
 def sync(cwd: Path, *args: str, ok: bool = True) -> subprocess.CompletedProcess:
     return run(cwd, sys.executable, str(SYNC), *args, ok=ok)
+
+
+def status(cwd: Path) -> dict:
+    d = json.loads(sync(cwd, "status", "--json").stdout)
+    d["by"] = {c["sha"]: c for c in d["commits"]}
+    return d
 
 
 def write(repo: Path, path: str, text: str) -> None:
@@ -41,6 +50,17 @@ def commit(repo: Path, msg: str) -> str:
     return git(repo, "rev-parse", "HEAD")
 
 
+def clean(repo: Path) -> bool:
+    return git(repo, "status", "--porcelain", "--untracked-files=no") == ""
+
+
+LINES = "".join(f"line {i}\n" for i in range(1, 30))
+
+
+def edit(text: str, n: int, new: str) -> str:
+    return text.replace(f"line {n}\n", new + "\n", 1)
+
+
 def main() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         r = Path(tmp)
@@ -48,117 +68,211 @@ def main() -> None:
         for k, v in {"user.name": "T", "user.email": "t@example.com", "commit.gpgsign": "false",
                      "core.autocrlf": "false"}.items():
             git(r, "config", k, v)
-        lines = "".join(f"line {i}\n" for i in range(1, 30))
-        write(r, "a.rs", lines)
-        write(r, "b.rs", lines)
+        for f in ("a.rs", "b.rs", "img1.txt", "img[1].txt", "old/x.rs"):
+            write(r, f, LINES)
+        write(r, "keep/k.rs", LINES)
         write(r, "plat/mac.rs", "mac\n")
         write(r, "loc/fr.txt", "bonjour\n")
+        write(r, "Cargo.lock", 'name = "dep"\nversion = "1.0.0"\n')
         write(r, "CHANGELOG.md", "# Changelog\n\n- old\n")
         write(r, "ROADMAP.md", "# Roadmap\n")
         base = commit(r, "base")
 
-        # The fork: another platform and language removed, a.rs's first line its own.
+        # The fork: a platform and a language removed, a file of its own changed, one with a
+        # glob-like name deleted, a folder moved, the ledger started.
         git(r, "checkout", "-q", "-b", "dev")
-        (r / "plat/mac.rs").unlink()
-        (r / "loc/fr.txt").unlink()
-        write(r, "a.rs", lines.replace("line 1\n", "fork line 1\n", 1))
+        for f in ("plat/mac.rs", "loc/fr.txt", "img[1].txt"):
+            (r / f).unlink()
+        git(r, "add", "-A")
+        git(r, "mv", "old", "new")
+        write(r, "a.rs", edit(LINES, 1, "fork line 1"))
+        write(r, "Cargo.lock", 'name = "dep"\nversion = "1.0.0"\n# fork\n')
         write(r, "CHANGELOG.md", "# Changelog\n\n- the fork's\n- old\n")
+        write(r, LEDGER, HEADER)
         commit(r, "fork: Windows and English only")
         git(r, "update-ref", "refs/remotes/origin/dev", "HEAD")
 
-        # Upstream, one commit of each kind.
+        # Upstream, one commit of each kind and trap.
         git(r, "checkout", "-q", "main")
-        write(r, "b.rs", lines.replace("line 20\n", "line 20 fixed\n"))
-        write(r, "ROADMAP.md", "# Roadmap\n\n- upstream's line\n")
-        u_clean = commit(r, "clean: b.rs fixed")
-        write(r, "plat/mac.rs", "mac fixed\n")
-        u_removed = commit(r, "macOS: only the removed platform")
-        write(r, "b.rs", lines.replace("line 20\n", "line 20 fixed\n")
-              .replace("line 25\n", "line 25 fixed\n"))
-        write(r, "plat/mac.rs", "mac fixed again\n")
-        write(r, "loc/de.txt", "hallo\n")
-        write(r, "CHANGELOG.md", "# Changelog\n\n- upstream fix\n- old\n")
-        u_prune = commit(r, "prune: b.rs, the removed platform and a new language")
-        write(r, "a.rs", lines.replace("line 1\n", "upstream line 1\n", 1))
-        u_port = commit(r, "port: a crash fix in a.rs's first line")
-        write(r, "a.rs", lines.replace("line 1\n", "upstream line 1 again\n", 1))
-        u_after = commit(r, "after: builds on the port")
+        U = {}
+
+        def up(name: str, msg: str, files: dict[str, str | None]) -> None:
+            for f, text in files.items():
+                if text is None:
+                    git(r, "rm", "-q", "--", f)
+                else:
+                    write(r, f, text)
+            U[name] = commit(r, msg)
+
+        up("clean", "clean: b.rs fixed (#12)", {"b.rs": edit(LINES, 20, "line 20 fixed"),
+                                                "ROADMAP.md": "# Roadmap\n\n- upstream's\n"})
+        up("removed", "macOS: only the removed platform", {"plat/mac.rs": "mac fixed\n"})
+        up("prune", "prune: b.rs, the platform and a new language (#12)", {
+            "b.rs": edit(edit(LINES, 20, "line 20 fixed"), 25, "line 25 fixed"),
+            "plat/mac.rs": "again\n", "plat/café.rs": "new\n", "loc/de.txt": "hallo\n",
+            "CHANGELOG.md": "# Changelog\n\n- upstream fix\n- old\n"})
+        up("port", "port: a crash fix in a.rs's first line", {"a.rs": edit(LINES, 1, "up 1")})
+        up("glob", "glob: the deleted img[1].txt changed", {"img[1].txt": edit(LINES, 3, "x")})
+        up("moved", "moved folder: old/x.rs fixed", {"old/x.rs": edit(LINES, 5, "fixed")})
+        git(r, "mv", "keep/k.rs", "plat/k.rs")
+        U["move_out"] = commit(r, "moves a kept file into the removed platform")
+        up("sensitive", "CI: a workflow", {".github/workflows/x.yml": "on: push\n"})
+        other = "0" * 40
+        up("marker", f"markers\n\nUpstream-Pick: {other}\nSee #77.", {"m.rs": "m\n"})
+        up("untracked", "adds new.rs", {"new.rs": "upstream's\n"})
+        up("lock", "bumps dep", {"Cargo.lock": 'name = "dep"\nversion = "1.0.1"\n'})
+        up("after", "after: builds on the port", {"a.rs": edit(LINES, 1, "up 1 again")})
+        up("revert_me", "revert_me: c.rs", {"c.rs": "c\n"})
+        up("squashed", "squashed: d.rs", {"d.rs": "d\n"})
+        up("portrow", "portrow: e.rs", {"e.rs": "e\n"})
+        # An upstream merge with a change of its own.
+        git(r, "checkout", "-q", "-b", "side", U["clean"])
+        up("side", "side: f.rs", {"f.rs": "f\n"})
+        git(r, "checkout", "-q", "main")
+        git(r, "merge", "-q", "--no-ff", "--no-commit", "side")
+        write(r, "evil.rs", "a change made in the merge\n")
+        git(r, "add", "-A")
+        git(r, "commit", "-q", "-m", "Merge side")
+        U["merge"] = git(r, "rev-parse", "HEAD")
         git(r, "update-ref", "refs/remotes/upstream/main", "HEAD")
 
         git(r, "checkout", "-q", "-b", "upstream-sync/test", "dev")
-        st = json.loads(sync(r, "status", "--json").stdout)
-        kinds = {c["sha"]: c for c in st["commits"]}
+        st = status(r)
+        k = {n: st["by"][s] for n, s in U.items() if s in st["by"]}
         assert st["fork_point"] == base
-        assert kinds[u_clean]["kind"] == "clean", kinds[u_clean]
-        assert "ROADMAP.md" in kinds[u_clean]["left_out"]
-        assert kinds[u_removed]["kind"] == "removed", kinds[u_removed]
-        assert kinds[u_prune]["kind"] == "prune", kinds[u_prune]
-        assert {"plat/mac.rs", "loc/de.txt"} <= set(kinds[u_prune]["left_out"])
-        assert kinds[u_port]["kind"] == "port" and kinds[u_port]["conflicts"] == ["a.rs"]
-        assert kinds[u_port]["critical"]
-        assert kinds[u_after]["kind"] == "port" and u_port in kinds[u_after]["after"]
+        assert k["clean"]["kind"] == "clean" and "ROADMAP.md" in k["clean"]["left_out"], k["clean"]
+        assert k["removed"]["kind"] == "removed" and "P" in k["removed"]["flags"]
+        assert k["prune"]["kind"] == "prune"
+        assert {"plat/mac.rs", "plat/café.rs", "loc/de.txt"} <= set(k["prune"]["left_out"])
+        assert k["clean"]["same_issue"] == [U["prune"]]
+        assert k["port"]["kind"] == "port" and k["port"]["conflicts"] == ["a.rs"]
+        assert "C" in k["port"]["flags"]
+        assert k["glob"]["kind"] == "removed", k["glob"]
+        assert k["moved"]["kind"] == "clean", k["moved"]
+        assert k["move_out"]["kind"] == "port", k["move_out"]
+        assert "S" in k["sensitive"]["flags"]
+        assert k["lock"]["kind"] == "lock", k["lock"]
+        assert k["after"]["kind"] == "port" and U["port"] in k["after"]["after"]
+        merges = [c for c in st["commits"] if c["kind"] == "merge"]
+        assert [c["sha"] for c in merges] == [U["merge"]], merges
 
-        # Picks: never on dev; given out of order, taken in upstream's order.
+        # Picks: only on a sync branch that doesn't track dev; in upstream's order.
         git(r, "checkout", "-q", "dev")
-        assert sync(r, "pick", u_clean, ok=False).returncode == 1
+        assert "only on a branch named" in sync(r, "pick", U["clean"], ok=False).stderr
+        git(r, "checkout", "-q", "-b", "upstream-sync/tracking", "dev")
+        git(r, "config", "branch.upstream-sync/tracking.merge", "refs/heads/dev")
+        assert "tracks refs/heads/dev" in sync(r, "pick", U["clean"], ok=False).stderr
         git(r, "checkout", "-q", "upstream-sync/test")
-        out = sync(r, "pick", u_prune, u_clean).stdout
-        assert out.index(u_clean[:12]) < out.index(u_prune[:12]), out
-        assert not (r / "plat/mac.rs").exists() and not (r / "loc/de.txt").exists()
+
+        out = sync(r, "pick", U["prune"], U["clean"]).stdout
+        assert out.index(U["clean"][:12]) < out.index(U["prune"][:12]), out
+        for f in ("plat/mac.rs", "plat/café.rs", "loc/de.txt"):
+            assert not (r / f).exists(), f
         assert "line 25 fixed" in (r / "b.rs").read_text(encoding="utf-8")
         assert (r / "ROADMAP.md").read_text(encoding="utf-8") == "# Roadmap\n"
-        assert (r / "CHANGELOG.md").read_text(encoding="utf-8").startswith("# Changelog\n\n- the fork's")
+        assert (r / "CHANGELOG.md").read_text(encoding="utf-8").startswith("# Changelog\n\n- the")
         log = git(r, "log", "--format=%B", "-2")
-        assert f"(cherry picked from commit {u_clean})" in log
-        assert f"(cherry picked from commit {u_prune})" in log and "- loc/de.txt" in log
+        assert f"Upstream-Pick: {U['clean']}" in log and f"Upstream-Pick: {U['prune']}" in log
+        assert "(upstream 12)" in log and "#12" not in log, log
         assert git(r, "log", "-1", "--format=%an", "HEAD") == "T"
+        ledger = (r / LEDGER).read_text(encoding="utf-8")
+        assert f"| {U['clean']} | picked |" in ledger and f"| {U['prune']} | picked |" in ledger
 
-        # A pick taken already is not taken again; a conflict leaves nothing behind.
-        assert "already picked" in sync(r, "pick", u_clean).stdout
+        # The unstaged ledger (tracked, edited by the picks) doesn't block the next pick.
+        assert not clean(r) and git(r, "diff", "--name-only") == LEDGER
+        assert "already picked" in sync(r, "pick", U["clean"]).stdout
+        assert "picked as" in sync(r, "pick", U["moved"]).stdout
+        assert "line 5 fixed" not in (r / "new/x.rs").read_text(encoding="utf-8")
+        assert "fixed" in (r / "new/x.rs").read_text(encoding="utf-8")
+        assert not (r / "old").exists()
+
+        # A staged change blocks; a pick that fails keeps the ledger's unstaged rows.
+        git(r, "add", LEDGER)
+        assert "staged changes" in sync(r, "pick", U["port"], ok=False).stderr
+        git(r, "reset", "-q", "--", LEDGER)
+        before = (r / LEDGER).read_text(encoding="utf-8")
         head = git(r, "rev-parse", "HEAD")
-        res = sync(r, "pick", u_port, ok=False)
-        assert res.returncode == 1 and "needs a port" in res.stdout, res.stdout
+        res = sync(r, "pick", U["port"], ok=False)
+        assert "needs a port" in res.stdout, res.stdout
         assert git(r, "rev-parse", "HEAD") == head
-        assert git(r, "status", "--porcelain", "--untracked-files=no") == ""
-        assert not Path(git(r, "rev-parse", "--git-path", "CHERRY_PICK_HEAD")).exists()
+        assert (r / LEDGER).read_text(encoding="utf-8") == before
+        assert git(r, "diff", "--cached", "--name-only") == ""
 
-        # A removed-only commit picked: nothing left, nothing committed.
-        res = sync(r, "pick", u_removed, ok=False)
-        assert "record it skipped" in res.stdout and git(r, "rev-parse", "HEAD") == head
+        # The traps: a glob-like name, a move out of what the fork keeps, an untracked file in
+        # the way, a sensitive file, a lock-only conflict: none changes anything it shouldn't.
+        assert "nothing to take" in sync(r, "pick", U["glob"], ok=False).stdout
+        assert (r / "img1.txt").exists()
+        res = sync(r, "pick", U["move_out"], ok=False)
+        assert "delete the fork's file" in res.stdout and (r / "keep/k.rs").exists(), res.stdout
+        write(r, "new.rs", "mine\n")
+        res = sync(r, "pick", U["untracked"], ok=False)
+        assert "git refused the pick" in res.stdout, res.stdout
+        assert (r / "new.rs").read_text(encoding="utf-8") == "mine\n"
+        (r / "new.rs").unlink()
+        assert "--allow-sensitive" in sync(r, "pick", U["sensitive"], ok=False).stdout
+        assert "picked as" in sync(r, "pick", "--allow-sensitive", U["sensitive"]).stdout
+        assert "--lock" in sync(r, "pick", U["lock"], ok=False).stdout
+        assert git(r, "rev-parse", "HEAD") != head and git(r, "diff", "--cached") == ""
 
-        # Decisions without a commit: the ledger. A port: its trailer.
-        (r / "tools/upstream-sync").mkdir(parents=True)
-        write(r, "tools/upstream-sync/ledger.md", "| upstream | status | ref | subject | note |\n"
-              "|---|---|---|---|---|\n")
-        sync(r, "record", u_removed, "skipped", "--note", "macOS only")
-        sync(r, "record", u_removed, "skipped", "--note", "macOS only, again")  # replaces
-        ledger = (r / "tools/upstream-sync/ledger.md").read_text(encoding="utf-8")
-        assert ledger.count(u_removed[:12]) == 1 and "again" in ledger
-        # The ledger may be uncommitted while picking (it is the only file that may).
-        write(r, "a.rs", lines.replace("line 1\n", "fork line 1, the port\n", 1))
-        git(r, "commit", "-qam", f"Port of the crash fix\n\nUpstream-Port: {u_port[:12]}")
-        st = json.loads(sync(r, "status", "--json").stdout)
-        left = {c["sha"] for c in st["commits"]}
-        assert left == {u_after}, [c["subject"] for c in st["commits"]]
-        assert u_port not in json.loads(sync(r, "status", "--json").stdout)["commits"][0]["after"]
+        # Upstream's own markers count for nothing here; its #numbers link nowhere.
+        assert "picked as" in sync(r, "pick", U["marker"]).stdout
+        body = git(r, "log", "-1", "--format=%B")
+        assert f"upstream's text: Upstream-Pick: {other}" in body and "upstream 77" in body, body
+        assert other not in json.dumps(status(r)["warnings"])
 
-        # Deferred shows again; a ledger row upstream no longer has is reported.
-        sync(r, "record", u_after, "deferred", "--note", "after the window's rewrite")
-        st = json.loads(sync(r, "status", "--json").stdout)
-        assert [c["status"] for c in st["commits"]] == ["deferred"]
-        with open(r / "tools/upstream-sync/ledger.md", "a", encoding="utf-8") as f:
-            f.write("| 0123456789ab | skipped |  | gone | rewritten |\n")
-        assert json.loads(sync(r, "status", "--json").stdout)["ledger_unknown"] == ["0123456789ab"]
+        # A pick reverted here shows again; a picked row whose trailer a squash lost doesn't; a
+        # ported row without its trailer in dev shows again, with a warning.
+        sync(r, "pick", U["revert_me"])
+        git(r, "add", LEDGER)
+        git(r, "commit", "-qm", "ledger")
+        git(r, "revert", "--no-edit", "HEAD~1")
+        sync(r, "record", U["portrow"], "ported", "--ref", "PR 9", "--note", "by hand")
+        squash_row = f"| {U['squashed']} | picked | 2026-01-01 | abc | squashed: d.rs | |\n"
+        with open(r / LEDGER, "a", encoding="utf-8", newline="\n") as f:
+            f.write(squash_row)
+        st = status(r)
+        assert st["by"][U["revert_me"]]["status"] == "reverted", st["by"][U["revert_me"]]
+        assert U["squashed"] not in st["by"]
+        assert st["by"][U["portrow"]]["status"] == "ported?"
+        assert any("ported" in w and U["portrow"][:12] in w for w in st["warnings"])
 
-        # PR: refuses when origin is the original.
-        git(r, "remote", "add", "origin", "https://github.com/anefzaoui/misterdownloadmanager.git")
+        # A port's trailer settles it; record replaces a row, and refuses what isn't upstream's.
+        write(r, "a.rs", edit(LINES, 1, "fork line 1, the port"))
+        git(r, "add", "a.rs")
+        git(r, "commit", "-qm", f"Port of the crash fix\n\nUpstream-Port: {U['port']}")
+        sync(r, "record", U["port"], "ported", "--ref", "this commit", "--note", "by hand")
+        sync(r, "record", U["removed"], "skipped", "--note", "macOS only")
+        sync(r, "record", U["removed"], "skipped", "--note", "macOS only, again")
+        ledger = (r / LEDGER).read_text(encoding="utf-8")
+        assert ledger.count(U["removed"]) == 1 and "again" in ledger
+        assert "not an upstream commit" in sync(r, "record", base, "skipped", "--note", "x",
+                                                ok=False).stderr
+        st = status(r)
+        assert U["port"] not in st["by"] and U["removed"] not in st["by"]
+        assert U["port"] not in st["by"][U["after"]]["after"]
+        with open(r / LEDGER, "a", encoding="utf-8", newline="\n") as f:
+            f.write("| 0123456789ab | skipped | | | gone | |\n| " + U["glob"] + " | skiped | | | |"
+                    " typo |\n")
+        warnings = " ".join(status(r)["warnings"])
+        assert "0123456789ab" in warnings and "unknown status 'skiped'" in warnings, warnings
+
+        # PRs: never through an origin that is, or pushes to, the original; never a body that
+        # would mention the original's issues.
         git(r, "add", "-A")
         git(r, "commit", "-qm", "ledger")
-        res = sync(r, "pr", "--title", "t", "--body-file", "x", ok=False)
-        assert res.returncode == 1 and "never push there" in res.stderr, res.stderr
+        git(r, "remote", "add", "origin", "https://github.com/someone/fork.git")
+        git(r, "remote", "set-url", "--push", "origin",
+            "https://github.com/anefzaoui/misterdownloadmanager.git")
+        assert "never push there" in sync(r, "pr", "--title", "t", "--body-file", "x",
+                                          ok=False).stderr
+        git(r, "remote", "set-url", "--push", "origin", "https://github.com/someone/fork.git")
+        if shutil.which("gh"):
+            write(r, "body.md", "Fixes anefzaoui/misterdownloadmanager#771.\n")
+            res = sync(r, "pr", "--title", "t", "--body-file", str(r / "body.md"), ok=False)
+            assert "would link to" in res.stderr, res.stderr
+        assert git(r, "for-each-ref", "refs/remotes/origin/upstream-sync") == ""
     print("ok: sync.py sorts, picks, records and refuses as it should")
 
 
 if __name__ == "__main__":
-    os.environ.pop("GIT_DIR", None)
     main()

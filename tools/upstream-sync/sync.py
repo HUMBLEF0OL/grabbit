@@ -6,38 +6,47 @@ The original (anefzaoui/misterdownloadmanager) is the `upstream` remote: fetched
 this fork. Nothing here merges upstream wholesale: the fork has removed parts of it (the other
 platforms, the other languages) and rewrites others (Graphite), so each commit is sorted:
 
-  removed  every file it touches is gone here (or lies in a folder that is): nothing to take
-  clean    applies as it is (after the fork's own files below are left out)
-  prune    applies once the removed files and the fork's own files are left out
-  port     conflicts in code the fork kept and changed: read the fix and write it again by hand
+  nothing  it only touches the fork's own record (OWN): nothing to take
+  removed  every other file it touches is gone here (or lies in a folder that is): nothing to take
+  clean    applies as it is (the fork's own record left out)
+  prune    applies once the removed files and the fork's own record are left out
+  lock     applies but for Cargo.lock: `pick --lock` keeps the fork's and makes upstream's bumps
+  port     conflicts in code the fork kept: read the fix and write it again by hand
+  merge    an upstream merge commit whose result differs from merging its parents: read it
 
-The fork's own files (OWN) always keep the fork's version: upstream's lines in them are left out
-and the sync pull request writes the fork's own entries. A sorted commit is a starting point, not
-a verdict: a "clean" one can still break the fork's logic, which is what the build and tests and
-the review are for (.claude/skills/upstream-sync/SKILL.md).
+The kind says whether the text applies, never whether the fix is right here: a `clean` commit can
+still break the fork's logic, which is what the flags, the build and the review are for
+(.claude/skills/upstream-sync/SKILL.md). Flags: C critical-looking, S sensitive (runs code or
+instructs agents: never batch-picked), A earlier upstream commits not taken here changed the same
+files or crates, I upstream's identity in added lines, P another platform, a language or text
+direction in added lines.
 
-What was taken is read from this fork's history: a pick's `(cherry picked from commit <sha>)`
-line and a port's `Upstream-Port: <sha>` trailer. What was decided without a commit (skipped,
-covered, deferred) is in LEDGER.
+The record of what was decided is LEDGER (one row per upstream commit, written by `pick` and
+`record`), backed by the trailers `pick` and a port leave in this fork's history
+(`Upstream-Pick: <sha>`, `Upstream-Port: <sha>`), so a squash merge losing the trailers, a revert
+in the fork or a port PR closed unmerged can't make a fix look taken when it isn't.
 
-    python tools/upstream-sync/sync.py doctor [--fix]   # the remotes and gh, checked (and set)
-    python tools/upstream-sync/sync.py status [--fetch] [--json] [--all] [--onto REF]
+    python tools/upstream-sync/sync.py doctor [--fix]   # remotes, gh, branches: checked (and set)
+    python tools/upstream-sync/sync.py status [--fetch] [--json] [--all]
     python tools/upstream-sync/sync.py show <sha>       # one commit: why it sorts as it does
-    python tools/upstream-sync/sync.py pick <sha>...    # onto the current sync branch
+    python tools/upstream-sync/sync.py watch [--json]   # upstream's open PRs and unmerged branches
+    python tools/upstream-sync/sync.py report           # status + watch as Markdown (CI's issue)
+    python tools/upstream-sync/sync.py pick <sha>... [--lock] [--allow-sensitive] [--keep-going]
     python tools/upstream-sync/sync.py record <sha> <skipped|covered|deferred|ported> --note "…"
-    python tools/upstream-sync/sync.py pr --title "…" --body-file F   # push, PR to the fork's dev
+    python tools/upstream-sync/sync.py pr --title "…" --body-file F [--draft] [--force]
 
 Python 3.10 or later; git 2.40 or later (merge-tree --merge-base).
 """
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
-import tempfile
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -46,24 +55,52 @@ UPSTREAM_SLUG = "anefzaoui/misterdownloadmanager"
 UPSTREAM_BRANCH = "main"
 FORK_REMOTE = "origin"
 FORK_BASE = "dev"
-PROTECTED = {"dev", "main"}
+PROTECTED = ("dev", "main")
 SYNC_PREFIX = "upstream-sync/"
 LEDGER = "tools/upstream-sync/ledger.md"
 # The fork's own record of what changed and what's planned: upstream's lines never land here.
-OWN = ("CHANGELOG.md", "ROADMAP.md")
-STATUSES = ("skipped", "covered", "deferred", "ported")
-# A hint for the reviewer, never a decision: words upstream's subjects use for fixes that matter.
+OWN = ("CHANGELOG.md", "ROADMAP.md", LEDGER)
+STATUSES = ("picked", "ported", "skipped", "covered", "deferred")
+RECORDABLE = ("skipped", "covered", "deferred", "ported")
+# A move the fork made counts only when git is this sure of it; below, git's guess (50 %) can pair
+# a deleted file with an unrelated new one and carry upstream's fix into the wrong file.
+RENAMES = "find-renames=90%"
+STALE_DEFERRED_DAYS = 14
+
+# Hints for the reviewer, never decisions. Upstream writes plain language ("the window never
+# waits", "no longer holds up"), so its phrasings are here as well as the usual words.
 CRITICAL = re.compile(
-    r"secur|vulnerab|cve-|crash|panic|freez|hangs?|deadlock|corrupt|data loss|heap|"
-    r"overflow|leak|injection|traversal|signature|integrity|checksum|one piece short|"
-    r"can't stop|permissions",
+    r"secur|vulnerab|\bcve-|crash|panic|freez|\bhangs?\b|deadlock|corrupt|data loss|heap|"
+    r"overflow|\bleak|injection|traversal|signature|integrity|checksum|one piece short|"
+    r"can't stop|can't start|won't start|window's thread|beside the window|holds? up|"
+    r"never waits|stops? answering|not responding|lost|\bshort\b|untrusted|privacy|referr|"
+    r"only the service's own|permissions|\btls\b|certificate|\btokens?\b|password",
     re.I,
 )
-# Upstream still builds for these; this fork doesn't (a hint: such a commit is usually skipped).
-OTHER_PLATFORMS = re.compile(r"^(linux|macos|mac|ubuntu|flatpak|safari)|^linux and macos", re.I)
-PICKED = re.compile(r"\(cherry picked from commit ([0-9a-f]{40})\)")
-PORTED = re.compile(r"^Upstream-Port:\s*([0-9a-f]{7,40})\s*$", re.M)
-ROW = re.compile(r"^\|\s*([0-9a-f]{7,40})\s*\|\s*(\w+)\s*\|(.*)\|\s*$")
+CRITICAL_AREAS = ("crates/debrid/", "crates/ipc/", "crates/nmhost/", "crates/crash/",
+                  "crates/remote/", "crates/app/src/help.rs", "extension/background.js",
+                  "tools/installer/", ".github/workflows/")
+SENSITIVE = re.compile(
+    r"^(\.claude/|\.github/|\.cargo/|\.vscode/|tools/|CLAUDE\.md$|AGENTS\.md$|\.gitattributes$|"
+    r"rust-toolchain(\.toml)?$)|(^|/)(build\.rs|package\.json)$"
+)
+OTHER_PLATFORMS = re.compile(r"^(linux|macos|mac|ubuntu|flatpak|safari|helium)\b|linux and macos",
+                             re.I)
+ADDED_LINTS = (
+    ("P", re.compile(r'target_os\s*=\s*"(linux|macos|ios|android)"|cfg\(\s*unix\s*\)')),
+    ("P", re.compile(r"right-to-left|\bis_rtl\b|\brtl\b|text direction|dir=\W?rtl", re.I)),
+    ("I", re.compile(r"anefzaoui", re.I)),
+)
+ISSUE = re.compile(r"(?<![\w/])#(\d+)")
+PICK_TRAILER = re.compile(r"^Upstream-Pick:\s*([0-9a-f]{40})\s*$", re.M)
+PORT_TRAILER = re.compile(r"^Upstream-Port:\s*([0-9a-f]{40})\s*$", re.M)
+REVERTS = re.compile(r"This reverts commit ([0-9a-f]{40})")
+MARKERS = re.compile(r"^(?=Upstream-(Pick|Port):|.*cherry picked from commit)", re.M | re.I)
+ROW = re.compile(r"^\|\s*([0-9a-fA-F]{7,40})\s*\|\s*([\w?-]+)\s*\|(.*)\|\s*$")
+# A reference GitHub would turn into a link, and so a mention on the original's issue or PR.
+UPSTREAM_LINK = re.compile(
+    r"anefzaoui/misterdownloadmanager(#\d+|/(issues|pull|discussions)/\d+)|"
+    r"github\.com/anefzaoui/misterdownloadmanager/(issues|pull|discussions)/", re.I)
 
 
 class Fail(Exception):
@@ -71,13 +108,15 @@ class Fail(Exception):
 
 
 def git(*args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
+    # Paths come back as they are (no "\303\251" quoting) and go in as they are (no globbing:
+    # `git rm "img[1].txt"` must never remove img1.txt).
     r = subprocess.run(
-        ["git", *args],
+        ["git", "-c", "core.quotepath=off", *args],
         capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
-        env={**os.environ, **(env or {})},
+        env={**os.environ, "GIT_LITERAL_PATHSPECS": "1", **(env or {})},
     )
     if check and r.returncode != 0:
         raise Fail(f"git {' '.join(args)}: {r.stderr.strip() or r.stdout.strip()}")
@@ -88,12 +127,17 @@ def out(*args: str) -> str:
     return git(*args).stdout.strip()
 
 
+def zlist(*args: str) -> list[str]:
+    """A NUL-separated list (`-z` added by the caller), exactly as git wrote each name."""
+    return [p for p in git(*args).stdout.split("\0") if p]
+
+
 def root() -> Path:
     return Path(out("rev-parse", "--show-toplevel"))
 
 
 def slug(url: str) -> str:
-    """owner/name of a GitHub remote address (https or ssh), lower case."""
+    """owner/name of a GitHub remote address (https or ssh), lower case; '' when not GitHub."""
     m = re.search(r"github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$", url.strip())
     return m.group(1).lower() if m else ""
 
@@ -115,92 +159,185 @@ def has_ref(ref: str) -> bool:
     return git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}", check=False).returncode == 0
 
 
-def current_branch() -> str:
-    return git("symbolic-ref", "--short", "-q", "HEAD", check=False).stdout.strip()
-
-
-# ---------------------------------------------------------------------------------------------
-# What the fork removed, and what it has already taken
-
-
-@dataclass
-class Removed:
-    files: set[str]
-    dirs: set[str]
-
-    def __contains__(self, path: str) -> bool:
-        if path in self.files:
-            return True
-        parts = path.split("/")
-        return any("/".join(parts[:i]) in self.dirs for i in range(1, len(parts)))
-
-
-def removed(base: str, head: str) -> Removed:
-    """Files the fork deleted since the fork point (a rename is not a deletion: git follows it),
-    and folders that existed then and are gone now (a file upstream adds in one is removed too)."""
-    files = set(out("diff", "-M", "--diff-filter=D", "--name-only", base, head).splitlines())
-    then = set(out("ls-tree", "-r", "-d", "--name-only", base).splitlines())
-    now = set(out("ls-tree", "-r", "-d", "--name-only", head).splitlines())
-    return Removed(files, then - now)
-
-
-def fork_changed(base: str, head: str) -> set[str]:
-    return set(out("diff", "-M", "--name-only", base, head).splitlines())
-
-
-def read_ledger(path: Path) -> dict[str, tuple[str, str]]:
-    """sha (as written) -> (status, rest of the row)."""
-    rows = {}
-    if path.exists():
-        for line in path.read_text(encoding="utf-8").splitlines():
-            m = ROW.match(line)
-            if m:
-                rows[m.group(1)] = (m.group(2), m.group(3).strip())
-    return rows
-
-
 def full_sha(sha: str) -> str | None:
     r = git("rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}", check=False)
     return r.stdout.strip() if r.returncode == 0 else None
 
 
+def current_branch() -> str:
+    return git("symbolic-ref", "--short", "-q", "HEAD", check=False).stdout.strip()
+
+
+def git_path(name: str) -> Path:
+    return Path(out("rev-parse", "--git-path", name))
+
+
+def today() -> str:
+    return dt.date.today().isoformat()
+
+
+# ---------------------------------------------------------------------------------------------
+# What the fork removed or moved, and what it changed
+
+
 @dataclass
-class Handled:
-    picked: set[str] = field(default_factory=set)
-    ported: set[str] = field(default_factory=set)
-    equivalent: set[str] = field(default_factory=set)
-    ledger: dict[str, str] = field(default_factory=dict)
-    unknown: list[str] = field(default_factory=list)  # ledger rows upstream no longer has
+class Fork:
+    gone: set[str]                 # files deleted here (not moved)
+    gone_dirs: set[str]            # folders deleted here, with nothing in them moved out
+    moved: dict[str, str]          # upstream path -> the fork's (git sure: 90 % or more alike)
+    rewritten: dict[str, str]      # deleted here, perhaps rewritten as (50-90 % alike)
+    changed: set[str]              # every path the fork changed, both names of a move
 
-    def status(self, sha: str) -> str | None:
-        if sha in self.picked:
-            return "picked"
-        if sha in self.ported or any(sha.startswith(p) for p in self.ported if len(p) < 40):
-            return "ported"
-        if sha in self.ledger:
-            return self.ledger[sha]
-        if sha in self.equivalent:
-            return "equivalent"
-        return None
+    def is_gone(self, path: str) -> bool:
+        if path in self.moved or path in self.rewritten:
+            return False
+        if path in self.gone:
+            return True
+        parts = path.split("/")
+        return any("/".join(parts[:i]) in self.gone_dirs for i in range(1, len(parts)))
 
 
-def handled(refs: list[str], fork_point: str, up: str, ledger_path: Path) -> Handled:
-    h = Handled()
+def renames(base: str, head: str, threshold: str) -> list[tuple[int, str, str]]:
+    items = zlist("diff", f"-M{threshold}", "--diff-filter=R", "--name-status", "-z", base, head)
+    return [(int(items[i][1:] or 0), items[i + 1], items[i + 2]) for i in range(0, len(items), 3)]
+
+
+def fork_state(base: str, head: str) -> Fork:
+    deleted = set(zlist("diff", "--no-renames", "--diff-filter=D", "--name-only", "-z", base, head))
+    moved, rewritten = {}, {}
+    for score, src, dst in renames(base, head, "50%"):
+        (moved if score >= 90 else rewritten)[src] = dst
+    gone = deleted - moved.keys() - rewritten.keys()
+    then_dirs = set(zlist("ls-tree", "-r", "-d", "--name-only", "-z", base))
+    now_dirs = set(zlist("ls-tree", "-r", "-d", "--name-only", "-z", head))
+    alive = set()  # folders that still hold, or moved out, something the fork keeps
+    for path in zlist("ls-tree", "-r", "--name-only", "-z", base):
+        if path not in gone:
+            parts = path.split("/")
+            alive.update("/".join(parts[:i]) for i in range(1, len(parts)))
+    changed = set()
+    items = zlist("diff", "-M50%", "--name-status", "-z", base, head)
+    i = 0
+    while i < len(items):
+        status = items[i]
+        n = 2 if status[0] in "RC" else 1
+        changed.update(items[i + 1:i + 1 + n])
+        i += 1 + n
+    return Fork(gone, (then_dirs - now_dirs) - alive, moved, rewritten, changed)
+
+
+# ---------------------------------------------------------------------------------------------
+# What has been taken or decided
+
+
+@dataclass
+class Row:
+    sha: str
+    status: str
+    date: str
+    ref: str
+    subject: str
+    note: str
+
+
+def read_ledger(path: Path) -> tuple[list[Row], list[str]]:
+    """The rows, and what's wrong with any (a bad status, a duplicate)."""
+    rows, problems, seen = [], [], set()
+    if not path.exists():
+        return rows, problems
+    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        m = ROW.match(line)
+        if not m:
+            continue
+        cells = [c.strip() for c in m.group(3).split("|")]
+        cells += [""] * (4 - len(cells))
+        row = Row(m.group(1).lower(), m.group(2).lower(), *cells[:4])
+        if row.status not in STATUSES:
+            problems.append(f"ledger line {n}: unknown status {row.status!r} (row ignored)")
+            continue
+        if row.sha in seen:
+            problems.append(f"ledger line {n}: a second row for {row.sha[:12]} (the last counts)")
+        seen.add(row.sha)
+        rows.append(row)
+    return rows, problems
+
+
+@dataclass
+class Taken:
+    status: dict[str, str] = field(default_factory=dict)   # upstream sha -> its status here
+    warnings: list[str] = field(default_factory=list)
+
+    def of(self, sha: str) -> str | None:
+        return self.status.get(sha)
+
+
+DONE = {"picked", "ported", "skipped", "covered", "equivalent"}
+
+
+def taken(refs: list[str], fork_point: str, up: str, in_range: set[str], ledger: Path) -> Taken:
+    t = Taken()
     refs = [r for r in dict.fromkeys(refs) if has_ref(r)]
-    log = out("log", "--format=%B%x00", f"^{fork_point}", *refs) if refs else ""
-    h.picked = set(PICKED.findall(log))
-    h.ported = set(PORTED.findall(log))
-    for ref in refs:  # same change already here, by patch-id (a pick made without -x, a rebase)
+    picked, ported, reverted = set(), set(), set()
+    if refs:
+        # Oldest first, so a later revert undoes an earlier pick, and a pick again redoes it.
+        raw = out("log", "--reverse", "--topo-order", "--format=%H%x1f%B%x1e", f"^{fork_point}",
+                  *refs)
+        by_commit: dict[str, tuple[set[str], set[str]]] = {}
+        for record in raw.split("\x1e"):
+            if "\x1f" not in record:
+                continue
+            sha, body = record.strip().split("\x1f", 1)
+            p, q = set(PICK_TRAILER.findall(body)), set(PORT_TRAILER.findall(body))
+            by_commit[sha] = (p, q)
+            for r in REVERTS.findall(body):
+                rp, rq = by_commit.get(r, (set(), set()))
+                picked -= rp
+                ported -= rq
+                reverted |= rp | rq
+            picked |= p
+            ported |= q
+            reverted -= p | q
+    for sha in sorted(picked | ported):
+        if sha not in in_range:
+            t.warnings.append(f"a trailer names {sha[:12]}, not an upstream commit since the fork "
+                              "point (rewritten upstream history?)")
+    for sha in picked:
+        t.status[sha] = "picked"
+    for sha in ported:
+        t.status[sha] = "ported"
+    for ref in refs:  # the same change already here by patch-id (a pick made by hand, a rebase)
         for line in out("cherry", ref, up, fork_point).splitlines():
             if line.startswith("- "):
-                h.equivalent.add(line[2:].strip())
-    for sha, (status, _) in read_ledger(ledger_path).items():
-        full = full_sha(sha)
-        if full:
-            h.ledger[full] = status
+                t.status.setdefault(line[2:].strip(), "equivalent")
+    rows, problems = read_ledger(ledger)
+    t.warnings += problems
+    for row in rows:
+        full = full_sha(row.sha) if len(row.sha) < 40 else row.sha
+        if not full or full not in in_range:
+            t.warnings.append(f"ledger row {row.sha[:12]}: not an upstream commit since the fork "
+                              "point (rewritten upstream history, or a typo)")
+            continue
+        if row.status == "picked":
+            # A squash merge may have dropped the trailer: the row stands, unless it was reverted.
+            t.status[full] = "reverted" if full in reverted else "picked"
+        elif row.status == "ported":
+            t.status[full] = "ported" if full in ported else "ported?"
         else:
-            h.unknown.append(sha)
-    return h
+            t.status[full] = row.status
+        if row.status == "deferred":
+            try:
+                age = (dt.date.today() - dt.date.fromisoformat(row.date)).days
+            except ValueError:
+                age = 0
+            if age > STALE_DEFERRED_DAYS:
+                t.warnings.append(f"{full[:12]} deferred {age} days ago: decide it again")
+    for sha, st in t.status.items():
+        if st == "ported?":
+            t.warnings.append(f"{sha[:12]} is recorded ported, but no `Upstream-Port` trailer for "
+                              "it is in dev or here: its PR not merged yet, or closed")
+        if st == "reverted":
+            t.warnings.append(f"{sha[:12]} was picked, then reverted here: decide it again")
+    return t
 
 
 # ---------------------------------------------------------------------------------------------
@@ -210,282 +347,548 @@ def handled(refs: list[str], fork_point: str, up: str, ledger_path: Path) -> Han
 @dataclass
 class Commit:
     sha: str
+    index: int
     date: str
     subject: str
     kind: str = ""
-    critical: bool = False
+    flags: str = ""
+    critical_why: list[str] = field(default_factory=list)
+    issues: list[str] = field(default_factory=list)
+    same_issue: list[str] = field(default_factory=list)
+    changelog: list[str] = field(default_factory=list)
     touches_fork: list[str] = field(default_factory=list)
     left_out: list[str] = field(default_factory=list)
+    sensitive: list[str] = field(default_factory=list)
     conflicts: list[str] = field(default_factory=list)
-    after: list[str] = field(default_factory=list)  # earlier upstream commits not taken, same files
+    after: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     status: str | None = None
 
 
-def touched(sha: str) -> list[str]:
-    """Paths the commit changes, both sides of a rename."""
-    paths = []
-    for line in out("diff-tree", "-r", "-M", "--no-commit-id", "--name-status", sha).splitlines():
-        paths += line.split("\t")[1:]
-    return list(dict.fromkeys(paths))
+def changes(sha: str) -> list[tuple[str, str, str | None]]:
+    """(status letter, path, renamed-to) for each change; a rename once, with both names."""
+    items = zlist("diff-tree", "-r", "-M", "--no-commit-id", "--name-status", "-z", "--root", sha)
+    res, i = [], 0
+    while i < len(items):
+        st = items[i][0]
+        if st in "RC":
+            res.append((st, items[i + 1], items[i + 2]))
+            i += 3
+        else:
+            res.append((st, items[i + 1], None))
+            i += 2
+    return res
 
 
-def simulate(sha: str, onto: str) -> tuple[bool, list[str]]:
-    """Cherry-pick `sha` onto `onto` in memory (nothing on disk moves): clean?, conflicted paths."""
-    r = git(
-        "merge-tree", "--write-tree", "--name-only", "--no-messages",
-        f"--merge-base={sha}^", onto, sha, check=False,
-    )
+def simulate(sha: str, onto: str) -> list[str]:
+    """Cherry-pick `sha` onto `onto` in memory (nothing on disk moves): the conflicted paths."""
+    r = git("merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", "-X", RENAMES,
+            f"--merge-base={sha}^", onto, sha, check=False)
     if r.returncode not in (0, 1):
         raise Fail(f"merge-tree on {sha[:12]}: {r.stderr.strip()}")
-    lines = r.stdout.splitlines()
     conflicts = []
-    for line in lines[1:]:
-        if not line.strip():
+    for p in r.stdout.split("\0")[1:]:
+        if not p:
             break
-        conflicts.append(line.strip())
-    return r.returncode == 0, list(dict.fromkeys(conflicts))
+        conflicts.append(p)
+    return list(dict.fromkeys(conflicts))
 
 
-def not_taken_before(c: Commit, paths: list[str], fork_point: str, h: Handled) -> list[str]:
-    """Earlier upstream commits, not taken here yet, that changed these paths: a conflict in them
-    is often upstream's own earlier change missing here, not the fork's. Take or port those first."""
-    if not paths:
-        return []
-    shas = out("rev-list", "--reverse", "--no-merges", f"{fork_point}..{c.sha}^", "--", *paths)
-    return [s for s in shas.splitlines() if h.status(s) in (None, "deferred")]
+def added_lines(sha: str, path: str) -> list[str]:
+    diff = git("show", "--format=", "--no-color", "--unified=0", sha, "--", path).stdout
+    return [ln[1:] for ln in diff.splitlines() if ln.startswith("+") and not ln.startswith("+++")]
 
 
-def sort_commit(c: Commit, onto: str, gone: Removed, changed: set[str], fork_point: str,
-                h: Handled) -> Commit:
-    full = out("log", "-1", "--format=%B", c.sha)
-    c.critical = bool(CRITICAL.search(full))
-    paths = touched(c.sha)
+def crate_tomls(paths: list[str]) -> list[str]:
+    tomls = {"Cargo.toml"} if any(p.endswith(".rs") for p in paths) else set()
+    for p in paths:
+        m = re.match(r"(crates/[^/]+)/", p)
+        if m:
+            tomls.add(f"{m.group(1)}/Cargo.toml")
+    return sorted(tomls)
+
+
+def sort_commit(c: Commit, onto: str, fork: Fork, fork_point: str, t: Taken,
+                messages: dict[str, str]) -> Commit:
+    msg = messages.get(c.sha) or out("log", "-1", "--format=%B", c.sha)
+    ch = changes(c.sha)
+    paths = list(dict.fromkeys(p for _, a, b in ch for p in (a, b) if p))
+    if "CHANGELOG.md" in paths:
+        c.changelog = [ln for ln in added_lines(c.sha, "CHANGELOG.md") if ln.strip()]
+    c.issues = sorted(set(ISSUE.findall(msg)), key=int)
+    words = CRITICAL.findall(msg + "\n" + "\n".join(c.changelog))
+    c.critical_why = sorted({w.lower() for w in words})
+    areas = [a for a in CRITICAL_AREAS if any(p.startswith(a) for p in paths)]
+    if areas:
+        c.notes.append("touches " + ", ".join(areas) + " (security, IPC, crash or release code): "
+                       "read it for a fix that matters even when its subject doesn't say so")
     own = [p for p in paths if p in OWN]
-    gone_here = [p for p in paths if p in gone]
+    gone = [p for p in paths if p not in OWN and fork.is_gone(p)]
     rest = [p for p in paths if p not in OWN and p not in gone]
-    c.left_out = gone_here + own
-    c.touches_fork = [p for p in rest if p in changed]
+    c.left_out = gone + own
+    c.touches_fork = [p for p in rest if p in fork.changed]
+    c.sensitive = [p for p in rest if SENSITIVE.search(p)]
+    for _, src, _dst in ch:
+        if src in fork.rewritten:
+            c.notes.append(f"{src} was deleted here, perhaps rewritten as {fork.rewritten[src]}: "
+                           "check whether the fix belongs there")
+    look = rest or paths
+    earlier = out("rev-list", "--reverse", "--no-merges", f"{fork_point}..{c.sha}^", "--",
+                  *look, *crate_tomls(look))
+    c.after = [s for s in earlier.splitlines() if t.of(s) not in DONE]
     if not rest:
-        c.kind = "removed"
-        return c
-    if len(out("rev-list", "--parents", "-n", "1", c.sha).split()) > 2:
-        c.notes.append("a merge commit: its own resolution is not carried")
-    _, conflicts = simulate(c.sha, onto)
-    c.conflicts = [p for p in conflicts if p not in OWN and p not in gone]
-    if c.conflicts:
-        c.kind = "port"
-        c.after = not_taken_before(c, c.conflicts, fork_point, h)
-        mine = [p for p in c.conflicts if p in changed]
-        if c.after:
-            c.notes.append("after " + ", ".join(s[:12] for s in c.after)
-                           + ": upstream changed these files before; take those first, then sort again")
-        if not mine:
-            c.notes.append("the fork never changed the conflicting files: only upstream's earlier "
-                           "commits are missing")
-    elif gone_here or (set(conflicts) & set(own)):
-        c.kind = "prune"
+        c.kind = "removed" if gone else "nothing"
     else:
-        c.kind = "clean"
-    if "Cargo.lock" in c.conflicts:
-        c.notes.append("Cargo.lock: keep the fork's, then `cargo update -p <crate>` for its bump")
-    if any(p.endswith(".rs") for p in c.left_out if p in gone):
-        c.notes.append("Rust code left out: check nothing kept here needed it")
-    if OTHER_PLATFORMS.search(c.subject):
-        c.notes.append("about another platform: likely skipped, unless it touches shared code")
-    if c.touches_fork and c.kind != "port":
+        moves_out = [(src, dst) for st, src, dst in ch
+                     if st == "R" and dst and (dst in OWN or fork.is_gone(dst)) and src in rest]
+        moves_own = [(src, dst) for st, src, dst in ch if st == "R" and src in OWN]
+        conflicts = simulate(c.sha, onto)
+        c.conflicts = [p for p in conflicts if p not in OWN and not fork.is_gone(p)]
+        if moves_out or moves_own:
+            c.kind = "port"
+            c.notes += [f"upstream moves {s} to {d}, which this fork doesn't keep: a pick would "
+                        "delete the fork's file" for s, d in moves_out + moves_own]
+        elif c.conflicts == ["Cargo.lock"]:
+            c.kind = "lock"
+        elif c.conflicts:
+            c.kind = "port"
+        elif gone or set(conflicts) & set(own):
+            c.kind = "prune"
+        else:
+            c.kind = "clean"
+        if c.kind == "port" and c.conflicts:
+            if all(p in fork.changed for p in c.conflicts):
+                c.notes.append("the fork changed the conflicting files: port by hand now; never "
+                               "take a feature only to make this apply")
+            elif c.after:
+                c.notes.append("the fork never changed some conflicting files: upstream's earlier "
+                               "commits (A) are missing; decide those first, then sort again")
+        added = {p: added_lines(c.sha, p) for p in rest}
+        for flag, rx in ADDED_LINTS:
+            hits = [p for p, lines in added.items() if any(rx.search(ln) for ln in lines)]
+            if hits and flag not in c.flags:
+                c.flags += flag
+            what = "another platform or text direction" if flag == "P" else "upstream's identity"
+            c.notes += [f"{p}: added lines name {what}" for p in hits]
+    if OTHER_PLATFORMS.search(c.subject) and "P" not in c.flags:
+        c.flags += "P"
+    if c.critical_why:
+        c.flags = "C" + c.flags
+    if c.sensitive:
+        c.flags += "S"
+        c.notes.append("sensitive (" + ", ".join(c.sensitive) + "): read every line; never "
+                       "batch-picked (pick it alone with --allow-sensitive after review)")
+    if c.after:
+        c.flags += "A"
+    if c.touches_fork and c.kind in ("clean", "prune", "lock"):
         c.notes.append("applies, but in files the fork changed: review the logic, not just the text")
+    c.notes = list(dict.fromkeys(c.notes))
     return c
 
 
-def pending(fork_point: str, up: str) -> list[Commit]:
-    commits = []
-    fmt = "%H%x1f%ad%x1f%s"
-    for line in out(
-        "log", "--reverse", "--topo-order", "--no-merges", "--date=short", f"--format={fmt}",
-        f"{fork_point}..{up}",
-    ).splitlines():
-        sha, date, subject = line.split("\x1f", 2)
-        commits.append(Commit(sha, date, subject))
-    return commits
+def pending(fork_point: str, up: str) -> tuple[list[Commit], dict[str, str]]:
+    commits, messages = [], {}
+    raw = out("log", "--reverse", "--topo-order", "--no-merges", "--date=short",
+              "--format=%H%x1f%ad%x1f%s%x1f%B%x1e", f"{fork_point}..{up}")
+    for i, record in enumerate(r for r in raw.split("\x1e") if r.strip()):
+        sha, date, subject, body = record.strip().split("\x1f", 3)
+        commits.append(Commit(sha, i + 1, date, subject))
+        messages[sha] = body
+    return commits, messages
+
+
+def evil_merges(fork_point: str, up: str, t: Taken) -> list[Commit]:
+    """Upstream merges whose tree isn't what merging their parents gives: changes of their own."""
+    res = []
+    for line in out("rev-list", "--merges", "--reverse", "--format=%H %P",
+                    f"{fork_point}..{up}").splitlines():
+        if line.startswith("commit "):
+            continue
+        sha, *parents = line.split()
+        if t.of(sha) in DONE:
+            continue
+        r = git("merge-tree", "--write-tree", *parents, check=False) if len(parents) == 2 else None
+        tree = r.stdout.split("\n", 1)[0].strip() if r else ""
+        if r is None or r.returncode != 0 or tree != out("rev-parse", f"{sha}^{{tree}}"):
+            c = Commit(sha, 0, out("log", "-1", "--date=short", "--format=%ad", sha),
+                       out("log", "-1", "--format=%s", sha), kind="merge")
+            c.notes.append("an upstream merge with changes of its own: `git show --cc` it, port "
+                           "what's wanted, `record` it")
+            res.append(c)
+    return res
 
 
 # ---------------------------------------------------------------------------------------------
 # Commands
 
 
-def context(onto: str | None) -> tuple[str, str, str, Removed, set[str], Handled]:
-    up, fork = upstream_ref(), fork_ref()
-    for ref in (up, fork):
+@dataclass
+class Context:
+    up: str
+    fork_point: str
+    onto: str
+    fork: Fork
+    t: Taken
+    in_range: set[str]
+
+
+def context() -> Context:
+    up, forkref = upstream_ref(), fork_ref()
+    for ref in (up, forkref):
         if not has_ref(ref):
             raise Fail(f"{ref} is missing: run `doctor --fix`, then `status --fetch`")
-    onto = onto or "HEAD"
-    fork_point = git("merge-base", fork, up, check=False).stdout.strip()
+    fork_point = git("merge-base", forkref, up, check=False).stdout.strip()
     if not fork_point:
-        raise Fail(f"{fork} and {up} share no history")
-    gone = removed(fork_point, onto)
-    changed = fork_changed(fork_point, onto)
-    h = handled([fork, "HEAD", onto], fork_point, up, root() / LEDGER)
-    return up, fork_point, onto, gone, changed, h
+        raise Fail(f"{forkref} and {up} share no history")
+    in_range = set(out("rev-list", f"{fork_point}..{up}").splitlines())
+    fork = fork_state(fork_point, "HEAD")
+    t = taken([forkref, "HEAD"], fork_point, up, in_range, root() / LEDGER)
+    return Context(up, fork_point, "HEAD", fork, t, in_range)
+
+
+def sorted_commits(ctx: Context, everything: bool) -> list[Commit]:
+    commits, messages = pending(ctx.fork_point, ctx.up)
+    for c in commits:
+        c.status = ctx.t.of(c.sha)
+    todo = [c for c in commits if everything or c.status not in DONE]
+    by_issue: dict[str, list[Commit]] = {}
+    for c in todo:
+        sort_commit(c, ctx.onto, ctx.fork, ctx.fork_point, ctx.t, messages)
+        for n in c.issues:
+            by_issue.setdefault(n, []).append(c)
+    for c in todo:
+        others = {x.sha: x.index for n in c.issues for x in by_issue[n] if x.sha != c.sha}
+        c.same_issue = sorted(others, key=others.get)
+    return todo + evil_merges(ctx.fork_point, ctx.up, ctx.t)
 
 
 def cmd_status(a) -> int:
     if a.fetch:
         git("fetch", UPSTREAM_REMOTE, "--no-tags", "--prune")
-        git("fetch", FORK_REMOTE, "--prune")
-    up, fork_point, onto, gone, changed, h = context(a.onto)
-    commits = pending(fork_point, up)
-    for c in commits:
-        c.status = h.status(c.sha)
-    todo = [c for c in commits if a.all or c.status in (None, "deferred")]
-    for c in todo:
-        sort_commit(c, onto, gone, changed, fork_point, h)
-    open_syncs = unmerged_sync_branches()
+        git("fetch", FORK_REMOTE)
+    ctx = context()
+    todo = sorted_commits(ctx, a.all)
+    syncs = sync_branches()
     if a.json:
         print(json.dumps({
-            "upstream": up, "fork_point": fork_point, "onto": onto,
-            "open_sync_branches": open_syncs, "ledger_unknown": h.unknown,
+            "upstream": ctx.up, "fork_point": ctx.fork_point, "onto": ctx.onto,
+            "sync_branches": syncs, "warnings": ctx.t.warnings,
             "commits": [asdict(c) for c in todo],
         }, indent=1))
         return 0
-    done = len(commits) - len([c for c in commits if c.status in (None, "deferred")])
-    print(f"Upstream {up} since the fork point {fork_point[:12]}: {len(commits)} commits, "
-          f"{done} handled, {len(commits) - done} to look at. Sorted against {onto}.\n")
-    if open_syncs:
-        print("! Sync branches on origin not yet in dev (their picks may show again here): "
-              + ", ".join(open_syncs) + "\n")
-    for sha in h.unknown:
-        print(f"! Ledger row {sha}: upstream no longer has that commit (rewritten history?)")
-    order = {"port": 0, "prune": 1, "clean": 2, "removed": 3}
-    todo.sort(key=lambda c: (not c.critical, order.get(c.kind, 9)))
-    print("| sha | date | kind | critical? | status | subject |")
-    print("|---|---|---|---|---|---|")
+    print(f"Upstream {ctx.up} since the fork point {ctx.fork_point[:12]}: {len(ctx.in_range)} "
+          f"commits; {len(todo)} to look at, in upstream's order. Sorted against {ctx.onto}.")
+    for s in syncs + ctx.t.warnings:
+        print(f"! {s}")
+    print("\n|  # | sha | date | kind | flags | status | subject |")
+    print("|---:|---|---|---|---|---|---|")
     for c in todo:
-        print(f"| {c.sha[:12]} | {c.date} | {c.kind} | {'yes' if c.critical else ''} | "
+        print(f"| {c.index or '-'} | {c.sha[:12]} | {c.date} | {c.kind} | {c.flags} | "
               f"{c.status or ''} | {c.subject.replace('|', '/')} |")
+    print("\nFlags: C critical-looking, S sensitive, A earlier upstream commits not taken, "
+          "I upstream's identity, P another platform or language.")
     for c in todo:
-        if c.conflicts or c.notes:
-            print(f"\n{c.sha[:12]} {c.kind}: " + "; ".join(
-                ([f"conflicts in {', '.join(c.conflicts)}"] if c.conflicts else []) + c.notes))
+        bits = []
+        if c.critical_why:
+            bits.append("critical? " + ", ".join(c.critical_why))
+        if c.conflicts:
+            bits.append("conflicts in " + ", ".join(c.conflicts))
+        if c.after:
+            bits.append("A: " + ", ".join(s[:12] for s in c.after))
+        if c.same_issue:
+            bits.append("same issue as " + ", ".join(s[:12] for s in c.same_issue))
+        bits += c.notes
+        if bits:
+            print(f"\n{c.index or '-'} {c.sha[:12]} ({c.kind}):\n  - " + "\n  - ".join(bits))
     return 0
 
 
 def cmd_show(a) -> int:
-    up, fork_point, onto, gone, changed, h = context(a.onto)
+    ctx = context()
     sha = full_sha(a.sha)
-    if not sha:
-        raise Fail(f"no commit {a.sha}")
-    c = Commit(sha, out("log", "-1", "--date=short", "--format=%ad", sha),
-               out("log", "-1", "--format=%s", sha))
-    c.status = h.status(sha)
-    sort_commit(c, onto, gone, changed, fork_point, h)
+    if not sha or sha not in ctx.in_range:
+        raise Fail(f"{a.sha} is not an upstream commit since the fork point")
+    commits, messages = pending(ctx.fork_point, ctx.up)
+    c = next((x for x in commits if x.sha == sha), None)
+    if c is None:
+        c = Commit(sha, 0, out("log", "-1", "--date=short", "--format=%ad", sha),
+                   out("log", "-1", "--format=%s", sha))
+    c.status = ctx.t.of(sha)
+    sort_commit(c, ctx.onto, ctx.fork, ctx.fork_point, ctx.t, messages)
     print(json.dumps(asdict(c), indent=1))
     return 0
 
 
-def tracked_dirty(ignore: set[str]) -> list[str]:
-    paths = []
-    for line in out("status", "--porcelain", "--untracked-files=no").splitlines():
-        p = line[3:].split(" -> ")[-1].strip('"')
-        if p not in ignore:
-            paths.append(p)
-    return paths
+def gh_json(args: list[str]):
+    if not shutil.which("gh"):
+        return None
+    try:
+        r = subprocess.run(["gh", *args], capture_output=True, text=True, encoding="utf-8",
+                           errors="replace")
+    except OSError:
+        return None
+    if r.returncode != 0:
+        return None
+    try:
+        return json.loads(r.stdout or "null")
+    except json.JSONDecodeError:
+        return None
 
 
-def git_dir_file(name: str) -> Path:
-    return Path(out("rev-parse", "--git-path", name))
+def watch_data() -> dict:
+    """Upstream's work not on its main branch yet: open PRs and branches. Read only."""
+    prs = gh_json(["pr", "list", "-R", UPSTREAM_SLUG, "--state", "open", "--limit", "100",
+                   "--json", "number,title,headRefName,updatedAt,isDraft"])
+    advisories = gh_json(["api", f"repos/{UPSTREAM_SLUG}/security-advisories"])
+    branches = []
+    for ref in out("for-each-ref", "--format=%(refname:short)",
+                   f"refs/remotes/{UPSTREAM_REMOTE}/").splitlines():
+        name = ref.split("/", 1)[1] if "/" in ref else ref
+        if name in ("HEAD", UPSTREAM_BRANCH, "pr-shots") or not has_ref(ref):
+            continue
+        n = int(out("rev-list", "--count", "--no-merges", f"{upstream_ref()}..{ref}") or 0)
+        if n:
+            subj = out("log", "-1", "--format=%s", ref)
+            branches.append({"branch": name, "commits": n, "last": subj,
+                             "critical": bool(CRITICAL.search(subj + " " + name))})
+    for p in prs or []:
+        p["critical"] = bool(CRITICAL.search(p["title"] + " " + p["headRefName"]))
+    return {"prs": prs, "advisories": advisories, "branches": branches}
+
+
+def cmd_watch(a) -> int:
+    d = watch_data()
+    if a.json:
+        print(json.dumps(d, indent=1))
+        return 0
+    if d["prs"] is None:
+        print("! gh is missing or can't read upstream's PRs: only its branches are listed")
+    else:
+        print(f"Upstream's open PRs: {len(d['prs'])} (C critical-looking). Not picked until merged "
+              "there; port one early only when the owner says so.\n")
+        for p in sorted(d["prs"], key=lambda p: (not p["critical"], -p["number"])):
+            print(f"  {'C' if p['critical'] else ' '} {p['number']:>5} "
+                  f"{'(draft) ' if p['isDraft'] else ''}{p['title']}  [{p['headRefName']}]")
+    if isinstance(d["advisories"], list) and d["advisories"]:
+        print(f"\n! upstream has {len(d['advisories'])} security advisories: read them")
+    print(f"\nUpstream branches ahead of {upstream_ref()}: {len(d['branches'])}")
+    for b in d["branches"]:
+        print(f"  {'C' if b['critical'] else ' '} {b['branch']}: {b['commits']} commits, "
+              f"last: {b['last']}")
+    return 0
+
+
+def code(text: str) -> str:
+    """Inline code for Markdown: no link, no mention, whatever the text holds."""
+    return "`" + text.replace("`", "'").replace("\n", " ") + "`"
+
+
+def cmd_report(a) -> int:
+    ctx = context()
+    todo = sorted_commits(ctx, False)
+    d = watch_data()
+    crit = [c for c in todo if "C" in c.flags]
+    lines = [
+        f"Upstream ({code(UPSTREAM_SLUG)}, {code(UPSTREAM_BRANCH)}) since the fork point "
+        f"{code(ctx.fork_point[:12])}: **{len(todo)}** commits to look at, **{len(crit)}** "
+        f"critical-looking. Updated {dt.datetime.now(dt.timezone.utc):%Y-%m-%d %H:%M} UTC; run "
+        "`/upstream-sync` to act on it. Kinds and flags: `tools/upstream-sync/sync.py`.", "",
+        "| # | sha | kind | flags | subject |", "|---:|---|---|---|---|",
+    ]
+    for c in sorted(todo, key=lambda c: ("C" not in c.flags, c.index)):
+        lines.append(f"| {c.index or '-'} | {code(c.sha[:12])} | {c.kind} | {c.flags} | "
+                     f"{code(c.subject)} |")
+    if ctx.t.warnings:
+        lines += ["", "Warnings:"] + [f"- {code(w)}" for w in ctx.t.warnings]
+    if d["prs"] is not None:
+        crit_prs = [p for p in d["prs"] if p["critical"]]
+        lines += ["", f"Upstream's open PRs that look critical (not merged there yet): "
+                  f"{len(crit_prs)}"]
+        lines += [f"- {code(str(p['number']) + ' ' + p['title'])}" for p in crit_prs]
+    if isinstance(d["advisories"], list) and d["advisories"]:
+        lines += ["", f"**Upstream has {len(d['advisories'])} security advisories.**"]
+    print("\n".join(lines))
+    return 0
+
+
+def staged() -> list[str]:
+    return zlist("diff", "--cached", "--name-only", "--no-renames", "-z", "HEAD")
+
+
+def unstaged(ignore: tuple[str, ...] = ()) -> list[str]:
+    return [p for p in zlist("diff", "--name-only", "--no-renames", "-z") if p not in ignore]
 
 
 def undo_pick() -> None:
-    if git_dir_file("CHERRY_PICK_HEAD").exists():
+    if git_path("CHERRY_PICK_HEAD").exists():
         git("cherry-pick", "--abort", check=False)
     git("reset", "--merge", "HEAD", check=False)
 
 
-def pick_one(sha: str, gone: Removed, h: Handled) -> str:
-    """One upstream commit onto HEAD, with the fork's rules. Returns what happened."""
-    status = h.status(sha)
-    if status and status != "deferred":
-        return f"{sha[:12]} already {status}: not picked again"
-    msg = out("log", "-1", "--format=%B", sha)
-    author = out("log", "-1", "--format=%an <%ae>", sha)
-    date = out("log", "-1", "--format=%aI", sha)
-    git("cherry-pick", "--no-commit", sha, check=False)
+def neutralise(msg: str) -> str:
+    """Upstream's message, made safe to carry: its own markers can't count as this fork's
+    record, and its #numbers can't link to this fork's issues and PRs."""
+    msg = MARKERS.sub("upstream's text: ", msg)
+    return ISSUE.sub(lambda m: f"upstream {m.group(1)}", msg)
+
+
+def lock_bumps(sha: str) -> list[tuple[str, str, str]]:
+    """(name, old version, new version) of the packages upstream's Cargo.lock bumped."""
+    def packages(rev: str) -> dict[str, set[str]]:
+        text = git("show", f"{rev}:Cargo.lock", check=False).stdout.replace("\r", "")
+        res: dict[str, set[str]] = {}
+        for m in re.finditer(r'name = "([^"]+)"\nversion = "([^"]+)"', text):
+            res.setdefault(m.group(1), set()).add(m.group(2))
+        return res
+    before, after = packages(f"{sha}^"), packages(sha)
+    bumps = []
+    for name, vers in after.items():
+        old, new = before.get(name, set()) - vers, vers - before.get(name, set())
+        if len(old) == 1 and len(new) == 1:
+            bumps.append((name, old.pop(), new.pop()))
+    return bumps
+
+
+def apply_lock(sha: str) -> str | None:
+    """The fork's Cargo.lock kept, then upstream's version bumps made in it. None when done."""
+    if not shutil.which("cargo"):
+        return "cargo is not on PATH"
+    git("checkout", "HEAD", "--", "Cargo.lock")
+    cmds = [["cargo", "metadata", "--format-version", "1"]]
+    cmds += [["cargo", "update", "-p", f"{n}@{o}", "--precise", v] for n, o, v in lock_bumps(sha)]
+    for cmd in cmds:
+        r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           cwd=root())
+        if r.returncode != 0 and "did not match any packages" not in r.stderr:
+            return f"`{' '.join(cmd)}` failed: {r.stderr.strip()[-300:]}"
+    git("add", "--", "Cargo.lock")
+    return None
+
+
+def pick_one(sha: str, ctx: Context, commits: list[Commit], messages: dict[str, str],
+             a) -> tuple[bool, str]:
+    """One upstream commit onto HEAD, with the fork's rules. (taken?, what happened)."""
+    status = ctx.t.of(sha)
+    if status in DONE:
+        return True, f"{sha[:12]} already {status}: not picked again"
+    c = next(x for x in commits if x.sha == sha)
+    c = Commit(c.sha, c.index, c.date, c.subject)
+    sort_commit(c, "HEAD", ctx.fork, ctx.fork_point, ctx.t, messages)
+    if c.kind in ("nothing", "removed"):
+        return False, (f"{sha[:12]} is {c.kind}: nothing to take; "
+                       f"`record {sha[:12]} skipped --note \"…\"`")
+    if c.kind == "port":
+        return False, f"{sha[:12]} needs a port: " + "; ".join(
+            ([f"conflicts in {', '.join(c.conflicts)}"] if c.conflicts else []) + c.notes)
+    if c.sensitive and not a.allow_sensitive:
+        return False, (f"{sha[:12]} is sensitive ({', '.join(c.sensitive)}): read every line, "
+                       "then pick it alone with --allow-sensitive")
+    if c.kind == "lock" and not a.lock:
+        return False, f"{sha[:12]} conflicts only in Cargo.lock: pick it with --lock"
+    r = git("cherry-pick", "--no-commit", "-X", RENAMES, sha, check=False)
+    conflicted = set(zlist("diff", "--name-only", "--diff-filter=U", "-z"))
+    if r.returncode != 0 and not conflicted:
+        undo_pick()
+        return False, f"{sha[:12]}: git refused the pick ({r.stderr.strip()}); nothing changed"
     left_out = []
-    staged = set(out("diff", "--cached", "--name-only", "HEAD").splitlines())
-    conflicted = set(out("diff", "--name-only", "--diff-filter=U").splitlines())
-    for path in sorted(staged | conflicted):
+    for path in sorted(set(staged()) | conflicted):
         if path in OWN:
             if git("cat-file", "-e", f"HEAD:{path}", check=False).returncode == 0:
                 git("checkout", "HEAD", "--", path)
             else:
-                git("rm", "-f", "--quiet", "--", path, check=False)
+                git("rm", "-f", "--quiet", "--", path)
             left_out.append(path)
-        elif path in gone:
-            git("rm", "-f", "--quiet", "--", path, check=False)
+        elif ctx.fork.is_gone(path):
+            git("rm", "-f", "--quiet", "--", path)
             left_out.append(path)
-    still = out("diff", "--name-only", "--diff-filter=U").splitlines()
+    if c.kind == "lock" and "Cargo.lock" in conflicted:
+        problem = apply_lock(sha)
+        if problem:
+            undo_pick()
+            return False, f"{sha[:12]}: Cargo.lock not made ({problem}); nothing changed"
+    still = zlist("diff", "--name-only", "--diff-filter=U", "-z")
     if still:
         undo_pick()
-        return f"{sha[:12]} needs a port: conflicts in {', '.join(still)} (nothing changed)"
-    if git("diff", "--cached", "--quiet", "HEAD", check=False).returncode == 0:
+        return False, f"{sha[:12]} needs a port: conflicts in {', '.join(still)} (nothing changed)"
+    if not staged():
         undo_pick()
-        return f"{sha[:12]} has nothing left once removed and own files are out: record it skipped"
-    body = msg.rstrip() + f"\n\n(cherry picked from commit {sha})\n"
+        return False, (f"{sha[:12]}: nothing left to commit. Already in the fork? "
+                       f"`record {sha[:12]} covered --ref <commit>`; otherwise skipped")
+    body = neutralise(messages.get(sha) or out("log", "-1", "--format=%B", sha)).rstrip()
     if left_out:
-        body += "\nLeft out here (removed in this fork, or the fork's own record):\n"
+        body += "\n\nLeft out here (removed in this fork, or the fork's own record):\n"
         body += "".join(f"- {p}\n" for p in left_out)
-    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, suffix=".txt") as f:
-        f.write(body)
-        msg_file = f.name
+    if c.kind == "lock":
+        body += "\nCargo.lock: the fork's, with upstream's version bumps made in it.\n"
+    body = body.rstrip() + f"\n\nUpstream-Pick: {sha}\n"
+    msg_file = git_path("UPSTREAM_SYNC_MSG")
+    msg_file.write_text(body, encoding="utf-8", newline="\n")
     try:
-        r = git("commit", "--quiet", "-F", msg_file, f"--author={author}", f"--date={date}",
-                check=False)
+        r = git("commit", "--quiet", "--cleanup=whitespace", "-F", str(msg_file),
+                "--author=" + out("log", "-1", "--format=%an <%ae>", sha),
+                "--date=" + out("log", "-1", "--format=%aI", sha), check=False)
     finally:
-        os.unlink(msg_file)
+        msg_file.unlink(missing_ok=True)
     if r.returncode != 0:
         undo_pick()
-        return f"{sha[:12]} could not be committed ({r.stderr.strip()}): nothing changed"
-    h.picked.add(sha)
+        return False, f"{sha[:12]}: not committed ({r.stderr.strip()}); nothing changed"
     new = out("rev-parse", "--short=12", "HEAD")
+    write_row(sha, "picked", new, f"left out {len(left_out)} file(s)" if left_out else "")
+    ctx.t.status[sha] = "picked"
     extra = f", left out {len(left_out)} file(s)" if left_out else ""
-    return f"{sha[:12]} picked as {new}{extra}"
+    warn = "".join(f"\n    ! {n}" for n in c.notes)
+    return True, f"{sha[:12]} picked as {new}{extra}{warn}"
 
 
 def guard_sync_branch() -> str:
     branch = current_branch()
     if not branch:
         raise Fail("HEAD is detached: work on a sync branch (upstream-sync/<date>)")
-    if branch in PROTECTED:
-        raise Fail(f"on {branch}: picks go on a sync branch, and reach {FORK_BASE} by a PR")
+    if not branch.startswith(SYNC_PREFIX):
+        raise Fail(f"on {branch}: picks and PRs only on a branch named {SYNC_PREFIX}…, "
+                   "in the run's own worktree")
+    merge = git("config", "--get", f"branch.{branch}.merge", check=False).stdout.strip()
+    if merge in {f"refs/heads/{b}" for b in PROTECTED}:
+        raise Fail(f"{branch} tracks {merge}: a push from an editor would land on it. "
+                   f"`git branch --unset-upstream {branch}` first")
     return branch
 
 
 def cmd_pick(a) -> int:
     guard_sync_branch()
-    if git_dir_file("CHERRY_PICK_HEAD").exists() or git_dir_file("MERGE_HEAD").exists():
-        raise Fail("a cherry-pick or merge is in progress: finish or abort it first")
-    dirty = tracked_dirty({LEDGER})
+    for state in ("CHERRY_PICK_HEAD", "MERGE_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"):
+        if git_path(state).exists():
+            raise Fail("a cherry-pick, merge, revert or rebase is in progress: finish or abort it")
+    if staged():
+        raise Fail("staged changes (" + ", ".join(staged()) + "): commit or unstage them; a "
+                   "pick interrupted half way is undone with `git reset --merge HEAD`")
+    dirty = unstaged((LEDGER,))
     if dirty:
-        raise Fail("uncommitted changes (commit or stash them first): " + ", ".join(dirty))
-    up, fork_point, onto, gone, changed, h = context(None)
-    in_range = set(out("rev-list", "--no-merges", f"{fork_point}..{up}").splitlines())
+        raise Fail("uncommitted changes (" + ", ".join(dirty) + "): commit or stash them first "
+                   "(only the ledger may stay uncommitted)")
+    ctx = context()
     shas = []
     for s in a.sha:
         full = full_sha(s)
-        if not full:
-            raise Fail(f"no commit {s}")
-        if full not in in_range:
+        if not full or full not in ctx.in_range:
             raise Fail(f"{s} is not an upstream commit since the fork point")
-        shas.append(full)
-    # Upstream's order, whatever order they were given in: a fix can build on the one before.
-    order = out("rev-list", "--reverse", "--topo-order", f"{fork_point}..{up}").splitlines()
-    shas.sort(key=order.index)
+        if full not in shas:
+            shas.append(full)
+    commits, messages = pending(ctx.fork_point, ctx.up)
+    order = [c.sha for c in commits]
+    for s in shas:
+        if s not in order:
+            raise Fail(f"{s[:12]} is an upstream merge: read it (`show`), port what's wanted")
+    shas.sort(key=order.index)  # upstream's order: a fix can build on the one before
+    ledger = root() / LEDGER
     failed = 0
     for sha in shas:
-        line = pick_one(sha, gone, h)
+        saved = ledger.read_bytes() if ledger.exists() else None
+        ok, line = pick_one(sha, ctx, commits, messages, a)
+        if saved is not None and not ok:
+            ledger.write_bytes(saved)  # an undone pick never takes the ledger's rows with it
         print(line)
-        if "picked as" not in line and "already" not in line:
+        if not ok:
             failed += 1
             if not a.keep_going:
                 print("Stopped: later picks may build on this one (--keep-going to go on).")
@@ -493,65 +896,112 @@ def cmd_pick(a) -> int:
     return 1 if failed else 0
 
 
-def cmd_record(a) -> int:
-    sha = full_sha(a.sha)
-    if not sha:
-        raise Fail(f"no commit {a.sha}")
-    if not a.note.strip():
-        raise Fail("--note is required: say why, for whoever reads the ledger next")
+def write_row(sha: str, status: str, ref: str, note: str) -> str:
+    """The commit's row, replacing every earlier one for it, at the end of the ledger."""
     path = root() / LEDGER
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    subject = out("log", "-1", "--format=%s", sha).replace("|", "/")
-    note = a.note.replace("|", "/").replace("\n", " ")
-    row = f"| {sha[:12]} | {a.status} | {a.ref or ''} | {subject} | {note} |"
-    for i, line in enumerate(lines):
-        m = ROW.match(line)
-        if m and full_sha(m.group(1)) == sha:
-            lines[i] = row
-            break
-    else:
-        lines.append(row)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
-    print(row)
+    kept = []
+    for ln in lines:
+        m = ROW.match(ln)
+        if m and (m.group(1).lower() == sha or full_sha(m.group(1)) == sha):
+            continue
+        kept.append(ln)
+    subject = out("log", "-1", "--format=%s", sha)
+    cells = [sha, status, today(), ref, subject, note]
+    row = "| " + " | ".join(c.replace("|", "/").replace("\n", " ").strip() for c in cells) + " |"
+    kept.append(row)
+    path.write_text("\n".join(kept) + "\n", encoding="utf-8", newline="\n")
+    return row
+
+
+def cmd_record(a) -> int:
+    ctx = context()
+    sha = full_sha(a.sha)
+    if not sha or sha not in ctx.in_range:
+        raise Fail(f"{a.sha} is not an upstream commit since the fork point")
+    if not a.note.strip():
+        raise Fail("--note is required: say why, for whoever reads the ledger next")
+    if a.status in ("covered", "ported") and not a.ref:
+        raise Fail(f"{a.status} needs --ref: the fork's commit or PR that has the fix")
+    print(write_row(sha, a.status, a.ref or "", a.note))
     return 0
 
 
-def unmerged_sync_branches() -> list[str]:
-    fork = fork_ref()
-    if not has_ref(fork):
+def sync_branches() -> list[str]:
+    """What earlier runs left: sync branches not in dev, by their PR's state when gh can tell."""
+    forkref = fork_ref()
+    if not has_ref(forkref):
         return []
-    names = out("for-each-ref", "--format=%(refname:short)",
-                f"refs/remotes/{FORK_REMOTE}/{SYNC_PREFIX}").splitlines()
-    return [n for n in names
-            if git("merge-base", "--is-ancestor", n, fork, check=False).returncode != 0]
+    notes = []
+    target = slug(remote_url(FORK_REMOTE))
+    for ref in out("for-each-ref", "--format=%(refname:short)",
+                   f"refs/remotes/{FORK_REMOTE}/{SYNC_PREFIX}").splitlines():
+        if git("merge-base", "--is-ancestor", ref, forkref, check=False).returncode == 0:
+            continue
+        branch = ref.split("/", 1)[1]
+        prs = gh_json(["pr", "list", "-R", target, "--state", "all", "--head", branch,
+                       "--json", "number,state"]) if target else None
+        if prs is None:
+            notes.append(f"{branch} is not in {forkref} (gh can't tell its PR's state)")
+        elif not prs:
+            notes.append(f"{branch} has no PR: open it with `sync.py pr`, or delete the branch")
+        elif prs[0]["state"] == "MERGED":
+            continue  # squash- or rebase-merged: its ledger rows are what count
+        elif prs[0]["state"] == "CLOSED":
+            notes.append(f"{branch}: PR {prs[0]['number']} closed unmerged; its picks and rows "
+                         "never landed: delete the branch and decide its commits again")
+        else:
+            notes.append(f"{branch}: PR {prs[0]['number']} open; its commits show here until "
+                         "it merges (don't pick them again elsewhere)")
+    return notes
 
 
 def fork_slug() -> str:
-    s = slug(remote_url(FORK_REMOTE))
-    if not s:
-        raise Fail(f"{FORK_REMOTE} is not a GitHub address")
-    if s == UPSTREAM_SLUG:
-        raise Fail(f"{FORK_REMOTE} points at the original ({UPSTREAM_SLUG}): never push there")
-    return s
+    for push in (False, True):
+        s = slug(remote_url(FORK_REMOTE, push=push))
+        if not s:
+            raise Fail(f"{FORK_REMOTE}'s {'push' if push else 'fetch'} address is not GitHub")
+        if s == UPSTREAM_SLUG:
+            raise Fail(f"{FORK_REMOTE} {'pushes' if push else 'points'} to the original "
+                       f"({UPSTREAM_SLUG}): never push there")
+    return slug(remote_url(FORK_REMOTE))
 
 
 def cmd_pr(a) -> int:
     branch = guard_sync_branch()
     target = fork_slug()
-    if tracked_dirty(set()):
+    if not shutil.which("gh"):
+        raise Fail("gh is not installed: nothing pushed")
+    body = Path(a.body_file)
+    if not body.is_file():
+        raise Fail(f"no body file {a.body_file}: nothing pushed")
+    text = body.read_text(encoding="utf-8")
+    bare = re.sub(r"```.*?```|`[^`\n]*`", "", text, flags=re.S)
+    for t in (bare, a.title):
+        m = UPSTREAM_LINK.search(t)
+        if m:
+            raise Fail(f"{m.group(0)!r} would link to, and so mention this PR on, the original: "
+                       "put it in `code`, or write \"upstream issue N\"; nothing pushed")
+    if staged() or unstaged():
         raise Fail("uncommitted changes: commit them (the ledger too) before the PR")
-    git("push", "-u", FORK_REMOTE, f"HEAD:refs/heads/{branch}")
+    push = ["push", "-u", FORK_REMOTE, f"HEAD:refs/heads/{branch}"]
+    if a.force:
+        push.insert(1, "--force-with-lease")
+    git(*push)
     # -R and --base always: in a fork, gh's default for a new PR is the parent repository.
     args = ["gh", "pr", "create", "-R", target, "--base", FORK_BASE, "--head", branch,
-            "--title", a.title, "--body-file", a.body_file]
+            "--title", a.title, "--body-file", str(body)]
     if a.draft:
         args.append("--draft")
-    r = subprocess.run(args, text=True, encoding="utf-8")
-    return r.returncode
+    try:
+        return subprocess.run(args).returncode
+    except OSError as e:
+        raise Fail(f"gh failed ({e}); the branch is pushed: open the PR against "
+                   f"{target} {FORK_BASE} (not the original)")
 
 
 def checks() -> list[tuple[bool, str, list[str] | None]]:
-    """(ok, what, the git config command that fixes it, if one does)."""
+    """(ok, what, the git command that fixes it, if one does)."""
     c = []
     up_url = remote_url(UPSTREAM_REMOTE)
     want = f"https://github.com/{UPSTREAM_SLUG}.git"
@@ -561,17 +1011,26 @@ def checks() -> list[tuple[bool, str, list[str] | None]]:
     c.append((bool(up_url) and push == "DISABLED", f"{UPSTREAM_REMOTE} cannot be pushed to",
               ["remote", "set-url", "--push", UPSTREAM_REMOTE, "DISABLED"]))
     tag = git("config", "--get", f"remote.{UPSTREAM_REMOTE}.tagOpt", check=False).stdout.strip()
-    c.append((tag == "--no-tags", f"{UPSTREAM_REMOTE}'s tags stay out (they'd clash with ours)",
+    c.append((tag == "--no-tags", f"{UPSTREAM_REMOTE}'s tags stay out (they'd clash with ours, "
+              "and a v* tag pushed here starts a release)",
               ["config", f"remote.{UPSTREAM_REMOTE}.tagOpt", "--no-tags"]))
-    origin = slug(remote_url(FORK_REMOTE))
-    c.append((bool(origin) and origin != UPSTREAM_SLUG,
-              f"{FORK_REMOTE} is this fork ({origin or 'missing'}), not the original", None))
+    for push_side in (False, True):
+        s = slug(remote_url(FORK_REMOTE, push=push_side))
+        c.append((bool(s) and s != UPSTREAM_SLUG,
+                  f"{FORK_REMOTE} {'pushes to' if push_side else 'is'} this fork "
+                  f"({s or 'missing'}), not the original", None))
     gh = git("config", "--get", f"remote.{FORK_REMOTE}.gh-resolved", check=False).stdout.strip()
     c.append((gh == "base", f"gh's default repository is {FORK_REMOTE} (not the parent)",
               ["config", f"remote.{FORK_REMOTE}.gh-resolved", "base"]))
     pd = git("config", "--get", "remote.pushDefault", check=False).stdout.strip()
     c.append((pd != UPSTREAM_REMOTE, f"remote.pushDefault is not {UPSTREAM_REMOTE}",
               ["config", "--unset", "remote.pushDefault"]))
+    for line in out("for-each-ref", "--format=%(refname:short) %(upstream)",
+                    f"refs/heads/{SYNC_PREFIX}").splitlines():
+        b, _, up = line.partition(" ")
+        if up in {f"refs/remotes/{FORK_REMOTE}/{p}" for p in PROTECTED}:
+            c.append((False, f"{b} tracks {up} (an editor's push would land there)",
+                      ["branch", "--unset-upstream", b]))
     v = re.search(r"(\d+)\.(\d+)", out("--version"))
     c.append((bool(v) and (int(v[1]), int(v[2])) >= (2, 40), "git 2.40 or later", None))
     c.append((has_ref(upstream_ref()), f"{upstream_ref()} fetched",
@@ -584,12 +1043,22 @@ def cmd_doctor(a) -> int:
     for ok, what, fix in checks():
         if not ok and a.fix and fix:
             git(*fix)
-            ok = True
-            what += " (fixed)"
+            ok, what = True, what + " (fixed)"
         print(("ok    " if ok else "FAIL  ") + what)
         bad += not ok
-    for n in unmerged_sync_branches():
-        print(f"note  {n} is not in {fork_ref()} yet: one sync at a time, merge or close it first")
+    if not shutil.which("gh"):
+        print("note  gh is not installed: `watch` and `pr` need it")
+    for s in sync_branches():
+        print(f"note  {s}")
+    for b in out("for-each-ref", "--format=%(refname:short)",
+                 f"refs/heads/{SYNC_PREFIX}").splitlines():
+        print(f"note  local sync branch {b}")
+    for line in out("worktree", "list", "--porcelain").splitlines():
+        if line.startswith("branch refs/heads/" + SYNC_PREFIX):
+            print(f"note  a worktree has {line.split(' ', 1)[1][len('refs/heads/'):]} checked out")
+    _, problems = read_ledger(root() / LEDGER)
+    for p in problems:
+        print(f"note  {p}")
     return 1 if bad else 0
 
 
@@ -604,26 +1073,30 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--fetch", action="store_true")
     s.add_argument("--json", action="store_true")
     s.add_argument("--all", action="store_true", help="the handled commits too")
-    s.add_argument("--onto", help="sort against this ref (default HEAD)")
     sh = sub.add_parser("show")
     sh.add_argument("sha")
-    sh.add_argument("--onto")
+    w = sub.add_parser("watch")
+    w.add_argument("--json", action="store_true")
+    sub.add_parser("report")
     k = sub.add_parser("pick")
     k.add_argument("sha", nargs="+")
     k.add_argument("--keep-going", action="store_true")
+    k.add_argument("--lock", action="store_true", help="make upstream's Cargo.lock bumps (cargo)")
+    k.add_argument("--allow-sensitive", action="store_true", help="after reading every line")
     r = sub.add_parser("record")
     r.add_argument("sha")
-    r.add_argument("status", choices=STATUSES)
+    r.add_argument("status", choices=RECORDABLE)
     r.add_argument("--note", required=True)
     r.add_argument("--ref", help="the fork's commit or PR, for ported and covered")
     pr = sub.add_parser("pr")
     pr.add_argument("--title", required=True)
     pr.add_argument("--body-file", required=True)
     pr.add_argument("--draft", action="store_true")
+    pr.add_argument("--force", action="store_true", help="--force-with-lease, this branch only")
     a = p.parse_args(argv)
     try:
-        return {"doctor": cmd_doctor, "status": cmd_status, "show": cmd_show, "pick": cmd_pick,
-                "record": cmd_record, "pr": cmd_pr}[a.cmd](a)
+        return {"doctor": cmd_doctor, "status": cmd_status, "show": cmd_show, "watch": cmd_watch,
+                "report": cmd_report, "pick": cmd_pick, "record": cmd_record, "pr": cmd_pr}[a.cmd](a)
     except Fail as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
