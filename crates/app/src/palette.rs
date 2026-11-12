@@ -1068,14 +1068,16 @@ mod tests {
                     p.dark
                 );
             }
-            // The toolbar's band is the window (chrome::toolbar): its hover is seen on it.
-            assert!(
-                channel_step(p.toolbar_hot, p.window) >= SEEN_STEP,
-                "dark {}: toolbar hot {:?} on the window {:?}",
-                p.dark,
-                p.toolbar_hot,
-                p.window
-            );
+            // The toolbar's band is a panel (chrome::toolbar_graphite, plan 05b): its hover and
+            // a split button's other half are seen on it.
+            for (what, face) in [("hot", p.toolbar_hot), ("hot faint", p.toolbar_hot_faint)] {
+                assert!(
+                    channel_step(face, p.panel) >= SEEN_STEP,
+                    "dark {}: toolbar {what} {face:?} on the panel {:?}",
+                    p.dark,
+                    p.panel
+                );
+            }
             // The outlaw colour throughout: no accent-tinted edge on its buttons.
             assert_eq!(p.button_default_bottom, p.button_default_border);
             assert_eq!(p.button_accent_bottom, p.button_accent);

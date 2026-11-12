@@ -1223,6 +1223,67 @@ impl App {
             )
         };
         let (title, why) = (crate::i18n::t(title), crate::i18n::t(why));
+        if crate::theme::chrome() == crate::palette::ChromeLook::Graphite {
+            // Graphite's (plan 05b, the mockup's `.empty`): a 56-point tile (radius 14) with
+            // the download or the filter glyph, the title in SemiBold 16, the reason, the
+            // link; 8 apart, centred.
+            let need = if filtered { "gx-filter" } else { "gx-download" };
+            let title_font = egui::FontId::new(16.0, egui::FontFamily::Name("tahoma-bold".into()));
+            let reason_font = egui::FontId::proportional(crate::theme::metrics().font_body);
+            let link_font = egui::FontId::new(
+                crate::theme::metrics().font_body,
+                egui::FontFamily::Name("geist-medium".into()),
+            );
+            let action = crate::i18n::t(action);
+            let width = |f: &egui::FontId, s: &str| winui::text_width_font(p, f.clone(), s).ceil();
+            let block_h = 56.0 + 12.0 + 22.0 + 8.0 + 18.0 + 8.0 + 18.0;
+            let top = (body.center().y - block_h / 2.0)
+                .max(body.top() + 16.0)
+                .round();
+            let cx = body.center().x;
+            let tile =
+                egui::Rect::from_min_size(pos2((cx - 28.0).round(), top), egui::vec2(56.0, 56.0));
+            winui::icon_tile(ui, winui::rect(tile), need, winui::TEXT(), 14.0);
+            let y = tile.bottom() + 12.0 + 17.0;
+            let tw = width(&title_font, title);
+            winui::text_font(
+                p,
+                title_font,
+                (cx - tw / 2.0).round(),
+                y,
+                title,
+                winui::TEXT(),
+            );
+            let y = y + 8.0 + 17.0;
+            let ww = width(&reason_font, why);
+            winui::text_font(
+                p,
+                reason_font,
+                (cx - ww / 2.0).round(),
+                y,
+                why,
+                winui::MUTED(),
+            );
+            let y = y + 8.0 + 17.0;
+            let aw = width(&link_font, action);
+            let drawn = winui::text_font(
+                p,
+                link_font,
+                (cx - aw / 2.0).round(),
+                y,
+                action,
+                crate::theme::colors().link,
+            );
+            let resp = ui
+                .interact(
+                    drawn.expand(2.0),
+                    egui::Id::unique("empty-action"),
+                    egui::Sense::click(),
+                )
+                .on_hover_cursor(egui::CursorIcon::PointingHand);
+            winui::expose(&resp, egui::Role::Link, action, true, None);
+            return resp.clicked().then_some(cmd);
+        }
         let title_font = winui::tahoma_bold();
         let tw = winui::text_width_font(p, title_font.clone(), title);
         let ww = winui::text_width(p, why);
@@ -1264,8 +1325,6 @@ impl App {
     ) {
         let p = ui.painter();
         let top = o.y + layout.strip_top(h);
-        // Centred in the band it reads as: the strip and the gap above it, under the panes.
-        let baseline = winui::baseline_in(top - layout.pane_gap, layout.strip_h + layout.pane_gap);
         let n = shown as u64;
         let mut left = crate::i18n::tn(n, "{n} download", "{n} downloads");
         let selected = self.selection.ids().len() as u64;
@@ -1273,6 +1332,39 @@ impl App {
             left += "   ";
             left += &crate::i18n::tn(selected, "{n} selected", "{n} selected");
         }
+        if layout.graphite {
+            // Graphite's status bar (plan 05b): on `panel` with a rule above it, 12-point muted
+            // text 12 in from each side; the same words.
+            let c = crate::theme::colors();
+            let band = egui::Rect::from_min_max(pos2(o.x, top), pos2(o.x + w, o.y + h));
+            p.rect_filled(winui::rect(band), 0.0, c.panel);
+            winui::fill_l(p, o.x, top, o.x + w - 1.0, top, c.menubar_line);
+            let font = winui::segoe();
+            let baseline = top + 1.0 + ((layout.strip_h - 1.0) / 2.0).floor() + 4.0;
+            let right = self.activity();
+            let right_w = right
+                .as_ref()
+                .map_or(0.0, |r| winui::text_width_font(p, font.clone(), r).ceil());
+            let shown = winui::ellipsize(p, &font, &left, (w - 36.0 - right_w).max(0.0));
+            let drawn = winui::text_font(
+                p,
+                font.clone(),
+                o.x + 12.0,
+                baseline,
+                &shown,
+                winui::MUTED(),
+            );
+            if shown != left {
+                winui::full_on_hover(ui, drawn, "strip-left", &left);
+            }
+            if let Some(right) = right {
+                let x = o.x + w - 12.0 - right_w;
+                winui::text_font(p, font, x, baseline, &right, winui::MUTED());
+            }
+            return;
+        }
+        // Centred in the band it reads as: the strip and the gap above it, under the panes.
+        let baseline = winui::baseline_in(top - layout.pane_gap, layout.strip_h + layout.pane_gap);
         winui::fit(
             ui,
             p,
@@ -1334,31 +1426,34 @@ impl App {
     /// One download's row in the list.
     /// `queued`: the downloads in a queue (worked out once for all the rows).
     fn row(&self, it: &Item, queued: &std::collections::HashSet<u64>) -> list::Row {
+        let status = if self.extracts.extracting(it.id) {
+            // i18n: a download's status: its archive is being extracted (#37)
+            crate::i18n::t("Extracting...").to_owned()
+        } else {
+            it.status_text()
+        };
+        // The share done, while the cell says it as a percentage (not "Checking 42%", "45% at
+        // Real-Debrid"): Graphite's Status cell draws it as a bar.
+        let progress = it
+            .fraction()
+            .filter(|f| status == model::percent(*f))
+            .map(|f| f as f32);
         list::Row {
-            status_group: match it.status {
-                // i18n: a download's status (state it is in, not a command): being downloaded now
-                Status::Downloading => "Downloading",
-                // i18n: a download's status (state it is in, not a command): stopped by the user
-                Status::Stopped => "Stopped",
-                // i18n: a download's status (state it is in, not a command): waiting in a queue for its turn
-                Status::Queued => "Waiting",
-                // i18n: a download's status (state it is in, not a command): finished, the whole file is there
-                Status::Complete => "Complete",
-                // i18n: a download's status (state it is in, not a command): it failed
-                Status::Error => "Error",
+            kind: match it.status {
+                Status::Downloading => list::StatusKind::Downloading,
+                Status::Stopped => list::StatusKind::Stopped,
+                Status::Queued => list::StatusKind::Waiting,
+                Status::Complete => list::StatusKind::Complete,
+                Status::Error => list::StatusKind::Error,
             },
+            progress,
             icon: file_icon(&it.file_name),
             queued: queued.contains(&it.id),
             cells: [
                 it.file_name.clone(),
                 String::new(),
                 it.size.map_or(String::new(), model::size_list),
-                if self.extracts.extracting(it.id) {
-                    // i18n: a download's status: its archive is being extracted (#37)
-                    crate::i18n::t("Extracting...").to_owned()
-                } else {
-                    it.status_text()
-                },
+                status,
                 it.time_left(),
                 if it.live.is_some() {
                     model::rate(it.rate())
@@ -2149,6 +2244,42 @@ impl App {
                 if let Some(at) = at {
                     chrome::open_sub_at(ctx, &format!("menu-{index}"), at);
                 }
+            }
+            // The main window's other menus, for its screenshots (plan 05b): the list's blank
+            // space's, a category's (Music) and the main queue's, the column chooser.
+            "context" if tab == "blank" => {
+                self.open_menu = None;
+                self.selection.retain(&[]);
+                self.open_popup(Popup::Item(None), egui::pos2(560.0, 420.0));
+            }
+            "node" => {
+                self.open_menu = None;
+                let node = if tab == "queue" {
+                    self.queues_open = true;
+                    View::Queue(0)
+                } else {
+                    self.all_open = true;
+                    View::Cat(Category::Music)
+                };
+                self.open_popup(Popup::Node(Some(node)), egui::pos2(150.0, 300.0));
+            }
+            "columns" => {
+                self.open_menu = None;
+                self.open_popup(Popup::Columns, egui::pos2(600.0, 160.0));
+            }
+            // A column's filter box open (filter:3, Status), filters hiding every download, and
+            // back (the same screenshots).
+            "filter" => {
+                self.open_menu = None;
+                self.popup = None;
+                self.list.open_filter(tab.parse().unwrap_or(3));
+            }
+            "filtered" => {
+                self.list.filters[3] = Some(list::Filter::Values(Vec::new()));
+            }
+            "unfiltered" => {
+                self.list.close_filter();
+                self.list.filters.iter_mut().for_each(|f| *f = None);
             }
             // Every download selected and the right-click menu open on them (Move/Rename, #333).
             "context" if tab == "all" => {
@@ -6302,16 +6433,22 @@ impl App {
         ));
         if self.queues_open {
             // Every queue, the user's too (IDM lists them all here).
+            // Graphite draws a synchronization queue as the refresh glyph, not a tick badge.
+            let graphite = crate::theme::chrome() == crate::palette::ChromeLook::Graphite;
             for (q, queue) in self.queues.iter().enumerate() {
                 let view = Some(View::Queue(q));
+                let (icon, badge) = match (queue.sync, graphite) {
+                    (true, true) => (IconKey::Themed("gx-refresh", "page_white_stack"), None),
+                    (sync, _) => (stack.clone(), sync.then_some("tick")),
+                };
                 rows.push((
                     TreeRow {
                         level: 1,
                         label: queue.name.clone().into(),
                         expander: None,
                         selected: view == Some(cur),
-                        icon: stack.clone(),
-                        badge: queue.sync.then_some("tick"),
+                        icon,
+                        badge,
                         count: None,
                     },
                     view,
@@ -6337,80 +6474,106 @@ impl App {
         self.popup = Some((kind, at, self.popup_serial));
     }
 
-    /// The main window's title bar where the theme draws its own (Windows only: elsewhere the
-    /// window manager owns the title bar): the frame is switched to ours or back as the theme
-    /// changes, the bar drawn at the top of `full`; returns what is left for the layout.
+    /// Whether the main window's title bar is ours this frame (Windows: a style theme's, #45):
+    /// the frame is switched to ours or back as the theme changes.
+    fn sync_frame(&mut self, ui: &Ui) -> bool {
+        let want = crate::dialogs::drawn_captions();
+        if self.drawn_frame != Some(want)
+            && let Some(h) = crate::win32::drawn_frame(crate::MAIN_TITLE, want)
+        {
+            self.drawn_frame = Some(want);
+            self.main_hwnd = Some(h);
+            ui.ctx().request_repaint();
+        }
+        want && self.drawn_frame == Some(true)
+    }
+
+    /// The main window's drawn title bar (`drawn`: [`Self::sync_frame`]) at the top of `full`;
+    /// returns what is left for the layout, and the bar (its parts, for
+    /// [`Self::publish_caption`]). Graphite's keeps `reserve` after its title for the menus and
+    /// Find (plan 05b).
     fn drawn_caption(
         &mut self,
         ui: &mut Ui,
         layout: &chrome::Layout,
         full: egui::Rect,
-    ) -> egui::Rect {
-        {
-            use crate::winui::caption::{self, CaptionButton};
-            let caption_h = layout.caption_h;
-            let want =
-                crate::theme::current().controls.caption != crate::palette::CaptionLook::System;
-            if self.drawn_frame != Some(want)
-                && let Some(h) = crate::win32::drawn_frame(crate::MAIN_TITLE, want)
-            {
-                self.drawn_frame = Some(want);
-                self.main_hwnd = Some(h);
-                ui.ctx().request_repaint();
-            }
-            if !want || self.drawn_frame != Some(true) {
-                return full;
-            }
-            let rect = egui::Rect::from_min_size(full.min, egui::vec2(full.width(), caption_h));
-            if let Some(h) = self.main_hwnd {
-                let m = crate::win32::max_button_state(h);
-                caption::frame_maximize(m.hot, m.pressed);
-            }
-            let buttons = [
-                (CaptionButton::Close, true),
-                (CaptionButton::Maximize, true),
-                (CaptionButton::Minimize, true),
-            ];
-            let bar = caption::title_bar(ui, rect, crate::MAIN_TITLE, &buttons);
-            if let Some(h) = self.main_hwnd {
-                // The sizing frame above the bar (Windows 11, #208) in the bar's colour.
-                crate::win32::caption_colour(h, [bar.top.r(), bar.top.g(), bar.top.b()]);
-                let ppp = ui.ctx().pixels_per_point();
-                let px = |r: egui::Rect| {
-                    let (a, b) = ((r.min - full.min) * ppp, (r.max - full.min) * ppp);
-                    [
-                        a.x.round() as i32,
-                        a.y.round() as i32,
-                        b.x.round() as i32,
-                        b.y.round() as i32,
-                    ]
-                };
-                crate::win32::set_caption_hits(
-                    h,
-                    crate::win32::CaptionHits {
-                        strip_h: (caption_h * ppp).round() as i32,
-                        icon: px(bar.icon),
-                        buttons: bar.buttons.iter().map(|r| px(*r)).collect(),
-                        max_button: Some(1),
-                    },
-                );
-            }
-            let ctx = ui.ctx();
-            match bar.pressed {
-                Some(CaptionButton::Close) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
-                Some(CaptionButton::Minimize) => {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true))
-                }
-                Some(CaptionButton::Maximize) => {
-                    let max = ctx.input(|i| i.viewport().maximized) == Some(true);
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!max));
-                }
-                _ => {}
-            }
-            egui::Rect::from_min_max(egui::pos2(full.min.x, full.min.y + caption_h), full.max)
+        drawn: bool,
+        reserve: f32,
+    ) -> (egui::Rect, Option<crate::winui::caption::TitleBar>) {
+        use crate::winui::caption::{self, CaptionButton};
+        if !drawn {
+            return (full, None);
         }
+        let caption_h = layout.caption_h;
+        let rect = egui::Rect::from_min_size(full.min, egui::vec2(full.width(), caption_h));
+        if let Some(h) = self.main_hwnd {
+            let m = crate::win32::max_button_state(h);
+            caption::frame_maximize(m.hot, m.pressed);
+        }
+        let buttons = [
+            (CaptionButton::Close, true),
+            (CaptionButton::Maximize, true),
+            (CaptionButton::Minimize, true),
+        ];
+        let bar = if layout.menus_in_caption {
+            caption::main_bar(ui, rect, crate::MAIN_TITLE, &buttons, reserve)
+        } else {
+            caption::title_bar(ui, rect, crate::MAIN_TITLE, &buttons)
+        };
+        if let Some(h) = self.main_hwnd {
+            // The sizing frame above the bar (Windows 11, #208) in the bar's colour.
+            crate::win32::caption_colour(h, [bar.top.r(), bar.top.g(), bar.top.b()]);
+        }
+        let ctx = ui.ctx();
+        match bar.pressed {
+            Some(CaptionButton::Close) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            Some(CaptionButton::Minimize) => {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true))
+            }
+            Some(CaptionButton::Maximize) => {
+                let max = ctx.input(|i| i.viewport().maximized) == Some(true);
+                ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!max));
+            }
+            _ => {}
+        }
+        let rest =
+            egui::Rect::from_min_max(egui::pos2(full.min.x, full.min.y + caption_h), full.max);
+        (rest, Some(bar))
     }
 
+    /// Tell the window's hit test where the drawn bar's parts are (client pixels from `origin`,
+    /// the window's top-left): its icon, its buttons, and `more` (screen rects in points) that
+    /// are the client's too, Graphite's menu titles and Find. The rest of the bar drags the
+    /// window. Maximize stays the second button, answered as the system's.
+    fn publish_caption(
+        &self,
+        ui: &Ui,
+        layout: &chrome::Layout,
+        origin: Pos2,
+        bar: &crate::winui::caption::TitleBar,
+        more: &[egui::Rect],
+    ) {
+        let Some(h) = self.main_hwnd else { return };
+        let ppp = ui.ctx().pixels_per_point();
+        let px = |r: egui::Rect| {
+            let (a, b) = ((r.min - origin) * ppp, (r.max - origin) * ppp);
+            [
+                a.x.round() as i32,
+                a.y.round() as i32,
+                b.x.round() as i32,
+                b.y.round() as i32,
+            ]
+        };
+        crate::win32::set_caption_hits(
+            h,
+            crate::win32::CaptionHits {
+                strip_h: (layout.caption_h * ppp).round() as i32,
+                icon: px(bar.icon),
+                buttons: bar.buttons.iter().chain(more).map(|r| px(*r)).collect(),
+                max_button: Some(1),
+            },
+        );
+    }
     fn toggle(&mut self, b: Branch) {
         match b {
             Branch::All => self.all_open = !self.all_open,
@@ -6427,10 +6590,20 @@ impl App {
         // The client area, laid out from the right in a right-to-left interface (winui).
         let _surface = winui::Surface::enter(full.min.x, full.max.x);
         // Where every band and pane goes this frame (chrome::Layout).
-        let layout = chrome::Layout::current();
+        let drawn = self.sync_frame(ui);
+        let layout = chrome::Layout::current(drawn);
+        let window_min = full.min;
+        // Graphite's title bar keeps room after its title for the menus and Find (plan 05b).
+        let find_key = chrome::key_label(Cmd::Find.hint().unwrap_or("Ctrl+F"));
+        let find_size = chrome::find_button_size(ui.painter(), &find_key);
+        let reserve = if layout.menus_in_caption {
+            chrome::caption_menus_width(ui.painter()) + find_size.x + 32.0
+        } else {
+            0.0
+        };
         // A style theme's title bar, drawn above the layout (Windows; #45), mirrored right to
         // left as the progress window's.
-        let full = self.drawn_caption(ui, &layout, full);
+        let (full, bar) = self.drawn_caption(ui, &layout, full, drawn, reserve);
         let o = full.min;
         let (w, h) = (full.width(), full.height());
         let mut chosen: Option<(Cmd, Option<u64>)> = None;
@@ -6508,7 +6681,40 @@ impl App {
         }
 
         // Menu bar and its popups: which menu is open is chrome::menubar_next's to say.
-        if let Some(event) = chrome::menu_bar(ui, &layout, o, w, self.open_menu) {
+        let (event, titles) = match &bar {
+            // Graphite: the menus in the title bar after its title, then Find between them and
+            // the window's buttons, centred in the room there (the mockup's); both the client's
+            // in the window's hit test, the rest of the bar its caption.
+            Some(bar) if layout.menus_in_caption => {
+                let mid = window_min.y + (layout.caption_h - 1.0) / 2.0;
+                let (event, titles) = chrome::caption_menu_bar(
+                    ui,
+                    bar.title_end + chrome::CAPTION_MENUS_GAP,
+                    mid,
+                    self.open_menu,
+                );
+                let end = titles.last().map_or(bar.title_end, |t| t.right());
+                let free = bar.buttons_start - end;
+                let mut more: Vec<egui::Rect> = titles.iter().map(|t| winui::rect(*t)).collect();
+                if free >= find_size.x + 16.0 {
+                    let x = (end + (free - find_size.x) / 2.0).round();
+                    let rc = egui::Rect::from_min_size(pos2(x, (mid - 13.0).round()), find_size);
+                    if chrome::find_button(ui, rc, &find_key) {
+                        chosen = Some((Cmd::Find, None));
+                    }
+                    more.push(winui::rect(rc));
+                }
+                self.publish_caption(ui, &layout, window_min, bar, &more);
+                (event, titles)
+            }
+            bar => {
+                if let Some(bar) = bar {
+                    self.publish_caption(ui, &layout, window_min, bar, &[]);
+                }
+                chrome::menu_bar(ui, &layout, o, w, self.open_menu)
+            }
+        };
+        if let Some(event) = event {
             self.open_menu = chrome::menubar_next(self.open_menu, event);
         }
         // A menu opened by Left or Right is drawn in the same pass as the one it replaces (a
@@ -6516,10 +6722,16 @@ impl App {
         // a pass without a menu would close, a new window opening for the next (#277).
         for _ in 0..2 {
             let Some(i) = self.open_menu else { break };
-            let x = chrome::menus()[i].1;
             let entries = self.menu_entries(i);
-            // Under the item's leading edge (the menu's top-right in RTL), on the bar's last row.
-            let at = pos2(winui::mx(o.x + x), o.y + layout.menu_h - 1.0);
+            // Under the item's leading edge (the menu's top-right in RTL), on the bar's last row
+            // (Graphite's: the title bar's rule).
+            let title = titles[i];
+            let bottom = if layout.menus_in_caption {
+                o.y
+            } else {
+                title.bottom()
+            };
+            let at = pos2(winui::mx(title.left()), bottom - 1.0);
             let event = match chrome::popup(
                 &ctx,
                 MenuKind::Bar,
@@ -6545,7 +6757,7 @@ impl App {
                     let press =
                         ui.input(|x| x.pointer.press_origin().filter(|_| x.pointer.any_pressed()));
                     let press_on_title =
-                        press.is_some_and(|at| chrome::menubar_title_at(&layout, o, at).is_some());
+                        press.is_some_and(|at| chrome::menubar_title_at(&titles, at).is_some());
                     Some(MenuBarEvent::Dismissed { press_on_title })
                 }
             };
@@ -6616,12 +6828,20 @@ impl App {
             // The splitter: the gap between the pane and the list (`splitter_w`), dragged
             // sideways.
             let max_w = (w * 0.6).max(100.0);
-            let cat_w = (self.settings.categories_width as f32).clamp(100.0, max_w);
+            // Graphite's pane has a width of its own (224 by default), Classic keeps IDM's.
+            let saved = if layout.graphite {
+                self.settings.graphite_categories_width
+            } else {
+                self.settings.categories_width
+            };
+            let cat_w = (saved as f32).clamp(100.0, max_w);
             let right = o.x + layout.tree_left + cat_w;
+            // The splitter: IDM's 4-point gap; Graphite's pane rule, 3 either side of it.
+            let grip = if layout.splitter_w > 0.0 { 0.0 } else { 3.0 };
             let split = winui::rect(egui::Rect::from_min_max(
-                pos2(right, o.y + layout.panes_top()),
+                pos2(right - grip, o.y + layout.panes_top()),
                 pos2(
-                    right + layout.splitter_w,
+                    right + layout.splitter_w + grip,
                     o.y + layout.strip_top(h) - layout.pane_gap,
                 ),
             ));
@@ -6641,7 +6861,11 @@ impl App {
                 let nw = (winui::mx(p.x) - o.x - layout.tree_left - layout.splitter_w / 2.0)
                     .round()
                     .clamp(100.0, max_w);
-                self.settings.categories_width = nw as u32;
+                if layout.graphite {
+                    self.settings.graphite_categories_width = nw as u32;
+                } else {
+                    self.settings.categories_width = nw as u32;
+                }
             }
             if sr.drag_stopped() {
                 self.dirty = true;
@@ -6736,13 +6960,10 @@ impl App {
         let (ids, rows) = self.list_rows();
         self.selection.retain(&ids);
         let (selected, focus) = self.selection.rows(&ids);
-        // Its bottom edge is exclusive: its frame's last row one under the pane frame's (IDM's).
+        // Its bottom edge is exclusive: IDM's frame's last row one under the pane frame's.
         let outer = egui::Rect::from_min_max(
             pos2(o.x + list_left, o.y + layout.panes_top()),
-            pos2(
-                o.x + w - layout.list_right,
-                o.y + layout.strip_top(h) - layout.pane_gap + 1.0,
-            ),
+            pos2(o.x + w - layout.list_right, o.y + layout.list_bottom(h)),
         );
         self.list.menu_open = self.popup.is_some() || self.open_menu.is_some();
         // Another node shows from its top (its rows aren't the last one's).

@@ -5379,8 +5379,6 @@ pub fn spin_arrows(ui: &mut Ui, rc: Rect, enabled: bool, id: &str) -> i32 {
 /// tile's size: a dialog's icon (40, radius 8), an empty list's or About's (56, radius 14).
 /// The tint applies to one-colour sets; a colour set draws its own colours. False when the
 /// theme has no icon set or its set lacks `need` (the tile is drawn, empty).
-// ponytail: no caller until 05b and 07a (plans/02b-chrome-gate.md), one painter for both.
-#[allow(dead_code)]
 pub fn icon_tile(ui: &Ui, rc: Rect, need: &str, tint: Color32, radius: f32) -> bool {
     let painter = ui.painter();
     painter.rect_filled(rc, radius, crate::theme::colors().tile);
@@ -5957,6 +5955,100 @@ pub mod caption {
         /// The colour along the bar's top edge (the sizing frame above the main window's bar
         /// takes it: win32::caption_colour).
         pub top: Color32,
+        /// Where the title ends (English x, the leading edge's side): what the bar holds after
+        /// it starts there ([`main_bar`]'s menus).
+        pub title_end: f32,
+        /// Where the caption buttons start (English x).
+        pub buttons_start: f32,
+    }
+
+    /// Graphite's main-window title bar (plan 05b, DESIGN.md): `rect` 36 high with a rule
+    /// along its bottom, the window's icon 12 from the start, the title after it at its start
+    /// (not centred: the menus follow it), `reserve` kept free after the title for them, the
+    /// caption buttons 42 × 35 from the window's end. The rest as [`title_bar`].
+    pub fn main_bar(
+        ui: &mut Ui,
+        rect: Rect,
+        title: &str,
+        buttons: &[(CaptionButton, bool)],
+        reserve: f32,
+    ) -> TitleBar {
+        static ALWAYS_ACTIVE: std::sync::LazyLock<bool> =
+            std::sync::LazyLock::new(|| std::env::var_os("MDM_TEST_ACTIVE").is_some());
+        let active = *ALWAYS_ACTIVE || ui.ctx().input(|i| i.viewport().focused) != Some(false);
+        let p = ui.painter().clone();
+        let bar = bar_colour(active);
+        p.rect_filled(rect, 0.0, bar);
+        let c = crate::theme::colors();
+        // The rule under the bar (the mockup's `line`).
+        p.rect_filled(
+            Rect::from_min_max(pos2(rect.left(), rect.bottom() - 1.0), rect.max),
+            0.0,
+            c.menubar_line,
+        );
+        const BUTTON: egui::Vec2 = vec2(42.0, 35.0);
+        let mut pressed = None;
+        let mut rects = Vec::with_capacity(buttons.len());
+        let mut from_end = 0.0;
+        for (b, enabled) in buttons {
+            let english =
+                Rect::from_min_size(pos2(rect.right() - from_end - BUTTON.x, rect.top()), BUTTON);
+            from_end += BUTTON.x;
+            let rc = super::rect(english);
+            if caption_button(ui, rc, *b, *enabled, active) {
+                pressed = Some(*b);
+            }
+            rects.push(rc);
+        }
+        FRAME_MAX.with(|c| c.set((false, false)));
+        let buttons_start = rect.right() - from_end;
+        // The icon: 16, 12 from the start, centred on the bar above its rule.
+        let mid = rect.top() + (rect.height() - 1.0) / 2.0;
+        let icon = Rect::from_min_size(
+            pos2(rect.left() + 12.0, (mid - 8.0).round()),
+            vec2(16.0, 16.0),
+        );
+        egui::Image::new(egui::include_image!("../assets/icons/app/mdm-32.png"))
+            .paint_at(ui, super::rect(icon));
+        let font = FontId::new(segoe().size, egui::FontFamily::Name("geist-medium".into()));
+        let x = icon.right() + 10.0;
+        let room = (buttons_start - x - reserve).max(0.0);
+        let shown = ellipsize(&p, &font, title, room);
+        let ink = if active {
+            CAPTION_INK()
+        } else {
+            caption_ink_inactive()
+        };
+        let galley = p.layout_no_wrap(shown.clone(), font.clone(), ink);
+        let w = galley.size().x;
+        let english = Rect::from_min_size(
+            pos2(x, (mid - galley.size().y / 2.0).round()),
+            galley.size(),
+        );
+        let drawn = super::rect(english);
+        p.galley(drawn.min, galley, ink);
+        let label = ui.interact(drawn, widget_id(ui, "caption-title"), Sense::hover());
+        if SYSTEM_SPEAKS {
+            unspoken(ui, &label);
+        } else {
+            expose(&label, egui::Role::Label, title, true, None);
+        }
+        if shown != title {
+            label.on_hover_text(title);
+        }
+        // The system menu's place: the bar's start to just past the icon.
+        let icon_hit = super::rect(Rect::from_min_max(
+            rect.min,
+            pos2(icon.right() + 5.0, rect.bottom()),
+        ));
+        TitleBar {
+            pressed,
+            buttons: rects,
+            icon: icon_hit,
+            top: bar,
+            title_end: x + w,
+            buttons_start,
+        }
     }
 
     /// A title bar we draw ourselves (where the window's frame is ours: win32::thin_frame): the
@@ -6113,6 +6205,8 @@ pub mod caption {
             buttons: rects,
             icon,
             top,
+            title_end: drawn.right(),
+            buttons_start: rect.right() - buttons_w,
         }
     }
 }

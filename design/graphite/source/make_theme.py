@@ -31,19 +31,17 @@ WARNING = {"light": "#9d5d00", "dark": "#f5a524"}
 # a0 (63 %): 3.2 to 3.4:1 light, 3.5 to 3.6:1 dark.
 RING = "acc@a0"
 
-# The toolbar's faces. Its band is the window (`bg`) until plan 05 puts it on a panel, and
-# `hover` is made for panels (`surface`): on `bg` it is 5 apart in light, not seen. So the
-# faces are the window shaded toward the ink, as much as `hover` is from `surface` (about 14),
-# pressed twice that, the other half of a split button half of it.
-TOOLBAR_HOT = ("mix", "bg", "ink", 0.06)
-TOOLBAR_PRESSED = ("mix", "bg", "ink", 0.12)
-TOOLBAR_FAINT = ("mix", "bg", "ink", 0.03)
+# The toolbar's faces. Its band is a panel (`surface`, plan 05b), which `hover` and `press`
+# are made for; the other half of a split button under the pointer half-way to `hover`.
+TOOLBAR_HOT = "hover"
+TOOLBAR_PRESSED = "press"
+TOOLBAR_FAINT = ("mix", "surface", "hover", 0.5)
 
 # Faces that must be told apart by eye (pal.STEP), beyond pal.py's own (pal.APART).
 FACES_APART = [
-    ("toolbar hot / band", TOOLBAR_HOT, "bg"),
+    ("toolbar hot / band", TOOLBAR_HOT, "surface"),
     ("toolbar pressed / hot", TOOLBAR_PRESSED, TOOLBAR_HOT),
-    ("toolbar faint / band", TOOLBAR_FAINT, "bg"),
+    ("toolbar faint / band", TOOLBAR_FAINT, "surface"),
     ("toolbar faint / hot", TOOLBAR_FAINT, TOOLBAR_HOT),
 ]
 
@@ -170,10 +168,11 @@ radius = 8
 "radius.menu-item" = 6
 "radius.popup" = 8
 "radius.egui" = 8
-# The mockup's row height.
+# The mockup's row height, and its column heads' (7 above and below the title, the rule).
 "list.row" = 32
-# Geist's sizes (plan 04, step 6): the main window's text and column heads at the mock's 12
-# (its toolbar labels share the size until 05b gives them 11.5), egui's body text at 13.
+"list.header" = 31
+# Geist's sizes (plan 04, step 6): the main window's text and column heads at the mock's 12,
+# its toolbar labels at 11.5 (`font.small`, plan 05b), egui's body text at 13.
 "font.ui" = 12
 "font.body" = 13
 "font.small" = 11.5

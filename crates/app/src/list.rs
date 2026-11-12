@@ -133,7 +133,7 @@ fn row_value(row: &Row, col: usize) -> &str {
     match col {
         1 if row.queued => "In a queue",
         1 => "Not in a queue",
-        3 => row.status_group,
+        3 => row.kind.group(),
         c => &row.cells[c],
     }
 }
@@ -190,6 +190,8 @@ pub struct ListState {
     filter_open: Option<(usize, Pos2)>,
     /// The sideways scroll when it opened (it closes when the list moves).
     filter_hscroll: f32,
+    /// A filter box to open on the next frame ([ListState::open_filter]).
+    filter_pending: Option<usize>,
     /// A selection box being dragged: where it started (x in content, y in rows' space) and
     /// whether Ctrl adds it to the selection.
     marquee: Option<(Pos2, bool)>,
@@ -216,6 +218,7 @@ impl Default for ListState {
             filters: vec![None; COLS],
             filter_open: None,
             filter_hscroll: 0.0,
+            filter_pending: None,
             marquee: None,
             typed: String::new(),
             menu_open: false,
@@ -244,6 +247,20 @@ impl ListState {
     /// Give the list the keys, or take them (the tree has them).
     pub fn set_keys(&mut self, on: bool) {
         self.focused = on;
+    }
+
+    /// Open column `col`'s filter box under its header on the next frame, as a click on its
+    /// funnel does (`/show filter:<col>`, for screenshots).
+    pub fn open_filter(&mut self, col: usize) {
+        if col < COLS {
+            self.filter_pending = Some(col);
+        }
+    }
+
+    /// Close the filter box.
+    pub fn close_filter(&mut self) {
+        self.filter_open = None;
+        self.filter_pending = None;
     }
 
     /// Columns as they first were: order, widths, every one shown.
@@ -330,9 +347,50 @@ impl ListState {
     }
 }
 
+/// What a download is doing, as the Status filter groups it and Graphite's Status cell draws it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StatusKind {
+    Downloading,
+    Stopped,
+    Waiting,
+    Complete,
+    Error,
+}
+
+impl StatusKind {
+    /// What the Status filter sees (and offers, [`filter_values`]).
+    pub fn group(self) -> &'static str {
+        match self {
+            // i18n: a download's status (state it is in, not a command): being downloaded now
+            StatusKind::Downloading => "Downloading",
+            // i18n: a download's status (state it is in, not a command): stopped by the user
+            StatusKind::Stopped => "Stopped",
+            // i18n: a download's status (state it is in, not a command): waiting in a queue for its turn
+            StatusKind::Waiting => "Waiting",
+            // i18n: a download's status (state it is in, not a command): finished, the whole file is there
+            StatusKind::Complete => "Complete",
+            // i18n: a download's status (state it is in, not a command): it failed
+            StatusKind::Error => "Error",
+        }
+    }
+
+    /// Its icon in the theme's set (Graphite's Status cell).
+    fn need(self) -> &'static str {
+        match self {
+            StatusKind::Downloading => "st-downloading",
+            StatusKind::Stopped => "st-paused",
+            StatusKind::Waiting => "st-queued",
+            StatusKind::Complete => "st-complete",
+            StatusKind::Error => "st-error",
+        }
+    }
+}
+
 pub struct Row {
-    /// What the Status filter sees: Downloading, Stopped, Waiting, Complete or Error.
-    pub status_group: &'static str,
+    pub kind: StatusKind,
+    /// How much is done (0 to 1) while the Status cell shows it as a percentage: Graphite's
+    /// cell draws it as a bar (plan 05b). None when the cell says something else.
+    pub progress: Option<f32>,
     pub icon: IconKey,
     /// In a queue: the Q column shows a queue icon (IDM: stacked files).
     pub queued: bool,
@@ -524,10 +582,19 @@ pub fn show(
         outer.right() - 1.0,
         outer.bottom() - 1.0,
     );
-    winui::solid(&p, screen(outer), FRAME());
-    fill(&p, l + 1.0, t + 1.0, r - 1.0, b - 1.0, BG());
-    let (cl, ct, cr, cb) = (l + 2.0, t + 2.0, r - 2.0, b - 2.0);
-    let font = winui::tahoma();
+    // Graphite's list (plan 05b): edge to edge in its pane, no frame; quiet column heads with
+    // a rule under them, rows on hairlines, the numbers right-aligned in tabular figures, the
+    // Status cell's progress drawn.
+    let g = crate::theme::chrome() == crate::palette::ChromeLook::Graphite;
+    let (cl, ct, cr, cb) = if g {
+        fill(&p, l, t, r, b, BG());
+        (l, t, r, b)
+    } else {
+        winui::solid(&p, screen(outer), FRAME());
+        fill(&p, l + 1.0, t + 1.0, r - 1.0, b - 1.0, BG());
+        (l + 2.0, t + 2.0, r - 2.0, b - 2.0)
+    };
+    let font = if g { winui::segoe() } else { winui::tahoma() };
 
     // Scroll bars (notes/ui-spec/scrollbars.md), decided like Win32: each one shows when the
     // content overflows the room the other one leaves.
@@ -643,6 +710,13 @@ pub fn show(
         .then_some(pointer)
         .flatten()
         .and_then(|pp| funnel_hit(st, pp));
+    // A box asked for from outside (open_filter): as if its funnel was clicked.
+    let funnel_click = funnel_click.or_else(|| {
+        let col = st.filter_pending.take()?;
+        cols.iter()
+            .find(|(c, ..)| *c == col)
+            .map(|(c, x0, x1)| (*c, funnel_rect(st, *c, *x0, *x1, ct).left_bottom(), *x1))
+    });
     if let Some((col, at, _)) = funnel_click {
         st.filter_open = match st.filter_open {
             Some((c, _)) if c == col => None,
@@ -676,7 +750,10 @@ pub fn show(
     let p_all = p.clone();
     let p = p.with_clip_rect(screen(header));
     fill(&p, cl, ct, rr, ct + header_h() - 1.0, HEADER_BG());
-    for (c, x0, x1) in &cols {
+    if g {
+        graphite_header(ui, &p, st, &hresp, &cols, (cl, ct, rr));
+    }
+    for (c, x0, x1) in cols.iter().filter(|_| !g) {
         let hovered = hresp
             .hover_pos()
             .map(english)
@@ -923,19 +1000,31 @@ pub fn show(
             let inner = top + row_inset();
             for (c, x0, x1) in &cols {
                 // The file-type icon sits in the File Name column, wherever it is.
+                // Graphite: 10 in from the column's start, the file's name 8 after its icon.
+                let (pad, icon_x) = if g { (10.0, 10.0) } else { (6.0, 4.0) };
                 let tx = if *c == 0 {
-                    icons.paint_in(ui, &bp, row.icon.clone(), pos2(x0 + 4.0, inner));
-                    x0 + 22.0
+                    icons.paint_in(ui, &bp, row.icon.clone(), pos2(x0 + icon_x, inner));
+                    x0 + icon_x + 16.0 + if g { 8.0 } else { 2.0 }
                 } else {
-                    x0 + 6.0
+                    x0 + pad
                 };
                 if *c == 1 && row.queued {
-                    icons.paint_in(
-                        ui,
-                        &bp,
-                        IconKey::Silk("page_white_stack"),
-                        pos2(x0 + 2.0, inner),
-                    );
+                    if g {
+                        // The queues' own icon, centred in the narrow column.
+                        icons.paint_in(
+                            ui,
+                            &bp,
+                            IconKey::Themed("cat-queues", "page_white_stack"),
+                            pos2(((x0 + x1) / 2.0 - 8.0).round(), inner),
+                        );
+                    } else {
+                        icons.paint_in(
+                            ui,
+                            &bp,
+                            IconKey::Silk("page_white_stack"),
+                            pos2(x0 + 2.0, inner),
+                        );
+                    }
                 }
                 let cell = Rect::from_min_max(pos2(*x0, top), pos2(*x1 - 1.0, top + row_h()));
                 if *c == SOURCE {
@@ -956,7 +1045,29 @@ pub fn show(
                     continue;
                 }
                 let value = cell_text(*c, &row.cells[*c]);
-                let s = winui::ellipsize(&bp, &font, &value, x1 - tx - 3.0);
+                // Graphite: the numbers in tabular figures, to the column's end.
+                let cell_font = if g && numeric(*c) {
+                    numbers_font()
+                } else {
+                    font.clone()
+                };
+                let room = if g { x1 - tx - 9.0 } else { x1 - tx - 3.0 };
+                if g && *c == 3 {
+                    let clip = bp.with_clip_rect(screen(cell.intersect(body)));
+                    let hovered = resp
+                        .hover_pos()
+                        .map(english)
+                        .is_some_and(|h| cell.contains(h));
+                    if hovered {
+                        let tip = status_tip(idx);
+                        if !tip.is_empty() {
+                            cut_under_pointer = Some(tip);
+                        }
+                    }
+                    status_cell(ui, &clip, (tx, x1 - 10.0), top, row, sel);
+                    continue;
+                }
+                let s = winui::ellipsize(&bp, &cell_font, &value, room);
                 // A cut cell shows its whole text on hover (Windows' list label tip); the
                 // Status cell shows the download's recent events.
                 if resp
@@ -977,7 +1088,7 @@ pub fn show(
                 }
                 let clip = bp.with_clip_rect(screen(cell.intersect(body)));
                 // A failed download's Status and Description (the reason) in the error colour.
-                let failed = row.status_group == "Error" && (*c == 3 || *c == 7);
+                let failed = row.kind == StatusKind::Error && (*c == 3 || *c == 7);
                 let ink = if sel {
                     winui::SELECTION_TEXT()
                 } else if failed {
@@ -985,7 +1096,13 @@ pub fn show(
                 } else {
                     TEXT()
                 };
-                text_font(&clip, font.clone(), tx, inner + 12.0, &s, ink);
+                let tx = if g && right_aligned(*c) {
+                    let w = winui::text_width_font(&bp, cell_font.clone(), &s).ceil();
+                    (x1 - 10.0 - w).max(tx)
+                } else {
+                    tx
+                };
+                text_font(&clip, cell_font, tx, inner + 12.0, &s, ink);
             }
         }
         // The grid line is the item's own last row (top + 16), so icons are not clipped; in
@@ -1003,7 +1120,8 @@ pub fn show(
         resp.clone().on_hover_text_at_pointer(full);
     }
     filter_box(ui, st);
-    for (_, _, x1) in cols.iter().filter(|_| !rows.is_empty()) {
+    // Graphite's rows have hairlines only, no columns' lines.
+    for (_, _, x1) in cols.iter().filter(|_| !rows.is_empty() && !g) {
         // One line at col.right + 1.
         fill(&bp, x1 + 1.0, body_top, x1 + 1.0, rb, GRID_V_RIGHT());
     }
@@ -1265,26 +1383,228 @@ fn chip(
     };
     // The cell holds the English key (filters match on it); the chip shows it translated.
     let full = crate::i18n::t(label);
-    // Room: the pill starts 5 px in, pads its text 6 px each side, and ends 3 px before the cell.
-    let label = &winui::ellipsize(p, font, full, (x1 - x0 - 5.0 - 12.0 - 3.0).max(0.0));
+    // Graphite's (the mockup's `.chip`): Medium 11.5, 8 either side, 18 high, 10 in.
+    let graphite = crate::theme::chrome() == crate::palette::ChromeLook::Graphite;
+    let medium = egui::FontId::new(
+        crate::theme::metrics().font_small,
+        egui::FontFamily::Name("geist-medium".into()),
+    );
+    let (font, inset, pad, h, baseline) = if graphite {
+        (&medium, 10.0, 8.0, 18.0, top + 13.0)
+    } else {
+        (
+            font,
+            5.0,
+            6.0,
+            row_h().min(crate::palette::Metrics::CLASSIC.list_row) - 4.0,
+            top + 12.0,
+        )
+    };
+    let pill_top = if graphite { top } else { top + 2.0 };
+    // Room: the pill starts `inset` in, pads its text each side, and ends 3 px before the cell.
+    let label = &winui::ellipsize(p, font, full, (x1 - x0 - inset - 2.0 * pad - 3.0).max(0.0));
     let w = winui::text_width_font(p, font.clone(), label).round();
-    let h = row_h().min(crate::palette::Metrics::CLASSIC.list_row) - 4.0;
-    let pill = Rect::from_min_size(pos2(x0 + 5.0, top + 2.0), egui::vec2(w + 12.0, h));
+    let pill = Rect::from_min_size(pos2(x0 + inset, pill_top), egui::vec2(w + 2.0 * pad, h));
     p.rect_filled(winui::rect(pill), h / 2.0, fill);
     text_font(
         p,
         font.clone(),
-        pill.left() + 6.0,
-        top + 12.0,
+        pill.left() + pad,
+        baseline,
         label,
         crate::theme::colors().chip_text,
     );
     label != full
 }
 
+/// Graphite's Status cell (plan 05b, the mockup's `.st`) from English `x` to `right`, in the row
+/// at `top`: a moving download, a 4-point bar and its percentage; a stopped one part-way, the
+/// paused icon, the word, the bar in the muted ink and the percentage; any other, its icon and
+/// its word (or what the cell says: "Extracting...", "Checking 42%"). Errors in the error
+/// colour, finished downloads muted. The cell's text for screen readers is the row's as before.
+fn status_cell(ui: &Ui, p: &egui::Painter, (x, right): (f32, f32), top: f32, row: &Row, sel: bool) {
+    let c = crate::theme::colors();
+    let mid = top + row_h() / 2.0;
+    let baseline = top + row_inset() + 12.0;
+    let font = winui::segoe();
+    let ink = match row.kind {
+        _ if sel => winui::SELECTION_TEXT(),
+        StatusKind::Error => winui::ERROR(),
+        StatusKind::Complete => winui::MUTED(),
+        _ => TEXT(),
+    };
+    // The percentage, 46 wide at the end, and the bar before it from `from`, 7 apart.
+    let meter = |from: f32, f: f32, bar: Color32| {
+        let pct = crate::model::percent(f64::from(f));
+        let w = winui::text_width_font(p, numbers_font(), &pct).ceil();
+        text_font(p, numbers_font(), right - w, baseline, &pct, ink);
+        let end = right - 46.0 - 7.0;
+        if end - from >= 30.0 {
+            let track = Rect::from_min_max(
+                pos2(from, (mid - 2.0).round()),
+                pos2(end, (mid + 2.0).round()),
+            );
+            p.rect_filled(winui::rect(track), 2.0, c.progress_track);
+            let done = Rect::from_min_max(
+                track.min,
+                pos2(
+                    track.left() + track.width() * f.clamp(0.0, 1.0),
+                    track.bottom(),
+                ),
+            );
+            if done.width() > 0.5 {
+                p.rect_filled(winui::rect(done), 2.0, bar);
+            }
+        }
+    };
+    match (row.kind, row.progress) {
+        (StatusKind::Downloading, Some(f)) => meter(x, f, c.progress_bar),
+        (kind, progress) => {
+            let icon = Rect::from_min_size(pos2(x, (mid - 8.0).round()), egui::vec2(16.0, 16.0));
+            crate::themeicons::paint_in(ui, p, kind.need(), winui::rect(icon), ink, true);
+            let tx = icon.right() + 7.0;
+            // The word where the cell gives a percentage, else what it says.
+            let text = match progress {
+                Some(_) => crate::i18n::t(kind.group()),
+                None if row.cells[3].is_empty() => crate::i18n::t(kind.group()),
+                None => row.cells[3].as_str(),
+            };
+            let stopped = kind == StatusKind::Stopped && progress.is_some();
+            let room = if stopped {
+                right - 46.0 - 7.0 - 30.0 - 7.0 - tx
+            } else {
+                right - tx
+            };
+            let shown = winui::ellipsize(p, &font, text, room.max(0.0));
+            let drawn = text_font(p, font.clone(), tx, baseline, &shown, ink);
+            if stopped && let Some(f) = progress {
+                meter(winui::rect(drawn).right() + 7.0, f, winui::MUTED());
+            }
+        }
+    }
+}
+
+/// The columns whose numbers Graphite's list right-aligns (the mockup's `.r`): Q, Size, Time
+/// left, Transfer rate and a torrent's three.
+fn right_aligned(col: usize) -> bool {
+    matches!(col, 1 | 2 | 4 | 5 | PEERS | RATIO | UPLOAD)
+}
+
+/// The columns drawn in [`crate::theme::NUMBERS`] (tabular figures) under Graphite.
+fn numeric(col: usize) -> bool {
+    matches!(col, 2 | 3 | 4 | 5 | PEERS | RATIO | UPLOAD)
+}
+
+fn numbers_font() -> egui::FontId {
+    egui::FontId::new(
+        crate::theme::metrics().font_ui,
+        egui::FontFamily::Name(crate::theme::NUMBERS.into()),
+    )
+}
+
+/// Graphite's column heads (plan 05b, the mockup's `th`): the title in the muted ink, Medium,
+/// 10 in from the column's start (its end for a right-aligned column), the sort chevron after
+/// it and a filtered column's funnel after that in the accent; no dividers, one rule under
+/// them all. The funnel that opens a column's filter shows at the column's end under the
+/// pointer, where IDM's layout has it always.
+fn graphite_header(
+    ui: &Ui,
+    p: &egui::Painter,
+    st: &ListState,
+    hresp: &egui::Response,
+    cols: &[(usize, f32, f32)],
+    (cl, ct, rr): (f32, f32, f32),
+) {
+    let english = |q: Pos2| pos2(winui::mx(q.x), q.y);
+    let hh = header_h();
+    let c = crate::theme::colors();
+    fill(p, cl, ct + hh - 1.0, rr, ct + hh - 1.0, c.header_line);
+    let font = egui::FontId::new(
+        crate::theme::metrics().font_ui,
+        egui::FontFamily::Name("geist-medium".into()),
+    );
+    let baseline = ct + (hh / 2.0).floor() + 3.0;
+    for (col, x0, x1) in cols {
+        let hovered = hresp
+            .hover_pos()
+            .map(english)
+            .is_some_and(|h| h.x >= *x0 && h.x <= *x1 && st.drag.is_none());
+        let state = match (hovered, hresp.is_pointer_button_down_on()) {
+            (false, _) => winui::State::Normal,
+            (true, false) => winui::State::Hot,
+            (true, true) => winui::State::Pressed,
+        };
+        if let Some(t) = winui::subtle_fill(state, c) {
+            fill(p, *x0, ct, x1 - 1.0, ct + hh - 2.0, t);
+        }
+        let sorted = st.sort.filter(|(sc, _)| sc == col).map(|(_, asc)| asc);
+        let filtered = st.filters[*col].is_some();
+        let open = st.filter_open.is_some_and(|(fc, _)| fc == *col);
+        // After the title: the chevron (12) and the funnel (12), 4 apart.
+        let marks = sorted.map_or(0.0, |_| 16.0) + if filtered { 16.0 } else { 0.0 };
+        // The end's funnel under the pointer takes room too.
+        let end_room = if hovered || open { 16.0 } else { 0.0 };
+        let full = crate::i18n::tc("column", TITLES[*col]);
+        let room = (x1 - x0 - 20.0 - marks - end_room).max(0.0);
+        let label = winui::ellipsize(p, &font, full, room);
+        if hovered && st.drag.is_none() {
+            let tip = if TITLES[*col] == "Q" {
+                Some(crate::i18n::tc("column", "Queue"))
+            } else {
+                (label != full).then_some(full)
+            };
+            if let Some(tip) = tip {
+                hresp.clone().on_hover_text_at_pointer(tip);
+            }
+        }
+        let clip = p.with_clip_rect(winui::rect(Rect::from_x_y_ranges(*x0..=*x1, ct..=ct + hh)));
+        let w = winui::text_width_font(p, font.clone(), &label).ceil();
+        let tx = if right_aligned(*col) {
+            (x1 - 10.0 - w - marks - end_room).max(x0 + 10.0)
+        } else {
+            x0 + 10.0
+        };
+        text_font(&clip, font.clone(), tx, baseline, &label, winui::MUTED());
+        let mut mx = tx + w + 4.0;
+        let mid = ct + (hh / 2.0).floor();
+        if let Some(asc) = sorted {
+            // The mockup's chevron: down for descending (its "Added"), up for ascending.
+            let cx = mx + 6.0;
+            let d = if asc { -1.0 } else { 1.0 };
+            clip.line(
+                vec![
+                    pos2(winui::mx(cx - 3.5), mid - 1.75 * d),
+                    pos2(winui::mx(cx), mid + 1.75 * d),
+                    pos2(winui::mx(cx + 3.5), mid - 1.75 * d),
+                ],
+                egui::Stroke::new(1.5, winui::MUTED()),
+            );
+            mx += 16.0;
+        }
+        if filtered {
+            let rc = Rect::from_min_size(pos2(mx, mid - 6.0), egui::vec2(12.0, 12.0));
+            if !crate::themeicons::paint_in(
+                ui,
+                &clip,
+                "gx-filter",
+                winui::rect(rc),
+                FILTER_ON(),
+                true,
+            ) {
+                funnel(&clip, rc, FILTER_ON());
+            }
+        }
+        if hovered || open {
+            funnel(&clip, funnel_rect(st, *col, *x0, *x1, ct), SORT_ARROW());
+        }
+    }
+}
+
 /// Where a column's funnel sits in its header: at the right, left of the sort chevron.
 fn funnel_rect(st: &ListState, col: usize, x0: f32, x1: f32, ct: f32) -> Rect {
-    let sorted = st.sort.is_some_and(|(sc, _)| sc == col);
+    // Graphite's sort chevron follows the title, not the column's end.
+    let graphite = crate::theme::chrome() == crate::palette::ChromeLook::Graphite;
+    let sorted = !graphite && st.sort.is_some_and(|(sc, _)| sc == col);
     let right = x1 - if sorted { 18.0 } else { 4.0 };
     let left = (right - 12.0).max(x0 + 2.0);
     Rect::from_min_max(pos2(left, ct + 6.0), pos2(right, ct + header_h() - 6.0))
@@ -1561,7 +1881,17 @@ mod tests {
         cells[0] = name.into();
         cells[SOURCE] = source.into();
         Row {
-            status_group: status,
+            kind: [
+                StatusKind::Downloading,
+                StatusKind::Stopped,
+                StatusKind::Waiting,
+                StatusKind::Complete,
+                StatusKind::Error,
+            ]
+            .into_iter()
+            .find(|k| k.group() == status)
+            .unwrap(),
+            progress: None,
             icon: IconKey::Silk("page_white"),
             queued,
             cells,

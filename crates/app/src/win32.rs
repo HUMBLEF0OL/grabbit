@@ -4486,6 +4486,12 @@ fn classic_face(family: &egui::FontFamily) -> Option<(FaceKey, Option<&'static [
         egui::FontFamily::Proportional | egui::FontFamily::Monospace => "",
         egui::FontFamily::Name(name) => name,
     };
+    // The list's numbers keep Segoe UI's tabular figures whatever the theme's font (theme.rs
+    // NUMBERS): drawn from its file in both branches, or egui would draw them with fractional
+    // advances.
+    if name == crate::theme::NUMBERS {
+        return Some((FaceKey::File("segoeui.ttf"), None));
+    }
     if let Some([regular, medium, semibold]) = crate::theme::bundled_face() {
         let bytes = match name {
             "" | "tahoma" => regular,
