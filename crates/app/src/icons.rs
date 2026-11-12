@@ -1,6 +1,8 @@
-//! Toolbar icons: Lucide outlines (ISC licence, assets/icons/lucide/, v1.63.0) composed into
-//! IDM 6.42's toolbar roles, stroked with the two-tone diagonal gradients measured from IDM's
-//! "Neon" toolbar (tools/pixel/gradients.py). IDM's own images are never used (D-001).
+//! MDM's own icons by role. The toolbar's: a theme's icon set, else Lucide outlines (ISC
+//! licence, assets/icons/lucide/, v1.63.0) stroked with two-tone diagonal gradients
+//! (tools/pixel/gradients.py). The others (Options pages, helpers, the drag handle): Graphite's
+//! own icons in every theme (plan 05.5a), the Lucide outline only if its set lacked one. IDM's
+//! own images are never used (D-001).
 
 use egui::{Image, ImageSource};
 
@@ -18,9 +20,9 @@ pub enum Icon {
     Scheduler,
     StartQueue,
     StopQueue,
-    /// Download complete's drag handle: drag the file out (IDM's hand-and-arrows grip).
+    /// Download complete's drag handle: drag the file out.
     DragOut,
-    /// Options page headers (IDM draws its own artwork there; ours are Lucide outlines).
+    /// Options page headers (Graphite's icons, the mockup's).
     PageGeneral,
     PageFileTypes,
     PageSaveTo,
@@ -32,6 +34,8 @@ pub enum Icon {
     PageRegional,
     PageArchives,
     PageRemote,
+    /// Options → Accounts (debrid services).
+    PageAccounts,
     /// The first-start helpers window (ours): yt-dlp finds a page's video,
     HelperVideo,
     /// ffmpeg joins its picture and sound,
@@ -139,6 +143,8 @@ impl Icon {
                 r#"<path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/>"#,
                 r#"<path d="M12 22V12"/><path d="m3.3 7 7.703 4.734a2 2 0 0 0 1.994 0L20.7 7"/><path d="m7.5 4.27 9 5.15"/>"#,
             ),
+            // Lucide "key-round", as Sites Logins (its fallback only).
+            Icon::PageAccounts => Icon::PageLogins.body(),
             // Lucide "smartphone" (Options → Remote, #141).
             Icon::PageRemote => {
                 r#"<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>"#
@@ -182,7 +188,7 @@ impl Icon {
             Icon::PageFileTypes | Icon::PageDownloads => ("#3fa864", "#2f7fcf"),
             Icon::PageSaveTo => ("#e6a817", "#c77a12"),
             Icon::PageProxy => ("#5b6fd6", "#8a5fd0"),
-            Icon::PageLogins => ("#d9a514", "#9a7b2e"),
+            Icon::PageLogins | Icon::PageAccounts => ("#d9a514", "#9a7b2e"),
             Icon::PageSounds => ("#8a5fd0", "#d05f9a"),
             Icon::PageRegional => ("#2f7fcf", "#3fa864"),
             Icon::PageArchives => ("#c77a12", "#8a5fd0"),
@@ -218,6 +224,7 @@ impl Icon {
             Icon::PageRegional => "page-regional",
             Icon::PageArchives => "page-archives",
             Icon::PageRemote => "page-remote",
+            Icon::PageAccounts => "page-accounts",
             Icon::HelperVideo => "helper-video",
             Icon::HelperMerge => "helper-merge",
             Icon::HelperChecked => "helper-checked",
@@ -252,7 +259,7 @@ impl Icon {
 
     /// The icon set's name for this icon (`crate::themeicons`): a toolbar need, or the Graphite
     /// icon its place draws (plan 05.5a; the mockup names each).
-    pub fn need(self) -> &'static str {
+    fn need(self) -> &'static str {
         match self {
             Icon::AddUrl => "tb-add-url",
             Icon::AddTorrent => "tb-add-torrent",
@@ -277,6 +284,7 @@ impl Icon {
             Icon::PageRegional => "gx-world",
             Icon::PageArchives => "ft-archive",
             Icon::PageRemote => "gx-device",
+            Icon::PageAccounts => "gx-user",
             Icon::HelperVideo => "gx-search",
             Icon::HelperMerge => "gx-merge",
             Icon::HelperChecked => "gx-shield",
@@ -354,7 +362,7 @@ impl Icon {
 mod tests {
     use super::Icon;
 
-    /// Every icon that isn't the toolbar's is in Graphite's set at 16 and 24 (plan 05.5a).
+    /// Every icon's need is in Graphite's set at 16 and 24 (plan 05.5a).
     #[test]
     fn every_icon_has_a_graphite_need() {
         use Icon::*;
@@ -382,10 +390,21 @@ mod tests {
             PageRegional,
             PageArchives,
             PageRemote,
+            PageAccounts,
             HelperVideo,
             HelperMerge,
             HelperChecked,
         ];
+        // A new Icon breaks this match: add it to `all` above too.
+        for icon in all {
+            match icon {
+                AddUrl | AddTorrent | Resume | Stop | StopAll | Delete | DeleteCompleted
+                | Options | Scheduler | StartQueue | StopQueue | DragOut | PageGeneral
+                | PageFileTypes | PageSaveTo | PageDownloads | PageConnection | PageProxy
+                | PageLogins | PageSounds | PageRegional | PageArchives | PageRemote
+                | PageAccounts | HelperVideo | HelperMerge | HelperChecked => {}
+            }
+        }
         for icon in all {
             let need = icon.need();
             assert!(

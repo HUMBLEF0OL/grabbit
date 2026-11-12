@@ -436,12 +436,12 @@ fn silk(name: &str) -> Option<egui::ImageSource<'static>> {
         "arrow_down",
         "arrow_up",
         "cross",
-        "folder_link",
-        "folder_delete"
+        "folder_link"
     )
 }
 
-/// The small icons drawn by key: Silk's (the Categories tree, the Scheduler's queues) and the
+/// The small icons drawn by key: Silk's (the Categories tree), Graphite's (the Scheduler's
+/// queues) and the
 /// file types', which fileicons.rs draws (the system's own).
 #[derive(Default)]
 pub struct ShellIcons;

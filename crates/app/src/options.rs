@@ -1696,7 +1696,7 @@ impl OptionsDialog {
         header(
             ui,
             o,
-            Icon::PageLogins,
+            Icon::PageAccounts,
             "Debrid service accounts",
             true,
             117.0,

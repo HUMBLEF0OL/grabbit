@@ -975,6 +975,21 @@ mod tests {
                 let f = f.unwrap_or_else(|| panic!("graphite lacks {need} at {px}"));
                 assert!(!f.png && f.mono, "{need} {px}");
                 let raw = std::str::from_utf8(&f.bytes).unwrap();
+                // The Graphite icon pattern (plan 05.5a): the root's attributes, exactly.
+                let root = &raw[..raw.find('>').unwrap()];
+                for want in [
+                    format!(r#"width="{px}""#),
+                    format!(r#"height="{px}""#),
+                    r#"viewBox="0 0 24 24""#.to_owned(),
+                    r#"fill="none""#.to_owned(),
+                    r##"stroke="#ffffff""##.to_owned(),
+                    r#"stroke-width="1.75""#.to_owned(),
+                    r#"stroke-linecap="round""#.to_owned(),
+                    r#"stroke-linejoin="round""#.to_owned(),
+                ] {
+                    assert!(root.contains(&want), "{need} {px}: the root lacks {want}");
+                }
+                assert!(!raw.contains("class="), "{need} {px}: a class");
                 let count = |s: &str| raw.matches(s).count();
                 assert_eq!(
                     count("fill="),

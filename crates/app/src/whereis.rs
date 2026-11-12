@@ -8,6 +8,7 @@
 use std::net::IpAddr;
 use std::sync::OnceLock;
 
+use egui::emath::GuiRounding as _;
 use egui::{Color32, Rect, Sense, Ui, pos2, vec2};
 use serde::{Deserialize, Serialize};
 
@@ -230,6 +231,7 @@ pub fn line(ui: &Ui, x: f32, baseline: f32, right: f32, seen: Option<&Seen>, id:
             pos2(at, baseline - 11.0),
             vec2(16.0, 16.0),
         ));
+        let rc = rc.round_to_pixels(ui.ctx().pixels_per_point());
         crate::themeicons::paint_graphite(ui, &p, name, rc, true);
         shown = Some(rc);
         at += 21.0;
