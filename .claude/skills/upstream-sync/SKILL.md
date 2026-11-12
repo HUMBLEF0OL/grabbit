@@ -128,6 +128,8 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
    node tools/extension/test.mjs              # when the extension changed
    python tools/upstream-sync/test_sync.py    # when the tool changed
    ```
+   GitHub Actions minutes are counted: run these locally and push once they pass, not to find
+   out.
    A failure is fixed before the PR, never shipped. When a pick causes it and the fix isn't
    obvious, make the branch again from `origin/dev` without it (picks are repeatable: the
    ledger rows of an undone branch go with it) and `record <sha> deferred --note "breaks <test>:
@@ -159,7 +161,7 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
 
 ## Watching between runs
 
-The workflow `.github/workflows/upstream-watch.yml` runs `sync.py report` once a day: the
+The workflow `.github/workflows/upstream-watch.yml` runs `sync.py report` once a week: the
 commits waiting, the critical-looking ones first, and upstream's critical-looking open PRs. The
 report is on each run's summary page, and in one issue on this fork labelled `upstream-watch`
 when the fork has Issues turned on. It only reads the original. GitHub runs scheduled workflows

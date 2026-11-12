@@ -1,4 +1,5 @@
-# Once a day: the original MDM's commits not yet decided here (critical-looking ones first) and
+# Once a week (Actions minutes are counted; `/upstream-sync` runs `status` whenever it's needed):
+# the original MDM's commits not yet decided here (critical-looking ones first) and
 # its open PRs that look critical. The report is on each run's summary page, and in one issue on
 # this fork labelled upstream-watch when the fork has Issues turned on. It only reads the
 # original; nothing is picked here (that is /upstream-sync, by a person, through a PR).
@@ -8,7 +9,7 @@ name: Upstream watch
 
 on:
   schedule:
-    - cron: "23 5 * * *"
+    - cron: "23 5 * * 1"
   workflow_dispatch:
 
 permissions: {}
@@ -77,7 +78,7 @@ jobs:
           fi
           printf '%s\n' "$REPORT" > "$RUNNER_TEMP/report.md"
           gh label create upstream-watch -R "$REPO" --color BFD4F2 \
-            --description "The upstream watch's daily report" 2>/dev/null || true
+            --description "The upstream watch's weekly report" 2>/dev/null || true
           n=$(gh issue list -R "$REPO" --label upstream-watch --state open --json number \
             --jq '.[0].number // empty')
           if [ -n "$n" ]; then

@@ -1,0 +1,39 @@
+# tools/upstream-sync/sync.py's self-check, only when the tool changes (Actions minutes are
+# counted): on Ubuntu, and on Windows, the tool's home (a case-blind file system, Git for Windows).
+name: Upstream sync tool
+
+on:
+  push:
+    branches: [main, dev]
+    paths:
+      - "tools/upstream-sync/**"
+      - ".github/workflows/upstream-sync-tool.yml"
+  pull_request:
+    paths:
+      - "tools/upstream-sync/**"
+      - ".github/workflows/upstream-sync-tool.yml"
+
+concurrency:
+  group: upstream-sync-tool-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  self-check:
+    name: self-check (${{ matrix.os }})
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      # Against throwaway repositories: sorts, picks, records, refuses; a --lock pick with cargo.
+      - name: Self-check
+        run: python tools/upstream-sync/test_sync.py

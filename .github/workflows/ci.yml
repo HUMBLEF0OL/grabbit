@@ -4,7 +4,7 @@ name: CI
 # Pushes to main and dev only: a pull request's branch is tested once as the pull request (a bare push:
 # ran everything twice), and a release tag's commit was already tested on main.
 # A change to the website or the docs alone builds nothing here (the app embeds none of it; the
-# Website workflow builds the site).
+# Website workflow builds the site), nor does one to the upstream-sync tool (its own workflow).
 on:
   push:
     branches: [main, dev]
@@ -13,12 +13,18 @@ on:
       - "tools/website/**"
       - "docs/**"
       - "**/*.md"
+      - "tools/upstream-sync/**"
+      - ".claude/**"
+      - ".github/workflows/upstream-*.yml"
   pull_request:
     paths-ignore:
       - "website/**"
       - "tools/website/**"
       - "docs/**"
       - "**/*.md"
+      - "tools/upstream-sync/**"
+      - ".claude/**"
+      - ".github/workflows/upstream-*.yml"
 
 # A newer commit on a pull request makes its older run moot: cancel it (main and dev run to the end).
 concurrency:
@@ -62,24 +68,6 @@ jobs:
 
       - name: Tests
         run: cargo test --workspace
-
-  upstream-sync:
-    # On Windows too: the tool's home (a case-blind file system, Git for Windows).
-    name: upstream sync tool (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
-        with:
-          python-version: "3.12"
-      # tools/upstream-sync/sync.py against a throwaway repository (sorts, picks, records, refuses).
-      - name: Self-check
-        run: python tools/upstream-sync/test_sync.py
 
   extension:
     name: browser extension
