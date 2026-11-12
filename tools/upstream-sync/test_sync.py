@@ -351,6 +351,18 @@ def main() -> None:
         assert json.loads(sync(r, "show", U["merge"]).stdout)["kind"] == "merge"
         rep = sync(r, "report").stdout
         assert "could not be read" in rep and "| 1 |" not in rep.split("\n")[0]
+        w = json.loads(sync(r, "watch", "--json").stdout)
+        assert w["prs"] is None and w["advisories"] is None
+        assert [b["branch"] for b in w["branches"]] == [], w  # side is merged into main
+        sync(r, "record", U["after"], "deferred", "--note", "later")
+        ledger = (r / LEDGER).read_text(encoding="utf-8")
+        today = next(ln for ln in ledger.splitlines() if U["after"] in ln).split("|")[3].strip()
+        (r / LEDGER).write_text(ledger.replace(today, "someday"), encoding="utf-8", newline="\n")
+        assert any("deferred with no date" in x for x in status(r)["warnings"])
+        (r / LEDGER).write_text(ledger.replace(today, "2000-01-01"), encoding="utf-8",
+                                newline="\n")
+        assert any("deferred" in x and "days ago" in x for x in status(r)["warnings"])
+        (r / LEDGER).write_text(ledger, encoding="utf-8", newline="\n")
 
         # A merged sync PR reverted on dev: its picks show again, as reverted, never as done.
         git(r, "add", "-A")

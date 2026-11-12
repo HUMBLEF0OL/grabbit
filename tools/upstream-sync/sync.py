@@ -94,7 +94,8 @@ CARGO_CONFIG = re.compile(r"(^|/)\.cargo/|(^|/)rust-toolchain", re.I)
 OTHER_PLATFORMS = re.compile(r"^(linux|macos|mac|ubuntu|flatpak|safari|helium)\b|linux and macos",
                              re.I)
 ADDED_LINTS = (
-    ("P", re.compile(r'target_os\s*=\s*"(linux|macos|ios|android)"|cfg\(\s*unix\s*\)')),
+    ("P", re.compile(r'target_os\s*=\s*"(linux|macos|ios|android)"|cfg\(\s*unix\s*\)|'
+                     r'not\(\s*windows\s*\)|target_family\s*=\s*"unix"')),
     ("P", re.compile(r"right-to-left|\bis_rtl\b|\brtl\b|text direction|dir=\W?rtl", re.I)),
     ("I", re.compile(r"anefzaoui(?!/[\w.-]+\.git)", re.I)),
 )
@@ -434,7 +435,9 @@ def taken(refs: list[str], fork_point: str, up: str, in_range: set[str], ledger:
             try:
                 age = (dt.date.today() - dt.date.fromisoformat(row.date)).days
             except ValueError:
-                age = 0
+                t.warnings.append(f"{full[:12]} deferred with no date ({row.date!r}): record it "
+                                  "again, so it can come up for review")
+                continue
             if age > STALE_DEFERRED_DAYS:
                 t.warnings.append(f"{full[:12]} deferred {age} days ago: decide it again")
     for sha, st in t.status.items():
