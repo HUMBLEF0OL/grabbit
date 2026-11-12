@@ -305,6 +305,54 @@ fn place_to_take(item: &Item, items: &[Item]) -> Option<PathBuf> {
 }
 
 impl Cmd {
+    /// The icon a Graphite menu draws at this command's item (plan 05b, the mockup's menus), by
+    /// what it does; `label` tells apart the commands two items share (Pause All and Stop All)
+    /// and names a greyed placeholder's (no command: [`chrome::menu_icon`]).
+    fn menu_icon(&self, label: &str) -> Option<&'static str> {
+        Some(match self {
+            Cmd::None => return chrome::menu_icon(label),
+            Cmd::AddUrl => "tb-add-url",
+            Cmd::OpenTorrentFile => "tb-add-torrent",
+            Cmd::AddMagnet | Cmd::LinkGrabber | Cmd::RefreshAddress => "gx-link",
+            Cmd::TorrentSettings | Cmd::Options => "tb-options",
+            Cmd::Batch(false) => "gx-hash",
+            Cmd::Batch(true) => "gx-copy",
+            Cmd::VideoPage => "ft-video",
+            Cmd::RssFeeds(_) => "gx-rss",
+            Cmd::Exit => "ui-close",
+            Cmd::Stop => "tb-stop",
+            Cmd::StopAll if label == "&Pause All" => "tb-stop",
+            Cmd::StopAll => "tb-stop-all",
+            Cmd::Remove | Cmd::RemoveWithFiles | Cmd::DeleteCategory(_) | Cmd::DeleteQueue(_) => {
+                "tb-delete"
+            }
+            Cmd::Resume => "tb-resume",
+            Cmd::Redownload => "gx-refresh",
+            Cmd::DeleteCompleted => "tb-delete-completed",
+            Cmd::Find | Cmd::FindNext => "gx-search",
+            Cmd::Scheduler | Cmd::ScheduleQueue(_) => "tb-scheduler",
+            Cmd::StartQueue(_) => "tb-start-queue",
+            Cmd::StopQueue(_) => "tb-stop-queue",
+            Cmd::HelpPage("README.md") | Cmd::Properties | Cmd::CategoryProps(_) => "gx-info",
+            Cmd::HelpPage("") => "gx-world",
+            Cmd::Shortcuts => "gx-keyboard",
+            Cmd::ReportProblem => "gx-bug",
+            Cmd::CheckUpdates => "gx-download",
+            Cmd::TellFriend => "gx-send",
+            Cmd::Support => "gx-gift",
+            Cmd::Open => "gx-external",
+            Cmd::OpenWith => "gx-apps",
+            Cmd::OpenFolder | Cmd::Browse(_) => "cat-folder-open",
+            Cmd::MoveRename | Cmd::EditQueue(_) => "gx-edit",
+            Cmd::VerifyChecksum => "gx-shield",
+            Cmd::Extract => "ft-archive",
+            Cmd::RemoveFromQueue => "gx-minus",
+            Cmd::ClearFilters => "gx-filter",
+            Cmd::AddCategory | Cmd::NewQueue => "gx-plus",
+            _ => return None,
+        })
+    }
+
     /// The key that runs this command anywhere in the main window, as the shortcuts list writes
     /// it (Help → Keyboard shortcuts); menus show it beside the item.
     fn hint(&self) -> Option<&'static str> {
@@ -1243,7 +1291,8 @@ impl App {
             let cx = body.center().x;
             let tile =
                 egui::Rect::from_min_size(pos2((cx - 28.0).round(), top), egui::vec2(56.0, 56.0));
-            winui::icon_tile(ui, winui::rect(tile), need, winui::TEXT(), 14.0);
+            let c = crate::theme::colors();
+            winui::icon_tile(ui, winui::rect(tile), need, c.text_secondary, 14.0);
             let y = tile.bottom() + 12.0 + 17.0;
             let tw = width(&title_font, title);
             winui::text_font(
@@ -1266,23 +1315,8 @@ impl App {
             );
             let y = y + 8.0 + 17.0;
             let aw = width(&link_font, action);
-            let drawn = winui::text_font(
-                p,
-                link_font,
-                (cx - aw / 2.0).round(),
-                y,
-                action,
-                crate::theme::colors().link,
-            );
-            let resp = ui
-                .interact(
-                    drawn.expand(2.0),
-                    egui::Id::unique("empty-action"),
-                    egui::Sense::click(),
-                )
-                .on_hover_cursor(egui::CursorIcon::PointingHand);
-            winui::expose(&resp, egui::Role::Link, action, true, None);
-            return resp.clicked().then_some(cmd);
+            let x = (cx - aw / 2.0).round();
+            return winui::link_font(ui, p, link_font, x, y, action, "empty-action").then_some(cmd);
         }
         let title_font = winui::tahoma_bold();
         let tw = winui::text_width_font(p, title_font.clone(), title);
@@ -1346,20 +1380,15 @@ impl App {
                 .as_ref()
                 .map_or(0.0, |r| winui::text_width_font(p, font.clone(), r).ceil());
             let shown = winui::ellipsize(p, &font, &left, (w - 36.0 - right_w).max(0.0));
-            let drawn = winui::text_font(
-                p,
-                font.clone(),
-                o.x + 12.0,
-                baseline,
-                &shown,
-                winui::MUTED(),
-            );
+            // The mockup's secondary ink.
+            let ink = c.text_secondary;
+            let drawn = winui::text_font(p, font.clone(), o.x + 12.0, baseline, &shown, ink);
             if shown != left {
                 winui::full_on_hover(ui, drawn, "strip-left", &left);
             }
             if let Some(right) = right {
                 let x = o.x + w - 12.0 - right_w;
-                winui::text_font(p, font, x, baseline, &right, winui::MUTED());
+                winui::text_font(p, font, x, baseline, &right, ink);
             }
             return;
         }
@@ -2228,7 +2257,7 @@ impl App {
             "menu" => {
                 self.popup = None;
                 let (index, sub) = tab.split_once(':').unwrap_or((tab, ""));
-                let index = index.parse().unwrap_or(0);
+                let index = index.parse().unwrap_or(0).min(chrome::menus().len() - 1);
                 self.open_menu = Some(index);
                 // menu:3:theme opens View → Theme (#45), menu:3:size View → Interface size (#262).
                 let wanted = match sub {
@@ -6725,20 +6754,24 @@ impl App {
             let entries = self.menu_entries(i);
             // Under the item's leading edge (the menu's top-right in RTL), on the bar's last row
             // (Graphite's: the title bar's rule).
-            let title = titles[i];
+            let Some(&title) = titles.get(i) else {
+                self.open_menu = None;
+                break;
+            };
             let bottom = if layout.menus_in_caption {
                 o.y
             } else {
                 title.bottom()
             };
             let at = pos2(winui::mx(title.left()), bottom - 1.0);
-            let event = match chrome::popup(
+            let event = match chrome::popup_with_icons(
                 &ctx,
                 MenuKind::Bar,
                 &format!("menu-{i}"),
                 at,
                 &entries,
                 &|c: &Cmd| c.hint(),
+                &|c: &Cmd, l: &str| c.menu_icon(l),
             ) {
                 PopupResult::Open => None,
                 PopupResult::Neighbor(d) => {
@@ -6836,12 +6869,13 @@ impl App {
             };
             let cat_w = (saved as f32).clamp(100.0, max_w);
             let right = o.x + layout.tree_left + cat_w;
-            // The splitter: IDM's 4-point gap; Graphite's pane rule, 3 either side of it.
-            let grip = if layout.splitter_w > 0.0 { 0.0 } else { 3.0 };
+            // The splitter: IDM's 4-point gap; Graphite's, the pane's last 6 points and its rule
+            // (the list beside it takes its own drags: a selection box, a column).
+            let grip = if layout.splitter_w > 0.0 { 0.0 } else { 6.0 };
             let split = winui::rect(egui::Rect::from_min_max(
                 pos2(right - grip, o.y + layout.panes_top()),
                 pos2(
-                    right + layout.splitter_w + grip,
+                    right + layout.splitter_w,
                     o.y + layout.strip_top(h) - layout.pane_gap,
                 ),
             ));
@@ -7106,13 +7140,16 @@ impl App {
                     None,
                 ),
             };
-            match chrome::popup(
+            // The column chooser's items have no icons (the mockup's): only check marks.
+            let columns = matches!(kind, Popup::Columns);
+            match chrome::popup_with_icons(
                 &ctx,
                 MenuKind::Context,
                 &format!("popup-{serial}"),
                 pos,
                 &entries,
                 &|c: &Cmd| c.hint(),
+                &|c: &Cmd, l: &str| if columns { None } else { c.menu_icon(l) },
             ) {
                 PopupResult::Open | PopupResult::Neighbor(_) => {}
                 PopupResult::Chosen(c) => {

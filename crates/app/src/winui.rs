@@ -1460,7 +1460,21 @@ pub fn row_list(
 /// Text that opens or does something when clicked: link colour, underlined under the pointer.
 /// `label` is English (translated here).
 pub fn link(ui: &Ui, p: &Painter, x: f32, baseline: f32, label: &str, salt: &str) -> bool {
-    let rect = text(p, x, baseline, crate::i18n::t(label), LINK());
+    link_font(ui, p, tahoma(), x, baseline, label, salt)
+}
+
+/// [link] in `font`.
+pub fn link_font(
+    ui: &Ui,
+    p: &Painter,
+    font: FontId,
+    x: f32,
+    baseline: f32,
+    label: &str,
+    salt: &str,
+) -> bool {
+    let rect = text_font(p, font, x, baseline, crate::i18n::t(label), LINK());
+    note_caption(p, crate::i18n::t(label), rect);
     let resp = ui
         .interact(rect, ui.scope_id().with(("link", salt)), Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -6205,7 +6219,7 @@ pub mod caption {
             buttons: rects,
             icon,
             top,
-            title_end: drawn.right(),
+            title_end: super::rect(drawn).right(),
             buttons_start: rect.right() - buttons_w,
         }
     }

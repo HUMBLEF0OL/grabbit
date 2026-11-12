@@ -357,6 +357,7 @@ pub fn derive(s: &Seeds) -> Palette {
         drop_edge: toward(bg, 0.4),
         panel: surface,
         tile: toward(surface, 0.05),
+        text_secondary: readable(mix(text, surface, 0.15), surface, 7.0),
         menu_shortcut: readable(mix(text, surface, 0.3), surface, 4.5),
         toolbar_checked: tint(bg, 0.18),
         // Deep enough under white text: the error colour darkened to 4.5:1 against white.

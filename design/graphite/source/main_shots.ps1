@@ -9,7 +9,7 @@
 #   powershell -ExecutionPolicy Bypass -File design\graphite\source\main_shots.ps1 -Bin target\05-before -Out target\05a\before
 #
 # Pictures: <Out>\<theme>\<state>[-dark].png. States: plain (the list), empty (a first start),
-# nocats (the Categories pane hidden), wide (the pane 220 wide), menu-0 .. menu-4 (Tasks, File,
+# nocats (the Categories pane hidden), wide (the pane 220 wide, Graphite's 300), menu-0 .. menu-4 (Tasks, File,
 # Downloads, View, Help), context (a download's right-click menu), and with -Extra the states
 # 05b's /show commands open (blank, node, queue, columns, filter, filtered). The toolbar's
 # drop-down menus have no /show: only chrome.rs's layout_tests check their place.
@@ -168,7 +168,7 @@ foreach ($m in $modes) {
   $dark = $m -eq "dark"
   $suffix = if ($dark) { "-dark" } else { "" }
   # The states that need a start of their own (another list or other settings), and the rest.
-  $own = @{ "empty" = @($true, ""); "nocats" = @($false, ',"show_categories":false'); "wide" = @($false, ',"categories_width":220') }
+  $own = @{ "empty" = @($true, ""); "nocats" = @($false, ',"show_categories":false'); "wide" = @($false, ',"categories_width":220,"graphite_categories_width":300') }
   $runs = @(,@($false, "", @($all | Where-Object { -not $own.ContainsKey($_) })))
   foreach ($s in $all | Where-Object { $own.ContainsKey($_) }) { $runs += ,@($own[$s][0], $own[$s][1], @($s)) }
   foreach ($run in $runs) {

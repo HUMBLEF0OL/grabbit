@@ -117,6 +117,180 @@ impl Layout {
     }
 }
 
+/// Plan 05b's accessibility and hit tests, headless: what the main window's bars give screen
+/// readers and the window's hit test, in IDM's layout and Graphite's.
+#[cfg(test)]
+mod a11y_tests {
+    use super::*;
+    use egui::accesskit::{Node, NodeId, Role};
+
+    /// One frame of `paint` in a 1240 × 700 window, AccessKit on; its nodes by id, and what
+    /// `paint` returned. `events`: this frame's input.
+    fn frame<R>(
+        ctx: &egui::Context,
+        events: Vec<egui::Event>,
+        paint: impl FnOnce(&mut Ui) -> R,
+    ) -> (std::collections::HashMap<NodeId, Node>, R) {
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1240.0, 700.0))),
+            events,
+            ..Default::default()
+        };
+        let mut out = None;
+        let mut paint = Some(paint);
+        let mut full = ctx.run_ui(input, |ui| {
+            if let Some(p) = paint.take() {
+                out = Some(p(ui));
+            }
+        });
+        full.textures_delta.clear();
+        let update = full
+            .platform_output
+            .accesskit_update
+            .expect("AccessKit is on");
+        (update.nodes.into_iter().collect(), out.expect("painted"))
+    }
+
+    fn named(nodes: &std::collections::HashMap<NodeId, Node>, role: Role) -> Vec<(String, bool)> {
+        let mut v: Vec<(String, bool)> = nodes
+            .values()
+            .filter(|n| n.role() == role)
+            .map(|n| (n.label().unwrap_or_default().to_owned(), n.is_disabled()))
+            .collect();
+        v.sort();
+        v
+    }
+
+    const BUTTONS: [(Icon, &str, bool); 11] = [
+        (Icon::AddUrl, "Add URL", true),
+        (Icon::AddTorrent, "Add Torrent", true),
+        (Icon::Resume, "Resume", false),
+        (Icon::Stop, "Stop", false),
+        (Icon::StopAll, "Stop All", false),
+        (Icon::Delete, "Delete", true),
+        (Icon::DeleteCompleted, "Delete Completed", true),
+        (Icon::Options, "Options", true),
+        (Icon::Scheduler, "Scheduler", true),
+        (Icon::StartQueue, "Start Queue", true),
+        (Icon::StopQueue, "Stop Queue", false),
+    ];
+
+    /// The toolbar's 11 buttons are buttons for screen readers, by their labels, greyed as
+    /// drawn: in IDM's layout and in Graphite's (00's accessibility exception: every theme).
+    #[test]
+    fn the_toolbar_exposes_its_eleven_buttons() {
+        let _fonts = crate::theme::font_tests();
+        for layout in [Layout::CLASSIC, Layout::GRAPHITE] {
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            let mut nodes = Default::default();
+            for _ in 0..2 {
+                (nodes, _) = frame(&ctx, vec![], |ui| {
+                    toolbar(ui, &layout, Pos2::ZERO, 1240.0, &BUTTONS)
+                });
+            }
+            let mut want: Vec<(String, bool)> = BUTTONS
+                .iter()
+                .map(|(_, l, on)| ((*l).to_owned(), !on))
+                .collect();
+            want.sort();
+            assert_eq!(
+                named(&nodes, Role::Button),
+                want,
+                "graphite {}",
+                layout.graphite
+            );
+        }
+    }
+
+    /// Graphite's title-bar menus: still a menu bar of five menu items for screen readers, and
+    /// each title's rect (the one the window's hit test is given, App::publish_caption) finds
+    /// that title again ([`menubar_title_at`]); a screen reader's Click on a title opens it.
+    #[test]
+    fn the_title_bar_menus_are_a_menu_bar() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let (nodes, (_, titles)) =
+            frame(&ctx, vec![], |ui| caption_menu_bar(ui, 300.0, 17.0, None));
+        assert_eq!(named(&nodes, Role::MenuBar).len(), 1);
+        let mut items: Vec<String> = named(&nodes, Role::MenuItem)
+            .into_iter()
+            .map(|(n, _)| n)
+            .collect();
+        items.sort();
+        assert_eq!(items, ["Downloads", "File", "Help", "Tasks", "View"]);
+        assert_eq!(titles.len(), 5);
+        for (i, t) in titles.iter().enumerate() {
+            assert_eq!(menubar_title_at(&titles, winui::rect(*t).center()), Some(i));
+            assert!(
+                t.top() >= 4.0 && t.bottom() <= 31.0,
+                "inside the bar: {t:?}"
+            );
+        }
+        // Between two titles: none (the window's caption, which drags it).
+        let gap = pos2(titles[0].right() + 0.5, titles[0].center().y);
+        assert_eq!(menubar_title_at(&titles, gap), None);
+        // Click (a screen reader's or UI Automation's) on File: its menu opens.
+        let file = nodes
+            .iter()
+            .find(|(_, n)| n.role() == Role::MenuItem && n.label() == Some("File"))
+            .map(|(id, _)| *id)
+            .unwrap();
+        let click = egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Expand,
+            target_tree: egui::accesskit::TreeId::ROOT,
+            target_node: file,
+            data: None,
+        });
+        let (_, (event, _)) = frame(&ctx, vec![click], |ui| {
+            caption_menu_bar(ui, 300.0, 17.0, None)
+        });
+        assert_eq!(
+            event,
+            Some(MenuBarEvent::Title {
+                i: 1,
+                released: false
+            })
+        );
+    }
+
+    /// Graphite's Find button is a button named Find, and a screen reader's Click presses it
+    /// (Cmd::Find, as Ctrl+F).
+    #[test]
+    fn the_find_button_is_a_button() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let rc = Rect::from_min_size(pos2(800.0, 5.0), vec2(120.0, 26.0));
+        let (nodes, clicked) = frame(&ctx, vec![], |ui| find_button(ui, rc, "Ctrl+F"));
+        assert!(!clicked);
+        let (id, _) = nodes
+            .iter()
+            .find(|(_, n)| n.role() == Role::Button && n.label() == Some("Find"))
+            .expect("a Find button");
+        let click = egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Click,
+            target_tree: egui::accesskit::TreeId::ROOT,
+            target_node: *id,
+            data: None,
+        });
+        let (_, clicked) = frame(&ctx, vec![click], |ui| find_button(ui, rc, "Ctrl+F"));
+        assert!(clicked);
+    }
+
+    /// Graphite's menus draw each item's icon by its command; a submenu's and a greyed
+    /// placeholder's by their labels, which are the app's own.
+    #[test]
+    fn menu_icons_for_submenus_and_placeholders() {
+        assert_eq!(menu_icon("Speed &Limiter"), Some("gx-gauge"));
+        assert_eq!(menu_icon("E&xport"), Some("gx-upload"));
+        assert_eq!(menu_icon("Delete"), Some("tb-delete"));
+        // A label no menu has (a queue named so is a command's item): none.
+        assert_eq!(menu_icon("My downloads"), None);
+    }
+}
+
 #[cfg(test)]
 mod layout_tests {
     use super::Layout;
@@ -302,20 +476,20 @@ pub fn paint_image(ui: &Ui, painter: &egui::Painter, src: egui::ImageSource<'sta
 
 // ---- menu bar --------------------------------------------------------------------------------
 
-/// Top-level menus: label, item rect x and width, text x (measured, "Ta" kerned by the font):
-/// the standard Win32 bar (text at item.x + 7, width = text + 14; light-main.md), in both modes
+/// Top-level menus: label, item rect x and width (measured, "Ta" kerned by the font): the
+/// standard Win32 bar (text at item.x + 7, width = text + 14; light-main.md), in both modes
 /// (user decision 2026-11-01: dark mode only changes colours, never sizes or places; IDM's dark
 /// bar was wider).
-const MENUS: [(&str, f32, f32, f32); 5] = [
-    ("&Tasks", 0.0, 42.0, 7.0),
-    ("&File", 42.0, 32.0, 49.0),
-    ("&Downloads", 74.0, 73.0, 81.0),
-    ("&View", 147.0, 39.0, 154.0),
-    ("&Help", 186.0, 39.0, 193.0),
+const MENUS: [(&str, f32, f32); 5] = [
+    ("&Tasks", 0.0, 42.0),
+    ("&File", 42.0, 32.0),
+    ("&Downloads", 74.0, 73.0),
+    ("&View", 147.0, 39.0),
+    ("&Help", 186.0, 39.0),
 ];
 
 /// The menu bar: the measured rects.
-pub fn menus() -> Vec<(&'static str, f32, f32, f32)> {
+pub fn menus() -> Vec<(&'static str, f32, f32)> {
     MENUS.to_vec()
 }
 
@@ -359,7 +533,7 @@ pub fn menu_bar(
     // From the leading edge: the first menu at the right in RTL.
     let titles: Vec<Rect> = menus()
         .iter()
-        .map(|(_, x, w, _)| Rect::from_min_size(o + vec2(*x, 0.0), vec2(*w, menu_h)))
+        .map(|(_, x, w)| Rect::from_min_size(o + vec2(*x, 0.0), vec2(*w, menu_h)))
         .collect();
     let bar = Rect::from_min_size(o, vec2(width, menu_h));
     let hit = bar_titles(ui, bar, &titles, open, false);
@@ -452,16 +626,11 @@ pub fn find_button(ui: &mut Ui, rc: Rect, key: &str) -> bool {
     );
     let mid = rc.center().y;
     let icon = Rect::from_min_size(pos2(rc.left() + 9.0, (mid - 7.0).round()), vec2(14.0, 14.0));
-    crate::themeicons::paint_in(ui, &p, "gx-search", winui::rect(icon), c.text, true);
+    // The mockup's: the icon and the label in the secondary ink, the key in the shortcuts'.
+    let ink = c.text_secondary;
+    crate::themeicons::paint_in(ui, &p, "gx-search", winui::rect(icon), ink, true);
     let baseline = rc.top() + 17.0;
-    let drawn = text_font(
-        &p,
-        winui::segoe(),
-        icon.right() + 7.0,
-        baseline,
-        label,
-        c.text,
-    );
+    let drawn = text_font(&p, winui::segoe(), icon.right() + 7.0, baseline, label, ink);
     text_font(
         &p,
         key_font(),
@@ -923,6 +1092,21 @@ pub fn popup<C: Clone>(
     entries: &[MenuEntry<C>],
     hint: &dyn Fn(&C) -> Option<&'static str>,
 ) -> PopupResult<C> {
+    popup_with_icons(ctx, kind, id, pos, entries, hint, &|_, _| None)
+}
+
+/// [popup], with the icon a Graphite menu draws at each item's start: `icon` gives it for an
+/// item from its command and its label (a submenu's from its label, [menu_icon]).
+#[allow(clippy::too_many_arguments)]
+pub fn popup_with_icons<C: Clone>(
+    ctx: &egui::Context,
+    kind: MenuKind,
+    id: &str,
+    pos: Pos2,
+    entries: &[MenuEntry<C>],
+    hint: &dyn Fn(&C) -> Option<&'static str>,
+    icon: &dyn Fn(&C, &str) -> Option<&'static str>,
+) -> PopupResult<C> {
     let sub_key = egui::Id::unique(("popup-sub", id));
     // The control that has the keys while the menu is open (a drop-down list, a text box): the
     // menu's windows never take them, so Escape reached its window, and egui let them go there
@@ -971,6 +1155,7 @@ pub fn popup<C: Clone>(
         &mut result,
         0,
         hint,
+        icon,
     );
     if let Some(c) = result {
         ctx.data_mut(|d| {
@@ -1171,56 +1356,27 @@ impl MenuLook {
     }
 }
 
-/// The icon a Graphite menu draws at an item's start, by the item's label (the English text
-/// the menus are built with): the mockup's (`MENUS` and the right-click menus in
-/// `design/graphite/source/graphite.html`). None for the rest, and for check and radio items
-/// (their mark takes the column).
+/// The icon a Graphite menu draws at a submenu's start, or at a greyed placeholder's (an item
+/// with no command, which [`popup_with_icons`]'s caller can't tell by its command), by its
+/// label: the English text the menus are built with, all the app's own (a queue's name, a
+/// user's word, never reaches here). The mockup's (`MENUS` and the right-click menus in
+/// `design/graphite/source/graphite.html`). None for the rest.
 pub fn menu_icon(label: &str) -> Option<&'static str> {
     Some(match label {
-        // Tasks
-        "&Add new download" | "&Add new download..." => "tb-add-url",
-        "Open &torrent file..." => "tb-add-torrent",
-        "Add &magnet link..." | "&Link grabber..." | "Refresh download address" => "gx-link",
-        "Torrent setti&ngs..." | "&Options" => "tb-options",
-        "Add &batch download" => "gx-hash",
-        "Add batch download from &clipboard" => "gx-copy",
-        "Download &video from a page..." => "ft-video",
-        "&RSS feeds..." => "gx-rss",
+        // Submenus.
         "E&xport" => "gx-upload",
-        "&Import" | "Check for &updates..." => "gx-download",
-        "&Exit" => "ui-close",
-        // File
-        "&Stop Download" | "Stop Download" | "&Pause All" => "tb-stop",
-        "&Remove" | "Remove with &files" | "Remove" | "Remove with files" | "Delete" => "tb-delete",
-        "&Download Now" | "Resume Download" => "tb-resume",
-        "R&edownload" | "Redownload" => "gx-refresh",
-        // Downloads
-        "&Stop All" => "tb-stop-all",
-        "&Delete All Completed" => "tb-delete-completed",
-        "Find (Ctrl-F)" | "Find Next (F3)" => "gx-search",
-        "S&cheduler" | "Schedule" => "tb-scheduler",
+        "&Import" => "gx-download",
         "Start &queue" | "Start now" => "tb-start-queue",
         "S&top queue" | "Stop" => "tb-stop-queue",
         "Speed &Limiter" => "gx-gauge",
-        // Help
-        "H&elp contents" | "Properties" => "gx-info",
-        "&Keyboard shortcuts" => "gx-keyboard",
-        "Mister Download Manager &Home Page" => "gx-world",
-        "&Report a problem" => "gx-bug",
-        "Tell a &friend" => "gx-send",
-        "Support &MDM" => "gx-gift",
-        // A download's menu, blank space's, a category's and a queue's
-        "Open" => "gx-external",
-        "Open with..." => "gx-apps",
-        "Open folder" | "Browse" => "cat-folder-open",
-        "Move/Rename (Ctrl-M)" | "Edit queue" => "gx-edit",
-        "Verify checksum..." => "gx-shield",
-        "Extract" => "ft-archive",
         "Add to queue" | "Move to queue" => "cat-queues",
-        "Delete from queue" => "gx-minus",
         "On Double click" => "gx-pointer",
-        "Clear all &filters" => "gx-filter",
-        "Add category" | "Create new queue" => "gx-plus",
+        // A category's and a queue's greyed items.
+        "Browse" => "cat-folder-open",
+        "Properties" => "gx-info",
+        "Delete" => "tb-delete",
+        "Edit queue" => "gx-edit",
+        "Schedule" => "tb-scheduler",
         _ => return None,
     })
 }
@@ -1416,6 +1572,7 @@ fn popup_level<C: Clone>(
     result: &mut Option<C>,
     depth: usize,
     hint: &dyn Fn(&C) -> Option<&'static str>,
+    icon: &dyn Fn(&C, &str) -> Option<&'static str>,
 ) {
     let look = MenuLook::of(kind);
     let g = look.graphite;
@@ -1641,27 +1798,17 @@ fn popup_level<C: Clone>(
             // The shortcut at the trailing edge, in the menu's quieter ink (Graphite's own
             // role for it, `menu.shortcut`, in its smaller size).
             if let Some(k) = keys {
+                let key = key_label(k);
                 if g {
-                    let galley = painter.layout_no_wrap(
-                        key_label(k),
-                        key_font(),
-                        crate::theme::colors().menu_shortcut,
-                    );
-                    let x = o.x + w - 14.0 - galley.size().x;
-                    text_font(
-                        &painter,
-                        key_font(),
-                        x,
-                        baseline,
-                        &key_label(k),
-                        crate::theme::colors().menu_shortcut,
-                    );
+                    let ink = crate::theme::colors().menu_shortcut;
+                    let x = o.x + w - 14.0 - text_width_font(&painter, key_font(), &key);
+                    text_font(&painter, key_font(), x, baseline, &key, ink);
                 } else {
                     winui::text_right(
                         &painter,
                         o.x + w - 24.0,
                         y + 14.0,
-                        &key_label(k),
+                        &key,
                         TEXT_DISABLED_MENU(),
                     );
                 }
@@ -1677,7 +1824,11 @@ fn popup_level<C: Clone>(
             // has one and no check mark takes the column.
             let marked = checked || matches!(e, MenuEntry::Radio(..));
             if g && !marked
-                && let Some(need) = menu_icon(label)
+                && let Some(need) = match e {
+                    MenuEntry::Item(l, c, ..) | MenuEntry::Radio(l, c, ..) => icon(c, l),
+                    MenuEntry::Sub(l, ..) => menu_icon(l),
+                    MenuEntry::Sep => None,
+                }
             {
                 let ink = if enabled {
                     TEXT()
@@ -1815,6 +1966,7 @@ fn popup_level<C: Clone>(
             result,
             depth + 1,
             hint,
+            icon,
         );
     }
 }
@@ -2559,76 +2711,18 @@ pub fn categories(
         let row = winui::rect(
             Rect::from_min_size(pos2(area.left(), top), vec2(area.width(), 16.0)).intersect(area),
         );
-        let resp = rows_ui.interact(
+        // The row's events and its node; its expander at x 11..26 (the scrolled origin's).
+        tree_row(
+            ui,
+            &rows_ui,
+            r,
+            k,
             row,
-            egui::Id::unique(("tree-row", k)),
-            winui::pointer_only(),
+            (o.x + 11.0, o.x + 26.0),
+            None,
+            &mut event,
+            &mut selected_at,
         );
-        // A tree item: its name (with its count), selected, open or shut, its level; Click
-        // selects it (egui's own), Expand / Collapse open and shut it, Show context menu opens
-        // its menu.
-        {
-            use egui::accesskit::Action;
-            let name = match r.count {
-                Some(n) => format!("{} {}", crate::i18n::t(&r.label), count_text(n)),
-                None => crate::i18n::t(&r.label).to_owned(),
-            };
-            winui::expose(&resp, egui::Role::TreeItem, &name, true, None);
-            let (expand, collapse, menu) = ui.input(|i| {
-                (
-                    i.has_accesskit_action_request(resp.id, Action::Expand),
-                    i.has_accesskit_action_request(resp.id, Action::Collapse),
-                    i.has_accesskit_action_request(resp.id, Action::ShowContextMenu),
-                )
-            });
-            let (level, selected, open) = (r.level, r.selected, r.expander);
-            ui.ctx().accesskit_node_builder(resp.id, |n| {
-                n.set_selected(selected);
-                n.set_level(level + 1);
-                n.add_action(Action::ShowContextMenu);
-                if let Some(open) = open {
-                    n.set_expanded(open);
-                    n.add_action(if open {
-                        Action::Collapse
-                    } else {
-                        Action::Expand
-                    });
-                }
-            });
-            let under = resp.rect.left_bottom() + vec2(24.0, 0.0);
-            if r.selected {
-                selected_at = Some((k, under));
-            }
-            if (expand && r.expander == Some(false)) || (collapse && r.expander == Some(true)) {
-                event = Some(TreeEvent::Toggle(k));
-            }
-            if menu {
-                event = Some(TreeEvent::Context(k, under));
-            }
-            // An assistive action moves no pointer: the frame showing its result is asked for.
-            if expand || collapse || menu {
-                ui.ctx().request_repaint();
-            }
-        }
-        if resp.clicked() {
-            let on_expander = resp.interact_pointer_pos().is_some_and(|q| {
-                let x = winui::mx(q.x);
-                x >= o.x + 11.0 && x <= o.x + 26.0
-            });
-            event = Some(if on_expander && r.expander.is_some() {
-                TreeEvent::Toggle(k)
-            } else {
-                TreeEvent::Select(k)
-            });
-        }
-        if resp.double_clicked() && r.expander.is_some() {
-            event = Some(TreeEvent::Toggle(k));
-        }
-        if resp.secondary_clicked()
-            && let Some(at) = resp.interact_pointer_pos()
-        {
-            event = Some(TreeEvent::Context(k, at));
-        }
     }
     // The selected node's menu from the keyboard, under the node: Shift+F10 or the Menu key.
     if keys
@@ -2689,6 +2783,94 @@ pub fn categories(
     event
 }
 
+/// One Categories row's events and its node, IDM's tree and Graphite's alike: a tree item with
+/// its name (and count), selected, open or shut, its level; Click selects it (on its expander,
+/// English x `chevron`, toggles it), a double-click toggles it, a right-click and Show context
+/// menu open its menu, Expand / Collapse open and shut it. `hit`: the row on screen; `tip`: its
+/// whole label, when cut.
+#[allow(clippy::too_many_arguments)]
+fn tree_row(
+    ui: &Ui,
+    rows_ui: &Ui,
+    r: &TreeRow<'_>,
+    k: usize,
+    hit: Rect,
+    chevron: (f32, f32),
+    tip: Option<&str>,
+    event: &mut Option<TreeEvent>,
+    selected_at: &mut Option<(usize, Pos2)>,
+) {
+    use egui::accesskit::Action;
+    let resp = rows_ui.interact(
+        hit,
+        egui::Id::unique(("tree-row", k)),
+        winui::pointer_only(),
+    );
+    let resp = match tip {
+        Some(t) => resp.on_hover_text(t),
+        None => resp,
+    };
+    let label = crate::i18n::t(&r.label);
+    let name = match r.count {
+        Some(n) => format!("{label} {}", count_text(n)),
+        None => label.to_owned(),
+    };
+    winui::expose(&resp, egui::Role::TreeItem, &name, true, None);
+    let (expand, collapse, menu) = ui.input(|i| {
+        (
+            i.has_accesskit_action_request(resp.id, Action::Expand),
+            i.has_accesskit_action_request(resp.id, Action::Collapse),
+            i.has_accesskit_action_request(resp.id, Action::ShowContextMenu),
+        )
+    });
+    let (level, selected, open) = (r.level, r.selected, r.expander);
+    ui.ctx().accesskit_node_builder(resp.id, |n| {
+        n.set_selected(selected);
+        n.set_level(level + 1);
+        n.add_action(Action::ShowContextMenu);
+        if let Some(open) = open {
+            n.set_expanded(open);
+            n.add_action(if open {
+                Action::Collapse
+            } else {
+                Action::Expand
+            });
+        }
+    });
+    let under = resp.rect.left_bottom() + vec2(24.0, 0.0);
+    if r.selected {
+        *selected_at = Some((k, under));
+    }
+    if (expand && r.expander == Some(false)) || (collapse && r.expander == Some(true)) {
+        *event = Some(TreeEvent::Toggle(k));
+    }
+    if menu {
+        *event = Some(TreeEvent::Context(k, under));
+    }
+    // An assistive action moves no pointer: the frame showing its result is asked for.
+    if expand || collapse || menu {
+        ui.ctx().request_repaint();
+    }
+    if resp.clicked() {
+        let on_expander = resp.interact_pointer_pos().is_some_and(|q| {
+            let x = winui::mx(q.x);
+            x >= chevron.0 && x <= chevron.1
+        });
+        *event = Some(if on_expander && r.expander.is_some() {
+            TreeEvent::Toggle(k)
+        } else {
+            TreeEvent::Select(k)
+        });
+    }
+    if resp.double_clicked() && r.expander.is_some() {
+        *event = Some(TreeEvent::Toggle(k));
+    }
+    if resp.secondary_clicked()
+        && let Some(at) = resp.interact_pointer_pos()
+    {
+        *event = Some(TreeEvent::Context(k, at));
+    }
+}
 /// Graphite's Categories pane (plan 05b, the mockup's `aside.cats`): on `panel` from the
 /// window's start to `right`, a rule at its end; no caption bar (View → Hide categories closes
 /// it); rows 28 high, 1 apart, 10 under the pane's top and 8 in from its sides, each a chevron
@@ -2849,77 +3031,18 @@ fn categories_graphite(
             winui::focus_ring(&tp, winui::rect(row));
         }
         let hit = winui::rect(row.intersect(area));
-        let resp = rows_ui.interact(
+        let tip = (shown != label).then_some(label);
+        tree_row(
+            ui,
+            &rows_ui,
+            r,
+            k,
             hit,
-            egui::Id::unique(("tree-row", k)),
-            winui::pointer_only(),
+            (chev_x - 4.0, chev_x + 17.0),
+            tip,
+            &mut event,
+            &mut selected_at,
         );
-        let resp = if shown != label {
-            resp.on_hover_text(label)
-        } else {
-            resp
-        };
-        {
-            use egui::accesskit::Action;
-            let name = match r.count {
-                Some(n) => format!("{label} {}", count_text(n)),
-                None => label.to_owned(),
-            };
-            winui::expose(&resp, egui::Role::TreeItem, &name, true, None);
-            let (expand, collapse, menu) = ui.input(|i| {
-                (
-                    i.has_accesskit_action_request(resp.id, Action::Expand),
-                    i.has_accesskit_action_request(resp.id, Action::Collapse),
-                    i.has_accesskit_action_request(resp.id, Action::ShowContextMenu),
-                )
-            });
-            let (level, selected, open) = (r.level, r.selected, r.expander);
-            ui.ctx().accesskit_node_builder(resp.id, |n| {
-                n.set_selected(selected);
-                n.set_level(level + 1);
-                n.add_action(Action::ShowContextMenu);
-                if let Some(open) = open {
-                    n.set_expanded(open);
-                    n.add_action(if open {
-                        Action::Collapse
-                    } else {
-                        Action::Expand
-                    });
-                }
-            });
-            let under = resp.rect.left_bottom() + vec2(24.0, 0.0);
-            if r.selected {
-                selected_at = Some((k, under));
-            }
-            if (expand && r.expander == Some(false)) || (collapse && r.expander == Some(true)) {
-                event = Some(TreeEvent::Toggle(k));
-            }
-            if menu {
-                event = Some(TreeEvent::Context(k, under));
-            }
-            if expand || collapse || menu {
-                ui.ctx().request_repaint();
-            }
-        }
-        if resp.clicked() {
-            let on_chevron = resp.interact_pointer_pos().is_some_and(|q| {
-                let x = winui::mx(q.x);
-                x >= chev_x - 4.0 && x <= chev_x + 17.0
-            });
-            event = Some(if on_chevron && r.expander.is_some() {
-                TreeEvent::Toggle(k)
-            } else {
-                TreeEvent::Select(k)
-            });
-        }
-        if resp.double_clicked() && r.expander.is_some() {
-            event = Some(TreeEvent::Toggle(k));
-        }
-        if resp.secondary_clicked()
-            && let Some(at) = resp.interact_pointer_pos()
-        {
-            event = Some(TreeEvent::Context(k, at));
-        }
     }
     if keys
         && let Some((k, at)) = selected_at

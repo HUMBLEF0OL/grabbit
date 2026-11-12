@@ -322,7 +322,12 @@ impl ListState {
             widths: classic.to_vec(),
             visible: self.visible.to_vec(),
             sort: self.sort,
-            graphite_widths: graphite.to_vec(),
+            // Saved only once changed: a list that never changed them gets later defaults.
+            graphite_widths: if graphite == GRAPHITE_WIDTHS {
+                Vec::new()
+            } else {
+                graphite.to_vec()
+            },
         }
     }
 
@@ -1113,13 +1118,16 @@ pub fn show(
                         .hover_pos()
                         .map(english)
                         .is_some_and(|h| cell.contains(h));
+                    let cut = status_cell(ui, &clip, (tx, x1 - 10.0), top, row, sel);
+                    // The download's recent events; a cut word whole when there are none.
                     if hovered {
                         let tip = status_tip(idx);
                         if !tip.is_empty() {
                             cut_under_pointer = Some(tip);
+                        } else if cut {
+                            cut_under_pointer = Some(row.cells[3].clone());
                         }
                     }
-                    status_cell(ui, &clip, (tx, x1 - 10.0), top, row, sel);
                     continue;
                 }
                 let s = winui::ellipsize(&bp, &cell_font, &value, room);
@@ -1163,8 +1171,9 @@ pub fn show(
         // The grid line is the item's own last row (top + 16), so icons are not clipped; in
         // both modes (dark changes only colours).
         let gy = top + row_h() - 1.0;
-        // An empty list has no grid (the empty state stands alone).
-        if !rows.is_empty() {
+        // An empty list has no grid (the empty state stands alone); Graphite's rules its rows
+        // only, not the room under them.
+        if !rows.is_empty() && (!g || idx < rows.len()) {
             fill(&bp, cl, gy, rr, gy, GRID_H());
         }
     }
@@ -1479,7 +1488,15 @@ fn chip(
 /// paused icon, the word, the bar in the muted ink and the percentage; any other, its icon and
 /// its word (or what the cell says: "Extracting...", "Checking 42%"). Errors in the error
 /// colour, finished downloads muted. The cell's text for screen readers is the row's as before.
-fn status_cell(ui: &Ui, p: &egui::Painter, (x, right): (f32, f32), top: f32, row: &Row, sel: bool) {
+/// Returns whether the word was cut (the caller shows it whole on hover).
+fn status_cell(
+    ui: &Ui,
+    p: &egui::Painter,
+    (x, right): (f32, f32),
+    top: f32,
+    row: &Row,
+    sel: bool,
+) -> bool {
     let c = crate::theme::colors();
     let mid = top + row_h() / 2.0;
     let baseline = top + row_inset() + 12.0;
@@ -1488,13 +1505,14 @@ fn status_cell(ui: &Ui, p: &egui::Painter, (x, right): (f32, f32), top: f32, row
         _ if sel => winui::SELECTION_TEXT(),
         StatusKind::Error => winui::ERROR(),
         StatusKind::Complete => winui::MUTED(),
-        _ => TEXT(),
+        _ => crate::theme::colors().text_secondary,
     };
     // The percentage, 46 wide at the end, and the bar before it from `from`, 7 apart.
     let meter = |from: f32, f: f32, bar: Color32| {
-        let pct = crate::model::percent(f64::from(f));
-        let w = winui::text_width_font(p, numbers_font(), &pct).ceil();
-        text_font(p, numbers_font(), right - w, baseline, &pct, ink);
+        // The cell's own text (it is the percentage while progress is given).
+        let pct = &row.cells[3];
+        let w = winui::text_width_font(p, numbers_font(), pct).ceil();
+        text_font(p, numbers_font(), right - w, baseline, pct, ink);
         let end = right - 46.0 - 7.0;
         if end - from >= 30.0 {
             let track = Rect::from_min_max(
@@ -1515,7 +1533,10 @@ fn status_cell(ui: &Ui, p: &egui::Painter, (x, right): (f32, f32), top: f32, row
         }
     };
     match (row.kind, row.progress) {
-        (StatusKind::Downloading, Some(f)) => meter(x, f, c.progress_bar),
+        (StatusKind::Downloading, Some(f)) => {
+            meter(x, f, c.progress_bar);
+            false
+        }
         (kind, progress) => {
             let icon = Rect::from_min_size(pos2(x, (mid - 8.0).round()), egui::vec2(16.0, 16.0));
             let tx = icon.right() + 7.0;
@@ -1538,7 +1559,7 @@ fn status_cell(ui: &Ui, p: &egui::Painter, (x, right): (f32, f32), top: f32, row
                 if let Some(f) = pct {
                     meter(right, f, winui::MUTED());
                 }
-                return;
+                return false;
             }
             crate::themeicons::paint_in(ui, p, kind.need(), winui::rect(icon), ink, true);
             let word_w = winui::text_width_font(p, font.clone(), text).ceil();
@@ -1553,6 +1574,7 @@ fn status_cell(ui: &Ui, p: &egui::Painter, (x, right): (f32, f32), top: f32, row
                 };
                 meter(from, f, winui::MUTED());
             }
+            shown != text
         }
     }
 }
@@ -1668,7 +1690,18 @@ fn graphite_header(
             }
         }
         if hovered || open {
-            funnel(&clip, funnel_rect(st, *col, *x0, *x1, ct), SORT_ARROW());
+            let fr = funnel_rect(st, *col, *x0, *x1, ct);
+            let rc = Rect::from_center_size(fr.center(), egui::vec2(12.0, 12.0));
+            if !crate::themeicons::paint_in(
+                ui,
+                &clip,
+                "gx-filter",
+                winui::rect(rc),
+                SORT_ARROW(),
+                true,
+            ) {
+                funnel(&clip, fr, SORT_ARROW());
+            }
         }
     }
 }

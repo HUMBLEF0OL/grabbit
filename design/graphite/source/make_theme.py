@@ -120,7 +120,8 @@ ROLES = [
     # Plan 02b: the roles the Graphite layout (chrome = "graphite") draws with; nothing reads
     # them before 05b, 07a and 09a.
     ("The Graphite layout: panels, icon tiles, shortcuts, danger buttons, banners", [
-        ("panel", "surface"), ("tile", "tile"), ("menu.shortcut", "ink3"),
+        ("panel", "surface"), ("tile", "tile"), ("text.secondary", "ink2"),
+        ("menu.shortcut", "ink3"),
         ("toolbar.checked", "sel"), ("button.danger", "dng"), ("button.danger.text", "ondng"),
         ("banner.error", "errSoft"), ("banner.info", "sel"), ("banner.warning", "warnSoft"),
     ]),
@@ -258,6 +259,8 @@ def check() -> list[str]:
         ("error / window", "err", "bg", 4.5),
         ("success / window", "okt", "bg", 4.5),
         ("menu shortcut / menu", "ink3", "surface", 4.5),
+        ("secondary text / panel", "ink2", "surface", 4.5),
+        ("secondary text / window", "ink2", "bg", 4.5),
         ("danger button text / danger", "ondng", "dng", 4.5),
         ("text / error banner", "ink", "errSoft", 4.5),
         ("text / info banner", "ink", "sel", 4.5),

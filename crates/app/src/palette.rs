@@ -315,6 +315,7 @@ palette! {
     // classic look keeps today's colours, derived themes get theirs from derive.rs ----
     panel: "panel", "A band behind the title bar, toolbar, status bar and dialog footers (Graphite layout)" = grey(0x39), grey(0xf0);
     tile: "tile", "The square behind a dialog's or an empty list's icon (Graphite layout)" = grey(0x44), grey(0xe6);
+    text_secondary: "text.secondary", "Secondary text in the Graphite layout: toolbar labels, menu titles, the Categories tree, the status bar (Graphite layout)" = grey(0xff), grey(0x00);
     menu_shortcut: "menu.shortcut", "A menu item's keyboard shortcut, and Find's (Graphite layout)" = grey(0xab), grey(0x6d);
     toolbar_checked: "toolbar.checked", "A toolbar toggle that is on (Graphite layout)" = rgb(0x2a, 0x36, 0x40), rgb(0xcc, 0xe8, 0xff);
     button_danger: "button.danger", "A button that deletes: its face (Graphite layout)" = rgb(0xc4, 0x2b, 0x1c), rgb(0xc4, 0x2b, 0x1c);
