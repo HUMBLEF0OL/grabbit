@@ -1,0 +1,3350 @@
+{
+ "upstream": "upstream/main",
+ "fork_point": "390a50168c564eef3ce2271cfc7117fb00005012",
+ "onto": "HEAD",
+ "sync_branches": [],
+ "warnings": [],
+ "commits": [
+  {
+   "sha": "f3c11394f3d1260b589d6675777b5af2331c9ec3",
+   "index": 1,
+   "date": "2026-11-10",
+   "subject": "The data folder is worked out once per run, not on every tick (#565) (#582)",
+   "kind": "port",
+   "flags": "C",
+   "critical_why": [
+    "freez"
+   ],
+   "issues": [
+    "565",
+    "582"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- A freeze when the disk was slow: MDM looked on the disk for a portable data folder on every tick of the window; it now works the data folder out once ([#565](https://github.com/anefzaoui/misterdownloadmanager/issues/565))."
+   ],
+   "touches_fork": [
+    "crates/ipc/src/lib.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/ipc/src/lib.rs"
+   ],
+   "after": [],
+   "notes": [
+    "touches crates/ipc/ (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "714f76b4840843bae2841c1c1ab0ee78ea4c6bef",
+   "index": 2,
+   "date": "2026-11-10",
+   "subject": "CI: each job gets only the permissions it needs; actions and release tools pinned (#580)",
+   "kind": "port",
+   "flags": "CS",
+   "critical_why": [
+    "permissions"
+   ],
+   "issues": [
+    "580"
+   ],
+   "same_issue": [],
+   "changelog": [],
+   "touches_fork": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/docs-shots.yml",
+    ".github/workflows/help-pictures.yml",
+    ".github/workflows/pages.yml",
+    ".github/workflows/release.yml"
+   ],
+   "left_out": [
+    "ROADMAP.md"
+   ],
+   "sensitive": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/docs-shots.yml",
+    ".github/workflows/help-pictures.yml",
+    ".github/workflows/pages.yml",
+    ".github/workflows/release.yml",
+    "tools/release/.gitignore",
+    "tools/release/package-lock.json",
+    "tools/release/package.json"
+   ],
+   "conflicts": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/release.yml"
+   ],
+   "after": [],
+   "notes": [
+    "touches .github/workflows/ (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "sensitive (.github/workflows/ci.yml, .github/workflows/docs-shots.yml, .github/workflows/help-pictures.yml, .github/workflows/pages.yml, .github/workflows/release.yml, tools/release/.gitignore, tools/release/package-lock.json, tools/release/package.json): read every line; never batch-picked (pick it alone with --allow-sensitive after review)"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "b54f8b7b56cb278bd3f97f051054fbe7d4518ede",
+   "index": 3,
+   "date": "2026-11-10",
+   "subject": "funding.json: the open funding manifest (#596)",
+   "kind": "prune",
+   "flags": "I",
+   "critical_why": [],
+   "issues": [
+    "596"
+   ],
+   "same_issue": [],
+   "changelog": [],
+   "touches_fork": [],
+   "left_out": [
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [],
+   "notes": [
+    ".well-known/funding-manifest-urls: added lines name upstream's identity",
+    "funding.json: added lines name upstream's identity",
+    "website/.well-known/funding-manifest-urls: added lines name upstream's identity"
+   ],
+   "status": "skipped"
+  },
+  {
+   "sha": "02eafc94b5a810a91e443b1073ae9898cce32bf4",
+   "index": 4,
+   "date": "2026-11-10",
+   "subject": "Release tools: web-ext 10.8.0, with the dependencies it brings (#598)",
+   "kind": "port",
+   "flags": "SA",
+   "critical_why": [],
+   "issues": [
+    "598"
+   ],
+   "same_issue": [],
+   "changelog": [],
+   "touches_fork": [],
+   "left_out": [
+    "ROADMAP.md"
+   ],
+   "sensitive": [
+    "tools/release/package-lock.json",
+    "tools/release/package.json"
+   ],
+   "conflicts": [
+    "tools/release/package-lock.json",
+    "tools/release/package.json"
+   ],
+   "after": [
+    "714f76b4840843bae2841c1c1ab0ee78ea4c6bef"
+   ],
+   "notes": [
+    "the fork no longer has tools/release/package-lock.json, tools/release/package.json (deleted after the fork point, or by an earlier pick): if that was on purpose, skip this",
+    "the fork never changed some conflicting files: upstream's earlier commits (A) are missing; decide those first, then sort again",
+    "sensitive (tools/release/package-lock.json, tools/release/package.json): read every line; never batch-picked (pick it alone with --allow-sensitive after review)"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "bbbeb4a08cfd13d067a7d374f8d74a792d8ace61",
+   "index": 5,
+   "date": "2026-11-10",
+   "subject": "Video without ffmpeg: a sound that comes as a file, and HLS pieces saved as what they are (#569) (#593)",
+   "kind": "port",
+   "flags": "",
+   "critical_why": [],
+   "issues": [
+    "569",
+    "593"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- **Download video** without ffmpeg (on macOS and Linux, where MDM doesn't install it): the sound alone comes from a format the site sends as one file when it has one, and a sound or video that came as an HLS stream's pieces is saved as what it is (`.aac`, `.ts`) instead of `.mp4`, which players refused to open ([#569](https://github.com/anefzaoui/misterdownloadmanager/issues/569))."
+   ],
+   "touches_fork": [
+    "crates/tools/tests/fake_ytdlp.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/tools/tests/fake_ytdlp.rs"
+   ],
+   "after": [],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "b936414ecb7b29f7e6dbfd63a601cfdbad3223f4",
+   "index": 6,
+   "date": "2026-11-10",
+   "subject": "Linux and macOS: the system's gallery-dl, as yt-dlp's (#571) (#594)",
+   "kind": "port",
+   "flags": "P",
+   "critical_why": [],
+   "issues": [
+    "571",
+    "594"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Linux and macOS: a gallery-dl installed by the system (a package manager, Homebrew, pip) is found and used when MDM has none of its own, as yt-dlp is; **Helpers** can switch to MDM's own copy where MDM has one (Windows and Linux x86-64) ([#571](https://github.com/anefzaoui/misterdownloadmanager/issues/571))."
+   ],
+   "touches_fork": [
+    "crates/app/src/helpers.rs",
+    "crates/cli/src/lib.rs",
+    "crates/tools/src/gallery.rs",
+    "docs/galleries.md",
+    "docs/video.md"
+   ],
+   "left_out": [
+    "crates/tools/tests/system_helpers.rs",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/helpers.rs",
+    "docs/galleries.md",
+    "docs/video.md"
+   ],
+   "after": [],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "crates/tools/src/gallery.rs: added lines name another platform or text direction"
+   ],
+   "status": "skipped"
+  },
+  {
+   "sha": "a5a75803718884cbdfe7593ac6e70ebfeae2d133",
+   "index": 7,
+   "date": "2026-11-10",
+   "subject": "Extension: downloads it leaves keep another extension's name and folder (#578) (#584)",
+   "kind": "port",
+   "flags": "S",
+   "critical_why": [],
+   "issues": [
+    "578",
+    "584"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Chrome, Edge, Brave and the other Chromium browsers: a download the extension leaves to the browser keeps the name and folder another extension gives it (Save In's folders, or any extension's own download into a folder). The extension's answer for it counted as a name of its own, an empty one, and when the extension was the newest installed it won: the file landed in the Downloads folder, and the browser could warn of a conflict between the two extensions ([#578](https://github.com/anefzaoui/misterdownloadmanager/issues/578))."
+   ],
+   "touches_fork": [
+    "extension/background.js",
+    "tools/extension/e2e.mjs",
+    "tools/extension/test.mjs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [
+    "tools/extension/e2e.mjs",
+    "tools/extension/test.mjs"
+   ],
+   "conflicts": [
+    "extension/background.js"
+   ],
+   "after": [],
+   "notes": [
+    "touches extension/background.js (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "sensitive (tools/extension/e2e.mjs, tools/extension/test.mjs): read every line; never batch-picked (pick it alone with --allow-sensitive after review)"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "390189f7470f85b38be278f6f08881ce679e4c01",
+   "index": 8,
+   "date": "2026-11-10",
+   "subject": "Menus: another item closes the submenu at once, one item lit (#579) (#595)",
+   "kind": "port",
+   "flags": "P",
+   "critical_why": [],
+   "issues": [
+    "579",
+    "595"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Menus: going from an item with a submenu to another item closes the submenu at once, and only the item under the pointer is lit. The submenu stayed open, its item lit as well, until the pointer rested on one item, so as long as it kept moving; going diagonally into the submenu still keeps it open ([#579](https://github.com/anefzaoui/misterdownloadmanager/issues/579))."
+   ],
+   "touches_fork": [
+    "crates/app/src/chrome.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/chrome.rs"
+   ],
+   "after": [],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "crates/app/src/chrome.rs: added lines name another platform or text direction"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "3d11d7ba7c5d5bdfe4092b43916e32c3390eff48",
+   "index": 9,
+   "date": "2026-11-10",
+   "subject": "Video button: one place over YouTube's thumbnail previews (#560) (#591)",
+   "kind": "prune",
+   "flags": "SA",
+   "critical_why": [],
+   "issues": [
+    "560",
+    "591"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- The browser's **video button** over YouTube's thumbnail previews keeps one place, so it can be clicked: it moved to another corner when the preview showed its sound and captions buttons, back when they hid as the pointer reached it, and away again, and it followed the preview as it shrank. Over the same video it now only moves on to a free corner, never back, and it stays put while the pointer is on it ([#560](https://github.com/anefzaoui/misterdownloadmanager/issues/560))."
+   ],
+   "touches_fork": [
+    "extension/video.js",
+    "tools/extension/e2e.mjs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [
+    "tools/extension/e2e.mjs"
+   ],
+   "conflicts": [],
+   "after": [
+    "a5a75803718884cbdfe7593ac6e70ebfeae2d133"
+   ],
+   "notes": [
+    "sensitive (tools/extension/e2e.mjs): read every line; never batch-picked (pick it alone with --allow-sensitive after review)",
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "43a529d91e5f66ec29a93788acd90cec604d1cfe",
+   "index": 10,
+   "date": "2026-11-10",
+   "subject": "Download complete: dragging the file out no longer holds up the window (#561) (#592)",
+   "kind": "port",
+   "flags": "CP",
+   "critical_why": [
+    "beside the window",
+    "holds up"
+   ],
+   "issues": [
+    "561",
+    "592"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Windows: dragging a finished file out of **Download complete** (the grip at its bottom right) no longer holds up MDM's windows for as long as the drag lasts, or for as long as the program it is dropped on takes to answer: the drag now runs beside the window, as file dialogs already do ([#561](https://github.com/anefzaoui/misterdownloadmanager/issues/561))."
+   ],
+   "touches_fork": [
+    "crates/app/src/dialogs.rs",
+    "crates/app/src/win32.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/dialogs.rs",
+    "crates/app/src/win32.rs"
+   ],
+   "after": [],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "crates/app/src/dialogs.rs: added lines name another platform or text direction"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+   "index": 11,
+   "date": "2026-11-11",
+   "subject": "fix(tray+handoff): tray click toggles window; browser downloads open only their dialog (#520)",
+   "kind": "port",
+   "flags": "",
+   "critical_why": [],
+   "issues": [
+    "520"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Left click on the tray icon now toggles the main window: hidden or minimized shows it again, in front hides it to the tray, and behind other windows brings it forward (it only ever showed it, so clicking while the window was visible did nothing).",
+    "- A download started in the browser (a video's download button, a link, a magnet or .torrent) now opens only its dialog when the main window is hidden or minimized, instead of always bringing the full window up."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/tray.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/app.rs",
+    "crates/app/src/tray.rs"
+   ],
+   "after": [],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "feeb7133217d777817b226093d8ff68ce90b7cb2",
+   "index": 12,
+   "date": "2026-11-11",
+   "subject": "Categories without their own folder follow General's folder; start Add torrent with Torrents' folder (#556, #550) (#554)",
+   "kind": "port",
+   "flags": "A",
+   "critical_why": [],
+   "issues": [
+    "550",
+    "554",
+    "556"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- **Options \u2192 Save to**: changing the **General** category's default download directory now moves the default folders of all other categories without their own folder (`Video`, `Music`, `Torrents`, etc.) under it, instead of leaving them under the system's `Downloads` folder ([#556](https://github.com/anefzaoui/misterdownloadmanager/issues/556)). **Add torrent** also starts with the **Torrents** category's folder from the moment it opens (so **Save to** no longer flips when a magnet link's metadata arrives) and remembers a changed folder when **Change folder for this category on last selected** is ticked ([#550](https://github.com/anefzaoui/misterdownloadmanager/issues/550))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/categories.rs",
+    "crates/app/src/model.rs",
+    "crates/app/src/options.rs",
+    "crates/app/src/torrentdlg.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/torrentdlg.rs"
+   ],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471"
+   ],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "8742fcd833eae2a241d64da98eff79b5ec7dbfa6",
+   "index": 13,
+   "date": "2026-11-11",
+   "subject": "Themes: Emerald, a white canvas with one emerald fill and near-black ink (from #45) (#522)",
+   "kind": "port",
+   "flags": "SA",
+   "critical_why": [],
+   "issues": [
+    "45",
+    "522"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- **Emerald** among the built-in looks in **View \u2192 Theme**: a white canvas with one near-black ink and a ladder of neutral greys for structure, emerald fills that carry near-black text rather than white, 6-point corners and Metro's one-colour icons. Its theme file names a few seeds per side and derives every other colour, so a role added later arrives in this look instead of the classic one ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/palette.rs",
+    "docs/ARCHITECTURE.md",
+    "docs/README.md",
+    "docs/getting-started.md",
+    "docs/themes.md",
+    "tools/shots/shots.toml",
+    "website/content/themes.toml"
+   ],
+   "left_out": [
+    "i18n/en.tsv",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [
+    "tools/shots/shots.toml"
+   ],
+   "conflicts": [
+    "crates/app/src/app.rs",
+    "crates/app/src/palette.rs",
+    "docs/ARCHITECTURE.md",
+    "docs/README.md",
+    "docs/getting-started.md",
+    "docs/themes.md",
+    "tools/shots/shots.toml"
+   ],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471"
+   ],
+   "notes": [
+    "a theme other than Graphite (emerald): this fork keeps Graphite only (plan 05.5): skip",
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "sensitive (tools/shots/shots.toml): read every line; never batch-picked (pick it alone with --allow-sensitive after review)"
+   ],
+   "status": "skipped"
+  },
+  {
+   "sha": "42e0a83b3e4f1b539e97a521dcc2abf9e419752f",
+   "index": 14,
+   "date": "2026-11-11",
+   "subject": "Smooth Windows text (View \u2192 Text) and 110 / 115 / 120 % interface sizes (#478)",
+   "kind": "port",
+   "flags": "PA",
+   "critical_why": [],
+   "issues": [
+    "478"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- **Smooth text on Windows, and finer interface sizes:** **View \u2192 Text \u2192 Smooth** draws letters anti-aliased at their own size instead of as thick, whole-pixel letters that are hard to read on a 1440p screen; **Classic**, the default, keeps the look MDM had. **View \u2192 Interface size** now offers 110 %, 115 % and 120 % between 100 % and 125 %."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/crashui.rs",
+    "crates/app/src/main.rs",
+    "crates/app/src/scale.rs",
+    "crates/app/src/settings.rs",
+    "crates/app/src/theme.rs",
+    "crates/app/src/win32.rs",
+    "docs/ARCHITECTURE.md",
+    "docs/getting-started.md",
+    "docs/troubleshooting.md"
+   ],
+   "left_out": [
+    "i18n/en.tsv",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/app.rs",
+    "crates/app/src/theme.rs",
+    "crates/app/src/win32.rs",
+    "docs/ARCHITECTURE.md",
+    "docs/getting-started.md"
+   ],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471"
+   ],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "crates/app/src/theme.rs: added lines name another platform or text direction",
+    "crates/app/src/win32.rs: added lines name another platform or text direction"
+   ],
+   "status": "skipped"
+  },
+  {
+   "sha": "7dc0e3a9567b26ca210c6afcff68227011fee769",
+   "index": 15,
+   "date": "2026-11-11",
+   "subject": "Download video: a sound-only choice saves in Music (#611) (#614)",
+   "kind": "port",
+   "flags": "A",
+   "critical_why": [],
+   "issues": [
+    "611",
+    "614"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- **Download video**: a sound-only choice (MP3, Opus, FLAC, the original sound) saves in the Music category's folder and is listed under Music, as a playlist downloaded as sound only does; choosing a video again goes back to the Video folder. A folder you typed or picked in **Save to** stays as it is ([#611](https://github.com/anefzaoui/misterdownloadmanager/issues/611))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/videodlg.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/app.rs",
+    "crates/app/src/videodlg.rs"
+   ],
+   "after": [
+    "bbbeb4a08cfd13d067a7d374f8d74a792d8ace61",
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471"
+   ],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "39be735d19dfb7649a05b7e8d88951ff3a25cde1",
+   "index": 16,
+   "date": "2026-11-11",
+   "subject": "Speed limiter: a raised or removed limit applies to the waits already started (#621) (#637)",
+   "kind": "prune",
+   "flags": "",
+   "critical_why": [],
+   "issues": [
+    "621",
+    "637"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Raising a speed limit, or turning it off, applies at once: to a download's own limit (its progress window's **Speed Limiter** tab), the limit for one file and the limit for all downloads together. A connection already waiting its turn under the old limit sat out the wait the old limit gave it, many seconds at a low limit, before the new speed showed; it now counts what is left at the new limit, and ends its wait as soon as there is no limit ([#621](https://github.com/anefzaoui/misterdownloadmanager/issues/621))."
+   ],
+   "touches_fork": [
+    "crates/engine/Cargo.toml",
+    "crates/engine/src/limiter.rs",
+    "crates/engine/tests/e2e.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [],
+   "notes": [
+    "dependencies change: a new crate's build script and macros run at build; read what it adds",
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "5bfb9bb0211e8c8fa3569abbed0bbb3e4043c4e6",
+   "index": 17,
+   "date": "2026-11-11",
+   "subject": "macOS: downloads to a network volume no longer refused for 0 bytes free (#623) (#638)",
+   "kind": "port",
+   "flags": "P",
+   "critical_why": [],
+   "issues": [
+    "623",
+    "638"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- macOS: downloads to a network volume (a folder under `/Volumes` on an SMB, AFP or NFS share) start again. Each one was refused with \"Not enough disk space ... 0 bytes free\", however much the share had: macOS answers 0 when asked a network volume's space \"for important usage\" (the free space plus what the system can clear, as Finder counts it on the Mac's own disks), and MDM took that 0. On a network volume, or whenever that answer is 0, MDM now counts the free space the volume reports ([#623](https://github.com/anefzaoui/misterdownloadmanager/issues/623))."
+   ],
+   "touches_fork": [
+    "crates/engine/src/disk.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/engine/src/disk.rs"
+   ],
+   "after": [],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "skipped"
+  },
+  {
+   "sha": "e7237345530e2a94203de915bc5b1d90da586a23",
+   "index": 18,
+   "date": "2026-11-11",
+   "subject": "Debrid sign-in by code: only the service's own page is opened (#635)",
+   "kind": "prune",
+   "flags": "C",
+   "critical_why": [
+    "only the service's own"
+   ],
+   "issues": [
+    "635"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "### Changed",
+    "- Debrid accounts: signing in by code opens the page only when it is the service's own site, over https."
+   ],
+   "touches_fork": [
+    "crates/debrid/src/lib.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [],
+   "notes": [
+    "touches crates/debrid/ (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+   "index": 19,
+   "date": "2026-11-11",
+   "subject": "Tray click on Windows: in front is what covers the window, not the focus (#640)",
+   "kind": "port",
+   "flags": "PA",
+   "critical_why": [],
+   "issues": [
+    "640"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Left click on the tray icon now toggles the main window: hidden or minimized shows it again, in front hides it to the tray, and behind other windows brings it forward (it only ever showed it, so clicking while the window was visible did nothing). On Windows it goes by what covers the window, so it works with the icon under the taskbar's ^ too."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/win32.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/app.rs"
+   ],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769"
+   ],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "crates/app/src/app.rs: added lines name another platform or text direction"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "a255a8b1f185e7be888eb92fbe1527c332fcece9",
+   "index": 20,
+   "date": "2026-11-11",
+   "subject": "Cancel in Download File Info asks whether to cancel the waiting downloads too (#394) (#610)",
+   "kind": "prune",
+   "flags": "A",
+   "critical_why": [],
+   "issues": [
+    "394",
+    "610"
+   ],
+   "same_issue": [],
+   "changelog": [],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/dialogs.rs"
+   ],
+   "left_out": [
+    "i18n/en.tsv",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb"
+   ],
+   "notes": [
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "ba2cbabd68d10434ba4ac5d99791c6501fc2f6c3",
+   "index": 21,
+   "date": "2026-11-11",
+   "subject": "Windows: the clipboard read and written one at a time, no more heap corruption (#629) (#639)",
+   "kind": "port",
+   "flags": "C",
+   "critical_why": [
+    "corrupt",
+    "crash",
+    "heap"
+   ],
+   "issues": [
+    "629",
+    "639"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Windows: MDM no longer crashes (\"crash in ntdll.dll\", the heap corrupted) when the clipboard is read in two places at once, as when **Add URL** opened while the clipboard monitor was looking for a copied link. Windows lets the parts of one program open the clipboard together, and their reads spoiled each other's data; MDM's reads and writes of the clipboard, a paste or copy in a text box included, now go one at a time ([#629](https://github.com/anefzaoui/misterdownloadmanager/issues/629))."
+   ],
+   "touches_fork": [
+    "Cargo.lock",
+    "Cargo.toml",
+    "crates/app/Cargo.toml",
+    "crates/app/src/main.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "Cargo.lock",
+    "Cargo.toml",
+    "crates/app/src/main.rs"
+   ],
+   "after": [],
+   "notes": [
+    "dependencies change: a new crate's build script and macros run at build; read what it adds",
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "0198cc4f74e48142838b96348fddbffde1e0a9e0",
+   "index": 22,
+   "date": "2026-11-11",
+   "subject": "A link refused before any byte goes on where the browser's download ended (#630) (#642)",
+   "kind": "prune",
+   "flags": "A",
+   "critical_why": [],
+   "issues": [
+    "630",
+    "642"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- A download handed over by the browser whose link the site refuses to MDM before sending anything (FileHippo's links answered **412 Precondition Failed**; a one-time link the browser has already used, or one tied to its session, answers 403, 404 or 410) goes on from the address the browser's own download of it had reached, once; if that is refused too, the link's own answer is the error shown. Its cookies go there only when it is the same site ([#630](https://github.com/anefzaoui/misterdownloadmanager/issues/630))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/dialogs.rs",
+    "crates/engine/src/download.rs",
+    "crates/engine/tests/e2e.rs",
+    "crates/labserver/src/faults.rs",
+    "crates/labserver/src/server.rs",
+    "docs/browser-integration.md"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb"
+   ],
+   "notes": [
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "7ec5bf056a4a6f81cfd5cdb9303b8e57caea9c39",
+   "index": 23,
+   "date": "2026-11-11",
+   "subject": "Tests: the clipboard tests one at a time (#644)",
+   "kind": "port",
+   "flags": "",
+   "critical_why": [],
+   "issues": [
+    "644"
+   ],
+   "same_issue": [],
+   "changelog": [],
+   "touches_fork": [
+    "crates/app/src/main.rs"
+   ],
+   "left_out": [],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/main.rs"
+   ],
+   "after": [],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "ported"
+  },
+  {
+   "sha": "5213ad1f036f0814d20b9b3399ff22204ba74200",
+   "index": 24,
+   "date": "2026-11-11",
+   "subject": "Windows: the title bar's light or dark set once, not checked with DWM every 2 s (#633, #583) (#641)",
+   "kind": "port",
+   "flags": "CA",
+   "critical_why": [
+    "freez"
+   ],
+   "issues": [
+    "583",
+    "633",
+    "641"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Windows: fewer freezes (\"The window stopped responding\") on a system held up by its disk or its memory. Every 2 seconds, and in each frame of an open dialog, MDM asked Windows about its windows' title bar colours, and the window waited with Windows' answer; it now sets a title bar's light or dark once, when the window opens or the theme changes. Looking for its own windows no longer waits on another busy part of MDM either ([#633](https://github.com/anefzaoui/misterdownloadmanager/issues/633), [#583](https://github.com/anefzaoui/misterdownloadmanager/issues/583))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/crashui.rs",
+    "crates/app/src/dialogs.rs",
+    "crates/app/src/theme.rs",
+    "crates/app/src/win32.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/app.rs",
+    "crates/app/src/crashui.rs",
+    "crates/app/src/dialogs.rs"
+   ],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb"
+   ],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "ported"
+  },
+  {
+   "sha": "a59a2e2cb89ca8719e632fbd6006c57575918816",
+   "index": 25,
+   "date": "2026-11-11",
+   "subject": "Test: a passed-over gallery-dl, on a machine that has its own (#648)",
+   "kind": "nothing",
+   "flags": "",
+   "critical_why": [],
+   "issues": [
+    "648"
+   ],
+   "same_issue": [],
+   "changelog": [],
+   "touches_fork": [
+    "crates/tools/src/gallery.rs"
+   ],
+   "left_out": [],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [],
+   "notes": [
+    "already in the fork: applying it changes nothing"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "ca7bedbfd3970c229c56cb6df04e49f833344bae",
+   "index": 26,
+   "date": "2026-11-11",
+   "subject": "Test: the slow-flush bound grows with the yardstick (#649)",
+   "kind": "port",
+   "flags": "",
+   "critical_why": [],
+   "issues": [
+    "649"
+   ],
+   "same_issue": [],
+   "changelog": [],
+   "touches_fork": [
+    "crates/engine/tests/e2e.rs"
+   ],
+   "left_out": [],
+   "sensitive": [],
+   "conflicts": [
+    "crates/engine/tests/e2e.rs"
+   ],
+   "after": [],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "9fa1e58a28df5b53ee99af7aed42124442c1d43e",
+   "index": 27,
+   "date": "2026-11-11",
+   "subject": "Search: point the README, the add-on and the site's data to misterdownloadmanager.com (#658)",
+   "kind": "prune",
+   "flags": "I",
+   "critical_why": [],
+   "issues": [
+    "658"
+   ],
+   "same_issue": [],
+   "changelog": [],
+   "touches_fork": [
+    "README.md",
+    "website/index.html"
+   ],
+   "left_out": [
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [],
+   "notes": [
+    "website/index.html: added lines name upstream's identity",
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "skipped"
+  },
+  {
+   "sha": "8200e91208a49cc8bcf82eb04be74bc139066ad5",
+   "index": 28,
+   "date": "2026-11-11",
+   "subject": "macOS: helpers get Homebrew's folders on their PATH (#659) (#662)",
+   "kind": "prune",
+   "flags": "P",
+   "critical_why": [],
+   "issues": [
+    "659",
+    "662"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- macOS: YouTube videos that need yt-dlp's JavaScript runtime load when MDM is opened from Finder or the Dock. MDM found Homebrew's yt-dlp, but the helpers it started didn't get Homebrew's folders on their PATH, so yt-dlp found neither Deno nor ffmpeg (\"Requested format is not available\"); they now look there too, after the folders of their own PATH ([#659](https://github.com/anefzaoui/misterdownloadmanager/issues/659))."
+   ],
+   "touches_fork": [
+    "crates/tools/src/proc.rs"
+   ],
+   "left_out": [
+    "crates/tools/src/system.rs",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [],
+   "notes": [
+    "crates/tools/src/proc.rs: added lines name another platform or text direction",
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "skipped"
+  },
+  {
+   "sha": "69aeb6db14846713ea5c3004e1ef3907af98eb3f",
+   "index": 29,
+   "date": "2026-11-11",
+   "subject": "Torrents: the DHT joins through four public routers, and the port picked is kept (#650) (#664)",
+   "kind": "port",
+   "flags": "",
+   "critical_why": [],
+   "issues": [
+    "650",
+    "664"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Torrents: magnet links without trackers find peers through the DHT again where its first nodes didn't answer. MDM asked only two public routers to join the DHT; where neither answered (one name pointing at an old address, or a network blocking one), the DHT stayed empty and the log said \"error in bootstrap\" every minute or two. It now asks four together (`dht.libtorrent.org`, `dht.transmissionbt.com`, `router.bittorrent.com`, `router.utorrent.com`), any one that answers is enough, and the others are asked no more once one has. The nodes it knows are kept for the next start, the IPv6 ones too ([#650](https://github.com/anefzaoui/misterdownloadmanager/issues/650)).",
+    "- Torrents: with the **Port** box empty in Torrent settings, MDM keeps the port it picked and listens on it again at the next start (another one if a program has taken it), so peers that learned it, and a router's or firewall's rule for it, still reach MDM; it was a new port at each start. MDM's log says where it listens: one socket for IPv4 and IPv6, which Windows' `netstat -p tcp` (IPv4 only) doesn't list ([#650](https://github.com/anefzaoui/misterdownloadmanager/issues/650))."
+   ],
+   "touches_fork": [
+    "Cargo.lock",
+    "Cargo.toml",
+    "crates/torrent/Cargo.toml",
+    "crates/torrent/src/lib.rs",
+    "docs/torrent-security.md",
+    "docs/torrents.md"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "Cargo.lock",
+    "Cargo.toml",
+    "docs/torrents.md"
+   ],
+   "after": [],
+   "notes": [
+    "dependencies change: a new crate's build script and macros run at build; read what it adds",
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "4843a8b7fd6d12c0304b2d3c87deaa617b44cb78",
+   "index": 30,
+   "date": "2026-11-11",
+   "subject": "Test: the running helper copy works on Ubuntu 26.04 (its sleep is a multi-call program) (#681)",
+   "kind": "removed",
+   "flags": "",
+   "critical_why": [],
+   "issues": [
+    "681"
+   ],
+   "same_issue": [],
+   "changelog": [],
+   "touches_fork": [],
+   "left_out": [
+    "crates/app/src/unix.rs"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [],
+   "notes": [
+    "crates/app/src/unix.rs was deleted here, and the fork added crates/app/src/clipboard.rs, crates/app/src/lookwatch.rs, crates/app/src/tray/watch.rs beside it: check whether the fix belongs in one of them"
+   ],
+   "status": "skipped"
+  },
+  {
+   "sha": "d45f3f5ba28cb1b69239370fbd34142acc584a2a",
+   "index": 31,
+   "date": "2026-11-11",
+   "subject": "Crash reports: Linux stacks read from the program's start, a C-runtime stall is a busy computer (#661, #663) (#669)",
+   "kind": "prune",
+   "flags": "C",
+   "critical_why": [
+    "crash",
+    "deadlock",
+    "freez"
+   ],
+   "issues": [
+    "661",
+    "663",
+    "669"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Linux: freeze and crash reports show MDM's own functions, files and lines again, and the right ones. When MDM's code began a page after the start of the program in memory (as 0.5.0's did), the report read the whole stack at the wrong place: it showed only system libraries (`freeze in libc.so.6+\u2026`), named other functions of MDM once the release's symbols were fetched, and couldn't find an existing issue for the same problem. A `.dmp` from such a report reads right too ([#661](https://github.com/anefzaoui/misterdownloadmanager/issues/661)).",
+    "- Windows: a freeze report whose window thread hardly ran and stopped in the C runtime's memory routines (`VCRUNTIME140.dll`, comparing the first bytes of an icon) now says the computer was too busy to run MDM or slow to load it from disk, with the page faults counted meanwhile, instead of a deadlock; those routines never wait ([#663](https://github.com/anefzaoui/misterdownloadmanager/issues/663))."
+   ],
+   "touches_fork": [
+    "crates/app/src/crash.rs",
+    "crates/crash/src/analyze.rs",
+    "crates/crash/src/lib.rs",
+    "crates/crash/src/modules.rs",
+    "crates/crash/src/report.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [],
+   "notes": [
+    "touches crates/crash/ (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "98418eee0c264a9f58370f9d8ce9ea7901eea642",
+   "index": 32,
+   "date": "2026-11-11",
+   "subject": "Clipboard: every read off the window's thread (follows #418) (#688)",
+   "kind": "port",
+   "flags": "CA",
+   "critical_why": [
+    "beside the window",
+    "window's thread"
+   ],
+   "issues": [
+    "418",
+    "688"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- The window no longer waits for the program that owns the clipboard. A text box's right-click menu (to offer **Paste**) and **Add URL**, **Add batch download**, **Add torrent** and **Download video** (to fill in a copied link) read the clipboard on the window's own thread, so a program that held the clipboard without answering (on Linux, where a read waited up to 4 seconds each time, and while the right-click menu was open at every frame; on Windows, a program that had stopped responding) held up MDM's window too. They now read it beside the window, as the clipboard monitor has since 0.5.1; a link copied just before still fills the box as the window opens (follows [#418](https://github.com/anefzaoui/misterdownloadmanager/issues/418))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/batch.rs",
+    "crates/app/src/clipboard.rs",
+    "crates/app/src/dialogs.rs",
+    "crates/app/src/main.rs",
+    "crates/app/src/torrentdlg.rs",
+    "crates/app/src/videodlg.rs",
+    "crates/app/src/winui.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/clipboard.rs",
+    "crates/app/src/videodlg.rs"
+   ],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb"
+   ],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "ported"
+  },
+  {
+   "sha": "de60fb70ace3a827d800ddf63617cc728076950a",
+   "index": 33,
+   "date": "2026-11-11",
+   "subject": "Links added by hand go with the default browser's User-Agent (part of #668) (#691)",
+   "kind": "prune",
+   "flags": "PA",
+   "critical_why": [],
+   "issues": [
+    "668",
+    "691"
+   ],
+   "same_issue": [
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e"
+   ],
+   "changelog": [
+    "- Links you add by hand go with the User-Agent of your default browser, at the version you have installed (Chrome, Edge, Brave, Opera, Vivaldi, Firefox or Safari, on Windows, Linux and macOS), instead of the Internet Explorer 11 one MDM sent until now, which some sites no longer let through. MDM looks the browser up once as it starts. **Options \u2192 Downloads** shows it with **Automatic** ticked; untick it to type your own, and a User-Agent you had set stays yours. When MDM doesn't recognise your default browser, it sends a current Chrome's; when a site turns a browser's User-Agent away, it asks once more with its former one, as for downloads from the browser (part of [#668](https://github.com/anefzaoui/misterdownloadmanager/issues/668))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/headless.rs",
+    "crates/app/src/main.rs",
+    "crates/app/src/options.rs",
+    "crates/app/src/settings.rs",
+    "crates/app/src/videodlg.rs",
+    "crates/app/src/win32.rs",
+    "crates/cli/src/lib.rs",
+    "crates/engine/src/download.rs",
+    "crates/engine/src/lib.rs",
+    "crates/engine/tests/e2e.rs",
+    "crates/tools/src/lib.rs",
+    "docs/options.md"
+   ],
+   "left_out": [
+    "crates/app/src/unix.rs",
+    "i18n/af.tsv",
+    "i18n/am.tsv",
+    "i18n/ar.tsv",
+    "i18n/as.tsv",
+    "i18n/az.tsv",
+    "i18n/be.tsv",
+    "i18n/bg.tsv",
+    "i18n/bn.tsv",
+    "i18n/bs.tsv",
+    "i18n/ca-es-valencia.tsv",
+    "i18n/ca.tsv",
+    "i18n/chr.tsv",
+    "i18n/cs.tsv",
+    "i18n/cy.tsv",
+    "i18n/da.tsv",
+    "i18n/de.tsv",
+    "i18n/el.tsv",
+    "i18n/en.tsv",
+    "i18n/es-mx.tsv",
+    "i18n/es.tsv",
+    "i18n/et.tsv",
+    "i18n/eu.tsv",
+    "i18n/fa.tsv",
+    "i18n/fi.tsv",
+    "i18n/fil.tsv",
+    "i18n/fr-ca.tsv",
+    "i18n/fr.tsv",
+    "i18n/ga.tsv",
+    "i18n/gd.tsv",
+    "i18n/gl.tsv",
+    "i18n/gu.tsv",
+    "i18n/he.tsv",
+    "i18n/hi.tsv",
+    "i18n/hr.tsv",
+    "i18n/hu.tsv",
+    "i18n/hy.tsv",
+    "i18n/id.tsv",
+    "i18n/is.tsv",
+    "i18n/it.tsv",
+    "i18n/ja.tsv",
+    "i18n/ka.tsv",
+    "i18n/kk.tsv",
+    "i18n/km.tsv",
+    "i18n/kn.tsv",
+    "i18n/ko.tsv",
+    "i18n/kok.tsv",
+    "i18n/lb.tsv",
+    "i18n/lo.tsv",
+    "i18n/lt.tsv",
+    "i18n/lv.tsv",
+    "i18n/mi.tsv",
+    "i18n/mk.tsv",
+    "i18n/ml.tsv",
+    "i18n/mr.tsv",
+    "i18n/ms.tsv",
+    "i18n/mt.tsv",
+    "i18n/nb.tsv",
+    "i18n/ne.tsv",
+    "i18n/nl.tsv",
+    "i18n/nn.tsv",
+    "i18n/or.tsv",
+    "i18n/pa.tsv",
+    "i18n/pl.tsv",
+    "i18n/pt-br.tsv",
+    "i18n/pt.tsv",
+    "i18n/quz.tsv",
+    "i18n/ro.tsv",
+    "i18n/ru.tsv",
+    "i18n/sk.tsv",
+    "i18n/sl.tsv",
+    "i18n/sq.tsv",
+    "i18n/sr-latn.tsv",
+    "i18n/sr.tsv",
+    "i18n/sv.tsv",
+    "i18n/ta.tsv",
+    "i18n/te.tsv",
+    "i18n/th.tsv",
+    "i18n/tr.tsv",
+    "i18n/tt.tsv",
+    "i18n/ug.tsv",
+    "i18n/uk.tsv",
+    "i18n/ur.tsv",
+    "i18n/uz.tsv",
+    "i18n/vi.tsv",
+    "i18n/zh-hans.tsv",
+    "i18n/zh-hant.tsv",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb"
+   ],
+   "notes": [
+    "crates/app/src/unix.rs was deleted here, and the fork added crates/app/src/clipboard.rs, crates/app/src/lookwatch.rs, crates/app/src/tray/watch.rs beside it: check whether the fix belongs in one of them",
+    "crates/app/src/defaultbrowser.rs: added lines name another platform or text direction",
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "26f5b00f8943d732bbd6725b7eb8d66cc7029526",
+   "index": 34,
+   "date": "2026-11-11",
+   "subject": "feat(debrid): add TorBox for file-host links and torrents (#566)",
+   "kind": "prune",
+   "flags": "PA",
+   "critical_why": [],
+   "issues": [
+    "566"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- **TorBox** debrid accounts (experimental), in **Options \u2192 Accounts**, signed in in the browser or with your API key: file-host links, torrents and magnet links through your account ([#391](https://github.com/anefzaoui/misterdownloadmanager/issues/391))."
+   ],
+   "touches_fork": [
+    "Cargo.lock",
+    "README.md",
+    "crates/app/src/app.rs",
+    "crates/app/src/model.rs",
+    "crates/app/src/options.rs",
+    "crates/app/src/torrents.rs",
+    "crates/cli/src/lib.rs",
+    "crates/debrid/src/lib.rs",
+    "crates/engine/src/download.rs",
+    "crates/labserver/src/server.rs",
+    "docs/ARCHITECTURE.md",
+    "docs/README.md",
+    "docs/debrid.md",
+    "docs/options.md"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+    "69aeb6db14846713ea5c3004e1ef3907af98eb3f",
+    "de60fb70ace3a827d800ddf63617cc728076950a"
+   ],
+   "notes": [
+    "touches crates/debrid/ (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "dependencies change: a new crate's build script and macros run at build; read what it adds",
+    "crates/app/src/options.rs: added lines name another platform or text direction",
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "skipped"
+  },
+  {
+   "sha": "817a7b4c818d63c8dbfead7e9b46e45c85feddfc",
+   "index": 35,
+   "date": "2026-11-11",
+   "subject": "Torrents: the window never waits on the torrent engine (#693) (#702)",
+   "kind": "prune",
+   "flags": "CA",
+   "critical_why": [
+    "beside the window",
+    "freez",
+    "never waits"
+   ],
+   "issues": [
+    "693",
+    "702"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Torrents: the window no longer freezes while torrents run on a busy or slow disk (an antivirus scanning each write, a disk that is full of other work). The window read each torrent's numbers from the torrent engine on every frame, and the engine holds a torrent while it is paused, removed or added until its writes to the disk have ended, seconds on such a disk; the window waited that long (\"freeze in mdm_torrent::Torrents::stats\"). The numbers are now read beside the window, five times a second and at once after each change, and the list, the progress window's tabs, **Files...** and the right-click menu show the last ones without waiting ([#693](https://github.com/anefzaoui/misterdownloadmanager/issues/693))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/torrentfiles.rs",
+    "crates/app/src/torrents.rs",
+    "crates/torrent/src/lib.rs",
+    "crates/torrent/src/watch.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+    "69aeb6db14846713ea5c3004e1ef3907af98eb3f",
+    "de60fb70ace3a827d800ddf63617cc728076950a"
+   ],
+   "notes": [
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "32881b9d7f2066c37b85abdeda1c7a100272298c",
+   "index": 36,
+   "date": "2026-11-11",
+   "subject": "Torrents: a pause during a piece's hash check no longer leaves the torrent one piece short (#706) (#717)",
+   "kind": "port",
+   "flags": "CA",
+   "critical_why": [
+    "one piece short"
+   ],
+   "issues": [
+    "706",
+    "717"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Torrents: pausing a torrent just as one of its pieces was being checked no longer leaves it one piece short for good. That piece was neither counted as downloaded nor asked for again, so the torrent stopped just before the end, and pausing and starting it again didn't help, only restarting MDM did; a pause now puts that piece back to be downloaded again ([#706](https://github.com/anefzaoui/misterdownloadmanager/issues/706))."
+   ],
+   "touches_fork": [
+    "Cargo.lock",
+    "Cargo.toml"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "Cargo.toml"
+   ],
+   "after": [
+    "69aeb6db14846713ea5c3004e1ef3907af98eb3f"
+   ],
+   "notes": [
+    "dependencies change: a new crate's build script and macros run at build; read what it adds",
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "ported"
+  },
+  {
+   "sha": "380cdb3ed029caff849465b1e01c54d8312c2f03",
+   "index": 37,
+   "date": "2026-11-11",
+   "subject": "Extension: a video in a feed sends its post, not the feed (#689, #643) (#707)",
+   "kind": "prune",
+   "flags": "PSA",
+   "critical_why": [],
+   "issues": [
+    "643",
+    "689",
+    "707"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- The browser's **video button** over a video in a feed (a site's home page, a timeline, search results) sends that video's own address instead of the page's, which yt-dlp read as no video at all (\"No video found on this page\"). It finds the post the video sits in, as you would: on LinkedIn its `/feed/update/urn:li:activity:\u2026/` (or `urn:li:ugcPost:\u2026`) address, read from the post in LinkedIn's 2026 feed too, on Facebook the reel's, the video's or the post's own link, on X the post's (`/status/\u2026`), on Instagram `/p/\u2026` or `/reel/\u2026`, on Reddit the post's comments page, on TikTok `/@\u2026/video/\u2026`, on Vimeo and Dailymotion the clip's page, and elsewhere a post's own link, such as its timestamp. Only a post that names that one video counts. When nothing does, the video's own file goes (when it plays one, not pieces), and otherwise nothing goes and the button says to open the post and use the button there ([#689](https://github.com/anefzaoui/misterdownloadmanager/issues/689), [#643](https://github.com/anefzaoui/misterdownloadmanager/issues/643))."
+   ],
+   "touches_fork": [
+    "extension/background.js",
+    "extension/video.js",
+    "tools/extension/e2e.mjs",
+    "tools/extension/test.mjs"
+   ],
+   "left_out": [
+    "extension/_locales/am/messages.json",
+    "extension/_locales/ar/messages.json",
+    "extension/_locales/bg/messages.json",
+    "extension/_locales/bn/messages.json",
+    "extension/_locales/ca/messages.json",
+    "extension/_locales/cs/messages.json",
+    "extension/_locales/da/messages.json",
+    "extension/_locales/de/messages.json",
+    "extension/_locales/el/messages.json",
+    "extension/_locales/es/messages.json",
+    "extension/_locales/es_419/messages.json",
+    "extension/_locales/et/messages.json",
+    "extension/_locales/fa/messages.json",
+    "extension/_locales/fi/messages.json",
+    "extension/_locales/fil/messages.json",
+    "extension/_locales/fr/messages.json",
+    "extension/_locales/gu/messages.json",
+    "extension/_locales/he/messages.json",
+    "extension/_locales/hi/messages.json",
+    "extension/_locales/hr/messages.json",
+    "extension/_locales/hu/messages.json",
+    "extension/_locales/id/messages.json",
+    "extension/_locales/it/messages.json",
+    "extension/_locales/ja/messages.json",
+    "extension/_locales/kn/messages.json",
+    "extension/_locales/ko/messages.json",
+    "extension/_locales/lt/messages.json",
+    "extension/_locales/lv/messages.json",
+    "extension/_locales/ml/messages.json",
+    "extension/_locales/mr/messages.json",
+    "extension/_locales/ms/messages.json",
+    "extension/_locales/nl/messages.json",
+    "extension/_locales/no/messages.json",
+    "extension/_locales/pl/messages.json",
+    "extension/_locales/pt_BR/messages.json",
+    "extension/_locales/pt_PT/messages.json",
+    "extension/_locales/ro/messages.json",
+    "extension/_locales/ru/messages.json",
+    "extension/_locales/sk/messages.json",
+    "extension/_locales/sl/messages.json",
+    "extension/_locales/sr/messages.json",
+    "extension/_locales/sv/messages.json",
+    "extension/_locales/ta/messages.json",
+    "extension/_locales/te/messages.json",
+    "extension/_locales/th/messages.json",
+    "extension/_locales/tr/messages.json",
+    "extension/_locales/uk/messages.json",
+    "extension/_locales/vi/messages.json",
+    "extension/_locales/zh_CN/messages.json",
+    "extension/_locales/zh_TW/messages.json",
+    "i18n/af.tsv",
+    "i18n/am.tsv",
+    "i18n/ar.tsv",
+    "i18n/as.tsv",
+    "i18n/az.tsv",
+    "i18n/be.tsv",
+    "i18n/bg.tsv",
+    "i18n/bn.tsv",
+    "i18n/bs.tsv",
+    "i18n/ca-es-valencia.tsv",
+    "i18n/ca.tsv",
+    "i18n/cs.tsv",
+    "i18n/cy.tsv",
+    "i18n/da.tsv",
+    "i18n/de.tsv",
+    "i18n/el.tsv",
+    "i18n/en.tsv",
+    "i18n/es-mx.tsv",
+    "i18n/es.tsv",
+    "i18n/et.tsv",
+    "i18n/eu.tsv",
+    "i18n/fa.tsv",
+    "i18n/fi.tsv",
+    "i18n/fil.tsv",
+    "i18n/fr-ca.tsv",
+    "i18n/fr.tsv",
+    "i18n/ga.tsv",
+    "i18n/gd.tsv",
+    "i18n/gl.tsv",
+    "i18n/gu.tsv",
+    "i18n/he.tsv",
+    "i18n/hi.tsv",
+    "i18n/hr.tsv",
+    "i18n/hu.tsv",
+    "i18n/hy.tsv",
+    "i18n/id.tsv",
+    "i18n/is.tsv",
+    "i18n/it.tsv",
+    "i18n/ja.tsv",
+    "i18n/ka.tsv",
+    "i18n/kk.tsv",
+    "i18n/km.tsv",
+    "i18n/kn.tsv",
+    "i18n/ko.tsv",
+    "i18n/kok.tsv",
+    "i18n/lb.tsv",
+    "i18n/lo.tsv",
+    "i18n/lt.tsv",
+    "i18n/lv.tsv",
+    "i18n/mi.tsv",
+    "i18n/mk.tsv",
+    "i18n/ml.tsv",
+    "i18n/mr.tsv",
+    "i18n/ms.tsv",
+    "i18n/mt.tsv",
+    "i18n/nb.tsv",
+    "i18n/ne.tsv",
+    "i18n/nl.tsv",
+    "i18n/nn.tsv",
+    "i18n/or.tsv",
+    "i18n/pa.tsv",
+    "i18n/pl.tsv",
+    "i18n/pt-br.tsv",
+    "i18n/pt.tsv",
+    "i18n/quz.tsv",
+    "i18n/ro.tsv",
+    "i18n/ru.tsv",
+    "i18n/sk.tsv",
+    "i18n/sl.tsv",
+    "i18n/sq.tsv",
+    "i18n/sr-latn.tsv",
+    "i18n/sr.tsv",
+    "i18n/sv.tsv",
+    "i18n/ta.tsv",
+    "i18n/te.tsv",
+    "i18n/th.tsv",
+    "i18n/tr.tsv",
+    "i18n/tt.tsv",
+    "i18n/ug.tsv",
+    "i18n/uk.tsv",
+    "i18n/ur.tsv",
+    "i18n/uz.tsv",
+    "i18n/vi.tsv",
+    "i18n/zh-hans.tsv",
+    "i18n/zh-hant.tsv",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [
+    "tools/extension/e2e.mjs",
+    "tools/extension/feeds/article.html",
+    "tools/extension/feeds/dailymotion.html",
+    "tools/extension/feeds/facebook-watch.html",
+    "tools/extension/feeds/facebook.html",
+    "tools/extension/feeds/feeds.css",
+    "tools/extension/feeds/instagram.html",
+    "tools/extension/feeds/linkedin-sdui.html",
+    "tools/extension/feeds/linkedin.html",
+    "tools/extension/feeds/reddit-old.html",
+    "tools/extension/feeds/reddit.html",
+    "tools/extension/feeds/social.html",
+    "tools/extension/feeds/tiktok.html",
+    "tools/extension/feeds/vimeo-player.html",
+    "tools/extension/feeds/vimeo.html",
+    "tools/extension/feeds/x.html",
+    "tools/extension/test.mjs"
+   ],
+   "conflicts": [],
+   "after": [
+    "a5a75803718884cbdfe7593ac6e70ebfeae2d133"
+   ],
+   "notes": [
+    "touches extension/background.js (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "tools/extension/e2e.mjs: added lines name another platform or text direction",
+    "sensitive (tools/extension/e2e.mjs, tools/extension/feeds/article.html, tools/extension/feeds/dailymotion.html, tools/extension/feeds/facebook-watch.html, tools/extension/feeds/facebook.html, tools/extension/feeds/feeds.css, tools/extension/feeds/instagram.html, tools/extension/feeds/linkedin-sdui.html, tools/extension/feeds/linkedin.html, tools/extension/feeds/reddit-old.html, tools/extension/feeds/reddit.html, tools/extension/feeds/social.html, tools/extension/feeds/tiktok.html, tools/extension/feeds/vimeo-player.html, tools/extension/feeds/vimeo.html, tools/extension/feeds/x.html, tools/extension/test.mjs): read every line; never batch-picked (pick it alone with --allow-sensitive after review)",
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "460ab099c093ed8540caaaae7fec864daac20cef",
+   "index": 38,
+   "date": "2026-11-11",
+   "subject": "Helium: MDM offers it the extension on Linux and macOS, by Helium's own name for the store (#685) (#725)",
+   "kind": "port",
+   "flags": "PSA",
+   "critical_why": [],
+   "issues": [
+    "685",
+    "725"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Helium: on Linux and macOS, MDM offers the extension to Helium, through Helium's own services: with them allowed, it arrives at Helium's next start (on macOS Helium asks first). It names the store as Helium does: Helium asks Google's update service without its version, and Google answers it \"no update\", which is why the offer MDM writes for Chrome on Windows, which Helium reads there too, never brought it the extension. On Windows MDM's window still opens the store's page in Helium. On Linux the .deb's and .rpm's helper files for everyone cover Helium too, so MDM writes none in its folder in your home. [Browser integration](docs/browser-integration.md#helium) says how to add the extension in Helium, and what to turn on when Helium says **Extension downloads are disabled** ([#685](https://github.com/anefzaoui/misterdownloadmanager/issues/685))."
+   ],
+   "touches_fork": [
+    "README.md",
+    "crates/ipc/src/browsers.rs",
+    "crates/nmhost/src/main.rs",
+    "crates/nmhost/tests/host.rs",
+    "docs/README.md",
+    "docs/browser-integration.md",
+    "docs/getting-started.md",
+    "docs/guide-catch-browser-downloads.md",
+    "tools/extension/e2e.mjs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [
+    "tools/extension/e2e.mjs"
+   ],
+   "conflicts": [
+    "crates/ipc/src/browsers.rs",
+    "crates/nmhost/src/main.rs",
+    "crates/nmhost/tests/host.rs",
+    "docs/README.md",
+    "docs/browser-integration.md",
+    "docs/getting-started.md",
+    "tools/extension/e2e.mjs"
+   ],
+   "after": [
+    "a5a75803718884cbdfe7593ac6e70ebfeae2d133",
+    "380cdb3ed029caff849465b1e01c54d8312c2f03"
+   ],
+   "notes": [
+    "touches crates/ipc/, crates/nmhost/ (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "crates/ipc/src/browsers.rs: added lines name another platform or text direction",
+    "crates/nmhost/src/main.rs: added lines name another platform or text direction",
+    "sensitive (tools/extension/e2e.mjs): read every line; never batch-picked (pick it alone with --allow-sensitive after review)"
+   ],
+   "status": "skipped"
+  },
+  {
+   "sha": "7adb2f9fa191d22e762ffb7e00a5a7dc0001515d",
+   "index": 39,
+   "date": "2026-11-11",
+   "subject": "feat(progress): add safe deferred Rename row on Download status tab (#655)",
+   "kind": "port",
+   "flags": "PA",
+   "critical_why": [],
+   "issues": [
+    "655"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- **Deferred Rename** on a download's **Download status** tab: save a new name while a download runs (**Confirm**, **Enter**, or 3 seconds idle) to rename the finished file's stem (along with yt-dlp subtitle files) or an exclusive finished folder on completion, without touching the live stream or `.mdm.part` state; shared/save or pre-existing folders, split-archive volumes, and single-file torrents keep their original names ([#655](https://github.com/anefzaoui/misterdownloadmanager/pull/655)).",
+    "- File names whose stem is a Windows reserved device name followed by spaces before the dot (`CON .txt`, `LPT1 .log`) are now prefixed with `_` (`_CON .txt`), as `CON.txt` already was ([#655](https://github.com/anefzaoui/misterdownloadmanager/pull/655))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/main.rs",
+    "crates/app/src/model.rs",
+    "crates/app/src/progress.rs",
+    "crates/app/src/torrents.rs",
+    "crates/app/src/win32.rs",
+    "crates/engine/src/naming.rs",
+    "crates/tools/src/gallery.rs",
+    "crates/torrent/src/lib.rs"
+   ],
+   "left_out": [
+    "crates/app/src/unix.rs",
+    "i18n/af.tsv",
+    "i18n/am.tsv",
+    "i18n/ar.tsv",
+    "i18n/as.tsv",
+    "i18n/az.tsv",
+    "i18n/be.tsv",
+    "i18n/bg.tsv",
+    "i18n/bn.tsv",
+    "i18n/bs.tsv",
+    "i18n/ca-es-valencia.tsv",
+    "i18n/ca.tsv",
+    "i18n/chr.tsv",
+    "i18n/cs.tsv",
+    "i18n/cy.tsv",
+    "i18n/da.tsv",
+    "i18n/de.tsv",
+    "i18n/el.tsv",
+    "i18n/en.tsv",
+    "i18n/es-mx.tsv",
+    "i18n/es.tsv",
+    "i18n/et.tsv",
+    "i18n/eu.tsv",
+    "i18n/fa.tsv",
+    "i18n/fi.tsv",
+    "i18n/fil.tsv",
+    "i18n/fr-ca.tsv",
+    "i18n/fr.tsv",
+    "i18n/ga.tsv",
+    "i18n/gd.tsv",
+    "i18n/gl.tsv",
+    "i18n/gu.tsv",
+    "i18n/he.tsv",
+    "i18n/hi.tsv",
+    "i18n/hr.tsv",
+    "i18n/hu.tsv",
+    "i18n/hy.tsv",
+    "i18n/id.tsv",
+    "i18n/is.tsv",
+    "i18n/it.tsv",
+    "i18n/ja.tsv",
+    "i18n/ka.tsv",
+    "i18n/kk.tsv",
+    "i18n/km.tsv",
+    "i18n/kn.tsv",
+    "i18n/ko.tsv",
+    "i18n/kok.tsv",
+    "i18n/lb.tsv",
+    "i18n/lo.tsv",
+    "i18n/lt.tsv",
+    "i18n/lv.tsv",
+    "i18n/mi.tsv",
+    "i18n/mk.tsv",
+    "i18n/ml.tsv",
+    "i18n/mr.tsv",
+    "i18n/ms.tsv",
+    "i18n/mt.tsv",
+    "i18n/nb.tsv",
+    "i18n/ne.tsv",
+    "i18n/nl.tsv",
+    "i18n/nn.tsv",
+    "i18n/or.tsv",
+    "i18n/pa.tsv",
+    "i18n/pl.tsv",
+    "i18n/pt-br.tsv",
+    "i18n/pt.tsv",
+    "i18n/quz.tsv",
+    "i18n/ro.tsv",
+    "i18n/ru.tsv",
+    "i18n/sk.tsv",
+    "i18n/sl.tsv",
+    "i18n/sq.tsv",
+    "i18n/sr-latn.tsv",
+    "i18n/sr.tsv",
+    "i18n/sv.tsv",
+    "i18n/ta.tsv",
+    "i18n/te.tsv",
+    "i18n/th.tsv",
+    "i18n/tr.tsv",
+    "i18n/tt.tsv",
+    "i18n/ug.tsv",
+    "i18n/uk.tsv",
+    "i18n/ur.tsv",
+    "i18n/uz.tsv",
+    "i18n/vi.tsv",
+    "i18n/zh-hans.tsv",
+    "i18n/zh-hant.tsv",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/app.rs",
+    "crates/app/src/main.rs",
+    "crates/app/src/progress.rs",
+    "crates/torrent/src/lib.rs"
+   ],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+    "69aeb6db14846713ea5c3004e1ef3907af98eb3f",
+    "de60fb70ace3a827d800ddf63617cc728076950a"
+   ],
+   "notes": [
+    "touches crates/debrid/ (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "crates/app/src/unix.rs was deleted here, and the fork added crates/app/src/clipboard.rs, crates/app/src/lookwatch.rs, crates/app/src/tray/watch.rs beside it: check whether the fix belongs in one of them",
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "crates/app/src/deferred_rename.rs: added lines name another platform or text direction"
+   ],
+   "status": "skipped"
+  },
+  {
+   "sha": "19296802b99cb96aae4f382ea3d08cef91d11445",
+   "index": 40,
+   "date": "2026-11-11",
+   "subject": "Windows: the tray icon's menu follows MDM's look, dark or light (#682) (#722)",
+   "kind": "port",
+   "flags": "A",
+   "critical_why": [],
+   "issues": [
+    "682",
+    "722"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Windows: the notification-area icon's menu (and the window menu of a title bar MDM draws) follows MDM's look: dark in dark mode or with a dark theme, light otherwise, whatever Windows' own mode is. It was always drawn in Windows' light colours, also on Windows 10 ([#682](https://github.com/anefzaoui/misterdownloadmanager/issues/682))."
+   ],
+   "touches_fork": [
+    "Cargo.toml",
+    "crates/app/src/app.rs",
+    "crates/app/src/win32.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/app.rs"
+   ],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+    "69aeb6db14846713ea5c3004e1ef3907af98eb3f",
+    "de60fb70ace3a827d800ddf63617cc728076950a"
+   ],
+   "notes": [
+    "dependencies change: a new crate's build script and macros run at build; read what it adds",
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "0612aa8a444cc121431407be702ceddbf6bdce65",
+   "index": 41,
+   "date": "2026-11-11",
+   "subject": "Fix/603 colab runtime proxy only (#729)",
+   "kind": "port",
+   "flags": "SA",
+   "critical_why": [],
+   "issues": [
+    "729"
+   ],
+   "same_issue": [],
+   "changelog": [],
+   "touches_fork": [
+    "extension/background.js",
+    "tools/extension/test.mjs"
+   ],
+   "left_out": [
+    "ROADMAP.md"
+   ],
+   "sensitive": [
+    "tools/extension/test.mjs"
+   ],
+   "conflicts": [
+    "tools/extension/test.mjs"
+   ],
+   "after": [
+    "a5a75803718884cbdfe7593ac6e70ebfeae2d133",
+    "380cdb3ed029caff849465b1e01c54d8312c2f03"
+   ],
+   "notes": [
+    "touches extension/background.js (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "sensitive (tools/extension/test.mjs): read every line; never batch-picked (pick it alone with --allow-sensitive after review)"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "50a3985607b73e2fa943d48fbf69b23be838eadc",
+   "index": 42,
+   "date": "2026-11-11",
+   "subject": "Tests: the slow-flush case measures the transfer, not the runner's disk (part of #518) (#728)",
+   "kind": "port",
+   "flags": "A",
+   "critical_why": [],
+   "issues": [
+    "518",
+    "728"
+   ],
+   "same_issue": [],
+   "changelog": [],
+   "touches_fork": [
+    "crates/engine/tests/e2e.rs"
+   ],
+   "left_out": [
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/engine/tests/e2e.rs"
+   ],
+   "after": [
+    "de60fb70ace3a827d800ddf63617cc728076950a"
+   ],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "cc3922efc4b1b714d923a27779a395d1eb20c938",
+   "index": 43,
+   "date": "2026-11-11",
+   "subject": "Extension: the video button's corners and divider follow the text direction (#744)",
+   "kind": "prune",
+   "flags": "A",
+   "critical_why": [],
+   "issues": [
+    "744"
+   ],
+   "same_issue": [],
+   "changelog": [],
+   "touches_fork": [
+    "extension/video.js"
+   ],
+   "left_out": [
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [
+    "380cdb3ed029caff849465b1e01c54d8312c2f03"
+   ],
+   "notes": [
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "skipped"
+  },
+  {
+   "sha": "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e",
+   "index": 44,
+   "date": "2026-11-11",
+   "subject": "Sites that let only browsers through: one more try the way a browser connects (part of #668) (#748)",
+   "kind": "port",
+   "flags": "PSA",
+   "critical_why": [],
+   "issues": [
+    "668",
+    "748"
+   ],
+   "same_issue": [
+    "de60fb70ace3a827d800ddf63617cc728076950a"
+   ],
+   "changelog": [
+    "- Sites that let only browsers through: when a site's bot check (Cloudflare's challenge) or its refusal of programs (FileHippo's *412 Precondition Failed*) turns MDM's own connection away, MDM asks once more connecting the way your browser does (its handshake, HTTP/2 settings and order of headers), with the download's User-Agent and your browser's cookies for that site only, and downloads on that one connection. Proxy, network adapter (it isn't tried when it can't be held to the adapter), speed limits, stop and resume apply as usual, and every other download keeps MDM's own connection. It answers no challenge: a site that still wants one solved in a browser refuses again, and MDM says so as before (Alt+click leaves the download to the browser) ([#668](https://github.com/anefzaoui/misterdownloadmanager/issues/668), [#645](https://github.com/anefzaoui/misterdownloadmanager/issues/645), [#630](https://github.com/anefzaoui/misterdownloadmanager/issues/630)).",
+    "- Building from source needs Rust 1.98 or later, CMake and libclang (and NASM on Windows): the browser-like connection is built on BoringSSL ([#668](https://github.com/anefzaoui/misterdownloadmanager/issues/668))."
+   ],
+   "touches_fork": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/docs-shots.yml",
+    ".github/workflows/release.yml",
+    "CONTRIBUTING.md",
+    "Cargo.lock",
+    "Cargo.toml",
+    "README.md",
+    "crates/app/Cargo.toml",
+    "crates/engine/Cargo.toml",
+    "crates/engine/src/download.rs",
+    "crates/engine/src/lib.rs",
+    "crates/engine/src/net.rs",
+    "crates/engine/tests/e2e.rs",
+    "crates/engine/tests/post.rs",
+    "crates/labserver/src/faults.rs",
+    "crates/labserver/src/server.rs",
+    "docs/browser-integration.md",
+    "docs/troubleshooting.md"
+   ],
+   "left_out": [
+    "Dockerfile",
+    "tools/dev/check-cross.ps1",
+    "tools/lab/linux-vm/setup.sh",
+    "tools/lab/wsl/setup.sh",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/docs-shots.yml",
+    ".github/workflows/release.yml",
+    "rust-toolchain.toml"
+   ],
+   "conflicts": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/release.yml",
+    "Cargo.lock",
+    "crates/engine/src/download.rs",
+    "crates/engine/src/lib.rs"
+   ],
+   "after": [
+    "714f76b4840843bae2841c1c1ab0ee78ea4c6bef",
+    "69aeb6db14846713ea5c3004e1ef3907af98eb3f",
+    "de60fb70ace3a827d800ddf63617cc728076950a",
+    "19296802b99cb96aae4f382ea3d08cef91d11445",
+    "50a3985607b73e2fa943d48fbf69b23be838eadc"
+   ],
+   "notes": [
+    "touches .github/workflows/ (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "dependencies change: a new crate's build script and macros run at build; read what it adds",
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "crates/engine/src/browserlike.rs: added lines name another platform or text direction",
+    "sensitive (.github/workflows/ci.yml, .github/workflows/docs-shots.yml, .github/workflows/release.yml, rust-toolchain.toml): read every line; never batch-picked (pick it alone with --allow-sensitive after review)"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "97e31ad5810e4e4e059683e19cd4d766493b7697",
+   "index": 45,
+   "date": "2026-11-11",
+   "subject": "Video button: qualities in a menu on the page, with Video/Audio tabs and fast look-ups; HLS sizes, duplicate videos, a smooth progress bar (#449)",
+   "kind": "port",
+   "flags": "PSA",
+   "critical_why": [],
+   "issues": [
+    "449"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- **The video's qualities in the page:** a click on the Download video button opens a menu over the video that lists its qualities with their sizes, video and audio in their own tabs (looked up by MDM with yt-dlp). The one you pick downloads at once with only its progress window; MDM's main window stays where it is. **Open in Mister Download Manager\u2026** in the same menu opens the Download video window as before. A stream the page plays (HLS) is listed at once, read by MDM itself; the same video asked again within 10 minutes opens at once; and the pick starts downloading without looking the video up a second time.",
+    "- **Sizes for a stream's qualities:** HLS qualities showed no size; each is now estimated from its bitrate and the video's length, in the Download video window and in the download list.",
+    "- **A video already in the list is no longer downloaded again without a word:** picking the same quality of the same video, from the menu over a video or the Download video window, now follows Options \u2192 Downloads (\"If a duplicate download link is added\": ask, a numbered name, overwrite, or open / resume the one there). Another quality of the same video is not a duplicate.",
+    "- The progress window's bar glides as the download goes, instead of moving in steps four times a second."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/main.rs",
+    "crates/app/src/model.rs",
+    "crates/app/src/progress.rs",
+    "crates/app/src/videodlg.rs",
+    "crates/engine/src/download.rs",
+    "crates/engine/src/lib.rs",
+    "crates/ipc/src/lib.rs",
+    "crates/nmhost/src/main.rs",
+    "crates/tools/src/lib.rs",
+    "crates/tools/tests/fake_ytdlp.rs",
+    "docs/browser-integration.md",
+    "extension/background.js",
+    "extension/video.js",
+    "tools/extension/e2e.mjs",
+    "tools/extension/test.mjs"
+   ],
+   "left_out": [
+    "extension/_locales/am/messages.json",
+    "extension/_locales/ar/messages.json",
+    "extension/_locales/bg/messages.json",
+    "extension/_locales/bn/messages.json",
+    "extension/_locales/ca/messages.json",
+    "extension/_locales/cs/messages.json",
+    "extension/_locales/da/messages.json",
+    "extension/_locales/de/messages.json",
+    "extension/_locales/el/messages.json",
+    "extension/_locales/es/messages.json",
+    "extension/_locales/es_419/messages.json",
+    "extension/_locales/et/messages.json",
+    "extension/_locales/fa/messages.json",
+    "extension/_locales/fi/messages.json",
+    "extension/_locales/fil/messages.json",
+    "extension/_locales/fr/messages.json",
+    "extension/_locales/gu/messages.json",
+    "extension/_locales/he/messages.json",
+    "extension/_locales/hi/messages.json",
+    "extension/_locales/hr/messages.json",
+    "extension/_locales/hu/messages.json",
+    "extension/_locales/id/messages.json",
+    "extension/_locales/it/messages.json",
+    "extension/_locales/ja/messages.json",
+    "extension/_locales/kn/messages.json",
+    "extension/_locales/ko/messages.json",
+    "extension/_locales/lt/messages.json",
+    "extension/_locales/lv/messages.json",
+    "extension/_locales/ml/messages.json",
+    "extension/_locales/mr/messages.json",
+    "extension/_locales/ms/messages.json",
+    "extension/_locales/nl/messages.json",
+    "extension/_locales/no/messages.json",
+    "extension/_locales/pl/messages.json",
+    "extension/_locales/pt_BR/messages.json",
+    "extension/_locales/pt_PT/messages.json",
+    "extension/_locales/ro/messages.json",
+    "extension/_locales/ru/messages.json",
+    "extension/_locales/sk/messages.json",
+    "extension/_locales/sl/messages.json",
+    "extension/_locales/sr/messages.json",
+    "extension/_locales/sv/messages.json",
+    "extension/_locales/ta/messages.json",
+    "extension/_locales/te/messages.json",
+    "extension/_locales/th/messages.json",
+    "extension/_locales/tr/messages.json",
+    "extension/_locales/uk/messages.json",
+    "extension/_locales/vi/messages.json",
+    "extension/_locales/zh_CN/messages.json",
+    "extension/_locales/zh_TW/messages.json",
+    "i18n/af.tsv",
+    "i18n/am.tsv",
+    "i18n/ar.tsv",
+    "i18n/as.tsv",
+    "i18n/az.tsv",
+    "i18n/be.tsv",
+    "i18n/bg.tsv",
+    "i18n/bn.tsv",
+    "i18n/bs.tsv",
+    "i18n/ca-es-valencia.tsv",
+    "i18n/ca.tsv",
+    "i18n/chr.tsv",
+    "i18n/cs.tsv",
+    "i18n/cy.tsv",
+    "i18n/da.tsv",
+    "i18n/de.tsv",
+    "i18n/el.tsv",
+    "i18n/en.tsv",
+    "i18n/es-mx.tsv",
+    "i18n/es.tsv",
+    "i18n/et.tsv",
+    "i18n/eu.tsv",
+    "i18n/fa.tsv",
+    "i18n/fi.tsv",
+    "i18n/fil.tsv",
+    "i18n/fr-ca.tsv",
+    "i18n/fr.tsv",
+    "i18n/ga.tsv",
+    "i18n/gd.tsv",
+    "i18n/gl.tsv",
+    "i18n/gu.tsv",
+    "i18n/he.tsv",
+    "i18n/hi.tsv",
+    "i18n/hr.tsv",
+    "i18n/hu.tsv",
+    "i18n/hy.tsv",
+    "i18n/id.tsv",
+    "i18n/is.tsv",
+    "i18n/it.tsv",
+    "i18n/ja.tsv",
+    "i18n/ka.tsv",
+    "i18n/kk.tsv",
+    "i18n/km.tsv",
+    "i18n/kn.tsv",
+    "i18n/ko.tsv",
+    "i18n/kok.tsv",
+    "i18n/lb.tsv",
+    "i18n/lo.tsv",
+    "i18n/lt.tsv",
+    "i18n/lv.tsv",
+    "i18n/mi.tsv",
+    "i18n/mk.tsv",
+    "i18n/ml.tsv",
+    "i18n/mr.tsv",
+    "i18n/ms.tsv",
+    "i18n/mt.tsv",
+    "i18n/nb.tsv",
+    "i18n/ne.tsv",
+    "i18n/nl.tsv",
+    "i18n/nn.tsv",
+    "i18n/or.tsv",
+    "i18n/pa.tsv",
+    "i18n/pl.tsv",
+    "i18n/pt-br.tsv",
+    "i18n/pt.tsv",
+    "i18n/quz.tsv",
+    "i18n/ro.tsv",
+    "i18n/ru.tsv",
+    "i18n/sk.tsv",
+    "i18n/sl.tsv",
+    "i18n/sq.tsv",
+    "i18n/sr-latn.tsv",
+    "i18n/sr.tsv",
+    "i18n/sv.tsv",
+    "i18n/ta.tsv",
+    "i18n/te.tsv",
+    "i18n/th.tsv",
+    "i18n/tr.tsv",
+    "i18n/tt.tsv",
+    "i18n/ug.tsv",
+    "i18n/uk.tsv",
+    "i18n/ur.tsv",
+    "i18n/uz.tsv",
+    "i18n/vi.tsv",
+    "i18n/zh-hans.tsv",
+    "i18n/zh-hant.tsv",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [
+    "tools/extension/e2e.mjs",
+    "tools/extension/test.mjs"
+   ],
+   "conflicts": [
+    "crates/app/src/app.rs",
+    "crates/app/src/model.rs",
+    "crates/app/src/progress.rs",
+    "crates/app/src/videodlg.rs",
+    "crates/tools/src/lib.rs",
+    "crates/tools/src/video.rs",
+    "crates/tools/tests/fake_ytdlp.rs",
+    "extension/_locales/en/messages.json",
+    "extension/background.js",
+    "extension/video.js",
+    "tools/extension/e2e.mjs"
+   ],
+   "after": [
+    "bbbeb4a08cfd13d067a7d374f8d74a792d8ace61",
+    "a5a75803718884cbdfe7593ac6e70ebfeae2d133",
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+    "de60fb70ace3a827d800ddf63617cc728076950a",
+    "380cdb3ed029caff849465b1e01c54d8312c2f03",
+    "19296802b99cb96aae4f382ea3d08cef91d11445",
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e"
+   ],
+   "notes": [
+    "touches crates/ipc/, crates/nmhost/, extension/background.js (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "the fork never changed some conflicting files: upstream's earlier commits (A) are missing; decide those first, then sort again",
+    "extension/video.js: added lines name another platform or text direction",
+    "tools/extension/e2e.mjs: added lines name another platform or text direction",
+    "sensitive (tools/extension/e2e.mjs, tools/extension/test.mjs): read every line; never batch-picked (pick it alone with --allow-sensitive after review)"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "6b4a76255e3cb943bbaf791ca27fcb3483c00aa0",
+   "index": 46,
+   "date": "2026-11-11",
+   "subject": "Windows: Close hides MDM in the notification area again, and the tray icon's questions leave the window's thread (#750, #747) (#764)",
+   "kind": "port",
+   "flags": "CPA",
+   "critical_why": [
+    "beside the window",
+    "freez",
+    "lost",
+    "window's thread"
+   ],
+   "issues": [
+    "747",
+    "750",
+    "764"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Windows: closing the window hides MDM in the notification area again, as it did before 0.5.2, instead of leaving it minimized in the taskbar with its icon right there, among the hidden icons behind ^ (where Windows puts a new icon). Before hiding the window, MDM asked Windows where the icon was, and Windows 10 and some Windows 11 versions give an icon behind ^ no place; MDM took that for no icon at all. It now also asks whether Windows has the icon, wherever it shows it, and keeps the window in the taskbar only when Windows says it has none (Explorer isn't running, or the icon was lost): when Windows doesn't answer, the window hides as usual, and starting MDM again always brings it back. The same goes for **Minimize to the notification area**, and for a start with Windows, which no longer shows the window minimized after half a minute ([#750](https://github.com/anefzaoui/misterdownloadmanager/issues/750), [#718](https://github.com/anefzaoui/misterdownloadmanager/issues/718), [#754](https://github.com/anefzaoui/misterdownloadmanager/issues/754), [#545](https://github.com/anefzaoui/misterdownloadmanager/issues/545), [#534](https://github.com/anefzaoui/misterdownloadmanager/issues/534), [#527](https://github.com/anefzaoui/misterdownloadmanager/issues/527)).",
+    "- Windows: the window no longer freezes while Explorer is slow to answer about MDM's notification-area icon (\"freeze in misterdownloadmanager::tray::Tray::visible_now\"). The window asked Explorer about the icon every second, and set the icon's tip, on its own thread, and waited as long as Explorer took: 8 seconds in the report. Both now happen beside the window, which goes by Windows' last answer; an answer that is late or missing is never taken for \"no icon\", so a window in the notification area stays there ([#747](https://github.com/anefzaoui/misterdownloadmanager/issues/747); thanks to [@TG-Twilight](https://github.com/TG-Twilight) for the first version, [#697](https://github.com/anefzaoui/misterdownloadmanager/pull/697))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/tray.rs",
+    "crates/app/src/tray/watch.rs",
+    "crates/app/src/win32.rs",
+    "crates/app/tests/close_without_tray.rs",
+    "crates/app/tests/startup_tray.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/app.rs",
+    "crates/app/src/tray.rs",
+    "crates/app/src/tray/watch.rs"
+   ],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+    "de60fb70ace3a827d800ddf63617cc728076950a",
+    "19296802b99cb96aae4f382ea3d08cef91d11445",
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e",
+    "97e31ad5810e4e4e059683e19cd4d766493b7697"
+   ],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "crates/app/src/tray.rs: added lines name another platform or text direction",
+    "crates/app/src/tray/watch.rs: added lines name another platform or text direction"
+   ],
+   "status": "ported"
+  },
+  {
+   "sha": "34ac3595267745a5a07581b07348d8874ac1bd92",
+   "index": 47,
+   "date": "2026-11-11",
+   "subject": "Videos and galleries: the speed limits reach yt-dlp and gallery-dl, and a change starts them again (#708) (#775)",
+   "kind": "port",
+   "flags": "IA",
+   "critical_why": [],
+   "issues": [
+    "708",
+    "775"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Video downloads (and image galleries) keep to the speed limits you set: a video's own limit (its progress window's **Speed Limiter** tab) and the limit for all downloads together now reach yt-dlp and gallery-dl too, not only the limit for one file, and turning the limiter on or off, changing its settings or a video's own limit applies to the videos under way: yt-dlp takes a limit only as it starts, so they stop and start again with the new one, from where they were. Several videos under the limit for all downloads share it evenly: when another starts, the ones running with more than their share start again with it. A video or a gallery started while the Scheduler's download limit is reached now waits, as other downloads do ([#708](https://github.com/anefzaoui/misterdownloadmanager/issues/708))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/model.rs",
+    "docs/connections-and-speed.md",
+    "docs/video.md"
+   ],
+   "left_out": [
+    "i18n/en.tsv",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "docs/video.md"
+   ],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+    "de60fb70ace3a827d800ddf63617cc728076950a",
+    "19296802b99cb96aae4f382ea3d08cef91d11445",
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e",
+    "97e31ad5810e4e4e059683e19cd4d766493b7697"
+   ],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "docs/video.md: added lines name upstream's identity"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "415725d4c12b5b86b2df5df5a23140f07e95c912",
+   "index": 48,
+   "date": "2026-11-11",
+   "subject": "Download windows: a slow drive no longer freezes them; the disk is asked beside the window (#743, #751) (#768)",
+   "kind": "port",
+   "flags": "CA",
+   "critical_why": [
+    "beside the window",
+    "freez"
+   ],
+   "issues": [
+    "743",
+    "751",
+    "768"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- The download windows no longer freeze while a drive is slow to answer (a hard disk waking up, a USB drive, a network or mapped folder). **Download File Info** asked the disk whether its file's name was taken (to number it `(1)`) on the window's own thread, and so did **Show in folder**, **Open folder**, **Open** and the drag handle in **Download complete**, the question to create a missing folder, the look for files a torrent would write into, and the progress window's check of a folder for **Rename**; the window waited for the disk, 8 seconds and more in the reports. They now ask beside the window. Meanwhile Save As shows the name as it is, without `(1)`, and takes the numbered one when the answer comes; a download started before then is numbered as it starts, so nothing is overwritten ([#743](https://github.com/anefzaoui/misterdownloadmanager/issues/743), [#751](https://github.com/anefzaoui/misterdownloadmanager/issues/751))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/dialogs.rs",
+    "crates/app/src/gallerydlg.rs",
+    "crates/app/src/launch.rs",
+    "crates/app/src/model.rs",
+    "crates/app/src/progress.rs",
+    "crates/app/src/torrentdlg.rs",
+    "crates/app/src/videodlg.rs",
+    "crates/app/src/win32.rs",
+    "crates/engine/src/download.rs",
+    "crates/engine/src/naming.rs",
+    "crates/engine/tests/e2e.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/app.rs",
+    "crates/app/src/dialogs.rs",
+    "crates/app/src/progress.rs"
+   ],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+    "de60fb70ace3a827d800ddf63617cc728076950a",
+    "19296802b99cb96aae4f382ea3d08cef91d11445",
+    "50a3985607b73e2fa943d48fbf69b23be838eadc",
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e",
+    "97e31ad5810e4e4e059683e19cd4d766493b7697"
+   ],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "ported"
+  },
+  {
+   "sha": "87cf289f8ded68ccdb651732a273c7359d977b2b",
+   "index": 49,
+   "date": "2026-11-11",
+   "subject": "Icons: the file-type icons no longer fill the log with SVG warnings, so reports keep MDM's own lines (#767) (#774)",
+   "kind": "prune",
+   "flags": "CA",
+   "critical_why": [
+    "crash",
+    "freez"
+   ],
+   "issues": [
+    "767",
+    "774"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Crash and freeze reports keep the log lines that explain them: 25 of the file-type icons carried no-op styles (`marker:none`, `mask:none` and the like) that MDM's SVG reader warned about each time they were drawn, 1,385 lines for one look at them all, and those warnings filled the end of the log a report includes ([#767](https://github.com/anefzaoui/misterdownloadmanager/issues/767)). The icons look the same."
+   ],
+   "touches_fork": [
+    "crates/app/assets/icons/tango/scalable/application-certificate.svg",
+    "crates/app/assets/icons/tango/scalable/application-x-executable.svg",
+    "crates/app/assets/icons/tango/scalable/audio-x-generic.svg",
+    "crates/app/assets/icons/tango/scalable/computer.svg",
+    "crates/app/assets/icons/tango/scalable/folder-open.svg",
+    "crates/app/assets/icons/tango/scalable/folder.svg",
+    "crates/app/assets/icons/tango/scalable/font-x-generic.svg",
+    "crates/app/assets/icons/tango/scalable/image-x-generic.svg",
+    "crates/app/assets/icons/tango/scalable/media-optical.svg",
+    "crates/app/assets/icons/tango/scalable/network-workgroup.svg",
+    "crates/app/assets/icons/tango/scalable/package-x-generic.svg",
+    "crates/app/assets/icons/tango/scalable/text-html.svg",
+    "crates/app/assets/icons/tango/scalable/text-x-generic.svg",
+    "crates/app/assets/icons/tango/scalable/text-x-script.svg",
+    "crates/app/assets/icons/tango/scalable/video-x-generic.svg",
+    "crates/app/assets/icons/tango/scalable/x-office-address-book.svg",
+    "crates/app/assets/icons/tango/scalable/x-office-calendar.svg",
+    "crates/app/assets/icons/tango/scalable/x-office-document-template.svg",
+    "crates/app/assets/icons/tango/scalable/x-office-document.svg",
+    "crates/app/assets/icons/tango/scalable/x-office-drawing-template.svg",
+    "crates/app/assets/icons/tango/scalable/x-office-drawing.svg",
+    "crates/app/assets/icons/tango/scalable/x-office-presentation-template.svg",
+    "crates/app/assets/icons/tango/scalable/x-office-presentation.svg",
+    "crates/app/assets/icons/tango/scalable/x-office-spreadsheet-template.svg",
+    "crates/app/assets/icons/tango/scalable/x-office-spreadsheet.svg"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e"
+   ],
+   "notes": [
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "d8147ab28c1b910e8342ef336ba3f2e879f44921",
+   "index": 50,
+   "date": "2026-11-11",
+   "subject": "Downloads: Akamai's refusal of programs is a bot check, so MDM tries again as a browser connects (#771) (#776)",
+   "kind": "port",
+   "flags": "A",
+   "critical_why": [],
+   "issues": [
+    "771",
+    "776"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Sites behind Akamai that let only browsers through (a 403 \"Access Denied\" page for MDM, the file for a browser, such as HPE's documentation PDFs) now download: MDM takes Akamai's refusal for the bot check it is and tries again the way a browser connects, as it does for Cloudflare's ([#771](https://github.com/anefzaoui/misterdownloadmanager/issues/771))."
+   ],
+   "touches_fork": [
+    "crates/engine/src/download.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/engine/src/download.rs"
+   ],
+   "after": [
+    "de60fb70ace3a827d800ddf63617cc728076950a",
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e",
+    "97e31ad5810e4e4e059683e19cd4d766493b7697"
+   ],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "8e1bf1d0afbd3994b437d4c84ef3e052d9f35975",
+   "index": 51,
+   "date": "2026-11-12",
+   "subject": "Videos in one file come down through MDM's engine; yt-dlp only finds them (part of #769) (#781)",
+   "kind": "port",
+   "flags": "A",
+   "critical_why": [],
+   "issues": [
+    "769",
+    "781"
+   ],
+   "same_issue": [
+    "b35b42d4cab545fb63cba9765681ad4c7f67c4f2",
+    "1e4f8e17179a6ab3199f953b30d91800c0e707c9"
+   ],
+   "changelog": [
+    "- **Videos come down through MDM's own downloader:** yt-dlp now finds a video and its sound, and MDM downloads them the way it downloads any file: over as many connections as **Options \u2192 Connection** gives (8 by default; the progress window's connections table and segment map show them), under the speed limits (a change applies at once), paused and resumed like a file, also after quitting MDM, and with a fresh address asked of yt-dlp when one expires. yt-dlp then joins them and adds the subtitles as before. YouTube's qualities, its sound and most sites' MP4s come this way; live streams, streams in pieces (HLS, DASH, for now) and RTMP, RTSP, MMS or FTP streams are still yt-dlp's to download, and the progress window says so ([#769](https://github.com/anefzaoui/misterdownloadmanager/issues/769)).",
+    "- Wikimedia Commons videos download again: their quality list carries a negative size estimate, which MDM took for a page with no video at all (\"it gave no video information\").",
+    "- Video downloads (and image galleries) keep to the speed limits you set: a video's own limit (its progress window's **Speed Limiter** tab) and the limit for all downloads together, not only the limit for one file, and turning the limiter on or off, changing its settings or a video's own limit applies to the videos under way (at once for a video MDM's own downloader brings in; one yt-dlp still downloads by itself, and a gallery, take a limit only as they start, so they stop and start again with the new one, from where they were). Several such videos under the limit for all downloads share it evenly: when another starts, the ones running with more than their share start again with it. A video or a gallery started while the Scheduler's download limit is reached now waits, as other downloads do ([#708](https://github.com/anefzaoui/misterdownloadmanager/issues/708))."
+   ],
+   "touches_fork": [
+    "Cargo.lock",
+    "crates/app/src/app.rs",
+    "crates/app/src/model.rs",
+    "crates/app/src/progress.rs",
+    "crates/cli/src/lib.rs",
+    "crates/debrid/src/lib.rs",
+    "crates/engine/src/download.rs",
+    "crates/engine/tests/e2e.rs",
+    "crates/tools/Cargo.toml",
+    "crates/tools/src/gallery.rs",
+    "crates/tools/src/lib.rs",
+    "crates/tools/tests/fake_ytdlp.rs",
+    "docs/command-line.md",
+    "docs/video.md"
+   ],
+   "left_out": [
+    "i18n/af.tsv",
+    "i18n/am.tsv",
+    "i18n/ar.tsv",
+    "i18n/as.tsv",
+    "i18n/az.tsv",
+    "i18n/be.tsv",
+    "i18n/bg.tsv",
+    "i18n/bn.tsv",
+    "i18n/bs.tsv",
+    "i18n/ca-es-valencia.tsv",
+    "i18n/ca.tsv",
+    "i18n/chr.tsv",
+    "i18n/cs.tsv",
+    "i18n/cy.tsv",
+    "i18n/da.tsv",
+    "i18n/de.tsv",
+    "i18n/el.tsv",
+    "i18n/en.tsv",
+    "i18n/es-mx.tsv",
+    "i18n/es.tsv",
+    "i18n/et.tsv",
+    "i18n/eu.tsv",
+    "i18n/fa.tsv",
+    "i18n/fi.tsv",
+    "i18n/fil.tsv",
+    "i18n/fr-ca.tsv",
+    "i18n/fr.tsv",
+    "i18n/ga.tsv",
+    "i18n/gd.tsv",
+    "i18n/gl.tsv",
+    "i18n/gu.tsv",
+    "i18n/he.tsv",
+    "i18n/hi.tsv",
+    "i18n/hr.tsv",
+    "i18n/hu.tsv",
+    "i18n/hy.tsv",
+    "i18n/id.tsv",
+    "i18n/is.tsv",
+    "i18n/it.tsv",
+    "i18n/ja.tsv",
+    "i18n/ka.tsv",
+    "i18n/kk.tsv",
+    "i18n/km.tsv",
+    "i18n/kn.tsv",
+    "i18n/ko.tsv",
+    "i18n/kok.tsv",
+    "i18n/lb.tsv",
+    "i18n/lo.tsv",
+    "i18n/lt.tsv",
+    "i18n/lv.tsv",
+    "i18n/mi.tsv",
+    "i18n/mk.tsv",
+    "i18n/ml.tsv",
+    "i18n/mr.tsv",
+    "i18n/ms.tsv",
+    "i18n/mt.tsv",
+    "i18n/nb.tsv",
+    "i18n/ne.tsv",
+    "i18n/nl.tsv",
+    "i18n/nn.tsv",
+    "i18n/or.tsv",
+    "i18n/pa.tsv",
+    "i18n/pl.tsv",
+    "i18n/pt-br.tsv",
+    "i18n/pt.tsv",
+    "i18n/quz.tsv",
+    "i18n/ro.tsv",
+    "i18n/ru.tsv",
+    "i18n/site/ar.json",
+    "i18n/site/bn.json",
+    "i18n/site/de.json",
+    "i18n/site/es.json",
+    "i18n/site/fa.json",
+    "i18n/site/fr.json",
+    "i18n/site/hi.json",
+    "i18n/site/id.json",
+    "i18n/site/it.json",
+    "i18n/site/ja.json",
+    "i18n/site/ko.json",
+    "i18n/site/nl.json",
+    "i18n/site/pl.json",
+    "i18n/site/pt-br.json",
+    "i18n/site/pt.json",
+    "i18n/site/ru.json",
+    "i18n/site/th.json",
+    "i18n/site/tr.json",
+    "i18n/site/uk.json",
+    "i18n/site/vi.json",
+    "i18n/site/zh-hans.json",
+    "i18n/sk.tsv",
+    "i18n/sl.tsv",
+    "i18n/sq.tsv",
+    "i18n/sr-latn.tsv",
+    "i18n/sr.tsv",
+    "i18n/sv.tsv",
+    "i18n/ta.tsv",
+    "i18n/te.tsv",
+    "i18n/th.tsv",
+    "i18n/tr.tsv",
+    "i18n/tt.tsv",
+    "i18n/ug.tsv",
+    "i18n/uk.tsv",
+    "i18n/ur.tsv",
+    "i18n/uz.tsv",
+    "i18n/vi.tsv",
+    "i18n/zh-hans.tsv",
+    "i18n/zh-hant.tsv",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/app.rs",
+    "crates/app/src/model.rs",
+    "crates/app/src/progress.rs",
+    "crates/cli/src/lib.rs",
+    "crates/debrid/src/lib.rs",
+    "crates/engine/src/download.rs",
+    "crates/tools/src/lib.rs",
+    "crates/tools/src/video.rs",
+    "crates/tools/tests/fake_ytdlp.rs",
+    "docs/command-line.md",
+    "docs/video.md"
+   ],
+   "after": [
+    "bbbeb4a08cfd13d067a7d374f8d74a792d8ace61",
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+    "69aeb6db14846713ea5c3004e1ef3907af98eb3f",
+    "de60fb70ace3a827d800ddf63617cc728076950a",
+    "19296802b99cb96aae4f382ea3d08cef91d11445",
+    "50a3985607b73e2fa943d48fbf69b23be838eadc",
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e",
+    "97e31ad5810e4e4e059683e19cd4d766493b7697",
+    "d8147ab28c1b910e8342ef336ba3f2e879f44921"
+   ],
+   "notes": [
+    "touches crates/debrid/ (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "dependencies change: a new crate's build script and macros run at build; read what it adds",
+    "the fork never changed some conflicting files: upstream's earlier commits (A) are missing; decide those first, then sort again"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "ff0560fd399dcee9b210b141120c4dff9d358298",
+   "index": 52,
+   "date": "2026-11-12",
+   "subject": "Windows: the C runtime is inside MDM's programs, so a missing or 32-bit VCRUNTIME140.dll can't stop them (#785) (#786)",
+   "kind": "prune",
+   "flags": "CS",
+   "critical_why": [
+    "can't stop"
+   ],
+   "issues": [
+    "785",
+    "786"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Windows: MDM's programs carry Microsoft's C runtime inside them instead of loading it from Windows (`VCRUNTIME140.dll`), so a PC without that runtime, or with a 32-bit copy where the 64-bit one should be, no longer stops them: setup's last step failed there with \"The application was unable to start correctly (0xc000007b)\" ([#785](https://github.com/anefzaoui/misterdownloadmanager/issues/785))."
+   ],
+   "touches_fork": [
+    ".cargo/config.toml",
+    "tools/installer/build.ps1"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [
+    ".cargo/config.toml",
+    "tools/installer/build.ps1"
+   ],
+   "conflicts": [],
+   "after": [],
+   "notes": [
+    "touches tools/installer/ (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "sensitive (.cargo/config.toml, tools/installer/build.ps1): read every line; never batch-picked (pick it alone with --allow-sensitive after review)",
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "b35b42d4cab545fb63cba9765681ad4c7f67c4f2",
+   "index": 53,
+   "date": "2026-11-12",
+   "subject": "Streams in pieces (HLS, DASH) come down through MDM's engine (part of #769, #531) (#783)",
+   "kind": "port",
+   "flags": "A",
+   "critical_why": [],
+   "issues": [
+    "531",
+    "769",
+    "783"
+   ],
+   "same_issue": [
+    "8e1bf1d0afbd3994b437d4c84ef3e052d9f35975",
+    "1e4f8e17179a6ab3199f953b30d91800c0e707c9"
+   ],
+   "changelog": [
+    "- Videos a site sends in pieces (HLS and DASH streams, as many sites other than YouTube do) download several pieces at once, as many as **Options \u2192 Connection** gives a file (8 by default), through MDM's own downloader: against a test server that slows each connection, 4 at once took under a third of the time, 8 under a fifth. They keep to the speed limits, a change applying at once; pieces encrypted with AES-128 are decrypted with their playlist's key, and pieces whose addresses expire are asked of yt-dlp again. The command line's `video-get` and `playlist-get` take `-c` for it ([#531](https://github.com/anefzaoui/misterdownloadmanager/issues/531), [#769](https://github.com/anefzaoui/misterdownloadmanager/issues/769)).",
+    "- **Videos come down through MDM's own downloader:** yt-dlp now finds a video and its sound, and MDM downloads them the way it downloads any file: over as many connections as **Options \u2192 Connection** gives (8 by default; the progress window's connections table and segment map show them), under the speed limits (a change applies at once), paused and resumed like a file, also after quitting MDM, and with a fresh address asked of yt-dlp when one expires. yt-dlp then joins them and adds the subtitles as before. YouTube's qualities, its sound, most sites' MP4s and streams in pieces (HLS, DASH) come this way; live streams and RTMP, RTSP, MMS or FTP streams are still yt-dlp's to download, and the progress window says so ([#769](https://github.com/anefzaoui/misterdownloadmanager/issues/769))."
+   ],
+   "touches_fork": [
+    "Cargo.lock",
+    "crates/app/src/app.rs",
+    "crates/app/src/progress.rs",
+    "crates/cli/src/lib.rs",
+    "crates/tools/src/lib.rs",
+    "crates/tools/tests/fake_ytdlp.rs",
+    "docs/command-line.md",
+    "docs/video.md"
+   ],
+   "left_out": [
+    "i18n/en.tsv",
+    "i18n/site/ar.json",
+    "i18n/site/bn.json",
+    "i18n/site/de.json",
+    "i18n/site/es.json",
+    "i18n/site/fa.json",
+    "i18n/site/fr.json",
+    "i18n/site/hi.json",
+    "i18n/site/id.json",
+    "i18n/site/it.json",
+    "i18n/site/ja.json",
+    "i18n/site/ko.json",
+    "i18n/site/nl.json",
+    "i18n/site/pl.json",
+    "i18n/site/pt-br.json",
+    "i18n/site/pt.json",
+    "i18n/site/ru.json",
+    "i18n/site/th.json",
+    "i18n/site/tr.json",
+    "i18n/site/uk.json",
+    "i18n/site/vi.json",
+    "i18n/site/zh-hans.json",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/app.rs",
+    "crates/app/src/progress.rs",
+    "crates/cli/src/lib.rs",
+    "crates/tools/src/streams.rs",
+    "crates/tools/src/video.rs",
+    "crates/tools/tests/fake_ytdlp.rs",
+    "docs/command-line.md",
+    "docs/video.md"
+   ],
+   "after": [
+    "bbbeb4a08cfd13d067a7d374f8d74a792d8ace61",
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+    "69aeb6db14846713ea5c3004e1ef3907af98eb3f",
+    "de60fb70ace3a827d800ddf63617cc728076950a",
+    "19296802b99cb96aae4f382ea3d08cef91d11445",
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e",
+    "97e31ad5810e4e4e059683e19cd4d766493b7697",
+    "8e1bf1d0afbd3994b437d4c84ef3e052d9f35975"
+   ],
+   "notes": [
+    "dependencies change: a new crate's build script and macros run at build; read what it adds",
+    "the fork no longer has crates/tools/src/streams.rs (deleted after the fork point, or by an earlier pick): if that was on purpose, skip this",
+    "the fork never changed some conflicting files: upstream's earlier commits (A) are missing; decide those first, then sort again"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "1e4f8e17179a6ab3199f953b30d91800c0e707c9",
+   "index": 54,
+   "date": "2026-11-12",
+   "subject": "Image galleries come down through MDM's engine; gallery-dl lists the files (fixes #769) (#784)",
+   "kind": "port",
+   "flags": "A",
+   "critical_why": [],
+   "issues": [
+    "769",
+    "784"
+   ],
+   "same_issue": [
+    "8e1bf1d0afbd3994b437d4c84ef3e052d9f35975",
+    "b35b42d4cab545fb63cba9765681ad4c7f67c4f2"
+   ],
+   "changelog": [
+    "- **Videos come down through MDM's own downloader:** yt-dlp now finds a video and its sound, and MDM downloads them the way it downloads any file: over as many connections as **Options \u2192 Connection** gives (8 by default; the progress window's connections table and segment map show them), under the speed limits (a change applies at once), paused and resumed like a file, also after quitting MDM, and with a fresh address asked of yt-dlp when one expires. yt-dlp then joins them and adds the subtitles as before. YouTube's qualities, its sound, most sites' MP4s and streams in pieces (HLS, DASH) come this way, and so do an image gallery's pictures, which gallery-dl lists (gallery-dl 1.32 and later; it then fetches only what MDM couldn't have); live streams and RTMP, RTSP, MMS or FTP streams are still yt-dlp's to download, and the progress window says so ([#769](https://github.com/anefzaoui/misterdownloadmanager/issues/769))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/model.rs",
+    "crates/cli/src/lib.rs",
+    "crates/tools/src/gallery.rs",
+    "docs/command-line.md",
+    "docs/connections-and-speed.md",
+    "docs/galleries.md",
+    "docs/video.md"
+   ],
+   "left_out": [
+    "i18n/site/ar.json",
+    "i18n/site/bn.json",
+    "i18n/site/de.json",
+    "i18n/site/es.json",
+    "i18n/site/fa.json",
+    "i18n/site/fr.json",
+    "i18n/site/hi.json",
+    "i18n/site/id.json",
+    "i18n/site/it.json",
+    "i18n/site/ja.json",
+    "i18n/site/ko.json",
+    "i18n/site/nl.json",
+    "i18n/site/pl.json",
+    "i18n/site/pt-br.json",
+    "i18n/site/pt.json",
+    "i18n/site/ru.json",
+    "i18n/site/th.json",
+    "i18n/site/tr.json",
+    "i18n/site/uk.json",
+    "i18n/site/vi.json",
+    "i18n/site/zh-hans.json",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/model.rs",
+    "crates/tools/src/gallery.rs",
+    "crates/tools/src/pieces.rs",
+    "crates/tools/src/streams.rs",
+    "docs/command-line.md",
+    "docs/video.md"
+   ],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+    "de60fb70ace3a827d800ddf63617cc728076950a",
+    "19296802b99cb96aae4f382ea3d08cef91d11445",
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e",
+    "97e31ad5810e4e4e059683e19cd4d766493b7697",
+    "8e1bf1d0afbd3994b437d4c84ef3e052d9f35975",
+    "b35b42d4cab545fb63cba9765681ad4c7f67c4f2"
+   ],
+   "notes": [
+    "the fork no longer has crates/tools/src/pieces.rs, crates/tools/src/streams.rs (deleted after the fork point, or by an earlier pick): if that was on purpose, skip this",
+    "the fork never changed some conflicting files: upstream's earlier commits (A) are missing; decide those first, then sort again"
+   ],
+   "status": "deferred"
+  },
+  {
+   "sha": "c1c8417d69ed1a19740a80214cb65d88ff786d5b",
+   "index": 55,
+   "date": "2026-11-12",
+   "subject": "Downloads to a slow disk: no freezes past the first gigabytes, no healthy connection cut as slow (#782) (#791)",
+   "kind": "port",
+   "flags": "CA",
+   "critical_why": [
+    "crash",
+    "freez"
+   ],
+   "issues": [
+    "782",
+    "791"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Fast downloads to a hard disk no longer freeze for 7 to 10 seconds once they are a few gigabytes in, and MDM no longer replaces healthy connections as \"much slower than the other connections\". Past the first gigabytes the system's cache is full and the disk sets the pace; each save of the resume state then had more to write than the last (spaced out by how long the last one took), until one took over 10 seconds and the download stood still. And a connection that had waited for the disk read what the system kept for it meanwhile in a burst, which MDM took for its speed, so every other connection looked four times slower and was cut, often all at once. Now the connections keep receiving into memory while the disk takes their writes (up to 256 MB per download), the resume state is saved to the disk only when that won't stop them, a connection's speed counts all the time it took (waits for the disk included), and no connection is replaced while the disk sets the pace. On a disk slower than the network the download goes at the disk's speed, evenly: with a test disk of 70 MB/s behind a 1 GB cache, a 6 GB download that froze for 7 to 12 seconds now never drops under 69 MB/s once the cache is full, and on Linux with the disk held to 60 MB/s, where MDM cut 67 connections in a typical 6 GB download (up to 111), it now cuts none or one. What a crash or power cut makes MDM download again is what came since the last save: on a disk that falls behind, everything since it did; pausing and stopping still save everything ([#782](https://github.com/anefzaoui/misterdownloadmanager/issues/782))."
+   ],
+   "touches_fork": [
+    "crates/engine/examples/slow_disk.rs",
+    "crates/engine/src/download.rs",
+    "crates/engine/src/lib.rs",
+    "crates/engine/src/slowdisk.rs",
+    "crates/engine/tests/e2e.rs",
+    "crates/labserver/src/faults.rs",
+    "crates/labserver/src/server.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/engine/src/download.rs",
+    "crates/engine/src/slowdisk.rs"
+   ],
+   "after": [
+    "de60fb70ace3a827d800ddf63617cc728076950a",
+    "50a3985607b73e2fa943d48fbf69b23be838eadc",
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e",
+    "97e31ad5810e4e4e059683e19cd4d766493b7697",
+    "d8147ab28c1b910e8342ef336ba3f2e879f44921",
+    "8e1bf1d0afbd3994b437d4c84ef3e052d9f35975",
+    "b35b42d4cab545fb63cba9765681ad4c7f67c4f2"
+   ],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": "ported"
+  },
+  {
+   "sha": "68ba617edb3d29af691d7410079c5ab773c766a5",
+   "index": 56,
+   "date": "2026-11-12",
+   "subject": "Windows 10: the progress window without a black band above its title bar (#620) (#652)",
+   "kind": "prune",
+   "flags": "A",
+   "critical_why": [],
+   "issues": [
+    "620",
+    "652"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Windows 10: the download's progress window no longer shows a black band above its title bar, with its contents moved down and every click landing above the button it showed (you had to click above a button for it to work); the same goes for the dialogs with a Metro, Luna, Aero or Aqua title bar. These windows kept the system's title bar style underneath MDM's own, hidden, and the picture was placed where that hidden title bar would have ended, as it was on a Windows 11 Insider build, fixed there in 0.5.0 ([#208](https://github.com/anefzaoui/misterdownloadmanager/issues/208)). They are now framed on Windows 10 as on Windows 11, with no title bar style at all, and a thin border round them ([#620](https://github.com/anefzaoui/misterdownloadmanager/issues/620))."
+   ],
+   "touches_fork": [
+    "crates/app/src/win32.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [],
+   "after": [
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+    "de60fb70ace3a827d800ddf63617cc728076950a",
+    "19296802b99cb96aae4f382ea3d08cef91d11445",
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e"
+   ],
+   "notes": [
+    "applies, but in files the fork changed: review the logic, not just the text"
+   ],
+   "status": "picked"
+  },
+  {
+   "sha": "ac2e425299471343d045c0b52631df6d99c2d217",
+   "index": 57,
+   "date": "2026-11-12",
+   "subject": "Extension: the Download video button, redesigned: the best quality named before the click, every state says what happened (#703, part of #741) (#778)",
+   "kind": "port",
+   "flags": "PSA",
+   "critical_why": [],
+   "issues": [
+    "703",
+    "741",
+    "778"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- **The Download video button, redesigned** (building on the qualities' menu below): a small light tab at the video's top corner (dark in Windows' dark mode) with MDM's logo, a green **Download video** part, an arrow for its list and **\u2715** to hide it on this video. MDM looks the video up as soon as the button appears, so the button names the best quality before you click (**1080p**, **4K**), and one click downloads it at once, even while MDM is still looking; a video that plays a plain file is downloaded as that file, with no look-up. Its list (the arrow) starts with **Download best**, then one numbered line per quality, video and sound apart, with its type, frame rate or bitrate and size, opens the Download video window for the rest (**All qualities and subtitles\u2026**), and hides it or keeps it off the site. After a click it says what happened in its own colour, with the one action that helps: **Added to MDM** with **Show**, **Open the post to download it** with **Open post**, **MDM didn't answer** with **Get MDM** and **Retry**, **Off on this site** with **Turn on**, and **Protected video \u00b7 can't be saved**. It mirrors in right-to-left languages, shows a ring around it for the keyboard, shrinks to its logo, arrow and \u2715 on a small video or where its words wouldn't fit, and shows the edge and the spots it snaps to while you drag it ([#703](https://github.com/anefzaoui/misterdownloadmanager/issues/703)).",
+    "- Wikimedia Commons videos download again: their quality list carries a negative size estimate, which MDM took for a page with no video at all (\"it gave no video information\"), and so did one yt-dlp says is neither a plain file nor not (`\"direct\": null`).",
+    "- The Download video button no longer comes back when you play or pause the video: only moving the pointer over it shows it. It fades 1.5 seconds after the pointer stops (2.6 before), and at once when the pointer leaves the video (part of [#741](https://github.com/anefzaoui/misterdownloadmanager/issues/741))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/ipc/src/lib.rs",
+    "crates/nmhost/src/main.rs",
+    "docs/browser-integration.md",
+    "extension/background.js",
+    "extension/popup.js",
+    "extension/video.js",
+    "tools/extension/e2e.mjs",
+    "tools/extension/test.mjs"
+   ],
+   "left_out": [
+    "extension/_locales/am/messages.json",
+    "extension/_locales/ar/messages.json",
+    "extension/_locales/bg/messages.json",
+    "extension/_locales/bn/messages.json",
+    "extension/_locales/ca/messages.json",
+    "extension/_locales/cs/messages.json",
+    "extension/_locales/da/messages.json",
+    "extension/_locales/de/messages.json",
+    "extension/_locales/el/messages.json",
+    "extension/_locales/es/messages.json",
+    "extension/_locales/es_419/messages.json",
+    "extension/_locales/et/messages.json",
+    "extension/_locales/fa/messages.json",
+    "extension/_locales/fi/messages.json",
+    "extension/_locales/fil/messages.json",
+    "extension/_locales/fr/messages.json",
+    "extension/_locales/gu/messages.json",
+    "extension/_locales/he/messages.json",
+    "extension/_locales/hi/messages.json",
+    "extension/_locales/hr/messages.json",
+    "extension/_locales/hu/messages.json",
+    "extension/_locales/id/messages.json",
+    "extension/_locales/it/messages.json",
+    "extension/_locales/ja/messages.json",
+    "extension/_locales/kn/messages.json",
+    "extension/_locales/ko/messages.json",
+    "extension/_locales/lt/messages.json",
+    "extension/_locales/lv/messages.json",
+    "extension/_locales/ml/messages.json",
+    "extension/_locales/mr/messages.json",
+    "extension/_locales/ms/messages.json",
+    "extension/_locales/nl/messages.json",
+    "extension/_locales/no/messages.json",
+    "extension/_locales/pl/messages.json",
+    "extension/_locales/pt_BR/messages.json",
+    "extension/_locales/pt_PT/messages.json",
+    "extension/_locales/ro/messages.json",
+    "extension/_locales/ru/messages.json",
+    "extension/_locales/sk/messages.json",
+    "extension/_locales/sl/messages.json",
+    "extension/_locales/sr/messages.json",
+    "extension/_locales/sv/messages.json",
+    "extension/_locales/ta/messages.json",
+    "extension/_locales/te/messages.json",
+    "extension/_locales/th/messages.json",
+    "extension/_locales/tr/messages.json",
+    "extension/_locales/uk/messages.json",
+    "extension/_locales/vi/messages.json",
+    "extension/_locales/zh_CN/messages.json",
+    "extension/_locales/zh_TW/messages.json",
+    "i18n/af.tsv",
+    "i18n/am.tsv",
+    "i18n/ar.tsv",
+    "i18n/as.tsv",
+    "i18n/az.tsv",
+    "i18n/be.tsv",
+    "i18n/bg.tsv",
+    "i18n/bn.tsv",
+    "i18n/bs.tsv",
+    "i18n/ca-es-valencia.tsv",
+    "i18n/ca.tsv",
+    "i18n/chr.tsv",
+    "i18n/cs.tsv",
+    "i18n/cy.tsv",
+    "i18n/da.tsv",
+    "i18n/de.tsv",
+    "i18n/el.tsv",
+    "i18n/en.tsv",
+    "i18n/es-mx.tsv",
+    "i18n/es.tsv",
+    "i18n/et.tsv",
+    "i18n/eu.tsv",
+    "i18n/fa.tsv",
+    "i18n/fi.tsv",
+    "i18n/fil.tsv",
+    "i18n/fr-ca.tsv",
+    "i18n/fr.tsv",
+    "i18n/ga.tsv",
+    "i18n/gd.tsv",
+    "i18n/gl.tsv",
+    "i18n/gu.tsv",
+    "i18n/he.tsv",
+    "i18n/hi.tsv",
+    "i18n/hr.tsv",
+    "i18n/hu.tsv",
+    "i18n/hy.tsv",
+    "i18n/id.tsv",
+    "i18n/is.tsv",
+    "i18n/it.tsv",
+    "i18n/ja.tsv",
+    "i18n/ka.tsv",
+    "i18n/kk.tsv",
+    "i18n/km.tsv",
+    "i18n/kn.tsv",
+    "i18n/ko.tsv",
+    "i18n/kok.tsv",
+    "i18n/lb.tsv",
+    "i18n/lo.tsv",
+    "i18n/lt.tsv",
+    "i18n/lv.tsv",
+    "i18n/mi.tsv",
+    "i18n/mk.tsv",
+    "i18n/ml.tsv",
+    "i18n/mr.tsv",
+    "i18n/ms.tsv",
+    "i18n/mt.tsv",
+    "i18n/nb.tsv",
+    "i18n/ne.tsv",
+    "i18n/nl.tsv",
+    "i18n/nn.tsv",
+    "i18n/or.tsv",
+    "i18n/pa.tsv",
+    "i18n/pl.tsv",
+    "i18n/pt-br.tsv",
+    "i18n/pt.tsv",
+    "i18n/quz.tsv",
+    "i18n/ro.tsv",
+    "i18n/ru.tsv",
+    "i18n/sk.tsv",
+    "i18n/sl.tsv",
+    "i18n/sq.tsv",
+    "i18n/sr-latn.tsv",
+    "i18n/sr.tsv",
+    "i18n/sv.tsv",
+    "i18n/ta.tsv",
+    "i18n/te.tsv",
+    "i18n/th.tsv",
+    "i18n/tr.tsv",
+    "i18n/tt.tsv",
+    "i18n/ug.tsv",
+    "i18n/uk.tsv",
+    "i18n/ur.tsv",
+    "i18n/uz.tsv",
+    "i18n/vi.tsv",
+    "i18n/zh-hans.tsv",
+    "i18n/zh-hant.tsv",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [
+    "tools/extension/e2e.mjs",
+    "tools/extension/test.mjs"
+   ],
+   "conflicts": [
+    "crates/app/src/app.rs",
+    "crates/app/src/videolookup.rs",
+    "crates/ipc/src/api.rs",
+    "crates/nmhost/src/main.rs",
+    "crates/tools/src/resolve.rs",
+    "docs/automation-api.schema.json",
+    "docs/browser-integration.md",
+    "extension/_locales/en/messages.json",
+    "extension/background.js",
+    "extension/video.js",
+    "tools/extension/e2e.mjs",
+    "tools/extension/test.mjs"
+   ],
+   "after": [
+    "bbbeb4a08cfd13d067a7d374f8d74a792d8ace61",
+    "a5a75803718884cbdfe7593ac6e70ebfeae2d133",
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+    "de60fb70ace3a827d800ddf63617cc728076950a",
+    "380cdb3ed029caff849465b1e01c54d8312c2f03",
+    "19296802b99cb96aae4f382ea3d08cef91d11445",
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e",
+    "97e31ad5810e4e4e059683e19cd4d766493b7697",
+    "8e1bf1d0afbd3994b437d4c84ef3e052d9f35975",
+    "b35b42d4cab545fb63cba9765681ad4c7f67c4f2",
+    "1e4f8e17179a6ab3199f953b30d91800c0e707c9"
+   ],
+   "notes": [
+    "touches crates/ipc/, crates/nmhost/, extension/background.js (security, IPC, crash or release code): read it for a fix that matters even when its subject doesn't say so",
+    "the fork no longer has crates/app/src/videolookup.rs (deleted after the fork point, or by an earlier pick): if that was on purpose, skip this",
+    "the fork never changed some conflicting files: upstream's earlier commits (A) are missing; decide those first, then sort again",
+    "extension/video.js: added lines name another platform or text direction",
+    "sensitive (tools/extension/e2e.mjs, tools/extension/test.mjs): read every line; never batch-picked (pick it alone with --allow-sensitive after review)"
+   ],
+   "status": null
+  },
+  {
+   "sha": "4d1e47cadf0e046e06797d36b602d52c1dba7383",
+   "index": 58,
+   "date": "2026-11-12",
+   "subject": "Theme: Windows' light or dark and the theme files read beside the window (#719) (#735)",
+   "kind": "port",
+   "flags": "CPA",
+   "critical_why": [
+    "beside the window",
+    "freez"
+   ],
+   "issues": [
+    "719",
+    "735"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- Windows: the window no longer freezes while it checks whether Windows is in light or dark mode. Every 2 seconds the window read Windows' app mode (and, with the **Native** theme, its accent and contrast colours) from the registry, and looked at the themes folder and pywal's colours on the disk, on its own thread; where the registry took seconds to answer, the window waited that long (\"freeze in misterdownloadmanager::theme::update\"). A thread beside the window now reads them, at once when Windows says one of those settings changed, and the window shows its last answer without waiting: switching Windows between light and dark, a new accent, a theme file added to the themes folder and pywal's new colours are followed as before ([#719](https://github.com/anefzaoui/misterdownloadmanager/issues/719))."
+   ],
+   "touches_fork": [
+    "crates/app/src/app.rs",
+    "crates/app/src/lookwatch.rs",
+    "crates/app/src/main.rs",
+    "crates/app/src/native.rs",
+    "crates/app/src/theme.rs",
+    "crates/app/src/themefile.rs",
+    "crates/app/src/win32.rs"
+   ],
+   "left_out": [
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "crates/app/src/app.rs",
+    "crates/app/src/lookwatch.rs",
+    "crates/app/src/native.rs",
+    "crates/app/src/theme.rs"
+   ],
+   "after": [
+    "70599ffc0a2ff2703bab7d1d52b749c91582b471",
+    "7dc0e3a9567b26ca210c6afcff68227011fee769",
+    "b488f2b539d9063ade0fa8b4904665c5f2447ebb",
+    "de60fb70ace3a827d800ddf63617cc728076950a",
+    "19296802b99cb96aae4f382ea3d08cef91d11445",
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e",
+    "97e31ad5810e4e4e059683e19cd4d766493b7697",
+    "8e1bf1d0afbd3994b437d4c84ef3e052d9f35975",
+    "b35b42d4cab545fb63cba9765681ad4c7f67c4f2",
+    "1e4f8e17179a6ab3199f953b30d91800c0e707c9",
+    "ac2e425299471343d045c0b52631df6d99c2d217"
+   ],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply",
+    "crates/app/src/lookwatch.rs: added lines name another platform or text direction"
+   ],
+   "status": "ported"
+  },
+  {
+   "sha": "0b5379a7c270f9e2e4667a0e4cc1d1442d2ab5da",
+   "index": 59,
+   "date": "2026-11-12",
+   "subject": "Docs: the ROADMAP says what shipped, and WinGet in the install steps (#798) (#806)",
+   "kind": "port",
+   "flags": "A",
+   "critical_why": [],
+   "issues": [
+    "798",
+    "806"
+   ],
+   "same_issue": [],
+   "changelog": [
+    "- **Upload speed for torrents**, next to **Transfer rate** (part of [#357](https://github.com/anefzaoui/misterdownloadmanager/issues/357)): what a torrent sends to peers, in bytes per second, blank for anything but a torrent. A layout saved before it gets it between **Transfer rate** and **Peers**.",
+    "- **Smooth text on Windows, and finer interface sizes:** **View \u2192 Text \u2192 Smooth** draws letters anti-aliased at their own size instead of as thick, whole-pixel letters that are hard to read on a 1440p screen; **Classic**, the default, keeps the look MDM had. **View \u2192 Interface size** now offers 110 %, 115 % and 120 % between 100 % and 125 %."
+   ],
+   "touches_fork": [
+    "README.md",
+    "docs/getting-started.md",
+    "website/download.html"
+   ],
+   "left_out": [
+    "i18n/site/ar.json",
+    "i18n/site/bn.json",
+    "i18n/site/de.json",
+    "i18n/site/es.json",
+    "i18n/site/fa.json",
+    "i18n/site/fr.json",
+    "i18n/site/hi.json",
+    "i18n/site/id.json",
+    "i18n/site/it.json",
+    "i18n/site/ja.json",
+    "i18n/site/ko.json",
+    "i18n/site/nl.json",
+    "i18n/site/pl.json",
+    "i18n/site/pt-br.json",
+    "i18n/site/pt.json",
+    "i18n/site/ru.json",
+    "i18n/site/th.json",
+    "i18n/site/tr.json",
+    "i18n/site/uk.json",
+    "i18n/site/vi.json",
+    "i18n/site/zh-hans.json",
+    "CHANGELOG.md",
+    "ROADMAP.md"
+   ],
+   "sensitive": [],
+   "conflicts": [
+    "README.md",
+    "docs/getting-started.md"
+   ],
+   "after": [
+    "0067cd0a7a1f3d3dc8e3a3ea9a1ce476490eef3e"
+   ],
+   "notes": [
+    "the fork changed the conflicting files: port by hand now; never take a feature only to make this apply"
+   ],
+   "status": null
+  }
+ ]
+}
