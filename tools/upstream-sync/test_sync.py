@@ -368,5 +368,68 @@ def main() -> None:
     print("ok: sync.py sorts, picks, records and refuses as it should")
 
 
+def lock_case() -> None:
+    """`pick --lock` through to the end, on a small Cargo workspace (path crates: no network):
+    upstream bumps a crate, the fork added one, and only Cargo.lock conflicts."""
+    cargo = shutil.which("cargo")
+    if not cargo:
+        print("skipped: the --lock pick (cargo is not on PATH)")
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        r = Path(tmp)
+        git(r, "init", "-q", "-b", "main")
+        for k, v in {"user.name": "T", "user.email": "t@example.com", "commit.gpgsign": "false",
+                     "core.autocrlf": "false", "protocol.https.allow": "never"}.items():
+            git(r, "config", k, v)
+
+        def crate(name: str, version: str, deps: str = "") -> None:
+            write(r, f"{name}/Cargo.toml", f'[package]\nname = "{name}"\nversion = "{version}"\n'
+                  f'edition = "2021"\n\n[dependencies]\n{deps}')
+            write(r, f"{name}/src/lib.rs", "")
+
+        def lockfile() -> None:
+            run(r, cargo, "generate-lockfile", "--offline")
+
+        write(r, "Cargo.toml", '[workspace]\nmembers = ["app", "dep"]\nresolver = "2"\n')
+        write(r, ".gitignore", "target/\n")
+        crate("app", "0.1.0", 'dep = { path = "../dep", version = "1" }\n')
+        crate("dep", "1.0.0")
+        lockfile()
+        base = commit(r, "base")
+
+        git(r, "checkout", "-q", "-b", "dev")
+        write(r, "Cargo.toml", '[workspace]\nmembers = ["app", "dep", "dep2"]\nresolver = "2"\n')
+        crate("dep2", "0.1.0")
+        lockfile()
+        write(r, LEDGER, HEADER)
+        commit(r, "fork: a crate of its own")
+        git(r, "update-ref", "refs/remotes/origin/dev", "HEAD")
+        fork_lock = (r / "Cargo.lock").read_text(encoding="utf-8")
+
+        git(r, "checkout", "-q", "main")
+        crate("dep", "1.0.1")
+        lockfile()
+        bump = commit(r, "dep 1.0.1")
+        git(r, "update-ref", "refs/remotes/upstream/main", "HEAD")
+
+        git(r, "checkout", "-q", "-b", "upstream-sync/lock", "dev")
+        c = status(r)["by"][bump]
+        assert c["kind"] == "lock" and c["conflicts"] == ["Cargo.lock"], c
+        assert "--lock" in sync(r, "pick", bump, ok=False).stdout
+        out = sync(r, "pick", "--lock", bump).stdout
+        assert "picked as" in out, out
+        lock = (r / "Cargo.lock").read_text(encoding="utf-8")
+        assert 'name = "dep2"' in lock, lock                 # the fork's lock, kept
+        assert 'name = "dep"\nversion = "1.0.1"' in lock, lock  # with upstream's bump in it
+        assert lock != fork_lock
+        assert "Cargo.lock: the fork's, with upstream's version bumps" in git(
+            r, "log", "-1", "--format=%B")
+        assert git(r, "diff", "--name-only") == LEDGER and git(r, "diff", "--cached") == ""
+        run(r, cargo, "metadata", "--format-version", "1", "--offline", "--locked")  # consistent
+        assert base
+    print("ok: a lock-only conflict is picked with --lock")
+
+
 if __name__ == "__main__":
     main()
+    lock_case()
