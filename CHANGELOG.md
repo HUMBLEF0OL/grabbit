@@ -25,6 +25,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ### Fixed
 
+- Windows: the window no longer stops on a stalled system while it checks its title bar's colours. MDM asked Windows for the title bar's light or dark every 2 seconds and for each dialog at every frame, and the window waited when the system was stalled (its disk, its memory); the colours are now set once, when a window opens or the theme changes (upstream issues 633 and 583).
 - Torrents: pausing a torrent just as one of its pieces was being checked no longer leaves it one piece short for good. That piece was neither counted as downloaded nor asked for again, so the torrent stopped just before the end, and only restarting MDM helped; a pause now puts that piece back to be downloaded again (upstream issue 706).
 - Torrents: the DHT stops asking a bootstrap node that never answers once another one has, instead of logging "error in bootstrap" every minute or two, and loads the IPv6 nodes it saved at the last start too (part of upstream issue 650).
 - The window no longer waits for a program that holds the clipboard without answering: a text box's right-click menu (to offer **Paste**), **Add URL**, **Add batch download**, **Add torrent** and **Download video** (to fill in a copied link) read the clipboard beside the window, as the clipboard monitor does; a link copied just before still fills the box as the window opens (upstream issue 688).

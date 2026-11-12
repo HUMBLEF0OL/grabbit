@@ -120,6 +120,7 @@ pub fn keep_theme(
     let theme_key = key.with("theme");
     let shown_key = key.with("shown");
     let front_key = key.with("front");
+    let caption_key = key.with("caption");
     // Not drawn in the last pass, the window is gone and this is a new one, hidden until it is
     // told otherwise, whatever the last one was told (#440).
     if !open || window_was_gone(ctx, key.with("theme-pass")) {
@@ -127,6 +128,7 @@ pub fn keep_theme(
             d.remove::<bool>(theme_key);
             d.remove::<bool>(shown_key);
             d.remove::<u32>(front_key);
+            d.remove::<bool>(caption_key);
         });
     }
     if !open {
@@ -174,8 +176,14 @@ pub fn keep_theme(
             ctx.data_mut(|d| d.insert_temp(front_key, tries));
         }
     }
-    // Belt and braces: a no-op when the caption is already right.
-    crate::win32::caption_dark(title, dark);
+    // Belt and braces, once per window and theme (until the window is found): asked every frame,
+    // the window's thread waited on DWM, or on a busy window of this process while looking for
+    // its own, in a stalled system (upstream issues 633 and 583).
+    if ctx.data(|d| d.get_temp::<bool>(caption_key)) != Some(dark)
+        && crate::win32::caption_dark(title, dark)
+    {
+        ctx.data_mut(|d| d.insert_temp(caption_key, dark));
+    }
 }
 
 /// Whether the window `key` is drawn again after a pass that didn't draw it: egui destroys a
