@@ -408,6 +408,8 @@ pub enum IconKey {
     Silk(&'static str),
     /// The theme icon set's icon for a need (`crate::themeicons`), else this Silk icon.
     Themed(&'static str, &'static str),
+    /// Graphite's icon for a need, whatever the theme (`themeicons::graphite`).
+    Graphite(&'static str),
 }
 
 /// The embedded Silk icons (XP-era look, like IDM's tree icons).
@@ -472,6 +474,9 @@ impl ShellIcons {
                 {
                     paint_image(ui, painter, src, rc);
                 }
+            }
+            IconKey::Graphite(need) => {
+                crate::themeicons::paint_graphite(ui, painter, need, rc, true);
             }
             IconKey::Ext(e) | IconKey::ExtLarge(e) => {
                 // The key holds the extension alone (empty when there is none).

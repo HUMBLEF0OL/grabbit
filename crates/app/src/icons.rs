@@ -250,10 +250,10 @@ impl Icon {
         )
     }
 
-    /// The theme icon set's name for this icon (`crate::themeicons`), for the ones a set can
-    /// replace: the toolbar's.
-    fn need(self) -> Option<&'static str> {
-        Some(match self {
+    /// The icon set's name for this icon (`crate::themeicons`): a toolbar need, or the Graphite
+    /// icon its place draws (plan 05.5a; the mockup names each).
+    pub fn need(self) -> &'static str {
+        match self {
             Icon::AddUrl => "tb-add-url",
             Icon::AddTorrent => "tb-add-torrent",
             Icon::Resume => "tb-resume",
@@ -265,18 +265,39 @@ impl Icon {
             Icon::Scheduler => "tb-scheduler",
             Icon::StartQueue => "tb-start-queue",
             Icon::StopQueue => "tb-stop-queue",
-            _ => return None,
-        })
+            Icon::DragOut => "gx-grip",
+            Icon::PageGeneral => "gx-adjust",
+            Icon::PageFileTypes => "ft-generic",
+            Icon::PageSaveTo => "cat-folder",
+            Icon::PageDownloads => "gx-download",
+            Icon::PageConnection => "gx-network",
+            Icon::PageProxy => "gx-shield",
+            Icon::PageLogins => "gx-key",
+            Icon::PageSounds => "gx-volume",
+            Icon::PageRegional => "gx-world",
+            Icon::PageArchives => "ft-archive",
+            Icon::PageRemote => "gx-device",
+            Icon::HelperVideo => "gx-search",
+            Icon::HelperMerge => "gx-merge",
+            Icon::HelperChecked => "gx-shield",
+        }
     }
 
-    /// The icon, enabled or greyed: the theme's own where its icon set has one (a one-colour
-    /// icon in the text colour), else the classic outline.
+    /// A toolbar icon: the theme's icon set may replace it; the others are Graphite's always.
+    fn toolbar(self) -> bool {
+        self.need().starts_with("tb-")
+    }
+
+    /// The icon, enabled or greyed: a toolbar icon the theme's own where its icon set has one (a
+    /// one-colour icon in the text colour), else the classic outline; any other Graphite's.
     pub fn image(self, enabled: bool) -> Image<'static> {
         let ink = crate::themeicons::ink(enabled);
-        if let Some((src, tint)) = self
-            .need()
-            .and_then(|need| crate::themeicons::source(need, 32.0, ink, enabled))
-        {
+        let made = if self.toolbar() {
+            crate::themeicons::source(self.need(), 32.0, ink, enabled)
+        } else {
+            crate::themeicons::graphite(self.need(), 32.0, ink, enabled)
+        };
+        if let Some((src, tint)) = made {
             return Image::new(src).tint(tint);
         }
         Image::new(self.source(enabled))
@@ -326,5 +347,52 @@ impl Icon {
                 })
                 .clone()
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Icon;
+
+    /// Every icon that isn't the toolbar's is in Graphite's set at 16 and 24 (plan 05.5a).
+    #[test]
+    fn every_icon_has_a_graphite_need() {
+        use Icon::*;
+        let all = [
+            AddUrl,
+            AddTorrent,
+            Resume,
+            Stop,
+            StopAll,
+            Delete,
+            DeleteCompleted,
+            Options,
+            Scheduler,
+            StartQueue,
+            StopQueue,
+            DragOut,
+            PageGeneral,
+            PageFileTypes,
+            PageSaveTo,
+            PageDownloads,
+            PageConnection,
+            PageProxy,
+            PageLogins,
+            PageSounds,
+            PageRegional,
+            PageArchives,
+            PageRemote,
+            HelperVideo,
+            HelperMerge,
+            HelperChecked,
+        ];
+        for icon in all {
+            let need = icon.need();
+            assert!(
+                crate::themeicons::graphite_has(need, 16)
+                    && crate::themeicons::graphite_has(need, 24),
+                "{icon:?}: Graphite's set lacks {need}"
+            );
+        }
     }
 }
