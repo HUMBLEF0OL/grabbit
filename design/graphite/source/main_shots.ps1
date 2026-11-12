@@ -9,9 +9,10 @@
 #   powershell -ExecutionPolicy Bypass -File design\graphite\source\main_shots.ps1 -Bin target\05-before -Out target\05a\before
 #
 # Pictures: <Out>\<theme>\<state>[-dark].png. States: plain (the list), empty (a first start),
-# menu-0 .. menu-4 (Tasks, File, Downloads, View, Help), context (a download's right-click
-# menu), and with -Extra the states 05b's /show commands open (blank, node, queue, columns,
-# filter, filtered, running).
+# nocats (the Categories pane hidden), wide (the pane 220 wide), menu-0 .. menu-4 (Tasks, File,
+# Downloads, View, Help), context (a download's right-click menu), and with -Extra the states
+# 05b's /show commands open (blank, node, queue, columns, filter, filtered). The toolbar's
+# drop-down menus have no /show: only chrome.rs's layout_tests check their place.
 param(
   [Parameter(Mandatory)][string]$Bin,
   [Parameter(Mandatory)][string]$Out,
@@ -19,7 +20,8 @@ param(
   [string]$Mode = "",
   [string[]]$States = @(),
   [switch]$Extra,
-  [string]$Work = "D:\Demo",
+  # The run's folder (deleted at its start and end); its path shows in no main-window state.
+  [string]$Work = (Join-Path $env:TEMP "mdm-main-shots"),
   [ValidateSet(100, 125, 150, 175, 200)][int]$InterfaceSize = 100
 )
 $ErrorActionPreference = "Stop"
@@ -31,7 +33,7 @@ if (-not (Test-Path $exe)) { throw "no $exe" }
 if (Test-Path $Work) { throw "$Work exists: give -Work a folder that doesn't (the run deletes it)" }
 $Themes = @($Themes | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 $States = @($States | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
-$all = @("plain", "menu-0", "menu-1", "menu-2", "menu-3", "menu-4", "context", "empty")
+$all = @("plain", "menu-0", "menu-1", "menu-2", "menu-3", "menu-4", "context", "empty", "nocats", "wide")
 if ($Extra) { $all += @("blank", "node", "queue", "columns", "filter", "filtered") }
 if ($States.Count) { $all = @($all | Where-Object { $States -contains $_ }) }
 
@@ -92,7 +94,8 @@ function Items([string]$dl) {
   "[" + ($json -join ",") + "]"
 }
 
-function Run-App([bool]$dark, [bool]$empty, [scriptblock]$body) {
+# A copy of the app with the fixed list (none: `empty`) and `more` settings (JSON members).
+function Run-App([bool]$dark, [bool]$empty, [string]$more, [scriptblock]$body) {
   New-Item -ItemType Directory -Force "$Work\data", "$Work\Downloads" | Out-Null
   $d = $dark.ToString().ToLower()
   $items = if ($empty) { "[]" } else { Items "$Work\Downloads" }
@@ -102,7 +105,7 @@ function Run-App([bool]$dark, [bool]$empty, [scriptblock]$body) {
     '{"next_id":9,"items":' + $items + ',"version":2' + $queues + ',"settings":{"helpers_asked":true,"extension_never_ask":true' +
     ',"dark_mode_support":' + $d + ',"always_dark":' + $d + ',"update_check":false,"theme":"' + $Themes[0] + '"' +
     ',"interface_size":' + $InterfaceSize + ',"torrent_incoming":false,"torrent_upnp":false,"torrent_dht":false,"torrent_lsd":false' +
-    ',"category_dirs":[["General","' + ("$Work\Downloads" -replace '\\', '\\') + '"]]}}')
+    ',"category_dirs":[["General","' + ("$Work\Downloads" -replace '\\', '\\') + '"]]' + $more + '}}')
   $env:MDM_DATA_DIR = "$Work\data"
   $env:MDM_OFFSCREEN = "1"
   $env:MDM_TEST_ACTIVE = "1"
@@ -115,7 +118,8 @@ function Run-App([bool]$dark, [bool]$empty, [scriptblock]$body) {
       $main = @(Titles $app.Id | Where-Object { $_ -like "Mister Download Manager*" })[0]
     }
     if (-not $main) { throw "no main window" }
-    Start-Sleep 3
+    # The system's file icons come in the background: a first picture taken sooner missed some.
+    Start-Sleep 6
     & $body $app $main
   } finally {
     Get-CimInstance Win32_Process -Filter "Name='$(Split-Path -Leaf $exe)'" |
@@ -138,6 +142,7 @@ function Capture([int]$procId, [string]$title, [string]$file) {
     if ($hash -eq $prev) { return $true }
     $prev = $hash
   }
+  if (-not (Test-Path $file)) { throw "$(Split-Path -Leaf $file): no picture" }
   Write-Warning "$(Split-Path -Leaf $file): still changing after 10 s"
   return $true
 }
@@ -145,22 +150,26 @@ function Capture([int]$procId, [string]$title, [string]$file) {
 # Each state: the /show commands that open it (none: the main window as it is) and whether the
 # picture is every window of ours composed (a menu over the main window).
 $how = @{
-  "plain" = @(@(), $false); "empty" = @(@(), $false)
+  "plain" = @(@(), $false); "empty" = @(@(), $false); "nocats" = @(@(), $false); "wide" = @(@(), $false)
   "menu-0" = @(@("menu:0"), $true); "menu-1" = @(@("menu:1"), $true); "menu-2" = @(@("menu:2"), $true)
   "menu-3" = @(@("menu:3"), $true); "menu-4" = @(@("menu:4"), $true)
   "context" = @(@("context"), $true)
   "blank" = @(@("context:blank"), $true); "node" = @(@("node:all"), $true)
   "queue" = @(@("node:queue"), $true); "columns" = @(@("columns"), $true)
-  "filter" = @(@("filter:3"), $true); "filtered" = @(@("filtered"), $false)
+  "filter" = @(@("filter:3"), $false); "filtered" = @(@("filtered"), $false)
 }
 $modes = if ($Mode) { @($Mode) } else { @("light", "dark") }
 foreach ($m in $modes) {
   $dark = $m -eq "dark"
   $suffix = if ($dark) { "-dark" } else { "" }
-  foreach ($empty in @($false, $true)) {
-    $mine = @($all | Where-Object { ($_ -eq "empty") -eq $empty })
+  # The states that need a start of their own (another list or other settings), and the rest.
+  $own = @{ "empty" = @($true, ""); "nocats" = @($false, ',"show_categories":false'); "wide" = @($false, ',"categories_width":220') }
+  $runs = @(,@($false, "", @($all | Where-Object { -not $own.ContainsKey($_) })))
+  foreach ($s in $all | Where-Object { $own.ContainsKey($_) }) { $runs += ,@($own[$s][0], $own[$s][1], @($s)) }
+  foreach ($run in $runs) {
+    $empty, $more, $mine = $run
     if (-not $mine.Count) { continue }
-    Run-App $dark $empty {
+    Run-App $dark $empty $more {
       param($app, $main)
       foreach ($t in $Themes) {
         & $exe /show "theme:$t"
@@ -172,6 +181,7 @@ foreach ($m in $modes) {
           foreach ($c in $cmds) { & $exe /show $c; Start-Sleep -Milliseconds 400 }
           if ($composed) {
             for ($i = 0; $i -lt 50 -and -not (@(Titles $app.Id) -like "misterdownloadmanager menu*"); $i++) { Start-Sleep -Milliseconds 200 }
+            if (-not (@(Titles $app.Id) -like "misterdownloadmanager menu*")) { throw "${t} ${s}: no menu opened" }
           }
           Start-Sleep -Milliseconds 800
           $file = Join-Path $dir "$s$suffix.png"

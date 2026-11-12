@@ -6512,8 +6512,7 @@ impl App {
             self.open_menu = chrome::menubar_next(self.open_menu, event);
         }
         // A menu opened by Left or Right is drawn in the same pass as the one it replaces (a
-        // second turn): a pass without the old menu, then one with the new, closed one menu
-        // window and opened another, where they can be shown in turn.
+        // second turn), so no pass goes by without a menu of the bar shown (#277).
         for _ in 0..2 {
             let Some(i) = self.open_menu else { break };
             let x = chrome::menus()[i].1;
@@ -6613,7 +6612,8 @@ impl App {
         let list_left = if self.show_categories {
             let rows = self.tree_rows();
             let tree: Vec<TreeRow<'_>> = rows.iter().map(|(r, ..)| r.clone()).collect();
-            // The splitter: the 4 px gap between the pane and the list, dragged sideways.
+            // The splitter: the gap between the pane and the list (`splitter_w`), dragged
+            // sideways.
             let max_w = (w * 0.6).max(100.0);
             let cat_w = (self.settings.categories_width as f32).clamp(100.0, max_w);
             let right = o.x + layout.tree_left + cat_w;
@@ -6735,7 +6735,7 @@ impl App {
         let (ids, rows) = self.list_rows();
         self.selection.retain(&ids);
         let (selected, focus) = self.selection.rows(&ids);
-        // Its bottom edge is exclusive: the frame's last row on the pane's.
+        // Its bottom edge is exclusive: its frame's last row one under the pane frame's (IDM's).
         let outer = egui::Rect::from_min_max(
             pos2(o.x + list_left, o.y + layout.panes_top()),
             pos2(
@@ -6811,10 +6811,10 @@ impl App {
         if let Some((i, pos)) = r.context {
             self.open_popup(Popup::Item(i.map(|i| ids[i])), pos);
         }
-        let layout = self.list.layout();
-        if self.last_layout.as_ref() != Some(&layout) {
+        let list_layout = self.list.layout();
+        if self.last_layout.as_ref() != Some(&list_layout) {
             self.dirty |= self.last_layout.is_some();
-            self.last_layout = Some(layout);
+            self.last_layout = Some(list_layout);
         }
         if let Some(pos) = r.header_context {
             self.open_popup(Popup::Columns, pos);

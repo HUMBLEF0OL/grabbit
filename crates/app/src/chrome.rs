@@ -32,7 +32,8 @@ pub struct Layout {
     pub tree_left: f32,
     /// The splitter between the pane and the list.
     pub splitter_w: f32,
-    /// From the panes' bottom to the strip.
+    /// From the Categories pane's and the splitter's bottom to the strip (the list's frame
+    /// ends one row lower: its exclusive edge is `pane_gap - 1` above the strip).
     pub pane_gap: f32,
     /// From the list's right edge to the window's.
     pub list_right: f32,
@@ -1691,7 +1692,7 @@ pub fn categories(
     let p = ui.painter().clone();
     let y0 = o.y + layout.panes_top(); // frame top
     let left = o.x + layout.tree_left;
-    // Laid out in English (frame x 6 .. right); every part made where it is on screen — the pane
+    // Laid out in English (frame `left` .. right); every part made where it is on screen — the pane
     // on the right in RTL, its tree indenting from the right.
     let frame = winui::rect(Rect::from_min_max(
         pos2(left, y0),
@@ -1752,7 +1753,7 @@ pub fn categories(
             let count = r.count.map_or(0.0, |n| {
                 5.0 + text_width_font(&p, winui::tahoma(), &count_text(n))
             });
-            text_x - 8.0
+            text_x - (tree.left() - left + 6.0)
                 + text_width_font(&p, winui::tahoma(), crate::i18n::t(&r.label))
                 + count
                 + 5.0
@@ -1784,8 +1785,9 @@ pub fn categories(
     vpos = vpos.clamp(0.0, (rows.len() as f32 - page_rows).max(0.0));
     hpos = hpos.clamp(0.0, (content_w - area.width()).max(0.0)).round();
     let first_row = vpos.round();
-    // Everything below is laid out from a horizontally scrolled origin.
-    let o = pos2(o.x - hpos, o.y);
+    // Everything below is laid out from a horizontally scrolled origin: the rows' spec x
+    // (connectors at 19, icons at 30 and 49, text at 51 and 70) count from 6 before the frame.
+    let o = pos2(left - 6.0 - hpos, o.y);
     let tp = p.with_clip_rect(winui::rect(area));
     let row_top = |k: usize| area.top() + 16.0 * (k as f32 - first_row);
     // Blank space (registered first, so the rows sit above it): the selected node's menu, at

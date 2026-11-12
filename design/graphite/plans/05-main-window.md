@@ -54,7 +54,8 @@ Line numbers drift as phases land: find each item by its name first.
    `toolbar` and its drop anchor, `categories`, the splitter, `list::show`'s rect, `status_strip`,
    the popup anchor.
 3. Test: screenshots of every main-window state before and after are identical in Classic, Metro, Aqua
-   and Graphite, taken with `design/graphite/source/baseline.ps1` and compared by a small
+   and Graphite, taken with `design/graphite/source/main_shots.ps1` (a fixed list, nothing
+   moving: `baseline.ps1`'s live downloads differ from run to run) and compared by a small
    `source/pixel_diff.py` (PIL, exits non-zero on any differing pixel) written in this phase.
    No CHANGELOG line.
 
