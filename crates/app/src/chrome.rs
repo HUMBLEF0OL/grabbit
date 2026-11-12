@@ -3358,8 +3358,8 @@ fn chevron(p: &egui::Painter, ox: f32, top: f32, open: bool, bright: bool) {
 #[cfg(test)]
 mod tests {
     use super::{
-        FOCUS_GRACE, FocusVerdict, MenuBarEvent, MenuEntry, MenuFocus, MenuKind, heading_into,
-        item_at, menu_viewport, menubar_next,
+        FOCUS_GRACE, FocusVerdict, MenuBarEvent, MenuEntry, MenuFocus, MenuKind, MenuLook, SEP,
+        SLOT, heading_into, item_at, menu_viewport, menubar_next,
     };
     use egui::{Rect, pos2};
 
@@ -3658,6 +3658,8 @@ mod tests {
                     &mut result,
                     0,
                     &|_| None,
+                    // 05b's menu icons: none here (the test is about the pointer, not the look).
+                    &|_, _| None,
                 );
             });
             out.textures_delta.clear();
