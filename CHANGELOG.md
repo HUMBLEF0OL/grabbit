@@ -14,6 +14,14 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 - **View → Theme → Graphite**, the first part of MDM's new look: near-black or white with royal amethyst for what you chose (the selection, ticked boxes, the focus ring) and electric cyan for what moves (progress, the default button), rounded corners, taller rows in the download list, a flat title bar and its own thin outline icons in one colour (Tabler Icons) in the toolbar, the categories, the download list and the title bar, light and dark, in its own typeface, Geist (built in; the other themes keep Segoe UI), which changes as soon as you choose Graphite or leave it. The windows keep their layout.
 - Videos a site sends in pieces (HLS and DASH streams, as many sites other than YouTube do) download several pieces at once, as many as **Options → Connection** gives a file (8 by default): against a test server that slows each connection, 4 at once took under a third of the time, 8 under a fifth. With a speed limit on, they still come one at a time, so the limit holds; a video in one file, as most of YouTube's are, is unchanged. The command line's `video-get` and `playlist-get` take `-c` for it ([#531](https://github.com/anefzaoui/misterdownloadmanager/issues/531)).
 
+### Changed
+
+- **Help → Report a problem**, crash reports (and the symbols that make them readable), the
+  update check, the security contact and the installer's support and update links now go to
+  this project's own repository, HUMBLEF0OL/grabbit, instead of the original Mister Download
+  Manager's: reports reach the people who make this build, and it updates only from its own
+  releases. Until its first release, the update check says MDM is up to date.
+
 ### Fixed
 
 - The video button follows **Options → General → Customize MDM Download panels in browsers** in the pages already open: switched off, or its site listed, it goes within a few seconds, without reloading the page (it stayed until a reload, and on YouTube, which never reloads, for good). A site listed as `example.com` now takes `www.example.com` and its other subdomains too, and a player embedded from another site follows the site in the address bar ([#532](https://github.com/anefzaoui/misterdownloadmanager/issues/532)).

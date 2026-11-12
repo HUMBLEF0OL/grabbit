@@ -102,5 +102,5 @@ body:
     attributes:
       label: Before you send it
       options:
-        - label: I looked through the [open issues](https://github.com/anefzaoui/misterdownloadmanager/issues) and this one isn't there yet.
+        - label: I looked through the [open issues](https://github.com/HUMBLEF0OL/grabbit/issues) and this one isn't there yet.
           required: true

@@ -497,6 +497,8 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   extension and the Docker image are no longer made, and their code, packaging, CI jobs and help
   pages are removed. MDM on Windows works as before. The multi-platform state is kept on the
   `archive/multiplatform-i18n` branch.
+- ✅ Problem reports, crash reports, update checks, the security contact and the installer's
+  links go to this fork's repository, not the original's.
 
 ## Being worked on
 

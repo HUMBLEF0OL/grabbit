@@ -9,7 +9,7 @@ body:
     attributes:
       value: |
         Thank you for sending this. **The crash report window filled this in**: please add the report's file (and the `.dmp` file, if you chose to) by dragging it into the **Report** box below.
-        No crash window? Use the [Bug report](https://github.com/anefzaoui/misterdownloadmanager/issues/new?template=bug.yml) form instead.
+        No crash window? Use the [Bug report](https://github.com/HUMBLEF0OL/grabbit/issues/new?template=bug.yml) form instead.
   - type: input
     id: signature
     attributes:
