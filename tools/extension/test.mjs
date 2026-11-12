@@ -1854,7 +1854,7 @@ const ask = (listeners) => (m, sender) => new Promise((r) => listeners.message(m
   const { api, calls, listeners } = fakeApi({ firefox: false });
   load(api, false);
   await settle();
-  let suggested;
+  let suggested = false; // this fork calls suggest() with no name (no noName helper)
   listeners.determining(
     {
       id: 91,
@@ -1865,7 +1865,7 @@ const ask = (listeners) => (m, sender) => new Promise((r) => listeners.message(m
       totalBytes: 1024,
       mime: "application/zip",
     },
-    (value) => (suggested = value),
+    () => (suggested = true),
   );
   await settle();
   assert.ok(suggested, "the browser keeps the authenticated runtime-proxy download");
