@@ -1124,8 +1124,8 @@ pub fn show(
                         let tip = status_tip(idx);
                         if !tip.is_empty() {
                             cut_under_pointer = Some(tip);
-                        } else if cut {
-                            cut_under_pointer = Some(row.cells[3].clone());
+                        } else if let Some(word) = cut {
+                            cut_under_pointer = Some(word);
                         }
                     }
                     continue;
@@ -1488,7 +1488,7 @@ fn chip(
 /// paused icon, the word, the bar in the muted ink and the percentage; any other, its icon and
 /// its word (or what the cell says: "Extracting...", "Checking 42%"). Errors in the error
 /// colour, finished downloads muted. The cell's text for screen readers is the row's as before.
-/// Returns whether the word was cut (the caller shows it whole on hover).
+/// Returns the word when it was cut or left out (the caller shows it whole on hover).
 fn status_cell(
     ui: &Ui,
     p: &egui::Painter,
@@ -1496,7 +1496,7 @@ fn status_cell(
     top: f32,
     row: &Row,
     sel: bool,
-) -> bool {
+) -> Option<String> {
     let c = crate::theme::colors();
     let mid = top + row_h() / 2.0;
     let baseline = top + row_inset() + 12.0;
@@ -1535,7 +1535,7 @@ fn status_cell(
     match (row.kind, row.progress) {
         (StatusKind::Downloading, Some(f)) => {
             meter(x, f, c.progress_bar);
-            false
+            None
         }
         (kind, progress) => {
             let icon = Rect::from_min_size(pos2(x, (mid - 8.0).round()), egui::vec2(16.0, 16.0));
@@ -1559,7 +1559,7 @@ fn status_cell(
                 if let Some(f) = pct {
                     meter(right, f, winui::MUTED());
                 }
-                return false;
+                return Some(text.to_owned());
             }
             crate::themeicons::paint_in(ui, p, kind.need(), winui::rect(icon), ink, true);
             let word_w = winui::text_width_font(p, font.clone(), text).ceil();
@@ -1574,7 +1574,7 @@ fn status_cell(
                 };
                 meter(from, f, winui::MUTED());
             }
-            shown != text
+            (shown != text).then(|| text.to_owned())
         }
     }
 }
@@ -1967,6 +1967,78 @@ mod tests {
                 s
             })
             .collect()
+    }
+
+    /// Plan 05b's accessibility test: the list still gives screen readers its rows, each named
+    /// by its file, its Status cell's text and its size, in the list (whichever look draws it:
+    /// the Status cell's bar is drawn, its words are what is read).
+    #[test]
+    fn the_list_exposes_its_rows() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut rows = vec![
+            row("Web", "Complete", "a.zip", false),
+            row("Web", "Stopped", "b.iso", true),
+        ];
+        rows[0].cells[3] = "Complete".into();
+        rows[1].cells[3] = "63.00%".into();
+        rows[1].cells[2] = "92.00  MB".into();
+        rows[1].progress = Some(0.63);
+        let mut st = ListState::default();
+        let mut icons = ShellIcons;
+        let mut nodes = Vec::new();
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(900.0, 400.0))),
+                    ..Default::default()
+                },
+                |ui| {
+                    let outer = Rect::from_min_size(pos2(0.0, 0.0), egui::vec2(900.0, 400.0));
+                    show(
+                        ui,
+                        outer,
+                        &mut st,
+                        &rows,
+                        &[false, true],
+                        Some(1),
+                        &mut icons,
+                        &|_| String::new(),
+                    );
+                },
+            );
+            out.textures_delta.clear();
+            nodes = out
+                .platform_output
+                .accesskit_update
+                .expect("AccessKit is on")
+                .nodes;
+        }
+        let mut options: Vec<(String, bool)> = nodes
+            .iter()
+            .filter(|(_, n)| n.role() == egui::accesskit::Role::ListBoxOption)
+            .map(|(_, n)| {
+                (
+                    n.label().unwrap_or_default().to_owned(),
+                    n.is_selected() == Some(true),
+                )
+            })
+            .collect();
+        options.sort();
+        assert_eq!(
+            options,
+            [
+                ("a.zip, Complete".to_owned(), false),
+                ("b.iso, 63.00%, 92.00  MB".to_owned(), true),
+            ]
+        );
+        assert!(
+            nodes
+                .iter()
+                .any(|(_, n)| n.role() == egui::accesskit::Role::ListBox
+                    && n.label() == Some("Downloads"))
+        );
     }
 
     /// Plan 05b: IDM's look and Graphite's keep their own column widths through a theme switch

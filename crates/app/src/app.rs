@@ -1282,7 +1282,7 @@ impl App {
                 crate::theme::metrics().font_body,
                 egui::FontFamily::Name("geist-medium".into()),
             );
-            let action = crate::i18n::t(action);
+            let shown_action = crate::i18n::t(action);
             let width = |f: &egui::FontId, s: &str| winui::text_width_font(p, f.clone(), s).ceil();
             let block_h = 56.0 + 12.0 + 22.0 + 8.0 + 18.0 + 8.0 + 18.0;
             let top = (body.center().y - block_h / 2.0)
@@ -1311,10 +1311,10 @@ impl App {
                 (cx - ww / 2.0).round(),
                 y,
                 why,
-                winui::MUTED(),
+                c.text_secondary,
             );
             let y = y + 8.0 + 17.0;
-            let aw = width(&link_font, action);
+            let aw = width(&link_font, shown_action);
             let x = (cx - aw / 2.0).round();
             return winui::link_font(ui, p, link_font, x, y, action, "empty-action").then_some(cmd);
         }
@@ -6625,8 +6625,14 @@ impl App {
         // Graphite's title bar keeps room after its title for the menus and Find (plan 05b).
         let find_key = chrome::key_label(Cmd::Find.hint().unwrap_or("Ctrl+F"));
         let find_size = chrome::find_button_size(ui.painter(), &find_key);
+        // The menu titles' places once a frame (measured at 0, 0; moved where they go).
+        let rel_titles = if layout.menus_in_caption {
+            chrome::caption_titles(ui.painter(), 0.0, 0.0)
+        } else {
+            Vec::new()
+        };
         let reserve = if layout.menus_in_caption {
-            chrome::caption_menus_width(ui.painter()) + find_size.x + 32.0
+            chrome::caption_menus_width(&rel_titles) + find_size.x + 32.0
         } else {
             0.0
         };
@@ -6718,6 +6724,7 @@ impl App {
                 let mid = window_min.y + (layout.caption_h - 1.0) / 2.0;
                 let (event, titles) = chrome::caption_menu_bar(
                     ui,
+                    &rel_titles,
                     bar.title_end + chrome::CAPTION_MENUS_GAP,
                     mid,
                     self.open_menu,
@@ -6879,31 +6886,6 @@ impl App {
                     o.y + layout.strip_top(h) - layout.pane_gap,
                 ),
             ));
-            let sr = ui.interact(
-                split,
-                egui::Id::unique("cat-splitter"),
-                winui::pointer_drag(),
-            );
-            if sr.hovered() || sr.dragged() {
-                ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-            }
-            if sr.dragged()
-                && let Some(p) = sr.interact_pointer_pos()
-            {
-                // The pointer stays on the splitter's middle (the pane's width from its leading
-                // edge: the right in RTL).
-                let nw = (winui::mx(p.x) - o.x - layout.tree_left - layout.splitter_w / 2.0)
-                    .round()
-                    .clamp(100.0, max_w);
-                if layout.graphite {
-                    self.settings.graphite_categories_width = nw as u32;
-                } else {
-                    self.settings.categories_width = nw as u32;
-                }
-            }
-            if sr.drag_stopped() {
-                self.dirty = true;
-            }
             // The tree's keys while it has them (Tab moves between it and the list): Up / Down
             // through the nodes, Left / Right close and open a branch, Home / End.
             let free = self.popup.is_none()
@@ -6953,7 +6935,7 @@ impl App {
                     tree_event = Some(TreeEvent::Toggle(at));
                 }
             }
-            if let Some(ev) = chrome::categories(
+            let tree_ev = chrome::categories(
                 ui,
                 &mut self.icons,
                 &layout,
@@ -6963,8 +6945,47 @@ impl App {
                 &tree,
                 self.tree_keys && free,
             )
-            .or(tree_event)
+            .or(tree_event);
+            // The splitter after the tree, so it is above the tree's scroll bar where they meet.
+            let sr = ui.interact(
+                split,
+                egui::Id::unique("cat-splitter"),
+                winui::pointer_drag(),
+            );
+            if sr.hovered() || sr.dragged() {
+                ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+            }
+            // Graphite's grip is 6 wide: the pane keeps where it was taken (IDM's 4-point gap
+            // keeps the pointer on its middle, as before).
+            let grab = egui::Id::unique("cat-splitter-grab");
+            if sr.drag_started()
+                && let Some(p) = sr.interact_pointer_pos()
             {
+                let at = winui::mx(p.x) - (o.x + layout.tree_left + cat_w);
+                ctx.data_mut(|d| d.insert_temp(grab, at));
+            }
+            if sr.dragged()
+                && let Some(p) = sr.interact_pointer_pos()
+            {
+                // The pane's width from its leading edge (the right in RTL).
+                let at = if layout.graphite {
+                    ctx.data(|d| d.get_temp::<f32>(grab)).unwrap_or(0.0)
+                } else {
+                    layout.splitter_w / 2.0
+                };
+                let nw = (winui::mx(p.x) - o.x - layout.tree_left - at)
+                    .round()
+                    .clamp(100.0, max_w);
+                if layout.graphite {
+                    self.settings.graphite_categories_width = nw as u32;
+                } else {
+                    self.settings.categories_width = nw as u32;
+                }
+            }
+            if sr.drag_stopped() {
+                self.dirty = true;
+            }
+            if let Some(ev) = tree_ev {
                 // A click in the tree gives it the keys.
                 self.tree_keys = true;
                 self.list.set_keys(false);

@@ -5960,6 +5960,31 @@ pub mod caption {
         show_focus(ui, resp, tile);
     }
 
+    /// A title bar's caption buttons from the window's end inwards, rom_end after the last
+    /// one: `place` puts each (by its kind and how far from the end the row has come so far) on
+    /// screen. The button pressed, their rects, and how far the row reaches from the end. The
+    /// frame's word on Maximize ([`frame_maximize`]) holds for this bar only.
+    fn button_row(
+        ui: &mut Ui,
+        buttons: &[(CaptionButton, bool)],
+        active: bool,
+        mut from_end: f32,
+        place: impl Fn(CaptionButton, f32) -> Rect,
+    ) -> (Option<CaptionButton>, Vec<Rect>, f32) {
+        let mut pressed = None;
+        let mut rects = Vec::with_capacity(buttons.len());
+        for (b, enabled) in buttons {
+            let rc = place(*b, from_end);
+            from_end += rc.width();
+            if caption_button(ui, rc, *b, *enabled, active) {
+                pressed = Some(*b);
+            }
+            rects.push(rc);
+        }
+        FRAME_MAX.with(|c| c.set((false, false)));
+        (pressed, rects, from_end)
+    }
+
     /// What a drawn title bar did: the button pressed, and where its buttons and its icon are (in
     /// points), for the window's hit test (win32::set_caption_hits).
     pub struct TitleBar {
@@ -6001,20 +6026,12 @@ pub mod caption {
             c.menubar_line,
         );
         const BUTTON: egui::Vec2 = vec2(42.0, 35.0);
-        let mut pressed = None;
-        let mut rects = Vec::with_capacity(buttons.len());
-        let mut from_end = 0.0;
-        for (b, enabled) in buttons {
-            let english =
-                Rect::from_min_size(pos2(rect.right() - from_end - BUTTON.x, rect.top()), BUTTON);
-            from_end += BUTTON.x;
-            let rc = super::rect(english);
-            if caption_button(ui, rc, *b, *enabled, active) {
-                pressed = Some(*b);
-            }
-            rects.push(rc);
-        }
-        FRAME_MAX.with(|c| c.set((false, false)));
+        let (pressed, rects, from_end) = button_row(ui, buttons, active, 0.0, |_, from_end| {
+            super::rect(Rect::from_min_size(
+                pos2(rect.right() - from_end - BUTTON.x, rect.top()),
+                BUTTON,
+            ))
+        });
         let buttons_start = rect.right() - from_end;
         // The icon: 16, 12 from the start, centred on the bar above its rule.
         let mid = rect.top() + (rect.height() - 1.0) / 2.0;
@@ -6096,12 +6113,9 @@ pub mod caption {
                 bar
             }
         };
-        let mut pressed = None;
-        let mut rects = Vec::with_capacity(buttons.len());
         // From the window's end inwards, each as wide as its kind is.
-        let mut from_end = st.end;
-        for (b, enabled) in buttons {
-            let bw = if *b == CaptionButton::Close {
+        let (pressed, rects, from_end) = button_row(ui, buttons, active, st.end, |b, from_end| {
+            let bw = if b == CaptionButton::Close {
                 st.close_w
             } else {
                 st.button_w
@@ -6111,15 +6125,8 @@ pub mod caption {
             } else {
                 rect.right() - from_end - bw
             };
-            from_end += bw;
-            let rc = Rect::from_min_size(pos2(x0, rect.top()), vec2(bw, rect.height()));
-            if caption_button(ui, rc, *b, *enabled, active) {
-                pressed = Some(*b);
-            }
-            rects.push(rc);
-        }
-        // The frame's word on Maximize holds for this bar only.
-        FRAME_MAX.with(|c| c.set((false, false)));
+            Rect::from_min_size(pos2(x0, rect.top()), vec2(bw, rect.height()))
+        });
         let buttons_w = from_end;
         // Without an icon, the title keeps a little room from the bar's start.
         let icon_w = if st.icon { CAPTION_ICON_W } else { 12.0 };

@@ -233,8 +233,10 @@ mod a11y_tests {
         let _fonts = crate::theme::font_tests();
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
-        let (nodes, (_, titles)) =
-            frame(&ctx, vec![], |ui| caption_menu_bar(ui, 300.0, 17.0, None));
+        let (nodes, (_, titles)) = frame(&ctx, vec![], |ui| {
+            let rel = caption_titles(ui.painter(), 0.0, 0.0);
+            caption_menu_bar(ui, &rel, 300.0, 17.0, None)
+        });
         assert_eq!(named(&nodes, Role::MenuBar).len(), 1);
         let mut items: Vec<String> = named(&nodes, Role::MenuItem)
             .into_iter()
@@ -266,7 +268,8 @@ mod a11y_tests {
             data: None,
         });
         let (_, (event, _)) = frame(&ctx, vec![click], |ui| {
-            caption_menu_bar(ui, 300.0, 17.0, None)
+            let rel = caption_titles(ui.painter(), 0.0, 0.0);
+            caption_menu_bar(ui, &rel, 300.0, 17.0, None)
         });
         assert_eq!(
             event,
@@ -579,24 +582,26 @@ pub fn caption_titles(p: &egui::Painter, x: f32, mid: f32) -> Vec<Rect> {
 }
 
 /// The room Graphite's menu titles take after the window's title: the gap before them and the
-/// titles themselves ([`caption_titles`]).
-pub fn caption_menus_width(p: &egui::Painter) -> f32 {
-    let titles = caption_titles(p, 0.0, 0.0);
-    CAPTION_MENUS_GAP + titles.last().map_or(0.0, |r| r.right())
+/// titles themselves (`rel`: [`caption_titles`] at 0, 0).
+pub fn caption_menus_width(rel: &[Rect]) -> f32 {
+    CAPTION_MENUS_GAP + rel.last().map_or(0.0, |r| r.right())
 }
 
 /// From the window's title to the first menu title (the mockup's 10 + 8).
 pub const CAPTION_MENUS_GAP: f32 = 18.0;
 
-/// Paint Graphite's menu titles in the title bar ([`caption_titles`] from English x `x`, centred
-/// on `mid`); what happened to them, as [`menu_bar`], and their rects (English).
+/// Paint Graphite's menu titles in the title bar (`rel`: [`caption_titles`] at 0, 0, placed from
+/// English x `x`, centred on `mid`); what happened to them, as [`menu_bar`], and their rects
+/// (English).
 pub fn caption_menu_bar(
     ui: &mut Ui,
+    rel: &[Rect],
     x: f32,
     mid: f32,
     open: Option<usize>,
 ) -> (Option<MenuBarEvent>, Vec<Rect>) {
-    let titles = caption_titles(ui.painter(), x, mid);
+    let by = vec2(x, (mid - 13.0).round() + 13.0);
+    let titles: Vec<Rect> = rel.iter().map(|r| r.translate(by)).collect();
     let bar = titles.iter().fold(Rect::NOTHING, |a, r| a.union(*r));
     let hit = bar_titles(ui, bar, &titles, open, true);
     (hit, titles)
@@ -2319,7 +2324,10 @@ fn toolbar_graphite(
                 let split = english.right() - ARROW_W;
                 let main = Rect::from_min_max(english.min, pos2(split, english.bottom()));
                 let arrow = Rect::from_min_max(pos2(split, english.top()), english.max);
-                let (main_c, arrow_c) = if on_arrow {
+                // A greyed button's arrow still opens its menu: only the arrow part lights.
+                let (main_c, arrow_c) = if on_arrow && !*enabled {
+                    (Color32::TRANSPARENT, face)
+                } else if on_arrow {
                     (c.toolbar_hot_faint, face)
                 } else {
                     (face, c.toolbar_hot_faint)

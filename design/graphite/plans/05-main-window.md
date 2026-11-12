@@ -165,7 +165,7 @@ chooser, Column filter, First start, Filters hide all: light and dark, at 100% a
   MenuItems, Find a Button. Tests: `chrome::a11y_tests` (the toolbar in both layouts, the
   title-bar menus and their rects, Find, the toolbar fitting 710 points), `win32::frame_tests`
   (`graphite_menus_and_find_in_the_bar_are_the_clients`), `chrome::layout_tests`,
-  `list::tests::each_look_keeps_its_column_widths`.
+  `list::tests::each_look_keeps_its_column_widths`, `list::tests::the_list_exposes_its_rows`.
 - **Keyboard**: Alt, F10, Alt+letter, Left / Right and Tab go through the same code as before
   (`App::paint` opens `open_menu` by index, whichever bar draws it); not driven in a live window
   (that needs the desktop's focus): 09a's full keyboard pass.
