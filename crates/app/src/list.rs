@@ -98,6 +98,20 @@ pub const UPLOAD: usize = 12;
 pub const DEFAULT_WIDTHS: [f32; COLS] = [
     150.0, 20.0, 75.0, 65.0, 75.0, 95.0, 65.0, 200.0, 145.0, 62.0, 64.0, 92.0, 100.0,
 ];
+/// Graphite's (plan 05b, the mockup's): its padded cells and the Status cell's icon, word and
+/// bar need more room. Kept apart from IDM's, as the Categories pane's width is.
+pub const GRAPHITE_WIDTHS: [f32; COLS] = [
+    280.0, 34.0, 90.0, 170.0, 110.0, 110.0, 160.0, 160.0, 160.0, 70.0, 80.0, 100.0, 110.0,
+];
+/// The default widths of IDM's look or Graphite's.
+fn default_widths(graphite: bool) -> [f32; COLS] {
+    if graphite {
+        GRAPHITE_WIDTHS
+    } else {
+        DEFAULT_WIDTHS
+    }
+}
+
 /// Default display order: Source first, then IDM's, a torrent's three columns after its rate, and
 /// Added after Last Try Date.
 const DEFAULT_ORDER: [usize; COLS] = [SOURCE, 0, 1, 2, 3, 4, 5, UPLOAD, PEERS, RATIO, 6, ADDED, 7];
@@ -190,8 +204,12 @@ pub struct ListState {
     filter_open: Option<(usize, Pos2)>,
     /// The sideways scroll when it opened (it closes when the list moves).
     filter_hscroll: f32,
-    /// A filter box to open on the next frame ([ListState::open_filter]).
+    /// A filter box to open on the next frame ([`ListState::open_filter`]).
     filter_pending: Option<usize>,
+    /// The other look's widths: Graphite's while `widths` are IDM's, and back ([`Self::set_look`]).
+    other_widths: [f32; COLS],
+    /// `widths` are Graphite's.
+    graphite: bool,
     /// A selection box being dragged: where it started (x in content, y in rows' space) and
     /// whether Ctrl adds it to the selection.
     marquee: Option<(Pos2, bool)>,
@@ -219,6 +237,8 @@ impl Default for ListState {
             filter_open: None,
             filter_hscroll: 0.0,
             filter_pending: None,
+            other_widths: GRAPHITE_WIDTHS,
+            graphite: false,
             marquee: None,
             typed: String::new(),
             menu_open: false,
@@ -235,6 +255,9 @@ pub struct Layout {
     pub widths: Vec<f32>,
     pub visible: Vec<bool>,
     pub sort: Option<(usize, bool)>,
+    /// The widths under the Graphite layout (empty in a list saved before it: its defaults).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub graphite_widths: Vec<f32>,
 }
 
 impl ListState {
@@ -267,17 +290,38 @@ impl ListState {
     pub fn reset_columns(&mut self) {
         let fresh = ListState::default();
         self.order = fresh.order;
-        self.widths = fresh.widths;
+        self.widths = default_widths(self.graphite);
         self.visible = fresh.visible;
         self.hscroll = 0.0;
     }
 
+    /// Draw with IDM's column widths or Graphite's (plan 05b): each look keeps its own, so a
+    /// theme switch shows each as it was left.
+    pub fn set_look(&mut self, graphite: bool) {
+        if self.graphite != graphite {
+            std::mem::swap(&mut self.widths, &mut self.other_widths);
+            self.graphite = graphite;
+            self.hscroll = 0.0;
+        }
+    }
+
+    /// IDM's widths and Graphite's, whichever is drawn now.
+    fn widths_by_look(&self) -> ([f32; COLS], [f32; COLS]) {
+        if self.graphite {
+            (self.other_widths, self.widths)
+        } else {
+            (self.widths, self.other_widths)
+        }
+    }
+
     pub fn layout(&self) -> Layout {
+        let (classic, graphite) = self.widths_by_look();
         Layout {
             order: self.order.clone(),
-            widths: self.widths.to_vec(),
+            widths: classic.to_vec(),
             visible: self.visible.to_vec(),
             sort: self.sort,
+            graphite_widths: graphite.to_vec(),
         }
     }
 
@@ -329,10 +373,20 @@ impl ListState {
             return;
         }
         self.order = l.order;
-        for (c, default) in DEFAULT_WIDTHS.iter().enumerate() {
-            self.widths[c] = l.widths.get(c).copied().unwrap_or(*default).max(MIN_WIDTH);
+        let width = |saved: &[f32], c: usize, default: f32| {
+            saved.get(c).copied().unwrap_or(default).max(MIN_WIDTH)
+        };
+        let (mut classic, mut graphite) = ([0.0; COLS], [0.0; COLS]);
+        for c in 0..COLS {
+            classic[c] = width(&l.widths, c, DEFAULT_WIDTHS[c]);
+            graphite[c] = width(&l.graphite_widths, c, GRAPHITE_WIDTHS[c]);
             self.visible[c] = l.visible.get(c).copied().unwrap_or(true);
         }
+        (self.widths, self.other_widths) = if self.graphite {
+            (graphite, classic)
+        } else {
+            (classic, graphite)
+        };
         self.visible[0] = true;
         self.sort = l.sort.filter(|(c, _)| *c < COLS);
     }
@@ -1331,7 +1385,9 @@ fn fit_width(p: &egui::Painter, font: &egui::FontId, col: usize, rows: &[Row]) -
         .fold(0.0, f32::max);
     match col {
         // The queue icon and the source chip have their own sizes.
-        1 | SOURCE => DEFAULT_WIDTHS[col],
+        1 | SOURCE => {
+            default_widths(crate::theme::chrome() == crate::palette::ChromeLook::Graphite)[col]
+        }
         _ => title.max(cells).ceil().max(MIN_WIDTH),
     }
 }
@@ -1461,7 +1517,6 @@ fn status_cell(ui: &Ui, p: &egui::Painter, (x, right): (f32, f32), top: f32, row
         (StatusKind::Downloading, Some(f)) => meter(x, f, c.progress_bar),
         (kind, progress) => {
             let icon = Rect::from_min_size(pos2(x, (mid - 8.0).round()), egui::vec2(16.0, 16.0));
-            crate::themeicons::paint_in(ui, p, kind.need(), winui::rect(icon), ink, true);
             let tx = icon.right() + 7.0;
             // The word where the cell gives a percentage, else what it says.
             let text = match progress {
@@ -1470,15 +1525,32 @@ fn status_cell(ui: &Ui, p: &egui::Painter, (x, right): (f32, f32), top: f32, row
                 None => row.cells[3].as_str(),
             };
             let stopped = kind == StatusKind::Stopped && progress.is_some();
+            // A stopped one in a narrow column keeps its percentage: then the icon and the
+            // word where they fit, the bar where there is room for it.
             let room = if stopped {
-                right - 46.0 - 7.0 - 30.0 - 7.0 - tx
+                right - 46.0 - 7.0 - tx
             } else {
                 right - tx
             };
-            let shown = winui::ellipsize(p, &font, text, room.max(0.0));
+            let pct = progress.filter(|_| stopped);
+            if room < 0.0 {
+                if let Some(f) = pct {
+                    meter(right, f, winui::MUTED());
+                }
+                return;
+            }
+            crate::themeicons::paint_in(ui, p, kind.need(), winui::rect(icon), ink, true);
+            let word_w = winui::text_width_font(p, font.clone(), text).ceil();
+            let with_bar = room - word_w - 7.0 >= 30.0;
+            let shown = winui::ellipsize(p, &font, text, room);
             let drawn = text_font(p, font.clone(), tx, baseline, &shown, ink);
-            if stopped && let Some(f) = progress {
-                meter(winui::rect(drawn).right() + 7.0, f, winui::MUTED());
+            if let Some(f) = pct {
+                let from = if with_bar {
+                    winui::rect(drawn).right() + 7.0
+                } else {
+                    right
+                };
+                meter(from, f, winui::MUTED());
             }
         }
     }
@@ -1863,6 +1935,40 @@ mod tests {
             .collect()
     }
 
+    /// Plan 05b: IDM's look and Graphite's keep their own column widths through a theme switch
+    /// and a save, and a list saved before Graphite's widths existed gets their defaults.
+    #[test]
+    fn each_look_keeps_its_column_widths() {
+        let mut st = ListState::default();
+        st.widths[0] = 222.0;
+        st.set_look(true);
+        assert_eq!(st.widths, GRAPHITE_WIDTHS);
+        st.widths[3] = 190.0;
+        let saved = st.layout();
+        assert_eq!(saved.widths[0], 222.0);
+        assert_eq!(saved.graphite_widths[3], 190.0);
+        st.set_look(false);
+        assert_eq!(st.widths[0], 222.0);
+        // Loaded while Graphite draws: Graphite's widths shown, IDM's kept.
+        let mut other = ListState::default();
+        other.set_look(true);
+        other.apply(saved.clone());
+        assert_eq!(other.widths[3], 190.0);
+        other.set_look(false);
+        assert_eq!(other.widths[0], 222.0);
+        // An older list: no Graphite widths saved.
+        let mut old = saved;
+        old.graphite_widths.clear();
+        let mut st = ListState::default();
+        st.apply(old);
+        st.set_look(true);
+        assert_eq!(st.widths, GRAPHITE_WIDTHS);
+        // Reset columns: the drawn look's defaults.
+        st.widths[3] = 50.0;
+        st.reset_columns();
+        assert_eq!(st.widths, GRAPHITE_WIDTHS);
+    }
+
     #[test]
     fn moving_a_column_right_and_left() {
         let mut st = ListState::default();
@@ -1952,6 +2058,7 @@ mod tests {
             widths: vec![200.0, 20.0, 75.0, 65.0, 75.0, 95.0, 65.0, 300.0],
             visible: vec![true; 8],
             sort: Some((2, false)),
+            graphite_widths: Vec::new(),
         };
         let mut st = ListState::default();
         st.apply(old);
@@ -1983,6 +2090,7 @@ mod tests {
             ],
             visible: vec![true; 10],
             sort: None,
+            graphite_widths: Vec::new(),
         };
         let mut st = ListState::default();
         st.apply(old);
@@ -1999,6 +2107,7 @@ mod tests {
             widths: vec![62.0; 12],
             visible: vec![true; 12],
             sort: None,
+            graphite_widths: Vec::new(),
         };
         let mut st = ListState::default();
         st.apply(bad);
@@ -2017,6 +2126,7 @@ mod tests {
             ],
             visible: vec![true; 12],
             sort: Some((PEERS, true)),
+            graphite_widths: Vec::new(),
         };
         let mut st = ListState::default();
         st.apply(old);

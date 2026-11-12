@@ -6956,7 +6956,8 @@ impl App {
             layout.tree_left
         };
 
-        // Download list.
+        // Download list, in the look's own column widths.
+        self.list.set_look(layout.graphite);
         let (ids, rows) = self.list_rows();
         self.selection.retain(&ids);
         let (selected, focus) = self.selection.rows(&ids);

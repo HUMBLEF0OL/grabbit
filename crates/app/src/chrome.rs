@@ -139,6 +139,22 @@ mod layout_tests {
         assert_eq!(l.list_bottom(600.0), 574.0);
         assert!(!l.graphite && !l.menus_in_caption);
     }
+
+    /// Graphite's (plan 05b): the menus in a 36-point title bar, so the toolbar starts at the
+    /// client's top; its band 58; the panes edge to edge down to a 28-point status bar; a
+    /// drop-down's menu just under its button.
+    #[test]
+    fn the_graphite_layout_moves_the_panes_up() {
+        let l = Layout::GRAPHITE;
+        assert_eq!((l.caption_h, l.menu_h, l.toolbar_top()), (36.0, 0.0, 0.0));
+        assert_eq!(l.panes_top(), 58.0);
+        assert_eq!(l.drop_y, super::TB_BUTTON_TOP + super::TB_BUTTON_H + 1.0);
+        assert!(l.drop_y < l.toolbar_h);
+        assert_eq!(l.strip_top(600.0), 572.0);
+        assert_eq!(l.list_bottom(600.0), 572.0);
+        assert_eq!((l.tree_left, l.list_right), (0.0, 0.0));
+        assert!(l.graphite && l.menus_in_caption);
+    }
 }
 
 const fn rgb(r: u8, g: u8, b: u8) -> Color32 {
