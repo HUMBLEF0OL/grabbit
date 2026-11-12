@@ -203,6 +203,28 @@ mod a11y_tests {
         }
     }
 
+    /// 04's overflow (plans/04-typeface.md): at 200 % the window is about 710 points wide, and
+    /// Graphite's toolbar keeps every button inside it, the labels cut.
+    #[test]
+    fn the_graphite_toolbar_fits_a_narrow_window() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut nodes = Default::default();
+        for _ in 0..2 {
+            (nodes, _) = frame(&ctx, vec![], |ui| {
+                toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 710.0, &BUTTONS)
+            });
+        }
+        let rights: Vec<f64> = nodes
+            .values()
+            .filter(|n| n.role() == Role::Button)
+            .filter_map(|n| n.bounds().map(|b| b.x1))
+            .collect();
+        assert_eq!(rights.len(), 11);
+        assert!(rights.iter().all(|r| *r <= 710.0), "{rights:?}");
+    }
+
     /// Graphite's title-bar menus: still a menu bar of five menu items for screen readers, and
     /// each title's rect (the one the window's hit test is given, App::publish_caption) finds
     /// that title again ([`menubar_title_at`]); a screen reader's Click on a title opens it.
@@ -690,8 +712,11 @@ fn bar_titles(
             }
             (english.left() + 7.0, english.top() + 13.0)
         };
-        let ink = if graphite {
+        // Graphite's titles in the secondary ink, the open one in the caption's.
+        let ink = if graphite && open == Some(i) {
             winui::caption::CAPTION_INK()
+        } else if graphite {
+            crate::theme::colors().text_secondary
         } else {
             TEXT()
         };
@@ -1831,7 +1856,7 @@ fn popup_level<C: Clone>(
                 }
             {
                 let ink = if enabled {
-                    TEXT()
+                    crate::theme::colors().text_secondary
                 } else {
                     TEXT_DISABLED_MENU()
                 };
@@ -2240,14 +2265,24 @@ fn toolbar_graphite(
     // A toolbar wider than the window (long labels, 200 %): the longest labels give way first.
     let natural: Vec<(f32, f32)> = buttons
         .iter()
-        .map(|(_, label, _)| {
+        .map(|(icon, label, _)| {
             let ext = text_width_font(&p, font.clone(), crate::i18n::tc("toolbar", label)).ceil();
-            // label_cap pads a label by 12: Graphite's by PAD. A drop-down's arrow sits inside
-            // its button (never under the minimum width), so it adds nothing.
-            (ext + PAD - 12.0, 0.0)
+            // label_cap pads a label by 12: Graphite's by PAD. A drop-down's arrow is a part of
+            // its own at the button's end, past the label.
+            (
+                ext + PAD - 12.0,
+                if is_dropdown(icon) { ARROW_W } else { 0.0 },
+            )
         })
         .collect();
-    let cap = label_cap(&natural, MIN_W, (width - fixed).max(0.0));
+    // Narrower than 60 only in a window too small for them all (200 %, a narrow window): down
+    // to the icon's room, the labels cut with "..." and whole on hover.
+    let room = (width - fixed).max(0.0);
+    let arrows: f32 = natural.iter().map(|n| n.1).sum();
+    let min_w = MIN_W
+        .min(((room - arrows) / buttons.len().max(1) as f32).floor())
+        .max(36.0);
+    let cap = label_cap(&natural, min_w, room);
     let mut x = o.x + SIDE;
     let mut event = None;
     let pointer_down = ui.input(|i| i.pointer.primary_down());
@@ -2255,10 +2290,12 @@ fn toolbar_graphite(
         let full = crate::i18n::tc("toolbar", label);
         let dropdown = is_dropdown(icon);
         let full_ext = text_width_font(&p, font.clone(), full).ceil();
-        let bw = MIN_W.max((full_ext + PAD).min(cap));
-        let cut = full_ext + PAD > bw;
+        // The icon and the label in the main part; a drop-down's arrow part after it.
+        let main_w = min_w.max((full_ext + PAD).min(cap));
+        let bw = main_w + if dropdown { ARROW_W } else { 0.0 };
+        let cut = full_ext + PAD > main_w;
         let shown = if cut {
-            winui::ellipsize(&p, &font, full, bw - PAD)
+            winui::ellipsize(&p, &font, full, (main_w - PAD).max(0.0))
         } else {
             full.to_owned()
         };
@@ -2313,14 +2350,18 @@ fn toolbar_graphite(
         }
         // The icon, 20, 6 under the button's top, centred (a drop-down's in what is left of
         // its arrow's part).
-        let cx = english.center().x;
+        let cx = english.left() + main_w / 2.0;
         let icon_rc = Rect::from_min_size(
             pos2((cx - 10.0).round(), english.top() + 6.0),
             vec2(20.0, 20.0),
         );
         icon.image(*enabled).paint_at(ui, winui::rect(icon_rc));
         let ext = text_width_font(&p, font.clone(), &shown).ceil();
-        let ink = if *enabled { TEXT() } else { TB_DISABLED() };
+        let ink = if *enabled {
+            c.text_secondary
+        } else {
+            TB_DISABLED()
+        };
         text_font(
             &p,
             font.clone(),
@@ -2984,10 +3025,17 @@ fn categories_graphite(
         }
         let icon_x = chev_x + 13.0 + 7.0;
         let icon_rc = Rect::from_min_size(pos2(icon_x, (mid - 8.0).round()), vec2(16.0, 16.0));
+        // The chosen row's icon in the accent, its label in the text's ink; the others in the
+        // secondary ink (the mockup's).
         let ink = if r.selected {
             crate::theme::colors().accent
         } else {
+            crate::theme::colors().text_secondary
+        };
+        let label_ink = if r.selected {
             TEXT()
+        } else {
+            crate::theme::colors().text_secondary
         };
         let drawn_themed = match &r.icon {
             IconKey::Themed(need, _) => {
@@ -3016,7 +3064,7 @@ fn categories_graphite(
             (row.right() - 6.0 - text_x - count_w).max(0.0),
         );
         let baseline = (mid + 4.0).round();
-        let drawn = text_font(&tp, row_font, text_x, baseline, &shown, TEXT());
+        let drawn = text_font(&tp, row_font, text_x, baseline, &shown, label_ink);
         if let Some(s) = &count {
             text_font(
                 &tp,
