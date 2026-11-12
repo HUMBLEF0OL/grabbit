@@ -68,3 +68,4 @@ only to fix a mistake; `sync.py doctor` reports a bad or duplicated row.
 | 98418eee0c264a9f58370f9d8ce9ea7901eea642 | ported | 2026-11-12 | PR 5 | Clipboard: every read off the window's thread (follows #418) (#688) | ported by hand: clipboard read off the window's thread |
 | 7ec5bf056a4a6f81cfd5cdb9303b8e57caea9c39 | ported | 2026-11-12 | PR 5 | Tests: the clipboard tests one at a time (#644) | ported by hand: clipboard read off the window's thread |
 | 32881b9d7f2066c37b85abdeda1c7a100272298c | ported | 2026-11-12 | PR 6 | Torrents: a pause during a piece's hash check no longer leaves the torrent one piece short (#706) (#717) | rqbit pin moved to 694291b (brings ac7fa6e, the library half of 650) |
+| 5213ad1f036f0814d20b9b3399ff22204ba74200 | ported | 2026-11-12 | PR 7 | Windows: the title bar's light or dark set once, not checked with DWM every 2 s (#633, #583) (#641) | cfg(windows) branches dropped; caption set once per change |
