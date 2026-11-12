@@ -1,7 +1,7 @@
 # Builds misterdownloadmanager.com (tools/website/build.py: website/, docs/ and CHANGELOG.md, in
-# English) and publishes it with GitHub Pages, on every push to main that touches them, and
-# once a day so the repository's star, fork and issue counts and its contributors (the home page,
-# /contributors.html, the News page; tools/contributors.py) on the site stay current.
+# English) and publishes it with GitHub Pages, on every push to main that touches them, or by
+# hand (Actions → Website → Run workflow) to refresh the star, fork and issue counts and the
+# contributors (tools/contributors.py). No daily run: Actions minutes are counted.
 name: Website
 
 on:
@@ -15,8 +15,6 @@ on:
       - "tools/website/**"
       - "tools/contributors.py"
       - ".github/workflows/pages.yml"
-  schedule:
-    - cron: "17 4 * * *"
   workflow_dispatch:
 
 permissions:

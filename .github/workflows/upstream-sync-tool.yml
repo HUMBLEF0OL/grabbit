@@ -1,14 +1,10 @@
-# tools/upstream-sync/sync.py's self-check, only when the tool changes (Actions minutes are
-# counted): on Ubuntu, and on Windows, the tool's home (a case-blind file system, Git for Windows).
+# tools/upstream-sync/sync.py's self-check, on pull requests into main that change the tool
+# (Actions minutes are counted; on dev it runs locally): on Ubuntu, and on Windows, the tool's home (a case-blind file system, Git for Windows).
 name: Upstream sync tool
 
 on:
-  push:
-    branches: [main, dev]
-    paths:
-      - "tools/upstream-sync/**"
-      - ".github/workflows/upstream-sync-tool.yml"
   pull_request:
+    branches: [main]
     paths:
       - "tools/upstream-sync/**"
       - ".github/workflows/upstream-sync-tool.yml"

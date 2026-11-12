@@ -33,7 +33,9 @@ ranges; `GET /` lists them), so downloads can be tested without the internet.
 
 ## Before you open a pull request
 
-These are the checks CI runs; each works on a clean clone:
+These are the checks CI runs. CI runs only on pull requests into `main` (a release, or a
+hotfix), to spend GitHub Actions minutes once per release: **run them yourself before a pull
+request into `dev` merges**, or before you push to `dev`. Each works on a clean clone:
 
 ```
 cargo fmt --all --check
