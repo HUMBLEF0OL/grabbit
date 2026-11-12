@@ -48,6 +48,7 @@ import re
 import shutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -114,12 +115,14 @@ class Fail(Exception):
     """A stop with a reason for the person: printed, exit code 1."""
 
 
-def git(*args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
+def git(*args: str, check: bool = True, env: dict | None = None,
+        stdin: str | None = None) -> subprocess.CompletedProcess:
     # Paths come back as they are (no "\303\251" quoting) and go in as they are (no globbing:
     # `git rm "img[1].txt"` must never remove img1.txt).
     try:
         r = subprocess.run(
             ["git", "-c", "core.quotepath=off", *args],
+            input=stdin,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -242,21 +245,29 @@ def fork_state(base: str, head: str) -> Fork:
     return Fork(gone, (then_dirs - now_dirs) - alive, moved, rewritten, changed, added, by_case)
 
 
-def tree_paths(rev: str) -> tuple[set[str], set[str]]:
-    """Files and folders in a commit's tree."""
-    files = set(git("ls-tree", "-r", "--name-only", "-z", rev, check=False).stdout.split("\0"))
-    dirs = set(git("ls-tree", "-r", "-d", "--name-only", "-z", rev, check=False).stdout.split("\0"))
-    return files - {""}, dirs - {""}
+def existing(rev: str, paths: list[str]) -> set[str]:
+    """Which of these paths (files or folders) exist in a commit's tree: one git process."""
+    paths = [x for x in dict.fromkeys(paths) if "\n" not in x]
+    if not paths:
+        return set()
+    r = git("cat-file", "--batch-check=%(objectname)", stdin="".join(f"{rev}:{x}\n" for x in paths),
+            check=False)
+    return {x for x, line in zip(paths, r.stdout.splitlines()) if not line.endswith("missing")}
 
 
-def gone_checker(fork: Fork, sha: str):
+def gone_checker(fork: Fork, sha: str, paths: list[str]):
     """Gone here because the fork removed it, not because upstream did before this commit (a
     file upstream deleted and brings back, a folder it dropped and starts again)."""
-    files, dirs = tree_paths(f"{sha}^")
+    def chain(path: str) -> list[str]:
+        parts = path.split("/")
+        return ["/".join(parts[:i]) for i in range(1, len(parts) + 1)]
+    there = existing(f"{sha}^", [x for path in paths for x in chain(path)])
 
     def in_upstream(path: str) -> bool:
-        parts = path.split("/")
-        return path in files or any("/".join(parts[:i]) in dirs for i in range(1, len(parts)))
+        if not set(chain(path)) <= set(c for x in paths for c in chain(x)):
+            there.update(existing(f"{sha}^", chain(path)))
+        parts = chain(path)
+        return path in there or any(x in there for x in parts[:-1])
     return lambda path: fork.is_gone(path) and in_upstream(path)
 
 
@@ -489,9 +500,20 @@ def simulate(sha: str, onto: str) -> list[str]:
     return list(dict.fromkeys(conflicts))
 
 
-def added_lines(sha: str, path: str) -> list[str]:
-    diff = git("show", "--format=", "--no-color", "--unified=0", sha, "--", path).stdout
-    return [ln[1:] for ln in diff.splitlines() if ln.startswith("+") and not ln.startswith("+++")]
+def added_lines(sha: str) -> dict[str, list[str]]:
+    """Every file's added lines in a commit, from one `git show`."""
+    res: dict[str, list[str]] = {}
+    current = None
+    for ln in git("show", "--format=", "--no-color", "--unified=0", "--no-renames", "--no-ext-diff",
+                  sha).stdout.splitlines():
+        if ln.startswith("+++ "):
+            name = ln[4:].rstrip("\t")
+            current = name[2:] if name.startswith("b/") else None
+            if current is not None:
+                res.setdefault(current, [])
+        elif ln.startswith("+") and current is not None:
+            res[current].append(ln[1:])
+    return res
 
 
 def crate_tomls(paths: list[str]) -> list[str]:
@@ -508,8 +530,9 @@ def sort_commit(c: Commit, onto: str, fork: Fork, fork_point: str, t: Taken,
     msg = messages.get(c.sha) or out("log", "-1", "--format=%B", c.sha)
     ch = changes(c.sha)
     paths = list(dict.fromkeys(p for _, a, b in ch for p in (a, b) if p))
+    adds = added_lines(c.sha)
     if "CHANGELOG.md" in paths:
-        c.changelog = [ln for ln in added_lines(c.sha, "CHANGELOG.md") if ln.strip()]
+        c.changelog = [ln for ln in adds.get("CHANGELOG.md", []) if ln.strip()]
     c.issues = sorted(set(ISSUE.findall(msg)), key=int)
     words = CRITICAL.findall(msg + "\n" + "\n".join(c.changelog))
     c.critical_why = sorted({w.lower() for w in words})
@@ -517,7 +540,7 @@ def sort_commit(c: Commit, onto: str, fork: Fork, fork_point: str, t: Taken,
     if areas:
         c.notes.append("touches " + ", ".join(areas) + " (security, IPC, crash or release code): "
                        "read it for a fix that matters even when its subject doesn't say so")
-    is_gone = gone_checker(fork, c.sha)
+    is_gone = gone_checker(fork, c.sha, paths)
     own = [p for p in paths if p in OWN]
     gone = [p for p in paths if p not in OWN and is_gone(p)]
     rest = [p for p in paths if p not in OWN and p not in gone]
@@ -580,7 +603,7 @@ def sort_commit(c: Commit, onto: str, fork: Fork, fork_point: str, t: Taken,
             elif c.after:
                 c.notes.append("the fork never changed some conflicting files: upstream's earlier "
                                "commits (A) are missing; decide those first, then sort again")
-        added = {p: added_lines(c.sha, p) for p in rest}
+        added = {p: adds.get(p, []) for p in rest}
         for flag, rx in ADDED_LINTS:
             hits = [p for p, lines in added.items() if any(rx.search(ln) for ln in lines)]
             if hits and flag not in c.flags:
@@ -668,9 +691,13 @@ def sorted_commits(ctx: Context, everything: bool) -> list[Commit]:
     for c in commits:
         c.status = ctx.t.of(c.sha)
     todo = [c for c in commits if everything or c.status not in DONE]
+    # Each commit is sorted on its own, read only (merge-tree writes objects, never refs), so a
+    # few at once: on Windows most of the time is starting git processes.
+    with ThreadPoolExecutor(max_workers=min(4, os.cpu_count() or 1)) as pool:
+        list(pool.map(lambda c: sort_commit(c, ctx.onto, ctx.fork, ctx.fork_point, ctx.t,
+                                            messages), todo))
     by_issue: dict[str, list[Commit]] = {}
     for c in todo:
-        sort_commit(c, ctx.onto, ctx.fork, ctx.fork_point, ctx.t, messages)
         for n in c.issues:
             by_issue.setdefault(n, []).append(c)
     for c in todo:
