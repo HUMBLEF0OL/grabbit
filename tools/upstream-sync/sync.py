@@ -35,7 +35,7 @@ in the fork or a port PR closed unmerged can't make a fix look taken when it isn
     python tools/upstream-sync/sync.py record <sha> <skipped|covered|deferred|ported> --note "…"
     python tools/upstream-sync/sync.py pr --title "…" --body-file F [--draft] [--force]
 
-Python 3.10 or later; git 2.40 or later (merge-tree --merge-base).
+Python 3.10 or later; a git whose merge-tree takes --merge-base and -X (`doctor` checks).
 """
 from __future__ import annotations
 
@@ -66,6 +66,7 @@ RECORDABLE = ("skipped", "covered", "deferred", "ported")
 # a deleted file with an unrelated new one and carry upstream's fix into the wrong file.
 RENAMES = "find-renames=90%"
 STALE_DEFERRED_DAYS = 14
+REPORT_ROWS = 200  # GitHub's issue body holds 65,536 characters
 
 # Hints for the reviewer, never decisions. Upstream writes plain language ("the window never
 # waits", "no longer holds up"), so its phrasings are here as well as the usual words.
@@ -82,14 +83,14 @@ CRITICAL_AREAS = ("crates/debrid/", "crates/ipc/", "crates/nmhost/", "crates/cra
                   "tools/installer/", ".github/workflows/")
 SENSITIVE = re.compile(
     r"^(\.claude/|\.github/|\.cargo/|\.vscode/|tools/|CLAUDE\.md$|AGENTS\.md$|\.gitattributes$|"
-    r"rust-toolchain(\.toml)?$)|(^|/)(build\.rs|package\.json)$"
+    r"rust-toolchain(\.toml)?$|\.gitmodules$)|(^|/)(build\.rs|package(-lock)?\.json)$"
 )
 OTHER_PLATFORMS = re.compile(r"^(linux|macos|mac|ubuntu|flatpak|safari|helium)\b|linux and macos",
                              re.I)
 ADDED_LINTS = (
     ("P", re.compile(r'target_os\s*=\s*"(linux|macos|ios|android)"|cfg\(\s*unix\s*\)')),
     ("P", re.compile(r"right-to-left|\bis_rtl\b|\brtl\b|text direction|dir=\W?rtl", re.I)),
-    ("I", re.compile(r"anefzaoui", re.I)),
+    ("I", re.compile(r"anefzaoui(?!/[\w.-]+\.git)", re.I)),
 )
 ISSUE = re.compile(r"(?<![\w/])#(\d+)")
 PICK_TRAILER = re.compile(r"^Upstream-Pick:\s*([0-9a-f]{40})\s*$", re.M)
@@ -291,6 +292,11 @@ def taken(refs: list[str], fork_point: str, up: str, in_range: set[str], ledger:
             by_commit[sha] = (p, q)
             for r in REVERTS.findall(body):
                 rp, rq = by_commit.get(r, (set(), set()))
+                parents = out("rev-list", "--parents", "-n", "1", r).split()[1:] if full_sha(r) else []
+                if len(parents) == 2:  # a merged PR reverted: everything the merge brought in
+                    for inner in out("rev-list", f"{parents[0]}..{parents[1]}").splitlines():
+                        ip, iq = by_commit.get(inner, (set(), set()))
+                        rp, rq = rp | ip, rq | iq
                 picked -= rp
                 ported -= rq
                 reverted |= rp | rq
@@ -305,10 +311,21 @@ def taken(refs: list[str], fork_point: str, up: str, in_range: set[str], ledger:
         t.status[sha] = "picked"
     for sha in ported:
         t.status[sha] = "ported"
+    for sha in reverted:
+        t.status[sha] = "reverted"
     for ref in refs:  # the same change already here by patch-id (a pick made by hand, a rebase)
         for line in out("cherry", ref, up, fork_point).splitlines():
-            if line.startswith("- "):
+            if line.startswith("- ") and line[2:].strip() not in reverted:
                 t.status.setdefault(line[2:].strip(), "equivalent")
+    # Picks on other sync branches whose PRs haven't merged: taken there, not here yet.
+    current = current_branch()
+    for ref in out("for-each-ref", "--format=%(refname:short)",
+                   f"refs/remotes/{FORK_REMOTE}/{SYNC_PREFIX}").splitlines():
+        if not refs or ref.split("/", 1)[1] == current:
+            continue
+        log = out("log", "--format=%B", f"^{refs[0]}", ref)
+        for sha in set(PICK_TRAILER.findall(log)) | set(PORT_TRAILER.findall(log)):
+            t.status.setdefault(sha, "in-pr")
     rows, problems = read_ledger(ledger)
     t.warnings += problems
     for row in rows:
@@ -321,7 +338,8 @@ def taken(refs: list[str], fork_point: str, up: str, in_range: set[str], ledger:
             # A squash merge may have dropped the trailer: the row stands, unless it was reverted.
             t.status[full] = "reverted" if full in reverted else "picked"
         elif row.status == "ported":
-            t.status[full] = "ported" if full in ported else "ported?"
+            t.status[full] = ("reverted" if full in reverted
+                              else "ported" if full in ported else "ported?")
         else:
             t.status[full] = row.status
         if row.status == "deferred":
@@ -400,7 +418,7 @@ def added_lines(sha: str, path: str) -> list[str]:
 
 
 def crate_tomls(paths: list[str]) -> list[str]:
-    tomls = {"Cargo.toml"} if any(p.endswith(".rs") for p in paths) else set()
+    tomls = set()  # a crate's own manifest: a dependency it gained, which a later fix uses
     for p in paths:
         m = re.match(r"(crates/[^/]+)/", p)
         if m:
@@ -428,6 +446,9 @@ def sort_commit(c: Commit, onto: str, fork: Fork, fork_point: str, t: Taken,
     c.left_out = gone + own
     c.touches_fork = [p for p in rest if p in fork.changed]
     c.sensitive = [p for p in rest if SENSITIVE.search(p)]
+    if any(p.endswith("Cargo.toml") for p in paths):
+        c.notes.append("dependencies change: a new crate's build script and macros run at build; "
+                       "read what it adds")
     for _, src, _dst in ch:
         if src in fork.rewritten:
             c.notes.append(f"{src} was deleted here, perhaps rewritten as {fork.rewritten[src]}: "
@@ -460,6 +481,9 @@ def sort_commit(c: Commit, onto: str, fork: Fork, fork_point: str, t: Taken,
             if all(p in fork.changed for p in c.conflicts):
                 c.notes.append("the fork changed the conflicting files: port by hand now; never "
                                "take a feature only to make this apply")
+            elif c.after and c.critical_why:
+                c.notes.append("critical-looking: port it now; upstream's earlier commits (A) "
+                               "show what it builds on, never what it waits for")
             elif c.after:
                 c.notes.append("the fork never changed some conflicting files: upstream's earlier "
                                "commits (A) are missing; decide those first, then sort again")
@@ -614,13 +638,21 @@ def cmd_show(a) -> int:
         c = Commit(sha, 0, out("log", "-1", "--date=short", "--format=%ad", sha),
                    out("log", "-1", "--format=%s", sha))
     c.status = ctx.t.of(sha)
-    sort_commit(c, ctx.onto, ctx.fork, ctx.fork_point, ctx.t, messages)
+    if len(out("rev-list", "--parents", "-n", "1", sha).split()) > 2:
+        merges = [m for m in evil_merges(ctx.fork_point, ctx.up, Taken()) if m.sha == sha]
+        if merges:
+            c = merges[0]
+        else:
+            c.kind = "merge"
+            c.notes.append("a plain merge: its changes come with the commits it merged")
+    else:
+        sort_commit(c, ctx.onto, ctx.fork, ctx.fork_point, ctx.t, messages)
     print(json.dumps(asdict(c), indent=1))
     return 0
 
 
 def gh_json(args: list[str]):
-    if not shutil.which("gh"):
+    if os.environ.get("UPSTREAM_SYNC_OFFLINE") or not shutil.which("gh"):
         return None
     try:
         r = subprocess.run(["gh", *args], capture_output=True, text=True, encoding="utf-8",
@@ -669,7 +701,9 @@ def cmd_watch(a) -> int:
         for p in sorted(d["prs"], key=lambda p: (not p["critical"], -p["number"])):
             print(f"  {'C' if p['critical'] else ' '} {p['number']:>5} "
                   f"{'(draft) ' if p['isDraft'] else ''}{p['title']}  [{p['headRefName']}]")
-    if isinstance(d["advisories"], list) and d["advisories"]:
+    if not isinstance(d["advisories"], list):
+        print("\n! upstream's security advisories could not be read (they may need access)")
+    elif d["advisories"]:
         print(f"\n! upstream has {len(d['advisories'])} security advisories: read them")
     print(f"\nUpstream branches ahead of {upstream_ref()}: {len(d['branches'])}")
     for b in d["branches"]:
@@ -680,7 +714,7 @@ def cmd_watch(a) -> int:
 
 def code(text: str) -> str:
     """Inline code for Markdown: no link, no mention, whatever the text holds."""
-    return "`" + text.replace("`", "'").replace("\n", " ") + "`"
+    return "`" + text.replace("`", "'").replace("\n", " ").replace("|", "\\|") + "`"
 
 
 def cmd_report(a) -> int:
@@ -695,17 +729,24 @@ def cmd_report(a) -> int:
         "`/upstream-sync` to act on it. Kinds and flags: `tools/upstream-sync/sync.py`.", "",
         "| # | sha | kind | flags | subject |", "|---:|---|---|---|---|",
     ]
-    for c in sorted(todo, key=lambda c: ("C" not in c.flags, c.index)):
+    rows = sorted(todo, key=lambda c: ("C" not in c.flags, c.index))
+    for c in rows[:REPORT_ROWS]:
         lines.append(f"| {c.index or '-'} | {code(c.sha[:12])} | {c.kind} | {c.flags} | "
                      f"{code(c.subject)} |")
+    if len(rows) > REPORT_ROWS:
+        lines.append(f"| | | | | …and {len(rows) - REPORT_ROWS} more: `sync.py status` |")
     if ctx.t.warnings:
         lines += ["", "Warnings:"] + [f"- {code(w)}" for w in ctx.t.warnings]
-    if d["prs"] is not None:
+    if d["prs"] is None:
+        lines += ["", "**Upstream's open PRs could not be read** (gh missing or refused)."]
+    else:
         crit_prs = [p for p in d["prs"] if p["critical"]]
         lines += ["", f"Upstream's open PRs that look critical (not merged there yet): "
                   f"{len(crit_prs)}"]
         lines += [f"- {code(str(p['number']) + ' ' + p['title'])}" for p in crit_prs]
-    if isinstance(d["advisories"], list) and d["advisories"]:
+    if not isinstance(d["advisories"], list):
+        lines += ["", "Upstream's security advisories could not be read (they may need access)."]
+    elif d["advisories"]:
         lines += ["", f"**Upstream has {len(d['advisories'])} security advisories.**"]
     print("\n".join(lines))
     return 0
@@ -729,6 +770,9 @@ def neutralise(msg: str) -> str:
     """Upstream's message, made safe to carry: its own markers can't count as this fork's
     record, and its #numbers can't link to this fork's issues and PRs."""
     msg = MARKERS.sub("upstream's text: ", msg)
+    msg = re.sub(r"(https?://)?(www\.)?github\.com/anefzaoui/misterdownloadmanager/"
+                 r"(issues|pull|discussions)/(\d+)\S*", r"upstream \3 \4", msg, flags=re.I)
+    msg = re.sub(r"anefzaoui/misterdownloadmanager#(\d+)", r"upstream issue \1", msg, flags=re.I)
     return ISSUE.sub(lambda m: f"upstream {m.group(1)}", msg)
 
 
@@ -771,6 +815,8 @@ def pick_one(sha: str, ctx: Context, commits: list[Commit], messages: dict[str, 
     status = ctx.t.of(sha)
     if status in DONE:
         return True, f"{sha[:12]} already {status}: not picked again"
+    if status == "in-pr":
+        return False, f"{sha[:12]} is picked on another sync branch whose PR is open: not again"
     c = next(x for x in commits if x.sha == sha)
     c = Commit(c.sha, c.index, c.date, c.subject)
     sort_commit(c, "HEAD", ctx.fork, ctx.fork_point, ctx.t, messages)
@@ -805,6 +851,7 @@ def pick_one(sha: str, ctx: Context, commits: list[Commit], messages: dict[str, 
         problem = apply_lock(sha)
         if problem:
             undo_pick()
+            git("checkout", "HEAD", "--", "Cargo.lock", check=False)
             return False, f"{sha[:12]}: Cargo.lock not made ({problem}); nothing changed"
     still = zlist("diff", "--name-only", "--diff-filter=U", "-z")
     if still:
@@ -984,10 +1031,20 @@ def cmd_pr(a) -> int:
                        "put it in `code`, or write \"upstream issue N\"; nothing pushed")
     if staged() or unstaged():
         raise Fail("uncommitted changes: commit them (the ledger too) before the PR")
+    if has_ref(fork_ref()):
+        m = UPSTREAM_LINK.search(out("log", "--format=%B", f"{fork_ref()}..HEAD"))
+        if m:
+            raise Fail(f"a commit on this branch says {m.group(0)!r}, which would mention this "
+                       "fork on the original: reword it (`upstream issue N`); nothing pushed")
+    existing = gh_json(["pr", "list", "-R", target, "--state", "open", "--head", branch,
+                        "--json", "number,url"])
     push = ["push", "-u", FORK_REMOTE, f"HEAD:refs/heads/{branch}"]
     if a.force:
         push.insert(1, "--force-with-lease")
     git(*push)
+    if existing:
+        print(f"pushed; its PR is open already: {existing[0]['url']}")
+        return 0
     # -R and --base always: in a fork, gh's default for a new PR is the parent repository.
     args = ["gh", "pr", "create", "-R", target, "--base", FORK_BASE, "--head", branch,
             "--title", a.title, "--body-file", str(body)]
@@ -1031,8 +1088,10 @@ def checks() -> list[tuple[bool, str, list[str] | None]]:
         if up in {f"refs/remotes/{FORK_REMOTE}/{p}" for p in PROTECTED}:
             c.append((False, f"{b} tracks {up} (an editor's push would land there)",
                       ["branch", "--unset-upstream", b]))
-    v = re.search(r"(\d+)\.(\d+)", out("--version"))
-    c.append((bool(v) and (int(v[1]), int(v[2])) >= (2, 40), "git 2.40 or later", None))
+    h = git("merge-tree", "-h", check=False)
+    usage = h.stdout + h.stderr
+    c.append(("merge-base <" in usage and "strategy-option" in usage,
+              "git's merge-tree takes --merge-base and -X (a recent git)", None))
     c.append((has_ref(upstream_ref()), f"{upstream_ref()} fetched",
               ["fetch", UPSTREAM_REMOTE, "--no-tags"]))
     return c

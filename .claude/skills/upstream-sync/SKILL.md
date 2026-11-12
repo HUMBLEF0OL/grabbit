@@ -36,8 +36,11 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
 - Commit to `dev` or `main`, merge a PR, or force-push anything but the run's own sync branch.
 - Work in the main checkout or another session's worktree, or build into their `target`.
 - Take back what the fork removed: `#[cfg(target_os = "linux")]` / `"macos"` code, translations,
-  the language picker, right-to-left layout (flag `P`); or upstream's identity, links and domains
-  (flag `I`, and README, manifests, website, `help.rs`, `crash/github.rs`, issue templates).
+  the language picker, right-to-left layout (flag `P`); or links to upstream's repository and
+  its owner's name (flag `I`; also check README, manifests, website, `help.rs`,
+  `crash/github.rs`, issue templates). The product name and misterdownloadmanager.com stay as
+  long as the fork itself uses them; the git dependencies the fork shares (`anefzaoui/egui.git`,
+  `anefzaoui/rqbit.git`) are dependencies, not identity.
 
 ## A run
 
@@ -141,15 +144,22 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
    squash keeps the ledger's rows (which is what counts) but loses the per-commit trailers.
    If gh fails after the push, open the PR by hand with base **HUMBLEF0OL/grabbit `dev`**: the
    web page proposes the original first.
+   Two sync PRs open at once (a batch and a port) both add ledger rows at its end, so the second
+   to merge conflicts there: keep both sides' rows (`doctor` reports a duplicated row; the later
+   decision stays). While a PR is open, `status` marks its commits `in-pr` and `pick` won't take
+   them again on another branch.
 
 10. **After the merge**, remove the run's worktree and its branch, locally and on origin.
 
 ## Watching between runs
 
-The workflow `.github/workflows/upstream-watch.yml` runs `sync.py report` once a day and keeps
-it in one issue on this fork, labelled `upstream-watch`: the commits waiting, the critical-
-looking ones first, and upstream's critical-looking open PRs. It only reads the original. GitHub
-runs scheduled workflows from the default branch, so it starts once it reaches `main`.
+The workflow `.github/workflows/upstream-watch.yml` runs `sync.py report` once a day: the
+commits waiting, the critical-looking ones first, and upstream's critical-looking open PRs. The
+report is on each run's summary page, and in one issue on this fork labelled `upstream-watch`
+when the fork has Issues turned on. It only reads the original. GitHub runs scheduled workflows
+from the default branch (`main`), so it starts with the first release PR that carries it; it can
+be started by hand from the Actions tab after that. GitHub pauses a schedule after 60 days
+without activity in the repository.
 
 ## When something looks wrong
 

@@ -6,6 +6,7 @@ found. `python tools/upstream-sync/test_sync.py` (needs git 2.40+; gh only for t
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -28,8 +29,13 @@ def git(cwd: Path, *args: str) -> str:
     return run(cwd, "git", "-c", "core.quotepath=off", *args).stdout.strip()
 
 
-def sync(cwd: Path, *args: str, ok: bool = True) -> subprocess.CompletedProcess:
-    return run(cwd, sys.executable, str(SYNC), *args, ok=ok)
+def sync(cwd: Path, *args: str, ok: bool = True, online: bool = False):
+    env = None if online else {**os.environ, "UPSTREAM_SYNC_OFFLINE": "1"}
+    r = subprocess.run([sys.executable, str(SYNC), *args], cwd=cwd, capture_output=True,
+                       text=True, encoding="utf-8", env=env)
+    if ok and r.returncode != 0:
+        raise AssertionError(f"sync {args}: {r.returncode}\n{r.stdout}\n{r.stderr}")
+    return r
 
 
 def status(cwd: Path) -> dict:
@@ -66,7 +72,7 @@ def main() -> None:
         r = Path(tmp)
         git(r, "init", "-q", "-b", "main")
         for k, v in {"user.name": "T", "user.email": "t@example.com", "commit.gpgsign": "false",
-                     "core.autocrlf": "false"}.items():
+                     "core.autocrlf": "false", "protocol.https.allow": "never"}.items():
             git(r, "config", k, v)
         for f in ("a.rs", "b.rs", "img1.txt", "img[1].txt", "old/x.rs"):
             write(r, f, LINES)
@@ -125,6 +131,9 @@ def main() -> None:
         up("revert_me", "revert_me: c.rs", {"c.rs": "c\n"})
         up("squashed", "squashed: d.rs", {"d.rs": "d\n"})
         up("portrow", "portrow: e.rs", {"e.rs": "e\n"})
+        up("merge_rev", "merge_rev: g.rs", {"g.rs": "g\n"})
+        up("link", "link: h.rs\n\nSee anefzaoui/misterdownloadmanager#5 and "
+           "https://github.com/anefzaoui/misterdownloadmanager/issues/6.", {"h.rs": "h\n"})
         # An upstream merge with a change of its own.
         git(r, "checkout", "-q", "-b", "side", U["clean"])
         up("side", "side: f.rs", {"f.rs": "f\n"})
@@ -268,9 +277,32 @@ def main() -> None:
         git(r, "remote", "set-url", "--push", "origin", "https://github.com/someone/fork.git")
         if shutil.which("gh"):
             write(r, "body.md", "Fixes anefzaoui/misterdownloadmanager#771.\n")
-            res = sync(r, "pr", "--title", "t", "--body-file", str(r / "body.md"), ok=False)
+            res = sync(r, "pr", "--title", "t", "--body-file", str(r / "body.md"), ok=False,
+                       online=True)
             assert "would link to" in res.stderr, res.stderr
         assert git(r, "for-each-ref", "refs/remotes/origin/upstream-sync") == ""
+
+        # Links to the original are rewritten in a pick; `show` knows a merge; `report` runs.
+        assert "picked as" in sync(r, "pick", U["link"]).stdout
+        body = git(r, "log", "-1", "--format=%B")
+        assert "anefzaoui" not in body and "upstream issue 5" in body and "upstream issues 6" in body, body
+        assert json.loads(sync(r, "show", U["merge"]).stdout)["kind"] == "merge"
+        rep = sync(r, "report").stdout
+        assert "could not be read" in rep and "| 1 |" not in rep.split("\n")[0]
+
+        # A merged sync PR reverted on dev: its picks show again, as reverted, never as done.
+        git(r, "add", "-A")
+        git(r, "commit", "-qm", "ledger")
+        git(r, "checkout", "-q", "-b", "upstream-sync/pr2", "dev")
+        assert "picked as" in sync(r, "pick", U["merge_rev"]).stdout
+        git(r, "add", "-A")
+        git(r, "commit", "-qm", "ledger")
+        git(r, "checkout", "-q", "dev")
+        git(r, "merge", "-q", "--no-ff", "-m", "Merge the sync PR", "upstream-sync/pr2")
+        git(r, "revert", "--no-edit", "-m", "1", "HEAD")
+        git(r, "update-ref", "refs/remotes/origin/dev", "dev")
+        git(r, "checkout", "-q", "-b", "upstream-sync/after-revert", "dev")
+        assert status(r)["by"][U["merge_rev"]]["status"] == "reverted"
     print("ok: sync.py sorts, picks, records and refuses as it should")
 
 

@@ -38,13 +38,20 @@ jobs:
       - name: Report
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python tools/upstream-sync/sync.py report > "$RUNNER_TEMP/report.md"
+        run: |
+          python tools/upstream-sync/sync.py report > "$RUNNER_TEMP/report.md"
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
       - name: The tracking issue
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-        # -R always: in a fork, gh's default repository is the original.
+        # -R always: in a fork, gh's default repository is the original. With the fork's Issues
+        # turned off, the run's summary (above) is the report.
         run: |
+          if [ "$(gh repo view "$REPO" --json hasIssuesEnabled --jq .hasIssuesEnabled)" != true ]; then
+            echo "::notice::Issues are off on $REPO: the report is in this run's summary only"
+            exit 0
+          fi
           gh label create upstream-watch -R "$REPO" --color BFD4F2 \
             --description "The upstream watch's daily report" 2>/dev/null || true
           n=$(gh issue list -R "$REPO" --label upstream-watch --state open --json number \
