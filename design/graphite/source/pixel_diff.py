@@ -3,8 +3,8 @@
 Two files, or two folders: every PNG under the first (its subfolders too) is compared with the
 one at the same relative path under the second. Prints, for each pair, how many pixels differ
 (any channel, alpha included) and the box around them; exits 1 if any pair differs (size,
-pixels, a picture missing from either side or one that can't be read), 0 if every pair is
-identical, 2 on a bad command line.
+pixels, a picture missing from either side or one that can't be read, an "after" that doesn't
+exist), 0 if every pair is identical, 2 on a bad command line (a "before" that doesn't exist).
 
     python design/graphite/source/pixel_diff.py before.png after.png
     python design/graphite/source/pixel_diff.py target/05a/before target/05a/after
@@ -48,10 +48,13 @@ def main() -> int:
     ap.add_argument("after", type=Path)
     ap.add_argument("--diff", type=Path, default=None, help="folder for pictures of the differences")
     args = ap.parse_args()
-    for p in (args.before, args.after):
-        if not p.exists():
-            print(f"{p}: not found", file=sys.stderr)
-            return 2
+    if not args.before.exists():
+        print(f"{args.before}: not found", file=sys.stderr)
+        return 2
+    # A missing "after" is a missing picture (or all of them): a difference, as in folder mode.
+    if not args.after.exists():
+        print(f"{args.after}: not found")
+        return 1
     if args.before.is_dir() != args.after.is_dir():
         print("give two files or two folders", file=sys.stderr)
         return 2

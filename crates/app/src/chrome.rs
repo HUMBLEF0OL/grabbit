@@ -1753,7 +1753,8 @@ pub fn categories(
             let count = r.count.map_or(0.0, |n| {
                 5.0 + text_width_font(&p, winui::tahoma(), &count_text(n))
             });
-            text_x - (tree.left() - left + 6.0)
+            // From the tree's start (the rows count from 6 before the frame).
+            left - 6.0 + text_x - tree.left()
                 + text_width_font(&p, winui::tahoma(), crate::i18n::t(&r.label))
                 + count
                 + 5.0

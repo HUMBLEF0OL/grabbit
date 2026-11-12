@@ -6512,7 +6512,8 @@ impl App {
             self.open_menu = chrome::menubar_next(self.open_menu, event);
         }
         // A menu opened by Left or Right is drawn in the same pass as the one it replaces (a
-        // second turn), so no pass goes by without a menu of the bar shown (#277).
+        // second turn): on X11 the bar's menus share one window (chrome::menu_viewport), which
+        // a pass without a menu would close, a new window opening for the next (#277).
         for _ in 0..2 {
             let Some(i) = self.open_menu else { break };
             let x = chrome::menus()[i].1;

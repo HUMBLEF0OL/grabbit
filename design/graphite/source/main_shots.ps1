@@ -20,7 +20,7 @@ param(
   [string]$Mode = "",
   [string[]]$States = @(),
   [switch]$Extra,
-  # The run's folder (deleted at its start and end); its path shows in no main-window state.
+  # The run's folder (must not exist; deleted at the end); its path shows in no main-window state.
   [string]$Work = (Join-Path $env:TEMP "mdm-main-shots"),
   [ValidateSet(100, 125, 150, 175, 200)][int]$InterfaceSize = 100
 )
@@ -35,7 +35,11 @@ $Themes = @($Themes | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 $States = @($States | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
 $all = @("plain", "menu-0", "menu-1", "menu-2", "menu-3", "menu-4", "context", "empty", "nocats", "wide")
 if ($Extra) { $all += @("blank", "node", "queue", "columns", "filter", "filtered") }
-if ($States.Count) { $all = @($all | Where-Object { $States -contains $_ }) }
+if ($States.Count) {
+  $unknown = @($States | Where-Object { $all -notcontains $_ })
+  if ($unknown.Count) { throw "no such state (or one of -Extra's without -Extra): $($unknown -join ', ')" }
+  $all = @($all | Where-Object { $States -contains $_ })
+}
 
 Add-Type -TypeDefinition @"
 using System; using System.Text; using System.Collections.Generic; using System.Runtime.InteropServices;
@@ -131,20 +135,21 @@ function Run-App([bool]$dark, [bool]$empty, [string]$more, [scriptblock]$body) {
   }
 }
 
-# cap-own.ps1 until two pictures in a row are the same (nothing still painting), up to 10 s.
+# cap-own.ps1 until two pictures in a row are the same (nothing still painting), up to 10 s;
+# throws when none comes or it never settles.
 function Capture([int]$procId, [string]$title, [string]$file) {
   $by = if ($title) { @{ Title = [WildcardPattern]::Escape($title) } } else { @{} }
+  Remove-Item -LiteralPath $file -ErrorAction SilentlyContinue
   $prev = $null
   for ($try = 0; $try -lt 20; $try++) {
     Start-Sleep -Milliseconds 500
     try { & (Join-Path $lab "cap-own.ps1") -ProcessId $procId @by -Out $file | Out-Null } catch { continue }
     $hash = (Get-FileHash $file -Algorithm SHA256).Hash
-    if ($hash -eq $prev) { return $true }
+    if ($hash -eq $prev) { return }
     $prev = $hash
   }
   if (-not (Test-Path $file)) { throw "$(Split-Path -Leaf $file): no picture" }
-  Write-Warning "$(Split-Path -Leaf $file): still changing after 10 s"
-  return $true
+  throw "$(Split-Path -Leaf $file): still changing after 10 s"
 }
 
 # Each state: the /show commands that open it (none: the main window as it is) and whether the
@@ -186,7 +191,8 @@ foreach ($m in $modes) {
           Start-Sleep -Milliseconds 800
           $file = Join-Path $dir "$s$suffix.png"
           $title = if ($composed) { "" } else { $main }
-          if (Capture $app.Id $title $file) { "  $t\$s$suffix.png" }
+          Capture $app.Id $title $file
+          "  $t\$s$suffix.png"
           Close-Menus $app.Id
           Start-Sleep -Milliseconds 800
           Close-Menus $app.Id
