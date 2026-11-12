@@ -498,6 +498,11 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   pages are removed. MDM on Windows works as before. The multi-platform state is kept on the
   `archive/multiplatform-i18n` branch.
 
+- ✅ The original MDM's fixes, brought in one at a time: `tools/upstream-sync/sync.py` sorts
+  upstream's new commits (applies, applies without the removed parts, needs a port by hand,
+  nothing to take), picks the ones that apply onto a sync branch and records the rest; each run
+  reaches `dev` by a pull request
+
 ## Being worked on
 
 These ship in a later version, when they're ready.
