@@ -1821,10 +1821,7 @@ impl Complete {
                 // Enter: Open, the default button (as in the other dialogs).
                 // The keys of a drag out of the grip are the drag's (Escape cancels it), not
                 // this window's (#561: the drag runs beside the window, which sees them too).
-                #[cfg(windows)]
                 let dragging = crate::win32::dragging_out();
-                #[cfg(not(windows))]
-                let dragging = false; // the grip is Windows-only
                 // A file that can't open says why (the box stays for Open folder).
                 if (open.clicked() || (!dragging && winui::enter_pressed(ui)))
                     && open_file(&self.path)
