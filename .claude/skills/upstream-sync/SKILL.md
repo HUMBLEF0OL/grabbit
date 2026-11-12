@@ -149,10 +149,11 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
    PR goes unseen (its picked rows still count). Say so in the PR body.
    If gh fails after the push, open the PR by hand with base **HUMBLEF0OL/grabbit `dev`**: the
    web page proposes the original first.
-   Two sync PRs open at once (a batch and a port) both add ledger rows at its end, so the second
-   to merge conflicts there: keep both sides' rows (`doctor` reports a duplicated row; the later
-   decision stays). While a PR is open, `status` marks its commits `in-pr` and `pick` won't take
-   them again on another branch.
+   Two sync PRs open at once (a batch and a port) both add ledger rows at its end; git merges
+   them by union (`.gitattributes`). If GitHub still reports a conflict there, keep both sides'
+   rows (`doctor` reports a duplicated row; the later decision stays). While a PR is open,
+   `status` marks its commits `in-pr`, and picks on another local sync branch `in-branch`;
+   `pick` won't take either again.
 
 10. **After the merge**, remove the run's worktree and its branch, locally and on origin.
 
@@ -170,9 +171,16 @@ without activity in the repository.
 
 - `status` shows a commit you know was taken (picked by hand without the tool, a ledger row
   lost): `record <sha> covered --ref <fork commit>`.
-- `reverted`: a pick reverted in the fork shows again; decide it again (and say why in the note).
+- `reverted`: a pick reverted in the fork (or a hand-made copy of it) shows again; decide it
+  again, and say why in the note.
+- `picked?`: a row says picked, but the pick isn't in `dev` or on this branch (a squash dropped
+  its trailer, a reset, an uncommitted ledger carried from another branch). Check the code: if
+  the fix is there, `record <sha> covered --ref <commit>`; if not, pick it again.
 - `ported?`: a port recorded whose `Upstream-Port` trailer isn't in `dev`: its PR is open, or
   was closed (then decide again).
+- `in-branch`: picked on another local `upstream-sync/` branch not yet in `dev`: finish that
+  branch (its PR), or delete it to pick here.
+- `equivalent` (`status --all`): the same change is already in `dev`, made without the tool.
 - "not an upstream commit since the fork point": upstream rewrote its history, or a typo. Find
   the commit's new sha by subject (`git log upstream/main --grep=…`) and record it again.
 - Upstream reverts a commit: the revert is a commit like any other. Taken the original? Take the
