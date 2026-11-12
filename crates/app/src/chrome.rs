@@ -366,7 +366,7 @@ pub enum IconKey {
 }
 
 /// The small icons drawn by key: the icon set's (the Categories tree), Graphite's (the
-/// Scheduler's queues) and the file types', which fileicons.rs draws (the system's own).
+/// Scheduler's queues) and the file types', which fileicons.rs draws.
 #[derive(Default)]
 pub struct ShellIcons;
 
@@ -2293,7 +2293,7 @@ pub enum TreeEvent {
     Context(usize, Pos2),
 }
 
-/// One Categories row's events and its node, IDM's tree and Graphite's alike: a tree item with
+/// One Categories row's events and its node: a tree item with
 /// its name (and count), selected, open or shut, its level; Click selects it (on its expander,
 /// English x `chevron`, toggles it), a double-click toggles it, a right-click and Show context
 /// menu open its menu, Expand / Collapse open and shut it. `hit`: the row on screen; `tip`: its

@@ -108,6 +108,12 @@ ProgID) that ends in the new state with nothing lost; the existing startup tests
   `caption` = `luna`, `aero`, `aqua`, `adwaita`, `breeze`, `metro`) stay as theme-file vocabulary
   with their drawing code: 05.5c kept them, to stay under its size limit. Decide here whether a
   theme file still offers them, and remove them with their drawing if not.
+- Theme-file vocabulary nothing draws any more, decided with the above: the `icons` key
+  (`IconStyle`, which inked the Lucide outlines), and the palette roles of the classic tree, list
+  and toolbar (`tree`, `tree.frame`, `tree.lines`, `tree.chevrons`, `toolbar.arrow`,
+  `toolbar.split.shadow`/`.light`, `toolbar.line.light`, `icon.disabled.end`, `list.frame`,
+  `header.sep`, `sorted`): warn "ignored" or remove them, with the docs' theme guide.
+- Plans 06 to 09 carry a note that Graphite is the only look; their Classic steps are gone.
 
 ## Done when
 

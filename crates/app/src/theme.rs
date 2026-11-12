@@ -60,7 +60,7 @@ pub fn metrics() -> &'static Metrics {
 /// rates, time left and percentages): Segoe UI, whatever the theme's font.
 pub const NUMBERS: &str = "numbers";
 
-/// Is what is drawn now a dark surface (light text on dark)? The classic look's dark variant
+/// Is what is drawn now a dark surface (light text on dark)? The base's dark variant
 /// is; a theme says for each of its variants. Glyph rendering and the window captions follow it.
 pub fn dark_surface() -> bool {
     colors().dark
@@ -88,13 +88,16 @@ pub fn select(id: &str) -> Vec<String> {
     // pywal's file is followed again only if this theme is made from it (`themefile::load_in`).
     crate::themefile::forget_pywal();
     *SELECTED.lock().unwrap_or_else(|e| e.into_inner()) = id.clone();
-    let (theme, warnings) = chosen(&id);
+    let (theme, warnings) = chosen(&id, load);
     set(theme);
     warnings
 }
 
-/// The theme [`select`] makes active for `id`, and what went wrong, logged.
-fn chosen(id: &str) -> (Theme, Vec<String>) {
+/// The theme [`select`] makes active for `id` (read by `load`), and what went wrong, logged.
+fn chosen(
+    id: &str,
+    load: impl Fn(&str) -> Result<crate::themefile::Loaded, String>,
+) -> (Theme, Vec<String>) {
     if id.is_empty() {
         return (crate::palette::graphite().clone(), Vec::new());
     }
@@ -533,12 +536,11 @@ fn fonts_for(ctx: &egui::Context, font: Option<&str>) {
             (Monospace, "bundled"),
             (Name("tahoma".into()), "bundled"),
             (Name("tahoma-bold".into()), "bundled-semibold"),
-            (Name("arial-bold".into()), "bundled-semibold"),
             (medium, "bundled-medium"),
         ] {
             let list = defs.families.entry(family).or_default();
             // Tahoma's own files give way too: the family is the bundled face's alone.
-            list.retain(|f| !matches!(f.as_str(), "tahoma" | "tahoma-bold" | "arial-bold"));
+            list.retain(|f| !matches!(f.as_str(), "tahoma" | "tahoma-bold"));
             lead(list, key);
         }
     }
@@ -941,7 +943,9 @@ mod select_tests {
     #[test]
     fn every_old_or_unknown_id_gives_graphite() {
         let g = crate::palette::graphite();
-        let (t, w) = super::chosen("");
+        // Read without following pywal's file (another test follows it).
+        let read = |id: &str| crate::themefile::read(id).0;
+        let (t, w) = super::chosen("", read);
         assert!(t == *g && w.is_empty());
         for id in [
             "graphite",
@@ -952,7 +956,7 @@ mod select_tests {
             "aqua",
             "no-such",
         ] {
-            let (t, w) = super::chosen(id);
+            let (t, w) = super::chosen(id, read);
             assert_eq!(t.id, "graphite", "{id}");
             assert_eq!(t.light, g.light, "{id}");
             assert_eq!(w.is_empty(), id == "graphite", "{id}: {w:?}");

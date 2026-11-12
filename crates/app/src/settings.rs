@@ -87,9 +87,8 @@ pub struct Settings {
     /// its first state next time, and what happens when it no longer asks.
     pub delete_files_too: bool,
     /// Categories pane frame width (IDM: 143, frame x 6..149); dragged with the splitter.
-    pub categories_width: u32,
     /// The same pane's width under the Graphite layout (plan 05b: 224 by default, the mockup's),
-    /// kept apart so Classic's stays IDM's.
+    /// (`categories_width`, IDM's layout's, is read no more since plan 05.5c).
     pub graphite_categories_width: u32,
     /// The main window as last left: position and size (x, y, width, height, in points at 100 %
     /// interface size: the system's own logical pixels), and maximized.
@@ -107,7 +106,7 @@ pub struct Settings {
     pub always_dark: bool,
     /// The look (#45): "graphite" (the default, MDM's only built-in look) or a theme file's name
     /// in the data folder's `themes` folder (crate::themefile). An id MDM no longer has gives
-    /// Graphite, and is written as it is until the theme is chosen again (plan 05.5c).
+    /// Graphite, and "graphite" is written in its place (plan 05.5c).
     pub theme: String,
     /// View → Draw with (#89): OpenGL or Direct3D (Windows only), used from the next start.
     /// None: MDM's default (`renderer::DEFAULT`), which may change.
@@ -357,7 +356,6 @@ impl Default for Settings {
             double_click_open: false,
             confirm_delete: true,
             delete_files_too: false,
-            categories_width: 143,
             graphite_categories_width: 224,
             window: None,
             window_maximized: false,

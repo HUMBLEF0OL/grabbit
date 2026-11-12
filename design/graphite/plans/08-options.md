@@ -1,5 +1,7 @@
 # 08 · Options as a side list
 
+> **Since 05.5c Graphite is the only look** (`00-conventions.md`): a step here that gates on Graphite, keeps Classic unchanged, uses Silk icons, sizes a window for both layouts or falls back to Classic is read as Graphite's alone; there is no Classic side left.
+
 Replaces the two rows of tabs (which swap front and back when a back-row tab is clicked) with the same
 twelve pages listed down the side, in the same order, under the Graphite chrome. Every page keeps its
 controls and wording; Classic keeps the tabs, pixel for pixel.

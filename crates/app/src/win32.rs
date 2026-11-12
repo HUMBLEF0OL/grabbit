@@ -2612,12 +2612,7 @@ impl LookKeys {
             HKEY, HKEY_CURRENT_USER, KEY_NOTIFY, RegCloseKey, RegOpenKeyExW,
         };
         use windows_sys::Win32::System::Threading::CreateEventW;
-        let paths = [
-            personalize_key(),
-            r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent".into(),
-            r"Control Panel\Accessibility\HighContrast".into(),
-            r"Control Panel\Colors".into(),
-        ];
+        let paths = [personalize_key()];
         let keys = paths
             .iter()
             .filter_map(|p| {
@@ -4929,7 +4924,7 @@ fn classic_face(family: &egui::FontFamily) -> Option<(FaceKey, Option<&'static [
         let bytes = match name {
             "" | "tahoma" => regular,
             "geist-medium" => medium,
-            "tahoma-bold" | "arial-bold" => semibold,
+            "tahoma-bold" => semibold,
             _ => return None,
         };
         return Some((
@@ -4941,7 +4936,6 @@ fn classic_face(family: &egui::FontFamily) -> Option<(FaceKey, Option<&'static [
         "" | "geist-medium" => "segoeui.ttf",
         "tahoma" => "tahoma.ttf",
         "tahoma-bold" => "tahomabd.ttf",
-        "arial-bold" => "arialbd.ttf",
         _ => return None,
     };
     Some((FaceKey::File(file), None))

@@ -1,5 +1,7 @@
 # 09 · Polish, then make Graphite the default
 
+> **Since 05.5c Graphite is the only look** (`00-conventions.md`): a step here that gates on Graphite, keeps Classic unchanged, uses Silk icons, sizes a window for both layouts or falls back to Classic is read as Graphite's alone; there is no Classic side left.
+
 Adds the finishing touches the theme shipped without (the two-tone hot colour and the dark-mode glow),
 does a full review against the mockup, and switches new installs to Graphite.
 

@@ -1,5 +1,7 @@
 # 07 · Dialogs
 
+> **Since 05.5c Graphite is the only look** (`00-conventions.md`): a step here that gates on Graphite, keeps Classic unchanged, uses Silk icons, sizes a window for both layouts or falls back to Classic is read as Graphite's alone; there is no Classic side left.
+
 Brings every dialog to the mock under the Graphite chrome: the default button last in every footer and
 filled, one label column, file cards, icon tiles, status banners, status as icon + word. Colours,
 corners and controls already come from the theme (02); this phase is layout. Classic and era themes

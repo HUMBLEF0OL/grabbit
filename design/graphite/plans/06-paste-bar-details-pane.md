@@ -1,5 +1,7 @@
 # 06 · Paste bar and details pane
 
+> **Since 05.5c Graphite is the only look** (`00-conventions.md`): a step here that gates on Graphite, keeps Classic unchanged, uses Silk icons, sizes a window for both layouts or falls back to Classic is read as Graphite's alone; there is no Classic side left.
+
 Two new, optional parts of the main window under the Graphite chrome: a paste bar under the toolbar
 that adds a download from an address, and a details pane beside the list that shows the selected
 download. Both reuse what exists (00's accepted exception: new routes to existing commands); neither

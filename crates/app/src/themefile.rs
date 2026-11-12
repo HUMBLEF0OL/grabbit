@@ -104,8 +104,8 @@ pub fn list_in(dir: Option<&Path>, wal: Option<PathBuf>) -> Vec<Entry> {
         });
     }
     for (id, path) in files {
-        // Built-ins keep their ids (Native too, which is made, not read).
-        if out.iter().any(|e| e.id == id) || id == "native" {
+        // Built-ins keep their ids.
+        if out.iter().any(|e| e.id == id) {
             continue;
         }
         // The name the file gives itself, else its file name.
@@ -383,9 +383,8 @@ fn add_in(folder: &Path, source: &Path) -> Result<String, String> {
         stem
     };
     std::fs::create_dir_all(folder).map_err(|e| format!("{}: {e}", folder.display()))?;
-    // The built-ins' ids, Native's and pywal's are never a file's (the file would be passed over).
-    let reserved =
-        |id: &str| palette::builtins().iter().any(|t| t.id == id) || id == "native" || id == PYWAL;
+    // The built-ins' ids and pywal's are never a file's (the file would be passed over).
+    let reserved = |id: &str| palette::builtins().iter().any(|t| t.id == id) || id == PYWAL;
     let taken = |id: &str| {
         folder.join(id).exists()
             || EXTENSIONS
@@ -906,7 +905,12 @@ mod tests {
             "inherits = \"gruvish\"\nicons = \"accent\"\n[sizes]\nradius = 6\n",
         )
         .unwrap();
-        let t = load_in(&dir, "gruvish", 0).unwrap().theme;
+        // On Graphite, without a word (plan 05.5c: no removed theme inherited).
+        let l = load_in(&dir, "gruvish", 0).unwrap();
+        assert!(l.warnings.is_empty(), "{:?}", l.warnings);
+        let t = l.theme;
+        assert_eq!(t.controls, crate::palette::graphite().controls);
+        assert_eq!(t.metrics, crate::palette::graphite().metrics);
         assert_eq!(t.name, "Test Scheme");
         assert_eq!(t.dark.field, Color32::from_rgb(0x1d, 0x20, 0x21));
         assert_eq!(t.light, t.dark);

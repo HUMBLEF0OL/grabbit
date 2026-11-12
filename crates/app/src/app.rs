@@ -975,6 +975,11 @@ impl App {
         // The zoom main.rs started at (View → Interface size, #262).
         let zoom = crate::scale::startup(loaded.settings.interface_size);
         let mut settings = loaded.settings;
+        // A theme MDM no longer has is Graphite now, and saved so (plan 05.5c); a file's name
+        // stays, so a file away for a while comes back when it is there again.
+        if settings.theme.is_empty() || crate::palette::REMOVED.contains(&settings.theme.as_str()) {
+            settings.theme = "graphite".into();
+        }
         if settings.limiter_on_startup {
             settings.speed_limit_on = true;
         }
