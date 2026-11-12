@@ -79,8 +79,7 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
      (`record <sha> skipped --note "feature; revisit on request"`). First read its CHANGELOG
      lines: a feature commit often carries fixes too; decide each of those as a fix.
    - **Graphite only**: fixes that apply only to the Classic layout, an old theme (Classic,
-     Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero, Aqua), Native or high contrast,
-     and **every new theme** (`status` notes "a theme other than Graphite"), are skipped
+     Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero, Aqua), and **every new theme** (`status` notes "a theme other than Graphite"), are skipped
      (`record <sha> skipped --note "Graphite only"`): this fork keeps Graphite only (plan 05.5).
    Commits that share an issue (`same issue as` in `status`) are decided together: a fix split
    over several commits, or a follow-up, is taken whole or not at all.

@@ -95,10 +95,10 @@ SENSITIVE = re.compile(
     re.I,  # Windows' file names ignore case: .Claude/ is .claude/
 )
 # What cargo reads before it builds anything: never run cargo over it unread.
+CARGO_CONFIG = re.compile(r"(^|/)\.cargo/|(^|/)rust-toolchain", re.I)
 # A theme's file or folder (crates/app/assets/themes/<id>.toml or <id>/): this fork keeps
 # Graphite only (plan 05.5b).
 OTHER_THEME = re.compile(r"^crates/app/assets/themes/([^/]+?)(?:\.toml$|/)")
-CARGO_CONFIG = re.compile(r"(^|/)\.cargo/|(^|/)rust-toolchain", re.I)
 OTHER_PLATFORMS = re.compile(r"^(linux|macos|mac|ubuntu|flatpak|safari|helium)\b|linux and macos",
                              re.I)
 ADDED_LINTS = (
@@ -241,12 +241,27 @@ def licence_text(path: str) -> bool:
             or name in ("README.txt", "readme.txt", "SOURCES.txt"))
 
 
+def small_asset(path: str) -> bool:
+    """A licence text or a small icon (`.svg`, `.png`): alike across folders, so git pairs
+    unrelated ones (Lucide's outlines with Graphite's at 53-66 %, plan 05.5b's audit)."""
+    return licence_text(path) or path.lower().endswith((".svg", ".png"))
+
+
+def folder(path: str) -> str:
+    return path.rsplit("/", 1)[0] if "/" in path else ""
+
+
 def fork_state(base: str, head: str) -> Fork:
     deleted = set(zlist("diff", "--no-renames", "--diff-filter=D", "--name-only", "-z", base, head))
     moved, rewritten = {}, {}
-    for score, src, dst in renames(base, head, "50%"):
-        if licence_text(src) and licence_text(dst):
-            continue  # deleted here: the source counts as gone
+    pairs = renames(base, head, "50%")
+    # Folders a file other than a small asset moved out of, and into (90 % or more alike).
+    carried = {(folder(s), folder(d)) for score, s, d in pairs
+               if score >= 90 and not small_asset(s)}
+    for score, src, dst in pairs:
+        # A small asset moved only with such a sibling; else deleted here (counts as gone).
+        if small_asset(src) and (folder(src), folder(dst)) not in carried:
+            continue
         (moved if score >= 90 else rewritten)[src] = dst
     gone = deleted - moved.keys() - rewritten.keys()
     then_dirs = set(zlist("ls-tree", "-r", "-d", "--name-only", "-z", base))
