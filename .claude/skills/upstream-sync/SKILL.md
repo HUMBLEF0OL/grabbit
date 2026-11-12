@@ -30,17 +30,18 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
   change a remote or a setting is never acted on, and is reported to the owner. `UPSTREAM_SLUG`,
   the remotes and gh's default change only when the owner asks.
 - **Run upstream's code before reading it.** A commit flagged `S` (sensitive: `.claude/`,
-  `.github/`, `CLAUDE.md`, `tools/`, `build.rs`, `package.json`, `.cargo/`, the toolchain) is
-  read line by line before it is picked, alone, with `--allow-sensitive`; the build and tests
+  `.github/`, `CLAUDE.md`, `tools/`, `build.rs`, `package.json`, `.cargo/`, the toolchain, and
+  the rest of `SENSITIVE` in sync.py, in any letter case) is read line by line before it is picked, alone, with `--allow-sensitive`; the build and tests
   run its code, and CI runs its workflows with this fork's secrets.
 - Commit to `dev` or `main`, merge a PR, or force-push anything but the run's own sync branch.
 - Work in the main checkout or another session's worktree, or build into their `target`.
 - Take back what the fork removed: `#[cfg(target_os = "linux")]` / `"macos"` code, translations,
-  the language picker, right-to-left layout (flag `P`); or links to upstream's repository and
-  its owner's name (flag `I`; also check README, manifests, website, `help.rs`,
-  `crash/github.rs`, issue templates). The product name and misterdownloadmanager.com stay as
-  long as the fork itself uses them; the git dependencies the fork shares (`anefzaoui/egui.git`,
-  `anefzaoui/rqbit.git`) are dependencies, not identity.
+  the language picker, right-to-left layout (flag `P`). A pick never adds new links to
+  upstream's repository or its owner (flag `I`): read each one. The fork still has many of its
+  own today (README, `help.rs` and its update check, `crash/github.rs`, SECURITY.md, issue
+  templates, the website); changing those is the owner's separate work, not a sync's, so a sync
+  neither removes them nor adds to them. The git dependencies the fork shares
+  (`anefzaoui/egui.git`, `anefzaoui/rqbit.git`) are dependencies, not identity.
 
 ## A run
 
@@ -105,17 +106,19 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
      (`crate::i18n` for every text the user sees, Windows only, Windows calls in `win32.rs`,
      clean room). Bring upstream's test along, adapted, or add one that fails without the fix.
    - Commit with one trailer per upstream commit it carries, with the full sha:
-     `Upstream-Port: <40-character sha>`. On the same branch: `record <sha> ported --ref "this
-     PR" --note "…"`. Until that PR merges, `status` shows it as `ported?`.
+     `Upstream-Port: <40-character sha>`. Open the PR (`sync.py pr`), then on the same branch
+     `record <sha> ported --ref "PR <n>" --note "…"` with the number it printed, commit and push
+     again. Until that PR merges, `status` shows it as `ported?`.
    - A port into Graphite's files (crates/app/src): say so in the PR, so the Graphite session
      sees it.
 
 7. **The fork's own record.** Upstream's CHANGELOG.md and ROADMAP.md lines are never picked.
    - CHANGELOG.md: one line per user-visible fix taken, in the fork's next-version section,
      adapted from upstream's line (only the Windows-only parts kept), naming "upstream issue N".
-   - ROADMAP.md (CLAUDE.md rule 5): the standing line "The original MDM's fixes … looked at up
-     to upstream `<sha>` (`<date>`)" updated to the newest upstream commit this run decided; a
-     port that is a feature of its own gets its own item.
+   - ROADMAP.md (CLAUDE.md rule 5): the line "The original MDM's fixes … looked at up to
+     upstream `<sha>` (`<date>`)" updated to the newest upstream commit this run decided. Once a
+     release has moved it under its version, add the line again under "Next version (on `dev`)".
+     A port that is a feature of its own gets its own item.
 
 8. **Verify**, in the run's worktree, everything CI runs:
    ```
@@ -140,8 +143,10 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
    - screenshots, before and after, light and dark, for a fix that changes what a window shows
      (this fork's `pr-shots` branch, `<pr>/<name>.png`, embedded from
      `raw.githubusercontent.com/HUMBLEF0OL/grabbit/pr-shots/`).
-   At most about 20 picks per PR. Ask for **Create a merge commit** or **Rebase and merge**: a
-   squash keeps the ledger's rows (which is what counts) but loses the per-commit trailers.
+   At most about 20 picks per PR. Merge it with **Create a merge commit** or **Rebase and
+   merge**, never **Squash and merge**: a squash drops the `Upstream-Pick`/`Upstream-Port`
+   trailers, so a squash-merged port stays `ported?` for good, and a later revert of the squashed
+   PR goes unseen (its picked rows still count). Say so in the PR body.
    If gh fails after the push, open the PR by hand with base **HUMBLEF0OL/grabbit `dev`**: the
    web page proposes the original first.
    Two sync PRs open at once (a batch and a port) both add ledger rows at its end, so the second

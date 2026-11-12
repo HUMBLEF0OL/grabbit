@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """sync.py against a throwaway repository: a fork that removed a platform and a language, moved a
 folder and changed files, and an upstream with a commit of every kind and every trap the audits
-found. `python tools/upstream-sync/test_sync.py` (needs git 2.40+; gh only for the PR checks).
+found. `python tools/upstream-sync/test_sync.py` (needs git 2.43+ for merge-tree -X; gh only for
+the PR checks; cargo for the --lock case, which fails rather than skips under CI).
 """
 from __future__ import annotations
 
@@ -158,6 +159,9 @@ def main() -> None:
         up("big", "a big commit", {f"big/f{i}.rs": f"{i}\n" for i in range(150)})
         up("twice", "twice: i.rs", {"i.rs": "i\n"})
         up("short_port", "short_port: j.rs", {"j.rs": "j\n"})
+        up("lint_p", "a helper", {"lint_p.rs": "#[cfg(not(windows))]\nfn f() {}\n"})
+        up("lint_i", "a link", {"lint_i.md": "See https://github.com/anefzaoui/somewhere\n"})
+        up("same", "same: k2.rs", {"k2.rs": "the same change\n"})
         # An upstream merge with a change of its own.
         git(r, "checkout", "-q", "-f", "-b", "side", U["clean"])
         up("side", "side: f.rs", {"f.rs": "f\n"})
@@ -169,6 +173,11 @@ def main() -> None:
         U["merge"] = git(r, "rev-parse", "HEAD")
         git(r, "update-ref", "refs/remotes/upstream/main", "HEAD")
 
+        git(r, "checkout", "-q", "-f", "dev")
+        write(r, "k2.rs", "the same change\n")
+        git(r, "add", "k2.rs")
+        git(r, "commit", "-q", "-m", "the fork's own copy of the same change")
+        git(r, "update-ref", "refs/remotes/origin/dev", "HEAD")
         git(r, "checkout", "-q", "-f", "-b", "upstream-sync/test", "dev")
         st = status(r)
         k = {n: st["by"][s] for n, s in U.items() if s in st["by"]}
@@ -191,6 +200,12 @@ def main() -> None:
         assert "S" in k["build_rs"]["flags"], k["build_rs"]
         assert k["restore"]["kind"] != "removed" and k["drop"]["kind"] == "clean", (k["restore"], k["drop"])
         assert k["big"]["kind"] == "clean"
+        assert "P" in k["lint_p"]["flags"] and "I" in k["lint_i"]["flags"], (k["lint_p"],
+                                                                             k["lint_i"])
+        assert U["same"] not in st["by"]
+        assert json.loads(sync(r, "status", "--json", "--all").stdout) and any(
+            c["sha"] == U["same"] and c["status"] == "equivalent"
+            for c in json.loads(sync(r, "status", "--json", "--all").stdout)["commits"])
         merges = [c for c in st["commits"] if c["kind"] == "merge"]
         assert [c["sha"] for c in merges] == [U["merge"]], merges
 
@@ -310,6 +325,13 @@ def main() -> None:
         assert "never push there" in sync(r, "pr", "--title", "t", "--body-file", "x",
                                           ok=False).stderr
         git(r, "remote", "set-url", "--push", "origin", "https://github.com/someone/fork.git")
+        res = sync(r, "doctor", ok=False)
+        assert res.returncode == 1 and "FAIL  upstream cannot be pushed to" in res.stdout, res.stdout
+        sync(r, "doctor", "--fix")
+        assert git(r, "remote", "get-url", "--push", "upstream") == "DISABLED"
+        assert git(r, "config", "remote.upstream.tagOpt") == "--no-tags"
+        assert git(r, "config", "remote.origin.gh-resolved") == "base"
+        assert sync(r, "doctor").returncode == 0
         if shutil.which("gh"):
             for body in ("Fixes anefzaoui/misterdownloadmanager#771.\n",
                          "Fixes \\`anefzaoui/misterdownloadmanager#771\\`.\n"):
@@ -385,6 +407,8 @@ def lock_case() -> None:
     upstream bumps a crate, the fork added one, and only Cargo.lock conflicts."""
     cargo = shutil.which("cargo")
     if not cargo:
+        if os.environ.get("CI"):
+            raise AssertionError("cargo is not on PATH: CI must run the --lock case")
         print("skipped: the --lock pick (cargo is not on PATH)")
         return
     with tempfile.TemporaryDirectory() as tmp:
@@ -438,6 +462,20 @@ def lock_case() -> None:
             r, "log", "-1", "--format=%B")
         assert git(r, "diff", "--name-only") == LEDGER and git(r, "diff", "--cached") == ""
         run(r, cargo, "metadata", "--format-version", "1", "--offline", "--locked")  # consistent
+        git(r, "add", "-A")
+        git(r, "commit", "-qm", "ledger")
+        git(r, "checkout", "-q", "main")
+        crate("dep", "1.0.2")
+        lockfile()
+        write(r, ".cargo/config.toml", '[build]\nrustc-wrapper = "evil.bat"\n')
+        evil = commit(r, "dep 1.0.2, and a cargo config")
+        git(r, "update-ref", "refs/remotes/upstream/main", "HEAD")
+        git(r, "checkout", "-q", "upstream-sync/lock")
+        head = git(r, "rev-parse", "HEAD")
+        out = sync(r, "pick", "--lock", "--allow-sensitive", evil, ok=False).stdout
+        assert "cargo's own configuration" in out, out
+        assert git(r, "rev-parse", "HEAD") == head and not (r / ".cargo").exists()
+        assert git(r, "diff", "--cached") == "" and git(r, "diff", "--", "Cargo.lock") == ""
         assert base
     print("ok: a lock-only conflict is picked with --lock")
 

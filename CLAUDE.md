@@ -36,8 +36,8 @@ craft-libs), laid out the way Internet Download Manager users expect. Start by r
    (the `upstream` remote), is read, never written to: no push, PR, issue, comment, or link that
    GitHub would turn into a mention there (write `upstream issue 668`, or put it in `code`); and
    never "Sync fork" or `gh repo sync`. On GitHub a new PR defaults to the original: always name
-   this fork (`gh pr create -R HUMBLEF0OL/grabbit --base dev`). Its fixes come in only through
-   `/upstream-sync`.
+   this fork (`gh pr create -R HUMBLEF0OL/grabbit --base dev`; `--base main` for a hotfix). Its
+   fixes come in only through `/upstream-sync`.
 
 ## Commands
 

@@ -23,8 +23,11 @@ direction in added lines.
 
 The record of what was decided is LEDGER (one row per upstream commit, written by `pick` and
 `record`), backed by the trailers `pick` and a port leave in this fork's history
-(`Upstream-Pick: <sha>`, `Upstream-Port: <sha>`), so a squash merge losing the trailers, a revert
-in the fork or a port PR closed unmerged can't make a fix look taken when it isn't.
+(`Upstream-Pick: <sha>`, `Upstream-Port: <sha>`): a revert in the fork (of a pick, a merged sync
+PR, or a revert) and a port PR closed unmerged show the fix as not taken. Sync PRs are merged with
+a merge commit or a rebase, never squashed: a squash drops the trailers, so a squashed port stays
+`ported?` and a revert of a squashed PR goes unseen. `equivalent`: the same change is already in
+the fork (by patch-id), made without the tool.
 
     python tools/upstream-sync/sync.py doctor [--fix]   # remotes, gh, branches: checked (and set)
     python tools/upstream-sync/sync.py status [--fetch] [--json] [--all]
@@ -41,6 +44,7 @@ Python 3.10 or later; a git whose merge-tree takes --merge-base and -X (`doctor`
 from __future__ import annotations
 
 import argparse
+import codecs
 import datetime as dt
 import json
 import os
@@ -110,6 +114,9 @@ ROW = re.compile(r"^\|\s*([0-9a-fA-F]{7,40})\s*\|\s*([\w?-]+)\s*\|(.*)\|\s*$")
 UPSTREAM_LINK = re.compile(
     r"anefzaoui/misterdownloadmanager(#\d+|/(issues|pull|discussions)/\d+)|"
     r"github\.com/anefzaoui/misterdownloadmanager/(issues|pull|discussions)/", re.I)
+
+
+MENTION = re.compile(r"(?<![\w/])@anefzaoui\b", re.I)
 
 
 class Fail(Exception):
@@ -267,8 +274,9 @@ def gone_checker(fork: Fork, sha: str, paths: list[str]):
     def in_upstream(path: str) -> bool:
         if not set(chain(path)) <= set(c for x in paths for c in chain(x)):
             there.update(existing(f"{sha}^", chain(path)))
-        parts = chain(path)
-        return path in there or any(x in there for x in parts[:-1])
+        if path in fork.gone:
+            return path in there
+        return any(d in there for d in chain(path)[:-1] if d in fork.gone_dirs)
     return lambda path: fork.is_gone(path) and in_upstream(path)
 
 
@@ -302,7 +310,11 @@ def read_ledger(path: Path) -> tuple[list[Row], list[str]]:
     rows, problems, seen = [], [], set()
     if not path.exists():
         return rows, problems
-    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        raise Fail(f"{LEDGER} is not UTF-8: save it as UTF-8 again")
+    for n, line in enumerate(text.splitlines(), 1):
         m = ROW.match(line)
         if not m:
             continue
@@ -374,6 +386,8 @@ def taken(refs: list[str], fork_point: str, up: str, in_range: set[str], ledger:
                         picked.update(undone[1])
                         ported.update(undone[2])
                         reverted.difference_update(undone[1] | undone[2])
+            if REVERTS.search(body):
+                continue
             p = {upstream_sha(x) for x in PICK_TRAILER.findall(body)}
             q = {upstream_sha(x) for x in PORT_TRAILER.findall(body)}
             if p or q:
@@ -506,15 +520,21 @@ def simulate(sha: str, onto: str) -> list[str]:
 def added_lines(sha: str) -> dict[str, list[str]]:
     """Every file's added lines in a commit, from one `git show`."""
     res: dict[str, list[str]] = {}
-    current = None
+    current, header = None, False
     for ln in git("show", "--format=", "--no-color", "--unified=0", "--no-renames", "--no-ext-diff",
-                  sha).stdout.splitlines():
-        if ln.startswith("+++ "):
+                  "--src-prefix=a/", "--dst-prefix=b/", sha).stdout.splitlines():
+        if ln.startswith("diff --git ") or ln.startswith("diff --cc "):
+            current, header = None, True
+        elif header and ln.startswith("@@"):
+            header = False
+        elif header and ln.startswith("+++ "):
             name = ln[4:].rstrip("\t")
+            if name.startswith('"') and name.endswith('"'):  # git's C quoting
+                name = codecs.escape_decode(name[1:-1].encode("utf-8"))[0].decode("utf-8", "replace")
             current = name[2:] if name.startswith("b/") else None
             if current is not None:
                 res.setdefault(current, [])
-        elif ln.startswith("+") and current is not None:
+        elif not header and ln.startswith("+") and current is not None:
             res[current].append(ln[1:])
     return res
 
@@ -696,9 +716,12 @@ def sorted_commits(ctx: Context, everything: bool) -> list[Commit]:
     todo = [c for c in commits if everything or c.status not in DONE]
     # Each commit is sorted on its own, read only (merge-tree writes objects, never refs), so a
     # few at once: on Windows most of the time is starting git processes.
-    with ThreadPoolExecutor(max_workers=min(4, os.cpu_count() or 1)) as pool:
+    pool = ThreadPoolExecutor(max_workers=min(4, os.cpu_count() or 1))
+    try:
         list(pool.map(lambda c: sort_commit(c, ctx.onto, ctx.fork, ctx.fork_point, ctx.t,
                                             messages), todo))
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
     by_issue: dict[str, list[Commit]] = {}
     for c in todo:
         for n in c.issues:
@@ -893,6 +916,7 @@ def neutralise(msg: str) -> str:
     """Upstream's message, made safe to carry: its own markers can't count as this fork's
     record, and its #numbers can't link to this fork's issues and PRs."""
     msg = MARKERS.sub("upstream's text: ", msg)
+    msg = MENTION.sub("anefzaoui", msg)
     msg = re.sub(r"(https?://)?(www\.)?github\.com/anefzaoui/misterdownloadmanager/"
                  r"(issues|pull|discussions)/(\d+)\S*", r"upstream \3 \4", msg, flags=re.I)
     msg = re.sub(r"anefzaoui/misterdownloadmanager#(\d+)", r"upstream issue \1", msg, flags=re.I)
@@ -1060,7 +1084,11 @@ def cmd_pick(a) -> int:
     failed = 0
     for sha in shas:
         saved = ledger.read_bytes() if ledger.exists() else None
-        ok, line = pick_one(sha, ctx, commits, messages, a)
+        try:
+            ok, line = pick_one(sha, ctx, commits, messages, a)
+        except (Fail, OSError) as e:
+            undo_pick()
+            ok, line = False, f"{sha[:12]}: stopped half way ({e}); undone, nothing changed"
         if saved is not None and not ok:
             ledger.write_bytes(saved)  # an undone pick never takes the ledger's rows with it
         print(line)
@@ -1152,11 +1180,15 @@ def cmd_pr(a) -> int:
     body = Path(a.body_file)
     if not body.is_file():
         raise Fail(f"no body file {a.body_file}: nothing pushed")
-    text = body.read_text(encoding="utf-8")
+    try:
+        text = body.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        raise Fail(f"{a.body_file} is not UTF-8 (PowerShell 5.1's `>` writes UTF-16: use "
+                   "`Out-File -Encoding utf8`); nothing pushed")
     bare = re.sub(r"```.*?```|(?<!\\)`[^`\n]*(?<!\\)`|<(code|pre)>.*?</\1>", "",
                   text.replace("\\`", "\x00"), flags=re.S | re.I)
     for t in (bare, a.title):
-        m = UPSTREAM_LINK.search(t)
+        m = UPSTREAM_LINK.search(t) or MENTION.search(t)
         if m:
             raise Fail(f"{m.group(0)!r} would link to, and so mention this PR on, the original: "
                        "put it in `code`, or write \"upstream issue N\"; nothing pushed")
@@ -1285,6 +1317,7 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("--force", action="store_true", help="--force-with-lease, this branch only")
     a = p.parse_args(argv)
     try:
+        os.chdir(root())  # pathspecs are relative to the current folder; ours are the repo's
         return {"doctor": cmd_doctor, "status": cmd_status, "show": cmd_show, "watch": cmd_watch,
                 "report": cmd_report, "pick": cmd_pick, "record": cmd_record, "pr": cmd_pr}[a.cmd](a)
     except Fail as e:
