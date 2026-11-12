@@ -395,6 +395,12 @@ pub struct Item {
     /// Content-Disposition), as a browser does (#28). Cleared once the file is made.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub name_from_url: bool,
+    /// Its name was given without waiting for its folder to be looked at (Download File Info:
+    /// a sleeping drive or a network folder can take seconds to answer, #743): nothing of its
+    /// own is on the disk yet, and it starts under that name or the next free numbered one, as
+    /// the engine finds as it starts (`Destination::Free`). Cleared once the file is made.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub number_at_start: bool,
     /// The Link grabber package it came in (#37): its archives are extracted together once
     /// every volume is there.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -715,6 +721,7 @@ impl Item {
             gallery: None,
             log: Vec::new(),
             name_from_url: false,
+            number_at_start: false,
             package: None,
             server: None,
             direct: false,
@@ -765,8 +772,9 @@ impl Item {
         self.size = size_after(s.state, s.size, s.downloaded, self.size);
         self.resumable = s.resumable.or(self.resumable);
         if let Some(f) = &s.file {
-            // Named now: a later start from scratch keeps this name.
+            // Named now: a later start from scratch keeps this name, and its file is its own.
             let guessed = std::mem::take(&mut self.name_from_url);
+            self.number_at_start = false;
             if *f != self.dest {
                 // The file as saved (a video's real extension, a numbered duplicate, the name
                 // the server gave).
