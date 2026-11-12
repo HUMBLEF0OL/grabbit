@@ -154,11 +154,10 @@ pub fn generation() -> u64 {
 
 // ---- Windows' app mode and colours -----------------------------------------------------------
 
-/// What Windows says about the look: dark apps, and the accent and contrast colours (Native).
+/// What Windows says about the look: dark apps.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SystemLook {
     pub dark: bool,
-    pub native: crate::native::System,
 }
 
 static SYSTEM: OnceLock<Watched<SystemLook>> = OnceLock::new();
@@ -177,7 +176,6 @@ pub fn system(ctx: &egui::Context) -> SystemLook {
             "system look",
             || SystemLook {
                 dark: crate::win32::apps_use_dark(),
-                native: crate::native::windows_now(),
             },
             move || {
                 keys.get_or_insert_with(crate::win32::LookKeys::open)

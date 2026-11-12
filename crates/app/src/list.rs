@@ -31,17 +31,13 @@ fn row_inset() -> f32 {
 // The active theme's colours (crate::palette, #45).
 themed! {
     /// The list's border (it was #828790 in dark too): the lists' and tables' one edge.
-    FRAME => list_frame;
     /// Inner ring and row background.
     BG => list;
     HEADER_BG => header;
-    HEADER_SEP => header_sep;
     /// Sort indicator (an addition: IDM's header shows none).
-    SORTED_BG => sorted;
     SORT_ARROW => sort_arrow;
     /// Light: the one grid colour, 1 px lines (light-main.md).
     GRID_H => list_grid;
-    GRID_V_RIGHT => list_grid;
     /// Selected row (list focused): Windows' accent, as every list's (one blue across MDM), with
     /// white text and a dotted focus outline in its inverse, #ff9933.
     SELECTED => selection;
@@ -93,26 +89,12 @@ pub const RATIO: usize = 11;
 /// last slot, so a layout saved before it existed still means what it meant.
 pub const UPLOAD: usize = 12;
 
-/// IDM's default column widths (and ours for Added, room for a 12-hour clock's
-/// `Oct 28 9:05:01 AM 2026`, Source, Peers, Share ratio and Upload speed).
-pub const DEFAULT_WIDTHS: [f32; COLS] = [
-    150.0, 20.0, 75.0, 65.0, 75.0, 95.0, 65.0, 200.0, 145.0, 62.0, 64.0, 92.0, 100.0,
-];
 /// Graphite's (plan 05b, the mockup's; Status 30 wider, for Geist's "Stopped" with its bar and
 /// percentage): its padded cells need more room. Kept apart from IDM's, as the Categories
 /// pane's width is.
 pub const GRAPHITE_WIDTHS: [f32; COLS] = [
     280.0, 34.0, 90.0, 200.0, 110.0, 110.0, 160.0, 160.0, 160.0, 70.0, 80.0, 100.0, 110.0,
 ];
-/// The default widths of IDM's look or Graphite's.
-fn default_widths(graphite: bool) -> [f32; COLS] {
-    if graphite {
-        GRAPHITE_WIDTHS
-    } else {
-        DEFAULT_WIDTHS
-    }
-}
-
 /// Default display order: Source first, then IDM's, a torrent's three columns after its rate, and
 /// Added after Last Try Date.
 const DEFAULT_ORDER: [usize; COLS] = [SOURCE, 0, 1, 2, 3, 4, 5, UPLOAD, PEERS, RATIO, 6, ADDED, 7];
@@ -207,10 +189,6 @@ pub struct ListState {
     filter_hscroll: f32,
     /// A filter box to open on the next frame ([`ListState::open_filter`]).
     filter_pending: Option<usize>,
-    /// The other look's widths: Graphite's while `widths` are IDM's, and back ([`Self::set_look`]).
-    other_widths: [f32; COLS],
-    /// `widths` are Graphite's.
-    graphite: bool,
     /// A selection box being dragged: where it started (x in content, y in rows' space) and
     /// whether Ctrl adds it to the selection.
     marquee: Option<(Pos2, bool)>,
@@ -225,7 +203,7 @@ impl Default for ListState {
     fn default() -> Self {
         ListState {
             order: DEFAULT_ORDER.to_vec(),
-            widths: DEFAULT_WIDTHS,
+            widths: GRAPHITE_WIDTHS,
             visible: [true; COLS],
             sort: None,
             scroll: 0.0,
@@ -238,8 +216,6 @@ impl Default for ListState {
             filter_open: None,
             filter_hscroll: 0.0,
             filter_pending: None,
-            other_widths: GRAPHITE_WIDTHS,
-            graphite: false,
             marquee: None,
             typed: String::new(),
             menu_open: false,
@@ -253,10 +229,10 @@ impl Default for ListState {
 pub struct Layout {
     pub order: Vec<usize>,
     /// Lists (not fixed arrays), so layouts saved before a column was added still load.
-    pub widths: Vec<f32>,
     pub visible: Vec<bool>,
     pub sort: Option<(usize, bool)>,
-    /// The widths under the Graphite layout (empty in a list saved before it: its defaults).
+    /// The columns' widths (empty until changed: the defaults). Named for Graphite's layout,
+    /// whose they were while IDM's had its own (`widths`, read no more since plan 05.5c).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub graphite_widths: Vec<f32>,
 }
@@ -291,42 +267,21 @@ impl ListState {
     pub fn reset_columns(&mut self) {
         let fresh = ListState::default();
         self.order = fresh.order;
-        self.widths = default_widths(self.graphite);
+        self.widths = GRAPHITE_WIDTHS;
         self.visible = fresh.visible;
         self.hscroll = 0.0;
     }
 
-    /// Draw with IDM's column widths or Graphite's (plan 05b): each look keeps its own, so a
-    /// theme switch shows each as it was left.
-    pub fn set_look(&mut self, graphite: bool) {
-        if self.graphite != graphite {
-            std::mem::swap(&mut self.widths, &mut self.other_widths);
-            self.graphite = graphite;
-            self.hscroll = 0.0;
-        }
-    }
-
-    /// IDM's widths and Graphite's, whichever is drawn now.
-    fn widths_by_look(&self) -> ([f32; COLS], [f32; COLS]) {
-        if self.graphite {
-            (self.other_widths, self.widths)
-        } else {
-            (self.widths, self.other_widths)
-        }
-    }
-
     pub fn layout(&self) -> Layout {
-        let (classic, graphite) = self.widths_by_look();
         Layout {
             order: self.order.clone(),
-            widths: classic.to_vec(),
             visible: self.visible.to_vec(),
             sort: self.sort,
             // Saved only once changed: a list that never changed them gets later defaults.
-            graphite_widths: if graphite == GRAPHITE_WIDTHS {
+            graphite_widths: if self.widths == GRAPHITE_WIDTHS {
                 Vec::new()
             } else {
-                graphite.to_vec()
+                self.widths.to_vec()
             },
         }
     }
@@ -382,17 +337,10 @@ impl ListState {
         let width = |saved: &[f32], c: usize, default: f32| {
             saved.get(c).copied().unwrap_or(default).max(MIN_WIDTH)
         };
-        let (mut classic, mut graphite) = ([0.0; COLS], [0.0; COLS]);
-        for c in 0..COLS {
-            classic[c] = width(&l.widths, c, DEFAULT_WIDTHS[c]);
-            graphite[c] = width(&l.graphite_widths, c, GRAPHITE_WIDTHS[c]);
+        for (c, default) in GRAPHITE_WIDTHS.iter().enumerate() {
+            self.widths[c] = width(&l.graphite_widths, c, *default);
             self.visible[c] = l.visible.get(c).copied().unwrap_or(true);
         }
-        (self.widths, self.other_widths) = if self.graphite {
-            (graphite, classic)
-        } else {
-            (classic, graphite)
-        };
         self.visible[0] = true;
         self.sort = l.sort.filter(|(c, _)| *c < COLS);
     }
@@ -645,16 +593,9 @@ pub fn show(
     // Graphite's list (plan 05b): edge to edge in its pane, no frame; quiet column heads with
     // a rule under them, rows on hairlines, the numbers right-aligned in tabular figures, the
     // Status cell's progress drawn.
-    let g = crate::theme::chrome() == crate::palette::ChromeLook::Graphite;
-    let (cl, ct, cr, cb) = if g {
-        fill(&p, l, t, r, b, BG());
-        (l, t, r, b)
-    } else {
-        winui::solid(&p, screen(outer), FRAME());
-        fill(&p, l + 1.0, t + 1.0, r - 1.0, b - 1.0, BG());
-        (l + 2.0, t + 2.0, r - 2.0, b - 2.0)
-    };
-    let font = if g { winui::segoe() } else { winui::tahoma() };
+    fill(&p, l, t, r, b, BG());
+    let (cl, ct, cr, cb) = (l, t, r, b);
+    let font = winui::segoe();
 
     // Scroll bars (notes/ui-spec/scrollbars.md), decided like Win32: each one shows when the
     // content overflows the room the other one leaves.
@@ -760,22 +701,22 @@ pub fn show(
         st.drag = None;
     }
     // A click on a header's funnel opens its filter box instead of sorting.
-    let funnel_hit = |st: &ListState, pp: Pos2| {
+    let funnel_hit = |pp: Pos2| {
         cols.iter()
-            .find(|(c, x0, x1)| funnel_rect(st, *c, *x0, *x1, ct).contains(pp))
-            .map(|(c, x0, x1)| (*c, funnel_rect(st, *c, *x0, *x1, ct).left_bottom(), *x1))
+            .find(|(_, x0, x1)| funnel_rect(*x0, *x1, ct).contains(pp))
+            .map(|(c, x0, x1)| (*c, funnel_rect(*x0, *x1, ct).left_bottom(), *x1))
     };
     let funnel_click = hresp
         .clicked()
         .then_some(pointer)
         .flatten()
-        .and_then(|pp| funnel_hit(st, pp));
+        .and_then(funnel_hit);
     // A box asked for from outside (open_filter): as if its funnel was clicked.
     let funnel_click = funnel_click.or_else(|| {
         let col = st.filter_pending.take()?;
         cols.iter()
             .find(|(c, ..)| *c == col)
-            .map(|(c, x0, x1)| (*c, funnel_rect(st, *c, *x0, *x1, ct).left_bottom(), *x1))
+            .map(|(c, x0, x1)| (*c, funnel_rect(*x0, *x1, ct).left_bottom(), *x1))
     });
     if let Some((col, at, _)) = funnel_click {
         st.filter_open = match st.filter_open {
@@ -810,95 +751,7 @@ pub fn show(
     let p_all = p.clone();
     let p = p.with_clip_rect(screen(header));
     fill(&p, cl, ct, rr, ct + header_h() - 1.0, HEADER_BG());
-    if g {
-        graphite_header(ui, &p, st, &hresp, &cols, (cl, ct, rr));
-    }
-    for (c, x0, x1) in cols.iter().filter(|_| !g) {
-        let hovered = hresp
-            .hover_pos()
-            .map(english)
-            .is_some_and(|h| h.x >= *x0 && h.x <= *x1 && st.drag.is_none());
-        // The column under the pointer, and pressed while the mouse button is held on it (as
-        // Windows' headers); the shared tint (winui::subtle_fill).
-        let state = match (hovered, hresp.is_pointer_button_down_on()) {
-            (false, _) => winui::State::Normal,
-            (true, false) => winui::State::Hot,
-            (true, true) => winui::State::Pressed,
-        };
-        let tint = winui::subtle_fill(state, crate::theme::colors());
-        // The sorted column: highlighted header and a chevron at its right edge (▲ ascending,
-        // ▼ descending).
-        if let Some((sc, asc)) = st.sort
-            && sc == *c
-        {
-            fill(
-                &p,
-                *x0,
-                ct,
-                x1 - 1.0,
-                ct + header_h() - 1.0,
-                tint.unwrap_or(SORTED_BG()),
-            );
-            // At the cell's right edge, vertically centred in the header.
-            let cx = x1 - 9.0;
-            let mid = ct + (header_h() / 2.0).floor() - 2.0;
-            for i in 0..4 {
-                let y = mid + if asc { i as f32 } else { 3.0 - i as f32 };
-                let half = i as f32;
-                fill(&p, cx - half, y, cx + half, y, SORT_ARROW());
-            }
-        } else if let Some(t) = tint {
-            fill(&p, *x0, ct, x1 - 1.0, ct + header_h() - 1.0, t);
-        }
-        fill(&p, *x1, ct, *x1, ct + header_h() - 1.0, HEADER_SEP());
-        let mut arrow_room = if st.sort.is_some_and(|(sc, _)| sc == *c) {
-            14.0
-        } else {
-            0.0
-        };
-        // The funnel (user, 2026-10-30): always shown, faint; darker under the pointer or while
-        // its box is open; blue while the column is filtered. A column too narrow for a label
-        // and the funnel (Q) shows it only under the pointer.
-        let filtered = st.filters[*c].is_some();
-        let open = st.filter_open.is_some_and(|(fc, _)| fc == *c);
-        let roomy = x1 - x0 >= 44.0;
-        if roomy || filtered || hovered || open {
-            let fr = funnel_rect(st, *c, *x0, *x1, ct);
-            let color = if filtered {
-                FILTER_ON()
-            } else if hovered || open {
-                SORT_ARROW()
-            } else {
-                SORT_ARROW().gamma_multiply(0.45)
-            };
-            if !roomy {
-                p.rect_filled(screen(fr), crate::theme::metrics().part_radius, HEADER_BG());
-            }
-            funnel(&p, fr, color);
-            if roomy {
-                arrow_room += 14.0;
-            }
-        }
-        let full = crate::i18n::tc("column", TITLES[*c]);
-        let label = winui::ellipsize(&p, &font, full, x1 - x0 - 10.0 - arrow_room);
-        // A cut title shows whole under the pointer; the one-letter Q says what it is.
-        if hovered && st.drag.is_none() {
-            let tip = if TITLES[*c] == "Q" {
-                // i18n: tooltip of the narrow "Q" column's title
-                Some(crate::i18n::tc("column", "Queue"))
-            } else {
-                (label != full).then_some(full)
-            };
-            if let Some(tip) = tip {
-                hresp.clone().on_hover_text_at_pointer(tip);
-            }
-        }
-        let clip = p.with_clip_rect(screen(Rect::from_x_y_ranges(
-            *x0..=*x1,
-            ct..=ct + header_h(),
-        )));
-        text_font(&clip, font.clone(), x0 + 6.0, ct + 15.0, &label, TEXT());
-    }
+    graphite_header(ui, &p, st, &hresp, &cols, (cl, ct, rr));
 
     // ---- body ------------------------------------------------------------------------------
     let p = p_all;
@@ -1061,36 +914,26 @@ pub fn show(
             for (c, x0, x1) in &cols {
                 // The file-type icon sits in the File Name column, wherever it is.
                 // Graphite: 10 in from the column's start, the file's name 8 after its icon.
-                let (pad, icon_x) = if g { (10.0, 10.0) } else { (6.0, 4.0) };
+                let (pad, icon_x) = (10.0, 10.0);
                 let tx = if *c == 0 {
                     icons.paint_in(ui, &bp, row.icon.clone(), pos2(x0 + icon_x, inner));
-                    x0 + icon_x + 16.0 + if g { 8.0 } else { 2.0 }
+                    x0 + icon_x + 16.0 + 8.0
                 } else {
                     x0 + pad
                 };
                 if *c == 1 && row.queued {
-                    if g {
-                        // The queues' own icon, centred in the narrow column.
-                        icons.paint_in(
-                            ui,
-                            &bp,
-                            IconKey::Themed("cat-queues", "page_white_stack"),
-                            pos2(((x0 + x1) / 2.0 - 8.0).round(), inner),
-                        );
-                    } else {
-                        icons.paint_in(
-                            ui,
-                            &bp,
-                            IconKey::Silk("page_white_stack"),
-                            pos2(x0 + 2.0, inner),
-                        );
-                    }
+                    // The queues' own icon, centred in the narrow column.
+                    icons.paint_in(
+                        ui,
+                        &bp,
+                        IconKey::Themed("cat-queues"),
+                        pos2(((x0 + x1) / 2.0 - 8.0).round(), inner),
+                    );
                 }
                 let cell = Rect::from_min_max(pos2(*x0, top), pos2(*x1 - 1.0, top + row_h()));
                 if *c == SOURCE {
                     let cut = chip(
                         &bp.with_clip_rect(screen(cell.intersect(body))),
-                        &font,
                         (*x0, *x1),
                         inner,
                         &row.cells[*c],
@@ -1106,13 +949,13 @@ pub fn show(
                 }
                 let value = cell_text(*c, &row.cells[*c]);
                 // Graphite: the numbers in tabular figures, to the column's end.
-                let cell_font = if g && numeric(*c) {
+                let cell_font = if numeric(*c) {
                     numbers_font()
                 } else {
                     font.clone()
                 };
-                let room = if g { x1 - tx - 9.0 } else { x1 - tx - 3.0 };
-                if g && *c == 3 {
+                let room = x1 - tx - 9.0;
+                if *c == 3 {
                     let clip = bp.with_clip_rect(screen(cell.intersect(body)));
                     let hovered = resp
                         .hover_pos()
@@ -1159,7 +1002,7 @@ pub fn show(
                 } else {
                     TEXT()
                 };
-                let tx = if g && right_aligned(*c) {
+                let tx = if right_aligned(*c) {
                     let w = winui::text_width_font(&bp, cell_font.clone(), &s).ceil();
                     (x1 - 10.0 - w).max(tx)
                 } else {
@@ -1173,7 +1016,7 @@ pub fn show(
         let gy = top + row_h() - 1.0;
         // An empty list has no grid (the empty state stands alone); Graphite's rules its rows
         // only, not the room under them.
-        if !rows.is_empty() && (!g || idx < rows.len()) {
+        if idx < rows.len() {
             fill(&bp, cl, gy, rr, gy, GRID_H());
         }
     }
@@ -1184,11 +1027,7 @@ pub fn show(
         resp.clone().on_hover_text_at_pointer(full);
     }
     filter_box(ui, st);
-    // Graphite's rows have hairlines only, no columns' lines.
-    for (_, _, x1) in cols.iter().filter(|_| !rows.is_empty() && !g) {
-        // One line at col.right + 1.
-        fill(&bp, x1 + 1.0, body_top, x1 + 1.0, rb, GRID_V_RIGHT());
-    }
+    // The rows have hairlines only, no columns' lines.
     // While a column is dragged: a translucent copy of its header follows the pointer, and a
     // 2 px mark shows where it will land.
     if let (Some(HeaderDrag::Move { col, grab }), Some(pp)) = (st.drag, pointer) {
@@ -1395,9 +1234,7 @@ fn fit_width(p: &egui::Painter, font: &egui::FontId, col: usize, rows: &[Row]) -
         .fold(0.0, f32::max);
     match col {
         // The queue icon and the source chip have their own sizes.
-        1 | SOURCE => {
-            default_widths(crate::theme::chrome() == crate::palette::ChromeLook::Graphite)[col]
-        }
+        1 | SOURCE => GRAPHITE_WIDTHS[col],
         _ => title.max(cells).ceil().max(MIN_WIDTH),
     }
 }
@@ -1432,13 +1269,7 @@ fn dotted(p: &egui::Painter, l: f32, t: f32, r: f32, b: f32, color: Color32) {
 /// left of the cell `x0..x1`, `top` the top of the row's contents (a classic row's height:
 /// centred by the caller in a taller row). A label too long for the cell (a translation in a
 /// narrow column) is cut with "..."; returns whether it was.
-fn chip(
-    p: &egui::Painter,
-    font: &egui::FontId,
-    (x0, x1): (f32, f32),
-    top: f32,
-    label: &str,
-) -> bool {
+fn chip(p: &egui::Painter, (x0, x1): (f32, f32), top: f32, label: &str) -> bool {
     if label.is_empty() {
         return false;
     }
@@ -1450,23 +1281,12 @@ fn chip(
     // The cell holds the English key (filters match on it); the chip shows it translated.
     let full = crate::i18n::t(label);
     // Graphite's (the mockup's `.chip`): Medium 11.5, 8 either side, 18 high, 10 in.
-    let graphite = crate::theme::chrome() == crate::palette::ChromeLook::Graphite;
     let medium = egui::FontId::new(
         crate::theme::metrics().font_small,
         egui::FontFamily::Name("geist-medium".into()),
     );
-    let (font, inset, pad, h, baseline) = if graphite {
-        (&medium, 10.0, 8.0, 18.0, top + 13.0)
-    } else {
-        (
-            font,
-            5.0,
-            6.0,
-            row_h().min(crate::palette::Metrics::CLASSIC.list_row) - 4.0,
-            top + 12.0,
-        )
-    };
-    let pill_top = if graphite { top } else { top + 2.0 };
+    let (font, inset, pad, h, baseline) = (&medium, 10.0, 8.0, 18.0, top + 13.0);
+    let pill_top = top;
     // Room: the pill starts `inset` in, pads its text each side, and ends 3 px before the cell.
     let label = &winui::ellipsize(p, font, full, (x1 - x0 - inset - 2.0 * pad - 3.0).max(0.0));
     let w = winui::text_width_font(p, font.clone(), label).round();
@@ -1690,7 +1510,7 @@ fn graphite_header(
             }
         }
         if hovered || open {
-            let fr = funnel_rect(st, *col, *x0, *x1, ct);
+            let fr = funnel_rect(*x0, *x1, ct);
             let rc = Rect::from_center_size(fr.center(), egui::vec2(12.0, 12.0));
             if !crate::themeicons::paint_in(
                 ui,
@@ -1707,11 +1527,9 @@ fn graphite_header(
 }
 
 /// Where a column's funnel sits in its header: at the right, left of the sort chevron.
-fn funnel_rect(st: &ListState, col: usize, x0: f32, x1: f32, ct: f32) -> Rect {
-    // Graphite's sort chevron follows the title, not the column's end.
-    let graphite = crate::theme::chrome() == crate::palette::ChromeLook::Graphite;
-    let sorted = !graphite && st.sort.is_some_and(|(sc, _)| sc == col);
-    let right = x1 - if sorted { 18.0 } else { 4.0 };
+fn funnel_rect(x0: f32, x1: f32, ct: f32) -> Rect {
+    // The sort chevron follows the title, not the column's end.
+    let right = x1 - 4.0;
     let left = (right - 12.0).max(x0 + 2.0);
     Rect::from_min_max(pos2(left, ct + 6.0), pos2(right, ct + header_h() - 6.0))
 }
@@ -2041,35 +1859,29 @@ mod tests {
         );
     }
 
-    /// Plan 05b: IDM's look and Graphite's keep their own column widths through a theme switch
-    /// and a save, and a list saved before Graphite's widths existed gets their defaults.
+    /// The column widths go through a save; a list saved before plan 05.5c (IDM's widths in
+    /// `widths`, read no more) gets Graphite's defaults; Reset columns gives them back.
     #[test]
-    fn each_look_keeps_its_column_widths() {
+    fn the_column_widths_are_saved_and_reset() {
         let mut st = ListState::default();
-        st.widths[0] = 222.0;
-        st.set_look(true);
         assert_eq!(st.widths, GRAPHITE_WIDTHS);
         st.widths[3] = 190.0;
         let saved = st.layout();
-        assert_eq!(saved.widths[0], 222.0);
         assert_eq!(saved.graphite_widths[3], 190.0);
-        st.set_look(false);
-        assert_eq!(st.widths[0], 222.0);
-        // Loaded while Graphite draws: Graphite's widths shown, IDM's kept.
         let mut other = ListState::default();
-        other.set_look(true);
-        other.apply(saved.clone());
+        other.apply(saved);
         assert_eq!(other.widths[3], 190.0);
-        other.set_look(false);
-        assert_eq!(other.widths[0], 222.0);
-        // An older list: no Graphite widths saved.
-        let mut old = saved;
-        old.graphite_widths.clear();
+        // Unchanged widths aren't written: a later default reaches them.
+        assert!(ListState::default().layout().graphite_widths.is_empty());
+        // A list saved with IDM's widths only.
+        let old: Layout = serde_json::from_str(
+            r#"{"order":[9,0,1,2,3,4,5,12,10,11,6,8,7],"widths":[222.0,20.0,75.0,65.0,75.0,95.0,65.0,300.0,125.0,62.0,64.0,92.0,90.0],"visible":[true,true,true,true,true,true,true,true,true,true,true,true,true],"sort":null}"#,
+        )
+        .unwrap();
         let mut st = ListState::default();
         st.apply(old);
-        st.set_look(true);
         assert_eq!(st.widths, GRAPHITE_WIDTHS);
-        // Reset columns: the drawn look's defaults.
+        // Reset columns: the defaults.
         st.widths[3] = 50.0;
         st.reset_columns();
         assert_eq!(st.widths, GRAPHITE_WIDTHS);
@@ -2079,8 +1891,8 @@ mod tests {
     fn moving_a_column_right_and_left() {
         let mut st = ListState::default();
         let cols = spans(&st);
-        // Drop "File Name" (slot 0) at the boundary after "Size" (x = 62 + 150 + 20 + 75 = 307).
-        move_column(&mut st, &cols, 0, 308.0);
+        // Drop "File Name" (slot 0) at the boundary after "Size" (x = 70 + 280 + 34 + 90 = 474).
+        move_column(&mut st, &cols, 0, 475.0);
         assert_eq!(st.order[..5], [SOURCE, 1, 2, 0, 3]);
         let cols = spans(&st);
         // And to the very left.
@@ -2104,7 +1916,7 @@ mod tests {
             .find(|k| k.group() == status)
             .unwrap(),
             progress: None,
-            icon: IconKey::Silk("page_white"),
+            icon: IconKey::Themed("ft-generic"),
             queued,
             cells,
         }
@@ -2161,10 +1973,9 @@ mod tests {
     fn a_layout_saved_before_the_added_columns_still_loads() {
         let old = Layout {
             order: vec![0, 2, 1, 3, 4, 5, 6, 7],
-            widths: vec![200.0, 20.0, 75.0, 65.0, 75.0, 95.0, 65.0, 300.0],
+            graphite_widths: vec![200.0, 20.0, 75.0, 65.0, 75.0, 95.0, 65.0, 300.0],
             visible: vec![true; 8],
             sort: Some((2, false)),
-            graphite_widths: Vec::new(),
         };
         let mut st = ListState::default();
         st.apply(old);
@@ -2174,13 +1985,13 @@ mod tests {
             [SOURCE, 0, 2, 1, 3, 4, 5, UPLOAD, PEERS, RATIO, 6, ADDED, 7]
         );
         assert_eq!(st.widths[0], 200.0, "the saved widths stay");
-        assert_eq!(st.widths[ADDED], DEFAULT_WIDTHS[ADDED]);
+        assert_eq!(st.widths[ADDED], GRAPHITE_WIDTHS[ADDED]);
         assert!(st.visible[ADDED]);
         assert!(st.visible[SOURCE]);
         // A layout saved before they existed gets their defaults, shown.
-        assert_eq!(st.widths[UPLOAD], DEFAULT_WIDTHS[UPLOAD]);
-        assert_eq!(st.widths[PEERS], DEFAULT_WIDTHS[PEERS]);
-        assert_eq!(st.widths[RATIO], DEFAULT_WIDTHS[RATIO]);
+        assert_eq!(st.widths[UPLOAD], GRAPHITE_WIDTHS[UPLOAD]);
+        assert_eq!(st.widths[PEERS], GRAPHITE_WIDTHS[PEERS]);
+        assert_eq!(st.widths[RATIO], GRAPHITE_WIDTHS[RATIO]);
         assert!(st.visible[UPLOAD] && st.visible[PEERS] && st.visible[RATIO]);
         assert_eq!(st.sort, Some((2, false)));
     }
@@ -2191,12 +2002,11 @@ mod tests {
     fn a_layout_saved_before_the_torrent_columns_gets_them() {
         let old = Layout {
             order: vec![SOURCE, 0, 1, 2, 3, 4, 5, 6, ADDED, 7],
-            widths: vec![
+            graphite_widths: vec![
                 62.0, 150.0, 20.0, 75.0, 65.0, 75.0, 95.0, 65.0, 125.0, 300.0,
             ],
             visible: vec![true; 10],
             sort: None,
-            graphite_widths: Vec::new(),
         };
         let mut st = ListState::default();
         st.apply(old);
@@ -2206,14 +2016,13 @@ mod tests {
         );
         assert!(st.widths[UPLOAD] > 0.0 && st.widths[PEERS] > 0.0 && st.widths[RATIO] > 0.0);
         // None of the torrent columns were in that layout, so all three get their defaults.
-        assert_eq!(st.widths[UPLOAD], DEFAULT_WIDTHS[UPLOAD]);
+        assert_eq!(st.widths[UPLOAD], GRAPHITE_WIDTHS[UPLOAD]);
         // A layout that names one column twice (and so misses another) is ignored whole.
         let bad = Layout {
             order: vec![SOURCE, 0, 1, 2, 3, 4, 5, 6, ADDED, 7, PEERS, PEERS],
-            widths: vec![62.0; 12],
+            graphite_widths: vec![62.0; 12],
             visible: vec![true; 12],
             sort: None,
-            graphite_widths: Vec::new(),
         };
         let mut st = ListState::default();
         st.apply(bad);
@@ -2227,12 +2036,11 @@ mod tests {
     fn a_layout_saved_by_052_keeps_peers_as_peers() {
         let old = Layout {
             order: vec![SOURCE, 0, 1, 2, 3, 4, 5, PEERS, RATIO, 6, ADDED, 7],
-            widths: vec![
+            graphite_widths: vec![
                 150.0, 20.0, 75.0, 65.0, 75.0, 95.0, 65.0, 300.0, 145.0, 62.0, 64.0, 92.0,
             ],
             visible: vec![true; 12],
             sort: Some((PEERS, true)),
-            graphite_widths: Vec::new(),
         };
         let mut st = ListState::default();
         st.apply(old);
@@ -2246,7 +2054,7 @@ mod tests {
         );
         assert_eq!(st.widths[RATIO], 92.0, "Share ratio keeps its own");
         assert_eq!(
-            st.widths[UPLOAD], DEFAULT_WIDTHS[UPLOAD],
+            st.widths[UPLOAD], GRAPHITE_WIDTHS[UPLOAD],
             "the new slot gets its default"
         );
         assert_eq!(

@@ -932,20 +932,17 @@ fn sort_key(it: &Item, col: usize, queued: bool) -> (f64, String) {
     }
 }
 
-/// Silk icons standing in for IDM's XP-era category icons.
-/// A theme's icon set may replace them (`crate::themeicons`).
+/// A category's icon: the theme's icon set's (`crate::themeicons`), else Graphite's.
 fn category_icon(c: Category) -> IconKey {
-    let (need, silk) = match c {
-        Category::Compressed => ("cat-compressed", "page_white_zip"),
-        Category::Documents => ("cat-documents", "page_white"),
-        Category::Music => ("cat-music", "music"),
-        Category::Programs => ("cat-programs", "application_xp"),
-        Category::Video => ("cat-video", "film"),
-        Category::General => ("cat-documents", "page_white"),
-        Category::Torrents => ("cat-torrents", "folder_link"),
-        Category::Custom(_) => ("cat-folder", "folder"),
-    };
-    IconKey::Themed(need, silk)
+    IconKey::Themed(match c {
+        Category::Compressed => "cat-compressed",
+        Category::Documents | Category::General => "cat-documents",
+        Category::Music => "cat-music",
+        Category::Programs => "cat-programs",
+        Category::Video => "cat-video",
+        Category::Torrents => "cat-torrents",
+        Category::Custom(_) => "cat-folder",
+    })
 }
 
 impl App {
@@ -973,7 +970,7 @@ impl App {
         start: crate::Start,
     ) -> Self {
         // The look (#45): the chosen theme before anything is drawn.
-        crate::theme::select(&crate::theme::startup_id(&loaded.settings.theme), ctx);
+        crate::theme::select(&crate::theme::startup_id(&loaded.settings.theme));
         crate::theme::apply(ctx);
         // The zoom main.rs started at (View → Interface size, #262).
         let zoom = crate::scale::startup(loaded.settings.interface_size);
@@ -1263,79 +1260,51 @@ impl App {
             )
         };
         let (title, why) = (crate::i18n::t(title), crate::i18n::t(why));
-        if crate::theme::chrome() == crate::palette::ChromeLook::Graphite {
-            // Graphite's (plan 05b, the mockup's `.empty`): a 56-point tile (radius 14) with
-            // the download or the filter glyph, the title in SemiBold 16, the reason, the
-            // link; 8 apart, centred.
-            let need = if filtered { "gx-filter" } else { "gx-download" };
-            let title_font = egui::FontId::new(16.0, egui::FontFamily::Name("tahoma-bold".into()));
-            let reason_font = egui::FontId::proportional(crate::theme::metrics().font_body);
-            let link_font = egui::FontId::new(
-                crate::theme::metrics().font_body,
-                egui::FontFamily::Name("geist-medium".into()),
-            );
-            let shown_action = crate::i18n::t(action);
-            let width = |f: &egui::FontId, s: &str| winui::text_width_font(p, f.clone(), s).ceil();
-            let block_h = 56.0 + 12.0 + 22.0 + 8.0 + 18.0 + 8.0 + 18.0;
-            let top = (body.center().y - block_h / 2.0)
-                .max(body.top() + 16.0)
-                .round();
-            let cx = body.center().x;
-            let tile =
-                egui::Rect::from_min_size(pos2((cx - 28.0).round(), top), egui::vec2(56.0, 56.0));
-            let c = crate::theme::colors();
-            winui::icon_tile(ui, winui::rect(tile), need, c.text_secondary, 14.0);
-            let y = tile.bottom() + 12.0 + 17.0;
-            let tw = width(&title_font, title);
-            winui::text_font(
-                p,
-                title_font,
-                (cx - tw / 2.0).round(),
-                y,
-                title,
-                winui::TEXT(),
-            );
-            let y = y + 8.0 + 17.0;
-            let ww = width(&reason_font, why);
-            winui::text_font(
-                p,
-                reason_font,
-                (cx - ww / 2.0).round(),
-                y,
-                why,
-                c.text_secondary,
-            );
-            let y = y + 8.0 + 17.0;
-            let aw = width(&link_font, shown_action);
-            let x = (cx - aw / 2.0).round();
-            return winui::link_font(ui, p, link_font, x, y, action, "empty-action").then_some(cmd);
-        }
-        let title_font = winui::tahoma_bold();
-        let tw = winui::text_width_font(p, title_font.clone(), title);
-        let ww = winui::text_width(p, why);
-        let aw = winui::text_width(p, crate::i18n::t(action));
-        // The block: icon 40, title, reason, link; in the middle, or under the header when
-        // the list is short.
-        let block_h = 40.0 + 14.0 + 16.0 + 8.0 + 13.0 + 14.0 + 13.0;
-        let top = (body.center().y - block_h / 2.0).max(body.top() + 16.0);
+        // Graphite's (plan 05b, the mockup's `.empty`): a 56-point tile (radius 14) with
+        // the download or the filter glyph, the title in SemiBold 16, the reason, the
+        // link; 8 apart, centred.
+        let need = if filtered { "gx-filter" } else { "gx-download" };
+        let title_font = egui::FontId::new(16.0, egui::FontFamily::Name("tahoma-bold".into()));
+        let reason_font = egui::FontId::proportional(crate::theme::metrics().font_body);
+        let link_font = egui::FontId::new(
+            crate::theme::metrics().font_body,
+            egui::FontFamily::Name("geist-medium".into()),
+        );
+        let shown_action = crate::i18n::t(action);
+        let width = |f: &egui::FontId, s: &str| winui::text_width_font(p, f.clone(), s).ceil();
+        let block_h = 56.0 + 12.0 + 22.0 + 8.0 + 18.0 + 8.0 + 18.0;
+        let top = (body.center().y - block_h / 2.0)
+            .max(body.top() + 16.0)
+            .round();
         let cx = body.center().x;
-        // A download glyph in the muted ink (outlined, as the toolbar's icons are).
-        let ink = egui::Stroke::new(1.5, winui::MUTED());
-        let c = winui::rect(egui::Rect::from_center_size(
-            pos2(cx, top + 20.0),
-            egui::vec2(1.0, 1.0),
-        ))
-        .center();
-        p.circle_stroke(c, 19.0, ink);
-        p.line_segment([c + egui::vec2(0.0, -10.0), c + egui::vec2(0.0, 9.0)], ink);
-        p.line_segment([c + egui::vec2(-7.0, 2.0), c + egui::vec2(0.0, 9.0)], ink);
-        p.line_segment([c + egui::vec2(7.0, 2.0), c + egui::vec2(0.0, 9.0)], ink);
-        let y = top + 40.0 + 14.0 + 12.0;
-        winui::text_font(p, title_font, cx - tw / 2.0, y, title, winui::TEXT());
-        let y = y + 8.0 + 13.0;
-        winui::text(p, cx - ww / 2.0, y, why, winui::MUTED());
-        let y = y + 14.0 + 13.0;
-        winui::link(ui, p, cx - aw / 2.0, y, action, "empty-action").then_some(cmd)
+        let tile =
+            egui::Rect::from_min_size(pos2((cx - 28.0).round(), top), egui::vec2(56.0, 56.0));
+        let c = crate::theme::colors();
+        winui::icon_tile(ui, winui::rect(tile), need, c.text_secondary, 14.0);
+        let y = tile.bottom() + 12.0 + 17.0;
+        let tw = width(&title_font, title);
+        winui::text_font(
+            p,
+            title_font,
+            (cx - tw / 2.0).round(),
+            y,
+            title,
+            winui::TEXT(),
+        );
+        let y = y + 8.0 + 17.0;
+        let ww = width(&reason_font, why);
+        winui::text_font(
+            p,
+            reason_font,
+            (cx - ww / 2.0).round(),
+            y,
+            why,
+            c.text_secondary,
+        );
+        let y = y + 8.0 + 17.0;
+        let aw = width(&link_font, shown_action);
+        let x = (cx - aw / 2.0).round();
+        winui::link_font(ui, p, link_font, x, y, action, "empty-action").then_some(cmd)
     }
 
     /// The strip under the list: how many downloads are shown and selected, how many run and
@@ -1358,46 +1327,28 @@ impl App {
             left += "   ";
             left += &crate::i18n::tn(selected, "{n} selected", "{n} selected");
         }
-        if layout.graphite {
-            // Graphite's status bar (plan 05b): on `panel` with a rule above it, 12-point muted
-            // text 12 in from each side; the same words.
-            let c = crate::theme::colors();
-            let band = egui::Rect::from_min_max(pos2(o.x, top), pos2(o.x + w, o.y + h));
-            p.rect_filled(winui::rect(band), 0.0, c.panel);
-            winui::fill_l(p, o.x, top, o.x + w - 1.0, top, c.menubar_line);
-            let font = winui::segoe();
-            let baseline = top + 1.0 + ((layout.strip_h - 1.0) / 2.0).floor() + 4.0;
-            let right = self.activity();
-            let right_w = right
-                .as_ref()
-                .map_or(0.0, |r| winui::text_width_font(p, font.clone(), r).ceil());
-            let shown = winui::ellipsize(p, &font, &left, (w - 36.0 - right_w).max(0.0));
-            // The mockup's secondary ink.
-            let ink = c.text_secondary;
-            let drawn = winui::text_font(p, font.clone(), o.x + 12.0, baseline, &shown, ink);
-            if shown != left {
-                winui::full_on_hover(ui, drawn, "strip-left", &left);
-            }
-            if let Some(right) = right {
-                let x = o.x + w - 12.0 - right_w;
-                winui::text_font(p, font, x, baseline, &right, ink);
-            }
-            return;
+        // The status bar (plan 05b): on `panel` with a rule above it, 12-point muted text 12 in
+        // from each side.
+        let c = crate::theme::colors();
+        let band = egui::Rect::from_min_max(pos2(o.x, top), pos2(o.x + w, o.y + h));
+        p.rect_filled(winui::rect(band), 0.0, c.panel);
+        winui::fill_l(p, o.x, top, o.x + w - 1.0, top, c.menubar_line);
+        let font = winui::segoe();
+        let baseline = top + 1.0 + ((layout.strip_h - 1.0) / 2.0).floor() + 4.0;
+        let right = self.activity();
+        let right_w = right
+            .as_ref()
+            .map_or(0.0, |r| winui::text_width_font(p, font.clone(), r).ceil());
+        let shown = winui::ellipsize(p, &font, &left, (w - 36.0 - right_w).max(0.0));
+        // The mockup's secondary ink.
+        let ink = c.text_secondary;
+        let drawn = winui::text_font(p, font.clone(), o.x + 12.0, baseline, &shown, ink);
+        if shown != left {
+            winui::full_on_hover(ui, drawn, "strip-left", &left);
         }
-        // Centred in the band it reads as: the strip and the gap above it, under the panes.
-        let baseline = winui::baseline_in(top - layout.pane_gap, layout.strip_h + layout.pane_gap);
-        winui::fit(
-            ui,
-            p,
-            o.x + 8.0,
-            baseline,
-            &left,
-            winui::MUTED(),
-            o.x + w / 2.0,
-            "strip-left",
-        );
-        if let Some(right) = self.activity() {
-            winui::text_right(p, o.x + w - 10.0, baseline, &right, winui::MUTED());
+        if let Some(right) = right {
+            let x = o.x + w - 12.0 - right_w;
+            winui::text_font(p, font, x, baseline, &right, ink);
         }
     }
 
@@ -2256,7 +2207,7 @@ impl App {
             "theme-add" => {
                 self.add_theme_file(std::path::Path::new(tab), ctx);
             }
-            // View → Theme → a theme, as the menu picks it (#45): `theme:native` (tests of the
+            // View → Theme → a theme, as the menu picks it (#45): `theme:graphite` (tests of the
             // live switch without a click).
             "theme" => {
                 let id = crate::chrome::label(tab);
@@ -5373,7 +5324,7 @@ impl App {
             }
             Cmd::Theme(id) => {
                 self.settings.theme = id.to_owned();
-                crate::theme::select(id, ctx);
+                crate::theme::select(id);
                 // Live: egui's own visuals, the glyph rendering and the captions follow at once;
                 // every painter reads the new theme from its next frame.
                 crate::theme::apply_theme(ctx);
@@ -6077,38 +6028,11 @@ impl App {
         let chosen = self.settings.theme.as_str();
         let mut items = Vec::new();
         let mut files = false;
-        let on = |id: &str| chosen == id;
-        // i18n: View → Theme: MDM's own look, the default (IDM's layout, Windows 11's controls)
-        items.push(Radio("Classic", Cmd::Theme("classic"), true, on("classic")));
-        // i18n: View → Theme: the system's own colours (its accent colour, its high contrast)
-        items.push(Radio("Native", Cmd::Theme("native"), true, on("native")));
-        // i18n: View → Theme: black and white with strong edges, for low vision
-        items.push(Radio(
-            "High contrast",
-            Cmd::Theme("high-contrast"),
-            true,
-            on("high-contrast"),
-        ));
-        items.push(Sep);
-        // i18n: View → Theme: a style theme's name (Windows 8's flat look); keep "Metro" unless your language writes it otherwise
-        items.push(Radio("Metro", Cmd::Theme("metro"), true, on("metro")));
-        // i18n: View → Theme: a style theme's name (GNOME's look, the Linux desktop), a name: keep "Adwaita" as written
-        items.push(Radio("Adwaita", Cmd::Theme("adwaita"), true, on("adwaita")));
-        // i18n: View → Theme: a style theme's name (KDE Plasma's look, the Linux desktop), a name: keep "Breeze" as written
-        items.push(Radio("Breeze", Cmd::Theme("breeze"), true, on("breeze")));
-        // i18n: View → Theme: a style theme's name (Windows XP's look), a name: keep "Luna" as written
-        items.push(Radio("Luna", Cmd::Theme("luna"), true, on("luna")));
-        // i18n: View → Theme: a style theme's name (Windows 7's glassy look), a name: keep "Aero" as written
-        items.push(Radio("Aero", Cmd::Theme("aero"), true, on("aero")));
-        // i18n: View → Theme: a style theme's name (Mac OS X's look), a name: keep "Aqua" as written
-        items.push(Radio("Aqua", Cmd::Theme("aqua"), true, on("aqua")));
-        // i18n: View → Theme: MDM's own new look (rounded, amethyst and cyan), a name: keep "Graphite" as written
-        items.push(Radio(
-            "Graphite",
-            Cmd::Theme("graphite"),
-            true,
-            on("graphite"),
-        ));
+        // Graphite, MDM's only built-in look: chosen too when the setting names a theme MDM no
+        // longer has (plan 05.5c), which is Graphite now.
+        let graphite = chosen == "graphite" || crate::theme::current().id == "graphite";
+        // i18n: View → Theme: MDM's own look (rounded, amethyst and cyan), a name: keep "Graphite" as written
+        items.push(Radio("Graphite", Cmd::Theme("graphite"), true, graphite));
         let wal = crate::themefile::PYWAL;
         for e in self.theme_list.iter().filter(|e| e.path.is_some()) {
             if !files {
@@ -6118,19 +6042,29 @@ impl App {
             // pywal's colours, where `wal` writes them, followed as it writes them again.
             if e.id == wal && e.name == wal {
                 // i18n: View → Theme: the colours of pywal (a program making colour schemes from the wallpaper), followed as they change; a name: keep "pywal" as written
-                items.push(Radio("pywal", Cmd::Theme(wal), true, chosen == wal));
+                items.push(Radio(
+                    "pywal",
+                    Cmd::Theme(wal),
+                    true,
+                    chosen == wal && !graphite,
+                ));
                 continue;
             }
             // A file's theme by its own name, untranslated.
             let (id, name) = (crate::chrome::label(&e.id), crate::chrome::label(&e.name));
-            items.push(Radio(name, Cmd::Theme(id), true, e.id == chosen));
+            items.push(Radio(
+                name,
+                Cmd::Theme(id),
+                true,
+                e.id == chosen && !graphite,
+            ));
         }
         items.push(Sep);
         // i18n: View → Theme: picks a theme file or a Base16 or pywal colour scheme, copies it into the themes folder and uses it
         items.push(I("Add a theme file…", Cmd::AddThemeFile, true, false));
         // i18n: View → Theme: opens the folder where theme files go (TOML or JSON)
         items.push(I("Open themes folder", Cmd::OpenThemesFolder, true, false));
-        // i18n: View menu: submenu choosing MDM's look (colours, sizes, icons): Classic, Native…
+        // i18n: View menu: submenu choosing MDM's look (colours, sizes, icons): Graphite or a theme file
         Sub("Theme", true, items)
     }
 
@@ -6557,26 +6491,18 @@ impl App {
     /// The Categories tree: each row, the view it selects (None: just toggles) and its branch.
     fn tree_rows(&self) -> Vec<(TreeRow<'static>, Option<View>, Branch)> {
         let cur = self.view;
-        let row = |level, label: &'static str, expander, icon, badge, view: Option<View>| TreeRow {
+        let row = |level, label: &'static str, expander, icon, view: Option<View>| TreeRow {
             level,
             label: label.into(),
             expander,
             selected: view == Some(cur),
             icon,
-            badge,
             count: None,
         };
         let mut rows = Vec::new();
-        // The badges that repeat their icon, unless the theme's icon set has no need of them.
-        let badges = crate::themeicons::tree_badges();
-        // Silk icons in IDM's roles: folder, folder + green arrow, folder + tick, page stacks.
         let mut branch =
-            |label, open: bool, icon, badge, view: View, b: Branch, child: fn(Category) -> View| {
-                rows.push((
-                    row(0, label, Some(open), icon, badge, Some(view)),
-                    Some(view),
-                    b,
-                ));
+            |label, open: bool, icon, view: View, b: Branch, child: fn(Category) -> View| {
+                rows.push((row(0, label, Some(open), icon, Some(view)), Some(view), b));
                 if open {
                     for c in Category::named() {
                         let v = child(c);
@@ -6587,7 +6513,6 @@ impl App {
                                 expander: None,
                                 selected: v == cur,
                                 icon: category_icon(c),
-                                badge: None,
                                 count: None,
                             },
                             Some(v),
@@ -6599,8 +6524,7 @@ impl App {
         branch(
             "All Downloads",
             self.all_open,
-            IconKey::Themed("cat-all", "folder"),
-            None,
+            IconKey::Themed("cat-all"),
             View::All,
             Branch::All,
             View::Cat,
@@ -6609,8 +6533,7 @@ impl App {
             // i18n: adjective: the downloads that are not complete yet
             "Unfinished",
             self.unfinished_open,
-            IconKey::Themed("cat-unfinished", "folder_go"),
-            None,
+            IconKey::Themed("cat-unfinished"),
             View::Unfinished(None),
             Branch::Unfinished,
             |c| View::Unfinished(Some(c)),
@@ -6619,25 +6542,18 @@ impl App {
             // i18n: adjective: the downloads that are complete
             "Finished",
             self.finished_open,
-            IconKey::Themed("cat-finished", "folder"),
-            badges.then_some("tick"),
+            IconKey::Themed("cat-finished"),
             View::Finished(None),
             Branch::Finished,
             |c| View::Finished(Some(c)),
         );
-        let stack = if badges {
-            IconKey::Silk("page_white_stack")
-        } else {
-            IconKey::Themed("cat-queues", "page_white_stack")
-        };
         rows.push((
             row(
                 0,
                 // i18n: plural noun: the download queues
                 "Queues",
                 Some(self.queues_open),
-                IconKey::Themed("cat-queues", "folder"),
-                badges.then_some("page_white_stack"),
+                IconKey::Themed("cat-queues"),
                 None,
             ),
             None,
@@ -6645,13 +6561,13 @@ impl App {
         ));
         if self.queues_open {
             // Every queue, the user's too (IDM lists them all here).
-            // Graphite draws a synchronization queue as the refresh glyph, not a tick badge.
-            let graphite = crate::theme::chrome() == crate::palette::ChromeLook::Graphite;
+            // A synchronization queue as the refresh glyph.
             for (q, queue) in self.queues.iter().enumerate() {
                 let view = Some(View::Queue(q));
-                let (icon, badge) = match (queue.sync, graphite) {
-                    (true, true) => (IconKey::Themed("gx-refresh", "page_white_stack"), None),
-                    (sync, _) => (stack.clone(), sync.then_some("tick")),
+                let icon = if queue.sync {
+                    IconKey::Themed("gx-refresh")
+                } else {
+                    IconKey::Themed("cat-queues")
                 };
                 rows.push((
                     TreeRow {
@@ -6660,7 +6576,6 @@ impl App {
                         expander: None,
                         selected: view == Some(cur),
                         icon,
-                        badge,
                         count: None,
                     },
                     view,
@@ -7051,12 +6966,8 @@ impl App {
             // The splitter: the gap between the pane and the list (`splitter_w`), dragged
             // sideways.
             let max_w = (w * 0.6).max(100.0);
-            // Graphite's pane has a width of its own (224 by default), Classic keeps IDM's.
-            let saved = if layout.graphite {
-                self.settings.graphite_categories_width
-            } else {
-                self.settings.categories_width
-            };
+            // The pane's own width (224 by default).
+            let saved = self.settings.graphite_categories_width;
             let cat_w = (saved as f32).clamp(100.0, max_w);
             let right = o.x + layout.tree_left + cat_w;
             // The splitter: IDM's 4-point gap; Graphite's, the pane's last 6 points and its rule
@@ -7151,19 +7062,11 @@ impl App {
                 && let Some(p) = sr.interact_pointer_pos()
             {
                 // The pane's width from its leading edge (the right in RTL).
-                let at = if layout.graphite {
-                    ctx.data(|d| d.get_temp::<f32>(grab)).unwrap_or(0.0)
-                } else {
-                    layout.splitter_w / 2.0
-                };
+                let at = ctx.data(|d| d.get_temp::<f32>(grab)).unwrap_or(0.0);
                 let nw = (winui::mx(p.x) - o.x - layout.tree_left - at)
                     .round()
                     .clamp(100.0, max_w);
-                if layout.graphite {
-                    self.settings.graphite_categories_width = nw as u32;
-                } else {
-                    self.settings.categories_width = nw as u32;
-                }
+                self.settings.graphite_categories_width = nw as u32;
             }
             if sr.drag_stopped() {
                 self.dirty = true;
@@ -7173,7 +7076,6 @@ impl App {
                 self.tree_keys = true;
                 self.list.set_keys(false);
                 match ev {
-                    TreeEvent::Close => self.show_categories = false,
                     TreeEvent::Select(k) => match rows[k].1 {
                         Some(v) => self.view = v,
                         None => self.toggle(rows[k].2),
@@ -7194,8 +7096,6 @@ impl App {
             layout.tree_left
         };
 
-        // Download list, in the look's own column widths.
-        self.list.set_look(layout.graphite);
         let (ids, rows) = self.list_rows();
         self.selection.retain(&ids);
         let (selected, focus) = self.selection.rows(&ids);
@@ -9140,11 +9040,9 @@ impl App {
                 self.settings.always_dark,
                 &ctx,
             );
-            // Native follows the system's accent and contrast as they change, a theme made from
-            // pywal's colours the colours `wal` writes for each new wallpaper.
-            let changed = if crate::theme::follow_system(&ctx)
-                || crate::theme::follow_pywal(files.as_ref().map(|(_, f)| f))
-            {
+            // A theme made from pywal's colours follows the colours `wal` writes for each new
+            // wallpaper.
+            let changed = if crate::theme::follow_pywal(files.as_ref().map(|(_, f)| f)) {
                 crate::theme::apply_theme(&ctx);
                 true
             } else {

@@ -39,29 +39,11 @@ pub struct Layout {
     pub list_right: f32,
     /// From the list's bottom edge (exclusive) to the strip.
     pub list_gap: f32,
-    /// Graphite's layout (plan 05b): its painters draw the bands, the tree and the list.
-    pub graphite: bool,
     /// The menus are in the drawn title bar (Graphite's, `menu_h` 0), not in a row of their own.
     pub menus_in_caption: bool,
 }
 
 impl Layout {
-    /// Today's layout (IDM's), in every theme but Graphite.
-    pub const CLASSIC: Layout = Layout {
-        caption_h: winui::caption::CAPTION_H,
-        menu_h: 20.0,
-        toolbar_h: 70.0,
-        drop_y: 65.0,
-        strip_h: 22.0,
-        tree_left: 6.0,
-        splitter_w: 4.0,
-        pane_gap: 5.0,
-        list_right: 7.0,
-        list_gap: 4.0,
-        graphite: false,
-        menus_in_caption: false,
-    };
-
     /// Graphite's (DESIGN.md, the mockup's main window): a 36-point title bar that holds the
     /// menus, a 58-point toolbar band, the panes edge to edge, a 28-point status bar.
     pub const GRAPHITE: Layout = Layout {
@@ -75,21 +57,21 @@ impl Layout {
         pane_gap: 0.0,
         list_right: 0.0,
         list_gap: 0.0,
-        graphite: true,
         menus_in_caption: true,
     };
 
-    /// The active theme's layout, this frame. `drawn_caption`: the title bar is ours (else
-    /// the system's, and Graphite keeps a menu row under it).
+    /// The menu row under the system's title bar, its bottom line included (IDM's: non-client
+    /// y -20..-1), when the title bar isn't ours.
+    pub const MENU_ROW_H: f32 = 20.0;
+
+    /// The layout this frame. `drawn_caption`: the title bar is ours (else the system's, and
+    /// a menu row stays under it).
     pub fn current(drawn_caption: bool) -> Layout {
-        if crate::theme::chrome() != crate::palette::ChromeLook::Graphite {
-            return Layout::CLASSIC;
-        }
         if drawn_caption {
             Layout::GRAPHITE
         } else {
             Layout {
-                menu_h: Layout::CLASSIC.menu_h,
+                menu_h: Layout::MENU_ROW_H,
                 menus_in_caption: false,
                 ..Layout::GRAPHITE
             }
@@ -176,31 +158,24 @@ mod a11y_tests {
     ];
 
     /// The toolbar's 11 buttons are buttons for screen readers, by their labels, greyed as
-    /// drawn: in IDM's layout and in Graphite's (00's accessibility exception: every theme).
+    /// drawn.
     #[test]
     fn the_toolbar_exposes_its_eleven_buttons() {
         let _fonts = crate::theme::font_tests();
-        for layout in [Layout::CLASSIC, Layout::GRAPHITE] {
-            let ctx = egui::Context::default();
-            ctx.enable_accesskit();
-            let mut nodes = Default::default();
-            for _ in 0..2 {
-                (nodes, _) = frame(&ctx, vec![], |ui| {
-                    toolbar(ui, &layout, Pos2::ZERO, 1240.0, &BUTTONS)
-                });
-            }
-            let mut want: Vec<(String, bool)> = BUTTONS
-                .iter()
-                .map(|(_, l, on)| ((*l).to_owned(), !on))
-                .collect();
-            want.sort();
-            assert_eq!(
-                named(&nodes, Role::Button),
-                want,
-                "graphite {}",
-                layout.graphite
-            );
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut nodes = Default::default();
+        for _ in 0..2 {
+            (nodes, _) = frame(&ctx, vec![], |ui| {
+                toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 1240.0, &BUTTONS)
+            });
         }
+        let mut want: Vec<(String, bool)> = BUTTONS
+            .iter()
+            .map(|(_, l, on)| ((*l).to_owned(), !on))
+            .collect();
+        want.sort();
+        assert_eq!(named(&nodes, Role::Button), want);
     }
 
     /// 04's overflow (plans/04-typeface.md): at 200 % the window is about 710 points wide, and
@@ -320,25 +295,6 @@ mod a11y_tests {
 mod layout_tests {
     use super::Layout;
 
-    /// The numbers the main window was laid out with before they were shared (plan 05a): the
-    /// menu bar 20 high, the panes from client y 90, the strip 22, the pane at x 6, a
-    /// drop-down's menu at client y 85.
-    #[test]
-    fn the_classic_layout_keeps_its_numbers() {
-        let l = Layout::CLASSIC;
-        assert_eq!(l.toolbar_top(), 20.0);
-        assert_eq!(l.panes_top(), 90.0);
-        assert_eq!(l.toolbar_top() + l.drop_y, 85.0);
-        assert_eq!(l.strip_top(600.0), 578.0);
-        assert_eq!(
-            (l.tree_left, l.splitter_w, l.pane_gap, l.list_right),
-            (6.0, 4.0, 5.0, 7.0)
-        );
-        assert_eq!(l.caption_h, 32.0);
-        assert_eq!(l.list_bottom(600.0), 574.0);
-        assert!(!l.graphite && !l.menus_in_caption);
-    }
-
     /// Graphite's (plan 05b): the menus in a 36-point title bar, so the toolbar starts at the
     /// client's top; its band 58; the panes edge to edge down to a 28-point status bar; a
     /// drop-down's menu just under its button.
@@ -352,13 +308,16 @@ mod layout_tests {
         assert_eq!(l.strip_top(600.0), 572.0);
         assert_eq!(l.list_bottom(600.0), 572.0);
         assert_eq!((l.tree_left, l.list_right), (0.0, 0.0));
-        assert!(l.graphite && l.menus_in_caption);
+        assert!(l.menus_in_caption);
+        // Under the system's title bar, a menu row of its own; the rest as above.
+        let s = Layout::current(false);
+        assert_eq!((s.menu_h, s.toolbar_top()), (20.0, 20.0));
+        assert_eq!(s.panes_top(), 78.0);
+        assert!(!s.menus_in_caption);
+        assert_eq!(Layout::current(true).panes_top(), 58.0);
     }
 }
 
-const fn rgb(r: u8, g: u8, b: u8) -> Color32 {
-    Color32::from_rgb(r, g, b)
-}
 use crate::theme::themed;
 // The active theme's colours (crate::palette, #45).
 themed! {
@@ -386,10 +345,6 @@ themed! {
     TEXT_DISABLED_MENU => menu_text_disabled;
     TB_DISABLED => toolbar_text_disabled;
     /// A drop-down's arrow (dark: light on the dark band, where #282828 could not be seen).
-    TB_ARROW => toolbar_arrow;
-    CAT_FRAME => tree_frame;
-    TREE_BG => tree;
-    TREE_LINES => tree_lines;
     /// The tree's chevrons (dark look).
     TREE_EXPANDER => tree_expander;
 }
@@ -404,44 +359,14 @@ pub enum IconKey {
     Ext(String),
     /// 32 × 32 (Download File Info).
     ExtLarge(String),
-    /// A FamFamFam Silk icon (CC BY 2.5, assets/icons/silk/), by name.
-    Silk(&'static str),
-    /// The theme icon set's icon for a need (`crate::themeicons`), else this Silk icon.
-    Themed(&'static str, &'static str),
+    /// The theme icon set's icon for a need (`crate::themeicons`), else Graphite's.
+    Themed(&'static str),
     /// Graphite's icon for a need, whatever the theme (`themeicons::graphite`).
     Graphite(&'static str),
 }
 
-/// The embedded Silk icons (XP-era look, like IDM's tree icons).
-fn silk(name: &str) -> Option<egui::ImageSource<'static>> {
-    macro_rules! icons {
-        ($($n:literal),*) => {
-            match name {
-                $($n => Some(egui::include_image!(concat!("../assets/icons/silk/", $n, ".png"))),)*
-                _ => None,
-            }
-        };
-    }
-    icons!(
-        "folder",
-        "folder_go",
-        "folder_page",
-        "page_white_zip",
-        "page_white",
-        "music",
-        "application_xp",
-        "film",
-        "tick",
-        "page_white_stack",
-        "arrow_down",
-        "arrow_up",
-        "cross",
-        "folder_link"
-    )
-}
-
-/// The small icons drawn by key: Silk's (the Categories tree), Graphite's (the Scheduler's
-/// queues) and the file types', which fileicons.rs draws (the system's own).
+/// The small icons drawn by key: the icon set's (the Categories tree), Graphite's (the
+/// Scheduler's queues) and the file types', which fileicons.rs draws (the system's own).
 #[derive(Default)]
 pub struct ShellIcons;
 
@@ -462,16 +387,9 @@ impl ShellIcons {
         };
         let rc = winui::rect(Rect::from_min_size(min, vec2(side, side)));
         match &key {
-            IconKey::Silk(name) => {
-                if let Some(src) = silk(name) {
-                    paint_image(ui, painter, src, rc);
-                }
-            }
-            IconKey::Themed(need, name) => {
-                if !crate::themeicons::paint(ui, painter, need, rc, true)
-                    && let Some(src) = silk(name)
-                {
-                    paint_image(ui, painter, src, rc);
+            IconKey::Themed(need) => {
+                if !crate::themeicons::paint(ui, painter, need, rc, true) {
+                    crate::themeicons::paint_graphite(ui, painter, need, rc, true);
                 }
             }
             IconKey::Graphite(need) => {
@@ -487,19 +405,6 @@ impl ShellIcons {
                 crate::fileicons::paint(ui, painter, crate::fileicons::Kind::File(&name), rc);
             }
         }
-    }
-}
-
-/// An image source drawn in `rc` through `painter` (its clip), pixel-sharp.
-pub fn paint_image(ui: &Ui, painter: &egui::Painter, src: egui::ImageSource<'static>, rc: Rect) {
-    let img = egui::Image::new(src).texture_options(egui::TextureOptions::NEAREST);
-    if let Ok(egui::load::TexturePoll::Ready { texture }) = img.load_for_size(ui.ctx(), rc.size()) {
-        painter.image(
-            texture.id,
-            rc,
-            Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
-            Color32::WHITE,
-        );
     }
 }
 
@@ -1349,9 +1254,9 @@ fn menu_width(p: &egui::Painter, label: &str) -> f32 {
     }
 }
 
-/// How a menu's window is laid out: IDM's (Win32's), or Graphite's (plan 05b, the mockup's
-/// `.menu-pop`) for the menu bar's and the right-click menus while the theme's layout is
-/// Graphite's (drop-down lists keep Win32's until the dialogs get theirs, plan 07).
+/// How a menu's window is laid out: Graphite's (plan 05b, the mockup's `.menu-pop`) for the
+/// menu bar's and the right-click menus, Win32's for drop-down lists until the dialogs get
+/// theirs (plan 07).
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct MenuLook {
     graphite: bool,
@@ -1368,10 +1273,9 @@ struct MenuLook {
 
 impl MenuLook {
     fn of(kind: MenuKind) -> MenuLook {
-        let graphite = crate::theme::chrome() == crate::palette::ChromeLook::Graphite;
         match kind {
-            MenuKind::Bar | MenuKind::Context if graphite => MenuLook {
-                graphite,
+            MenuKind::Bar | MenuKind::Context => MenuLook {
+                graphite: true,
                 pad: 5.0,
                 slot: 28.0,
                 sep: 11.0,
@@ -2097,198 +2001,6 @@ pub enum ToolbarEvent {
     Drop(usize, Pos2),
 }
 
-/// Paint the etch (the toolbar's first two rows, client y 20 and 21 under the menu bar) and the
-/// toolbar band under it, down to where the panes start ([`Layout::panes_top`]).
-pub fn toolbar(
-    ui: &mut Ui,
-    layout: &Layout,
-    o: Pos2,
-    width: f32,
-    buttons: &[(Icon, &str, bool)],
-) -> Option<ToolbarEvent> {
-    if layout.graphite {
-        return toolbar_graphite(ui, layout, o, width, buttons);
-    }
-    let p = ui.painter().clone();
-    let top = o.y + layout.toolbar_top();
-    let c = crate::theme::colors();
-    fill(&p, o.x, top, o.x + width - 1.0, top, c.toolbar_line);
-    fill(
-        &p,
-        o.x,
-        top + 1.0,
-        o.x + width - 1.0,
-        top + 1.0,
-        c.toolbar_line_light,
-    );
-    // Both modes (light-main.md; dark changes only colours): Tahoma labels, 66 px buttons, a
-    // 68 px band under the etch's two rows.
-    let (font, base_w, band_h) = (winui::tahoma(), 66.0f32, layout.toolbar_h - 2.0);
-    let band = Rect::from_min_size(pos2(o.x, top + 2.0), vec2(width, band_h));
-    p.rect_filled(band, 0.0, WINDOW_BG());
-    let mut x = o.x;
-    let mut event = None;
-    let is_dropdown =
-        |icon: &Icon| matches!(icon, Icon::StartQueue | Icon::StopQueue | Icon::AddTorrent);
-    // A toolbar wider than the window (long translations): the longest labels give way first,
-    // cut with "..." and whole on hover, so every button stays on screen.
-    let natural: Vec<(f32, f32)> = buttons
-        .iter()
-        .map(|(icon, label, _)| {
-            let ext = text_width_font(&p, font.clone(), crate::i18n::tc("toolbar", label)).round();
-            (ext, if is_dropdown(icon) { 15.0 } else { 0.0 })
-        })
-        .collect();
-    let cap = label_cap(&natural, base_w, width);
-    for (i, (icon, label, enabled)) in buttons.iter().enumerate() {
-        let full = crate::i18n::tc("toolbar", label);
-        let dropdown = is_dropdown(icon);
-        // IDM's buttons are 66 px; ours grow only when a full label needs it (user
-        // decision), up to the cap that keeps the toolbar inside the window.
-        let full_ext = text_width_font(&p, font.clone(), full).round();
-        let bw = base_w.max((full_ext + 12.0).min(cap));
-        let cut = full_ext + 12.0 > bw;
-        let shown = if cut {
-            winui::ellipsize(&p, &font, full, bw - 12.0)
-        } else {
-            full.to_owned()
-        };
-        let label = &shown;
-        let ext = text_width_font(&p, font.clone(), label).round();
-        let total = bw + if dropdown { 15.0 } else { 0.0 };
-        // Laid out in English from the leading edge; each part made where it is on screen (the
-        // first button at the right in RTL, a drop-down's arrow after its button).
-        let rc = winui::rect(Rect::from_min_size(
-            pos2(x, band.top()),
-            vec2(total, band_h),
-        ));
-        let resp = ui.interact(rc, egui::Id::unique(("tb", i)), winui::pointer_only());
-        // For screen readers and UI Automation (plan 05b, in every theme): a button by its
-        // whole label, greyed as drawn.
-        winui::expose(&resp, egui::Role::Button, full, *enabled, None);
-        let resp = if cut { resp.on_hover_text(full) } else { resp };
-        let past_button = |q: Pos2| winui::mx(q.x) >= x + bw;
-        if *enabled && resp.hovered() {
-            // Hover (IDM 6.42, captured 2026-10-30): the button's own width, from the band's top,
-            // square. Dark: a flat #33414d. Light: Windows' hot button, #e5f3ff with a 1 px
-            // #cce8ff border. As much room under the label as above the icon (user request
-            // 2026-11-01: IDM's 61 px left the label on the bottom edge): 65 tall, inside the
-            // band. Beyond IDM (which lights only the button part, user
-            // request 2026-10-29): a drop-down is a split button — the part under the pointer is
-            // lit (pressed while the mouse is down), the other part faintly, a 1 px divider between.
-            let h = 65.0;
-            let (hot_c, faint_c, down_c, edge_c, border_c) = (
-                c.toolbar_hot,
-                c.toolbar_hot_faint,
-                c.toolbar_pressed,
-                c.toolbar_hot_edge,
-                c.toolbar_hot_border,
-            );
-            let on_arrow = dropdown && resp.hover_pos().is_some_and(past_button);
-            let down = resp.is_pointer_button_down_on();
-            let main = winui::rect(Rect::from_min_size(pos2(x, band.top()), vec2(bw, h)));
-            // The arrow part starts on the button's last column: their borders share one line.
-            let arrow = winui::rect(Rect::from_min_size(
-                pos2(x + bw - 1.0, band.top()),
-                vec2(total - bw + 1.0, h),
-            ));
-            let lit = |r: Rect, under: bool| {
-                let c = match (under, down) {
-                    (true, true) => down_c,
-                    (true, false) => hot_c,
-                    (false, _) => faint_c,
-                };
-                p.rect_filled(r, 0.0, c);
-                // None in the dark look (a transparent border isn't drawn).
-                p.rect_stroke(
-                    r,
-                    0.0,
-                    egui::Stroke::new(1.0, border_c),
-                    egui::StrokeKind::Inside,
-                );
-            };
-            lit(main, !on_arrow);
-            if dropdown {
-                lit(arrow, on_arrow);
-                // The divider: the parts' shared edge, one line.
-                winui::fill_l(
-                    &p,
-                    x + bw - 1.0,
-                    band.top(),
-                    x + bw - 1.0,
-                    band.top() + h - 1.0,
-                    edge_c,
-                );
-            }
-        }
-        let cx = x + bw / 2.0;
-        let icon_rect = Rect::from_min_size(
-            pos2(cx - 16.0, top + 9.5 + 20.0 - 20.0 + 0.0),
-            vec2(32.0, 32.0),
-        )
-        .translate(vec2(0.0, 0.0));
-        let icon_rect = Rect::from_center_size(pos2(cx, top + 25.5), icon_rect.size());
-        // Placed, not mirrored: an icon keeps its look.
-        icon.image(*enabled).paint_at(ui, winui::rect(icon_rect));
-        // Label: x = btn.x + floor((w − ext)/2), +1 for drop-downs, last ink row 58. Every label
-        // on one line (IDM draws the drop-downs' 1 px lower: in one row it read as a mistake).
-        let mut lx = x + ((bw - ext) / 2.0).floor();
-        if dropdown {
-            lx += 1.0;
-        }
-        let ly = top + 58.0;
-        text_font(
-            &p,
-            font.clone(),
-            lx,
-            ly,
-            label,
-            if *enabled { TEXT() } else { TB_DISABLED() },
-        );
-        if dropdown {
-            let ax = x + bw + 4.0;
-            let ay = top + 31.0;
-            // The split's divider at rest (user choice 2026-10-29, "B"): a classic etched
-            // toolbar separator — a shadow line and a highlight beside it — 24 px tall, centred
-            // on the arrow; the hover draws the full divider instead.
-            if !(*enabled && resp.hovered()) {
-                let (shadow, light) = (c.toolbar_split_shadow, c.toolbar_split_light);
-                let (y0, y1) = (ay - 10.0, ay + 13.0);
-                winui::fill_l(&p, x + bw - 1.0, y0, x + bw - 1.0, y1, shadow);
-                winui::fill_l(&p, x + bw, y0, x + bw, y1, light);
-            }
-            for (row, half) in [3.0f32, 2.0, 1.0, 0.0].iter().enumerate() {
-                winui::fill_l(
-                    &p,
-                    ax + 3.0 - half,
-                    ay + row as f32,
-                    ax + 3.0 + half,
-                    ay + row as f32,
-                    TB_ARROW(),
-                );
-            }
-        }
-        // No right-click menu: it would offer toolbar looks (sizes, styles) and only one is
-        // built.
-        // Not a `let` inside the `if`: in a let-chain `&&` ends the binding, so the pointer test
-        // became a condition of its own and only the arrow part ever clicked (0.2.3).
-        let on_arrow = dropdown && resp.interact_pointer_pos().is_some_and(past_button);
-        // The arrow is a button of its own (a split button): its menu lists every queue, so it
-        // works while the main one's button is greyed.
-        if resp.clicked() && (*enabled || on_arrow) {
-            // The drop-down menu's top-left is the button's left edge, `drop_y` under the
-            // toolbar's top (client y 85); in RTL its top-right at the button's right edge.
-            event = Some(if on_arrow {
-                ToolbarEvent::Drop(i, pos2(winui::mx(x), top + layout.drop_y))
-            } else {
-                ToolbarEvent::Click(i)
-            });
-        }
-        x += total;
-    }
-    event
-}
-
 /// Graphite's toolbar buttons: their top inside the band and their height (DESIGN.md: the
 /// band 58, its rule included).
 pub const TB_BUTTON_TOP: f32 = 5.0;
@@ -2308,8 +2020,9 @@ fn ends_group(icon: Icon) -> bool {
 /// under it, 20-point icons over 11.5-point labels, buttons at least 60 wide (8 either side of
 /// the label), 2 apart in a group and a 1-point rule between groups; under the pointer the
 /// toolbar's hot face rounded 8; a drop-down's arrow inside its button's end, which is its own
-/// part (a split button, as IDM's layout has it).
-fn toolbar_graphite(
+/// part (a split button, as IDM's layout has it). Down to where the panes start
+/// ([`Layout::panes_top`]).
+pub fn toolbar(
     ui: &mut Ui,
     layout: &Layout,
     o: Pos2,
@@ -2564,8 +2277,6 @@ pub struct TreeRow<'a> {
     pub expander: Option<bool>,
     pub selected: bool,
     pub icon: IconKey,
-    /// A small Silk icon overlaid at the icon's bottom-right (Finished ✓, queue stacks).
-    pub badge: Option<&'static str>,
     /// How many downloads the node holds, shown after its label (none when empty).
     pub count: Option<usize>,
 }
@@ -2578,345 +2289,8 @@ fn count_text(n: usize) -> String {
 pub enum TreeEvent {
     Select(usize),
     Toggle(usize),
-    Close,
     /// Right-click: the row whose menu opens (the selection does not move) and where.
     Context(usize, Pos2),
-}
-
-/// The Categories pane: frame x [`Layout::tree_left`] .. `right` (IDM: 6 .. 148, resizable by
-/// the splitter), from the panes' top to `bottom` (the strip's top) less the pane gap; caption,
-/// close "x", tree (rows 16 px, indent 19).
-#[allow(clippy::too_many_arguments)]
-pub fn categories(
-    ui: &mut Ui,
-    icons: &mut ShellIcons,
-    layout: &Layout,
-    o: Pos2,
-    bottom: f32,
-    right: f32,
-    rows: &[TreeRow<'_>],
-    // The tree has the keys (its chosen node shows the focus).
-    keys: bool,
-) -> Option<TreeEvent> {
-    if layout.graphite {
-        return categories_graphite(ui, icons, layout, o, bottom, right, rows, keys);
-    }
-    let p = ui.painter().clone();
-    let y0 = o.y + layout.panes_top(); // frame top
-    let left = o.x + layout.tree_left;
-    // Laid out in English (frame `left` .. right); every part made where it is on screen — the pane
-    // on the right in RTL, its tree indenting from the right.
-    let frame = winui::rect(Rect::from_min_max(
-        pos2(left, y0),
-        pos2(right, bottom - layout.pane_gap),
-    ));
-    p.rect_stroke(
-        frame,
-        0.0,
-        Stroke::new(1.0, CAT_FRAME()),
-        egui::StrokeKind::Inside,
-    );
-    winui::fill_l(&p, left, y0 + 18.0, right - 1.0, y0 + 18.0, CAT_FRAME()); // caption underline
-    // i18n: title of the side pane that lists the categories
-    let caption = crate::i18n::t("Categories");
-    // Short of the close box: in a narrow pane or a long translation, "..." and whole on hover.
-    let shown = winui::ellipsize(&p, &winui::tahoma(), caption, right - 21.0 - (left + 6.0));
-    let drawn = text_font(&p, winui::tahoma(), left + 6.0, y0 + 13.0, &shown, TEXT());
-    if shown != caption {
-        winui::full_on_hover(ui, drawn, "categories-caption", caption);
-    }
-    let mut event = None;
-    let close = winui::rect(Rect::from_min_size(
-        pos2(right - 19.0, y0 + 2.0),
-        vec2(16.0, 15.0),
-    ));
-    let cr = ui
-        .interact(close, egui::Id::unique("cat-close"), winui::pointer_only())
-        // i18n: tooltip of the × that closes the Categories pane
-        .on_hover_text(crate::i18n::t("Close"));
-    if let Some(c) = winui::subtle_fill(winui::State::of(&cr, true), crate::theme::colors()) {
-        p.rect_filled(close, crate::theme::metrics().part_radius, c);
-    }
-    text_font(
-        &p,
-        winui::arial_bold(),
-        right - 15.0,
-        y0 + 13.0,
-        crate::i18n::t("x"),
-        TEXT(),
-    );
-    if cr.clicked() {
-        event = Some(TreeEvent::Close);
-    }
-    // Inside the frame: 2 from its start, 3 from its end and 4 from its bottom.
-    let tree = Rect::from_min_max(
-        pos2(left + 2.0, y0 + 18.0),
-        pos2(right - 3.0, bottom - layout.pane_gap - 4.0),
-    );
-    p.rect_filled(winui::rect(tree), 0.0, TREE_BG());
-
-    // Scroll bars (notes/ui-spec/scrollbars.md "Categories tree"): by rows vertically, by
-    // pixels horizontally; each shows when the content overflows (Win32 rule).
-    let content_h = rows.len() as f32 * 16.0;
-    let content_w = rows
-        .iter()
-        .map(|r| {
-            let text_x = if r.level == 0 { 51.0 } else { 70.0 };
-            let count = r.count.map_or(0.0, |n| {
-                5.0 + text_width_font(&p, winui::tahoma(), &count_text(n))
-            });
-            // From the tree's start (the rows count from 6 before the frame).
-            left - 6.0 + text_x - tree.left()
-                + text_width_font(&p, winui::tahoma(), crate::i18n::t(&r.label))
-                + count
-                + 5.0
-        })
-        .fold(0.0, f32::max)
-        .ceil();
-    let (mut need_v, mut need_h) = (false, false);
-    for _ in 0..2 {
-        need_h = content_w > tree.width() - if need_v { scrollbar::THICK } else { 0.0 };
-        need_v = content_h > tree.height() - if need_h { scrollbar::THICK } else { 0.0 };
-    }
-    let area = Rect::from_min_max(
-        tree.min,
-        pos2(
-            tree.right() - if need_v { scrollbar::THICK } else { 0.0 },
-            tree.bottom() - if need_h { scrollbar::THICK } else { 0.0 },
-        ),
-    );
-    let scroll_id = egui::Id::unique("tree-scroll");
-    let (mut vpos, mut hpos) = ui
-        .ctx()
-        .data(|d| d.get_temp::<(f32, f32)>(scroll_id))
-        .unwrap_or_default();
-    let page_rows = (area.height() / 16.0).floor().max(1.0);
-    if ui.rect_contains_pointer(winui::rect(tree)) {
-        vpos += winui::wheel_rows(ui, 16.0, page_rows);
-        hpos -= ui.input(|i| i.smooth_scroll_delta.x);
-    }
-    vpos = vpos.clamp(0.0, (rows.len() as f32 - page_rows).max(0.0));
-    hpos = hpos.clamp(0.0, (content_w - area.width()).max(0.0)).round();
-    let first_row = vpos.round();
-    // Everything below is laid out from a horizontally scrolled origin: the rows' spec x
-    // (connectors at 19, icons at 30 and 49, text at 51 and 70) count from 6 before the frame.
-    let o = pos2(left - 6.0 - hpos, o.y);
-    let tp = p.with_clip_rect(winui::rect(area));
-    let row_top = |k: usize| area.top() + 16.0 * (k as f32 - first_row);
-    // Blank space (registered first, so the rows sit above it): the selected node's menu, at
-    // the pointer (IDM places it beside the node; user decision: at the pointer).
-    let blank = ui.interact(
-        winui::rect(area),
-        egui::Id::unique("tree-blank"),
-        winui::pointer_only(),
-    );
-    if blank.secondary_clicked()
-        && let Some(k) = rows.iter().position(|r| r.selected)
-        && let Some(at) = blank.interact_pointer_pos()
-    {
-        event = Some(TreeEvent::Context(k, at));
-    }
-    // For screen readers and UI Automation (#113): the pane is a tree named as its caption, its
-    // rows the tree's items (made in a child whose accessibility parent is the tree).
-    winui::expose(
-        &blank,
-        egui::Role::Tree,
-        crate::i18n::t("Categories"),
-        true,
-        None,
-    );
-    let rows_ui = ui.new_child(egui::UiBuilder::new().accessibility_parent(blank.id));
-    // Where the selected row is, for its menu from the keyboard (Shift+F10, the Menu key).
-    let mut selected_at: Option<(usize, Pos2)> = None;
-
-    // Connector dots (#6d6d6d, every other pixel), painted first; expander boxes cover them.
-    let roots: Vec<usize> = (0..rows.len()).filter(|&k| rows[k].level == 0).collect();
-    if let (Some(&first), Some(&last)) = (roots.first(), roots.last()) {
-        let mut y = row_top(first);
-        while y <= row_top(last) + 8.0 {
-            if (y - tree.top()) as i32 % 2 == 0 {
-                winui::px_l(&tp, o.x + 19.0, y, TREE_LINES());
-            }
-            y += 1.0;
-        }
-        for &k in &roots {
-            let mut x = o.x + 19.0;
-            while x <= o.x + 29.0 {
-                winui::px_l(&tp, x, row_top(k) + 8.0, TREE_LINES());
-                x += 2.0;
-            }
-        }
-    }
-    for (k, r) in rows.iter().enumerate() {
-        if r.level == 1 {
-            let mut x = o.x + 38.0;
-            while x <= o.x + 48.0 {
-                winui::px_l(&tp, x, row_top(k) + 8.0, TREE_LINES());
-                x += 2.0;
-            }
-            let is_last = rows.get(k + 1).is_none_or(|n| n.level == 0);
-            let start = row_top(k);
-            let end = if is_last {
-                row_top(k) + 8.0
-            } else {
-                row_top(k) + 15.0
-            };
-            let mut y = start;
-            while y <= end {
-                if (y - tree.top()) as i32 % 2 == 0 {
-                    winui::px_l(&tp, o.x + 38.0, y, TREE_LINES());
-                }
-                y += 1.0;
-            }
-        }
-    }
-
-    for (k, r) in rows.iter().enumerate() {
-        let top = row_top(k);
-        // Rows outside the viewport (icons are not clipped by `tp`).
-        if top < area.top() || top >= area.bottom() {
-            continue;
-        }
-        let icon_x = o.x + if r.level == 0 { 30.0 } else { 49.0 };
-        let text_x = o.x + if r.level == 0 { 51.0 } else { 70.0 };
-        let ext = text_width_font(&p, winui::tahoma(), crate::i18n::t(&r.label));
-        if r.selected {
-            // The inactive selection grey behind the label, in both modes (#f0f0f0 on the white
-            // tree could not be seen).
-            winui::fill_l(
-                &tp,
-                text_x - 2.0,
-                top,
-                text_x + ext + 1.0,
-                top + 15.0,
-                winui::SELECTED_INACTIVE(),
-            );
-        }
-        if let Some(open) = r.expander {
-            if crate::theme::colors().tree_chevrons {
-                winui::fill_l(&tp, o.x + 11.0, top, o.x + 26.0, top + 15.0, TREE_BG());
-                chevron(&tp, o.x, top, open, r.selected);
-            } else {
-                // Classic box; nothing opaque around it, so connectors run up to it.
-                expander_box(&tp, o.x, top, open);
-            }
-        }
-        // Icons placed, not mirrored.
-        icons.paint_in(ui, &tp, r.icon.clone(), pos2(icon_x, top));
-        if let Some(name) = r.badge {
-            let rc = winui::rect(Rect::from_min_size(
-                pos2(icon_x + 7.0, top + 7.0),
-                vec2(9.0, 9.0),
-            ));
-            // The check badge from the theme's icon set, where it has one.
-            let themed =
-                name == "tick" && crate::themeicons::paint(ui, &tp, "misc-emblem-ok", rc, true);
-            if !themed && let Some(src) = silk(name) {
-                paint_image(ui, &tp, src, rc);
-            }
-        }
-        text_font(
-            &tp,
-            winui::tahoma(),
-            text_x,
-            top + 11.0,
-            crate::i18n::t(&r.label),
-            TEXT(),
-        );
-        if keys && r.selected {
-            winui::focus_ring(
-                &tp,
-                winui::rect(Rect::from_min_max(
-                    pos2(text_x - 3.0, top),
-                    pos2(text_x + ext + 3.0, top + 16.0),
-                )),
-            );
-        }
-        if let Some(n) = r.count {
-            let count = count_text(n);
-            text_font(
-                &tp,
-                winui::tahoma(),
-                text_x + ext + 5.0,
-                top + 11.0,
-                &count,
-                winui::MUTED(),
-            );
-        }
-
-        let row = winui::rect(
-            Rect::from_min_size(pos2(area.left(), top), vec2(area.width(), 16.0)).intersect(area),
-        );
-        // The row's events and its node; its expander at x 11..26 (the scrolled origin's).
-        tree_row(
-            ui,
-            &rows_ui,
-            r,
-            k,
-            row,
-            (o.x + 11.0, o.x + 26.0),
-            None,
-            &mut event,
-            &mut selected_at,
-        );
-    }
-    // The selected node's menu from the keyboard, under the node: Shift+F10 or the Menu key.
-    if keys
-        && let Some((k, at)) = selected_at
-        && ui.input_mut(|i| {
-            i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10)
-                || i.consume_key(egui::Modifiers::NONE, egui::Key::Menu)
-        })
-    {
-        event = Some(TreeEvent::Context(k, at));
-    }
-
-    if need_v {
-        // At the trailing edge: the left in RTL.
-        let track = winui::rect(Rect::from_min_max(
-            pos2(area.right(), tree.top()),
-            pos2(tree.right(), area.bottom()),
-        ));
-        let total = rows.len() as f32;
-        if scrollbar::bar(
-            ui,
-            scroll_id.with("v"),
-            track,
-            true,
-            total,
-            page_rows,
-            1.0,
-            &mut vpos,
-        ) {
-            vpos = vpos.round();
-            ui.ctx().request_repaint();
-        }
-    }
-    if need_h {
-        let track = winui::rect(Rect::from_min_max(
-            pos2(tree.left(), area.bottom()),
-            pos2(area.right(), tree.bottom()),
-        ));
-        if scrollbar::bar(
-            ui,
-            scroll_id.with("h"),
-            track,
-            false,
-            content_w,
-            area.width(),
-            15.0,
-            &mut hpos,
-        ) {
-            hpos = hpos.round();
-            ui.ctx().request_repaint();
-        }
-    }
-    if need_v && need_h {
-        scrollbar::corner(ui, area.right(), area.bottom());
-    }
-    ui.ctx()
-        .data_mut(|d| d.insert_temp(scroll_id, (vpos, hpos)));
-    event
 }
 
 /// One Categories row's events and its node, IDM's tree and Graphite's alike: a tree item with
@@ -3014,7 +2388,7 @@ fn tree_row(
 /// further in. The chosen row is filled with the selection, rounded 6, its icon in the accent.
 /// The same events, keys and accessibility tree as IDM's.
 #[allow(clippy::too_many_arguments)]
-fn categories_graphite(
+pub fn categories(
     ui: &mut Ui,
     icons: &mut ShellIcons,
     layout: &Layout,
@@ -3133,7 +2507,7 @@ fn categories_graphite(
             crate::theme::colors().text_secondary
         };
         let drawn_themed = match &r.icon {
-            IconKey::Themed(need, _) => {
+            IconKey::Themed(need) => {
                 crate::themeicons::paint_in(ui, &tp, need, winui::rect(icon_rc), ink, true)
             }
             _ => false,
@@ -3218,145 +2592,6 @@ fn categories_graphite(
     }
     ui.ctx().data_mut(|d| d.insert_temp(scroll_id, (vpos, 0.0)));
     event
-}
-
-/// Light mode's classic 9×9 +/- box at x 15..23, y top+4..top+12 (light-main.md grids).
-fn expander_box(p: &egui::Painter, ox: f32, top: f32, open: bool) {
-    const MINUS: [[u32; 9]; 9] = [
-        [
-            0xbabbbc, 0x919191, 0x919191, 0x919191, 0x919191, 0x919191, 0x919191, 0x919191,
-            0xbabbbc,
-        ],
-        [
-            0x919191, 0xfafbfb, 0xfafbfb, 0xfafbfb, 0xfafbfb, 0xfafbfb, 0xfafbfb, 0xfafbfb,
-            0x919191,
-        ],
-        [
-            0x919191, 0xfafbfb, 0xfafbfb, 0xfafbfb, 0xfafbfb, 0xfafbfb, 0xfafbfb, 0xfafbfb,
-            0x919191,
-        ],
-        [
-            0x919191, 0xfafbfb, 0xfafbfb, 0xfafbfb, 0xfafbfb, 0xfafbfb, 0xfafbfb, 0xfafbfb,
-            0x919191,
-        ],
-        [
-            0x919191, 0xededec, 0x4b63a7, 0x4b63a7, 0x4b63a7, 0x4b63a7, 0x4b63a7, 0xededec,
-            0x919191,
-        ],
-        [
-            0x919191, 0xededec, 0xededec, 0xededec, 0xededec, 0xededec, 0xededec, 0xededec,
-            0x919191,
-        ],
-        [
-            0x919191, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3,
-            0x919191,
-        ],
-        [
-            0x919191, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3,
-            0x919191,
-        ],
-        [
-            0xbabbbc, 0x919191, 0x919191, 0x919191, 0x919191, 0x919191, 0x919191, 0x919191,
-            0xbabbbc,
-        ],
-    ];
-    const PLUS: [[u32; 9]; 9] = [
-        [
-            0xbabbbc, 0x919191, 0x919191, 0x919191, 0x919191, 0x919191, 0x919191, 0x919191,
-            0xbabbbc,
-        ],
-        [
-            0x919191, 0xfcfcfc, 0xfcfcfc, 0xfcfcfc, 0xfcfcfc, 0xfcfcfc, 0xfcfcfc, 0xfcfcfc,
-            0x919191,
-        ],
-        [
-            0x919191, 0xfcfcfc, 0xfcfcfc, 0xfcfcfc, 0x294272, 0xfcfcfc, 0xfcfcfc, 0xfcfcfc,
-            0x919191,
-        ],
-        [
-            0x919191, 0xfafbfb, 0xfafbfb, 0xfafbfb, 0x294272, 0xfafbfb, 0xfafbfb, 0xfafbfb,
-            0x919191,
-        ],
-        [
-            0x919191, 0xfafbfb, 0x4b63a7, 0x4b63a7, 0x4b63a7, 0x4b63a7, 0x4b63a7, 0xfafbfb,
-            0x919191,
-        ],
-        [
-            0x919191, 0xededec, 0xededec, 0xededec, 0x294272, 0xededec, 0xededec, 0xededec,
-            0x919191,
-        ],
-        [
-            0x919191, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3, 0x294272, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3,
-            0x919191,
-        ],
-        [
-            0x919191, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3, 0xe3e3e3,
-            0x919191,
-        ],
-        [
-            0xbabbbc, 0x919191, 0x919191, 0x919191, 0x919191, 0x919191, 0x919191, 0x919191,
-            0xbabbbc,
-        ],
-    ];
-    let grid = if open { &MINUS } else { &PLUS };
-    for (dy, row) in grid.iter().enumerate() {
-        for (dx, v) in row.iter().enumerate() {
-            let c = rgb((v >> 16) as u8, (v >> 8) as u8, *v as u8);
-            winui::px_l(p, ox + 15.0 + dx as f32, top + 4.0 + dy as f32, c);
-        }
-    }
-}
-
-/// Explorer dark-theme chevrons, pixel for pixel (spec "Expander chevrons").
-fn chevron(p: &egui::Painter, ox: f32, top: f32, open: bool, bright: bool) {
-    const COLLAPSED: [[u8; 6]; 9] = [
-        [0xc9, 0x95, 0x23, 0x20, 0x20, 0x20],
-        [0x8d, 0xd9, 0x97, 0x23, 0x20, 0x20],
-        [0x21, 0x8d, 0xd9, 0x97, 0x23, 0x20],
-        [0x20, 0x21, 0x8d, 0xd9, 0x97, 0x22],
-        [0x20, 0x20, 0x22, 0xbb, 0xd9, 0x4a],
-        [0x20, 0x21, 0x8d, 0xd9, 0x8d, 0x21],
-        [0x21, 0x8d, 0xd9, 0x8d, 0x21, 0x20],
-        [0x8d, 0xd9, 0x8d, 0x21, 0x20, 0x20],
-        [0xc9, 0x8d, 0x21, 0x20, 0x20, 0x20],
-    ];
-    const EXPANDED: [[u8; 9]; 6] = [
-        [0xec, 0xad, 0x23, 0x20, 0x20, 0x20, 0x21, 0xa3, 0xec],
-        [0xa3, 0xff, 0xb0, 0x23, 0x20, 0x21, 0xa4, 0xff, 0xa3],
-        [0x21, 0xa4, 0xff, 0xa8, 0x22, 0xa4, 0xff, 0xa4, 0x21],
-        [0x20, 0x21, 0xa4, 0xff, 0xdb, 0xff, 0xa4, 0x21, 0x20],
-        [0x20, 0x20, 0x21, 0xa4, 0xff, 0xa4, 0x21, 0x20, 0x20],
-        [0x20, 0x20, 0x20, 0x21, 0x53, 0x21, 0x20, 0x20, 0x20],
-    ];
-    let _ = bright;
-    // Measured over the dark tree (#20) in white: coverage, so the theme's tree and ink show.
-    let (bg, ink) = (TREE_BG(), TREE_EXPANDER());
-    let grey = |v: u8| {
-        let a = (v as f32 - 32.0) / 223.0;
-        let mix = |b: u8, i: u8| (b as f32 + (i as f32 - b as f32) * a).round() as u8;
-        rgb(
-            mix(bg.r(), ink.r()),
-            mix(bg.g(), ink.g()),
-            mix(bg.b(), ink.b()),
-        )
-    };
-    if open {
-        for (dy, row) in EXPANDED.iter().enumerate() {
-            for (dx, v) in row.iter().enumerate() {
-                if *v != 0x20 {
-                    winui::px_l(p, ox + 14.0 + dx as f32, top + 5.0 + dy as f32, grey(*v));
-                }
-            }
-        }
-    } else {
-        for (dy, row) in COLLAPSED.iter().enumerate() {
-            for (dx, v) in row.iter().enumerate() {
-                if *v != 0x20 {
-                    winui::px_l(p, ox + 16.0 + dx as f32, top + 4.0 + dy as f32, grey(*v));
-                }
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -3672,21 +2907,22 @@ mod tests {
         let o = ctx
             .data(|d| d.get_temp::<egui::Pos2>(sub_key.with(("origin", 0usize))))
             .expect("drawn");
-        // Slots: 3..25, 25..47, separator, Import 56..78, Exit 78..100.
+        // The menu bar's (Graphite's) slots: 5..33, 33..61, separator, Import 72..100, Exit
+        // 100..128.
         let at = |x: f32, y: f32| Some(o + egui::vec2(x, y));
         let open = |ctx: &egui::Context| ctx.data(|d| d.get_temp::<usize>(sub_key));
         for _ in 0..3 {
-            frame(at(60.0, 67.0));
+            frame(at(60.0, 86.0));
         }
         assert_eq!(open(&ctx), Some(3), "Import's submenu opens");
         // Straight up to Show drop target: closed in that pass.
-        frame(at(60.0, 40.0));
-        frame(at(60.0, 38.0));
+        frame(at(60.0, 47.0));
+        frame(at(60.0, 45.0));
         assert_eq!(open(&ctx), None, "closed at once");
 
         // Again, then diagonally across Exit towards the submenu: kept.
         for _ in 0..3 {
-            frame(at(60.0, 67.0));
+            frame(at(60.0, 86.0));
         }
         assert_eq!(open(&ctx), Some(3));
         let right = ctx
@@ -3695,7 +2931,7 @@ mod tests {
             .x;
         // Most of the way to the submenu, a little lower: over Exit.
         let x = o.x + (right - o.x) * 0.9 - o.x;
-        frame(at(x, 80.0));
+        frame(at(x, 102.0));
         assert_eq!(open(&ctx), Some(3), "kept on the way into it");
     }
 

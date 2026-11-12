@@ -332,14 +332,6 @@ pub fn segoe() -> FontId {
     FontId::proportional(crate::theme::metrics().font_ui)
 }
 
-/// Arial Bold −13: the Categories close "x".
-pub fn arial_bold() -> FontId {
-    FontId::new(
-        crate::theme::metrics().font_ui_bold,
-        FontFamily::Name("arial-bold".into()),
-    )
-}
-
 /// Like [`text`] in any font.
 pub fn text_font(
     p: &Painter,
@@ -7070,10 +7062,7 @@ mod tests {
         assert_eq!(State::Pressed.open_if(true), State::Pressed);
         assert_eq!(State::Disabled.open_if(true), State::Disabled);
         assert_eq!(State::Hot.open_if(false), State::Hot);
-        let (light, dark) = (
-            &crate::palette::CLASSIC.light,
-            &crate::palette::CLASSIC.dark,
-        );
+        let (light, dark) = (&crate::palette::BASE.light, &crate::palette::BASE.dark);
         for c in [light, dark] {
             assert_eq!(subtle_fill(State::Normal, c), None);
             assert_eq!(subtle_fill(State::Disabled, c), None);

@@ -641,7 +641,7 @@ palette:
         let (v, _) = base16_theme(DARK_CLASSIC, "file-name").unwrap();
         let l = crate::themefile::parse("gruv", &v, |_| {
             Ok(crate::themefile::Loaded {
-                theme: crate::palette::CLASSIC.clone(),
+                theme: crate::palette::BASE.clone(),
                 warnings: Vec::new(),
             })
         })
@@ -651,8 +651,8 @@ palette:
         assert_eq!(t.name, "Test Dark Classic");
         // Both sides take the scheme; the layout and sizes stay the classic look's.
         assert_eq!(t.light, t.dark);
-        assert_eq!(t.metrics, crate::palette::CLASSIC.metrics);
-        assert_eq!(t.controls, crate::palette::CLASSIC.controls);
+        assert_eq!(t.metrics, crate::palette::BASE.metrics);
+        assert_eq!(t.controls, crate::palette::BASE.controls);
         let p = &t.dark;
         assert!(p.dark);
         assert_eq!(p.window, rgb(0x3c3836));
@@ -674,7 +674,7 @@ palette:
         assert_eq!(v["name"], "my-scheme");
         let l = crate::themefile::parse("light", &v, |_| {
             Ok(crate::themefile::Loaded {
-                theme: crate::palette::CLASSIC.clone(),
+                theme: crate::palette::BASE.clone(),
                 warnings: Vec::new(),
             })
         })

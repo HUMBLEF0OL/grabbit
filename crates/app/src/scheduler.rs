@@ -1115,7 +1115,7 @@ impl Scheduler {
                 "arrow_down" => "misc-down",
                 _ => "misc-remove",
             };
-            icons.paint(ui, IconKey::Themed(need, icon), img);
+            icons.paint(ui, IconKey::Themed(need), img);
             if !enabled {
                 // Disabled: wash the icon out.
                 fill(&p, img.x, img.y, img.x + 15.0, img.y + 15.0, {

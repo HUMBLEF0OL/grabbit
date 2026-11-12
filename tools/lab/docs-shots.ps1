@@ -39,7 +39,7 @@ param(
   # "@download:<path>" (Download File Info for the lab server's <path>, as a browser hands it),
   # or "@complete:<path>" (the Download complete window once that small file is in).
   # With -Torrent, "@torrent" is its Add torrent window. "a+b" runs /show a first, then shoots b
-  # ("theme:metro+@main").
+  # ("theme:graphite+@main").
   [string[]]$Show = @(),
   # Beside each picture, <name>.ui.json: its controls' names and places (ui-rects.ps1).
   [switch]$Ui,
@@ -252,7 +252,7 @@ try {
   foreach ($entry in $Show) {
     Follow
     $name, $what = $entry -split "=", 2
-    # "theme:metro+@main": /show theme:metro first (no window of its own), then the shot.
+    # "theme:graphite+@main": /show theme:graphite first (no window of its own), then the shot.
     $parts = @($what -split "\+")
     $what = $parts[-1]
     foreach ($p in $parts[0..($parts.Count - 2)]) {
