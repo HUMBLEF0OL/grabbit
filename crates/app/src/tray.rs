@@ -5,6 +5,10 @@
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex};
 
+mod watch;
+
+pub use watch::Icon;
+
 use tray_icon::menu::{
     CheckMenuItem, Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem, Submenu,
 };
@@ -27,25 +31,6 @@ pub enum TrayCmd {
     ShowDownload(u64),
 }
 
-/// What the shell says of MDM's icon, asked by [`Tray::visible_now`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ShellIcon {
-    /// It says where the icon is (Shell_NotifyIconGetRect).
-    pub placed: bool,
-    /// It holds the icon (Windows: `win32::tray_icon_held`), wherever it shows it.
-    pub held: bool,
-}
-
-impl ShellIcon {
-    /// Whether the icon can bring a hidden window back. One the shell holds is reachable even
-    /// where the shell gives no place for it: the hidden icons behind ^, where Windows puts a
-    /// new icon (#545, #534, #527: MDM took a missing place for a missing icon and left the
-    /// window in the taskbar).
-    pub fn reachable(self) -> bool {
-        self.placed || self.held
-    }
-}
-
 /// What closing the main window does.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OnClose {
@@ -58,13 +43,18 @@ pub enum OnClose {
 }
 
 /// What closing the main window does: `keep_running` is Options' "Keep running when closing the
-/// window", `tray` whether a tray object exists, `shown` whether its icon is reachable
-/// ([`ShellIcon::reachable`]); else the window waits in the taskbar. Never a hidden window with
-/// no icon to bring it back.
-pub fn on_close(keep_running: bool, tray: bool, shown: bool) -> OnClose {
+/// window", `tray` whether a tray object exists, `icon` what the shell last said of its icon
+/// ([`Tray::icon`]); else the window waits in the taskbar.
+///
+/// Never a hidden window with no icon to bring it back: the taskbar only when the shell said the
+/// icon is gone. No answer, or an old one, hides the window as an icon that is there does
+/// (upstream issues 750, 718 and 754: a shell that couldn't confirm the icon left the window in
+/// the taskbar with the icon right there); such a window still comes back from the icon once the
+/// shell answers, and a second start of MDM always brings it back.
+pub fn on_close(keep_running: bool, tray: bool, icon: Icon) -> OnClose {
     if !(keep_running && tray) {
         OnClose::Quit
-    } else if shown {
+    } else if icon != Icon::Gone {
         OnClose::Hide
     } else {
         OnClose::Minimize
@@ -81,6 +71,9 @@ pub struct Tray {
     start_queue: MenuItem,
     stop_queue: MenuItem,
     queue_running: std::cell::Cell<Option<bool>>,
+    /// The icon itself, kept for as long as the tray (the watcher's thread asks and tells the
+    /// shell about it through its hidden window).
+    #[allow(dead_code)]
     tray: TrayIcon,
     /// The tip shown and when, so the shell is told at most once a second.
     tip: std::cell::RefCell<(String, Option<std::time::Instant>)>,
@@ -89,68 +82,43 @@ pub struct Tray {
     downloads: Submenu,
     shown_downloads: std::cell::RefCell<Vec<(u64, String)>>,
     download_ids: Arc<Mutex<Vec<(MenuId, u64)>>>,
-    /// What [`Tray::visible`] last saw and when: the minimize path asks every frame, and the
-    /// shell shouldn't be asked that often (a second of staleness is enough).
-    visible_checked: std::cell::Cell<Option<(bool, std::time::Instant)>>,
-    /// The shell's last answer, logged when it changes.
-    answer: std::cell::Cell<Option<ShellIcon>>,
-    /// The icon's id with the shell, once found (`win32::tray_icon_held`).
-    icon_id: std::cell::Cell<Option<u32>>,
+    /// The thread that asks the shell about the icon and sets its tip (upstream issue 747:
+    /// never the window's).
+    watch: watch::Watch,
+    /// The last answer the window took from it, for a frame where the watcher is busy writing
+    /// the next.
+    seen: std::cell::Cell<Option<watch::Seen>>,
 }
 
 impl Tray {
-    /// What the shell says of the icon now.
-    fn shell_icon(&self) -> ShellIcon {
-        // MDM_TEST_TRAY_RECT=0: the shell gives no place for the icon, as the reporters' did for
-        // one behind ^ (the close test, with a real icon the shell holds).
-        let placed = self.tray.rect().is_some()
-            && std::env::var_os("MDM_TEST_TRAY_RECT").is_none_or(|v| v != "0");
-        let held = {
-            let id = crate::win32::tray_icon_held(self.tray.window_handle(), self.icon_id.get());
-            if id.is_some() {
-                self.icon_id.set(id);
-            }
-            id.is_some()
-        };
-        ShellIcon { placed, held }
+    /// What the shell says of the icon, as the window may act on it: closing, Minimize to the
+    /// notification area and the start with the session ask it every frame. The last answer of
+    /// the watcher's thread, never waiting for the shell.
+    pub fn icon(&self) -> Icon {
+        if let Some(v) = test_visible() {
+            return v;
+        }
+        watch::icon(self.seen(), std::time::Instant::now())
     }
 
-    /// Whether the shell really has the icon, to click. `tray-icon` ignores a failed
-    /// `Shell_NotifyIcon(NIM_ADD)` (it waits for the taskbar to be recreated), so `Tray::new`
-    /// returning `Some` doesn't mean the user can see or click the icon: the shell is asked
-    /// ([`ShellIcon`]).
-    pub fn visible(&self) -> bool {
-        // Off-screen tests can't make the shell answer reliably: the variable says what to
-        // answer (the startup tray test uses it with MDM_TEST_TRAY).
-        if let Some(v) = std::env::var_os("MDM_TEST_TRAY_VISIBLE") {
-            return v == "1";
-        }
-        if let Some((shown, checked)) = self.visible_checked.get()
-            && checked.elapsed() < std::time::Duration::from_secs(1)
-        {
-            return shown;
-        }
-        self.visible_now()
+    /// [`Tray::icon`], for closing: the same last answer, whose age it weighs.
+    pub fn icon_now(&self) -> Icon {
+        self.icon()
     }
 
-    /// [`visible`] without the one-second cache: closing asks once and must not use an answer
-    /// from before the icon went away.
-    pub fn visible_now(&self) -> bool {
-        if let Some(v) = std::env::var_os("MDM_TEST_TRAY_VISIBLE") {
-            return v == "1";
+    /// Whether a window hidden in the notification area should come back to the taskbar: the
+    /// shell, running and answering, has said for some seconds that it has no icon of MDM's
+    /// (`watch::rescue`). Never on no answer.
+    pub fn rescue(&self) -> bool {
+        test_visible().is_none() && watch::rescue(self.seen(), std::time::Instant::now())
+    }
+
+    /// The watcher's last answer, or the one the window took before while it is busy writing.
+    fn seen(&self) -> Option<watch::Seen> {
+        if let Some(seen) = self.watch.latest() {
+            self.seen.set(Some(seen));
         }
-        let icon = self.shell_icon();
-        if self.answer.replace(Some(icon)) != Some(icon) {
-            tracing::info!(
-                "tray icon: placed {}, held by the shell {}",
-                icon.placed,
-                icon.held
-            );
-        }
-        let shown = icon.reachable();
-        self.visible_checked
-            .set(Some((shown, std::time::Instant::now())));
-        shown
+        self.seen.get()
     }
 
     /// The icon and its menu; events wake `ctx`. None if the shell refuses the icon (logged).
@@ -225,6 +193,21 @@ impl Tray {
             }
         };
 
+        // Only the hidden window's handle crosses to the watcher's thread: TrayIcon stays here.
+        let watch = {
+            let wake = ctx.clone();
+            watch::Watch::new(
+                WindowsShell {
+                    hwnd: tray.window_handle() as isize,
+                    id: None,
+                    // MDM_TEST_TRAY_RECT=0: the shell gives the icon no place, as the reporters'
+                    // did for one behind ^ (the close test, with a real icon the shell holds).
+                    rect_withheld: std::env::var_os("MDM_TEST_TRAY_RECT").is_some_and(|v| v == "0"),
+                },
+                move || wake.request_repaint(),
+            )
+        };
+
         let (tx, rx) = channel();
         let wake = |tx: &Sender<TrayCmd>, ctx: &egui::Context| (tx.clone(), ctx.clone());
         let (icon_tx, icon_ctx) = wake(&tx, ctx);
@@ -271,9 +254,8 @@ impl Tray {
             downloads,
             shown_downloads: Default::default(),
             download_ids,
-            visible_checked: Default::default(),
-            answer: Default::default(),
-            icon_id: Default::default(),
+            watch,
+            seen: Default::default(),
         })
     }
 
@@ -298,7 +280,10 @@ impl Tray {
             .1
             .is_none_or(|t| t.elapsed() >= std::time::Duration::from_secs(1));
         if last.0 != tip && due {
-            let _ = self.tray.set_tooltip(Some(tip));
+            // The watcher's thread sets it, as setting it waits for Explorer (upstream issue 747).
+            if !self.watch.tip(tip) {
+                return;
+            }
             *last = (tip.to_owned(), Some(std::time::Instant::now()));
         }
     }
@@ -332,6 +317,46 @@ impl Tray {
     }
 }
 
+/// What the tests say of the icon, as off-screen tests can't make the shell answer reliably
+/// (MDM_TEST_TRAY_VISIBLE: 1 there, anything else gone; the startup and close tests use it with
+/// MDM_TEST_TRAY).
+fn test_visible() -> Option<Icon> {
+    std::env::var_os("MDM_TEST_TRAY_VISIBLE")
+        .map(|v| if v == "1" { Icon::There } else { Icon::Gone })
+}
+
+/// Windows' shell, as the watcher's thread asks it: the tray's hidden window (one icon) and the
+/// icon's id once found.
+struct WindowsShell {
+    hwnd: isize,
+    id: Option<u32>,
+    rect_withheld: bool,
+}
+
+impl watch::Port for WindowsShell {
+    fn ask(&mut self) -> watch::Shell {
+        use crate::win32::TrayAnswer;
+        match crate::win32::tray_icon_ask(self.hwnd, self.id, self.rect_withheld) {
+            TrayAnswer::NoTaskbar => watch::Shell::NoTaskbar,
+            TrayAnswer::Silent => watch::Shell::Silent,
+            TrayAnswer::Answered { held, placed } => {
+                if held.is_some() {
+                    self.id = held;
+                }
+                watch::Shell::Answered {
+                    placed,
+                    held: held.is_some(),
+                }
+            }
+        }
+    }
+
+    fn tip(&mut self, tip: &str) -> bool {
+        self.id
+            .is_some_and(|id| crate::win32::tray_icon_tip(self.hwnd, id, tip))
+    }
+}
+
 /// A download's name as the tray menu shows it: at most MENU_NAME_MAX characters, the rest "…";
 /// "&" doubled, which menus would read as a shortcut mark.
 fn short(name: &str) -> String {
@@ -356,41 +381,24 @@ fn picture() -> Result<tray_icon::Icon, String> {
 mod tests {
     use super::*;
 
-    /// The close decision without a shell (#545, #534, #527), with the shell's answers as
-    /// Windows gives them. Measured on Windows 11 (build 26200), a new icon behind ^: placed (the
-    /// rect of ^ itself) and held; the same icon once removed: neither. The reporters' Windows
-    /// (10 and 11) gave an icon behind ^ no place: the icon there, the window left in the taskbar.
+    /// The close decision (upstream issues 750, 718, 754 and 545): an icon the shell says is
+    /// there, or no answer at all, hides the window; only the shell saying the icon is gone
+    /// leaves it in the taskbar.
     #[test]
-    fn closing_hides_to_an_icon_the_shell_holds_even_with_no_place() {
-        let held_no_place = ShellIcon {
-            placed: false,
-            held: true,
-        };
-        let held_placed = ShellIcon {
-            placed: true,
-            held: true,
-        };
-        let none = ShellIcon {
-            placed: false,
-            held: false,
-        };
-        for icon in [held_no_place, held_placed] {
-            assert!(icon.reachable(), "{icon:?}");
-            assert_eq!(on_close(true, true, icon.reachable()), OnClose::Hide);
+    fn closing_hides_unless_the_shell_says_the_icon_is_gone() {
+        for icon in [Icon::There, Icon::Unknown] {
+            assert_eq!(on_close(true, true, icon), OnClose::Hide, "{icon:?}");
         }
-        // No icon the shell holds (Explorer not running, the icon refused or lost): the
-        // taskbar, never a hidden window with no way back.
-        assert!(!none.reachable());
-        assert_eq!(on_close(true, true, none.reachable()), OnClose::Minimize);
+        assert_eq!(on_close(true, true, Icon::Gone), OnClose::Minimize);
     }
 
     /// The rest of the close decision (#457).
     #[test]
     fn closing_quits_with_the_option_off_or_no_tray() {
         // The option off, or no tray object at all: closing quits, whatever the shell says.
-        for shown in [true, false] {
-            assert_eq!(on_close(false, true, shown), OnClose::Quit);
-            assert_eq!(on_close(true, false, shown), OnClose::Quit);
+        for icon in [Icon::There, Icon::Unknown, Icon::Gone] {
+            assert_eq!(on_close(false, true, icon), OnClose::Quit);
+            assert_eq!(on_close(true, false, icon), OnClose::Quit);
         }
     }
 
