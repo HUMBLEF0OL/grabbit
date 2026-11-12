@@ -6,20 +6,15 @@
 name: Help pictures
 
 on:
+  # Pull requests into main only (Actions minutes are counted; on dev it runs locally).
   pull_request:
+    branches: [main]
     paths:
       - "docs/**"
       - "README.md"
       - "website/**"
       - "tools/shots/**"
       - ".github/workflows/help-pictures.yml"
-  push:
-    branches: [main, dev]
-    paths:
-      - "docs/**"
-      - "README.md"
-      - "website/**"
-      - "tools/shots/**"
 
 permissions:
   contents: read

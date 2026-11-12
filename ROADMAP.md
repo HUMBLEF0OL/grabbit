@@ -505,6 +505,9 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   each run reaches `dev` by a pull request, and a weekly report (from the first release on)
   lists what waits. Looked at up to upstream `390a50168c56` (2026-11-10, the fork point):
   nothing taken yet.
+- ✅ GitHub Actions run for `main` only: the build and tests on pull requests into `main` (a
+  release or a hotfix), none on `dev`, where the same checks run locally before a merge; the
+  website builds on its own changes or by hand, with no daily run.
 
 ## Being worked on
 

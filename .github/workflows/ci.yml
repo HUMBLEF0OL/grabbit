@@ -1,22 +1,12 @@
-# Build, lint and test main, dev and every pull request on Windows.
-name: CI
-
-# Pushes to main and dev only: a pull request's branch is tested once as the pull request (a bare push:
-# ran everything twice), and a release tag's commit was already tested on main.
+# Build, lint and test on Windows: pull requests into main only (a release from dev, or a hotfix),
+# to spend Actions minutes once per release. Changes reach main only by pull request (its ruleset),
+# so a push there was tested already, and a release tag's commit was tested on main. Work merged
+# into dev is checked locally before it merges (CONTRIBUTING.md, "Before you open a pull request").
 # A change to the website or the docs alone builds nothing here (the app embeds none of it; the
 # Website workflow builds the site), nor does one to the upstream-sync tool (its own workflow).
 on:
-  push:
-    branches: [main, dev]
-    paths-ignore:
-      - "website/**"
-      - "tools/website/**"
-      - "docs/**"
-      - "**/*.md"
-      - "tools/upstream-sync/**"
-      - ".claude/**"
-      - ".github/workflows/upstream-*.yml"
   pull_request:
+    branches: [main]
     paths-ignore:
       - "website/**"
       - "tools/website/**"
