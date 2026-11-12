@@ -24,6 +24,22 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ### Fixed
 
+- MDM no longer crashes ("crash in ntdll.dll", the heap corrupted) when the clipboard is read in two places at once, as when **Add URL** opened while the clipboard monitor looked for a copied link: MDM's own clipboard reads and the window's copy and paste now take turns (upstream issue 629).
+- MDM starts on a PC without Microsoft's Visual C++ runtime, or with a 32-bit copy where the 64-bit one belongs: its programs carry the C runtime inside them instead of loading `VCRUNTIME140.dll` (upstream issue 785).
+- The window no longer freezes when the disk is slow: MDM looked on the disk for a portable data folder on every tick of the window; it now works the data folder out once (upstream issue 565).
+- Torrents: the window no longer freezes while torrents run on a busy or slow disk; it reads the torrents' numbers beside the window instead of waiting on the torrent engine (upstream issue 693).
+- Dragging a finished file out of **Download complete** no longer holds up MDM's windows for as long as the drag lasts, or as long as the program it is dropped on takes to answer (upstream issue 561).
+- Menus: moving from an item with a submenu to another item closes the submenu at once, and only the item under the pointer is lit (upstream issue 579).
+- Raising a speed limit, or turning it off, applies at once, to the connections already waiting their turn under the old limit too (upstream issue 621).
+- Videos and image galleries keep to the speed limits you set: a video's own limit and the limit for all downloads together reach yt-dlp and gallery-dl, and a change starts them again with the new limit (upstream issue 708).
+- Debrid accounts: signing in by code opens the sign-in page only when it is the service's own site, over https (upstream issue 635).
+- A download handed over by the browser whose link the site refuses to MDM before sending anything (a 412, or a one-time link answering 403, 404 or 410) goes on in the browser where it ended, instead of failing (upstream issue 630).
+- **Options → Save to**: changing the **General** category's folder moves the folders of the other categories that have none of their own under it, and **Add torrent** starts in the Torrents category's folder (upstream issues 556 and 550).
+- **Cancel** in **Download File Info** asks whether to cancel the downloads waiting behind it too (upstream issue 394).
+- Windows 10: the download's progress window, and the dialogs drawn like it, no longer show a black band above the title bar that pushed every click above the button it showed (upstream issue 620).
+- Crash and freeze reports keep the log lines that explain them: 25 file-type icons no longer fill the log with warnings about their SVG styles (upstream issue 767); a freeze in the C runtime's memory routines is reported as a computer too busy, or too slow to load MDM from disk (upstream issue 663).
+- The browser's video button keeps one place over YouTube's thumbnail previews, so it can be clicked (upstream issue 560).
+- Downloads from a Google Colab notebook's runtime, which only the browser's own session can fetch, stay in the browser; other files linked from a notebook still come to MDM (upstream issue 603).
 - The video button follows **Options → General → Customize MDM Download panels in browsers** in the pages already open: switched off, or its site listed, it goes within a few seconds, without reloading the page (it stayed until a reload, and on YouTube, which never reloads, for good). A site listed as `example.com` now takes `www.example.com` and its other subdomains too, and a player embedded from another site follows the site in the address bar ([#532](https://github.com/anefzaoui/misterdownloadmanager/issues/532)).
 - A download's progress is saved from its first seconds again: since 0.5.2, when the disk was slow to write the resume state as the download started (no data had arrived yet), the first save of its progress waited nine times as long, up to a minute, so a short download cut off by a crash or a power cut in that time started over from the beginning (part of [#518](https://github.com/anefzaoui/misterdownloadmanager/issues/518)).
 - The browser's **video button** over a hover-to-play preview (YouTube's thumbnails) no longer vanishes as the pointer goes to it: it stays where it was while the pointer is on it, a click downloads that video, and it fades once the pointer leaves ([#503](https://github.com/anefzaoui/misterdownloadmanager/issues/503)).
