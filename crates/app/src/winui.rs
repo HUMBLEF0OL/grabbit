@@ -5960,11 +5960,11 @@ pub mod caption {
         show_focus(ui, resp, tile);
     }
 
-    /// A title bar's caption buttons from the window's end inwards, rom_end after the last
+    /// A title bar's caption buttons from the window's end inwards, `from_end` after the last
     /// one: `place` puts each (by its kind and how far from the end the row has come so far) on
     /// screen. The button pressed, their rects, and how far the row reaches from the end. The
     /// frame's word on Maximize ([`frame_maximize`]) holds for this bar only.
-    fn button_row(
+    fn caption_row(
         ui: &mut Ui,
         buttons: &[(CaptionButton, bool)],
         active: bool,
@@ -6026,7 +6026,7 @@ pub mod caption {
             c.menubar_line,
         );
         const BUTTON: egui::Vec2 = vec2(42.0, 35.0);
-        let (pressed, rects, from_end) = button_row(ui, buttons, active, 0.0, |_, from_end| {
+        let (pressed, rects, from_end) = caption_row(ui, buttons, active, 0.0, |_, from_end| {
             super::rect(Rect::from_min_size(
                 pos2(rect.right() - from_end - BUTTON.x, rect.top()),
                 BUTTON,
@@ -6114,7 +6114,7 @@ pub mod caption {
             }
         };
         // From the window's end inwards, each as wide as its kind is.
-        let (pressed, rects, from_end) = button_row(ui, buttons, active, st.end, |b, from_end| {
+        let (pressed, rects, from_end) = caption_row(ui, buttons, active, st.end, |b, from_end| {
             let bw = if b == CaptionButton::Close {
                 st.close_w
             } else {

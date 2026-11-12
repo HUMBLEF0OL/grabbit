@@ -2957,7 +2957,7 @@ fn categories_graphite(
     let inner_top = top + 10.0;
     let content_h = rows.len() as f32 * STRIDE + 10.0;
     let need_v = content_h > area.height();
-    let rows_right = area.right() - 8.0 - if need_v { scrollbar::THICK } else { 0.0 };
+    let rows_right = area.right() - 8.0 - if need_v { scrollbar::THICK + 6.0 } else { 0.0 };
     let scroll_id = egui::Id::unique("tree-scroll");
     let mut vpos = ui
         .ctx()
@@ -3110,9 +3110,10 @@ fn categories_graphite(
         event = Some(TreeEvent::Context(k, at));
     }
     if need_v {
+        // Clear of the splitter's grip, the pane's last 6 points (App::paint).
         let track = winui::rect(Rect::from_min_max(
-            pos2(area.right() - scrollbar::THICK, area.top()),
-            area.max,
+            pos2(area.right() - 6.0 - scrollbar::THICK, area.top()),
+            pos2(area.right() - 6.0, area.bottom()),
         ));
         if scrollbar::bar(
             ui,
