@@ -25,6 +25,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ### Fixed
 
+- The window no longer waits for a program that holds the clipboard without answering: a text box's right-click menu (to offer **Paste**), **Add URL**, **Add batch download**, **Add torrent** and **Download video** (to fill in a copied link) read the clipboard beside the window, as the clipboard monitor does; a link copied just before still fills the box as the window opens (upstream issue 688).
 - MDM no longer crashes ("crash in ntdll.dll", the heap corrupted) when the clipboard is read in two places at once, as when **Add URL** opened while the clipboard monitor looked for a copied link: MDM's own clipboard reads and the window's copy and paste now take turns (upstream issue 629).
 - MDM starts on a PC without Microsoft's Visual C++ runtime, or with a 32-bit copy where the 64-bit one belongs: its programs carry the C runtime inside them instead of loading `VCRUNTIME140.dll` (upstream issue 785).
 - The window no longer freezes when the disk is slow: MDM looked on the disk for a portable data folder on every tick of the window; it now works the data folder out once (upstream issue 565).
