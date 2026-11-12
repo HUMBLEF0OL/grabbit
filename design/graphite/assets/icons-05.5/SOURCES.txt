@@ -1,0 +1,7 @@
+Plan 05.5's new Graphite extras: Tabler Icons 3.31.0 outline (design/graphite/vendor), MIT,
+converted by export_icons.convert() (stroke 1.75, white ink, 16 and 24, viewBox 0 0 24 24).
+Staged here until 05.5 adds them to gen3.py EXTRA and themeicons.rs EXTRAS; export_icons.py
+then writes the same files into assets/icons/ and the app's set, and this folder is removed.
+
+extra -> Tabler outline icon
+gx-computer  device-desktop
