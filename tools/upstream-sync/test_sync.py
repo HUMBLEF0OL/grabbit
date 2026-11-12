@@ -552,7 +552,53 @@ def graphite_only_case() -> None:
     print("ok: an old theme's licence is no move, and a theme commit says Graphite only")
 
 
+def move_rule_case() -> None:
+    """05.5b's sibling rule keeps the real moves (its second audit): an icon-only folder moved
+    whole, a lone icon renamed unchanged, a notice renamed in its own folder, a licence carried
+    by a move that made subfolders."""
+    sys.path.insert(0, str(SYNC.parent))
+    import sync as sync_mod
+    mit = "".join(f"MIT licence line {i}\n" for i in range(40))
+    with tempfile.TemporaryDirectory() as tmp:
+        r = Path(tmp)
+        git(r, "init", "-q", "-b", "main")
+        for k, v in {"user.name": "T", "user.email": "t@example.com", "commit.gpgsign": "false",
+                     "core.autocrlf": "false"}.items():
+            git(r, "config", k, v)
+        for i in range(3):
+            write(r, f"a/icons/i{i}.svg", f"<svg><path d='M{i} 0h{i}'/></svg>\n")
+        write(r, "a/icons/LICENSE", "Copyright A\n" + mit)
+        write(r, "img/logo.png", "PNG logo bytes\n")
+        write(r, "tools/foo/README.txt", "notes about foo\n" * 20)
+        write(r, "tools/foo/run.py", LINES)
+        write(r, "lib/x/LICENSE", "Copyright X\n" + mit)
+        write(r, "lib/x/a.rs", LINES)
+        commit(r, "base")
+        git(r, "checkout", "-q", "-b", "dev")
+        git(r, "mv", "a", "b")
+        (r / "art").mkdir()
+        git(r, "mv", "img/logo.png", "art/logo.png")
+        git(r, "mv", "tools/foo/README.txt", "tools/foo/NOTES.txt")
+        (r / "lib/y/src").mkdir(parents=True)
+        git(r, "mv", "lib/x/a.rs", "lib/y/src/a.rs")
+        git(r, "mv", "lib/x/LICENSE", "lib/y/LICENSE")
+        commit(r, "fork: moves")
+        here = os.getcwd()
+        os.chdir(r)
+        try:
+            f = sync_mod.fork_state("main", "dev")
+        finally:
+            os.chdir(here)
+        for src in ["a/icons/i0.svg", "a/icons/LICENSE", "img/logo.png", "tools/foo/README.txt",
+                    "lib/x/LICENSE"]:
+            assert src in f.moved or src in f.rewritten, (src, f.gone)
+            assert not f.is_gone(src), src
+        assert "a" not in f.gone_dirs and "a/icons" not in f.gone_dirs, f.gone_dirs
+    print("ok: whole moves, exact icon renames and in-folder notice renames stay moves")
+
+
 if __name__ == "__main__":
     main()
     graphite_only_case()
+    move_rule_case()
     lock_case()

@@ -255,12 +255,26 @@ def fork_state(base: str, head: str) -> Fork:
     deleted = set(zlist("diff", "--no-renames", "--diff-filter=D", "--name-only", "-z", base, head))
     moved, rewritten = {}, {}
     pairs = renames(base, head, "50%")
-    # Folders a file other than a small asset moved out of, and into (90 % or more alike).
-    carried = {(folder(s), folder(d)) for score, s, d in pairs
-               if score >= 90 and not small_asset(s)}
+
+    def sure(score: int, src: str) -> bool:
+        """A move git is sure of by itself: any file but a small asset at 90 % or more, or an
+        icon unchanged (100 %: two unrelated icons are never byte-identical; a licence can be)."""
+        return score >= 90 and (not small_asset(src) or (score == 100 and not licence_text(src)))
+
+    # Folders such a move went out of, and into.
+    carried = {(folder(s), folder(d)) for score, s, d in pairs if sure(score, s)}
+
+    def with_sibling(src: str, dst: str) -> bool:
+        """A sibling of `src` moved into `dst`'s folder, or under it (a move that also made
+        subfolders: lib/x/a.rs -> lib/y/src/a.rs carries lib/x/LICENSE -> lib/y/LICENSE)."""
+        to = folder(dst)
+        return any(f == folder(src) and (d == to or d.startswith(to + "/")) for f, d in carried)
+
     for score, src, dst in pairs:
-        # A small asset moved only with such a sibling; else deleted here (counts as gone).
-        if small_asset(src) and (folder(src), folder(dst)) not in carried:
+        # A small asset counts as moved when git is sure, when it stays in its folder (renamed
+        # there), or with a sibling; else it was deleted here (it counts as gone).
+        if (small_asset(src) and not sure(score, src) and folder(src) != folder(dst)
+                and not with_sibling(src, dst)):
             continue
         (moved if score >= 90 else rewritten)[src] = dst
     gone = deleted - moved.keys() - rewritten.keys()
