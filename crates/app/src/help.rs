@@ -11,12 +11,14 @@ use egui::{pos2, vec2};
 use crate::dialogs::{Outcome, window};
 use crate::winui::{self, ButtonKind, r};
 
-/// The repository: problem reports, releases, source, licences.
-pub const REPO: &str = "https://github.com/anefzaoui/misterdownloadmanager";
+/// The repository: problem reports, releases, source, licences. This fork's own: its users'
+/// reports and its builds' updates come here, not to the original (anefzaoui/misterdownloadmanager).
+pub const REPO: &str = "https://github.com/HUMBLEF0OL/grabbit";
 /// The creator's GitHub Sponsors page: Help → Support MDM, About's last line. The website, the
 /// extension's popup and the repository's Sponsor button (.github/FUNDING.yml) point there too.
 pub const SPONSORS: &str = "https://github.com/sponsors/anefzaoui";
-const LATEST: &str = "https://api.github.com/repos/anefzaoui/misterdownloadmanager/releases/latest";
+/// This fork's releases (none yet: GitHub's 404 reads as up to date).
+const LATEST: &str = "https://api.github.com/repos/HUMBLEF0OL/grabbit/releases/latest";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const COMMIT: &str = env!("MDM_COMMIT");
 /// While MDM runs, the automatic check comes again this often (it also checks at every start).
