@@ -12,13 +12,17 @@ use std::time::{Duration, Instant};
 /// of its own: the `open` crate waits for the launcher it starts (up to 250 ms).
 pub fn open(target: impl AsRef<OsStr>) {
     let target = target.as_ref().to_owned();
-    let started = std::thread::Builder::new()
-        .name("launch".into())
-        .spawn(move || {
-            let _ = open::that_detached(&target);
-        });
-    if let Err(e) = started {
-        tracing::warn!("open: no thread to run it on: {e}");
+    spawn("launch", move || {
+        let _ = open::that_detached(&target);
+    });
+}
+
+/// Run `job` on a thread of its own named `name`, and return at once: for what a window hands
+/// over that may wait (a program, a file on a sleeping hard disk, a USB drive or a network
+/// folder: #743, #751).
+pub fn spawn(name: &str, job: impl FnOnce() + Send + 'static) {
+    if let Err(e) = std::thread::Builder::new().name(name.into()).spawn(job) {
+        tracing::warn!("{name}: no thread to run it on: {e}");
     }
 }
 
@@ -118,6 +122,16 @@ where
                 .unwrap_or_else(|e| e.into_inner())
                 .0;
         }
+    }
+
+    /// The answer for `key` if it came; never asks, never waits (a window that asked once, with
+    /// [`Asked::get`], and looks for its answer each frame after).
+    pub fn answer(&self, key: &K) -> Option<T> {
+        let s = self.shared.0.lock().unwrap_or_else(|e| e.into_inner());
+        s.answer
+            .as_ref()
+            .filter(|(k, _, _)| k == key)
+            .map(|(_, v, _)| v.clone())
     }
 }
 

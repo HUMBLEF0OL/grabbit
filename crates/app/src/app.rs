@@ -1575,6 +1575,7 @@ impl App {
         );
         self.name_guessed(id, fi.name_guessed());
         self.set_direct(id, fi.direct);
+        self.number_at_start(id);
         self.selection.set(id);
         if matches!(start, Start::Now) {
             // Later: the answer is closed (its download starts some other time).
@@ -1596,10 +1597,13 @@ impl App {
         if !self.settings.start_immediately || fi.early.is_some() || !fi.probed() {
             return;
         }
-        let dest = fi.dest();
-        if !dest.parent().is_some_and(std::path::Path::is_dir) {
-            return; // a folder still to be created waits for the dialog's question
+        // Once Save As has been looked at off the window's thread (#743): its name numbered in
+        // its folder, and the folder there. A folder still to be created waits for the dialog's
+        // question; a look still under way, for its answer.
+        if fi.folder_found() != Some(true) {
+            return;
         }
+        let dest = fi.dest();
         let id = self.push_item(
             fi.url.clone(),
             dest,
@@ -1615,6 +1619,7 @@ impl App {
             },
         );
         self.set_direct(id, fi.direct);
+        self.number_at_start(id);
         fi.early = Some(id);
         if let Some(k) = fi.take_kept() {
             self.kept_answers.insert(id, k);
@@ -1661,6 +1666,7 @@ impl App {
                         dont_show: false,
                         notices: i.notices.clone(),
                         seen: false,
+                        opening: None,
                     });
                 }
             } else if !live {
@@ -1722,6 +1728,8 @@ impl App {
                     item.dest = dest;
                     item.downloaded = 0;
                     item.status = Status::Stopped;
+                    // Download File Info's place, given without waiting for the disk (#743).
+                    item.number_at_start = true;
                     if start {
                         self.start(id, true);
                     }
@@ -1780,6 +1788,15 @@ impl App {
     fn set_direct(&mut self, id: u64, direct: bool) {
         if let Some(item) = self.item(id) {
             item.direct = direct;
+        }
+    }
+
+    /// Download `id`'s name was given without waiting for its folder to be looked at (Download
+    /// File Info, #743): it starts under it, or the next free numbered name if it is taken by
+    /// then (`Item::number_at_start`).
+    fn number_at_start(&mut self, id: u64) {
+        if let Some(item) = self.item(id) {
+            item.number_at_start = true;
         }
     }
 
@@ -2713,13 +2730,19 @@ impl App {
         // The file's own remembered limit, else the Speed Limiter's.
         opts.speed_limit = own_limit.or(self.settings.speed_limit());
         opts.checksum = checksum;
-        self.claim_place(id);
+        // A new download from Download File Info has nothing of its own on the disk yet: nothing
+        // to resume, and no place to claim from another row (the engine takes the next free
+        // name as it starts). Its start never waits for the disk on the window's thread (#743).
+        let fresh = self.item(id).is_some_and(|i| i.number_at_start);
+        if !fresh {
+            self.claim_place(id);
+        }
         let Some(item) = self.item(id) else { return };
         let _guard = rt.enter();
         // Resume whenever there is something to resume. If that fails, say why and keep the
         // data: starting over would overwrite it, and that is only ever the user's choice.
         let state = state_path(&item.dest);
-        let dl = if state.exists() {
+        let dl = if !fresh && state.exists() {
             match Download::resume(state, headers, opts) {
                 Ok(dl) => dl,
                 Err(e) => {
@@ -2733,13 +2756,15 @@ impl App {
         } else {
             // Nothing to resume. A missing folder is created by the engine; a removed drive is
             // reported without touching the progress shown for the data on it.
-            if item.dest.parent().is_none_or(std::path::Path::is_dir) {
+            if fresh || item.dest.parent().is_none_or(std::path::Path::is_dir) {
                 item.downloaded = 0;
             }
             // A name nobody gave (the address's guess) is the server's to give: into the folder,
-            // under its Content-Disposition name (#28); the row follows the file made.
+            // under its Content-Disposition name (#28); the row follows the file made. A name
+            // given before its folder was looked at is numbered on there if it is taken (#743).
             let dest = match item.dest.parent() {
                 Some(dir) if item.name_from_url => Destination::Dir(dir.to_owned()),
+                _ if fresh => Destination::Free(item.dest.clone()),
                 _ => Destination::File(item.dest.clone()),
             };
             Download::start_with(
@@ -5756,6 +5781,7 @@ impl App {
                     dont_show: false,
                     notices: i.notices.clone(),
                     seen: false,
+                    opening: None,
                 });
             }
         }
@@ -7522,6 +7548,7 @@ impl App {
                 dont_show: false,
                 notices: i.notices.clone(),
                 seen: false,
+                opening: None,
             });
         } else if i.live.is_none() {
             self.start(id, true);
