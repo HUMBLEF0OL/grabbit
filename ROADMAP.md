@@ -504,7 +504,7 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   nothing to take), picks the ones that apply onto a sync branch and records every decision;
   each run reaches `dev` by a pull request, and a weekly report (from the first release on)
   lists what waits. Looked at up to upstream `68ba617edb3d` (2026-11-12): 19 fixes taken and
-  4 ported by hand, 12 skipped, 18 deferred; 3 critical ones being ported by hand.
+  5 ported by hand, 12 skipped, 18 deferred; 2 critical ones being ported by hand.
 - ✅ GitHub Actions run for `main` only: the build and tests on pull requests into `main` (a
   release or a hotfix), none on `dev`, where the same checks run locally before a merge; the
   website builds on its own changes or by hand, with no daily run.
@@ -549,11 +549,12 @@ These ship in a later version, when they're ready.
 - 🔄 Add URL's **Use authorization** empty for an address with a login in Options → Sites
   Logins, though the download used it
   ([#511](https://github.com/anefzaoui/misterdownloadmanager/issues/511)): fix in review
-- 🔄 Windows: closing the window left MDM in the taskbar instead of the notification area
-  when its icon was among the hidden icons behind ^
-  ([#545](https://github.com/anefzaoui/misterdownloadmanager/issues/545),
-  [#534](https://github.com/anefzaoui/misterdownloadmanager/issues/534),
-  [#527](https://github.com/anefzaoui/misterdownloadmanager/issues/527)): fix in review
+- 🔄 Windows: closing the window left MDM minimized in the taskbar instead of the notification
+  area while its icon was there, among the hidden icons behind ^ (upstream issues 750, 718, 754,
+  545, 534 and 527): MDM now keeps the window in the taskbar only when Windows says it has no
+  icon of MDM's; fix in review, to confirm on Windows 10
+- 🔄 The window freezing while Explorer was slow to answer about MDM's notification-area icon
+  (upstream issue 747): asked beside the window now; fix in review
 - 🔄 Two tests that fail now and then on busy CI runners
   ([#518](https://github.com/anefzaoui/misterdownloadmanager/issues/518)): the slow-flush one fixed;
   the crash-and-resume one found a real delay in saving a new download's progress, fix in review
