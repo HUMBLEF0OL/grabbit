@@ -4,7 +4,7 @@ name: CI
 # Pushes to main and dev only: a pull request's branch is tested once as the pull request (a bare push:
 # ran everything twice), and a release tag's commit was already tested on main.
 # A change to the website or the docs alone builds nothing here (the app embeds none of it; the
-# Website workflow builds the site).
+# Website workflow builds the site), nor does one to the upstream-sync tool (its own workflow).
 on:
   push:
     branches: [main, dev]
@@ -13,12 +13,18 @@ on:
       - "tools/website/**"
       - "docs/**"
       - "**/*.md"
+      - "tools/upstream-sync/**"
+      - ".claude/**"
+      - ".github/workflows/upstream-*.yml"
   pull_request:
     paths-ignore:
       - "website/**"
       - "tools/website/**"
       - "docs/**"
       - "**/*.md"
+      - "tools/upstream-sync/**"
+      - ".claude/**"
+      - ".github/workflows/upstream-*.yml"
 
 # A newer commit on a pull request makes its older run moot: cancel it (main and dev run to the end).
 concurrency:

@@ -1,3 +1,6 @@
 # Generated files keep the line endings their tools write, on every checkout (CI compares them).
 # Test fixtures are compared byte for byte (a signed checksum list): never converted.
 crates/*/tests/fixtures/** -text
+# The upstream ledger grows by rows at its end: two sync PRs merge without a conflict there (a
+# commit decided twice keeps both rows; `sync.py doctor` reports it, the later row counts).
+tools/upstream-sync/ledger.md merge=union

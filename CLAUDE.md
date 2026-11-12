@@ -24,13 +24,20 @@ craft-libs), laid out the way Internet Download Manager users expect. Start by r
 6. Every PR description shows what it changed in screenshots, as many as it takes: each changed
    window and state, before and after, light and dark; phone width for the website. The images
    live on the `pr-shots` branch (`<pr>/<name>.png`, never merged) and are embedded from
-   `raw.githubusercontent.com/anefzaoui/misterdownloadmanager/pr-shots/`.
+   `raw.githubusercontent.com/HUMBLEF0OL/grabbit/pr-shots/`.
    Neutral test folders in shots, no IDM artwork. A change with nothing to see shows its proof
    (tables, logs) instead and says so.
 
 7. **Branches:** work branches from `dev` and its PRs target `dev`. `main` is the release branch
    (website, tags): it takes only a `dev` → `main` release PR or a hotfix from `main`, which is
    then merged back into `dev`. See [CONTRIBUTING.md](CONTRIBUTING.md#branches).
+8. **This repository is the fork HUMBLEF0OL/grabbit; it is its own project.** Branches, PRs and
+   pr-shots go to `origin` (HUMBLEF0OL/grabbit) only. The original, anefzaoui/misterdownloadmanager
+   (the `upstream` remote), is read, never written to: no push, PR, issue, comment, or link that
+   GitHub would turn into a mention there (write `upstream issue 668`, or put it in `code`); and
+   never "Sync fork" or `gh repo sync`. On GitHub a new PR defaults to the original: always name
+   this fork (`gh pr create -R HUMBLEF0OL/grabbit --base dev`; `--base main` for a hotfix). Its
+   fixes come in only through `/upstream-sync`.
 
 ## Commands
 
@@ -42,6 +49,9 @@ craft-libs), laid out the way Internet Download Manager users expect. Start by r
 - `tools/extension/pack.ps1` — build the extension for Chromium and Firefox into
   `target/extension/`; `node tools/extension/test.mjs` — its logic against fake browser APIs.
 - `tools/installer/build.ps1` — the Windows installer and portable zip into `target/dist/`.
+- `python tools/upstream-sync/sync.py status --fetch` — the original MDM's new commits, sorted
+  for this fork (`/upstream-sync`, `.claude/skills/upstream-sync`); fixes come one way, by PR
+  to `dev`, never pushed to the original.
 - `python tools/website/build.py --serve` — the website (English only) on 127.0.0.1:8765; needs
   Python 3.12 or newer (as CI uses), with `markdown` installed.
 - Website design goes through the Impeccable skill (`/impeccable`, `.claude/skills/impeccable`):
