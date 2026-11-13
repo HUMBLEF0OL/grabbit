@@ -770,11 +770,39 @@ fn show_paste_arg(name: &str) -> Option<&str> {
     let address = name.strip_prefix("paste:")?.trim();
     (!address.is_empty()).then_some(address)
 }
+/// Is this `/show details` (plan 06, requirement 21.1)? Only the bare name: it takes no
+/// argument (`details:x` is not it).
+fn is_show_details(name: &str) -> bool {
+    name == "details"
+}
+/// The download `/show details` selects (requirement 21.1), in `self.items` order (the list's
+/// own order when it is not sorted): the first stopped one that Resume may start, else the
+/// first download; None without downloads.
+fn show_details_pick(items: &[Item]) -> Option<u64> {
+    items
+        .iter()
+        .find(|i| i.status == Status::Stopped && i.can_start())
+        .or_else(|| items.first())
+        .map(|i| i.id)
+}
 
 /// The typing gate before the menu bar's keys (Alt, F10, Alt+letter) in `App::paint`: a focused
 /// text box keeps them, as on dev, except the paste bar's field while it is empty (D12).
 fn menu_keys_blocked(text_edit_focused: bool, is_paste_field: bool, paste_empty: bool) -> bool {
     text_edit_focused && !(is_paste_field && paste_empty)
+}
+
+/// The command a details pane button runs on the shown download (Requirement 15.5, D10): Show
+/// progress window is Open, which brings an unfinished download's progress window up
+/// (`open_item`); the button is greyed for a finished one, which Open would open.
+fn details_cmd(action: crate::panes::DetailsAction) -> Cmd {
+    use crate::panes::DetailsAction;
+    match action {
+        DetailsAction::Resume => Cmd::Resume,
+        DetailsAction::Stop => Cmd::Stop,
+        DetailsAction::OpenFolder => Cmd::OpenFolder,
+        DetailsAction::ShowProgress => Cmd::Open,
+    }
 }
 
 /// For the empty paste field with the focus, which leaves the menu keys to the menu bar: the
@@ -1315,6 +1343,37 @@ impl App {
     fn item(&mut self, id: u64) -> Option<&mut Item> {
         self.items.iter_mut().find(|i| i.id == id)
     }
+    /// What the details pane shows for the selection (D9), from the downloads the list draws
+    /// this frame: one gone shows nothing (Requirement 14.3).
+    fn details_view(&self) -> crate::panes::DetailsView {
+        use crate::panes::{DetailsView, Shown};
+        let ids = self.selection.ids();
+        let sizes: Vec<(u64, Option<u64>)> = if ids.is_empty() {
+            Vec::new()
+        } else {
+            self.items.iter().map(|i| (i.id, i.size)).collect()
+        };
+        match crate::panes::shown(ids, &sizes) {
+            Shown::Empty => DetailsView::Empty,
+            Shown::One(id) => self
+                .items
+                .iter()
+                .find(|i| i.id == id)
+                .map_or(DetailsView::Empty, |it| {
+                    DetailsView::One(Box::new(self.one_download(it)))
+                }),
+            Shown::Many { count, total } => DetailsView::Many { count, total },
+        }
+    }
+    /// The details pane's view of `it`: its live rate while it runs, the queue it is in.
+    fn one_download(&self, it: &Item) -> crate::panes::OneDownload {
+        let queue = self
+            .queues
+            .iter()
+            .find(|q| q.items.contains(&it.id))
+            .map(|q| q.name.as_str());
+        crate::panes::one_download(it, it.live.as_ref().map(|_| it.rate()), queue)
+    }
 
     /// The one download single-download commands act on (Properties, Open…).
     fn selected_item(&self) -> Option<&Item> {
@@ -1528,13 +1587,7 @@ impl App {
             .filter(|f| status == model::percent(*f))
             .map(|f| f as f32);
         list::Row {
-            kind: match it.status {
-                Status::Downloading => list::StatusKind::Downloading,
-                Status::Stopped => list::StatusKind::Stopped,
-                Status::Queued => list::StatusKind::Waiting,
-                Status::Complete => list::StatusKind::Complete,
-                Status::Error => list::StatusKind::Error,
-            },
+            kind: list::StatusKind::of(it.status),
             progress,
             icon: file_icon(&it.file_name),
             queued: queued.contains(&it.id),
@@ -2171,6 +2224,20 @@ impl App {
                     if let Some(new) = crate::panes::submit(&mut self.paste, accepted) {
                         self.route_new_url(new, ctx);
                     }
+                }
+            }
+            // The details pane on with a stopped download selected (plan 06's "details pane
+            // with a stopped download" screenshots). As `paste`, the pane is on for this run;
+            // the hook itself saves nothing. A download the view hides is shown in All
+            // Downloads, as Find next does, so the list keeps the selection.
+            "details" if is_show_details(name) => {
+                self.settings.show_details = true;
+                if let Some(id) = show_details_pick(&self.items) {
+                    self.selection.set(id);
+                    if !self.shown_ids().contains(&id) {
+                        self.view = View::All;
+                    }
+                    self.list.scroll_to = self.shown_ids().iter().position(|x| *x == id);
                 }
             }
             // MDM_CRASH_TEST=1 only (crash.rs): the crash reports' own check.
@@ -6923,7 +6990,9 @@ impl App {
         let _surface = winui::Surface::enter(full.min.x, full.max.x);
         // Where every band and pane goes this frame (chrome::Layout).
         let drawn = self.sync_frame(ui);
-        // The paste bar's band under the toolbar (plan 06); the details pane's width comes later.
+        // The paste bar's band under the toolbar (plan 06). The details pane's width is added
+        // after the Categories pane (its clamp needs the list's leading edge); nothing drawn
+        // before then reads it.
         let layout = chrome::Layout::current(drawn).with_panes(self.settings.show_paste_bar, None);
         let window_min = full.min;
         // Graphite's title bar keeps room after its title for the menus and Find (plan 05b).
@@ -7336,9 +7405,71 @@ impl App {
             layout.tree_left
         };
 
+        // The details pane's width (plan 06b, D11), from the list's leading edge: the
+        // Categories pane's width does not depend on it, so there is no cycle. From here the
+        // list ends at the pane (`list_end`); the bands above were drawn without it.
+        let details_w = self
+            .settings
+            .show_details
+            .then(|| crate::panes::details_width(self.settings.details_width, w, list_left));
+        let layout = layout.with_panes(self.settings.show_paste_bar, details_w);
+
         let (ids, rows) = self.list_rows();
         self.selection.retain(&ids);
         let (selected, focus) = self.selection.rows(&ids);
+
+        // The details pane (plan 06b), from `details_left` to the trailing edge beside the
+        // list. Built each frame from `self.items`, the list's data, after the selection is
+        // kept to the rows shown: it follows the list's repaints while a download runs.
+        if self.settings.show_details {
+            let left = o.x + layout.details_left(w);
+            let rc = egui::Rect::from_min_max(
+                pos2(left, o.y + layout.panes_top()),
+                pos2(o.x + w, o.y + layout.list_bottom(h)),
+            );
+            let view = self.details_view();
+            let shown = match &view {
+                crate::panes::DetailsView::One(one) => Some(one.id),
+                _ => None,
+            };
+            if let Some(action) = crate::panes::details_pane(ui, rc, &view, &mut self.icons)
+                && let Some(id) = shown
+            {
+                chosen = Some((details_cmd(action), Some(id)));
+            }
+            // The splitter: the pane's first `DETAILS_GRIP` points, after the pane so it is
+            // above it. The pane keeps where it was taken; dragging toward the list widens it.
+            let grip = winui::rect(egui::Rect::from_min_max(
+                rc.min,
+                pos2(left + chrome::Layout::DETAILS_GRIP, rc.max.y),
+            ));
+            let sr = ui.interact(
+                grip,
+                egui::Id::unique("details-splitter"),
+                winui::pointer_drag(),
+            );
+            if sr.hovered() || sr.dragged() {
+                ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+            }
+            let grab = egui::Id::unique("details-splitter-grab");
+            if sr.drag_started()
+                && let Some(p) = sr.interact_pointer_pos()
+            {
+                ctx.data_mut(|d| d.insert_temp(grab, winui::mx(p.x) - left));
+            }
+            if sr.dragged()
+                && let Some(p) = sr.interact_pointer_pos()
+            {
+                // The pane's width from the window's trailing edge (the left in RTL).
+                let at = ctx.data(|d| d.get_temp::<f32>(grab)).unwrap_or(0.0);
+                let nw = (o.x + w - (winui::mx(p.x) - at)).round().max(0.0);
+                self.settings.details_width =
+                    crate::panes::details_width(nw as u32, w, list_left) as u32;
+            }
+            if sr.drag_stopped() {
+                self.dirty = true;
+            }
+        }
         // Its bottom edge is exclusive: IDM's frame's last row one under the pane frame's.
         let outer = egui::Rect::from_min_max(
             pos2(o.x + list_left, o.y + layout.panes_top()),
@@ -10018,6 +10149,49 @@ mod show_paste_tests {
         }
     }
 }
+#[cfg(test)]
+mod show_details_tests {
+    use super::{is_show_details, show_details_pick};
+    use crate::model::{Category, Item, Status};
+    fn item(id: u64, status: Status) -> Item {
+        let url = "https://example.org/a.zip".parse().unwrap();
+        let dest = std::path::PathBuf::from(r"D:\Downloads\Compressed\a.zip");
+        let mut it = Item::new(id, url, dest, Category::Compressed);
+        it.status = status;
+        it
+    }
+    /// `/show details` (requirement 21.1): the bare name only.
+    #[test]
+    fn show_details_is_the_bare_name() {
+        assert!(is_show_details("details"));
+        for name in [
+            "details:",
+            "details:x",
+            "detail",
+            "paste:details",
+            "",
+            "addurl",
+        ] {
+            assert!(!is_show_details(name), "{name}");
+        }
+    }
+    /// The first stopped download in the list's order, past queued, failed, finished and
+    /// running ones; the first download without a stopped one; none without downloads.
+    #[test]
+    fn show_details_picks_the_first_stopped_download() {
+        let items = [
+            item(1, Status::Queued),
+            item(2, Status::Error),
+            item(3, Status::Complete),
+            item(4, Status::Downloading),
+            item(5, Status::Stopped),
+            item(6, Status::Stopped),
+        ];
+        assert_eq!(show_details_pick(&items), Some(5));
+        assert_eq!(show_details_pick(&items[..4]), Some(1));
+        assert_eq!(show_details_pick(&[]), None);
+    }
+}
 
 #[cfg(test)]
 mod view_menu_tests {
@@ -10162,6 +10336,27 @@ mod typing_gate_tests {
         assert_eq!(typed(plain, f, false), "f", "a plain letter");
         let x = vec![key(egui::Key::X, plain), egui::Event::Text("x".into())];
         assert_eq!(typed(plain, x, true), "", "an item's letter, a menu open");
+    }
+}
+
+#[cfg(test)]
+mod details_cmd_tests {
+    use super::{Cmd, details_cmd};
+    use crate::panes::DetailsAction;
+
+    /// Each details pane button runs its command (Requirement 15.5): Show progress window is
+    /// Open, which shows an unfinished download's progress window (D10).
+    #[test]
+    fn each_details_button_runs_its_command() {
+        let table = [
+            (DetailsAction::Resume, Cmd::Resume),
+            (DetailsAction::Stop, Cmd::Stop),
+            (DetailsAction::OpenFolder, Cmd::OpenFolder),
+            (DetailsAction::ShowProgress, Cmd::Open),
+        ];
+        for (action, cmd) in table {
+            assert_eq!(details_cmd(action), cmd, "{action:?}");
+        }
     }
 }
 

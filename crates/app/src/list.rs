@@ -370,6 +370,18 @@ pub enum StatusKind {
 }
 
 impl StatusKind {
+    /// The kind of a download in `status` (the list's Status cell, the details pane).
+    pub fn of(status: crate::model::Status) -> StatusKind {
+        use crate::model::Status;
+        match status {
+            Status::Downloading => StatusKind::Downloading,
+            Status::Stopped => StatusKind::Stopped,
+            Status::Queued => StatusKind::Waiting,
+            Status::Complete => StatusKind::Complete,
+            Status::Error => StatusKind::Error,
+        }
+    }
+
     /// What the Status filter sees (and offers, [`filter_values`]).
     pub fn group(self) -> &'static str {
         match self {
@@ -383,6 +395,16 @@ impl StatusKind {
             StatusKind::Complete => "Complete",
             // i18n: a download's status (state it is in, not a command): it failed
             StatusKind::Error => "Error",
+        }
+    }
+
+    /// The fill of its progress (the Status cell's bar, the details pane's segment cells): the
+    /// bar's colour while it moves, the error colour for an error, else muted.
+    pub fn bar_color(self) -> Color32 {
+        match self {
+            StatusKind::Downloading => crate::theme::colors().progress_bar,
+            StatusKind::Error => winui::ERROR(),
+            _ => winui::MUTED(),
         }
     }
 
@@ -1358,7 +1380,7 @@ fn status_cell(
     };
     match (row.kind, row.progress) {
         (StatusKind::Downloading, Some(f)) => {
-            meter(x, f, c.progress_bar);
+            meter(x, f, row.kind.bar_color());
             None
         }
         (kind, progress) => {
@@ -1381,7 +1403,7 @@ fn status_cell(
             let pct = progress.filter(|_| stopped);
             if room < 0.0 {
                 if let Some(f) = pct {
-                    meter(right, f, winui::MUTED());
+                    meter(right, f, kind.bar_color());
                 }
                 return Some(text.to_owned());
             }
@@ -1396,7 +1418,7 @@ fn status_cell(
                 } else {
                     right
                 };
-                meter(from, f, winui::MUTED());
+                meter(from, f, kind.bar_color());
             }
             (shown != text).then(|| text.to_owned())
         }
