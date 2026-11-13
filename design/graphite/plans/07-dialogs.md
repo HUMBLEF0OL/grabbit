@@ -7,11 +7,13 @@ filled, one label column, file cards, icon tiles, status banners, status as icon
 corners and controls already come from the theme (02); this phase is layout. **Keys never change**: each dialog keeps today's Enter and
 Escape behaviour.
 
-- Branches: `ui/07a-dialog-kit`, then one per wave (`ui/07b-…` to `ui/07e-…`)
+- Branches: `ui/07b-dialog-kit-adding` (07a and 07b in one PR), then `ui/07c-…`, `ui/07d-…`,
+  `ui/07e-…` in parallel (see **Fast track** below)
+- **Time box: 4 hours of agent time for the whole plan**, from the first commit to the last PR ready.
 - Needs: 02b (the Graphite roles), 03 (`st-*` and file icons), 03b (`gx-*` glyphs);
   04 before final sizes (04's plan lists the labels Geist overflows: limiter, gallery, Scheduler,
   grabber, progress window). Independent of 05 and 06.
-- Unblocks: 08 (needs 07a), 09
+- Unblocks: 08 (needs 07a, so it can start once PR 1 merges), 09
 
 ## Facts this plan relies on (paths under `crates/app/src/`, checked on `ui/03-icons` c3541d0)
 
@@ -20,6 +22,8 @@ Line numbers drift as phases land: find each item by its name first.
 - Every dialog is its own viewport through `dialogs::window` (`dialogs.rs:224`) / `question` (239) /
   `notice` (255) → `dialog_window` (295-446), with a fixed client size passed as literals (no shared
   constants), wrapped in `scroll()` (`dialogs.rs:83`); `shown_size` caps it to the screen.
+- `design/graphite/source/baseline.ps1` takes `-Theme`, `-Shots`, `-InterfaceSize` (100–200) and dark mode, and opens every
+  window off the screen through `/show`: the screenshots need no clicking.
 - **Layout is absolute pixels in English coordinates**: `winui::r(o, x, y, w, h)` (`winui.rs:209`),
   `text`, `label`; mirroring goes through `rect()`.
 - Controls: `button` / `button_light` with `ButtonKind {Normal, Default, Disabled, Accent}`
@@ -67,7 +71,56 @@ Footer order today (left to right, default marked *) and after 07:
 | Tell a friend | `help.rs:938` | Copy*, Email, Close | ; Email, Close, Copy* |
 | Generic notice (`dialogs::notice`) | `dialogs.rs:255` | OK*, centred | OK*, centred (the one centred footer) |
 
-## 07a · The dialog kit (one PR, no visual change, no CHANGELOG line)
+## Fast track (4-hour cap)
+
+The plan is built by agents. The time goes to steps that wait on each other (screenshots, audit
+rounds, workspace builds, merges), not to writing code, so the plan runs like this:
+
+| Slot | Work | Budget |
+| --- | --- | --- |
+| 0:00–1:15 | **PR 1 = 07a + 07b**: the kit, proven by the Adding dialogs in the same PR | 75 min |
+| 1:15–1:30 | Maintainer merges PR 1 into `dev` | 15 min |
+| 1:30–3:30 | **07c, 07d, 07e in parallel**, one agent and one worktree each, all branched from `dev` with PR 1 in it | 120 min |
+| 3:30–4:00 | Maintainer merges them one after another; the agents rebase and fix ROADMAP/CHANGELOG conflicts | 30 min |
+
+Rules that keep it inside the box:
+
+1. **07a ships with 07b.** The kit is reviewed together with its first users; its tests (07a step 8)
+   are part of that PR. The CHANGELOG line comes from 07b.
+2. **Parallel worktrees** (`git worktree add ../grabbit-07c ui/07c-…`, and the same for 07d and 07e). Each one
+   gets its own `CARGO_TARGET_DIR` (`target-07c`, …), since a shared target folder makes their
+   builds wait on its lock. 07c, 07d and 07e touch separate files (`progress.rs`; `torrentdlg.rs`,
+   `videodlg.rs`, `batch.rs`, `grabber.rs`, `rssdlg.rs`; `scheduler.rs`, `find.rs`, `help.rs`).
+   Their shared file is `dialogs.rs`: 07c and 07e both edit it, so each touches only its own
+   dialogs' functions there. None of the three changes the kit; a kit fix found on the way goes in
+   its own small PR to `dev`.
+3. **Build less while working.** While iterating: `cargo check -p mdm-app`, `cargo test -p mdm-app`.
+   Once before each PR: the full workspace `cargo build`, `cargo test`,
+   `cargo clippy --all-targets`, `cargo fmt --all`.
+4. **Screenshots in one batch per wave** with `design/graphite/source/baseline.ps1 -Theme graphite -Shots <the wave's
+   dialogs>`, run four times (light and dark, `-InterfaceSize 100` and `200`) for the after
+   shots. The before shots come from the same script on `dev` before the wave starts. Every run
+   passes `-Work` with a neutral folder under the worktree (its default, `D:\Demo`, is not to be
+   used). Parallel runs each use their own copy of the exe and labserver, and their own port and
+   work folder: `docs-shots.ps1`'s cleanup stops every process of its exe path. A dialog the
+   script can't open yet gets a `-Show` entry, not a hand-taken shot.
+5. **One audit round per PR**, by a fresh reviewer agent, against this fixed checklist:
+   - the footer order matches the table above, with the `Default` button last;
+   - Enter and Escape fire only the buttons marked for them, and a disabled marked button ignores Enter;
+   - Escape in the progress window leaves the download running;
+   - Alt+letter and Tab order are as before;
+   - nothing clips or overflows at 200 %, with the longest strings;
+   - every text goes through `crate::i18n`;
+   - ROADMAP and CHANGELOG are true.
+
+   It fixes what it finds in the same round; no second round for wording.
+6. **The maintainer merges at once.** A PR that waits for review pauses the clock but leaves the
+   box as it is.
+7. **Running over.** If a wave is not ready at 3:30, it ships the dialogs that are done (each
+   matching its mock, keys unchanged) and lists the rest under the wave's ROADMAP item as
+   remaining. A late wave never holds up the others' PRs.
+
+## 07a · The dialog kit (ships inside 07b's PR, no CHANGELOG line of its own)
 
 1. `winui::footer(ui, o, client_w, y, items: &[FooterItem])` where `FooterItem` is a `Button(FooterButton
    { label, kind, side: Leading | Trailing, icon: Option<IconKey>, mnemonic, enter: bool, escape: bool })`
@@ -96,7 +149,7 @@ Footer order today (left to right, default marked *) and after 07:
    button ignores Enter; **Escape in the progress window leaves the download running**; label column
    positions.
 
-## Waves (each one PR, each dialog compared with its mock state)
+## Waves (each one PR, 07b carrying 07a; each dialog compared with its mock state)
 
 | Wave | Dialogs | Mock section |
 | --- | --- | --- |
@@ -130,4 +183,5 @@ Specific to 07e:
 
 - [ ] Every dialog listed matches its mock state in Graphite, light and dark
 - [ ] Enter, Escape, Alt+letter and Tab order work in each dialog exactly as before
-- [ ] Screenshots per wave; ROADMAP, CHANGELOG (none for 07a)
+- [ ] Screenshots per wave; ROADMAP, CHANGELOG (07a's comes with 07b)
+- [ ] Done within the 4-hour box, or what's left listed under its wave's ROADMAP item
