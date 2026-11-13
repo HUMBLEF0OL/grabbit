@@ -37,6 +37,9 @@ Plans and PRs link here instead of explaining a missing check again.
   - PR 13, 05.5a: the Options page headers, the helpers window, Download complete's drag
     handle, the Scheduler's queues, Download File Info's Server row (light and dark, 100 to
     200 %); and `gx-computer`'s look check in the app beside its neighbours.
+  - PRs 14 and 15, 05.5c: the pixel pairs that show Graphite unchanged, light and dark, for
+    every window in the plan's final check (the logged runs stand in for them: the same icons
+    reached before and after).
 
 ### G2 · Windows high contrast (plan 05.5)
 

@@ -104,7 +104,7 @@ impl Mapped {
         colors.insert("text.muted".into(), Value::String(to_hex(self.muted)));
         let mut top = Map::new();
         top.insert("name".into(), Value::String(name.to_owned()));
-        top.insert("inherits".into(), Value::String("classic".into()));
+        top.insert("inherits".into(), Value::String("graphite".into()));
         top.insert("seeds".into(), Value::Object(seeds));
         top.insert("colors".into(), Value::Object(colors));
         Value::Object(top)
@@ -637,11 +637,11 @@ palette:
     }
 
     #[test]
-    fn a_scheme_is_a_theme_on_the_classic_look() {
+    fn a_scheme_is_a_theme_on_its_base() {
         let (v, _) = base16_theme(DARK_CLASSIC, "file-name").unwrap();
         let l = crate::themefile::parse("gruv", &v, |_| {
             Ok(crate::themefile::Loaded {
-                theme: crate::palette::CLASSIC.clone(),
+                theme: crate::palette::BASE.clone(),
                 warnings: Vec::new(),
             })
         })
@@ -649,10 +649,10 @@ palette:
         assert!(l.warnings.is_empty(), "{:?}", l.warnings);
         let t = l.theme;
         assert_eq!(t.name, "Test Dark Classic");
-        // Both sides take the scheme; the layout and sizes stay the classic look's.
+        // Both sides take the scheme; the sizes and controls stay the base's (`parse`'s).
         assert_eq!(t.light, t.dark);
-        assert_eq!(t.metrics, crate::palette::CLASSIC.metrics);
-        assert_eq!(t.controls, crate::palette::CLASSIC.controls);
+        assert_eq!(t.metrics, crate::palette::BASE.metrics);
+        assert_eq!(t.controls, crate::palette::BASE.controls);
         let p = &t.dark;
         assert!(p.dark);
         assert_eq!(p.window, rgb(0x3c3836));
@@ -674,7 +674,7 @@ palette:
         assert_eq!(v["name"], "my-scheme");
         let l = crate::themefile::parse("light", &v, |_| {
             Ok(crate::themefile::Loaded {
-                theme: crate::palette::CLASSIC.clone(),
+                theme: crate::palette::BASE.clone(),
                 warnings: Vec::new(),
             })
         })

@@ -7,7 +7,7 @@ use std::cell::Cell;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use crate::palette::{CLASSIC, Metrics, Palette, Theme};
+use crate::palette::{BASE, Metrics, Palette, Theme};
 
 static DARK: AtomicBool = AtomicBool::new(true);
 
@@ -25,11 +25,11 @@ pub fn dark() -> bool {
 // (one atomic load per read, no lock, no allocation). A theme set from a file is leaked: it
 // lives as long as the program (a few KB per change), so a reference to it never dangles.
 
-static ACTIVE: RwLock<&'static Theme> = RwLock::new(&CLASSIC);
+static ACTIVE: RwLock<&'static Theme> = RwLock::new(&BASE);
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 thread_local! {
-    static SEEN: Cell<(u64, &'static Theme)> = const { Cell::new((0, &CLASSIC)) };
+    static SEEN: Cell<(u64, &'static Theme)> = const { Cell::new((0, &BASE)) };
 }
 
 /// The active theme.
@@ -60,12 +60,7 @@ pub fn metrics() -> &'static Metrics {
 /// rates, time left and percentages): Segoe UI, whatever the theme's font.
 pub const NUMBERS: &str = "numbers";
 
-/// The active theme's layout: IDM's or Graphite's.
-pub fn chrome() -> crate::palette::ChromeLook {
-    current().controls.chrome
-}
-
-/// Is what is drawn now a dark surface (light text on dark)? The classic look's dark variant
+/// Is what is drawn now a dark surface (light text on dark)? The base's dark variant
 /// is; a theme says for each of its variants. Glyph rendering and the window captions follow it.
 pub fn dark_surface() -> bool {
     colors().dark
@@ -84,36 +79,38 @@ pub fn set(theme: Theme) {
     GENERATION.fetch_add(1, Ordering::AcqRel);
 }
 
-/// Makes the theme with this id the active one: a built-in, or a file in the themes folder
-/// (`themefile`), or a theme file's path; Native is made from what the system says. A theme
-/// that can't be read leaves the classic look, logged. Returns what was skipped or went wrong.
-pub fn select(id: &str, ctx: &egui::Context) -> Vec<String> {
+/// Makes the theme with this id the active one: Graphite, or a file in the themes folder
+/// (`themefile`), or a theme file's path. An empty id, a theme MDM no longer has
+/// ([`crate::palette::REMOVED`]), an unknown one or one that can't be read gives Graphite, logged
+/// (plan 05.5c). Returns what was skipped or went wrong.
+pub fn select(id: &str) -> Vec<String> {
     let id = id.to_owned();
     // pywal's file is followed again only if this theme is made from it (`themefile::load_in`).
     crate::themefile::forget_pywal();
     *SELECTED.lock().unwrap_or_else(|e| e.into_inner()) = id.clone();
-    if id.is_empty() || id == CLASSIC.id {
-        set(CLASSIC.clone());
-        return Vec::new();
+    let (theme, warnings) = chosen(&id, load);
+    set(theme);
+    warnings
+}
+
+/// The theme [`select`] makes active for `id` (read by `load`), and what went wrong, logged.
+fn chosen(
+    id: &str,
+    load: impl Fn(&str) -> Result<crate::themefile::Loaded, String>,
+) -> (Theme, Vec<String>) {
+    if id.is_empty() {
+        return (crate::palette::graphite().clone(), Vec::new());
     }
-    if id == "native" {
-        let system = crate::native::system(ctx);
-        *NATIVE_SEEN.lock().unwrap_or_else(|e| e.into_inner()) = Some(system);
-        set(crate::native::theme(&system));
-        return Vec::new();
-    }
-    match load(&id) {
+    match load(id) {
         Ok(loaded) => {
             for w in &loaded.warnings {
                 tracing::warn!("theme {id}: {w}");
             }
-            set(loaded.theme);
-            loaded.warnings
+            (loaded.theme, loaded.warnings)
         }
         Err(e) => {
-            tracing::warn!("theme {id}: {e}; the classic look instead");
-            set(CLASSIC.clone());
-            vec![e]
+            tracing::warn!("theme {id}: {e}; Graphite instead");
+            (crate::palette::graphite().clone(), vec![e])
         }
     }
 }
@@ -172,26 +169,6 @@ pub fn startup_id(setting: &str) -> String {
         .ok()
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| setting.to_owned())
-}
-
-/// What the system said when Native was last made.
-static NATIVE_SEEN: std::sync::Mutex<Option<crate::native::System>> = std::sync::Mutex::new(None);
-
-/// While Native is the theme: made again when the system's accent or contrast changed. True
-/// when it was (the caller applies it: `apply_theme`, `apply_mode`).
-pub fn follow_system(ctx: &egui::Context) -> bool {
-    if current().id != "native" {
-        return false;
-    }
-    let system = crate::native::system(ctx);
-    let mut seen = NATIVE_SEEN.lock().unwrap_or_else(|e| e.into_inner());
-    if *seen == Some(system) {
-        return false;
-    }
-    *seen = Some(system);
-    drop(seen);
-    set(crate::native::theme(&system));
-    true
 }
 
 /// Match egui's glyph rendering to the surface: a dark one thickens light-on-dark text
@@ -559,12 +536,11 @@ fn fonts_for(ctx: &egui::Context, font: Option<&str>) {
             (Monospace, "bundled"),
             (Name("tahoma".into()), "bundled"),
             (Name("tahoma-bold".into()), "bundled-semibold"),
-            (Name("arial-bold".into()), "bundled-semibold"),
             (medium, "bundled-medium"),
         ] {
             let list = defs.families.entry(family).or_default();
             // Tahoma's own files give way too: the family is the bundled face's alone.
-            list.retain(|f| !matches!(f.as_str(), "tahoma" | "tahoma-bold" | "arial-bold"));
+            list.retain(|f| !matches!(f.as_str(), "tahoma" | "tahoma-bold"));
             lead(list, key);
         }
     }
@@ -933,7 +909,7 @@ mod glyph_tests {
         assert!(needs_reload(Some(&geist), None), "leaving Graphite");
     }
 
-    /// Plan 04: from Classic to Graphite and back, the first Proportional font is Geist, then the
+    /// Plan 04: from a theme without a font to Graphite and back, the first Proportional font is Geist, then the
     /// system's again; DirectWrite draws Geist's bytes only while Geist leads.
     #[test]
     fn a_theme_switch_swaps_the_face() {
@@ -943,8 +919,8 @@ mod glyph_tests {
             ctx.fonts(|f| f.definitions().families[&egui::FontFamily::Proportional][0].clone())
         };
         let _one = super::font_tests();
-        let themes = crate::palette::builtins();
-        let (classic, graphite) = (themes[0], themes[8]);
+        // A theme of no font of its own (a file can be one): the base.
+        let (classic, graphite) = (&crate::palette::BASE, crate::palette::graphite());
         let ctx = egui::Context::default();
         // As `apply` at start, then `apply_theme` at each switch.
         super::load_font(&ctx, classic.font.as_deref());
@@ -957,5 +933,33 @@ mod glyph_tests {
         assert_eq!(first(&ctx), system);
         assert_ne!(system, "bundled");
         assert!(super::bundled_face().is_none());
+    }
+}
+
+#[cfg(test)]
+mod select_tests {
+    /// Plan 05.5c: an empty id, a removed theme's, an unknown one: Graphite (the last two
+    /// say why).
+    #[test]
+    fn every_old_or_unknown_id_gives_graphite() {
+        let g = crate::palette::graphite();
+        // Read without following pywal's file (another test follows it).
+        let read = |id: &str| crate::themefile::read(id).0;
+        let (t, w) = super::chosen("", read);
+        assert!(t == *g && w.is_empty());
+        for id in [
+            "graphite",
+            "classic",
+            "native",
+            "high-contrast",
+            "metro",
+            "aqua",
+            "no-such",
+        ] {
+            let (t, w) = super::chosen(id, read);
+            assert_eq!(t.id, "graphite", "{id}");
+            assert_eq!(t.light, g.light, "{id}");
+            assert_eq!(w.is_empty(), id == "graphite", "{id}: {w:?}");
+        }
     }
 }

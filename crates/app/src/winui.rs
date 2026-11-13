@@ -60,11 +60,7 @@ pub fn install_fonts(defs: &mut egui::FontDefinitions, font_dir: Option<&std::pa
         .get(&FontFamily::Proportional)
         .cloned()
         .unwrap_or_default();
-    for (family, file) in [
-        ("tahoma", "tahoma.ttf"),
-        ("tahoma-bold", "tahomabd.ttf"),
-        ("arial-bold", "arialbd.ttf"),
-    ] {
+    for (family, file) in [("tahoma", "tahoma.ttf"), ("tahoma-bold", "tahomabd.ttf")] {
         let fonts = match font_dir.and_then(|d| std::fs::read(d.join(file)).ok()) {
             Some(bytes) => {
                 defs.font_data.insert(
@@ -330,14 +326,6 @@ fn name_from_caption(resp: &Response) {
 /// Segoe UI −12: menu bar, toolbar labels.
 pub fn segoe() -> FontId {
     FontId::proportional(crate::theme::metrics().font_ui)
-}
-
-/// Arial Bold −13: the Categories close "x".
-pub fn arial_bold() -> FontId {
-    FontId::new(
-        crate::theme::metrics().font_ui_bold,
-        FontFamily::Name("arial-bold".into()),
-    )
 }
 
 /// Like [`text`] in any font.
@@ -7070,10 +7058,7 @@ mod tests {
         assert_eq!(State::Pressed.open_if(true), State::Pressed);
         assert_eq!(State::Disabled.open_if(true), State::Disabled);
         assert_eq!(State::Hot.open_if(false), State::Hot);
-        let (light, dark) = (
-            &crate::palette::CLASSIC.light,
-            &crate::palette::CLASSIC.dark,
-        );
+        let (light, dark) = (&crate::palette::BASE.light, &crate::palette::BASE.dark);
         for c in [light, dark] {
             assert_eq!(subtle_fill(State::Normal, c), None);
             assert_eq!(subtle_fill(State::Disabled, c), None);

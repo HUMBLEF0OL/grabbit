@@ -157,8 +157,6 @@ progress = "line"
 scroll = "overlay"
 # A drawn, flat title bar coloured by the caption roles.
 caption = "metro"
-# Graphite's layout (title-bar menus, a toolbar on a panel, dialog footers), not IDM's.
-chrome = "graphite"
 
 [sizes]
 radius = 8

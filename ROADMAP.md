@@ -204,20 +204,22 @@ Everything below ships together, in version 0.5.0.
   theme, and theme files can change them; the classic look is unchanged
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
 - ✅ View → Theme: Classic (the default), Native (the system's accent colour and high contrast,
-  followed as they change) and High contrast
+  followed as they change) and High contrast (removed since: Graphite is the only look)
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
 - ✅ Themes: Metro, Windows 8's flat look (its controls, a drawn title bar on Windows, Fluent
-  icons); themes choose each control's style and bring their own icons
+  icons); themes choose each control's style and bring their own icons (Metro removed since:
+  Graphite is the only look)
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
 - ✅ Themes: Adwaita, GNOME's look (its controls, a header bar on Windows, GNOME's Adwaita icons
-  in colour and one colour)
+  in colour and one colour) (removed since: Graphite is the only look)
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
 - ✅ Themes: Breeze, KDE Plasma's look (its focus frame, check boxes, buttons and title bar on
-  Windows, KDE's Breeze icons)
+  Windows, KDE's Breeze icons) (removed since: Graphite is the only look)
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
 - ✅ Themes: Luna, Aero and Aqua, the looks of Windows XP, Windows 7 and Mac OS X (shaded and
   glossy buttons, their check boxes and progress bars, their title bars on Windows, icons drawn
-  for MDM); Metro, Adwaita and Breeze get MDM's own icons where theirs had none
+  for MDM); Metro, Adwaita and Breeze get MDM's own icons where theirs had none (removed since:
+  Graphite is the only look)
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
 - ✅ Themes: Base16 and pywal colour schemes imported as themes (View → Theme → Add a theme
   file…, or the themes folder); **pywal** follows `wal` as it writes new colours, text kept
@@ -421,7 +423,8 @@ Everything below ships together, in version 0.5.0.
   contrast; style themes with their own control shapes, a drawn title bar on Windows and their own
   icons: Metro, Adwaita, Breeze, Luna, Aero and Aqua; and theme files anyone can make, try and
   share, in TOML or JSON, built on any theme (`inherits`), with their own icons; Base16 and
-  pywal colour schemes read as themes ([the guide](docs/themes.md))
+  pywal colour schemes read as themes ([the guide](docs/themes.md)). The built-in themes but
+  Graphite were removed since: Graphite is the only look; theme files build on it
 - ✅ Linux, no longer experimental: every change is checked on Ubuntu (GNOME) as well as Windows,
   and on KDE Plasma, Cinnamon and Xfce; Wayland sessions (through XWayland, menus under their
   titles on sway too); the .deb and .rpm installed in clean Ubuntu, Debian and Fedora systems, the
@@ -535,8 +538,9 @@ These ship in a later version, when they're ready.
   (menus and a Find button in the title bar, icons and shortcuts in the menus, a grouped toolbar,
   a flatter Categories tree, progress in the Status column, a quieter status bar), and
   Graphite's own icons in the Options pages, the helpers window, the drag handle, the
-  Scheduler's queues and the Server row. Next: Graphite as the only look, then the paste bar and
-  details pane, then the dialogs
+  Scheduler's queues and the Server row, and Graphite as the only look (the Classic layout and
+  the old themes removed; Windows' high contrast is followed again once a high-contrast Graphite
+  comes back). Next: the paste bar and details pane, then the dialogs
 
 ### Bugs being looked into
 

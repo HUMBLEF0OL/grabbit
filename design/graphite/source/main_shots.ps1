@@ -16,7 +16,7 @@
 param(
   [Parameter(Mandatory)][string]$Bin,
   [Parameter(Mandatory)][string]$Out,
-  [string[]]$Themes = @("classic", "metro", "aqua", "graphite"),
+  [string[]]$Themes = @("graphite"),
   [string]$Mode = "",
   [string[]]$States = @(),
   [switch]$Extra,

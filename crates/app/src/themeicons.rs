@@ -157,9 +157,6 @@ pub const SIZES: [u32; 4] = [16, 24, 32, 48];
 #[derive(Default)]
 pub struct Set {
     files: HashMap<(String, u32), File>,
-    /// Its Finished and Queues icons say so already: the categories tree draws them without
-    /// the classic look's badges ([`tree_badges`]).
-    no_badges: bool,
 }
 
 impl Set {
@@ -672,11 +669,10 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "tb-scheduler.svg", "tb-start-queue.svg", "tb-stop-all.svg", "tb-stop-queue.svg",
             "tb-stop.svg", "ui-close.svg", "ui-maximize.svg", "ui-minimize.svg", "ui-restore.svg",
             "ui-to-tray.svg"]);
-    // Its Finished is a circled tick and its Queues a numbered list, as the mockup draws the tree:
-    // no badge over them (the tick would repeat Finished's).
-    let mut graphite = Set::from_files(graphite, true);
-    graphite.no_badges = true;
-    sets.insert("graphite".to_owned(), Arc::new(graphite));
+    sets.insert(
+        "graphite".to_owned(),
+        Arc::new(Set::from_files(graphite, true)),
+    );
     Mutex::new(sets)
 });
 
@@ -726,19 +722,6 @@ pub fn graphite_has(need: &str, px: u32) -> bool {
 
 fn set(name: &str) -> Option<Arc<Set>> {
     SETS.lock().ok()?.get(name).cloned()
-}
-
-/// Whether the categories tree draws the badges that repeat a row's icon (Finished's tick and
-/// Queues' page stack over the folder, each queue as the stack): yes in the classic look and in
-/// every set but one whose Finished and Queues icons say so already (Graphite's), which then
-/// draws them alone and each queue as its Queues icon. A synchronized queue keeps its tick.
-pub fn tree_badges() -> bool {
-    badges_with(crate::theme::current().icon_set.as_deref())
-}
-
-/// [`tree_badges`] for a theme with this set (None: none, or one not loaded).
-fn badges_with(icon_set: Option<&str>) -> bool {
-    icon_set.and_then(set).is_none_or(|s| !s.no_badges)
 }
 
 /// How an icon's picture takes the ink: its own colours, the ink written into a one-colour
@@ -1011,17 +994,6 @@ mod tests {
                 assert_eq!(set.file(need, px).unwrap().0, size, "{need} {px}");
             }
         }
-        // The tree draws its Finished and Queues icons alone (the mockup's), whichever theme
-        // names the set; every other set keeps the badges.
-        assert!(set.no_badges);
-        assert!(!badges_with(Some("graphite")));
-        for name in ["metro", "adwaita", "breeze", "luna", "aero", "aqua"] {
-            assert!(!self::set(name).unwrap().no_badges, "{name}");
-            assert!(badges_with(Some(name)), "{name}");
-        }
-        // The classic look, and a theme naming a set that isn't there: the badges.
-        assert!(badges_with(None));
-        assert!(badges_with(Some("no-such-set")));
     }
 
     /// A one-colour picture as the set holds it: its greys white, so the ink tints them.

@@ -8,7 +8,7 @@
 //!   sizes, row heights). Where a window puts its controls stays the window's layout.
 //! - [`IconStyle`]: how the toolbar's and Options' outline icons are inked.
 //!
-//! [`CLASSIC`] is MDM's own look (IDM's classic layout, Windows 11 controls, accent #0078D4),
+//! [`BASE`] is MDM's original look (IDM's classic layout, Windows 11 controls, accent #0078D4),
 //! written out with the exact values the painters had before themes: the default, unchanged.
 
 use std::borrow::Cow;
@@ -450,17 +450,6 @@ pub struct Controls {
     /// A push button: Windows 11's, or KDE's (the edge in the accent under the pointer, the face
     /// tinted with it pressed).
     pub button: ButtonLook,
-    /// Where windows put their parts: IDM's layout, or Graphite's (design/graphite).
-    pub chrome: ChromeLook,
-}
-
-/// Which layout the windows use. Only the layout: colours and controls stay the theme's.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ChromeLook {
-    /// IDM's layout, as every theme but Graphite draws it.
-    Classic,
-    /// Graphite's: title-bar menus, a grouped toolbar on a panel, dialogs with a footer band.
-    Graphite,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -566,7 +555,6 @@ impl Controls {
         caption: CaptionLook::System,
         focus: FocusLook::Dotted,
         button: ButtonLook::Fluent,
-        chrome: ChromeLook::Classic,
     };
 
     /// Sets the control with this key to the style named `value`; false when either is unknown.
@@ -603,8 +591,6 @@ impl Controls {
             ("focus", "dotted") => self.focus = FocusLook::Dotted,
             ("focus", "ring") => self.focus = FocusLook::Ring,
             ("focus", "frame") => self.focus = FocusLook::Frame,
-            ("chrome", "classic") => self.chrome = ChromeLook::Classic,
-            ("chrome", "graphite") => self.chrome = ChromeLook::Graphite,
             _ => return false,
         }
         true
@@ -637,10 +623,11 @@ impl Theme {
     }
 }
 
-/// The classic look, MDM's default.
-pub static CLASSIC: Theme = Theme {
-    id: Cow::Borrowed("classic"),
-    name: Cow::Borrowed("Classic"),
+/// The base every theme inherits (Graphite's own file included): MDM's original colours, sizes
+/// and controls, written out. Not a theme anyone chooses (plan 05.5c: Graphite is the only look).
+pub static BASE: Theme = Theme {
+    id: Cow::Borrowed("base"),
+    name: Cow::Borrowed("Base"),
     light: Palette::classic(false),
     dark: Palette::classic(true),
     metrics: Metrics::CLASSIC,
@@ -650,52 +637,33 @@ pub static CLASSIC: Theme = Theme {
     controls: Controls::CLASSIC,
 };
 
-/// The built-in themes that don't change by themselves, the default first: the classic look
-/// (written out above), then the ones shipped as theme files (`assets/themes/`, in the format
-/// users write, so they double as examples). Native follows the system and is made when chosen
-/// (`crate::native`).
-pub fn builtins() -> [&'static Theme; 9] {
-    static HIGH_CONTRAST: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
-        crate::themefile::builtin(
-            "high-contrast",
-            include_str!("../assets/themes/high-contrast.toml"),
-        )
-    });
-    // The style themes (#45): their era's look, the layout kept.
-    static METRO: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
-        crate::themefile::builtin("metro", include_str!("../assets/themes/metro.toml"))
-    });
-    static ADWAITA: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
-        crate::themefile::builtin("adwaita", include_str!("../assets/themes/adwaita.toml"))
-    });
-    static BREEZE: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
-        crate::themefile::builtin("breeze", include_str!("../assets/themes/breeze.toml"))
-    });
-    static LUNA: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
-        crate::themefile::builtin("luna", include_str!("../assets/themes/luna.toml"))
-    });
-    static AERO: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
-        crate::themefile::builtin("aero", include_str!("../assets/themes/aero.toml"))
-    });
-    static AQUA: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
-        crate::themefile::builtin("aqua", include_str!("../assets/themes/aqua.toml"))
-    });
-    // MDM's own new look (design/graphite), appended: the ones above keep their places.
+/// The built-in themes: Graphite alone (design/graphite), shipped as a theme file
+/// (`assets/themes/graphite.toml`, in the format users write, so it doubles as an example).
+pub fn builtins() -> [&'static Theme; 1] {
+    [graphite()]
+}
+
+/// Graphite, MDM's look: the default, and what a theme that can't be had falls back to.
+pub fn graphite() -> &'static Theme {
     static GRAPHITE: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
         crate::themefile::builtin("graphite", include_str!("../assets/themes/graphite.toml"))
     });
-    [
-        &CLASSIC,
-        &HIGH_CONTRAST,
-        &METRO,
-        &ADWAITA,
-        &BREEZE,
-        &LUNA,
-        &AERO,
-        &AQUA,
-        &GRAPHITE,
-    ]
+    &GRAPHITE
 }
+
+/// The themes MDM had before Graphite became its only look (plan 05.5c): a setting or a theme
+/// file naming one gets Graphite, with a warning.
+pub const REMOVED: &[&str] = &[
+    "classic",
+    "native",
+    "high-contrast",
+    "metro",
+    "adwaita",
+    "breeze",
+    "luna",
+    "aero",
+    "aqua",
+];
 
 /// `#rrggbb` or `#rrggbbaa` (the `#` optional, as Base16 writes them) as a colour.
 pub fn parse_hex(s: &str) -> Option<Color32> {
@@ -751,8 +719,8 @@ mod tests {
         sizes.dedup();
         assert_eq!(sizes.len(), n, "a size key is used twice");
         for (k, _) in ROLES {
-            assert!(CLASSIC.light.role(k).is_some());
-            let mut p = CLASSIC.dark;
+            assert!(BASE.light.role(k).is_some());
+            let mut p = BASE.dark;
             assert!(p.set_role(k, Color32::RED));
             assert_eq!(p.role(k), Some(Color32::RED));
         }
@@ -773,7 +741,7 @@ mod tests {
     /// of each kind, so a slip in the table shows here as well as in the pixel comparison.
     #[test]
     fn classic_keeps_the_old_values() {
-        let (l, d) = (&CLASSIC.light, &CLASSIC.dark);
+        let (l, d) = (&BASE.light, &BASE.dark);
         assert_eq!(
             (l.accent, d.accent),
             (rgb(0x00, 0x78, 0xd4), rgb(0x60, 0xcd, 0xff))
@@ -790,41 +758,18 @@ mod tests {
         assert_eq!(l.segments.missing[0], hex(0xfafafc));
         assert_eq!(d.segments.missing[0], rgb(77, 77, 77));
         assert!(d.dark && !l.dark);
-        assert_eq!(CLASSIC.metrics.control_radius, 3.0);
-        assert_eq!(CLASSIC.metrics.list_row, 17.0);
+        assert_eq!(BASE.metrics.control_radius, 3.0);
+        assert_eq!(BASE.metrics.list_row, 17.0);
     }
 
-    /// Every built-in theme's text reads (WCAG 2.1 AA, 4.5:1), High contrast's at AAA (7:1),
-    /// and its accent stands out from the background (3:1).
+    /// Every built-in theme's text reads (WCAG 2.1 AA, 4.5:1), and its accent stands out from
+    /// the background (3:1).
     #[test]
     fn built_in_themes_meet_wcag_contrast() {
         use crate::derive::contrast;
-        let mut themes: Vec<Theme> = builtins().iter().map(|t| (*t).clone()).collect();
-        // Native with a few accents, and with Windows' high-contrast colours.
-        for accent in [
-            rgb(0x00, 0x78, 0xd4),
-            rgb(0xe7, 0x48, 0x56),
-            rgb(0xff, 0xb9, 0x00),
-        ] {
-            themes.push(crate::native::theme(&crate::native::System {
-                accent: Some(crate::native::Accent::from_color(accent)),
-                ..Default::default()
-            }));
-        }
-        themes.push(crate::native::theme(&crate::native::System {
-            high_contrast: Some([
-                grey(0x00),
-                grey(0xff),
-                rgb(0x1a, 0xeb, 0xff),
-                grey(0x00),
-                rgb(0xff, 0xff, 0x00),
-                rgb(0x3f, 0xf2, 0x3f),
-            ]),
-            ..Default::default()
-        }));
+        let themes: Vec<Theme> = builtins().iter().map(|t| (*t).clone()).collect();
         for t in &themes {
-            let high = t.id == "high-contrast" || t.light.focus_ring == t.light.accent;
-            let min = if high { 7.0 } else { 4.5 };
+            let min = 4.5;
             for p in [&t.light, &t.dark] {
                 let pairs = [
                     ("text / window", p.text, p.window),
@@ -837,12 +782,6 @@ mod tests {
                 ];
                 for (what, fg, bg) in pairs {
                     let r = contrast(fg, bg);
-                    // The classic look keeps today's pixels: its dark grey notes on the dark
-                    // window are 4.42:1 (#a0a0a0 on #393939), reported for its own fix.
-                    if t.id == "classic" && p.dark && what == "muted / window" {
-                        assert!(r >= 4.4, "{} {}: {what} {r:.2}", t.id, p.dark);
-                        continue;
-                    }
                     assert!(r >= min, "{} {}: {what} {r:.2}", t.id, p.dark);
                 }
                 let r = contrast(p.link, p.window);
@@ -869,11 +808,10 @@ mod tests {
         }
     }
 
-    /// The style themes' keyboard focus ring is seen (WCAG 2.1 non-text contrast, 3:1) on the
-    /// window and on the boxes, light and dark, its transparency included. Classic keeps IDM's
-    /// dotted grey rectangle.
+    /// The keyboard focus ring is seen (WCAG 2.1 non-text contrast, 3:1) on the window and on the
+    /// boxes, light and dark, its transparency included.
     #[test]
-    fn style_themes_focus_rings_are_seen() {
+    fn focus_rings_are_seen() {
         use crate::derive::contrast;
         let over = |fg: Color32, bg: Color32| {
             let a = fg.a() as f32 / 255.0;
@@ -886,9 +824,6 @@ mod tests {
             )
         };
         for t in builtins() {
-            if t.id == "classic" || t.id == "high-contrast" {
-                continue;
-            }
             for p in [&t.light, &t.dark] {
                 for bg in [p.window, p.field] {
                     let r = contrast(over(p.focus_ring, bg), bg);
@@ -898,134 +833,44 @@ mod tests {
         }
     }
 
-    /// A theme shipped as a file reads without a warning.
+    /// The theme shipped as a file (Graphite's) reads without a warning.
     #[test]
     fn built_in_theme_files_read_cleanly() {
-        for (id, name, text) in [
-            (
-                "high-contrast",
-                "High contrast",
-                include_str!("../assets/themes/high-contrast.toml"),
-            ),
-            (
-                "metro",
-                "Metro",
-                include_str!("../assets/themes/metro.toml"),
-            ),
-            (
-                "adwaita",
-                "Adwaita",
-                include_str!("../assets/themes/adwaita.toml"),
-            ),
-            (
-                "breeze",
-                "Breeze",
-                include_str!("../assets/themes/breeze.toml"),
-            ),
-            ("luna", "Luna", include_str!("../assets/themes/luna.toml")),
-            ("aero", "Aero", include_str!("../assets/themes/aero.toml")),
-            ("aqua", "Aqua", include_str!("../assets/themes/aqua.toml")),
-            (
-                "graphite",
-                "Graphite",
-                include_str!("../assets/themes/graphite.toml"),
-            ),
-        ] {
-            let v: serde_json::Value = toml::from_str(text).unwrap();
-            let l = crate::themefile::parse(id, &v, |_| {
-                Ok(crate::themefile::Loaded {
-                    theme: CLASSIC.clone(),
-                    warnings: Vec::new(),
-                })
+        let text = include_str!("../assets/themes/graphite.toml");
+        let v: serde_json::Value = toml::from_str(text).unwrap();
+        let l = crate::themefile::parse("graphite", &v, |_| {
+            Ok(crate::themefile::Loaded {
+                theme: BASE.clone(),
+                warnings: Vec::new(),
             })
-            .unwrap();
-            assert!(l.warnings.is_empty(), "{id}: {:?}", l.warnings);
-            assert_eq!(l.theme.name, name);
-            assert!(l.theme.dark.dark && !l.theme.light.dark);
-        }
-        let metro = builtins()[2];
-        assert_eq!(metro.icon_set.as_deref(), Some("metro"));
-        assert_eq!(metro.controls.caption, CaptionLook::Metro);
-        assert_eq!(metro.metrics.control_radius, 0.0);
-        let adwaita = builtins()[3];
-        assert_eq!(adwaita.icon_set.as_deref(), Some("adwaita"));
-        assert_eq!(adwaita.controls.caption, CaptionLook::Adwaita);
-        assert_eq!(adwaita.controls.focus, FocusLook::Ring);
-        assert_eq!(adwaita.controls.check, CheckLook::Adwaita);
-        assert_eq!(adwaita.controls.field_focus, FieldFocus::Ring);
-        let breeze = builtins()[4];
-        assert_eq!(breeze.icon_set.as_deref(), Some("breeze"));
-        assert_eq!(breeze.controls.caption, CaptionLook::Breeze);
-        assert_eq!(breeze.controls.focus, FocusLook::Frame);
-        assert_eq!(breeze.controls.check, CheckLook::Breeze);
-        assert_eq!(breeze.controls.button, ButtonLook::Breeze);
-        assert_eq!(breeze.controls.field_focus, FieldFocus::Border);
-        // The era themes: their own buttons, boxes, bars and title bars, and icon sets.
-        for (i, id, button, check, progress, caption) in [
-            (
-                5,
-                "luna",
-                ButtonLook::Luna,
-                CheckLook::Luna,
-                ProgressLook::Blocks,
-                CaptionLook::Luna,
-            ),
-            (
-                6,
-                "aero",
-                ButtonLook::Aero,
-                CheckLook::Aero,
-                ProgressLook::Gloss,
-                CaptionLook::Aero,
-            ),
-            (
-                7,
-                "aqua",
-                ButtonLook::Aqua,
-                CheckLook::Aqua,
-                ProgressLook::Gloss,
-                CaptionLook::Aqua,
-            ),
-        ] {
-            let t = builtins()[i];
-            assert_eq!(t.id, id);
-            assert_eq!(t.icon_set.as_deref(), Some(id));
-            assert_eq!(t.controls.button, button, "{id}");
-            assert_eq!(t.controls.check, check, "{id}");
-            assert_eq!(t.controls.progress, progress, "{id}");
-            assert_eq!(t.controls.caption, caption, "{id}");
-            // Their buttons shine: the gloss isn't the face.
-            for p in [&t.light, &t.dark] {
-                assert_ne!(p.gloss, p.button, "{id} {}", p.dark);
-            }
-        }
-        // Aqua's keyboard focus is a ring, as Mac OS X draws it; Luna's and Aero's Windows'
-        // dotted rectangle.
-        assert_eq!(builtins()[7].controls.focus, FocusLook::Ring);
-        assert_eq!(builtins()[5].controls.focus, FocusLook::Dotted);
-        assert_eq!(builtins()[6].controls.focus, FocusLook::Dotted);
+        })
+        .unwrap();
+        assert!(l.warnings.is_empty(), "{:?}", l.warnings);
+        assert_eq!(l.theme.name, "Graphite");
+        assert!(l.theme.dark.dark && !l.theme.light.dark);
     }
 
-    /// Graphite, MDM's own new look, comes last (the others keep their places): rounded corners,
+    /// Graphite, MDM's look and its only built-in theme (plan 05.5c): rounded corners,
     /// a focus ring, a flat drawn title bar, the mockup's taller rows, its own one-colour icon
     /// set (Tabler's, themeicons.rs), and pressed faces told from the pointer over them (issue
     /// #7) on its buttons and toolbar.
     #[test]
     fn graphite_is_built_in() {
-        let t = builtins()[8];
+        assert_eq!(builtins().len(), 1);
+        let t = builtins()[0];
+        assert!(std::ptr::eq(t, graphite()));
         assert_eq!((t.id.as_ref(), t.name.as_ref()), ("graphite", "Graphite"));
         assert_eq!(t.metrics.control_radius, 8.0);
         assert_eq!(t.metrics.list_row, 32.0);
         assert_eq!(t.icons, IconStyle::Mono);
         assert_eq!(t.icon_set.as_deref(), Some("graphite"));
-        // Plan 04: Geist, bundled; every other built-in keeps the system's font.
+        // Plan 04: Geist, bundled.
         assert_eq!(t.font.as_deref(), Some("geist"));
         let m = &t.metrics;
         assert_eq!(
             (m.font_ui, m.font_body, m.font_small, m.font_heading),
             (12.0, 13.0, 11.5, 16.0)
         );
-        assert!(builtins()[..8].iter().all(|b| b.font.is_none()));
         assert_eq!(
             t.controls,
             Controls {
@@ -1036,7 +881,6 @@ mod tests {
                 caption: CaptionLook::Metro,
                 focus: FocusLook::Ring,
                 button: ButtonLook::Fluent,
-                chrome: ChromeLook::Graphite,
             }
         );
         // Plan 02b's roles, as make_theme.py maps them from pal.py's tokens.
@@ -1090,38 +934,38 @@ mod tests {
         }
     }
 
-    /// Only Graphite lays windows out its own way; every other theme keeps IDM's layout, and a
-    /// file naming a layout MDM doesn't have is told so.
+    /// `[controls] chrome` is read and ignored (Graphite's layout is the only one, plan 05.5c):
+    /// a file saying `graphite` is quiet, one naming another layout is told so.
     #[test]
-    fn only_graphite_has_its_chrome() {
-        for t in builtins() {
-            let want = if t.id == "graphite" {
-                ChromeLook::Graphite
-            } else {
-                ChromeLook::Classic
-            };
-            assert_eq!(t.controls.chrome, want, "{}", t.id);
-        }
+    fn chrome_is_read_and_ignored() {
         let mut c = Controls::CLASSIC;
-        assert!(c.set("chrome", "graphite") && c.chrome == ChromeLook::Graphite);
-        assert!(c.set("chrome", "classic") && c.chrome == ChromeLook::Classic);
-        let v: serde_json::Value = toml::from_str("[controls]\nchrome = \"neon\"").unwrap();
-        let l = crate::themefile::parse("t", &v, |_| {
-            Ok(crate::themefile::Loaded {
-                theme: CLASSIC.clone(),
-                warnings: Vec::new(),
+        assert!(!c.set("chrome", "graphite") && !c.set("chrome", "classic"));
+        for (layout, warned) in [("graphite", false), ("classic", true), ("neon", true)] {
+            let text = format!("[controls]\nchrome = \"{layout}\"");
+            let v: serde_json::Value = toml::from_str(&text).unwrap();
+            let l = crate::themefile::parse("t", &v, |_| {
+                Ok(crate::themefile::Loaded {
+                    theme: BASE.clone(),
+                    warnings: Vec::new(),
+                })
             })
-        })
-        .unwrap();
-        assert!(
-            l.warnings.len() == 1 && l.warnings[0].starts_with("controls.chrome: "),
-            "{:?}",
-            l.warnings
-        );
-        assert_eq!(l.theme.controls.chrome, ChromeLook::Classic);
+            .unwrap();
+            assert_eq!(
+                l.warnings.len(),
+                usize::from(warned),
+                "{layout}: {:?}",
+                l.warnings
+            );
+            assert!(
+                l.warnings
+                    .iter()
+                    .all(|w| w.starts_with("controls.chrome: "))
+            );
+            assert_eq!(l.theme.controls, BASE.controls);
+        }
     }
 
-    /// The classic look's dark secondary and error texts read on every dark surface they sit on
+    /// The base's dark secondary and error texts read on every dark surface they sit on
     /// (WCAG 2.1 AA, 4.5:1): the window, a tab page, a text box.
     #[test]
     fn classic_dark_texts_read() {
@@ -1140,7 +984,7 @@ mod tests {
             let (x, y) = (lum(a), lum(b));
             (x.max(y) + 0.05) / (x.min(y) + 0.05)
         };
-        let d = &CLASSIC.dark;
+        let d = &BASE.dark;
         for fg in [d.muted, d.error, d.error_strong] {
             for bg in [d.window, d.tab_page, d.field] {
                 assert!(ratio(fg, bg) >= 4.5, "{fg:?} on {bg:?}: {}", ratio(fg, bg));
@@ -1151,7 +995,7 @@ mod tests {
     /// The rows between a dark variant's menu bar and its toolbar (#379): none of them stands out
     /// against the surfaces around them. The classic dark palette's were near-white (the dark
     /// look of IDM's era retired on 2026-11-01): a bright band across the window, under the menu
-    /// bar. High contrast's lines are meant to stand out.
+    /// bar.
     #[test]
     fn dark_variants_draw_no_bright_line_under_the_menu_bar() {
         let lum = |c: Color32| {
@@ -1169,7 +1013,7 @@ mod tests {
             let (x, y) = (lum(a), lum(b));
             (x.max(y) + 0.05) / (x.min(y) + 0.05)
         };
-        for theme in builtins().iter().filter(|t| t.id != "high-contrast") {
+        for theme in builtins() {
             let d = &theme.dark;
             for (what, line) in [
                 ("menubar.line", d.menubar_line),

@@ -382,7 +382,7 @@ pub fn derive(s: &Seeds) -> Palette {
     }
 }
 
-/// High contrast (`contrast = "high"` in a theme file, and the system's high-contrast mode):
+/// High contrast (`contrast = "high"` in a theme file):
 /// every control's edge in the text's colour, focus in the accent, secondary and greyed text
 /// at 7:1 and 4.5:1.
 pub fn strengthen(p: &mut Palette) {

@@ -154,18 +154,17 @@ pub fn generation() -> u64 {
 
 // ---- Windows' app mode and colours -----------------------------------------------------------
 
-/// What Windows says about the look: dark apps, and the accent and contrast colours (Native).
+/// What Windows says about the look: dark apps.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SystemLook {
     pub dark: bool,
-    pub native: crate::native::System,
 }
 
 static SYSTEM: OnceLock<Watched<SystemLook>> = OnceLock::new();
 
 /// What Windows said last: read again at once when the registry says one of its keys changed
 /// (`win32::LookKeys`), else every 2 s. Waits only at the very first ask, at most
-/// [`FIRST_WAIT`]; light with no accent until an answer comes.
+/// [`FIRST_WAIT`]; light until an answer comes.
 pub fn system(ctx: &egui::Context) -> SystemLook {
     use std::sync::atomic::{AtomicBool, Ordering};
     static ASKED: AtomicBool = AtomicBool::new(false);
@@ -177,7 +176,6 @@ pub fn system(ctx: &egui::Context) -> SystemLook {
             "system look",
             || SystemLook {
                 dark: crate::win32::apps_use_dark(),
-                native: crate::native::windows_now(),
             },
             move || {
                 keys.get_or_insert_with(crate::win32::LookKeys::open)

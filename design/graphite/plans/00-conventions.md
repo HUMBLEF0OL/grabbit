@@ -34,9 +34,8 @@ push target below, which is the maintainer's rule and overrides the repository n
     the paste bar's Tab stop, Escape and Ctrl+V);
   - **accessibility additions** in every theme (exposing a control that was not exposed, such as the
     toolbar's buttons): invisible, and the tree only gains nodes.
-- **Classic stays as it is.** Every look phase gates its changes on the Graphite theme (the
-  `[controls] chrome` gate from 02b, or the Graphite theme's own keys). Each PR shows Classic
-  pixel-identical before and after for the windows it touched.
+- **Graphite is the only layout** (since 05.5c). A look phase changes Graphite's windows
+  directly: there is no Classic side to gate on or to keep pixel-identical.
 
 ## Checks before every PR (the same commands CI runs)
 
@@ -56,7 +55,7 @@ push target below, which is the maintainer's rule and overrides the repository n
   `raw.githubusercontent.com/HUMBLEF0OL/grabbit/pr-shots/<pr>/<name>.png`, never merged.
 - Neutral test folders and files (as in the mockup: `D:\Downloads`, example.org addresses), no IDM artwork.
 - **Before** = `dev` at the branch point, in the same theme as the after-shot, taken with the same
-  script. The phase 01 baseline (Classic) is for the "Classic unchanged" pairs.
+  script. Graphite light and dark only: no Classic pairs.
 - Take every shot at Windows display scale 200% and View, Interface size 100% (the baseline's `INDEX.md`
   records this), or the pairs don't match pixel for pixel.
 
@@ -80,7 +79,6 @@ IDM: no artwork, icons, sounds or text. Behaviour stays what is learned from pub
 ## Definition of done (every phase)
 
 - [ ] Every mock state the plan lists matches at 100%, light and dark
-- [ ] Classic pixel-identical for every window the phase touched
 - [ ] All checks above pass
 - [ ] Screenshots in the PR, from the fork
 - [ ] ROADMAP, ATTRIBUTION and CHANGELOG updated where they apply; PLAN.md Progress ticked
