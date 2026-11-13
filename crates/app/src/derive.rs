@@ -324,7 +324,6 @@ pub fn derive(s: &Seeds) -> Palette {
         toolbar_pressed: tint(bg, 0.22),
         toolbar_text_disabled: disabled,
         icon_disabled: disabled,
-        tree: surface,
         tree_expander: text,
         status_value: text,
         progress_label_disabled: disabled,

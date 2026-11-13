@@ -108,8 +108,10 @@ ProgID) that ends in the new state with nothing lost; the existing startup tests
   `caption` = `luna`, `aero`, `aqua`, `adwaita`, `breeze`, `metro`) stay as theme-file vocabulary
   with their drawing code: 05.5c kept them, to stay under its size limit. Decide here whether a
   theme file still offers them, and remove them with their drawing if not.
-- The docs' theme guide (`docs/themes.md`) still shows the `icons` key and the palette roles 05.5d
-  removed (the classic toolbar's and tree's, `header.sorted`, `font.ui.bold`): rewrite it here.
+- The docs' theme guide (`docs/themes.md`), the website's theme sample (`tools/website/build.py`,
+  `inherits = "classic"`, `icons = "color"`) and its AI prompt (`website/content/theme-prompt.txt`)
+  still show the removed themes, the `icons` key and the palette roles 05.5d removed (the classic
+  toolbar's and tree's, `tree`, `header.sorted`, `font.ui.bold`): rewrite them here.
 - Plans 06 to 09 were adjusted after 05.5 (their Classic steps removed, 09b's default already done).
 
 ## Done when

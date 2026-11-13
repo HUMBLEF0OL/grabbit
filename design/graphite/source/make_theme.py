@@ -111,7 +111,7 @@ ROLES = [
         ("toolbar.hot.faint", TOOLBAR_FAINT),
         ("toolbar.text.disabled", "dis"), ("icon.disabled", "dis"),
     ]),
-    ("Categories tree", [("tree", "surface"), ("tree.expander", "ink3")]),
+    ("Categories tree", [("tree.expander", "ink3")]),
     ("The drawn title bar: the panel colour, its buttons a tint of the ink (6 %, 12 %)", [
         ("caption", "surface"), ("caption.text", "ink"), ("caption.text.inactive", "ink3"),
         ("caption.hot", "ink@0f"), ("caption.pressed", "ink@1f"),

@@ -44,7 +44,7 @@ Cancel (no behaviour change: Escape is the cancel).
    Icons: General `gx-adjust`, File types `ft-generic`, Save to `cat-folder`, Downloads `gx-download`,
    Connection `gx-network`, Remote `gx-device`, Proxy / Socks `gx-shield`, Sites Logins `gx-key`,
    Accounts `gx-user`, Sounds `gx-volume`, Regional `gx-world`, Archives `ft-archive`.
-2. **Page origin**: pages draw at an origin; under Graphite pass `o + (206, 56)` and a page width of
+2. **Page origin**: pages draw at an origin; pass `o + (206, 56)` and a page width of
    415 (the tab frame's inner width), so every page's absolute x values land inside its area without
    rewriting the pages. Above the page: its heading (an `icon_tile` with the page icon + the page's
    title, as the mock).

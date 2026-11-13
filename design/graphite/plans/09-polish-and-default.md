@@ -57,8 +57,8 @@ Line numbers drift as phases land: find each item by its name first.
    needed (nothing else to choose) and no migration (the fork had no users).
 2. Left: a user upgrading from the last release (whose looks are gone) starts in Graphite; say so in
    the release's CHANGELOG and notes (05.5c's line already does).
-3. **Downgrade**: the last release has Graphite built in (since 02), so a settings file saying
-   `graphite` loads there unchanged; nothing to do.
+3. **Downgrade**: the last release (0.5.2) has no Graphite: it reads `graphite` as an unknown theme
+   and falls back to its classic look. Acceptable; nothing to do.
 4. Website and docs screenshots (`tools/shots/`, `docs/`) retaken in Graphite; `docs/` theme help lists Graphite.
    Left from 02, which kept Graphite off the website until a release has it: with the release that
    ships it, add its tile to `website/content/themes.toml` (and the "Nine looks" line of

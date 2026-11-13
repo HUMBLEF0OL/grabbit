@@ -42,7 +42,7 @@ Line numbers drift as phases land: find each item by its name first.
    View ("Paste bar", "Details pane"); the settings persist. The toolbar's Details toggle (end of the Graphite toolbar,
    `gx-sidebar` icon) runs `Cmd::ToggleDetails`; its on state is filled with the role
    `toolbar.checked` (added by 02b).
-4. **Paste bar** (`layout.paste_h = 48` when shown under Graphite, 0 otherwise):
+4. **Paste bar** (`layout.paste_h = 48` when shown, 0 when hidden):
    - A text field with the `gx-link` icon, placeholder "Paste an address or a magnet link", the address
      history as a drop-down (`settings.url_history`), the hint "Enter adds it", and a Download button
      with `gx-download`, filled as the default button.

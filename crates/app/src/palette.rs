@@ -97,7 +97,6 @@ macro_rules! palette {
             /// Access letters are always underlined (IDM's dark look), not only once the keyboard
             /// is in use (Windows' rule).
             pub access_keys_always: bool,
-            /// The category tree's expanders: chevrons (dark look) or classic +/- boxes.
             /// The progress window's segment bar.
             pub segments: Segments,
             $(#[doc = $doc] pub $field: Color32,)*
@@ -275,7 +274,6 @@ palette! {
     toolbar_text_disabled: "toolbar.text.disabled", "A greyed toolbar label" = grey(0xa0), grey(0xa0);
     icon_disabled: "icon.disabled", "A greyed icon's ink (its start)" = grey(0x9f), grey(0x9f);
     // ---- categories tree ----
-    tree: "tree", "The categories tree's background" = grey(0x20), grey(0xff);
     tree_expander: "tree.expander", "The tree's chevrons, where the variant draws them" = grey(0xff), grey(0x1a);
     // ---- progress window ----
     status_value: "progress.status", "The progress window's Status value" = grey(0xff), rgb(0x00, 0x00, 0xff);

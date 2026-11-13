@@ -140,7 +140,6 @@ menu = "#ffffff"
 "toolbar.text.disabled" = "#a5a0b6"
 "icon.disabled" = "#a5a0b6"
 # Categories tree.
-tree = "#ffffff"
 "tree.expander" = "#625d78"
 # The drawn title bar: the panel colour, its buttons a tint of the ink (6 %, 12 %).
 caption = "#ffffff"
@@ -238,7 +237,6 @@ menu = "#121019"
 "toolbar.text.disabled" = "#5e596c"
 "icon.disabled" = "#5e596c"
 # Categories tree.
-tree = "#121019"
 "tree.expander" = "#948ea8"
 # The drawn title bar: the panel colour, its buttons a tint of the ink (6 %, 12 %).
 caption = "#121019"

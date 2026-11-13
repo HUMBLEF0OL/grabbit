@@ -162,6 +162,19 @@ pub fn follow_pywal(files: Option<&crate::lookwatch::ThemeFiles>) -> bool {
     }
 }
 
+/// The theme id to keep in the settings once [`select`] made `active` the theme for `setting`:
+/// "graphite" for none, or for a theme MDM no longer has ([`crate::palette::REMOVED`]) that
+/// fell back to Graphite; else the setting as it is (a user's own file named like a removed
+/// theme stays theirs, and a file away for a while comes back when it is there again).
+pub fn saved_id(setting: &str, active: &str) -> String {
+    let removed = setting.is_empty() || crate::palette::REMOVED.contains(&setting);
+    if removed && active == "graphite" {
+        "graphite".to_owned()
+    } else {
+        setting.to_owned()
+    }
+}
+
 /// The theme to start with: `MDM_THEME` (tests and screenshots: an id or a theme file's path),
 /// else the setting.
 pub fn startup_id(setting: &str) -> String {
@@ -938,6 +951,18 @@ mod glyph_tests {
 
 #[cfg(test)]
 mod select_tests {
+    /// Plan 05.5c: a removed theme's id that fell back is saved as Graphite's; a user's file of
+    /// that name, an unknown name and Graphite stay as they are.
+    #[test]
+    fn a_removed_id_is_saved_as_graphite_only_when_it_fell_back() {
+        assert_eq!(super::saved_id("", "graphite"), "graphite");
+        assert_eq!(super::saved_id("metro", "graphite"), "graphite");
+        assert_eq!(super::saved_id("classic", "graphite"), "graphite");
+        assert_eq!(super::saved_id("metro", "metro"), "metro");
+        assert_eq!(super::saved_id("no-such", "graphite"), "no-such");
+        assert_eq!(super::saved_id("mine", "mine"), "mine");
+    }
+
     /// Plan 05.5c: an empty id, a removed theme's, an unknown one: Graphite (the last two
     /// say why).
     #[test]

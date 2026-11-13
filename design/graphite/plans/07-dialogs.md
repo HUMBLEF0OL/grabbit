@@ -39,7 +39,7 @@ Line numbers drift as phases land: find each item by its name first.
 - The tray menu is native (`tray_icon::menu`, `tray.rs:158`): the theme cannot draw it.
 - The drop target (`droptarget.rs`) draws the app icon.
 
-Footer order today (left to right, default marked *) and under Graphite:
+Footer order today (left to right, default marked *) and after 07:
 
 | Dialog | Where | Today | Graphite (leading ; trailing) |
 | --- | --- | --- | --- |
@@ -92,7 +92,7 @@ Footer order today (left to right, default marked *) and under Graphite:
    `banner.error`, `banner.info`, `banner.warning` from 02b (error window, torrent General, Options Remote
    and Accounts, gallery, Verify checksum). Not the existing `winui::banner`.
 7. Each dialog takes the mock's size in its wave (no `dialog_size` for two layouts: 05.5 left one).
-8. Tests: footer order per chrome; Enter and Escape fire only the marked buttons; a disabled marked
+8. Tests: footer order; Enter and Escape fire only the marked buttons; a disabled marked
    button ignores Enter; **Escape in the progress window leaves the download running**; label column
    positions.
 
