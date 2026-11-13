@@ -5,7 +5,9 @@
 Replaces the two rows of tabs (which swap front and back when a back-row tab is clicked) with the same
 twelve pages listed down the side, in the same order. Every page keeps its controls and wording.
 
-- Branches: `ui/08a-options-list` (side list, pages unchanged inside), `ui/08b-options-pages` (pages on `form`)
+- Branches: `ui/08a-options-list` (side list, pages unchanged inside), then `ui/08b1-…`, `ui/08b2-…`,
+  `ui/08b3-…` in parallel (pages on `form`; see **Fast track** below)
+- **Time box: 3 hours of agent time for the whole plan**, from the first commit to the last PR ready.
 - Needs: 07a (the kit: footer, form, icon_tile, status_banner), 02b, 03b (page icons); 04 before final sizes (04's plan lists the Options labels Geist overflows)
 - Unblocks: 09
 
@@ -33,6 +35,43 @@ Line numbers drift as phases land: find each item by its name first.
 A Cancel button: Options has none today; the close box and Escape already discard the changes
 (`options.rs:3`). Decide before 08a starts and record it in `../PLAN.md`; the recommendation is no
 Cancel (no behaviour change: Escape is the cancel).
+
+## Fast track (3-hour cap)
+
+Run the same way as 07's fast track (`07-dialogs.md`); what differs here is that everything lives in
+one file, `options.rs`.
+
+| Slot | Work | Budget |
+| --- | --- | --- |
+| 0:00 | The Cancel decision above, recorded in `../PLAN.md` (default if no answer: no Cancel) | — |
+| 0:00–0:50 | **PR 1 = 08a**: the side list, the page origin, the footer | 50 min |
+| 0:50–1:05 | Maintainer merges PR 1 into `dev` | 15 min |
+| 1:05–2:35 | **08b in three parallel parts**, one agent and one worktree each, all branched from `dev` with PR 1 in it | 90 min |
+| 2:35–3:00 | Maintainer merges them one after another; the agents rebase and fix ROADMAP/CHANGELOG conflicts | 25 min |
+
+08b's three parts (each its own PR):
+
+| Part | Pages and sub-dialogs |
+| --- | --- |
+| 08b1 | General, File types, Save to, Downloads, Connection (its spin box) |
+| 08b2 | Remote (`status_banner` Info), Proxy, Sites Logins, Accounts (`status_banner` Warning), Sounds, Regional, Archives |
+| 08b3 | The nine sub-dialogs (`pair_window`, `sub_dialog` and their callers), the window's 820 x 520 size, the Options help page in `docs/` |
+
+Rules that keep it inside the box:
+
+1. **Own functions only.** Each part edits only its own page and sub-dialog functions in `options.rs`, so
+   git merges the three cleanly. The shared parts (`fn tabs`/`side_list`, `ORDER`, the page dispatch,
+   the window size) belong to 08a and 08b3. A kit gap goes to `winui` in a small PR of its own, not
+   into a part.
+2. **Start early.** 08a needs only 07a (in 07's PR 1), so it can run beside 07c, 07d and 07e; plans 07
+   and 08 then fit in about 4½ hours together instead of 7.
+3. **Worktrees, builds, screenshots, audit, merges, running over:** as 07's fast track rules 2 to 7:
+   own `CARGO_TARGET_DIR` per worktree; `cargo check -p mdm-app` while iterating, the full workspace once
+   per PR; screenshots in one batch per part with `baseline.ps1 -Theme graphite -Shots <its pages>`
+   (`options:<page>` shows a page), light and dark, `-InterfaceSize 100` and `200`, `-Work` inside the
+   worktree, an exe copy per runner; one audit round against the fixed checklist, here also: every
+   page reachable by click, Up/Down and Ctrl+Tab in `ORDER`, each page's first control hit where
+   it's drawn; what isn't ready at 2:35 ships as remaining under the ROADMAP item.
 
 ## 08a · The side list
 
@@ -76,3 +115,4 @@ Cancel (no behaviour change: Escape is the cancel).
 - [ ] 08a: every page reachable from the side list and working
 - [ ] 08b: all twelve pages and nine sub-dialogs match their mock states in Graphite, light and dark
 - [ ] Help updated; screenshots, ROADMAP, CHANGELOG
+- [ ] Done within the 3-hour box, or what's left listed under its part's ROADMAP item
