@@ -85,7 +85,7 @@ $states = @(
   @("main-filtered", "-", "No /show for filters that hide every row"),
   @("addurl", "addurl", ""),
   @("fileinfo", "@download:gen/250M/project-files-2026.zip", ""),
-  @("later", "-", "Opened from Download File Info's Download Later; no /show"),
+  @("later", "later", ""),
   @("dup", "@download:gen/4M/project-report-2026.pdf", "The address of a download already in the list"),
   @("progress-status", "progress:status", ""),
   @("progress-limit", "progress:limit", ""),

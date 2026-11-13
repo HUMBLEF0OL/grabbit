@@ -594,6 +594,19 @@ pub fn paint_graphite(
     paint_source(ui, painter, graphite(need, px, ink(enabled), enabled), rc)
 }
 
+/// [`paint_graphite`] in `ink` (a status banner's icon in its kind's colour).
+#[allow(dead_code)] // ponytail: first used by the 07c-07e waves (status banners)
+pub fn paint_graphite_in(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    need: &str,
+    rc: egui::Rect,
+    ink: Color32,
+) -> bool {
+    let px = rc.width() * ui.ctx().pixels_per_point();
+    paint_source(ui, painter, graphite(need, px, ink, true), rc)
+}
+
 /// Draws an icon made by [`source`] into `rc`; false when there is none.
 fn paint_source(
     ui: &egui::Ui,

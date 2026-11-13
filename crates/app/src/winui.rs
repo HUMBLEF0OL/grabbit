@@ -2837,7 +2837,7 @@ pub fn drop_list(
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ButtonKind {
     Normal,
     Default,
@@ -2845,6 +2845,10 @@ pub enum ButtonKind {
     /// The one answer a window recommends (the default too), filled with the accent as Windows
     /// 11's accent buttons: the first start's "Yes, download them".
     Accent,
+    /// An answer that deletes (Confirm deletion's Yes): filled with `button.danger`.
+    Danger,
+    /// A quiet button (a footer's Help): no face or border until the pointer is on it.
+    Ghost,
 }
 
 /// Push button: #333333 fill, 1 px rounded (r 4) border by state, text centred with its
@@ -2857,17 +2861,34 @@ pub fn button(
     focus_rect: bool,
     mnemonic: Option<usize>,
 ) -> Response {
-    // The label is translated here (M16); a mnemonic index points into the English text only,
-    // and becomes the "&" form every button uses.
+    button_icon(ui, rc, None, label, kind, focus_rect, mnemonic)
+}
+
+/// [`button`] with Graphite's `icon` (a need, as `gx-dots`) before its label, the pair centred.
+pub fn button_icon(
+    ui: &mut Ui,
+    rc: Rect,
+    icon: Option<&str>,
+    label: &str,
+    kind: ButtonKind,
+    focus_rect: bool,
+    mnemonic: Option<usize>,
+) -> Response {
+    let label = with_mnemonic(label, mnemonic);
+    button_face(ui, rc, &label, kind, focus_rect, icon, PressFocus::Take)
+}
+
+/// `label` translated (M16), with "&" before the access letter at char index `mnemonic`: the
+/// index points into the English text only, so a translation keeps its own (or none).
+fn with_mnemonic(label: &str, mnemonic: Option<usize>) -> String {
     let translated = crate::i18n::t(label);
-    let label = match mnemonic.filter(|_| translated == label) {
+    match mnemonic.filter(|_| translated == label) {
         Some(i) => {
             let at = label.char_indices().nth(i).map_or(label.len(), |(b, _)| b);
             format!("{}&{}", &label[..at], &label[at..])
         }
         None => translated.to_owned(),
-    };
-    button_face(ui, rc, &label, kind, focus_rect, None, PressFocus::Take)
+    }
 }
 
 /// Whether a pointer press gives a [`button_face`] the keys.
@@ -3316,11 +3337,6 @@ pub fn group_box(p: &Painter, rc: Rect, gap: Option<(f32, f32)>) {
     hline(p, l, rr, b, GROUP_LINE());
 }
 
-/// The 22 × 21 "+" / "..." buttons.
-pub fn small_button(ui: &mut Ui, rc: Rect, glyph: &str) -> Response {
-    button(ui, rc, glyph, ButtonKind::Normal, false, None)
-}
-
 // ---- light dialogs (Speed Limiter, Scheduler, Options) ------------------------------------
 // notes/ui-spec/scheduler-and-misc.md "Light dialog control styles".
 
@@ -3739,6 +3755,408 @@ pub fn buttons_light_right(
     out
 }
 
+// ---- the dialog kit (Graphite, plan 07a) ---------------------------------------------------
+//
+// Every dialog's footer, label column, file card and banner, as the mockup draws them. Keys
+// stay each dialog's own: a footer presses a button on Enter or Escape only where the dialog
+// marks it ([`FooterButton::enter`], [`FooterButton::escape`]); a `Default` look adds none.
+
+/// A footer's height: its top rule, 12 above and below a 30-point button (the mockup's `.foot`).
+pub const FOOTER_H: f32 = 55.0;
+/// A kit control's height: a footer's buttons, a form's rows, a file card's action.
+pub const CONTROL_H: f32 = 30.0;
+/// The room at a footer's ends, and a form's edges (the mockup's `.pad`).
+pub const EDGE: f32 = 16.0;
+const FOOTER_GAP: f32 = 8.0;
+/// A footer button's room either side of its label (the mockup's `.btn` padding).
+const FOOTER_BUTTON_PAD: f32 = 14.0;
+const FOOTER_BUTTON_MIN: f32 = 56.0;
+
+/// Which end of a [`footer`] a button sits at.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Side {
+    Leading,
+    Trailing,
+}
+
+/// A button in a [`footer`]: trailing, no icon, no keys until the dialog says so.
+#[derive(Clone, Copy, Debug)]
+pub struct FooterButton<'a> {
+    pub label: &'a str,
+    pub kind: ButtonKind,
+    pub side: Side,
+    /// Graphite's icon before the label (a need, as `gx-dots`).
+    pub icon: Option<&'a str>,
+    /// The access letter's char index in the English label ([`button`]).
+    pub mnemonic: Option<usize>,
+    /// Enter presses it (no control took Enter first). A greyed button ignores it.
+    pub enter: bool,
+    /// Escape presses it (no control took Escape first). A greyed button ignores it.
+    pub escape: bool,
+    /// Its hover text (English, translated here): why it is greyed, …
+    pub tip: Option<&'a str>,
+}
+
+impl<'a> FooterButton<'a> {
+    pub fn new(label: &'a str, kind: ButtonKind) -> Self {
+        Self {
+            label,
+            kind,
+            side: Side::Trailing,
+            icon: None,
+            mnemonic: None,
+            enter: false,
+            escape: false,
+            tip: None,
+        }
+    }
+    /// `tip` on hover while `on` ([`why_disabled`]'s reason for a greyed button).
+    pub fn tip(self, on: bool, tip: &'a str) -> Self {
+        Self {
+            tip: on.then_some(tip),
+            ..self
+        }
+    }
+    #[allow(dead_code)] // ponytail: first used by the 07c-07e waves
+    pub fn leading(self) -> Self {
+        Self {
+            side: Side::Leading,
+            ..self
+        }
+    }
+    #[allow(dead_code)] // ponytail: first used by the 07c-07e waves
+    pub fn icon(self, need: &'a str) -> Self {
+        Self {
+            icon: Some(need),
+            ..self
+        }
+    }
+    pub fn mnemonic(self, at: usize) -> Self {
+        Self {
+            mnemonic: Some(at),
+            ..self
+        }
+    }
+    /// Enter presses it while `on` (a dialog's own condition: no drop list open, …).
+    pub fn enter(self, on: bool) -> Self {
+        Self { enter: on, ..self }
+    }
+    /// Escape presses it while `on`.
+    pub fn escape(self, on: bool) -> Self {
+        Self { escape: on, ..self }
+    }
+    /// The answer a footer puts last and fills: the dialog's default, an accent or a danger one.
+    fn primary(&self) -> bool {
+        matches!(
+            self.kind,
+            ButtonKind::Default | ButtonKind::Accent | ButtonKind::Danger
+        )
+    }
+}
+
+/// What a [`footer`] holds: buttons, and leading check boxes (Add torrent's "Download in
+/// order", Confirm deletion's "Don't show this dialog again").
+pub enum FooterItem<'a> {
+    Button(FooterButton<'a>),
+    #[allow(dead_code)] // ponytail: first used by the 07d-07e waves
+    Check(&'a str, &'a mut bool),
+}
+
+/// Where a footer's items go, each `(width, side, primary)` in the order given (the dialog's Tab
+/// order, kept): the English x of each. Leading ones from the left edge in order; trailing ones
+/// against the right edge in order, the primary ones moved last (rightmost).
+pub fn footer_slots(items: &[(f32, Side, bool)], client_w: f32) -> Vec<f32> {
+    let mut x = vec![0.0; items.len()];
+    let mut left = EDGE;
+    for (i, (w, side, _)) in items.iter().enumerate() {
+        if *side == Side::Leading {
+            x[i] = left;
+            left += w + FOOTER_GAP;
+        }
+    }
+    let trailing = || {
+        items
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, side, _))| *side == Side::Trailing)
+    };
+    let shown: Vec<usize> = trailing()
+        .filter(|(_, (_, _, primary))| !primary)
+        .chain(trailing().filter(|(_, (_, _, primary))| *primary))
+        .map(|(i, _)| i)
+        .collect();
+    let mut right = client_w - EDGE;
+    for &i in shown.iter().rev() {
+        right -= items[i].0;
+        x[i] = right;
+        right -= FOOTER_GAP;
+    }
+    x
+}
+
+/// The button a key presses, of `buttons` given as `(enabled, enter, escape)`: the first
+/// enabled one marked for Enter when `enter` was pressed, else for Escape when `escape` was.
+pub fn footer_key(buttons: &[(bool, bool, bool)], enter: bool, escape: bool) -> Option<usize> {
+    let marked =
+        |pick: fn(&(bool, bool, bool)) -> bool| buttons.iter().position(|b| b.0 && pick(b));
+    (enter.then(|| marked(|b| b.1)).flatten()).or_else(|| escape.then(|| marked(|b| b.2)).flatten())
+}
+
+/// A dialog's footer band at English `y` across `client_w` (window-relative to `o`): the
+/// `panel` colour under a top rule, its leading items from the left, its trailing buttons at the
+/// right with the default (or accent, or danger) one last and filled. Items are made in the
+/// order given, so Tab keeps the dialog's order. The index in `items` of the button clicked,
+/// pressed by its access letter, or by a key it is marked for.
+pub fn footer(
+    ui: &mut Ui,
+    o: Pos2,
+    client_w: f32,
+    y: f32,
+    items: &mut [FooterItem],
+) -> Option<usize> {
+    let c = crate::theme::colors();
+    let p = ui.painter().clone();
+    p.rect_filled(r(o, 0.0, y, client_w, FOOTER_H), 0.0, c.panel);
+    fill_l(
+        &p,
+        o.x,
+        o.y + y,
+        o.x + client_w - 1.0,
+        o.y + y,
+        c.menubar_line,
+    );
+    let widths: Vec<(f32, Side, bool)> = items
+        .iter()
+        .map(|item| match item {
+            FooterItem::Button(b) => {
+                let shown = with_mnemonic(b.label, None);
+                let icon = if b.icon.is_some() {
+                    BUTTON_ICON + BUTTON_ICON_GAP
+                } else {
+                    0.0
+                };
+                let w = (text_width(&p, &shown) + icon + 2.0 * FOOTER_BUTTON_PAD).ceil();
+                (w.max(FOOTER_BUTTON_MIN), b.side, b.primary())
+            }
+            FooterItem::Check(caption, _) => (
+                checkbox_caption_end(&p, 0.0, caption).ceil(),
+                Side::Leading,
+                false,
+            ),
+        })
+        .collect();
+    let xs = footer_slots(&widths, client_w);
+    let top = y + 1.0 + ((FOOTER_H - 1.0 - CONTROL_H) / 2.0).floor();
+    // Read before the buttons: a focused button takes Enter for itself (button_face).
+    let (enter, escape) = (enter_pressed(ui), escape_pressed(ui));
+    let mut clicked = None;
+    let mut keys = Vec::new();
+    let mut at_key = Vec::new();
+    for (i, item) in items.iter_mut().enumerate() {
+        let (w, x) = (widths[i].0, xs[i]);
+        match item {
+            FooterItem::Button(b) => {
+                // The default is filled like an accent one in a footer.
+                let kind = if b.kind == ButtonKind::Default {
+                    ButtonKind::Accent
+                } else {
+                    b.kind
+                };
+                let label = with_mnemonic(b.label, b.mnemonic);
+                let resp = button_face(
+                    ui,
+                    r(o, x, top, w, CONTROL_H),
+                    &label,
+                    kind,
+                    b.enter,
+                    b.icon,
+                    PressFocus::Take,
+                );
+                let resp = match b.tip {
+                    Some(tip) => resp.on_hover_text(crate::i18n::t(tip)),
+                    None => resp,
+                };
+                if resp.clicked() && clicked.is_none() {
+                    clicked = Some(i);
+                }
+                keys.push((b.kind != ButtonKind::Disabled, b.enter, b.escape));
+                at_key.push(i);
+            }
+            FooterItem::Check(caption, on) => {
+                let box_top = top + ((CONTROL_H - 13.0) / 2.0).round();
+                checkbox(ui, o + vec2(x, box_top), on, caption, true);
+            }
+        }
+    }
+    clicked.or_else(|| footer_key(&keys, enter, escape).map(|k| at_key[k]))
+}
+
+/// A form's label column, plan 07a: the English x its fields start at for labels drawn at
+/// English `x`: 112 points of labels (240 for sentence labels, `wide`) and a 12-point gap, or
+/// further right where a (translated) label is longer.
+pub fn form(p: &Painter, x: f32, labels: &[&str], wide: bool) -> f32 {
+    let column = if wide { 240.0 } else { 112.0 };
+    let labels: Vec<&str> = labels.iter().map(|l| crate::i18n::t(l)).collect();
+    // label_column keeps 6 after the widest label; a form keeps its 12.
+    label_column(p, x, &labels, x + column + 12.0 - 6.0) + 6.0
+}
+
+/// A form's label (English, translated here) at English `x`, centred on the row `top`..`top + h`
+/// (window-relative to `o`), in the secondary text colour, or greyed.
+pub fn form_label(p: &Painter, o: Pos2, x: f32, top: f32, h: f32, label: &str, enabled: bool) {
+    let color = if enabled {
+        crate::theme::colors().text_secondary
+    } else {
+        TEXT_DISABLED()
+    };
+    text(
+        p,
+        o.x + x,
+        o.y + baseline_in(top, h),
+        crate::i18n::t(label),
+        color,
+    );
+}
+
+/// A hairline across English `x`..`x + w` at `y` (window-relative to `o`): what groups a
+/// form's rows where a group box was.
+// ponytail: first used by the 07c-07e waves (the kit ships with 07b, plan 07a).
+#[allow(dead_code)]
+pub fn rule(p: &Painter, o: Pos2, x: f32, y: f32, w: f32) {
+    let line = crate::theme::colors().menubar_line;
+    fill_l(p, o.x + x, o.y + y, o.x + x + w - 1.0, o.y + y, line);
+}
+
+/// A file's header (Download File Info, Download complete, File Properties, Verify checksum):
+/// a bordered card (`rc` on screen) with the file's icon on a 40-point tile, its `name` in bold
+/// (cut with "...", whole on hover) over its `sub` line (a size), and an optional `action`
+/// button at the end. The action's response.
+pub fn file_card(
+    ui: &mut Ui,
+    rc: Rect,
+    icon: crate::fileicons::Kind,
+    name: &str,
+    sub: &str,
+    action: Option<(&str, ButtonKind)>,
+) -> (Option<Response>, Rect) {
+    let c = crate::theme::colors();
+    let p = ui.painter().clone();
+    p.rect_filled(rc, 8.0, c.panel);
+    p.rect_stroke(
+        rc,
+        8.0,
+        Stroke::new(1.0, c.menubar_line),
+        StrokeKind::Inside,
+    );
+    let tile = Rect::from_min_size(
+        pos2(rc.left() + 12.0, (rc.center().y - 20.0).round()),
+        vec2(40.0, 40.0),
+    );
+    p.rect_filled(tile, 8.0, c.tile);
+    crate::fileicons::paint(
+        ui,
+        &p,
+        icon,
+        Rect::from_center_size(tile.center(), vec2(20.0, 20.0)),
+    );
+    let mut end = rc.right() - 12.0;
+    let resp = action.map(|(label, kind)| {
+        let w = (text_width(&p, crate::i18n::t(label)) + 2.0 * FOOTER_BUTTON_PAD)
+            .ceil()
+            .max(FOOTER_BUTTON_MIN);
+        end -= w;
+        let at = Rect::from_min_size(
+            pos2(end, (rc.center().y - CONTROL_H / 2.0).round()),
+            vec2(w, CONTROL_H),
+        );
+        end -= 12.0;
+        button_face(
+            ui,
+            at,
+            crate::i18n::t(label),
+            kind,
+            false,
+            None,
+            PressFocus::Take,
+        )
+    });
+    let x = tile.right() + 12.0;
+    let bold = tahoma_bold();
+    let shown = ellipsize(&p, &bold, name, (end - x).max(0.0));
+    let drawn = text_at(&p, bold, x, rc.center().y - 3.0, &shown, c.text);
+    if shown != name {
+        full_on_hover(ui, drawn, ("file-card", rc.min.x as i32), name);
+    }
+    let sub_at = text_at(&p, tahoma(), x, rc.center().y + 14.0, sub, c.muted);
+    (resp, sub_at)
+}
+
+/// A square button showing only Graphite's `icon` (a need, as `gx-dots`), its `tip` (English,
+/// translated here) its name for screen readers and its hover text: a form's browse and add
+/// buttons.
+pub fn icon_only_button(ui: &mut Ui, rc: Rect, need: &str, tip: &str, enabled: bool) -> Response {
+    let kind = if enabled {
+        ButtonKind::Normal
+    } else {
+        ButtonKind::Disabled
+    };
+    let resp = button_face(ui, rc, "", kind, false, Some(need), PressFocus::Take);
+    let tip = crate::i18n::t(tip);
+    expose(&resp, egui::Role::Button, tip, enabled, None);
+    resp.on_hover_text(tip)
+}
+
+/// What a [`status_banner`] tells of.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)] // ponytail: first used by the 07c-07e waves
+pub enum BannerKind {
+    Error,
+    Info,
+    Warning,
+}
+
+/// A status banner (`rc` on screen; not the first-start [`banner`]): the kind's soft colour
+/// (`banner.error`, `banner.info`, `banner.warning`), Graphite's `icon` in the kind's ink, a bold
+/// `title` and a `sub` line that wraps. The lines its `sub` took.
+#[allow(dead_code)] // ponytail: first used by the 07c-07e waves
+pub fn status_banner(
+    ui: &Ui,
+    rc: Rect,
+    kind: BannerKind,
+    icon: &str,
+    title: &str,
+    sub: &str,
+) -> usize {
+    let c = crate::theme::colors();
+    let p = ui.painter();
+    let (fill, ink) = match kind {
+        BannerKind::Error => (c.banner_error, c.error),
+        BannerKind::Info => (c.banner_info, c.accent),
+        BannerKind::Warning => (c.banner_warning, c.warning),
+    };
+    p.rect_filled(rc, 8.0, fill);
+    let glyph = Rect::from_min_size(pos2(rc.left() + 12.0, rc.top() + 10.0), vec2(17.0, 17.0));
+    crate::themeicons::paint_graphite_in(ui, p, icon, glyph, ink);
+    let x = glyph.right() + 10.0;
+    let bold = tahoma_bold();
+    let shown = ellipsize(p, &bold, title, (rc.right() - 12.0 - x).max(0.0));
+    text_at(p, bold, x, rc.top() + 23.0, &shown, c.text);
+    if sub.is_empty() {
+        return 0;
+    }
+    paragraph(p, x, rc.top() + 41.0, sub, c.text, rc.right() - 12.0, 17.0)
+}
+
+/// How tall a [`status_banner`] is whose `sub` takes `lines` lines (none: a title alone).
+#[allow(dead_code)] // ponytail: first used by the 07c-07e waves
+pub fn status_banner_height(lines: usize) -> f32 {
+    if lines == 0 {
+        37.0
+    } else {
+        37.0 + 17.0 * lines as f32 + 2.0
+    }
+}
+
 /// A push button in the current theme (dark: IDM's dark buttons; light: Windows 11's), its
 /// (translated) `label` with "&" before the access letter: the letter is underlined and
 /// Alt+letter presses it. Hot and pressed as Windows 11 draws them: a pressed button's label
@@ -3800,10 +4218,11 @@ fn button_face(
         _ => (label.to_owned(), None),
     };
     // An icon takes its side and a gap of the label's room; the pair is centred.
-    let icon_room = if icon.is_some() {
-        BUTTON_ICON + BUTTON_ICON_GAP
-    } else {
-        0.0
+    let icon_room = match icon {
+        // An icon alone ([`icon_only_button`]) is centred without a gap after it.
+        Some(_) if label.is_empty() => BUTTON_ICON,
+        Some(_) => BUTTON_ICON + BUTTON_ICON_GAP,
+        None => 0.0,
     };
     let label_room = Rect::from_min_max(pos2(rc.left() + icon_room, rc.top()), rc.max);
     // A translation wider than the button ends in "..." and shows whole on hover (UI rule).
@@ -4004,6 +4423,38 @@ fn button_colors_in(
             ..face
         };
     }
+    if kind == ButtonKind::Danger {
+        // `button.danger` filled, a shade lighter under the pointer and darker pressed.
+        let fill = match state {
+            State::Pressed => crate::derive::shade(c.button_danger, -0.12),
+            State::Hot => crate::derive::shade(c.button_danger, 0.08),
+            _ => c.button_danger,
+        };
+        return Face {
+            fill,
+            border: fill,
+            bottom: fill,
+            text: c.button_danger_text,
+        };
+    }
+    if kind == ButtonKind::Ghost {
+        // No face at rest: the window shows through; a normal button's face under the pointer.
+        let (fill, border) = match state {
+            State::Pressed => (c.button_pressed, c.button_border),
+            State::Hot => (c.button_hot, c.button_border),
+            _ => (Color32::TRANSPARENT, Color32::TRANSPARENT),
+        };
+        return Face {
+            fill,
+            border,
+            bottom: border,
+            text: match state {
+                State::Disabled => c.text_disabled,
+                State::Pressed => c.button_text_pressed,
+                _ => c.button_text,
+            },
+        };
+    }
     if kind == ButtonKind::Accent {
         // The accent filled, a shade lighter under the pointer and darker pressed.
         let (fill, text) = match state {
@@ -4026,10 +4477,12 @@ fn button_colors_in(
     // the default button outlined in the accent.
     let (border, bottom) = match kind {
         ButtonKind::Normal => (c.button_border, c.button_bottom),
-        ButtonKind::Default | ButtonKind::Accent => {
+        ButtonKind::Default | ButtonKind::Accent | ButtonKind::Danger => {
             (c.button_default_border, c.button_default_bottom)
         }
-        ButtonKind::Disabled => (c.button_disabled_border, c.button_disabled_border),
+        ButtonKind::Disabled | ButtonKind::Ghost => {
+            (c.button_disabled_border, c.button_disabled_border)
+        }
     };
     // KDE and Windows 7: the edge in the accent under the pointer and pressed (its face tinted,
     // by the theme's colours).
@@ -6533,6 +6986,98 @@ mod tests {
             }
         });
         out.textures_delta.clear();
+    }
+
+    #[test]
+    fn a_footer_puts_the_default_last_and_keeps_leading_ones_left() {
+        // Download complete: Open*, Open with..., Open folder, Close (the old Tab order).
+        let items = [
+            (60.0, Side::Trailing, true),
+            (90.0, Side::Leading, false),
+            (95.0, Side::Leading, false),
+            (64.0, Side::Trailing, false),
+        ];
+        let x = footer_slots(&items, 500.0);
+        assert_eq!(x[1], EDGE);
+        assert_eq!(x[2], EDGE + 90.0 + 8.0);
+        // Close, then Open at the right edge.
+        assert_eq!(x[0], 500.0 - EDGE - 60.0);
+        assert_eq!(x[3], x[0] - 8.0 - 64.0);
+        // Two trailing primaries keep their own order, after the others.
+        let items = [
+            (50.0, Side::Trailing, true),
+            (50.0, Side::Trailing, false),
+            (50.0, Side::Trailing, true),
+        ];
+        let x = footer_slots(&items, 300.0);
+        assert!(x[1] < x[0] && x[0] < x[2]);
+    }
+
+    #[test]
+    fn footer_keys_fire_only_the_marked_enabled_buttons() {
+        // OK (Enter), Cancel (Escape).
+        let ok_cancel = [(true, true, false), (true, false, true)];
+        assert_eq!(footer_key(&ok_cancel, true, false), Some(0));
+        assert_eq!(footer_key(&ok_cancel, false, true), Some(1));
+        assert_eq!(footer_key(&ok_cancel, false, false), None);
+        // A greyed OK ignores Enter; nothing else answers it.
+        let greyed = [(false, true, false), (true, false, true)];
+        assert_eq!(footer_key(&greyed, true, false), None);
+        // Nothing marked: the keys do nothing (the progress window's Enter).
+        let none = [(true, false, false), (true, false, false)];
+        assert_eq!(footer_key(&none, true, true), None);
+    }
+
+    #[test]
+    fn a_footer_answers_enter_and_escape_as_marked() {
+        let run = |key: egui::Key, ok_kind: ButtonKind| {
+            let ctx = egui::Context::default();
+            let mut defs = egui::FontDefinitions::default();
+            install_fonts(&mut defs, None);
+            ctx.set_fonts(defs);
+            let input = egui::RawInput {
+                events: vec![egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                ..Default::default()
+            };
+            let mut got = None;
+            let mut out = ctx.run_ui(input, |ui| {
+                let mut items = [
+                    FooterItem::Button(FooterButton::new("OK", ok_kind).enter(true)),
+                    FooterItem::Button(
+                        FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                    ),
+                    FooterItem::Button(FooterButton::new("Help", ButtonKind::Ghost).leading()),
+                ];
+                got = footer(ui, pos2(0.0, 0.0), 400.0, 100.0, &mut items);
+            });
+            out.textures_delta.clear();
+            got
+        };
+        assert_eq!(run(egui::Key::Enter, ButtonKind::Default), Some(0));
+        assert_eq!(run(egui::Key::Escape, ButtonKind::Default), Some(1));
+        assert_eq!(run(egui::Key::Enter, ButtonKind::Disabled), None);
+        assert_eq!(run(egui::Key::Space, ButtonKind::Default), None);
+    }
+
+    #[test]
+    fn a_form_puts_its_fields_after_the_label_column() {
+        with_painter(|p| {
+            assert_eq!(
+                form(p, 16.0, &["URL", "Save As"], false),
+                16.0 + 112.0 + 12.0
+            );
+            assert_eq!(form(p, 16.0, &["Add to queue:"], true), 16.0 + 240.0 + 12.0);
+            // A label longer than the column moves the fields, 12 after it.
+            let long = "A label much longer than the form's column";
+            let want = (16.0 + text_width(p, long) + 6.0).ceil() + 6.0;
+            assert_eq!(form(p, 16.0, &[long], false), want);
+        });
     }
 
     #[test]
