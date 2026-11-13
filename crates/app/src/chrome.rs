@@ -41,6 +41,10 @@ pub struct Layout {
     pub list_gap: f32,
     /// The menus are in the drawn title bar (Graphite's, `menu_h` 0), not in a row of their own.
     pub menus_in_caption: bool,
+    /// The paste bar under the toolbar: [`Layout::PASTE_H`] when shown, 0 when hidden (plan 06).
+    pub paste_h: f32,
+    /// The details pane at the trailing edge: its width when shown, 0 when hidden (plan 06).
+    pub details_w: f32,
 }
 
 impl Layout {
@@ -58,7 +62,17 @@ impl Layout {
         list_right: 0.0,
         list_gap: 0.0,
         menus_in_caption: true,
+        paste_h: 0.0,
+        details_w: 0.0,
     };
+
+    /// The paste bar's band, its bottom rule included (the mockup's `.paste`: 8 + 32 + 8).
+    pub const PASTE_H: f32 = 48.0;
+
+    /// The details pane's splitter grip: its first 4 points, inside its leading rule.
+    // The details pane (plan 06b) uses it; the allow goes then.
+    #[allow(dead_code)]
+    pub const DETAILS_GRIP: f32 = 4.0;
 
     /// The menu row under the system's title bar, its bottom line included (IDM's: non-client
     /// y -20..-1), when the title bar isn't ours.
@@ -78,6 +92,17 @@ impl Layout {
         }
     }
 
+    /// This frame's panes on top of `self` (plan 06): the paste bar's height when `paste`, the
+    /// details pane's width when given (0 for `None`); every other field as it is.
+    /// `with_panes(false, None)` is `self`.
+    pub fn with_panes(self, paste: bool, details_w: Option<f32>) -> Layout {
+        Layout {
+            paste_h: if paste { Layout::PASTE_H } else { 0.0 },
+            details_w: details_w.unwrap_or(0.0),
+            ..self
+        }
+    }
+
     /// The list's bottom edge (exclusive) in a client area `h` high.
     pub fn list_bottom(&self, h: f32) -> f32 {
         self.strip_top(h) - self.list_gap
@@ -88,9 +113,28 @@ impl Layout {
         self.menu_h
     }
 
-    /// Where the panes (Categories, the list) start, down from the client area's top.
+    /// The paste bar's top, down from the client area's: under the toolbar.
+    pub fn paste_top(&self) -> f32 {
+        self.toolbar_top() + self.toolbar_h
+    }
+
+    /// Where the panes (Categories, the list) start, down from the client area's top: under
+    /// the toolbar and the paste bar.
     pub fn panes_top(&self) -> f32 {
-        self.menu_h + self.toolbar_h
+        self.paste_top() + self.paste_h
+    }
+
+    /// The list's trailing edge in a client area `w` wide: before its margin and the details
+    /// pane.
+    pub fn list_end(&self, w: f32) -> f32 {
+        w - self.list_right - self.details_w
+    }
+
+    /// The details pane's leading edge in a client area `w` wide.
+    // The details pane (plan 06b) uses it; the allow goes then.
+    #[allow(dead_code)]
+    pub fn details_left(&self, w: f32) -> f32 {
+        w - self.details_w
     }
 
     /// The strip's top in a client area `h` high.
@@ -315,6 +359,107 @@ mod layout_tests {
         assert_eq!(s.panes_top(), 78.0);
         assert!(!s.menus_in_caption);
         assert_eq!(Layout::current(true).panes_top(), 58.0);
+    }
+
+    /// Plan 06: with the paste bar and the details pane both off, the layout is today's for
+    /// either title bar (panes at 58 under Graphite's, 78 under the system's).
+    #[test]
+    fn both_panes_off_is_todays_layout() {
+        for drawn in [true, false] {
+            let l = Layout::current(drawn).with_panes(false, None);
+            assert_eq!(l, Layout::current(drawn));
+            assert_eq!((l.paste_h, l.details_w), (0.0, 0.0));
+            assert_eq!(l.list_end(1240.0), 1240.0);
+        }
+        let (drawn, system) = (Layout::current(true), Layout::current(false));
+        assert_eq!(drawn.with_panes(false, None).panes_top(), 58.0);
+        assert_eq!(system.with_panes(false, None).panes_top(), 78.0);
+    }
+
+    /// The paste bar's 48 points go between the toolbar and the panes: its top is the
+    /// toolbar's bottom, the panes start under it (106 under Graphite's title bar, 126 under
+    /// the system's).
+    #[test]
+    fn the_paste_bar_moves_the_panes_down() {
+        let l = Layout::current(true).with_panes(true, None);
+        assert_eq!(l.paste_h, Layout::PASTE_H);
+        assert_eq!(l.paste_top(), 58.0);
+        assert_eq!(l.panes_top(), 106.0);
+        let s = Layout::current(false).with_panes(true, None);
+        assert_eq!(s.paste_top(), 78.0);
+        assert_eq!(s.panes_top(), 126.0);
+        // The paste bar leaves the list's trailing edge alone.
+        assert_eq!(l.list_end(1240.0), 1240.0);
+    }
+
+    /// The details pane's width comes off the list's trailing edge, after the list's margin;
+    /// the pane starts where the list ends when there is no margin.
+    #[test]
+    fn the_details_pane_ends_the_list_before_it() {
+        let l = Layout::current(true).with_panes(false, Some(276.0));
+        assert_eq!(l.details_w, 276.0);
+        assert_eq!(l.panes_top(), 58.0);
+        assert_eq!(l.list_end(1240.0), 964.0);
+        assert_eq!(l.details_left(1240.0), 964.0);
+        // A layout with a right margin: the margin and the pane both come off.
+        let m = Layout {
+            list_right: 2.0,
+            ..l
+        };
+        assert_eq!(m.list_end(1240.0), 962.0);
+        // Both on: the paste bar and the pane together.
+        let both = Layout::current(false).with_panes(true, Some(300.0));
+        assert_eq!((both.panes_top(), both.list_end(1000.0)), (126.0, 700.0));
+    }
+
+    // Feature: paste-bar-details-pane, Property 6: Layout neutrality.
+    // **Validates: Requirements 5.5**
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+        /// Both panes off is today's layout for either title bar, and `with_panes` changes no
+        /// field but the paste bar's height and the details pane's width.
+        #[test]
+        fn with_panes_changes_only_the_panes(
+            drawn in proptest::prelude::any::<bool>(),
+            paste in proptest::prelude::any::<bool>(),
+            details in proptest::option::of(0.0f32..=100_000.0),
+        ) {
+            let base = Layout::current(drawn);
+            proptest::prop_assert_eq!(base.with_panes(false, None), base);
+            let l = base.with_panes(paste, details);
+            proptest::prop_assert_eq!(
+                Layout {
+                    paste_h: base.paste_h,
+                    details_w: base.details_w,
+                    ..l
+                },
+                base
+            );
+        }
+    }
+
+    // Feature: paste-bar-details-pane, Property 7: Layout arithmetic.
+    // **Validates: Requirements 5.1, 5.2, 5.3, 5.4**
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+        /// The paste bar is 48 high when shown and 0 when hidden, right under the toolbar; the
+        /// panes start under both; the details pane's width comes off the list's trailing edge
+        /// after its margin.
+        #[test]
+        fn the_panes_add_up(
+            drawn in proptest::prelude::any::<bool>(),
+            paste in proptest::prelude::any::<bool>(),
+            d in 0.0f32..=100_000.0,
+            w in 0.0f32..=100_000.0,
+        ) {
+            let l = Layout::current(drawn).with_panes(paste, Some(d));
+            let paste_h = if paste { 48.0 } else { 0.0 };
+            proptest::prop_assert_eq!(l.paste_h, paste_h);
+            proptest::prop_assert_eq!(l.paste_top(), l.toolbar_top() + l.toolbar_h);
+            proptest::prop_assert_eq!(l.panes_top(), l.toolbar_top() + l.toolbar_h + paste_h);
+            proptest::prop_assert_eq!(l.details_w, d);
+            proptest::prop_assert_eq!(l.list_end(w), w - l.list_right - d);
+        }
     }
 }
 

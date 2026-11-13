@@ -6755,7 +6755,8 @@ impl App {
         let _surface = winui::Surface::enter(full.min.x, full.max.x);
         // Where every band and pane goes this frame (chrome::Layout).
         let drawn = self.sync_frame(ui);
-        let layout = chrome::Layout::current(drawn);
+        // The paste bar's band under the toolbar (plan 06); the details pane's width comes later.
+        let layout = chrome::Layout::current(drawn).with_panes(self.settings.show_paste_bar, None);
         let window_min = full.min;
         // Graphite's title bar keeps room after its title for the menus and Find (plan 05b).
         let find_key = chrome::key_label(Cmd::Find.hint().unwrap_or("Ctrl+F"));
@@ -7139,7 +7140,7 @@ impl App {
         // Its bottom edge is exclusive: IDM's frame's last row one under the pane frame's.
         let outer = egui::Rect::from_min_max(
             pos2(o.x + list_left, o.y + layout.panes_top()),
-            pos2(o.x + w - layout.list_right, o.y + layout.list_bottom(h)),
+            pos2(o.x + layout.list_end(w), o.y + layout.list_bottom(h)),
         );
         self.list.menu_open = self.popup.is_some() || self.open_menu.is_some();
         // Another node shows from its top (its rows aren't the last one's).
