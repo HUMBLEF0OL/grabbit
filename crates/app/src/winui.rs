@@ -2867,13 +2867,29 @@ pub fn button(
         }
         None => translated.to_owned(),
     };
-    button_face(ui, rc, &label, kind, focus_rect, None)
+    button_face(ui, rc, &label, kind, focus_rect, None, PressFocus::Take)
+}
+
+/// Whether a pointer press gives a [`button_face`] the keys.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PressFocus {
+    /// A dialog's button: a press gives it the keys, as every control in Windows
+    /// ([`focus_on_press`]).
+    Take,
+    /// A main-window button (the paste bar's Download, the details pane's): a press leaves the
+    /// keys where they were, and a pointer click gives up a focus Tab gave it, so the next
+    /// Enter or Space is the list's, not a second press of the button. A screen reader's Focus,
+    /// or egui's Tab order from another focused widget, still focuses it, and Enter, Space, its
+    /// access letter and a screen reader's Click still press it.
+    Leave,
 }
 
 /// A push button with a 16-point Graphite icon (its `need`, as `gx-download`) before its
 /// (translated) `label`, the pair centred: the paste bar's Download, the details pane's buttons.
-/// [`button`]'s face, focus, Enter, access letter, hover text and accessibility; the icon in the
-/// label's colour (white on the accent).
+/// [`button`]'s face, Enter, access letter, hover text and accessibility; the icon in the
+/// label's colour (white on the accent). A main-window button: a pointer click leaves no
+/// widget focused ([`PressFocus::Leave`]), so the list's keys, Delete, Ctrl+V and the Tab
+/// rotation work right after it.
 pub fn icon_label_button(
     ui: &mut Ui,
     rc: Rect,
@@ -2883,7 +2899,15 @@ pub fn icon_label_button(
 ) -> Response {
     // Its focus ring shows while it has the keys only: in the main window no button is a
     // dialog's default whose ring shows while nothing has them.
-    button_face(ui, rc, crate::i18n::t(label), kind, false, Some(need))
+    button_face(
+        ui,
+        rc,
+        crate::i18n::t(label),
+        kind,
+        false,
+        Some(need),
+        PressFocus::Leave,
+    )
 }
 
 /// An [`icon_label_button`]'s icon: its side, and the room between it and the label.
@@ -3672,7 +3696,15 @@ pub fn button_light(
     kind: ButtonKind,
     focus_rect: bool,
 ) -> Response {
-    button_face(ui, rc, crate::i18n::t(label), kind, focus_rect, None)
+    button_face(
+        ui,
+        rc,
+        crate::i18n::t(label),
+        kind,
+        focus_rect,
+        None,
+        PressFocus::Take,
+    )
 }
 
 /// How wide a light button must be for its (translated) `label`: at least `min` (Windows'
@@ -3713,6 +3745,7 @@ pub fn buttons_light_right(
 /// dims and its darker bottom edge flattens. `default_focus`: the dialog's default button, whose
 /// focus rectangle shows while no other control has the keyboard focus; any control with the
 /// focus shows it. `icon`: Graphite's icon for that need before the label ([`icon_label_button`]).
+/// `press`: whether a pointer press gives it the keys ([`PressFocus`]).
 fn button_face(
     ui: &mut Ui,
     rc: Rect,
@@ -3720,6 +3753,7 @@ fn button_face(
     kind: ButtonKind,
     default_focus: bool,
     icon: Option<&str>,
+    press: PressFocus,
 ) -> Response {
     let enabled = kind != ButtonKind::Disabled;
     let sense = if enabled {
@@ -3741,7 +3775,16 @@ fn button_face(
         enabled,
         None,
     );
-    focus_on_press(&resp);
+    match press {
+        PressFocus::Take => focus_on_press(&resp),
+        // A pointer's click (not Enter, Space or a screen reader's, egui's fake click) gives
+        // up a focus Tab gave it.
+        PressFocus::Leave => {
+            if resp.flags.contains(egui::response::Flags::CLICKED) && resp.has_focus() {
+                resp.surrender_focus();
+            }
+        }
+    }
     // A focused button answers Enter itself (egui clicks it): the dialog's default button,
     // read after it, doesn't run as well.
     if resp.has_focus() {
@@ -7030,6 +7073,73 @@ mod tests {
         assert_eq!(buttons[0].1, label);
         let (_, clicked) = frame(vec![ask(buttons[0].0, Action::Click)]);
         assert!(clicked, "AccessKit's click presses it");
+    }
+
+    /// A pointer click on a main-window button ([`icon_label_button`]) leaves no widget
+    /// focused, also when Tab had focused it, while Enter still presses it when it has the
+    /// keys; a dialog's [`button`] takes the keys on a press, as before.
+    #[test]
+    fn a_click_leaves_a_main_window_button_unfocused_and_a_dialog_button_focused() {
+        let ctx = egui::Context::default();
+        let rc = Rect::from_min_size(pos2(10.0, 10.0), egui::vec2(120.0, 32.0));
+        let at = rc.center();
+        // From a variable: the catalog's extractor takes literal labels as texts to translate.
+        let label = "Download";
+        let frame = |dialog: bool, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(300.0, 100.0))),
+                events,
+                ..Default::default()
+            };
+            let mut got = (egui::Id::NULL, false);
+            let mut out = ctx.run_ui(input, |ui| {
+                let r = if dialog {
+                    button(ui, rc, label, ButtonKind::Normal, false, None)
+                } else {
+                    icon_label_button(ui, rc, "gx-download", label, ButtonKind::Accent)
+                };
+                got = (r.id, r.clicked());
+            });
+            out.textures_delta.clear();
+            got
+        };
+        let pointer = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let click = |dialog| {
+            frame(dialog, vec![egui::Event::PointerMoved(at)]);
+            frame(dialog, vec![pointer(true)]);
+            frame(dialog, vec![pointer(false)])
+        };
+        let focused = || ctx.memory(|m| m.focused());
+        let (id, clicked) = click(false);
+        assert!(clicked);
+        assert_eq!(focused(), None, "a main-window button: nothing focused");
+        ctx.memory_mut(|m| m.request_focus(id));
+        frame(false, vec![]);
+        assert!(click(false).1);
+        assert_eq!(focused(), None, "a focus Tab gave goes on a click");
+        ctx.memory_mut(|m| m.request_focus(id));
+        frame(false, vec![]);
+        let enter = egui::Event::Key {
+            key: egui::Key::Enter,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        assert!(
+            frame(false, vec![enter]).1,
+            "Enter presses it with the keys"
+        );
+        assert_eq!(focused(), Some(id), "and it keeps them");
+        ctx.memory_mut(|m| m.surrender_focus(id));
+        let (id, clicked) = click(true);
+        assert!(clicked);
+        assert_eq!(focused(), Some(id), "a dialog's button takes the keys");
     }
 
     #[test]

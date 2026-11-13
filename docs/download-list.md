@@ -115,13 +115,13 @@ The right-click menu has everything you can do with a download: **Open**, **Open
 
 **View → Details pane**, or **Details** at the end of the toolbar, shows a pane beside the list with the selected download. The same again hides it. It is off at first.
 
-The pane shows the download's icon and name, how far it is, and 8 cells that fill as each eighth of the file comes in. While it runs, the cells say how many connections it has (a video or a torrent shows none). Below them come **Status**, **Transfer rate** and **Time left** (while it runs), **Resume capability**, **Save to**, **Address** (never with its password), **Queue** and **Last Try Date**, each when it has a value. The figures change as the download runs.
+The pane shows the download's icon and name, how far it is, and 8 cells that fill as each eighth of the file comes in. While it runs, and after it stopped in this session, the cells say how many connections it has (a video or a torrent shows none). When its size is known, they also say how much of it has come, for example 57.96 MB of 92.00 MB. Below them come **Status**, **Transfer rate** and **Time left** (while it runs), **Resume capability**, **Save to**, **Address** (never with its password), **Queue** and **Last Try Date**, each when it has a value. The figures change as the download runs.
 
 Its buttons are **Resume** or **Stop**, **Open folder** and **Show progress window** (greyed for a finished download).
 
 With nothing selected the pane says **Select a download to see its details**; with several, how many they are and their total size.
 
-Drag the pane's edge by the list to make it wider or narrower. It keeps the list at least 200 points wide, and MDM remembers the width. The list keeps all its columns and scrolls sideways when they don't fit.
+Drag the pane's edge by the list to make it wider or narrower. It is never wider than half the window, keeps the list at least 200 points wide when the window has room, and MDM remembers the width. The list keeps all its columns and scrolls sideways when they don't fit.
 
 ## Verify checksum
 

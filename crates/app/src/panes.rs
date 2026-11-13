@@ -36,10 +36,6 @@ pub struct PasteBar {
     /// A menu or a popup menu of the main window is open (set each frame, as the list's): its
     /// keys (Enter, Escape, the arrows) are the menu's, not the field's.
     pub menu_open: bool,
-    /// The list's filter box is open (set each frame): Tab moves among its controls in egui's
-    /// order, as before the paste bar, so a focus that order hands the field or the Download
-    /// button goes on to the box.
-    pub filter_open: bool,
 }
 
 /// What the paste bar reports in a frame.
@@ -161,28 +157,21 @@ pub fn paste_bar(
         pos2(o.x + SIDE, y),
         vec2(g.field, FIELD_H),
     ));
-    let field = winui::icon_combo_edit(
-        ui,
-        field_rc,
-        &mut st.text,
-        id,
-        "gx-link",
-        // i18n: the paste bar's address field while it is empty
-        crate::i18n::t("Paste an address or a magnet link"),
-    );
-    // Unasked, the field's focus came from Tab forward (the box's last control, or nothing
-    // focused): it goes on to the button and on.
-    let passed = st.filter_open && !asked && pass_tab_focus(ui, &field, true);
+    // i18n: the paste bar's address field while it is empty
+    let placeholder = crate::i18n::t("Paste an address or a magnet link");
+    let field = winui::icon_combo_edit(ui, field_rc, &mut st.text, id, "gx-link", placeholder);
     // An error about the address goes once it is edited.
     if field.changed() {
         st.edited();
     }
-    // Named for screen readers; the error, while shown, is its description.
+    // Named for screen readers, with its placeholder; the error, while shown, is its
+    // description.
     // i18n: noun: the web address (URL); the paste bar's field, to screen readers
     let name = crate::i18n::t("Address");
     let error = st.error.clone();
     ui.ctx().accesskit_node_builder(id, |node| {
         node.set_label(name);
+        node.set_placeholder(placeholder);
         if let Some(e) = error {
             node.set_description(e);
         }
@@ -195,40 +184,12 @@ pub fn paste_bar(
     // At the band's end, never over the field (a window narrower than the narrowest parts).
     let left = (o.x + w - SIDE - g.button).max(o.x + SIDE + g.field + GAP);
     let button_rc = winui::rect(Rect::from_min_size(pos2(left, y), vec2(g.button, FIELD_H)));
+    // A click leaves no widget focused (a main-window button), so Enter after it is not a
+    // second submit; a screen reader's Focus, or egui's order from another focused widget,
+    // still reaches it. From the keyboard, Enter in the field submits as it does.
     let download =
         winui::icon_label_button(ui, button_rc, "gx-download", label, ButtonKind::Accent);
-    // The button's, from the field (forward) or from Shift+Tab before the box's first control.
-    if st.filter_open {
-        pass_tab_focus(ui, &download, passed);
-    }
     event.or(download.clicked().then_some(PasteEvent::Submit))
-}
-
-/// While the list's filter box is open, a focus egui's own Tab order gave `resp` this frame (no
-/// pointer press or release, no screen reader's request) is given back, and `forward` the next
-/// control takes it: Tab past the box's last control comes back to its first, as before the
-/// paste bar. Shift+Tab before the box's first control leaves nothing focused (the "contains"
-/// box then focuses its text box itself; a Shift+Tab more reaches the box's last control).
-/// Whether the focus was given back.
-fn pass_tab_focus(ui: &Ui, resp: &egui::Response, forward: bool) -> bool {
-    if !resp.gained_focus() {
-        return false;
-    }
-    let other = ui.input(|i| {
-        i.pointer.any_down()
-            || i.pointer.any_released()
-            || i.events
-                .iter()
-                .any(|e| matches!(e, egui::Event::AccessKitActionRequest(_)))
-    });
-    if other {
-        return false;
-    }
-    resp.surrender_focus();
-    if forward {
-        ui.memory_mut(|m| m.move_focus(egui::FocusDirection::Next));
-    }
-    true
 }
 
 /// One of the main window's Tab stops (Tab_Stop).
@@ -280,6 +241,9 @@ pub struct TabState {
     pub menu_open: bool,
     /// The list's filter box is open.
     pub filter_open: bool,
+    /// The open filter box's first and last controls, from its last frame drawn
+    /// (`ListState::filter_ends`): Tab goes round between them.
+    pub filter_ends: Option<(egui::Id, egui::Id)>,
 }
 
 /// The stop that has the keys now: the paste field when it has egui's focus (the bar shown),
@@ -295,39 +259,51 @@ pub fn current_stop(ctx: &egui::Context, s: &TabState) -> Stop {
 }
 
 /// Tab and Shift+Tab in the main window, before any of its widgets is laid out: the stop Tab
-/// moved the keys to from `from` ([`current_stop`]). Moving to the paste field asks it to take the focus (`focus_next`);
-/// moving to the tree or the list takes the focus from it. The caller gives the tree or the
-/// list the keys.
+/// moved the keys to from `from` ([`current_stop`]). Moving to the paste field asks it to take
+/// the focus (`focus_next`); moving to the tree or the list takes the focus from it. The caller
+/// gives the tree or the list the keys.
 ///
+/// - The list's filter box is open (no menu): Tab goes round its controls as before the paste
+///   bar and the details pane ([`filter_box_tab`]); no stop moves.
 /// - Another widget has egui's focus (a filter box's control, the Download button from a
 ///   screen reader): Tab is egui's, as before the paste bar.
-/// - A menu, a popup menu or the history list is open, or the filter box is (the bar shown):
-///   no move. With nothing focused and the bar shown, egui's own move is cancelled under a
-///   menu, so the field does not take the focus behind it; under the filter box egui moves
-///   among the box's controls (`PasteBar::filter_open` passes the field's turn on).
-/// - Only the list is shown: nothing (Tab is left as it was before the paste bar).
-/// - Else Tab and Shift+Tab are consumed and, the bar shown, egui's own move is cancelled: with
-///   nothing focused it would give the first focusable widget (the field) the focus. The bar
-///   hidden, this is the tree ↔ list toggle of before, egui's move untouched.
+/// - A menu, a popup menu or the history list is open: no move. With nothing focused, egui's
+///   own move is cancelled, so the field (or a details pane button) does not take the focus
+///   behind it.
+/// - Only the list is shown: no move, and Tab is not consumed. With nothing focused, egui's own
+///   move is cancelled, so a details pane button (or the empty list's link) does not take the
+///   focus.
+/// - Else Tab and Shift+Tab are consumed and egui's own move is cancelled: with nothing focused
+///   it would give the first focusable widget (the field, or the details pane's first button)
+///   the focus. The bar hidden, this is the tree ↔ list toggle of before.
 pub fn tab_keys(ctx: &egui::Context, st: &mut PasteBar, s: TabState, from: Stop) -> Option<Stop> {
     let field = paste_field_id();
     let focused = ctx.memory(|m| m.focused());
+    let cancel = || ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
+    if s.filter_open && !s.menu_open && !st.list_open && filter_box_tab(ctx, s, focused) {
+        cancel();
+        return None;
+    }
     if focused.is_some_and(|id| id != field) {
         return None;
     }
-    let cancel = || ctx.memory_mut(|m| m.move_focus(egui::FocusDirection::None));
     if s.menu_open || st.list_open {
-        if s.paste && focused.is_none() {
+        if focused.is_none() {
             cancel();
         }
         return None;
     }
-    if s.paste && s.filter_open {
+    if s.filter_open {
         return None;
     }
     // Every stop is reached both ways round: none forward is none at all, and Tab stays in the
-    // input as before.
-    next_stop(from, false, s.paste, s.tree)?;
+    // input as before. With nothing focused, egui's own move is cancelled all the same.
+    if next_stop(from, false, s.paste, s.tree).is_none() {
+        if focused.is_none() {
+            cancel();
+        }
+        return None;
+    }
     let (tab, back) = ctx.input_mut(|i| {
         // Shift+Tab first: Tab's pattern (no modifiers) matches Shift+Tab too.
         let back = i.consume_key(egui::Modifiers::SHIFT, egui::Key::Tab);
@@ -337,15 +313,58 @@ pub fn tab_keys(ctx: &egui::Context, st: &mut PasteBar, s: TabState, from: Stop)
     if !tab {
         return None;
     }
-    if s.paste {
-        cancel();
-    }
+    cancel();
     let to = next_stop(from, back, s.paste, s.tree)?;
     match to {
         Stop::Paste => st.focus_next = true,
         Stop::Tree | Stop::List => st.leave(ctx),
     }
     Some(to)
+}
+
+/// Tab at an end of the list's open filter box (`s.filter_ends`): Tab on its last control gives
+/// its first the focus, Shift+Tab on its first gives its last; with nothing (or the paste
+/// field) focused, Tab enters the box at its first control and Shift+Tab at its last. Between
+/// its controls egui's own order moves the focus, which stays in the box. Without this, egui's
+/// order runs on to the controls drawn before or after the box (the paste bar's, the details
+/// pane's buttons). The key is consumed and the focus given; the caller cancels egui's own
+/// move. Whether it did so.
+fn filter_box_tab(ctx: &egui::Context, s: TabState, focused: Option<egui::Id>) -> bool {
+    let Some((first, last)) = s.filter_ends else {
+        return false;
+    };
+    let outside = focused.is_none_or(|id| id == paste_field_id());
+    // The key's own modifiers, as egui reads them for its focus move.
+    let tab = ctx.input(|i| {
+        i.events.iter().find_map(|e| match e {
+            egui::Event::Key {
+                key: egui::Key::Tab,
+                pressed: true,
+                modifiers,
+                ..
+            } => Some(*modifiers),
+            _ => None,
+        })
+    });
+    let fwd = tab.is_some_and(|m| m.is_none());
+    let back = tab.is_some_and(|m| m.shift_only());
+    let to = if fwd && (outside || focused == Some(last)) {
+        first
+    } else if back && (outside || focused == Some(first)) {
+        last
+    } else {
+        return false;
+    };
+    ctx.input_mut(|i| {
+        let mods = if back {
+            egui::Modifiers::SHIFT
+        } else {
+            egui::Modifiers::NONE
+        };
+        i.consume_key(mods, egui::Key::Tab)
+    });
+    ctx.memory_mut(|m| m.request_focus(to));
+    true
 }
 
 /// The address field's arrow, keys and history drop list (AddUrl's address box, C8): what they
@@ -685,14 +704,17 @@ pub fn status_word(status: Status) -> &'static str {
 
 /// The status line under the file's name (D8): its state in a word, then ", {percent}" while
 /// the share that has come is known (`fraction`, as the list's Status column reads it) and the
-/// download is not complete: "Stopped, 63.00%".
+/// download is not complete: "Stopped, 63.00%", the percent as left-to-right data.
 pub fn status_line(status: Status, fraction: Option<f64>) -> String {
     let word = status_word(status);
     match fraction {
         Some(f) if status != Status::Complete => crate::i18n::fmt(
             // i18n: the details pane, under the file's name: {status} is the download's state ("Stopped", "Downloading"), {percent} how much has come ("63.00%")
             crate::i18n::t("{status}, {percent}"),
-            &[("status", word), ("percent", &model::percent(f))],
+            &[
+                ("status", word),
+                ("percent", &crate::i18n::ltr(&model::percent(f))),
+            ],
         ),
         _ => word.to_owned(),
     }
@@ -725,15 +747,15 @@ pub fn connections_label(running: bool, snap: Option<&mdm_engine::Snapshot>) -> 
 }
 
 /// The segment cells' bytes label (Requirement 13.7): "57.96 MB of 92.00 MB" in the list's size
-/// format, whenever the size is known.
+/// format (each size as left-to-right data), whenever the size is known.
 pub fn bytes_label(downloaded: u64, size: Option<u64>) -> Option<String> {
     let total = size?;
     Some(crate::i18n::fmt(
         // i18n: the details pane, over the segment cells: {done} is how much has come of the whole {total}, e.g. "57.96 MB of 92.00 MB"
         crate::i18n::t("{done} of {total}"),
         &[
-            ("done", &model::size(downloaded)),
-            ("total", &model::size(total)),
+            ("done", &crate::i18n::ltr(&model::size(downloaded))),
+            ("total", &crate::i18n::ltr(&model::size(total))),
         ],
     ))
 }
@@ -1063,23 +1085,23 @@ pub fn details_pane(
     let mut y = top + PANE_ICON.max(name_h + 2.0 + 15.0) + PANE_PAD;
 
     // The segment cells under their label row: the connections at its start, the bytes at
-    // its end.
+    // its end, read in that order (the connections' room is what the bytes leave).
     if one.connections.is_some() || one.bytes.is_some() {
-        if let Some(bytes) = &one.bytes {
-            let w = winui::text_width_font(&bp, small.clone(), bytes).ceil();
-            winui::text_font(&bp, small.clone(), r - w, y + 12.0, bytes, c.muted);
-            let at = Rect::from_min_size(pos2(r - w, y), vec2(w, 15.0));
-            pane_text(&body, at, ("bytes", id), bytes, false);
-        }
+        let bytes_w = one
+            .bytes
+            .as_ref()
+            .map(|b| winui::text_width_font(&bp, small.clone(), b).ceil());
         if let Some(conns) = &one.connections {
-            let bytes_w = one.bytes.as_ref().map_or(0.0, |b| {
-                winui::text_width_font(&bp, small.clone(), b).ceil() + 8.0
-            });
-            let room = (r - l - bytes_w).max(0.0);
+            let room = (r - l - bytes_w.map_or(0.0, |w| w + 8.0)).max(0.0);
             let shown = winui::ellipsize(&bp, &small, conns, room);
             winui::text_font(&bp, small.clone(), l, y + 12.0, &shown, c.muted);
             let at = Rect::from_min_size(pos2(l, y), vec2(room, 15.0));
             pane_text(&body, at, ("connections", id), conns, shown != *conns);
+        }
+        if let (Some(bytes), Some(w)) = (&one.bytes, bytes_w) {
+            winui::text_font(&bp, small.clone(), r - w, y + 12.0, bytes, c.muted);
+            let at = Rect::from_min_size(pos2(r - w, y), vec2(w, 15.0));
+            pane_text(&body, at, ("bytes", id), bytes, false);
         }
         y += 15.0 + 6.0;
     }
@@ -1339,7 +1361,51 @@ mod tests {
         .to_vec()
     }
 
-    /// Enter in the field, its list closed, submits the text; the field keeps the keys.
+    /// A pointer click on Download with an address Add URL accepts (06 audit): it submits and
+    /// leaves no widget focused, the field emptied as `App::paint` empties it (`submit`, then
+    /// `leave`, the list taking the keys), so the Enter after it is not a second, empty submit.
+    #[test]
+    fn a_click_on_download_leaves_no_focus_and_enter_does_not_submit_again() {
+        let _fonts = crate::theme::font_tests();
+        let mut bar = PasteBar {
+            text: "https://example.org/a.zip".into(),
+            ..Default::default()
+        };
+        let ctx = focused(&mut bar, &[]);
+        let (nodes, _) = band(&ctx, &mut bar, vec![]);
+        let at = nodes
+            .values()
+            .find(|n| n.role() == egui::accesskit::Role::Button && n.label() == Some("Download"))
+            .and_then(|n| n.bounds())
+            .map(|b| pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32))
+            .expect("the Download button");
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let mut event = None;
+        for events in [
+            vec![egui::Event::PointerMoved(at)],
+            vec![button(true)],
+            vec![button(false)],
+        ] {
+            event = event.or(band(&ctx, &mut bar, events).1);
+        }
+        assert_eq!(event, Some(PasteEvent::Submit));
+        assert_eq!(ctx.memory(|m| m.focused()), None, "no widget focused");
+        let accepted = crate::dialogs::accept_address(&bar.text);
+        assert!(submit(&mut bar, accepted).is_some());
+        bar.leave(&ctx);
+        band(&ctx, &mut bar, vec![]);
+        let (_, event) = band(&ctx, &mut bar, vec![press(egui::Key::Enter)]);
+        assert_eq!(event, None, "Enter after the click");
+        assert_eq!(ctx.memory(|m| m.focused()), None);
+    }
+
+    /// Enter in the field, its list closed, submits the text; the field keeps the keys (an
+    /// accepted address then gives them to the list: `App::paint`).
     #[test]
     fn enter_in_the_field_submits() {
         let _fonts = crate::theme::font_tests();
@@ -1766,8 +1832,12 @@ mod tests {
     struct Window {
         bar: PasteBar,
         s: TabState,
-        /// A control of an open filter box (drawn after the band, as the list's is).
+        /// The open filter box's text box (drawn after the band, as the list's is).
         filter: String,
+        /// Its Close button's id, as drawn.
+        close: Option<egui::Id>,
+        /// A button drawn after the list, as the details pane's are.
+        after: Option<egui::Id>,
     }
 
     fn filter_id() -> egui::Id {
@@ -1776,7 +1846,8 @@ mod tests {
 
     /// One frame of the window: the Tab rotation before any widget (when `rotate`, as
     /// `App::tab_keys` gives the tree or the list the keys), the band while shown, then the
-    /// filter box's control while open. Where Tab moved the keys.
+    /// filter box's text box and Close while open (their ids kept as the list keeps them), then
+    /// a button as the details pane's. Where Tab moved the keys.
     fn window(
         ctx: &egui::Context,
         win: &mut Window,
@@ -1789,6 +1860,8 @@ mod tests {
             ..Default::default()
         };
         let layout = Layout::GRAPHITE.with_panes(true, None);
+        // Labels from variables: the catalog's extractor takes literal ones as texts to translate.
+        let (close_label, open_label) = ("Close", "Open");
         let mut to = None;
         let mut out = ctx.run_ui(input, |ui| {
             if rotate {
@@ -1801,12 +1874,19 @@ mod tests {
                 }
             }
             if win.s.paste {
-                win.bar.filter_open = win.s.filter_open;
                 paste_bar(ui, &layout, Pos2::ZERO, 1240.0, &mut win.bar, &[]);
             }
             if win.s.filter_open {
                 ui.add(egui::TextEdit::singleline(&mut win.filter).id(filter_id()));
+                let rc = Rect::from_min_size(pos2(300.0, 200.0), vec2(80.0, 21.0));
+                let close = winui::button(ui, rc, close_label, ButtonKind::Default, false, None);
+                win.close = Some(close.id);
+                win.s.filter_ends = Some((filter_id(), close.id));
             }
+            let rc = Rect::from_min_size(pos2(1000.0, 600.0), vec2(120.0, 32.0));
+            let after =
+                winui::icon_label_button(ui, rc, "gx-window", open_label, ButtonKind::Normal);
+            win.after = Some(after.id);
         });
         out.textures_delta.clear();
         to
@@ -1869,7 +1949,8 @@ mod tests {
     }
 
     /// The paste bar hidden, Tab toggles the tree and the list as before it; with the
-    /// Categories pane hidden too, Tab is left alone.
+    /// Categories pane hidden too, Tab is not consumed and gives egui's focus to no widget (not
+    /// the details pane's button drawn after the list); under an open menu, no move either.
     #[test]
     fn with_the_bar_hidden_tab_toggles_the_tree_and_the_list() {
         let ctx = egui::Context::default();
@@ -1886,12 +1967,16 @@ mod tests {
         assert_eq!(window(&ctx, &mut win, tab(), true), Some(Stop::Tree));
         let shift_tab = vec![key(egui::Key::Tab, egui::Modifiers::SHIFT)];
         assert_eq!(window(&ctx, &mut win, shift_tab, true), Some(Stop::List));
+        let focused = |ctx: &egui::Context| ctx.memory(|m| m.focused());
         win.s.tree = false;
         assert_eq!(window(&ctx, &mut win, tab(), true), None);
         assert!(
             ctx.input(|i| i.key_pressed(egui::Key::Tab)),
             "left as it was"
         );
+        window(&ctx, &mut win, vec![], true);
+        assert!(win.after.is_some(), "the pane's button drawn");
+        assert_eq!(focused(&ctx), None, "only the list: no widget focused");
         // A menu open: no move either.
         win.s = TabState {
             tree: true,
@@ -1899,40 +1984,77 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(window(&ctx, &mut win, tab(), true), None);
+        window(&ctx, &mut win, vec![], true);
+        assert_eq!(focused(&ctx), None, "a menu open: no widget focused");
     }
 
-    /// An open filter box keeps Tab among its controls: Tab past its last control (or with
-    /// nothing focused) reaches its first again, never the paste field or the button.
+    /// An open filter box keeps Tab among its controls, both ways round, with the paste bar
+    /// shown or not and a details pane button drawn after the box: Tab past its last control
+    /// (Close) reaches its first again, Shift+Tab before its first reaches Close (as on `dev`),
+    /// and with nothing focused Tab enters it at its first control and Shift+Tab at Close. No
+    /// stop moves, and neither the paste field, the Download button nor the pane's button
+    /// takes the focus.
     #[test]
     fn tab_in_an_open_filter_box_stays_in_the_box() {
         let _fonts = crate::theme::font_tests();
-        let ctx = egui::Context::default();
-        let mut win = Window {
-            s: TabState {
-                paste: true,
-                tree: true,
-                filter_open: true,
+        for paste in [true, false] {
+            let ctx = egui::Context::default();
+            let mut win = Window {
+                s: TabState {
+                    paste,
+                    tree: true,
+                    filter_open: true,
+                    ..Default::default()
+                },
                 ..Default::default()
-            },
-            ..Default::default()
-        };
-        let in_box = |ctx: &egui::Context| ctx.memory(|m| m.has_focus(filter_id()));
-        window(&ctx, &mut win, vec![], true);
-        ctx.memory_mut(|m| m.request_focus(filter_id()));
-        window(&ctx, &mut win, vec![], true);
-        assert!(in_box(&ctx));
-        assert_eq!(
-            window(&ctx, &mut win, vec![press(egui::Key::Tab)], true),
-            None
-        );
-        window(&ctx, &mut win, vec![], true);
-        assert!(in_box(&ctx), "past the last control, back to the first");
-        assert!(!field_focused(&ctx));
-        ctx.memory_mut(|m| m.surrender_focus(filter_id()));
-        window(&ctx, &mut win, vec![], true);
-        window(&ctx, &mut win, vec![press(egui::Key::Tab)], true);
-        assert!(in_box(&ctx), "nothing focused: the box's first control");
-        assert!(!field_focused(&ctx));
+            };
+            let focused = |ctx: &egui::Context| ctx.memory(|m| m.focused());
+            // A key, then a frame without one: egui's Shift+Tab lands a frame later.
+            let step = |ctx: &egui::Context, win: &mut Window, back: bool| {
+                let mods = if back {
+                    egui::Modifiers::SHIFT
+                } else {
+                    egui::Modifiers::NONE
+                };
+                let to = window(ctx, win, vec![key(egui::Key::Tab, mods)], true);
+                window(ctx, win, vec![], true);
+                assert_eq!(to, None, "no stop moves (paste bar shown: {paste})");
+            };
+            window(&ctx, &mut win, vec![], true);
+            let close = win.close.expect("Close drawn");
+            ctx.memory_mut(|m| m.request_focus(filter_id()));
+            window(&ctx, &mut win, vec![], true);
+            assert_eq!(focused(&ctx), Some(filter_id()));
+            step(&ctx, &mut win, false);
+            assert_eq!(focused(&ctx), Some(close), "Tab: the next control");
+            step(&ctx, &mut win, false);
+            assert_eq!(
+                focused(&ctx),
+                Some(filter_id()),
+                "Tab past Close: the first control, not the pane's button"
+            );
+            step(&ctx, &mut win, true);
+            assert_eq!(
+                focused(&ctx),
+                Some(close),
+                "Shift+Tab before the first control: Close"
+            );
+            step(&ctx, &mut win, true);
+            assert_eq!(
+                focused(&ctx),
+                Some(filter_id()),
+                "Shift+Tab: the one before"
+            );
+            for (back, want) in [(false, filter_id()), (true, close)] {
+                let held = focused(&ctx).unwrap();
+                ctx.memory_mut(|m| m.surrender_focus(held));
+                window(&ctx, &mut win, vec![], true);
+                step(&ctx, &mut win, back);
+                assert_eq!(focused(&ctx), Some(want), "nothing focused, back: {back}");
+            }
+            assert_ne!(focused(&ctx), win.after);
+            assert!(!field_focused(&ctx));
+        }
     }
 
     // Feature: paste-bar-details-pane, Property 5: Field state.
@@ -2352,6 +2474,8 @@ mod details_tests {
         it
     }
 
+    /// The percent goes in as left-to-right data (CLAUDE.md rule 2); `i18n::fmt` keeps an
+    /// isolate only in a sentence with right-to-left text, so the English line is plain.
     #[test]
     fn status_line_table() {
         let cases = [
@@ -2726,21 +2850,62 @@ mod details_tests {
     /// over `frames`, one frame for each event list.
     fn pane(view: &DetailsView, frames: Vec<Vec<egui::Event>>) -> Option<DetailsAction> {
         let ctx = egui::Context::default();
+        frames.into_iter().fold(None, |action, events| {
+            action.or(pane_frame(&ctx, view, events))
+        })
+    }
+
+    /// One frame of the pane on `ctx`, as [`pane`] draws it: what it returned.
+    fn pane_frame(
+        ctx: &egui::Context,
+        view: &DetailsView,
+        events: Vec<egui::Event>,
+    ) -> Option<DetailsAction> {
         let rc = Rect::from_min_size(pos2(964.0, 58.0), vec2(276.0, 600.0));
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1240.0, 700.0))),
+            events,
+            ..Default::default()
+        };
         let mut action = None;
-        for events in frames {
-            let input = egui::RawInput {
-                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1240.0, 700.0))),
-                events,
-                ..Default::default()
-            };
-            let mut out = ctx.run_ui(input, |ui| {
-                let mut icons = crate::chrome::ShellIcons;
-                action = action.or(details_pane(ui, rc, view, &mut icons));
-            });
-            out.textures_delta.clear();
-        }
+        let mut out = ctx.run_ui(input, |ui| {
+            let mut icons = crate::chrome::ShellIcons;
+            action = details_pane(ui, rc, view, &mut icons);
+        });
+        out.textures_delta.clear();
         action
+    }
+
+    /// A pointer click on Stop (06 audit): it asks for Stop and leaves no widget focused, so
+    /// once the download has stopped and Resume is in Stop's place (the same button to egui),
+    /// Enter does not press Resume: it is the list's.
+    #[test]
+    fn a_click_on_stop_leaves_no_focus_and_enter_does_not_resume() {
+        let _fonts = crate::theme::font_tests();
+        let mut it = item("https://example.org/a.zip", Status::Downloading);
+        it.size = Some(92 * MB);
+        it.downloaded = 58 * MB;
+        let running = DetailsView::One(Box::new(one_download(&it, Some(1e6), None)));
+        it.status = Status::Stopped;
+        let stopped = one_download(&it, None, None);
+        assert_eq!(stopped.primary, Some(Primary::Resume));
+        let stopped = DetailsView::One(Box::new(stopped));
+        let ctx = egui::Context::default();
+        let action = click_primary()
+            .into_iter()
+            .fold(None, |a, events| a.or(pane_frame(&ctx, &running, events)));
+        assert_eq!(action, Some(DetailsAction::Stop));
+        assert_eq!(ctx.memory(|m| m.focused()), None, "no widget focused");
+        pane_frame(&ctx, &stopped, vec![]);
+        let enter = egui::Event::Key {
+            key: egui::Key::Enter,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        assert_eq!(pane_frame(&ctx, &stopped, vec![enter]), None, "Enter");
+        assert_eq!(ctx.memory(|m| m.focused()), None);
     }
 
     /// A pointer click on the pane's primary button: over it, pressed, released.
@@ -2873,10 +3038,11 @@ mod details_tests {
     }
 
     /// One stopped download (Requirement 18.1, 18.3): the "Details" group holds its name,
-    /// status line, connections and bytes, then each row's label read right before its value,
-    /// whole even where the value is drawn cut; then Resume, Open folder and Show progress
-    /// window as buttons by their labels. Running, the primary is Stop; complete, Resume and
-    /// Show progress window are greyed and Open folder is not.
+    /// status line, connections then bytes (as drawn from the row's start), then each row's
+    /// label read right before its value, whole even where the value is drawn cut; then
+    /// Resume, Open folder and Show progress window as buttons by their labels. Running, the
+    /// primary is Stop; complete, Resume and Show progress window are greyed and Open folder is
+    /// not.
     #[test]
     fn the_details_group_reads_each_label_before_its_value_and_the_buttons() {
         let _fonts = crate::theme::font_tests();
@@ -2897,8 +3063,9 @@ mod details_tests {
             it.snap = Some(snap(8, &vec![ConnStatus::Receiving; 8]));
             let one = one_download(&it, rate, Some("Main download queue"));
             let mut want = vec![text(&one.file_name), text(&one.status_line)];
-            want.extend(one.bytes.as_deref().map(text));
+            // As drawn from the row's start: the connections, then the bytes.
             want.extend(one.connections.as_deref().map(text));
+            want.extend(one.bytes.as_deref().map(text));
             for (label, value) in &one.rows {
                 want.extend([text(label), text(value)]);
             }

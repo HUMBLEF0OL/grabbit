@@ -88,7 +88,8 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
 - [x] 05.5c Classic removed (complete, PRs 14 and 15 merged 2026-11-13)
 - [x] 05.5d The theme-file vocabulary nothing draws any more (05.5c's audit; ticked in its PR)
 - [x] 06a Paste bar (ticked in its PR; done once merged)
-- [x] 06b Details pane (ticked in its PR; done once merged)
+- [x] 06b Details pane (ticked in its PR, one PR with 06a; done once merged; the on-screen
+      keyboard and Narrator pass and the screenshots are owed, see its plan's "Done when")
 - [ ] 07a Dialog kit
 - [ ] 07b Adding
 - [ ] 07c Watching and finishing

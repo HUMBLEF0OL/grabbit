@@ -185,6 +185,8 @@ pub struct ListState {
     pub filters: Vec<Option<Filter>>,
     /// The open filter box: column and its top-left.
     filter_open: Option<(usize, Pos2)>,
+    /// The open filter box's first and last controls, as last drawn ([`ListState::filter_ends`]).
+    filter_ends: Option<(egui::Id, egui::Id)>,
     /// The sideways scroll when it opened (it closes when the list moves).
     filter_hscroll: f32,
     /// A filter box to open on the next frame ([`ListState::open_filter`]).
@@ -214,6 +216,7 @@ impl Default for ListState {
             scroll_to: None,
             filters: vec![None; COLS],
             filter_open: None,
+            filter_ends: None,
             filter_hscroll: 0.0,
             filter_pending: None,
             marquee: None,
@@ -251,6 +254,13 @@ impl ListState {
     /// A column's filter box is open (the main window's Tab is then the box's).
     pub fn filter_is_open(&self) -> bool {
         self.filter_open.is_some()
+    }
+
+    /// The open filter box's first control (its text box, or its first check box) and its last
+    /// (Close), as it was last drawn: the main window's Tab goes round between them
+    /// (`panes::tab_keys`). None while no box is open.
+    pub fn filter_ends(&self) -> Option<(egui::Id, egui::Id)> {
+        self.filter_open.and(self.filter_ends)
     }
 
     /// Open column `col`'s filter box under its header on the next frame, as a click on its
@@ -1619,6 +1629,8 @@ fn filter_box(ui: &mut Ui, st: &mut ListState) {
             let p = ui.painter().clone();
             crate::chrome::popup_surface(&p, shown);
             let o = rect.min;
+            // Its first control: the text box, or the first check box.
+            let mut first = None;
             match values {
                 Some(vals) => {
                     // i18n: verb: label before the filter's list, i.e. show the rows that…
@@ -1636,7 +1648,9 @@ fn filter_box(ui: &mut Ui, st: &mut ListState) {
                     for (i, v) in vals.iter().enumerate() {
                         let mut on = keep.contains(v);
                         let y = o.y + 28.0 + 18.0 * i as f32;
-                        if winui::checkbox(ui, pos2(o.x + 12.0, y), &mut on, v, true).clicked() {
+                        let check = winui::checkbox(ui, pos2(o.x + 12.0, y), &mut on, v, true);
+                        first = first.or(Some(check.id));
+                        if check.clicked() {
                             keep.retain(|k| k != v);
                             if on {
                                 keep.push(v);
@@ -1692,6 +1706,7 @@ fn filter_box(ui: &mut Ui, st: &mut ListState) {
                     if !edit.has_focus() && !ui.ctx().memory(|m| m.focused().is_some()) {
                         edit.request_focus();
                     }
+                    first = Some(edit.id);
                     st.filters[col] = (!t.is_empty()).then_some(Filter::Text(t));
                     if winui::button(
                         ui,
@@ -1714,7 +1729,7 @@ fn filter_box(ui: &mut Ui, st: &mut ListState) {
                     }
                 }
             }
-            if winui::button(
+            let close_button = winui::button(
                 ui,
                 r(Rect::from_min_size(
                     pos2(
@@ -1728,11 +1743,12 @@ fn filter_box(ui: &mut Ui, st: &mut ListState) {
                 winui::ButtonKind::Default,
                 false,
                 None,
-            )
-            .clicked()
-            {
+            );
+            if close_button.clicked() {
                 close = true;
             }
+            // Its ends, for the main window's Tab (it goes round the box, never out of it).
+            st.filter_ends = first.map(|first| (first, close_button.id));
         });
     if close {
         st.filter_open = None;

@@ -1348,10 +1348,25 @@ impl App {
     fn details_view(&self) -> crate::panes::DetailsView {
         use crate::panes::{DetailsView, Shown};
         let ids = self.selection.ids();
-        let sizes: Vec<(u64, Option<u64>)> = if ids.is_empty() {
-            Vec::new()
-        } else {
-            self.items.iter().map(|i| (i.id, i.size)).collect()
+        // The selected downloads' sizes only (this runs every frame): one is looked up, several
+        // are found in one pass over the downloads.
+        let sizes: Vec<(u64, Option<u64>)> = match ids {
+            [] => Vec::new(),
+            [id] => self
+                .items
+                .iter()
+                .find(|i| i.id == *id)
+                .map(|i| (i.id, i.size))
+                .into_iter()
+                .collect(),
+            _ => {
+                let picked: std::collections::HashSet<u64> = ids.iter().copied().collect();
+                self.items
+                    .iter()
+                    .filter(|i| picked.contains(&i.id))
+                    .map(|i| (i.id, i.size))
+                    .collect()
+            }
         };
         match crate::panes::shown(ids, &sizes) {
             Shown::Empty => DetailsView::Empty,
@@ -2214,8 +2229,9 @@ impl App {
             "addurl" => self.run(Cmd::AddUrl, None, ctx),
             // The paste bar with an address put in and submitted, as its Enter does (plan 06's
             // "Adding a download" screenshots): `paste:https://example.org/a.zip` opens Download
-            // File Info, a rejected one shows "Invalid address". The bar is shown for this run;
-            // the hook itself saves nothing (the address's history entry does, as Enter's).
+            // File Info, a rejected one shows "Invalid address". The bar is turned on as View →
+            // Paste bar does, so the next settings save keeps it on (an accepted address asks
+            // for that save at once: its history entry, as Enter's).
             "paste" => {
                 if let Some(address) = show_paste_arg(name) {
                     self.settings.show_paste_bar = true;
@@ -2227,8 +2243,8 @@ impl App {
                 }
             }
             // The details pane on with a stopped download selected (plan 06's "details pane
-            // with a stopped download" screenshots). As `paste`, the pane is on for this run;
-            // the hook itself saves nothing. A download the view hides is shown in All
+            // with a stopped download" screenshots). As `paste`, the pane is turned on and the
+            // next settings save keeps it on. A download the view hides is shown in All
             // Downloads, as Find next does, so the list keeps the selection.
             "details" if is_show_details(name) => {
                 self.settings.show_details = true;
@@ -5522,9 +5538,16 @@ impl App {
             }
             Cmd::TogglePasteBar => {
                 self.settings.show_paste_bar = !self.settings.show_paste_bar;
-                // Hidden, the paste field also gives up the keys.
+                // Hidden, the paste field also gives up the keys. When it had them (or was
+                // about to take them after Ctrl+V), the list takes them, as after Escape.
                 if !self.settings.show_paste_bar {
+                    let had = self.paste.focus_next
+                        || ctx.memory(|m| m.has_focus(crate::panes::paste_field_id()));
                     self.paste.leave(ctx);
+                    if had {
+                        self.tree_keys = false;
+                        self.list.set_keys(true);
+                    }
                 }
                 self.dirty = true;
             }
@@ -6957,6 +6980,7 @@ impl App {
             tree_keys: self.tree_keys,
             menu_open: self.popup.is_some() || self.open_menu.is_some(),
             filter_open: self.list.filter_is_open(),
+            filter_ends: self.list.filter_ends(),
         }
     }
 
@@ -6975,12 +6999,88 @@ impl App {
         let Some(to) = crate::panes::tab_keys(ctx, &mut self.paste, state, from) else {
             return;
         };
-        if to != crate::panes::Stop::Paste {
+        if to == crate::panes::Stop::Paste {
+            // The field has the keys: the list's selection goes grey, as the tree's does.
+            self.list.set_keys(false);
+        } else {
             self.tree_keys = to == crate::panes::Stop::Tree;
             self.list.set_keys(!self.tree_keys);
         }
         // The keyboard is in use: access letters show (light mode too).
         crate::chrome::show_cues(ctx);
+    }
+
+    /// The details pane (plan 06b) and its splitter, from `details_left` to the trailing edge
+    /// beside the list, in the client area `o`, `w` × `h`. Built each frame from `self.items`,
+    /// the list's data, after `list::show` and the selection it changed: it follows the list's
+    /// repaints while a download runs, shows a click's selection in that frame, and comes after
+    /// the list for a screen reader as on screen. The list ends where the pane starts
+    /// (`list_end`), so nothing of the list is under it. A button's command goes in `chosen`
+    /// for the shown download, and the list takes the keys back.
+    fn details(
+        &mut self,
+        ui: &mut Ui,
+        layout: &chrome::Layout,
+        (o, w, h): (egui::Pos2, f32, f32),
+        list_left: f32,
+        chosen: &mut Option<(Cmd, Option<u64>)>,
+    ) {
+        let ctx = ui.ctx().clone();
+        let left = o.x + layout.details_left(w);
+        let rc = egui::Rect::from_min_max(
+            pos2(left, o.y + layout.panes_top()),
+            pos2(o.x + w, o.y + layout.list_bottom(h)),
+        );
+        let view = self.details_view();
+        let shown = match &view {
+            crate::panes::DetailsView::One(one) => Some(one.id),
+            _ => None,
+        };
+        if let Some(action) = crate::panes::details_pane(ui, rc, &view, &mut self.icons)
+            && let Some(id) = shown
+        {
+            *chosen = Some((details_cmd(action), Some(id)));
+            // The press in the pane took the keys from the list; its download is the list's.
+            // Only with nothing focused (a pointer click): a widget that keeps egui's focus (a
+            // button pressed by Enter, the field under a screen reader's Click) keeps the keys,
+            // and the list does not draw an active selection it cannot act on.
+            if ctx.memory(|m| m.focused().is_none()) {
+                self.tree_keys = false;
+                self.list.set_keys(true);
+            }
+        }
+        // The splitter: the pane's first `DETAILS_GRIP` points, after the pane so it is above
+        // it. The pane keeps where it was taken; dragging toward the list widens it.
+        let grip = winui::rect(egui::Rect::from_min_max(
+            rc.min,
+            pos2(left + chrome::Layout::DETAILS_GRIP, rc.max.y),
+        ));
+        let sr = ui.interact(
+            grip,
+            egui::Id::unique("details-splitter"),
+            winui::pointer_drag(),
+        );
+        if sr.hovered() || sr.dragged() {
+            ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+        }
+        let grab = egui::Id::unique("details-splitter-grab");
+        if sr.drag_started()
+            && let Some(p) = sr.interact_pointer_pos()
+        {
+            ctx.data_mut(|d| d.insert_temp(grab, winui::mx(p.x) - left));
+        }
+        if sr.dragged()
+            && let Some(p) = sr.interact_pointer_pos()
+        {
+            // The pane's width from the window's trailing edge (the left in RTL).
+            let at = ctx.data(|d| d.get_temp::<f32>(grab)).unwrap_or(0.0);
+            let nw = (o.x + w - (winui::mx(p.x) - at)).round().max(0.0);
+            self.settings.details_width =
+                crate::panes::details_width(nw as u32, w, list_left) as u32;
+        }
+        if sr.drag_stopped() {
+            self.dirty = true;
+        }
     }
 
     fn paint(&mut self, ui: &mut Ui) {
@@ -7261,13 +7361,18 @@ impl App {
         if self.settings.show_paste_bar {
             // An open menu's keys are the menu's (the list's rule).
             self.paste.menu_open = self.popup.is_some() || self.open_menu.is_some();
-            // An open filter box's Tab is its own (egui's order among its controls).
-            self.paste.filter_open = self.list.filter_is_open();
             let history = &self.settings.url_history;
             match crate::panes::paste_bar(ui, &layout, o, w, &mut self.paste, history) {
                 Some(crate::panes::PasteEvent::Submit) => {
                     let accepted = dialogs::accept_address(&self.paste.text);
                     pasted = crate::panes::submit(&mut self.paste, accepted);
+                    // Added: the field gives up the keys and the list takes them, as after
+                    // Escape (the new download is there). Rejected, the field keeps them.
+                    if pasted.is_some() {
+                        self.paste.leave(&ctx);
+                        self.tree_keys = false;
+                        self.list.set_keys(true);
+                    }
                 }
                 // Escape: the field gave up the keys; the list takes them.
                 Some(crate::panes::PasteEvent::Left) => {
@@ -7418,58 +7523,6 @@ impl App {
         self.selection.retain(&ids);
         let (selected, focus) = self.selection.rows(&ids);
 
-        // The details pane (plan 06b), from `details_left` to the trailing edge beside the
-        // list. Built each frame from `self.items`, the list's data, after the selection is
-        // kept to the rows shown: it follows the list's repaints while a download runs.
-        if self.settings.show_details {
-            let left = o.x + layout.details_left(w);
-            let rc = egui::Rect::from_min_max(
-                pos2(left, o.y + layout.panes_top()),
-                pos2(o.x + w, o.y + layout.list_bottom(h)),
-            );
-            let view = self.details_view();
-            let shown = match &view {
-                crate::panes::DetailsView::One(one) => Some(one.id),
-                _ => None,
-            };
-            if let Some(action) = crate::panes::details_pane(ui, rc, &view, &mut self.icons)
-                && let Some(id) = shown
-            {
-                chosen = Some((details_cmd(action), Some(id)));
-            }
-            // The splitter: the pane's first `DETAILS_GRIP` points, after the pane so it is
-            // above it. The pane keeps where it was taken; dragging toward the list widens it.
-            let grip = winui::rect(egui::Rect::from_min_max(
-                rc.min,
-                pos2(left + chrome::Layout::DETAILS_GRIP, rc.max.y),
-            ));
-            let sr = ui.interact(
-                grip,
-                egui::Id::unique("details-splitter"),
-                winui::pointer_drag(),
-            );
-            if sr.hovered() || sr.dragged() {
-                ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
-            }
-            let grab = egui::Id::unique("details-splitter-grab");
-            if sr.drag_started()
-                && let Some(p) = sr.interact_pointer_pos()
-            {
-                ctx.data_mut(|d| d.insert_temp(grab, winui::mx(p.x) - left));
-            }
-            if sr.dragged()
-                && let Some(p) = sr.interact_pointer_pos()
-            {
-                // The pane's width from the window's trailing edge (the left in RTL).
-                let at = ctx.data(|d| d.get_temp::<f32>(grab)).unwrap_or(0.0);
-                let nw = (o.x + w - (winui::mx(p.x) - at)).round().max(0.0);
-                self.settings.details_width =
-                    crate::panes::details_width(nw as u32, w, list_left) as u32;
-            }
-            if sr.drag_stopped() {
-                self.dirty = true;
-            }
-        }
         // Its bottom edge is exclusive: IDM's frame's last row one under the pane frame's.
         let outer = egui::Rect::from_min_max(
             pos2(o.x + list_left, o.y + layout.panes_top()),
@@ -7504,6 +7557,9 @@ impl App {
         }
         if let Some(pick) = r.pick {
             self.selection.apply(pick, &ids);
+        }
+        if self.settings.show_details {
+            self.details(ui, &layout, (o, w, h), list_left, &mut chosen);
         }
         if let Some(i) = r.properties {
             self.properties(ids[i]);
@@ -7651,6 +7707,8 @@ impl App {
             ctx.input(|i| crate::panes::ctrl_v(shown, focused, busy, &i.events).map(str::to_owned))
         {
             self.paste.fill(&clip);
+            // The field takes the keys on the next frame: the list's selection goes grey.
+            self.list.set_keys(false);
         }
         if let Some(new) = pasted {
             self.route_new_url(new, &ctx);
