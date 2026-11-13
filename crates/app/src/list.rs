@@ -2091,4 +2091,85 @@ mod tests {
         assert_eq!(st.widths[SOURCE], 62.0, "the saved widths stay");
         assert_eq!(st.widths[ADDED], 145.0);
     }
+
+    /// Plan 06b, requirement 19.1: beside the details pane the list keeps every column and
+    /// scrolls sideways. In a 1240-wide client area with the Categories pane at its default
+    /// width, the list's `outer` is laid out as `App::paint` lays it out (from `list_left` to
+    /// `list_end(w)`), once with the pane closed and once open: the same columns are shown, the
+    /// sideways range grows by the pane's width, and scrolling to its end shows the last
+    /// column's trailing edge at the body's.
+    #[test]
+    fn the_list_keeps_its_columns_beside_the_details_pane() {
+        let _fonts = crate::theme::font_tests();
+        let (w, h) = (1240.0, 600.0);
+        let saved = crate::settings::Settings::default();
+        let list_left = crate::chrome::Layout::GRAPHITE.tree_left
+            + saved.graphite_categories_width as f32
+            + crate::chrome::Layout::GRAPHITE.splitter_w;
+        let d = crate::panes::details_width(saved.details_width, w, list_left);
+        assert_eq!((list_left, d), (224.0, 276.0));
+        let closed = crate::chrome::Layout::GRAPHITE.with_panes(false, None);
+        let open = closed.with_panes(false, Some(d));
+        let rows = vec![
+            row("Web", "Complete", "a.zip", false),
+            row("Web", "Stopped", "b.iso", false),
+        ];
+        // One list in `layout`, scrolled sideways by `hscroll` (clamped by `show`): the columns
+        // shown, the scroll it keeps, and the rows' area.
+        let run = |layout: crate::chrome::Layout, hscroll: f32| {
+            let ctx = egui::Context::default();
+            let mut st = ListState {
+                hscroll,
+                ..ListState::default()
+            };
+            let outer = Rect::from_min_max(
+                pos2(list_left, layout.panes_top()),
+                pos2(layout.list_end(w), layout.list_bottom(h)),
+            );
+            let mut body = Rect::NOTHING;
+            for _ in 0..2 {
+                let mut out = ctx.run_ui(
+                    egui::RawInput {
+                        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(w, h))),
+                        ..Default::default()
+                    },
+                    |ui| {
+                        let r = show(
+                            ui,
+                            outer,
+                            &mut st,
+                            &rows,
+                            &[false, false],
+                            None,
+                            &mut ShellIcons,
+                            &|_| String::new(),
+                        );
+                        body = r.body.expect("the list has a body");
+                    },
+                );
+                out.textures_delta.clear();
+            }
+            (st.shown(), st.hscroll, body)
+        };
+        let content_w: f32 = GRAPHITE_WIDTHS.iter().sum();
+        let (cols_closed, range_closed, body_closed) = run(closed, f32::MAX);
+        let (cols_open, range_open, body_open) = run(open, f32::MAX);
+        // No column is hidden to make room.
+        assert_eq!(cols_closed.len(), COLS);
+        assert_eq!(cols_open, cols_closed);
+        // The list ends where the pane starts.
+        assert_eq!(body_closed.right(), w);
+        assert_eq!(body_open.right(), open.list_end(w));
+        assert_eq!(body_open.right(), open.details_left(w));
+        // The columns are wider than either list: the sideways range is what does not fit, and
+        // it grows by the pane's width.
+        assert_eq!(range_closed, content_w - body_closed.width());
+        assert_eq!(range_open, content_w - body_open.width());
+        assert_eq!(range_open - range_closed, d);
+        // Scrolled to its end, the last column ends at the body's trailing edge: it is reached.
+        assert_eq!(list_left + content_w - range_open, body_open.right());
+        // Unscrolled, the pane's list starts at the first column, as the closed one does.
+        let (_, start, _) = run(open, 0.0);
+        assert_eq!(start, 0.0);
+    }
 }
