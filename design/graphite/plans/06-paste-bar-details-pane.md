@@ -78,10 +78,30 @@ bar, placeholder); Adding a download section (paste bar routing to Download File
 - Settings round-trip for the three new fields; old settings files load with the defaults.
 - Details pane: shows the focused row; updates after Stop/Resume; empty and multi-select states.
 
+## Left from 06
+
+Plan 09a does the full keyboard and accessibility review (09, step 5), so these go there:
+
+- The on-screen keyboard pass (Tab rotation, arrows, Alt and menu letters with the field empty and
+  not empty, Enter, Escape, Ctrl+V) and the Narrator pass (the field, the Download button, the
+  toggles, the Details group). The user skipped them in 06; the headless tests cover the logic.
+- Interface sizes 150 % and 200 % for the paste bar and the details pane (06's screenshots are at
+  100 % only).
+- The audit's deferred nits:
+  - tests of `route_new_url`'s side effects (the history and `dirty`, `request_parts` for a
+    .torrent, the Video and General folders, the duplicate check), which need an `App` built in
+    a test;
+  - a file name without break points stays on one line in the pane's header (`winui::fit_lines`
+    does not break inside a word, and other windows share it);
+  - tests of the splitter's arithmetic (pull `dragged_width` out of `App::details` first) and of
+    a short pane (276 × 150);
+  - `/show details` while a column filter is set (the shots run on a fresh data folder, so none
+    is).
+
 ## Done when
 
 - [x] Both parts toggle from View (and the toolbar, for details) and persist across restarts
 - [x] The paste bar routes every kind of address exactly as Add URL does
-- [ ] Keyboard and accessibility checks pass (the headless tests pass; the on-screen keyboard and Narrator pass is owed, done by the user)
+- [ ] Keyboard and accessibility checks pass (the headless tests pass; the on-screen keyboard and Narrator pass is left to 09a, see "Left from 06")
 - [x] Help updated; ROADMAP, CHANGELOG
-- [ ] Screenshots (owed, taken by the user)
+- [x] Screenshots (light and dark at 100 %, before and after, in the PR)
