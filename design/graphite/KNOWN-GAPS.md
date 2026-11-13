@@ -6,7 +6,26 @@ Plans and PRs link here instead of explaining a missing check again.
 
 ## Open
 
-### G1 · No screenshots on this PC (since 2026-11-12)
+### G2 · Windows high contrast (plan 05.5)
+
+- **What:** with Native and High contrast removed in 05.5c, turning on Windows' high contrast no
+  longer changes the app's colours.
+- **Accepted by the owner (2026-11-12):** high contrast is deferred, to come back as a Graphite
+  variant.
+- **What closes it:** a high-contrast Graphite variant that follows Windows' setting.
+
+### G3 · Docs, help pictures and website show the old looks (plan 05.5 → 10)
+
+- **What:** after 05.5c, the docs, the help pictures (`tools/shots/shots.toml`'s `theme:*` takes),
+  the website's themes and licence pages, README, PRODUCT.md and CLAUDE.md still describe the
+  old themes and "IDM's look".
+- **Accepted:** rewritten with the rename (plan 10).
+- **Until then:** no release (`dev` → `main`), since the website is published from `main`.
+- **What closes it:** plan 10.
+
+## Closed
+
+### G1 · No screenshots on this PC (2026-11-12 to 2026-11-13)
 
 - **What:** offscreen captures (`MDM_OFFSCREEN=1`, `tools/lab/cap-own.ps1`) come out completely
   black on the maintainer's PC. This happened with the debug and release builds and with every
@@ -40,24 +59,15 @@ Plans and PRs link here instead of explaining a missing check again.
   - PRs 14 and 15, 05.5c: the pixel pairs that show Graphite unchanged, light and dark, for
     every window in the plan's final check (the logged runs stand in for them: the same icons
     reached before and after).
-
-### G2 · Windows high contrast (plan 05.5)
-
-- **What:** with Native and High contrast removed in 05.5c, turning on Windows' high contrast no
-  longer changes the app's colours.
-- **Accepted by the owner (2026-11-12):** high contrast is deferred, to come back as a Graphite
-  variant.
-- **What closes it:** a high-contrast Graphite variant that follows Windows' setting.
-
-### G3 · Docs, help pictures and website show the old looks (plan 05.5 → 10)
-
-- **What:** after 05.5c, the docs, the help pictures (`tools/shots/shots.toml`'s `theme:*` takes),
-  the website's themes and licence pages, README, PRODUCT.md and CLAUDE.md still describe the
-  old themes and "IDM's look".
-- **Accepted:** rewritten with the rename (plan 10).
-- **Until then:** no release (`dev` → `main`), since the website is published from `main`.
-- **What closes it:** plan 10.
-
-## Closed
-
-(none yet)
+- **Closed 2026-11-13, with the owner's agreement:** shots on screen
+  (`docs-shots.ps1 -At "40,40"`), with `cap-own.ps1` made per-monitor DPI aware while it captures:
+  at 200 % its `PrintWindow` gave only the top-left quarter of an on-screen window otherwise.
+  Offscreen captures still come out black on this PC; how to shoot is in `plans/00-conventions.md`
+  (Screenshots). Neutral work folder (`E:\shots`), the pointer parked off the windows.
+  - PR 13 (05.5a): the 18 windows it changed, before (6303cfe5) and after (06835db6), light and
+    dark at 100 %, light at 150 % and dark at 200 %, on pr-shots `13/`. Every change is on an
+    icon; the rest are live values (the progress window, Regional's sample clock).
+  - PRs 14 and 15 (05.5c) and 16 (05.5d): all 56 windows of the final check, before (06835db6)
+    and after (57fa360f), light and dark, on pr-shots `14/`. 39 of 56 identical in each mode;
+    the others differ only by live values (a running download's numbers, the progress window,
+    Regional's sample clock), About's build commit, and View → Theme's submenu (intended).

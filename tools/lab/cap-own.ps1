@@ -16,9 +16,16 @@ public static class CO {
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint f);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, System.Text.StringBuilder s, int n);
   [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int a, out RECT r, int n);
+  [DllImport("user32.dll")] public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr c);
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
 }
 "@
+# Per-monitor aware (v2) while it captures, so the window rect and what PrintWindow draws agree at
+# 200 %: else an on-screen window comes out as its top-left quarter. The thread's own awareness is
+# put back after (callers run on the same thread: docs-shots, probe-own, progress-shots, showcase).
+$prevCtx = [CO]::SetThreadDpiAwarenessContext([IntPtr](-4))
+if ($prevCtx -eq [IntPtr]::Zero) { Write-Warning "not per-monitor DPI aware: an on-screen window may come out cut" }
+try {
 # -ProcessId: one instance only (a test instance next to the user's own).
 $ids = if ($ProcessId) { @($ProcessId) } else { @(Get-Process $ProcName -ErrorAction Stop | ForEach-Object { $_.Id }) }
 $wins = New-Object System.Collections.ArrayList
@@ -57,3 +64,6 @@ for ($i = $wins.Count - 1; $i -ge 0; $i--) {
 }
 $g.Dispose(); $bmp.Save($Out); $bmp.Dispose()
 "$($wins.Count) windows, origin ($L,$T) -> $Out"
+} finally {
+  if ($prevCtx -ne [IntPtr]::Zero) { [CO]::SetThreadDpiAwarenessContext($prevCtx) | Out-Null }
+}
