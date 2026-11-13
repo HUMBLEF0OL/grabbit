@@ -3346,11 +3346,7 @@ fn list_icon(index: i32, px: u32) -> Option<crate::fileicons::Native> {
         got = Some((side, rgba));
     }
     let (side, rgba) = got?;
-    Some(crate::fileicons::Native::Rgba {
-        side,
-        rgba,
-        premultiplied: false,
-    })
+    Some(crate::fileicons::Native::Rgba { side, rgba })
 }
 
 /// Whether every visible pixel of the `side`-square `rgba` lies in its top-left `within` square.
