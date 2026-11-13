@@ -111,6 +111,18 @@ The right-click menu has everything you can do with a download: **Open**, **Open
 
 **Move/Rename** (**Ctrl+M**) moves or renames the file of a finished download, or of one that hasn't started yet. With several downloads selected it asks for a folder and moves them all there, each under its own name.
 
+## Details pane
+
+**View → Details pane**, or **Details** at the end of the toolbar, shows a pane beside the list with the selected download. The same again hides it. It is off at first.
+
+The pane shows the download's icon and name, how far it is, and 8 cells that fill as each eighth of the file comes in. While it runs, the cells say how many connections it has (a video or a torrent shows none). Below them come **Status**, **Transfer rate** and **Time left** (while it runs), **Resume capability**, **Save to**, **Address** (never with its password), **Queue** and **Last Try Date**, each when it has a value. The figures change as the download runs.
+
+Its buttons are **Resume** or **Stop**, **Open folder** and **Show progress window** (greyed for a finished download).
+
+With nothing selected the pane says **Select a download to see its details**; with several, how many they are and their total size.
+
+Drag the pane's edge by the list to make it wider or narrower. It keeps the list at least 200 points wide, and MDM remembers the width. The list keeps all its columns and scrolls sideways when they don't fit.
+
 ## Verify checksum
 
 Many sites publish a checksum next to the download. Right-click the download, choose **Verify checksum...** and paste it. MDM reads MD5, SHA-1, SHA-256, SHA-512 and CRC32. A finished file is checked at once; an unfinished one is checked when its download ends. MDM then says **The file matches** or **The file does NOT match**.
