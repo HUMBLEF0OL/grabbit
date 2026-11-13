@@ -1,6 +1,6 @@
-//! What the look follows outside MDM, read off the window's thread (upstream issue 719): Windows' light or dark
-//! app mode, its accent and contrast colours (the registry), and the theme files (the data
-//! folder's `themes` folder, pywal's colours). A registry read can wait for seconds (#719: 8 s,
+//! What the look follows outside MDM, read off the window's thread (upstream issue 719):
+//! Windows' light or dark app mode (the registry), and the theme files (the data folder's
+//! `themes` folder, pywal's colours). A registry read can wait for seconds (#719: 8 s,
 //! on the window's thread, froze the window), a folder on a slow or network disk as long; so a
 //! thread of their own reads each ([`Watched`]), the window takes the last answer and is woken
 //! when one changes. The rule of the clipboard's reads (#418) and the torrents' numbers (#693).
@@ -152,7 +152,7 @@ pub fn generation() -> u64 {
     system + FILES.get().map_or(0, Watched::generation)
 }
 
-// ---- Windows' app mode and colours -----------------------------------------------------------
+// ---- Windows' app mode ------------------------------------------------------------------
 
 /// What Windows says about the look: dark apps.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

@@ -2594,9 +2594,8 @@ pub fn apps_use_dark() -> bool {
 }
 
 /// Waits for a change to what the theme follows in the registry (#719): the app mode
-/// ([`personalize_key`]), the accent colour, high contrast and the system colours, each key
-/// watched with `RegNotifyChangeKeyValue`. Opened, armed and waited on by `lookwatch`'s thread,
-/// never the window's: those calls can wait as long as a read.
+/// ([`personalize_key`]), watched with `RegNotifyChangeKeyValue`. Opened, armed and waited on by
+/// `lookwatch`'s thread, never the window's: those calls can wait as long as a read.
 pub struct LookKeys {
     /// The keys open for watching and the event each signals (HKEYs and HANDLEs, kept as numbers
     /// so the watcher can be moved to its thread).
@@ -2606,7 +2605,7 @@ pub struct LookKeys {
 }
 
 impl LookKeys {
-    /// The keys that exist (the accent's is missing on older Windows).
+    /// The keys (one now: the app mode's), when they exist.
     pub fn open() -> Self {
         use windows_sys::Win32::System::Registry::{
             HKEY, HKEY_CURRENT_USER, KEY_NOTIFY, RegCloseKey, RegOpenKeyExW,

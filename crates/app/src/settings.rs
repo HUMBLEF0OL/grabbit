@@ -86,9 +86,8 @@ pub struct Settings {
     /// The confirmation's "Also delete the files from disk", as last answered (IDM keeps it):
     /// its first state next time, and what happens when it no longer asks.
     pub delete_files_too: bool,
-    /// Categories pane frame width (IDM: 143, frame x 6..149); dragged with the splitter.
-    /// The same pane's width under the Graphite layout (plan 05b: 224 by default, the mockup's),
-    /// (`categories_width`, IDM's layout's, is read no more since plan 05.5c).
+    /// The Categories pane's width (plan 05b: 224 by default, the mockup's), dragged with the
+    /// splitter. IDM's layout's own (`categories_width`) is read no more since plan 05.5c.
     pub graphite_categories_width: u32,
     /// The main window as last left: position and size (x, y, width, height, in points at 100 %
     /// interface size: the system's own logical pixels), and maximized.

@@ -42,7 +42,7 @@ phase that must decide them before it starts.
 | 03b | [Extra glyphs](plans/03b-extra-glyphs.md) | 36 `gx-*` slots (menu, button, Options page, queue icons) in the Graphite set | 03 | `ui/03b-extra-glyphs` |
 | 04 | [Typeface](plans/04-typeface.md) | Themes can choose a bundled font; Graphite uses Geist; digits decided | 01, 02 | `ui/04-typeface` |
 | 05 | [Main window](plans/05-main-window.md) | One layout model (05a); then title-bar menus and Find, menu icons and shortcuts, grouped toolbar, flatter categories, progress in the Status cell (05b) | 05a: 02. 05b: 02b, 03, 03b, 04, 05a | `ui/05a-layout-model`, `ui/05b-main-window` |
-| 05.5 | [Graphite only](plans/05.5-graphite-only.md) | Graphite icons everywhere (05.5a); upstream sync ready for the removal (05.5b); the Classic layout, old themes, Silk, Tango and Lucide removed (05.5c) | 05b | `ui/05.5a-graphite-icons`, `tools/upstream-sync-graphite-only`, `ui/05.5c-classic-removed` |
+| 05.5 | [Graphite only](plans/05.5-graphite-only.md) | Graphite icons everywhere (05.5a); upstream sync ready for the removal (05.5b); the Classic layout, old themes, Silk, Tango and Lucide removed (05.5c) | 05b | `ui/05.5a-graphite-icons`, `tools/upstream-sync-graphite-only`, `ui/05.5c-classic-removed`, `ui/05.5c2-icons-assets`, `ui/05.5d-unused-vocabulary` |
 | 06 | [Paste bar and details pane](plans/06-paste-bar-details-pane.md) | The two optional panes, toggled in View and the toolbar | 05a, 05b (and 02b, 03b through 05b) | `ui/06-panes` |
 | 07 | [Dialogs](plans/07-dialogs.md) | The dialog kit (07a: footer, keys as today, danger/ghost/icon buttons, form, file card, icon tile, banners), then every dialog in four waves (07b to 07e) | 02b, 03, 03b; 04 before final sizes | `ui/07a-dialog-kit`, `ui/07b…07e` |
 | 08 | [Options](plans/08-options.md) | Side list with pages unchanged inside (08a), then pages on the form and sub-dialogs (08b) | 07a, 02b, 03b; 04 before final sizes | `ui/08a-options-list`, `ui/08b-options-pages` |
@@ -83,9 +83,10 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
       checks in its plan, shots in `pr-shots` `04-typeface/`)
 - [x] 05a Layout model (ticked in its PR; done once merged)
 - [x] 05b Main window (ticked in its PR; done once merged)
-- [x] 05.5a Graphite icons everywhere (ticked in its PR; done once merged)
-- [x] 05.5b Upstream sync ready for the removal (ticked in its PR; done once merged)
-- [x] 05.5c Classic removed (ticked in its PR; done once merged)
+- [x] 05.5a Graphite icons everywhere (complete, PR 13 merged into `dev` 2026-11-13)
+- [x] 05.5b Upstream sync ready for the removal (complete, PR 12 merged 2026-11-13; post-merge check on PR 12)
+- [x] 05.5c Classic removed (complete, PRs 14 and 15 merged 2026-11-13)
+- [x] 05.5d The theme-file vocabulary nothing draws any more (05.5c's audit; ticked in its PR)
 - [ ] 06 Paste bar and details pane
 - [ ] 07a Dialog kit
 - [ ] 07b Adding
@@ -126,8 +127,8 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
   dialog changes once, in a small diff, and keeps its keys).
 - **Fonts**: Windows draws Latin text through DirectWrite (GDI-classic metrics); since 04 it reads a
   bundled font from memory too (`win32.rs` `classic_face`), so Geist keeps the same text path.
-- **Classic must not move**: every layout phase gates on 02b's chrome control and shows Classic
-  pixel-identical in its PR.
+- **Graphite is the only layout** (since 05.5c): a phase changes Graphite's windows directly; its
+  pictures are Graphite light and dark (`plans/00-conventions.md`).
 - **The rename moves users' data and integrations** (saved logins, autostart, native messaging host,
   update feed); 10c's migrations and the never-change list exist for that.
 - **Accessibility**: the toolbar and status strip are not exposed today; 05b adds the toolbar, and 09a

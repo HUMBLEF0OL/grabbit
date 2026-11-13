@@ -539,7 +539,7 @@ These ship in a later version, when they're ready.
   a flatter Categories tree, progress in the Status column, a quieter status bar), and
   Graphite's own icons in the Options pages, the helpers window, the drag handle, the
   Scheduler's queues and the Server row, and Graphite as the only look (the Classic layout and
-  the old themes removed; Windows' high contrast is followed again once a high-contrast Graphite
+  the old themes removed, with the theme-file keys only they used; Windows' high contrast is followed again once a high-contrast Graphite
   comes back). Next: the paste bar and details pane, then the dialogs
 
 ### Bugs being looked into
@@ -583,8 +583,9 @@ These ship in a later version, when they're ready.
   ([#507](https://github.com/anefzaoui/misterdownloadmanager/issues/507)): fix in review
 - 🔄 A freeze when a video finishes, while its file is marked as downloaded from the web
   ([#510](https://github.com/anefzaoui/misterdownloadmanager/issues/510)): fix in review
-- 🔄 A bright white line under the menu bar in dark mode
-  ([#379](https://github.com/anefzaoui/misterdownloadmanager/issues/379)): fix in review
+- ✅ A bright white line under the menu bar in dark mode
+  ([#379](https://github.com/anefzaoui/misterdownloadmanager/issues/379)): gone with the old looks
+  (Graphite, the only one, never drew it)
 - 🔄 Closing the main window follows a setting (on by default, MDM keeps running), and with no
   tray icon the window goes to the taskbar instead of vanishing: fix in review
   ([#457](https://github.com/anefzaoui/misterdownloadmanager/pull/457))

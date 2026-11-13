@@ -52,7 +52,7 @@ pub fn tahoma_title() -> FontId {
     )
 }
 
-/// Tahoma (IDM's dialogs), Tahoma Bold and Arial Bold from Windows' fonts folder. A family
+/// Tahoma (IDM's dialogs) and Tahoma Bold from Windows' fonts folder. A family
 /// whose file isn't there is the interface font's, so drawing with it never fails.
 pub fn install_fonts(defs: &mut egui::FontDefinitions, font_dir: Option<&std::path::Path>) {
     let ui = defs

@@ -344,8 +344,7 @@ themed! {
     GLYPH => menu_glyph;
     TEXT_DISABLED_MENU => menu_text_disabled;
     TB_DISABLED => toolbar_text_disabled;
-    /// A drop-down's arrow (dark: light on the dark band, where #282828 could not be seen).
-    /// The tree's chevrons (dark look).
+    /// The tree's chevrons.
     TREE_EXPANDER => tree_expander;
 }
 

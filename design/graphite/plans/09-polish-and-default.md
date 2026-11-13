@@ -1,9 +1,10 @@
 # 09 · Polish, then make Graphite the default
 
-> **Since 05.5c Graphite is the only look** (`00-conventions.md`): a step here that gates on Graphite, keeps Classic unchanged, uses Silk icons, sizes a window for both layouts or falls back to Classic is read as Graphite's alone; there is no Classic side left.
+> **Adjusted after 05.5** (Graphite only, merged 2026-11-13): there is no Classic layout, no old theme and no Silk, Tango or Lucide icon left, so this plan's steps are Graphite's alone (`00-conventions.md`).
 
 Adds the finishing touches the theme shipped without (the two-tone hot colour and the dark-mode glow),
-does a full review against the mockup, and switches new installs to Graphite.
+does a full review against the mockup, and finishes Graphite as the default (05.5c already made it the
+default and only look).
 
 - Branches: `ui/09a-finish`, `ui/09b-default`
 - Needs: 06, 07e, 08b (and through them 05, 07a…07d, 08a; 02b's roles `button.accent.top`,
@@ -24,15 +25,14 @@ Line numbers drift as phases land: find each item by its name first.
 - Looks are chosen by `ButtonLook` / `ProgressLook` / `CaptionLook` (`palette.rs:469/491/502`) through
   `[controls]` (`Controls::set`, `:546-582`). `ButtonLook::Graphite` and `ProgressLook::Graphite` do not
   exist yet. `button.glow` (`palette.rs:216`) is Luna's glow under the pointer, not a shadow: leave it.
-- The theme's id is saved in `settings.theme`, default "classic" (`settings.rs:105-107, 364`).
-  `Settings` is `#[serde(default)]`, so a change to `Settings::default()` would also fill a missing
-  field in an existing user's settings file.
+- The theme's id is saved in `settings.theme`, default "graphite" since 05.5c; an id MDM no longer
+  has (the old themes) is Graphite, and saved so at the next save.
 
 ## 09a · Finish
 
 1. **Two-tone hot colour**: a new `ButtonLook::Graphite` and `ProgressLook::Graphite` (`[controls]`
    values `button = "graphite"`, `progress = "graphite"`, written by `make_theme.py`). For the Accent and
-   (under Graphite) Default buttons, `paint_button` fills with two stops (`button.accent.top` at the top,
+   Default buttons, `paint_button` fills with two stops (`button.accent.top` at the top,
    `button.accent` at the bottom) through `fill_shaded`; the progress fill runs left to right
    `progress.bar` → `progress.bar.end` (a horizontal variant of `fill_shaded`, or two meshes).
 2. **Glow (dark only)**: a soft shadow under the default button and the progress fill in the `glow`
@@ -53,22 +53,20 @@ Line numbers drift as phases land: find each item by its name first.
 
 ## 09b · Graphite by default
 
-1. **New installs only**: when no settings file exists at start (`store` load finds nothing), the
-   fresh settings get `theme = "graphite"`. `Settings::default().theme` stays "classic", so serde never
-   switches an existing user. Test both: a missing file starts in Graphite; an existing file without a
-   `theme` field keeps Classic.
-2. Existing users keep their theme. On first start after the update, a one-time question (a
-   `dialogs::question` with Try it / Not now) offers Graphite; "Try it" runs `Cmd::Theme("graphite")`;
-   the answer is remembered in a new settings field. This is a new window: say so in the CHANGELOG.
-3. **Downgrade**: an older build reading `theme = "graphite"` falls back to Classic (test against the
-   last release's settings loader).
+1. **Done in 05.5c**: Graphite is the default and the only built-in look; no one-time question is
+   needed (nothing else to choose) and no migration (the fork had no users).
+2. Left: a user upgrading from the last release (whose looks are gone) starts in Graphite; say so in
+   the release's CHANGELOG and notes (05.5c's line already does).
+3. **Downgrade**: the last release (0.5.2) has no Graphite: it reads `graphite` as an unknown theme
+   and falls back to its classic look. Acceptable; nothing to do.
 4. Website and docs screenshots (`tools/shots/`, `docs/`) retaken in Graphite; `docs/` theme help lists Graphite.
    Left from 02, which kept Graphite off the website until a release has it: with the release that
    ships it, add its tile to `website/content/themes.toml` (and the "Nine looks" line of
    `website/content/features/themes.md`), its `site-theme-graphite` shot to `tools/shots/shots.toml`
    (`take = "theme:graphite+@main"`, as the other themes'), `"graphite"` to the `inherits` list of
-   `website/content/theme-prompt.txt` (and `chrome = classic | graphite` to its `[controls]`
-   line, from 02b), and Graphite to the themes in `website/llms.txt`.
+   `website/content/theme-prompt.txt` (its `[controls]` no longer takes `chrome`: 05.5c ignores it),
+   and Graphite to the themes in `website/llms.txt`. The old themes' tiles and shots go (plan 10's
+   "Left from 05.5" and KNOWN-GAPS G3 hold the list).
 5. CHANGELOG entry for the new look; ROADMAP's "A new look, 'Graphite'" item marked ✅.
 
 ## Done when
@@ -76,5 +74,5 @@ Line numbers drift as phases land: find each item by its name first.
 - [ ] Graphite's default button and progress show the two-tone finish; dark mode shows the glow; light does not
 - [ ] Frame-time budget met
 - [ ] Every mock state reviewed (visual, keyboard, accessibility, 200%); follow-ups filed
-- [ ] New installs start in Graphite; existing users keep their theme and are offered it once; downgrade falls back
+- [ ] An upgrade from the last release starts in Graphite, and the release notes say so
 - [ ] Screenshots, docs, website, ROADMAP, CHANGELOG
