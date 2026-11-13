@@ -104,6 +104,10 @@ enum Cmd {
     ToggleDarkMode,
     /// View → Always dark (#60).
     ToggleAlwaysDark,
+    /// View → Paste bar (plan 06).
+    TogglePasteBar,
+    /// View → Details pane, and the toolbar's Details (plan 06).
+    ToggleDetails,
     /// View → Theme → a theme (#45): a built-in's id or a theme file's name.
     Theme(&'static str),
     /// View → Theme → Open themes folder.
@@ -313,7 +317,10 @@ impl Cmd {
             Cmd::None => return chrome::menu_icon(label),
             Cmd::AddUrl => "tb-add-url",
             Cmd::OpenTorrentFile => "tb-add-torrent",
-            Cmd::AddMagnet | Cmd::LinkGrabber | Cmd::RefreshAddress => "gx-link",
+            Cmd::AddMagnet | Cmd::LinkGrabber | Cmd::RefreshAddress | Cmd::TogglePasteBar => {
+                "gx-link"
+            }
+            Cmd::ToggleDetails => "gx-sidebar",
             Cmd::TorrentSettings | Cmd::Options => "tb-options",
             Cmd::Batch(false) => "gx-hash",
             Cmd::Batch(true) => "gx-copy",
@@ -5359,6 +5366,16 @@ impl App {
                 self.theme_checked = None;
                 self.dirty = true;
             }
+            Cmd::TogglePasteBar => {
+                // Hidden, the paste field also gives up the keys: `self.paste.leave(ctx)`
+                // comes with the paste bar's state (task 5).
+                self.settings.show_paste_bar = !self.settings.show_paste_bar;
+                self.dirty = true;
+            }
+            Cmd::ToggleDetails => {
+                self.settings.show_details = !self.settings.show_details;
+                self.dirty = true;
+            }
             Cmd::Theme(id) => {
                 self.settings.theme = id.to_owned();
                 crate::theme::select(id);
@@ -5846,9 +5863,7 @@ impl App {
         let resumable = picked.iter().any(|i| i.can_start());
         let deletable = picked.iter().any(|i| i.live.is_none());
         let any_running = self.items.iter().any(|i| i.live.is_some());
-        let off = |label| I(label, Cmd::None, false, false);
-        #[allow(unused_mut)]
-        let mut menu = match index {
+        match index {
             0 => vec![
                 I("&Add new download", Cmd::AddUrl, true, false),
                 I("Open &torrent file...", Cmd::OpenTorrentFile, true, false),
@@ -5977,39 +5992,13 @@ impl App {
                 Sep,
                 I("&Options", Cmd::Options, true, false),
             ],
-            3 => vec![
-                I(
-                    if self.show_categories {
-                        crate::i18n::mark("Hide &categories")
-                    } else {
-                        crate::i18n::mark("Show &categories")
-                    },
-                    Cmd::ToggleCategories,
-                    true,
-                    false,
-                ),
-                self.arrange_menu(),
-                // i18n: noun: the toolbar (submenu of View with its settings)
-                Sub("Toolbar", false, vec![]),
-                Sub("&Tray icon", false, vec![]),
-                off("C&ustomize URL List..."),
-                I(
-                    "Dark Mode support",
-                    Cmd::ToggleDarkMode,
-                    true,
-                    self.settings.dark_mode_support,
-                ),
-                // MDM's (#60): dark whatever the system says (a desktop that reports nothing).
-                I(
-                    // i18n: View menu: a check item; dark mode on, whatever the system's setting
-                    "Always dark",
-                    Cmd::ToggleAlwaysDark,
-                    true,
-                    self.settings.always_dark,
-                ),
-                // i18n: noun: the list's font (submenu)
-                Sub("Font", false, vec![]),
-            ],
+            3 => Self::view_entries(
+                self.show_categories,
+                &self.settings,
+                self.list.sort.map(|s| s.0),
+                self.zoom,
+                &self.theme_list,
+            ),
             // IDM's Help menu, ours (D-020): pages of the user guide (docs/); "Video downloads" stands
             // where IDM has "Grabber Help"; "Report a problem" where "Contact IDM Support";
             // Keyboard shortcuts added; no Tip of the Day.
@@ -6045,24 +6034,80 @@ impl App {
                 // MDM's, not IDM's: the creator's GitHub Sponsors page, asked for only.
                 I("Support &MDM", Cmd::Support, true, false),
             ],
-        };
-        // View → Theme (MDM's, #45), after Always dark; then Draw with (#89, renderer.rs).
-        if let Some(at) = menu
-            .iter()
-            .position(|e| matches!(e, I(_, Cmd::ToggleAlwaysDark, ..)))
-        {
-            menu.insert(at + 1, self.theme_menu());
-            menu.insert(at + 2, self.interface_size_menu());
-            menu.insert(at + 3, self.draw_with_menu());
         }
-        menu
     }
 
-    /// View → Theme (#45): the built-in themes, the theme files in the themes folder, and a way
-    /// to that folder. Picked, a theme applies at once.
-    fn theme_menu(&self) -> MenuEntry<Cmd> {
+    /// The View menu: its check items by `show_categories` and `settings`, Arrange files by the
+    /// list's sort column (`sorted`), Theme by the theme files in its folder (`themes`),
+    /// Interface size by the zoom drawn now. Built from these alone, so a test builds it too.
+    fn view_entries(
+        show_categories: bool,
+        settings: &Settings,
+        sorted: Option<usize>,
+        zoom: f32,
+        themes: &[crate::themefile::Entry],
+    ) -> Vec<MenuEntry<Cmd>> {
+        use MenuEntry::{Item as I, Sub};
+        let off = |label| I(label, Cmd::None, false, false);
+        vec![
+            I(
+                if show_categories {
+                    crate::i18n::mark("Hide &categories")
+                } else {
+                    crate::i18n::mark("Show &categories")
+                },
+                Cmd::ToggleCategories,
+                true,
+                false,
+            ),
+            // Plan 06: the paste bar and the details pane, right after Categories.
+            I(
+                // i18n: View menu: a check item; the address band under the toolbar
+                "&Paste bar",
+                Cmd::TogglePasteBar,
+                true,
+                settings.show_paste_bar,
+            ),
+            I(
+                // i18n: View menu: a check item; the pane beside the list with the selected download
+                "Details pa&ne",
+                Cmd::ToggleDetails,
+                true,
+                settings.show_details,
+            ),
+            Self::arrange_menu(sorted),
+            // i18n: noun: the toolbar (submenu of View with its settings)
+            Sub("Toolbar", false, vec![]),
+            Sub("&Tray icon", false, vec![]),
+            off("C&ustomize URL List..."),
+            I(
+                "Dark Mode support",
+                Cmd::ToggleDarkMode,
+                true,
+                settings.dark_mode_support,
+            ),
+            // MDM's (#60): dark whatever the system says (a desktop that reports nothing).
+            I(
+                // i18n: View menu: a check item; dark mode on, whatever the system's setting
+                "Always dark",
+                Cmd::ToggleAlwaysDark,
+                true,
+                settings.always_dark,
+            ),
+            // View → Theme (MDM's, #45), after Always dark; then Interface size (#262) and
+            // Draw with (#89, renderer.rs).
+            Self::theme_menu(&settings.theme, themes),
+            Self::interface_size_menu(zoom),
+            Self::draw_with_menu(settings.renderer),
+            // i18n: noun: the list's font (submenu)
+            Sub("Font", false, vec![]),
+        ]
+    }
+
+    /// View → Theme (#45): the built-in themes, the theme files in the themes folder
+    /// (`themes`), and a way to that folder. Picked, a theme applies at once.
+    fn theme_menu(chosen: &str, themes: &[crate::themefile::Entry]) -> MenuEntry<Cmd> {
         use MenuEntry::{Item as I, Radio, Sep, Sub};
-        let chosen = self.settings.theme.as_str();
         let mut items = Vec::new();
         let mut files = false;
         // Graphite, MDM's only built-in look: chosen too when the setting names a theme MDM no
@@ -6071,7 +6116,7 @@ impl App {
         // i18n: View → Theme: MDM's own look (rounded, amethyst and cyan), a name: keep "Graphite" as written
         items.push(Radio("Graphite", Cmd::Theme("graphite"), true, graphite));
         let wal = crate::themefile::PYWAL;
-        for e in self.theme_list.iter().filter(|e| e.path.is_some()) {
+        for e in themes.iter().filter(|e| e.path.is_some()) {
             if !files {
                 items.push(Sep);
                 files = true;
@@ -6107,8 +6152,8 @@ impl App {
 
     /// View → Interface size (#262): every window larger, as a browser zooms (Ctrl + / Ctrl − /
     /// Ctrl 0 too). The size shown is the zoom drawn now, a test run's MDM_ZOOM too.
-    fn interface_size_menu(&self) -> MenuEntry<Cmd> {
-        let now = crate::scale::of_zoom(self.zoom);
+    fn interface_size_menu(zoom: f32) -> MenuEntry<Cmd> {
+        let now = crate::scale::of_zoom(zoom);
         let items = crate::scale::STEPS
             .into_iter()
             .map(|p| {
@@ -6123,12 +6168,12 @@ impl App {
 
     /// View → Draw with (#89): OpenGL or Direct3D, used from the next start. Greyed lines say when
     /// what draws now isn't the choice: the system's API failed here (and why), or the choice
-    /// waits for the next start.
-    fn draw_with_menu(&self) -> MenuEntry<Cmd> {
+    /// waits for the next start. `setting`: the choice saved in the settings.
+    fn draw_with_menu(setting: Option<crate::renderer::Api>) -> MenuEntry<Cmd> {
         use crate::renderer::{self, Api, Why};
         use MenuEntry::{Item as I, Radio, Sep, Sub};
         let off = |label| I(label, Cmd::None, false, false);
-        let chosen = renderer::chosen(self.settings.renderer);
+        let chosen = renderer::chosen(setting);
         let gpu = renderer::GPU.unwrap_or(Api::OpenGl);
         let on = chosen == gpu;
         let draw = Cmd::DrawWith(gpu);
@@ -6226,11 +6271,11 @@ impl App {
     /// The list's right-click menu. With several downloads selected it acts on all of them
     /// (Resume, Stop, Remove, queues); commands for one download need one.
     /// View → Arrange files, also on the list's blank space.
-    fn arrange_menu(&self) -> MenuEntry<Cmd> {
+    /// `sorted`: the list's sort column, None in the order of addition.
+    fn arrange_menu(sorted: Option<usize>) -> MenuEntry<Cmd> {
         use MenuEntry::{Item as I, Sub};
         let off = |label| I(label, Cmd::None, false, false);
         Sub("Arrange files", true, {
-            let sorted = self.list.sort.map(|s| s.0);
             let by = |label, col: Option<usize>| I(label, Cmd::Arrange(col), true, sorted == col);
             vec![
                 by("By &Order Of Addition", None),
@@ -6262,7 +6307,7 @@ impl App {
                 !self.shown_ids().is_empty(),
                 false,
             ),
-            self.arrange_menu(),
+            Self::arrange_menu(self.list.sort.map(|s| s.0)),
             I(
                 "Clear all &filters",
                 Cmd::ClearFilters,
@@ -6988,7 +7033,15 @@ impl App {
             ),
         ];
         let tb: Vec<(Icon, &str, bool)> = buttons.iter().map(|(i, l, e, _)| (*i, *l, *e)).collect();
-        match chrome::toolbar(ui, &layout, o, w, &tb) {
+        // The toolbar's toggle at its end: the details pane.
+        let toggle = chrome::ToolbarToggle {
+            icon: Icon::Details,
+            // i18n: noun: the toolbar button that shows and hides the details pane
+            label: "Details",
+            on: self.settings.show_details,
+        };
+        match chrome::toolbar(ui, &layout, o, w, &tb, Some(toggle)) {
+            Some(ToolbarEvent::Toggle) => chosen = Some((Cmd::ToggleDetails, None)),
             Some(ToolbarEvent::Click(k)) => chosen = Some((buttons[k].3, None)),
             Some(ToolbarEvent::Drop(k, at)) => match buttons[k].0 {
                 Icon::AddTorrent => self.open_popup(Popup::TorrentDrop, at),
@@ -9693,5 +9746,64 @@ mod route_tests {
         fn route_of_takes_the_first_check_that_holds(url in routed_address()) {
             proptest::prop_assert_eq!(route_of(&url), dev_route(&url));
         }
+    }
+}
+
+#[cfg(test)]
+mod view_menu_tests {
+    use super::{App, Cmd, MenuEntry, Settings};
+
+    /// The View menu, the paste bar and the details pane on or off as given.
+    fn view(paste: bool, details: bool) -> Vec<MenuEntry<Cmd>> {
+        let settings = Settings {
+            show_paste_bar: paste,
+            show_details: details,
+            ..Default::default()
+        };
+        App::view_entries(false, &settings, None, 1.0, &[])
+    }
+
+    /// Plan 06 (requirements 4.1, 4.2): "Paste bar" right after Categories, then "Details
+    /// pane", each checked while its setting is on.
+    #[test]
+    fn the_paste_bar_and_the_details_pane_follow_categories_checked_by_their_settings() {
+        for (paste, details) in [(false, false), (true, false), (false, true), (true, true)] {
+            let menu = view(paste, details);
+            assert!(matches!(
+                &menu[0],
+                MenuEntry::Item(_, Cmd::ToggleCategories, ..)
+            ));
+            assert!(matches!(
+                &menu[1],
+                MenuEntry::Item("&Paste bar", Cmd::TogglePasteBar, true, on) if *on == paste
+            ));
+            assert!(matches!(
+                &menu[2],
+                MenuEntry::Item("Details pa&ne", Cmd::ToggleDetails, true, on) if *on == details
+            ));
+        }
+    }
+
+    /// Requirement 4.3: no two items of the View menu share an access letter (the one after
+    /// "&": an item without one has none, as the menus' keys go).
+    #[test]
+    fn every_view_menu_access_letter_is_unique() {
+        let mut seen = std::collections::HashMap::new();
+        for e in view(true, true) {
+            let (MenuEntry::Item(l, ..) | MenuEntry::Radio(l, ..) | MenuEntry::Sub(l, ..)) = e
+            else {
+                continue;
+            };
+            let label = crate::i18n::tc("menu", l);
+            if !label.replace("&&", "").contains('&') {
+                continue;
+            }
+            let letter = crate::chrome::menu_letter(label);
+            if let Some(other) = seen.insert(letter.clone(), label) {
+                panic!("{other:?} and {label:?} share the access letter {letter:?}");
+            }
+        }
+        assert_eq!(seen.get("p"), Some(&"&Paste bar"));
+        assert_eq!(seen.get("n"), Some(&"Details pa&ne"));
     }
 }

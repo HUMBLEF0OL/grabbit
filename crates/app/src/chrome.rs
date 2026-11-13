@@ -148,7 +148,7 @@ impl Layout {
 #[cfg(test)]
 mod a11y_tests {
     use super::*;
-    use egui::accesskit::{Node, NodeId, Role};
+    use egui::accesskit::{Node, NodeId, Role, Toggled};
 
     /// One frame of `paint` in a 1240 × 700 window, AccessKit on; its nodes by id, and what
     /// `paint` returned. `events`: this frame's input.
@@ -157,8 +157,18 @@ mod a11y_tests {
         events: Vec<egui::Event>,
         paint: impl FnOnce(&mut Ui) -> R,
     ) -> (std::collections::HashMap<NodeId, Node>, R) {
+        frame_wide(ctx, 1240.0, events, paint)
+    }
+
+    /// [`frame`] in a window `w` wide (700 high).
+    fn frame_wide<R>(
+        ctx: &egui::Context,
+        w: f32,
+        events: Vec<egui::Event>,
+        paint: impl FnOnce(&mut Ui) -> R,
+    ) -> (std::collections::HashMap<NodeId, Node>, R) {
         let input = egui::RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1240.0, 700.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(w, 700.0))),
             events,
             ..Default::default()
         };
@@ -211,7 +221,7 @@ mod a11y_tests {
         let mut nodes = Default::default();
         for _ in 0..2 {
             (nodes, _) = frame(&ctx, vec![], |ui| {
-                toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 1240.0, &BUTTONS)
+                toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 1240.0, &BUTTONS, None)
             });
         }
         let mut want: Vec<(String, bool)> = BUTTONS
@@ -232,7 +242,7 @@ mod a11y_tests {
         let mut nodes = Default::default();
         for _ in 0..2 {
             (nodes, _) = frame(&ctx, vec![], |ui| {
-                toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 710.0, &BUTTONS)
+                toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 710.0, &BUTTONS, None)
             });
         }
         let rights: Vec<f64> = nodes
@@ -242,6 +252,186 @@ mod a11y_tests {
             .collect();
         assert_eq!(rights.len(), 11);
         assert!(rights.iter().all(|r| *r <= 710.0), "{rights:?}");
+    }
+
+    /// A toolbar button as a screen reader has it: name, greyed, toggled state, bounds.
+    type ButtonNode = (String, bool, Option<Toggled>, Option<[f64; 4]>);
+
+    /// The toolbar's buttons in their order across the band.
+    fn toolbar_buttons(nodes: &std::collections::HashMap<NodeId, Node>) -> Vec<ButtonNode> {
+        let mut v: Vec<ButtonNode> = nodes
+            .values()
+            .filter(|n| n.role() == Role::Button)
+            .map(|n| {
+                (
+                    n.label().unwrap_or_default().to_owned(),
+                    n.is_disabled(),
+                    n.toggled(),
+                    n.bounds().map(|b| [b.x0, b.y0, b.x1, b.y1]),
+                )
+            })
+            .collect();
+        v.sort_by(|a, b| {
+            let x = |n: &ButtonNode| n.3.map_or(f64::MAX, |b| b[0]);
+            x(a).total_cmp(&x(b))
+        });
+        v
+    }
+
+    /// The main window's Details toggle, on or off.
+    fn details(on: bool) -> Option<ToolbarToggle<'static>> {
+        Some(ToolbarToggle {
+            icon: Icon::Details,
+            label: "Details",
+            on,
+        })
+    }
+
+    /// The toolbar's nodes after two frames 1240 wide with `toggle`.
+    fn toolbar_nodes(
+        ctx: &egui::Context,
+        toggle: impl Fn() -> Option<ToolbarToggle<'static>>,
+    ) -> std::collections::HashMap<NodeId, Node> {
+        let mut nodes = Default::default();
+        for _ in 0..2 {
+            (nodes, _) = frame(ctx, vec![], |ui| {
+                toolbar(
+                    ui,
+                    &Layout::GRAPHITE,
+                    Pos2::ZERO,
+                    1240.0,
+                    &BUTTONS,
+                    toggle(),
+                )
+            });
+        }
+        nodes
+    }
+
+    /// A screen reader's Click on the node named `label`.
+    fn click_on(nodes: &std::collections::HashMap<NodeId, Node>, label: &str) -> egui::Event {
+        let (id, _) = nodes
+            .iter()
+            .find(|(_, n)| n.role() == Role::Button && n.label() == Some(label))
+            .unwrap_or_else(|| panic!("a {label} button"));
+        egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Click,
+            target_tree: egui::accesskit::TreeId::ROOT,
+            target_node: *id,
+            data: None,
+        })
+    }
+
+    /// With the Details toggle the toolbar has 12 buttons: the 11 as before, then "Details",
+    /// usable, its toggled state the setting's (requirements 11.4).
+    #[test]
+    fn the_toolbar_exposes_the_details_toggle_as_its_twelfth_button() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        for on in [false, true] {
+            let buttons = toolbar_buttons(&toolbar_nodes(&ctx, || details(on)));
+            assert_eq!(buttons.len(), 12, "{buttons:?}");
+            for ((label, disabled, toggled, _), (_, want, enabled)) in buttons.iter().zip(&BUTTONS)
+            {
+                assert_eq!(
+                    (label.as_str(), *disabled, *toggled),
+                    (*want, !enabled, None)
+                );
+            }
+            let (label, disabled, toggled, _) = &buttons[11];
+            let want = if on { Toggled::True } else { Toggled::False };
+            assert_eq!(
+                (label.as_str(), *disabled, *toggled),
+                ("Details", false, Some(want))
+            );
+        }
+    }
+
+    /// A screen reader's Click on Details presses the toggle (requirements 11.5).
+    #[test]
+    fn a_screen_readers_click_presses_the_toolbars_details_toggle() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let nodes = toolbar_nodes(&ctx, || details(false));
+        let click = click_on(&nodes, "Details");
+        let (_, event) = frame(&ctx, vec![click], |ui| {
+            toolbar(
+                ui,
+                &Layout::GRAPHITE,
+                Pos2::ZERO,
+                1240.0,
+                &BUTTONS,
+                details(false),
+            )
+        });
+        assert!(matches!(event, Some(ToolbarEvent::Toggle)));
+    }
+
+    /// Without a toggle the toolbar is as before (requirements 4.10): its 11 buttons, none with
+    /// a toggled state, where they are beside the toggle; a Click on one is still that button's.
+    #[test]
+    fn without_a_toggle_the_toolbar_is_as_before() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let nodes = toolbar_nodes(&ctx, || None);
+        let plain = toolbar_buttons(&nodes);
+        assert_eq!(plain.len(), 11, "{plain:?}");
+        assert!(plain.iter().all(|b| b.2.is_none() && b.0 != "Details"));
+        let with = toolbar_buttons(&toolbar_nodes(&ctx, || details(true)));
+        assert_eq!(plain[..], with[..11]);
+        let click = click_on(&nodes, "Add URL");
+        let (_, event) = frame(&ctx, vec![click], |ui| {
+            toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 1240.0, &BUTTONS, None)
+        });
+        assert!(matches!(event, Some(ToolbarEvent::Click(0))));
+    }
+
+    /// Property 15, toolbar fit: for any width from 710 (04's 200 %) to 2400, drawn from any
+    /// `o.x`, every button's and the Details toggle's right edge is within `o.x + width`, and
+    /// the toggle starts past the last button. One context for every case (a frame's fonts).
+    ///
+    /// **Validates: Requirements 4.9**
+    #[test]
+    fn the_toolbar_and_its_details_toggle_fit_any_width_from_710() {
+        use proptest::test_runner::{Config, TestCaseError, TestRunner};
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut runner = TestRunner::new(Config::with_cases(256));
+        let widths = (0.0f32..=120.0, 710.0f32..=2400.0, proptest::bool::ANY);
+        let result = runner.run(&widths, |(ox, width, on)| {
+            let o = pos2(ox, 0.0);
+            let mut nodes = Default::default();
+            for _ in 0..2 {
+                (nodes, _) = frame_wide(&ctx, ox + width, vec![], |ui| {
+                    toolbar(ui, &Layout::GRAPHITE, o, width, &BUTTONS, details(on))
+                });
+            }
+            let buttons = toolbar_buttons(&nodes);
+            let end = f64::from(o.x + width);
+            let bounds: Vec<[f64; 4]> = buttons.iter().filter_map(|b| b.3).collect();
+            let fail = |why: &str| {
+                Err(TestCaseError::fail(format!(
+                    "{why}: o.x {ox}, width {width}, on {on}, {buttons:?}"
+                )))
+            };
+            if buttons.len() != 12 || bounds.len() != 12 || buttons[11].0 != "Details" {
+                return fail("12 buttons, Details last");
+            }
+            if !bounds.iter().all(|b| b[2] <= end) {
+                return fail("a right edge past o.x + width");
+            }
+            if bounds[11][0] < bounds[10][2] {
+                return fail("the toggle over the last button");
+            }
+            Ok(())
+        });
+        if let Err(e) = result {
+            panic!("{e}");
+        }
     }
 
     /// Graphite's title-bar menus: still a menu bar of five menu items for screen readers, and
@@ -2143,6 +2333,16 @@ pub enum ToolbarEvent {
     /// A drop-down button's arrow: its menu opens at this point (the button's left edge,
     /// [`Layout::drop_y`] under the toolbar's top).
     Drop(usize, Pos2),
+    /// The toggle at the toolbar's end (Details) was pressed.
+    Toggle,
+}
+
+/// A toggle at the toolbar's end: its icon, label and whether it is on (filled with
+/// `toolbar.checked`, exposed with its toggled state).
+pub struct ToolbarToggle<'a> {
+    pub icon: Icon,
+    pub label: &'a str,
+    pub on: bool,
 }
 
 /// Graphite's toolbar buttons: their top inside the band and their height (DESIGN.md: the
@@ -2165,13 +2365,15 @@ fn ends_group(icon: Icon) -> bool {
 /// the label), 2 apart in a group and a 1-point rule between groups; under the pointer the
 /// toolbar's hot face rounded 8; a drop-down's arrow inside its button's end, which is its own
 /// part (a split button, as IDM's layout has it). Down to where the panes start
-/// ([`Layout::panes_top`]).
+/// ([`Layout::panes_top`]). `toggle`: a toggle button at the band's trailing end (the
+/// mockup's Details), at least `RULE_GAP` after the last button.
 pub fn toolbar(
     ui: &mut Ui,
     layout: &Layout,
     o: Pos2,
     width: f32,
     buttons: &[(Icon, &str, bool)],
+    toggle: Option<ToolbarToggle<'_>>,
 ) -> Option<ToolbarEvent> {
     let p = ui.painter().clone();
     let c = crate::theme::colors();
@@ -2210,18 +2412,19 @@ pub fn toolbar(
                     GAP
                 }
             })
-            .sum::<f32>();
+            .sum::<f32>()
+        + if toggle.is_some() { RULE_GAP } else { 0.0 };
     // A toolbar wider than the window (long labels, 200 %): the longest labels give way first.
+    // The toggle's label among them, by the same rules (no arrow).
     let natural: Vec<(f32, f32)> = buttons
         .iter()
-        .map(|(icon, label, _)| {
+        .map(|(icon, label, _)| (label, is_dropdown(icon)))
+        .chain(toggle.as_ref().map(|t| (&t.label, false)))
+        .map(|(label, dropdown)| {
             let ext = text_width_font(&p, font.clone(), crate::i18n::tc("toolbar", label)).ceil();
             // label_cap pads a label by 12: Graphite's by PAD. A drop-down's arrow is a part of
             // its own at the button's end, past the label.
-            (
-                ext + PAD - 12.0,
-                if is_dropdown(icon) { ARROW_W } else { 0.0 },
-            )
+            (ext + PAD - 12.0, if dropdown { ARROW_W } else { 0.0 })
         })
         .collect();
     // Narrower than 60 only in a window too small for them all (200 %, a narrow window): down
@@ -2229,7 +2432,7 @@ pub fn toolbar(
     let room = (width - fixed).max(0.0);
     let arrows: f32 = natural.iter().map(|n| n.1).sum();
     let min_w = MIN_W
-        .min(((room - arrows) / buttons.len().max(1) as f32).floor())
+        .min(((room - arrows) / natural.len().max(1) as f32).floor())
         .max(36.0);
     let cap = label_cap(&natural, min_w, room);
     let mut x = o.x + SIDE;
@@ -2361,6 +2564,62 @@ pub fn toolbar(
             } else {
                 x += GAP;
             }
+        }
+    }
+    if let Some(t) = toggle {
+        // At the band's trailing end (the mockup's `.tg.end`), never nearer the last button
+        // than RULE_GAP; filled with `toolbar.checked` while on.
+        let full = crate::i18n::tc("toolbar", t.label);
+        let full_ext = text_width_font(&p, font.clone(), full).ceil();
+        let bw = min_w.max((full_ext + PAD).min(cap));
+        let cut = full_ext + PAD > bw;
+        let shown = if cut {
+            winui::ellipsize(&p, &font, full, (bw - PAD).max(0.0))
+        } else {
+            full.to_owned()
+        };
+        let left = (o.x + width - SIDE - bw).max(x + RULE_GAP);
+        let english = Rect::from_min_size(pos2(left, top + TB_BUTTON_TOP), vec2(bw, TB_BUTTON_H));
+        let rc = winui::rect(english);
+        let resp = ui.interact(
+            rc,
+            egui::Id::unique(("tb", "toggle")),
+            winui::pointer_only(),
+        );
+        winui::expose(&resp, egui::Role::Button, full, true, Some(t.on));
+        let resp = if cut { resp.on_hover_text(full) } else { resp };
+        let radius = crate::theme::metrics().button_radius;
+        let face = if resp.hovered() {
+            Some(if resp.is_pointer_button_down_on() && pointer_down {
+                c.toolbar_pressed
+            } else {
+                c.toolbar_hot
+            })
+        } else if t.on {
+            Some(c.toolbar_checked)
+        } else {
+            None
+        };
+        if let Some(face) = face {
+            p.rect_filled(rc, radius, face);
+        }
+        let cx = english.left() + bw / 2.0;
+        let icon_rc = Rect::from_min_size(
+            pos2((cx - 10.0).round(), english.top() + 6.0),
+            vec2(20.0, 20.0),
+        );
+        t.icon.image(true).paint_at(ui, winui::rect(icon_rc));
+        let ext = text_width_font(&p, font.clone(), &shown).ceil();
+        text_font(
+            &p,
+            font.clone(),
+            (cx - ext / 2.0).round(),
+            english.top() + 39.0,
+            &shown,
+            c.text_secondary,
+        );
+        if resp.clicked() {
+            event = Some(ToolbarEvent::Toggle);
         }
     }
     event
