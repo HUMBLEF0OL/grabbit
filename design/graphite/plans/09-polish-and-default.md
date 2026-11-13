@@ -69,6 +69,17 @@ Line numbers drift as phases land: find each item by its name first.
    "Left from 05.5" and KNOWN-GAPS G3 hold the list).
 5. CHANGELOG entry for the new look; ROADMAP's "A new look, 'Graphite'" item marked ✅.
 
+## Left from 06
+
+09a's full review (step 5) takes these. Plan 06's "Left from 06" has the details:
+
+- the on-screen keyboard and Narrator pass over the paste bar, the details pane and their toggles
+  (skipped in 06; the headless tests cover the logic);
+- interface sizes 150 % and 200 % for both (06's screenshots are at 100 % only);
+- the audit's deferred nits: tests of `route_new_url`'s side effects (they need an `App` built in a
+  test), a file name without break points staying on one line in the pane's header, tests of the
+  splitter and of a short pane, and `/show details` while a column filter is set.
+
 ## Done when
 
 - [ ] Graphite's default button and progress show the two-tone finish; dark mode shows the glow; light does not

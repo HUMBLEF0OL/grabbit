@@ -16,9 +16,14 @@ not), and the menu bar and every right-click menu as menus whose items can be ru
 | Keys | What they do |
 |---|---|
 | **Ctrl+N** | Add a download (**Add URL**) |
+| **Ctrl+V** | Paste an address into the paste bar (while nothing else has the keyboard; it doesn't add it, **Enter** does) |
 | **Ctrl+F** | Find a download |
 | **F3** | Find the next match |
 | Type a name | Jump to the download whose name starts with it |
+
+In the paste bar's address box, **Enter** adds the address, **Esc** leaves the box, **Up** /
+**Down** step through the last addresses (the same list as **Add URL**'s), and **Alt+Down** or
+**F4** opens that list.
 
 ## The selected download
 
@@ -45,7 +50,9 @@ not), and the menu bar and every right-click menu as menus whose items can be ru
 | **Ctrl+Space** | Select or unselect the download with the dotted outline |
 | **Page Up** / **Page Down** | Move a page up / down |
 | **Home** / **End** | Select the first / last download |
-| **Tab** / **Shift+Tab** | Move between the download list and the Categories tree |
+| **Tab** / **Shift+Tab** | Move between the paste bar, the categories and the download list (**Shift+Tab** goes back) |
+
+When the paste bar is hidden, **Tab** moves between the categories and the download list.
 
 In the **Categories** tree, **Up** / **Down** choose a node, **Left** / **Right** close and open
 a branch, and **Home** / **End** go to the first / last node.
@@ -62,7 +69,7 @@ a branch, and **Home** / **End** go to the first / last node.
 | **Enter**, or an item's underlined letter | Run the highlighted item |
 | **Esc** | Close a menu or dialog (an open drop-down list first) |
 | **Enter** | In **Download File Info**: **Start Download** |
-| **Tab** | Move between the **Categories** pane and the download list |
+| **Tab** | Move between the paste bar, the categories and the download list |
 | **Up** / **Down**, **Left** / **Right** | In the **Categories** pane: the next category; close or open a branch |
 | **Shift+F10** or the **Menu** key | In the **Categories** pane: the selected category's menu (**Properties**, **Add category**, **Delete**) |
 | **Ctrl++** / **Ctrl+−** | Make everything larger / smaller, in every window (**View → Interface size**, 100 % to 200 %) |

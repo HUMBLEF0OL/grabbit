@@ -985,9 +985,15 @@ impl Item {
     }
 
     pub fn time_left(&self) -> String {
+        self.time_left_at(self.rate())
+    }
+
+    /// The Time left column at a transfer rate of `rate` bytes/s (its live one: `time_left`):
+    /// blank unless it is downloading with a size and data coming.
+    pub fn time_left_at(&self, rate: f64) -> String {
         match (self.status, self.size) {
-            (Status::Downloading, Some(t)) if self.rate() > 1.0 => {
-                time((t.saturating_sub(self.downloaded)) as f64 / self.rate())
+            (Status::Downloading, Some(t)) if rate > 1.0 => {
+                time((t.saturating_sub(self.downloaded)) as f64 / rate)
             }
             _ => String::new(),
         }

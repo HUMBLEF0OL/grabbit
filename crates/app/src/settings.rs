@@ -98,6 +98,15 @@ pub struct Settings {
     pub show_categories: bool,
     pub branches: [bool; 4],
     pub view: Option<crate::app::View>,
+    /// View → Paste bar (plan 06): the address band under the toolbar. On by default, for
+    /// existing lists too.
+    pub show_paste_bar: bool,
+    /// View → Details pane, and the toolbar's Details (plan 06): the selected download beside
+    /// the list. Off by default.
+    pub show_details: bool,
+    /// The details pane's width in points (plan 06: 276 by default, the mockup's), dragged with
+    /// its splitter.
+    pub details_width: u32,
     /// View → Dark Mode support (IDM 6.37): follow Windows' dark app mode; off = always light.
     pub dark_mode_support: bool,
     /// View → Always dark (#60): dark whatever the system says (a desktop that reports no
@@ -361,6 +370,9 @@ impl Default for Settings {
             show_categories: true,
             branches: [true, false, false, false],
             view: None,
+            show_paste_bar: true,
+            show_details: false,
+            details_width: 276,
             dark_mode_support: true,
             always_dark: false,
             theme: "graphite".into(),
@@ -1049,6 +1061,18 @@ mod tests {
         );
     }
 
+    /// Plan 06: a settings file from before the paste bar and the details pane loads with the
+    /// paste bar on, the pane off and the pane 276 points wide (D1).
+    #[test]
+    fn an_old_settings_file_gets_the_paste_bar_and_details_defaults() {
+        let s: super::Settings =
+            serde_json::from_str(r#"{"max_connections": 3, "show_categories": false}"#).unwrap();
+        assert_eq!(s.max_connections, 3);
+        assert!(s.show_paste_bar);
+        assert!(!s.show_details);
+        assert_eq!(s.details_width, 276);
+    }
+
     #[test]
     fn a_dialog_keeps_what_changed_elsewhere_meanwhile() {
         let from = super::Settings::default();
@@ -1129,6 +1153,137 @@ mod tests {
         }
         assert_eq!(h.len(), HISTORY);
         assert_eq!(h[0], "29");
+    }
+
+    /// An address as `route_new_url` hands it to `remember`; two hosts × 20 paths give 40
+    /// values, enough to fill a history of `HISTORY` and to hit an entry already there.
+    fn address() -> impl proptest::strategy::Strategy<Value = String> {
+        "https://example\\.(org|com)/[a-d]{1,2}"
+    }
+
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+
+        // Feature: paste-bar-details-pane, Property 4: History
+        /// **Validates: Requirements 1.2**
+        ///
+        /// For any history `remember` can have built (distinct entries, at most `HISTORY`, in any
+        /// order) and any address, with or without spaces around it: afterwards the address is
+        /// first, no entry is there twice and there are at most `HISTORY`.
+        #[test]
+        fn remember_puts_the_address_first_once_within_the_limit(
+            history in proptest::strategy::Strategy::prop_shuffle(
+                proptest::strategy::Strategy::prop_map(
+                    proptest::collection::btree_set(address(), 0..=HISTORY),
+                    Vec::from_iter,
+                ),
+            ),
+            url in address(),
+            pad in "[ \t]{0,2}",
+        ) {
+            let mut h = history;
+            remember(&mut h, &format!("{pad}{url}{pad}"));
+            proptest::prop_assert_eq!(&h[0], &url);
+            let distinct: std::collections::HashSet<&String> = h.iter().collect();
+            proptest::prop_assert_eq!(distinct.len(), h.len(), "no duplicates: {:?}", h);
+            proptest::prop_assert!(h.len() <= HISTORY, "{} entries", h.len());
+        }
+    }
+
+    /// The settings' keys as the list file writes them, but the paste bar's and the details
+    /// pane's: what a file from before plan 06 can hold.
+    fn keys_before_plan_06() -> Vec<String> {
+        let all = serde_json::to_value(Settings::default()).unwrap();
+        all.as_object()
+            .unwrap()
+            .keys()
+            .filter(|k| !["show_paste_bar", "show_details", "details_width"].contains(&k.as_str()))
+            .cloned()
+            .collect()
+    }
+
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+
+        // Feature: paste-bar-details-pane, Property 13: Settings round trip
+        /// **Validates: Requirements 3.2, 3.3**
+        ///
+        /// Any paste bar and details pane state, and any width, read back as saved: through
+        /// serde_json as `store::encode` writes the list (pretty) and `store::parse_bytes` reads
+        /// it (from bytes).
+        #[test]
+        fn the_view_settings_read_back_as_saved(
+            paste in proptest::prelude::any::<bool>(),
+            details in proptest::prelude::any::<bool>(),
+            width in proptest::prelude::any::<u32>(),
+        ) {
+            let s = Settings {
+                show_paste_bar: paste,
+                show_details: details,
+                details_width: width,
+                ..Settings::default()
+            };
+            let json = serde_json::to_vec_pretty(&s).unwrap();
+            let back: Settings = serde_json::from_slice(&json).unwrap();
+            proptest::prop_assert_eq!(
+                (back.show_paste_bar, back.show_details, back.details_width),
+                (paste, details, width)
+            );
+        }
+
+        // Feature: paste-bar-details-pane, Property 13: Settings round trip
+        /// **Validates: Requirements 3.2, 3.3**
+        ///
+        /// A settings object with any of the other keys (with changed values) and a key MDM no
+        /// longer knows, but none of the three: they load as the defaults (on, off, 276) and the
+        /// other values are read.
+        #[test]
+        fn a_file_without_the_view_settings_loads_their_defaults(
+            keys in proptest::sample::subsequence(
+                keys_before_plan_06(),
+                0..=keys_before_plan_06().len(),
+            ),
+            max_connections in 1u32..=128,
+            show_categories in proptest::prelude::any::<bool>(),
+            categories_width in proptest::prelude::any::<u32>(),
+            theme in "[a-z]{0,8}",
+            unknown in proptest::prelude::any::<bool>(),
+        ) {
+            let source = Settings {
+                max_connections,
+                show_categories,
+                graphite_categories_width: categories_width,
+                theme,
+                ..Settings::default()
+            };
+            let all = serde_json::to_value(&source).unwrap();
+            let mut file = serde_json::Map::new();
+            for k in &keys {
+                file.insert(k.clone(), all[k.as_str()].clone());
+            }
+            if unknown {
+                file.insert("language".into(), serde_json::json!("de"));
+            }
+            let json = serde_json::to_vec_pretty(&file).unwrap();
+            let back: Settings = serde_json::from_slice(&json).unwrap();
+            proptest::prop_assert_eq!(
+                (back.show_paste_bar, back.show_details, back.details_width),
+                (true, false, 276)
+            );
+            let has = |k: &str| keys.iter().any(|x| x == k);
+            if has("max_connections") {
+                proptest::prop_assert_eq!(back.max_connections, max_connections);
+            }
+            if has("show_categories") {
+                proptest::prop_assert_eq!(back.show_categories, show_categories);
+            }
+            if has("graphite_categories_width") {
+                proptest::prop_assert_eq!(back.graphite_categories_width, categories_width);
+            }
+            if has("theme") {
+                proptest::prop_assert_eq!(&back.theme, &source.theme);
+            }
+        }
     }
 
     #[test]

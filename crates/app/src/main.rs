@@ -34,6 +34,7 @@ mod netwatch;
 mod options;
 mod pacfetch;
 mod palette;
+mod panes;
 mod playlistdlg;
 mod progress;
 mod properties;

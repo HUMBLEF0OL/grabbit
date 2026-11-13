@@ -19,6 +19,19 @@ MDM takes `http://`, `https://`, `ftp://`, `ftps://`, `ftpes://` and `magnet:` a
 
 If the address is a video's page (YouTube, Vimeo, TikTok and others), the video window opens instead. See [Video downloads](video.md). A magnet link opens **Add torrent**; see [Torrents](torrents.md).
 
+## Paste bar
+
+The paste bar is the address box under the toolbar. It is there unless you turned it off: **View → Paste bar** shows or hides it.
+
+1. Paste a file's address or a magnet link into the box.
+2. Press **Enter** or click **Download**.
+
+MDM goes on as if you had clicked **OK** in **Add URL**: a file's address opens **Download File Info**, a magnet link or a `.torrent` address opens **Add torrent**, a video's page the video window ([Video downloads](video.md)) and a gallery's page the gallery window ([Image galleries](galleries.md)). An address MDM doesn't take shows **Invalid address** in place of **Enter adds it**, and stays in the box for you to fix.
+
+The paste bar shares **Add URL**'s list of the last 20 addresses. The arrow at the end of the box (or **Alt+Down** or **F4**) opens it, and **Up** and **Down** in the box step through the same addresses.
+
+**Ctrl+V** while nothing else has the keyboard puts the first line of the clipboard in the paste bar. It adds nothing until you press **Enter**. **Esc** leaves the box, and **Tab** moves between the paste bar, the categories and the download list.
+
 ## FTP and FTPS
 
 FTP downloads work like web downloads: several connections at once, pause and resume, and the

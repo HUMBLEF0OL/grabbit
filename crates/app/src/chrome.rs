@@ -41,6 +41,10 @@ pub struct Layout {
     pub list_gap: f32,
     /// The menus are in the drawn title bar (Graphite's, `menu_h` 0), not in a row of their own.
     pub menus_in_caption: bool,
+    /// The paste bar under the toolbar: [`Layout::PASTE_H`] when shown, 0 when hidden (plan 06).
+    pub paste_h: f32,
+    /// The details pane at the trailing edge: its width when shown, 0 when hidden (plan 06).
+    pub details_w: f32,
 }
 
 impl Layout {
@@ -58,7 +62,15 @@ impl Layout {
         list_right: 0.0,
         list_gap: 0.0,
         menus_in_caption: true,
+        paste_h: 0.0,
+        details_w: 0.0,
     };
+
+    /// The paste bar's band, its bottom rule included (the mockup's `.paste`: 8 + 32 + 8).
+    pub const PASTE_H: f32 = 48.0;
+
+    /// The details pane's splitter grip: its first 4 points, inside its leading rule.
+    pub const DETAILS_GRIP: f32 = 4.0;
 
     /// The menu row under the system's title bar, its bottom line included (IDM's: non-client
     /// y -20..-1), when the title bar isn't ours.
@@ -78,6 +90,17 @@ impl Layout {
         }
     }
 
+    /// This frame's panes on top of `self` (plan 06): the paste bar's height when `paste`, the
+    /// details pane's width when given (0 for `None`); every other field as it is.
+    /// `with_panes(false, None)` is `self`.
+    pub fn with_panes(self, paste: bool, details_w: Option<f32>) -> Layout {
+        Layout {
+            paste_h: if paste { Layout::PASTE_H } else { 0.0 },
+            details_w: details_w.unwrap_or(0.0),
+            ..self
+        }
+    }
+
     /// The list's bottom edge (exclusive) in a client area `h` high.
     pub fn list_bottom(&self, h: f32) -> f32 {
         self.strip_top(h) - self.list_gap
@@ -88,9 +111,26 @@ impl Layout {
         self.menu_h
     }
 
-    /// Where the panes (Categories, the list) start, down from the client area's top.
+    /// The paste bar's top, down from the client area's: under the toolbar.
+    pub fn paste_top(&self) -> f32 {
+        self.toolbar_top() + self.toolbar_h
+    }
+
+    /// Where the panes (Categories, the list) start, down from the client area's top: under
+    /// the toolbar and the paste bar.
     pub fn panes_top(&self) -> f32 {
-        self.menu_h + self.toolbar_h
+        self.paste_top() + self.paste_h
+    }
+
+    /// The list's trailing edge in a client area `w` wide: before its margin and the details
+    /// pane.
+    pub fn list_end(&self, w: f32) -> f32 {
+        w - self.list_right - self.details_w
+    }
+
+    /// The details pane's leading edge in a client area `w` wide.
+    pub fn details_left(&self, w: f32) -> f32 {
+        w - self.details_w
     }
 
     /// The strip's top in a client area `h` high.
@@ -104,7 +144,7 @@ impl Layout {
 #[cfg(test)]
 mod a11y_tests {
     use super::*;
-    use egui::accesskit::{Node, NodeId, Role};
+    use egui::accesskit::{Node, NodeId, Role, Toggled};
 
     /// One frame of `paint` in a 1240 × 700 window, AccessKit on; its nodes by id, and what
     /// `paint` returned. `events`: this frame's input.
@@ -113,8 +153,18 @@ mod a11y_tests {
         events: Vec<egui::Event>,
         paint: impl FnOnce(&mut Ui) -> R,
     ) -> (std::collections::HashMap<NodeId, Node>, R) {
+        frame_wide(ctx, 1240.0, events, paint)
+    }
+
+    /// [`frame`] in a window `w` wide (700 high).
+    fn frame_wide<R>(
+        ctx: &egui::Context,
+        w: f32,
+        events: Vec<egui::Event>,
+        paint: impl FnOnce(&mut Ui) -> R,
+    ) -> (std::collections::HashMap<NodeId, Node>, R) {
         let input = egui::RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1240.0, 700.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(w, 700.0))),
             events,
             ..Default::default()
         };
@@ -167,7 +217,7 @@ mod a11y_tests {
         let mut nodes = Default::default();
         for _ in 0..2 {
             (nodes, _) = frame(&ctx, vec![], |ui| {
-                toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 1240.0, &BUTTONS)
+                toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 1240.0, &BUTTONS, None)
             });
         }
         let mut want: Vec<(String, bool)> = BUTTONS
@@ -188,7 +238,7 @@ mod a11y_tests {
         let mut nodes = Default::default();
         for _ in 0..2 {
             (nodes, _) = frame(&ctx, vec![], |ui| {
-                toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 710.0, &BUTTONS)
+                toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 710.0, &BUTTONS, None)
             });
         }
         let rights: Vec<f64> = nodes
@@ -198,6 +248,186 @@ mod a11y_tests {
             .collect();
         assert_eq!(rights.len(), 11);
         assert!(rights.iter().all(|r| *r <= 710.0), "{rights:?}");
+    }
+
+    /// A toolbar button as a screen reader has it: name, greyed, toggled state, bounds.
+    type ButtonNode = (String, bool, Option<Toggled>, Option<[f64; 4]>);
+
+    /// The toolbar's buttons in their order across the band.
+    fn toolbar_buttons(nodes: &std::collections::HashMap<NodeId, Node>) -> Vec<ButtonNode> {
+        let mut v: Vec<ButtonNode> = nodes
+            .values()
+            .filter(|n| n.role() == Role::Button)
+            .map(|n| {
+                (
+                    n.label().unwrap_or_default().to_owned(),
+                    n.is_disabled(),
+                    n.toggled(),
+                    n.bounds().map(|b| [b.x0, b.y0, b.x1, b.y1]),
+                )
+            })
+            .collect();
+        v.sort_by(|a, b| {
+            let x = |n: &ButtonNode| n.3.map_or(f64::MAX, |b| b[0]);
+            x(a).total_cmp(&x(b))
+        });
+        v
+    }
+
+    /// The main window's Details toggle, on or off.
+    fn details(on: bool) -> Option<ToolbarToggle<'static>> {
+        Some(ToolbarToggle {
+            icon: Icon::Details,
+            label: "Details",
+            on,
+        })
+    }
+
+    /// The toolbar's nodes after two frames 1240 wide with `toggle`.
+    fn toolbar_nodes(
+        ctx: &egui::Context,
+        toggle: impl Fn() -> Option<ToolbarToggle<'static>>,
+    ) -> std::collections::HashMap<NodeId, Node> {
+        let mut nodes = Default::default();
+        for _ in 0..2 {
+            (nodes, _) = frame(ctx, vec![], |ui| {
+                toolbar(
+                    ui,
+                    &Layout::GRAPHITE,
+                    Pos2::ZERO,
+                    1240.0,
+                    &BUTTONS,
+                    toggle(),
+                )
+            });
+        }
+        nodes
+    }
+
+    /// A screen reader's Click on the node named `label`.
+    fn click_on(nodes: &std::collections::HashMap<NodeId, Node>, label: &str) -> egui::Event {
+        let (id, _) = nodes
+            .iter()
+            .find(|(_, n)| n.role() == Role::Button && n.label() == Some(label))
+            .unwrap_or_else(|| panic!("a {label} button"));
+        egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
+            action: egui::accesskit::Action::Click,
+            target_tree: egui::accesskit::TreeId::ROOT,
+            target_node: *id,
+            data: None,
+        })
+    }
+
+    /// With the Details toggle the toolbar has 12 buttons: the 11 as before, then "Details",
+    /// usable, its toggled state the setting's (requirements 11.4).
+    #[test]
+    fn the_toolbar_exposes_the_details_toggle_as_its_twelfth_button() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        for on in [false, true] {
+            let buttons = toolbar_buttons(&toolbar_nodes(&ctx, || details(on)));
+            assert_eq!(buttons.len(), 12, "{buttons:?}");
+            for ((label, disabled, toggled, _), (_, want, enabled)) in buttons.iter().zip(&BUTTONS)
+            {
+                assert_eq!(
+                    (label.as_str(), *disabled, *toggled),
+                    (*want, !enabled, None)
+                );
+            }
+            let (label, disabled, toggled, _) = &buttons[11];
+            let want = if on { Toggled::True } else { Toggled::False };
+            assert_eq!(
+                (label.as_str(), *disabled, *toggled),
+                ("Details", false, Some(want))
+            );
+        }
+    }
+
+    /// A screen reader's Click on Details presses the toggle (requirements 11.5).
+    #[test]
+    fn a_screen_readers_click_presses_the_toolbars_details_toggle() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let nodes = toolbar_nodes(&ctx, || details(false));
+        let click = click_on(&nodes, "Details");
+        let (_, event) = frame(&ctx, vec![click], |ui| {
+            toolbar(
+                ui,
+                &Layout::GRAPHITE,
+                Pos2::ZERO,
+                1240.0,
+                &BUTTONS,
+                details(false),
+            )
+        });
+        assert!(matches!(event, Some(ToolbarEvent::Toggle)));
+    }
+
+    /// Without a toggle the toolbar is as before (requirements 4.10): its 11 buttons, none with
+    /// a toggled state, where they are beside the toggle; a Click on one is still that button's.
+    #[test]
+    fn without_a_toggle_the_toolbar_is_as_before() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let nodes = toolbar_nodes(&ctx, || None);
+        let plain = toolbar_buttons(&nodes);
+        assert_eq!(plain.len(), 11, "{plain:?}");
+        assert!(plain.iter().all(|b| b.2.is_none() && b.0 != "Details"));
+        let with = toolbar_buttons(&toolbar_nodes(&ctx, || details(true)));
+        assert_eq!(plain[..], with[..11]);
+        let click = click_on(&nodes, "Add URL");
+        let (_, event) = frame(&ctx, vec![click], |ui| {
+            toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 1240.0, &BUTTONS, None)
+        });
+        assert!(matches!(event, Some(ToolbarEvent::Click(0))));
+    }
+
+    /// Property 15, toolbar fit: for any width from 710 (04's 200 %) to 2400, drawn from any
+    /// `o.x`, every button's and the Details toggle's right edge is within `o.x + width`, and
+    /// the toggle starts past the last button. One context for every case (a frame's fonts).
+    ///
+    /// **Validates: Requirements 4.9**
+    #[test]
+    fn the_toolbar_and_its_details_toggle_fit_any_width_from_710() {
+        use proptest::test_runner::{Config, TestCaseError, TestRunner};
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut runner = TestRunner::new(Config::with_cases(256));
+        let widths = (0.0f32..=120.0, 710.0f32..=2400.0, proptest::bool::ANY);
+        let result = runner.run(&widths, |(ox, width, on)| {
+            let o = pos2(ox, 0.0);
+            let mut nodes = Default::default();
+            for _ in 0..2 {
+                (nodes, _) = frame_wide(&ctx, ox + width, vec![], |ui| {
+                    toolbar(ui, &Layout::GRAPHITE, o, width, &BUTTONS, details(on))
+                });
+            }
+            let buttons = toolbar_buttons(&nodes);
+            let end = f64::from(o.x + width);
+            let bounds: Vec<[f64; 4]> = buttons.iter().filter_map(|b| b.3).collect();
+            let fail = |why: &str| {
+                Err(TestCaseError::fail(format!(
+                    "{why}: o.x {ox}, width {width}, on {on}, {buttons:?}"
+                )))
+            };
+            if buttons.len() != 12 || bounds.len() != 12 || buttons[11].0 != "Details" {
+                return fail("12 buttons, Details last");
+            }
+            if !bounds.iter().all(|b| b[2] <= end) {
+                return fail("a right edge past o.x + width");
+            }
+            if bounds[11][0] < bounds[10][2] {
+                return fail("the toggle over the last button");
+            }
+            Ok(())
+        });
+        if let Err(e) = result {
+            panic!("{e}");
+        }
     }
 
     /// Graphite's title-bar menus: still a menu bar of five menu items for screen readers, and
@@ -315,6 +545,107 @@ mod layout_tests {
         assert_eq!(s.panes_top(), 78.0);
         assert!(!s.menus_in_caption);
         assert_eq!(Layout::current(true).panes_top(), 58.0);
+    }
+
+    /// Plan 06: with the paste bar and the details pane both off, the layout is today's for
+    /// either title bar (panes at 58 under Graphite's, 78 under the system's).
+    #[test]
+    fn both_panes_off_is_todays_layout() {
+        for drawn in [true, false] {
+            let l = Layout::current(drawn).with_panes(false, None);
+            assert_eq!(l, Layout::current(drawn));
+            assert_eq!((l.paste_h, l.details_w), (0.0, 0.0));
+            assert_eq!(l.list_end(1240.0), 1240.0);
+        }
+        let (drawn, system) = (Layout::current(true), Layout::current(false));
+        assert_eq!(drawn.with_panes(false, None).panes_top(), 58.0);
+        assert_eq!(system.with_panes(false, None).panes_top(), 78.0);
+    }
+
+    /// The paste bar's 48 points go between the toolbar and the panes: its top is the
+    /// toolbar's bottom, the panes start under it (106 under Graphite's title bar, 126 under
+    /// the system's).
+    #[test]
+    fn the_paste_bar_moves_the_panes_down() {
+        let l = Layout::current(true).with_panes(true, None);
+        assert_eq!(l.paste_h, Layout::PASTE_H);
+        assert_eq!(l.paste_top(), 58.0);
+        assert_eq!(l.panes_top(), 106.0);
+        let s = Layout::current(false).with_panes(true, None);
+        assert_eq!(s.paste_top(), 78.0);
+        assert_eq!(s.panes_top(), 126.0);
+        // The paste bar leaves the list's trailing edge alone.
+        assert_eq!(l.list_end(1240.0), 1240.0);
+    }
+
+    /// The details pane's width comes off the list's trailing edge, after the list's margin;
+    /// the pane starts where the list ends when there is no margin.
+    #[test]
+    fn the_details_pane_ends_the_list_before_it() {
+        let l = Layout::current(true).with_panes(false, Some(276.0));
+        assert_eq!(l.details_w, 276.0);
+        assert_eq!(l.panes_top(), 58.0);
+        assert_eq!(l.list_end(1240.0), 964.0);
+        assert_eq!(l.details_left(1240.0), 964.0);
+        // A layout with a right margin: the margin and the pane both come off.
+        let m = Layout {
+            list_right: 2.0,
+            ..l
+        };
+        assert_eq!(m.list_end(1240.0), 962.0);
+        // Both on: the paste bar and the pane together.
+        let both = Layout::current(false).with_panes(true, Some(300.0));
+        assert_eq!((both.panes_top(), both.list_end(1000.0)), (126.0, 700.0));
+    }
+
+    // Feature: paste-bar-details-pane, Property 6: Layout neutrality.
+    // **Validates: Requirements 5.5**
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+        /// Both panes off is today's layout for either title bar, and `with_panes` changes no
+        /// field but the paste bar's height and the details pane's width.
+        #[test]
+        fn with_panes_changes_only_the_panes(
+            drawn in proptest::prelude::any::<bool>(),
+            paste in proptest::prelude::any::<bool>(),
+            details in proptest::option::of(0.0f32..=100_000.0),
+        ) {
+            let base = Layout::current(drawn);
+            proptest::prop_assert_eq!(base.with_panes(false, None), base);
+            let l = base.with_panes(paste, details);
+            proptest::prop_assert_eq!(
+                Layout {
+                    paste_h: base.paste_h,
+                    details_w: base.details_w,
+                    ..l
+                },
+                base
+            );
+        }
+    }
+
+    // Feature: paste-bar-details-pane, Property 7: Layout arithmetic.
+    // **Validates: Requirements 5.1, 5.2, 5.3, 5.4**
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+        /// The paste bar is 48 high when shown and 0 when hidden, right under the toolbar; the
+        /// panes start under both; the details pane's width comes off the list's trailing edge
+        /// after its margin.
+        #[test]
+        fn the_panes_add_up(
+            drawn in proptest::prelude::any::<bool>(),
+            paste in proptest::prelude::any::<bool>(),
+            d in 0.0f32..=100_000.0,
+            w in 0.0f32..=100_000.0,
+        ) {
+            let l = Layout::current(drawn).with_panes(paste, Some(d));
+            let paste_h = if paste { 48.0 } else { 0.0 };
+            proptest::prop_assert_eq!(l.paste_h, paste_h);
+            proptest::prop_assert_eq!(l.paste_top(), l.toolbar_top() + l.toolbar_h);
+            proptest::prop_assert_eq!(l.panes_top(), l.toolbar_top() + l.toolbar_h + paste_h);
+            proptest::prop_assert_eq!(l.details_w, d);
+            proptest::prop_assert_eq!(l.list_end(w), w - l.list_right - d);
+        }
     }
 }
 
@@ -1998,6 +2329,16 @@ pub enum ToolbarEvent {
     /// A drop-down button's arrow: its menu opens at this point (the button's left edge,
     /// [`Layout::drop_y`] under the toolbar's top).
     Drop(usize, Pos2),
+    /// The toggle at the toolbar's end (Details) was pressed.
+    Toggle,
+}
+
+/// A toggle at the toolbar's end: its icon, label and whether it is on (filled with
+/// `toolbar.checked`, exposed with its toggled state).
+pub struct ToolbarToggle<'a> {
+    pub icon: Icon,
+    pub label: &'a str,
+    pub on: bool,
 }
 
 /// Graphite's toolbar buttons: their top inside the band and their height (DESIGN.md: the
@@ -2020,13 +2361,15 @@ fn ends_group(icon: Icon) -> bool {
 /// the label), 2 apart in a group and a 1-point rule between groups; under the pointer the
 /// toolbar's hot face rounded 8; a drop-down's arrow inside its button's end, which is its own
 /// part (a split button, as IDM's layout has it). Down to where the panes start
-/// ([`Layout::panes_top`]).
+/// ([`Layout::panes_top`]). `toggle`: a toggle button at the band's trailing end (the
+/// mockup's Details), at least `RULE_GAP` after the last button.
 pub fn toolbar(
     ui: &mut Ui,
     layout: &Layout,
     o: Pos2,
     width: f32,
     buttons: &[(Icon, &str, bool)],
+    toggle: Option<ToolbarToggle<'_>>,
 ) -> Option<ToolbarEvent> {
     let p = ui.painter().clone();
     let c = crate::theme::colors();
@@ -2065,18 +2408,19 @@ pub fn toolbar(
                     GAP
                 }
             })
-            .sum::<f32>();
+            .sum::<f32>()
+        + if toggle.is_some() { RULE_GAP } else { 0.0 };
     // A toolbar wider than the window (long labels, 200 %): the longest labels give way first.
+    // The toggle's label among them, by the same rules (no arrow).
     let natural: Vec<(f32, f32)> = buttons
         .iter()
-        .map(|(icon, label, _)| {
+        .map(|(icon, label, _)| (label, is_dropdown(icon)))
+        .chain(toggle.as_ref().map(|t| (&t.label, false)))
+        .map(|(label, dropdown)| {
             let ext = text_width_font(&p, font.clone(), crate::i18n::tc("toolbar", label)).ceil();
             // label_cap pads a label by 12: Graphite's by PAD. A drop-down's arrow is a part of
             // its own at the button's end, past the label.
-            (
-                ext + PAD - 12.0,
-                if is_dropdown(icon) { ARROW_W } else { 0.0 },
-            )
+            (ext + PAD - 12.0, if dropdown { ARROW_W } else { 0.0 })
         })
         .collect();
     // Narrower than 60 only in a window too small for them all (200 %, a narrow window): down
@@ -2084,7 +2428,7 @@ pub fn toolbar(
     let room = (width - fixed).max(0.0);
     let arrows: f32 = natural.iter().map(|n| n.1).sum();
     let min_w = MIN_W
-        .min(((room - arrows) / buttons.len().max(1) as f32).floor())
+        .min(((room - arrows) / natural.len().max(1) as f32).floor())
         .max(36.0);
     let cap = label_cap(&natural, min_w, room);
     let mut x = o.x + SIDE;
@@ -2216,6 +2560,62 @@ pub fn toolbar(
             } else {
                 x += GAP;
             }
+        }
+    }
+    if let Some(t) = toggle {
+        // At the band's trailing end (the mockup's `.tg.end`), never nearer the last button
+        // than RULE_GAP; filled with `toolbar.checked` while on.
+        let full = crate::i18n::tc("toolbar", t.label);
+        let full_ext = text_width_font(&p, font.clone(), full).ceil();
+        let bw = min_w.max((full_ext + PAD).min(cap));
+        let cut = full_ext + PAD > bw;
+        let shown = if cut {
+            winui::ellipsize(&p, &font, full, (bw - PAD).max(0.0))
+        } else {
+            full.to_owned()
+        };
+        let left = (o.x + width - SIDE - bw).max(x + RULE_GAP);
+        let english = Rect::from_min_size(pos2(left, top + TB_BUTTON_TOP), vec2(bw, TB_BUTTON_H));
+        let rc = winui::rect(english);
+        let resp = ui.interact(
+            rc,
+            egui::Id::unique(("tb", "toggle")),
+            winui::pointer_only(),
+        );
+        winui::expose(&resp, egui::Role::Button, full, true, Some(t.on));
+        let resp = if cut { resp.on_hover_text(full) } else { resp };
+        let radius = crate::theme::metrics().button_radius;
+        let face = if resp.hovered() {
+            Some(if resp.is_pointer_button_down_on() && pointer_down {
+                c.toolbar_pressed
+            } else {
+                c.toolbar_hot
+            })
+        } else if t.on {
+            Some(c.toolbar_checked)
+        } else {
+            None
+        };
+        if let Some(face) = face {
+            p.rect_filled(rc, radius, face);
+        }
+        let cx = english.left() + bw / 2.0;
+        let icon_rc = Rect::from_min_size(
+            pos2((cx - 10.0).round(), english.top() + 6.0),
+            vec2(20.0, 20.0),
+        );
+        t.icon.image(true).paint_at(ui, winui::rect(icon_rc));
+        let ext = text_width_font(&p, font.clone(), &shown).ceil();
+        text_font(
+            &p,
+            font.clone(),
+            (cx - ext / 2.0).round(),
+            english.top() + 39.0,
+            &shown,
+            c.text_secondary,
+        );
+        if resp.clicked() {
+            event = Some(ToolbarEvent::Toggle);
         }
     }
     event

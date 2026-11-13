@@ -7,7 +7,7 @@ that adds a download from an address, and a details pane beside the list that sh
 download. Both reuse what exists (00's accepted exception: new routes to existing commands); neither
 adds a new kind of download.
 
-- Branch: `ui/06-panes`
+- Branch: `ui/06-panes` (06a, the paste bar), `ui/06b-details-pane` (06b, the details pane, stacked on `ui/06-panes`)
 - Needs: 05a (`Layout`), 05b (the Graphite toolbar, for the Details toggle), 02b (the Graphite roles), 03b (`gx-*` glyphs)
 - Unblocks: 09
 
@@ -78,9 +78,30 @@ bar, placeholder); Adding a download section (paste bar routing to Download File
 - Settings round-trip for the three new fields; old settings files load with the defaults.
 - Details pane: shows the focused row; updates after Stop/Resume; empty and multi-select states.
 
+## Left from 06
+
+Plan 09a does the full keyboard and accessibility review (09, step 5), so these go there:
+
+- The on-screen keyboard pass (Tab rotation, arrows, Alt and menu letters with the field empty and
+  not empty, Enter, Escape, Ctrl+V) and the Narrator pass (the field, the Download button, the
+  toggles, the Details group). The user skipped them in 06; the headless tests cover the logic.
+- Interface sizes 150 % and 200 % for the paste bar and the details pane (06's screenshots are at
+  100 % only).
+- The audit's deferred nits:
+  - tests of `route_new_url`'s side effects (the history and `dirty`, `request_parts` for a
+    .torrent, the Video and General folders, the duplicate check), which need an `App` built in
+    a test;
+  - a file name without break points stays on one line in the pane's header (`winui::fit_lines`
+    does not break inside a word, and other windows share it);
+  - tests of the splitter's arithmetic (pull `dragged_width` out of `App::details` first) and of
+    a short pane (276 × 150);
+  - `/show details` while a column filter is set (the shots run on a fresh data folder, so none
+    is).
+
 ## Done when
 
-- [ ] Both parts toggle from View (and the toolbar, for details) and persist across restarts
-- [ ] The paste bar routes every kind of address exactly as Add URL does
-- [ ] Keyboard and accessibility checks pass
-- [ ] Help updated; screenshots, ROADMAP, CHANGELOG
+- [x] Both parts toggle from View (and the toolbar, for details) and persist across restarts
+- [x] The paste bar routes every kind of address exactly as Add URL does
+- [ ] Keyboard and accessibility checks pass (the headless tests pass; the on-screen keyboard and Narrator pass is left to 09a, see "Left from 06")
+- [x] Help updated; ROADMAP, CHANGELOG
+- [x] Screenshots (light and dark at 100 %, before and after, in the PR)

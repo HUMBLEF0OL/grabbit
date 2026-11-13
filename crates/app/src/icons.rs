@@ -40,6 +40,8 @@ pub enum Icon {
     HelperMerge,
     /// and both are checked before they run.
     HelperChecked,
+    /// The toolbar's Details toggle (plan 06): shows or hides the details pane.
+    Details,
 }
 
 impl Icon {
@@ -74,6 +76,8 @@ impl Icon {
             Icon::HelperVideo => "gx-search",
             Icon::HelperMerge => "gx-merge",
             Icon::HelperChecked => "gx-shield",
+            // Not a tb- need, so Graphite's in every theme.
+            Icon::Details => "gx-sidebar",
         }
     }
 
@@ -140,6 +144,7 @@ mod tests {
             HelperVideo,
             HelperMerge,
             HelperChecked,
+            Details,
         ];
         // A new Icon breaks this match: add it to `all` above too.
         for icon in all {
@@ -148,7 +153,7 @@ mod tests {
                 | Options | Scheduler | StartQueue | StopQueue | DragOut | PageGeneral
                 | PageFileTypes | PageSaveTo | PageDownloads | PageConnection | PageProxy
                 | PageLogins | PageSounds | PageRegional | PageArchives | PageRemote
-                | PageAccounts | HelperVideo | HelperMerge | HelperChecked => {}
+                | PageAccounts | HelperVideo | HelperMerge | HelperChecked | Details => {}
             }
         }
         for icon in all {
@@ -159,5 +164,14 @@ mod tests {
                 "{icon:?}: Graphite's set lacks {need}"
             );
         }
+    }
+
+    /// The toolbar's Details toggle (plan 06) draws Graphite's `gx-sidebar` in every theme.
+    #[test]
+    fn details_is_graphites_sidebar() {
+        assert_eq!(Icon::Details.need(), "gx-sidebar");
+        assert!(!Icon::Details.toolbar());
+        assert!(crate::themeicons::graphite_has("gx-sidebar", 16));
+        assert!(crate::themeicons::graphite_has("gx-sidebar", 24));
     }
 }

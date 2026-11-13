@@ -104,6 +104,10 @@ enum Cmd {
     ToggleDarkMode,
     /// View → Always dark (#60).
     ToggleAlwaysDark,
+    /// View → Paste bar (plan 06).
+    TogglePasteBar,
+    /// View → Details pane, and the toolbar's Details (plan 06).
+    ToggleDetails,
     /// View → Theme → a theme (#45): a built-in's id or a theme file's name.
     Theme(&'static str),
     /// View → Theme → Open themes folder.
@@ -313,7 +317,10 @@ impl Cmd {
             Cmd::None => return chrome::menu_icon(label),
             Cmd::AddUrl => "tb-add-url",
             Cmd::OpenTorrentFile => "tb-add-torrent",
-            Cmd::AddMagnet | Cmd::LinkGrabber | Cmd::RefreshAddress => "gx-link",
+            Cmd::AddMagnet | Cmd::LinkGrabber | Cmd::RefreshAddress | Cmd::TogglePasteBar => {
+                "gx-link"
+            }
+            Cmd::ToggleDetails => "gx-sidebar",
             Cmd::TorrentSettings | Cmd::Options => "tb-options",
             Cmd::Batch(false) => "gx-hash",
             Cmd::Batch(true) => "gx-copy",
@@ -463,6 +470,8 @@ pub struct App {
     move_many_for: Vec<u64>,
     /// The Categories tree has the keys (else the list; Tab moves between them).
     tree_keys: bool,
+    /// The paste bar's address field, its error and its drop list (plan 06a).
+    paste: crate::panes::PasteBar,
     /// The app's context, to reach its windows from anywhere (bring one to the front).
     ui_ctx: egui::Context,
     /// The language screen readers were last told.
@@ -721,6 +730,135 @@ pub struct App {
     wake: crate::wake::Waker,
     /// Commands from ipc.rs (command line, second launch, browser).
     commands: std::sync::mpsc::Receiver<ipc::Incoming>,
+}
+
+/// Where an accepted address goes, in Add URL's order (plan 06): `route_of` picks it,
+/// `App::route_new_url` opens it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Route {
+    /// A magnet link: Add torrent.
+    Magnet,
+    /// A .torrent's address (#39): Add torrent fetches it.
+    TorrentUrl,
+    /// A video's page (YouTube, Vimeo…): the video window.
+    VideoPage,
+    /// An image gallery's page (#58): gallery-dl.
+    GalleryPage,
+    /// Anything else: the duplicate check, then Download File Info.
+    File,
+}
+
+/// The route for an accepted address: the first check that holds wins, in this order.
+fn route_of(url: &url::Url) -> Route {
+    if url.scheme() == "magnet" {
+        Route::Magnet
+    } else if crate::torrents::is_torrent_url(url, None, None) {
+        Route::TorrentUrl
+    } else if mdm_tools::pages::is_video_page(url) {
+        Route::VideoPage
+    } else if mdm_tools::pages::is_gallery_page(url) {
+        Route::GalleryPage
+    } else {
+        Route::File
+    }
+}
+
+/// `/show paste:<address>`'s address (plan 06, requirement 21.2): what follows `paste:`,
+/// trimmed. None for another name or an empty address. The address comes in lower case
+/// (`mdm_ipc::parse_args` lowers every `/show` argument).
+fn show_paste_arg(name: &str) -> Option<&str> {
+    let address = name.strip_prefix("paste:")?.trim();
+    (!address.is_empty()).then_some(address)
+}
+/// Is this `/show details` (plan 06, requirement 21.1)? Only the bare name: it takes no
+/// argument (`details:x` is not it).
+fn is_show_details(name: &str) -> bool {
+    name == "details"
+}
+/// The download `/show details` selects (requirement 21.1), in `self.items` order (the list's
+/// own order when it is not sorted): the first stopped one that Resume may start, else the
+/// first download; None without downloads.
+fn show_details_pick(items: &[Item]) -> Option<u64> {
+    items
+        .iter()
+        .find(|i| i.status == Status::Stopped && i.can_start())
+        .or_else(|| items.first())
+        .map(|i| i.id)
+}
+
+/// The typing gate before the menu bar's keys (Alt, F10, Alt+letter) in `App::paint`: a focused
+/// text box keeps them, as on dev, except the paste bar's field while it is empty (D12).
+fn menu_keys_blocked(text_edit_focused: bool, is_paste_field: bool, paste_empty: bool) -> bool {
+    text_edit_focused && !(is_paste_field && paste_empty)
+}
+
+/// The command a details pane button runs on the shown download (Requirement 15.5, D10): Show
+/// progress window is Open, which brings an unfinished download's progress window up
+/// (`open_item`); the button is greyed for a finished one, which Open would open.
+fn details_cmd(action: crate::panes::DetailsAction) -> Cmd {
+    use crate::panes::DetailsAction;
+    match action {
+        DetailsAction::Resume => Cmd::Resume,
+        DetailsAction::Stop => Cmd::Stop,
+        DetailsAction::OpenFolder => Cmd::OpenFolder,
+        DetailsAction::ShowProgress => Cmd::Open,
+    }
+}
+
+/// For the empty paste field with the focus, which leaves the menu keys to the menu bar: the
+/// letter typed with Alt held (it comes as a key, which opens a menu, and as text), and while a
+/// menu is open its items' letters, are taken from the input before the field is drawn, so the
+/// field doesn't type them too. A plain letter with no menu open stays the field's.
+fn take_menu_text(ctx: &egui::Context, menu_open: bool) {
+    ctx.input_mut(|i| {
+        if menu_open || (i.modifiers.alt && !i.modifiers.ctrl) {
+            i.events.retain(|e| !matches!(e, egui::Event::Text(_)));
+        }
+    });
+}
+
+/// The main window's shortcut keys at the end of `App::paint` (no menu or popup open, no command
+/// chosen yet), the command they run. The full list: Help → Keyboard shortcuts (`help.rs`).
+///
+/// - Ctrl+F finds, F3 finds the next match (Downloads menu); Ctrl+N adds a download (not in
+///   IDM); Ctrl+M as IDM and F2 as renaming in Explorer move or rename. These are consumed
+///   whatever has the focus (no text box answers them); of several in one frame Find wins, then
+///   Find next, Add, Move/rename (Ctrl+M first: F2 is then left in the input).
+/// - Else, while no widget is `focused` (a text box, Find, a filter or the paste field, has the
+///   keys: Delete deletes its text), Delete removes the selected downloads and Shift+Delete
+///   with their files (both ask first). They are read, not consumed. On Windows egui reports
+///   Shift+Delete as Cut (Ctrl+X is Cut too, without Shift).
+fn shortcut_cmd(i: &mut egui::InputState, focused: bool) -> Option<Cmd> {
+    let find = i.consume_key(egui::Modifiers::COMMAND, egui::Key::F);
+    let next = i.consume_key(egui::Modifiers::NONE, egui::Key::F3);
+    let add = i.consume_key(egui::Modifiers::COMMAND, egui::Key::N);
+    let rename = i.consume_key(egui::Modifiers::COMMAND, egui::Key::M)
+        || i.consume_key(egui::Modifiers::NONE, egui::Key::F2);
+    if find {
+        return Some(Cmd::Find);
+    } else if next {
+        return Some(Cmd::FindNext);
+    } else if add {
+        return Some(Cmd::AddUrl);
+    } else if rename {
+        return Some(Cmd::MoveRename);
+    }
+    if focused {
+        return None;
+    }
+    let del = i.key_pressed(egui::Key::Delete) && !i.modifiers.shift;
+    // Windows reports it as Cut.
+    let shift_del = i.modifiers.shift
+        && !i.modifiers.command
+        && (i.events.iter().any(|e| matches!(e, egui::Event::Cut))
+            || i.key_pressed(egui::Key::Delete));
+    if shift_del {
+        Some(Cmd::RemoveWithFiles)
+    } else if del {
+        Some(Cmd::Remove)
+    } else {
+        None
+    }
 }
 
 /// The login written in an address (`ftp://user:pass@host/…`), decoded.
@@ -1058,6 +1196,7 @@ impl App {
             a11y_lang: "",
             ui_ctx: ctx.clone(),
             tree_keys: false,
+            paste: Default::default(),
             move_rename_for: None,
             move_many_for: Vec::new(),
             list_view: view,
@@ -1203,6 +1342,52 @@ impl App {
 
     fn item(&mut self, id: u64) -> Option<&mut Item> {
         self.items.iter_mut().find(|i| i.id == id)
+    }
+    /// What the details pane shows for the selection (D9), from the downloads the list draws
+    /// this frame: one gone shows nothing (Requirement 14.3).
+    fn details_view(&self) -> crate::panes::DetailsView {
+        use crate::panes::{DetailsView, Shown};
+        let ids = self.selection.ids();
+        // The selected downloads' sizes only (this runs every frame): one is looked up, several
+        // are found in one pass over the downloads.
+        let sizes: Vec<(u64, Option<u64>)> = match ids {
+            [] => Vec::new(),
+            [id] => self
+                .items
+                .iter()
+                .find(|i| i.id == *id)
+                .map(|i| (i.id, i.size))
+                .into_iter()
+                .collect(),
+            _ => {
+                let picked: std::collections::HashSet<u64> = ids.iter().copied().collect();
+                self.items
+                    .iter()
+                    .filter(|i| picked.contains(&i.id))
+                    .map(|i| (i.id, i.size))
+                    .collect()
+            }
+        };
+        match crate::panes::shown(ids, &sizes) {
+            Shown::Empty => DetailsView::Empty,
+            Shown::One(id) => self
+                .items
+                .iter()
+                .find(|i| i.id == id)
+                .map_or(DetailsView::Empty, |it| {
+                    DetailsView::One(Box::new(self.one_download(it)))
+                }),
+            Shown::Many { count, total } => DetailsView::Many { count, total },
+        }
+    }
+    /// The details pane's view of `it`: its live rate while it runs, the queue it is in.
+    fn one_download(&self, it: &Item) -> crate::panes::OneDownload {
+        let queue = self
+            .queues
+            .iter()
+            .find(|q| q.items.contains(&it.id))
+            .map(|q| q.name.as_str());
+        crate::panes::one_download(it, it.live.as_ref().map(|_| it.rate()), queue)
     }
 
     /// The one download single-download commands act on (Properties, Open…).
@@ -1417,13 +1602,7 @@ impl App {
             .filter(|f| status == model::percent(*f))
             .map(|f| f as f32);
         list::Row {
-            kind: match it.status {
-                Status::Downloading => list::StatusKind::Downloading,
-                Status::Stopped => list::StatusKind::Stopped,
-                Status::Queued => list::StatusKind::Waiting,
-                Status::Complete => list::StatusKind::Complete,
-                Status::Error => list::StatusKind::Error,
-            },
+            kind: list::StatusKind::of(it.status),
             progress,
             icon: file_icon(&it.file_name),
             queued: queued.contains(&it.id),
@@ -2048,6 +2227,35 @@ impl App {
         let (window, tab) = name.split_once(':').unwrap_or((name, ""));
         match window {
             "addurl" => self.run(Cmd::AddUrl, None, ctx),
+            // The paste bar with an address put in and submitted, as its Enter does (plan 06's
+            // "Adding a download" screenshots): `paste:https://example.org/a.zip` opens Download
+            // File Info, a rejected one shows "Invalid address". The bar is turned on as View →
+            // Paste bar does, so the next settings save keeps it on (an accepted address asks
+            // for that save at once: its history entry, as Enter's).
+            "paste" => {
+                if let Some(address) = show_paste_arg(name) {
+                    self.settings.show_paste_bar = true;
+                    self.paste.fill(address);
+                    let accepted = dialogs::accept_address(&self.paste.text);
+                    if let Some(new) = crate::panes::submit(&mut self.paste, accepted) {
+                        self.route_new_url(new, ctx);
+                    }
+                }
+            }
+            // The details pane on with a stopped download selected (plan 06's "details pane
+            // with a stopped download" screenshots). As `paste`, the pane is turned on and the
+            // next settings save keeps it on. A download the view hides is shown in All
+            // Downloads, as Find next does, so the list keeps the selection.
+            "details" if is_show_details(name) => {
+                self.settings.show_details = true;
+                if let Some(id) = show_details_pick(&self.items) {
+                    self.selection.set(id);
+                    if !self.shown_ids().contains(&id) {
+                        self.view = View::All;
+                    }
+                    self.list.scroll_to = self.shown_ids().iter().position(|x| *x == id);
+                }
+            }
             // MDM_CRASH_TEST=1 only (crash.rs): the crash reports' own check.
             "crash-test" => crate::crash::test(tab),
             "batch" => self.run(Cmd::Batch(false), None, ctx),
@@ -5328,6 +5536,25 @@ impl App {
                 self.theme_checked = None;
                 self.dirty = true;
             }
+            Cmd::TogglePasteBar => {
+                self.settings.show_paste_bar = !self.settings.show_paste_bar;
+                // Hidden, the paste field also gives up the keys. When it had them (or was
+                // about to take them after Ctrl+V), the list takes them, as after Escape.
+                if !self.settings.show_paste_bar {
+                    let had = self.paste.focus_next
+                        || ctx.memory(|m| m.has_focus(crate::panes::paste_field_id()));
+                    self.paste.leave(ctx);
+                    if had {
+                        self.tree_keys = false;
+                        self.list.set_keys(true);
+                    }
+                }
+                self.dirty = true;
+            }
+            Cmd::ToggleDetails => {
+                self.settings.show_details = !self.settings.show_details;
+                self.dirty = true;
+            }
             Cmd::Theme(id) => {
                 self.settings.theme = id.to_owned();
                 crate::theme::select(id);
@@ -5815,9 +6042,7 @@ impl App {
         let resumable = picked.iter().any(|i| i.can_start());
         let deletable = picked.iter().any(|i| i.live.is_none());
         let any_running = self.items.iter().any(|i| i.live.is_some());
-        let off = |label| I(label, Cmd::None, false, false);
-        #[allow(unused_mut)]
-        let mut menu = match index {
+        match index {
             0 => vec![
                 I("&Add new download", Cmd::AddUrl, true, false),
                 I("Open &torrent file...", Cmd::OpenTorrentFile, true, false),
@@ -5946,39 +6171,13 @@ impl App {
                 Sep,
                 I("&Options", Cmd::Options, true, false),
             ],
-            3 => vec![
-                I(
-                    if self.show_categories {
-                        crate::i18n::mark("Hide &categories")
-                    } else {
-                        crate::i18n::mark("Show &categories")
-                    },
-                    Cmd::ToggleCategories,
-                    true,
-                    false,
-                ),
-                self.arrange_menu(),
-                // i18n: noun: the toolbar (submenu of View with its settings)
-                Sub("Toolbar", false, vec![]),
-                Sub("&Tray icon", false, vec![]),
-                off("C&ustomize URL List..."),
-                I(
-                    "Dark Mode support",
-                    Cmd::ToggleDarkMode,
-                    true,
-                    self.settings.dark_mode_support,
-                ),
-                // MDM's (#60): dark whatever the system says (a desktop that reports nothing).
-                I(
-                    // i18n: View menu: a check item; dark mode on, whatever the system's setting
-                    "Always dark",
-                    Cmd::ToggleAlwaysDark,
-                    true,
-                    self.settings.always_dark,
-                ),
-                // i18n: noun: the list's font (submenu)
-                Sub("Font", false, vec![]),
-            ],
+            3 => Self::view_entries(
+                self.show_categories,
+                &self.settings,
+                self.list.sort.map(|s| s.0),
+                self.zoom,
+                &self.theme_list,
+            ),
             // IDM's Help menu, ours (D-020): pages of the user guide (docs/); "Video downloads" stands
             // where IDM has "Grabber Help"; "Report a problem" where "Contact IDM Support";
             // Keyboard shortcuts added; no Tip of the Day.
@@ -6014,24 +6213,80 @@ impl App {
                 // MDM's, not IDM's: the creator's GitHub Sponsors page, asked for only.
                 I("Support &MDM", Cmd::Support, true, false),
             ],
-        };
-        // View → Theme (MDM's, #45), after Always dark; then Draw with (#89, renderer.rs).
-        if let Some(at) = menu
-            .iter()
-            .position(|e| matches!(e, I(_, Cmd::ToggleAlwaysDark, ..)))
-        {
-            menu.insert(at + 1, self.theme_menu());
-            menu.insert(at + 2, self.interface_size_menu());
-            menu.insert(at + 3, self.draw_with_menu());
         }
-        menu
     }
 
-    /// View → Theme (#45): the built-in themes, the theme files in the themes folder, and a way
-    /// to that folder. Picked, a theme applies at once.
-    fn theme_menu(&self) -> MenuEntry<Cmd> {
+    /// The View menu: its check items by `show_categories` and `settings`, Arrange files by the
+    /// list's sort column (`sorted`), Theme by the theme files in its folder (`themes`),
+    /// Interface size by the zoom drawn now. Built from these alone, so a test builds it too.
+    fn view_entries(
+        show_categories: bool,
+        settings: &Settings,
+        sorted: Option<usize>,
+        zoom: f32,
+        themes: &[crate::themefile::Entry],
+    ) -> Vec<MenuEntry<Cmd>> {
+        use MenuEntry::{Item as I, Sub};
+        let off = |label| I(label, Cmd::None, false, false);
+        vec![
+            I(
+                if show_categories {
+                    crate::i18n::mark("Hide &categories")
+                } else {
+                    crate::i18n::mark("Show &categories")
+                },
+                Cmd::ToggleCategories,
+                true,
+                false,
+            ),
+            // Plan 06: the paste bar and the details pane, right after Categories.
+            I(
+                // i18n: View menu: a check item; the address band under the toolbar
+                "&Paste bar",
+                Cmd::TogglePasteBar,
+                true,
+                settings.show_paste_bar,
+            ),
+            I(
+                // i18n: View menu: a check item; the pane beside the list with the selected download
+                "Details pa&ne",
+                Cmd::ToggleDetails,
+                true,
+                settings.show_details,
+            ),
+            Self::arrange_menu(sorted),
+            // i18n: noun: the toolbar (submenu of View with its settings)
+            Sub("Toolbar", false, vec![]),
+            Sub("&Tray icon", false, vec![]),
+            off("C&ustomize URL List..."),
+            I(
+                "Dark Mode support",
+                Cmd::ToggleDarkMode,
+                true,
+                settings.dark_mode_support,
+            ),
+            // MDM's (#60): dark whatever the system says (a desktop that reports nothing).
+            I(
+                // i18n: View menu: a check item; dark mode on, whatever the system's setting
+                "Always dark",
+                Cmd::ToggleAlwaysDark,
+                true,
+                settings.always_dark,
+            ),
+            // View → Theme (MDM's, #45), after Always dark; then Interface size (#262) and
+            // Draw with (#89, renderer.rs).
+            Self::theme_menu(&settings.theme, themes),
+            Self::interface_size_menu(zoom),
+            Self::draw_with_menu(settings.renderer),
+            // i18n: noun: the list's font (submenu)
+            Sub("Font", false, vec![]),
+        ]
+    }
+
+    /// View → Theme (#45): the built-in themes, the theme files in the themes folder
+    /// (`themes`), and a way to that folder. Picked, a theme applies at once.
+    fn theme_menu(chosen: &str, themes: &[crate::themefile::Entry]) -> MenuEntry<Cmd> {
         use MenuEntry::{Item as I, Radio, Sep, Sub};
-        let chosen = self.settings.theme.as_str();
         let mut items = Vec::new();
         let mut files = false;
         // Graphite, MDM's only built-in look: chosen too when the setting names a theme MDM no
@@ -6040,7 +6295,7 @@ impl App {
         // i18n: View → Theme: MDM's own look (rounded, amethyst and cyan), a name: keep "Graphite" as written
         items.push(Radio("Graphite", Cmd::Theme("graphite"), true, graphite));
         let wal = crate::themefile::PYWAL;
-        for e in self.theme_list.iter().filter(|e| e.path.is_some()) {
+        for e in themes.iter().filter(|e| e.path.is_some()) {
             if !files {
                 items.push(Sep);
                 files = true;
@@ -6076,8 +6331,8 @@ impl App {
 
     /// View → Interface size (#262): every window larger, as a browser zooms (Ctrl + / Ctrl − /
     /// Ctrl 0 too). The size shown is the zoom drawn now, a test run's MDM_ZOOM too.
-    fn interface_size_menu(&self) -> MenuEntry<Cmd> {
-        let now = crate::scale::of_zoom(self.zoom);
+    fn interface_size_menu(zoom: f32) -> MenuEntry<Cmd> {
+        let now = crate::scale::of_zoom(zoom);
         let items = crate::scale::STEPS
             .into_iter()
             .map(|p| {
@@ -6092,12 +6347,12 @@ impl App {
 
     /// View → Draw with (#89): OpenGL or Direct3D, used from the next start. Greyed lines say when
     /// what draws now isn't the choice: the system's API failed here (and why), or the choice
-    /// waits for the next start.
-    fn draw_with_menu(&self) -> MenuEntry<Cmd> {
+    /// waits for the next start. `setting`: the choice saved in the settings.
+    fn draw_with_menu(setting: Option<crate::renderer::Api>) -> MenuEntry<Cmd> {
         use crate::renderer::{self, Api, Why};
         use MenuEntry::{Item as I, Radio, Sep, Sub};
         let off = |label| I(label, Cmd::None, false, false);
-        let chosen = renderer::chosen(self.settings.renderer);
+        let chosen = renderer::chosen(setting);
         let gpu = renderer::GPU.unwrap_or(Api::OpenGl);
         let on = chosen == gpu;
         let draw = Cmd::DrawWith(gpu);
@@ -6195,11 +6450,11 @@ impl App {
     /// The list's right-click menu. With several downloads selected it acts on all of them
     /// (Resume, Stop, Remove, queues); commands for one download need one.
     /// View → Arrange files, also on the list's blank space.
-    fn arrange_menu(&self) -> MenuEntry<Cmd> {
+    /// `sorted`: the list's sort column, None in the order of addition.
+    fn arrange_menu(sorted: Option<usize>) -> MenuEntry<Cmd> {
         use MenuEntry::{Item as I, Sub};
         let off = |label| I(label, Cmd::None, false, false);
         Sub("Arrange files", true, {
-            let sorted = self.list.sort.map(|s| s.0);
             let by = |label, col: Option<usize>| I(label, Cmd::Arrange(col), true, sorted == col);
             vec![
                 by("By &Order Of Addition", None),
@@ -6231,7 +6486,7 @@ impl App {
                 !self.shown_ids().is_empty(),
                 false,
             ),
-            self.arrange_menu(),
+            Self::arrange_menu(self.list.sort.map(|s| s.0)),
             I(
                 "Clear all &filters",
                 Cmd::ClearFilters,
@@ -6717,6 +6972,117 @@ impl App {
         }
     }
 
+    /// What the Tab rotation reads this frame (`panes::tab_keys`).
+    fn tab_state(&self) -> crate::panes::TabState {
+        crate::panes::TabState {
+            paste: self.settings.show_paste_bar,
+            tree: self.show_categories,
+            tree_keys: self.tree_keys,
+            menu_open: self.popup.is_some() || self.open_menu.is_some(),
+            filter_open: self.list.filter_is_open(),
+            filter_ends: self.list.filter_ends(),
+        }
+    }
+
+    /// The Tab stop that has the keys now: the paste field when it has egui's focus, else the
+    /// tree when it has the keys, else the list.
+    fn current_stop(&self, ctx: &egui::Context) -> crate::panes::Stop {
+        crate::panes::current_stop(ctx, &self.tab_state())
+    }
+
+    /// Tab and Shift+Tab in the main window (no menu, popup or history list open): consumed,
+    /// egui's own focus move cancelled, the next shown stop of paste field → tree → list given
+    /// the keys (`panes::tab_keys`). The paste bar hidden, the tree ↔ list toggle of before.
+    fn tab_keys(&mut self, ctx: &egui::Context) {
+        let from = self.current_stop(ctx);
+        let state = self.tab_state();
+        let Some(to) = crate::panes::tab_keys(ctx, &mut self.paste, state, from) else {
+            return;
+        };
+        if to == crate::panes::Stop::Paste {
+            // The field has the keys: the list's selection goes grey, as the tree's does.
+            self.list.set_keys(false);
+        } else {
+            self.tree_keys = to == crate::panes::Stop::Tree;
+            self.list.set_keys(!self.tree_keys);
+        }
+        // The keyboard is in use: access letters show (light mode too).
+        crate::chrome::show_cues(ctx);
+    }
+
+    /// The details pane (plan 06b) and its splitter, from `details_left` to the trailing edge
+    /// beside the list, in the client area `o`, `w` × `h`. Built each frame from `self.items`,
+    /// the list's data, after `list::show` and the selection it changed: it follows the list's
+    /// repaints while a download runs, shows a click's selection in that frame, and comes after
+    /// the list for a screen reader as on screen. The list ends where the pane starts
+    /// (`list_end`), so nothing of the list is under it. A button's command goes in `chosen`
+    /// for the shown download, and the list takes the keys back.
+    fn details(
+        &mut self,
+        ui: &mut Ui,
+        layout: &chrome::Layout,
+        (o, w, h): (egui::Pos2, f32, f32),
+        list_left: f32,
+        chosen: &mut Option<(Cmd, Option<u64>)>,
+    ) {
+        let ctx = ui.ctx().clone();
+        let left = o.x + layout.details_left(w);
+        let rc = egui::Rect::from_min_max(
+            pos2(left, o.y + layout.panes_top()),
+            pos2(o.x + w, o.y + layout.list_bottom(h)),
+        );
+        let view = self.details_view();
+        let shown = match &view {
+            crate::panes::DetailsView::One(one) => Some(one.id),
+            _ => None,
+        };
+        if let Some(action) = crate::panes::details_pane(ui, rc, &view, &mut self.icons)
+            && let Some(id) = shown
+        {
+            *chosen = Some((details_cmd(action), Some(id)));
+            // The press in the pane took the keys from the list; its download is the list's.
+            // Only with nothing focused (a pointer click): a widget that keeps egui's focus (a
+            // button pressed by Enter, the field under a screen reader's Click) keeps the keys,
+            // and the list does not draw an active selection it cannot act on.
+            if ctx.memory(|m| m.focused().is_none()) {
+                self.tree_keys = false;
+                self.list.set_keys(true);
+            }
+        }
+        // The splitter: the pane's first `DETAILS_GRIP` points, after the pane so it is above
+        // it. The pane keeps where it was taken; dragging toward the list widens it.
+        let grip = winui::rect(egui::Rect::from_min_max(
+            rc.min,
+            pos2(left + chrome::Layout::DETAILS_GRIP, rc.max.y),
+        ));
+        let sr = ui.interact(
+            grip,
+            egui::Id::unique("details-splitter"),
+            winui::pointer_drag(),
+        );
+        if sr.hovered() || sr.dragged() {
+            ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+        }
+        let grab = egui::Id::unique("details-splitter-grab");
+        if sr.drag_started()
+            && let Some(p) = sr.interact_pointer_pos()
+        {
+            ctx.data_mut(|d| d.insert_temp(grab, winui::mx(p.x) - left));
+        }
+        if sr.dragged()
+            && let Some(p) = sr.interact_pointer_pos()
+        {
+            // The pane's width from the window's trailing edge (the left in RTL).
+            let at = ctx.data(|d| d.get_temp::<f32>(grab)).unwrap_or(0.0);
+            let nw = (o.x + w - (winui::mx(p.x) - at)).round().max(0.0);
+            self.settings.details_width =
+                crate::panes::details_width(nw as u32, w, list_left) as u32;
+        }
+        if sr.drag_stopped() {
+            self.dirty = true;
+        }
+    }
+
     fn paint(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
         let full = ui.max_rect();
@@ -6724,7 +7090,10 @@ impl App {
         let _surface = winui::Surface::enter(full.min.x, full.max.x);
         // Where every band and pane goes this frame (chrome::Layout).
         let drawn = self.sync_frame(ui);
-        let layout = chrome::Layout::current(drawn);
+        // The paste bar's band under the toolbar (plan 06). The details pane's width is added
+        // after the Categories pane (its clamp needs the list's leading edge); nothing drawn
+        // before then reads it.
+        let layout = chrome::Layout::current(drawn).with_panes(self.settings.show_paste_bar, None);
         let window_min = full.min;
         // Graphite's title bar keeps room after its title for the menus and Find (plan 05b).
         let find_key = chrome::key_label(Cmd::Find.hint().unwrap_or("Ctrl+F"));
@@ -6750,10 +7119,14 @@ impl App {
         // The menu bar from the keyboard: F10 or Alt pressed alone opens its first menu, Alt and a
         // menu's underlined letter that menu.
         // A focused button or list (Tab, a screen reader, #328) leaves these keys to the menu bar;
-        // only a text box keeps them.
-        let typing = ctx
-            .memory(|m| m.focused())
-            .is_some_and(|id| egui::TextEdit::load_state(&ctx, id).is_some());
+        // only a text box keeps them, but for the paste field while it is empty (plan 06).
+        let focused = ctx.memory(|m| m.focused());
+        let on_paste = focused == Some(crate::panes::paste_field_id());
+        let typing = menu_keys_blocked(
+            focused.is_some_and(|id| egui::TextEdit::load_state(&ctx, id).is_some()),
+            on_paste,
+            self.paste.text.is_empty(),
+        );
         if self.open_menu.is_none() && self.popup.is_none() && !typing {
             let labels: Vec<String> = chrome::menus()
                 .iter()
@@ -6818,6 +7191,15 @@ impl App {
             self.alt_down = false;
             self.alt_alone = false;
         }
+        // The empty paste field left these keys to the menus: their letters aren't typed in it.
+        if on_paste && !typing {
+            take_menu_text(&ctx, self.open_menu.is_some());
+        }
+
+        // Tab and Shift+Tab between the paste field, the tree and the list, before any widget
+        // that takes the focus is laid out (egui would give Tab's focus to the first one, the
+        // paste field). After the menu keys above, which count Tab as another key (Alt+Tab).
+        self.tab_keys(&ctx);
 
         // Menu bar and its popups: which menu is open is chrome::menubar_next's to say.
         let (event, titles) = match &bar {
@@ -6956,13 +7338,49 @@ impl App {
             ),
         ];
         let tb: Vec<(Icon, &str, bool)> = buttons.iter().map(|(i, l, e, _)| (*i, *l, *e)).collect();
-        match chrome::toolbar(ui, &layout, o, w, &tb) {
+        // The toolbar's toggle at its end: the details pane.
+        let toggle = chrome::ToolbarToggle {
+            icon: Icon::Details,
+            // i18n: noun: the toolbar button that shows and hides the details pane
+            label: "Details",
+            on: self.settings.show_details,
+        };
+        match chrome::toolbar(ui, &layout, o, w, &tb, Some(toggle)) {
+            Some(ToolbarEvent::Toggle) => chosen = Some((Cmd::ToggleDetails, None)),
             Some(ToolbarEvent::Click(k)) => chosen = Some((buttons[k].3, None)),
             Some(ToolbarEvent::Drop(k, at)) => match buttons[k].0 {
                 Icon::AddTorrent => self.open_popup(Popup::TorrentDrop, at),
                 icon => self.open_popup(Popup::QueueDrop(matches!(icon, Icon::StartQueue)), at),
             },
             None => {}
+        }
+
+        // The paste bar under the toolbar (plan 06a). An accepted address goes on as Add URL's
+        // OK sends it, at the end of the frame as every other route.
+        let mut pasted: Option<dialogs::NewUrl> = None;
+        if self.settings.show_paste_bar {
+            // An open menu's keys are the menu's (the list's rule).
+            self.paste.menu_open = self.popup.is_some() || self.open_menu.is_some();
+            let history = &self.settings.url_history;
+            match crate::panes::paste_bar(ui, &layout, o, w, &mut self.paste, history) {
+                Some(crate::panes::PasteEvent::Submit) => {
+                    let accepted = dialogs::accept_address(&self.paste.text);
+                    pasted = crate::panes::submit(&mut self.paste, accepted);
+                    // Added: the field gives up the keys and the list takes them, as after
+                    // Escape (the new download is there). Rejected, the field keeps them.
+                    if pasted.is_some() {
+                        self.paste.leave(&ctx);
+                        self.tree_keys = false;
+                        self.list.set_keys(true);
+                    }
+                }
+                // Escape: the field gave up the keys; the list takes them.
+                Some(crate::panes::PasteEvent::Left) => {
+                    self.tree_keys = false;
+                    self.list.set_keys(true);
+                }
+                None => {}
+            }
         }
 
         // Categories pane.
@@ -6986,21 +7404,11 @@ impl App {
                     o.y + layout.strip_top(h) - layout.pane_gap,
                 ),
             ));
-            // The tree's keys while it has them (Tab moves between it and the list): Up / Down
+            // The tree's keys while it has them (Tab moves them: `tab_keys`): Up / Down
             // through the nodes, Left / Right close and open a branch, Home / End.
             let free = self.popup.is_none()
                 && self.open_menu.is_none()
                 && ctx.memory(|m| m.focused().is_none());
-            if free
-                && ctx.input_mut(|i| {
-                    i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)
-                        || i.consume_key(egui::Modifiers::SHIFT, egui::Key::Tab)
-                })
-            {
-                self.tree_keys = !self.tree_keys;
-                self.list.set_keys(!self.tree_keys);
-                crate::chrome::show_cues(&ctx);
-            }
             let mut tree_event = None;
             if free && self.tree_keys {
                 let at = rows
@@ -7102,13 +7510,23 @@ impl App {
             layout.tree_left
         };
 
+        // The details pane's width (plan 06b, D11), from the list's leading edge: the
+        // Categories pane's width does not depend on it, so there is no cycle. From here the
+        // list ends at the pane (`list_end`); the bands above were drawn without it.
+        let details_w = self
+            .settings
+            .show_details
+            .then(|| crate::panes::details_width(self.settings.details_width, w, list_left));
+        let layout = layout.with_panes(self.settings.show_paste_bar, details_w);
+
         let (ids, rows) = self.list_rows();
         self.selection.retain(&ids);
         let (selected, focus) = self.selection.rows(&ids);
+
         // Its bottom edge is exclusive: IDM's frame's last row one under the pane frame's.
         let outer = egui::Rect::from_min_max(
             pos2(o.x + list_left, o.y + layout.panes_top()),
-            pos2(o.x + w - layout.list_right, o.y + layout.list_bottom(h)),
+            pos2(o.x + layout.list_end(w), o.y + layout.list_bottom(h)),
         );
         self.list.menu_open = self.popup.is_some() || self.open_menu.is_some();
         // Another node shows from its top (its rows aren't the last one's).
@@ -7139,6 +7557,9 @@ impl App {
         }
         if let Some(pick) = r.pick {
             self.selection.apply(pick, &ids);
+        }
+        if self.settings.show_details {
+            self.details(ui, &layout, (o, w, h), list_left, &mut chosen);
         }
         if let Some(i) = r.properties {
             self.properties(ids[i]);
@@ -7269,57 +7690,85 @@ impl App {
                 PopupResult::Dismissed => self.popup = None,
             }
         }
-        // Ctrl+F finds, F3 finds the next match (Downloads menu); Ctrl+N adds a download (not
-        // in IDM). The full list: Help → Keyboard shortcuts (`shortcuts.rs`).
+        // The main window's shortcut keys (Ctrl+F, F3, Ctrl+N, Ctrl+M / F2, Delete,
+        // Shift+Delete), with no menu or popup open.
         if chosen.is_none() && self.popup.is_none() && self.open_menu.is_none() {
-            let (find, next, add) = ctx.input_mut(|i| {
-                (
-                    i.consume_key(egui::Modifiers::COMMAND, egui::Key::F),
-                    i.consume_key(egui::Modifiers::NONE, egui::Key::F3),
-                    i.consume_key(egui::Modifiers::COMMAND, egui::Key::N),
-                )
-            });
-            // Ctrl+M as IDM; F2 as renaming in Explorer.
-            if ctx.input_mut(|i| {
-                i.consume_key(egui::Modifiers::COMMAND, egui::Key::M)
-                    || i.consume_key(egui::Modifiers::NONE, egui::Key::F2)
-            }) {
-                chosen = Some((Cmd::MoveRename, None));
-            }
-            if find {
-                chosen = Some((Cmd::Find, None));
-            } else if next {
-                chosen = Some((Cmd::FindNext, None));
-            } else if add {
-                chosen = Some((Cmd::AddUrl, None));
-            }
+            let focused = ctx.memory(|m| m.focused().is_some());
+            chosen = ctx
+                .input_mut(|i| shortcut_cmd(i, focused))
+                .map(|c| (c, None));
         }
-        // Delete removes the selected downloads, Shift+Delete with their files (both ask first);
-        // not while a text box (Find, a filter) has the keys.
-        if chosen.is_none()
-            && self.popup.is_none()
-            && self.open_menu.is_none()
-            && ctx.memory(|m| m.focused().is_none())
+        // Ctrl+V with no widget focused puts the copied address in the paste bar and gives it
+        // the keys; Enter or Download adds it (D13).
+        let focused = ctx.memory(|m| m.focused().is_some());
+        let busy = chosen.is_some() || self.popup.is_some() || self.open_menu.is_some();
+        let shown = self.settings.show_paste_bar;
+        if let Some(clip) =
+            ctx.input(|i| crate::panes::ctrl_v(shown, focused, busy, &i.events).map(str::to_owned))
         {
-            // On Windows egui reports Shift+Delete as Cut (Ctrl+X is Cut too, without Shift).
-            let (del, shift_del) = ctx.input(|i| {
-                (
-                    i.key_pressed(egui::Key::Delete) && !i.modifiers.shift,
-                    // Windows reports it as Cut.
-                    i.modifiers.shift
-                        && !i.modifiers.command
-                        && (i.events.iter().any(|e| matches!(e, egui::Event::Cut))
-                            || i.key_pressed(egui::Key::Delete)),
-                )
-            });
-            if shift_del {
-                chosen = Some((Cmd::RemoveWithFiles, None));
-            } else if del {
-                chosen = Some((Cmd::Remove, None));
-            }
+            self.paste.fill(&clip);
+            // The field takes the keys on the next frame: the list's selection goes grey.
+            self.list.set_keys(false);
+        }
+        if let Some(new) = pasted {
+            self.route_new_url(new, &ctx);
         }
         if let Some((c, target)) = chosen {
             self.run(c, target, &ctx);
+        }
+    }
+
+    /// An accepted address from Add URL's OK (and the paste bar, plan 06): remembered for the
+    /// Address drop list, then opened where it belongs (`route_of`). A window already open
+    /// keeps its own waiting queue, as before.
+    fn route_new_url(&mut self, new: dialogs::NewUrl, ctx: &egui::Context) {
+        // Every address that goes on is remembered for the Address drop list.
+        crate::settings::remember(&mut self.settings.url_history, new.url.as_str());
+        self.dirty = true;
+        match route_of(&new.url) {
+            Route::Magnet => self.open_torrent_dialog(Some(new.url.to_string()), ctx),
+            // A .torrent's address (#39): Add torrent fetches it and shows what it holds.
+            Route::TorrentUrl => {
+                let parts =
+                    self.request_parts(&new.url, new.login.as_ref(), &Default::default(), false);
+                let remote = crate::torrents::Remote {
+                    url: new.url.clone(),
+                    parts,
+                };
+                self.open_torrent_dialog_with(Some(new.url.to_string()), Some(remote), ctx);
+            }
+            // A video's page, not a file (YouTube, Vimeo…): the video window looks it up.
+            Route::VideoPage => {
+                let dir = self.settings.category_dir(Category::Video, &self.downloads);
+                crate::videodlg::refresh_ytdlp(&self.rt);
+                self.video_dlg = Some(
+                    crate::videodlg::VideoDialog::for_page(
+                        dir,
+                        new.url.as_str(),
+                        Default::default(),
+                    )
+                    .with_subs(self.settings.video_subs.clone()),
+                );
+            }
+            // An image gallery's page (Wikimedia Commons, Flickr…): gallery-dl (#58).
+            Route::GalleryPage => {
+                let dir = self
+                    .settings
+                    .category_dir(Category::General, &self.downloads);
+                self.gallery_dlg =
+                    Some(crate::gallerydlg::GalleryDialog::new(dir, new.url.as_str()));
+            }
+            Route::File => {
+                let url = new.url.clone();
+                if self.duplicate_gate(&url, || {
+                    Pending::Url(dialogs::NewUrl {
+                        url: new.url.clone(),
+                        login: new.login.clone(),
+                    })
+                }) {
+                    self.open_file_info(new, Default::default(), ctx);
+                }
+            }
         }
     }
 
@@ -8330,68 +8779,12 @@ impl App {
             }
         }
         if let Some(d) = &mut self.add_url {
-            let out = d.show(ctx, |url| self.settings.site_login(url));
-            // Every address that goes on is remembered for the Address drop list.
-            if let Outcome::Done(new) = &out {
-                crate::settings::remember(&mut self.settings.url_history, new.url.as_str());
-                self.dirty = true;
-            }
-            match out {
+            match d.show(ctx, |url| self.settings.site_login(url)) {
                 Outcome::Open => {}
                 Outcome::Closed => self.add_url = None,
-                Outcome::Done(new) if new.url.scheme() == "magnet" => {
-                    self.add_url = None;
-                    self.open_torrent_dialog(Some(new.url.to_string()), ctx);
-                }
-                // A .torrent's address (#39): Add torrent fetches it and shows what it holds.
-                Outcome::Done(new) if crate::torrents::is_torrent_url(&new.url, None, None) => {
-                    self.add_url = None;
-                    let parts = self.request_parts(
-                        &new.url,
-                        new.login.as_ref(),
-                        &Default::default(),
-                        false,
-                    );
-                    let remote = crate::torrents::Remote {
-                        url: new.url.clone(),
-                        parts,
-                    };
-                    self.open_torrent_dialog_with(Some(new.url.to_string()), Some(remote), ctx);
-                }
-                // A video's page, not a file (YouTube, Vimeo…): the video window looks it up.
-                Outcome::Done(new) if mdm_tools::pages::is_video_page(&new.url) => {
-                    self.add_url = None;
-                    let dir = self.settings.category_dir(Category::Video, &self.downloads);
-                    crate::videodlg::refresh_ytdlp(&self.rt);
-                    self.video_dlg = Some(
-                        crate::videodlg::VideoDialog::for_page(
-                            dir,
-                            new.url.as_str(),
-                            Default::default(),
-                        )
-                        .with_subs(self.settings.video_subs.clone()),
-                    );
-                }
-                // An image gallery's page (Wikimedia Commons, Flickr…): gallery-dl (#58).
-                Outcome::Done(new) if mdm_tools::pages::is_gallery_page(&new.url) => {
-                    self.add_url = None;
-                    let dir = self
-                        .settings
-                        .category_dir(Category::General, &self.downloads);
-                    self.gallery_dlg =
-                        Some(crate::gallerydlg::GalleryDialog::new(dir, new.url.as_str()));
-                }
                 Outcome::Done(new) => {
                     self.add_url = None;
-                    let url = new.url.clone();
-                    if self.duplicate_gate(&url, || {
-                        Pending::Url(dialogs::NewUrl {
-                            url: new.url.clone(),
-                            login: new.login.clone(),
-                        })
-                    }) {
-                        self.open_file_info(new, Default::default(), ctx);
-                    }
+                    self.route_new_url(new, ctx);
                 }
             }
         }
@@ -9554,6 +9947,874 @@ mod mark_finished_tests {
             let zone = std::fs::read_to_string(stream).unwrap();
             assert!(zone.contains("ZoneId=3"), "{zone}");
             assert!(zone.contains("HostUrl=https://videos.test/v"), "{zone}");
+        }
+    }
+}
+#[cfg(test)]
+mod route_tests {
+    use super::{Route, route_of};
+    fn route(s: &str) -> Route {
+        route_of(&url::Url::parse(s).unwrap())
+    }
+    #[test]
+    fn each_kind_of_address_has_its_route() {
+        assert_eq!(
+            route("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"),
+            Route::Magnet
+        );
+        assert_eq!(route("https://example.org/a.torrent"), Route::TorrentUrl);
+        assert_eq!(
+            route("https://www.youtube.com/watch?v=Tg6byXUo8RU"),
+            Route::VideoPage
+        );
+        // From mdm_tools::pages' gallery_pages_are_recognised.
+        assert_eq!(
+            route("https://commons.wikimedia.org/wiki/Category:Featured_pictures_of_birds"),
+            Route::GalleryPage
+        );
+        assert_eq!(route("https://example.org/file.zip"), Route::File);
+    }
+    #[test]
+    fn a_magnet_wins_over_a_torrent_looking_name() {
+        assert_eq!(
+            route("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=ubuntu.torrent"),
+            Route::Magnet
+        );
+    }
+    /// No address is both a video page and a gallery page: `mdm_tools::pages` lists disjoint
+    /// hosts for the two. The closest real overlap is a .torrent's address on a video or a
+    /// gallery site, which the torrent check, earlier in the order, wins.
+    #[test]
+    fn an_earlier_check_wins_over_a_later_one() {
+        let video = url::Url::parse("https://www.youtube.com/shorts/clip.torrent").unwrap();
+        assert!(mdm_tools::pages::is_video_page(&video));
+        assert_eq!(route_of(&video), Route::TorrentUrl);
+        let gallery =
+            url::Url::parse("https://www.flickr.com/photos/nasawebbtelescope/a.torrent").unwrap();
+        assert!(mdm_tools::pages::is_gallery_page(&gallery));
+        assert_eq!(route_of(&gallery), Route::TorrentUrl);
+    }
+
+    /// `dev`'s inline match of the Add URL outcome, guard by guard, in its order.
+    fn dev_route(url: &url::Url) -> Route {
+        match url {
+            u if u.scheme() == "magnet" => Route::Magnet,
+            u if crate::torrents::is_torrent_url(u, None, None) => Route::TorrentUrl,
+            u if mdm_tools::pages::is_video_page(u) => Route::VideoPage,
+            u if mdm_tools::pages::is_gallery_page(u) => Route::GalleryPage,
+            _ => Route::File,
+        }
+    }
+
+    /// Addresses from a small grammar (scheme × host × path × ending × query): video and
+    /// gallery hosts with paths of their page shapes, and endings such as `.torrent`, so
+    /// addresses that more than one check accepts come up often.
+    fn routed_address() -> impl proptest::strategy::Strategy<Value = url::Url> {
+        use proptest::prelude::*;
+        let scheme = prop::sample::select(vec!["https", "http", "ftp", "magnet"]);
+        let host = prop::sample::select(vec![
+            "www.youtube.com",
+            "youtu.be",
+            "vimeo.com",
+            "x.com",
+            "www.flickr.com",
+            "imgur.com",
+            "commons.wikimedia.org",
+            "someone.tumblr.com",
+            "bsky.app",
+            "example.org",
+        ]);
+        let path = prop::sample::select(vec![
+            "",
+            "/watch",
+            "/shorts/clip",
+            "/123456",
+            "/someone/status/1",
+            "/photos/nasawebbtelescope",
+            "/a/abc123",
+            "/wiki/Category:Birds",
+            "/profile/nasa.gov",
+            "/dir/file",
+        ]);
+        let ending = prop::sample::select(vec!["", "/", ".torrent", ".TORRENT", ".zip", ".jpg"]);
+        let query = prop::sample::select(vec!["", "?v=abc", "?list=PL1&tags=landscape"]);
+        (scheme, host, path, ending, query).prop_map(|(s, h, p, e, q)| {
+            let text = if s == "magnet" {
+                format!("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn={h}{p}{e}")
+            } else {
+                format!("{s}://{h}{p}{e}{q}")
+            };
+            url::Url::parse(&text).unwrap()
+        })
+    }
+
+    // Feature: paste-bar-details-pane, Property 1: Route priority.
+    // **Validates: Requirements 1.3, 1.4, 1.5, 1.6, 1.7, 1.9**
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+        #[test]
+        fn route_of_takes_the_first_check_that_holds(url in routed_address()) {
+            proptest::prop_assert_eq!(route_of(&url), dev_route(&url));
+        }
+    }
+
+    /// What Add URL's OK hands on for `typed`: the real dialog, its box holding `typed` and
+    /// Enter pressed in it (OK, the default button), drawn in its own window rendered
+    /// headlessly as dialogs.rs's tests do, and handled as `App` handles its outcome (the
+    /// dialog goes with the first `Done`). No Sites Logins entry and nothing typed under "Use
+    /// authorization".
+    fn add_url_ok(typed: &str) -> Vec<crate::dialogs::NewUrl> {
+        use crate::dialogs::{AddUrl, Outcome};
+        thread_local! {
+            static ENTER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        }
+        egui::Context::set_immediate_viewport_renderer(|ctx, viewport| {
+            let events = if ENTER.with(|e| e.take()) {
+                vec![egui::Event::Key {
+                    key: egui::Key::Enter,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::default(),
+                }]
+            } else {
+                vec![]
+            };
+            let input = egui::RawInput {
+                viewport_id: viewport.ids.this,
+                events,
+                viewports: std::iter::once((viewport.ids.this, egui::ViewportInfo::default()))
+                    .collect(),
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(600.0, 160.0),
+                )),
+                ..Default::default()
+            };
+            let mut ui_cb = viewport.viewport_ui_cb;
+            let mut out = ctx.run_ui(input, |ui| ui_cb(ui));
+            out.textures_delta.clear();
+        });
+        let ctx = egui::Context::default();
+        ctx.set_embed_viewports(false);
+        let mut dlg = AddUrl::default();
+        dlg.address = typed.to_owned();
+        let mut dlg = Some(dlg);
+        let mut handed = Vec::new();
+        // A frame (the box takes the focus), Enter, then two frames more.
+        for enter in [false, true, false, false] {
+            ENTER.with(|e| e.set(enter));
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                if let Some(d) = &mut dlg {
+                    match d.show(ui.ctx(), |_| None) {
+                        Outcome::Open => {}
+                        Outcome::Closed => dlg = None,
+                        Outcome::Done(new) => {
+                            dlg = None;
+                            handed.push(new);
+                        }
+                    }
+                }
+            });
+            out.textures_delta.clear();
+        }
+        handed
+    }
+
+    // Feature: paste-bar-details-pane, Property 3: Same route.
+    // **Validates: Requirements 1.1, 7.2**
+    /// An accepted address submitted in the paste bar goes on as Add URL's OK sends it: the
+    /// same url, once, without a login, and so the same route.
+    #[test]
+    fn the_paste_bar_and_add_url_send_an_address_the_same_way() {
+        for (typed, route) in [
+            ("https://example.org/file.zip", Route::File),
+            // Typed without a scheme: both read it as https.
+            ("www.example.org/a.zip", Route::File),
+            (
+                "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567",
+                Route::Magnet,
+            ),
+            ("https://example.org/a.torrent", Route::TorrentUrl),
+            (
+                "https://www.youtube.com/watch?v=Tg6byXUo8RU",
+                Route::VideoPage,
+            ),
+            (
+                "https://commons.wikimedia.org/wiki/Category:Featured_pictures_of_birds",
+                Route::GalleryPage,
+            ),
+        ] {
+            // The paste bar: Enter or Download, as `App::paint` handles it.
+            let mut bar = crate::panes::PasteBar {
+                text: typed.to_owned(),
+                ..Default::default()
+            };
+            let accepted = crate::dialogs::accept_address(&bar.text);
+            let pasted = crate::panes::submit(&mut bar, accepted)
+                .unwrap_or_else(|| panic!("the paste bar takes {typed}"));
+            // Once: the field emptied, so a second Enter hands nothing on.
+            let accepted = crate::dialogs::accept_address(&bar.text);
+            assert!(
+                crate::panes::submit(&mut bar, accepted).is_none(),
+                "{typed}: handed on once"
+            );
+
+            let ok = add_url_ok(typed);
+            assert_eq!(ok.len(), 1, "{typed}: Add URL's OK hands it on once");
+            let added = &ok[0];
+            assert_eq!(pasted.url, added.url, "{typed}: the same url");
+            assert!(
+                pasted.login.is_none(),
+                "{typed}: the paste bar sends no login"
+            );
+            assert!(added.login.is_none(), "{typed}: nothing typed in Add URL");
+            assert_eq!(route_of(&pasted.url), route, "{typed}");
+            assert_eq!(route_of(&added.url), route, "{typed}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod show_paste_tests {
+    use super::show_paste_arg;
+
+    /// `/show paste:<address>` (requirement 21.2): the address after `paste:`, colons and all;
+    /// nothing for other names or an empty address.
+    #[test]
+    fn show_paste_takes_the_address_after_its_name() {
+        assert_eq!(
+            show_paste_arg("paste:https://example.org/a.zip"),
+            Some("https://example.org/a.zip")
+        );
+        assert_eq!(
+            show_paste_arg("paste:magnet:?xt=urn:btih:0123"),
+            Some("magnet:?xt=urn:btih:0123")
+        );
+        assert_eq!(
+            show_paste_arg("paste: www.example.org/a.zip "),
+            Some("www.example.org/a.zip")
+        );
+        for name in [
+            "paste:",
+            "paste:  ",
+            "paste",
+            "addurl",
+            "pastes:x",
+            "options:paste:x",
+        ] {
+            assert_eq!(show_paste_arg(name), None, "{name}");
+        }
+    }
+}
+#[cfg(test)]
+mod show_details_tests {
+    use super::{is_show_details, show_details_pick};
+    use crate::model::{Category, Item, Status};
+    fn item(id: u64, status: Status) -> Item {
+        let url = "https://example.org/a.zip".parse().unwrap();
+        let dest = std::path::PathBuf::from(r"D:\Downloads\Compressed\a.zip");
+        let mut it = Item::new(id, url, dest, Category::Compressed);
+        it.status = status;
+        it
+    }
+    /// `/show details` (requirement 21.1): the bare name only.
+    #[test]
+    fn show_details_is_the_bare_name() {
+        assert!(is_show_details("details"));
+        for name in [
+            "details:",
+            "details:x",
+            "detail",
+            "paste:details",
+            "",
+            "addurl",
+        ] {
+            assert!(!is_show_details(name), "{name}");
+        }
+    }
+    /// The first stopped download in the list's order, past queued, failed, finished and
+    /// running ones; the first download without a stopped one; none without downloads.
+    #[test]
+    fn show_details_picks_the_first_stopped_download() {
+        let items = [
+            item(1, Status::Queued),
+            item(2, Status::Error),
+            item(3, Status::Complete),
+            item(4, Status::Downloading),
+            item(5, Status::Stopped),
+            item(6, Status::Stopped),
+        ];
+        assert_eq!(show_details_pick(&items), Some(5));
+        assert_eq!(show_details_pick(&items[..4]), Some(1));
+        assert_eq!(show_details_pick(&[]), None);
+    }
+}
+
+#[cfg(test)]
+mod view_menu_tests {
+    use super::{App, Cmd, MenuEntry, Settings};
+
+    /// The View menu, the paste bar and the details pane on or off as given.
+    fn view(paste: bool, details: bool) -> Vec<MenuEntry<Cmd>> {
+        let settings = Settings {
+            show_paste_bar: paste,
+            show_details: details,
+            ..Default::default()
+        };
+        App::view_entries(false, &settings, None, 1.0, &[])
+    }
+
+    /// Plan 06 (requirements 4.1, 4.2): "Paste bar" right after Categories, then "Details
+    /// pane", each checked while its setting is on.
+    #[test]
+    fn the_paste_bar_and_the_details_pane_follow_categories_checked_by_their_settings() {
+        for (paste, details) in [(false, false), (true, false), (false, true), (true, true)] {
+            let menu = view(paste, details);
+            assert!(matches!(
+                &menu[0],
+                MenuEntry::Item(_, Cmd::ToggleCategories, ..)
+            ));
+            assert!(matches!(
+                &menu[1],
+                MenuEntry::Item("&Paste bar", Cmd::TogglePasteBar, true, on) if *on == paste
+            ));
+            assert!(matches!(
+                &menu[2],
+                MenuEntry::Item("Details pa&ne", Cmd::ToggleDetails, true, on) if *on == details
+            ));
+        }
+    }
+
+    /// Requirement 4.3: no two items of the View menu share an access letter (the one after
+    /// "&": an item without one has none, as the menus' keys go).
+    #[test]
+    fn every_view_menu_access_letter_is_unique() {
+        let mut seen = std::collections::HashMap::new();
+        for e in view(true, true) {
+            let (MenuEntry::Item(l, ..) | MenuEntry::Radio(l, ..) | MenuEntry::Sub(l, ..)) = e
+            else {
+                continue;
+            };
+            let label = crate::i18n::tc("menu", l);
+            if !label.replace("&&", "").contains('&') {
+                continue;
+            }
+            let letter = crate::chrome::menu_letter(label);
+            if let Some(other) = seen.insert(letter.clone(), label) {
+                panic!("{other:?} and {label:?} share the access letter {letter:?}");
+            }
+        }
+        assert_eq!(seen.get("p"), Some(&"&Paste bar"));
+        assert_eq!(seen.get("n"), Some(&"Details pa&ne"));
+    }
+}
+
+#[cfg(test)]
+mod typing_gate_tests {
+    use super::{menu_keys_blocked, take_menu_text};
+
+    // Feature: paste-bar-details-pane, Property 14: Typing gate.
+    // **Validates: Requirements 10.8, 10.9**
+    /// Every focus state: the menu keys are skipped exactly when a text box has the focus and
+    /// it isn't the paste field while empty.
+    #[test]
+    fn a_focused_text_box_keeps_the_menu_keys_but_the_empty_paste_field() {
+        // (a text box focused, it is the paste field, the paste field empty) -> skipped
+        for (focused, paste, empty, blocked) in [
+            // Nothing or a button or list focused: the menu bar has the keys (#328).
+            (false, false, false, false),
+            (false, false, true, false),
+            (false, true, false, false),
+            (false, true, true, false),
+            // Another text box (the list's filter, a dialog's box): it keeps them, as on dev.
+            (true, false, false, true),
+            (true, false, true, true),
+            // The paste field holding text keeps them (10.9); empty, the menus have them (10.8).
+            (true, true, false, true),
+            (true, true, true, false),
+        ] {
+            assert_eq!(
+                menu_keys_blocked(focused, paste, empty),
+                blocked,
+                "focused {focused}, paste field {paste}, empty {empty}"
+            );
+        }
+    }
+
+    /// The empty paste field focused, a frame of `events` with `modifiers` held: what the
+    /// field holds once `take_menu_text` ran before it was drawn (as `App::paint` does).
+    fn typed(modifiers: egui::Modifiers, events: Vec<egui::Event>, menu_open: bool) -> String {
+        let ctx = egui::Context::default();
+        let id = crate::panes::paste_field_id();
+        let mut text = String::new();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 100.0));
+        // The modifiers held come as egui-winit sends them, before the keys.
+        let held = std::iter::once(egui::Event::ModifiersChanged(modifiers));
+        let frames = [vec![], held.chain(events).collect()];
+        for (n, events) in frames.into_iter().enumerate() {
+            let input = egui::RawInput {
+                screen_rect: Some(screen),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                if n == 0 {
+                    ui.memory_mut(|m| m.request_focus(id));
+                } else {
+                    assert!(ui.memory(|m| m.has_focus(id)), "the field has the focus");
+                    take_menu_text(ui.ctx(), menu_open);
+                }
+                ui.add(egui::TextEdit::singleline(&mut text).id(id));
+            });
+            out.textures_delta.clear();
+        }
+        text
+    }
+
+    fn key(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    /// Alt+F (File) in the empty paste field opens the menu and types no "f"; a plain "f"
+    /// opens nothing and is typed; with a menu open, an item's letter isn't typed either.
+    #[test]
+    fn the_menus_letters_are_not_typed_in_the_empty_paste_field() {
+        let alt = egui::Modifiers::ALT;
+        let alt_f = vec![key(egui::Key::F, alt), egui::Event::Text("f".into())];
+        assert_eq!(typed(alt, alt_f, false), "", "Alt+F");
+        let plain = egui::Modifiers::NONE;
+        let f = vec![key(egui::Key::F, plain), egui::Event::Text("f".into())];
+        assert_eq!(typed(plain, f, false), "f", "a plain letter");
+        let x = vec![key(egui::Key::X, plain), egui::Event::Text("x".into())];
+        assert_eq!(typed(plain, x, true), "", "an item's letter, a menu open");
+    }
+}
+
+#[cfg(test)]
+mod details_cmd_tests {
+    use super::{Cmd, details_cmd};
+    use crate::panes::DetailsAction;
+
+    /// Each details pane button runs its command (Requirement 15.5): Show progress window is
+    /// Open, which shows an unfinished download's progress window (D10).
+    #[test]
+    fn each_details_button_runs_its_command() {
+        let table = [
+            (DetailsAction::Resume, Cmd::Resume),
+            (DetailsAction::Stop, Cmd::Stop),
+            (DetailsAction::OpenFolder, Cmd::OpenFolder),
+            (DetailsAction::ShowProgress, Cmd::Open),
+        ];
+        for (action, cmd) in table {
+            assert_eq!(details_cmd(action), cmd, "{action:?}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod old_keys_tests {
+    use super::{Cmd, menu_keys_blocked, shortcut_cmd};
+    use crate::panes::{Stop, next_stop};
+    use egui::{Event, Key, Modifiers};
+
+    /// Who has egui's focus in the frame the keys come in.
+    #[derive(Clone, Copy, Debug)]
+    enum Focus {
+        Nothing,
+        /// The paste bar's address field, holding "abc".
+        PasteField,
+        /// Another widget: a text box (the Find box, a filter); in the list's test a button.
+        OtherBox,
+    }
+
+    /// The end of `App::paint` on `dev` (85df4c43), copied as it was: the oracle. No menu or
+    /// popup open, no command chosen before it.
+    fn dev_keys(ctx: &egui::Context) -> Option<Cmd> {
+        let mut chosen = None;
+        let (find, next, add) = ctx.input_mut(|i| {
+            (
+                i.consume_key(egui::Modifiers::COMMAND, egui::Key::F),
+                i.consume_key(egui::Modifiers::NONE, egui::Key::F3),
+                i.consume_key(egui::Modifiers::COMMAND, egui::Key::N),
+            )
+        });
+        if ctx.input_mut(|i| {
+            i.consume_key(egui::Modifiers::COMMAND, egui::Key::M)
+                || i.consume_key(egui::Modifiers::NONE, egui::Key::F2)
+        }) {
+            chosen = Some(Cmd::MoveRename);
+        }
+        if find {
+            chosen = Some(Cmd::Find);
+        } else if next {
+            chosen = Some(Cmd::FindNext);
+        } else if add {
+            chosen = Some(Cmd::AddUrl);
+        }
+        if chosen.is_none() && ctx.memory(|m| m.focused().is_none()) {
+            let (del, shift_del) = ctx.input(|i| {
+                (
+                    i.key_pressed(egui::Key::Delete) && !i.modifiers.shift,
+                    i.modifiers.shift
+                        && !i.modifiers.command
+                        && (i.events.iter().any(|e| matches!(e, egui::Event::Cut))
+                            || i.key_pressed(egui::Key::Delete)),
+                )
+            });
+            if shift_del {
+                chosen = Some(Cmd::RemoveWithFiles);
+            } else if del {
+                chosen = Some(Cmd::Remove);
+            }
+        }
+        chosen
+    }
+
+    /// Today's: `App::paint`'s call of `shortcut_cmd`.
+    fn new_keys(ctx: &egui::Context) -> Option<Cmd> {
+        let focused = ctx.memory(|m| m.focused().is_some());
+        ctx.input_mut(|i| shortcut_cmd(i, focused))
+    }
+
+    /// What a frame's keys did: the command, the events left for what is drawn after, the
+    /// paste field's text.
+    type Outcome = (Option<Cmd>, Vec<Event>, String);
+
+    /// Two frames of a window with the paste field (holding "abc") and another text box drawn
+    /// before the keys are read, as in `App::paint`: the first gives `focus` the focus, the
+    /// second brings `events` with `modifiers` held and runs `keys` after the boxes.
+    fn frame(
+        modifiers: Modifiers,
+        events: &[Event],
+        focus: Focus,
+        keys: fn(&egui::Context) -> Option<Cmd>,
+    ) -> Outcome {
+        let ctx = egui::Context::default();
+        let field = crate::panes::paste_field_id();
+        let other = egui::Id::unique("old-keys-find-box");
+        let mut text = "abc".to_owned();
+        let mut find = String::new();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 200.0));
+        let mut result = (None, Vec::new());
+        let held = std::iter::once(Event::ModifiersChanged(modifiers));
+        let frames = [vec![], held.chain(events.iter().cloned()).collect()];
+        for (n, events) in frames.into_iter().enumerate() {
+            let input = egui::RawInput {
+                screen_rect: Some(screen),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                if n == 0 {
+                    match focus {
+                        Focus::Nothing => {}
+                        Focus::PasteField => ui.memory_mut(|m| m.request_focus(field)),
+                        Focus::OtherBox => ui.memory_mut(|m| m.request_focus(other)),
+                    }
+                }
+                ui.add(egui::TextEdit::singleline(&mut text).id(field));
+                ui.add(egui::TextEdit::singleline(&mut find).id(other));
+                if n == 1 {
+                    let cmd = keys(ui.ctx());
+                    result = (cmd, ui.input(|i| i.events.clone()));
+                }
+            });
+            out.textures_delta.clear();
+        }
+        (result.0, result.1, text)
+    }
+
+    fn key(key: Key, modifiers: Modifiers) -> Event {
+        Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    /// Today's main-window shortcuts with the command each runs on `dev` with nothing focused.
+    /// Enter, Alt+Enter, Ctrl+A, the arrows and Shift+F10 are the list's (`list::keyboard`,
+    /// below), Tab the rotation's, Alt and F10 the menu bar's, Ctrl++ / Ctrl+- / Ctrl+0
+    /// `scale::keys`' (any window, unchanged): `shortcut_cmd` leaves them all.
+    fn shortcuts() -> Vec<(&'static str, Modifiers, Vec<Event>, Option<Cmd>)> {
+        let (none, ctrl, shift) = (Modifiers::NONE, Modifiers::COMMAND, Modifiers::SHIFT);
+        let ctrl_shift = ctrl | shift;
+        vec![
+            ("Ctrl+F", ctrl, vec![key(Key::F, ctrl)], Some(Cmd::Find)),
+            ("F3", none, vec![key(Key::F3, none)], Some(Cmd::FindNext)),
+            ("Ctrl+N", ctrl, vec![key(Key::N, ctrl)], Some(Cmd::AddUrl)),
+            (
+                "Ctrl+M",
+                ctrl,
+                vec![key(Key::M, ctrl)],
+                Some(Cmd::MoveRename),
+            ),
+            ("F2", none, vec![key(Key::F2, none)], Some(Cmd::MoveRename)),
+            (
+                "Delete",
+                none,
+                vec![key(Key::Delete, none)],
+                Some(Cmd::Remove),
+            ),
+            (
+                "Shift+Delete",
+                shift,
+                vec![key(Key::Delete, shift)],
+                Some(Cmd::RemoveWithFiles),
+            ),
+            // Windows: Shift+Delete arrives as Cut.
+            (
+                "Shift+Delete as Cut",
+                shift,
+                vec![Event::Cut],
+                Some(Cmd::RemoveWithFiles),
+            ),
+            ("Ctrl+X", ctrl, vec![key(Key::X, ctrl), Event::Cut], None),
+            (
+                "Ctrl+Shift+Delete",
+                ctrl_shift,
+                vec![key(Key::Delete, ctrl_shift)],
+                None,
+            ),
+            // Ctrl+M and F2 at once: Ctrl+M runs it, F2 is left in the input.
+            (
+                "Ctrl+M and F2",
+                ctrl,
+                vec![key(Key::M, ctrl), key(Key::F2, none)],
+                Some(Cmd::MoveRename),
+            ),
+            // Find wins over the others in one frame; Delete is not read then.
+            (
+                "Ctrl+F and Delete",
+                ctrl,
+                vec![key(Key::F, ctrl), key(Key::Delete, ctrl)],
+                Some(Cmd::Find),
+            ),
+            (
+                "F3 and Ctrl+N",
+                ctrl,
+                vec![key(Key::F3, none), key(Key::N, ctrl)],
+                Some(Cmd::FindNext),
+            ),
+            (
+                "plain F",
+                none,
+                vec![key(Key::F, none), Event::Text("f".into())],
+                None,
+            ),
+            (
+                "plain N",
+                none,
+                vec![key(Key::N, none), Event::Text("n".into())],
+                None,
+            ),
+            (
+                "plain M",
+                none,
+                vec![key(Key::M, none), Event::Text("m".into())],
+                None,
+            ),
+            // The list's, the rotation's, the menu bar's, the interface size's: none here.
+            ("Enter", none, vec![key(Key::Enter, none)], None),
+            (
+                "Alt+Enter",
+                Modifiers::ALT,
+                vec![key(Key::Enter, Modifiers::ALT)],
+                None,
+            ),
+            ("Ctrl+A", ctrl, vec![key(Key::A, ctrl)], None),
+            ("Shift+F10", shift, vec![key(Key::F10, shift)], None),
+            ("F10", none, vec![key(Key::F10, none)], None),
+            ("Tab", none, vec![key(Key::Tab, none)], None),
+            ("Ctrl+0", ctrl, vec![key(Key::Num0, ctrl)], None),
+            // Ctrl+V is the paste bar's (`panes::ctrl_v`), no command.
+            (
+                "Ctrl+V",
+                ctrl,
+                vec![Event::Paste("https://example.com/a.zip".into())],
+                None,
+            ),
+        ]
+    }
+
+    // Feature: paste-bar-details-pane, Property 16: Old keys.
+    // **Validates: Requirements 10.10**
+    /// Every shortcut of the table, the paste field not focused: the command of `dev`, the same
+    /// keys consumed; and for every focus (the paste field too) the same as `dev`'s code with
+    /// a text box focused.
+    #[test]
+    fn the_old_keys_run_the_commands_of_dev() {
+        for (name, mods, events, expected) in shortcuts() {
+            let (cmd, left, text) = frame(mods, &events, Focus::Nothing, new_keys);
+            assert_eq!(cmd, expected, "{name}, nothing focused");
+            assert_eq!(text, "abc", "{name}: the unfocused field is untouched");
+            for focus in [Focus::Nothing, Focus::PasteField, Focus::OtherBox] {
+                let now = frame(mods, &events, focus, new_keys);
+                let dev = frame(mods, &events, focus, dev_keys);
+                assert_eq!(now, dev, "{name}, {focus:?}: as dev");
+            }
+            let (_, dev_left, _) = frame(mods, &events, Focus::Nothing, dev_keys);
+            assert_eq!(left, dev_left, "{name}: the same keys consumed");
+        }
+    }
+
+    /// The paste field focused with text keeps Delete and Shift+Delete: Delete deletes its
+    /// text, not downloads; Ctrl+V with nothing focused fills the paste bar, no command.
+    #[test]
+    fn the_paste_field_keeps_delete_and_ctrl_v_goes_to_the_bar() {
+        let none = Modifiers::NONE;
+        let del = [key(Key::Home, none), key(Key::Delete, none)];
+        let (cmd, _, text) = frame(none, &del, Focus::PasteField, new_keys);
+        assert_eq!(cmd, None, "Delete in the field");
+        assert_eq!(text, "bc", "Delete deleted the field's text");
+        let shift = Modifiers::SHIFT;
+        for events in [vec![key(Key::Delete, shift)], vec![Event::Cut]] {
+            let (cmd, ..) = frame(shift, &events, Focus::PasteField, new_keys);
+            assert_eq!(cmd, None, "Shift+Delete in the field: {events:?}");
+        }
+        // Nothing focused: Delete is the list's command and the field keeps its text.
+        let (cmd, _, text) = frame(none, &del, Focus::Nothing, new_keys);
+        assert_eq!((cmd, text.as_str()), (Some(Cmd::Remove), "abc"));
+        // Ctrl+V with nothing focused: no command, the bar's text.
+        let paste = [Event::Paste("https://example.com/a.zip".into())];
+        let ctrl = Modifiers::COMMAND;
+        let (cmd, left, _) = frame(ctrl, &paste, Focus::Nothing, new_keys);
+        assert_eq!(cmd, None, "Ctrl+V runs no command");
+        assert_eq!(
+            crate::panes::ctrl_v(true, false, false, &left),
+            Some("https://example.com/a.zip"),
+            "Ctrl+V goes to the paste bar"
+        );
+    }
+
+    /// The menu bar's keys (Alt, F10, Alt+letter) and Tab, the paste field not focused: as on
+    /// dev. Dev's gate was "a text box has the focus"; dev's Tab, the paste bar hidden, toggled
+    /// the keys between the tree and the list, and did nothing without the tree.
+    #[test]
+    fn the_menu_keys_and_tab_work_as_on_dev_without_the_paste_field() {
+        for text_box in [false, true] {
+            for empty in [false, true] {
+                assert_eq!(menu_keys_blocked(text_box, false, empty), text_box);
+            }
+        }
+        for back in [false, true] {
+            assert_eq!(next_stop(Stop::Tree, back, false, true), Some(Stop::List));
+            assert_eq!(next_stop(Stop::List, back, false, true), Some(Stop::Tree));
+            assert_eq!(next_stop(Stop::List, back, false, false), None);
+        }
+    }
+
+    /// The list's own keys (`list::keyboard`, unchanged since dev): Ctrl+A selects all, Enter
+    /// opens the focused row, Alt+Enter its Properties, while no widget has the focus; with a
+    /// widget focused (the paste field, the Download button) the list leaves them.
+    #[test]
+    fn the_lists_keys_wait_while_a_widget_has_the_focus() {
+        let _fonts = crate::theme::font_tests();
+        let (none, alt, ctrl) = (Modifiers::NONE, Modifiers::ALT, Modifiers::COMMAND);
+        let row = |name: &str| {
+            let mut cells: [String; crate::list::COLS] = Default::default();
+            cells[0] = name.into();
+            crate::list::Row {
+                kind: crate::list::StatusKind::Stopped,
+                progress: None,
+                icon: crate::chrome::IconKey::Themed("ft-generic"),
+                queued: false,
+                cells,
+            }
+        };
+        let rows = [row("a.zip"), row("b.iso")];
+        type Got = (Option<crate::selection::Pick>, Option<usize>, Option<usize>);
+        let list = |events: Vec<Event>, focus: Focus| -> Got {
+            let ctx = egui::Context::default();
+            let field = crate::panes::paste_field_id();
+            let mut text = "abc".to_owned();
+            let mut st = crate::list::ListState::default();
+            st.set_keys(true);
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 400.0));
+            let mut got = (None, None, None);
+            for n in 0..2 {
+                let input = egui::RawInput {
+                    screen_rect: Some(screen),
+                    events: if n == 1 { events.clone() } else { vec![] },
+                    ..Default::default()
+                };
+                let mut out = ctx.run_ui(input, |ui| {
+                    ui.add(egui::TextEdit::singleline(&mut text).id(field));
+                    let button = ui.button("Download");
+                    if n == 0 {
+                        match focus {
+                            Focus::Nothing => {}
+                            Focus::PasteField => ui.memory_mut(|m| m.request_focus(field)),
+                            Focus::OtherBox => button.request_focus(),
+                        }
+                    }
+                    let outer =
+                        egui::Rect::from_min_size(egui::pos2(0.0, 40.0), egui::vec2(900.0, 360.0));
+                    let r = crate::list::show(
+                        ui,
+                        outer,
+                        &mut st,
+                        &rows,
+                        &[true, false],
+                        Some(0),
+                        &mut crate::chrome::ShellIcons,
+                        &|_| String::new(),
+                    );
+                    if n == 1 {
+                        got = (r.pick, r.enter, r.properties);
+                    }
+                });
+                out.textures_delta.clear();
+            }
+            got
+        };
+        use crate::selection::Pick;
+        let keys = [
+            (
+                "Ctrl+A",
+                ctrl,
+                key(Key::A, ctrl),
+                (Some(Pick::All), None, None),
+            ),
+            ("Enter", none, key(Key::Enter, none), (None, Some(0), None)),
+            (
+                "Alt+Enter",
+                alt,
+                key(Key::Enter, alt),
+                (None, None, Some(0)),
+            ),
+        ];
+        for (name, mods, event, expected) in keys {
+            let held = Event::ModifiersChanged(mods);
+            let events = vec![held, event];
+            assert_eq!(
+                list(events.clone(), Focus::Nothing),
+                expected,
+                "{name}, nothing focused"
+            );
+            assert_eq!(
+                list(events.clone(), Focus::OtherBox),
+                (None, None, None),
+                "{name}, a button focused"
+            );
+            // A single-line box gives its focus up on Enter and Alt+Enter, as on dev (the
+            // paste field takes Enter itself first: Submit), so only Ctrl+A is tried with it.
+            if !name.contains("Enter") {
+                assert_eq!(
+                    list(events, Focus::PasteField),
+                    (None, None, None),
+                    "{name}, the paste field focused"
+                );
+            }
         }
     }
 }

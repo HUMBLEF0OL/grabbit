@@ -539,8 +539,11 @@ These ship in a later version, when they're ready.
   a flatter Categories tree, progress in the Status column, a quieter status bar), and
   Graphite's own icons in the Options pages, the helpers window, the drag handle, the
   Scheduler's queues and the Server row, and Graphite as the only look (the Classic layout and
-  the old themes removed, with the theme-file keys only they used; Windows' high contrast is followed again once a high-contrast Graphite
-  comes back). Next: the paste bar and details pane, then the dialogs
+  the old themes removed, with the theme-file keys only they used; Windows' high contrast is
+  followed again once a high-contrast Graphite comes back), and the paste bar and details pane
+  (an address box under the toolbar that adds a download as Add URL's OK does, and a pane beside
+  the list with the selected download, its progress and its buttons; both shown or hidden in
+  **View**, the pane also with the toolbar's **Details**). Next: the dialogs
 
 ### Bugs being looked into
 

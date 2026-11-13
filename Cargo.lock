@@ -4380,6 +4380,7 @@ dependencies = [
  "mdm-torrent",
  "open",
  "percent-encoding",
+ "proptest",
  "qrcodegen",
  "raw-window-handle",
  "regex",

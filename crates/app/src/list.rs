@@ -185,6 +185,8 @@ pub struct ListState {
     pub filters: Vec<Option<Filter>>,
     /// The open filter box: column and its top-left.
     filter_open: Option<(usize, Pos2)>,
+    /// The open filter box's first and last controls, as last drawn ([`ListState::filter_ends`]).
+    filter_ends: Option<(egui::Id, egui::Id)>,
     /// The sideways scroll when it opened (it closes when the list moves).
     filter_hscroll: f32,
     /// A filter box to open on the next frame ([`ListState::open_filter`]).
@@ -214,6 +216,7 @@ impl Default for ListState {
             scroll_to: None,
             filters: vec![None; COLS],
             filter_open: None,
+            filter_ends: None,
             filter_hscroll: 0.0,
             filter_pending: None,
             marquee: None,
@@ -247,6 +250,17 @@ impl ListState {
     /// Give the list the keys, or take them (the tree has them).
     pub fn set_keys(&mut self, on: bool) {
         self.focused = on;
+    }
+    /// A column's filter box is open (the main window's Tab is then the box's).
+    pub fn filter_is_open(&self) -> bool {
+        self.filter_open.is_some()
+    }
+
+    /// The open filter box's first control (its text box, or its first check box) and its last
+    /// (Close), as it was last drawn: the main window's Tab goes round between them
+    /// (`panes::tab_keys`). None while no box is open.
+    pub fn filter_ends(&self) -> Option<(egui::Id, egui::Id)> {
+        self.filter_open.and(self.filter_ends)
     }
 
     /// Open column `col`'s filter box under its header on the next frame, as a click on its
@@ -366,6 +380,18 @@ pub enum StatusKind {
 }
 
 impl StatusKind {
+    /// The kind of a download in `status` (the list's Status cell, the details pane).
+    pub fn of(status: crate::model::Status) -> StatusKind {
+        use crate::model::Status;
+        match status {
+            Status::Downloading => StatusKind::Downloading,
+            Status::Stopped => StatusKind::Stopped,
+            Status::Queued => StatusKind::Waiting,
+            Status::Complete => StatusKind::Complete,
+            Status::Error => StatusKind::Error,
+        }
+    }
+
     /// What the Status filter sees (and offers, [`filter_values`]).
     pub fn group(self) -> &'static str {
         match self {
@@ -379,6 +405,16 @@ impl StatusKind {
             StatusKind::Complete => "Complete",
             // i18n: a download's status (state it is in, not a command): it failed
             StatusKind::Error => "Error",
+        }
+    }
+
+    /// The fill of its progress (the Status cell's bar, the details pane's segment cells): the
+    /// bar's colour while it moves, the error colour for an error, else muted.
+    pub fn bar_color(self) -> Color32 {
+        match self {
+            StatusKind::Downloading => crate::theme::colors().progress_bar,
+            StatusKind::Error => winui::ERROR(),
+            _ => winui::MUTED(),
         }
     }
 
@@ -1354,7 +1390,7 @@ fn status_cell(
     };
     match (row.kind, row.progress) {
         (StatusKind::Downloading, Some(f)) => {
-            meter(x, f, c.progress_bar);
+            meter(x, f, row.kind.bar_color());
             None
         }
         (kind, progress) => {
@@ -1377,7 +1413,7 @@ fn status_cell(
             let pct = progress.filter(|_| stopped);
             if room < 0.0 {
                 if let Some(f) = pct {
-                    meter(right, f, winui::MUTED());
+                    meter(right, f, kind.bar_color());
                 }
                 return Some(text.to_owned());
             }
@@ -1392,7 +1428,7 @@ fn status_cell(
                 } else {
                     right
                 };
-                meter(from, f, winui::MUTED());
+                meter(from, f, kind.bar_color());
             }
             (shown != text).then(|| text.to_owned())
         }
@@ -1593,6 +1629,8 @@ fn filter_box(ui: &mut Ui, st: &mut ListState) {
             let p = ui.painter().clone();
             crate::chrome::popup_surface(&p, shown);
             let o = rect.min;
+            // Its first control: the text box, or the first check box.
+            let mut first = None;
             match values {
                 Some(vals) => {
                     // i18n: verb: label before the filter's list, i.e. show the rows that…
@@ -1610,7 +1648,9 @@ fn filter_box(ui: &mut Ui, st: &mut ListState) {
                     for (i, v) in vals.iter().enumerate() {
                         let mut on = keep.contains(v);
                         let y = o.y + 28.0 + 18.0 * i as f32;
-                        if winui::checkbox(ui, pos2(o.x + 12.0, y), &mut on, v, true).clicked() {
+                        let check = winui::checkbox(ui, pos2(o.x + 12.0, y), &mut on, v, true);
+                        first = first.or(Some(check.id));
+                        if check.clicked() {
                             keep.retain(|k| k != v);
                             if on {
                                 keep.push(v);
@@ -1666,6 +1706,7 @@ fn filter_box(ui: &mut Ui, st: &mut ListState) {
                     if !edit.has_focus() && !ui.ctx().memory(|m| m.focused().is_some()) {
                         edit.request_focus();
                     }
+                    first = Some(edit.id);
                     st.filters[col] = (!t.is_empty()).then_some(Filter::Text(t));
                     if winui::button(
                         ui,
@@ -1688,7 +1729,7 @@ fn filter_box(ui: &mut Ui, st: &mut ListState) {
                     }
                 }
             }
-            if winui::button(
+            let close_button = winui::button(
                 ui,
                 r(Rect::from_min_size(
                     pos2(
@@ -1702,11 +1743,12 @@ fn filter_box(ui: &mut Ui, st: &mut ListState) {
                 winui::ButtonKind::Default,
                 false,
                 None,
-            )
-            .clicked()
-            {
+            );
+            if close_button.clicked() {
                 close = true;
             }
+            // Its ends, for the main window's Tab (it goes round the box, never out of it).
+            st.filter_ends = first.map(|first| (first, close_button.id));
         });
     if close {
         st.filter_open = None;
@@ -2064,5 +2106,86 @@ mod tests {
         );
         assert_eq!(st.widths[SOURCE], 62.0, "the saved widths stay");
         assert_eq!(st.widths[ADDED], 145.0);
+    }
+
+    /// Plan 06b, requirement 19.1: beside the details pane the list keeps every column and
+    /// scrolls sideways. In a 1240-wide client area with the Categories pane at its default
+    /// width, the list's `outer` is laid out as `App::paint` lays it out (from `list_left` to
+    /// `list_end(w)`), once with the pane closed and once open: the same columns are shown, the
+    /// sideways range grows by the pane's width, and scrolling to its end shows the last
+    /// column's trailing edge at the body's.
+    #[test]
+    fn the_list_keeps_its_columns_beside_the_details_pane() {
+        let _fonts = crate::theme::font_tests();
+        let (w, h) = (1240.0, 600.0);
+        let saved = crate::settings::Settings::default();
+        let list_left = crate::chrome::Layout::GRAPHITE.tree_left
+            + saved.graphite_categories_width as f32
+            + crate::chrome::Layout::GRAPHITE.splitter_w;
+        let d = crate::panes::details_width(saved.details_width, w, list_left);
+        assert_eq!((list_left, d), (224.0, 276.0));
+        let closed = crate::chrome::Layout::GRAPHITE.with_panes(false, None);
+        let open = closed.with_panes(false, Some(d));
+        let rows = vec![
+            row("Web", "Complete", "a.zip", false),
+            row("Web", "Stopped", "b.iso", false),
+        ];
+        // One list in `layout`, scrolled sideways by `hscroll` (clamped by `show`): the columns
+        // shown, the scroll it keeps, and the rows' area.
+        let run = |layout: crate::chrome::Layout, hscroll: f32| {
+            let ctx = egui::Context::default();
+            let mut st = ListState {
+                hscroll,
+                ..ListState::default()
+            };
+            let outer = Rect::from_min_max(
+                pos2(list_left, layout.panes_top()),
+                pos2(layout.list_end(w), layout.list_bottom(h)),
+            );
+            let mut body = Rect::NOTHING;
+            for _ in 0..2 {
+                let mut out = ctx.run_ui(
+                    egui::RawInput {
+                        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(w, h))),
+                        ..Default::default()
+                    },
+                    |ui| {
+                        let r = show(
+                            ui,
+                            outer,
+                            &mut st,
+                            &rows,
+                            &[false, false],
+                            None,
+                            &mut ShellIcons,
+                            &|_| String::new(),
+                        );
+                        body = r.body.expect("the list has a body");
+                    },
+                );
+                out.textures_delta.clear();
+            }
+            (st.shown(), st.hscroll, body)
+        };
+        let content_w: f32 = GRAPHITE_WIDTHS.iter().sum();
+        let (cols_closed, range_closed, body_closed) = run(closed, f32::MAX);
+        let (cols_open, range_open, body_open) = run(open, f32::MAX);
+        // No column is hidden to make room.
+        assert_eq!(cols_closed.len(), COLS);
+        assert_eq!(cols_open, cols_closed);
+        // The list ends where the pane starts.
+        assert_eq!(body_closed.right(), w);
+        assert_eq!(body_open.right(), open.list_end(w));
+        assert_eq!(body_open.right(), open.details_left(w));
+        // The columns are wider than either list: the sideways range is what does not fit, and
+        // it grows by the pane's width.
+        assert_eq!(range_closed, content_w - body_closed.width());
+        assert_eq!(range_open, content_w - body_open.width());
+        assert_eq!(range_open - range_closed, d);
+        // Scrolled to its end, the last column ends at the body's trailing edge: it is reached.
+        assert_eq!(list_left + content_w - range_open, body_open.right());
+        // Unscrolled, the pane's list starts at the first column, as the closed one does.
+        let (_, start, _) = run(open, 0.0);
+        assert_eq!(start, 0.0);
     }
 }
