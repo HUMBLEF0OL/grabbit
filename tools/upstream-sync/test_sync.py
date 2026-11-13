@@ -482,6 +482,123 @@ def lock_case() -> None:
     print("ok: a lock-only conflict is picked with --lock")
 
 
+def graphite_only_case() -> None:
+    """Plan 05.5b: the fork deletes an old theme and adds Graphite's, whose licence is near
+    identical. An upstream change to the old licence, or a new file in the old theme's folder,
+    sorts removed (the licence pair is no move), and a theme commit carries the theme note. A
+    licence moved with its folder's code is still a move; Lucide's outline, which git pairs with
+    an unrelated Graphite icon, is not (05.5b's audit)."""
+    mit = "".join(f"MIT licence line {i}\n" for i in range(40))
+    with tempfile.TemporaryDirectory() as tmp:
+        r = Path(tmp)
+        git(r, "init", "-q", "-b", "main")
+        for k, v in {"user.name": "T", "user.email": "t@example.com", "commit.gpgsign": "false",
+                     "core.autocrlf": "false", "protocol.https.allow": "never"}.items():
+            git(r, "config", k, v)
+        t = "crates/app/assets/themes/"
+        write(r, t + "x/icons/LICENSE", "Copyright X\n" + mit)
+        write(r, t + "x/icons/16/a.svg", "<svg/>\n")
+        write(r, t + "x.toml", "name = 'x'\n")
+        write(r, "keep.rs", LINES)
+        # A folder the fork really moves, its licence with it.
+        write(r, "lib/x/LICENSE", "Copyright L\n" + mit)
+        write(r, "lib/x/a.rs", LINES)
+        # Lucide's outline, which git pairs with an unrelated Graphite icon (about 60 % alike).
+        svg = "".join(f'  <path d="M{i} {i}h{i}"/>\n' for i in range(6))
+        lucide = "crates/app/assets/icons/lucide/"
+        write(r, lucide + "x.svg", "<svg lucide>\n" + svg + "".join(
+            f'  <circle r="{i}"/>\n' for i in range(4)) + "</svg>\n")
+        commit(r, "base")
+
+        git(r, "checkout", "-q", "-b", "dev")
+        git(r, "rm", "-rq", t + "x", t + "x.toml", lucide)
+        git(r, "mv", "lib/x", "lib/y")
+        write(r, t + "graphite/icons/LICENSE", "Copyright G\n" + mit)
+        write(r, t + "graphite/icons/24/gx-plus.svg", "<svg graphite>\n" + svg + "".join(
+            f'  <rect x="{i}"/>\n' for i in range(4)) + "</svg>\n")
+        write(r, t + "graphite.toml", "name = 'graphite'\n")
+        write(r, LEDGER, HEADER)
+        commit(r, "fork: Graphite only")
+        git(r, "update-ref", "refs/remotes/origin/dev", "HEAD")
+
+        git(r, "checkout", "-q", "main")
+        write(r, t + "x/icons/LICENSE", "Copyright X 2026\n" + mit)
+        lic = commit(r, "x: licence year")
+        write(r, t + "x/icons/b.svg", "<svg/>\n")  # beside the licence: alive only by its pair
+        new = commit(r, "x: a new icon")
+        write(r, "lib/x/LICENSE", "Copyright L 2026\n" + mit)
+        moved_lic = commit(r, "lib: licence year")
+        write(r, lucide + "x.svg", "<svg lucide 2>\n" + svg + "</svg>\n")
+        lucide_edit = commit(r, "lucide: x simpler")
+        write(r, lucide + "y.svg", "<svg/>\n")
+        lucide_new = commit(r, "lucide: y")
+        write(r, t + "emerald.toml", "name = 'emerald'\n")
+        write(r, "keep.rs", edit(LINES, 3, "line 3 fixed"))
+        theme = commit(r, "Emerald, a new theme")
+        git(r, "update-ref", "refs/remotes/upstream/main", "HEAD")
+
+        git(r, "checkout", "-q", "-b", "upstream-sync/graphite", "dev")
+        by = status(r)["by"]
+        assert by[lic]["kind"] == "removed", by[lic]
+        assert by[new]["kind"] == "removed", by[new]
+        note = "a theme other than Graphite (emerald): this fork keeps Graphite only (plan 05.5): skip"
+        assert note in by[theme]["notes"], by[theme]
+        assert any("(x)" in n for n in by[new]["notes"]), by[new]
+        # A licence that moved with its folder's code still lands on the fork's copy.
+        assert by[moved_lic]["kind"] != "removed", by[moved_lic]
+        # Lucide's outline is no rewrite of Graphite's icon: gone, and its folder too.
+        assert by[lucide_edit]["kind"] == "removed", by[lucide_edit]
+        assert by[lucide_new]["kind"] == "removed", by[lucide_new]
+    print("ok: an old theme's licence is no move, and a theme commit says Graphite only")
+
+
+def move_rule_case() -> None:
+    """05.5b's sibling rule keeps the real moves (its second audit): an icon-only folder moved
+    whole, a lone icon renamed unchanged, a notice renamed in its own folder, a licence carried
+    by a move that made subfolders."""
+    sys.path.insert(0, str(SYNC.parent))
+    import sync as sync_mod
+    mit = "".join(f"MIT licence line {i}\n" for i in range(40))
+    with tempfile.TemporaryDirectory() as tmp:
+        r = Path(tmp)
+        git(r, "init", "-q", "-b", "main")
+        for k, v in {"user.name": "T", "user.email": "t@example.com", "commit.gpgsign": "false",
+                     "core.autocrlf": "false"}.items():
+            git(r, "config", k, v)
+        for i in range(3):
+            write(r, f"a/icons/i{i}.svg", f"<svg><path d='M{i} 0h{i}'/></svg>\n")
+        write(r, "a/icons/LICENSE", "Copyright A\n" + mit)
+        write(r, "img/logo.png", "PNG logo bytes\n")
+        write(r, "tools/foo/README.txt", "notes about foo\n" * 20)
+        write(r, "tools/foo/run.py", LINES)
+        write(r, "lib/x/LICENSE", "Copyright X\n" + mit)
+        write(r, "lib/x/a.rs", LINES)
+        commit(r, "base")
+        git(r, "checkout", "-q", "-b", "dev")
+        git(r, "mv", "a", "b")
+        (r / "art").mkdir()
+        git(r, "mv", "img/logo.png", "art/logo.png")
+        git(r, "mv", "tools/foo/README.txt", "tools/foo/NOTES.txt")
+        (r / "lib/y/src").mkdir(parents=True)
+        git(r, "mv", "lib/x/a.rs", "lib/y/src/a.rs")
+        git(r, "mv", "lib/x/LICENSE", "lib/y/LICENSE")
+        commit(r, "fork: moves")
+        here = os.getcwd()
+        os.chdir(r)
+        try:
+            f = sync_mod.fork_state("main", "dev")
+        finally:
+            os.chdir(here)
+        for src in ["a/icons/i0.svg", "a/icons/LICENSE", "img/logo.png", "tools/foo/README.txt",
+                    "lib/x/LICENSE"]:
+            assert src in f.moved or src in f.rewritten, (src, f.gone)
+            assert not f.is_gone(src), src
+        assert "a" not in f.gone_dirs and "a/icons" not in f.gone_dirs, f.gone_dirs
+    print("ok: whole moves, exact icon renames and in-folder notice renames stay moves")
+
+
 if __name__ == "__main__":
     main()
+    graphite_only_case()
+    move_rule_case()
     lock_case()
