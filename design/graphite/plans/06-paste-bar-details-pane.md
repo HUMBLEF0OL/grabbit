@@ -7,7 +7,7 @@ that adds a download from an address, and a details pane beside the list that sh
 download. Both reuse what exists (00's accepted exception: new routes to existing commands); neither
 adds a new kind of download.
 
-- Branch: `ui/06-panes`
+- Branch: `ui/06-panes` (06a, the paste bar), `ui/06b-details-pane` (06b, the details pane, stacked on `ui/06-panes`)
 - Needs: 05a (`Layout`), 05b (the Graphite toolbar, for the Details toggle), 02b (the Graphite roles), 03b (`gx-*` glyphs)
 - Unblocks: 09
 
@@ -80,7 +80,8 @@ bar, placeholder); Adding a download section (paste bar routing to Download File
 
 ## Done when
 
-- [ ] Both parts toggle from View (and the toolbar, for details) and persist across restarts
-- [ ] The paste bar routes every kind of address exactly as Add URL does
-- [ ] Keyboard and accessibility checks pass
-- [ ] Help updated; screenshots, ROADMAP, CHANGELOG
+- [x] Both parts toggle from View (and the toolbar, for details) and persist across restarts
+- [x] The paste bar routes every kind of address exactly as Add URL does
+- [ ] Keyboard and accessibility checks pass (the headless tests pass; the on-screen keyboard and Narrator pass is owed, done by the user)
+- [x] Help updated; ROADMAP, CHANGELOG
+- [ ] Screenshots (owed, taken by the user)
