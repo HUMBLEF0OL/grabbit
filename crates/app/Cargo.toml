@@ -85,6 +85,8 @@ tray-icon = "0.26.1"
 winresource = "0.1"
 
 [dev-dependencies]
+# Property tests (the engine's version, already in Cargo.lock).
+proptest.workspace = true
 tempfile.workspace = true
 # secrets.rs's test that no secret reaches the log.
 tracing-subscriber.workspace = true

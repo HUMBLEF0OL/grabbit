@@ -723,6 +723,37 @@ pub struct App {
     commands: std::sync::mpsc::Receiver<ipc::Incoming>,
 }
 
+/// Where an accepted address goes, in Add URL's order (plan 06): `route_of` picks it,
+/// `App::route_new_url` opens it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Route {
+    /// A magnet link: Add torrent.
+    Magnet,
+    /// A .torrent's address (#39): Add torrent fetches it.
+    TorrentUrl,
+    /// A video's page (YouTube, Vimeo…): the video window.
+    VideoPage,
+    /// An image gallery's page (#58): gallery-dl.
+    GalleryPage,
+    /// Anything else: the duplicate check, then Download File Info.
+    File,
+}
+
+/// The route for an accepted address: the first check that holds wins, in this order.
+fn route_of(url: &url::Url) -> Route {
+    if url.scheme() == "magnet" {
+        Route::Magnet
+    } else if crate::torrents::is_torrent_url(url, None, None) {
+        Route::TorrentUrl
+    } else if mdm_tools::pages::is_video_page(url) {
+        Route::VideoPage
+    } else if mdm_tools::pages::is_gallery_page(url) {
+        Route::GalleryPage
+    } else {
+        Route::File
+    }
+}
+
 /// The login written in an address (`ftp://user:pass@host/…`), decoded.
 fn url_login(url: &url::Url) -> Option<(String, String)> {
     let password = url.password()?;
@@ -7323,6 +7354,60 @@ impl App {
         }
     }
 
+    /// An accepted address from Add URL's OK (and the paste bar, plan 06): remembered for the
+    /// Address drop list, then opened where it belongs (`route_of`). A window already open
+    /// keeps its own waiting queue, as before.
+    fn route_new_url(&mut self, new: dialogs::NewUrl, ctx: &egui::Context) {
+        // Every address that goes on is remembered for the Address drop list.
+        crate::settings::remember(&mut self.settings.url_history, new.url.as_str());
+        self.dirty = true;
+        match route_of(&new.url) {
+            Route::Magnet => self.open_torrent_dialog(Some(new.url.to_string()), ctx),
+            // A .torrent's address (#39): Add torrent fetches it and shows what it holds.
+            Route::TorrentUrl => {
+                let parts =
+                    self.request_parts(&new.url, new.login.as_ref(), &Default::default(), false);
+                let remote = crate::torrents::Remote {
+                    url: new.url.clone(),
+                    parts,
+                };
+                self.open_torrent_dialog_with(Some(new.url.to_string()), Some(remote), ctx);
+            }
+            // A video's page, not a file (YouTube, Vimeo…): the video window looks it up.
+            Route::VideoPage => {
+                let dir = self.settings.category_dir(Category::Video, &self.downloads);
+                crate::videodlg::refresh_ytdlp(&self.rt);
+                self.video_dlg = Some(
+                    crate::videodlg::VideoDialog::for_page(
+                        dir,
+                        new.url.as_str(),
+                        Default::default(),
+                    )
+                    .with_subs(self.settings.video_subs.clone()),
+                );
+            }
+            // An image gallery's page (Wikimedia Commons, Flickr…): gallery-dl (#58).
+            Route::GalleryPage => {
+                let dir = self
+                    .settings
+                    .category_dir(Category::General, &self.downloads);
+                self.gallery_dlg =
+                    Some(crate::gallerydlg::GalleryDialog::new(dir, new.url.as_str()));
+            }
+            Route::File => {
+                let url = new.url.clone();
+                if self.duplicate_gate(&url, || {
+                    Pending::Url(dialogs::NewUrl {
+                        url: new.url.clone(),
+                        login: new.login.clone(),
+                    })
+                }) {
+                    self.open_file_info(new, Default::default(), ctx);
+                }
+            }
+        }
+    }
+
     /// Download File Info for an address from Add URL, the browser (`context`) or the command
     /// line. One at a time: another that arrives meanwhile waits its turn (the browser has
     /// already given its own copy up, so none may be dropped).
@@ -8330,68 +8415,12 @@ impl App {
             }
         }
         if let Some(d) = &mut self.add_url {
-            let out = d.show(ctx, |url| self.settings.site_login(url));
-            // Every address that goes on is remembered for the Address drop list.
-            if let Outcome::Done(new) = &out {
-                crate::settings::remember(&mut self.settings.url_history, new.url.as_str());
-                self.dirty = true;
-            }
-            match out {
+            match d.show(ctx, |url| self.settings.site_login(url)) {
                 Outcome::Open => {}
                 Outcome::Closed => self.add_url = None,
-                Outcome::Done(new) if new.url.scheme() == "magnet" => {
-                    self.add_url = None;
-                    self.open_torrent_dialog(Some(new.url.to_string()), ctx);
-                }
-                // A .torrent's address (#39): Add torrent fetches it and shows what it holds.
-                Outcome::Done(new) if crate::torrents::is_torrent_url(&new.url, None, None) => {
-                    self.add_url = None;
-                    let parts = self.request_parts(
-                        &new.url,
-                        new.login.as_ref(),
-                        &Default::default(),
-                        false,
-                    );
-                    let remote = crate::torrents::Remote {
-                        url: new.url.clone(),
-                        parts,
-                    };
-                    self.open_torrent_dialog_with(Some(new.url.to_string()), Some(remote), ctx);
-                }
-                // A video's page, not a file (YouTube, Vimeo…): the video window looks it up.
-                Outcome::Done(new) if mdm_tools::pages::is_video_page(&new.url) => {
-                    self.add_url = None;
-                    let dir = self.settings.category_dir(Category::Video, &self.downloads);
-                    crate::videodlg::refresh_ytdlp(&self.rt);
-                    self.video_dlg = Some(
-                        crate::videodlg::VideoDialog::for_page(
-                            dir,
-                            new.url.as_str(),
-                            Default::default(),
-                        )
-                        .with_subs(self.settings.video_subs.clone()),
-                    );
-                }
-                // An image gallery's page (Wikimedia Commons, Flickr…): gallery-dl (#58).
-                Outcome::Done(new) if mdm_tools::pages::is_gallery_page(&new.url) => {
-                    self.add_url = None;
-                    let dir = self
-                        .settings
-                        .category_dir(Category::General, &self.downloads);
-                    self.gallery_dlg =
-                        Some(crate::gallerydlg::GalleryDialog::new(dir, new.url.as_str()));
-                }
                 Outcome::Done(new) => {
                     self.add_url = None;
-                    let url = new.url.clone();
-                    if self.duplicate_gate(&url, || {
-                        Pending::Url(dialogs::NewUrl {
-                            url: new.url.clone(),
-                            login: new.login.clone(),
-                        })
-                    }) {
-                        self.open_file_info(new, Default::default(), ctx);
-                    }
+                    self.route_new_url(new, ctx);
                 }
             }
         }
@@ -9554,6 +9583,114 @@ mod mark_finished_tests {
             let zone = std::fs::read_to_string(stream).unwrap();
             assert!(zone.contains("ZoneId=3"), "{zone}");
             assert!(zone.contains("HostUrl=https://videos.test/v"), "{zone}");
+        }
+    }
+}
+#[cfg(test)]
+mod route_tests {
+    use super::{Route, route_of};
+    fn route(s: &str) -> Route {
+        route_of(&url::Url::parse(s).unwrap())
+    }
+    #[test]
+    fn each_kind_of_address_has_its_route() {
+        assert_eq!(
+            route("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"),
+            Route::Magnet
+        );
+        assert_eq!(route("https://example.org/a.torrent"), Route::TorrentUrl);
+        assert_eq!(
+            route("https://www.youtube.com/watch?v=Tg6byXUo8RU"),
+            Route::VideoPage
+        );
+        // From mdm_tools::pages' gallery_pages_are_recognised.
+        assert_eq!(
+            route("https://commons.wikimedia.org/wiki/Category:Featured_pictures_of_birds"),
+            Route::GalleryPage
+        );
+        assert_eq!(route("https://example.org/file.zip"), Route::File);
+    }
+    #[test]
+    fn a_magnet_wins_over_a_torrent_looking_name() {
+        assert_eq!(
+            route("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=ubuntu.torrent"),
+            Route::Magnet
+        );
+    }
+    /// No address is both a video page and a gallery page: `mdm_tools::pages` lists disjoint
+    /// hosts for the two. The closest real overlap is a .torrent's address on a video or a
+    /// gallery site, which the torrent check, earlier in the order, wins.
+    #[test]
+    fn an_earlier_check_wins_over_a_later_one() {
+        let video = url::Url::parse("https://www.youtube.com/shorts/clip.torrent").unwrap();
+        assert!(mdm_tools::pages::is_video_page(&video));
+        assert_eq!(route_of(&video), Route::TorrentUrl);
+        let gallery =
+            url::Url::parse("https://www.flickr.com/photos/nasawebbtelescope/a.torrent").unwrap();
+        assert!(mdm_tools::pages::is_gallery_page(&gallery));
+        assert_eq!(route_of(&gallery), Route::TorrentUrl);
+    }
+
+    /// `dev`'s inline match of the Add URL outcome, guard by guard, in its order.
+    fn dev_route(url: &url::Url) -> Route {
+        match url {
+            u if u.scheme() == "magnet" => Route::Magnet,
+            u if crate::torrents::is_torrent_url(u, None, None) => Route::TorrentUrl,
+            u if mdm_tools::pages::is_video_page(u) => Route::VideoPage,
+            u if mdm_tools::pages::is_gallery_page(u) => Route::GalleryPage,
+            _ => Route::File,
+        }
+    }
+
+    /// Addresses from a small grammar (scheme × host × path × ending × query): video and
+    /// gallery hosts with paths of their page shapes, and endings such as `.torrent`, so
+    /// addresses that more than one check accepts come up often.
+    fn routed_address() -> impl proptest::strategy::Strategy<Value = url::Url> {
+        use proptest::prelude::*;
+        let scheme = prop::sample::select(vec!["https", "http", "ftp", "magnet"]);
+        let host = prop::sample::select(vec![
+            "www.youtube.com",
+            "youtu.be",
+            "vimeo.com",
+            "x.com",
+            "www.flickr.com",
+            "imgur.com",
+            "commons.wikimedia.org",
+            "someone.tumblr.com",
+            "bsky.app",
+            "example.org",
+        ]);
+        let path = prop::sample::select(vec![
+            "",
+            "/watch",
+            "/shorts/clip",
+            "/123456",
+            "/someone/status/1",
+            "/photos/nasawebbtelescope",
+            "/a/abc123",
+            "/wiki/Category:Birds",
+            "/profile/nasa.gov",
+            "/dir/file",
+        ]);
+        let ending = prop::sample::select(vec!["", "/", ".torrent", ".TORRENT", ".zip", ".jpg"]);
+        let query = prop::sample::select(vec!["", "?v=abc", "?list=PL1&tags=landscape"]);
+        (scheme, host, path, ending, query).prop_map(|(s, h, p, e, q)| {
+            let text = if s == "magnet" {
+                format!("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn={h}{p}{e}")
+            } else {
+                format!("{s}://{h}{p}{e}{q}")
+            };
+            url::Url::parse(&text).unwrap()
+        })
+    }
+
+    // Feature: paste-bar-details-pane, Property 1: Route priority.
+    // **Validates: Requirements 1.3, 1.4, 1.5, 1.6, 1.7, 1.9**
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+        #[test]
+        fn route_of_takes_the_first_check_that_holds(url in routed_address()) {
+            proptest::prop_assert_eq!(route_of(&url), dev_route(&url));
         }
     }
 }

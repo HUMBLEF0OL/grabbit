@@ -593,6 +593,14 @@ pub struct NewUrl {
     pub login: Option<(String, String)>,
 }
 
+/// An address Add URL's OK and the paste bar accept: as typed (`parse_address`: no scheme reads as
+/// https), and one MDM downloads or a magnet link. None: "Invalid address".
+pub fn accept_address(typed: &str) -> Option<Url> {
+    crate::model::parse_address(typed)
+        .ok()
+        .filter(|url| mdm_engine::supported(url) || url.scheme() == "magnet")
+}
+
 impl AddUrl {
     /// Opens like IDM's: pre-filled with the clipboard's text when it is an http(s) URL (or a
     /// magnet link: OK then opens Add torrent). The clipboard is read off the window's thread,
@@ -815,14 +823,14 @@ impl AddUrl {
                     return Outcome::Closed;
                 }
                 if ok || (enter && !list_was_open) {
-                    match crate::model::parse_address(&self.address) {
-                        Ok(url) if mdm_engine::supported(&url) || url.scheme() == "magnet" => {
+                    match accept_address(&self.address) {
+                        Some(url) => {
                             return Outcome::Done(NewUrl {
                                 url,
                                 login: self.typed_login(),
                             });
                         }
-                        _ => self.error = Some(crate::i18n::t("Invalid address").into()),
+                        None => self.error = Some(crate::i18n::t("Invalid address").into()),
                     }
                 }
                 Outcome::Open
@@ -3696,6 +3704,93 @@ mod tests {
         assert_eq!(fill("magnet:?xt=urn:btih:ab"), "magnet:?xt=urn:btih:ab");
         assert_eq!(fill("some words"), "");
         assert_eq!(fill("mailto:a@b.example"), "");
+    }
+
+    /// Plan 06: Add URL's OK and the paste bar share one rule: as typed (no scheme reads as
+    /// https), then an address MDM downloads or a magnet link.
+    #[test]
+    fn accept_address_takes_what_add_url_takes() {
+        let ok = |t: &str| accept_address(t).map(|u| u.to_string());
+        assert_eq!(
+            ok("www.example.org/a.zip").as_deref(),
+            Some("https://www.example.org/a.zip")
+        );
+        assert_eq!(
+            accept_address("magnet:?xt=urn:btih:ab").map(|u| u.scheme().to_owned()),
+            Some("magnet".to_owned())
+        );
+        assert_eq!(
+            accept_address("ftp://ftp.example.org/f.iso").map(|u| u.scheme().to_owned()),
+            Some("ftp".to_owned())
+        );
+        assert_eq!(ok("not an address"), None);
+        assert_eq!(ok("file:///x"), None);
+        assert_eq!(ok(""), None);
+        assert_eq!(ok("   \t "), None);
+    }
+
+    /// Addresses from a small grammar (scheme × host × path, with stray spaces), so the
+    /// accepted and the rejected sides both come up often; free text alongside.
+    fn typed_address() -> impl proptest::strategy::Strategy<Value = String> {
+        use proptest::prelude::*;
+        let scheme = prop::sample::select(vec![
+            "",
+            "http://",
+            "https://",
+            "HTTPS://",
+            "ftp://",
+            "ftps://",
+            "file:///",
+            "mailto:",
+            "javascript:",
+            "data:",
+            "magnet:?xt=urn:btih:",
+            "magnet:",
+            "ws://",
+            "http:/",
+        ]);
+        let host = prop::sample::select(vec![
+            "example.org",
+            "www.example.org",
+            "files.example.com:8080",
+            "localhost",
+            "127.0.0.1",
+            "[::1]",
+            "a",
+            "",
+            "exa mple.org",
+            "user:pw@example.org",
+            "ab12",
+        ]);
+        let path = prop::sample::select(vec![
+            "",
+            "/",
+            "/a.zip",
+            "/dir/f.iso?x=1&y=2",
+            "#frag",
+            " /x",
+            "/a b.zip",
+            "\\f.zip",
+        ]);
+        let pad = prop::sample::select(vec!["", " ", "\t", "\n"]);
+        let grammar = (pad.clone(), scheme, host, path, pad)
+            .prop_map(|(a, s, h, p, b)| format!("{a}{s}{h}{p}{b}"));
+        prop_oneof![grammar, any::<String>(), "[ -~]{0,40}"]
+    }
+
+    // Feature: paste-bar-details-pane, Property 2: Same validity rule.
+    // **Validates: Requirements 2.1, 2.2, 2.4, 2.5**
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+        #[test]
+        fn accept_address_is_the_one_validity_rule(t in typed_address()) {
+            let model = crate::model::parse_address(&t)
+                .ok()
+                .filter(|u| mdm_engine::supported(u) || u.scheme() == "magnet");
+            proptest::prop_assert_eq!(accept_address(&t).is_some(), model.is_some());
+            // An accepted text gives the address `parse_address` read (2.1).
+            proptest::prop_assert_eq!(accept_address(&t), model);
+        }
     }
 
     /// #511: an address with an Options → Sites Logins entry shows that login in "Use

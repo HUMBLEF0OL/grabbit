@@ -1131,6 +1131,41 @@ mod tests {
         assert_eq!(h[0], "29");
     }
 
+    /// An address as `route_new_url` hands it to `remember`; two hosts × 20 paths give 40
+    /// values, enough to fill a history of `HISTORY` and to hit an entry already there.
+    fn address() -> impl proptest::strategy::Strategy<Value = String> {
+        "https://example\\.(org|com)/[a-d]{1,2}"
+    }
+
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+
+        // Feature: paste-bar-details-pane, Property 4: History
+        /// **Validates: Requirements 1.2**
+        ///
+        /// For any history `remember` can have built (distinct entries, at most `HISTORY`, in any
+        /// order) and any address, with or without spaces around it: afterwards the address is
+        /// first, no entry is there twice and there are at most `HISTORY`.
+        #[test]
+        fn remember_puts_the_address_first_once_within_the_limit(
+            history in proptest::strategy::Strategy::prop_shuffle(
+                proptest::strategy::Strategy::prop_map(
+                    proptest::collection::btree_set(address(), 0..=HISTORY),
+                    Vec::from_iter,
+                ),
+            ),
+            url in address(),
+            pad in "[ \t]{0,2}",
+        ) {
+            let mut h = history;
+            remember(&mut h, &format!("{pad}{url}{pad}"));
+            proptest::prop_assert_eq!(&h[0], &url);
+            let distinct: std::collections::HashSet<&String> = h.iter().collect();
+            proptest::prop_assert_eq!(distinct.len(), h.len(), "no duplicates: {:?}", h);
+            proptest::prop_assert!(h.len() <= HISTORY, "{} entries", h.len());
+        }
+    }
+
     #[test]
     fn site_logins_match_by_host_and_path() {
         let s = Settings {
