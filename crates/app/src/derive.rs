@@ -201,7 +201,6 @@ pub fn derive(s: &Seeds) -> Palette {
         dark,
         focus_line_straight: false,
         access_keys_always: false,
-        tree_chevrons: dark,
         segments,
         window: bg,
         text,
@@ -294,7 +293,6 @@ pub fn derive(s: &Seeds) -> Palette {
         header_line: toward(s.header, 0.1),
         header_sep: toward(s.header, 0.14),
         table_line: toward(surface, 0.12),
-        sorted: toward(s.header, 0.05),
         sort_arrow: muted,
         row_pressed: toward(surface, 0.12),
         chip_web: readable(s.success, Color32::WHITE, 3.0),
@@ -321,23 +319,13 @@ pub fn derive(s: &Seeds) -> Palette {
         menu_text: text,
         menu_glyph: text,
         menu_text_disabled: readable(mix(text, surface, 0.55), surface, 2.5),
-        toolbar_line: toward(bg, 0.12),
-        toolbar_line_light: bg,
         toolbar_hot: tint(bg, 0.12),
         toolbar_hot_faint: tint(bg, 0.05),
         toolbar_pressed: tint(bg, 0.22),
-        toolbar_hot_edge: tint(bg, 0.3),
-        toolbar_hot_border: tint(bg, 0.3),
-        toolbar_split_shadow: toward(bg, 0.2),
-        toolbar_split_light: bg,
         toolbar_text_disabled: disabled,
-        toolbar_arrow: muted,
         icon_disabled: disabled,
-        icon_disabled_end: disabled,
         tree: surface,
         tree_expander: text,
-        tree_lines: toward(surface, 0.35),
-        tree_frame: toward(bg, 0.16),
         status_value: text,
         progress_label_disabled: disabled,
         segment_border: toward(surface, 0.4),
@@ -402,22 +390,15 @@ pub fn strengthen(p: &mut Palette) {
         &mut p.check_border_pressed,
         &mut p.header_sep,
         &mut p.header_line,
-        &mut p.tree_frame,
         &mut p.meter_edge,
         &mut p.segment_border,
-        &mut p.toolbar_line,
         &mut p.menubar_line,
         &mut p.egui_window_border,
     ] {
         *c = edge;
     }
     // Grid lines and dividers clearly seen, quieter than the edges.
-    for c in [
-        &mut p.grid,
-        &mut p.list_grid,
-        &mut p.table_line,
-        &mut p.tree_lines,
-    ] {
+    for c in [&mut p.grid, &mut p.list_grid, &mut p.table_line] {
         *c = mix(p.window, p.text, 0.45);
     }
     p.focus_ring = p.accent;
@@ -440,7 +421,6 @@ pub fn strengthen(p: &mut Palette) {
     p.check_border_disabled = p.text_disabled;
     p.chevron_disabled = p.text_disabled;
     p.icon_disabled = p.text_disabled;
-    p.icon_disabled_end = p.text_disabled;
     // Hot and pressed: the accent's tint, clearly not the rest colour.
     p.subtle_hot = mix(p.window, p.accent, 0.25);
     p.subtle_pressed = mix(p.window, p.accent, 0.4);

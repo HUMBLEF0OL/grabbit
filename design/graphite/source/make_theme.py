@@ -108,8 +108,7 @@ ROLES = [
     ]),
     ("Toolbar: a neutral face under the pointer, no border", [
         ("toolbar.hot", TOOLBAR_HOT), ("toolbar.pressed", TOOLBAR_PRESSED),
-        ("toolbar.hot.faint", TOOLBAR_FAINT), ("toolbar.hot.edge", "line"),
-        ("toolbar.hot.border", "none"),
+        ("toolbar.hot.faint", TOOLBAR_FAINT),
         ("toolbar.text.disabled", "dis"), ("icon.disabled", "dis"),
     ]),
     ("Categories tree", [("tree", "surface"), ("tree.expander", "ink3")]),
@@ -146,7 +145,6 @@ name = "Graphite"
 # A font MDM carries: Geist (Regular, Medium, SemiBold for the bold texts).
 font = "geist"
 icon-set = "graphite"
-icons = "mono"
 
 [controls]
 field-focus = "ring"

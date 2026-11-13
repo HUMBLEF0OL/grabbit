@@ -108,12 +108,9 @@ ProgID) that ends in the new state with nothing lost; the existing startup tests
   `caption` = `luna`, `aero`, `aqua`, `adwaita`, `breeze`, `metro`) stay as theme-file vocabulary
   with their drawing code: 05.5c kept them, to stay under its size limit. Decide here whether a
   theme file still offers them, and remove them with their drawing if not.
-- Theme-file vocabulary nothing draws any more, decided with the above: the `icons` key
-  (`IconStyle`, which inked the Lucide outlines), and the palette roles of the classic tree, list
-  and toolbar (`tree`, `tree.frame`, `tree.lines`, `tree.chevrons`, `toolbar.arrow`,
-  `toolbar.split.shadow`/`.light`, `toolbar.line.light`, `icon.disabled.end`, `list.frame`,
-  `header.sep`, `sorted`): warn "ignored" or remove them, with the docs' theme guide.
-- Plans 06 to 09 carry a note that Graphite is the only look; their Classic steps are gone.
+- The docs' theme guide (`docs/themes.md`) still shows the `icons` key and the palette roles 05.5d
+  removed (the classic toolbar's and tree's, `header.sorted`, `font.ui.bold`): rewrite it here.
+- Plans 06 to 09 were adjusted after 05.5 (their Classic steps removed, 09b's default already done).
 
 ## Done when
 

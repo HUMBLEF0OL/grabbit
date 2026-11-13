@@ -5,7 +5,6 @@
 //! ```toml
 //! name = "My theme"
 //! inherits = "graphite"
-//! icons = "mono"            # color | mono | accent
 //!
 //! [sizes]
 //! radius = 4
@@ -34,7 +33,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::palette::{self, IconStyle, Palette, Theme};
+use crate::palette::{self, Palette, Theme};
 
 /// A theme read from a file, with what in it was skipped.
 #[derive(Debug)]
@@ -530,10 +529,11 @@ pub fn parse(
                     ));
                 }
             },
-            "icons" => match value.as_str().and_then(IconStyle::from_key) {
-                Some(s) => theme.icons = s,
-                None => warnings.push(format!("icons: {value} is not color, mono or accent")),
-            },
+            // How the old outline icons were inked: MDM's icons are Graphite's, in one colour
+            // (plan 05.5); read and ignored.
+            "icons" => warnings.push(format!(
+                "icons: {value}: ignored (MDM's icons are drawn in one colour)"
+            )),
             "sizes" => sizes(value, &mut theme, &mut warnings),
             "controls" => match value.as_object() {
                 Some(table) => {
@@ -653,7 +653,6 @@ fn colors(table_name: &str, v: &Value, pal: &mut Palette, warnings: &mut Vec<Str
             "dark" => Some(&mut pal.dark),
             "focus-line-straight" => Some(&mut pal.focus_line_straight),
             "access-keys-always" => Some(&mut pal.access_keys_always),
-            "tree-chevrons" => Some(&mut pal.tree_chevrons),
             _ => None,
         };
         if let Some(flag) = flag {
@@ -739,7 +738,6 @@ mod tests {
             "mine",
             r##"
             name = "Mine"
-            icons = "mono"
             [sizes]
             radius = 5
             "list.row" = 20
@@ -754,7 +752,6 @@ mod tests {
         assert!(l.warnings.is_empty(), "{:?}", l.warnings);
         let t = l.theme;
         assert_eq!((t.id.as_ref(), t.name.as_ref()), ("mine", "Mine"));
-        assert_eq!(t.icons, IconStyle::Mono);
         assert_eq!(t.metrics.control_radius, 5.0);
         assert_eq!(t.metrics.list_row, 20.0);
         assert_eq!(t.metrics.font_dialog, graphite().metrics.font_dialog);
@@ -871,6 +868,24 @@ mod tests {
         assert!(l.warnings.is_empty());
         assert_eq!(l.theme.light, graphite().light);
         assert_eq!(l.theme.icon_set.as_deref(), Some("graphite"));
+        // Keys only the removed looks used: read and ignored, each with a word in the log.
+        let l = toml_theme(
+            "mine",
+            "icons = \"mono\"\n[light]\n\"tree.frame\" = \"#123456\"\n",
+        )
+        .unwrap();
+        assert_eq!(l.warnings.len(), 2, "{:?}", l.warnings);
+        assert!(
+            l.warnings.iter().any(|w| w.starts_with("icons: ")),
+            "{:?}",
+            l.warnings
+        );
+        assert!(
+            l.warnings.iter().any(|w| w.contains("tree.frame")),
+            "{:?}",
+            l.warnings
+        );
+        assert_eq!(l.theme.light, graphite().light);
         // The built-in Graphite inherits the base, never itself.
         assert_eq!(graphite().id, "graphite");
     }
@@ -902,7 +917,7 @@ mod tests {
         // A theme file built on a scheme: its colours, the file's own changes on top.
         std::fs::write(
             dir.join("mine.toml"),
-            "inherits = \"gruvish\"\nicons = \"accent\"\n[sizes]\nradius = 6\n",
+            "inherits = \"gruvish\"\n[sizes]\nradius = 6\n",
         )
         .unwrap();
         // On Graphite, without a word (plan 05.5c: no removed theme inherited).
@@ -919,7 +934,6 @@ mod tests {
             (mine.dark.field, mine.light.accent),
             (t.dark.field, t.light.accent)
         );
-        assert_eq!(mine.icons, IconStyle::Accent);
         assert_eq!(mine.metrics.control_radius, 6.0);
         // pywal's file, here a light one: a light theme named after its wallpaper.
         let wal = load_in(&dir, "colors", 0).unwrap();

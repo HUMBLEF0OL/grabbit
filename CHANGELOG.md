@@ -8,7 +8,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 ### Removed
 
 - MDM is Windows only now: Linux, macOS, Safari and Docker builds are no longer made.
-- The old looks are removed; **Graphite** is the only look, light and dark. The Classic, Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero and Aqua themes are gone: a setting or a theme file that names one gets Graphite. Theme files of your own still work, on top of Graphite. Windows' high contrast no longer changes MDM's colours until a high-contrast Graphite comes back.
+- The old looks are removed; **Graphite** is the only look, light and dark. The Classic, Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero and Aqua themes are gone: a setting or a theme file that names one gets Graphite. Theme files of your own still work, on top of Graphite; their `icons` key and the old toolbar's and tree's colours (`toolbar.line`, `tree.frame` and the like) are no longer read, and a file naming them loads with a note in the log. Windows' high contrast no longer changes MDM's colours until a high-contrast Graphite comes back.
 
 ### Added
 

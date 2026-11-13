@@ -1,6 +1,6 @@
 # 06 · Paste bar and details pane
 
-> **Since 05.5c Graphite is the only look** (`00-conventions.md`): a step here that gates on Graphite, keeps Classic unchanged, uses Silk icons, sizes a window for both layouts or falls back to Classic is read as Graphite's alone; there is no Classic side left.
+> **Adjusted after 05.5** (Graphite only, merged 2026-11-13): there is no Classic layout, no old theme and no Silk, Tango or Lucide icon left, so this plan's steps are Graphite's alone (`00-conventions.md`).
 
 Two new, optional parts of the main window under the Graphite chrome: a paste bar under the toolbar
 that adds a download from an address, and a details pane beside the list that shows the selected
@@ -8,7 +8,7 @@ download. Both reuse what exists (00's accepted exception: new routes to existin
 adds a new kind of download.
 
 - Branch: `ui/06-panes`
-- Needs: 05a (`Layout`), 05b (the Graphite toolbar, for the Details toggle), 02b (the gate), 03b (`gx-*` glyphs)
+- Needs: 05a (`Layout`), 05b (the Graphite toolbar, for the Details toggle), 02b (the Graphite roles), 03b (`gx-*` glyphs)
 - Unblocks: 09
 
 ## Facts this plan relies on (paths under `crates/app/src/`, checked on `ui/03-icons` c3541d0)
@@ -39,8 +39,7 @@ Line numbers drift as phases land: find each item by its name first.
 2. **Settings**: `show_paste_bar: bool`, `show_details: bool`, `details_width: u32`, defaults as decided
    in `../PLAN.md` (paste bar on, details pane off, width 276).
 3. **Commands and View menu**: `Cmd::TogglePasteBar`, `Cmd::ToggleDetails` and two check items under
-   View ("Paste bar", "Details pane"). Under Classic chrome both items are hidden (the View menu stays exactly
-   as today) and neither part is drawn; the settings still persist. The toolbar's Details toggle (end of the Graphite toolbar,
+   View ("Paste bar", "Details pane"); the settings persist. The toolbar's Details toggle (end of the Graphite toolbar,
    `gx-sidebar` icon) runs `Cmd::ToggleDetails`; its on state is filled with the role
    `toolbar.checked` (added by 02b).
 4. **Paste bar** (`layout.paste_h = 48` when shown under Graphite, 0 otherwise):
@@ -78,11 +77,10 @@ bar, placeholder); Adding a download section (paste bar routing to Download File
   junk shows the invalid-address message; history grows.
 - Settings round-trip for the three new fields; old settings files load with the defaults.
 - Details pane: shows the focused row; updates after Stop/Resume; empty and multi-select states.
-- Classic: the View menu and the main window are pixel-identical (items hidden, nothing drawn).
 
 ## Done when
 
 - [ ] Both parts toggle from View (and the toolbar, for details) and persist across restarts
 - [ ] The paste bar routes every kind of address exactly as Add URL does
-- [ ] Keyboard and accessibility checks pass; Classic unchanged
+- [ ] Keyboard and accessibility checks pass
 - [ ] Help updated; screenshots, ROADMAP, CHANGELOG

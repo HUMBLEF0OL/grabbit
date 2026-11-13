@@ -13,7 +13,6 @@ name = "Graphite"
 # A font MDM carries: Geist (Regular, Medium, SemiBold for the bold texts).
 font = "geist"
 icon-set = "graphite"
-icons = "mono"
 
 [controls]
 field-focus = "ring"
@@ -138,8 +137,6 @@ menu = "#ffffff"
 "toolbar.hot" = "#f3f1f9"
 "toolbar.pressed" = "#ebe8f3"
 "toolbar.hot.faint" = "#f9f8fc"
-"toolbar.hot.edge" = "#e3e0ec"
-"toolbar.hot.border" = "#00000000"
 "toolbar.text.disabled" = "#a5a0b6"
 "icon.disabled" = "#a5a0b6"
 # Categories tree.
@@ -238,8 +235,6 @@ menu = "#121019"
 "toolbar.hot" = "#1c1828"
 "toolbar.pressed" = "#312c41"
 "toolbar.hot.faint" = "#171420"
-"toolbar.hot.edge" = "#262233"
-"toolbar.hot.border" = "#00000000"
 "toolbar.text.disabled" = "#5e596c"
 "icon.disabled" = "#5e596c"
 # Categories tree.

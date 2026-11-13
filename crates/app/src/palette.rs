@@ -6,7 +6,6 @@
 //!   which), by role. Each role has a stable key (`"button.hot"`), which theme files use.
 //! - [`Metrics`]: the sizes a control painter owns (corner radii, border and focus widths, font
 //!   sizes, row heights). Where a window puts its controls stays the window's layout.
-//! - [`IconStyle`]: how the toolbar's and Options' outline icons are inked.
 //!
 //! [`BASE`] is MDM's original look (IDM's classic layout, Windows 11 controls, accent #0078D4),
 //! written out with the exact values the painters had before themes: the default, unchanged.
@@ -99,7 +98,6 @@ macro_rules! palette {
             /// is in use (Windows' rule).
             pub access_keys_always: bool,
             /// The category tree's expanders: chevrons (dark look) or classic +/- boxes.
-            pub tree_chevrons: bool,
             /// The progress window's segment bar.
             pub segments: Segments,
             $(#[doc = $doc] pub $field: Color32,)*
@@ -134,7 +132,6 @@ macro_rules! palette {
                     dark,
                     focus_line_straight: dark,
                     access_keys_always: dark,
-                    tree_chevrons: dark,
                     segments: classic_segments(dark),
                     $($field: if dark { $dark } else { $light },)*
                 }
@@ -243,7 +240,6 @@ palette! {
     header_line: "header.line", "A header's bottom line in dialogs' lists" = grey(0x4e), grey(0xe5);
     header_sep: "header.sep", "The dividers between column headers" = grey(0x63), grey(0xe5);
     table_line: "table.line", "The dividers in the link grabber's and Add torrent's tables" = grey(0x4a), grey(0xe5);
-    sorted: "header.sorted", "The sorted column's header" = grey(0x26), grey(0xf0);
     sort_arrow: "header.sort-arrow", "The sort chevron" = grey(0xc8), grey(0x60);
     row_pressed: "row.pressed", "A list row pressed" = grey(0x4f), grey(0xe8);
     chip_web: "chip.web", "The download list's Web chip" = rgb(0x2e, 0x9d, 0x52), rgb(0x2e, 0x9d, 0x52);
@@ -273,24 +269,14 @@ palette! {
     menu_glyph: "menu.glyph", "Bullets, ticks and submenu arrows" = grey(0xff), grey(0x1a);
     menu_text_disabled: "menu.text.disabled", "A greyed menu item" = grey(0x6d), grey(0x9f);
     // ---- toolbar ----
-    toolbar_line: "toolbar.line", "The toolbar's top line" = grey(0x4a), grey(0xa0);
-    toolbar_line_light: "toolbar.line.light", "The highlight under it" = grey(0x39), grey(0xff);
     toolbar_hot: "toolbar.hot", "A toolbar button under the pointer" = rgb(0x33, 0x41, 0x4d), rgb(0xe5, 0xf3, 0xff);
     toolbar_hot_faint: "toolbar.hot.faint", "A split button's other part while one is under the pointer" = rgb(0x37, 0x3b, 0x3f), rgb(0xf3, 0xf9, 0xff);
     toolbar_pressed: "toolbar.pressed", "A toolbar button pressed" = rgb(0x2a, 0x36, 0x40), rgb(0xcc, 0xe8, 0xff);
-    toolbar_hot_edge: "toolbar.hot.edge", "A hot toolbar button's edge" = rgb(0x4d, 0x5f, 0x6e), rgb(0xcc, 0xe8, 0xff);
-    toolbar_hot_border: "toolbar.hot.border", "A hot toolbar button's border (transparent: none)" = Color32::TRANSPARENT, rgb(0xcc, 0xe8, 0xff);
-    toolbar_split_shadow: "toolbar.split.shadow", "A split button's divider at rest: its shadow" = grey(0x26), grey(0xc6);
-    toolbar_split_light: "toolbar.split.light", "The divider's highlight" = grey(0x4d), grey(0xff);
     toolbar_text_disabled: "toolbar.text.disabled", "A greyed toolbar label" = grey(0xa0), grey(0xa0);
-    toolbar_arrow: "toolbar.arrow", "A drop-down button's arrow" = grey(0xd0), grey(0x28);
     icon_disabled: "icon.disabled", "A greyed icon's ink (its start)" = grey(0x9f), grey(0x9f);
-    icon_disabled_end: "icon.disabled.end", "A greyed icon's ink (its end)" = grey(0x9a), grey(0x9a);
     // ---- categories tree ----
     tree: "tree", "The categories tree's background" = grey(0x20), grey(0xff);
-    tree_lines: "tree.lines", "The tree's dotted connectors" = grey(0x6d), grey(0x6d);
     tree_expander: "tree.expander", "The tree's chevrons, where the variant draws them" = grey(0xff), grey(0x1a);
-    tree_frame: "tree.frame", "The categories pane's frame" = grey(0xdc), grey(0xdc);
     // ---- progress window ----
     status_value: "progress.status", "The progress window's Status value" = grey(0xff), rgb(0x00, 0x00, 0xff);
     progress_label_disabled: "progress.label.disabled", "A greyed label in the progress window" = grey(0x80), grey(0x80);
@@ -392,7 +378,6 @@ metrics! {
     font_title: "font.title", "A window's headline (Tahoma Bold): the browser extension's, the helpers'" = 16.0;
     font_code: "font.code", "A sign-in code to type at a service's page" = 22.0;
     font_ui: "font.ui", "Menus and the main window's text (Segoe UI, or the theme's font)" = 12.0;
-    font_ui_bold: "font.ui.bold", "Bold headings in the main window" = 13.0;
     font_small: "font.small", "egui's small text" = 11.0;
     font_body: "font.body", "egui's body text: tooltips, multi-line boxes" = 12.0;
     font_heading: "font.heading", "egui's headings" = 16.0;
@@ -402,29 +387,6 @@ metrics! {
     tooltip_margin_x: "tooltip.margin-x", "A tooltip's left and right padding" = 9.0;
     tooltip_margin_top: "tooltip.margin-top", "A tooltip's top padding" = 6.0;
     tooltip_margin_bottom: "tooltip.margin-bottom", "A tooltip's bottom padding" = 7.0;
-}
-
-/// How the outline icons (toolbar, Options pages, helpers) are inked.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
-pub enum IconStyle {
-    /// Each icon's own two-colour gradient (the classic toolbar).
-    #[default]
-    Color,
-    /// The text colour.
-    Mono,
-    /// The accent.
-    Accent,
-}
-
-impl IconStyle {
-    pub fn from_key(s: &str) -> Option<Self> {
-        match s {
-            "color" | "colour" => Some(IconStyle::Color),
-            "mono" => Some(IconStyle::Mono),
-            "accent" => Some(IconStyle::Accent),
-            _ => None,
-        }
-    }
 }
 
 /// How the shared painters draw each kind of control (#45): the classic look's are Windows 11's;
@@ -607,7 +569,6 @@ pub struct Theme {
     pub light: Palette,
     pub dark: Palette,
     pub metrics: Metrics,
-    pub icons: IconStyle,
     /// The theme's icon set (`crate::themeicons`), by name; None: the classic icons.
     pub icon_set: Option<Cow<'static, str>>,
     /// A font bundled with MDM (`crate::theme::bundled_font`), by name; None: the system's.
@@ -631,7 +592,6 @@ pub static BASE: Theme = Theme {
     light: Palette::classic(false),
     dark: Palette::classic(true),
     metrics: Metrics::CLASSIC,
-    icons: IconStyle::Color,
     icon_set: None,
     font: None,
     controls: Controls::CLASSIC,
@@ -862,7 +822,6 @@ mod tests {
         assert_eq!((t.id.as_ref(), t.name.as_ref()), ("graphite", "Graphite"));
         assert_eq!(t.metrics.control_radius, 8.0);
         assert_eq!(t.metrics.list_row, 32.0);
-        assert_eq!(t.icons, IconStyle::Mono);
         assert_eq!(t.icon_set.as_deref(), Some("graphite"));
         // Plan 04: Geist, bundled.
         assert_eq!(t.font.as_deref(), Some("geist"));
@@ -1015,11 +974,7 @@ mod tests {
         };
         for theme in builtins() {
             let d = &theme.dark;
-            for (what, line) in [
-                ("menubar.line", d.menubar_line),
-                ("toolbar.line", d.toolbar_line),
-                ("toolbar.line.light", d.toolbar_line_light),
-            ] {
+            for (what, line) in [("menubar.line", d.menubar_line)] {
                 for bg in [d.menubar, d.window] {
                     assert!(
                         ratio(line, bg) <= 2.5,

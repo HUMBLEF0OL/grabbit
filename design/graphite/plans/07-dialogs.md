@@ -1,15 +1,14 @@
 # 07 · Dialogs
 
-> **Since 05.5c Graphite is the only look** (`00-conventions.md`): a step here that gates on Graphite, keeps Classic unchanged, uses Silk icons, sizes a window for both layouts or falls back to Classic is read as Graphite's alone; there is no Classic side left.
+> **Adjusted after 05.5** (Graphite only, merged 2026-11-13): there is no Classic layout, no old theme and no Silk, Tango or Lucide icon left, so this plan's steps are Graphite's alone (`00-conventions.md`).
 
 Brings every dialog to the mock under the Graphite chrome: the default button last in every footer and
 filled, one label column, file cards, icon tiles, status banners, status as icon + word. Colours,
-corners and controls already come from the theme (02); this phase is layout. Classic and era themes
-keep their IDM layouts, pixel for pixel. **Keys never change**: each dialog keeps today's Enter and
+corners and controls already come from the theme (02); this phase is layout. **Keys never change**: each dialog keeps today's Enter and
 Escape behaviour.
 
 - Branches: `ui/07a-dialog-kit`, then one per wave (`ui/07b-…` to `ui/07e-…`)
-- Needs: 02b (chrome gate and the Graphite roles), 03 (`st-*` and file icons), 03b (`gx-*` glyphs);
+- Needs: 02b (the Graphite roles), 03 (`st-*` and file icons), 03b (`gx-*` glyphs);
   04 before final sizes (04's plan lists the labels Geist overflows: limiter, gallery, Scheduler,
   grabber, progress window). Independent of 05 and 06.
 - Unblocks: 08 (needs 07a), 09
@@ -35,8 +34,8 @@ Line numbers drift as phases land: find each item by its name first.
 - A helper `winui::label_column` exists (`winui.rs:513`) but only Add torrent uses it (`torrentdlg.rs:439`).
 - `winui::banner` (`winui.rs:226`) is the first-start logo band, not a status banner.
 - Greyed drawing already comes from the theme (`text.disabled`, `field.disabled`, `button.disabled`).
-- The Scheduler's queue list draws Silk folders in every theme (`scheduler.rs:556-564`,
-  `IconKey::Silk` with `folder`, `folder_link`, `folder_delete`).
+- The Scheduler's queue list already draws Graphite's `cat-queues`, `gx-refresh` and `gx-gauge`
+  (`IconKey::Graphite`, since 05.5a).
 - The tray menu is native (`tray_icon::menu`, `tray.rs:158`): the theme cannot draw it.
 - The drop target (`droptarget.rs`) draws the app icon.
 
@@ -68,24 +67,23 @@ Footer order today (left to right, default marked *) and under Graphite:
 | Tell a friend | `help.rs:938` | Copy*, Email, Close | ; Email, Close, Copy* |
 | Generic notice (`dialogs::notice`) | `dialogs.rs:255` | OK*, centred | OK*, centred (the one centred footer) |
 
-## 07a · The dialog kit (one PR, no visual change in Classic, no CHANGELOG line)
+## 07a · The dialog kit (one PR, no visual change, no CHANGELOG line)
 
 1. `winui::footer(ui, o, client_w, y, items: &[FooterItem])` where `FooterItem` is a `Button(FooterButton
    { label, kind, side: Leading | Trailing, icon: Option<IconKey>, mnemonic, enter: bool, escape: bool })`
    or a leading `Check(label, &mut bool)` (Add torrent's "Download in order", Confirm deletion's
-   "Don't show this dialog again"). Under
-   Graphite it draws the footer band (`panel` fill from 02b, top rule, 16 px padding), leading buttons
-   left, trailing buttons right with the `Default` one last; under other chromes it keeps the order and
-   positions given, so a dialog migrated to `footer` looks the same in Classic. Returns which button was
-   clicked.
+   "Don't show this dialog again"). It
+   draws the footer band (`panel` fill from 02b, top rule, 16 px padding), leading buttons left,
+   trailing buttons right with the `Default` one last. A dialog moves to `footer` in its own wave, so
+   07a itself changes no window. Returns which button was clicked.
 2. **Keys stay as they are**: `footer` reports Enter only for the button the caller marks `enter: true`
    and Escape only for the one marked `escape: true`; each dialog marks exactly what it handles today.
-   Marking a button `Default` under Graphite changes its look only.
+   Marking a button `Default` changes its look only.
 3. **Button kinds**: `ButtonKind::Danger` (roles `button.danger`, `button.danger.text` from 02b) and
-   `ButtonKind::Ghost` (no face until hovered); under Graphite a `Default` button paints filled like
+   `ButtonKind::Ghost` (no face until hovered); a `Default` button paints filled like
    `Accent`. An optional icon before the label on `footer` buttons and on `button`.
-4. `winui::form(o, x, y)`: a label column of 112 (or 240 for sentence labels) under Graphite, the
-   dialog's own English x under other chromes; built on `label_column`.
+4. `winui::form(o, x, y)`: a label column of 112 (or 240 for sentence labels); built on
+   `label_column`.
 5. `winui::file_card(ui, rc, icon, name, sub, action)`: the bordered header with the file icon (Download
    File Info, Download complete, File Properties, Verify checksum). Icon tiles (Confirm deletion,
    Redownload, queue done, updates, crash report, video helpers, Options page headers) use 02b's
@@ -93,11 +91,10 @@ Footer order today (left to right, default marked *) and under Graphite:
 6. `winui::status_banner(ui, rc, kind: Error | Info | Warning, icon, title, sub)` with the roles
    `banner.error`, `banner.info`, `banner.warning` from 02b (error window, torrent General, Options Remote
    and Accounts, gallery, Verify checksum). Not the existing `winui::banner`.
-7. `winui::dialog_size(classic: Vec2, graphite: Vec2)`: lets a dialog keep its IDM size in Classic and
-   take the mock size in Graphite.
+7. Each dialog takes the mock's size in its wave (no `dialog_size` for two layouts: 05.5 left one).
 8. Tests: footer order per chrome; Enter and Escape fire only the marked buttons; a disabled marked
    button ignores Enter; **Escape in the progress window leaves the download running**; label column
-   positions; Classic positions unchanged.
+   positions.
 
 ## Waves (each one PR, each dialog compared with its mock state)
 
@@ -115,25 +112,22 @@ For each dialog in a wave:
 
 1. Move its footer to `footer` with the order above and its keys marked as today.
 2. Move its labels and fields onto `form`; group related options with a hairline rule instead of
-   `group_box` under Graphite.
+   `group_box`.
 3. Add `file_card`, `icon_tile` and `status_banner` where the mock has them; buttons get their mock icons
    (`gx-dots` on every "..." browse button, `gx-search` on Look up, `gx-plus`, `gx-external`, etc.).
 4. Status words get their `st-*` icon (progress window status, error banner).
-5. Size from `dialog_size`; check at 100% and 200% and with the longest strings (the app is English only).
+5. Size it as the mock does; check at 100% and 200% and with the longest strings (the app is English only).
 
 Specific to 07e:
 
-- **Scheduler queue list** (left from 03): under Graphite it draws `IconKey::Themed` with `cat-queues`
-  (a download queue), `gx-refresh` (a synchronization queue) and `gx-gauge` (Download limits), as the
-  mock does; under Classic it keeps Silk's folders.
-- **Drop target**: under Graphite, radius 10, the `gx-download` glyph in `accent` above its text;
-  Classic keeps the app icon.
+- **Scheduler queue list** (left from 03): done in 05.5a (`cat-queues`, `gx-refresh`, `gx-gauge`, as
+  the mock does); 07e only lays the window out.
+- **Drop target**: radius 10, the `gx-download` glyph in `accent` above its text.
 - **About**: laid out as the mock, keeping today's app icon at 56 px; 09a step 3 swaps in the
   gradient mark (and 10b the Grabbit logo).
 
 ## Done when
 
 - [ ] Every dialog listed matches its mock state in Graphite, light and dark
-- [ ] Every dialog in Classic is unchanged (screenshot diff)
 - [ ] Enter, Escape, Alt+letter and Tab order work in each dialog exactly as before
 - [ ] Screenshots per wave; ROADMAP, CHANGELOG (none for 07a)

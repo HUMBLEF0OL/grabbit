@@ -83,9 +83,10 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
       checks in its plan, shots in `pr-shots` `04-typeface/`)
 - [x] 05a Layout model (ticked in its PR; done once merged)
 - [x] 05b Main window (ticked in its PR; done once merged)
-- [x] 05.5a Graphite icons everywhere (ticked in its PR; done once merged)
-- [x] 05.5b Upstream sync ready for the removal (ticked in its PR; done once merged)
-- [x] 05.5c Classic removed (ticked in its PR; done once merged)
+- [x] 05.5a Graphite icons everywhere (complete, PR 13 merged into `dev` 2026-11-13)
+- [x] 05.5b Upstream sync ready for the removal (complete, PR 12 merged 2026-11-13; post-merge check on PR 12)
+- [x] 05.5c Classic removed (complete, PRs 14 and 15 merged 2026-11-13)
+- [x] 05.5d The theme-file vocabulary nothing draws any more (05.5c's audit; ticked in its PR)
 - [ ] 06 Paste bar and details pane
 - [ ] 07a Dialog kit
 - [ ] 07b Adding
