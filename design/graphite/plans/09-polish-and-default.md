@@ -32,7 +32,7 @@ Line numbers drift as phases land: find each item by its name first.
 
 1. **Two-tone hot colour**: a new `ButtonLook::Graphite` and `ProgressLook::Graphite` (`[controls]`
    values `button = "graphite"`, `progress = "graphite"`, written by `make_theme.py`). For the Accent and
-   (under Graphite) Default buttons, `paint_button` fills with two stops (`button.accent.top` at the top,
+   Default buttons, `paint_button` fills with two stops (`button.accent.top` at the top,
    `button.accent` at the bottom) through `fill_shaded`; the progress fill runs left to right
    `progress.bar` → `progress.bar.end` (a horizontal variant of `fill_shaded`, or two meshes).
 2. **Glow (dark only)**: a soft shadow under the default button and the progress fill in the `glow`

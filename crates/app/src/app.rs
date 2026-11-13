@@ -970,13 +970,17 @@ impl App {
         start: crate::Start,
     ) -> Self {
         // The look (#45): the chosen theme before anything is drawn.
-        crate::theme::select(&crate::theme::startup_id(&loaded.settings.theme));
+        let theme_id = crate::theme::startup_id(&loaded.settings.theme);
+        crate::theme::select(&theme_id);
         crate::theme::apply(ctx);
         // The zoom main.rs started at (View → Interface size, #262).
         let zoom = crate::scale::startup(loaded.settings.interface_size);
         let mut settings = loaded.settings;
-        // A theme MDM no longer has is Graphite now, and saved so (plan 05.5c).
-        settings.theme = crate::theme::saved_id(&settings.theme, &crate::theme::current().id);
+        // A theme MDM no longer has is Graphite now, and saved so (plan 05.5c); not when
+        // MDM_THEME chose another theme for this run (tests, screenshots).
+        if theme_id == settings.theme {
+            settings.theme = crate::theme::saved_id(&settings.theme, &crate::theme::current().id);
+        }
         if settings.limiter_on_startup {
             settings.speed_limit_on = true;
         }
