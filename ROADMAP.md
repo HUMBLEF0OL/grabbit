@@ -583,8 +583,9 @@ These ship in a later version, when they're ready.
   ([#507](https://github.com/anefzaoui/misterdownloadmanager/issues/507)): fix in review
 - 🔄 A freeze when a video finishes, while its file is marked as downloaded from the web
   ([#510](https://github.com/anefzaoui/misterdownloadmanager/issues/510)): fix in review
-- 🔄 A bright white line under the menu bar in dark mode
-  ([#379](https://github.com/anefzaoui/misterdownloadmanager/issues/379)): fix in review
+- ✅ A bright white line under the menu bar in dark mode
+  ([#379](https://github.com/anefzaoui/misterdownloadmanager/issues/379)): gone with the old looks
+  (Graphite, the only one, never drew it)
 - 🔄 Closing the main window follows a setting (on by default, MDM keeps running), and with no
   tray icon the window goes to the taskbar instead of vanishing: fix in review
   ([#457](https://github.com/anefzaoui/misterdownloadmanager/pull/457))
