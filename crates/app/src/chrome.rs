@@ -70,7 +70,7 @@ impl Layout {
     pub const PASTE_H: f32 = 48.0;
 
     /// The details pane's splitter grip: its first 4 points, inside its leading rule.
-    // The details pane (plan 06b) uses it; the allow goes then.
+    // The details pane (task 8.9, plan 06b) uses it; the allow goes then.
     #[allow(dead_code)]
     pub const DETAILS_GRIP: f32 = 4.0;
 
@@ -131,7 +131,7 @@ impl Layout {
     }
 
     /// The details pane's leading edge in a client area `w` wide.
-    // The details pane (plan 06b) uses it; the allow goes then.
+    // The details pane (task 8.9, plan 06b) uses it; the allow goes then.
     #[allow(dead_code)]
     pub fn details_left(&self, w: f32) -> f32 {
         w - self.details_w

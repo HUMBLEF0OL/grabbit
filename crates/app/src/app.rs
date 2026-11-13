@@ -470,6 +470,8 @@ pub struct App {
     move_many_for: Vec<u64>,
     /// The Categories tree has the keys (else the list; Tab moves between them).
     tree_keys: bool,
+    /// The paste bar's address field, its error and its drop list (plan 06a).
+    paste: crate::panes::PasteBar,
     /// The app's context, to reach its windows from anywhere (bring one to the front).
     ui_ctx: egui::Context,
     /// The language screen readers were last told.
@@ -758,6 +760,76 @@ fn route_of(url: &url::Url) -> Route {
         Route::GalleryPage
     } else {
         Route::File
+    }
+}
+
+/// `/show paste:<address>`'s address (plan 06, requirement 21.2): what follows `paste:`,
+/// trimmed. None for another name or an empty address. The address comes in lower case
+/// (`mdm_ipc::parse_args` lowers every `/show` argument).
+fn show_paste_arg(name: &str) -> Option<&str> {
+    let address = name.strip_prefix("paste:")?.trim();
+    (!address.is_empty()).then_some(address)
+}
+
+/// The typing gate before the menu bar's keys (Alt, F10, Alt+letter) in `App::paint`: a focused
+/// text box keeps them, as on dev, except the paste bar's field while it is empty (D12).
+fn menu_keys_blocked(text_edit_focused: bool, is_paste_field: bool, paste_empty: bool) -> bool {
+    text_edit_focused && !(is_paste_field && paste_empty)
+}
+
+/// For the empty paste field with the focus, which leaves the menu keys to the menu bar: the
+/// letter typed with Alt held (it comes as a key, which opens a menu, and as text), and while a
+/// menu is open its items' letters, are taken from the input before the field is drawn, so the
+/// field doesn't type them too. A plain letter with no menu open stays the field's.
+fn take_menu_text(ctx: &egui::Context, menu_open: bool) {
+    ctx.input_mut(|i| {
+        if menu_open || (i.modifiers.alt && !i.modifiers.ctrl) {
+            i.events.retain(|e| !matches!(e, egui::Event::Text(_)));
+        }
+    });
+}
+
+/// The main window's shortcut keys at the end of `App::paint` (no menu or popup open, no command
+/// chosen yet), the command they run. The full list: Help → Keyboard shortcuts (`help.rs`).
+///
+/// - Ctrl+F finds, F3 finds the next match (Downloads menu); Ctrl+N adds a download (not in
+///   IDM); Ctrl+M as IDM and F2 as renaming in Explorer move or rename. These are consumed
+///   whatever has the focus (no text box answers them); of several in one frame Find wins, then
+///   Find next, Add, Move/rename (Ctrl+M first: F2 is then left in the input).
+/// - Else, while no widget is `focused` (a text box, Find, a filter or the paste field, has the
+///   keys: Delete deletes its text), Delete removes the selected downloads and Shift+Delete
+///   with their files (both ask first). They are read, not consumed. On Windows egui reports
+///   Shift+Delete as Cut (Ctrl+X is Cut too, without Shift).
+fn shortcut_cmd(i: &mut egui::InputState, focused: bool) -> Option<Cmd> {
+    let find = i.consume_key(egui::Modifiers::COMMAND, egui::Key::F);
+    let next = i.consume_key(egui::Modifiers::NONE, egui::Key::F3);
+    let add = i.consume_key(egui::Modifiers::COMMAND, egui::Key::N);
+    let rename = i.consume_key(egui::Modifiers::COMMAND, egui::Key::M)
+        || i.consume_key(egui::Modifiers::NONE, egui::Key::F2);
+    if find {
+        return Some(Cmd::Find);
+    } else if next {
+        return Some(Cmd::FindNext);
+    } else if add {
+        return Some(Cmd::AddUrl);
+    } else if rename {
+        return Some(Cmd::MoveRename);
+    }
+    if focused {
+        return None;
+    }
+    let del = i.key_pressed(egui::Key::Delete) && !i.modifiers.shift;
+    // Windows reports it as Cut.
+    let shift_del = i.modifiers.shift
+        && !i.modifiers.command
+        && (i.events.iter().any(|e| matches!(e, egui::Event::Cut))
+            || i.key_pressed(egui::Key::Delete));
+    if shift_del {
+        Some(Cmd::RemoveWithFiles)
+    } else if del {
+        Some(Cmd::Remove)
+    } else {
+        None
     }
 }
 
@@ -1096,6 +1168,7 @@ impl App {
             a11y_lang: "",
             ui_ctx: ctx.clone(),
             tree_keys: false,
+            paste: Default::default(),
             move_rename_for: None,
             move_many_for: Vec::new(),
             list_view: view,
@@ -2086,6 +2159,20 @@ impl App {
         let (window, tab) = name.split_once(':').unwrap_or((name, ""));
         match window {
             "addurl" => self.run(Cmd::AddUrl, None, ctx),
+            // The paste bar with an address put in and submitted, as its Enter does (plan 06's
+            // "Adding a download" screenshots): `paste:https://example.org/a.zip` opens Download
+            // File Info, a rejected one shows "Invalid address". The bar is shown for this run;
+            // the hook itself saves nothing (the address's history entry does, as Enter's).
+            "paste" => {
+                if let Some(address) = show_paste_arg(name) {
+                    self.settings.show_paste_bar = true;
+                    self.paste.fill(address);
+                    let accepted = dialogs::accept_address(&self.paste.text);
+                    if let Some(new) = crate::panes::submit(&mut self.paste, accepted) {
+                        self.route_new_url(new, ctx);
+                    }
+                }
+            }
             // MDM_CRASH_TEST=1 only (crash.rs): the crash reports' own check.
             "crash-test" => crate::crash::test(tab),
             "batch" => self.run(Cmd::Batch(false), None, ctx),
@@ -5367,9 +5454,11 @@ impl App {
                 self.dirty = true;
             }
             Cmd::TogglePasteBar => {
-                // Hidden, the paste field also gives up the keys: `self.paste.leave(ctx)`
-                // comes with the paste bar's state (task 5).
                 self.settings.show_paste_bar = !self.settings.show_paste_bar;
+                // Hidden, the paste field also gives up the keys.
+                if !self.settings.show_paste_bar {
+                    self.paste.leave(ctx);
+                }
                 self.dirty = true;
             }
             Cmd::ToggleDetails => {
@@ -6793,6 +6882,40 @@ impl App {
         }
     }
 
+    /// What the Tab rotation reads this frame (`panes::tab_keys`).
+    fn tab_state(&self) -> crate::panes::TabState {
+        crate::panes::TabState {
+            paste: self.settings.show_paste_bar,
+            tree: self.show_categories,
+            tree_keys: self.tree_keys,
+            menu_open: self.popup.is_some() || self.open_menu.is_some(),
+            filter_open: self.list.filter_is_open(),
+        }
+    }
+
+    /// The Tab stop that has the keys now: the paste field when it has egui's focus, else the
+    /// tree when it has the keys, else the list.
+    fn current_stop(&self, ctx: &egui::Context) -> crate::panes::Stop {
+        crate::panes::current_stop(ctx, &self.tab_state())
+    }
+
+    /// Tab and Shift+Tab in the main window (no menu, popup or history list open): consumed,
+    /// egui's own focus move cancelled, the next shown stop of paste field → tree → list given
+    /// the keys (`panes::tab_keys`). The paste bar hidden, the tree ↔ list toggle of before.
+    fn tab_keys(&mut self, ctx: &egui::Context) {
+        let from = self.current_stop(ctx);
+        let state = self.tab_state();
+        let Some(to) = crate::panes::tab_keys(ctx, &mut self.paste, state, from) else {
+            return;
+        };
+        if to != crate::panes::Stop::Paste {
+            self.tree_keys = to == crate::panes::Stop::Tree;
+            self.list.set_keys(!self.tree_keys);
+        }
+        // The keyboard is in use: access letters show (light mode too).
+        crate::chrome::show_cues(ctx);
+    }
+
     fn paint(&mut self, ui: &mut Ui) {
         let ctx = ui.ctx().clone();
         let full = ui.max_rect();
@@ -6827,10 +6950,14 @@ impl App {
         // The menu bar from the keyboard: F10 or Alt pressed alone opens its first menu, Alt and a
         // menu's underlined letter that menu.
         // A focused button or list (Tab, a screen reader, #328) leaves these keys to the menu bar;
-        // only a text box keeps them.
-        let typing = ctx
-            .memory(|m| m.focused())
-            .is_some_and(|id| egui::TextEdit::load_state(&ctx, id).is_some());
+        // only a text box keeps them, but for the paste field while it is empty (plan 06).
+        let focused = ctx.memory(|m| m.focused());
+        let on_paste = focused == Some(crate::panes::paste_field_id());
+        let typing = menu_keys_blocked(
+            focused.is_some_and(|id| egui::TextEdit::load_state(&ctx, id).is_some()),
+            on_paste,
+            self.paste.text.is_empty(),
+        );
         if self.open_menu.is_none() && self.popup.is_none() && !typing {
             let labels: Vec<String> = chrome::menus()
                 .iter()
@@ -6895,6 +7022,15 @@ impl App {
             self.alt_down = false;
             self.alt_alone = false;
         }
+        // The empty paste field left these keys to the menus: their letters aren't typed in it.
+        if on_paste && !typing {
+            take_menu_text(&ctx, self.open_menu.is_some());
+        }
+
+        // Tab and Shift+Tab between the paste field, the tree and the list, before any widget
+        // that takes the focus is laid out (egui would give Tab's focus to the first one, the
+        // paste field). After the menu keys above, which count Tab as another key (Alt+Tab).
+        self.tab_keys(&ctx);
 
         // Menu bar and its popups: which menu is open is chrome::menubar_next's to say.
         let (event, titles) = match &bar {
@@ -7050,6 +7186,29 @@ impl App {
             None => {}
         }
 
+        // The paste bar under the toolbar (plan 06a). An accepted address goes on as Add URL's
+        // OK sends it, at the end of the frame as every other route.
+        let mut pasted: Option<dialogs::NewUrl> = None;
+        if self.settings.show_paste_bar {
+            // An open menu's keys are the menu's (the list's rule).
+            self.paste.menu_open = self.popup.is_some() || self.open_menu.is_some();
+            // An open filter box's Tab is its own (egui's order among its controls).
+            self.paste.filter_open = self.list.filter_is_open();
+            let history = &self.settings.url_history;
+            match crate::panes::paste_bar(ui, &layout, o, w, &mut self.paste, history) {
+                Some(crate::panes::PasteEvent::Submit) => {
+                    let accepted = dialogs::accept_address(&self.paste.text);
+                    pasted = crate::panes::submit(&mut self.paste, accepted);
+                }
+                // Escape: the field gave up the keys; the list takes them.
+                Some(crate::panes::PasteEvent::Left) => {
+                    self.tree_keys = false;
+                    self.list.set_keys(true);
+                }
+                None => {}
+            }
+        }
+
         // Categories pane.
         let list_left = if self.show_categories {
             let rows = self.tree_rows();
@@ -7071,21 +7230,11 @@ impl App {
                     o.y + layout.strip_top(h) - layout.pane_gap,
                 ),
             ));
-            // The tree's keys while it has them (Tab moves between it and the list): Up / Down
+            // The tree's keys while it has them (Tab moves them: `tab_keys`): Up / Down
             // through the nodes, Left / Right close and open a branch, Home / End.
             let free = self.popup.is_none()
                 && self.open_menu.is_none()
                 && ctx.memory(|m| m.focused().is_none());
-            if free
-                && ctx.input_mut(|i| {
-                    i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)
-                        || i.consume_key(egui::Modifiers::SHIFT, egui::Key::Tab)
-                })
-            {
-                self.tree_keys = !self.tree_keys;
-                self.list.set_keys(!self.tree_keys);
-                crate::chrome::show_cues(&ctx);
-            }
             let mut tree_event = None;
             if free && self.tree_keys {
                 let at = rows
@@ -7354,54 +7503,26 @@ impl App {
                 PopupResult::Dismissed => self.popup = None,
             }
         }
-        // Ctrl+F finds, F3 finds the next match (Downloads menu); Ctrl+N adds a download (not
-        // in IDM). The full list: Help → Keyboard shortcuts (`shortcuts.rs`).
+        // The main window's shortcut keys (Ctrl+F, F3, Ctrl+N, Ctrl+M / F2, Delete,
+        // Shift+Delete), with no menu or popup open.
         if chosen.is_none() && self.popup.is_none() && self.open_menu.is_none() {
-            let (find, next, add) = ctx.input_mut(|i| {
-                (
-                    i.consume_key(egui::Modifiers::COMMAND, egui::Key::F),
-                    i.consume_key(egui::Modifiers::NONE, egui::Key::F3),
-                    i.consume_key(egui::Modifiers::COMMAND, egui::Key::N),
-                )
-            });
-            // Ctrl+M as IDM; F2 as renaming in Explorer.
-            if ctx.input_mut(|i| {
-                i.consume_key(egui::Modifiers::COMMAND, egui::Key::M)
-                    || i.consume_key(egui::Modifiers::NONE, egui::Key::F2)
-            }) {
-                chosen = Some((Cmd::MoveRename, None));
-            }
-            if find {
-                chosen = Some((Cmd::Find, None));
-            } else if next {
-                chosen = Some((Cmd::FindNext, None));
-            } else if add {
-                chosen = Some((Cmd::AddUrl, None));
-            }
+            let focused = ctx.memory(|m| m.focused().is_some());
+            chosen = ctx
+                .input_mut(|i| shortcut_cmd(i, focused))
+                .map(|c| (c, None));
         }
-        // Delete removes the selected downloads, Shift+Delete with their files (both ask first);
-        // not while a text box (Find, a filter) has the keys.
-        if chosen.is_none()
-            && self.popup.is_none()
-            && self.open_menu.is_none()
-            && ctx.memory(|m| m.focused().is_none())
+        // Ctrl+V with no widget focused puts the copied address in the paste bar and gives it
+        // the keys; Enter or Download adds it (D13).
+        let focused = ctx.memory(|m| m.focused().is_some());
+        let busy = chosen.is_some() || self.popup.is_some() || self.open_menu.is_some();
+        let shown = self.settings.show_paste_bar;
+        if let Some(clip) =
+            ctx.input(|i| crate::panes::ctrl_v(shown, focused, busy, &i.events).map(str::to_owned))
         {
-            // On Windows egui reports Shift+Delete as Cut (Ctrl+X is Cut too, without Shift).
-            let (del, shift_del) = ctx.input(|i| {
-                (
-                    i.key_pressed(egui::Key::Delete) && !i.modifiers.shift,
-                    // Windows reports it as Cut.
-                    i.modifiers.shift
-                        && !i.modifiers.command
-                        && (i.events.iter().any(|e| matches!(e, egui::Event::Cut))
-                            || i.key_pressed(egui::Key::Delete)),
-                )
-            });
-            if shift_del {
-                chosen = Some((Cmd::RemoveWithFiles, None));
-            } else if del {
-                chosen = Some((Cmd::Remove, None));
-            }
+            self.paste.fill(&clip);
+        }
+        if let Some(new) = pasted {
+            self.route_new_url(new, &ctx);
         }
         if let Some((c, target)) = chosen {
             self.run(c, target, &ctx);
@@ -9747,6 +9868,155 @@ mod route_tests {
             proptest::prop_assert_eq!(route_of(&url), dev_route(&url));
         }
     }
+
+    /// What Add URL's OK hands on for `typed`: the real dialog, its box holding `typed` and
+    /// Enter pressed in it (OK, the default button), drawn in its own window rendered
+    /// headlessly as dialogs.rs's tests do, and handled as `App` handles its outcome (the
+    /// dialog goes with the first `Done`). No Sites Logins entry and nothing typed under "Use
+    /// authorization".
+    fn add_url_ok(typed: &str) -> Vec<crate::dialogs::NewUrl> {
+        use crate::dialogs::{AddUrl, Outcome};
+        thread_local! {
+            static ENTER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        }
+        egui::Context::set_immediate_viewport_renderer(|ctx, viewport| {
+            let events = if ENTER.with(|e| e.take()) {
+                vec![egui::Event::Key {
+                    key: egui::Key::Enter,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::default(),
+                }]
+            } else {
+                vec![]
+            };
+            let input = egui::RawInput {
+                viewport_id: viewport.ids.this,
+                events,
+                viewports: std::iter::once((viewport.ids.this, egui::ViewportInfo::default()))
+                    .collect(),
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(600.0, 160.0),
+                )),
+                ..Default::default()
+            };
+            let mut ui_cb = viewport.viewport_ui_cb;
+            let mut out = ctx.run_ui(input, |ui| ui_cb(ui));
+            out.textures_delta.clear();
+        });
+        let ctx = egui::Context::default();
+        ctx.set_embed_viewports(false);
+        let mut dlg = AddUrl::default();
+        dlg.address = typed.to_owned();
+        let mut dlg = Some(dlg);
+        let mut handed = Vec::new();
+        // A frame (the box takes the focus), Enter, then two frames more.
+        for enter in [false, true, false, false] {
+            ENTER.with(|e| e.set(enter));
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                if let Some(d) = &mut dlg {
+                    match d.show(ui.ctx(), |_| None) {
+                        Outcome::Open => {}
+                        Outcome::Closed => dlg = None,
+                        Outcome::Done(new) => {
+                            dlg = None;
+                            handed.push(new);
+                        }
+                    }
+                }
+            });
+            out.textures_delta.clear();
+        }
+        handed
+    }
+
+    // Feature: paste-bar-details-pane, Property 3: Same route.
+    // **Validates: Requirements 1.1, 7.2**
+    /// An accepted address submitted in the paste bar goes on as Add URL's OK sends it: the
+    /// same url, once, without a login, and so the same route.
+    #[test]
+    fn the_paste_bar_and_add_url_send_an_address_the_same_way() {
+        for (typed, route) in [
+            ("https://example.org/file.zip", Route::File),
+            // Typed without a scheme: both read it as https.
+            ("www.example.org/a.zip", Route::File),
+            (
+                "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567",
+                Route::Magnet,
+            ),
+            ("https://example.org/a.torrent", Route::TorrentUrl),
+            (
+                "https://www.youtube.com/watch?v=Tg6byXUo8RU",
+                Route::VideoPage,
+            ),
+            (
+                "https://commons.wikimedia.org/wiki/Category:Featured_pictures_of_birds",
+                Route::GalleryPage,
+            ),
+        ] {
+            // The paste bar: Enter or Download, as `App::paint` handles it.
+            let mut bar = crate::panes::PasteBar {
+                text: typed.to_owned(),
+                ..Default::default()
+            };
+            let accepted = crate::dialogs::accept_address(&bar.text);
+            let pasted = crate::panes::submit(&mut bar, accepted)
+                .unwrap_or_else(|| panic!("the paste bar takes {typed}"));
+            // Once: the field emptied, so a second Enter hands nothing on.
+            let accepted = crate::dialogs::accept_address(&bar.text);
+            assert!(
+                crate::panes::submit(&mut bar, accepted).is_none(),
+                "{typed}: handed on once"
+            );
+
+            let ok = add_url_ok(typed);
+            assert_eq!(ok.len(), 1, "{typed}: Add URL's OK hands it on once");
+            let added = &ok[0];
+            assert_eq!(pasted.url, added.url, "{typed}: the same url");
+            assert!(
+                pasted.login.is_none(),
+                "{typed}: the paste bar sends no login"
+            );
+            assert!(added.login.is_none(), "{typed}: nothing typed in Add URL");
+            assert_eq!(route_of(&pasted.url), route, "{typed}");
+            assert_eq!(route_of(&added.url), route, "{typed}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod show_paste_tests {
+    use super::show_paste_arg;
+
+    /// `/show paste:<address>` (requirement 21.2): the address after `paste:`, colons and all;
+    /// nothing for other names or an empty address.
+    #[test]
+    fn show_paste_takes_the_address_after_its_name() {
+        assert_eq!(
+            show_paste_arg("paste:https://example.org/a.zip"),
+            Some("https://example.org/a.zip")
+        );
+        assert_eq!(
+            show_paste_arg("paste:magnet:?xt=urn:btih:0123"),
+            Some("magnet:?xt=urn:btih:0123")
+        );
+        assert_eq!(
+            show_paste_arg("paste: www.example.org/a.zip "),
+            Some("www.example.org/a.zip")
+        );
+        for name in [
+            "paste:",
+            "paste:  ",
+            "paste",
+            "addurl",
+            "pastes:x",
+            "options:paste:x",
+        ] {
+            assert_eq!(show_paste_arg(name), None, "{name}");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -9805,5 +10075,493 @@ mod view_menu_tests {
         }
         assert_eq!(seen.get("p"), Some(&"&Paste bar"));
         assert_eq!(seen.get("n"), Some(&"Details pa&ne"));
+    }
+}
+
+#[cfg(test)]
+mod typing_gate_tests {
+    use super::{menu_keys_blocked, take_menu_text};
+
+    // Feature: paste-bar-details-pane, Property 14: Typing gate.
+    // **Validates: Requirements 10.8, 10.9**
+    /// Every focus state: the menu keys are skipped exactly when a text box has the focus and
+    /// it isn't the paste field while empty.
+    #[test]
+    fn a_focused_text_box_keeps_the_menu_keys_but_the_empty_paste_field() {
+        // (a text box focused, it is the paste field, the paste field empty) -> skipped
+        for (focused, paste, empty, blocked) in [
+            // Nothing or a button or list focused: the menu bar has the keys (#328).
+            (false, false, false, false),
+            (false, false, true, false),
+            (false, true, false, false),
+            (false, true, true, false),
+            // Another text box (the list's filter, a dialog's box): it keeps them, as on dev.
+            (true, false, false, true),
+            (true, false, true, true),
+            // The paste field holding text keeps them (10.9); empty, the menus have them (10.8).
+            (true, true, false, true),
+            (true, true, true, false),
+        ] {
+            assert_eq!(
+                menu_keys_blocked(focused, paste, empty),
+                blocked,
+                "focused {focused}, paste field {paste}, empty {empty}"
+            );
+        }
+    }
+
+    /// The empty paste field focused, a frame of `events` with `modifiers` held: what the
+    /// field holds once `take_menu_text` ran before it was drawn (as `App::paint` does).
+    fn typed(modifiers: egui::Modifiers, events: Vec<egui::Event>, menu_open: bool) -> String {
+        let ctx = egui::Context::default();
+        let id = crate::panes::paste_field_id();
+        let mut text = String::new();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 100.0));
+        // The modifiers held come as egui-winit sends them, before the keys.
+        let held = std::iter::once(egui::Event::ModifiersChanged(modifiers));
+        let frames = [vec![], held.chain(events).collect()];
+        for (n, events) in frames.into_iter().enumerate() {
+            let input = egui::RawInput {
+                screen_rect: Some(screen),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                if n == 0 {
+                    ui.memory_mut(|m| m.request_focus(id));
+                } else {
+                    assert!(ui.memory(|m| m.has_focus(id)), "the field has the focus");
+                    take_menu_text(ui.ctx(), menu_open);
+                }
+                ui.add(egui::TextEdit::singleline(&mut text).id(id));
+            });
+            out.textures_delta.clear();
+        }
+        text
+    }
+
+    fn key(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    /// Alt+F (File) in the empty paste field opens the menu and types no "f"; a plain "f"
+    /// opens nothing and is typed; with a menu open, an item's letter isn't typed either.
+    #[test]
+    fn the_menus_letters_are_not_typed_in_the_empty_paste_field() {
+        let alt = egui::Modifiers::ALT;
+        let alt_f = vec![key(egui::Key::F, alt), egui::Event::Text("f".into())];
+        assert_eq!(typed(alt, alt_f, false), "", "Alt+F");
+        let plain = egui::Modifiers::NONE;
+        let f = vec![key(egui::Key::F, plain), egui::Event::Text("f".into())];
+        assert_eq!(typed(plain, f, false), "f", "a plain letter");
+        let x = vec![key(egui::Key::X, plain), egui::Event::Text("x".into())];
+        assert_eq!(typed(plain, x, true), "", "an item's letter, a menu open");
+    }
+}
+
+#[cfg(test)]
+mod old_keys_tests {
+    use super::{Cmd, menu_keys_blocked, shortcut_cmd};
+    use crate::panes::{Stop, next_stop};
+    use egui::{Event, Key, Modifiers};
+
+    /// Who has egui's focus in the frame the keys come in.
+    #[derive(Clone, Copy, Debug)]
+    enum Focus {
+        Nothing,
+        /// The paste bar's address field, holding "abc".
+        PasteField,
+        /// Another widget: a text box (the Find box, a filter); in the list's test a button.
+        OtherBox,
+    }
+
+    /// The end of `App::paint` on `dev` (85df4c43), copied as it was: the oracle. No menu or
+    /// popup open, no command chosen before it.
+    fn dev_keys(ctx: &egui::Context) -> Option<Cmd> {
+        let mut chosen = None;
+        let (find, next, add) = ctx.input_mut(|i| {
+            (
+                i.consume_key(egui::Modifiers::COMMAND, egui::Key::F),
+                i.consume_key(egui::Modifiers::NONE, egui::Key::F3),
+                i.consume_key(egui::Modifiers::COMMAND, egui::Key::N),
+            )
+        });
+        if ctx.input_mut(|i| {
+            i.consume_key(egui::Modifiers::COMMAND, egui::Key::M)
+                || i.consume_key(egui::Modifiers::NONE, egui::Key::F2)
+        }) {
+            chosen = Some(Cmd::MoveRename);
+        }
+        if find {
+            chosen = Some(Cmd::Find);
+        } else if next {
+            chosen = Some(Cmd::FindNext);
+        } else if add {
+            chosen = Some(Cmd::AddUrl);
+        }
+        if chosen.is_none() && ctx.memory(|m| m.focused().is_none()) {
+            let (del, shift_del) = ctx.input(|i| {
+                (
+                    i.key_pressed(egui::Key::Delete) && !i.modifiers.shift,
+                    i.modifiers.shift
+                        && !i.modifiers.command
+                        && (i.events.iter().any(|e| matches!(e, egui::Event::Cut))
+                            || i.key_pressed(egui::Key::Delete)),
+                )
+            });
+            if shift_del {
+                chosen = Some(Cmd::RemoveWithFiles);
+            } else if del {
+                chosen = Some(Cmd::Remove);
+            }
+        }
+        chosen
+    }
+
+    /// Today's: `App::paint`'s call of `shortcut_cmd`.
+    fn new_keys(ctx: &egui::Context) -> Option<Cmd> {
+        let focused = ctx.memory(|m| m.focused().is_some());
+        ctx.input_mut(|i| shortcut_cmd(i, focused))
+    }
+
+    /// What a frame's keys did: the command, the events left for what is drawn after, the
+    /// paste field's text.
+    type Outcome = (Option<Cmd>, Vec<Event>, String);
+
+    /// Two frames of a window with the paste field (holding "abc") and another text box drawn
+    /// before the keys are read, as in `App::paint`: the first gives `focus` the focus, the
+    /// second brings `events` with `modifiers` held and runs `keys` after the boxes.
+    fn frame(
+        modifiers: Modifiers,
+        events: &[Event],
+        focus: Focus,
+        keys: fn(&egui::Context) -> Option<Cmd>,
+    ) -> Outcome {
+        let ctx = egui::Context::default();
+        let field = crate::panes::paste_field_id();
+        let other = egui::Id::unique("old-keys-find-box");
+        let mut text = "abc".to_owned();
+        let mut find = String::new();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400.0, 200.0));
+        let mut result = (None, Vec::new());
+        let held = std::iter::once(Event::ModifiersChanged(modifiers));
+        let frames = [vec![], held.chain(events.iter().cloned()).collect()];
+        for (n, events) in frames.into_iter().enumerate() {
+            let input = egui::RawInput {
+                screen_rect: Some(screen),
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                if n == 0 {
+                    match focus {
+                        Focus::Nothing => {}
+                        Focus::PasteField => ui.memory_mut(|m| m.request_focus(field)),
+                        Focus::OtherBox => ui.memory_mut(|m| m.request_focus(other)),
+                    }
+                }
+                ui.add(egui::TextEdit::singleline(&mut text).id(field));
+                ui.add(egui::TextEdit::singleline(&mut find).id(other));
+                if n == 1 {
+                    let cmd = keys(ui.ctx());
+                    result = (cmd, ui.input(|i| i.events.clone()));
+                }
+            });
+            out.textures_delta.clear();
+        }
+        (result.0, result.1, text)
+    }
+
+    fn key(key: Key, modifiers: Modifiers) -> Event {
+        Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    /// Today's main-window shortcuts with the command each runs on `dev` with nothing focused.
+    /// Enter, Alt+Enter, Ctrl+A, the arrows and Shift+F10 are the list's (`list::keyboard`,
+    /// below), Tab the rotation's, Alt and F10 the menu bar's, Ctrl++ / Ctrl+- / Ctrl+0
+    /// `scale::keys`' (any window, unchanged): `shortcut_cmd` leaves them all.
+    fn shortcuts() -> Vec<(&'static str, Modifiers, Vec<Event>, Option<Cmd>)> {
+        let (none, ctrl, shift) = (Modifiers::NONE, Modifiers::COMMAND, Modifiers::SHIFT);
+        let ctrl_shift = ctrl | shift;
+        vec![
+            ("Ctrl+F", ctrl, vec![key(Key::F, ctrl)], Some(Cmd::Find)),
+            ("F3", none, vec![key(Key::F3, none)], Some(Cmd::FindNext)),
+            ("Ctrl+N", ctrl, vec![key(Key::N, ctrl)], Some(Cmd::AddUrl)),
+            (
+                "Ctrl+M",
+                ctrl,
+                vec![key(Key::M, ctrl)],
+                Some(Cmd::MoveRename),
+            ),
+            ("F2", none, vec![key(Key::F2, none)], Some(Cmd::MoveRename)),
+            (
+                "Delete",
+                none,
+                vec![key(Key::Delete, none)],
+                Some(Cmd::Remove),
+            ),
+            (
+                "Shift+Delete",
+                shift,
+                vec![key(Key::Delete, shift)],
+                Some(Cmd::RemoveWithFiles),
+            ),
+            // Windows: Shift+Delete arrives as Cut.
+            (
+                "Shift+Delete as Cut",
+                shift,
+                vec![Event::Cut],
+                Some(Cmd::RemoveWithFiles),
+            ),
+            ("Ctrl+X", ctrl, vec![key(Key::X, ctrl), Event::Cut], None),
+            (
+                "Ctrl+Shift+Delete",
+                ctrl_shift,
+                vec![key(Key::Delete, ctrl_shift)],
+                None,
+            ),
+            // Ctrl+M and F2 at once: Ctrl+M runs it, F2 is left in the input.
+            (
+                "Ctrl+M and F2",
+                ctrl,
+                vec![key(Key::M, ctrl), key(Key::F2, none)],
+                Some(Cmd::MoveRename),
+            ),
+            // Find wins over the others in one frame; Delete is not read then.
+            (
+                "Ctrl+F and Delete",
+                ctrl,
+                vec![key(Key::F, ctrl), key(Key::Delete, ctrl)],
+                Some(Cmd::Find),
+            ),
+            (
+                "F3 and Ctrl+N",
+                ctrl,
+                vec![key(Key::F3, none), key(Key::N, ctrl)],
+                Some(Cmd::FindNext),
+            ),
+            (
+                "plain F",
+                none,
+                vec![key(Key::F, none), Event::Text("f".into())],
+                None,
+            ),
+            (
+                "plain N",
+                none,
+                vec![key(Key::N, none), Event::Text("n".into())],
+                None,
+            ),
+            (
+                "plain M",
+                none,
+                vec![key(Key::M, none), Event::Text("m".into())],
+                None,
+            ),
+            // The list's, the rotation's, the menu bar's, the interface size's: none here.
+            ("Enter", none, vec![key(Key::Enter, none)], None),
+            (
+                "Alt+Enter",
+                Modifiers::ALT,
+                vec![key(Key::Enter, Modifiers::ALT)],
+                None,
+            ),
+            ("Ctrl+A", ctrl, vec![key(Key::A, ctrl)], None),
+            ("Shift+F10", shift, vec![key(Key::F10, shift)], None),
+            ("F10", none, vec![key(Key::F10, none)], None),
+            ("Tab", none, vec![key(Key::Tab, none)], None),
+            ("Ctrl+0", ctrl, vec![key(Key::Num0, ctrl)], None),
+            // Ctrl+V is the paste bar's (`panes::ctrl_v`), no command.
+            (
+                "Ctrl+V",
+                ctrl,
+                vec![Event::Paste("https://example.com/a.zip".into())],
+                None,
+            ),
+        ]
+    }
+
+    // Feature: paste-bar-details-pane, Property 16: Old keys.
+    // **Validates: Requirements 10.10**
+    /// Every shortcut of the table, the paste field not focused: the command of `dev`, the same
+    /// keys consumed; and for every focus (the paste field too) the same as `dev`'s code with
+    /// a text box focused.
+    #[test]
+    fn the_old_keys_run_the_commands_of_dev() {
+        for (name, mods, events, expected) in shortcuts() {
+            let (cmd, left, text) = frame(mods, &events, Focus::Nothing, new_keys);
+            assert_eq!(cmd, expected, "{name}, nothing focused");
+            assert_eq!(text, "abc", "{name}: the unfocused field is untouched");
+            for focus in [Focus::Nothing, Focus::PasteField, Focus::OtherBox] {
+                let now = frame(mods, &events, focus, new_keys);
+                let dev = frame(mods, &events, focus, dev_keys);
+                assert_eq!(now, dev, "{name}, {focus:?}: as dev");
+            }
+            let (_, dev_left, _) = frame(mods, &events, Focus::Nothing, dev_keys);
+            assert_eq!(left, dev_left, "{name}: the same keys consumed");
+        }
+    }
+
+    /// The paste field focused with text keeps Delete and Shift+Delete: Delete deletes its
+    /// text, not downloads; Ctrl+V with nothing focused fills the paste bar, no command.
+    #[test]
+    fn the_paste_field_keeps_delete_and_ctrl_v_goes_to_the_bar() {
+        let none = Modifiers::NONE;
+        let del = [key(Key::Home, none), key(Key::Delete, none)];
+        let (cmd, _, text) = frame(none, &del, Focus::PasteField, new_keys);
+        assert_eq!(cmd, None, "Delete in the field");
+        assert_eq!(text, "bc", "Delete deleted the field's text");
+        let shift = Modifiers::SHIFT;
+        for events in [vec![key(Key::Delete, shift)], vec![Event::Cut]] {
+            let (cmd, ..) = frame(shift, &events, Focus::PasteField, new_keys);
+            assert_eq!(cmd, None, "Shift+Delete in the field: {events:?}");
+        }
+        // Nothing focused: Delete is the list's command and the field keeps its text.
+        let (cmd, _, text) = frame(none, &del, Focus::Nothing, new_keys);
+        assert_eq!((cmd, text.as_str()), (Some(Cmd::Remove), "abc"));
+        // Ctrl+V with nothing focused: no command, the bar's text.
+        let paste = [Event::Paste("https://example.com/a.zip".into())];
+        let ctrl = Modifiers::COMMAND;
+        let (cmd, left, _) = frame(ctrl, &paste, Focus::Nothing, new_keys);
+        assert_eq!(cmd, None, "Ctrl+V runs no command");
+        assert_eq!(
+            crate::panes::ctrl_v(true, false, false, &left),
+            Some("https://example.com/a.zip"),
+            "Ctrl+V goes to the paste bar"
+        );
+    }
+
+    /// The menu bar's keys (Alt, F10, Alt+letter) and Tab, the paste field not focused: as on
+    /// dev. Dev's gate was "a text box has the focus"; dev's Tab, the paste bar hidden, toggled
+    /// the keys between the tree and the list, and did nothing without the tree.
+    #[test]
+    fn the_menu_keys_and_tab_work_as_on_dev_without_the_paste_field() {
+        for text_box in [false, true] {
+            for empty in [false, true] {
+                assert_eq!(menu_keys_blocked(text_box, false, empty), text_box);
+            }
+        }
+        for back in [false, true] {
+            assert_eq!(next_stop(Stop::Tree, back, false, true), Some(Stop::List));
+            assert_eq!(next_stop(Stop::List, back, false, true), Some(Stop::Tree));
+            assert_eq!(next_stop(Stop::List, back, false, false), None);
+        }
+    }
+
+    /// The list's own keys (`list::keyboard`, unchanged since dev): Ctrl+A selects all, Enter
+    /// opens the focused row, Alt+Enter its Properties, while no widget has the focus; with a
+    /// widget focused (the paste field, the Download button) the list leaves them.
+    #[test]
+    fn the_lists_keys_wait_while_a_widget_has_the_focus() {
+        let _fonts = crate::theme::font_tests();
+        let (none, alt, ctrl) = (Modifiers::NONE, Modifiers::ALT, Modifiers::COMMAND);
+        let row = |name: &str| {
+            let mut cells: [String; crate::list::COLS] = Default::default();
+            cells[0] = name.into();
+            crate::list::Row {
+                kind: crate::list::StatusKind::Stopped,
+                progress: None,
+                icon: crate::chrome::IconKey::Themed("ft-generic"),
+                queued: false,
+                cells,
+            }
+        };
+        let rows = [row("a.zip"), row("b.iso")];
+        type Got = (Option<crate::selection::Pick>, Option<usize>, Option<usize>);
+        let list = |events: Vec<Event>, focus: Focus| -> Got {
+            let ctx = egui::Context::default();
+            let field = crate::panes::paste_field_id();
+            let mut text = "abc".to_owned();
+            let mut st = crate::list::ListState::default();
+            st.set_keys(true);
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(900.0, 400.0));
+            let mut got = (None, None, None);
+            for n in 0..2 {
+                let input = egui::RawInput {
+                    screen_rect: Some(screen),
+                    events: if n == 1 { events.clone() } else { vec![] },
+                    ..Default::default()
+                };
+                let mut out = ctx.run_ui(input, |ui| {
+                    ui.add(egui::TextEdit::singleline(&mut text).id(field));
+                    let button = ui.button("Download");
+                    if n == 0 {
+                        match focus {
+                            Focus::Nothing => {}
+                            Focus::PasteField => ui.memory_mut(|m| m.request_focus(field)),
+                            Focus::OtherBox => button.request_focus(),
+                        }
+                    }
+                    let outer =
+                        egui::Rect::from_min_size(egui::pos2(0.0, 40.0), egui::vec2(900.0, 360.0));
+                    let r = crate::list::show(
+                        ui,
+                        outer,
+                        &mut st,
+                        &rows,
+                        &[true, false],
+                        Some(0),
+                        &mut crate::chrome::ShellIcons,
+                        &|_| String::new(),
+                    );
+                    if n == 1 {
+                        got = (r.pick, r.enter, r.properties);
+                    }
+                });
+                out.textures_delta.clear();
+            }
+            got
+        };
+        use crate::selection::Pick;
+        let keys = [
+            (
+                "Ctrl+A",
+                ctrl,
+                key(Key::A, ctrl),
+                (Some(Pick::All), None, None),
+            ),
+            ("Enter", none, key(Key::Enter, none), (None, Some(0), None)),
+            (
+                "Alt+Enter",
+                alt,
+                key(Key::Enter, alt),
+                (None, None, Some(0)),
+            ),
+        ];
+        for (name, mods, event, expected) in keys {
+            let held = Event::ModifiersChanged(mods);
+            let events = vec![held, event];
+            assert_eq!(
+                list(events.clone(), Focus::Nothing),
+                expected,
+                "{name}, nothing focused"
+            );
+            assert_eq!(
+                list(events.clone(), Focus::OtherBox),
+                (None, None, None),
+                "{name}, a button focused"
+            );
+            // A single-line box gives its focus up on Enter and Alt+Enter, as on dev (the
+            // paste field takes Enter itself first: Submit), so only Ctrl+A is tried with it.
+            if !name.contains("Enter") {
+                assert_eq!(
+                    list(events, Focus::PasteField),
+                    (None, None, None),
+                    "{name}, the paste field focused"
+                );
+            }
+        }
     }
 }

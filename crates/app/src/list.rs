@@ -248,6 +248,10 @@ impl ListState {
     pub fn set_keys(&mut self, on: bool) {
         self.focused = on;
     }
+    /// A column's filter box is open (the main window's Tab is then the box's).
+    pub fn filter_is_open(&self) -> bool {
+        self.filter_open.is_some()
+    }
 
     /// Open column `col`'s filter box under its header on the next frame, as a click on its
     /// funnel does (`/show filter:<col>`, for screenshots).
