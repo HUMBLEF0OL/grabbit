@@ -81,14 +81,16 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
       a PR; nothing on screen changes)
 - [x] 04 Typeface (complete, in origin's `dev` since 2026-11-11, pushed directly instead of a PR;
       checks in its plan, shots in `pr-shots` `04-typeface/`)
-- [x] 05a Layout model (ticked in its PR; done once merged)
-- [x] 05b Main window (ticked in its PR; done once merged)
+- [x] 05a Layout model (complete, in origin's `dev` since 2026-11-12, pushed directly with 05b)
+- [x] 05b Main window (complete, in origin's `dev` since 2026-11-12, pushed directly instead of
+      a PR)
 - [x] 05.5a Graphite icons everywhere (complete, PR 13 merged into `dev` 2026-11-13)
 - [x] 05.5b Upstream sync ready for the removal (complete, PR 12 merged 2026-11-13; post-merge check on PR 12)
 - [x] 05.5c Classic removed (complete, PRs 14 and 15 merged 2026-11-13)
-- [x] 05.5d The theme-file vocabulary nothing draws any more (05.5c's audit; ticked in its PR)
-- [x] 06a Paste bar (ticked in its PR; done once merged)
-- [x] 06b Details pane (ticked in its PR, one PR with 06a; done once merged; the on-screen
+- [x] 05.5d The theme-file vocabulary nothing draws any more (05.5c's audit; complete, PR 16
+      merged 2026-11-13)
+- [x] 06a Paste bar (complete, PR 18 merged 2026-11-13)
+- [x] 06b Details pane (complete, in PR 18 with 06a, merged 2026-11-13; the on-screen
       keyboard and Narrator pass is left to 09a, see its plan's "Left from 06")
 - [ ] 07a Dialog kit
 - [ ] 07b Adding
