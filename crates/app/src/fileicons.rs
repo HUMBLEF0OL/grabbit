@@ -225,15 +225,6 @@ fn paint_source(ui: &Ui, painter: &Painter, src: ImageSource<'static>, rc: Rect)
     }
 }
 
-/// The Tango icon `name` (not a file's: a place, such as the Server row's computer and local
-/// network, #140) in `rc` on screen, at the screen's pixel size, so it stays sharp at every scale.
-pub fn paint_tango(ui: &Ui, painter: &Painter, name: &str, rc: Rect) {
-    let ppp = ui.ctx().pixels_per_point();
-    let rc = rc.round_to_pixels(ppp);
-    let px = (rc.width() * ppp).round().clamp(1.0, 512.0) as u32;
-    paint_source(ui, painter, tango_source(name, px), rc);
-}
-
 /// [`paint`] at English point `min` (a list's layout), `side` points square: placed where that
 /// is on screen, so in a right-to-left window the icon is at the row's start there too.
 pub fn paint_at(ui: &Ui, painter: &Painter, kind: Kind, min: egui::Pos2, side: f32) {
@@ -269,13 +260,11 @@ static TANGO: &[Tango] = tango!(
     "application-certificate",
     "application-x-executable",
     "audio-x-generic",
-    "computer",
     "folder",
     "folder-open",
     "font-x-generic",
     "image-x-generic",
     "media-optical",
-    "network-workgroup",
     "package-x-generic",
     "text-html",
     "text-x-generic",

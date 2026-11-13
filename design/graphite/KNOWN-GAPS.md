@@ -33,7 +33,10 @@ Plans and PRs link here instead of explaining a missing check again.
   - or shots on screen (`-At "x,y"`) or on GitHub's runner, if the owner agrees.
   
   Then take the missing pictures for every PR listed below, and the 05.5c pixel comparison.
-- **PRs merged under this gap** (pictures owed): none yet.
+- **PRs merged under this gap** (pictures owed):
+  - PR 13, 05.5a: the Options page headers, the helpers window, Download complete's drag
+    handle, the Scheduler's queues, Download File Info's Server row (light and dark, 100 to
+    200 %); and `gx-computer`'s look check in the app beside its neighbours.
 
 ### G2 · Windows high contrast (plan 05.5)
 

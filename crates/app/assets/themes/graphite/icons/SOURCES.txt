@@ -105,3 +105,4 @@ gx-device            device-mobile
 gx-key               key
 gx-user              user
 gx-volume            volume
+gx-computer          device-desktop
