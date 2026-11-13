@@ -132,6 +132,7 @@ pub const EXTRAS: &[(&str, &str)] = &[
     ("gx-key", "Options: Sites logins"),
     ("gx-user", "Options: Accounts"),
     ("gx-volume", "Options: Sounds"),
+    ("gx-computer", "Server: this computer"),
 ];
 
 /// Whether a set's file named for `need` is read: a need, or an extra.
@@ -632,7 +633,8 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "ft-executable.svg", "ft-font.svg", "ft-generic.svg", "ft-image.svg", "ft-pdf.svg",
             "ft-presentation.svg", "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.svg",
             "ft-video.svg",
-            "gx-adjust.svg", "gx-apps.svg", "gx-browser.svg", "gx-bug.svg", "gx-copy.svg",
+            "gx-adjust.svg", "gx-apps.svg", "gx-browser.svg", "gx-bug.svg", "gx-computer.svg",
+            "gx-copy.svg",
             "gx-device.svg", "gx-dots.svg", "gx-download.svg", "gx-edit.svg", "gx-external.svg",
             "gx-filter.svg", "gx-gauge.svg", "gx-gift.svg", "gx-grip.svg", "gx-hash.svg",
             "gx-info.svg", "gx-key.svg", "gx-keyboard.svg", "gx-link.svg", "gx-merge.svg",
@@ -654,7 +656,8 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "ft-executable.svg", "ft-font.svg", "ft-generic.svg", "ft-image.svg", "ft-pdf.svg",
             "ft-presentation.svg", "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.svg",
             "ft-video.svg",
-            "gx-adjust.svg", "gx-apps.svg", "gx-browser.svg", "gx-bug.svg", "gx-copy.svg",
+            "gx-adjust.svg", "gx-apps.svg", "gx-browser.svg", "gx-bug.svg", "gx-computer.svg",
+            "gx-copy.svg",
             "gx-device.svg", "gx-dots.svg", "gx-download.svg", "gx-edit.svg", "gx-external.svg",
             "gx-filter.svg", "gx-gauge.svg", "gx-gift.svg", "gx-grip.svg", "gx-hash.svg",
             "gx-info.svg", "gx-key.svg", "gx-keyboard.svg", "gx-link.svg", "gx-merge.svg",
@@ -715,6 +718,12 @@ pub fn load_folder(name: &str, dir: &Path, mono: bool) -> bool {
     true
 }
 
+/// Whether Graphite's set has `need` drawn at `px` (16 or 24).
+#[cfg(test)]
+pub fn graphite_has(need: &str, px: u32) -> bool {
+    set("graphite").is_some_and(|s| s.files.contains_key(&(need.to_owned(), px)))
+}
+
 fn set(name: &str) -> Option<Arc<Set>> {
     SETS.lock().ok()?.get(name).cloned()
 }
@@ -757,12 +766,35 @@ pub fn source(
     ink: Color32,
     enabled: bool,
 ) -> Option<(ImageSource<'static>, Color32)> {
+    let name = crate::theme::current().icon_set.clone()?;
+    source_in(name, need, px, ink, enabled)
+}
+
+/// [`source`] from Graphite's own set, whatever the theme: the places Graphite's set alone
+/// draws (plan 05.5a: the Options pages' headers, the helpers window, the drag handle, the
+/// Scheduler's tree, the Server row).
+pub fn graphite(
+    need: &str,
+    px: f32,
+    ink: Color32,
+    enabled: bool,
+) -> Option<(ImageSource<'static>, Color32)> {
+    source_in(Cow::Borrowed("graphite"), need, px, ink, enabled)
+}
+
+/// [`source`] from the set called `name`.
+fn source_in(
+    name: Cow<'static, str>,
+    need: &str,
+    px: f32,
+    ink: Color32,
+    enabled: bool,
+) -> Option<(ImageSource<'static>, Color32)> {
     use std::cell::RefCell;
     type Key = (Cow<'static, str>, String, u32, [u8; 3]);
     thread_local! {
         static MADE: RefCell<HashMap<Key, Option<(ImageSource<'static>, Paint)>>> = RefCell::default();
     }
-    let name = crate::theme::current().icon_set.clone()?;
     let [r, g, b, a] = ink.to_srgba_unmultiplied();
     let (src, paint) = MADE.with(|made| {
         made.borrow_mut()
@@ -833,7 +865,29 @@ pub fn paint_in(
     enabled: bool,
 ) -> bool {
     let px = rc.width() * ui.ctx().pixels_per_point();
-    let Some((src, tint)) = source(need, px, ink, enabled) else {
+    paint_source(ui, painter, source(need, px, ink, enabled), rc)
+}
+
+/// [`paint`] from Graphite's own set, whatever the theme ([`graphite`]).
+pub fn paint_graphite(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    need: &str,
+    rc: egui::Rect,
+    enabled: bool,
+) -> bool {
+    let px = rc.width() * ui.ctx().pixels_per_point();
+    paint_source(ui, painter, graphite(need, px, ink(enabled), enabled), rc)
+}
+
+/// Draws an icon made by [`source`] into `rc`; false when there is none.
+fn paint_source(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    made: Option<(ImageSource<'static>, Color32)>,
+    rc: egui::Rect,
+) -> bool {
+    let Some((src, tint)) = made else {
         return false;
     };
     let img = egui::Image::new(src);
@@ -921,6 +975,21 @@ mod tests {
                 let f = f.unwrap_or_else(|| panic!("graphite lacks {need} at {px}"));
                 assert!(!f.png && f.mono, "{need} {px}");
                 let raw = std::str::from_utf8(&f.bytes).unwrap();
+                // The Graphite icon pattern (plan 05.5a): the root's attributes, exactly.
+                let root = &raw[..raw.find('>').unwrap()];
+                for want in [
+                    format!(r#"width="{px}""#),
+                    format!(r#"height="{px}""#),
+                    r#"viewBox="0 0 24 24""#.to_owned(),
+                    r#"fill="none""#.to_owned(),
+                    r##"stroke="#ffffff""##.to_owned(),
+                    r#"stroke-width="1.75""#.to_owned(),
+                    r#"stroke-linecap="round""#.to_owned(),
+                    r#"stroke-linejoin="round""#.to_owned(),
+                ] {
+                    assert!(root.contains(&want), "{need} {px}: the root lacks {want}");
+                }
+                assert!(!raw.contains("class="), "{need} {px}: a class");
                 let count = |s: &str| raw.matches(s).count();
                 assert_eq!(
                     count("fill="),
@@ -1058,7 +1127,7 @@ mod tests {
         let n = ids.len();
         ids.dedup();
         assert_eq!(ids.len(), n, "an id twice");
-        assert_eq!(EXTRAS.len(), 36);
+        assert_eq!(EXTRAS.len(), 37);
         let graphite = set("graphite").unwrap();
         for (extra, _) in EXTRAS {
             assert!(extra.starts_with("gx-"), "{extra}");

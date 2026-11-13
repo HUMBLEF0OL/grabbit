@@ -553,15 +553,15 @@ impl Scheduler {
                 let (label, icon) = match queues.get(i) {
                     Some(q) => (
                         crate::i18n::t(q.name.as_str()),
-                        if q.sync { "folder_link" } else { "folder" },
+                        if q.sync { "gx-refresh" } else { "cat-queues" },
                     ),
-                    None => (crate::i18n::t(LIMITS_LABEL), "folder_delete"),
+                    None => (crate::i18n::t(LIMITS_LABEL), "gx-gauge"),
                 };
                 look.name = label.to_owned();
                 icons.paint_in(
                     ui,
                     clip,
-                    IconKey::Silk(icon),
+                    IconKey::Graphite(icon),
                     pos2(row.left() + 4.0, row.top()),
                 );
                 winui::fit(
