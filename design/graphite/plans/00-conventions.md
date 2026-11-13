@@ -58,6 +58,9 @@ push target below, which is the maintainer's rule and overrides the repository n
   script. Graphite light and dark only: no Classic pairs.
 - Take every shot at Windows display scale 200% and View, Interface size 100% (the baseline's `INDEX.md`
   records this), or the pairs don't match pixel for pixel.
+- On the maintainer's PC offscreen captures come out black: shoot on screen (`docs-shots.ps1 -At
+  "40,40"`), with the display on and unlocked, the pointer parked off the windows, nobody using the
+  PC, and a neutral `-Work` folder (KNOWN-GAPS G1, closed).
 
 ## Paperwork in every PR
 
