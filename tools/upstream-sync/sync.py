@@ -96,6 +96,9 @@ SENSITIVE = re.compile(
 )
 # What cargo reads before it builds anything: never run cargo over it unread.
 CARGO_CONFIG = re.compile(r"(^|/)\.cargo/|(^|/)rust-toolchain", re.I)
+# A theme's file or folder (crates/app/assets/themes/<id>.toml or <id>/): this fork keeps
+# Graphite only (plan 05.5b).
+OTHER_THEME = re.compile(r"^crates/app/assets/themes/([^/]+?)(?:\.toml$|/)")
 OTHER_PLATFORMS = re.compile(r"^(linux|macos|mac|ubuntu|flatpak|safari|helium)\b|linux and macos",
                              re.I)
 ADDED_LINTS = (
@@ -229,10 +232,50 @@ def renames(base: str, head: str, threshold: str) -> list[tuple[int, str, str]]:
     return [(int(items[i][1:] or 0), items[i + 1], items[i + 2]) for i in range(0, len(items), 3)]
 
 
+def licence_text(path: str) -> bool:
+    """A licence or notice file: alike in every folder (MIT texts, credits), so git's pairing of
+    two of them says nothing about a move (plan 05.5b: an old theme's icon licence is not
+    Graphite's)."""
+    name = path.rsplit("/", 1)[-1]
+    return (name.startswith(("LICENSE", "COPYING", "AUTHORS"))
+            or name in ("README.txt", "readme.txt", "SOURCES.txt"))
+
+
+def small_asset(path: str) -> bool:
+    """A licence text or a small icon (`.svg`, `.png`): alike across folders, so git pairs
+    unrelated ones (Lucide's outlines with Graphite's at 53-66 %, plan 05.5b's audit)."""
+    return licence_text(path) or path.lower().endswith((".svg", ".png"))
+
+
+def folder(path: str) -> str:
+    return path.rsplit("/", 1)[0] if "/" in path else ""
+
+
 def fork_state(base: str, head: str) -> Fork:
     deleted = set(zlist("diff", "--no-renames", "--diff-filter=D", "--name-only", "-z", base, head))
     moved, rewritten = {}, {}
-    for score, src, dst in renames(base, head, "50%"):
+    pairs = renames(base, head, "50%")
+
+    def sure(score: int, src: str) -> bool:
+        """A move git is sure of by itself: any file but a small asset at 90 % or more, or an
+        icon unchanged (100 %: two unrelated icons are never byte-identical; a licence can be)."""
+        return score >= 90 and (not small_asset(src) or (score == 100 and not licence_text(src)))
+
+    # Folders such a move went out of, and into.
+    carried = {(folder(s), folder(d)) for score, s, d in pairs if sure(score, s)}
+
+    def with_sibling(src: str, dst: str) -> bool:
+        """A sibling of `src` moved into `dst`'s folder, or under it (a move that also made
+        subfolders: lib/x/a.rs -> lib/y/src/a.rs carries lib/x/LICENSE -> lib/y/LICENSE)."""
+        to = folder(dst)
+        return any(f == folder(src) and (d == to or d.startswith(to + "/")) for f, d in carried)
+
+    for score, src, dst in pairs:
+        # A small asset counts as moved when git is sure, when it stays in its folder (renamed
+        # there), or with a sibling; else it was deleted here (it counts as gone).
+        if (small_asset(src) and not sure(score, src) and folder(src) != folder(dst)
+                and not with_sibling(src, dst)):
+            continue
         (moved if score >= 90 else rewritten)[src] = dst
     gone = deleted - moved.keys() - rewritten.keys()
     then_dirs = set(zlist("ls-tree", "-r", "-d", "--name-only", "-z", base))
@@ -638,6 +681,10 @@ def sort_commit(c: Commit, onto: str, fork: Fork, fork_point: str, t: Taken,
     if areas:
         c.notes.append("touches " + ", ".join(areas) + " (security, IPC, crash or release code): "
                        "read it for a fix that matters even when its subject doesn't say so")
+    themes = sorted({m.group(1) for p in paths if (m := OTHER_THEME.match(p))} - {"graphite"})
+    if themes:
+        c.notes.append(f"a theme other than Graphite ({', '.join(themes)}): this fork keeps "
+                       "Graphite only (plan 05.5): skip")
     is_gone = gone_checker(fork, c.sha, paths)
     own = [p for p in paths if p in OWN]
     gone = [p for p in paths if p not in OWN and is_gone(p)]
