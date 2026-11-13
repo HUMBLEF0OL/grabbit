@@ -22,7 +22,7 @@ public static class CO {
 "@
 # Per-monitor aware (v2) while it captures, so the window rect and what PrintWindow draws agree at
 # 200 %: else an on-screen window comes out as its top-left quarter. The thread's own awareness is
-# put back after (callers run on the same thread: ui-rects, probe-own).
+# put back after (callers run on the same thread: docs-shots, probe-own, progress-shots, showcase).
 $prevCtx = [CO]::SetThreadDpiAwarenessContext([IntPtr](-4))
 if ($prevCtx -eq [IntPtr]::Zero) { Write-Warning "not per-monitor DPI aware: an on-screen window may come out cut" }
 try {
