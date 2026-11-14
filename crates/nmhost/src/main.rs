@@ -134,6 +134,20 @@ fn web_header(v: Option<&str>) -> Option<&str> {
     })
 }
 
+/// Whether web addresses `a` and `b` have the same origin (scheme, host and port, any case).
+/// ponytail: textual, so `https://x:443` and `https://x` differ; browsers send neither form.
+fn same_origin(a: &str, b: &str) -> bool {
+    let origin = |u: &str| {
+        let (scheme, rest) = u.split_once("://")?;
+        let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+        Some((
+            scheme.to_ascii_lowercase(),
+            rest[..end].to_ascii_lowercase(),
+        ))
+    };
+    matches!((origin(a), origin(b)), (Some(x), Some(y)) if x == y)
+}
+
 /// A download the extension left to the browser: why (a `Declined` code, or `site-access`:
 /// the browser doesn't let it read the site), its site and file name.
 #[derive(Debug, Default, Deserialize, PartialEq)]
@@ -431,11 +445,15 @@ fn video_command(
         .clone()
         .filter(|s| s.starts_with("http://") || s.starts_with("https://"));
     // A stream or file of the page's, fetched as the browser fetched it (upstream issue 900):
-    // with the Referer and Origin its player sent, else from the page.
+    // with the Referer and Origin its player sent, else from the page. A Referer of the page's
+    // own site (often only its origin) keeps the whole page: the app sends no more than the
+    // browser would anyway (`sent_referrer`), and the page is what finds a Drive file behind its
+    // player (#34) and what File Properties shows.
     let (referer, origin) = match &src {
         Some(_) => (
             Some(
                 web_header(m.fetched_with.referer.as_deref())
+                    .filter(|r| !same_origin(r, &m.url))
                     .unwrap_or(&m.url)
                     .to_owned(),
             ),
@@ -1078,6 +1096,16 @@ mod tests {
         let cmd = click(&format!(",{fetched}"), "blob:https://anime.test/1");
         assert_eq!(cmd.referer.as_deref(), Some("https://search.test/"));
         assert_eq!(cmd.origin, None);
+        // The page's own site sent (its origin only, across to the stream's host): the whole
+        // page stays the Referer, so a Drive player's stream still finds its file (#34).
+        let drive = "https://drive.google.com/file/d/ID/view";
+        let m: Message = serde_json::from_str(&format!(
+            r#"{{"video":true,"explicit":true,"url":"{drive}","src":"https://abc.c.drive.google.com/videoplayback?id=1","fetchedWith":{{"referer":"https://Drive.google.com/","origin":"https://drive.google.com"}}}}"#
+        ))
+        .unwrap();
+        let cmd = video_command(&m, &rules, "").unwrap();
+        assert_eq!(cmd.referer.as_deref(), Some(drive));
+        assert_eq!(cmd.origin.as_deref(), Some("https://drive.google.com"));
     }
 
     #[test]

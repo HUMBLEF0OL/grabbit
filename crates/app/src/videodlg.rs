@@ -224,8 +224,10 @@ impl VideoDialog {
         let own = mdm_tools::pages::video_address(page);
         // An embedded player taken to the video's own page (#359): the site that embedded it
         // isn't that page's referer, and Dailymotion refuses its own page asked with one (403).
+        // Nor is the embedding site's Origin (upstream issue 900) that page's.
         if own != page {
             context.referer = None;
+            context.origin = None;
         }
         let page = own;
         VideoDialog {
@@ -1395,6 +1397,7 @@ mod tests {
         let from = |page: &str| {
             let context = mdm_ipc::Command {
                 referer: Some("https://news.test/article".into()),
+                origin: Some("https://news.test".into()),
                 ..Default::default()
             };
             VideoDialog::for_page(PathBuf::from("v"), page, context)
@@ -1402,11 +1405,13 @@ mod tests {
         let embed = from("https://geo.dailymotion.com/player/x1abc.html?video=x9xyz12");
         assert_eq!(embed.page, "https://www.dailymotion.com/video/x9xyz12");
         assert_eq!(embed.context().referer, None);
+        assert_eq!(embed.context().origin, None);
         let plain = from("https://player.vimeo.test/video/1");
         assert_eq!(
             plain.context().referer.as_deref(),
             Some("https://news.test/article")
         );
+        assert_eq!(plain.context().origin.as_deref(), Some("https://news.test"));
     }
 
     /// #317: Cloudflare's check in plain words, saying what to try for each kind of cookies had.
