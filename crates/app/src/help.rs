@@ -303,26 +303,38 @@ impl Updates {
         // Compact unless there are release notes to show (then a window of its own size).
         let notes = matches!(result, Some(Ok(Found::Newer(_))));
         // One window that grows when notes arrive (a second id made a new window flash up).
-        let (id, h) = ("updates", if notes { 250.0 } else { 96.0 });
-        let bottom = h - 32.0;
+        // The mockup's layout: an icon tile, the answer beside it, the notes, the status row, the
+        // footer.
+        const W: f32 = 480.0;
+        let (id, body) = ("updates", if notes { 277.0 } else { 105.0 });
+        let bottom = body - 16.0 - 21.0;
         window(
             ctx,
             id,
             "Check for updates",
-            [440.0, h],
+            [W, body + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 let ink = winui::TEXT();
-                let right = o.x + 429.0;
+                let e = winui::EDGE;
+                let right = o.x + W - e;
+                let tx = o.x + e + 40.0 + 12.0;
+                winui::icon_tile(
+                    ui,
+                    r(o, e, 16.0, 40.0, 40.0),
+                    "gx-download",
+                    crate::theme::colors().accent,
+                    8.0,
+                );
                 let mut download = None;
                 match &result {
                     None => {
                         winui::text(
                             &p,
-                            o.x + 11.0,
-                            o.y + 24.0,
+                            tx,
+                            o.y + 31.0,
                             crate::i18n::t("Checking for updates..."),
                             ink,
                         );
@@ -334,15 +346,14 @@ impl Updates {
                             ),
                             &[("version", VERSION)],
                         );
-                        winui::paragraph(&p, o.x + 11.0, o.y + 24.0, &line, ink, right, 13.0);
+                        winui::paragraph(&p, tx, o.y + 31.0, &line, ink, right, 13.0);
                     }
                     Some(Err(e)) => {
                         let line = crate::i18n::fmt(
                             crate::i18n::t("Updates could not be checked: {error}"),
                             &[("error", e)],
                         );
-                        let (rect, cut) =
-                            winui::text_fit(&p, o.x + 11.0, o.y + 24.0, &line, ink, right);
+                        let (rect, cut) = winui::text_fit(&p, tx, o.y + 31.0, &line, ink, right);
                         if cut {
                             winui::full_on_hover(ui, rect, "update-error", &line);
                         }
@@ -354,16 +365,7 @@ impl Updates {
                             ),
                             &[("version", &rel.version), ("date", &rel.date)],
                         );
-                        winui::fit(
-                            ui,
-                            &p,
-                            o.x + 11.0,
-                            o.y + 24.0,
-                            &line,
-                            ink,
-                            right,
-                            "update-line",
-                        );
+                        winui::fit(ui, &p, tx, o.y + 31.0, &line, ink, right, "update-line");
                         let have = crate::i18n::fmt(
                             crate::i18n::t("You have version {version}."),
                             &[("version", VERSION)],
@@ -371,8 +373,8 @@ impl Updates {
                         winui::fit(
                             ui,
                             &p,
-                            o.x + 11.0,
-                            o.y + 42.0,
+                            tx,
+                            o.y + 49.0,
                             &have,
                             winui::MUTED(),
                             right,
@@ -380,14 +382,14 @@ impl Updates {
                         );
                         winui::text(
                             &p,
-                            o.x + 11.0,
-                            o.y + 66.0,
+                            o.x + e,
+                            o.y + 80.0,
                             crate::i18n::t("What's new:"),
                             ink,
                         );
                         let notes = egui::Rect::from_min_max(
-                            pos2(o.x + 11.0, o.y + 74.0),
-                            pos2(right, o.y + 206.0),
+                            pos2(o.x + e, o.y + 88.0),
+                            pos2(right, o.y + 228.0),
                         );
                         // English, as the paragraph is laid out; made where it is on screen.
                         // Read-only text: the read-only field's look (it drew a square box of its own).
@@ -423,9 +425,11 @@ impl Updates {
                 // The first button: Retry after a failed check, Update now or Download for a new
                 // version.
                 let first = if matches!(result, Some(Err(_))) {
+                    // i18n: button: check for updates again
                     Some("Retry")
                 } else if download.is_some() {
                     Some(if asset.is_some() {
+                        // i18n: button: download and install the new version, then restart
                         "Update now"
                     } else {
                         "Download"
@@ -433,24 +437,11 @@ impl Updates {
                 } else {
                     None
                 };
-                // The buttons as wide as their labels in this language (#192), the row ending
-                // where it ends in English.
-                let row: Vec<(&str, f32)> = first
-                    .into_iter()
-                    .chain([close_label])
-                    .map(|l| (l, 73.0))
-                    .collect();
-                let placed = winui::buttons_to_right(&p, 429.0, 9.0, &row, 150.0);
-                let (first_at, close_at) = (placed[0], placed[placed.len() - 1]);
                 // Under the answer: how Update now is going, else the automatic check's switch,
-                // up to 8 px before the buttons (as in English with two). In English, as the text
-                // pens take it (a right-to-left window placed the status over its buttons when
-                // given the mirrored rect).
-                let status_right = (first_at.0 - 8.0).min(266.0);
-                let status_rc = egui::Rect::from_min_size(
-                    o + vec2(11.0, bottom),
-                    vec2(status_right - 11.0, 21.0),
-                );
+                // across the window (the buttons are in the footer). In English, as the text pens
+                // take it.
+                let status_rc =
+                    egui::Rect::from_min_size(o + vec2(e, bottom), vec2(W - 2.0 * e, 21.0));
                 if let Some(job) = &self.job {
                     let installing = job.installing();
                     // Put in place: a bar that moves, no percent.
@@ -502,41 +493,56 @@ impl Updates {
                     // Its caption stops before the buttons (a longer translation ends in "...").
                     winui::checkbox_until(
                         ui,
-                        o + vec2(11.0, bottom + 4.0),
+                        o + vec2(e, bottom + 4.0),
                         weekly,
                         // i18n: check box in the update window: look for a new version every time MDM starts
                         "Check for updates at every start",
                         true,
-                        Some(o.x + status_right),
+                        Some(right),
                     );
                 }
-                // Enter presses the default button, as in the other dialogs.
-                let mut enter = winui::enter_pressed(ui);
+                let idle = self.job.is_none();
+                // Being put in place: nothing can stop that, so no Cancel (nor Esc) meanwhile.
+                let installing = self
+                    .job
+                    .as_ref()
+                    .is_some_and(crate::update::Job::installing);
+                // The first button is the default (Enter); without one, Close is. Escape is
+                // Close's while nothing downloads (Cancel then stops the download on a click
+                // only; Escape closes the window, as before).
+                let first_kind = if first == Some("Update now") && !idle {
+                    ButtonKind::Disabled
+                } else {
+                    ButtonKind::Default
+                };
+                let close_kind = if installing {
+                    ButtonKind::Disabled
+                } else if first.is_some() {
+                    ButtonKind::Normal
+                } else {
+                    ButtonKind::Default
+                };
+                let mut items: Vec<FooterItem> = first
+                    .map(|label| FooterItem::Button(FooterButton::new(label, first_kind).enter(true)))
+                    .into_iter()
+                    .collect();
+                items.push(FooterItem::Button(
+                    FooterButton::new(close_label, close_kind)
+                        .enter(first.is_none())
+                        .escape(idle),
+                ));
+                let last = items.len() - 1;
+                let pressed = winui::footer(ui, o, W, body, &mut items);
+                let first_hit = first.is_some() && pressed == Some(0);
+                let close = pressed == Some(last);
                 // A check that failed can be tried again.
-                let at = r(o, first_at.0, bottom, first_at.1, 21.0);
-                if matches!(result, Some(Err(_))) {
-                    // i18n: button: check for updates again
-                    let retry = winui::button(ui, at, "Retry", ButtonKind::Default, false, None);
-                    if retry.clicked() || enter {
-                        self.slot = Some(check(rt, ui.ctx()));
-                        self.result = None;
-                        enter = false;
-                    }
+                if matches!(result, Some(Err(_))) && first_hit {
+                    self.slot = Some(check(rt, ui.ctx()));
+                    self.result = None;
                 }
                 if let Some(rel) = download.as_ref() {
                     if let Some(asset) = asset {
-                        let idle = self.job.is_none();
-                        let kind = if idle {
-                            ButtonKind::Default
-                        } else {
-                            ButtonKind::Disabled
-                        };
-                        // i18n: button: download and install the new version, then restart
-                        let update = winui::button(ui, at, "Update now", kind, false, None);
-                        if update.clicked()
-                            || (enter && idle)
-                            || (idle && std::mem::take(&mut self.press))
-                        {
+                        if (first_hit && idle) || (idle && std::mem::take(&mut self.press)) {
                             self.status = None;
                             self.job = Some(crate::update::Job::start(
                                 rt,
@@ -546,42 +552,18 @@ impl Updates {
                                 asset,
                             ));
                         }
-                    } else if winui::button(ui, at, "Download", ButtonKind::Default, false, None)
-                        .clicked()
-                        || enter
-                    {
+                    } else if first_hit {
                         crate::launch::open(&rel.page);
                         return Outcome::Done(false);
                     }
                 }
-                // Being put in place: nothing can stop that, so no Cancel (nor Esc) meanwhile.
-                let installing = self
-                    .job
-                    .as_ref()
-                    .is_some_and(crate::update::Job::installing);
-                let kind = if installing {
-                    ButtonKind::Disabled
-                } else if download.is_some() || matches!(result, Some(Err(_))) {
-                    ButtonKind::Normal
-                } else {
-                    ButtonKind::Default
-                };
-                let close = winui::button(
-                    ui,
-                    r(o, close_at.0, bottom, close_at.1, 21.0),
-                    close_label,
-                    kind,
-                    false,
-                    None,
-                )
-                .clicked();
                 if installing {
                     Outcome::Open
                 } else if close && self.job.is_some() {
                     // Cancel: the download stops, the window stays (Update now again, Later).
                     self.job = None;
                     Outcome::Open
-                } else if close || winui::escape_pressed(ui) || (enter && download.is_none()) {
+                } else if close || (!idle && winui::escape_pressed(ui)) {
                     Outcome::Closed
                 } else {
                     Outcome::Open
@@ -652,11 +634,13 @@ impl About {
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         // A long translation pushes the links and OK down; the window grows with them.
         let extra = crate::dialogs::grow_extra(ctx, "about");
+        const W: f32 = 420.0;
+        let body = 206.0 + extra;
         window(
             ctx,
             "about",
             "About Mister Download Manager",
-            [420.0, 236.0 + extra],
+            [W, body + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
