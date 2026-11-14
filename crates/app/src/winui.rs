@@ -3950,17 +3950,36 @@ pub fn footer(
     y: f32,
     items: &mut [FooterItem],
 ) -> Option<usize> {
+    footer_band(ui, o, client_w, y);
+    footer_items(ui, o, client_w, y, items)
+}
+
+/// A [`footer`]'s band alone (its `panel` fill and top rule): for a dialog with a control of
+/// its own in the band (RSS feeds' "Check feeds every"), drawn first and before that control,
+/// so the control keeps its Tab place; [`footer_items`] then adds the buttons.
+pub fn footer_band(ui: &Ui, o: Pos2, client_w: f32, y: f32) {
     let c = crate::theme::colors();
-    let p = ui.painter().clone();
+    let p = ui.painter();
     p.rect_filled(r(o, 0.0, y, client_w, FOOTER_H), 0.0, c.panel);
     fill_l(
-        &p,
+        p,
         o.x,
         o.y + y,
         o.x + client_w - 1.0,
         o.y + y,
         c.menubar_line,
     );
+}
+
+/// A [`footer`]'s items, without its band ([`footer_band`]).
+pub fn footer_items(
+    ui: &mut Ui,
+    o: Pos2,
+    client_w: f32,
+    y: f32,
+    items: &mut [FooterItem],
+) -> Option<usize> {
+    let p = ui.painter().clone();
     let widths: Vec<(f32, Side, bool)> = items
         .iter()
         .map(|item| match item {
