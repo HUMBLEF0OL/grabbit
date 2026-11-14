@@ -223,7 +223,6 @@ pub fn derive(s: &Seeds) -> Palette {
         selection_muted: mix(selection_text, selection, 0.2),
         selection_inactive: toward(surface, 0.14),
         selection_focus: readable(s.warning, selection, 3.0),
-        group_line: toward(bg, 0.16),
         etch_shadow: toward(bg, 0.3),
         etch_light: if dark {
             toward(bg, 0.08)
@@ -381,7 +380,6 @@ pub fn strengthen(p: &mut Palette) {
         &mut p.field_readonly_border,
         &mut p.button_border,
         &mut p.list_frame,
-        &mut p.group_line,
         &mut p.menu_border,
         &mut p.menu_sep,
         &mut p.check_border,
