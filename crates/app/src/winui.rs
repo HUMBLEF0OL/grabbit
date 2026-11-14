@@ -4190,7 +4190,11 @@ pub fn status_banner(
     let x = glyph.right() + 10.0;
     let bold = tahoma_bold();
     let shown = ellipsize(p, &bold, title, (rc.right() - 12.0 - x).max(0.0));
-    text_at(p, bold, x, rc.top() + 23.0, &shown, c.text);
+    let drawn = text_at(p, bold, x, rc.top() + 23.0, &shown, c.text);
+    // Cut with "...": whole on hover, as every cut text.
+    if shown != title {
+        full_on_hover(ui, drawn, ("status-banner", rc.min.y as i32), title);
+    }
     if sub.is_empty() {
         return 0;
     }
