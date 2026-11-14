@@ -262,6 +262,7 @@ fn take_place(item: &mut Item, target: PathBuf) {
         item.file_name = name;
     }
     item.dest = target;
+    item.moved_away = false;
 }
 
 /// The place a download about to start takes instead of its own, when its own belongs to
@@ -414,6 +415,32 @@ fn next_trim(done: u32) -> Duration {
 /// counted from MDM's icon (from the start while it has none), the window still hidden,
 /// before it shows minimized.
 const TRAY_GRACE: Duration = Duration::from_secs(30);
+
+/// How long after the main window loses the focus a tray click still counts it as in front
+/// (upstream issue 520): clicking the icon makes the taskbar the foreground window first, so the
+/// window reads as unfocused by the time Toggle runs.
+const TRAY_TOGGLE_GRACE: Duration = Duration::from_millis(500);
+
+/// Whether a left click on the tray icon hides the window instead of showing it. Hidden or
+/// minimized never hides. In front hides: focused, focused until just now (the click took the
+/// focus), or nothing of another program over it as Windows says (`in_front`,
+/// `win32::main_window_in_front`; upstream issue 640: with the icon under the taskbar's ^ the
+/// flyout took the focus well before the click). Otherwise it is behind other windows and comes
+/// forward. Unknown means show, never hide.
+fn tray_toggle_hide(
+    hidden: bool,
+    minimized: bool,
+    focused: Option<bool>,
+    since_focused: Option<Duration>,
+    in_front: Option<bool>,
+) -> bool {
+    if hidden || minimized {
+        return false;
+    }
+    focused == Some(true)
+        || (focused == Some(false) && since_focused.is_some_and(|d| d < TRAY_TOGGLE_GRACE))
+        || in_front == Some(true)
+}
 
 /// Where a start with the session (#226) leaves the window, decided here alone.
 #[derive(Debug, PartialEq)]
@@ -645,6 +672,8 @@ pub struct App {
     /// a real exit under way (closing the window otherwise only hides it, as IDM does).
     tray: Option<crate::tray::Tray>,
     tray_limiter: Option<bool>,
+    /// When the main window was last seen focused, for a tray click ([`tray_toggle_hide`]).
+    tray_last_focused: Option<Instant>,
     hidden: bool,
     /// Hidden to the tray: when to hand the window's memory back to the system next (#72), and
     /// how many times it was since the window hid.
@@ -927,23 +956,22 @@ pub(crate) fn mark_finished(
         .name("mark-downloaded".into())
         .spawn(move || {
             for f in files.iter().filter(|f| f.is_file()) {
-                crate::win32::mark_downloaded(f, &url, referrer.as_deref());
+                crate::webmark::mark(f, &url, referrer.as_deref());
             }
         })
         .ok()
 }
 
 /// Marks each file the engine starts writing as downloaded from the web (Mark-of-the-Web:
-/// win32 `mark_downloaded`), as browsers mark theirs. Only http(s) addresses
-/// (an FTP address may carry its login).
+/// `webmark::mark`, as the option and Windows' policy say), as browsers mark theirs. Only
+/// http(s) addresses (an FTP address may carry its login).
 pub(crate) fn mark_hook(url: &url::Url, referrer: Option<&str>) -> mdm_engine::FileHook {
     let web = matches!(url.scheme(), "http" | "https");
     let (url, referrer) = (url.to_string(), referrer.map(str::to_owned));
     mdm_engine::FileHook::new(move |path: &std::path::Path| {
-        if !web {
-            return;
+        if web {
+            crate::webmark::mark(path, &url, referrer.as_deref());
         }
-        crate::win32::mark_downloaded(path, &url, referrer.as_deref());
     })
 }
 
@@ -1119,6 +1147,7 @@ impl App {
             settings.speed_limit_on = true;
         }
         crate::regional::set(&settings.regional);
+        crate::webmark::set(settings.mark_downloads);
         if settings.proxy_mode == 2 {
             crate::pacfetch::refresh(&settings.proxy_script, &rt);
         }
@@ -1308,6 +1337,7 @@ impl App {
             limit_notice: None,
             tray: None,
             tray_limiter: None,
+            tray_last_focused: None,
             // Started with the session (#226): hidden from the first frame.
             hidden: start == crate::Start::Session,
             trim_when_hidden: (start == crate::Start::Session)
@@ -1835,6 +1865,7 @@ impl App {
                         notices: i.notices.clone(),
                         seen: false,
                         opening: None,
+                        moved_away: i.moved_away,
                     });
                 }
             } else if !live {
@@ -2663,16 +2694,11 @@ impl App {
             cmd.url = Some(file);
         }
         // The browser's download button over a video: the Download video window, looking the
-        // page up at once.
+        // page up at once. Only the dialog opens (upstream issue 520): it is a window of its own.
         if let Some(page) = cmd.video_page.as_deref() {
-            self.show_window(ctx);
-            let dir = self.settings.category_dir(Category::Video, &self.downloads);
-            crate::videodlg::refresh_ytdlp(&self.rt);
+            self.show_for_dialog(ctx);
             let page = page.to_owned();
-            self.video_dlg = Some(
-                crate::videodlg::VideoDialog::for_page(dir, &page, cmd)
-                    .with_subs(self.settings.video_subs.clone()),
-            );
+            self.video_dlg = Some(self.video_dialog(Some((&page, cmd))));
             return;
         }
         // Its menu: never on this site.
@@ -2684,7 +2710,7 @@ impl App {
         }
         // The browser's right-click menu: a page's (or a selection's) links, to tick in Import.
         if !cmd.links.is_empty() {
-            self.show_window(ctx);
+            self.show_for_dialog(ctx);
             let found = cmd
                 .links
                 .iter()
@@ -2719,7 +2745,7 @@ impl App {
                     && std::path::Path::new(u.trim_matches('"')).is_file())
         }) {
             let m = m.trim().to_owned();
-            self.show_window(ctx);
+            self.show_for_dialog(ctx);
             self.open_torrent_dialog(Some(m), ctx);
             return;
         }
@@ -2747,7 +2773,7 @@ impl App {
         };
         if !cmd.silent && (torrent(&url) || final_url.as_ref().is_some_and(torrent)) {
             let parts = self.request_parts(&url, None, &cmd, crate::debrid::browser_started(&cmd));
-            self.show_window(ctx);
+            self.show_for_dialog(ctx);
             self.open_torrent_dialog_with(
                 Some(url.to_string()),
                 Some(crate::torrents::Remote { url, parts }),
@@ -3422,6 +3448,15 @@ impl App {
         }
     }
 
+    /// Before a browser handoff's dialog (upstream issue 520): the main window stays where it is
+    /// (hidden, minimized) and only the dialog opens, as dialogs are windows of their own.
+    fn show_for_dialog(&mut self, ctx: &egui::Context) {
+        let minimized = ctx.input(|i| i.viewport().minimized == Some(true));
+        if !self.hidden && !minimized {
+            self.show_window(ctx);
+        }
+    }
+
     /// What the shell last said of the tray icon: the shell can accept it and still show
     /// nothing, and a window hidden with no icon to click has no way back. The answer comes from
     /// the tray's watcher thread and is never waited for (upstream issue 747).
@@ -3534,6 +3569,10 @@ impl App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
         }
+        // Kept every frame: by the time a tray click arrives the taskbar has the focus.
+        if ctx.input(|i| i.viewport().focused) == Some(true) {
+            self.tray_last_focused = Some(Instant::now());
+        }
         let cmds = self.tray.as_ref().map(|t| t.poll()).unwrap_or_default();
         for c in cmds {
             use crate::tray::TrayCmd;
@@ -3541,6 +3580,18 @@ impl App {
             let cmd = match c {
                 TrayCmd::Show => {
                     self.show_window(ctx);
+                    continue;
+                }
+                TrayCmd::Toggle => {
+                    let minimized = ctx.input(|i| i.viewport().minimized == Some(true));
+                    let focused = ctx.input(|i| i.viewport().focused);
+                    let since_focused = self.tray_last_focused.map(|t| t.elapsed());
+                    let in_front = crate::win32::main_window_in_front();
+                    if tray_toggle_hide(self.hidden, minimized, focused, since_focused, in_front) {
+                        self.hide_to_tray(ctx);
+                    } else {
+                        self.show_window(ctx);
+                    }
                     continue;
                 }
                 TrayCmd::AddUrl => Cmd::AddUrl,
@@ -3583,7 +3634,7 @@ impl App {
                 OnClose::Minimize => {
                     tracing::info!("close: no visible tray icon; minimizing to the taskbar");
                     ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                    crate::dialogs::minimize(ctx, self.main_hwnd);
                 }
                 OnClose::Quit => {
                     tracing::info!("close: quitting");
@@ -3823,6 +3874,22 @@ impl App {
         }
     }
 
+    /// Download video from a page, opened for a page (looked up at once) or from the menu: Save
+    /// to is the Video category's folder, the Music category's while a sound-only choice is
+    /// chosen (upstream issue 611; not when the user deleted Music).
+    fn video_dialog(&self, page: Option<(&str, mdm_ipc::Command)>) -> crate::videodlg::VideoDialog {
+        crate::videodlg::refresh_ytdlp(&self.rt);
+        let dir = self.settings.category_dir(Category::Video, &self.downloads);
+        let music = (!Category::Music.deleted())
+            .then(|| self.settings.category_dir(Category::Music, &self.downloads));
+        match page {
+            Some((page, cmd)) => crate::videodlg::VideoDialog::for_page(dir, page, cmd),
+            None => crate::videodlg::VideoDialog::new(dir),
+        }
+        .with_subs(self.settings.video_subs.clone())
+        .with_music_folder(music)
+    }
+
     /// Download video from a page → Download Now / Later.
     fn add_video(&mut self, add: crate::videodlg::VideoAdd) {
         let folder = add
@@ -3849,7 +3916,7 @@ impl App {
         let id = self.push_item(
             add.page,
             dest,
-            Category::Video,
+            add.category,
             String::new(),
             add.size,
             None,
@@ -3897,7 +3964,7 @@ impl App {
             let id = self.push_item(
                 page,
                 dest,
-                Category::Video,
+                add.category,
                 String::new(),
                 None,
                 None,
@@ -5224,6 +5291,7 @@ impl App {
         }
         self.settings = new;
         crate::regional::set(&self.settings.regional);
+        crate::webmark::set(self.settings.mark_downloads);
         // Options → Remote: listening started, stopped or moved.
         if let Some(r) = &self.remote {
             r.apply(crate::remote::config(&self.settings));
@@ -5478,12 +5546,54 @@ impl App {
         }
     }
 
+    /// Files dragged out of Download complete that the drop target moved (upstream issue 869):
+    /// the download follows its file where the shell said it went, or remembers it went where
+    /// MDM couldn't learn. Only while the download still points where the drag took the file
+    /// from.
+    fn poll_dragged_out(&mut self) {
+        for (id, from, out) in dialogs::dragged_out() {
+            let Some(item) = self.item(id).filter(|i| i.dest == from) else {
+                continue;
+            };
+            match &out {
+                dialogs::DraggedOut::Moved(to) => {
+                    tracing::info!("drag out: download {id} moved with its file");
+                    take_place(item, to.clone());
+                    let folder = to.parent().unwrap_or(to).display().to_string();
+                    item.note(crate::i18n::fmt(
+                        crate::i18n::t("Dragged out of Download complete and moved to {folder}"),
+                        &[("folder", &folder)],
+                    ));
+                }
+                dialogs::DraggedOut::MovedAway => {
+                    tracing::info!("drag out: download {id}'s file moved where MDM can't follow");
+                    item.moved_away = true;
+                    item.note(crate::i18n::t(
+                        "Dragged out of Download complete and moved to a place MDM couldn't learn",
+                    ));
+                }
+            }
+            for c in &mut self.complete {
+                if c.id == id {
+                    match &out {
+                        dialogs::DraggedOut::Moved(to) => {
+                            c.path = to.clone();
+                            c.moved_away = false;
+                        }
+                        dialogs::DraggedOut::MovedAway => c.moved_away = true,
+                    }
+                }
+            }
+            self.dirty = true;
+        }
+    }
+
     fn open_item(&mut self, id: u64) {
         let Some(i) = self.items.iter().find(|i| i.id == id) else {
             return;
         };
         if i.status == Status::Complete {
-            crate::dialogs::open_file(&i.dest);
+            crate::dialogs::open_download(&i.dest, i.moved_away);
         } else if !self.progress.iter().any(|p| p.id == id) {
             self.progress
                 .push(Progress::new(id, self.settings.show_complete));
@@ -5510,6 +5620,11 @@ impl App {
         let dest = target
             .and_then(|id| self.items.iter().find(|i| i.id == id))
             .map(|i| i.dest.clone());
+        // Its file dragged out of Download complete to a place MDM couldn't learn (upstream
+        // issue 869).
+        let moved_away = target
+            .and_then(|id| self.items.iter().find(|i| i.id == id))
+            .is_some_and(|i| i.moved_away);
         match cmd {
             Cmd::AddUrl => self.add_url = Some(AddUrl::from_clipboard(&self.settings.url_history)),
             Cmd::Exit => {
@@ -5713,12 +5828,12 @@ impl App {
             }
             Cmd::OpenWith => {
                 if let Some(d) = dest {
-                    dialogs::open_with(&d);
+                    dialogs::open_download_with(&d, moved_away);
                 }
             }
             Cmd::OpenFolder => {
                 if let Some(d) = dest {
-                    dialogs::show_in_folder(&d);
+                    dialogs::show_download_in_folder(&d, moved_away);
                 }
             }
             Cmd::ToggleColumn(i) => self.list.visible[i] = !self.list.visible[i],
@@ -5743,12 +5858,7 @@ impl App {
             },
             Cmd::VideoPage => {
                 if self.video_dlg.is_none() {
-                    let dir = self.settings.category_dir(Category::Video, &self.downloads);
-                    crate::videodlg::refresh_ytdlp(&self.rt);
-                    self.video_dlg = Some(
-                        crate::videodlg::VideoDialog::new(dir)
-                            .with_subs(self.settings.video_subs.clone()),
-                    );
+                    self.video_dlg = Some(self.video_dialog(None));
                 }
             }
             Cmd::AddMagnet => self.open_torrent_dialog(None, ctx),
@@ -5952,6 +6062,7 @@ impl App {
     /// Pull engine progress into the rows; open "Download complete" when one finishes.
     fn poll(&mut self, ctx: &egui::Context) {
         self.poll_moves();
+        self.poll_dragged_out();
         if !self.moving.is_empty() {
             ctx.request_repaint_after(Duration::from_millis(200));
         }
@@ -5962,7 +6073,11 @@ impl App {
             if i.poll() {
                 self.dirty = true;
                 match i.status {
-                    Status::Complete => finished.push(i.id),
+                    Status::Complete => {
+                        // Downloaded again: its file is where MDM saved it.
+                        i.moved_away = false;
+                        finished.push(i.id);
+                    }
                     Status::Error => failed.push(i.id),
                     _ => {}
                 }
@@ -6025,6 +6140,7 @@ impl App {
                     notices: i.notices.clone(),
                     seen: false,
                     opening: None,
+                    moved_away: i.moved_away,
                 });
             }
         }
@@ -7079,13 +7195,15 @@ impl App {
         let ctx = ui.ctx();
         match bar.pressed {
             Some(CaptionButton::Close) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
-            Some(CaptionButton::Minimize) => {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true))
-            }
-            Some(CaptionButton::Maximize) => {
-                let max = ctx.input(|i| i.viewport().maximized) == Some(true);
-                ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!max));
-            }
+            Some(CaptionButton::Minimize) => crate::dialogs::minimize(ctx, self.main_hwnd),
+            Some(CaptionButton::Maximize) => match self.main_hwnd {
+                // The system's command, as the frame's own Maximize sends it (upstream 874).
+                Some(h) => crate::win32::toggle_maximized(h),
+                None => {
+                    let max = ctx.input(|i| i.viewport().maximized) == Some(true);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!max));
+                }
+            },
             _ => {}
         }
         let rest =
@@ -7841,16 +7959,8 @@ impl App {
             }
             // A video's page, not a file (YouTube, Vimeo…): the video window looks it up.
             Route::VideoPage => {
-                let dir = self.settings.category_dir(Category::Video, &self.downloads);
-                crate::videodlg::refresh_ytdlp(&self.rt);
-                self.video_dlg = Some(
-                    crate::videodlg::VideoDialog::for_page(
-                        dir,
-                        new.url.as_str(),
-                        Default::default(),
-                    )
-                    .with_subs(self.settings.video_subs.clone()),
-                );
+                self.video_dlg =
+                    Some(self.video_dialog(Some((new.url.as_str(), Default::default()))));
             }
             // An image gallery's page (Wikimedia Commons, Flickr…): gallery-dl (#58).
             Route::GalleryPage => {
@@ -8005,6 +8115,7 @@ impl App {
                 notices: i.notices.clone(),
                 seen: false,
                 opening: None,
+                moved_away: i.moved_away,
             });
         } else if i.live.is_none() {
             self.start(id, true);
@@ -9213,10 +9324,11 @@ impl App {
                 Outcome::Closed => self.video_dlg = None,
                 Outcome::Done(out) => {
                     // Options' "Change folder for this category on last selected", which
-                    // Download File Info follows through its box (#475).
+                    // Download File Info follows through its box (#475): Music's for a
+                    // sound-only choice (upstream issue 611).
                     if self.settings.change_folder_on_last
                         && self.settings.keep_category_dir(
-                            Category::Video,
+                            v.category(),
                             &v.save_folder(),
                             &self.downloads,
                         )
@@ -9896,6 +10008,68 @@ mod at_login_tests {
         // No icon at all (the tray couldn't be made): the grace from the start.
         assert_eq!(at_login(TRAY_GRACE, None, false), AtLogin::Minimize);
         assert_eq!(at_login(s(60), None, true), AtLogin::Minimize);
+    }
+}
+
+#[cfg(test)]
+mod tray_toggle_tests {
+    use super::{TRAY_TOGGLE_GRACE, tray_toggle_hide};
+    use std::time::Duration;
+
+    /// A left click on the tray icon toggles (upstream issues 520, 640): hidden or minimized
+    /// shows; in front hides; behind other windows shows.
+    #[test]
+    fn only_a_window_in_front_hides() {
+        let ms = Duration::from_millis;
+        let (just_now, long_ago) = (
+            Some(TRAY_TOGGLE_GRACE - ms(1)),
+            Some(TRAY_TOGGLE_GRACE + ms(1)),
+        );
+        // Hidden or minimized: always shows, whatever else says.
+        assert!(!tray_toggle_hide(
+            true,
+            false,
+            Some(false),
+            None,
+            Some(true)
+        ));
+        assert!(!tray_toggle_hide(false, true, Some(true), None, Some(true)));
+        // Focused: hides.
+        assert!(tray_toggle_hide(false, false, Some(true), None, None));
+        // The click took the focus just now: still in front, hides.
+        assert!(tray_toggle_hide(false, false, Some(false), just_now, None));
+        // Focus gone long ago (the ^ flyout took it), nothing over the window: hides.
+        assert!(tray_toggle_hide(
+            false,
+            false,
+            Some(false),
+            long_ago,
+            Some(true)
+        ));
+        // Behind other windows: shows.
+        assert!(!tray_toggle_hide(
+            false,
+            false,
+            Some(false),
+            long_ago,
+            Some(false)
+        ));
+        assert!(!tray_toggle_hide(
+            false,
+            false,
+            Some(false),
+            None,
+            Some(false)
+        ));
+        // Unknown: show, never hide.
+        assert!(!tray_toggle_hide(false, false, None, None, None));
+        assert!(!tray_toggle_hide(
+            false,
+            false,
+            None,
+            Some(Duration::ZERO),
+            None
+        ));
     }
 }
 

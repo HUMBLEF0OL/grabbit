@@ -464,6 +464,10 @@ impl Meter {
             .flatten()
             .or(f.get(2).copied().flatten())
             .map(|t| t.max(0.0) as u64);
+        // Only an estimate, and no more than what came: yt-dlp's first line for a stream in
+        // pieces, before it knows how many there are (1 KB of 1 KB), or its last one. It says
+        // nothing of how much is left, and the bar must not hold on to its end (upstream 622).
+        let blind = f.get(1).copied().flatten().is_none() && total.is_some_and(|t| t <= got);
         // Back near 0: the next stream started; the one before counts in full.
         let next_stream = if self.at_once {
             got.saturating_mul(2) < self.last_got && self.last_got - got >= 64 * 1024
@@ -490,6 +494,13 @@ impl Meter {
         // HLS): no percentage rather than what came so far as the whole, 100 % (#344).
         if self.last_total == 0 && self.expected.is_none() {
             p.total = None;
+            return;
+        }
+        // Such a line leaves the bar where it was (none yet: no percentage). The stream's bytes
+        // still count in full when the next one starts.
+        if blind {
+            p.total = (self.frac > 0.0)
+                .then(|| ((downloaded as f64 / self.frac).round() as u64).max(downloaded + 1));
             return;
         }
         let mut whole = self.finished + self.last_total.max(got);
@@ -611,14 +622,16 @@ fn run(
     }))
 }
 
+/// A video or sound file's extensions, as yt-dlp saves them.
+pub const MEDIA: [&str; 15] = [
+    "mp4", "mkv", "webm", "mov", "m4v", "m4a", "mp3", "opus", "ogg", "oga", "flac", "wav", "aac",
+    "flv", "3gp",
+];
+
 /// The media file yt-dlp saved under our output name (`<dir>/<stem>.%(ext)s`), when it didn't say
 /// where, or said it in a form that names no file (#79). Its subtitles (`<stem>.<lang>.srt`) and
 /// unfinished parts don't count; the newest one wins.
 fn saved_by_name(ours: &[String]) -> Option<PathBuf> {
-    const MEDIA: [&str; 15] = [
-        "mp4", "mkv", "webm", "mov", "m4v", "m4a", "mp3", "opus", "ogg", "oga", "flac", "wav",
-        "aac", "flv", "3gp",
-    ];
     let template = ours
         .iter()
         .position(|a| a == "-o")
@@ -1272,6 +1285,42 @@ mod tests {
         assert_eq!(v[0], (400, Some(1000)));
         let v = run(None, &["NA NA NA NA"]);
         assert_eq!(v[0], (0, None));
+    }
+
+    /// Upstream 622: a Dropbox video (an HLS stream whose size nobody knows beforehand) read
+    /// 99.9 % from its first second to its end, the size growing with what came and 0 seconds
+    /// left. yt-dlp's first line for a stream gives an estimate as big as what came (1 KB of
+    /// 1 KB: it knows nothing yet), and the bar held on to that 99.9 % ever after. These are the
+    /// lines yt-dlp printed for a Dropbox video, its 1080p stream then its sound.
+    #[test]
+    fn a_first_estimate_as_big_as_what_came_is_no_end() {
+        let lines = [
+            "1024 NA 1024 491.2",
+            "3072 NA 20480.0 491.2",
+            "7168 NA 61440.0 491.2",
+            "1047552 NA 10465280.0 452673.0",
+            "1206648 NA 12046000.0 502170.4",
+            "9775640 NA 37005408.0 1553343.6",
+            "22221428 NA 39449345.4 1594996.9",
+            "36687072 NA 42130818.8 1439490.0",
+            "39940760 NA 39940760 1343764.3",
+            "64512 NA 253952.0 19016.1",
+            "1122012 NA 2178488.0 258367.6",
+            "2185904 NA 2460726.8 369230.2",
+        ];
+        let got = run(None, &lines);
+        // Nothing known at the first line: no percentage, rather than the end.
+        assert_eq!(got[0], (1024, None));
+        let f: Vec<f64> = got[1..]
+            .iter()
+            .map(|(d, t)| (*d as f64 / t.unwrap() as f64).min(MAX_WHILE_RUNNING))
+            .collect();
+        // A sliver at first, then what the estimate says: about a quarter at 9.8 MB of ~37 MB.
+        assert!(f[0] < 0.2, "{f:?}");
+        assert!(f[4] > 0.2 && f[4] < 0.3, "{f:?}");
+        assert!(f[6] > 0.85 && f[6] < 0.9, "{f:?}");
+        // The time left counts down from a size that is not just what came.
+        assert!(got[5].1.unwrap() > got[5].0 * 3, "{got:?}");
     }
 
     /// The subtitle arguments (#68): none asked, none passed; beside the video as SRT with

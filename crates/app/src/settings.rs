@@ -178,6 +178,9 @@ pub struct Settings {
     pub url_history: Vec<String>,
     pub folder_history: Vec<String>,
     pub set_creation_date: bool,
+    /// Save to → "Mark downloaded files as coming from the internet" (upstream issue 813):
+    /// Windows' Mark of the Web (`webmark`).
+    pub mark_downloads: bool,
     /// Downloads.
     pub show_start_dialog: bool,
     pub only_add_to_queue: bool,
@@ -404,6 +407,7 @@ impl Default for Settings {
             url_history: Vec::new(),
             folder_history: Vec::new(),
             set_creation_date: false,
+            mark_downloads: true,
             show_start_dialog: true,
             only_add_to_queue: false,
             start_immediately: true,

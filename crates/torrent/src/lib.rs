@@ -336,7 +336,7 @@ pub struct Config {
     pub listen: bool,
     /// Ask the router (UPnP) to forward the listening port.
     pub upnp: bool,
-    /// The port to listen on; None: one picked at each start.
+    /// The port to listen on; None: one picked the first time and kept (`PORT_FILE`).
     pub port: Option<u16>,
     /// The address to listen on; None: every address of the computer (IPv4 and IPv6), as
     /// BitTorrent clients do. Tests and test tools set 127.0.0.1: a listener on every address
@@ -355,8 +355,8 @@ pub struct Config {
     /// Tests: no trackers, local peers only, everything on loopback; no DHT unless
     /// `dht_bootstrap` names its nodes.
     pub offline: bool,
-    /// The DHT's first nodes (`host:port`); None: librqbit's own (public routers). Tests and test
-    /// tools name nodes on loopback.
+    /// The DHT's first nodes (`host:port`); None: MDM's public routers (`DHT_BOOTSTRAP`). Tests
+    /// and test tools name nodes on loopback.
     pub dht_bootstrap: Option<Vec<String>>,
     /// Options → Proxy / Socks → Network adapter (#35, #143): what holds every socket of the
     /// session to the adapter. UPnP and local peer discovery are off then: they speak to the
@@ -499,6 +499,64 @@ fn id(hash: &str) -> Result<TorrentIdOrHash, TorrentError> {
     TorrentIdOrHash::parse(hash).map_err(|_| TorrentError::Unknown)
 }
 
+/// The DHT's first nodes on the internet (upstream issue 650): the public routers BitTorrent
+/// clients use. Any one that answers is enough; they are asked together, and the rest no more
+/// once one has answered. librqbit's own two alone left the DHT empty where neither answered (a
+/// name resolving to an old address, a network blocking one), and magnet links without trackers
+/// then found no peer. Later starts begin with the nodes saved in `dht.json`.
+pub const DHT_BOOTSTRAP: &[&str] = &[
+    "dht.libtorrent.org:25401",
+    "dht.transmissionbt.com:6881",
+    "router.bittorrent.com:6881",
+    "router.utorrent.com:6881",
+];
+
+/// The DHT's first nodes: the ones a test names, else [`DHT_BOOTSTRAP`].
+fn bootstrap_nodes(cfg: &Config) -> Vec<String> {
+    cfg.dht_bootstrap
+        .clone()
+        .unwrap_or_else(|| DHT_BOOTSTRAP.iter().map(|a| (*a).to_owned()).collect())
+}
+
+/// The file in the state folder that keeps the port picked when Torrent settings name none
+/// (upstream issue 650): the next session listens on it again, so peers that learned it, and a
+/// router's or firewall's rule for it, still reach MDM.
+const PORT_FILE: &str = "listen-port";
+
+fn saved_port(state_dir: &Path) -> Option<u16> {
+    std::fs::read_to_string(state_dir.join(PORT_FILE))
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
+        .filter(|p| *p != 0)
+}
+
+/// Where the session listens, in MDM's log (upstream issue 650): a listener on every address is
+/// one IPv6 socket that takes IPv4 too, which Windows' `netstat -p tcp` (IPv4 only) doesn't list.
+/// `saved_nodes`: the DHT started from the nodes the last session saved (`dht.json`).
+fn log_network(session: &Session, saved_nodes: bool) {
+    match session.listen_addr() {
+        Some(a) if a.ip().is_unspecified() && a.is_ipv6() => tracing::info!(
+            "torrents: listening for peers on TCP port {} (every address, IPv4 and IPv6: {a})",
+            a.port()
+        ),
+        Some(a) => tracing::info!("torrents: listening for peers on TCP {a}"),
+        None => tracing::info!("torrents: not listening for peers (Torrent settings or a proxy)"),
+    }
+    if let Some(dht) = session.get_dht() {
+        tracing::info!(
+            "torrents: DHT on UDP {}, starting from {}",
+            dht.listen_addr(),
+            if saved_nodes {
+                "the nodes the last session saved, and the bootstrap nodes"
+            } else {
+                "the bootstrap nodes"
+            }
+        );
+    }
+}
+
 impl Torrents {
     pub async fn start(cfg: Config) -> Result<Torrents, TorrentError> {
         std::fs::create_dir_all(&cfg.state_dir).map_err(engine)?;
@@ -507,25 +565,35 @@ impl Torrents {
         let bind_ip = cfg.bind.as_ref().map(|Bind::Address(ip)| *ip);
         // Offline only without one named: a test's DHT on loopback is still on.
         let dht_on = cfg.dht && !proxied && (!cfg.offline || cfg.dht_bootstrap.is_some());
-        let dht = dht_on.then(|| librqbit::DhtSessionConfig {
-            bootstrap_addrs: cfg.dht_bootstrap.clone(),
-            persistence: Some(librqbit::dht::DhtPersistenceConfig {
-                dump_interval: None,
-                config_filename: Some(cfg.state_dir.join("dht.json")),
-            }),
-            ..Default::default()
-        });
+        // A closure: a session that can't take the saved port is built again (below).
+        let dht = || {
+            dht_on.then(|| librqbit::DhtSessionConfig {
+                bootstrap_addrs: Some(bootstrap_nodes(&cfg)),
+                persistence: Some(librqbit::dht::DhtPersistenceConfig {
+                    dump_interval: None,
+                    config_filename: Some(cfg.state_dir.join("dht.json")),
+                }),
+                ..Default::default()
+            })
+        };
         // Offline (tests): loopback only. A set address: that one (with the port asked for).
         // Bound to an address: on it.
         let ip = cfg.listen_ip.or(bind_ip).or(cfg
             .offline
             .then_some(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST)));
-        let listen = (cfg.listen && !proxied).then(|| ListenerOptions {
+        let listening = cfg.listen && !proxied;
+        // No port in Torrent settings: the one the last session listened on, when there was one.
+        let saved = if listening && cfg.port.is_none() {
+            saved_port(&cfg.state_dir)
+        } else {
+            None
+        };
+        let listen = |port: u16| ListenerOptions {
             listen_addr: match ip {
-                Some(ip) => (ip, cfg.port.unwrap_or(0)).into(),
+                Some(ip) => (ip, port).into(),
                 None => {
                     let mut any = ListenerOptions::default().listen_addr;
-                    any.set_port(cfg.port.unwrap_or(0));
+                    any.set_port(port);
                     any
                 }
             },
@@ -537,7 +605,7 @@ impl Torrents {
                 && ip.is_none_or(|i| !i.is_loopback()),
             ipv4_only: cfg.offline || v4_only || ip.is_some_and(|i| i.is_ipv4()),
             ..Default::default()
-        });
+        };
         // A list librqbit can't read would stop the session from starting: only a file there.
         let blocklist_url = cfg
             .blocklist
@@ -545,14 +613,14 @@ impl Torrents {
             .filter(|p| p.is_file())
             .and_then(|p| url::Url::from_file_path(p).ok())
             .map(|u| u.to_string());
-        let opts = SessionOptions {
-            dht,
-            listen,
+        let opts = |port: u16| SessionOptions {
+            dht: dht(),
+            listen: listening.then(|| listen(port)),
             connect: cfg.proxy.clone().map(|proxy| ConnectionOptions {
                 proxy_url: Some(proxy),
                 ..Default::default()
             }),
-            blocklist_url,
+            blocklist_url: blocklist_url.clone(),
             disable_trackers: cfg.offline,
             // Behind a proxy, UDP trackers are dropped (they would go around it): their client
             // sends from loopback, so no UDP can leave. A set listen address: that one (tests,
@@ -587,11 +655,29 @@ impl Torrents {
             ..Default::default()
         };
         prepare_saved(&cfg.state_dir.join("session"), proxied);
+        let saved_nodes = dht_on && cfg.state_dir.join("dht.json").is_file();
+        let output = cfg.state_dir.join("unsorted");
+        let port = cfg.port.or(saved).unwrap_or(0);
+        let session = match Session::new_with_opts(output.clone(), opts(port)).await {
+            // The saved port taken (another program has it now): any other one. A port set in
+            // Torrent settings is kept, and its error says why.
+            Err(e) if saved.is_some() => {
+                tracing::warn!(
+                    "torrents: can't listen on port {port} again ({e:#}); taking another one"
+                );
+                Session::new_with_opts(output, opts(0)).await
+            }
+            started => started,
+        }
         // With its causes: "error starting listeners: error binding: …" says why (an adapter's
         // address gone, #143).
-        let session = Session::new_with_opts(cfg.state_dir.join("unsorted"), opts)
-            .await
-            .map_err(|e| engine(format!("{e:#}")))?;
+        .map_err(|e| engine(format!("{e:#}")))?;
+        log_network(&session, saved_nodes);
+        if let (true, None, Some(addr)) = (listening, cfg.port, session.listen_addr())
+            && saved != Some(addr.port())
+        {
+            let _ = std::fs::write(cfg.state_dir.join(PORT_FILE), addr.port().to_string());
+        }
         let api = Api::new(session.clone(), None);
         let checks: Arc<Checks> = Default::default();
         // The first reading here, so the torrents restored are known from the start.
@@ -1467,6 +1553,77 @@ mod tests {
         ));
         assert!(Source::magnet("https://x/y.torrent").is_none());
         assert!(Source::magnet("magnet").is_none());
+    }
+
+    /// Upstream issue 650: with no port in Torrent settings, the one picked is kept: the next
+    /// session listens on it again. When another program has it by then, another one is taken,
+    /// and kept from then on. A port set in Torrent settings isn't saved.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_picked_port_is_kept() {
+        let tmp = tempfile::tempdir().unwrap();
+        // On loopback: a listener on every address makes Windows Firewall ask about each new
+        // test build.
+        let cfg = |dir: &str| Config {
+            upnp: false,
+            dht: false,
+            lsd: false,
+            listen_ip: Some(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST)),
+            ..Config::new(tmp.path().join(dir))
+        };
+        let port = |t: &Torrents| t.listen_addr().expect("listens").port();
+        let saved = || saved_port(&tmp.path().join("auto"));
+
+        let t = Torrents::start(cfg("auto")).await.unwrap();
+        let first = port(&t);
+        assert_eq!(saved(), Some(first));
+        t.stop().await;
+        let t = Torrents::start(cfg("auto")).await.unwrap();
+        assert_eq!(port(&t), first, "the same port again");
+        t.stop().await;
+
+        let other = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, first)).unwrap();
+        let t = Torrents::start(cfg("auto")).await.unwrap();
+        let second = port(&t);
+        assert_ne!(second, first, "another program has it");
+        assert_eq!(saved(), Some(second));
+        t.stop().await;
+        drop(other);
+
+        let free = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let t = Torrents::start(Config {
+            port: Some(free),
+            ..cfg("fixed")
+        })
+        .await
+        .unwrap();
+        assert_eq!(port(&t), free);
+        assert_eq!(saved_port(&tmp.path().join("fixed")), None);
+        t.stop().await;
+    }
+
+    /// Upstream issue 650: the DHT starts from several public routers, not librqbit's two
+    /// alone; a test's own nodes replace them.
+    #[test]
+    fn the_dht_has_fallback_routers() {
+        let cfg = Config::new(PathBuf::from("state"));
+        let nodes = bootstrap_nodes(&cfg);
+        for router in [
+            "dht.libtorrent.org:25401",
+            "dht.transmissionbt.com:6881",
+            "router.bittorrent.com:6881",
+            "router.utorrent.com:6881",
+        ] {
+            assert!(nodes.iter().any(|n| n == router), "{router} in {nodes:?}");
+        }
+        let own = Config {
+            dht_bootstrap: Some(vec!["127.0.0.1:6881".into()]),
+            ..cfg
+        };
+        assert_eq!(bootstrap_nodes(&own), ["127.0.0.1:6881"]);
     }
 
     /// A torrent of `dir`'s files, made by librqbit.

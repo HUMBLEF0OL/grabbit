@@ -916,16 +916,28 @@ impl OptionsDialog {
             "Set file creation date as provided by the server",
             true,
         );
-        // The temporary directory under a hairline, a row of the form.
-        winui::rule(&p, o, left, 297.0, right - left);
-        winui::form_label(&p, o, left, 305.0, h, "Temporary directory", true);
+        // Upstream issue 813: the Mark of the Web, like the date, is what the file carries.
+        winui::checkbox_light(
+            ui,
+            o + vec2(left, 296.0),
+            &mut self.s.mark_downloads,
+            "Mark downloaded files as coming from the internet",
+            true,
+        )
+        .on_hover_text(crate::i18n::t(
+            // i18n: tooltip of "Mark downloaded files as coming from the internet"
+            "Windows checks the files marked this way: SmartScreen before a program first runs, Office's Protected View before a document opens. Unticked, or under Windows' policy \"Do not preserve zone information in file attachments\", no download is marked.",
+        ));
+        // The temporary directory under a hairline, a row of the form (down by the row above).
+        winui::rule(&p, o, left, 319.0, right - left);
+        winui::form_label(&p, o, left, 327.0, h, "Temporary directory", true);
         // D-004: no temporary directory — parts are written next to the file, so there is
         // nothing to assemble at the end.
         let none = crate::i18n::t("Not used: file parts are written next to the file");
-        readonly(ui, r(o, fx, 305.0, browse_x - 8.0 - fx, h), none);
+        readonly(ui, r(o, fx, 327.0, browse_x - 8.0 - fx, h), none);
         winui::button_light(
             ui,
-            r(o, browse_x, 305.0, browse_w, h),
+            r(o, browse_x, 327.0, browse_w, h),
             // i18n: verb: choose a folder
             "Browse",
             ButtonKind::Disabled,
@@ -934,7 +946,7 @@ impl OptionsDialog {
         winui::paragraph(
             &p,
             o.x + left,
-            o.y + 355.0,
+            o.y + 377.0,
             crate::i18n::t(
                 "Mister Download Manager writes every connection straight into the final\nfile (a sparse part file next to it), so no temporary directory and no\nassembling step are needed.",
             ),

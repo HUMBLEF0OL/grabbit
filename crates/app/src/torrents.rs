@@ -744,7 +744,7 @@ fn mark_files(folder: &Path, files: &[mdm_torrent::FileEntry]) {
         if !path.is_file() {
             continue;
         }
-        crate::win32::mark_downloaded(&path, TORRENT_ORIGIN, None);
+        crate::webmark::mark(&path, TORRENT_ORIGIN, None);
     }
 }
 

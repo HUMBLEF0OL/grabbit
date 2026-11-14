@@ -15,7 +15,7 @@ pub enum Kind<'a> {
 }
 
 /// A folder, or a file by its extension (lowercase; None: a file without one): what the icon
-/// stands for, and what Windows' shell is asked for when a file is dragged out (win32.rs).
+/// stands for.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum What {
     Folder,
@@ -37,12 +37,6 @@ impl What {
             What::File(ext) => crate::themeicons::file_need(ext.as_deref()),
         }
     }
-}
-
-/// An icon as Windows' shell gives it (win32.rs, the picture of a file dragged out).
-pub enum Native {
-    /// `side` × `side` RGBA pixels, alpha not premultiplied.
-    Rgba { side: u32, rgba: Vec<u8> },
 }
 
 /// The extension of `name` (after its last dot, lowercase), if it has one.
