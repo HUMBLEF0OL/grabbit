@@ -9367,6 +9367,7 @@ impl App {
         // The freeze watchdog times this as it times `ui` (crash.rs): a command or the clock
         // that hangs is reported too, minimized or not (#202).
         crate::crash::logic_begin();
+        crate::crash::step(crate::crash::Step::Commands);
         let mut handled = false;
         while let Ok(inc) = self.commands.try_recv() {
             handled = true;
@@ -9380,6 +9381,7 @@ impl App {
         if handled {
             ctx.request_ui_pass(egui::ViewportId::ROOT);
         }
+        crate::crash::step(crate::crash::Step::NetworkSettings);
         // The clock: what must go on whatever the main window's state (#174). Minimized, egui
         // runs no `ui`, and the queues, the Scheduler's starts and stops, the download limits,
         // the kill switch, saving the list, the clipboard monitor, the update check, the tray and
@@ -9388,24 +9390,34 @@ impl App {
         crate::settings::share_dns(self.settings.dns());
         crate::settings::share_video_cookies(&self.settings);
         if !self.headless {
+            crate::crash::step(crate::crash::Step::Accessibility);
             self.follow_assistive_technology(ctx);
         }
+        crate::crash::step(crate::crash::Step::NetworkAdapter);
         self.network_adapter_tick(ctx);
+        crate::crash::step(crate::crash::Step::Limits);
         self.limit_restart_tick();
         self.debrid_tick();
+        crate::crash::step(crate::crash::Step::Downloads);
         self.poll(ctx);
+        crate::crash::step(crate::crash::Step::RemoteTorrents);
         self.poll_remote_torrents();
         // What failed in any window, told here (dialogs::tell).
         if let Some((title, text)) = dialogs::told().pop() {
             self.notice = Some((title, text));
         }
+        crate::crash::step(crate::crash::Step::Limits);
         self.apply_global_limit();
         // A server (#157) has no screen, clipboard or tray, and is updated by its image.
         if !self.headless {
+            crate::crash::step(crate::crash::Step::UpdateCheck);
             self.auto_update_check(ctx);
+            crate::crash::step(crate::crash::Step::Clipboard);
             self.watch_clipboard(ctx);
+            crate::crash::step(crate::crash::Step::Tray);
             self.tray(ctx);
             // The taskbar button's green bar: everything running, as one.
+            crate::crash::step(crate::crash::Step::Taskbar);
             crate::win32::taskbar_progress(crate::MAIN_TITLE, self.overall_progress());
         }
         if self
@@ -9414,12 +9426,14 @@ impl App {
         {
             self.ticked = Some(Instant::now());
             // For a crash report: what MDM has open and running (sent when it changes).
+            crate::crash::step(crate::crash::Step::ReportState);
             crate::crash::state(
                 self.items.len(),
                 self.items.iter().filter(|i| i.live.is_some()).count(),
                 self.queues.len(),
                 ctx.pixels_per_point(),
             );
+            crate::crash::step(crate::crash::Step::Torrents);
             self.torrent_tick();
             // Minimized, the windows these open (Download complete, a limit's notice, Download
             // File Info for a copied link, an update) are made by a pass of the main window's
@@ -9457,6 +9471,7 @@ impl App {
         // Light or dark: IDM follows Windows' app mode (checked every 2 s) unless View → Dark
         // Mode support is off. Switches live (IDM asks to restart). A change the look's watchers
         // saw wakes a frame, and the check runs in it rather than at its next 2 s.
+        crate::crash::step(crate::crash::Step::Theme);
         let system_changed = crate::theme::system_changed();
         if system_changed
             || self
@@ -9490,6 +9505,7 @@ impl App {
             // The caption follows (first check: the window may not exist yet; retried). Only
             // then: asking DWM every 2 s caught the window's thread in a stalled system (#633).
             if changed || !self.caption_set {
+                crate::crash::step(crate::crash::Step::Caption);
                 crate::theme::apply_mode(&ctx);
                 self.caption_set =
                     crate::win32::caption_dark(crate::MAIN_TITLE, crate::theme::dark_surface());
@@ -9498,9 +9514,11 @@ impl App {
                 ctx.request_repaint();
             }
         }
+        crate::crash::step(crate::crash::Step::MainWindow);
         egui::CentralPanel::no_frame()
             .frame(egui::Frame::new().fill(chrome::WINDOW_BG()))
             .show(ui, |ui| self.paint(ui));
+        crate::crash::step(crate::crash::Step::Dialogs);
         self.dialogs(&ctx);
         crate::crash::frame_end();
         crate::renderer::frame_done(&ctx);
