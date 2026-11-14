@@ -2642,13 +2642,8 @@ impl App {
         // page up at once.
         if let Some(page) = cmd.video_page.as_deref() {
             self.show_window(ctx);
-            let dir = self.settings.category_dir(Category::Video, &self.downloads);
-            crate::videodlg::refresh_ytdlp(&self.rt);
             let page = page.to_owned();
-            self.video_dlg = Some(
-                crate::videodlg::VideoDialog::for_page(dir, &page, cmd)
-                    .with_subs(self.settings.video_subs.clone()),
-            );
+            self.video_dlg = Some(self.video_dialog(Some((&page, cmd))));
             return;
         }
         // Its menu: never on this site.
@@ -3799,6 +3794,22 @@ impl App {
         }
     }
 
+    /// Download video from a page, opened for a page (looked up at once) or from the menu: Save
+    /// to is the Video category's folder, the Music category's while a sound-only choice is
+    /// chosen (upstream issue 611; not when the user deleted Music).
+    fn video_dialog(&self, page: Option<(&str, mdm_ipc::Command)>) -> crate::videodlg::VideoDialog {
+        crate::videodlg::refresh_ytdlp(&self.rt);
+        let dir = self.settings.category_dir(Category::Video, &self.downloads);
+        let music = (!Category::Music.deleted())
+            .then(|| self.settings.category_dir(Category::Music, &self.downloads));
+        match page {
+            Some((page, cmd)) => crate::videodlg::VideoDialog::for_page(dir, page, cmd),
+            None => crate::videodlg::VideoDialog::new(dir),
+        }
+        .with_subs(self.settings.video_subs.clone())
+        .with_music_folder(music)
+    }
+
     /// Download video from a page → Download Now / Later.
     fn add_video(&mut self, add: crate::videodlg::VideoAdd) {
         let folder = add
@@ -3825,7 +3836,7 @@ impl App {
         let id = self.push_item(
             add.page,
             dest,
-            Category::Video,
+            add.category,
             String::new(),
             add.size,
             None,
@@ -3873,7 +3884,7 @@ impl App {
             let id = self.push_item(
                 page,
                 dest,
-                Category::Video,
+                add.category,
                 String::new(),
                 None,
                 None,
@@ -5719,12 +5730,7 @@ impl App {
             },
             Cmd::VideoPage => {
                 if self.video_dlg.is_none() {
-                    let dir = self.settings.category_dir(Category::Video, &self.downloads);
-                    crate::videodlg::refresh_ytdlp(&self.rt);
-                    self.video_dlg = Some(
-                        crate::videodlg::VideoDialog::new(dir)
-                            .with_subs(self.settings.video_subs.clone()),
-                    );
+                    self.video_dlg = Some(self.video_dialog(None));
                 }
             }
             Cmd::AddMagnet => self.open_torrent_dialog(None, ctx),
@@ -7817,16 +7823,8 @@ impl App {
             }
             // A video's page, not a file (YouTube, Vimeo…): the video window looks it up.
             Route::VideoPage => {
-                let dir = self.settings.category_dir(Category::Video, &self.downloads);
-                crate::videodlg::refresh_ytdlp(&self.rt);
-                self.video_dlg = Some(
-                    crate::videodlg::VideoDialog::for_page(
-                        dir,
-                        new.url.as_str(),
-                        Default::default(),
-                    )
-                    .with_subs(self.settings.video_subs.clone()),
-                );
+                self.video_dlg =
+                    Some(self.video_dialog(Some((new.url.as_str(), Default::default()))));
             }
             // An image gallery's page (Wikimedia Commons, Flickr…): gallery-dl (#58).
             Route::GalleryPage => {
@@ -9189,10 +9187,11 @@ impl App {
                 Outcome::Closed => self.video_dlg = None,
                 Outcome::Done(out) => {
                     // Options' "Change folder for this category on last selected", which
-                    // Download File Info follows through its box (#475).
+                    // Download File Info follows through its box (#475): Music's for a
+                    // sound-only choice (upstream issue 611).
                     if self.settings.change_folder_on_last
                         && self.settings.keep_category_dir(
-                            Category::Video,
+                            v.category(),
                             &v.save_folder(),
                             &self.downloads,
                         )
