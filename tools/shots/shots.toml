@@ -181,7 +181,7 @@ id = "options-integration"
 page = "browser-integration.md"
 under = "What it takes"
 take = "options:general"
-crop = [18, 172, 380, 208]
+crop = { around = ["Use advanced browser integration", "List:Capture downloads from the following browsers"], pad = 16 }
 marks = ["Use advanced browser integration", "List:Capture downloads from the following browsers"]
 alt = "Options, General: Use advanced browser integration and the list of browsers MDM takes downloads from"
 caption = "1 must be on, and 2 your browser ticked."
