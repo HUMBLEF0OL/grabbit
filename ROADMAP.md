@@ -563,8 +563,9 @@ These ship in a later version, when they're ready.
   Delete category, Confirm deletion, Redownload and the other yes-or-no questions, Check for
   updates, About, Keyboard shortcuts, Tell a friend, Verify checksum, the crash report, Archive
   password, 7-Zip needed, Create folder, Download limits, the notices, the browser extension's
-  offer and the drop target; "Add many downloads" is that Confirm), their keys unchanged. Next:
-  the Options window (plan 08)
+  offer and the drop target; "Add many downloads" is that Confirm), their keys unchanged (still
+  to come, with plan 09's polish: the Scheduler at the mockup's width and short enough for a
+  1080p screen at 200 %). Next: the Options window (plan 08)
 
 ### Bugs being looked into
 

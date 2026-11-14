@@ -82,7 +82,7 @@ Line numbers drift as phases land: find each item by its name first.
 
 ## Left from 07
 
-09a's full review (step 5) takes these, from 07c's and 07d's audits:
+09a's full review (step 5) takes these, from 07c's, 07d's and 07e's audits:
 
 - the progress window's **Hide tab** at the page's top right, as the mock has it, 30 high: the
   Speed Limiter and completion pages need their rows checked for room first (it keeps its old
@@ -91,8 +91,11 @@ Line numbers drift as phases land: find each item by its name first.
   its peers) above the property table. The table starts at a fixed 274 under the piece bar, so
   the banner needs that page's geometry reworked (the frame's buttons are 07c's row already);
 - `/show` entries for the progress window's error state and its tab row's menu (07c's
-  screenshots), and for the queue-done countdown, Archive password, Create folder and the drop
-  target (07e's), each without a real side effect.
+  screenshots), and for Create folder, Archive password, Add category (the script shoots
+  Properties) and the drop target (07e's), each without a real side effect; the queue-done
+  countdown gets none that runs (it turns the computer off after 30 s);
+- the **Scheduler** at the mockup's 800 (it keeps 651 and its panes' places), and short enough for
+  a 1080p screen at 200 % (its client is 527 high: at 200 % it scrolls by about 45 px).
 
 ## Done when
 

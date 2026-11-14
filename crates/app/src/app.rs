@@ -7965,7 +7965,7 @@ impl App {
             .map(|(x, y)| pos2(x as f32, y as f32))
             .or_else(|| {
                 ctx.input(|i| i.viewport().outer_rect)
-                    .map(|r| pos2(r.right() - 90.0, r.top() + 90.0))
+                    .map(|r| pos2(r.right() - crate::droptarget::FIRST_INSET, r.top() + 90.0))
             });
         let dt = self
             .drop_target

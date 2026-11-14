@@ -90,6 +90,7 @@ impl ChecksumDialog {
                     let sub = Hash::parse(&self.text)
                         .map(|h| {
                             crate::i18n::fmt(
+                                // i18n: Verify checksum, the file card's line under its name: which checksum was given; {algorithm} = SHA-256, MD5…
                                 crate::i18n::t("{algorithm} checksum"),
                                 &[("algorithm", h.algo.name())],
                             )
@@ -161,9 +162,8 @@ impl ChecksumDialog {
                 let status_y = y0 + 64.0;
                 if let Some((kind, icon, title)) = &banner {
                     let rc = r(o, e, status_y, W - 2.0 * e, winui::status_banner_height(0));
+                    // A long reason is cut, and shown whole on hover by the banner itself.
                     winui::status_banner(ui, rc, *kind, icon, title, "");
-                    // Whole on hover (a long reason is cut).
-                    winui::full_on_hover(ui, rc, "checksum-verdict", title);
                 }
                 let (line, color) = match (&hash, &self.check) {
                     _ if banner.is_some() => (String::new(), LIGHT_TEXT()),

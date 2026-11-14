@@ -75,15 +75,22 @@ impl Drops {
 pub struct DropTarget {
     drops: Drops,
     pos: Pos2,
+    /// Its place was checked against the screen (shown first, rescaled): the box grew to
+    /// 150 × 110, and a place saved for the old 56 × 56 one may leave it partly off the screen.
+    placed: bool,
     /// MDM_TEST_DROP's link was dropped (once).
     test_dropped: bool,
 }
+
+/// How far from the main window's right edge a first-shown box starts (its right side 34 in).
+pub const FIRST_INSET: f32 = SIZE.x + 34.0;
 
 impl DropTarget {
     pub fn new(pos: Option<Pos2>) -> Self {
         DropTarget {
             drops: Drops::default(),
             pos: pos.unwrap_or(pos2(200.0, 200.0)),
+            placed: false,
             test_dropped: false,
         }
     }
@@ -92,6 +99,7 @@ impl DropTarget {
     /// on the screen, its place being in points, and made its size at the new one.
     pub fn rescale(&mut self, ctx: &egui::Context, ratio: f32) {
         self.pos = (self.pos.to_vec2() * ratio).round().to_pos2();
+        self.placed = false;
         ctx.send_viewport_cmd_to(
             ViewportId::from_hash_of("drop-target"),
             ViewportCommand::InnerSize(SIZE),
@@ -99,6 +107,20 @@ impl DropTarget {
     }
 
     pub fn show(&mut self, ctx: &egui::Context) -> Vec<Event> {
+        // Whole on the screen it is on (its work area), once per placing.
+        if !self.placed {
+            self.placed = true;
+            if let Some(wa) = crate::scale::work_area(ctx, self.pos) {
+                self.pos = pos2(
+                    self.pos
+                        .x
+                        .clamp(wa.left(), (wa.right() - SIZE.x).max(wa.left())),
+                    self.pos
+                        .y
+                        .clamp(wa.top(), (wa.bottom() - SIZE.y).max(wa.top())),
+                );
+            }
+        }
         let mut events: Vec<Event> = self
             .drops
             .poll(ctx, TITLE)
@@ -140,12 +162,13 @@ impl DropTarget {
             } else {
                 (crate::winui::BG(), crate::theme::colors().drop_edge)
             };
-            // Rounded (radius 10), the download glyph in the accent over the line that says
-            // what it is for, centred.
-            p.rect_filled(rect, 10.0, fill);
+            // Rounded as Windows 11 rounds the window itself (about 8), so no sliver of the
+            // clear colour shows between the two curves; the download glyph in the accent over
+            // the line that says what it is for, centred.
+            p.rect_filled(rect, 8.0, fill);
             p.rect_stroke(
                 rect,
-                10.0,
+                8.0,
                 egui::Stroke::new(1.0, edge),
                 egui::StrokeKind::Inside,
             );
