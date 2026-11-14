@@ -3881,8 +3881,9 @@ fn ok_cancel(ui: &mut Ui, o: Pos2, x: f32, y: f32, valid: bool) -> Outcome<()> {
 }
 
 /// The window: the side list ([`SIDE_W`]), the page area, the footer ([`winui::footer`]).
-const W: f32 = 640.0;
-const H: f32 = 515.0;
+/// The mock's 820 x 520 (plan 08b).
+const W: f32 = 820.0;
+const H: f32 = 520.0;
 /// The side list's width (its right border at this x).
 const SIDE_W: f32 = 190.0;
 /// A side list row: its height and the gap after it, from the list's top `SIDE_TOP`.
