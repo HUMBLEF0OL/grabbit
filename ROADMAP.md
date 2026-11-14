@@ -558,7 +558,14 @@ These ship in a later version, when they're ready.
   them: Add torrent (its looking-up ring in the progress bar's colours), Torrent settings, Add
   trackers, Files already there, Download video and its playlist, Download a gallery
   (gallery-dl's answer in a banner), the video helpers' offer and Helpers, Batch download, Link
-  grabber and RSS feeds ("Add many downloads" comes with 07e's Confirm). Next: the other dialogs
+  grabber and RSS feeds, and the organising and short-question dialogs on them
+  (the Scheduler and Enter queue name, the queue's turn-off countdown, Find file, Add, edit and
+  Delete category, Confirm deletion, Redownload and the other yes-or-no questions, Check for
+  updates, About, Keyboard shortcuts, Tell a friend, Verify checksum, the crash report, Archive
+  password, 7-Zip needed, Create folder, Download limits, the notices, the browser extension's
+  offer and the drop target; "Add many downloads" is that Confirm), their keys unchanged (still
+  to come, with plan 09's polish: the Scheduler at the mockup's width and short enough for a
+  1080p screen at 200 %). Next: the Options window (plan 08)
 
 ### Bugs being looked into
 

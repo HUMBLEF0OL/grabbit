@@ -13,7 +13,7 @@ use std::time::Duration;
 use egui::{Pos2, Ui};
 
 use crate::dialogs::{Outcome, window};
-use crate::winui::{self, ButtonKind, r};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r};
 
 const W: f32 = 520.0;
 const BANNER: f32 = 84.0;
@@ -107,7 +107,7 @@ impl Extension {
             "extension",
             // i18n: title of the window that offers the browser extension
             "Add Mister Download Manager to your browser",
-            [W, h + extra],
+            [W, h - 32.0 + winui::FOOTER_H + extra],
             false,
             winui::BG(),
             |ui, o| {
@@ -266,8 +266,6 @@ impl Extension {
         if !line.is_empty() {
             winui::paragraph(&p, o.x + 18.0, o.y + y, &line, color, o.x + W - 18.0, 14.0);
         }
-        winui::etched_h(&p, o.x + 16.0, o.y + h - 46.0, W - 32.0);
-        let y = h - 36.0;
         // The fallback, when a store can't be used (a managed browser, a store turned off): the
         // tutorial, which adds it by hand.
         if store.is_some()
@@ -275,7 +273,7 @@ impl Extension {
                 ui,
                 &p,
                 o.x + 18.0,
-                o.y + y + 17.0,
+                o.y + h - 48.0,
                 // i18n: link in the browser extension's window: the tutorial that adds it without the browser's store
                 "Install it by hand",
                 "by-hand",
@@ -283,39 +281,21 @@ impl Extension {
         {
             crate::help::open_page(mdm_ipc::extension::GUIDE_DOC);
         }
-        // As wide as their labels in this language (#192), Don't ask again only while no
-        // extension has reached MDM.
-        let row: Vec<(&str, f32)> = if self.connected {
-            vec![("Close", 90.0)]
-        } else {
-            vec![("Don't ask again", 130.0), ("Close", 90.0)]
-        };
-        let placed = winui::buttons_to_right(&p, W - 18.0, 8.0, &row, 200.0);
-        let close_at = placed[placed.len() - 1];
-        let close = winui::button(
-            ui,
-            r(o, close_at.0, y, close_at.1, 25.0),
-            "Close",
-            ButtonKind::Default,
-            false,
-            None,
-        );
-        if close.clicked() || winui::enter_pressed(ui) {
-            *answer = Some(false);
-        }
+        // The footer: Don't ask again (quiet, at its start) only while no extension has reached
+        // MDM, and Close, which Enter presses, as before (Escape closes it too, in `show`).
+        let mut items = vec![FooterItem::Button(
+            FooterButton::new("Close", ButtonKind::Default).enter(true),
+        )];
         if !self.connected {
             // i18n: button in the browser extension's window: stop offering it at each start
-            let never = winui::button(
-                ui,
-                r(o, placed[0].0, y, placed[0].1, 25.0),
-                "Don't ask again",
-                ButtonKind::Normal,
-                false,
-                None,
-            );
-            if never.clicked() {
-                *answer = Some(true);
-            }
+            items.push(FooterItem::Button(
+                FooterButton::new("Don't ask again", ButtonKind::Ghost).leading(),
+            ));
+        }
+        match winui::footer(ui, o, W, h - 32.0, &mut items) {
+            Some(0) => *answer = Some(false),
+            Some(_) => *answer = Some(true),
+            None => {}
         }
     }
 }

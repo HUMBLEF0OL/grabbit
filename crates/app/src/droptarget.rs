@@ -12,7 +12,8 @@ use egui::{Pos2, ViewportCommand, ViewportId, pos2, vec2};
 
 /// The window's title (its OLE target is found by it).
 const TITLE: &str = "Mister Download Manager drop target"; // not translated: an id
-const SIZE: f32 = 56.0;
+/// The box (Graphite's, the mockup's): its download glyph over its line.
+const SIZE: egui::Vec2 = vec2(150.0, 110.0);
 
 /// What was dropped: an address or a file path.
 pub type Dropped = String;
@@ -74,15 +75,22 @@ impl Drops {
 pub struct DropTarget {
     drops: Drops,
     pos: Pos2,
+    /// Its place was checked against the screen (shown first, rescaled): the box grew to
+    /// 150 × 110, and a place saved for the old 56 × 56 one may leave it partly off the screen.
+    placed: bool,
     /// MDM_TEST_DROP's link was dropped (once).
     test_dropped: bool,
 }
+
+/// How far from the main window's right edge a first-shown box starts (its right side 34 in).
+pub const FIRST_INSET: f32 = SIZE.x + 34.0;
 
 impl DropTarget {
     pub fn new(pos: Option<Pos2>) -> Self {
         DropTarget {
             drops: Drops::default(),
             pos: pos.unwrap_or(pos2(200.0, 200.0)),
+            placed: false,
             test_dropped: false,
         }
     }
@@ -91,13 +99,28 @@ impl DropTarget {
     /// on the screen, its place being in points, and made its size at the new one.
     pub fn rescale(&mut self, ctx: &egui::Context, ratio: f32) {
         self.pos = (self.pos.to_vec2() * ratio).round().to_pos2();
+        self.placed = false;
         ctx.send_viewport_cmd_to(
             ViewportId::from_hash_of("drop-target"),
-            ViewportCommand::InnerSize(vec2(SIZE, SIZE)),
+            ViewportCommand::InnerSize(SIZE),
         );
     }
 
-    pub fn show(&mut self, ctx: &egui::Context, icon: &egui::ImageSource<'static>) -> Vec<Event> {
+    pub fn show(&mut self, ctx: &egui::Context) -> Vec<Event> {
+        // Whole on the screen it is on (its work area), once per placing.
+        if !self.placed {
+            self.placed = true;
+            if let Some(wa) = crate::scale::work_area(ctx, self.pos) {
+                self.pos = pos2(
+                    self.pos
+                        .x
+                        .clamp(wa.left(), (wa.right() - SIZE.x).max(wa.left())),
+                    self.pos
+                        .y
+                        .clamp(wa.top(), (wa.bottom() - SIZE.y).max(wa.top())),
+                );
+            }
+        }
         let mut events: Vec<Event> = self
             .drops
             .poll(ctx, TITLE)
@@ -120,7 +143,7 @@ impl DropTarget {
             // Our own OLE target takes links and files.
             .with_drag_and_drop(false)
             .with_position(self.pos)
-            .with_inner_size(vec2(SIZE, SIZE));
+            .with_inner_size(SIZE);
         let over = self.drops.over();
         let vid = ViewportId::from_hash_of("drop-target");
         let mut styled = false;
@@ -139,31 +162,58 @@ impl DropTarget {
             } else {
                 (crate::winui::BG(), crate::theme::colors().drop_edge)
             };
-            p.rect_filled(rect, 0.0, fill);
+            // Rounded as Windows 11 rounds the window itself (about 8), so no sliver of the
+            // clear colour shows between the two curves; the download glyph in the accent over
+            // the line that says what it is for, centred.
+            p.rect_filled(rect, 8.0, fill);
             p.rect_stroke(
                 rect,
-                0.0,
+                8.0,
                 egui::Stroke::new(1.0, edge),
                 egui::StrokeKind::Inside,
             );
-            egui::Image::new(icon.clone()).paint_at(
+            let say = crate::i18n::t("Drag links here to download them");
+            let lines = crate::winui::wrap_lines(p, say, rect.width() - 24.0);
+            let line_h = 15.0;
+            let glyph = 26.0;
+            let block = glyph + 6.0 + line_h * lines.len() as f32;
+            let top = (rect.center().y - block / 2.0).round();
+            crate::themeicons::paint_graphite_in(
                 ui,
-                egui::Rect::from_center_size(rect.center(), vec2(40.0, 40.0)),
+                p,
+                "gx-download",
+                egui::Rect::from_center_size(
+                    pos2(rect.center().x, top + glyph / 2.0),
+                    vec2(glyph, glyph),
+                ),
+                crate::winui::accent(),
             );
+            let ink = crate::theme::colors().text_secondary;
+            for (i, line) in lines.iter().enumerate() {
+                let w = crate::winui::text_width(p, line);
+                crate::winui::text_at(
+                    p,
+                    crate::winui::tahoma(),
+                    (rect.center().x - w / 2.0).round(),
+                    top + glyph + 6.0 + line_h * (i as f32 + 1.0) - 4.0,
+                    line,
+                    ink,
+                );
+            }
             let resp = ui
                 .interact(
                     rect,
                     ui.scope_id().with("drop-target"),
                     crate::winui::pointer_drag(),
                 )
-                .on_hover_text(crate::i18n::t("Drag links here to download them"));
+                .on_hover_text(say);
             if resp.drag_started() {
                 ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
             }
             if resp.double_clicked() {
                 events.push(Event::ShowMain);
             }
-            // The menu is the app's (a 56 px window can't hold one).
+            // The menu is the app's (a box this small can't hold one).
             if resp.secondary_clicked()
                 && let (Some(at), Some(win)) = (
                     resp.interact_pointer_pos(),
@@ -188,6 +238,6 @@ impl DropTarget {
     /// The middle of the box (screen, logical points): where a right-click opens its menu in
     /// the off-screen checks (`/show drop-target-menu`).
     pub fn center(&self) -> Pos2 {
-        self.pos + vec2(SIZE, SIZE) / 2.0
+        self.pos + SIZE / 2.0
     }
 }
