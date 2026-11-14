@@ -573,7 +573,10 @@ These ship in a later version, when they're ready.
   to come, with plan 09's polish: the Scheduler at the mockup's width and short enough for a
   1080p screen at 200 %), and the help pages, the website's Themes page, its theme prompt and
   llms.txt describing Graphite as the only look (its picture there comes with the new
-  screenshots). Next: the Options window (plan 08)
+  screenshots), and the Options window's pages listed down the side (each with its icon and
+  title at the top, OK and Help in a footer; Up and Down added to its keys, and Ctrl+Shift+Tab
+  going back a page). Next: the Options pages on the dialogs' common parts and their windows
+  (plan 08b)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:

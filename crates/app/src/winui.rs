@@ -5603,10 +5603,11 @@ pub fn tab_keys(ui: &Ui, n: usize, current: usize) -> Option<usize> {
     let (next, prev) = ui.input_mut(|i| {
         let ctrl = egui::Modifiers::COMMAND;
         let ctrl_shift = egui::Modifiers::COMMAND | egui::Modifiers::SHIFT;
-        (
-            i.consume_key(ctrl, egui::Key::Tab) || i.consume_key(ctrl, egui::Key::PageDown),
-            i.consume_key(ctrl_shift, egui::Key::Tab) || i.consume_key(ctrl, egui::Key::PageUp),
-        )
+        // Ctrl+Shift+Tab first: `consume_key` ignores Shift, so Ctrl+Tab's would take it too.
+        let prev =
+            i.consume_key(ctrl_shift, egui::Key::Tab) || i.consume_key(ctrl, egui::Key::PageUp);
+        let next = i.consume_key(ctrl, egui::Key::Tab) || i.consume_key(ctrl, egui::Key::PageDown);
+        (next, prev)
     });
     match (next, prev) {
         (true, _) => Some((current + 1) % n),
