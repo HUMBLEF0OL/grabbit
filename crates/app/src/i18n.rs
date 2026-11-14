@@ -243,7 +243,10 @@ mod tests {
         let title = format!("71% {}", isolate("TeraLace_1.2.3_universal.apk"));
         assert_eq!(os_text(&title), "71% TeraLace_1.2.3_universal.apk");
         // No isolate: untouched.
-        assert_eq!(os_text("Mister Download Manager"), "Mister Download Manager");
+        assert_eq!(
+            os_text("Mister Download Manager"),
+            "Mister Download Manager"
+        );
         assert_eq!(os_text("مدير التنزيل"), "مدير التنزيل");
         let cases = [
             // A Hebrew or Arabic name can't pull "71%" over to its side.
