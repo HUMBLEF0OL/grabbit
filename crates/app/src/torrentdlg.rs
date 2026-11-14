@@ -19,7 +19,7 @@ use crate::winui::{self, ButtonKind, FooterButton, FooterItem, fill_l as fill, r
 
 /// Add torrent's width, and where its footer starts (under "Files go to").
 const ADD_W: f32 = 600.0;
-const ADD_BODY: f32 = 474.0;
+const ADD_BODY: f32 = 424.0;
 /// Torrent settings' and Add trackers' widths and footers (where their OK rows were).
 const SETTINGS_W: f32 = 480.0;
 const SETTINGS_BODY: f32 = 448.0;
@@ -584,7 +584,8 @@ impl TorrentDialog {
             }
         }
 
-        self.file_list(ui, r(o, lx, 94.0, right - lx, 250.0));
+        // 200 tall (11 rows), so the window fits a 1080p screen at 200 % as before.
+        self.file_list(ui, r(o, lx, 94.0, right - lx, 200.0));
 
         // Select all / none, each as wide as its label (#192), and what is chosen.
         let has = self.meta.is_some();
@@ -593,7 +594,7 @@ impl TorrentDialog {
         let (all_at, none_at) = ((lx, all_w), (lx + all_w + 8.0, none_w));
         if winui::button(
             ui,
-            r(o, all_at.0, 358.0, all_at.1, h),
+            r(o, all_at.0, 308.0, all_at.1, h),
             "Select all",
             kind(has, false),
             false,
@@ -606,7 +607,7 @@ impl TorrentDialog {
         }
         if winui::button(
             ui,
-            r(o, none_at.0, 358.0, none_at.1, h),
+            r(o, none_at.0, 308.0, none_at.1, h),
             "Select none",
             kind(has, false),
             false,
@@ -621,7 +622,7 @@ impl TorrentDialog {
             winui::text_right(
                 &p,
                 o.x + right,
-                o.y + winui::baseline_in(358.0, h),
+                o.y + winui::baseline_in(308.0, h),
                 &crate::i18n::fmt(
                     // i18n: the files chosen: {files} = "3 files", {size} = their total size
                     crate::i18n::t("Selected: {files}, {size}"),
@@ -638,10 +639,10 @@ impl TorrentDialog {
         }
 
         // Where.
-        winui::form_label(&p, o, lx, 402.0, h, "Save to", true);
+        winui::form_label(&p, o, lx, 352.0, h, "Save to", true);
         if winui::edit(
             ui,
-            r(o, fx, 402.0, right - h - 8.0 - fx, h),
+            r(o, fx, 352.0, right - h - 8.0 - fx, h),
             &mut self.folder,
             true,
             false,
@@ -651,7 +652,7 @@ impl TorrentDialog {
             self.folder_edited = true;
         }
         // i18n: tooltip of the "..." after Save to: choose the folder
-        if winui::icon_only_button(ui, r(o, right - h, 402.0, h, h), "gx-dots", "Browse", true)
+        if winui::icon_only_button(ui, r(o, right - h, 352.0, h, h), "gx-dots", "Browse", true)
             .clicked()
         {
             let from = self.folder.clone();
@@ -671,7 +672,7 @@ impl TorrentDialog {
                 &[("folder", &crate::i18n::ltr(&goes.display().to_string()))],
             );
             let (rect, cut) =
-                winui::text_fit(&p, o.x + fx, o.y + 456.0, &s, winui::MUTED(), o.x + right);
+                winui::text_fit(&p, o.x + fx, o.y + 406.0, &s, winui::MUTED(), o.x + right);
             if cut {
                 winui::full_on_hover(ui, rect, "torrent-goes", &s);
             }
@@ -1143,7 +1144,8 @@ impl TorrentSettings {
                     o.x + 456.0,
                     ("torrent-settings", 2),
                 );
-                winui::rule(&p, o, 14.0, 150.0, SETTINGS_W - 28.0);
+                // As far as the rows go (456), as the etched line did.
+                winui::rule(&p, o, 14.0, 150.0, 442.0);
                 let n = &mut self.net;
                 winui::checkbox(
                     ui,

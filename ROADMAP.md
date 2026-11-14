@@ -558,7 +558,7 @@ These ship in a later version, when they're ready.
   them: Add torrent (its looking-up ring in the progress bar's colours), Torrent settings, Add
   trackers, Files already there, Download video and its playlist, Download a gallery
   (gallery-dl's answer in a banner), the video helpers' offer and Helpers, Batch download, Link
-  grabber and RSS feeds. Next: the other dialogs
+  grabber and RSS feeds ("Add many downloads" comes with 07e's Confirm). Next: the other dialogs
 
 ### Bugs being looked into
 

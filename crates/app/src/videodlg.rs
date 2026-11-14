@@ -888,13 +888,14 @@ impl VideoDialog {
             (true, false) => ButtonKind::Normal,
         };
         // Why Download Now is greyed: each reason that holds, one a line (as both showed before).
+        // English keys here: the footer's tip translates what it is given, once.
         let why = [
             // i18n: why Download Now is greyed: the page address was changed after the look-up
-            (stale, crate::i18n::t("Look up the new address first")),
+            (stale, crate::i18n::mark("Look up the new address first")),
             // i18n: why Download Now is greyed: a playlist's videos are still being listed
             (
                 listing,
-                crate::i18n::t("Wait for the list, or stop listing"),
+                crate::i18n::mark("Wait for the list, or stop listing"),
             ),
         ]
         .iter()

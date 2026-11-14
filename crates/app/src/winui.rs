@@ -3873,7 +3873,6 @@ pub fn footer_trailing_left(client_w: f32, widths: &[f32]) -> f32 {
 /// can be ticked now (greyed otherwise, as Add torrent's until it has files).
 pub enum FooterItem<'a> {
     Button(FooterButton<'a>),
-    #[allow(dead_code)] // ponytail: first used by the 07d-07e waves
     Check(&'a str, &'a mut bool, bool),
 }
 
@@ -4051,8 +4050,6 @@ pub fn form_label(p: &Painter, o: Pos2, x: f32, top: f32, h: f32, label: &str, e
 
 /// A hairline across English `x`..`x + w` at `y` (window-relative to `o`): what groups a
 /// form's rows where a group box was.
-// ponytail: first used by the 07c-07e waves (the kit ships with 07b, plan 07a).
-#[allow(dead_code)]
 pub fn rule(p: &Painter, o: Pos2, x: f32, y: f32, w: f32) {
     let line = crate::theme::colors().menubar_line;
     fill_l(p, o.x + x, o.y + y, o.x + x + w - 1.0, o.y + y, line);
@@ -4141,9 +4138,8 @@ pub fn icon_only_button(ui: &mut Ui, rc: Rect, need: &str, tip: &str, enabled: b
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BannerKind {
     Error,
-    #[allow(dead_code)] // ponytail: first used by the 07d-07e waves
     Info,
-    #[allow(dead_code)] // ponytail: first used by the 07d-07e waves
+    #[allow(dead_code)] // ponytail: first used by the 07e wave
     Warning,
 }
 
@@ -4183,7 +4179,6 @@ pub fn status_banner(
 }
 
 /// How tall a [`status_banner`] is whose `sub` takes `lines` lines (none: a title alone).
-#[allow(dead_code)] // ponytail: first used by the 07c-07e waves
 pub fn status_banner_height(lines: usize) -> f32 {
     if lines == 0 {
         37.0

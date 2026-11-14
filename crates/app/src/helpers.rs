@@ -16,7 +16,7 @@ use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r};
 const OFFER_FOOTER: f32 = 30.0;
 /// Helpers' width, and where its footer starts (under the error line).
 const PROGRAMS_W: f32 = 500.0;
-const PROGRAMS_BODY: f32 = 262.0;
+const PROGRAMS_BODY: f32 = 280.0;
 
 /// The helpers' download, one after the other (user decision 2026-11-01: one at a time, one
 /// progress bar for both).
@@ -471,9 +471,10 @@ impl Programs {
         let p = ui.painter().clone();
         let c = crate::theme::colors();
         for (k, h) in HELPERS.into_iter().enumerate() {
-            let y = o.y + 8.0 + k as f32 * 78.0;
-            // Each helper in a box of its own (the mockup's), its parts 12 inside.
-            let card = r(o, 8.0, y - o.y, PROGRAMS_W - 16.0, 73.0);
+            let y = o.y + 8.0 + k as f32 * 84.0;
+            // Each helper in a box of its own (the mockup's), its parts 12 inside (its buttons
+            // end at 67 of its 79).
+            let card = r(o, 8.0, y - o.y, PROGRAMS_W - 16.0, 79.0);
             p.rect_filled(card, 8.0, c.panel);
             p.rect_stroke(
                 card,
@@ -603,8 +604,9 @@ impl Programs {
             winui::fit(
                 ui,
                 &p,
-                o.x + 14.0,
-                o.y + 254.0,
+                // In the cards' text column, under the last card (it ends at 255).
+                o.x + 20.0,
+                o.y + 272.0,
                 e,
                 winui::ERROR(),
                 o.x + 486.0,

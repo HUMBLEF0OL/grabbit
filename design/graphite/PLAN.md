@@ -99,7 +99,8 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
 - [ ] 07c Watching and finishing (`ui/07c-watching-finishing`, until it is merged; the error
       state's and the tab row menu's `/show` are left)
 - [ ] 07d Torrents, video and more (in `ui/07d-torrents-video`, until it is merged; the torrent
-      window keeps its five tabs and pieces grid, its frame is 07c's progress window)
+      window keeps its five tabs and pieces grid, its frame is 07c's progress window; "Add many
+      downloads" is the shared Confirm, done with 07e)
 - [ ] 07e Organising and the rest
 - [ ] 08a Options side list
 - [ ] 08b Options pages

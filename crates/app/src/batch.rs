@@ -294,7 +294,9 @@ impl Batch {
         // i18n: label before the last value of the range (an input box follows)
         let to_label = crate::i18n::t("To:");
         let to_label_x = fx + 70.0 + 12.0;
-        text(&p, o.x + to_label_x, base, to_label, LIGHT_TEXT());
+        // In the form labels' colour, as From: beside it.
+        let label_ink = crate::theme::colors().text_secondary;
+        text(&p, o.x + to_label_x, base, to_label, label_ink);
         let to_x = (to_label_x + winui::text_width(&p, to_label) + 8.0).ceil();
         self.spin(ui, o, to_x, 70.0, "to");
         // The size box at the row's end; a longer label is cut with "..." before it, whole on
@@ -306,7 +308,7 @@ impl Batch {
             o.x + to_x + 70.0 + 12.0,
             base,
             size_label,
-            LIGHT_TEXT(),
+            label_ink,
             o.x + size_x,
             o.x + to_x + 70.0 + 12.0,
         );
