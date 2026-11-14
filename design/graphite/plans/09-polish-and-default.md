@@ -84,6 +84,11 @@ Line numbers drift as phases land: find each item by its name first.
    Default buttons, `paint_button` fills with two stops (`button.accent.top` at the top,
    `button.accent` at the bottom) through `fill_shaded`; the progress fill runs left to right
    `progress.bar` → `progress.bar.end` (a horizontal variant of `fill_shaded`, or two meshes).
+   As built (09a1): only filled buttons (`ButtonKind::Accent`, which a footer's Default becomes)
+   are shaded; a Default button outside a footer is outlined in Graphite, so it has no face to
+   shade. The glow follows the mock rather than one shadow for both: under a filled button
+   `0 6px 18px -8px` (narrower than the face, 6 lower, blur 12); round a progress fill
+   `0 0 10px` (grown by 4, blur 10, since egui caps a blur at the rect's smaller side).
 2. **Glow (dark only)**: a soft shadow under the default button and the progress fill in the `glow`
    role (about 35% alpha), drawn with `epaint::Shadow` (blur 12, offset y 4). Graphite light sets `glow`
    transparent, so nothing is drawn.
@@ -99,6 +104,20 @@ Line numbers drift as phases land: find each item by its name first.
    - Nothing here needs the theme's colours any more: no `accent` → `button.accent` tile, no radius.
 4. **Cost check**: frame time of the main window with 1,000 rows and 10 running downloads, before and
    after, in Graphite dark. Budget: no more than 5% slower; otherwise ship flat (remove the glow first).
+   **Measured (09a1)**, as 04 did: a release build with a temporary probe (not kept), the main
+   window off the screens with 1,000 downloads (990 queued, 10 running from the lab server at
+   about 200 KB/s each), continuous repaints, Graphite dark switched live through `/show theme:`
+   between Graphite and a theme file inheriting it with `button = "fluent"`, `progress = "line"`
+   (today's flat look), eight rounds of 25 s each; the mean of every 600 frames' `unstable_dt` and
+   of the main window's `ui` CPU time:
+
+   | Graphite | `unstable_dt` mean | Frame CPU mean |
+   | --- | --- | --- |
+   | flat (before) | 17.482 ms | 15.638 ms |
+   | two-tone and glow | 17.234 ms (−1.4 %) | 15.414 ms (−1.4 %) |
+
+   Within the run's noise (each mean drifts by about ±10 % over the run): the budget is met and
+   the glow stays.
 5. **Full review**: every mock state, light and dark, at 100% and 150%, side by side with the mock; a
    list of differences fixed or recorded as follow-ups. It includes:
    - a contrast pass with the real colours (the WCAG tests in `palette.rs` plus a manual check of greyed text);

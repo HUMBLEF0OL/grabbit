@@ -590,7 +590,9 @@ These ship in a later version, when they're ready.
   plan 09's polish: Options short enough for a 1080p screen at 200 %, banners that wrap their
   title and that screen readers read, the side list as a list for screen readers, greyed icon
   buttons' icons greyed, Pair a device centred, Add an account's hint box sized to its text).
-  Next: the finish and review (plan 09)
+  And the finish: filled buttons shaded from a lighter cyan at their top and progress bars
+  shaded along their fill, glowing in dark mode.
+  Next: the review (plan 09)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:
