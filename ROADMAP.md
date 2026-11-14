@@ -546,7 +546,10 @@ These ship in a later version, when they're ready.
   followed again once a high-contrast Graphite comes back), and the paste bar and details pane
   (an address box under the toolbar that adds a download as Add URL's OK does, and a pane beside
   the list with the selected download, its progress and its buttons; both shown or hidden in
-  **View**, the pane also with the toolbar's **Details**). Next: the dialogs
+  **View**, the pane also with the toolbar's **Details**), and the dialogs' common parts (a
+  footer with the default button last, a label column, a file card, status banners) with the
+  first dialogs laid out on them: Add URL, Download File Info, Download later and Duplicate
+  download link, their keys unchanged. Next: the other dialogs
 
 ### Bugs being looked into
 

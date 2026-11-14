@@ -92,8 +92,10 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
 - [x] 06a Paste bar (complete, PR 18 merged 2026-11-13)
 - [x] 06b Details pane (complete, in PR 18 with 06a, merged 2026-11-13; the on-screen
       keyboard and Narrator pass is left to 09a, see its plan's "Left from 06")
-- [ ] 07a Dialog kit
-- [ ] 07b Adding
+- [ ] 07a Dialog kit (in the 07b PR, `ui/07b-dialog-kit-adding`, until it is merged; step 8's
+      "Escape in the progress window leaves the download running" test comes with 07c)
+- [ ] 07b Adding (Add URL, Download File Info, Download later, Duplicate download link; in PR,
+      until it is merged)
 - [ ] 07c Watching and finishing
 - [ ] 07d Torrents, video and more
 - [ ] 07e Organising and the rest

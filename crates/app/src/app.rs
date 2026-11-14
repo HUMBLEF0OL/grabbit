@@ -2227,6 +2227,11 @@ impl App {
         let (window, tab) = name.split_once(':').unwrap_or((name, ""));
         match window {
             "addurl" => self.run(Cmd::AddUrl, None, ctx),
+            // Download Later's queue selection panel, for no download (the screenshots').
+            "later" if self.queue_pick.is_none() => {
+                let names = self.queues.iter().map(|q| q.name.clone()).collect();
+                self.queue_pick = Some((Vec::new(), dialogs::QueuePick::new(names)));
+            }
             // The paste bar with an address put in and submitted, as its Enter does (plan 06's
             // "Adding a download" screenshots): `paste:https://example.org/a.zip` opens Download
             // File Info, a rejected one shows "Invalid address". The bar is turned on as View →
@@ -8671,8 +8676,11 @@ impl App {
                 // Cancel: the downloads stay in the list, in no queue.
                 Outcome::Closed => self.queue_pick = None,
                 Outcome::Done((q, start)) => {
+                    // No downloads (`/show later`'s, for the screenshots): nothing to queue or
+                    // start; queue_later never opens it without one.
                     if let Some((ids, _)) = self.queue_pick.take()
                         && q < self.queues.len()
+                        && !ids.is_empty()
                     {
                         for id in ids {
                             if !self.queues[q].items.contains(&id) {
@@ -9162,7 +9170,7 @@ impl App {
             // The downloads waiting their turn behind this one (a browser selection's arrive
             // one by one): Cancel asks whether they are cancelled too (#394).
             fi.waiting = self.file_info_waiting.len();
-            let out = fi.show(ctx, &mut self.icons);
+            let out = fi.show(ctx);
             if std::mem::take(&mut fi.new_category) {
                 self.category_for_file_info = true;
                 self.run(Cmd::AddCategory, None, ctx);
