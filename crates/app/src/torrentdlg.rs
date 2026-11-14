@@ -15,7 +15,11 @@ use crate::dialogs::{Outcome, window};
 use crate::model::{Category, category_folder};
 use crate::torrents::Host;
 // `fill` takes English pixels (made where they are on screen), `text` an English pen.
-use crate::winui::{self, ButtonKind, fill_l as fill, r, text};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, fill_l as fill, r, text};
+
+/// Add torrent's width, and where its footer starts (under "Files go to").
+const ADD_W: f32 = 600.0;
+const ADD_BODY: f32 = 420.0;
 
 /// How long a magnet may take to get its file list from peers.
 pub const METADATA_WAIT: Duration = Duration::from_secs(180);
@@ -392,7 +396,7 @@ impl TorrentDialog {
             ctx,
             "add-torrent",
             "Add torrent",
-            [600.0, 460.0],
+            [ADD_W, ADD_BODY + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| self.body(ui, o, rt),
@@ -469,13 +473,13 @@ impl TorrentDialog {
             edit.request_focus();
             self.focused = true;
         }
-        let browse = winui::button(
+        // i18n: tooltip of the "..." after the torrent: choose a .torrent file
+        let browse = winui::icon_only_button(
             ui,
             r(o, 486.0, 9.0, 22.0, 21.0),
-            "...",
-            kind(!busy, false),
-            false,
-            None,
+            "gx-dots",
+            "Browse",
+            !busy,
         )
         .clicked();
         if browse && !busy {
@@ -495,9 +499,10 @@ impl TorrentDialog {
         }
         let can_look = !busy && !self.source.trim().is_empty();
         // While it looks up, the button stops it (a magnet with no peers took up to 3 minutes).
-        let look = winui::button(
+        let look = winui::button_icon(
             ui,
             r(o, 514.0, 9.0, 75.0, 21.0),
+            (!busy).then_some("gx-search"),
             // i18n: button: stop looking the torrent up
             if busy {
                 crate::i18n::mark("Stop")
@@ -642,15 +647,9 @@ impl TorrentDialog {
         {
             self.folder_edited = true;
         }
-        if winui::button(
-            ui,
-            r(o, 567.0, 361.0, 22.0, 21.0),
-            "...",
-            ButtonKind::Normal,
-            false,
-            None,
-        )
-        .clicked()
+        // i18n: tooltip of the "..." after Save to: choose the folder
+        if winui::icon_only_button(ui, r(o, 567.0, 361.0, 22.0, 21.0), "gx-dots", "Browse", true)
+            .clicked()
         {
             let from = self.folder.clone();
             winui::start_pick(ui.ctx(), "torrent-folder", move || {
@@ -675,65 +674,47 @@ impl TorrentDialog {
             }
         }
 
-        // The bottom row, each button as wide as its label in this language (#192).
-        let [now_at, later_at, cancel_at] = winui::buttons_to_right(
-            &p,
-            589.0,
-            6.0,
-            &[("Download Now", 105.0), ("Later", 91.0), ("Cancel", 91.0)],
-            160.0,
-        )[..] else {
-            unreachable!("three buttons")
-        };
+        // The footer: Enter Download Now (while it can), Escape Cancel, as before.
+        let ready = has && count > 0 && !self.folder.trim().is_empty() && !busy;
+        let pressed = winui::footer(
+            ui,
+            o,
+            ADD_W,
+            ADD_BODY,
+            &mut [
+                FooterItem::Button(
+                    FooterButton::new("Download Now", kind(ready, true)).enter(ready),
+                ),
+                FooterItem::Button(
+                    // i18n: button: add it now, start downloading later
+                    FooterButton::new("Later", kind(ready, false)),
+                ),
+                FooterItem::Button(FooterButton::new("Cancel", ButtonKind::Normal).escape(true)),
+            ],
+        );
         // #39: its files' start first, to watch a video while it downloads (also later, from
-        // its right-click menu). Its caption stops before the buttons.
+        // its right-click menu). At the footer's start, greyed until there are files; drawn
+        // over the footer's band (the kit's check has no greyed state).
         winui::checkbox_until(
             ui,
-            pos2(o.x + 14.0, o.y + 432.0),
+            pos2(
+                o.x + winui::EDGE,
+                o.y + ADD_BODY + ((winui::FOOTER_H - 13.0) / 2.0).round(),
+            ),
             &mut self.in_order,
             // i18n: Add torrent, a checkbox: download the files from their start, to watch a video while it downloads
             "Download in order",
             has,
-            Some(o.x + now_at.0),
+            Some(o.x + ADD_W / 2.0 - 40.0),
         );
-        let ready = has && count > 0 && !self.folder.trim().is_empty() && !busy;
-        let now = winui::button(
-            ui,
-            r(o, now_at.0, 428.0, now_at.1, 21.0),
-            "Download Now",
-            kind(ready, true),
-            false,
-            None,
-        )
-        .clicked()
-            || (ready && winui::enter_pressed(ui));
-        let later = winui::button(
-            ui,
-            r(o, later_at.0, 428.0, later_at.1, 21.0),
-            // i18n: button: add it now, start downloading later
-            "Later",
-            kind(ready, false),
-            false,
-            None,
-        )
-        .clicked();
-        let cancel = winui::button(
-            ui,
-            r(o, cancel_at.0, 428.0, cancel_at.1, 21.0),
-            "Cancel",
-            ButtonKind::Normal,
-            false,
-            None,
-        )
-        .clicked();
-        if cancel || winui::escape_pressed(ui) {
-            return Outcome::Closed;
+        match pressed {
+            Some(2) => Outcome::Closed,
+            Some(k) if ready => {
+                self.start_now = Some(k == 0);
+                Outcome::Done(())
+            }
+            _ => Outcome::Open,
         }
-        if ready && (now || later) {
-            self.start_now = Some(now);
-            return Outcome::Done(());
-        }
-        Outcome::Open
     }
 
     fn selection(&self) -> (usize, u64) {

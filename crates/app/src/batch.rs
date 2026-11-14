@@ -4,7 +4,11 @@
 use egui::{Pos2, Ui, vec2};
 
 use crate::dialogs::{Outcome, window};
-use crate::winui::{self, ButtonKind, LIGHT_BG, LIGHT_TEXT, r, text};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, LIGHT_BG, LIGHT_TEXT, r, text};
+
+/// The window's width and where its footer starts (the old OK row's top, less its margin).
+const W: f32 = 474.0;
+const BODY: f32 = 346.0;
 
 pub struct Batch {
     address: String,
@@ -161,7 +165,7 @@ impl Batch {
             ctx,
             "batch",
             "Batch download",
-            [474.0, 387.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
             |ui, o| self.body(ui, o, urls, why),
@@ -238,11 +242,9 @@ impl Batch {
         // i18n: group box title: what the * in the address is replaced with (numbers or letters)
         let caption = crate::i18n::t("Replace asterisk to");
         let cw = winui::text_width(&p, caption);
-        winui::group_box(
-            &p,
-            r(o, 11.0, 110.0, 453.0, 82.0),
-            Some((o.x + 18.0, o.x + 22.0 + cw)),
-        );
+        // A hairline after the caption groups the row (it was a group box).
+        let after = (28.0 + cw).ceil();
+        winui::rule(&p, o, after, 110.0, 464.0 - after);
         text(&p, o.x + 20.0, o.y + 114.0, caption, LIGHT_TEXT());
         // i18n: the * in the address runs through numbers
         let numbers = winui::radio_light(ui, o + vec2(23.0, 129.0), !self.letters, "Numbers", true);
@@ -294,18 +296,9 @@ impl Batch {
         }
         self.spin(ui, o, 402.0, 429.0, "size");
 
-        // Use authorization (the group's title is the checkbox).
-        winui::group_box(
-            &p,
-            r(o, 11.0, 211.0, 453.0, 40.0),
-            Some(winui::caption_gap(
-                &p,
-                o.x + 20.0,
-                o.x + 124.0,
-                "Use authorization",
-                true,
-            )),
-        );
+        // Use authorization: a hairline after the check box groups its row (it was a group box).
+        let after = winui::checkbox_caption_end(&p, 20.0, "Use authorization").ceil() + 8.0;
+        winui::rule(&p, o, after, 211.0, 464.0 - after);
         winui::checkbox_light(
             ui,
             o + vec2(20.0, 205.0),
@@ -373,32 +366,29 @@ impl Batch {
         }
 
         let valid = !urls.is_empty();
-        let ok = winui::button_light(
-            ui,
-            r(o, 274.0, 354.0, 73.0, 21.0),
-            "OK",
-            if valid {
-                ButtonKind::Default
-            } else {
-                ButtonKind::Disabled
-            },
-            false,
-        );
-        let ok = winui::why_disabled(ok, !valid, why.unwrap_or("")).clicked();
-        let cancel = winui::button_light(
-            ui,
-            r(o, 372.0, 354.0, 73.0, 21.0),
-            "Cancel",
-            ButtonKind::Normal,
-            false,
-        )
-        .clicked();
-        if cancel || winui::escape_pressed(ui) {
-            Outcome::Closed
-        } else if valid && (ok || winui::enter_pressed(ui)) {
-            Outcome::Done(())
+        let ok_kind = if valid {
+            ButtonKind::Default
         } else {
-            Outcome::Open
+            ButtonKind::Disabled
+        };
+        // Enter OK (a greyed OK ignores it), Escape Cancel, as before.
+        match winui::footer(
+            ui,
+            o,
+            W,
+            BODY,
+            &mut [
+                FooterItem::Button(
+                    FooterButton::new("OK", ok_kind)
+                        .enter(true)
+                        .tip(!valid, why.unwrap_or("")),
+                ),
+                FooterItem::Button(FooterButton::new("Cancel", ButtonKind::Normal).escape(true)),
+            ],
+        ) {
+            Some(1) => Outcome::Closed,
+            Some(_) if valid => Outcome::Done(()),
+            _ => Outcome::Open,
         }
     }
 
