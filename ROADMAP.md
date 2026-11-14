@@ -571,6 +571,11 @@ These ship in a later version, when they're ready.
   1080p screen at 200 %), and the help pages, the website's Themes page, its theme prompt and
   llms.txt describing Graphite as the only look (its picture there comes with the new
   screenshots). Next: the Options window (plan 08)
+- 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
+  and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
+  carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:
+  a checker that lists every place the old name is still shown (`tools/rename/check.py`) and the
+  plan refreshed against today's code
 
 ### Bugs being looked into
 
