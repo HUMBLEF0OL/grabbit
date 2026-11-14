@@ -6,10 +6,59 @@ Adds the finishing touches the theme shipped without (the two-tone hot colour an
 does a full review against the mockup, and finishes Graphite as the default (05.5c already made it the
 default and only look).
 
-- Branches: `ui/09a-finish`, `ui/09b-default`
+- Branches: `ui/09a1-finish`, `ui/09a2-mark`, `ui/09b-text`, then `ui/09r1-…`, `ui/09r2-…`,
+  `ui/09r3-…` in parallel, then `ui/09b-shots` (see **Fast track** below)
+- **Time box: 3½ hours of agent time for the whole plan**, from the first commit to the last PR ready.
 - Needs: 06, 07e, 08b (and through them 05, 07a…07d, 08a; 02b's roles `button.accent.top`,
-  `progress.bar.end`, `glow`)
+  `progress.bar.end`, `glow`). 09a1 and 09a2 need only 02b's roles (see rule 2 below).
 - Unblocks: 10 (the rename's screenshots are taken once, on the final look)
+
+## Fast track (3½-hour cap)
+
+Run the same way as 07's and 08's fast tracks (`07-dialogs.md`, `08-options.md`). It differs from 08's
+in having two merge windows: the review needs the finish in, and the screenshots need the review's
+fixes in.
+
+| Slot | Work | Budget |
+| --- | --- | --- |
+| 0:00–0:45 | **Three parallel parts**, one agent and one worktree each: 09a1 (PR 1), 09a2, 09b-text | 45 min |
+| 0:45–1:00 | Maintainer merges 09a1 and 09a2 into `dev` | 15 min |
+| 1:00–2:30 | **The full review (09a step 5) in three parallel parts**, R1, R2, R3, all branched from `dev` with 09a1 and 09a2 in it; each reviews and fixes its own windows | 90 min |
+| 2:30–2:55 | Maintainer merges R1, R2, R3 one after another; the agents rebase and fix ROADMAP/CHANGELOG conflicts | 25 min |
+| 2:55–3:30 | **09b-shots**: website and docs screenshots retaken on the final look, then merged | 35 min |
+
+The parts (each its own PR):
+
+| Part | Work |
+| --- | --- |
+| 09a1 | 09a steps 1, 2 and 4: two-tone buttons and progress, the dark glow, the frame-time check (over budget: the glow comes out in this same PR) |
+| 09a2 | 09a step 3: the app-mark tile (title bar, About), the two offers without `winui::banner`'s logo band |
+| 09b-text | 09b steps 2 and 4 to 5 without the screenshots: `website/content/themes.toml`, `features/themes.md`, `theme-prompt.txt`, `llms.txt`, `tools/shots/shots.toml` entry, the `docs/` theme help, CHANGELOG, ROADMAP |
+| R1 | The main window, the details pane, the paste bar, and **Left from 06** |
+| R2 | 07's dialogs, and the contrast pass (the WCAG tests in `palette.rs`, greyed text by hand) |
+| R3 | Options and its nine sub-dialogs, About, the extension and video-helpers offers |
+| 09b-shots | `tools/shots/` and `docs/` screenshots in Graphite, the `site-theme-graphite` shot |
+
+Each review part covers its windows in light and dark at interface sizes 100, 150 and 200, side by side
+with the mock, plus the keyboard pass (Tab order, Alt and menu letters, Enter and Escape) and the
+accessibility-tree pass (names, roles, disabled states, bounds).
+
+Rules that keep it inside the box:
+
+1. **Own functions only.** 09a1 edits only the painting code (`paint_button`, `button_colors_in`,
+   `progress_bar`, `era_bar`, `fill_shaded`, the `[controls]` looks); 09a2 only `caption`/`title_bar`,
+   the About window and the two offers. Each review part fixes only its own windows' functions. A gap in
+   the shared kit goes to `winui` in a small PR of its own, not into a part.
+2. **Start early.** 09a1 and 09a2 touch no dialog or Options code, so they can run beside 08b (or
+   earlier); then only the review and the shots are left after 08b, about 2¾ hours. The review cannot
+   start early: it must see 06, 07 and 08 finished.
+3. **Worktrees, builds, screenshots, audit, merges:** as 07's fast track rules 2 to 7: own
+   `CARGO_TARGET_DIR` per worktree; `cargo check -p mdm-app` while iterating, the full workspace once per
+   PR; screenshots in one batch per part with `baseline.ps1 -Theme graphite`, light and dark,
+   `-Work` inside the worktree, an exe copy per runner; one audit round against the fixed checklist.
+4. **Running over.** The review is the open-ended part: what a review part has not fixed at 2:30 ships
+   as a follow-up listed under the ROADMAP item (09a step 5 already allows "fixed or recorded as
+   follow-ups"). The frame-time budget is not waived: over budget means flat, not late.
 
 ## Facts this plan relies on (paths under `crates/app/src/`, checked on `ui/03-icons` c3541d0)
 
@@ -104,3 +153,4 @@ Line numbers drift as phases land: find each item by its name first.
 - [ ] Every mock state reviewed (visual, keyboard, accessibility, 200%); follow-ups filed
 - [ ] An upgrade from the last release starts in Graphite, and the release notes say so
 - [ ] Screenshots, docs, website, ROADMAP, CHANGELOG
+- [ ] Done within the 3½-hour box, or what's left listed under its part's ROADMAP item
