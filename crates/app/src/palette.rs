@@ -818,7 +818,7 @@ mod tests {
         let t = builtins()[0];
         assert!(std::ptr::eq(t, graphite()));
         assert_eq!((t.id.as_ref(), t.name.as_ref()), ("graphite", "Graphite"));
-        assert_eq!(t.metrics.control_radius, 8.0);
+        assert_eq!(t.metrics.control_radius, 6.0);
         assert_eq!(t.metrics.list_row, 32.0);
         assert_eq!(t.icon_set.as_deref(), Some("graphite"));
         // Plan 04: Geist, bundled.

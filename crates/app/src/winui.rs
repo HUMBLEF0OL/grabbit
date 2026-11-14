@@ -3906,10 +3906,10 @@ fn paint_button(
             Stroke::new(m.border, face.border),
             StrokeKind::Inside,
         );
-        // The bottom edge: a push button's and a drop-down's 3 points in from its ends, a small
-        // part's from its corners (none on one too low for it).
+        // The bottom edge, on the straight part between the corners (none on a small part too
+        // low for it).
         if shape != Shape::Small || rc.height() >= 14.0 {
-            let inset = if shape == Shape::Small { radius } else { 3.0 };
+            let inset = bottom_inset(shape, radius);
             hline(
                 p,
                 rc.left() + inset,
@@ -3950,6 +3950,16 @@ fn paint_button(
         StrokeKind::Inside,
     );
     radius
+}
+
+/// Where a flat button's bottom line starts and ends, in from its sides: past the corners'
+/// curve (a fixed 3 stuck out of Graphite's 8-point corners), never nearer than 3 (Windows 11).
+fn bottom_inset(shape: Shape, radius: f32) -> f32 {
+    if shape == Shape::Small {
+        radius
+    } else {
+        radius.max(3.0)
+    }
 }
 
 /// What a face drawn by [`paint_button`] is: a push button, a small button-like part (a spin
@@ -6472,6 +6482,20 @@ pub mod caption {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A flat button's bottom line stays on the straight part between its corners: past how
+    /// far the curve reaches into the bottom row (Windows 11's 3 unchanged).
+    #[test]
+    fn button_bottom_line_stays_inside_its_corners() {
+        assert_eq!(bottom_inset(Shape::Push, 3.0), 3.0);
+        for r in [0.0f32, 2.0, 3.0, 5.0, 8.0, 12.0] {
+            for shape in [Shape::Push, Shape::DropDown] {
+                // The curve covers the row under its last full one this far in from the side.
+                let reach = r - (r * r - (r - 1.0).max(0.0).powi(2)).sqrt();
+                assert!(bottom_inset(shape, r) >= reach, "{shape:?} at radius {r}");
+            }
+        }
+    }
 
     /// `r` already gives the screen rect (mirrored in RTL); `rect` around it mirrors it back,
     /// so the thing stays at its English place in Arabic (#170: the browser offer window's logo

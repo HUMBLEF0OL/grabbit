@@ -513,6 +513,9 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
 - ✅ GitHub Actions run for `main` only: the build and tests on pull requests into `main` (a
   release or a hotfix), none on `dev`, where the same checks run locally before a merge; the
   website builds on its own changes or by hand, with no daily run.
+- ✅ Graphite's buttons: the line along a button's bottom no longer shows past its rounded
+  corners, and buttons, boxes and drop-downs share rounder-than-Windows corners in proportion to
+  their height, so a dialog's short buttons no longer look like pills.
 
 ## Being worked on
 
