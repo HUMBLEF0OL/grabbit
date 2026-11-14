@@ -298,12 +298,7 @@ impl Progress {
             if close {
                 return Action::Close;
             }
-            // Escape hides the window (the download goes on), as the × does.
-            if matches!(action, Action::None) && winui::escape_pressed(ui) {
-                Action::Close
-            } else {
-                action
-            }
+            on_escape(action, winui::escape_pressed(ui))
         });
         // Elsewhere the window manager is asked for its size at a new interface size (#262).
         crate::dialogs::follow_scale(ctx, vid, key, shown);
@@ -418,29 +413,39 @@ impl Progress {
         } else {
             ButtonKind::Normal
         };
-        // The row as wide as its labels in this language need (#192), each laid out for the
-        // longer of its two labels so it keeps its size when they change; Cancel stays at the
-        // window's edge.
-        let [details_at, pause_at, cancel_at] = winui::button_row(
-            &p,
-            &[
-                (
-                    winui::widest_label(&p, &["<< Hide details", "Show details >>"]),
-                    30.0,
-                    138.0,
-                ),
-                (winui::widest_label(&p, &["Pause", "Resume"]), 311.0, 82.0),
-                ("Cancel", 422.0, 73.0),
-            ],
-            8.0,
-            30.0,
-            200.0,
-        )[..] else {
-            unreachable!("three buttons")
+        // Graphite's row (plan 07): Details at the start; Cancel, then Pause / Resume last and
+        // filled. A look only: Enter presses nothing here and Escape hides the window, as
+        // before. Each button is laid out for the longer of its two labels, so it keeps its
+        // size when they change; Tab keeps its order (Details, Pause, Cancel).
+        let width = |label: &str| {
+            (winui::text_width(&p, crate::i18n::t(label)) + 28.0)
+                .ceil()
+                .max(73.0)
         };
+        let widths = [
+            width(winui::widest_label(
+                &p,
+                &["<< Hide details", "Show details >>"],
+            )),
+            width(winui::widest_label(&p, &["Pause", "Resume"])),
+            width("Cancel"),
+        ];
+        let slots = winui::footer_slots(
+            &[
+                (widths[0], winui::Side::Leading, false),
+                (widths[1], winui::Side::Trailing, true),
+                (widths[2], winui::Side::Trailing, false),
+            ],
+            548.0,
+        );
+        let (details_at, pause_at, cancel_at) = (
+            (slots[0], widths[0]),
+            (slots[1], widths[1]),
+            (slots[2], widths[2]),
+        );
         if winui::button(
             ui,
-            r(o, details_at.0, 206.0, details_at.1, 22.0),
+            r(o, details_at.0, BUTTONS_Y, details_at.1, winui::CONTROL_H),
             details_label,
             kind,
             false,
@@ -452,18 +457,19 @@ impl Progress {
         }
         let running = item.status == Status::Downloading;
         let can_resume = matches!(item.status, Status::Stopped | Status::Error);
+        // Filled as the row's last answer; its look only (no key presses it).
         let (label, pkind) = if running {
             // i18n: verb: pause the download
-            (crate::i18n::mark("Pause"), ButtonKind::Normal)
+            (crate::i18n::mark("Pause"), ButtonKind::Accent)
         } else if can_resume {
             // i18n: verb: continue the download
-            (crate::i18n::mark("Resume"), ButtonKind::Normal)
+            (crate::i18n::mark("Resume"), ButtonKind::Accent)
         } else {
             (crate::i18n::mark("Pause"), ButtonKind::Disabled)
         };
         if winui::button(
             ui,
-            r(o, pause_at.0, 206.0, pause_at.1, 22.0),
+            r(o, pause_at.0, BUTTONS_Y, pause_at.1, winui::CONTROL_H),
             label,
             pkind,
             false,
@@ -479,7 +485,7 @@ impl Progress {
         }
         if winui::button(
             ui,
-            r(o, cancel_at.0, 206.0, cancel_at.1, 22.0),
+            r(o, cancel_at.0, BUTTONS_Y, cancel_at.1, winui::CONTROL_H),
             "Cancel",
             ButtonKind::Normal,
             false,
@@ -931,6 +937,32 @@ fn hide_tab(ui: &mut Ui, o: Pos2) -> bool {
 /// Right end for text on the tab page (its frame is x 18..529).
 const PAGE_TEXT_RIGHT: f32 = 520.0;
 
+/// The top of the Details / Pause / Cancel row: 30-point buttons between the progress bar
+/// (ending at 196) and the connections' caption (its capitals from 233).
+const BUTTONS_Y: f32 = 201.0;
+
+/// Escape (`escape`) hides the window as the × does, and the download goes on: Close, never
+/// Cancel or Pause. Nothing in the row answers it (plan 07: the row's look changed, not its
+/// keys); a button pressed in the same frame wins.
+fn on_escape(action: Action, escape: bool) -> Action {
+    if matches!(action, Action::None) && escape {
+        Action::Close
+    } else {
+        action
+    }
+}
+
+/// The Graphite status icon (`st-*`) for a download's state, before its status word.
+fn status_icon(status: Status) -> &'static str {
+    match status {
+        Status::Downloading => "st-downloading",
+        Status::Stopped => "st-paused",
+        Status::Queued => "st-queued",
+        Status::Complete => "st-complete",
+        Status::Error => "st-error",
+    }
+}
+
 // The rows sit 7 px inside the page's frame at the top and at the bottom (the Server row's
 // descent included), with a slightly wider break after Status, as before.
 fn status_page(ui: &Ui, o: Pos2, item: &Item, snap: Option<&Snapshot>, frac: Option<f64>) {
@@ -983,6 +1015,17 @@ fn status_page(ui: &Ui, o: Pos2, item: &Item, snap: Option<&Snapshot>, frac: Opt
         &crate::i18n::ltr(item.url.as_str()),
         winui::TEXT(),
     );
+    // A failed download: its reason in an error banner between the address and Status (a band
+    // the page leaves free), whole and copyable on hover; Status then says only "Error".
+    let status = if item.status == Status::Error {
+        let at = r(o, 33.0, 52.0, PAGE_TEXT_RIGHT - 33.0, 37.0);
+        winui::status_banner(ui, at, winui::BannerKind::Error, "st-error", &status, "");
+        winui::copyable(ui, at, "error-banner", &status, true);
+        // i18n: a download's status (state it is in, not a command): it failed
+        crate::i18n::t("Error").to_owned()
+    } else {
+        status
+    };
     let rows: [(&str, f32, f32, String); 6] = [
         // i18n: noun: label before the download's state
         (crate::i18n::mark("Status"), 61.0, 102.0, status),
@@ -1055,13 +1098,20 @@ fn status_page(ui: &Ui, o: Pos2, item: &Item, snap: Option<&Snapshot>, frac: Opt
             crate::i18n::t(label),
             winui::TEXT(),
         );
-        // Light mode shows the status value in pure blue (light-dialogs.md).
-        let vc = if label == "Status" {
-            crate::theme::colors().status_value
+        if label == "Status" {
+            // The status word after its state's icon (plan 07: status as icon + word), in the
+            // status colour, or the error colour for a failed download.
+            let vc = if item.status == Status::Error {
+                winui::ERROR()
+            } else {
+                crate::theme::colors().status_value
+            };
+            let icon = winui::r(o, vx, base - 12.0, 16.0, 16.0);
+            crate::themeicons::paint_graphite_in(ui, p, status_icon(item.status), icon, vc);
+            fit(label, vx + 20.0, base, &value, vc);
         } else {
-            winui::TEXT()
-        };
-        fit(label, vx, base, &value, vc);
+            fit(label, vx, base, &value, winui::TEXT());
+        }
     }
     // Where its server is (#140): a file download's (a torrent, a video or a gallery has no
     // single server of MDM's own). As the running download sees it, else as its last run did.
@@ -1819,6 +1869,16 @@ mod tests {
     fn the_title_has_a_percentage_only_with_a_size() {
         assert!(!window_title(None, "clip.mp4").contains('%'));
         assert!(window_title(Some(0.445), "clip.mp4").starts_with("44% "));
+    }
+
+    /// Escape in the progress window hides it and leaves the download running (plan 07a): it
+    /// is Close (keep downloading), never Cancel or Pause; a button pressed with it wins.
+    #[test]
+    fn escape_leaves_the_download_running() {
+        assert!(matches!(on_escape(Action::None, true), Action::Close));
+        assert!(matches!(on_escape(Action::None, false), Action::None));
+        assert!(matches!(on_escape(Action::Pause, true), Action::Pause));
+        assert!(matches!(on_escape(Action::Cancel, true), Action::Cancel));
     }
 
     #[test]

@@ -12,8 +12,6 @@ pub enum Kind<'a> {
     File(&'a str),
     /// A folder (a torrent's folder, a tree's branch).
     Folder,
-    /// An open folder (Download complete's: the file is in it).
-    FolderOpen,
 }
 
 /// A folder, or a file by its extension (lowercase; None: a file without one): what the icon
@@ -29,7 +27,6 @@ impl What {
     pub fn of(kind: Kind) -> Self {
         match kind {
             Kind::Folder => What::Folder,
-            Kind::FolderOpen => What::FolderOpen,
             Kind::File(name) => What::File(extension(name)),
         }
     }
