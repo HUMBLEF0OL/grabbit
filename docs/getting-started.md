@@ -6,7 +6,7 @@ MDM runs on 64-bit Windows 10 and Windows 11.
 
 ## Choose a download
 
-Every version is on the [Releases](https://github.com/anefzaoui/misterdownloadmanager/releases) page. There are three files:
+Every version is on the [Releases](https://github.com/HUMBLEF0OL/grabbit/releases) page. There are three files:
 
 | File | What it is |
 |---|---|
@@ -62,7 +62,7 @@ From top to bottom:
   - **File** — the selected download: **Stop Download**, **Remove**, **Download Now**, **Redownload**.
   - **Downloads** — **Pause All**, **Stop All**, **Delete All Completed**, **Find**, the **Scheduler**, queues, the **Speed Limiter** and **Options**.
   - **View** — show or hide the categories, sort the list (**Arrange files**), **Dark Mode support**, **Always dark**, **Theme**, **Interface size** (every window larger, 100 % to 200 %; **Ctrl +**, **Ctrl −** and **Ctrl 0** too), **Draw with** (OpenGL or Direct3D) and **Language**.
-  - **Help** — help pages and tutorials (on the website), **Keyboard shortcuts**, **Report a problem**, **Check for updates**, **About**, **Tell a friend** and **Support MDM** (its creator's GitHub Sponsors page: optional, nothing in MDM changes).
+  - **Help** — help pages and tutorials (on the website), **Keyboard shortcuts**, **Report a problem**, **Check for updates**, **About**, **Tell a friend** and **Support MDM** (MDM's page on GitHub, to star it: optional, nothing in MDM changes).
 - **Toolbar.** **Add URL**, **Add Torrent**, **Resume**, **Stop**, **Stop All**, **Delete**, **Delete Completed**, **Options**, **Scheduler**, **Start Queue**, **Stop Queue**. The small arrow next to **Add Torrent**, **Start Queue** and **Stop Queue** opens more choices.
 - **Categories** (left). Choose what the list shows: **All Downloads**, **Unfinished**, **Finished** and **Queues**, each with its categories. Drag the gap between the pane and the list to make it wider.
 - **Download list** (right). One row per download. See [The download list](download-list.md).
@@ -76,57 +76,25 @@ MDM follows your system: when Windows is set to dark mode, so is MDM. To keep MD
 
 ## Themes
 
-**View → Theme** changes MDM's look at once, keeping its layout:
+MDM's look is **Graphite**: near-black or white with royal amethyst for what you chose (the
+selection, ticked boxes, the focus ring) and electric cyan for what moves (progress, the default
+button), rounded corners, a focus ring, taller rows in the download list, a flat title bar in the
+panels' colour, thin outline icons in one colour (Tabler's) and its own typeface, Geist. It is
+the only built-in theme: the earlier ones (Classic, Native, High contrast, Metro, Adwaita, Breeze,
+Luna, Aero and Aqua) are gone, and a copy of MDM that used one opens in Graphite.
 
-- **Classic**: MDM's own look, the default.
-- **Native**: your system's colours. Windows' accent colour (Settings → Personalization →
-  Colors) and, when it is on, its contrast theme. It follows them when you change them.
-- **High contrast**: black and white, a bright accent, every edge drawn, text at 7:1 or more.
-- **Metro**: Windows 8's flat look: square corners, flat buttons and boxes, a coloured title bar
-  with the title centred (on Windows, where MDM draws it), and one-colour icons (Microsoft's
-  Fluent UI System Icons).
-- **Adwaita**: GNOME's look: round corners, flat grey buttons, a rounded focus ring, GNOME's
-  check boxes, a header bar with the title in bold and round buttons (on Windows, where MDM
-  draws it), and GNOME's Adwaita icons, in colour for files and categories, one colour in the
-  toolbar.
-- **Breeze**: KDE Plasma's look: rounded corners, buttons and boxes that take the accent's edge
-  under the pointer or when focused, KDE's check boxes and focus frame, KDE's title bar with the
-  title centred and round buttons (on Windows, where MDM draws it), and KDE's Breeze icons.
-- **Luna**: Windows XP's look: buttons shaded from white with an orange glow under the pointer,
-  green ticks, square text boxes, progress in green blocks, a deep blue title bar with the title
-  in bold (on Windows, where MDM draws it), and colourful icons drawn for MDM in that manner.
-- **Aero**: Windows 7's look: glossy buttons that turn light blue under the pointer, quiet check
-  boxes, a glossy green progress bar, a glassy title bar with the title on a soft glow (on
-  Windows), and glossy icons drawn for MDM in that manner.
-- **Aqua**: Mac OS X's look: gel buttons round at the ends (the default one blue), glossy check
-  boxes, a blue focus ring, a blue gel progress bar, a grey title bar with small round buttons
-  (on Windows), and icons drawn for MDM in that manner.
-- **Graphite**: MDM's own new look: near-black and white with royal amethyst for what you chose
-  (the selection, ticked boxes, the focus ring) and electric cyan for what moves (progress, the
-  default button), rounded corners, a focus ring, taller rows in the download list, a flat title
-  bar in the panels' colour (on Windows), and thin outline icons in one colour (Tabler's). Its
-  typeface comes later.
+**View → Theme** lists Graphite and the theme files you add, and changes MDM's look at once,
+keeping its layout.
 
-![View → Theme open: Classic, Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero, Aqua and Graphite, Add a theme file… and Open themes folder](images/help/view-theme.webp)
+![View → Theme open: Graphite, Add a theme file… and Open themes folder](images/help/view-theme.webp)
 *View → Theme switches at once, keeping the layout.*
 
-<!-- pictures -->
-
-- ![The main window's toolbar and categories in the Classic theme](images/help/theme-classic.webp)
-  *Classic*
-- ![The main window's toolbar and categories in the High contrast theme](images/help/theme-high-contrast.webp)
-  *High contrast*
-- ![The main window's toolbar and categories in the Adwaita theme](images/help/theme-adwaita.webp)
-  *Adwaita*
-- ![The main window's toolbar and categories in the Breeze theme](images/help/theme-breeze.webp)
-  *Breeze*
-
-Each has a light and a dark side: **Dark Mode support** and **Always dark** choose between
-them as before. Theme files you put in the themes folder (**View → Theme → Open themes folder**)
-are listed there too, and so are Base16 and pywal colour schemes (**View → Theme → Add a theme
-file…**; **pywal** follows `wal` as it runs): [Themes](themes.md) says where that folder is, what
-a theme file holds (`inherits`, colours, sizes, control shapes, icons), how a scheme's colours are
-used, and how to make and share one.
+Graphite has a light and a dark side, and so does every theme file: **Dark Mode support** and
+**Always dark** choose between them. Theme files you put in the themes folder (**View → Theme →
+Open themes folder**) build on Graphite, and so do Base16 and pywal colour schemes (**View →
+Theme → Add a theme file…**; **pywal** follows `wal` as it runs): [Themes](themes.md) says where
+that folder is, what a theme file holds (colours, sizes, control shapes, a font, icons), how a
+scheme's colours are used, and how to make and share one.
 
 ## The tray icon
 

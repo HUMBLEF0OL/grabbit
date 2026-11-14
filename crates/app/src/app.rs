@@ -56,7 +56,7 @@ enum Cmd {
     CheckUpdates,
     About,
     TellFriend,
-    /// Help → Support MDM: the creator's GitHub Sponsors page in the browser.
+    /// Help → Support MDM: `help::SPONSORS` in the browser.
     Support,
     Exit,
     Stop,
@@ -6249,7 +6249,7 @@ impl App {
                 Sep,
                 I("&About Mister Download Manager", Cmd::About, true, false),
                 I("Tell a &friend", Cmd::TellFriend, true, false),
-                // MDM's, not IDM's: the creator's GitHub Sponsors page, asked for only.
+                // MDM's, not IDM's: `help::SPONSORS`, asked for only.
                 I("Support &MDM", Cmd::Support, true, false),
             ],
         }

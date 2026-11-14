@@ -29,6 +29,7 @@ a merge commit or a rebase, never squashed: a squash drops the trailers, so a sq
 `ported?` and a revert of a squashed PR goes unseen. `equivalent`: the same change is already in
 the fork (by patch-id), made without the tool.
 
+    python tools/upstream-sync/sync.py [-C <worktree>] <command> …   # -C: as git's, no cd
     python tools/upstream-sync/sync.py doctor [--fix]   # remotes, gh, branches: checked (and set)
     python tools/upstream-sync/sync.py status [--fetch] [--json] [--all]
     python tools/upstream-sync/sync.py show <sha>       # one commit: why it sorts as it does
@@ -36,6 +37,7 @@ the fork (by patch-id), made without the tool.
     python tools/upstream-sync/sync.py report           # status + watch as Markdown (CI's issue)
     python tools/upstream-sync/sync.py pick <sha>... [--lock] [--allow-sensitive] [--keep-going]
     python tools/upstream-sync/sync.py record <sha> <skipped|covered|deferred|ported> --note "…"
+    python tools/upstream-sync/sync.py record-many FILE  # many: sha<TAB>status<TAB>ref<TAB>note a line
     python tools/upstream-sync/sync.py pr --title "…" --body-file F [--draft] [--force]
 
 Python 3.10 or later; a git whose merge-tree takes --merge-base and -X (`doctor` checks); gh for
@@ -1284,6 +1286,34 @@ def cmd_record(a) -> int:
     return 0
 
 
+def cmd_record_many(a) -> int:
+    """`record` for many commits in one call: FILE has one decision a line,
+    `sha<TAB>status<TAB>ref<TAB>note` (ref may be empty; blank lines and # lines are skipped).
+    Every line is checked before any is written, so a bad line writes nothing."""
+    ctx = context()
+    rows = []
+    for n, line in enumerate(Path(a.file).read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) != 4:
+            raise Fail(f"{a.file}:{n}: want sha<TAB>status<TAB>ref<TAB>note, got {len(parts)} fields")
+        short, status, ref, note = (p.strip() for p in parts)
+        sha = full_sha(short)
+        if not sha or sha not in ctx.in_range:
+            raise Fail(f"{a.file}:{n}: {short} is not an upstream commit since the fork point")
+        if status not in RECORDABLE:
+            raise Fail(f"{a.file}:{n}: status {status!r} is not one of {', '.join(RECORDABLE)}")
+        if not note:
+            raise Fail(f"{a.file}:{n}: the note is required: say why")
+        if status in ("covered", "ported") and not ref:
+            raise Fail(f"{a.file}:{n}: {status} needs a ref: the fork's commit or PR")
+        rows.append((sha, status, ref, note))
+    for row in rows:
+        print(write_row(*row))
+    return 0
+
+
 def sync_branches() -> list[str]:
     """What earlier runs left: sync branches not in dev, by their PR's state when gh can tell."""
     forkref = fork_ref()
@@ -1438,6 +1468,9 @@ def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):  # the Windows console's code page can't print every
         stream.reconfigure(encoding="utf-8", errors="replace")  # upstream subject
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    # As git's -C: work on the repository (or worktree) at PATH, not the current folder's, so a run
+    # in a worktree needs no `cd` (a `cd` in a compound command asks for permission every time).
+    p.add_argument("-C", dest="repo", metavar="PATH", help="run as if started in PATH")
     sub = p.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("doctor")
     d.add_argument("--fix", action="store_true")
@@ -1460,6 +1493,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("status", choices=RECORDABLE)
     r.add_argument("--note", required=True)
     r.add_argument("--ref", help="the fork's commit or PR, for ported and covered")
+    rm = sub.add_parser("record-many", help="record from a file: sha<TAB>status<TAB>ref<TAB>note")
+    rm.add_argument("file")
     pr = sub.add_parser("pr")
     pr.add_argument("--title", required=True)
     pr.add_argument("--body-file", required=True)
@@ -1467,9 +1502,15 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("--force", action="store_true", help="--force-with-lease, this branch only")
     a = p.parse_args(argv)
     try:
+        if a.repo:
+            try:
+                os.chdir(a.repo)
+            except OSError as e:
+                raise Fail(f"-C {a.repo}: {e.strerror}")
         os.chdir(root())  # pathspecs are relative to the current folder; ours are the repo's
         return {"doctor": cmd_doctor, "status": cmd_status, "show": cmd_show, "watch": cmd_watch,
-                "report": cmd_report, "pick": cmd_pick, "record": cmd_record, "pr": cmd_pr}[a.cmd](a)
+                "report": cmd_report, "pick": cmd_pick, "record": cmd_record,
+                "record-many": cmd_record_many, "pr": cmd_pr}[a.cmd](a)
     except Fail as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
