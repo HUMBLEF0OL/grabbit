@@ -534,6 +534,14 @@ fn to_command(m: Message) -> mdm_ipc::Command {
         user_agent: m.user_agent,
         size: m.size.filter(|s| *s > 0),
         mime: some(m.mime),
+        // A page's media from the toolbar button's list (upstream issue 800): its page's title
+        // names a file whose address names nothing.
+        video_title: m
+            .title
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(|t| t.chars().take(TITLE_MAX).collect()),
         post_type: m.post.as_ref().and(some(m.post_type)),
         post: m.post,
         private: m.private,
@@ -548,6 +556,10 @@ fn to_command(m: Message) -> mdm_ipc::Command {
 
 /// The largest proxy auto-config script taken from the browser (#42).
 const PAC_MAX: usize = 256 * 1024;
+
+/// The most characters of a page's title taken with a download (the extension sends at most
+/// as many).
+const TITLE_MAX: usize = 300;
 
 /// The browser's proxy (#42) if it is one the app can use: `scheme://host:port`, the scheme
 /// http, https, socks4 or socks5(h), the host a name or an IP address (IPv6 in brackets), nothing
@@ -1345,6 +1357,25 @@ mod tests {
         );
         assert!(!c.later && !c.silent);
         assert_eq!((c.proxy, c.proxy_pac, c.proxy_login), (None, None, false));
+        assert_eq!(c.video_title, None);
+    }
+
+    /// Upstream issue 800: a page's media from the toolbar button's list goes with its page's
+    /// title (for a file whose address names nothing), trimmed and cut; a blank one is none.
+    #[test]
+    fn a_media_files_page_title_goes_with_it() {
+        let m: Message = serde_json::from_str(
+            r#"{"url":"https://x/remote_control.php?id=1","mime":"video/mp4","title":"  A talk  "}"#,
+        )
+        .unwrap();
+        let c = to_command(m);
+        assert_eq!(c.video_title.as_deref(), Some("A talk"));
+        assert_eq!(c.mime.as_deref(), Some("video/mp4"));
+        let long = format!(r#"{{"url":"https://x/a","title":"{}"}}"#, "t".repeat(400));
+        let c = to_command(serde_json::from_str(&long).unwrap());
+        assert_eq!(c.video_title.unwrap().len(), TITLE_MAX);
+        let blank: Message = serde_json::from_str(r#"{"url":"https://x/a","title":" "}"#).unwrap();
+        assert_eq!(to_command(blank).video_title, None);
     }
 
     #[test]

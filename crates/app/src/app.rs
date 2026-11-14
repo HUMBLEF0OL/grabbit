@@ -2692,6 +2692,8 @@ impl App {
         if let Some(file) = drive_file_behind_player(&cmd) {
             cmd.video_page = None;
             cmd.url = Some(file);
+            // Drive names its file itself; its page's title ("… - Google Drive") doesn't.
+            cmd.video_title = None;
         }
         // The browser's download button over a video: the Download video window, looking the
         // page up at once. Only the dialog opens (upstream issue 520): it is a window of its own.
@@ -2791,7 +2793,7 @@ impl App {
             let name = cmd
                 .name
                 .clone()
-                .unwrap_or_else(|| mdm_engine::naming::file_name(None, &url));
+                .unwrap_or_else(|| crate::model::browser_guess(&url, &cmd));
             let name = mdm_engine::naming::sanitize(&name);
             // The automation API's `category` (by its key) and `queue` (by name), when given.
             let category = cmd
@@ -2905,6 +2907,9 @@ impl App {
             // And the size it announced: larger than any waiting page, a page in its place is
             // the site's (upstream issue 701).
             expected_size: context.size,
+            // The page a media file was played on (upstream issue 800): a file whose address
+            // names nothing (a script, a bare id) is named by its title when the engine names it.
+            page_title: context.video_title.clone(),
             ..Options::default()
         };
         RequestParts { headers, opts }
@@ -9773,7 +9778,7 @@ impl App {
             let name = context
                 .name
                 .clone()
-                .unwrap_or_else(|| mdm_engine::naming::file_name(None, &url));
+                .unwrap_or_else(|| crate::model::browser_guess(&url, &context));
             let name = mdm_engine::naming::sanitize(&name);
             let category = Category::of(&name);
             let dir = self.settings.category_dir(category, &self.downloads);

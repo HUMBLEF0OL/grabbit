@@ -174,6 +174,10 @@ pub struct Options {
     /// page: a web page in its place is the site's (a countdown, a captcha), never the file
     /// (upstream issue 701, `expects_other_file`).
     pub expected_size: Option<u64>,
+    /// From the browser: the title of the page a media file was played on (upstream issue
+    /// 800). A download the engine names ([`Destination::Dir`]) whose address names nothing (a
+    /// script, a bare id, `videoplayback`) is named by it ([`naming::answer_name`]).
+    pub page_title: Option<String>,
     /// Tests and measurements: a disk slower than the network, behind a write cache, whose
     /// flush holds every write to the file (as NTFS's does, #361, upstream issue 782). None: the
     /// real disk.
@@ -260,6 +264,7 @@ impl Default for Options {
             on_file_created: None,
             expected_type: None,
             expected_size: None,
+            page_title: None,
             slow_disk: None,
         }
     }
@@ -895,8 +900,7 @@ pub async fn probe_kept(
         StatusCode::OK => (resp.content_length(), true),
         _ => (resp.content_length(), false),
     };
-    let cd = header_text(resp.headers(), header::CONTENT_DISPOSITION);
-    let file_name = name_for(cd.as_deref(), &final_url, unlocked.as_ref());
+    let file_name = name_for(resp.headers(), &final_url, unlocked.as_ref(), opts);
     // A page where a file that never is one was expected, whatever type it came as (upstream
     // issue 701): said before anything is saved.
     let first = if from_zero && never_a_page(opts.expected_type.as_deref(), &file_name) {
@@ -932,11 +936,25 @@ pub fn http_client(opts: &Options, url: &Url) -> Result<Client, Error> {
 }
 
 /// The file's name: the server's (Content-Disposition), else the service's (#44), else the
-/// address's.
-fn name_for(cd: Option<&str>, url: &Url, unlocked: Option<&crate::unlock::Unlocked>) -> String {
-    match (cd, unlocked.and_then(|u| u.file_name.as_deref())) {
+/// address's, typed by the server's `Content-Type` and named by the page's title when the
+/// address names nothing (upstream issues 695 and 800: [`naming::answer_name`]).
+fn name_for(
+    headers: &HeaderMap,
+    url: &Url,
+    unlocked: Option<&crate::unlock::Unlocked>,
+    opts: &Options,
+) -> String {
+    let cd = header_text(headers, header::CONTENT_DISPOSITION);
+    match (&cd, unlocked.and_then(|u| u.file_name.as_deref())) {
         (None, Some(name)) if !name.trim().is_empty() => naming::sanitize(name),
-        _ => naming::file_name(cd, url),
+        _ => naming::answer_name(
+            url,
+            &naming::Answer {
+                disposition: cd.as_deref(),
+                content_type: header_str(headers, header::CONTENT_TYPE),
+                title: opts.page_title.as_deref(),
+            },
+        ),
     }
 }
 
@@ -1750,10 +1768,7 @@ async fn run_fresh(
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned);
-    let server_name = {
-        let cd = header_text(resp.headers(), header::CONTENT_DISPOSITION);
-        name_for(cd.as_deref(), &final_url, unlocked.as_ref())
-    };
+    let server_name = name_for(resp.headers(), &final_url, unlocked.as_ref(), &opts);
     // Upstream issue 701: a page where a kind of file that never is one was expected, whatever
     // type it came as (application/octet-stream, none, or text/html under a file's name of the
     // server's): its first bytes say so, before anything is saved. The name is the one it would
