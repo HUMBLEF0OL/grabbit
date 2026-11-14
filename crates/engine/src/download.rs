@@ -1297,7 +1297,10 @@ impl Body {
         match self {
             Body::Http(r) => r.content_length(),
             Body::Ftp(t) => t.expected(),
-            Body::Prefixed(_, r) => r.content_length(),
+            // What the response still has to send, after the bytes read from it already.
+            Body::Prefixed(first, r) => r
+                .content_length()
+                .map(|n| n + first.as_ref().map_or(0, |b| b.len() as u64)),
         }
     }
 
@@ -1673,7 +1676,8 @@ async fn run_fresh(
     }
     let preempt_after = (ttfb * PREEMPT_TTFB).max(PREEMPT_MIN);
     let size = match resp.status() {
-        StatusCode::OK => resp.content_length(),
+        // The length still to come: the look's `first` bytes, read already, count too.
+        StatusCode::OK => resp.content_length().map(|n| n + first.len() as u64),
         // Some servers answer partially even without Range; accept it if it starts at 0.
         StatusCode::PARTIAL_CONTENT => match parse_content_range(resp.headers())? {
             (0, _, total) => total,
