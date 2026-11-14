@@ -1324,9 +1324,15 @@ impl OptionsDialog {
         let p = ui.painter().clone();
         // Get System as wide as its label (#192), its right end kept, on the heading's row
         // (the heading is the window's, `heading`).
-        let (get_x, get_w) =
-            winui::button_row(&p, &[("Get System", 307.0, 93.0)], 0.0, 307.0, 160.0)[0];
-        let get_y = HEAD_TOP + (HEAD_TILE - 21.0) / 2.0 - PAGE_AT.y;
+        let (get_x, get_w) = winui::button_row(
+            &p,
+            &[("Get System", PROXY_GET_X, 93.0)],
+            0.0,
+            PROXY_GET_X,
+            160.0,
+        )[0];
+        // On whole pixels: a half-pixel button's edges blur.
+        let get_y = HEAD_TOP + ((HEAD_TILE - 21.0) / 2.0).floor() - PAGE_AT.y;
         let s = &mut self.s;
         if winui::button_light(
             ui,
@@ -1901,7 +1907,8 @@ impl OptionsDialog {
             // i18n: Options → Sites Logins → Cookies for video sites: read the cookies of the browser chosen in the list after it
             "From browser:",
             true,
-            Some(194.0),
+            // Before the browser list (`until` is a window x, not the page's).
+            Some(o.x + 194.0),
         )
         .on_hover_text(tip);
         let choose = |s: &mut Settings, i: usize| s.video_cookies = browsers[i].to_owned();
@@ -3897,17 +3904,16 @@ const HEAD_TOP: f32 = 16.0;
 const HEAD_TILE: f32 = 40.0;
 /// Where a page's controls go, in its English pixels: under its heading, 16 in from the list
 /// and the window's edge, 8 above the footer. The test holds every page to it; 08b's pages lay
-/// out on it.
-#[allow(dead_code)] // ponytail: the pages' first users come with plan 08b
-mod area {
-    use super::*;
-    pub const PAGE_LEFT: f32 = winui::EDGE;
-    pub const PAGE_RIGHT: f32 = W - SIDE_W - winui::EDGE;
-    pub const PAGE_TOP: f32 = HEAD_TOP + HEAD_TILE + winui::EDGE - PAGE_AT.y;
-    pub const PAGE_BOTTOM: f32 = H - winui::FOOTER_H - 8.0 - PAGE_AT.y;
-}
-#[allow(unused_imports)]
-use area::*;
+/// out on it (only the test reads the first three until then).
+#[cfg_attr(not(test), allow(dead_code))]
+const PAGE_LEFT: f32 = winui::EDGE;
+#[cfg_attr(not(test), allow(dead_code))]
+const PAGE_RIGHT: f32 = W - SIDE_W - winui::EDGE;
+#[cfg_attr(not(test), allow(dead_code))]
+const PAGE_TOP: f32 = HEAD_TOP + HEAD_TILE + winui::EDGE - PAGE_AT.y;
+const PAGE_BOTTOM: f32 = H - winui::FOOTER_H - 8.0 - PAGE_AT.y;
+/// Proxy's Get System, on its heading's row: its English x, where the heading's title ends.
+const PROXY_GET_X: f32 = 307.0;
 
 /// The pages in the list's order, which is the old tabs' (Remote, ours, after Connection): page
 /// number (as `on_page` and `/show options:<n>` take it), its name in the list, its Graphite
@@ -4134,12 +4140,13 @@ fn heading(ui: &Ui, o: Pos2, page: usize) {
     let p = ui.painter();
     let left = o.x + x + HEAD_TILE + 12.0;
     let full = crate::i18n::t(title);
-    let shown = winui::ellipsize(
-        p,
-        &winui::tahoma_title(),
-        full,
-        o.x + W - winui::EDGE - left,
-    );
+    // Proxy's title ends before its Get System, on the same row.
+    let end = if page == 5 {
+        PAGE_AT.x + PROXY_GET_X - 8.0
+    } else {
+        W - winui::EDGE
+    };
+    let shown = winui::ellipsize(p, &winui::tahoma_title(), full, o.x + end - left);
     let drawn = winui::text_at(
         p,
         winui::tahoma_title(),
@@ -4331,7 +4338,7 @@ fn readonly_ltr(ui: &mut Ui, rc: Rect, value: &str) {
     );
 }
 
-/// A password edit (characters shown as bullets): the shared one, on the tab page.
+/// A password edit (characters shown as bullets): the shared one, on the page.
 fn password(ui: &mut Ui, rc: Rect, value: &mut String, enabled: bool) {
     winui::password_light_on(ui, rc, value, enabled, LIGHT_PAGE());
 }
@@ -4542,6 +4549,17 @@ mod tests {
                 })
                 .collect();
             assert!(!controls.is_empty(), "{label}: no controls");
+            // A caption's limit is a window x: Sites Logins' "From browser:" was cut down to
+            // "..." when given as a page x.
+            if page == 6 {
+                let b = tree
+                    .nodes
+                    .iter()
+                    .find(|(_, n)| n.label() == Some("From browser:"))
+                    .and_then(|(_, n)| n.bounds())
+                    .expect("From browser:");
+                assert!(b.x1 - b.x0 > 60.0, "\"From browser:\" cut: {b:?}");
+            }
             for (_, rc, _) in &controls {
                 assert!(
                     area.expand(0.5).contains_rect(*rc),
