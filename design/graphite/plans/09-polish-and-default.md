@@ -32,7 +32,7 @@ The parts (each its own PR):
 | Part | Work |
 | --- | --- |
 | 09a1 | 09a steps 1, 2 and 4: two-tone buttons and progress, the dark glow, the frame-time check (over budget: the glow comes out in this same PR) |
-| 09a2 | 09a step 3: the app-mark tile (title bar, About), the two offers without `winui::banner`'s logo band |
+| 09a2 | 09a step 3: the app mark (About's at 56 drawn sharp; the title bar's already is), the two offers without `winui::banner`'s logo band |
 | 09b-text | 09b steps 2 and 4 to 5 without the screenshots: `website/content/themes.toml`, `features/themes.md`, `theme-prompt.txt`, `llms.txt`, `tools/shots/shots.toml` entry, the `docs/` theme help, CHANGELOG, ROADMAP |
 | R1 | The main window, the details pane, the paste bar, and **Left from 06** |
 | R2 | 07's dialogs, and the contrast pass (the WCAG tests in `palette.rs`, greyed text by hand) |
@@ -46,8 +46,8 @@ accessibility-tree pass (names, roles, disabled states, bounds).
 Rules that keep it inside the box:
 
 1. **Own functions only.** 09a1 edits only the painting code (`paint_button`, `button_colors_in`,
-   `progress_bar`, `era_bar`, `fill_shaded`, the `[controls]` looks); 09a2 only `caption`/`title_bar`,
-   the About window and the two offers. Each review part fixes only its own windows' functions. A gap in
+   `progress_bar`, `era_bar`, `fill_shaded`, the `[controls]` looks); 09a2 only the About window and
+   the two offers (the title bar's mark needs nothing since 10b's logo). Each review part fixes only its own windows' functions. A gap in
    the shared kit goes to `winui` in a small PR of its own, not into a part.
 2. **Start early.** 09a1 and 09a2 touch no dialog or Options code, so they can run beside 08b (or
    earlier); then only the review and the shots are left after 08b, about 2¾ hours. The review cannot
@@ -87,10 +87,16 @@ Line numbers drift as phases land: find each item by its name first.
 2. **Glow (dark only)**: a soft shadow under the default button and the progress fill in the `glow`
    role (about 35% alpha), drawn with `epaint::Shadow` (blur 12, offset y 4). Graphite light sets `glow`
    transparent, so nothing is drawn.
-3. **App mark**: the title bar's small mark (16 px, radius 4) and the About window's (56 px, radius 14)
-   as a primary → outlaw gradient tile (`accent` → `button.accent`), until the Grabbit logo from 10b
-   replaces them. The extension offer and the video-helpers offer drop `winui::banner`'s logo band under
-   Graphite, as the mock draws them.
+3. **App mark**: the Grabbit logo exists (10b steps 1 and 2, PR 26: `art/grabbit.svg`, Graphite's
+   cyan into amethyst, no tile behind it), so there is no placeholder gradient tile to build: the
+   marks are the app icon's own PNGs, which `tools/icon/build_icon.py` writes.
+   - Title bar: done. `winui::caption`'s two title bars (the drawn one and `title_bar`) already paint
+     `mdm-32.png` at 16, sharp up to 200 %.
+   - About (`help.rs`, the "about" window): it paints `mdm-48.png` stretched to 56, soft at 100 % and
+     blurry at 150 and 200 %. Paint `mdm-128.png` at 56 instead (scaled down, sharp to 200 %).
+   - The extension offer and the video-helpers offer drop `winui::banner`'s logo band under Graphite,
+     as the mock draws them.
+   - Nothing here needs the theme's colours any more: no `accent` → `button.accent` tile, no radius.
 4. **Cost check**: frame time of the main window with 1,000 rows and 10 running downloads, before and
    after, in Graphite dark. Budget: no more than 5% slower; otherwise ship flat (remove the glow first).
 5. **Full review**: every mock state, light and dark, at 100% and 150%, side by side with the mock; a
