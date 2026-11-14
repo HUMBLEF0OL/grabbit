@@ -407,12 +407,6 @@ impl Progress {
         } else {
             crate::i18n::mark("Show details >>")
         };
-        let other_tab = self.tab != Tab::Status;
-        let kind = if other_tab {
-            ButtonKind::Default
-        } else {
-            ButtonKind::Normal
-        };
         // Graphite's row (plan 07): Details at the start; Cancel, then Pause / Resume last and
         // filled. A look only: Enter presses nothing here and Escape hides the window, as
         // before. Each button is laid out for the longer of its two labels, so it keeps its
@@ -430,24 +424,30 @@ impl Progress {
             width(winui::widest_label(&p, &["Pause", "Resume"])),
             width("Cancel"),
         ];
-        let slots = winui::footer_slots(
+        // Within the bar's span (17..530): the footer's edges laid out on 545 points, moved
+        // right by 1.
+        let slots: Vec<f32> = winui::footer_slots(
             &[
                 (widths[0], winui::Side::Leading, false),
                 (widths[1], winui::Side::Trailing, true),
                 (widths[2], winui::Side::Trailing, false),
             ],
-            548.0,
-        );
+            545.0,
+        )
+        .into_iter()
+        .map(|x| x + 1.0)
+        .collect();
         let (details_at, pause_at, cancel_at) = (
             (slots[0], widths[0]),
             (slots[1], widths[1]),
             (slots[2], widths[2]),
         );
+        // Plain: Pause / Resume is the row's one emphasised answer.
         if winui::button(
             ui,
             r(o, details_at.0, BUTTONS_Y, details_at.1, winui::CONTROL_H),
             details_label,
-            kind,
+            ButtonKind::Normal,
             false,
             None,
         )
@@ -1015,10 +1015,13 @@ fn status_page(ui: &Ui, o: Pos2, item: &Item, snap: Option<&Snapshot>, frac: Opt
         &crate::i18n::ltr(item.url.as_str()),
         winui::TEXT(),
     );
-    // A failed download: its reason in an error banner between the address and Status (a band
-    // the page leaves free), whole and copyable on hover; Status then says only "Error".
-    let status = if item.status == Status::Error {
-        let at = r(o, 33.0, 52.0, PAGE_TEXT_RIGHT - 33.0, 37.0);
+    // A failed download (the mock's error state): its reason in an error banner between the
+    // address and Status, whole and copyable on hover; Status then says only "Error". The rows
+    // move down under it, without Transfer rate and Time left (both blank unless it is
+    // downloading), so they end where they end in every other state.
+    let failed = item.status == Status::Error;
+    let status = if failed {
+        let at = r(o, 33.0, 50.0, PAGE_TEXT_RIGHT - 33.0, 30.0);
         winui::status_banner(ui, at, winui::BannerKind::Error, "st-error", &status, "");
         winui::copyable(ui, at, "error-banner", &status, true);
         // i18n: a download's status (state it is in, not a command): it failed
@@ -1026,7 +1029,7 @@ fn status_page(ui: &Ui, o: Pos2, item: &Item, snap: Option<&Snapshot>, frac: Opt
     } else {
         status
     };
-    let rows: [(&str, f32, f32, String); 6] = [
+    let rows: Vec<(&str, f32, f32, String)> = vec![
         // i18n: noun: label before the download's state
         (crate::i18n::mark("Status"), 61.0, 102.0, status),
         (
@@ -1077,6 +1080,19 @@ fn status_page(ui: &Ui, o: Pos2, item: &Item, snap: Option<&Snapshot>, frac: Opt
             .to_owned(),
         ),
     ];
+    // Under the banner: Status, File size, Downloaded and Resume capability 16 apart from 96,
+    // and Server at 160.
+    let (rows, server_base) = if failed {
+        let kept = rows
+            .into_iter()
+            .filter(|r| r.0 != "Transfer rate" && r.0 != "Time left")
+            .enumerate()
+            .map(|(i, (label, _, vx, value))| (label, 96.0 + 16.0 * i as f32, vx, value))
+            .collect();
+        (kept, 160.0)
+    } else {
+        (rows, 161.0)
+    };
     // A value starts 6 px after its label at the least (a long translation); the rows that share
     // the column at 135 (all but Status) keep sharing one.
     let after = |label: &str| 33.0 + winui::text_width(p, crate::i18n::t(label)).ceil() + 6.0;
@@ -1118,7 +1134,7 @@ fn status_page(ui: &Ui, o: Pos2, item: &Item, snap: Option<&Snapshot>, frac: Opt
     if item.torrent.is_none() && item.video.is_none() && item.gallery.is_none() {
         // i18n: label before where a download's server is (its country and round trip)
         let label = crate::i18n::t("Server");
-        text(p, o.x + 33.0, o.y + 161.0, label, winui::TEXT());
+        text(p, o.x + 33.0, o.y + server_base, label, winui::TEXT());
         let seen = snap
             .and_then(|s| s.server.as_ref())
             .map(crate::whereis::Seen::from)
@@ -1126,7 +1142,7 @@ fn status_page(ui: &Ui, o: Pos2, item: &Item, snap: Option<&Snapshot>, frac: Opt
         crate::whereis::line(
             ui,
             o.x + column.max(33.0 + winui::text_width(p, label).ceil() + 6.0),
-            o.y + 161.0,
+            o.y + server_base,
             o.x + PAGE_TEXT_RIGHT,
             seen.as_ref(),
             &format!("progress-{}", item.id),

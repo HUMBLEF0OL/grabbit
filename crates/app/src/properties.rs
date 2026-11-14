@@ -112,15 +112,21 @@ impl Properties {
                 winui::text_fit(&p, o.x + x, o.y + base, s, LIGHT_TEXT(), o.x + 466.0);
             winui::copyable(ui, rect, ("props", base as i32), s, cut);
         };
-        // The file's card (plan 07): its kind's icon, its name (whole on hover) over its type.
-        winui::file_card(
+        // The file's card (plan 07): its kind's icon, its name (whole on hover) over its type,
+        // both copyable as before (right-click → Copy): the name from the card, the type from
+        // its line.
+        let card = r(o, 11.0, 8.0, 456.0, 62.0);
+        let kind = file_type(&item.file_name, &ext);
+        let (_, type_at) = winui::file_card(
             ui,
-            r(o, 11.0, 8.0, 456.0, 62.0),
+            card,
             crate::fileicons::Kind::File(&item.file_name),
             &item.file_name,
-            &file_type(&item.file_name, &ext),
+            &kind,
             None,
         );
+        winui::copyable(ui, card, "props-name", &item.file_name, true);
+        winui::copyable(ui, type_at, "props-type", &kind, false);
         let size = item.size.map_or_else(String::new, |s| {
             crate::i18n::fmt(
                 crate::i18n::t("{size} ({bytes} Bytes)"),
@@ -384,12 +390,14 @@ impl Properties {
                 o.y + 415.0,
                 e,
                 winui::ERROR(),
-                o.x + 250.0,
+                o.x + 466.0,
                 "props-error",
             );
         } else if !complete {
             let result = item.error.clone().unwrap_or_else(|| item.status_text());
-            let x1 = o.x + 250.0;
+            // To the window's text edge: the buttons that once ended it at 250 are in the
+            // footer now.
+            let x1 = o.x + 466.0;
             let (rect, cut) = winui::text_fit(
                 &p,
                 o.x + 11.0,
@@ -408,7 +416,8 @@ impl Properties {
         }
         // The footer (plan 07): Open and a torrent's Files... at the start, OK last; Enter
         // presses OK, as before. Escape closes the window (it has no Cancel), as before. The
-        // leading buttons keep their Tab order (Open, then Files...).
+        // leading buttons keep their Tab order (Open, then Files...), so Open comes first on
+        // screen too: the kit places them in Tab order (the plan's table notes it).
         let mut items = vec![winui::FooterItem::Button(
             // i18n: verb: opens the file
             winui::FooterButton::new(

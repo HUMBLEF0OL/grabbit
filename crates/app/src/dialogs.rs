@@ -1736,7 +1736,7 @@ fn start_probe(
     probe
 }
 
-// ---- Download complete (client 455 × 215) --------------------------------------------------
+// ---- Download complete (client 540 × 317, 339 with a notice) -------------------------------
 
 pub struct Complete {
     pub id: u64,
@@ -1880,14 +1880,12 @@ impl Complete {
                 // 5.05), through OLE. A dashed box with Graphite's grip and what it does.
                 {
                     let handle = r(o, lx, 176.0 + dy, right - lx, 40.0);
-                    let grip = ui
-                        .interact(
-                            handle,
-                            egui::Id::unique(("drag-out", self.id)),
-                            winui::pointer_drag(),
-                        )
-                        // i18n: tooltip of the handle in Download complete: drag it to drop the downloaded file somewhere
-                        .on_hover_text(crate::i18n::t("Drag the file into a folder or an app"));
+                    // Its line says what it does (no tooltip repeating it).
+                    let grip = ui.interact(
+                        handle,
+                        egui::Id::unique(("drag-out", self.id)),
+                        winui::pointer_drag(),
+                    );
                     if grip.hovered() {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
                     }
@@ -1925,7 +1923,7 @@ impl Complete {
                         winui::tahoma(),
                         glyph.right() + 10.0,
                         o.y + winui::baseline_in(176.0 + dy, 40.0),
-                        // i18n: Download complete: the drag strip's line (also its tooltip)
+                        // i18n: Download complete: the drag strip's line: drag it to drop the downloaded file somewhere
                         crate::i18n::t("Drag the file into a folder or an app"),
                         ink,
                     );
@@ -2069,7 +2067,8 @@ impl SpeedSettings {
                     true,
                 );
                 // Beyond IDM: a limit for all downloads together.
-                winui::etched_h(&p, o.x + 11.0, o.y + 108.0, 431.0);
+                // Across to the window's text edge (464 of its 480).
+                winui::etched_h(&p, o.x + 11.0, o.y + 108.0, 453.0);
                 winui::checkbox_light_until(
                     ui,
                     o + vec2(11.0, 121.0),
