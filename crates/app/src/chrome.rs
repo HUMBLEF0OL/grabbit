@@ -3380,6 +3380,7 @@ mod tests {
                         &mut result,
                         0,
                         &|_| None,
+                        &|_, _| None, // the fork's menu icons (plan 05b): none in this test
                     );
                     if result.is_some() {
                         chosen = result;
