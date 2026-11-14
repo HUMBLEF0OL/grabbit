@@ -149,7 +149,7 @@
   },
   "popup_support": {
     "message": "Support MDM",
-    "description": "link at the foot of the toolbar button's popup to the creator's GitHub Sponsors page (MDM is free; this is an optional donation)"
+    "description": "link at the foot of the toolbar button's popup to MDM's GitHub page (MDM is free; starring it is optional)"
   },
   "popup_fix": {
     "message": "How to fix it",

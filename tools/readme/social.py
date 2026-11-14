@@ -37,7 +37,8 @@ def main():
     card.paste(shot, (x0, y0), mask)
 
     # The words, upper left.
-    icon = Image.open(ROOT / "art/Mister Download Manager.png").convert("RGBA").resize((112, 112), Image.LANCZOS)
+    # The app icon, built from art/grabbit.svg by tools/icon/build_icon.py.
+    icon = Image.open(ROOT / "crates/app/assets/icons/app/mdm-256.png").convert("RGBA").resize((112, 112), Image.LANCZOS)
     card.paste(icon, (64, 56), icon)
     draw.text((196, 58), "Mister Download Manager", font=font("segoeuib.ttf", 56), fill=INK)
     draw.text((198, 132), "Downloads faster than IDM. Free, forever.", font=font("segoeui.ttf", 34), fill=ACCENT)

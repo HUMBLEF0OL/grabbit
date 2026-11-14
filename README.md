@@ -7,7 +7,7 @@
 <h3 align="center">Downloads faster than IDM. Free, forever.</h3>
 
 <p align="center">
-  <a href="https://github.com/anefzaoui/misterdownloadmanager/releases/latest"><img src="https://img.shields.io/badge/Download%20for-Windows-2a78d6?style=flat-square&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0yIDMuNWw4LjUtMS4ydjguMkgyek0xMS41IDIuMkwyMiAuOHY5LjdIMTEuNXpNMiAxMS41aDguNXY4LjJMMiAxOC41ek0xMS41IDExLjVIMjJ2OS43bC0xMC41LTEuNHoiLz48L3N2Zz4%3D" alt="Download for Windows" height="34"></a>
+  <a href="https://github.com/HUMBLEF0OL/grabbit/releases/latest"><img src="https://img.shields.io/badge/Download%20for-Windows-2a78d6?style=flat-square&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0yIDMuNWw4LjUtMS4ydjguMkgyek0xMS41IDIuMkwyMiAuOHY5LjdIMTEuNXpNMiAxMS41aDguNXY4LjJMMiAxOC41ek0xMS41IDExLjVIMjJ2OS43bC0xMC41LTEuNHoiLz48L3N2Zz4%3D" alt="Download for Windows" height="34"></a>
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/anefzaoui/misterdownloadmanager/stargazers"><img src="https://img.shields.io/github/stars/anefzaoui/misterdownloadmanager?style=social&label=Star%20MDM" alt="Star Mister Download Manager on GitHub" height="28"></a><br>
+  <a href="https://github.com/HUMBLEF0OL/grabbit/stargazers"><img src="https://img.shields.io/github/stars/HUMBLEF0OL/grabbit?style=social&label=Star%20MDM" alt="Star Mister Download Manager on GitHub" height="28"></a><br>
   <sub>⭐ <b>Like it? Give it a star.</b> MDM has no ads and no marketing budget: stars are how people find it.</sub>
 </p>
 
@@ -46,13 +46,13 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/anefzaoui/misterdownloadmanager/releases/latest"><img src="https://img.shields.io/github/v/release/anefzaoui/misterdownloadmanager?logo=github" alt="Latest release"></a>
-  <a href="https://github.com/anefzaoui/misterdownloadmanager/releases"><img src="https://img.shields.io/github/downloads/anefzaoui/misterdownloadmanager/total?logo=github" alt="Downloads"></a>
-  <a href="https://github.com/anefzaoui/misterdownloadmanager/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/anefzaoui/misterdownloadmanager/ci.yml?logo=github&label=ci" alt="CI"></a>
-  <a href="https://github.com/anefzaoui/misterdownloadmanager/stargazers"><img src="https://img.shields.io/github/stars/anefzaoui/misterdownloadmanager?logo=github" alt="GitHub stars"></a>
+  <a href="https://github.com/HUMBLEF0OL/grabbit/releases/latest"><img src="https://img.shields.io/github/v/release/HUMBLEF0OL/grabbit?logo=github" alt="Latest release"></a>
+  <a href="https://github.com/HUMBLEF0OL/grabbit/releases"><img src="https://img.shields.io/github/downloads/HUMBLEF0OL/grabbit/total?logo=github" alt="Downloads"></a>
+  <a href="https://github.com/HUMBLEF0OL/grabbit/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/HUMBLEF0OL/grabbit/ci.yml?logo=github&label=ci" alt="CI"></a>
+  <a href="https://github.com/HUMBLEF0OL/grabbit/stargazers"><img src="https://img.shields.io/github/stars/HUMBLEF0OL/grabbit?logo=github" alt="GitHub stars"></a>
   <a href="https://addons.mozilla.org/firefox/addon/mister-download-manager/"><img src="https://img.shields.io/amo/v/mister-download-manager?logo=firefoxbrowser&label=Firefox%20add-on" alt="Firefox add-on"></a>
   <a href="https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp"><img src="https://img.shields.io/chrome-web-store/v/ejoleppdfgjdndddcjoehopknmlglojp?logo=googlechrome&label=Chrome%20Web%20Store" alt="Chrome Web Store"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/anefzaoui/misterdownloadmanager" alt="GPL-3.0 license"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/HUMBLEF0OL/grabbit" alt="GPL-3.0 license"></a>
 </p>
 
 | 🚀 [Download](#download) | ⚡ [Why switch](#why-switch-from-idm) | 🖼️ [Screenshots](#screenshots) | ✨ [Getting started](docs/getting-started.md) | 📜 [Help and tutorials](docs/README.md) |
@@ -88,10 +88,10 @@ programs at their default settings ([how we measured](#the-benchmark-in-detail))
 ## Download
 
 <p align="center">
-  <a href="https://github.com/anefzaoui/misterdownloadmanager/releases/latest"><img src="https://img.shields.io/badge/Download%20for-Windows-2a78d6?style=flat-square&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0yIDMuNWw4LjUtMS4ydjguMkgyek0xMS41IDIuMkwyMiAuOHY5LjdIMTEuNXpNMiAxMS41aDguNXY4LjJMMiAxOC41ek0xMS41IDExLjVIMjJ2OS43bC0xMC41LTEuNHoiLz48L3N2Zz4%3D" alt="Download for Windows" height="34"></a>
+  <a href="https://github.com/HUMBLEF0OL/grabbit/releases/latest"><img src="https://img.shields.io/badge/Download%20for-Windows-2a78d6?style=flat-square&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0yIDMuNWw4LjUtMS4ydjguMkgyek0xMS41IDIuMkwyMiAuOHY5LjdIMTEuNXpNMiAxMS41aDguNXY4LjJMMiAxOC41ek0xMS41IDExLjVIMjJ2OS43bC0xMC41LTEuNHoiLz48L3N2Zz4%3D" alt="Download for Windows" height="34"></a>
 </p>
 
-On the [download page](https://github.com/anefzaoui/misterdownloadmanager/releases/latest), pick
+On the [download page](https://github.com/HUMBLEF0OL/grabbit/releases/latest), pick
 one:
 
 | File | Choose it when |
@@ -285,7 +285,7 @@ some corners are still "good enough for now".
 - Not yet: code signing.
 
 Bug reports and ideas are welcome in
-[Issues](https://github.com/anefzaoui/misterdownloadmanager/issues/new/choose): **Help → Report a problem**
+[Issues](https://github.com/HUMBLEF0OL/grabbit/issues/new/choose): **Help → Report a problem**
 in the app fills in your version and system. Pull requests are accepted under the same licence: start with [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Made possible by these amazing humans
@@ -330,20 +330,20 @@ shows what each one did.
 ## ⭐ Star history
 
 If MDM saves you time, a star is the quickest way to say so, and it helps the next person find
-a free download manager. [Star it on GitHub](https://github.com/anefzaoui/misterdownloadmanager/stargazers).
+a free download manager. [Star it on GitHub](https://github.com/HUMBLEF0OL/grabbit/stargazers).
 
-<a href="https://star-history.com/#anefzaoui/misterdownloadmanager&Date">
+<a href="https://star-history.com/#HUMBLEF0OL/grabbit&Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=anefzaoui/misterdownloadmanager&type=Date&theme=dark">
-    <img src="https://api.star-history.com/svg?repos=anefzaoui/misterdownloadmanager&type=Date" alt="Mister Download Manager's GitHub stars over time" width="600">
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HUMBLEF0OL/grabbit&type=Date&theme=dark">
+    <img src="https://api.star-history.com/svg?repos=HUMBLEF0OL/grabbit&type=Date" alt="Mister Download Manager's GitHub stars over time" width="600">
   </picture>
 </a>
 
 ## Support MDM
 
-MDM is free and always will be. If it saves you time, you can support its creator on
-[GitHub Sponsors](https://github.com/sponsors/anefzaoui). It's optional: nothing in the app
-changes or unlocks, and there is no paid edition.
+MDM is free and always will be. If it saves you time, [star it on
+GitHub](https://github.com/HUMBLEF0OL/grabbit/stargazers). Nothing in the app changes or unlocks,
+and there is no paid edition.
 
 ## Licence and credits
 

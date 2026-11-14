@@ -39,7 +39,7 @@ These pages explain each part of the program. The tutorials walk through the thi
 ## Settings
 
 - **[Options](options.md)** — every page of the Options window.
-- **[Themes](themes.md)** — the built-in looks (Classic, Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero, Aqua, Graphite), and how to make your own in a text file.
+- **[Themes](themes.md)** — Graphite, MDM's look, light and dark, and how to make your own theme in a text file.
 - **[Portable mode](portable.md)** — run MDM from a folder or a USB stick without installing it.
 - **[Keyboard shortcuts](keyboard-shortcuts.md)** — every key the main window answers, and screen readers.
 - **[Command line and automation](command-line.md)** — IDM's command-line switches, the `misterdownloadmanager-cli` tool, and the automation API other programs can use.
@@ -61,8 +61,8 @@ These pages explain each part of the program. The tutorials walk through the thi
 - **[Crash reports](crash-reports.md)** — what the crash report window shows when MDM closes unexpectedly or stops responding, what a report contains, and how to send it.
 - **[Troubleshooting](troubleshooting.md)** — what to check when a download fails, the browser doesn't hand over a download, or a schedule doesn't start.
 - **[The browser and MDM aren't connected](browser-help.md)** — what the extension's red **!** means, reason by reason, and how to fix each.
-- **[Releases](https://github.com/anefzaoui/misterdownloadmanager/releases)** — download the latest version.
-- **[Report a problem](https://github.com/anefzaoui/misterdownloadmanager/issues/new/choose)** — or use **Help → Report a problem** in MDM, which fills in your version, system and how MDM was installed for you.
+- **[Releases](https://github.com/HUMBLEF0OL/grabbit/releases)** — download the latest version.
+- **[Report a problem](https://github.com/HUMBLEF0OL/grabbit/issues/new/choose)** — or use **Help → Report a problem** in MDM, which fills in your version, system and how MDM was installed for you.
 
 ---
 
