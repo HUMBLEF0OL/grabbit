@@ -5434,9 +5434,11 @@ impl App {
     fn when_done(&mut self, w: crate::queue::WhenDone) {
         // Ends dial-up (RAS) connections; nothing happens without one.
         if w.hang_up {
-            let _ = std::process::Command::new("rasdial")
-                .arg("/disconnect")
-                .spawn();
+            crate::launch::spawn("rasdial", move || {
+                let _ = std::process::Command::new("rasdial")
+                    .arg("/disconnect")
+                    .spawn();
+            });
         }
         if let Some(mode) = w.turn_off {
             self.turn_off = Some(dialogs::TurnOffCountdown::new(mode, w.force));
