@@ -59,7 +59,7 @@ pub fn install_fonts(defs: &mut egui::FontDefinitions, font_dir: Option<&std::pa
         .cloned()
         .unwrap_or_default();
     for (family, file) in [("tahoma", "tahoma.ttf"), ("tahoma-bold", "tahomabd.ttf")] {
-        let fonts = match font_dir.and_then(|d| std::fs::read(d.join(file)).ok()) {
+        let fonts = match font_dir.and_then(|d| crate::theme::read_font(&d.join(file))) {
             Some(bytes) => {
                 defs.font_data.insert(
                     family.into(),

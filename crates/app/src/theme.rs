@@ -262,8 +262,52 @@ const SYMBOL_FONTS: &[&str] = &["seguisym.ttf"];
 fn symbol_fonts() -> Vec<Vec<u8>> {
     SYMBOL_FONTS
         .iter()
-        .filter_map(|f| std::fs::read(font_dir().join(f)).ok())
+        .filter_map(|f| read_font(&font_dir().join(f)))
         .collect()
+}
+
+/// Whether egui can draw with `bytes`: a TrueType or OpenType font, or a collection of them (its
+/// first face), as the parser egui reads fonts with reads it. A damaged file, one cut short, a
+/// Type 1 or bitmap font or anything else is not one, and egui stops on a font it was given and
+/// can't read (upstream issue 931).
+fn loadable_font(bytes: &[u8]) -> bool {
+    use skrifa::raw::TableProvider as _;
+    let Ok(font) = skrifa::FontRef::from_index(bytes, 0) else {
+        return false;
+    };
+    // A font whose list of tables is whole but whose tables are cut short (a copy that stopped)
+    // passes the first look: every table it lists is in the file, and those every font has read.
+    font.table_directory
+        .table_records()
+        .iter()
+        .all(|table| font.table_data(table.tag()).is_some())
+        && font.head().is_ok()
+        && font.hhea().is_ok()
+        && font.maxp().is_ok()
+        && font.cmap().is_ok()
+}
+
+/// A font file's bytes, when egui can draw with them ([`loadable_font`]). Any other file is
+/// passed over, and the log says so (once a run: the fonts are loaded again with each theme
+/// change): the next font in line is used instead.
+pub(crate) fn read_font(path: &std::path::Path) -> Option<Vec<u8>> {
+    static SAID: std::sync::Mutex<Option<std::collections::HashSet<std::path::PathBuf>>> =
+        std::sync::Mutex::new(None);
+    let bytes = std::fs::read(path).ok()?;
+    if loadable_font(&bytes) {
+        return Some(bytes);
+    }
+    let mut said = SAID.lock().unwrap_or_else(|e| e.into_inner());
+    if said
+        .get_or_insert_with(Default::default)
+        .insert(path.to_owned())
+    {
+        tracing::warn!(
+            "fonts: {} is not a TrueType or OpenType font, passed over",
+            path.display()
+        );
+    }
+    None
 }
 
 /// The folder the font tables name files in.
@@ -382,7 +426,7 @@ fn fallback_font(c: char) -> Option<(String, egui::FontData)> {
     let font = loaded
         .entry(key.clone())
         .or_insert_with(|| {
-            let bytes = files.iter().find_map(|f| std::fs::read(f).ok())?;
+            let bytes = files.iter().find_map(|f| read_font(f))?;
             let mut tweak = egui::FontTweak::default();
             tweak.set_baseline_fallback(true);
             tweak.hinting_target =
@@ -414,7 +458,7 @@ fn add_script_fallback(ctx: &egui::Context) {
 
 /// The interface font: Segoe UI as IDM has it.
 fn ui_font() -> Option<Vec<u8>> {
-    std::fs::read(font_dir().join("segoeui.ttf")).ok()
+    read_font(&font_dir().join("segoeui.ttf"))
 }
 
 /// A font MDM carries for a theme to name (`font = "geist"`): its Regular, Medium and SemiBold.
@@ -730,6 +774,83 @@ mod mode_tests {
             assert_eq!(wanted(true, false, system), system, "following the system");
             assert!(!wanted(false, false, system), "support off: light");
         }
+    }
+}
+
+/// Upstream issue 931: a system font egui can't read (a damaged or cut-short file, a Type 1 or
+/// bitmap font) is passed over for the next one, never given to egui, which stops on it.
+#[cfg(test)]
+mod font_file_tests {
+    use super::{loadable_font, read_font};
+
+    /// A real TrueType font, and another: egui's own (Ubuntu Light, Hack).
+    fn real_ttf(name: &str) -> Vec<u8> {
+        egui::FontDefinitions::default().font_data[name]
+            .bytes()
+            .to_vec()
+    }
+
+    #[test]
+    fn only_fonts_egui_can_read_are_taken() {
+        let ttf = real_ttf("Ubuntu-Light");
+        assert!(loadable_font(&ttf), "a real TrueType font");
+        assert!(loadable_font(&real_ttf("Hack")), "another");
+
+        // A gzipped file, an uncompressed PCF ("\x01fcp"), a BDF, a Type 1 (.pfb) font.
+        let mut gz = vec![0x1f, 0x8b, 0x08, 0x00, 0, 0, 0, 0, 0x02, 0x03];
+        gz.extend((0..4000u32).map(|i| (i * 31 % 251) as u8));
+        let mut pcf = b"\x01fcp".to_vec();
+        pcf.extend([8, 0, 0, 0].iter().chain(&[0u8; 200]));
+        let bdf =
+            b"STARTFONT 2.1\nFONT -misc-fixed-medium-r-normal--13-120-75-75-c-120-iso10646-1\n";
+        let mut pfb = vec![0x80, 0x01, 0x10, 0x00, 0x00, 0x00];
+        pfb.extend(b"%!PS-AdobeFont-1.0: Test 001.000\n");
+        // Random bytes (a fixed xorshift, so the test is the same every run).
+        let mut x = 0x9e37_79b9u32;
+        let random: Vec<u8> = (0..8192)
+            .map(|_| {
+                x ^= x << 13;
+                x ^= x >> 17;
+                x ^= x << 5;
+                x as u8
+            })
+            .collect();
+        for (what, bytes) in [
+            ("a gzipped file", gz.as_slice()),
+            ("a PCF font", &pcf),
+            ("a BDF font", bdf),
+            ("a Type 1 font", &pfb),
+            ("random bytes", &random),
+            ("an empty file", &[]),
+            ("a TrueType font cut in half", &ttf[..ttf.len() / 2]),
+            (
+                "a TrueType font cut after its table list",
+                &ttf[..ttf.len().min(400)],
+            ),
+        ] {
+            assert!(!loadable_font(bytes), "{what} was taken");
+        }
+    }
+
+    /// A damaged font file in the fonts folder is passed over: no bytes for egui, and the
+    /// families fall back to the next font (egui's own); a good file is read as before.
+    #[test]
+    fn a_damaged_font_file_is_passed_over() {
+        let dir = tempfile::tempdir().unwrap();
+        let ttf = real_ttf("Ubuntu-Light");
+        let damaged = dir.path().join("tahoma.ttf");
+        std::fs::write(&damaged, &ttf[..ttf.len() / 2]).unwrap();
+        let good = dir.path().join("tahomabd.ttf");
+        std::fs::write(&good, &ttf).unwrap();
+
+        assert!(read_font(&damaged).is_none());
+        assert_eq!(read_font(&good), Some(ttf));
+        assert!(read_font(&dir.path().join("gone.ttf")).is_none());
+
+        let mut defs = egui::FontDefinitions::default();
+        crate::winui::install_fonts(&mut defs, Some(dir.path()));
+        assert!(!defs.font_data.contains_key("tahoma"), "the damaged file");
+        assert!(defs.font_data.contains_key("tahoma-bold"), "the good one");
     }
 }
 

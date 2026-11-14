@@ -513,6 +513,8 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   hand, the critical ones first. Ready for Graphite only: an old
   theme's licence never counts as moved to Graphite's, and a commit with a theme other than
   Graphite says to skip it.
+- ✅ No crash at start on a damaged or unreadable system font (ported from upstream issue 931):
+  the font is passed over for the next one in line, and the log names it.
 - ✅ No false "window stopped responding" report in the minute after the computer wakes, and
   every freeze report names what the window was doing (ported from upstream issues 574 and 613).
 - ✅ GitHub Actions run for `main` only: the build and tests on pull requests into `main` (a
