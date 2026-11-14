@@ -3103,13 +3103,14 @@ impl OptionsDialog {
                             };
                         }
                         if !said.is_empty() {
-                            // After the buttons, as the mockup's hint.
+                            // After the buttons, where the mockup has it; in the text's own
+                            // colour, as before: it may say the file could not be read.
                             let (rect, cut) = winui::text_fit(
                                 &p,
                                 o.x + import_at.0 + import_at.1 + 12.0,
                                 o.y + winui::baseline_in(row, winui::CONTROL_H),
                                 &said,
-                                crate::theme::colors().muted,
+                                LIGHT_TEXT(),
                                 o.x + W - e,
                             );
                             if cut {
