@@ -180,6 +180,10 @@ def main() -> None:
         git(r, "update-ref", "refs/remotes/origin/dev", "HEAD")
         git(r, "checkout", "-q", "-f", "-b", "upstream-sync/test", "dev")
         st = status(r)
+        # -C: the same answer from outside the repository, as git -C gives (no `cd` needed).
+        away = json.loads(sync(r.parent, "-C", str(r), "status", "--json").stdout)
+        assert [c["sha"] for c in away["commits"]] == [c["sha"] for c in st["commits"]], away
+        assert sync(r.parent, "-C", str(r / "no-such-folder"), "status", ok=False).returncode == 1
         k = {n: st["by"][s] for n, s in U.items() if s in st["by"]}
         assert st["fork_point"] == base
         assert k["clean"]["kind"] == "clean" and "ROADMAP.md" in k["clean"]["left_out"], k["clean"]

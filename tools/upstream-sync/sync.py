@@ -29,6 +29,7 @@ a merge commit or a rebase, never squashed: a squash drops the trailers, so a sq
 `ported?` and a revert of a squashed PR goes unseen. `equivalent`: the same change is already in
 the fork (by patch-id), made without the tool.
 
+    python tools/upstream-sync/sync.py [-C <worktree>] <command> …   # -C: as git's, no cd
     python tools/upstream-sync/sync.py doctor [--fix]   # remotes, gh, branches: checked (and set)
     python tools/upstream-sync/sync.py status [--fetch] [--json] [--all]
     python tools/upstream-sync/sync.py show <sha>       # one commit: why it sorts as it does
@@ -1438,6 +1439,9 @@ def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):  # the Windows console's code page can't print every
         stream.reconfigure(encoding="utf-8", errors="replace")  # upstream subject
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    # As git's -C: work on the repository (or worktree) at PATH, not the current folder's, so a run
+    # in a worktree needs no `cd` (a `cd` in a compound command asks for permission every time).
+    p.add_argument("-C", dest="repo", metavar="PATH", help="run as if started in PATH")
     sub = p.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("doctor")
     d.add_argument("--fix", action="store_true")
@@ -1467,6 +1471,11 @@ def main(argv: list[str] | None = None) -> int:
     pr.add_argument("--force", action="store_true", help="--force-with-lease, this branch only")
     a = p.parse_args(argv)
     try:
+        if a.repo:
+            try:
+                os.chdir(a.repo)
+            except OSError as e:
+                raise Fail(f"-C {a.repo}: {e.strerror}")
         os.chdir(root())  # pathspecs are relative to the current folder; ours are the repo's
         return {"doctor": cmd_doctor, "status": cmd_status, "show": cmd_show, "watch": cmd_watch,
                 "report": cmd_report, "pick": cmd_pick, "record": cmd_record, "pr": cmd_pr}[a.cmd](a)
