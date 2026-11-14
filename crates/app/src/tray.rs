@@ -1,5 +1,6 @@
 //! The notification-area icon (IDM: "IDM menu pops up when you right click on IDM icon"
-//! [IDM-doc]). Left click brings the window back; right click shows the menu. The menu's
+//! [IDM-doc]). Left click shows the window again, or hides it there while it is in front; right
+//! click shows the menu. The menu's
 //! contents are ours ([unknown] IDM's exact items, lab).
 
 use std::sync::mpsc::{Receiver, Sender, channel};
@@ -18,6 +19,9 @@ use tray_icon::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIc
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrayCmd {
     Show,
+    /// Left click on the icon: the window back when hidden, minimized or behind other
+    /// windows, hidden there when in front.
+    Toggle,
     AddUrl,
     Batch,
     LimiterOn,
@@ -218,7 +222,7 @@ impl Tray {
                 ..
             } = e
             {
-                let _ = icon_tx.send(TrayCmd::Show);
+                let _ = icon_tx.send(TrayCmd::Toggle);
                 icon_ctx.request_repaint();
             }
         }));

@@ -415,6 +415,32 @@ fn next_trim(done: u32) -> Duration {
 /// before it shows minimized.
 const TRAY_GRACE: Duration = Duration::from_secs(30);
 
+/// How long after the main window loses the focus a tray click still counts it as in front
+/// (upstream issue 520): clicking the icon makes the taskbar the foreground window first, so the
+/// window reads as unfocused by the time Toggle runs.
+const TRAY_TOGGLE_GRACE: Duration = Duration::from_millis(500);
+
+/// Whether a left click on the tray icon hides the window instead of showing it. Hidden or
+/// minimized never hides. In front hides: focused, focused until just now (the click took the
+/// focus), or nothing of another program over it as Windows says (`in_front`,
+/// `win32::main_window_in_front`; upstream issue 640: with the icon under the taskbar's ^ the
+/// flyout took the focus well before the click). Otherwise it is behind other windows and comes
+/// forward. Unknown means show, never hide.
+fn tray_toggle_hide(
+    hidden: bool,
+    minimized: bool,
+    focused: Option<bool>,
+    since_focused: Option<Duration>,
+    in_front: Option<bool>,
+) -> bool {
+    if hidden || minimized {
+        return false;
+    }
+    focused == Some(true)
+        || (focused == Some(false) && since_focused.is_some_and(|d| d < TRAY_TOGGLE_GRACE))
+        || in_front == Some(true)
+}
+
 /// Where a start with the session (#226) leaves the window, decided here alone.
 #[derive(Debug, PartialEq)]
 enum AtLogin {
@@ -645,6 +671,8 @@ pub struct App {
     /// a real exit under way (closing the window otherwise only hides it, as IDM does).
     tray: Option<crate::tray::Tray>,
     tray_limiter: Option<bool>,
+    /// When the main window was last seen focused, for a tray click ([`tray_toggle_hide`]).
+    tray_last_focused: Option<Instant>,
     hidden: bool,
     /// Hidden to the tray: when to hand the window's memory back to the system next (#72), and
     /// how many times it was since the window hid.
@@ -1284,6 +1312,7 @@ impl App {
             limit_notice: None,
             tray: None,
             tray_limiter: None,
+            tray_last_focused: None,
             // Started with the session (#226): hidden from the first frame.
             hidden: start == crate::Start::Session,
             trim_when_hidden: (start == crate::Start::Session)
@@ -2639,9 +2668,9 @@ impl App {
             cmd.url = Some(file);
         }
         // The browser's download button over a video: the Download video window, looking the
-        // page up at once.
+        // page up at once. Only the dialog opens (upstream issue 520): it is a window of its own.
         if let Some(page) = cmd.video_page.as_deref() {
-            self.show_window(ctx);
+            self.show_for_dialog(ctx);
             let page = page.to_owned();
             self.video_dlg = Some(self.video_dialog(Some((&page, cmd))));
             return;
@@ -2655,7 +2684,7 @@ impl App {
         }
         // The browser's right-click menu: a page's (or a selection's) links, to tick in Import.
         if !cmd.links.is_empty() {
-            self.show_window(ctx);
+            self.show_for_dialog(ctx);
             let found = cmd
                 .links
                 .iter()
@@ -2690,7 +2719,7 @@ impl App {
                     && std::path::Path::new(u.trim_matches('"')).is_file())
         }) {
             let m = m.trim().to_owned();
-            self.show_window(ctx);
+            self.show_for_dialog(ctx);
             self.open_torrent_dialog(Some(m), ctx);
             return;
         }
@@ -2718,7 +2747,7 @@ impl App {
         };
         if !cmd.silent && (torrent(&url) || final_url.as_ref().is_some_and(torrent)) {
             let parts = self.request_parts(&url, None, &cmd, crate::debrid::browser_started(&cmd));
-            self.show_window(ctx);
+            self.show_for_dialog(ctx);
             self.open_torrent_dialog_with(
                 Some(url.to_string()),
                 Some(crate::torrents::Remote { url, parts }),
@@ -3393,6 +3422,15 @@ impl App {
         }
     }
 
+    /// Before a browser handoff's dialog (upstream issue 520): the main window stays where it is
+    /// (hidden, minimized) and only the dialog opens, as dialogs are windows of their own.
+    fn show_for_dialog(&mut self, ctx: &egui::Context) {
+        let minimized = ctx.input(|i| i.viewport().minimized == Some(true));
+        if !self.hidden && !minimized {
+            self.show_window(ctx);
+        }
+    }
+
     /// What the shell last said of the tray icon: the shell can accept it and still show
     /// nothing, and a window hidden with no icon to click has no way back. The answer comes from
     /// the tray's watcher thread and is never waited for (upstream issue 747).
@@ -3505,6 +3543,10 @@ impl App {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
         }
+        // Kept every frame: by the time a tray click arrives the taskbar has the focus.
+        if ctx.input(|i| i.viewport().focused) == Some(true) {
+            self.tray_last_focused = Some(Instant::now());
+        }
         let cmds = self.tray.as_ref().map(|t| t.poll()).unwrap_or_default();
         for c in cmds {
             use crate::tray::TrayCmd;
@@ -3512,6 +3554,18 @@ impl App {
             let cmd = match c {
                 TrayCmd::Show => {
                     self.show_window(ctx);
+                    continue;
+                }
+                TrayCmd::Toggle => {
+                    let minimized = ctx.input(|i| i.viewport().minimized == Some(true));
+                    let focused = ctx.input(|i| i.viewport().focused);
+                    let since_focused = self.tray_last_focused.map(|t| t.elapsed());
+                    let in_front = crate::win32::main_window_in_front();
+                    if tray_toggle_hide(self.hidden, minimized, focused, since_focused, in_front) {
+                        self.hide_to_tray(ctx);
+                    } else {
+                        self.show_window(ctx);
+                    }
                     continue;
                 }
                 TrayCmd::AddUrl => Cmd::AddUrl,
@@ -9872,6 +9926,38 @@ mod at_login_tests {
         // No icon at all (the tray couldn't be made): the grace from the start.
         assert_eq!(at_login(TRAY_GRACE, None, false), AtLogin::Minimize);
         assert_eq!(at_login(s(60), None, true), AtLogin::Minimize);
+    }
+}
+
+#[cfg(test)]
+mod tray_toggle_tests {
+    use super::{TRAY_TOGGLE_GRACE, tray_toggle_hide};
+    use std::time::Duration;
+
+    /// A left click on the tray icon toggles (upstream issues 520, 640): hidden or minimized
+    /// shows; in front hides; behind other windows shows.
+    #[test]
+    fn only_a_window_in_front_hides() {
+        let ms = Duration::from_millis;
+        let (just_now, long_ago) = (
+            Some(TRAY_TOGGLE_GRACE - ms(1)),
+            Some(TRAY_TOGGLE_GRACE + ms(1)),
+        );
+        // Hidden or minimized: always shows, whatever else says.
+        assert!(!tray_toggle_hide(true, false, Some(false), None, Some(true)));
+        assert!(!tray_toggle_hide(false, true, Some(true), None, Some(true)));
+        // Focused: hides.
+        assert!(tray_toggle_hide(false, false, Some(true), None, None));
+        // The click took the focus just now: still in front, hides.
+        assert!(tray_toggle_hide(false, false, Some(false), just_now, None));
+        // Focus gone long ago (the ^ flyout took it), nothing over the window: hides.
+        assert!(tray_toggle_hide(false, false, Some(false), long_ago, Some(true)));
+        // Behind other windows: shows.
+        assert!(!tray_toggle_hide(false, false, Some(false), long_ago, Some(false)));
+        assert!(!tray_toggle_hide(false, false, Some(false), None, Some(false)));
+        // Unknown: show, never hide.
+        assert!(!tray_toggle_hide(false, false, None, None, None));
+        assert!(!tray_toggle_hide(false, false, None, Some(Duration::ZERO), None));
     }
 }
 
