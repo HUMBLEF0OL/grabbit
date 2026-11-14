@@ -497,7 +497,9 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   translated website and the translation tools are removed. File names in any script still show
   as they are. The earlier state is kept on the `archive/multiplatform-i18n` branch.
 - ✅ Problem reports, crash reports, update checks, the security contact and the installer's
-  links go to this fork's repository, not the original's.
+  links go to this fork's repository, not the original's; so do the README's, the help pages'
+  and the website's links, and **Help → Support MDM** (the fork's page on GitHub, until it has a
+  GitHub Sponsors page).
 - ✅ Windows only: the Linux and macOS builds (AppImage, .deb, .rpm, tar.gz, .dmg), the Safari
   extension and the Docker image are no longer made, and their code, packaging, CI jobs and help
   pages are removed. MDM on Windows works as before. The multi-platform state is kept on the
@@ -506,8 +508,9 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   upstream's new commits (applies, applies without the removed parts, needs a port by hand,
   nothing to take), picks the ones that apply onto a sync branch and records every decision;
   each run reaches `dev` by a pull request, and a weekly report (from the first release on)
-  lists what waits. Looked at up to upstream `68ba617edb3d` (2026-11-12): 19 fixes taken and
-  8 ported by hand (the critical ones), 12 skipped, 18 deferred. Ready for Graphite only: an old
+  lists what waits. Looked at up to upstream `9f7a6fc9ce8a` (2026-11-14): 24 fixes taken and
+  8 ported by hand (the critical ones), 42 skipped, 19 deferred; the rest wait to be ported by
+  hand, the critical ones first. Ready for Graphite only: an old
   theme's licence never counts as moved to Graphite's, and a commit with a theme other than
   Graphite says to skip it.
 - ✅ GitHub Actions run for `main` only: the build and tests on pull requests into `main` (a
@@ -516,6 +519,9 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
 - ✅ Graphite's buttons: the line along a button's bottom no longer shows past its rounded
   corners, and buttons, boxes and drop-downs share rounder-than-Windows corners in proportion to
   their height, so a dialog's short buttons no longer look like pills.
+- ✅ A new app icon, Grabbit's double chevron in Graphite's cyan and amethyst, with no tile behind
+  it: in the title bar, the taskbar, the tray, the installer, About and the browser extension,
+  and on the website (logo, favicon, home-screen icon) and the repository's social preview.
 
 ## Being worked on
 
@@ -565,13 +571,20 @@ These ship in a later version, when they're ready.
   password, 7-Zip needed, Create folder, Download limits, the notices, the browser extension's
   offer and the drop target; "Add many downloads" is that Confirm), their keys unchanged (still
   to come, with plan 09's polish: the Scheduler at the mockup's width and short enough for a
-  1080p screen at 200 %), and the Options window's pages listed down the side (each with its
-  icon and title at the top, OK and Help in a footer; Up and Down added to its keys, and
-  Ctrl+Shift+Tab going back a page), at the mock's 820 x 520, and the windows its pages open on
-  the dialogs' common parts (DNS settings, Add an account, Addresses left to the browser, Keys,
-  Test browser integration, Download panels, Pair a device, New and Edit login and exception),
-  their keys unchanged (still to come: the help page's pictures, retaken by the docs-shots
-  workflow). Next: the Options pages on the dialogs' common parts (plan 08b)
+  1080p screen at 200 %), and the help pages, the website's Themes page, its theme prompt and
+  llms.txt describing Graphite as the only look (its picture there comes with the new
+  screenshots), and the Options window's pages listed down the side (each with its icon and
+  title at the top, OK and Help in a footer; Up and Down added to its keys, and Ctrl+Shift+Tab
+  going back a page), at the mock's 820 x 520, and the windows its pages open on the dialogs'
+  common parts (DNS settings, Add an account, Addresses left to the browser, Keys, Test browser
+  integration, Download panels, Pair a device, New and Edit login and exception), their keys
+  unchanged (still to come: the help page's pictures, retaken by the docs-shots workflow).
+  Next: the Options pages on the dialogs' common parts (plan 08b)
+- 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
+  and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
+  carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:
+  a checker that lists every place the old name is still shown (`tools/rename/check.py`) and the
+  plan refreshed against today's code
 
 ### Bugs being looked into
 
