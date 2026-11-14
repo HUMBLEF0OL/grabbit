@@ -16,7 +16,7 @@ Delete the `data` folder (or make it read-only) and the same copy behaves like t
 
 ## Set it up
 
-1. Download `MisterDownloadManager-<version>-portable.zip` from [Releases](https://github.com/anefzaoui/misterdownloadmanager/releases).
+1. Download `MisterDownloadManager-<version>-portable.zip` from [Releases](https://github.com/HUMBLEF0OL/grabbit/releases).
 2. Unzip it where you want MDM to live, for example `E:\MDM` on a USB stick.
 3. Run `misterdownloadmanager.exe` from there.
 

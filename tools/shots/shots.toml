@@ -9,7 +9,7 @@
 #            ("options:connection"), "@main", "@menu:<show argument>" (a menu, over the main
 #            window), "@download:<lab server path>" (Download File Info, as a browser hands a
 #            download over), "@complete:<path>" (Download complete), "@torrent" (Add torrent for
-#            tools/lab/Open Movie Night.torrent); "a+b" runs /show a first ("theme:breeze+@main").
+#            tools/lab/Open Movie Night.torrent); "a+b" runs /show a first ("theme:graphite+@main").
 #            Shots with the same take share one capture.
 #   from     instead of take: a picture already in the repository (the browser's, made by
 #            tools/readme/browser-shots.mjs), and from_dark its night version if there is one
@@ -64,44 +64,8 @@ page = "getting-started.md"
 under = "Themes"
 take = "@menu:menu:3:theme"
 crop = [145, 28, 366, 466]
-alt = "View → Theme open: Classic, Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero, Aqua and Graphite, Add a theme file… and Open themes folder"
+alt = "View → Theme open: Graphite, Add a theme file… and Open themes folder"
 caption = "View → Theme switches at once, keeping the layout."
-
-[[shot]]
-id = "theme-classic"
-page = "getting-started.md"
-under = "Themes"
-take = "theme:classic+@main"
-crop = [0, 0, 560, 260]
-alt = "The main window's toolbar and categories in the Classic theme"
-caption = "Classic"
-
-[[shot]]
-id = "theme-high-contrast"
-page = "getting-started.md"
-under = "Themes"
-take = "theme:high-contrast+@main"
-crop = [0, 0, 560, 260]
-alt = "The main window's toolbar and categories in the High contrast theme"
-caption = "High contrast"
-
-[[shot]]
-id = "theme-adwaita"
-page = "getting-started.md"
-under = "Themes"
-take = "theme:adwaita+@main"
-crop = [0, 0, 560, 260]
-alt = "The main window's toolbar and categories in the Adwaita theme"
-caption = "Adwaita"
-
-[[shot]]
-id = "theme-breeze"
-page = "getting-started.md"
-under = "Themes"
-take = "theme:breeze+@main"
-crop = [0, 0, 560, 260]
-alt = "The main window's toolbar and categories in the Breeze theme"
-caption = "Breeze"
 
 # ---- Adding downloads ---------------------------------------------------------------------------
 
@@ -619,85 +583,14 @@ caption = "Test browser integration... says whether the browser reaches MDM."
 # website file that lists them, where `make.py check` looks for "images/help/<id>.webp".
 
 [[shot]]
-id = "site-theme-classic"
+id = "site-theme-graphite"
 page = "website/content/themes.toml"
-take = "theme:classic+@main"
+take = "theme:graphite+@main"
 # The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
+# Not taken yet (plan 09b-shots): take it, then uncomment `shot` in website/content/themes.toml.
 crop = [0, 0, 930, 300]
-alt = "The main window in the Classic theme"
-caption = "Classic"
-
-[[shot]]
-id = "site-theme-native"
-page = "website/content/themes.toml"
-take = "theme:native+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Native theme"
-caption = "Native"
-
-[[shot]]
-id = "site-theme-high-contrast"
-page = "website/content/themes.toml"
-take = "theme:high-contrast+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the High contrast theme"
-caption = "High contrast"
-
-[[shot]]
-id = "site-theme-metro"
-page = "website/content/themes.toml"
-take = "theme:metro+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Metro theme"
-caption = "Metro"
-
-[[shot]]
-id = "site-theme-adwaita"
-page = "website/content/themes.toml"
-take = "theme:adwaita+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Adwaita theme"
-caption = "Adwaita"
-
-[[shot]]
-id = "site-theme-breeze"
-page = "website/content/themes.toml"
-take = "theme:breeze+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Breeze theme"
-caption = "Breeze"
-
-[[shot]]
-id = "site-theme-luna"
-page = "website/content/themes.toml"
-take = "theme:luna+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Luna theme"
-caption = "Luna"
-
-[[shot]]
-id = "site-theme-aero"
-page = "website/content/themes.toml"
-take = "theme:aero+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Aero theme"
-caption = "Aero"
-
-[[shot]]
-id = "site-theme-aqua"
-page = "website/content/themes.toml"
-take = "theme:aqua+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Aqua theme"
-caption = "Aqua"
+alt = "The main window in the Graphite theme"
+caption = "Graphite"
 
 [[shot]]
 id = "site-gallery"

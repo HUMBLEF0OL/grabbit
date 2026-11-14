@@ -42,16 +42,16 @@ WEB = ROOT / "website"
 CONTENT = WEB / "content"
 OUT = ROOT / "target" / "site"
 SITE = "https://misterdownloadmanager.com"
-REPO = "https://github.com/anefzaoui/misterdownloadmanager"
+REPO = "https://github.com/HUMBLEF0OL/grabbit"
 # The Firefox add-on's listing (crates/ipc/src/extension.rs FIREFOX_PAGE): {{AMO}} in pages, and
 # <!--@amo--> for its Add to Firefox button.
 AMO = "https://addons.mozilla.org/firefox/addon/mister-download-manager/"
 # The extension's listing in the Chrome Web Store (crates/ipc/src/extension.rs STORE_ID), for
 # Chrome, Edge, Brave, Opera and Vivaldi: {{CWS}} in pages; <!--@stores--> is both buttons.
 CWS = "https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp"
-# The creator's GitHub Sponsors page: the header, the footer and the home page's Support MDM
-# (the app's Help menu and About, the extension's popup and .github/FUNDING.yml point there too).
-SPONSORS = "https://github.com/sponsors/anefzaoui"
+# The header's, the footer's and the home page's Support MDM: this fork's repository until its
+# owner's GitHub Sponsors page exists (see .github/FUNDING.yml; the app and the popup match).
+SPONSORS = REPO
 NAME = "Mister Download Manager"
 # The next release, as the site announces it. What is in the source but not in a download yet
 # says "Coming with version <this>" (coming_banner(): the feature pages, the Themes page, the
@@ -408,7 +408,7 @@ def header(section: str = "") -> str:
           <svg class="for-light-i" aria-hidden="true"><use href="#i-moon"/></svg><svg class="for-dark-i" aria-hidden="true"><use href="#i-sun"/></svg>
         </button>
         <a class="icon-btn top-gh" href="{REPO}" aria-label="Mister Download Manager on GitHub" title="GitHub"><svg aria-hidden="true"><use href="#i-github"/></svg></a>
-        <a class="icon-btn top-sponsor" href="{SPONSORS}" aria-label="Sponsor the creator on GitHub" title="Sponsor"><svg aria-hidden="true"><use href="#i-heart"/></svg></a>
+        <a class="icon-btn top-sponsor" href="{SPONSORS}" aria-label="Support MDM on GitHub" title="Support"><svg aria-hidden="true"><use href="#i-heart"/></svg></a>
         <a class="btn btn-go top-dl" href="/download.html">Download</a>
         <details class="menu">
           <summary class="icon-btn" aria-label="Menu"><svg aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
@@ -416,7 +416,7 @@ def header(section: str = "") -> str:
             {links}
             <a href="/contributing.html">Contribute</a>
             <a href="{REPO}">GitHub</a>
-            <a href="{SPONSORS}">Sponsor</a>
+            <a href="{SPONSORS}">Support</a>
           </nav>
         </details>
       </div>
@@ -462,7 +462,7 @@ def footer() -> str:
           <a class="brand" href="/"><img src="/assets/logo-64.png" width="34" height="34" alt=""><span>{NAME}</span></a>
           <p class="foot-tag">The download manager you already know, rebuilt to be faster. Free, open source and written from scratch in Rust.</p>
           <a class="text-link foot-star" href="{REPO}"><svg aria-hidden="true"><use href="#i-star"/></svg> Star it on GitHub</a>
-          <a class="text-link foot-star" href="{SPONSORS}"><svg aria-hidden="true"><use href="#i-heart"/></svg> Sponsor the creator</a>
+          <a class="text-link foot-star" href="{SPONSORS}"><svg aria-hidden="true"><use href="#i-heart"/></svg> Support MDM</a>
         </div>
         <div>
           <h2>Product</h2>
@@ -1399,8 +1399,7 @@ def build_features() -> None:
 # ---- Themes: website/content/themes.toml, and the theme file format from the app's own code -----
 
 THEME_SAMPLE = '''name = "Harbour"
-inherits = "classic"
-icons = "color"
+inherits = "graphite"
 
 [seeds.light]
 background = "#eef3f6"
@@ -1452,8 +1451,12 @@ def build_themes() -> None:
     for i, th in enumerate(themes):
         tag = coming_banner("tag") if th.get("tag") and is_coming(since) else ""
         note = f'<p class="theme-note">{esc(th["note"])}</p>' if th.get("note") else ""
+        # A theme whose picture isn't taken yet shows its text only.
+        alt = f"The main window in the {th['name']} theme"
+        shot = (f'<figure class="theme-shot" data-lightbox>{picture(th["shot"], alt, lazy=i > 3)}{note}</figure>'
+                if th.get("shot") else "")
         tiles.append(f"""<li class="theme-tile">
-          <figure class="theme-shot" data-lightbox>{picture(th["shot"], f"The main window in the {th['name']} theme", lazy=i > 3)}{note}</figure>
+          {shot}
           <div class="theme-text"><h3>{esc(th["name"])}</h3><p>{esc(th["feel"])}</p>{tag}</div>
         </li>""")
     tiles.append("""<li class="theme-tile theme-own"><a href="#make-your-own">
@@ -1464,11 +1467,11 @@ def build_themes() -> None:
                         and (ROOT / "crates" / "app" / "assets" / "themes" / f"{t['id']}.toml").is_file())
     trail = [("Home", "/"), ("Themes", "/themes.html")]
     themes_dir = f"{REPO}/tree/main/crates/app/assets/themes"
-    body = f"""{page_head("The same window, your way", "View → Theme changes how MDM looks at once and keeps everything where it was. Pick one of the built-in looks, each with a light and a dark side, or make your own in a text file.", trail)}
+    body = f"""{page_head("The same window, your way", "MDM's look is Graphite, with a light and a dark side. Make your own in a text file, and View → Theme changes to it at once, keeping everything where it was.", trail)}
     <div class="wrap themes">
       {coming_banner()}
       <div class="themes-bar">
-        <p>{len(themes)} built-in themes · light and dark</p>
+        <p>{len(themes)} built-in theme{"" if len(themes) == 1 else "s"} · light and dark</p>
         <div class="variant-seg" role="group" aria-label="Show the themes" data-variant-switch hidden>
           <button type="button" aria-pressed="true" data-variant="light">Light</button><button type="button" aria-pressed="false" data-variant="dark">Dark</button>
         </div>
@@ -1485,14 +1488,15 @@ def build_themes() -> None:
           <p>Start with a few colours, then add more as you go:</p>
           <pre><code translate="no">{esc(THEME_SAMPLE)}</code></pre>
           <ul>
-            <li><code>inherits</code> is the theme yours starts from: <code>classic</code> (the default), {builtin}, or another theme file in the same folder.</li>
+            <li><code>inherits</code> is the theme yours starts from: {builtin} (the default), or another theme file in the same folder.</li>
             <li><code>[seeds]</code> are a handful of colours (<code>background</code>, <code>surface</code>, <code>header</code>, <code>text</code>, <code>accent</code>, <code>selection</code>, <code>error</code>, <code>warning</code>, <code>success</code>) that MDM spreads over every control. <code>[seeds.light]</code> and <code>[seeds.dark]</code> give each side its own.</li>
             <li><code>[colors]</code> sets single colour roles on both sides, <code>[light]</code> and <code>[dark]</code> on one side only: <code>#rrggbb</code>, or <code>#rrggbbaa</code> with transparency.</li>
             <li><code>[sizes]</code> are corner radii, border widths, font sizes and row heights, in pixels. <code>[controls]</code> chooses the shape of text boxes, check boxes, buttons, progress bars, scroll bars, the focus mark and the title bar.</li>
-            <li><code>icons</code> is <code>color</code>, <code>mono</code> or <code>accent</code>. A theme in a folder of its own (<code>my-theme/theme.toml</code>) can bring its icons in <code>icons/16</code> and <code>icons/24</code>, each named for what it shows (<code>tb-add-url.svg</code>, <code>cat-music.png</code>); <code>-symbolic</code> ones take the theme's text colour.</li>
+            <li><code>font = "geist"</code> uses Geist, the typeface MDM carries, for every text; without it the windows keep Windows' own fonts.</li>
+            <li>A theme in a folder of its own (<code>my-theme/theme.toml</code>) can bring its icons in <code>icons/16</code> and <code>icons/24</code>, each named for what it shows (<code>tb-add-url.svg</code>, <code>cat-music.png</code>); <code>-symbolic</code> ones take the theme's text colour. An icon it lacks is Graphite's.</li>
             <li><code>contrast = "high"</code> strengthens every edge and text colour on top.</li>
           </ul>
-          <p>A key MDM doesn't know, or a value it can't read, is skipped and written to MDM's log (the <code>logs</code> folder beside the themes folder), so a file made for a newer MDM still loads. The built-in themes are written the same way: <a href="{themes_dir}">read them on GitHub</a>.</p>
+          <p>A key MDM doesn't know, or a value it can't read, is skipped and written to MDM's log (the <code>logs</code> folder beside the themes folder), so a file made for a newer MDM still loads. Graphite is written the same way: <a href="{themes_dir}">read it on GitHub</a>.</p>
           <details class="keys-ref"><summary>Every colour role ({len(keys["colors"])})</summary>{keys_table(keys["colors"], "What it colours")}</details>
           <details class="keys-ref"><summary>Every size ({len(keys["sizes"])})</summary>{keys_table(keys["sizes"], "What it sets")}</details>
           <details class="keys-ref"><summary>Every control style ({len(keys["controls"])})</summary>{keys_table(keys["controls"], "Its styles")}</details>
@@ -1509,7 +1513,7 @@ def build_themes() -> None:
             <div><dt>Windows</dt><dd><code translate="no">%APPDATA%\\misterdownloadmanager\\themes</code></dd></div>
             <div><dt>Portable copy</dt><dd><code translate="no">data\\themes</code> beside the program</dd></div>
           </dl>
-          <p>Within two seconds it shows in <b>View → Theme</b>, under the built-in themes, by the <code>name</code> it gives itself. Pick it and the whole window changes at once. After you edit the file, pick it again in <b>View → Theme</b> to see the change. <b>View → Dark Mode support</b> and <b>Always dark</b> switch between its light and dark side.</p>
+          <p>Within two seconds it shows in <b>View → Theme</b>, under Graphite, by the <code>name</code> it gives itself. Pick it and the whole window changes at once. After you edit the file, pick it again in <b>View → Theme</b> to see the change. <b>View → Dark Mode support</b> and <b>Always dark</b> switch between its light and dark side.</p>
           <p><b>View → Theme → Add a theme file…</b> does it for you: pick the file anywhere, and MDM copies it into the themes folder and uses it at once.</p>
           <h4 id="schemes">Already have a Base16 or pywal scheme?</h4>
           <p>It's a theme already. A <a href="https://github.com/tinted-theming/schemes">Base16 or Base24 scheme</a> (<code>.yaml</code>) or pywal's <code>colors.json</code>, added the same way, changes MDM's colours and nothing else: the scheme's backgrounds behind the list and the windows, its text kept readable (4.5:1 or more), its blue on the focus, the selection and the progress bar. Once <code>wal</code> has run, <b>View → Theme</b> lists <b>pywal</b>, read from <code>~/.cache/wal/colors.json</code> (<code translate="no">%USERPROFILE%\\.cache\\wal\\colors.json</code> on Windows), and MDM follows each new wallpaper's colours within two seconds. <a href="{REPO}/blob/main/docs/themes.md#base16-and-pywal-colour-schemes">The guide</a> shows which colour goes where.</p>
@@ -1528,7 +1532,7 @@ def build_themes() -> None:
       {cta_band()}
     </div>"""
     write("/themes.html", f"Themes — {NAME}",
-          f"{len(themes)} built-in looks for {NAME}, each light and dark: "
+          f"The built-in look of {NAME}, light and dark: "
           + ", ".join(t["name"] for t in themes) + ". Or make your own in a text file.",
           body, section="themes", jsonld=[crumbs_ld(trail)], priority="0.7")
 
