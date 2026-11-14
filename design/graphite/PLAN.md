@@ -28,7 +28,7 @@ phase that must decide them before it starts.
 | Safari steps, Linux and macOS wake lines | Decided (audit) | Not built: `dev` is Windows only (07e) |
 | Options: a Cancel button under Graphite | **Open, owner 08** | Decide before 08a; recommended: none (Escape and the close box already discard changes, `options.rs:3`) |
 | Tabular digits: Geist's own or Geist Mono | Decided in 04 | Geist's default figures are proportional (a 1 is 384 units wide, a 0 663), so the list's numeric cells (sizes, rates, time left, percent) keep Segoe UI's tabular figures; Geist Mono is not bundled. 05b draws those cells in the `numbers` family it adds (Segoe UI, falling back like the others) |
-| Which repository the app points at (updates, crash reports); exe and crate names | **Open, owner 10** | Decide before 10a; recommended: keep names, change repository constants only when that repository publishes Grabbit releases. Options and their costs: plan 10, "To decide before 10a" (the app's constants already name the fork since e53297fa) |
+| Which repository the app points at; exe and crate names; the old control styles | Decided 2026-11-14 | Everything (links, Sponsors) points to the fork only; exes renamed to `grabbit*.exe` in 10c; crates renamed to `grabbit-*` and the old control styles removed in 10e, last. Details and costs: plan 10, "Decisions" |
 
 ## Build order
 
@@ -47,7 +47,7 @@ phase that must decide them before it starts.
 | 07 | [Dialogs](plans/07-dialogs.md) | The dialog kit (07a: footer, keys as today, danger/ghost/icon buttons, form, file card, icon tile, banners), then every dialog in four waves (07b to 07e) | 02b, 03, 03b; 04 before final sizes | `ui/07a-dialog-kit`, `ui/07b…07e` |
 | 08 | [Options](plans/08-options.md) | Side list with pages unchanged inside (08a), then pages on the form and sub-dialogs (08b) | 07a, 02b, 03b; 04 before final sizes | `ui/08a-options-list`, `ui/08b-options-pages` |
 | 09 | [Polish and default](plans/09-polish-and-default.md) | Two-tone hot colour, dark glow, app mark, full visual/keyboard/accessibility review (09a); what is left of 09b now that 05.5c made Graphite the default | 06, 07e, 08b | `ui/09a-finish`, `ui/09b-default` |
-| 10 | [Rename to Grabbit](plans/10-rename-grabbit.md) | Display text, assets, migrated identifiers, distribution | 09b; the logo (maintainer) before 10b | `rename/10a…10d` |
+| 10 | [Rename to Grabbit](plans/10-rename-grabbit.md) | Display text, assets, migrated identifiers (exes renamed), distribution, then crates and old styles (10e) | 09b; the logo (maintainer) before 10b | `rename/10a…10e` |
 
 Tracks:
 
@@ -105,7 +105,7 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
 - [ ] 08b Options pages
 - [ ] 09a Finish
 - [ ] 09b Default
-- [ ] 10a to 10d Rename
+- [ ] 10a to 10e Rename
 
 ## What is in this folder
 

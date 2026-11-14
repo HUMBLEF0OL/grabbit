@@ -17,56 +17,39 @@ identifiers. Across the whole repo (`git grep -c`, lines): "Mister Download Mana
 154 files, the word "MDM" 2,211 in 253, `misterdownloadmanager` 774 in 114, `mdm-` names 485 in
 121 plus 1,067 `mdm_*::` paths in 101 Rust files.
 
-- Branches: `rename/10a-display`, `rename/10b-assets`, `rename/10c-migration`, `rename/10d-distribution`
+- Branches: `rename/10a-display`, `rename/10b-assets`, `rename/10c-migration`, `rename/10d-distribution`,
+  `rename/10e-internal` (last, when no other branch is open)
   (pushed to origin = `HUMBLEF0OL/grabbit` only, per 00)
 - Needs: 09b; a Grabbit logo before 10b (owner: the maintainer; done, `art/grabbit.svg`, PR 26)
 - Release: 10a to 10c ship together in one release; 10d follows the store and site moves
 
-## Decisions owned by this phase (record them in `../PLAN.md` before 10a)
+## Decisions (decided by the maintainer, 2026-11-14)
 
-| Decision | Options | Recommendation |
-| --- | --- | --- |
-| Which repository the app points at (update checker `help.rs:16 REPO`, `help.rs:21 LATEST`, crash reports `crates/crash/src/github.rs:6 REPO`, issue templates) | the upstream `anefzaoui/misterdownloadmanager`; the fork `HUMBLEF0OL/grabbit` | The repository that will publish Grabbit releases; until it publishes them, leave both constants as they are |
-| Executable names | keep `misterdownloadmanager*.exe`; rename to `grabbit*.exe` | Keep (least risk); revisit later |
-| Crate names `mdm-*` | keep; rename | Keep |
+Recorded in `../PLAN.md`. Counts are lines (`git grep -c`) on dev e9d327d3.
 
-### To decide before 10a
-
-Open for the maintainer; nothing here is decided. Counts are lines (`git grep -c`) on dev
-e9d327d3.
-
-1. **Which repository the app points at.** Since e53297fa ("Reports, crash reports and updates go
-   to this fork") the app's constants already name the fork: `help.rs:16 REPO`, `help.rs:21
-   LATEST`, `crates/crash/src/github.rs:6 REPO`, the three issue templates, and the installer's
-   `AppSupportURL` and `AppUpdatesURL` (`mdm.iss:28-29`). So the open part is the rest.
-   - a. Everything to the fork (the recommendation's end state once the fork publishes Grabbit
-     releases). Costs: 41 lines in 17 files still link the original's repository: README 14,
-     docs 19 (9 files), website 5 (`privacy.md`, `features/server.md`, `download.html`,
-     `llms.txt`), `tools/website/build.py:45 REPO`, `tools/contributors.py:46`, `mdm.iss:27`
-     `AppPublisherURL`. Separately, who the Sponsors links name (`help.rs:19`, `extension/popup.js:8`,
-     `tools/website/build.py:54`, `.github/FUNDING.yml:4`, README:345): 5 places.
-   - b. Back to the original. Costs: the 4 constants and 3 templates above, and updates would come
-     from builds this fork doesn't make.
-   - c. Leave as it is (code at the fork, docs and site at the original). Costs nothing now; users
-     who follow a docs link to report a problem land on the original's issues.
-   The ROADMAP (206) and CHANGELOG (184) links to the original's issues stay either way (history).
-2. **Executable names.**
-   - a. Keep `misterdownloadmanager*.exe` (recommended). Costs nothing; the names stay visible in
-     Task Manager, the install folder, the Run value's command and the CLI/MCP docs.
-   - b. Rename to `grabbit*.exe`. Costs: 149 lines in 65 files name an exe: `[[bin]]` in 4
-     `Cargo.toml`s (app, cli, mcp, nmhost), `release.yml:107`, the installer, `extension.rs:356`
-     host path, `update.rs:293`, docs (`command-line.md` and `ai-assistants.md` 12 lines each),
-     the website and the lab and shot scripts in `tools/`. And migrations on top of 10c: the Run value's command,
-     the ProgID's open command, the native host manifest's path, the updater replacing a
-     differently named running exe, the installer deleting the old exes, Windows asking again
-     for the firewall (remote and server modes), and users' scripts and AI assistants'
-     MCP settings that call `misterdownloadmanager-cli` / `-mcp` by name.
-3. **Crate names `mdm-*`.**
-   - a. Keep (recommended). Costs nothing; never shown to users (the checker allows them).
-   - b. Rename. Costs: 151 lines in 73 files (`Cargo.toml`s, CI, `cargo -p` in Rust and
-     workflows), 1,067 `mdm_*::` paths in 101 Rust files (or none with
-     `package = "grabbit-…"` renames in `Cargo.toml`, keeping the `mdm_` paths), plus the docs
-     and `CLAUDE.md` commands (`cargo run -p mdm-app` …); every open branch then conflicts.
+1. **Everything points to the fork, `HUMBLEF0OL/grabbit`, only.** The app's constants already do
+   since e53297fa (`help.rs:16 REPO`, `help.rs:21 LATEST`, `crates/crash/src/github.rs:6 REPO`, the
+   three issue templates, `mdm.iss:28-29` `AppSupportURL`/`AppUpdatesURL`). Left for 10d step 1:
+   41 lines in 17 files that still link the original's repository: README 14, docs 19 (9 files),
+   website 5 (`privacy.md`, `features/server.md`, `download.html`, `llms.txt`),
+   `tools/website/build.py:45 REPO`, `tools/contributors.py:46`, `mdm.iss:27` `AppPublisherURL`.
+   **Sponsors links point to the fork too** (`help.rs:19`, `extension/popup.js:8`,
+   `tools/website/build.py:54`, `.github/FUNDING.yml:4`, README:345): the fork owner's GitHub
+   Sponsors once it is enabled on that account, the fork's repository page until then. The ROADMAP
+   (206) and CHANGELOG (184) links to the original's issues are history and stay.
+2. **Executables are renamed to `grabbit*.exe`** (app, cli, mcp, nmhost), in 10c with their
+   migrations, after 08 and 09 are merged so no running branch breaks. Costs: 149 lines in 65 files
+   name an exe: `[[bin]]` in 4 `Cargo.toml`s, `release.yml:107`, the installer, `extension.rs:356`
+   host path, `update.rs:293`, docs (`command-line.md` and `ai-assistants.md` 12 lines each), the
+   website and the lab and shot scripts in `tools/` (the `docs-shots`/`baseline` scripts launch the
+   exe by name). Migrations: see 10c's "Binaries" row.
+3. **Crates are renamed to `grabbit-*`** (and their `mdm_*::` paths to `grabbit_*::`): 10e, the
+   very last step, when no other branch is open (every open branch would conflict). Costs: 151
+   lines in 73 files (`Cargo.toml`s, CI, `cargo -p` in Rust and workflows, the docs and
+   `CLAUDE.md` commands such as `cargo run -p mdm-app`) and 1,067 `mdm_*::` paths in 101 Rust files.
+4. **The removed themes' control styles go** (`luna`, `aero`, `aqua`, `adwaita`, `breeze`,
+   `metro`), with their drawing code: 10e, with the crate rename. A theme file naming one gets
+   Graphite's control (the fork has no users relying on them).
 
 ## Never change
 
@@ -123,7 +106,7 @@ when it exits 0.
 | Torrent ProgID `MisterDownloadManager.Torrent` | `win32.rs:3004` (`set_torrent_handlers`), `mdm.iss:106-110, 194` (the installer writes `.torrent`; registry keys ignore case) | Register the new ProgID; repoint `.torrent` if it pointed at the old one; remove the old |
 | Single-instance mutex `MisterDownloadManager.Running` | `win32.rs:3992` (`mark_running`), `mdm.iss:133` | App and installer change in the same release; the installer checks both names |
 | Native messaging host `com.misterdownloadmanager.host` | `crates/nmhost/src/main.rs:28` (`HOST_NAME`), `extension/background.js:14` (`HOST`), registry keys `win32.rs:4363-4364` (`host_registration`), `mdm.iss:129` | Register **both** host names for at least two releases; the extension tries the new name, then the old |
-| Binaries `misterdownloadmanager*.exe` | crate `Cargo.toml`s, Run key, ProgIDs, host manifest path (`crates/app/src/extension.rs:356`) | Per the decision above (recommended: keep) |
+| Binaries `misterdownloadmanager*.exe` → `grabbit*.exe` (decision 2) | `[[bin]]` in 4 crate `Cargo.toml`s, Run key, ProgIDs, host manifest path (`crates/app/src/extension.rs:356`), `update.rs:293`, `release.yml:107`, installer | The installer removes the old exes; the Run value's command, the ProgID's open command and the native host manifest's path are rewritten on first start; the updater replaces the running old-named exe; Windows asks again for the firewall (remote and server modes: say so in the release notes); users' scripts and AI assistants' MCP settings that call `misterdownloadmanager-cli` / `-mcp` by name: say so in the release notes and the CLI/MCP docs |
 | Window-property marker `MDM.popup` | `win32.rs:2191` (`popup_window`) | Internal; rename freely |
 
 `dev` is Windows only: there are no Linux or macOS identifiers to migrate (their code lives on
@@ -137,9 +120,9 @@ both host names.
 
 ## 10d · Distribution
 
-1. Repository constants per the decision above (no repository is renamed: the fork is already
-   `HUMBLEF0OL/grabbit`; the app's constants already name it, see "To decide before 10a"); issue
-   templates; 390 links to the original in ROADMAP (206) and CHANGELOG (184) (history entries keep
+1. Everything to the fork (decision 1): the 41 links to the original's repository and the 5
+   Sponsors links listed there (no repository is renamed: the fork is already
+   `HUMBLEF0OL/grabbit`, and the app's constants already name it); 390 links to the original in ROADMAP (206) and CHANGELOG (184) (history entries keep
    their URLs).
 2. Update feed: installed versions look for `MisterDownloadManager-{version}-{tail}` assets
    (`crates/tools/src/update.rs:76`; extension assets `.github/workflows/release.yml:144-145`, the
@@ -152,7 +135,13 @@ both host names.
 4. Docs, README, CONTRIBUTING, PRODUCT, DESIGN, CLAUDE.md, `.impeccable/design.json`; CHANGELOG gets a
    rename entry and keeps old entries as written; ROADMAP gets its own item for the rename (added
    with the groundwork).
-5. Crate names `mdm-*`: per the decision above.
+## 10e · Internal names and old styles (last, when no other branch is open)
+
+1. Crates `mdm-*` → `grabbit-*` and paths `mdm_*::` → `grabbit_*::` (decision 3), in one
+   mechanical commit with nothing else in it, so a later merge from an old branch is easy to redo;
+   then `CLAUDE.md`, the docs and the workflows' `cargo -p` commands.
+2. The removed themes' control styles and their drawing code (decision 4; "Left from 05.5" below).
+3. Full `cargo build`, `cargo test`, `cargo clippy --all-targets`, `node tools/extension/test.mjs`.
 
 ## Left from 05.5
 
@@ -163,8 +152,8 @@ both host names.
   themes and "IDM's look" (KNOWN-GAPS G3).
 - The control styles of the removed themes (`[controls]` `check`, `button`, `progress`,
   `caption` = `luna`, `aero`, `aqua`, `adwaita`, `breeze`, `metro`) stay as theme-file vocabulary
-  with their drawing code: 05.5c kept them, to stay under its size limit. Decide here whether a
-  theme file still offers them, and remove them with their drawing if not.
+  with their drawing code: 05.5c kept them, to stay under its size limit. Decided: they go, in
+  10e (decision 4).
 - The docs' theme guide (`docs/themes.md`), the website's theme sample (`tools/website/build.py`,
   `inherits = "classic"`, `icons = "color"`) and its AI prompt (`website/content/theme-prompt.txt`)
   still show the removed themes, the `icons` key and the palette roles 05.5d removed (the classic
