@@ -41,6 +41,11 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 - Torrents: the DHT stops asking a bootstrap node that never answers once another one has, instead of logging "error in bootstrap" every minute or two, and loads the IPv6 nodes it saved at the last start too (part of upstream issue 650).
 - The window no longer waits for a program that holds the clipboard without answering: a text box's right-click menu (to offer **Paste**), **Add URL**, **Add batch download**, **Add torrent** and **Download video** (to fill in a copied link) read the clipboard beside the window, as the clipboard monitor does; a link copied just before still fills the box as the window opens (upstream issue 688).
 - MDM no longer crashes ("crash in ntdll.dll", the heap corrupted) when the clipboard is read in two places at once, as when **Add URL** opened while the clipboard monitor looked for a copied link: MDM's own clipboard reads and the window's copy and paste now take turns (upstream issue 629).
+- On a touch screen, a tap on a menu's item chooses it (upstream issue 733).
+- Windows 10: the main window's drawn title bar no longer has a black band above it (upstream issue 802).
+- The progress window no longer shows scroll bars when its page is a pixel too short (upstream issue 672).
+- **Download File Info**: Left and Right move the caret in the file name and address boxes again (upstream issue 812).
+- Helper programs (yt-dlp, ffmpeg, gallery-dl) are looked for only in absolute folders of the system's search path, never in a relative one such as the current folder, so a program dropped there can't run in their place.
 - MDM starts on a PC without Microsoft's Visual C++ runtime, or with a 32-bit copy where the 64-bit one belongs: its programs carry the C runtime inside them instead of loading `VCRUNTIME140.dll` (upstream issue 785).
 - The window no longer freezes when the disk is slow: MDM looked on the disk for a portable data folder on every tick of the window; it now works the data folder out once (upstream issue 565).
 - Torrents: the window no longer freezes while torrents run on a busy or slow disk; it reads the torrents' numbers beside the window instead of waiting on the torrent engine (upstream issue 693).

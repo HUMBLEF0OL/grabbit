@@ -508,8 +508,9 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   upstream's new commits (applies, applies without the removed parts, needs a port by hand,
   nothing to take), picks the ones that apply onto a sync branch and records every decision;
   each run reaches `dev` by a pull request, and a weekly report (from the first release on)
-  lists what waits. Looked at up to upstream `68ba617edb3d` (2026-11-12): 19 fixes taken and
-  8 ported by hand (the critical ones), 12 skipped, 18 deferred. Ready for Graphite only: an old
+  lists what waits. Looked at up to upstream `9f7a6fc9ce8a` (2026-11-14): 24 fixes taken and
+  8 ported by hand (the critical ones), 42 skipped, 19 deferred; the rest wait to be ported by
+  hand, the critical ones first. Ready for Graphite only: an old
   theme's licence never counts as moved to Graphite's, and a commit with a theme other than
   Graphite says to skip it.
 - ✅ GitHub Actions run for `main` only: the build and tests on pull requests into `main` (a

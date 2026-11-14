@@ -58,8 +58,14 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
    git fetch origin
    git worktree add --no-track -b upstream-sync/<YYYY-MM-DD> "../grabbit-sync-<YYYY-MM-DD>" origin/dev
    ```
-   Build there with its own target (`$env:CARGO_TARGET_DIR = "<that worktree>\target"`) and
-   `-j 2`: other sessions run and screenshot the binaries in the main checkout's `target`.
+   Never `cd` into it (a `cd` asks for permission every time): run the tool with `-C`
+   (`python ../grabbit-sync-<date>/tools/upstream-sync/sync.py -C ../grabbit-sync-<date> status`),
+   git with `git -C ../grabbit-sync-<date> …`, cargo with `--manifest-path
+   ../grabbit-sync-<date>/Cargo.toml` and `-j 2`. Without `-C`, sync.py works on the folder the
+   shell is in, which is the main checkout. Don't set `CARGO_TARGET_DIR` or `--target-dir`: the
+   project's settings share one target between worktrees, so cargo's lock makes this run's
+   builds wait for other sessions' instead of running beside them (parallel builds run the PC
+   out of memory). One cargo command at a time.
 
 3. **Look.** `python tools/upstream-sync/sync.py status --fetch`, then `sync.py watch`.
    - `status` lists upstream's commits not decided yet, in upstream's order (`#`), with a kind
