@@ -101,7 +101,7 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
       the shared Confirm, done with 07e)
 - [x] 07e Organising and the rest (complete, PR 23 merged 2026-11-14; what is left is plan 09's
       "Left from 07")
-- [ ] 08a Options side list
+- [x] 08a Options side list (complete, PR 25; ticked here in 08b3's PR, which follows it)
 - [ ] 08b Options pages
 - [ ] 09a Finish
 - [ ] 09b Default
