@@ -152,6 +152,19 @@ Line numbers drift as phases land: find each item by its name first.
 - the **Scheduler** at the mockup's 800 (it keeps 651 and its panes' places), and short enough for
   a 1080p screen at 200 % (its client is 527 high: at 200 % it scrolls by about 45 px).
 
+## Left from 08
+
+09a's full review (step 5) takes these, from 08a's and 08b's audits (PRs 25, 32, 33, 34):
+
+- **Options at 200 %**: its 820 x 520 client scrolls on a 1080p screen (as before 08);
+- **`status_banner`**: no wrapping title (Accounts draws its sentence in the title's place itself)
+  and nothing a screen reader can read; Remote's and Accounts' banners need both;
+- the side list's rows (`ListItem`) have no `List` parent node for screen readers;
+- a greyed **`icon_only_button`** keeps its icon dark (Sites Logins' "..." with cookies Off): the
+  greyed tint in `button_face`;
+- **Pair a device**: the mock centres its column; the kit has no centred paragraph;
+- **Add an account**: its waiting hint's box is a fixed 94 px (two lines; a third would overflow).
+
 ## Done when
 
 - [ ] Graphite's default button and progress show the two-tone finish; dark mode shows the glow; light does not

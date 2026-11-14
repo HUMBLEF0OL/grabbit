@@ -13,8 +13,6 @@ crate::theme::themed! {
     /// Dialog background (light: light-dialogs.md).
     pub BG => window;
     pub TEXT => text;
-    /// A group box's frame (it was #dcdcdc in dark too: brighter than the separators in it).
-    pub GROUP_LINE => group_line;
     /// A list's column headers (the main list's): every list and table has the same (they had
     /// four: none, #f3f3f3, white).
     pub LIST_HEADER => header;
@@ -3287,26 +3285,6 @@ pub fn checkbox_until(
     )
 }
 
-/// Group box frame (`rc` on screen) with a gap in its top line for a checkbox caption (`gap` =
-/// English x range, inclusive pixels).
-pub fn group_box(p: &Painter, rc: Rect, gap: Option<(f32, f32)>) {
-    let (l, t, rr, b) = (rc.left(), rc.top(), rc.right() - 1.0, rc.bottom() - 1.0);
-    let gap = gap.map(|(g0, g1)| {
-        let (a, b) = (mcol(g0), mcol(g1));
-        (a.min(b), a.max(b))
-    });
-    match gap {
-        Some((g0, g1)) => {
-            hline(p, l, g0 - 1.0, t, GROUP_LINE());
-            hline(p, g1 + 1.0, rr, t, GROUP_LINE());
-        }
-        None => hline(p, l, rr, t, GROUP_LINE()),
-    }
-    vline(p, l, t, b, GROUP_LINE());
-    vline(p, rr, t, b, GROUP_LINE());
-    hline(p, l, rr, b, GROUP_LINE());
-}
-
 // ---- light dialogs (Speed Limiter, Scheduler, Options) ------------------------------------
 // notes/ui-spec/scheduler-and-misc.md "Light dialog control styles".
 
@@ -4128,7 +4106,6 @@ pub fn icon_only_button(ui: &mut Ui, rc: Rect, need: &str, tip: &str, enabled: b
 pub enum BannerKind {
     Error,
     Info,
-    #[allow(dead_code)] // ponytail: first used by plan 08 (Options' Remote and Accounts banners)
     Warning,
 }
 

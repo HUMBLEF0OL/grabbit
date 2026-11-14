@@ -578,10 +578,13 @@ These ship in a later version, when they're ready.
   going back a page), at the mock's 820 x 520, and the windows its pages open on the dialogs'
   common parts (DNS settings, Add an account, Addresses left to the browser, Keys, Test browser
   integration, Download panels, Pair a device, New and Edit login and exception), their keys
-  unchanged (still to come: the help page's pictures, retaken by the docs-shots workflow), and
-  the General, File types, Save to, Downloads and Connection pages on them (a label column,
-  hairlines in place of group boxes, Connection's number in a spin box). Next: the other seven
-  Options pages on them (plan 08b)
+  unchanged, and the General, File types, Save to, Downloads and Connection pages on them (a
+  label column, hairlines in place of group boxes, Connection's number in a spin box), and the
+  other seven on them too (Remote's state and Accounts' warning in banners) (still to come, with
+  plan 09's polish: Options short enough for a 1080p screen at 200 %, banners that wrap their
+  title and that screen readers read, the side list as a list for screen readers, greyed icon
+  buttons' icons greyed, Pair a device centred, Add an account's hint box sized to its text).
+  Next: the finish and review (plan 09)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:

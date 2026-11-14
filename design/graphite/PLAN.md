@@ -102,7 +102,8 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
 - [x] 07e Organising and the rest (complete, PR 23 merged 2026-11-14; what is left is plan 09's
       "Left from 07")
 - [x] 08a Options side list (complete, PR 25; ticked here in 08b3's PR, which follows it)
-- [ ] 08b Options pages
+- [x] 08b Options pages (complete with its three PRs: 08b3 the window's size and sub-dialogs,
+      08b1 and 08b2 the pages)
 - [ ] 09a Finish
 - [ ] 09b Default
 - [ ] 10a to 10e Rename
