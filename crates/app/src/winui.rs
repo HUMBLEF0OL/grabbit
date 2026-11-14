@@ -3795,6 +3795,11 @@ pub struct FooterButton<'a> {
     pub escape: bool,
     /// Its hover text (English, translated here): why it is greyed, …
     pub tip: Option<&'a str>,
+    /// The dialog's answer, put last: set by a `Default`, `Accent` or `Danger` kind, and kept by
+    /// [`FooterButton::primary`] for one greyed for now, so the footer never reshuffles.
+    pub primary: bool,
+    /// Its focus ring shows while no control has the keys ([`button`]'s `focus_rect`).
+    pub ring: bool,
 }
 
 impl<'a> FooterButton<'a> {
@@ -3808,7 +3813,24 @@ impl<'a> FooterButton<'a> {
             enter: false,
             escape: false,
             tip: None,
+            primary: matches!(
+                kind,
+                ButtonKind::Default | ButtonKind::Accent | ButtonKind::Danger
+            ),
+            ring: false,
         }
+    }
+    /// The dialog's answer while `kind` greys it (Download File Info's Start): it keeps the last
+    /// place.
+    pub fn primary(self) -> Self {
+        Self {
+            primary: true,
+            ..self
+        }
+    }
+    /// Its focus ring shows while no control has the keys, as the dialog's default did.
+    pub fn ring(self, on: bool) -> Self {
+        Self { ring: on, ..self }
     }
     /// `tip` on hover while `on` ([`why_disabled`]'s reason for a greyed button).
     pub fn tip(self, on: bool, tip: &'a str) -> Self {
@@ -3845,13 +3867,26 @@ impl<'a> FooterButton<'a> {
     pub fn escape(self, on: bool) -> Self {
         Self { escape: on, ..self }
     }
-    /// The answer a footer puts last and fills: the dialog's default, an accent or a danger one.
-    fn primary(&self) -> bool {
-        matches!(
-            self.kind,
-            ButtonKind::Default | ButtonKind::Accent | ButtonKind::Danger
-        )
-    }
+}
+
+/// A [`footer`] button's width for its (translated) `label`, with an icon or not: what a
+/// dialog needs to keep its own line (an error) clear of the footer's buttons.
+pub fn footer_button_width(p: &Painter, label: &str, icon: bool) -> f32 {
+    let shown = with_mnemonic(label, None);
+    let icon = if icon {
+        BUTTON_ICON + BUTTON_ICON_GAP
+    } else {
+        0.0
+    };
+    (text_width(p, &shown) + icon + 2.0 * FOOTER_BUTTON_PAD)
+        .ceil()
+        .max(FOOTER_BUTTON_MIN)
+}
+
+/// Where a dialog's own line before a footer's trailing buttons (of the given widths) must end:
+/// one gap before the leftmost of them (English x).
+pub fn footer_trailing_left(client_w: f32, widths: &[f32]) -> f32 {
+    client_w - EDGE - widths.iter().sum::<f32>() - FOOTER_GAP * widths.len() as f32
 }
 
 /// What a [`footer`] holds: buttons, and leading check boxes (Add torrent's "Download in
@@ -3928,16 +3963,11 @@ pub fn footer(
     let widths: Vec<(f32, Side, bool)> = items
         .iter()
         .map(|item| match item {
-            FooterItem::Button(b) => {
-                let shown = with_mnemonic(b.label, None);
-                let icon = if b.icon.is_some() {
-                    BUTTON_ICON + BUTTON_ICON_GAP
-                } else {
-                    0.0
-                };
-                let w = (text_width(&p, &shown) + icon + 2.0 * FOOTER_BUTTON_PAD).ceil();
-                (w.max(FOOTER_BUTTON_MIN), b.side, b.primary())
-            }
+            FooterItem::Button(b) => (
+                footer_button_width(&p, b.label, b.icon.is_some()),
+                b.side,
+                b.primary,
+            ),
             FooterItem::Check(caption, _) => (
                 checkbox_caption_end(&p, 0.0, caption).ceil(),
                 Side::Leading,
@@ -3968,7 +3998,7 @@ pub fn footer(
                     r(o, x, top, w, CONTROL_H),
                     &label,
                     kind,
-                    b.enter,
+                    b.ring,
                     b.icon,
                     PressFocus::Take,
                 );
@@ -7011,6 +7041,15 @@ mod tests {
         ];
         let x = footer_slots(&items, 300.0);
         assert!(x[1] < x[0] && x[0] < x[2]);
+        // A default greyed for now keeps its place (Download File Info's Start).
+        let start = FooterButton::new("Start Download", ButtonKind::Disabled).primary();
+        assert!(start.primary && !FooterButton::new("Cancel", ButtonKind::Normal).primary);
+        assert!(FooterButton::new("OK", ButtonKind::Default).primary);
+        // A line before two trailing buttons ends a gap before them.
+        assert_eq!(
+            footer_trailing_left(400.0, &[60.0, 70.0]),
+            400.0 - EDGE - 130.0 - 16.0
+        );
     }
 
     #[test]

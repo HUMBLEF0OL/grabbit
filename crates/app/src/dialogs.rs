@@ -784,7 +784,13 @@ impl AddUrl {
                         o.y + winui::baseline_in(BODY + 1.0, winui::FOOTER_H - 1.0),
                         e,
                         winui::ERROR(),
-                        o.x + W / 2.0 + 40.0,
+                        o.x + winui::footer_trailing_left(
+                            W,
+                            &[
+                                winui::footer_button_width(&p, "OK", false),
+                                winui::footer_button_width(&p, "Cancel", false),
+                            ],
+                        ),
                         "add-url-error",
                     );
                 }
@@ -1599,6 +1605,8 @@ impl FileInfo {
                         ),
                         FooterItem::Button(
                             FooterButton::new("Start Download", start_kind)
+                                .primary()
+                                .ring(true)
                                 .mnemonic(0)
                                 .enter(lists_closed)
                                 .tip(blocked.is_some(), why),

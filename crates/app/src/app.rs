@@ -8676,8 +8676,11 @@ impl App {
                 // Cancel: the downloads stay in the list, in no queue.
                 Outcome::Closed => self.queue_pick = None,
                 Outcome::Done((q, start)) => {
+                    // No downloads (`/show later`'s, for the screenshots): nothing to queue or
+                    // start; queue_later never opens it without one.
                     if let Some((ids, _)) = self.queue_pick.take()
                         && q < self.queues.len()
+                        && !ids.is_empty()
                     {
                         for id in ids {
                             if !self.queues[q].items.contains(&id) {
