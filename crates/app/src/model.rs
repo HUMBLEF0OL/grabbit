@@ -422,6 +422,11 @@ pub struct Item {
     /// 795). The request's own copy is `context.referer`; this one follows it (`set_referer`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub referer: Option<String>,
+    /// Its file was dragged out of Download complete and moved to a place MDM couldn't learn
+    /// (upstream issue 869): Open and Open folder say so while it isn't at `dest`. Cleared when
+    /// it is placed again (a move MDM follows, Move/Rename) or downloaded again.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub moved_away: bool,
     #[serde(skip)]
     pub live: Option<Live>,
     /// The session's temporary view while a torrent is being checked; never saved.
@@ -747,6 +752,7 @@ impl Item {
             direct: false,
             remote: None,
             referer: None,
+            moved_away: false,
             live: None,
             torrent_check: None,
             snap: None,

@@ -1752,6 +1752,9 @@ pub struct Complete {
     /// Open was pressed: the file is looked for and handed to its program off the window's
     /// thread (#743); the box closes when it opened, and stays (for Open folder) when it didn't.
     pub opening: Option<crate::launch::Asked<PathBuf, bool>>,
+    /// The file was dragged out of the box to a place MDM couldn't learn (upstream issue 869):
+    /// Open and Open folder say so.
+    pub moved_away: bool,
 }
 
 impl Complete {
@@ -1876,7 +1879,10 @@ impl Complete {
                 );
 
                 // The drag strip: drag it to drop the file into Explorer, a mail or a chat (IDM
-                // 5.05), through OLE. A dashed box with Graphite's grip and what it does.
+                // 5.05), through OLE. A dashed box with Graphite's grip and what it does. The drop
+                // target decides, as for a file dragged in Explorer: moved on the same drive (or
+                // with Shift), copied to another (or with Ctrl), and MDM's download follows a move
+                // (upstream issue 869).
                 {
                     let handle = r(o, lx, 176.0 + dy, right - lx, 40.0);
                     // Its line says what it does (no tooltip repeating it).
@@ -1888,14 +1894,24 @@ impl Complete {
                     if grip.hovered() {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
                     }
-                    // The file is looked for beside the window, with the drag (#743).
-                    if grip.drag_started()
-                        && let Err(e) = crate::win32::drag_file_out(
+                    // The file is looked for beside the window, with the drag (#743); where a move
+                    // took it comes back to the app (`dragged_out`), however late.
+                    if grip.drag_started() {
+                        let (id, from, wake) = (self.id, self.path.clone(), ui.ctx().clone());
+                        let followed = move |out| {
+                            DRAGGED_OUT
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .push((id, from, out));
+                            wake.request_repaint();
+                        };
+                        if let Err(e) = crate::win32::drag_file_out(
                             crate::i18n::t("Download complete"),
                             &self.path,
-                        )
-                    {
-                        tracing::warn!("drag out: {e}");
+                            followed,
+                        ) {
+                            tracing::warn!("drag out: {e}");
+                        }
                     }
                     let edge = handle.shrink(0.5);
                     let corners = [
@@ -1937,22 +1953,23 @@ impl Complete {
                 }
                 if open && self.opening.is_none() {
                     let opening = crate::launch::Asked::default();
+                    let moved_away = self.moved_away;
                     let _ = opening.get(
                         &self.path,
                         std::time::Duration::MAX,
                         std::time::Duration::ZERO,
                         Some(ui.ctx()),
-                        |p| open_file_now(p),
+                        move |p| open_download_now(p, moved_away),
                     );
                     self.opening = Some(opening);
                 }
                 if opened == Some(true) {
                     Outcome::Done(())
                 } else if with {
-                    open_with(&self.path);
+                    open_download_with(&self.path, self.moved_away);
                     Outcome::Done(())
                 } else if folder {
-                    show_in_folder(&self.path);
+                    show_download_in_folder(&self.path, self.moved_away);
                     Outcome::Done(())
                 } else if close {
                     Outcome::Done(())
@@ -2665,18 +2682,57 @@ pub fn told() -> Vec<(&'static str, String)> {
 /// program for it): on a thread of its own, as the file may be on a drive slow to answer
 /// (upstream issue 743). Returns at once.
 pub fn open_file(path: &Path) {
+    open_download(path, false);
+}
+
+/// [`open_file`] for a download: `moved_away`, its file was dragged out of Download complete to
+/// a place MDM couldn't learn (upstream issue 869), which is said when it isn't there.
+pub fn open_download(path: &Path, moved_away: bool) {
     let path = path.to_owned();
     crate::launch::spawn("open file", move || {
-        open_file_now(&path);
+        open_download_now(&path, moved_away);
     });
 }
 
-/// [`open_file`], waited for: true when the file was handed to the system. For a thread other
-/// than the window's (Download complete asks it through `launch::Asked`: whether it failed
-/// decides whether the box stays open).
-pub fn open_file_now(path: &Path) -> bool {
+/// What became of a file dragged out of Download complete (upstream issue 869), when the drop
+/// target moved it (a copy or a link leaves it where it was: nothing to say).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DraggedOut {
+    /// Moved there (the shell said where).
+    Moved(PathBuf),
+    /// Gone from its place, to somewhere MDM couldn't learn (a program that took it, the
+    /// Recycle Bin).
+    MovedAway,
+}
+
+/// Files dragged out and moved: (download, the path it was dragged from, what became of it).
+static DRAGGED_OUT: Mutex<Vec<(u64, PathBuf, DraggedOut)>> = Mutex::new(Vec::new());
+
+/// What [`DRAGGED_OUT`] was given since the last call (the app updates its downloads).
+pub fn dragged_out() -> Vec<(u64, PathBuf, DraggedOut)> {
+    std::mem::take(&mut *DRAGGED_OUT.lock().unwrap_or_else(|e| e.into_inner()))
+}
+
+/// Why a download's file isn't where MDM saved it, when it was dragged out of Download complete
+/// to a place MDM couldn't learn (upstream issue 869).
+fn moved_away_text(path: &Path) -> String {
     let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
-    let failed = if !path.exists() {
+    crate::i18n::fmt(
+        crate::i18n::t(
+            "{file} was moved elsewhere by dragging it out of Download complete, and MDM couldn't learn where. Look for it where you dropped it.",
+        ),
+        &[("file", &name)],
+    )
+}
+
+/// [`open_download`], waited for: true when the file was handed to the system. For a thread
+/// other than the window's (Download complete asks it through `launch::Asked`: whether it
+/// failed decides whether the box stays open).
+pub fn open_download_now(path: &Path, moved_away: bool) -> bool {
+    let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
+    let failed = if !path.exists() && moved_away {
+        moved_away_text(path)
+    } else if !path.exists() {
         crate::i18n::fmt(
             crate::i18n::t(
                 "{file} is no longer where it was saved (moved or deleted). Redownload, in its right-click menu, gets it again.",
@@ -2701,8 +2757,22 @@ pub fn open_file_now(path: &Path) -> bool {
 /// sleeping hard disk, a USB drive or a network folder can take seconds to answer (#751: 8 s,
 /// on the window's thread, froze it).
 pub fn show_in_folder(path: &Path) {
+    show_download_in_folder(path, false);
+}
+
+/// [`show_in_folder`] for a download: `moved_away`, its file was dragged out of Download
+/// complete to a place MDM couldn't learn (upstream issue 869): when it isn't there, that is
+/// said instead of opening the folder it left.
+pub fn show_download_in_folder(path: &Path, moved_away: bool) {
     let path = path.to_owned();
-    crate::launch::spawn("show in folder", move || show_in_folder_now(&path));
+    crate::launch::spawn("show in folder", move || {
+        if moved_away && !path.exists() {
+            // i18n: title of the message when the folder of a downloaded file can't be shown
+            tell(crate::i18n::mark("Open folder"), moved_away_text(&path));
+            return;
+        }
+        show_in_folder_now(&path)
+    });
 }
 
 /// [`show_in_folder`], on the thread it runs on.
@@ -2736,13 +2806,22 @@ fn show_in_folder_now(path: &Path) {
     }
 }
 
-pub fn open_with(path: &Path) {
-    {
+/// "Open with": the system's chooser of programs for the downloaded file `path`; when its file
+/// was dragged out of Download complete to a place MDM couldn't learn (`moved_away`, upstream
+/// issue 869) and isn't there, that is said instead. Looked at on a thread of its own (#743).
+pub fn open_download_with(path: &Path, moved_away: bool) {
+    let path = path.to_owned();
+    crate::launch::spawn("open with", move || {
+        if moved_away && !path.exists() {
+            // i18n: title of the message when a downloaded file can't be opened
+            tell(crate::i18n::mark("Open"), moved_away_text(&path));
+            return;
+        }
         let _ = std::process::Command::new("rundll32")
             .arg("shell32.dll,OpenAs_RunDLL")
-            .arg(path)
+            .arg(&path)
             .spawn();
-    }
+    });
 }
 
 /// "Duplicate download link": the address is already in the list (Options → Downloads → "If a

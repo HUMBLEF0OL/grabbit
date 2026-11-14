@@ -444,7 +444,7 @@ impl Properties {
         let ok_at = items.len() - 1;
         let pressed = winui::footer(ui, o, WIDTH, BODY, &mut items);
         if pressed == Some(0) && complete {
-            crate::dialogs::open_file(&item.dest);
+            crate::dialogs::open_download(&item.dest, item.moved_away);
         }
         if item.torrent.is_some() && pressed == Some(1) {
             self.files_requested = true;
