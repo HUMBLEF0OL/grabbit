@@ -44,6 +44,7 @@ See [Browser integration](browser-integration.md).
 - **Default download directory for "…" category** — the category's folder. Type a path or click **Browse**.
 - **Change folder for "…" category on last selected** — when you pick another folder in **Download File Info**, it becomes the category's folder from then on. On by default. (It sets the first state of **Remember this path** in that window.)
 - **Set file creation date as provided by the server** — give finished files the date the server reports, not the date you downloaded them.
+- **Mark downloaded files as coming from the internet** — on by default. Every file MDM downloads (from the browser, a link you add, a video, a gallery, a torrent) carries the Mark of the Web a browser's downloads carry: SmartScreen checks a program before it first runs, and Office opens a document in Protected View. Unticked, no download is marked. MDM also follows Windows' Group Policy **Do not preserve zone information in file attachments**, as browsers do: when it is on (for the computer or for you), no download is marked, whatever this box says.
 
 MDM doesn't use a temporary folder: every connection writes straight into the final file's place, so there is nothing to put together at the end.
 

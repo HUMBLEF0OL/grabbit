@@ -64,6 +64,7 @@ mod tray;
 mod update;
 mod videodlg;
 mod wake;
+mod webmark;
 mod whereis;
 mod win32;
 mod winui;
