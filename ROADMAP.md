@@ -568,6 +568,11 @@ These ship in a later version, when they're ready.
   offer and the drop target; "Add many downloads" is that Confirm), their keys unchanged (still
   to come, with plan 09's polish: the Scheduler at the mockup's width and short enough for a
   1080p screen at 200 %). Next: the Options window (plan 08)
+- 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
+  and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
+  carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:
+  a checker that lists every place the old name is still shown (`tools/rename/check.py`) and the
+  plan refreshed against today's code
 
 ### Bugs being looked into
 
