@@ -565,7 +565,10 @@ These ship in a later version, when they're ready.
   password, 7-Zip needed, Create folder, Download limits, the notices, the browser extension's
   offer and the drop target; "Add many downloads" is that Confirm), their keys unchanged (still
   to come, with plan 09's polish: the Scheduler at the mockup's width and short enough for a
-  1080p screen at 200 %). Next: the Options window (plan 08)
+  1080p screen at 200 %), and the Options window's pages listed down the side (each with its
+  icon and title at the top, OK and Help in a footer; Up and Down added to its keys, and
+  Ctrl+Shift+Tab going back a page). Next: the Options pages on the dialogs' common parts and
+  their windows (plan 08b)
 
 ### Bugs being looked into
 

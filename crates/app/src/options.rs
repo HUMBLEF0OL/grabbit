@@ -1,11 +1,10 @@
-//! Options (Downloads → Options, the toolbar's Options): IDM's configuration dialog, nine pages
-//! in a two-row tab control (notes/ui-spec/options-dialog.md). Light in both modes, as IDM's.
+//! Options (Downloads → Options, the toolbar's Options): the configuration dialog, twelve pages
+//! listed down its side (plan 08; IDM's two rows of tabs before, notes/ui-spec/options-dialog.md).
 //! It edits a copy of the settings: OK applies it, the close box and Escape discard it.
 
 use egui::{Pos2, Rect, Sense, Ui, pos2, vec2};
 
 use crate::dialogs::{Outcome, window};
-use crate::icons::Icon;
 use crate::model::Category;
 use crate::regional::DateOrder;
 use crate::settings::{self, Settings};
@@ -13,7 +12,8 @@ use crate::settings::{self, Settings};
 // starts at an English pen, and a widget given a screen rect (from `r`) turns it back into its
 // English rect (`winui::rect` both ways) before laying out its inside.
 use crate::winui::{
-    self, ButtonKind, LIGHT_BG, LIGHT_DISABLED, LIGHT_PAGE, LIGHT_TEXT, fill_l as fill, r, text,
+    self, ButtonKind, FooterButton, FooterItem, LIGHT_BG, LIGHT_DISABLED, LIGHT_PAGE, LIGHT_TEXT,
+    fill_l as fill, r, text,
 };
 
 pub const DUPLICATE: [&str; 4] = [
@@ -54,7 +54,7 @@ enum Sub {
     Pair,
 }
 
-/// Options → Remote's page number (the tabs' numbers).
+/// Options → Remote's page number (the numbers in `PAGES`).
 const REMOTE_PAGE: usize = 11;
 
 /// Connection → DNS's sub-dialog: a copy of the DNS fields, kept on OK.
@@ -223,8 +223,9 @@ pub struct OptionsDialog {
 }
 
 impl OptionsDialog {
-    /// Open on tab `page` (the numbers in `tabs`: 0 General … 4 Connection, 5 Proxy / Socks,
-    /// 6 Sites Logins, 7 Accounts, 8 Sounds, 9 Regional, 10 Archives); for `/show options:<tab>`.
+    /// Open on page `page` (the numbers in `PAGES`: 0 General … 4 Connection, 5 Proxy / Socks,
+    /// 6 Sites Logins, 7 Accounts, 8 Sounds, 9 Regional, 10 Archives, 11 Remote); for
+    /// `/show options:<page>`.
     pub fn on_page(mut self, page: usize) -> Self {
         self.page = page;
         self
@@ -306,57 +307,39 @@ impl OptionsDialog {
             ctx,
             "options",
             "Mister Download Manager Configuration",
-            [430.0, 506.0],
+            [W, H],
             false,
             LIGHT_BG(),
             |ui, o| {
-                // Ctrl+Tab through the pages in the tabs' order (Archives, 10, came last).
-                const ORDER: [usize; 12] = [0, 1, 2, 3, 4, 11, 5, 6, 7, 8, 9, 10];
-                let at = ORDER.iter().position(|p| *p == self.page).unwrap_or(0);
-                let by_key = winui::tab_keys(ui, ORDER.len(), at).map(|i| ORDER[i]);
-                if let Some(p) = tabs(ui, o, self.page).or(by_key) {
+                if let Some(p) = side_list(ui, o, self.page) {
                     self.page = p;
                 }
-                match self.page {
-                    0 => self.general(ui, o),
-                    1 => self.file_types(ui, o),
-                    2 => self.save_to(ui, o, downloads),
-                    3 => self.downloads(ui, o),
-                    4 => self.connection(ui, o),
-                    5 => self.proxy(ui, o),
-                    6 => self.logins(ui, o),
-                    7 => self.accounts(ui, o),
-                    9 => self.regional(ui, o),
-                    10 => self.archives(ui, o),
-                    REMOTE_PAGE => self.remote_page(ui, o),
-                    8 => self.sounds(ui, o),
-                    _ => self.regional(ui, o),
-                }
-                let ok = winui::button_light(
+                self.page_area(ui, o, downloads);
+                // No Cancel (PLAN.md): Escape and the close box discard the changes, as before.
+                // Escape and Enter keep their old order: Escape first.
+                let escape = winui::escape_pressed(ui);
+                let pressed = winui::footer(
                     ui,
-                    r(o, 269.0, 477.0, 73.0, 21.0),
-                    "OK",
-                    ButtonKind::Default,
-                    false,
-                )
-                .clicked();
-                if winui::button_light(
-                    ui,
-                    r(o, 350.0, 477.0, 73.0, 21.0),
-                    // i18n: noun: button that opens the help
-                    "Help",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked()
-                {
+                    o,
+                    W,
+                    H - winui::FOOTER_H,
+                    // Tab order as before: OK, then Help.
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("OK", ButtonKind::Default).enter(!modal),
+                        ),
+                        // i18n: noun: button that opens the help
+                        FooterItem::Button(FooterButton::new("Help", ButtonKind::Ghost).leading()),
+                    ],
+                );
+                if pressed == Some(1) {
                     crate::help::open_page("options.md");
                 }
                 if modal {
                     Outcome::Open
-                } else if winui::escape_pressed(ui) {
+                } else if escape {
                     Outcome::Closed
-                } else if ok || winui::enter_pressed(ui) {
+                } else if pressed == Some(0) {
                     Outcome::Done(())
                 } else {
                     Outcome::Open
@@ -415,20 +398,32 @@ impl OptionsDialog {
         }
     }
 
+    /// The chosen page under its heading. The pages keep their English pixels from the old tab
+    /// frame (x 6..421): moved as a whole into the area right of the list ([`PAGE_AT`]).
+    fn page_area(&mut self, ui: &mut Ui, o: Pos2, downloads: &std::path::Path) {
+        heading(ui, o, self.page);
+        let o = o + PAGE_AT;
+        match self.page {
+            0 => self.general(ui, o),
+            1 => self.file_types(ui, o),
+            2 => self.save_to(ui, o, downloads),
+            3 => self.downloads(ui, o),
+            4 => self.connection(ui, o),
+            5 => self.proxy(ui, o),
+            6 => self.logins(ui, o),
+            7 => self.accounts(ui, o),
+            8 => self.sounds(ui, o),
+            9 => self.regional(ui, o),
+            10 => self.archives(ui, o),
+            REMOTE_PAGE => self.remote_page(ui, o),
+            _ => self.regional(ui, o),
+        }
+    }
+
     // ---- pages --------------------------------------------------------------------------
 
     fn general(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        header(
-            ui,
-            o,
-            Icon::PageGeneral,
-            "Browser/System Integration",
-            false,
-            260.0,
-            63.0,
-            405.0,
-        );
         let portable = mdm_ipc::portable_dir().is_some();
         let s = &mut self.s;
         if portable {
@@ -645,16 +640,6 @@ impl OptionsDialog {
 
     fn file_types(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        header(
-            ui,
-            o,
-            Icon::PageFileTypes,
-            "Downloaded file types",
-            true,
-            254.0,
-            63.0,
-            405.0,
-        );
         text(
             &p,
             o.x + 21.0,
@@ -773,16 +758,6 @@ impl OptionsDialog {
 
     fn save_to(&mut self, ui: &mut Ui, o: Pos2, downloads: &std::path::Path) {
         let p = ui.painter().clone();
-        header(
-            ui,
-            o,
-            Icon::PageSaveTo,
-            "Categories, file types, folders",
-            true,
-            201.0,
-            58.0,
-            398.0,
-        );
         group(ui, o, 21.0, 94.0, 380.0, 201.0, "Save To...");
         // i18n: noun: label before the list of categories
         text(
@@ -911,7 +886,7 @@ impl OptionsDialog {
             "Set file creation date as provided by the server",
             true,
         );
-        group(ui, o, 21.0, 334.0, 380.0, 118.0, "Temporary directory");
+        group(ui, o, 21.0, 334.0, 380.0, 105.0, "Temporary directory");
         // D-004: no temporary directory — parts are written next to the file, so there is
         // nothing to assemble at the end.
         let none = crate::i18n::t("Not used: file parts are written next to the file");
@@ -937,10 +912,11 @@ impl OptionsDialog {
             o.x + 426.0,
             13.0,
         );
-        // #93: the built-in categories by file type as shipped again (beside OK, on this page).
+        // #93: the built-in categories by file type as shipped again (on this page only: under
+        // its last group, since the footer is the window's).
         if winui::button_light(
             ui,
-            r(o, 21.0, 477.0, 232.0, 21.0),
+            r(o, 21.0, PAGE_BOTTOM - 21.0, 232.0, 21.0),
             "Restore the built-in categories",
             ButtonKind::Normal,
             false,
@@ -982,16 +958,6 @@ impl OptionsDialog {
 
     fn downloads(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        header(
-            ui,
-            o,
-            Icon::PageDownloads,
-            "Default download settings",
-            true,
-            222.0,
-            58.0,
-            398.0,
-        );
         let s = &mut self.s;
         // Edit... as wide as its label in this language (#192), its caption before it.
         let (edit_x, edit_w) =
@@ -1123,16 +1089,6 @@ impl OptionsDialog {
 
     fn connection(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        header(
-            ui,
-            o,
-            Icon::PageConnection,
-            "Connections and Limits",
-            true,
-            245.0,
-            63.0,
-            399.0,
-        );
         group(ui, o, 21.0, 102.0, 380.0, 195.0, "Max. connections number");
         let label = crate::i18n::t("Default max. conn. number");
         let (rect, cut) = winui::label_into(
@@ -1366,40 +1322,15 @@ impl OptionsDialog {
 
     fn proxy(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        Icon::PageProxy
-            .image(true)
-            .paint_at(ui, r(o, 21.0, 50.0, 32.0, 32.0));
-        // Get System as wide as its label in this language (#192), its right end kept. A
-        // translated title ends where the English one does, unless the button needs that room or
-        // it would start less than 8 px after the icon: then it ends 8 px before the button, in
-        // two lines where one doesn't fit there.
-        let font = winui::tahoma_bold();
-        let english_end =
-            112.0 + winui::text_width_font(&p, font.clone(), "Proxy / socks configuration");
-        // The icon ends at 53; the button never moves right of its English place.
-        let (start, max_w) = (53.0 + 8.0, 160.0);
-        let get_whole = winui::button_fit_width(&p, "Get System", 93.0, max_w);
-        let room = (400.0 - get_whole).min(307.0) - 8.0 - start;
-        let (lines, title_w) =
-            page_title_lines(&p, font.clone(), "Proxy / socks configuration", room);
-        let from = (start + title_w + 8.0).min(307.0);
+        // Get System as wide as its label (#192), its right end kept, on the heading's row
+        // (the heading is the window's, `heading`).
         let (get_x, get_w) =
-            winui::button_row(&p, &[("Get System", 307.0, 93.0)], 0.0, from, max_w)[0];
-        if lines.len() == 1 && get_x - 8.0 >= english_end && english_end - title_w >= start {
-            page_title(
-                &p,
-                font,
-                o.x + 112.0,
-                o.y + 69.0,
-                "Proxy / socks configuration",
-            );
-        } else {
-            page_title_ending(&p, font, o.x + get_x - 8.0, o.y + 69.0, &lines);
-        }
+            winui::button_row(&p, &[("Get System", 307.0, 93.0)], 0.0, 307.0, 160.0)[0];
+        let get_y = HEAD_TOP + (HEAD_TILE - 21.0) / 2.0 - PAGE_AT.y;
         let s = &mut self.s;
         if winui::button_light(
             ui,
-            r(o, get_x, 61.0, get_w, 21.0),
+            r(o, get_x, get_y, get_w, 21.0),
             "Get System",
             ButtonKind::Normal,
             false,
@@ -1693,16 +1624,6 @@ impl OptionsDialog {
     /// Accounts (#44, ours): debrid service accounts that download file-host links. The list is
     /// asked in its order; a link goes through the first account whose service takes its host.
     fn accounts(&mut self, ui: &mut Ui, o: Pos2) {
-        header(
-            ui,
-            o,
-            Icon::PageAccounts,
-            "Debrid service accounts",
-            true,
-            117.0,
-            63.0,
-            399.0,
-        );
         let vault = crate::secrets::vault();
         let rows: Vec<Vec<String>> = self
             .s
@@ -1869,16 +1790,6 @@ impl OptionsDialog {
     }
 
     fn logins(&mut self, ui: &mut Ui, o: Pos2) {
-        header(
-            ui,
-            o,
-            Icon::PageLogins,
-            "User names and passwords for servers/sites",
-            true,
-            117.0,
-            63.0,
-            399.0,
-        );
         let rows: Vec<Vec<String>> = self
             .s
             .site_logins
@@ -2083,19 +1994,6 @@ impl OptionsDialog {
     /// of them, and Link grabber's ways.
     fn archives(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        // i18n: Options page title: extracting downloaded archives, and Link grabber
-        let title = crate::i18n::mark("Archives and Link grabber");
-        let w = winui::text_width_font(&p, winui::tahoma_bold(), title);
-        header(
-            ui,
-            o,
-            Icon::PageArchives,
-            title,
-            true,
-            406.0 - w,
-            61.0,
-            406.0,
-        );
         let s = &mut self.s;
         // i18n: Options → Archives: group box title
         group(ui, o, 16.0, 92.0, 392.0, 196.0, "Archives");
@@ -2214,16 +2112,6 @@ impl OptionsDialog {
     /// system's region writes them or the user's own way.
     fn regional(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        header(
-            ui,
-            o,
-            Icon::PageRegional,
-            "Dates and times",
-            true,
-            302.0,
-            61.0,
-            406.0,
-        );
         let reg = &mut self.s.regional;
         group(ui, o, 16.0, 92.0, 392.0, 250.0, "Write dates and times");
         let system = winui::radio_light(
@@ -2342,16 +2230,6 @@ impl OptionsDialog {
 
     fn sounds(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        header(
-            ui,
-            o,
-            Icon::PageSounds,
-            "Sound settings",
-            true,
-            304.0,
-            61.0,
-            406.0,
-        );
         group(
             ui,
             o,
@@ -2569,10 +2447,6 @@ impl OptionsDialog {
     /// downloads from a page MDM serves, once paired with a code shown here.
     fn remote_page(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        // i18n: Options page title: control MDM from a phone or another computer on the local network
-        let title = crate::i18n::mark("Remote control");
-        let w = winui::text_width_font(&p, winui::tahoma_bold(), title);
-        header(ui, o, Icon::PageRemote, title, true, 406.0 - w, 61.0, 406.0);
         let adapters = self.adapters_now();
         winui::checkbox_light(
             ui,
@@ -4006,314 +3880,276 @@ fn ok_cancel(ui: &mut Ui, o: Pos2, x: f32, y: f32, valid: bool) -> Outcome<()> {
     }
 }
 
-/// A row of tabs as shown: IDM's measured tabs in English; a translation's sized by its labels
-/// (each label centred, the room left over shared out), so the row keeps its span (x 8..419)
-/// and no label is cut.
-fn tab_row(
-    p: &egui::Painter,
-    row: &[(usize, &'static str, f32, f32, f32)],
-    measured: bool,
-) -> Vec<(usize, &'static str, f32, f32, f32)> {
-    // `measured`: the row's English positions are IDM's (a row of ours is sized as a translation).
-    if measured && row.iter().all(|t| crate::i18n::t(t.1) == t.1) {
-        return row.to_vec();
-    }
-    let (left, right) = (row[0].2, row[row.len() - 1].3);
-    let widths: Vec<f32> = row
-        .iter()
-        .map(|t| winui::text_width(p, crate::i18n::t(t.1)).ceil())
-        .collect();
-    let total: f32 = widths.iter().map(|w| w + 16.0).sum();
-    let spare = ((right - left - total) / row.len() as f32).floor();
-    let padded: Vec<f32> = widths.iter().map(|w| w + 16.0).collect();
-    let cap = winui::width_cap(&padded, right - left);
-    let mut x0 = left;
-    row.iter()
-        .zip(&widths)
-        .enumerate()
-        .map(|(k, (t, w))| {
-            let x1 = if k + 1 == row.len() {
-                right
-            } else if spare < 0.0 {
-                // Too wide for the strip: the narrow tabs keep their width, the wide ones share
-                // the rest (their labels cut where drawn).
-                x0 + (w + 16.0).min(cap)
-            } else {
-                x0 + w + 16.0 + spare
-            };
-            let tab = (t.0, t.1, x0, x1, x0 + ((x1 - x0 - w) / 2.0).floor());
-            x0 = x1;
-            tab
-        })
-        .collect()
+/// The window: the side list ([`SIDE_W`]), the page area, the footer ([`winui::footer`]).
+const W: f32 = 640.0;
+const H: f32 = 515.0;
+/// The side list's width (its right border at this x).
+const SIDE_W: f32 = 190.0;
+/// A side list row: its height and the gap after it, from the list's top `SIDE_TOP`.
+const ROW_H: f32 = 30.0;
+const ROW_GAP: f32 = 1.0;
+const SIDE_TOP: f32 = 10.0;
+/// Where a page's English pixels (laid out in the old tab frame, x 6..421, its header at y 54..80)
+/// go in the window: their left edge 16 after the list, the content under the page's heading.
+const PAGE_AT: egui::Vec2 = vec2(SIDE_W, -16.0);
+/// The page heading's icon tile: 40, 16 from the page area's top and leading edge.
+const HEAD_TOP: f32 = 16.0;
+const HEAD_TILE: f32 = 40.0;
+/// Where a page's controls go, in its English pixels: under its heading, 16 in from the list
+/// and the window's edge, 8 above the footer. The test holds every page to it; 08b's pages lay
+/// out on it.
+#[allow(dead_code)] // ponytail: the pages' first users come with plan 08b
+mod area {
+    use super::*;
+    pub const PAGE_LEFT: f32 = winui::EDGE;
+    pub const PAGE_RIGHT: f32 = W - SIDE_W - winui::EDGE;
+    pub const PAGE_TOP: f32 = HEAD_TOP + HEAD_TILE + winui::EDGE - PAGE_AT.y;
+    pub const PAGE_BOTTOM: f32 = H - winui::FOOTER_H - 8.0 - PAGE_AT.y;
+}
+#[allow(unused_imports)]
+use area::*;
+
+/// The pages in the list's order, which is the old tabs' (Remote, ours, after Connection): page
+/// number (as `on_page` and `/show options:<n>` take it), its name in the list, its Graphite
+/// icon, and its heading (the old page title).
+const PAGES: [(usize, &str, &str, &str); 12] = [
+    // i18n: Options page name: general settings
+    (
+        0,
+        crate::i18n::mark("General"),
+        "gx-adjust",
+        crate::i18n::mark("Browser/System Integration"),
+    ),
+    // i18n: Options page name
+    (
+        1,
+        crate::i18n::mark("File types"),
+        "ft-generic",
+        crate::i18n::mark("Downloaded file types"),
+    ),
+    (
+        2,
+        // i18n: Options page name: where downloads are saved
+        crate::i18n::mark("Save to"),
+        "cat-folder",
+        crate::i18n::mark("Categories, file types, folders"),
+    ),
+    (
+        3,
+        // i18n: Options page name: download settings
+        crate::i18n::mark("Downloads"),
+        "gx-download",
+        crate::i18n::mark("Default download settings"),
+    ),
+    (
+        4,
+        // i18n: Options page name: connection settings
+        crate::i18n::mark("Connection"),
+        "gx-network",
+        crate::i18n::mark("Connections and Limits"),
+    ),
+    (
+        REMOTE_PAGE,
+        // i18n: Options page name: control MDM from a phone or another computer on the local network
+        crate::i18n::mark("Remote"),
+        "gx-device",
+        // i18n: Options page title: control MDM from a phone or another computer on the local network
+        crate::i18n::mark("Remote control"),
+    ),
+    (
+        5,
+        // i18n: Options page name
+        crate::i18n::mark("Proxy / Socks"),
+        "gx-shield",
+        crate::i18n::mark("Proxy / socks configuration"),
+    ),
+    (
+        6,
+        // i18n: Options page name: user names and passwords for sites
+        crate::i18n::mark("Sites Logins"),
+        "gx-key",
+        crate::i18n::mark("User names and passwords for servers/sites"),
+    ),
+    (
+        7,
+        // i18n: Options page name: the user's debrid service accounts (Real-Debrid…)
+        crate::i18n::mark("Accounts"),
+        "gx-user",
+        crate::i18n::mark("Debrid service accounts"),
+    ),
+    // i18n: Options page name: sound settings
+    (
+        8,
+        crate::i18n::mark("Sounds"),
+        "gx-volume",
+        crate::i18n::mark("Sound settings"),
+    ),
+    (
+        9,
+        // i18n: Options page name: how dates and times are written (date order, 12- or 24-hour clock)
+        crate::i18n::mark("Regional"),
+        "gx-world",
+        crate::i18n::mark("Dates and times"),
+    ),
+    (
+        10,
+        // i18n: Options page name: extracting downloaded archives, and Link grabber
+        crate::i18n::mark("Archives"),
+        "ft-archive",
+        // i18n: Options page title: extracting downloaded archives, and Link grabber
+        crate::i18n::mark("Archives and Link grabber"),
+    ),
+];
+
+/// The page's place in [`PAGES`] (0 for a number that is none).
+fn page_at(page: usize) -> usize {
+    PAGES.iter().position(|p| p.0 == page).unwrap_or(0)
 }
 
-/// The two-row tab strip and the page frame; returns the page clicked.
-fn tabs(ui: &mut Ui, o: Pos2, page: usize) -> Option<usize> {
-    // (page, label, x0, x1, label x): the rows never move sideways, only swap front and back.
-    // Remote (#141, ours) joins the first row, which is sized by its labels since.
-    const G: [(usize, &str, f32, f32, f32); 6] = [
-        // i18n: tab title: general settings
-        (0, crate::i18n::mark("General"), 8.0, 82.0, 26.0),
-        // i18n: tab title
-        (1, crate::i18n::mark("File types"), 82.0, 166.0, 101.0),
-        // i18n: tab title: where downloads are saved
-        (2, crate::i18n::mark("Save to"), 166.0, 241.0, 185.0),
-        // i18n: tab title: download settings
-        (3, crate::i18n::mark("Downloads"), 241.0, 330.0, 260.0),
-        // i18n: tab title: connection settings
-        (4, crate::i18n::mark("Connection"), 330.0, 419.0, 349.0),
-        (
-            REMOTE_PAGE,
-            // i18n: tab title: control MDM from a phone or another computer on the local network
-            crate::i18n::mark("Remote"),
-            380.0,
-            419.0,
-            390.0,
-        ),
-    ];
-    // IDM's Dial Up / VPN tab is gone (D-021: no modem support; it did nothing); ours, Regional
-    // (how dates and times are written), Accounts (#44, debrid services) and Archives (#37) share
-    // the row, sized by their labels.
-    const P: [(usize, &str, f32, f32, f32); 6] = [
-        // i18n: tab title
-        (5, crate::i18n::mark("Proxy / Socks"), 8.0, 104.0, 20.0),
-        // i18n: tab title: user names and passwords for sites
-        (6, crate::i18n::mark("Sites Logins"), 104.0, 192.0, 116.0),
-        // i18n: tab title: the user's debrid service accounts (Real-Debrid…)
-        (7, crate::i18n::mark("Accounts"), 192.0, 265.0, 204.0),
-        // i18n: tab title: sound settings
-        (8, crate::i18n::mark("Sounds"), 265.0, 336.0, 279.0),
-        // i18n: tab title: how dates and times are written (date order, 12- or 24-hour clock)
-        (9, crate::i18n::mark("Regional"), 336.0, 380.0, 350.0),
-        // i18n: tab title: extracting downloaded archives, and Link grabber
-        (10, crate::i18n::mark("Archives"), 380.0, 419.0, 390.0),
-    ];
+/// Side list row `k`'s rect (window-relative to `o`).
+fn side_row(o: Pos2, k: usize) -> Rect {
+    r(
+        o,
+        8.0,
+        SIDE_TOP + k as f32 * (ROW_H + ROW_GAP),
+        SIDE_W - 16.0,
+        ROW_H,
+    )
+}
+
+/// The pages down the side (plan 08a): one Tab stop, the chosen row; Up / Down and Left / Right
+/// move through them, Home / End go to the ends, Ctrl+Tab / Ctrl+Shift+Tab (and Ctrl+Page Down
+/// / Up) wrap round from anywhere in the window, a click picks one. The page picked.
+fn side_list(ui: &mut Ui, o: Pos2, page: usize) -> Option<usize> {
+    let c = crate::theme::colors();
     let p = ui.painter().clone();
-    let border = winui::HEADER_LINE();
-    let (g, pr) = (tab_row(&p, &G, false), tab_row(&p, &P, false));
-    let first_row = page < 5 || page == REMOTE_PAGE;
-    let (front, back): (&[_], &[_]) = if first_row { (&g, &pr) } else { (&pr, &g) };
-    let mut clicked = None;
-    let mut tab = |ui: &mut Ui,
-                   (i, label, x0, x1, lx): (usize, &str, f32, f32, f32),
-                   top: f32,
-                   base: f32,
-                   sel: bool| {
-        let (x0, x1) = if sel {
-            (x0 - if x0 <= 8.0 { 2.0 } else { 1.0 }, x1 + 2.0)
-        } else {
-            (x0, x1)
-        };
-        let bottom = if sel { 45.0 } else { top + 17.0 };
-        // From the leading edge: the first tab at the right in RTL.
-        let rc = winui::rect(Rect::from_min_max(
-            o + vec2(x0, top),
-            o + vec2(x1 + 1.0, bottom + 1.0),
-        ));
-        // The strip is one Tab stop, the chosen tab (Windows' tab control); the arrows move.
+    let at = page_at(page);
+    let foot = H - winui::FOOTER_H;
+    p.rect_filled(r(o, 0.0, 0.0, SIDE_W, foot), 0.0, c.panel);
+    fill(
+        &p,
+        o.x + SIDE_W,
+        o.y,
+        o.x + SIDE_W,
+        o.y + foot - 1.0,
+        c.menubar_line,
+    );
+    let mut picked = winui::tab_keys(ui, PAGES.len(), at);
+    for (k, (_, label, icon, _)) in PAGES.iter().enumerate() {
+        let sel = k == at;
+        let rc = side_row(o, k);
         let sense = if sel {
             Sense::click()
         } else {
             winui::pointer_only()
         };
-        let resp = ui.interact(rc, egui::Id::unique(("opt-tab", i)), sense);
-        winui::expose(
-            &resp,
-            egui::Role::Tab,
-            crate::i18n::t(label),
-            true,
-            Some(sel),
-        );
+        let resp = ui.interact(rc, egui::Id::unique(("opt-page", k)), sense);
+        let label = crate::i18n::t(label);
+        winui::expose(&resp, egui::Role::ListItem, label, true, Some(sel));
         let resp = winui::enter_is_not_a_click(ui, resp);
         if resp.clicked() && !sel {
-            clicked = Some(i);
+            picked = Some(k);
         }
         if sel {
-            winui::keep_keys(ui, &resp, true, false, false);
+            winui::keep_keys(ui, &resp, true, true, false);
             if resp.has_focus() {
-                // Left / Right (mirrored in RTL), Home / End through the pages in order.
-                const ORDER: [usize; 12] = [0, 1, 2, 3, 4, 11, 5, 6, 7, 8, 9, 10];
-                let at = ORDER.iter().position(|p| *p == i).unwrap_or(0) as isize;
-                let fwd = if winui::rtl() { -1 } else { 1 };
-                let to = if winui::take_key(ui, egui::Key::ArrowRight) {
-                    Some(at + fwd)
-                } else if winui::take_key(ui, egui::Key::ArrowLeft) {
-                    Some(at - fwd)
+                let last = PAGES.len() - 1;
+                let to = if winui::take_key(ui, egui::Key::ArrowDown)
+                    || winui::take_key(ui, egui::Key::ArrowRight)
+                {
+                    Some((k + 1).min(last))
+                } else if winui::take_key(ui, egui::Key::ArrowUp)
+                    || winui::take_key(ui, egui::Key::ArrowLeft)
+                {
+                    Some(k.saturating_sub(1))
                 } else if winui::take_key(ui, egui::Key::Home) {
                     Some(0)
                 } else if winui::take_key(ui, egui::Key::End) {
-                    Some(ORDER.len() as isize - 1)
+                    Some(last)
                 } else {
                     None
                 };
                 if let Some(to) = to {
-                    let next = ORDER[to.clamp(0, ORDER.len() as isize - 1) as usize];
-                    clicked = Some(next);
-                    // The keys stay on the strip: the new tab takes the focus.
-                    ui.memory_mut(|m| m.request_focus(egui::Id::unique(("opt-tab", next))));
+                    picked = Some(to);
+                    // The keys stay on the list: the new row takes the focus.
+                    ui.memory_mut(|m| m.request_focus(egui::Id::unique(("opt-page", to))));
                 }
             }
         }
         let face = if sel {
-            LIGHT_PAGE()
+            Some(c.selection)
         } else if resp.hovered() {
-            winui::TAB_HOT()
+            Some(c.subtle_hot)
         } else {
-            winui::TAB_UNSELECTED()
+            None
         };
-        fill(&p, o.x + x0, o.y + top, o.x + x1, o.y + bottom, face);
-        fill(
-            &p,
-            o.x + x0 + 1.0,
-            o.y + top,
-            o.x + x1 - 1.0,
-            o.y + top,
-            border,
-        );
-        fill(
-            &p,
-            o.x + x0,
-            o.y + top + 1.0,
-            o.x + x0,
-            o.y + bottom,
-            border,
-        );
-        fill(
-            &p,
-            o.x + x1,
-            o.y + top + 1.0,
-            o.x + x1,
-            o.y + bottom,
-            border,
-        );
-        // A translated row too wide for the strip has narrower tabs (`tab_row`): their labels are
-        // cut with "..." and shown whole on hover.
-        let full = crate::i18n::t(label);
-        let shown = winui::ellipsize(&p, &winui::tahoma(), full, x1 - x0 - 6.0);
-        if shown == full {
-            text(&p, o.x + lx, o.y + base, full, LIGHT_TEXT());
-        } else {
-            let w = winui::text_width(&p, &shown);
-            let lx = x0 + ((x1 - x0 - w) / 2.0).floor();
-            let rc = text(&p, o.x + lx, o.y + base, &shown, LIGHT_TEXT());
-            winui::full_on_hover(ui, rc, ("opt-tab-label", i), full);
+        if let Some(face) = face {
+            p.rect_filled(rc, winui::control_radius(), face);
         }
-        winui::show_focus(ui, &resp, rc.shrink(2.0));
-    };
-    for t in back {
-        tab(ui, *t, 9.0, 22.0, false);
+        let (ink, glyph) = if sel {
+            (c.selection_text, c.accent)
+        } else {
+            (c.text_secondary, c.text_secondary)
+        };
+        crate::themeicons::paint_in(
+            ui,
+            &p,
+            icon,
+            Rect::from_min_size(pos2(rc.left() + 9.0, rc.center().y - 8.0), vec2(16.0, 16.0)),
+            glyph,
+            true,
+        );
+        winui::fit(
+            ui,
+            &p,
+            rc.left() + 34.0,
+            winui::baseline_in(rc.top(), rc.height()),
+            label,
+            ink,
+            rc.right() - 6.0,
+            ("opt-page-label", k),
+        );
+        winui::show_focus(ui, &resp, rc);
     }
-    for t in front.iter().filter(|t| t.0 != page) {
-        tab(ui, *t, 27.0, 40.0, false);
-    }
-    // Page frame (x 6..421, y 45..468) with its shadow, then the selected tab over its top.
-    fill(
-        &p,
-        o.x + 6.0,
-        o.y + 45.0,
-        o.x + 421.0,
-        o.y + 468.0,
-        LIGHT_PAGE(),
-    );
-    fill(&p, o.x + 6.0, o.y + 45.0, o.x + 421.0, o.y + 45.0, border);
-    fill(&p, o.x + 6.0, o.y + 468.0, o.x + 421.0, o.y + 468.0, border);
-    fill(&p, o.x + 6.0, o.y + 45.0, o.x + 6.0, o.y + 468.0, border);
-    fill(
-        &p,
-        o.x + 421.0,
-        o.y + 45.0,
-        o.x + 421.0,
-        o.y + 468.0,
-        border,
-    );
-    let shadow = winui::TAB_UNSELECTED();
-    fill(
-        &p,
-        o.x + 422.0,
-        o.y + 45.0,
-        o.x + 423.0,
-        o.y + 469.0,
-        shadow,
-    );
-    fill(&p, o.x + 6.0, o.y + 469.0, o.x + 423.0, o.y + 469.0, shadow);
-    if let Some(t) = front.iter().find(|t| t.0 == page) {
-        tab(ui, *t, 25.0, 38.0, true);
-    }
-    clicked
-}
-
-/// Page header: the icon, the title (bold, right-aligned as IDM's) and the etched rule.
-#[allow(clippy::too_many_arguments)]
-fn header(
-    ui: &mut Ui,
-    o: Pos2,
-    icon: Icon,
-    title: &str,
-    bold: bool,
-    ink_x: f32,
-    rule_x0: f32,
-    rule_x1: f32,
-) {
-    let p = ui.painter().clone();
-    icon.image(true).paint_at(ui, r(o, 21.0, 54.0, 32.0, 32.0));
-    let font = if bold {
-        winui::tahoma_bold()
+    if let Some(k) = picked
+        && k != at
+    {
+        Some(PAGES[k].0)
     } else {
-        winui::tahoma()
-    };
-    page_title(&p, font, o.x + ink_x, o.y + 69.0, title);
-    winui::etched_h(&p, o.x + rule_x0, o.y + 78.0, rule_x1 - rule_x0 + 2.0);
+        None
+    }
 }
 
-/// A page title, right-aligned as IDM's: English at its measured pen `x`, a translation ending
-/// where the English ends (in RTL: starting there, at the mirrored edge).
-fn page_title(p: &egui::Painter, font: egui::FontId, x: f32, baseline: f32, english: &str) {
-    let shown = crate::i18n::t(english);
-    let x = if shown == english {
-        x
-    } else {
-        let end = x + winui::text_width_font(p, font.clone(), english);
-        end - winui::text_width_font(p, font.clone(), shown)
-    };
-    winui::text_font(p, font, x, baseline, shown, LIGHT_TEXT());
-}
-
-/// `english` translated, as [`page_title_ending`] draws it in `room` px: one line where it fits,
-/// else two ([`winui::fit_lines`]); and how wide it is drawn.
-fn page_title_lines(
-    p: &egui::Painter,
-    font: egui::FontId,
-    english: &str,
-    room: f32,
-) -> (Vec<String>, f32) {
-    let lines = winui::fit_lines(p, font.clone(), crate::i18n::t(english), room);
-    let w = lines
-        .iter()
-        .map(|l| winui::text_width_font(p, font.clone(), l))
-        .fold(0.0, f32::max);
-    (lines, w)
-}
-
-/// A page title's `lines` ([`page_title_lines`]) ending at English x `end` (a control after it
-/// needs the room up to there): one line on `baseline`, two around it (beside the page's icon),
-/// each starting where the wider one does.
-fn page_title_ending(
-    p: &egui::Painter,
-    font: egui::FontId,
-    end: f32,
-    baseline: f32,
-    lines: &[String],
-) {
-    let w = lines
-        .iter()
-        .map(|l| winui::text_width_font(p, font.clone(), l))
-        .fold(0.0, f32::max);
-    // Bold Tahoma's rows are 15 px apart; two lines share the one line's middle.
-    let first = baseline - 7.5 * (lines.len() as f32 - 1.0);
-    for (i, line) in lines.iter().enumerate() {
-        let y = (first + 15.0 * i as f32).round();
-        winui::text_font(p, font.clone(), end - w, y, line, LIGHT_TEXT());
+/// The page's heading above it: its icon on a tile and its title.
+fn heading(ui: &Ui, o: Pos2, page: usize) {
+    let (_, _, icon, title) = PAGES[page_at(page)];
+    let x = SIDE_W + winui::EDGE;
+    winui::icon_tile(
+        ui,
+        r(o, x, HEAD_TOP, HEAD_TILE, HEAD_TILE),
+        icon,
+        crate::theme::colors().accent,
+        8.0,
+    );
+    let p = ui.painter();
+    let left = o.x + x + HEAD_TILE + 12.0;
+    let full = crate::i18n::t(title);
+    let shown = winui::ellipsize(
+        p,
+        &winui::tahoma_title(),
+        full,
+        o.x + W - winui::EDGE - left,
+    );
+    let drawn = winui::text_at(
+        p,
+        winui::tahoma_title(),
+        left,
+        o.y + winui::baseline_in(HEAD_TOP, HEAD_TILE),
+        &shown,
+        crate::theme::colors().text,
+    );
+    if shown != full {
+        winui::full_on_hover(ui, drawn, ("opt-heading", page), full);
     }
 }
 
@@ -4528,6 +4364,214 @@ fn kept_text(kept: crate::secrets::Kept) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use egui::accesskit::{NodeId, Role, TreeUpdate};
+
+    fn input(events: Vec<egui::Event>) -> egui::RawInput {
+        egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(W, H))),
+            events,
+            ..Default::default()
+        }
+    }
+
+    fn key(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    /// A press (`down`) or release of the left button at `at`.
+    fn button(at: Pos2, down: bool) -> Vec<egui::Event> {
+        vec![
+            egui::Event::PointerMoved(at),
+            egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: down,
+                modifiers: Default::default(),
+            },
+        ]
+    }
+
+    /// One pass of the side list on `page`: the page it picked.
+    fn list_pass(ctx: &egui::Context, page: usize, events: Vec<egui::Event>) -> Option<usize> {
+        let mut picked = None;
+        let mut out = ctx.run_ui(input(events), |ui| picked = side_list(ui, Pos2::ZERO, page));
+        out.textures_delta.clear();
+        picked
+    }
+
+    /// Plan 08 tests: every page is picked by a click on its row, Up / Down walk the list in
+    /// its order (Home / End to its ends), and Ctrl+Tab / Ctrl+Shift+Tab wrap round it.
+    #[test]
+    fn every_page_is_reached_by_click_arrows_and_ctrl_tab() {
+        let ctx = egui::Context::default();
+        let order: Vec<usize> = PAGES.iter().map(|p| p.0).collect();
+        assert_eq!(
+            order,
+            [0, 1, 2, 3, 4, 11, 5, 6, 7, 8, 9, 10],
+            "the old tabs' order"
+        );
+        for (_, label, need, _) in PAGES {
+            assert!(
+                crate::themeicons::graphite_has(need, 16)
+                    && crate::themeicons::graphite_has(need, 24),
+                "{label}: Graphite's set lacks {need}"
+            );
+        }
+        for (k, &want) in order.iter().enumerate() {
+            let from = if want == 0 { 1 } else { 0 };
+            let at = side_row(Pos2::ZERO, k).center();
+            list_pass(&ctx, from, vec![egui::Event::PointerMoved(at)]);
+            list_pass(&ctx, from, button(at, true));
+            assert_eq!(
+                list_pass(&ctx, from, button(at, false)),
+                Some(want),
+                "click row {k}"
+            );
+        }
+        // A key on `page`'s row, focused as Tab leaves it.
+        let press = |page: usize, k: egui::Key| {
+            list_pass(&ctx, page, vec![]);
+            ctx.memory_mut(|m| m.request_focus(egui::Id::unique(("opt-page", page_at(page)))));
+            list_pass(&ctx, page, vec![key(k, Default::default())])
+        };
+        for w in order.windows(2) {
+            assert_eq!(
+                press(w[0], egui::Key::ArrowDown),
+                Some(w[1]),
+                "Down from {}",
+                w[0]
+            );
+            assert_eq!(
+                press(w[1], egui::Key::ArrowUp),
+                Some(w[0]),
+                "Up from {}",
+                w[1]
+            );
+        }
+        assert_eq!(press(10, egui::Key::ArrowDown), None, "the end");
+        assert_eq!(press(0, egui::Key::ArrowUp), None, "the start");
+        assert_eq!(press(4, egui::Key::Home), Some(0));
+        assert_eq!(press(4, egui::Key::End), Some(10));
+        // Ctrl+Tab from anywhere: no row focused.
+        ctx.memory_mut(|m| m.surrender_focus(egui::Id::unique(("opt-page", 0))));
+        let ctrl = egui::Modifiers::COMMAND;
+        let mut page = order[0];
+        for &want in order.iter().cycle().skip(1).take(order.len()) {
+            page = list_pass(&ctx, page, vec![key(egui::Key::Tab, ctrl)]).expect("Ctrl+Tab");
+            assert_eq!(page, want);
+        }
+        let back = list_pass(
+            &ctx,
+            0,
+            vec![key(egui::Key::Tab, ctrl | egui::Modifiers::SHIFT)],
+        );
+        assert_eq!(back, Some(10), "Ctrl+Shift+Tab wraps back to Archives");
+    }
+
+    /// One pass of the window's page area on `page`, AccessKit on: its tree.
+    fn page_pass(
+        ctx: &egui::Context,
+        d: &mut OptionsDialog,
+        events: Vec<egui::Event>,
+    ) -> TreeUpdate {
+        let dir = std::env::temp_dir();
+        let mut out = ctx.run_ui(input(events), |ui| d.page_area(ui, Pos2::ZERO, &dir));
+        out.textures_delta.clear();
+        out.platform_output
+            .accesskit_update
+            .expect("AccessKit is on")
+    }
+
+    /// Plan 08 tests: at its new place every page's controls lie in the page area (right of the
+    /// list, above the footer), and its first control is hit where it is drawn: a click on it
+    /// gives it the keys.
+    #[test]
+    fn every_page_lies_in_its_area_and_is_hit_where_drawn() {
+        let area = Rect::from_min_max(pos2(PAGE_LEFT, PAGE_TOP), pos2(PAGE_RIGHT, PAGE_BOTTOM))
+            .translate(PAGE_AT)
+            // Proxy's Get System sits on the heading's row.
+            .with_min_y(HEAD_TOP)
+            // A check box's click area runs on to the window's edge after its caption.
+            .with_max_x(W);
+        for (page, label, ..) in PAGES {
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            let s = Settings::default();
+            let mut d = OptionsDialog::new(&s, &std::env::temp_dir(), vec![]).on_page(page);
+            page_pass(&ctx, &mut d, vec![]);
+            let tree = page_pass(&ctx, &mut d, vec![]);
+            let controls: Vec<(NodeId, Rect, u8)> = tree
+                .nodes
+                .iter()
+                .filter(|(_, n)| {
+                    matches!(
+                        n.role(),
+                        Role::Button
+                            | Role::CheckBox
+                            | Role::RadioButton
+                            | Role::TextInput
+                            | Role::ComboBox
+                            | Role::ListBox
+                            | Role::SpinButton
+                    )
+                })
+                .filter_map(|(id, n)| {
+                    let b = n.bounds()?;
+                    let rc = Rect::from_min_max(
+                        pos2(b.x0 as f32, b.y0 as f32),
+                        pos2(b.x1 as f32, b.y1 as f32),
+                    );
+                    // A Tab stop (0): not greyed, nor pointer-only (`winui::pointer_only`, spin
+                    // arrows). A list (1) only where there is nothing else (Sounds, its buttons
+                    // greyed until a row is chosen): its first row is clicked, its blank area
+                    // takes no click.
+                    let focusable =
+                        !n.is_disabled() && n.supports_action(egui::accesskit::Action::Focus);
+                    let rank = match (focusable, n.role() == Role::ListBox) {
+                        (true, false) => 0,
+                        (true, true) => 1,
+                        _ => 2,
+                    };
+                    Some((*id, rc, rank))
+                })
+                .collect();
+            assert!(!controls.is_empty(), "{label}: no controls");
+            for (_, rc, _) in &controls {
+                assert!(
+                    area.expand(0.5).contains_rect(*rc),
+                    "{label}: {rc:?} outside {area:?}"
+                );
+            }
+            // The page's first control (a Tab stop, topmost, then leftmost), clicked.
+            let (first, rc, rank) = *controls
+                .iter()
+                .filter(|c| c.2 < 2)
+                .min_by(|a, b| {
+                    (a.2, a.1.top(), a.1.left())
+                        .partial_cmp(&(b.2, b.1.top(), b.1.left()))
+                        .unwrap()
+                })
+                .unwrap_or_else(|| panic!("{label}: no Tab stop among {controls:?}"));
+            let at = if rank == 1 {
+                pos2(rc.center().x, rc.top() + 8.0)
+            } else {
+                rc.center()
+            };
+            page_pass(&ctx, &mut d, button(at, true));
+            page_pass(&ctx, &mut d, button(at, false));
+            let tree = page_pass(&ctx, &mut d, vec![]);
+            assert_eq!(
+                tree.focus, first,
+                "{label}: the click at {rc:?} reached its control"
+            );
+        }
+    }
 
     /// #424: the list written and read back through a real file: nothing lost, nothing doubled.
     #[test]

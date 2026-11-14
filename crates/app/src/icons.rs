@@ -1,5 +1,5 @@
 //! MDM's own icons by role, as an icon set draws them (`crate::themeicons`): the toolbar's from
-//! the theme's set, else Graphite's; the others (Options pages, helpers, the drag handle)
+//! the theme's set, else Graphite's; the others (helpers, the drag handle)
 //! Graphite's in every theme (plans 05.5a and 05.5c). IDM's own images are never used (D-001).
 
 use egui::Image;
@@ -18,20 +18,6 @@ pub enum Icon {
     Scheduler,
     StartQueue,
     StopQueue,
-    /// Options page headers (Graphite's icons, the mockup's).
-    PageGeneral,
-    PageFileTypes,
-    PageSaveTo,
-    PageDownloads,
-    PageConnection,
-    PageProxy,
-    PageLogins,
-    PageSounds,
-    PageRegional,
-    PageArchives,
-    PageRemote,
-    /// Options → Accounts (debrid services).
-    PageAccounts,
     /// The first-start helpers window (ours): yt-dlp finds a page's video,
     HelperVideo,
     /// ffmpeg joins its picture and sound,
@@ -58,18 +44,6 @@ impl Icon {
             Icon::Scheduler => "tb-scheduler",
             Icon::StartQueue => "tb-start-queue",
             Icon::StopQueue => "tb-stop-queue",
-            Icon::PageGeneral => "gx-adjust",
-            Icon::PageFileTypes => "ft-generic",
-            Icon::PageSaveTo => "cat-folder",
-            Icon::PageDownloads => "gx-download",
-            Icon::PageConnection => "gx-network",
-            Icon::PageProxy => "gx-shield",
-            Icon::PageLogins => "gx-key",
-            Icon::PageSounds => "gx-volume",
-            Icon::PageRegional => "gx-world",
-            Icon::PageArchives => "ft-archive",
-            Icon::PageRemote => "gx-device",
-            Icon::PageAccounts => "gx-user",
             Icon::HelperVideo => "gx-search",
             Icon::HelperMerge => "gx-merge",
             Icon::HelperChecked => "gx-shield",
@@ -125,18 +99,6 @@ mod tests {
             Scheduler,
             StartQueue,
             StopQueue,
-            PageGeneral,
-            PageFileTypes,
-            PageSaveTo,
-            PageDownloads,
-            PageConnection,
-            PageProxy,
-            PageLogins,
-            PageSounds,
-            PageRegional,
-            PageArchives,
-            PageRemote,
-            PageAccounts,
             HelperVideo,
             HelperMerge,
             HelperChecked,
@@ -146,10 +108,8 @@ mod tests {
         for icon in all {
             match icon {
                 AddUrl | AddTorrent | Resume | Stop | StopAll | Delete | DeleteCompleted
-                | Options | Scheduler | StartQueue | StopQueue | PageGeneral | PageFileTypes
-                | PageSaveTo | PageDownloads | PageConnection | PageProxy | PageLogins
-                | PageSounds | PageRegional | PageArchives | PageRemote | PageAccounts
-                | HelperVideo | HelperMerge | HelperChecked | Details => {}
+                | Options | Scheduler | StartQueue | StopQueue | HelperVideo | HelperMerge
+                | HelperChecked | Details => {}
             }
         }
         for icon in all {

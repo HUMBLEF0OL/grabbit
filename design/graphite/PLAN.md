@@ -26,7 +26,7 @@ phase that must decide them before it starts.
 | When to rename to Grabbit | Decided in 01 | Last (10): it touches data paths and the extension |
 | Tray menu | Decided (audit) | Stays native (`tray_icon`): the mock's tray menu is not built (07e) |
 | Safari steps, Linux and macOS wake lines | Decided (audit) | Not built: `dev` is Windows only (07e) |
-| Options: a Cancel button under Graphite | **Open, owner 08** | Decide before 08a; recommended: none (Escape and the close box already discard changes, `options.rs:3`) |
+| Options: a Cancel button under Graphite | Decided in 08a (2026-11-14) | None, as recommended: Escape and the close box already discard the changes (`options.rs:3`); the footer is Help (Ghost) ; OK* |
 | Tabular digits: Geist's own or Geist Mono | Decided in 04 | Geist's default figures are proportional (a 1 is 384 units wide, a 0 663), so the list's numeric cells (sizes, rates, time left, percent) keep Segoe UI's tabular figures; Geist Mono is not bundled. 05b draws those cells in the `numbers` family it adds (Segoe UI, falling back like the others) |
 | Which repository the app points at (updates, crash reports); exe and crate names | **Open, owner 10** | Decide before 10a; recommended: keep names, change repository constants only when that repository publishes Grabbit releases |
 
