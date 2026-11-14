@@ -2855,6 +2855,8 @@ impl App {
             .and_then(|r| sent_referrer(url, r));
         for (name, v) in [
             (reqwest::header::REFERER, &referer),
+            // A video's file or stream, with the Origin its page's player sent (upstream issue 900).
+            (reqwest::header::ORIGIN, &context.origin),
             (reqwest::header::COOKIE, &context.cookies),
             (reqwest::header::CONTENT_TYPE, &post_type.cloned()),
         ] {

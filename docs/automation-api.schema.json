@@ -425,6 +425,13 @@
             "null"
           ]
         },
+        "origin": {
+          "description": "From the browser (upstream issue 900): the `Origin` its page's player sent with a video's\nstream or file (`video_page`), sent again with it, its playlists and each of its pieces,\nas a site's video server may serve its own pages' players only.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "pair": {
           "default": false,
           "description": "The remote control (#157, `misterdownloadmanager-cli pair`): show a new pairing code;\nanswered with it, the page's addresses and a QR code to scan ([`api::PairAnswer`]).",

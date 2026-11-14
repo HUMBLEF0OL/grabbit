@@ -110,6 +110,28 @@ struct Message {
     /// `rules`) without asking about it: for MDM's log. Under its own key, with no `url`: an
     /// older host takes it for an address it can't download, and hands nothing over.
     declined: Option<Notice>,
+    /// With `video`: what the browser sent with `src` as its page's player asked for it
+    /// (upstream issue 900), sent again with it and each of its pieces. An older extension sends
+    /// none: the page is the stream's Referer then, as before.
+    fetched_with: FetchedWith,
+}
+
+/// The headers the browser sent with a stream (`Message::fetched_with`): its Referer and Origin.
+#[derive(Debug, Default, Deserialize, PartialEq)]
+#[serde(default)]
+struct FetchedWith {
+    referer: Option<String>,
+    origin: Option<String>,
+}
+
+/// `v` when it is a web address fit for a header (http or https, no space or control character,
+/// at most 8 KB): what the extension takes from the browser's own request.
+fn web_header(v: Option<&str>) -> Option<&str> {
+    v.map(str::trim).filter(|v| {
+        (v.starts_with("http://") || v.starts_with("https://"))
+            && v.len() <= 8192
+            && !v.chars().any(|c| c.is_whitespace() || c.is_control())
+    })
 }
 
 /// A download the extension left to the browser: why (a `Declined` code, or `site-access`:
@@ -408,14 +430,24 @@ fn video_command(
         .src
         .clone()
         .filter(|s| s.starts_with("http://") || s.starts_with("https://"));
-    let referer = match &src {
-        Some(_) => Some(m.url.clone()),
-        None => m.referrer.clone().filter(|r| !r.is_empty()),
+    // A stream or file of the page's, fetched as the browser fetched it (upstream issue 900):
+    // with the Referer and Origin its player sent, else from the page.
+    let (referer, origin) = match &src {
+        Some(_) => (
+            Some(
+                web_header(m.fetched_with.referer.as_deref())
+                    .unwrap_or(&m.url)
+                    .to_owned(),
+            ),
+            web_header(m.fetched_with.origin.as_deref()).map(str::to_owned),
+        ),
+        None => (m.referrer.clone().filter(|r| !r.is_empty()), None),
     };
     Ok(mdm_ipc::Command {
         video_page: Some(src.unwrap_or_else(|| m.url.clone())),
         video_title: m.title.clone().filter(|t| !t.trim().is_empty()),
         referer,
+        origin,
         cookies: m.cookies.clone().filter(|c| !c.is_empty()),
         cookie_jar: m.cookie_jar.clone(),
         user_agent: m.user_agent.clone(),
@@ -999,6 +1031,41 @@ mod tests {
         let m: Message =
             serde_json::from_str(r#"{"hideSite":"tube.test","openOptions":false}"#).unwrap();
         assert_eq!(m.hide_site.as_deref(), Some("tube.test"));
+    }
+
+    /// Upstream issue 900: a stream goes with the Referer and Origin its page's player sent for
+    /// it (the extension's `fetchedWith`); without them (an older extension), or with what isn't
+    /// a web address, the page is its Referer and no Origin goes. Only for a stream or file: a
+    /// page looked up keeps its own referrer.
+    #[test]
+    fn a_stream_goes_with_the_referer_and_origin_the_browser_sent() {
+        let rules = mdm_ipc::capture::CaptureRules::default();
+        let page = "https://anime.test/watch/12";
+        let src = "https://cdn.video.test/manifest/x.m3u8?sec=abc";
+        let fetched = r#""fetchedWith":{"referer":"https://player.video.test/","origin":"https://player.video.test"}"#;
+        let click = |extra: &str, src: &str| -> mdm_ipc::Command {
+            let m: Message = serde_json::from_str(&format!(
+                r#"{{"video":true,"explicit":true,"url":"{page}","src":"{src}","referrer":"https://search.test/"{extra}}}"#
+            ))
+            .unwrap();
+            video_command(&m, &rules, "").unwrap()
+        };
+        let cmd = click(&format!(",{fetched}"), src);
+        assert_eq!(cmd.referer.as_deref(), Some("https://player.video.test/"));
+        assert_eq!(cmd.origin.as_deref(), Some("https://player.video.test"));
+        // An older extension: from the page, no Origin.
+        let cmd = click("", src);
+        assert_eq!(cmd.referer.as_deref(), Some(page));
+        assert_eq!(cmd.origin, None);
+        // Not web addresses (a header's line break, the browser's "null" origin): left out.
+        let odd = r#","fetchedWith":{"referer":"https://x.test/\r\nX-Evil: 1","origin":"null"}"#;
+        let cmd = click(odd, src);
+        assert_eq!(cmd.referer.as_deref(), Some(page));
+        assert_eq!(cmd.origin, None);
+        // No stream (a player playing from blob:): the page, with its own referrer.
+        let cmd = click(&format!(",{fetched}"), "blob:https://anime.test/1");
+        assert_eq!(cmd.referer.as_deref(), Some("https://search.test/"));
+        assert_eq!(cmd.origin, None);
     }
 
     #[test]
