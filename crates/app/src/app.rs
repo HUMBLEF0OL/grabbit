@@ -10002,20 +10002,50 @@ mod tray_toggle_tests {
             Some(TRAY_TOGGLE_GRACE + ms(1)),
         );
         // Hidden or minimized: always shows, whatever else says.
-        assert!(!tray_toggle_hide(true, false, Some(false), None, Some(true)));
+        assert!(!tray_toggle_hide(
+            true,
+            false,
+            Some(false),
+            None,
+            Some(true)
+        ));
         assert!(!tray_toggle_hide(false, true, Some(true), None, Some(true)));
         // Focused: hides.
         assert!(tray_toggle_hide(false, false, Some(true), None, None));
         // The click took the focus just now: still in front, hides.
         assert!(tray_toggle_hide(false, false, Some(false), just_now, None));
         // Focus gone long ago (the ^ flyout took it), nothing over the window: hides.
-        assert!(tray_toggle_hide(false, false, Some(false), long_ago, Some(true)));
+        assert!(tray_toggle_hide(
+            false,
+            false,
+            Some(false),
+            long_ago,
+            Some(true)
+        ));
         // Behind other windows: shows.
-        assert!(!tray_toggle_hide(false, false, Some(false), long_ago, Some(false)));
-        assert!(!tray_toggle_hide(false, false, Some(false), None, Some(false)));
+        assert!(!tray_toggle_hide(
+            false,
+            false,
+            Some(false),
+            long_ago,
+            Some(false)
+        ));
+        assert!(!tray_toggle_hide(
+            false,
+            false,
+            Some(false),
+            None,
+            Some(false)
+        ));
         // Unknown: show, never hide.
         assert!(!tray_toggle_hide(false, false, None, None, None));
-        assert!(!tray_toggle_hide(false, false, None, Some(Duration::ZERO), None));
+        assert!(!tray_toggle_hide(
+            false,
+            false,
+            None,
+            Some(Duration::ZERO),
+            None
+        ));
     }
 }
 
