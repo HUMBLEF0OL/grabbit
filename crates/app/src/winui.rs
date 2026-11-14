@@ -4139,7 +4139,6 @@ pub fn icon_only_button(ui: &mut Ui, rc: Rect, need: &str, tip: &str, enabled: b
 pub enum BannerKind {
     Error,
     Info,
-    #[allow(dead_code)] // ponytail: first used by plan 08 (Options' Remote and Accounts banners)
     Warning,
 }
 
