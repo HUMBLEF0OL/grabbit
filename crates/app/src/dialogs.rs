@@ -2175,36 +2175,45 @@ pub fn grow_to(ctx: &egui::Context, key: &str, lines: usize, planned: usize) {
 /// A notice with OK, sized to its text (crate::i18n::t("Cannot find …")): one line when it
 /// fits, wrapped and taller when it doesn't (a long path or reason is never cut off).
 pub fn message(ctx: &egui::Context, id: &str, title: &str, text: &str) -> Outcome<()> {
-    // Tahoma −11 averages about 5.5 px a character; the box is kept between 260 and 480 px.
-    let width = (text.chars().count() as f32 * 5.6 + 40.0).clamp(260.0, 480.0);
+    // Tahoma −11 averages about 5.5 px a character; the box is kept between the mockup's 340 and
+    // 480 px.
+    let width = (text.chars().count() as f32 * 5.6 + 40.0).clamp(340.0, 480.0);
     let extra = grow_extra(ctx, id);
+    let body = 45.0 + extra;
     window(
         ctx,
         id,
         title,
-        [width, 80.0 + extra],
+        [width, body + winui::FOOTER_H],
         false,
         winui::LIGHT_BG(),
         |ui, o| {
             let p = ui.painter().clone();
             let lines = winui::paragraph(
                 &p,
-                o.x + 16.0,
-                o.y + 24.0,
+                o.x + winui::EDGE,
+                o.y + 29.0,
                 text,
                 winui::LIGHT_TEXT(),
-                o.x + width - 16.0,
+                o.x + width - winui::EDGE,
                 13.0,
             );
             grow_to(ui.ctx(), id, lines, 1);
-            let ok = winui::button_light(
+            // The one centred footer (the mockup's generic notice): the band, then OK in its
+            // middle, filled as the default.
+            winui::footer(ui, o, width, body, &mut []);
+            let w = winui::footer_button_width(&p, "OK", false);
+            let top = body + 1.0 + ((winui::FOOTER_H - 1.0 - winui::CONTROL_H) / 2.0).floor();
+            let ok = winui::button(
                 ui,
-                r(o, (width - 73.0) / 2.0, 47.0 + extra, 73.0, 21.0),
+                r(o, ((width - w) / 2.0).round(), top, w, winui::CONTROL_H),
                 "OK",
-                ButtonKind::Default,
+                ButtonKind::Accent,
                 false,
+                None,
             )
             .clicked();
+            // Enter and Escape close it (with a modifier held too), as before.
             let keys =
                 ui.input(|i| i.key_pressed(egui::Key::Enter) || i.key_pressed(egui::Key::Escape));
             if ok || keys {
@@ -2248,37 +2257,48 @@ impl LimitNotice {
     }
 
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
+        const W: f32 = 440.0;
+        const BODY: f32 = 66.0;
         window(
             ctx,
             "limit-notice",
             "Download limits",
-            [420.0, 90.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             winui::LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
+                // The limit, then (muted) when downloads go on.
                 for (i, line) in self.lines.iter().enumerate() {
                     winui::fit(
                         ui,
                         &p,
-                        o.x + 11.0,
-                        o.y + 21.0 + 13.0 * i as f32,
+                        o.x + winui::EDGE,
+                        o.y + 29.0 + 18.0 * i as f32,
                         line,
-                        winui::LIGHT_TEXT(),
-                        o.x + 409.0,
+                        if i == 0 {
+                            winui::LIGHT_TEXT()
+                        } else {
+                            winui::MUTED()
+                        },
+                        o.x + W - winui::EDGE,
                         ("notice-line", i),
                     );
                 }
-                let ok = winui::button_light(
-                    ui,
-                    r(o, 173.0, 57.0, 73.0, 21.0),
-                    "OK",
-                    ButtonKind::Default,
-                    false,
-                )
-                .clicked();
+                // Enter and Escape close it (with a modifier held too), as before.
                 let keys = ui
                     .input(|i| i.key_pressed(egui::Key::Enter) || i.key_pressed(egui::Key::Escape));
+                let ok = winui::footer(
+                    ui,
+                    o,
+                    W,
+                    BODY,
+                    &mut [FooterItem::Button(FooterButton::new(
+                        "OK",
+                        ButtonKind::Default,
+                    ))],
+                )
+                .is_some();
                 if ok || keys {
                     Outcome::Closed
                 } else {
@@ -2324,22 +2344,32 @@ impl TurnOffCountdown {
             TurnOff::Sleep => crate::i18n::t("The computer will go to sleep in {n} seconds."),
             TurnOff::Hibernate => crate::i18n::t("The computer will hibernate in {n} seconds."),
         };
+        // The mockup's layout: a power tile, the two lines beside it, the time left as a bar.
+        const W: f32 = 400.0;
+        const BODY: f32 = 92.0;
         question(
             ctx,
             "turn-off",
             "Mister Download Manager",
-            [374.0, 100.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             winui::LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
-                let black = winui::LIGHT_TEXT();
-                winui::text(
+                let e = winui::EDGE;
+                let c = crate::theme::colors();
+                winui::icon_tile(ui, r(o, e, 16.0, 40.0, 40.0), "gx-power", c.text, 8.0);
+                let tx = o.x + e + 40.0 + 12.0;
+                let right = o.x + W - e;
+                winui::fit(
+                    ui,
                     &p,
-                    o.x + 11.0,
-                    o.y + 21.0,
+                    tx,
+                    o.y + 31.0,
                     crate::i18n::t("The download queue is done."),
-                    black,
+                    winui::LIGHT_TEXT(),
+                    right,
+                    "turn-off-done",
                 );
                 let line = crate::i18n::fmt(
                     sentence,
@@ -2348,36 +2378,41 @@ impl TurnOffCountdown {
                         &crate::i18n::integer(left.as_secs() + u64::from(left.subsec_millis() > 0)),
                     )],
                 );
-                winui::text(&p, o.x + 11.0, o.y + 34.0, &line, black);
-                // As wide as their labels in this language (#192): a longer one pushes Cancel
-                // right.
-                let [now_at, cancel_at] = winui::button_row_from_left(
+                winui::fit(
+                    ui,
                     &p,
-                    &[("Turn off now", 94.0, 90.0), ("Cancel", 194.0, 73.0)],
-                    10.0,
-                    363.0,
-                    200.0,
-                )[..] else {
-                    unreachable!("two buttons")
-                };
-                let now = winui::button_light(
+                    tx,
+                    o.y + 49.0,
+                    &line,
+                    winui::MUTED(),
+                    right,
+                    "turn-off-left",
+                );
+                let gone = 1.0 - left.as_secs_f32() / Self::SECONDS as f32;
+                winui::progress_bar(
+                    &p,
+                    r(o, e, 70.0, W - 2.0 * e, 6.0),
+                    Some(gone.clamp(0.0, 1.0)),
+                    ui.input(|i| i.time),
+                );
+                // Cancel stays the default (Enter, Escape), as before: the mockup fills Turn
+                // off now, but Enter must not look like it turns the computer off.
+                let pressed = winui::footer(
                     ui,
-                    r(o, now_at.0, 63.0, now_at.1, 21.0),
-                    "Turn off now",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                let cancel = winui::button_light(
-                    ui,
-                    r(o, cancel_at.0, 63.0, cancel_at.1, 21.0),
-                    "Cancel",
-                    ButtonKind::Default,
-                    false,
-                )
-                .clicked();
-                // Enter: Cancel, the default button.
-                if cancel || winui::escape_pressed(ui) || winui::enter_pressed(ui) {
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(FooterButton::new("Turn off now", ButtonKind::Normal)),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Default)
+                                .enter(true)
+                                .escape(true),
+                        ),
+                    ],
+                );
+                let now = pressed == Some(0);
+                if pressed == Some(1) {
                     Outcome::Closed
                 } else if now || left.is_zero() {
                     Outcome::Done(())
@@ -2449,16 +2484,28 @@ impl ConfirmDelete {
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<(bool, bool)> {
         let n = self.ids.len() as u64;
         let extra = grow_extra(ctx, "confirm-delete");
+        // The mockup's layout: a delete tile, the question beside it, the files box, the
+        // footer with "Don't show this dialog again" at its start.
+        const W: f32 = 480.0;
+        const BODY: f32 = 104.0;
         question(
             ctx,
             "confirm-delete",
             "Confirm deletion of downloads",
-            [374.0, 146.0 + extra],
+            [W, BODY + extra + winui::FOOTER_H],
             false,
             winui::LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 let black = winui::LIGHT_TEXT();
+                let e = winui::EDGE;
+                winui::icon_tile(
+                    ui,
+                    r(o, e, 16.0, 40.0, 40.0),
+                    "tb-delete",
+                    crate::theme::colors().error,
+                    8.0,
+                );
                 let text = if n == 1 && self.unfinished {
                     crate::i18n::t(
                         "The selected download is not complete. Are you sure you want to delete
@@ -2488,8 +2535,15 @@ it from Mister Download Manager list of downloads?",
                         &[("n", &crate::i18n::integer(n))],
                     )
                 };
-                let lines =
-                    winui::paragraph(&p, o.x + 11.0, o.y + 21.0, &text, black, o.x + 362.0, 13.0);
+                let lines = winui::paragraph(
+                    &p,
+                    o.x + e + 52.0,
+                    o.y + 30.0,
+                    &text,
+                    black,
+                    o.x + W - e,
+                    13.0,
+                );
                 grow_to(ui.ctx(), "confirm-delete", lines, 3);
                 let o = o + vec2(0.0, extra);
                 let files = if n == 1 {
@@ -2505,33 +2559,31 @@ it from Mister Download Manager list of downloads?",
                         &[("n", &crate::i18n::integer(n))],
                     )
                 };
-                winui::checkbox_light(ui, o + vec2(24.0, 60.0), &mut self.files, &files, true);
-                let yes = winui::button_light(
+                winui::checkbox_light(ui, o + vec2(e, 74.0), &mut self.files, &files, true);
+                // Enter Yes, Escape No, as before; Tab: the files box, Yes, No, then "Don't
+                // show this dialog again".
+                let pressed = winui::footer(
                     ui,
-                    r(o, 94.0, 86.0, 73.0, 21.0),
-                    "Yes",
-                    ButtonKind::Default,
-                    false,
-                )
-                .clicked();
-                let no = winui::button_light(
-                    ui,
-                    r(o, 207.0, 86.0, 73.0, 21.0),
-                    "No",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                winui::checkbox_light(
-                    ui,
-                    o + vec2(24.0, 120.0),
-                    &mut self.dont_show,
-                    "Don't show this dialog again",
-                    true,
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("Yes", ButtonKind::Danger).enter(true),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("No", ButtonKind::Normal).escape(true),
+                        ),
+                        FooterItem::Check(
+                            "Don't show this dialog again",
+                            &mut self.dont_show,
+                            true,
+                        ),
+                    ],
                 );
-                if no || winui::escape_pressed(ui) {
+                if pressed == Some(1) {
                     Outcome::Closed
-                } else if yes || winui::enter_pressed(ui) {
+                } else if pressed == Some(0) {
                     Outcome::Done((self.files, self.dont_show))
                 } else {
                     Outcome::Open
@@ -2856,58 +2908,87 @@ impl QueuePick {
 pub struct Confirm {
     title: &'static str,
     text: String,
+    /// The icon tile before the question (Redownload's `gx-refresh`), where the mockup has one.
+    icon: Option<&'static str>,
 }
 
 impl Confirm {
     pub fn new(title: &'static str, text: String) -> Self {
-        Confirm { title, text }
+        Confirm {
+            title,
+            text,
+            icon: None,
+        }
+    }
+
+    /// With Graphite's `need` on a 40-point tile before the question.
+    pub fn icon(self, need: &'static str) -> Self {
+        Confirm {
+            icon: Some(need),
+            ..self
+        }
     }
 
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         let text = self.text.clone();
         let key = format!("confirm-{}", self.title);
         let extra = grow_extra(ctx, &key);
+        // The mockup's layout: the tile (if any), the question beside it, the footer.
+        const W: f32 = 480.0;
+        const BODY: f32 = 72.0;
+        let icon = self.icon;
         question(
             ctx,
             &key,
             self.title,
-            [400.0, 96.0 + extra],
+            [W, BODY + extra + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
                 let p = ui.painter().clone();
+                let e = winui::EDGE;
+                let x = match icon {
+                    Some(need) => {
+                        winui::icon_tile(
+                            ui,
+                            r(o, e, 16.0, 40.0, 40.0),
+                            need,
+                            crate::theme::colors().text,
+                            8.0,
+                        );
+                        e + 52.0
+                    }
+                    None => e,
+                };
                 let lines = winui::paragraph(
                     &p,
-                    o.x + 11.0,
-                    o.y + 22.0,
+                    o.x + x,
+                    o.y + 30.0,
                     &text,
                     winui::TEXT(),
-                    o.x + 389.0,
+                    o.x + W - e,
                     13.0,
                 );
                 grow_to(ui.ctx(), &key, lines, 3);
                 let o = o + vec2(0.0, extra);
-                let yes = winui::button(
+                // Enter Yes, Escape No, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, 234.0, 64.0, 73.0, 21.0),
-                    "Yes",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked();
-                let no = winui::button(
-                    ui,
-                    r(o, 316.0, 64.0, 73.0, 21.0),
-                    "No",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
-                if no || winui::escape_pressed(ui) {
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("Yes", ButtonKind::Default).enter(true),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("No", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                if pressed == Some(1) {
                     Outcome::Closed
-                } else if yes || winui::enter_pressed(ui) {
+                } else if pressed == Some(0) {
                     Outcome::Done(())
                 } else {
                     Outcome::Open
@@ -2948,22 +3029,26 @@ impl DeleteCategory {
             crate::i18n::t("Delete the category \"{category}\"? Its files stay where they are."),
             &[("category", &crate::i18n::isolate(&self.category.shown()))],
         );
+        // The mockup's layout: the question, the two choices 27 apart, the footer.
+        const W: f32 = 520.0;
+        const BODY: f32 = 119.0;
         question(
             ctx,
             key,
             "Delete category",
-            [500.0, 150.0 + extra],
+            [W, BODY + extra + winui::FOOTER_H],
             false,
             winui::LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
+                let e = winui::EDGE;
                 let lines = winui::paragraph(
                     &p,
-                    o.x + 11.0,
-                    o.y + 22.0,
+                    o.x + e,
+                    o.y + 30.0,
                     &text,
                     winui::LIGHT_TEXT(),
-                    o.x + 489.0,
+                    o.x + W - e,
                     13.0,
                 );
                 grow_to(ui.ctx(), key, lines, 2);
@@ -2974,46 +3059,34 @@ impl DeleteCategory {
                     // i18n: choice in Delete category: its downloads leave the list (not their files; running ones move to General)
                     "Remove its downloads from the list (running ones move to General)",
                 );
-                if winui::radio_light(ui, o + vec2(14.0, 52.0), !self.remove, to_general, true)
+                if winui::radio_light(ui, o + vec2(e, 58.0), !self.remove, to_general, true)
                     .clicked()
                 {
                     self.remove = false;
                 }
-                if winui::radio_light(ui, o + vec2(14.0, 75.0), self.remove, off_list, true)
-                    .clicked()
+                if winui::radio_light(ui, o + vec2(e, 85.0), self.remove, off_list, true).clicked()
                 {
                     self.remove = true;
                 }
-                // As wide as their labels in this language (#192).
-                let [delete_at, cancel_at] = winui::buttons_to_right(
-                    &p,
-                    488.0,
-                    8.0,
-                    &[("Delete", 73.0), ("Cancel", 73.0)],
-                    140.0,
-                )[..] else {
-                    unreachable!("two buttons")
-                };
-                // i18n: button: deletes the category
-                let delete = winui::button_light(
+                // Enter deletes, Escape cancels, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, delete_at.0, 118.0, delete_at.1, 21.0),
-                    "Delete",
-                    ButtonKind::Default,
-                    false,
-                )
-                .clicked();
-                let cancel = winui::button_light(
-                    ui,
-                    r(o, cancel_at.0, 118.0, cancel_at.1, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                if cancel || winui::escape_pressed(ui) {
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        // i18n: button: deletes the category
+                        FooterItem::Button(
+                            FooterButton::new("Delete", ButtonKind::Danger).enter(true),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                if pressed == Some(1) {
                     Outcome::Closed
-                } else if delete || winui::enter_pressed(ui) {
+                } else if pressed == Some(0) {
                     Outcome::Done(self.remove)
                 } else {
                     Outcome::Open
@@ -3044,60 +3117,62 @@ impl CreateFolder {
     /// `Done` once the folder exists (created on Yes); `Closed` on No, Escape or the close box.
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         let folder = self.folder.display().to_string();
+        // The mockup's layout: the folder in bold between the two lines, the footer.
+        const W: f32 = 420.0;
+        const BODY: f32 = 99.0;
         question(
             ctx,
             "create-folder",
             "Create folder",
-            [420.0, 128.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 let ink = winui::TEXT();
+                let (x, right) = (o.x + winui::EDGE, o.x + W - winui::EDGE);
                 winui::text(
                     &p,
-                    o.x + 11.0,
-                    o.y + 21.0,
+                    x,
+                    o.y + 29.0,
                     crate::i18n::t("This folder does not exist:"),
                     ink,
                 );
-                let (rect, cut) =
-                    winui::text_fit(&p, o.x + 11.0, o.y + 39.0, &folder, ink, o.x + 409.0);
-                if cut {
+                let bold = winui::tahoma_bold();
+                let shown = winui::ellipsize(&p, &bold, &folder, right - x);
+                let rect = winui::text_font(&p, bold, x, o.y + 47.0, &shown, ink);
+                if shown != folder {
                     winui::full_on_hover(ui, rect, "create-folder-path", &folder);
                 }
                 winui::text(
                     &p,
-                    o.x + 11.0,
-                    o.y + 57.0,
+                    x,
+                    o.y + 65.0,
                     crate::i18n::t("Do you want to create it?"),
                     ink,
                 );
                 if let Some(e) = &self.error {
-                    let (rect, cut) =
-                        winui::text_fit(&p, o.x + 11.0, o.y + 75.0, e, winui::ERROR(), o.x + 409.0);
+                    let (rect, cut) = winui::text_fit(&p, x, o.y + 83.0, e, winui::ERROR(), right);
                     if cut {
                         winui::full_on_hover(ui, rect, "create-folder-error", e);
                     }
                 }
-                let yes = winui::button(
+                // Enter Yes, Escape No, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, 254.0, 94.0, 73.0, 21.0),
-                    "Yes",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked();
-                let no = winui::button(
-                    ui,
-                    r(o, 336.0, 94.0, 73.0, 21.0),
-                    "No",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("Yes", ButtonKind::Default).enter(true),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("No", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                let (yes, no) = (pressed == Some(0), pressed == Some(1));
                 // Made beside the window (#743): a drive slow to answer doesn't hold it.
                 let made = self.making.as_ref().and_then(|m| m.answer(&self.folder));
                 if made.is_some() {
@@ -3109,12 +3184,12 @@ impl CreateFolder {
                         &[("error", e)],
                     ));
                 }
-                if no || winui::escape_pressed(ui) {
+                if no {
                     Outcome::Closed
                 } else if made == Some(Ok(())) {
                     Outcome::Done(())
                 } else {
-                    if (yes || winui::enter_pressed(ui)) && self.making.is_none() {
+                    if yes && self.making.is_none() {
                         let making = crate::launch::Asked::default();
                         let _ = making.get(
                             &self.folder,

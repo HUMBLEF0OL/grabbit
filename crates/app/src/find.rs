@@ -163,6 +163,7 @@ impl Find {
                                     ButtonKind::Disabled
                                 },
                             )
+                            .primary()
                             .enter(true)
                             .tip(
                                 !can,

@@ -2265,7 +2265,40 @@ impl App {
             "crash-test" => crate::crash::test(tab),
             "batch" => self.run(Cmd::Batch(false), None, ctx),
             "find" => self.run(Cmd::Find, None, ctx),
-            "scheduler" => self.run(Cmd::Scheduler, None, ctx),
+            // scheduler:files, scheduler:limits and scheduler:name open it on its main queue's
+            // Files in the queue, on Download limits, or asking a new queue's name (plan 07e's
+            // screenshots).
+            "scheduler" => {
+                self.run(Cmd::Scheduler, None, ctx);
+                if let Some(s) = &mut self.scheduler {
+                    match tab {
+                        "files" => s.show_queue(0, true),
+                        "limits" => s.show_limits(),
+                        "name" => s.new_queue(),
+                        _ => {}
+                    }
+                }
+            }
+            // The first download's Redownload question, as its right-click menu asks it.
+            "redownload" if first.is_some() => self.run(Cmd::Redownload, first, ctx),
+            // The notices that open by themselves (plan 07e's screenshots): the download limit
+            // reached, a generic notice, 7-Zip needed.
+            "limit-notice" => {
+                self.limit_notice = Some(dialogs::LimitNotice::new(
+                    self.settings.limits_mb,
+                    self.settings.limits_hours,
+                    Duration::from_secs(5 * 3600),
+                ));
+            }
+            "notice" => dialogs::tell(
+                crate::i18n::mark("Mister Download Manager"),
+                crate::i18n::t("Invalid address").to_owned(),
+            ),
+            "7zip" => {
+                self.extracts.needs_7zip = Some(crate::extractq::ToolDialog::new(
+                    "photos-2026.rar".to_owned(),
+                ));
+            }
             "about" => self.run(Cmd::About, None, ctx),
             // Update now's end-to-end tests (feature `test-update`, never in a release): Update
             // now pressed in the window `/show updates` opened (against MDM_UPDATE_FEED).
@@ -5855,7 +5888,8 @@ impl App {
                     );
                     // i18n: window title, verb: download the file again from the start
                     let title = crate::i18n::mark("Redownload");
-                    self.confirm_redownload = Some((id, dialogs::Confirm::new(title, text)));
+                    self.confirm_redownload =
+                        Some((id, dialogs::Confirm::new(title, text).icon("gx-refresh")));
                 }
             }
             Cmd::MoveRename => {
@@ -7936,8 +7970,7 @@ impl App {
         let dt = self
             .drop_target
             .get_or_insert_with(|| crate::droptarget::DropTarget::new(pos));
-        let icon = egui::include_image!("../assets/icons/app/mdm-48.png");
-        for ev in dt.show(ctx, &icon) {
+        for ev in dt.show(ctx) {
             use crate::droptarget::Event;
             match ev {
                 Event::Drop(s) => self.dropped(vec![s], ctx),

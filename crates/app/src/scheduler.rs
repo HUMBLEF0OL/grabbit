@@ -16,8 +16,8 @@ use crate::settings::Settings;
 // English pen, and a widget given a screen rect (from `r`) turns it back into its English rect
 // (`winui::rect` both ways) before laying out its inside.
 use crate::winui::{
-    self, ButtonKind, LIGHT_BG, LIGHT_DISABLED, LIGHT_PAGE, LIGHT_TEXT, LightTab, fill_l as fill,
-    r, text,
+    self, ButtonKind, FooterButton, FooterItem, LIGHT_BG, LIGHT_DISABLED, LIGHT_PAGE, LIGHT_TEXT,
+    LightTab, fill_l as fill, r, text,
 };
 
 /// What the app does for the Scheduler.
@@ -171,6 +171,10 @@ pub struct Scheduler {
 /// How much lower everything under "Start download at" sits than in IDM's window: the room for
 /// "Wake the computer to run this queue" and its note (#142).
 const DY: f32 = 40.0;
+/// The Scheduler's width, and where its footer starts (Graphite, plan 07e): the panes as
+/// before, New queue and Delete under the queue list, the window's buttons in the footer.
+const W: f32 = 651.0;
+const BODY: f32 = 432.0 + DY;
 
 // i18n: checkbox in the Scheduler, under the start time: wake the computer from sleep shortly before the queue starts, and keep it awake while the queue runs
 const WAKE_LABEL: &str = crate::i18n::mark("Wake the computer to run this queue");
@@ -223,6 +227,12 @@ impl Scheduler {
     pub fn show_queue(&mut self, q: usize, files: bool) {
         self.selected = q.min(self.queues.len().saturating_sub(1));
         self.tab = if files { Tab::Files } else { Tab::Schedule };
+        self.files_rows.selected = None;
+    }
+
+    /// Show the Download limits page (`/show scheduler:limits`, the screenshots').
+    pub fn show_limits(&mut self) {
+        self.selected = self.queues.len();
         self.files_rows.selected = None;
     }
 
@@ -302,7 +312,7 @@ impl Scheduler {
             "scheduler",
             // i18n: noun: the tool that starts and stops queues on time
             "Scheduler",
-            [651.0, 465.0 + DY],
+            [W, BODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
             |ui, o| self.body(ui, o, icons, items, running, wake_error, actions, naming),
@@ -364,28 +374,21 @@ impl Scheduler {
             crate::i18n::t("Queues"),
             LIGHT_TEXT(),
         );
-        let tree = r(o, 11.0, 44.0, 173.0, 379.0 + DY);
+        // The queue list, and under it the queue's own buttons (New queue, Delete), as wide as
+        // their labels need, sharing the list's width.
+        let buttons_y = BODY - 12.0 - winui::CONTROL_H;
+        let tree = r(o, 11.0, 44.0, 173.0, buttons_y - 8.0 - 44.0);
         let delete_key = self.tree(ui, icons, tree);
-        // The bottom row (the queue's buttons under the tree, the window's beside it), each as
-        // wide as its label in this language (#192): a longer one moves its neighbours along.
-        let row = winui::button_row(
+        let row = winui::button_row_from_left(
             &ui.painter().clone(),
-            &[
-                ("&New queue", 21.0, 73.0),
-                ("&Delete", 102.0, 73.0),
-                ("&Start now", 216.0, 73.0),
-                ("S&top", 297.0, 73.0),
-                ("&Help", 390.0, 73.0),
-                ("&Apply", 484.0, 73.0),
-                ("&Close", 565.0, 73.0),
-            ],
+            &[("&New queue", 11.0, 84.0), ("&Delete", 103.0, 81.0)],
             8.0,
-            21.0,
-            200.0,
+            184.0,
+            173.0,
         );
         let new_queue = winui::button_light(
             ui,
-            r(o, row[0].0, 432.0 + DY, row[0].1, 21.0),
+            r(o, row[0].0, buttons_y, row[0].1, winui::CONTROL_H),
             "&New queue",
             ButtonKind::Normal,
             false,
@@ -394,7 +397,7 @@ impl Scheduler {
         let deletable = self.selected >= 2 && self.selected < self.queues.len();
         let delete = winui::button_light(
             ui,
-            r(o, row[1].0, 432.0 + DY, row[1].1, 21.0),
+            r(o, row[1].0, buttons_y, row[1].1, winui::CONTROL_H),
             // i18n: verb: delete the queue
             "&Delete",
             if deletable {
@@ -405,15 +408,8 @@ impl Scheduler {
             false,
         )
         .clicked();
-        // The line between the panes runs down beside the buttons; it stops above them where a
-        // longer label takes a button across it.
-        let across = row[1].0 + row[1].1 > 197.0 - 4.0 || row[2].0 < 197.0 + 4.0;
-        let line_h = if across {
-            432.0 + DY - 6.0 - 11.0
-        } else {
-            442.0 + DY
-        };
-        winui::etched_v(&p, o.x + 197.0, o.y + 11.0, line_h);
+        // The line between the panes runs down to the footer.
+        winui::etched_v(&p, o.x + 197.0, o.y + 11.0, BODY - 22.0);
 
         // ---- right pane ---------------------------------------------------------------
         let on_queue = self.selected < self.queues.len();
@@ -462,37 +458,64 @@ impl Scheduler {
 
         // ---- bottom buttons -----------------------------------------------------------
         let is_running = on_queue && running.contains(&self.queues[self.selected].name);
-        let kind = |on: bool| {
-            if on {
-                ButtonKind::Normal
-            } else {
-                ButtonKind::Disabled
-            }
+        let kind = |on: bool, normal: ButtonKind| {
+            if on { normal } else { ButtonKind::Disabled }
         };
-        let btn = |ui: &mut Ui, (x, w): (f32, f32), label: &str, k: ButtonKind| {
-            winui::button_light(ui, r(o, x, 432.0 + DY, w, 21.0), label, k, false).clicked()
-        };
-        // i18n: verb: start the queue now
-        let start = btn(
-            ui,
-            row[2],
-            crate::i18n::mark("&Start now"),
-            kind(on_queue && !is_running),
-        );
-        // i18n: verb: stop the queue
-        let stop = btn(ui, row[3], crate::i18n::mark("S&top"), kind(is_running));
-        // i18n: noun: button that opens the help
-        if btn(ui, row[4], crate::i18n::mark("&Help"), ButtonKind::Normal) {
-            crate::help::open_page("queues-and-scheduler.md#the-scheduler-window");
-        }
         let dirty = {
             let (q, l) = self.state();
             (&q, &l) != (&self.applied.0, &self.applied.1)
         };
-        // i18n: verb: save the changes
-        let apply = btn(ui, row[5], crate::i18n::mark("&Apply"), kind(dirty));
-        // i18n: verb: close the window
-        let close = btn(ui, row[6], crate::i18n::mark("&Close"), ButtonKind::Normal);
+        // Escape first leaves a selected time or date field, then closes the window.
+        if !modal && self.focus.at.is_some() && winui::take_key(ui, egui::Key::Escape) {
+            self.focus.at = None;
+        }
+        // The footer: Stop at its start; Help (quiet), Apply, Close, and Start now last, the
+        // window's answer by look only: Enter presses nothing, as before. Tab and the access
+        // letters keep their order (Start now, Stop, Help, Apply, Close).
+        let pressed = winui::footer(
+            ui,
+            o,
+            W,
+            BODY,
+            &mut [
+                // i18n: verb: start the queue now
+                FooterItem::Button(
+                    FooterButton::new(
+                        "Start now",
+                        kind(on_queue && !is_running, ButtonKind::Default),
+                    )
+                    .primary()
+                    .mnemonic(0),
+                ),
+                // i18n: verb: stop the queue
+                FooterItem::Button(
+                    FooterButton::new("Stop", kind(is_running, ButtonKind::Normal))
+                        .leading()
+                        .mnemonic(1),
+                ),
+                // i18n: noun: button that opens the help
+                FooterItem::Button(FooterButton::new("Help", ButtonKind::Ghost).mnemonic(0)),
+                // i18n: verb: save the changes
+                FooterItem::Button(
+                    FooterButton::new("Apply", kind(dirty, ButtonKind::Normal)).mnemonic(0),
+                ),
+                // i18n: verb: close the window
+                FooterItem::Button(
+                    FooterButton::new("Close", ButtonKind::Normal)
+                        .mnemonic(0)
+                        .escape(true),
+                ),
+            ],
+        );
+        let (start, stop, apply, close) = (
+            pressed == Some(0),
+            pressed == Some(1),
+            pressed == Some(3),
+            pressed == Some(4),
+        );
+        if pressed == Some(2) {
+            crate::help::open_page("queues-and-scheduler.md#the-scheduler-window");
+        }
 
         if modal {
             return Outcome::Open;
@@ -522,12 +545,7 @@ impl Scheduler {
         if stop && on_queue {
             actions.push(Action::Stop(self.queues[self.selected].name.clone()));
         }
-        // Escape first leaves a selected time or date field, then closes the window.
-        if self.focus.at.is_some() && winui::take_key(ui, egui::Key::Escape) {
-            self.focus.at = None;
-        }
-        let escape = winui::escape_pressed(ui);
-        if close || escape {
+        if close {
             Outcome::Closed
         } else {
             Outcome::Open
@@ -917,7 +935,13 @@ impl Scheduler {
             winui::text_width(&p, crate::i18n::t(l)).ceil() + 8.0
         });
         let room = (right - x - lw).max(0.0);
-        let color = if error { winui::ERROR() } else { LIGHT_TEXT() };
+        // A hint (muted), as the mockup's wake line; a problem that stops the wake in the error
+        // colour.
+        let color = if error {
+            winui::ERROR()
+        } else {
+            winui::MUTED()
+        };
         winui::fit(
             ui,
             &p,
@@ -1222,31 +1246,41 @@ impl Scheduler {
             .iter()
             .flat_map(|q| [q.name.clone(), crate::i18n::t(&q.name).to_owned()])
             .collect();
+        // The mockup's layout: the sentence, the name's box, the reason it can't be used, the
+        // footer.
+        const QW: f32 = 400.0;
+        const QBODY: f32 = 116.0;
+        let e = winui::EDGE;
         let outcome = window(
             ctx,
             "queue-name",
             "Enter queue name",
-            [279.0, 120.0],
+            [QW, QBODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 text(
                     &p,
-                    o.x + 11.0,
-                    o.y + 20.0,
+                    o.x + e,
+                    o.y + 29.0,
                     crate::i18n::t("Enter a name for the new queue that will be"),
                     LIGHT_TEXT(),
                 );
                 text(
                     &p,
-                    o.x + 11.0,
-                    o.y + 33.0,
+                    o.x + e,
+                    o.y + 45.0,
                     crate::i18n::t("displayed in the list of queues"),
                     LIGHT_TEXT(),
                 );
-                let edit =
-                    winui::edit_light(ui, r(o, 11.0, 46.0, 258.0, 23.0), &mut name, true, false);
+                let edit = winui::edit_light(
+                    ui,
+                    r(o, e, 56.0, QW - 2.0 * e, winui::CONTROL_H),
+                    &mut name,
+                    true,
+                    false,
+                );
                 if !ui.data(|d| {
                     d.get_temp::<bool>(egui::Id::unique("queue-name-focused"))
                         .unwrap_or(false)
@@ -1268,42 +1302,46 @@ impl Scheduler {
                 } else {
                     None
                 };
-                let ok = winui::button_light(
-                    ui,
-                    r(o, 55.0, 87.0, 73.0, 21.0),
-                    "OK",
-                    if why.is_some() {
-                        ButtonKind::Disabled
-                    } else {
-                        ButtonKind::Default
-                    },
-                    false,
-                );
-                let ok = winui::why_disabled(ok, why.is_some(), why.unwrap_or("")).clicked()
-                    && why.is_none();
                 if let Some(w) = why.filter(|_| !typed.is_empty()) {
                     winui::fit(
                         ui,
                         &p,
-                        o.x + 11.0,
-                        o.y + 80.0,
+                        o.x + e,
+                        o.y + 104.0,
                         crate::i18n::t(w),
                         winui::ERROR(),
-                        o.x + 269.0,
+                        o.x + QW - e,
                         "queue-name-taken",
                     );
                 }
-                let cancel = winui::button_light(
+                // Enter OK (while the name can be used), Escape Cancel, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, 148.0, 87.0, 73.0, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                if cancel || winui::escape_pressed(ui) {
+                    o,
+                    QW,
+                    QBODY,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new(
+                                "OK",
+                                if why.is_some() {
+                                    ButtonKind::Disabled
+                                } else {
+                                    ButtonKind::Default
+                                },
+                            )
+                            .primary()
+                            .enter(true)
+                            .tip(why.is_some(), why.unwrap_or("")),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                if pressed == Some(1) {
                     Outcome::Closed
-                } else if ok || (why.is_none() && winui::enter_pressed(ui)) {
+                } else if pressed == Some(0) && why.is_none() {
                     Outcome::Done(())
                 } else {
                     Outcome::Open

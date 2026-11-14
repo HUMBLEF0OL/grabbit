@@ -9,7 +9,7 @@ use std::path::Path;
 use crate::dialogs::{Outcome, window};
 use crate::model::{BuiltinEdit, Category, CustomCategory};
 use crate::settings::Settings;
-use crate::winui::{self, ButtonKind, LIGHT_BG, LIGHT_DISABLED, LIGHT_TEXT, r};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, LIGHT_BG, LIGHT_DISABLED, r};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Target {
@@ -77,22 +77,27 @@ impl CategoryDialog {
             Target::Edit(c) => c.shown(),
             Target::New => String::new(),
         };
+        // The mockup's layout: a label column, rows 30 high, the hint under File types, the
+        // footer.
+        const W: f32 = 480.0;
+        const BODY: f32 = 180.0;
         let out = window(
             ctx,
             "category-edit",
             title,
-            [420.0, 196.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
-                let label = |y: f32, s: &str| {
-                    winui::text_right(&p, o.x + 90.0, o.y + y, crate::i18n::t(s), LIGHT_TEXT())
-                };
-                label(26.0, crate::i18n::mark("Name:"));
+                let (e, h) = (winui::EDGE, winui::CONTROL_H);
+                let fx = winui::form(&p, e, &["Name:", "File types:", "Folder:"], false);
+                let right = W - e;
+                let label = |y: f32, s: &str| winui::form_label(&p, o, e, y, h, s, true);
+                label(16.0, crate::i18n::mark("Name:"));
                 let name_box = winui::edit_light(
                     ui,
-                    r(o, 98.0, 12.0, 310.0, 23.0),
+                    r(o, fx, 16.0, right - fx, h),
                     &mut self.name,
                     !built_in,
                     false,
@@ -102,10 +107,10 @@ impl CategoryDialog {
                     name_box.request_focus();
                     self.focused = true;
                 }
-                label(57.0, crate::i18n::mark("File types:"));
+                label(56.0, crate::i18n::mark("File types:"));
                 winui::edit_light(
                     ui,
-                    r(o, 98.0, 43.0, 310.0, 23.0),
+                    r(o, fx, 56.0, right - fx, h),
                     &mut self.types,
                     !built_in,
                     false,
@@ -113,27 +118,27 @@ impl CategoryDialog {
                 winui::fit(
                     ui,
                     &p,
-                    o.x + 98.0,
-                    o.y + 80.0,
+                    o.x + fx,
+                    o.y + 104.0,
                     crate::i18n::t("Extensions separated by spaces, for example MP4 MKV R0*"),
                     LIGHT_DISABLED(),
-                    o.x + 408.0,
+                    o.x + right,
                     "category-types-hint",
                 );
-                label(112.0, crate::i18n::mark("Folder:"));
-                // Browse as wide as its label in this language (#192); the box ends 8 px before.
-                let (browse_x, browse_w) =
-                    winui::buttons_to_right(&p, 408.0, 8.0, &[("Browse...", 73.0)], 160.0)[0];
+                label(122.0, crate::i18n::mark("Folder:"));
+                // Browse as wide as its label needs; the box ends 8 px before it.
+                let browse_w = winui::footer_button_width(&p, "Browse...", false);
+                let browse_x = right - browse_w;
                 winui::edit_light(
                     ui,
-                    r(o, 98.0, 98.0, browse_x - 8.0 - 98.0, 23.0),
+                    r(o, fx, 122.0, browse_x - 8.0 - fx, h),
                     &mut self.folder,
                     true,
                     false,
                 );
                 if winui::button_light(
                     ui,
-                    r(o, browse_x, 99.0, browse_w, 21.0),
+                    r(o, browse_x, 122.0, browse_w, h),
                     "Browse...",
                     ButtonKind::Normal,
                     false,
@@ -170,44 +175,44 @@ impl CategoryDialog {
                     winui::fit(
                         ui,
                         &p,
-                        o.x + 98.0,
-                        o.y + 142.0,
+                        o.x + fx,
+                        o.y + 168.0,
                         e,
                         winui::ERROR(),
-                        o.x + 408.0,
+                        o.x + right,
                         "category-taken",
                     );
                 }
                 let valid = built_in || (!name.is_empty() && !taken);
-                let ok = winui::button_light(
+                // Enter OK (while valid), Escape Cancel, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, 254.0, 164.0, 73.0, 21.0),
-                    "OK",
-                    if valid {
-                        ButtonKind::Default
-                    } else {
-                        ButtonKind::Disabled
-                    },
-                    false,
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new(
+                                "OK",
+                                if valid {
+                                    ButtonKind::Default
+                                } else {
+                                    ButtonKind::Disabled
+                                },
+                            )
+                            .primary()
+                            .enter(true)
+                            // i18n: why OK is greyed in the category dialog
+                            .tip(name.is_empty() && !built_in, "Type the category's name"),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
                 );
-                // i18n: why OK is greyed in the category dialog
-                let ok = winui::why_disabled(
-                    ok,
-                    name.is_empty() && !built_in,
-                    "Type the category's name",
-                )
-                .clicked();
-                let cancel = winui::button_light(
-                    ui,
-                    r(o, 335.0, 164.0, 73.0, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                if cancel || winui::escape_pressed(ui) {
+                if pressed == Some(1) {
                     Outcome::Closed
-                } else if valid && (ok || winui::enter_pressed(ui)) {
+                } else if valid && pressed == Some(0) {
                     Outcome::Done(())
                 } else {
                     Outcome::Open

@@ -9,7 +9,7 @@ use std::time::Duration;
 use egui::{pos2, vec2};
 
 use crate::dialogs::{Outcome, window};
-use crate::winui::{self, ButtonKind, r};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r};
 
 /// The repository: problem reports, releases, source, licences. This fork's own: its users'
 /// reports and its builds' updates come here, not to the original (anefzaoui/misterdownloadmanager).
@@ -380,13 +380,7 @@ impl Updates {
                             right,
                             "update-have",
                         );
-                        winui::text(
-                            &p,
-                            o.x + e,
-                            o.y + 80.0,
-                            crate::i18n::t("What's new:"),
-                            ink,
-                        );
+                        winui::text(&p, o.x + e, o.y + 80.0, crate::i18n::t("What's new:"), ink);
                         let notes = egui::Rect::from_min_max(
                             pos2(o.x + e, o.y + 88.0),
                             pos2(right, o.y + 228.0),
@@ -523,7 +517,11 @@ impl Updates {
                     ButtonKind::Default
                 };
                 let mut items: Vec<FooterItem> = first
-                    .map(|label| FooterItem::Button(FooterButton::new(label, first_kind).enter(true)))
+                    .map(|label| {
+                        FooterItem::Button(
+                            FooterButton::new(label, first_kind).primary().enter(true),
+                        )
+                    })
                     .into_iter()
                     .collect();
                 items.push(FooterItem::Button(
@@ -635,7 +633,8 @@ impl About {
         // A long translation pushes the links and OK down; the window grows with them.
         let extra = crate::dialogs::grow_extra(ctx, "about");
         const W: f32 = 420.0;
-        let body = 206.0 + extra;
+        const BODY: f32 = 248.0;
+        let body = BODY + extra;
         window(
             ctx,
             "about",
@@ -646,15 +645,20 @@ impl About {
             |ui, o| {
                 let p = ui.painter().clone();
                 let ink = winui::TEXT();
+                // The mockup's About: everything centred under today's app icon at 56.
+                let cx = o.x + W / 2.0;
                 egui::Image::from_bytes(
                     "bytes://mdm-48.png",
                     include_bytes!("../assets/icons/app/mdm-48.png"),
                 )
-                .paint_at(ui, winui::r(o, 16.0, 16.0, 48.0, 48.0));
-                winui::text(
-                    &p,
-                    o.x + 80.0,
-                    o.y + 28.0,
+                .paint_at(ui, winui::r(o, W / 2.0 - 28.0, 24.0, 56.0, 56.0));
+                let centred = |font: egui::FontId, baseline: f32, s: &str, color| {
+                    let w = winui::text_width_font(&p, font.clone(), s);
+                    winui::text_at(&p, font, (cx - w / 2.0).round(), baseline, s, color)
+                };
+                centred(
+                    winui::tahoma_title(),
+                    o.y + 104.0,
                     crate::i18n::t("Mister Download Manager"),
                     ink,
                 );
@@ -663,76 +667,78 @@ impl About {
                     &[("version", VERSION), ("commit", COMMIT)],
                 );
                 // Copyable: bug reports ask for it.
-                let rect = winui::text(&p, o.x + 80.0, o.y + 46.0, &version, winui::MUTED());
+                let rect = centred(winui::tahoma(), o.y + 124.0, &version, winui::MUTED());
                 winui::copyable(ui, rect, "about-version", &version, false);
-                let lines = winui::paragraph(
+                let about = winui::wrap_lines(
                     &p,
-                    o.x + 80.0,
-                    o.y + 72.0,
                     crate::i18n::t(
                         "The download manager you already know, rebuilt to be faster. Free and open source under the GNU GPL, version 3 or later. Videos are found by yt-dlp; torrents run on librqbit.",
                     ),
-                    ink,
-                    o.x + 404.0,
-                    13.0,
+                    W - 2.0 * 32.0,
                 );
-                // The links in a row, 18 px apart; one that would pass the paragraph's right
-                // edge (a long translation) starts the next row.
-                let (mut x, mut y) = (o.x + 80.0, o.y + 72.0 + 13.0 * lines as f32 + 14.0);
-                let mut place = |label: &str| {
-                    let w = winui::text_width(&p, crate::i18n::t(label));
-                    if x > o.x + 80.0 && x + w > o.x + 404.0 {
-                        (x, y) = (o.x + 80.0, y + 16.0);
+                let mut y = o.y + 150.0;
+                for line in &about {
+                    centred(winui::tahoma(), y, line, ink);
+                    y += 16.0;
+                }
+                // The links in centred rows, 18 px apart: one that would pass the room (a long
+                // translation) starts the next row.
+                let links = ["Home page", "Source code", "Licenses and credits"];
+                let width = |l: &str| winui::text_width(&p, crate::i18n::t(l));
+                let mut rows: Vec<Vec<&str>> = vec![Vec::new()];
+                let mut row_w = 0.0;
+                for l in links {
+                    let w = width(l);
+                    let last = rows.last_mut().expect("a row");
+                    if !last.is_empty() && row_w + 18.0 + w > W - 2.0 * 32.0 {
+                        rows.push(vec![l]);
+                        row_w = w;
+                    } else {
+                        row_w += if last.is_empty() { w } else { 18.0 + w };
+                        last.push(l);
                     }
-                    let at = (x, y);
-                    x += w + 18.0;
-                    at
-                };
-                let (home, source, credits) = (
-                    place("Home page"),
-                    place("Source code"),
-                    place("Licenses and credits"),
-                );
-                if winui::link(ui, &p, home.0, home.1, "Home page", "home") {
-                    open_page("");
                 }
-                if winui::link(ui, &p, source.0, source.1, "Source code", "source") {
-                    crate::launch::open(REPO);
-                }
-                if winui::link(
-                    ui,
-                    &p,
-                    credits.0,
-                    credits.1,
-                    "Licenses and credits",
-                    "credits",
-                ) {
-                    crate::launch::open(format!("{REPO}/blob/main/ATTRIBUTION.md"));
+                y += 8.0;
+                for row in &rows {
+                    let total: f32 =
+                        row.iter().map(|l| width(l)).sum::<f32>() + 18.0 * (row.len() - 1) as f32;
+                    let mut x = (cx - total / 2.0).round();
+                    for l in row {
+                        if winui::link(ui, &p, x, y, l, l) {
+                            match *l {
+                                "Home page" => open_page(""),
+                                "Source code" => crate::launch::open(REPO),
+                                _ => {
+                                    crate::launch::open(format!("{REPO}/blob/main/ATTRIBUTION.md"))
+                                }
+                            }
+                        }
+                        x += width(l) + 18.0;
+                    }
+                    y += 16.0;
                 }
                 // Its own row under them: the creator's Sponsors page (Help → Support MDM).
-                y += 22.0;
-                if winui::link(
-                    ui,
-                    &p,
-                    o.x + 80.0,
-                    y,
-                    "Support MDM on GitHub Sponsors",
-                    "support",
-                ) {
+                y += 6.0;
+                let support_label = "Support MDM on GitHub Sponsors";
+                let sw = width(support_label);
+                if winui::link(ui, &p, (cx - sw / 2.0).round(), y, support_label, "support") {
                     support();
                 }
-                // The last row ends above OK (at 204 when it fits as planned).
-                crate::dialogs::grow_px(ui.ctx(), "about", y + 12.0 - (o.y + 194.0));
-                let ok = winui::button(
+                // The last row ends 16 above the footer; the window grows with a long text.
+                crate::dialogs::grow_px(ui.ctx(), "about", y + 20.0 - (o.y + BODY));
+                // Enter and Escape both close it, as before.
+                let ok = winui::footer(
                     ui,
-                    r(o, 336.0, 204.0 + extra, 73.0, 21.0),
-                    "OK",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked();
-                if ok || winui::escape_pressed(ui) || winui::enter_pressed(ui) {
+                    o,
+                    W,
+                    body,
+                    &mut [FooterItem::Button(
+                        FooterButton::new("OK", ButtonKind::Default)
+                            .enter(true)
+                            .escape(true),
+                    )],
+                );
+                if ok.is_some() {
                     Outcome::Closed
                 } else {
                     Outcome::Open
@@ -802,11 +808,13 @@ pub struct Shortcuts;
 impl Shortcuts {
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         let rows = SHORTCUTS.len() as f32;
+        const W: f32 = 520.0;
+        let body = 24.0 + 18.0 * rows + 8.0;
         window(
             ctx,
             "shortcuts",
             "Keyboard shortcuts",
-            [520.0, 52.0 + 18.0 * rows + 20.0],
+            [W, body + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
@@ -838,21 +846,20 @@ impl Shortcuts {
                         ("what", y as i32),
                     );
                 }
-                let y = 24.0 + 18.0 * rows + 6.0;
-                let ok = winui::button(
+                // Enter and Escape both close it (with a modifier held too, as before).
+                let any_key = ui
+                    .input(|i| i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::Enter));
+                let ok = winui::footer(
                     ui,
-                    r(o, 436.0, y, 73.0, 21.0),
-                    "OK",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked();
-                if ok
-                    || ui.input(|i| {
-                        i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::Enter)
-                    })
-                {
+                    o,
+                    W,
+                    body,
+                    &mut [FooterItem::Button(FooterButton::new(
+                        "OK",
+                        ButtonKind::Default,
+                    ))],
+                );
+                if ok.is_some() || any_key {
                     Outcome::Closed
                 } else {
                     Outcome::Open
@@ -888,26 +895,29 @@ impl TellFriend {
         let message = Self::message();
         // The message's box grows with a long translation, the window with it.
         let extra = crate::dialogs::grow_extra(ctx, "tell-a-friend");
+        const W: f32 = 440.0;
+        let body = 154.0 + extra;
         window(
             ctx,
             "tell-a-friend",
             "Tell a friend",
-            [420.0, 168.0 + extra],
+            [W, body + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 let ink = winui::TEXT();
+                let e = winui::EDGE;
                 winui::text(
                     &p,
-                    o.x + 11.0,
-                    o.y + 21.0,
+                    o.x + e,
+                    o.y + 29.0,
                     crate::i18n::t("Send this to a friend:"),
                     ink,
                 );
                 let rect = egui::Rect::from_min_max(
-                    pos2(o.x + 11.0, o.y + 30.0),
-                    pos2(o.x + 409.0, o.y + 106.0 + extra),
+                    pos2(o.x + e, o.y + 40.0),
+                    pos2(o.x + W - e, o.y + 116.0 + extra),
                 );
                 // English, as the paragraph is laid out; made where it is on screen.
                 // Read-only text: the read-only field's look (it drew a square box of its own).
@@ -922,20 +932,8 @@ impl TellFriend {
                     13.0,
                 );
                 crate::dialogs::grow_to(ui.ctx(), "tell-a-friend", lines, 5);
-                let o = o + vec2(0.0, extra);
-                // The buttons as wide as their labels in this language (#192), the row ending
-                // where it ends in English.
-                let [copy_at, email_at, close_at] = winui::buttons_to_right(
-                    &p,
-                    409.0,
-                    9.0,
-                    &[("Copy", 73.0), ("Email", 73.0), ("Close", 73.0)],
-                    130.0,
-                )[..] else {
-                    unreachable!("three buttons")
-                };
                 if let Some((said, failed)) = self.said {
-                    // Short of the buttons beside it (a long translation: "...", whole on hover).
+                    // Under the message (a long translation: "...", whole on hover).
                     let c = if failed {
                         winui::ERROR()
                     } else {
@@ -944,42 +942,32 @@ impl TellFriend {
                     winui::fit(
                         ui,
                         &p,
-                        o.x + 11.0,
-                        o.y + 150.0,
+                        o.x + e,
+                        o.y + 136.0 + extra,
                         crate::i18n::t(said),
                         c,
-                        o.x + copy_at.0 - 6.0,
+                        o.x + W - e,
                         "copied",
                     );
                 }
-                let copy = winui::button(
+                // Enter copies, Escape closes, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, copy_at.0, 136.0, copy_at.1, 21.0),
-                    "Copy",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked()
-                    || winui::enter_pressed(ui);
-                let email = winui::button(
-                    ui,
-                    r(o, email_at.0, 136.0, email_at.1, 21.0),
-                    "Email",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
-                let close = winui::button(
-                    ui,
-                    r(o, close_at.0, 136.0, close_at.1, 21.0),
-                    "Close",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
+                    o,
+                    W,
+                    body,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("Copy", ButtonKind::Default).enter(true),
+                        ),
+                        FooterItem::Button(FooterButton::new("Email", ButtonKind::Normal)),
+                        FooterItem::Button(
+                            FooterButton::new("Close", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                let (copy, email, close) =
+                    (pressed == Some(0), pressed == Some(1), pressed == Some(2));
                 // The user asked for it: the message goes to the clipboard (a busy clipboard
                 // says so; it showed nothing).
                 let to_clipboard = crate::set_clipboard;
@@ -1019,7 +1007,7 @@ impl TellFriend {
                         });
                     }
                 }
-                if close || winui::escape_pressed(ui) {
+                if close {
                     Outcome::Closed
                 } else {
                     Outcome::Open

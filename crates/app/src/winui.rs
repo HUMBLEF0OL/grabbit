@@ -844,7 +844,7 @@ fn data_left(x: f32, right: f32) -> f32 {
 
 /// `s` broken into the lines it shows in `room` px: at its own line breaks, and where a line is
 /// too long, at spaces, or between any two characters in scripts written without spaces.
-fn wrap_lines(p: &Painter, s: &str, room: f32) -> Vec<String> {
+pub fn wrap_lines(p: &Painter, s: &str, room: f32) -> Vec<String> {
     let mut lines: Vec<String> = Vec::new();
     for given in s.split('\n') {
         // A Windows line end (a report written there) breaks the line too.

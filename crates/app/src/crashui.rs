@@ -19,9 +19,13 @@ use mdm_crash::monitor::{self, Event};
 use mdm_crash::protocol::{Kind, Notes};
 use mdm_crash::report::{self, Made};
 
-use crate::winui::{self, ButtonKind, r};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r};
 
-const CLIENT: [f32; 2] = [620.0, 540.0];
+const CLIENT: [f32; 2] = [680.0, BODY + winui::FOOTER_H];
+/// Where the footer starts (Graphite, plan 07e): its five buttons need the width above.
+const BODY: f32 = 490.0;
+/// The right edge of the window's contents.
+const RIGHT: f32 = CLIENT[0] - winui::EDGE;
 
 pub fn monitor_main(m: MonitorArgs) -> eframe::Result {
     mdm_crash::logs::init(&m.data, mdm_crash::logs::MONITOR);
@@ -177,7 +181,6 @@ struct ReportWindow {
     recovered: bool,
     /// Something to tell under the report (copied, sent…).
     told: Option<String>,
-    icon: Option<egui::TextureHandle>,
     /// Windows' caption follows the window's theme (set once the window exists).
     caption_set: bool,
     /// DWM gave the caption its light or dark (once: asked every second, it caught the window's
@@ -199,7 +202,6 @@ impl ReportWindow {
             what: String::new(),
             attach: false,
             told: None,
-            icon: None,
             caption_set: false,
             caption_dwm: false,
             fitted: false,
@@ -375,36 +377,32 @@ impl ReportWindow {
             )
         };
 
-        // The app's icon and the heading.
-        let icon = self.icon.get_or_insert_with(|| {
-            let i = crate::app_picture();
-            let img = egui::ColorImage::from_rgba_unmultiplied(
-                [i.width as usize, i.height as usize],
-                &i.rgba,
-            );
-            ui.ctx()
-                .load_texture("crash-icon", img, egui::TextureOptions::LINEAR)
-        });
-        egui::Image::new((icon.id(), egui::vec2(32.0, 32.0)))
-            .paint_at(ui, r(o, 16.0, 16.0, 32.0, 32.0));
+        // A bug on its tile (the mockup's), and the heading.
+        winui::icon_tile(
+            ui,
+            r(o, 16.0, 16.0, 40.0, 40.0),
+            "gx-bug",
+            crate::theme::colors().error,
+            8.0,
+        );
         winui::text_font(
             &p,
             winui::tahoma_bold(),
-            o.x + 60.0,
+            o.x + 68.0,
             o.y + 30.0,
             self.heading(alive),
             winui::TEXT(),
         );
         winui::paragraph(
             &p,
-            o.x + 60.0,
+            o.x + 68.0,
             o.y + 50.0,
             // i18n: crash report window: what the report is and what Send does
             crate::i18n::t(
                 "A report was saved. Sending it to the developers on GitHub helps them fix this; you can read everything it holds below first. Nothing is sent by itself: Send opens the report form in your browser, filled in, for you to check and submit.",
             ),
             winui::TEXT(),
-            o.x + 604.0,
+            o.x + RIGHT,
             15.0,
         );
 
@@ -419,7 +417,7 @@ impl ReportWindow {
         );
         winui::multiline_light(
             ui,
-            r(o, 16.0, 124.0, 588.0, 58.0),
+            r(o, 16.0, 124.0, RIGHT - 16.0, 58.0),
             &mut self.what,
             "crash-what",
             true,
@@ -436,7 +434,7 @@ impl ReportWindow {
         );
         winui::field_frame(
             &p,
-            r(o, 16.0, 208.0, 588.0, 226.0),
+            r(o, 16.0, 208.0, RIGHT - 16.0, 226.0),
             winui::FieldLook::ReadOnly,
         );
         match &made {
@@ -444,7 +442,7 @@ impl ReportWindow {
             Some(m) => winui::scroll_text(
                 ui,
                 egui::Id::unique("crash-report-text"),
-                Rect::from_min_size(o + egui::vec2(18.0, 210.0), egui::vec2(584.0, 222.0)),
+                Rect::from_min_size(o + egui::vec2(18.0, 210.0), egui::vec2(RIGHT - 20.0, 222.0)),
                 &m.text,
                 winui::TEXT(),
                 14.0,
@@ -495,7 +493,7 @@ impl ReportWindow {
             // translation, an issue's title) is cut at the window's right margin with "...",
             // and shown whole under the pointer (#164).
             let (rc, cut) =
-                winui::text_fit(&p, o.x + 16.0, o.y + 452.0, &s, winui::TEXT(), o.x + 604.0);
+                winui::text_fit(&p, o.x + 16.0, o.y + 452.0, &s, winui::TEXT(), o.x + RIGHT);
             if cut {
                 winui::full_on_hover(ui, rc, "crash-status", &s);
             }
@@ -513,9 +511,6 @@ impl ReportWindow {
             );
         }
 
-        // The buttons, each as wide as its label in this language (#204): the row fills the
-        // window's width, those wider than their label giving room to those that need it.
-        let y = 500.0;
         let send_label = if found.is_some() {
             // i18n: crash report window button: open the GitHub issue already filed (and copy the report to add it there)
             "Open the reported issue"
@@ -532,77 +527,37 @@ impl ReportWindow {
             // i18n: crash report window button: start MDM again
             "Restart MDM"
         };
-        let [send_at, copy_at, folder_at, restart_at, close_at] = winui::button_row(
-            &p,
-            &[
-                (send_label, 16.0, 170.0),
-                ("Copy report", 192.0, 110.0),
-                ("Open folder", 308.0, 110.0),
-                (restart_label, 424.0, 112.0),
-                ("Close", 542.0, 62.0),
-            ],
-            6.0,
-            16.0,
-            260.0,
-        )[..] else {
-            unreachable!("five buttons")
+        // The footer: Open folder (and Restart, when MDM is gone or frozen) at its start; Copy
+        // report, Close and Send last. No key presses any, as before; Tab keeps its order.
+        let ready = |kind: ButtonKind| {
+            if made.is_some() {
+                kind
+            } else {
+                ButtonKind::Disabled
+            }
         };
-        let send = winui::button(
-            ui,
-            r(o, send_at.0, y, send_at.1, 25.0),
-            send_label,
-            if made.is_some() {
-                ButtonKind::Default
-            } else {
-                ButtonKind::Disabled
-            },
-            false,
-            None,
-        )
-        .clicked();
-        let copy = winui::button(
-            ui,
-            r(o, copy_at.0, y, copy_at.1, 25.0),
+        let mut items = vec![
+            FooterItem::Button(FooterButton::new(send_label, ready(ButtonKind::Default)).primary()),
             // i18n: crash report window button: copy the report's text
-            "Copy report",
-            if made.is_some() {
-                ButtonKind::Normal
-            } else {
-                ButtonKind::Disabled
-            },
-            false,
-            None,
-        )
-        .clicked();
-        let folder = winui::button(
-            ui,
-            r(o, folder_at.0, y, folder_at.1, 25.0),
+            FooterItem::Button(FooterButton::new("Copy report", ready(ButtonKind::Normal))),
             // i18n: crash report window button: show the report's file in its folder
-            "Open folder",
-            ButtonKind::Normal,
-            false,
-            None,
-        )
-        .clicked();
-        let restart = (!alive || frozen)
-            && winui::button(
-                ui,
-                r(o, restart_at.0, y, restart_at.1, 25.0),
-                restart_label,
-                ButtonKind::Normal,
-                false,
-                None,
-            )
-            .clicked();
-        let close = winui::button(
-            ui,
-            r(o, close_at.0, y, close_at.1, 25.0),
+            FooterItem::Button(FooterButton::new("Open folder", ButtonKind::Normal).leading()),
+        ];
+        let can_restart = !alive || frozen;
+        if can_restart {
+            items.push(FooterItem::Button(
+                FooterButton::new(restart_label, ButtonKind::Normal).leading(),
+            ));
+        }
+        items.push(FooterItem::Button(FooterButton::new(
             "Close",
             ButtonKind::Normal,
-            false,
-            None,
-        )
-        .clicked();
+        )));
+        let last = items.len() - 1;
+        let pressed = winui::footer(ui, o, CLIENT[0], BODY, &mut items);
+        let (send, copy, folder) = (pressed == Some(0), pressed == Some(1), pressed == Some(2));
+        let restart = can_restart && pressed == Some(3);
+        let close = pressed == Some(last);
 
         let Some(made) = made else {
             if close {
