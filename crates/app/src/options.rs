@@ -3388,7 +3388,6 @@ fn display_dir(dir: &std::path::Path) -> String {
     }
 }
 
-/// OK / Cancel at (x, y), OK only when `valid`.
 /// Connection → DNS → Settings...: how it's asked, its servers, the fallback, a test.
 fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
     use mdm_engine::dns::{Mode, Preset};
