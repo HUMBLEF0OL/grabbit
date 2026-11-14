@@ -572,8 +572,9 @@ These ship in a later version, when they're ready.
   Test browser integration, Download panels, Pair a device, New and Edit login and exception),
   their keys unchanged (still to come: the help page's pictures, retaken by the docs-shots
   workflow), and the General, File types, Save to, Downloads and Connection pages on them (a
-  label column, hairlines in place of group boxes, Connection's number in a spin box). Next: the
-  other seven Options pages on them (plan 08b)
+  label column, hairlines in place of group boxes, Connection's number in a spin box), and the
+  other seven on them too (Remote's state and Accounts' warning in banners). Next: the finish
+  and review (plan 09)
 
 ### Bugs being looked into
 
