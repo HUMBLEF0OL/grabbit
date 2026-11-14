@@ -83,9 +83,7 @@ pub async fn install_latest(
     if let Some(mine) = crate::chosen::chosen(dir, crate::chosen::Helper::Ffmpeg) {
         return Ok(mine);
     }
-    let client = mdm_engine::net::client_builder(&net.dns, &net.route, RELEASES)?
-        .user_agent(crate::USER_AGENT)
-        .build()?;
+    let client = crate::client(net, RELEASES)?;
     let body = client
         .get(RELEASES)
         .send()
