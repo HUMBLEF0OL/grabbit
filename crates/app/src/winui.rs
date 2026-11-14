@@ -3890,11 +3890,12 @@ pub fn footer_trailing_left(client_w: f32, widths: &[f32]) -> f32 {
 }
 
 /// What a [`footer`] holds: buttons, and leading check boxes (Add torrent's "Download in
-/// order", Confirm deletion's "Don't show this dialog again").
+/// order", Confirm deletion's "Don't show this dialog again"): caption, value, and whether it
+/// can be ticked now (greyed otherwise, as Add torrent's until it has files).
 pub enum FooterItem<'a> {
     Button(FooterButton<'a>),
     #[allow(dead_code)] // ponytail: first used by the 07d-07e waves
-    Check(&'a str, &'a mut bool),
+    Check(&'a str, &'a mut bool, bool),
 }
 
 /// Where a footer's items go, each `(width, side, primary)` in the order given (the dialog's Tab
@@ -3968,7 +3969,7 @@ pub fn footer(
                 b.side,
                 b.primary,
             ),
-            FooterItem::Check(caption, _) => (
+            FooterItem::Check(caption, _, _) => (
                 checkbox_caption_end(&p, 0.0, caption).ceil(),
                 Side::Leading,
                 false,
@@ -4012,9 +4013,9 @@ pub fn footer(
                 keys.push((b.kind != ButtonKind::Disabled, b.enter, b.escape));
                 at_key.push(i);
             }
-            FooterItem::Check(caption, on) => {
+            FooterItem::Check(caption, on, enabled) => {
                 let box_top = top + ((CONTROL_H - 13.0) / 2.0).round();
-                checkbox(ui, o + vec2(x, box_top), on, caption, true);
+                checkbox(ui, o + vec2(x, box_top), on, caption, *enabled);
             }
         }
     }
