@@ -90,7 +90,8 @@ fn own_window(title: &str, known: Option<HWND>) -> Option<HWND> {
     if let Some(h) = known.filter(|h| unsafe { IsWindow(*h) } != 0) {
         return Some(h);
     }
-    let title: Vec<u16> = title.encode_utf16().collect();
+    // As the window was given it (dialogs.rs, progress.rs): without isolates (upstream issue 919).
+    let title: Vec<u16> = crate::i18n::os_text(title).encode_utf16().collect();
     let mut f = Find {
         pid: unsafe { GetCurrentProcessId() },
         buf: vec![0; title.len() + 2],
@@ -1311,6 +1312,27 @@ mod find_own_window_tests {
         }
     }
 
+    /// Upstream issue 919: a window is given its title without isolates, and found by the title
+    /// MDM knows it by, isolates and all.
+    #[test]
+    fn a_window_titled_without_isolates_is_found() {
+        let title = format!(
+            "71% {} {}",
+            crate::i18n::isolate("mdm isolate test.zip"),
+            std::process::id()
+        );
+        let given = crate::i18n::os_text(&title);
+        assert!(
+            !given
+                .chars()
+                .any(|c| ('\u{2066}'..='\u{2069}').contains(&c))
+        );
+        let window = test_window(&given);
+        assert_eq!(find_own_window(&title), Some(window));
+        // SAFETY: the test's own window, made on this thread.
+        unsafe { DestroyWindow(window) };
+    }
+
     /// A hidden test window of this thread titled `title`, destroyed by the caller.
     fn test_window(title: &str) -> HWND {
         let class: Vec<u16> = "mdm-find-own-window-test-2\0".encode_utf16().collect();
@@ -1742,6 +1764,25 @@ pub fn tray_icon_tip(hwnd: isize, id: u32, tip: &str) -> bool {
     }
     // SAFETY: nid lives for the call; the shell only reads it.
     unsafe { Shell_NotifyIconW(NIM_MODIFY, &nid) != 0 }
+}
+
+/// Whether the window in front (the foreground window, which takes the keyboard) is another
+/// program's: a click outside MDM's windows (the desktop, the taskbar, another program) put it
+/// there. False while one of ours is in front, and while none is (Windows passing the foreground
+/// on). An open menu closes at once on it (chrome.rs, upstream issue 859).
+pub fn foreground_is_another_program() -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+    // SAFETY: plain queries about a window handle, which may be gone (then pid stays 0); the
+    // out pointer is a local.
+    unsafe {
+        let front = GetForegroundWindow();
+        if front.is_null() {
+            return false;
+        }
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(front, &mut pid);
+        pid != 0 && pid != GetCurrentProcessId()
+    }
 }
 
 /// What a borderless window of ours is, for [`popup_window`]: every one is a plain popup
@@ -4969,6 +5010,127 @@ mod classic_text {
                 is_color: false,
             })
         }
+    }
+}
+
+/// Open `path` with the program Windows has for its type, through `ShellExecuteW` (upstream
+/// issue 811): handed to explorer.exe instead (the `open` crate), a file whose program is
+/// another one, such as 7-Zip for a .zip, failed and its folder was shown.
+pub fn open_file_shell(path: &std::path::Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    // Shell extensions behind the file's program may need COM on the calling thread.
+    com_on_this_thread();
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    // SAFETY: lpFile is a null-terminated UTF-16 string that outlives the call; a null verb
+    // runs the type's default action; the other pointers may be null.
+    let ret = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            wide.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    // Above 32 is success; 32 or below is an SE_ERR code (most are Win32 error numbers).
+    let code = ret as usize;
+    if code > 32 {
+        return Ok(());
+    }
+    let err = std::io::Error::last_os_error();
+    Err(if err.raw_os_error().unwrap_or(0) != 0 {
+        err
+    } else {
+        std::io::Error::from_raw_os_error(code as i32)
+    })
+}
+
+#[cfg(test)]
+mod open_file_shell_tests {
+    /// A file that isn't there is an error, not a folder shown in its place.
+    #[test]
+    fn a_missing_file_is_an_error() {
+        let dir = std::env::temp_dir().join("mdm-open-file-shell-test-missing");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(super::open_file_shell(&dir.join("nothing here.zip")).is_err());
+    }
+}
+
+/// What Explorer's "Open with → Choose another app" asks of the chooser: the "Always use this
+/// app" choice may be saved for the file's type (`ALLOW_REGISTRATION`, `REGISTER_EXT`), and the
+/// app chosen opens the file (`EXEC`; without it the chooser only records the choice).
+const OPEN_WITH_FLAGS: windows_sys::Win32::UI::Shell::OPEN_AS_INFO_FLAGS = {
+    use windows_sys::Win32::UI::Shell::{OAIF_ALLOW_REGISTRATION, OAIF_EXEC, OAIF_REGISTER_EXT};
+    OAIF_ALLOW_REGISTRATION | OAIF_REGISTER_EXT | OAIF_EXEC
+};
+
+/// `path` as `SHOpenWithDialog` reads it: the path itself, wide and NUL-ended, with no quotes
+/// round it (a path with spaces is one string here, not a command line).
+fn open_with_file(path: &std::path::Path) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+    path.as_os_str().encode_wide().chain(Some(0)).collect()
+}
+
+/// Windows' own "Open with" chooser for the file `path` ("How do you want to open this file?"),
+/// as Explorer shows it: the app chosen there opens the file (upstream issue 720). It waits until
+/// the chooser is closed, so it is called on a thread of its own (with COM, apartment-threaded,
+/// as the shell expects). `Err(HRESULT)` when Windows couldn't show it; closing the chooser
+/// without a choice is `Ok`.
+///
+/// It used to run `rundll32 shell32.dll,OpenAs_RunDLL <path>`, which takes the rest of its
+/// command line as the path, quotes included: the quotes a path with a space gets made it a file
+/// that isn't there, and the chooser never showed.
+pub fn open_with_dialog(path: &std::path::Path) -> Result<(), i32> {
+    use windows_sys::Win32::Foundation::ERROR_CANCELLED;
+    use windows_sys::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
+    use windows_sys::Win32::UI::Shell::{OPENASINFO, SHOpenWithDialog};
+    // SAFETY: no reserved pointer. The thread is the chooser's own (`launch::spawn`) and keeps
+    // COM until it ends.
+    unsafe { CoInitializeEx(std::ptr::null(), COINIT_APARTMENTTHREADED as u32) };
+    let file = open_with_file(path);
+    let info = OPENASINFO {
+        pcszFile: file.as_ptr(),
+        pcszClass: std::ptr::null(),
+        oaifInFlags: OPEN_WITH_FLAGS,
+    };
+    // SAFETY: `info` and the NUL-ended `file` it points to outlive the call, which only reads
+    // them. No owner window: the window's thread isn't this one, and an owner would tie the two
+    // threads' input together while the chooser is open.
+    let hr = unsafe { SHOpenWithDialog(std::ptr::null_mut(), &info) };
+    // HRESULT_FROM_WIN32(ERROR_CANCELLED): the chooser closed without a choice.
+    let cancelled = (0x8007_0000 | ERROR_CANCELLED) as i32;
+    if hr >= 0 || hr == cancelled {
+        Ok(())
+    } else {
+        Err(hr)
+    }
+}
+
+#[cfg(test)]
+mod open_with_tests {
+    use super::*;
+
+    #[test]
+    fn the_chooser_opens_the_file_chosen() {
+        use windows_sys::Win32::UI::Shell::{OAIF_EXEC, OAIF_REGISTER_EXT};
+        assert_eq!(OPEN_WITH_FLAGS & OAIF_EXEC, OAIF_EXEC);
+        assert_eq!(OPEN_WITH_FLAGS & OAIF_REGISTER_EXT, OAIF_REGISTER_EXT);
+    }
+
+    #[test]
+    fn a_path_with_spaces_is_given_whole_and_unquoted() {
+        let path = std::path::Path::new(r"C:\Users\A B\Downloads\my file.zip");
+        let wide = open_with_file(path);
+        assert_eq!(wide.last(), Some(&0));
+        assert_eq!(
+            String::from_utf16(&wide[..wide.len() - 1]).unwrap(),
+            r"C:\Users\A B\Downloads\my file.zip"
+        );
+        assert!(!wide.contains(&u16::from(b'"')));
     }
 }
 

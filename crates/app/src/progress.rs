@@ -239,7 +239,8 @@ impl Progress {
         // Hidden until dialogs::keep_theme has given it its theme.
         let mut builder = crate::quiet(ViewportBuilder::default())
             .with_visible(false)
-            .with_title(title)
+            // The taskbar shows it: without isolates (upstream issue 919).
+            .with_title(crate::i18n::os_text(&title))
             .with_inner_size(shown)
             // IDM's progress window has 2 px borders and a fixed size. The sizing frame is asked
             // for and win32::progress_frame trims its borders, disables resizing and gives the

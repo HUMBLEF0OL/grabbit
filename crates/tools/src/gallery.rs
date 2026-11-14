@@ -139,9 +139,7 @@ pub async fn install_latest(
             "build for this system: install gallery-dl yourself and choose it in Helpers".into(),
         ));
     };
-    let client = mdm_engine::net::client_builder(&net.dns, &net.route, RELEASES)?
-        .user_agent(crate::USER_AGENT)
-        .build()?;
+    let client = crate::client(net, RELEASES)?;
     let body = crate::get_bytes(&client, RELEASES).await?;
     let release: Release =
         serde_json::from_slice(&body).map_err(|e| Error::BadRelease(e.to_string()))?;
@@ -280,7 +278,10 @@ impl GalleryJob {
         let mut ours: Vec<String> = vec![
             // The files right in `folder` (the gallery's own), not in subfolders of the site's.
             "--directory".into(),
-            folder.to_string_lossy().into_owned(),
+            // A full path: gallery-dl runs in a folder of its own (upstream issue 834).
+            crate::workdir::absolute(folder)
+                .to_string_lossy()
+                .into_owned(),
             // One file a second at most: gentle with the sites (Wikimedia answers 429 to
             // faster tools) and with the person's line.
             "--sleep".into(),

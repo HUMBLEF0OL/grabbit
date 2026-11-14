@@ -334,7 +334,7 @@ fn dialog_window<T>(
     // Hidden until `keep_theme` has given it its theme (see there).
     let mut builder = ViewportBuilder::default()
         .with_visible(false)
-        .with_title(title)
+        .with_title(crate::i18n::os_text(title))
         .with_inner_size(shown)
         // The thin frame trims the sizing borders and keeps the size fixed.
         .with_resizable(drawn)
@@ -2668,6 +2668,15 @@ pub fn open_file(path: &Path) {
 /// than the window's (Download complete asks it through `launch::Asked`: whether it failed
 /// decides whether the box stays open).
 pub fn open_file_now(path: &Path) -> bool {
+    hand_over(path, |p| {
+        crate::win32::open_file_shell(p).map_err(|e| e.to_string())
+    })
+}
+
+/// Hand the downloaded file `path` to `hand` (which opens it, or shows a chooser for it), or say
+/// why not: moved or deleted since, or `hand`'s error. True when it was handed over. Waits for
+/// `hand`, so it runs on a thread other than the window's.
+fn hand_over(path: &Path, hand: impl FnOnce(&Path) -> Result<(), String>) -> bool {
     let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
     let failed = if !path.exists() {
         crate::i18n::fmt(
@@ -2676,10 +2685,10 @@ pub fn open_file_now(path: &Path) -> bool {
             ),
             &[("file", &name)],
         )
-    } else if let Err(e) = open::that_detached(path) {
+    } else if let Err(e) = hand(path) {
         crate::i18n::fmt(
             crate::i18n::t("{file} could not be opened: {error}"),
-            &[("file", &name), ("error", &e.to_string())],
+            &[("file", &name), ("error", &e)],
         )
     } else {
         return true;
@@ -2729,13 +2738,20 @@ fn show_in_folder_now(path: &Path) {
     }
 }
 
+/// "Open with": Windows' own chooser of programs for the downloaded file `path` ("How do you
+/// want to open this file?", as Explorer shows it), or a message saying why not (moved or
+/// deleted since). Returns at once: the chooser is shown, and waited for, on a thread of its
+/// own, as is the look at the file (upstream issues 720, 743).
 pub fn open_with(path: &Path) {
-    {
-        let _ = std::process::Command::new("rundll32")
-            .arg("shell32.dll,OpenAs_RunDLL")
-            .arg(path)
-            .spawn();
-    }
+    let path = path.to_owned();
+    crate::launch::spawn("open with", move || {
+        hand_over(&path, |p| {
+            crate::win32::open_with_dialog(p).map_err(|hr| {
+                tracing::warn!("open with: SHOpenWithDialog failed, {hr:#010x}");
+                std::io::Error::from_raw_os_error(hr).to_string()
+            })
+        });
+    });
 }
 
 /// "Duplicate download link": the address is already in the list (Options → Downloads → "If a
