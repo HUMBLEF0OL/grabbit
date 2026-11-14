@@ -575,8 +575,11 @@ These ship in a later version, when they're ready.
   llms.txt describing Graphite as the only look (its picture there comes with the new
   screenshots), and the Options window's pages listed down the side (each with its icon and
   title at the top, OK and Help in a footer; Up and Down added to its keys, and Ctrl+Shift+Tab
-  going back a page). Next: the Options pages on the dialogs' common parts and their windows
-  (plan 08b)
+  going back a page), at the mock's 820 x 520, and the windows its pages open on the dialogs'
+  common parts (DNS settings, Add an account, Addresses left to the browser, Keys, Test browser
+  integration, Download panels, Pair a device, New and Edit login and exception), their keys
+  unchanged (still to come: the help page's pictures, retaken by the docs-shots workflow).
+  Next: the Options pages on the dialogs' common parts (plan 08b)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:

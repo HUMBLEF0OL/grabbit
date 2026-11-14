@@ -2,7 +2,9 @@
 
 [← Back to docs index](README.md)
 
-Open **Downloads → Options**, or click **Options** on the toolbar. The window has twelve pages on two rows of tabs. **OK** saves your changes; closing the window or pressing **Esc** throws them away.
+Open **Downloads → Options**, or click **Options** on the toolbar. The window lists its twelve pages down its left side; click one to show it. With a page's name selected, **Up** / **Down** (or **Left** / **Right**) move to the page before or after it, **Home** / **End** to the first or last; **Ctrl+Tab** / **Ctrl+Shift+Tab** go to the next / previous page from anywhere in the window, round the list.
+
+At the bottom, **OK** saves your changes and **Help** opens this page. There is no Cancel: closing the window or pressing **Esc** throws your changes away. The smaller windows a page opens (**DNS settings**, **Add an account**, **New login**…) have their own **OK** and **Cancel**: **Enter** is OK once what you typed can be used, **Esc** is Cancel.
 
 Some buttons are greyed. They belong to features that aren't built yet.
 

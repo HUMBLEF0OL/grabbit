@@ -6009,7 +6009,8 @@ pub fn combo_light(
         &p,
         tahoma(),
         lead(rc) + 5.0 * fwd(),
-        rc.top() + 13.0,
+        // Centred at any height (the kit's 30-px fields); `top + 13` at 21 px, as before.
+        baseline_in(rc.top(), rc.height()),
         &label,
         color,
     );
@@ -6022,7 +6023,9 @@ pub fn combo_light(
     } else {
         rc.right() - 13.0
     };
-    chevron_light(&p, pos2(chevron_x, rc.top() + 8.0), enabled);
+    // Centred too: `top + 8` at 21 px.
+    let chevron_y = rc.top() + ((rc.height() - 5.0) / 2.0).floor();
+    chevron_light(&p, pos2(chevron_x, chevron_y), enabled);
     // Over the face (drawn before it, the face hid it).
     show_focus(ui, &resp, rc.shrink(3.0));
     if open {
