@@ -76,26 +76,25 @@ Every colour and size a control is drawn with comes from the active theme (#45).
 light and a dark palette, metrics, control styles and an icon style (`palette.rs`):
 
 - **Palette roles.** `palette.rs` declares each role with a stable key (`"button.hot"`,
-  `"list.row"`, `"caption"`…), a description and the classic look's light and dark values,
-  written out (the classic look isn't derived). The shared painters (`winui.rs`, `chrome.rs`,
+  `"list.row"`, `"caption"`…), a description and the base's light and dark values
+  (`palette::BASE`, which Graphite's file builds on). The shared painters (`winui.rs`, `chrome.rs`,
   `list.rs`, `scrollbar.rs`) read them through `theme::colors()` and `theme::metrics()` and decide
   each control's states from them; no painting code holds a colour of its own.
 - **Derived palettes.** `derive.rs` makes a whole palette from a few seeds (background, surface,
   text, accent…), mixing every other role in OKLab and keeping WCAG contrast (4.5:1 for text, 3:1
-  for edges); High contrast strengthens every edge on top. `native.rs` seeds the Native theme from
-  Windows' accent and contrast settings.
+  for edges); a theme file's `contrast = "high"` strengthens every edge on top.
 - **Control styles.** `palette::Controls` names each control's shape (text boxes, check boxes,
-  buttons, progress bars, scroll bars, the focus mark, the title bar); the style themes (Metro,
-  Adwaita, Breeze, Luna, Aero, Aqua, Graphite) pick theirs, and MDM then draws the title bar
-  itself (the `caption.*` roles).
+  buttons, progress bars, scroll bars, the focus mark, the title bar); a theme picks its own
+  (Graphite: Windows 11's controls with a focus ring), and MDM draws the title bar itself (the
+  `caption.*` roles) unless it is `system`.
 - **Theme files.** `themefile.rs` reads TOML or JSON from the data folder's `themes` (one file,
   or `<id>/theme.toml` with icons beside it). A file names only what it changes; the rest comes
-  from the theme it `inherits` (a built-in's id or another file, the classic look by default),
-  down a chain in which a cycle is refused. Unknown keys are warnings, not errors. The built-in
-  style themes are such files too, carried in the program (`crates/app/assets/themes`).
+  from the theme it `inherits` (`graphite`, the only built-in and the default, or another file),
+  down a chain in which a cycle is refused. Unknown keys are warnings, not errors. Graphite is
+  such a file too, carried in the program (`crates/app/assets/themes/graphite.toml`).
 - **Icon sets.** `themeicons.rs` draws a theme's icons (named by what they're for: `tb-add-url`,
-  `cat-music`…, SVG or PNG at 16, 24, 32 and 48 px, `-symbolic` ones inked in the text colour)
-  where the classic look draws its own; a need the set lacks keeps the classic icon.
+  `cat-music`…, SVG or PNG at 16, 24, 32 and 48 px, `-symbolic` ones inked in the text colour);
+  a need the set lacks takes Graphite's icon.
 
 Where a window puts its controls stays its layout. So do the icons
 before file names (`fileicons.rs`): the Windows shell's system image lists. Each type is looked up once per pixel size, on a background thread. Tango's

@@ -1,6 +1,6 @@
 ---
 name: Themes
-line: Nine looks, light and dark, from Classic to Aqua, or your own in a text file.
+line: Graphite, MDM's own look, light and dark, or your own in a text file.
 group: app
 order: 315
 since: 0.5

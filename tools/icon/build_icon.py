@@ -5,7 +5,8 @@ the corners (stroke-linejoin round). This script reads those and draws them with
 SVG renderer is needed: the mark at 1024 px, then each size scaled down from it.
 
 Writes crates/app/assets/icons/app/mdm-<size>.png, mdm.ico (all sizes), the browser
-extension's icons and the copy of icon-48 that extension/video.js carries as data.
+extension's icons, the copy of icon-48 that extension/video.js carries as data, and the
+website's logos and favicon (website/assets/). tools/readme/social.py takes mdm-256.png.
 Run from the repository root: python tools/icon/build_icon.py
 """
 
@@ -21,6 +22,8 @@ SRC = ROOT / "art" / "grabbit.svg"
 APP = ROOT / "crates" / "app" / "assets" / "icons" / "app"
 EXT = ROOT / "extension" / "icons"
 VIDEO_JS = ROOT / "extension" / "video.js"
+SITE = ROOT / "website" / "assets"
+WEB = {"favicon-32.png": 32, "logo-64.png": 64, "apple-touch-icon.png": 256, "logo-256.webp": 256, "logo-640.png": 640}
 SIZES = [16, 20, 24, 32, 48, 64, 128, 256]
 BIG = 1024
 NS = {"s": "http://www.w3.org/2000/svg"}
@@ -90,7 +93,11 @@ def main() -> None:
     if n != 1:
         raise SystemExit("extension/video.js: no data:image/png LOGO to replace")
     VIDEO_JS.write_bytes(js)
-    print("wrote", ", ".join(map(str, SIZES)), "+ mdm.ico + extension icons + video.js LOGO")
+    # The website: favicon, header logo, apple-touch and web-app icons, the schema.org logo.
+    for name, size in WEB.items():
+        im = icons[size] if size in icons else big.resize((size, size), Image.LANCZOS)
+        im.save(SITE / name, **({"lossless": True} if name.endswith(".webp") else {"optimize": True}))
+    print("wrote", ", ".join(map(str, SIZES)), "+ mdm.ico + extension icons + video.js LOGO + website logos")
 
 
 if __name__ == "__main__":

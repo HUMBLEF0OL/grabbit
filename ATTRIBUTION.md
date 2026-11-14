@@ -10,10 +10,11 @@
 | Geist 1.900 (release v1.9.2), Regular, Medium and SemiBold (MDM's typeface, built into the app), unchanged | Vercel and the Geist Project Authors, <https://github.com/vercel/geist-font> | SIL Open Font License 1.1 — `crates/app/assets/fonts/geist/OFL.txt` | `crates/app/assets/fonts/geist/` (the design files' copy and its sources in `design/graphite/assets/fonts/`) |
 
 The app icon (`art/grabbit.svg`), Grabbit's double-chevron mark, is drawn as plain vector shapes
-in the Graphite theme's colours; every icon size is built from it by `tools/icon/build_icon.py`.
+in the Graphite theme's colours; every icon size, the website's logos and favicon are built from
+it by `tools/icon/build_icon.py`, and the social preview takes it from there.
 
-The original app icon (`art/Mister Download Manager.png`), still used by the README's pictures
-and social preview until they move to the new mark, was made for Mister Download Manager by its
+The original app icon (`art/Mister Download Manager.png`), still the style reference of the
+README's block icons below, was made for Mister Download Manager by its
 author, Ahmed Nefzaoui, with ChatGPT (OpenAI's image generation).
 
 The README's block icons (`docs/images/icons/`: arrow, globe, gift, magnet) were made for it

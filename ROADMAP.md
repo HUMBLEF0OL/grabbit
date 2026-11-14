@@ -517,7 +517,8 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   corners, and buttons, boxes and drop-downs share rounder-than-Windows corners in proportion to
   their height, so a dialog's short buttons no longer look like pills.
 - ✅ A new app icon, Grabbit's double chevron in Graphite's cyan and amethyst, with no tile behind
-  it: in the title bar, the taskbar, the tray, the installer, About and the browser extension.
+  it: in the title bar, the taskbar, the tray, the installer, About and the browser extension,
+  and on the website (logo, favicon, home-screen icon) and the repository's social preview.
 
 ## Being worked on
 
@@ -567,7 +568,9 @@ These ship in a later version, when they're ready.
   password, 7-Zip needed, Create folder, Download limits, the notices, the browser extension's
   offer and the drop target; "Add many downloads" is that Confirm), their keys unchanged (still
   to come, with plan 09's polish: the Scheduler at the mockup's width and short enough for a
-  1080p screen at 200 %). Next: the Options window (plan 08)
+  1080p screen at 200 %), and the help pages, the website's Themes page, its theme prompt and
+  llms.txt describing Graphite as the only look (its picture there comes with the new
+  screenshots). Next: the Options window (plan 08)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:
