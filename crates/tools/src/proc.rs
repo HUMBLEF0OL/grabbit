@@ -188,7 +188,11 @@ pub fn look_up(
     url: &str,
     timeout: Duration,
 ) -> Result<LookedUp, ProcError> {
-    let run = |args: &[String]| output_warned(ytdlp(exe, &[], args, url)?, "yt-dlp", timeout);
+    // A plain file a server's program sends gets its real type (upstream issue 695).
+    let run = |args: &[String]| {
+        output_warned(ytdlp(exe, &[], args, url)?, "yt-dlp", timeout)
+            .map(|(json, warnings)| (crate::resolve::typed_scripts(json), warnings))
+    };
     match run(ours) {
         Ok((json, warnings)) => Ok(LookedUp {
             json,
