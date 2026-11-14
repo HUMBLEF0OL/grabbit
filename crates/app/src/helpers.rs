@@ -10,7 +10,13 @@ use egui::{Pos2, Ui};
 
 use crate::dialogs::{Outcome, window};
 use crate::icons::Icon;
-use crate::winui::{self, ButtonKind, r};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r};
+
+/// The offer's footer: this far under its last rule, after the line of the way back later.
+const OFFER_FOOTER: f32 = 30.0;
+/// Helpers' width, and where its footer starts (under the error line).
+const PROGRAMS_W: f32 = 500.0;
+const PROGRAMS_BODY: f32 = 262.0;
 
 /// The helpers' download, one after the other (user decision 2026-11-01: one at a time, one
 /// progress bar for both).
@@ -129,7 +135,10 @@ impl Helpers {
             // Taller once Yes is pressed: the progress under the last section.
             [
                 520.0,
-                if self.job.is_some() { 418.0 } else { 382.0 } + extra,
+                if self.job.is_some() { 358.0 } else { 322.0 }
+                    + OFFER_FOOTER
+                    + winui::FOOTER_H
+                    + extra,
             ],
             false,
             winui::BG(),
@@ -329,77 +338,46 @@ impl Helpers {
             crate::i18n::t("Not now? Get them later from Tasks → Download video from a page.")
         };
         winui::text(&p, o.x + 16.0, o.y + y + 20.0, later, muted);
-        let y = y + 28.0;
+        // The footer under it ([`OFFER_FOOTER`]); Escape is the window's (show).
+        let top = y + OFFER_FOOTER;
         if self.job.is_none() {
-            // As wide as their labels in this language (#192), the row ending where it ends in
-            // English.
-            let [not_now_at, yes_at] = winui::button_row(
-                &p,
-                &[
-                    ("Not now", 196.0, 90.0),
-                    ("Yes, download them (recommended)", 292.0, 212.0),
+            // Enter Yes, as before.
+            let pressed = winui::footer(
+                ui,
+                o,
+                w,
+                top,
+                &mut [
+                    FooterItem::Button(FooterButton::new("Not now", ButtonKind::Normal)),
+                    // i18n: the first start's helpers window: download yt-dlp and ffmpeg (the recommended answer)
+                    FooterItem::Button(
+                        FooterButton::new("Yes, download them (recommended)", ButtonKind::Accent)
+                            .enter(true),
+                    ),
                 ],
-                6.0,
-                16.0,
-                360.0,
-            )[..] else {
-                unreachable!("two buttons")
-            };
-            let not_now = winui::button(
-                ui,
-                r(o, not_now_at.0, y, not_now_at.1, 25.0),
-                "Not now",
-                ButtonKind::Normal,
-                false,
-                None,
             );
-            // i18n: the first start's helpers window: download yt-dlp and ffmpeg (the recommended answer)
-            let yes = winui::button(
-                ui,
-                r(o, yes_at.0, y, yes_at.1, 25.0),
-                "Yes, download them (recommended)",
-                ButtonKind::Accent,
-                false,
-                None,
-            );
-            if yes.clicked() || winui::enter_pressed(ui) {
-                *answer = Some(true);
-            } else if not_now.clicked() {
-                *answer = Some(false);
+            match pressed {
+                Some(1) => *answer = Some(true),
+                Some(0) => *answer = Some(false),
+                _ => {}
             }
         } else {
-            let [again_at, close_at] = winui::button_row(
-                &p,
-                &[("Try again", 318.0, 90.0), ("Close", 414.0, 90.0)],
-                6.0,
-                16.0,
-                200.0,
-            )[..] else {
-                unreachable!("two buttons")
-            };
-            if failed && !running {
-                let again = winui::button(
-                    ui,
-                    r(o, again_at.0, y, again_at.1, 25.0),
+            // Try again once it failed; Enter Close, as before.
+            let again = failed && !running;
+            let mut items = Vec::new();
+            if again {
+                items.push(FooterItem::Button(FooterButton::new(
                     "Try again",
                     ButtonKind::Normal,
-                    false,
-                    None,
-                );
-                if again.clicked() {
-                    *answer = Some(true);
-                }
+                )));
             }
-            let close = winui::button(
-                ui,
-                r(o, close_at.0, y, close_at.1, 25.0),
-                "Close",
-                ButtonKind::Default,
-                false,
-                None,
-            );
-            if close.clicked() || winui::enter_pressed(ui) {
-                *answer = Some(false);
+            items.push(FooterItem::Button(
+                FooterButton::new("Close", ButtonKind::Default).enter(true),
+            ));
+            match winui::footer(ui, o, w, top, &mut items) {
+                Some(0) if again => *answer = Some(true),
+                Some(_) => *answer = Some(false),
+                None => {}
             }
         }
     }
@@ -482,7 +460,7 @@ impl Programs {
             "video-helpers",
             // i18n: window title: where MDM takes its helper programs (yt-dlp, ffmpeg, gallery-dl) from
             "Helpers",
-            [500.0, 292.0],
+            [PROGRAMS_W, PROGRAMS_BODY + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| self.body(ui, o),
@@ -622,22 +600,24 @@ impl Programs {
                 o.y + 254.0,
                 e,
                 winui::ERROR(),
-                o.x + 400.0,
+                o.x + 486.0,
                 "helper-error",
             );
         }
-        let close = winui::button(
+        // Close on Enter and on Escape, as before.
+        match winui::footer(
             ui,
-            r(o, 413.0, 260.0, 77.0, 21.0),
-            "Close",
-            ButtonKind::Default,
-            false,
-            None,
-        );
-        if close.clicked() || winui::escape_pressed(ui) || winui::enter_pressed(ui) {
-            Outcome::Done(())
-        } else {
-            Outcome::Open
+            o,
+            PROGRAMS_W,
+            PROGRAMS_BODY,
+            &mut [FooterItem::Button(
+                FooterButton::new("Close", ButtonKind::Default)
+                    .enter(true)
+                    .escape(true),
+            )],
+        ) {
+            Some(_) => Outcome::Done(()),
+            None => Outcome::Open,
         }
     }
 }

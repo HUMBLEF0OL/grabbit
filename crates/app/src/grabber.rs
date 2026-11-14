@@ -15,11 +15,14 @@ use url::Url;
 use crate::dialogs::{Outcome, window};
 use crate::model::{Category, category_folder};
 use crate::transfer::Imported;
-use crate::winui::{self, ButtonKind, LIGHT_BG, LIGHT_TEXT, fill_l as fill, r, text};
+use crate::winui::{
+    self, ButtonKind, FooterButton, FooterItem, LIGHT_BG, LIGHT_TEXT, fill_l as fill, r, text,
+};
 
 const ROW: f32 = 18.0;
-/// The top of the window's last row of buttons (Add to queue, Start, Cancel).
-const BUTTONS_Y: f32 = 446.0;
+/// Where the window's footer starts (Add to queue, Start, Cancel), and its width.
+const FOOTER_Y: f32 = 438.0;
+const GRABBER_W: f32 = 640.0;
 /// Links looked up at once, and at once from one host.
 const CHECKS: usize = 8;
 const CHECKS_PER_HOST: usize = 4;
@@ -464,7 +467,7 @@ impl Grabber {
             ctx,
             "grabber",
             "Link grabber",
-            [640.0, BUTTONS_Y + 30.0],
+            [GRABBER_W, FOOTER_Y + winui::FOOTER_H],
             true,
             LIGHT_BG(),
             |ui, o| self.body(ui, o),
@@ -559,28 +562,33 @@ impl Grabber {
             (true, true) => ButtonKind::Default,
             (true, false) => ButtonKind::Normal,
         };
-        let row = winui::buttons_light_right(
+        // The footer: Enter Start (while links are ticked), Escape Cancel, as before.
+        match winui::footer(
             ui,
             o,
-            629.0,
-            BUTTONS_Y,
-            &[
+            GRABBER_W,
+            FOOTER_Y,
+            &mut [
                 // i18n: Link grabber button: add the ticked links to the download queue without starting them (IDM's OK)
-                (crate::i18n::mark("Add to queue"), kind(false)),
+                FooterItem::Button(FooterButton::new(
+                    crate::i18n::mark("Add to queue"),
+                    kind(false),
+                )),
                 // i18n: Link grabber button: download the ticked links now
-                (crate::i18n::mark("Start"), kind(true)),
-                (crate::i18n::mark("Cancel"), ButtonKind::Normal),
+                FooterItem::Button(
+                    FooterButton::new(crate::i18n::mark("Start"), kind(true))
+                        .primary()
+                        .enter(any),
+                ),
+                FooterItem::Button(
+                    FooterButton::new(crate::i18n::mark("Cancel"), ButtonKind::Normal).escape(true),
+                ),
             ],
-        );
-        let (later, start, cancel) = (row[0].clicked(), row[1].clicked(), row[2].clicked());
-        if cancel || winui::escape_pressed(ui) {
-            Outcome::Closed
-        } else if any && (start || winui::enter_pressed(ui)) {
-            Outcome::Done(true)
-        } else if any && later {
-            Outcome::Done(false)
-        } else {
-            Outcome::Open
+        ) {
+            Some(2) => Outcome::Closed,
+            Some(1) if any => Outcome::Done(true),
+            Some(0) if any => Outcome::Done(false),
+            _ => Outcome::Open,
         }
     }
 

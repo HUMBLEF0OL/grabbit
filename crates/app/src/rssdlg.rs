@@ -9,7 +9,11 @@ use egui::{Pos2, Ui, pos2};
 
 use crate::dialogs::{Outcome, window};
 use crate::rss::{Article, Rule, Store};
-use crate::winui::{self, ButtonKind, r, text};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r, text};
+
+/// The window's width, and where its footer starts (under the tabs' pane).
+const RSS_W: f32 = 760.0;
+const RSS_BODY: f32 = 462.0;
 
 /// What the window asks of the app.
 #[derive(Debug, PartialEq, Eq)]
@@ -69,7 +73,7 @@ impl RssWindow {
             ctx,
             "rss",
             "RSS feeds",
-            [760.0, 500.0],
+            [RSS_W, RSS_BODY + winui::FOOTER_H],
             true,
             winui::BG(),
             |ui, o| {
@@ -99,16 +103,17 @@ impl RssWindow {
                 } else {
                     self.rules_page(ui, o, store)
                 };
-                let close = winui::button(
+                // The footer: Close, and Escape, as before (Enter is the pages' own).
+                let close = winui::footer(
                     ui,
-                    r(o, 663.0, 466.0, 87.0, 21.0),
-                    "Close",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
-                if close || winui::escape_pressed(ui) {
+                    o,
+                    RSS_W,
+                    RSS_BODY,
+                    &mut [FooterItem::Button(
+                        FooterButton::new("Close", ButtonKind::Normal).escape(true),
+                    )],
+                );
+                if close.is_some() {
                     Outcome::<()>::Closed
                 } else {
                     Outcome::Open

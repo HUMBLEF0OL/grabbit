@@ -554,8 +554,11 @@ These ship in a later version, when they're ready.
   Download complete (a card with the file's icon and size, a drag strip), Speed Limiter settings
   and File Properties on them too (still to come, with plan 09's polish: the Hide tab button's
   place, the torrent window's General-tab banner, and a way for the screenshot script to open a
-  failed download's window and the tab row's menu). Next:
-  the other dialogs
+  failed download's window and the tab row's menu), and the footer with the default button
+  last in Add torrent, Torrent settings, Add trackers, Download video, Download a gallery, the
+  video helpers' offer and Helpers, Batch download, Link grabber and RSS feeds (their insides
+  keep today's layout for now). Next: the other dialogs, and those dialogs' insides on the label
+  column
 
 ### Bugs being looked into
 

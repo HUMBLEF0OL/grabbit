@@ -11,7 +11,11 @@ use mdm_tools::resolve::{Choice, Looked, SubChoice, Video};
 use mdm_tools::video::{ALL_UPLOADERS, Subs};
 
 use crate::dialogs::{Outcome, window};
-use crate::winui::{self, ButtonKind, r, text};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r, text};
+
+/// Download video's width, and where its footer starts (the old bottom row's top).
+const VIDEO_W: f32 = 500.0;
+const VIDEO_BODY: f32 = 350.0;
 
 type Slot<T> = Arc<Mutex<Option<Result<T, String>>>>;
 
@@ -408,7 +412,7 @@ impl VideoDialog {
             ctx,
             "video-page",
             "Download video from a page",
-            [500.0, 391.0],
+            [VIDEO_W, VIDEO_BODY + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| self.body(ui, o, rt),
@@ -520,7 +524,7 @@ impl VideoDialog {
         );
         // Look up is as wide as its label in this language (#172); the address ends 8 px before.
         let (look_x, look_w) =
-            winui::buttons_to_right(&p, 489.0, 8.0, &[("Look up", 90.0)], 160.0)[0];
+            winui::buttons_to_right(&p, 489.0, 8.0, &[("Look up", 112.0)], 182.0)[0];
         let edit = winui::edit(
             ui,
             r(o, 11.0, 28.0, look_x - 8.0 - 11.0, 21.0),
@@ -536,9 +540,10 @@ impl VideoDialog {
         let page_ok =
             url::Url::parse(self.page.trim()).is_ok_and(|u| matches!(u.scheme(), "http" | "https"));
         let can_look = page_ok && !busy && ytdlp.is_some();
-        let look = winui::button(
+        let look = winui::button_icon(
             ui,
             r(o, look_x, 28.0, look_w, 21.0),
+            Some("gx-search"),
             "Look up",
             if can_look {
                 ButtonKind::Default
@@ -849,13 +854,13 @@ impl VideoDialog {
             true,
             false,
         );
-        if winui::button(
+        // i18n: tooltip of the "..." after Save to: choose the folder
+        if winui::icon_only_button(
             ui,
             r(o, 467.0, 253.0, 22.0, 21.0),
-            "...",
-            ButtonKind::Normal,
-            false,
-            None,
+            "gx-dots",
+            "Browse",
+            true,
         )
         .clicked()
         {
@@ -906,75 +911,48 @@ impl VideoDialog {
             (true, true) => ButtonKind::Default,
             (true, false) => ButtonKind::Normal,
         };
-        // The bottom row, each button as wide as its label in this language (#172): Helpers at the
-        // left, as wide as the room before Download Now allows.
-        let [now_at, later_at, cancel_at] = winui::buttons_to_right(
-            &p,
-            489.0,
-            8.0,
-            &[("Download Now", 105.0), ("Later", 73.0), ("Cancel", 73.0)],
-            160.0,
-        )[..] else {
-            unreachable!("three buttons")
+        // Why Download Now is greyed, when it is for a reason to tell.
+        let why = if stale {
+            // i18n: why Download Now is greyed: the page address was changed after the look-up
+            Some(crate::i18n::mark("Look up the new address first"))
+        } else if listing {
+            // i18n: why Download Now is greyed: a playlist's videos are still being listed
+            Some(crate::i18n::mark("Wait for the list, or stop listing"))
+        } else {
+            None
         };
-        let helpers_at = winui::buttons_from_left(
-            &p,
-            11.0,
-            8.0,
-            &[("Helpers...", 90.0)],
-            now_at.0 - 8.0 - 11.0,
-        )[0];
-        // Where yt-dlp and ffmpeg come from: MDM's own copies or the person's (#51).
-        if winui::button(
-            ui,
-            r(o, helpers_at.0, 358.0, helpers_at.1, 21.0),
-            // i18n: button in Download video: where MDM takes yt-dlp and ffmpeg from
-            "Helpers...",
-            ButtonKind::Normal,
-            false,
-            None,
-        )
-        .clicked()
-        {
-            self.open_helpers();
-        }
-        let now = winui::button(
-            ui,
-            r(o, now_at.0, 358.0, now_at.1, 21.0),
-            "Download Now",
-            kind(true),
-            false,
-            None,
-        );
-        // i18n: why Download Now is greyed: the page address was changed after the look-up
-        let now = winui::why_disabled(now, stale, "Look up the new address first");
-        // i18n: why Download Now is greyed: a playlist's videos are still being listed
-        let now = winui::why_disabled(now, listing, "Wait for the list, or stop listing").clicked()
-            || (ready && winui::enter_pressed(ui));
-        let later = winui::button(
-            ui,
-            r(o, later_at.0, 358.0, later_at.1, 21.0),
-            // i18n: button: add it now, start downloading later
-            "Later",
-            kind(false),
-            false,
-            None,
-        )
-        .clicked();
-        let cancel = winui::button(
-            ui,
-            r(o, cancel_at.0, 358.0, cancel_at.1, 21.0),
-            "Cancel",
-            ButtonKind::Normal,
-            false,
-            None,
-        )
-        .clicked();
         // Escape answers the playlist's question first, when it's asked.
         let asking = self.list.as_ref().is_some_and(|l| l.asking());
-        if cancel || (winui::escape_pressed(ui) && !asking) {
+        // The footer: Helpers at its start; Enter Download Now (while it can), Escape Cancel.
+        let pressed = winui::footer(
+            ui,
+            o,
+            VIDEO_W,
+            VIDEO_BODY,
+            &mut [
+                // Where yt-dlp and ffmpeg come from: MDM's own copies or the person's (#51).
+                // i18n: button in Download video: where MDM takes yt-dlp and ffmpeg from
+                FooterItem::Button(FooterButton::new("Helpers...", ButtonKind::Normal).leading()),
+                FooterItem::Button(
+                    FooterButton::new("Download Now", kind(true))
+                        .primary()
+                        .enter(ready)
+                        .tip(why.is_some(), why.unwrap_or("")),
+                ),
+                FooterItem::Button(
+                    // i18n: button: add it now, start downloading later
+                    FooterButton::new("Later", kind(false)),
+                ),
+                FooterItem::Button(FooterButton::new("Cancel", ButtonKind::Normal).escape(!asking)),
+            ],
+        );
+        if pressed == Some(0) {
+            self.open_helpers();
+        }
+        if pressed == Some(3) {
             return Outcome::Closed;
         }
+        let (now, later) = (pressed == Some(1), pressed == Some(2));
         if ready && (now || later) {
             // A playlist of many asks first; Yes comes back as `confirmed`.
             if let Some(list) = &mut self.list

@@ -20,6 +20,11 @@ use crate::winui::{self, ButtonKind, FooterButton, FooterItem, fill_l as fill, r
 /// Add torrent's width, and where its footer starts (under "Files go to").
 const ADD_W: f32 = 600.0;
 const ADD_BODY: f32 = 420.0;
+/// Torrent settings' and Add trackers' widths and footers (where their OK rows were).
+const SETTINGS_W: f32 = 470.0;
+const SETTINGS_BODY: f32 = 448.0;
+const TRACKERS_W: f32 = 460.0;
+const TRACKERS_BODY: f32 = 212.0;
 
 /// How long a magnet may take to get its file list from peers.
 pub const METADATA_WAIT: Duration = Duration::from_secs(180);
@@ -474,14 +479,9 @@ impl TorrentDialog {
             self.focused = true;
         }
         // i18n: tooltip of the "..." after the torrent: choose a .torrent file
-        let browse = winui::icon_only_button(
-            ui,
-            r(o, 486.0, 9.0, 22.0, 21.0),
-            "gx-dots",
-            "Browse",
-            !busy,
-        )
-        .clicked();
+        let browse =
+            winui::icon_only_button(ui, r(o, 486.0, 9.0, 22.0, 21.0), "gx-dots", "Browse", !busy)
+                .clicked();
         if browse && !busy {
             // i18n: the kind of file the Open dialog lists
             let kind = crate::i18n::t("Torrent files").to_owned();
@@ -648,8 +648,14 @@ impl TorrentDialog {
             self.folder_edited = true;
         }
         // i18n: tooltip of the "..." after Save to: choose the folder
-        if winui::icon_only_button(ui, r(o, 567.0, 361.0, 22.0, 21.0), "gx-dots", "Browse", true)
-            .clicked()
+        if winui::icon_only_button(
+            ui,
+            r(o, 567.0, 361.0, 22.0, 21.0),
+            "gx-dots",
+            "Browse",
+            true,
+        )
+        .clicked()
         {
             let from = self.folder.clone();
             winui::start_pick(ui.ctx(), "torrent-folder", move || {
@@ -683,7 +689,9 @@ impl TorrentDialog {
             ADD_BODY,
             &mut [
                 FooterItem::Button(
-                    FooterButton::new("Download Now", kind(ready, true)).enter(ready),
+                    FooterButton::new("Download Now", kind(ready, true))
+                        .primary()
+                        .enter(ready),
                 ),
                 FooterItem::Button(
                     // i18n: button: add it now, start downloading later
@@ -705,7 +713,13 @@ impl TorrentDialog {
             // i18n: Add torrent, a checkbox: download the files from their start, to watch a video while it downloads
             "Download in order",
             has,
-            Some(o.x + ADD_W / 2.0 - 40.0),
+            Some(
+                o.x + winui::footer_trailing_left(
+                    ADD_W,
+                    &["Download Now", "Later", "Cancel"]
+                        .map(|l| winui::footer_button_width(&p, l, false)),
+                ),
+            ),
         );
         match pressed {
             Some(2) => Outcome::Closed,
@@ -1051,7 +1065,7 @@ impl TorrentSettings {
             ctx,
             "torrent-settings",
             "Torrent settings",
-            [470.0, 492.0],
+            [SETTINGS_W, SETTINGS_BODY + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
@@ -1309,27 +1323,24 @@ impl TorrentSettings {
                     o.x + 456.0,
                     ("torrent-settings", 6),
                 );
-                let ok = winui::button(
+                // Enter OK, Escape Cancel, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, 298.0, 460.0, 77.0, 21.0),
-                    "OK",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked();
-                let cancel = winui::button(
-                    ui,
-                    r(o, 381.0, 460.0, 77.0, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
-                if cancel || winui::escape_pressed(ui) {
+                    o,
+                    SETTINGS_W,
+                    SETTINGS_BODY,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("OK", ButtonKind::Default).enter(true),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                if pressed == Some(1) {
                     Outcome::Closed
-                } else if ok || winui::enter_pressed(ui) {
+                } else if pressed == Some(0) {
                     let mut net = self.net.clone();
                     net.port = self.port.parse().unwrap_or(0);
                     Outcome::Done(TorrentChoice {
@@ -1416,7 +1427,7 @@ impl AddTrackers {
             ctx,
             "add-trackers",
             "Add trackers",
-            [460.0, 250.0],
+            [TRACKERS_W, TRACKERS_BODY + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
@@ -1460,28 +1471,22 @@ impl AddTrackers {
                 };
                 // Two lines' room: a translated reason is long.
                 winui::paragraph(&p, o.x + 14.0, o.y + 190.0, &line, color, o.x + 446.0, 14.0);
-                let ok = winui::button(
+                // Enter is a new line in the box: only OK adds them. Escape Cancel.
+                let pressed = winui::footer(
                     ui,
-                    r(o, 288.0, 218.0, 77.0, 21.0),
-                    "OK",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked();
-                let cancel = winui::button(
-                    ui,
-                    r(o, 371.0, 218.0, 77.0, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
-                // Enter is a new line in the box: only OK adds them.
-                if cancel || winui::escape_pressed(ui) {
+                    o,
+                    TRACKERS_W,
+                    TRACKERS_BODY,
+                    &mut [
+                        FooterItem::Button(FooterButton::new("OK", ButtonKind::Default)),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                if pressed == Some(1) {
                     Outcome::Closed
-                } else if ok {
+                } else if pressed == Some(0) {
                     match self.addresses() {
                         Ok(list) => Outcome::Done(list),
                         Err(e) => {

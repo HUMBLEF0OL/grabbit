@@ -380,6 +380,7 @@ impl Batch {
             &mut [
                 FooterItem::Button(
                     FooterButton::new("OK", ok_kind)
+                        .primary()
                         .enter(true)
                         .tip(!valid, why.unwrap_or("")),
                 ),

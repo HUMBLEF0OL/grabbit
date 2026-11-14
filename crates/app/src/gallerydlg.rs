@@ -10,7 +10,11 @@ use std::sync::{Arc, Mutex};
 use egui::{Pos2, Ui, pos2};
 
 use crate::dialogs::{Outcome, window};
-use crate::winui::{self, ButtonKind, r, text};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r, text};
+
+/// Download a gallery's width, and where its footer starts (the old bottom row's top).
+const GALLERY_W: f32 = 500.0;
+const GALLERY_BODY: f32 = 174.0;
 
 type Slot<T> = Arc<Mutex<Option<Result<T, String>>>>;
 
@@ -93,7 +97,7 @@ impl GalleryDialog {
             "gallery-page",
             // i18n: window title: download an image gallery's files (gallery-dl)
             "Download a gallery",
-            [500.0, 214.0],
+            [GALLERY_W, GALLERY_BODY + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| self.body(ui, o, rt),
@@ -299,13 +303,13 @@ impl GalleryDialog {
             true,
             false,
         );
-        if winui::button(
+        // i18n: tooltip of the "..." after Save to: choose the folder
+        if winui::icon_only_button(
             ui,
             r(o, 467.0, 103.0, 22.0, 21.0),
-            "...",
-            ButtonKind::Normal,
-            false,
-            None,
+            "gx-dots",
+            "Browse",
+            true,
         )
         .clicked()
         {
@@ -337,78 +341,42 @@ impl GalleryDialog {
             "gallery-limit-hint",
         );
 
-        // The bottom row, each button as wide as its label in this language (#192): Helpers at the
-        // left, as wide as the room before Download Now allows.
-        let [now_at, later_at, cancel_at] = winui::buttons_to_right(
-            &p,
-            489.0,
-            8.0,
-            &[("Download Now", 105.0), ("Later", 73.0), ("Cancel", 73.0)],
-            160.0,
-        )[..] else {
-            unreachable!("three buttons")
-        };
-        let helpers_at = winui::buttons_from_left(
-            &p,
-            11.0,
-            8.0,
-            &[("Helpers...", 90.0)],
-            now_at.0 - 8.0 - 11.0,
-        )[0];
-        if winui::button(
-            ui,
-            r(o, helpers_at.0, 182.0, helpers_at.1, 21.0),
-            "Helpers...",
-            ButtonKind::Normal,
-            false,
-            None,
-        )
-        .clicked()
-            && self.helpers.is_none()
-        {
-            self.helpers = Some(crate::helpers::Programs::new());
-        }
         let ready = readable && self.install.is_none() && self.check.is_none();
         let kind = |default: bool| match (ready, default) {
             (false, _) => ButtonKind::Disabled,
             (true, true) => ButtonKind::Default,
             (true, false) => ButtonKind::Normal,
         };
-        let now = winui::button(
+        // The footer: Helpers at its start; Enter Download Now (while it can), Escape Cancel.
+        let pressed = winui::footer(
             ui,
-            r(o, now_at.0, 182.0, now_at.1, 21.0),
-            "Download Now",
-            kind(true),
-            false,
-            None,
-        )
-        .clicked()
-            || (ready && winui::enter_pressed(ui));
-        let later = winui::button(
-            ui,
-            r(o, later_at.0, 182.0, later_at.1, 21.0),
-            "Later",
-            kind(false),
-            false,
-            None,
-        )
-        .clicked();
-        let cancel = winui::button(
-            ui,
-            r(o, cancel_at.0, 182.0, cancel_at.1, 21.0),
-            "Cancel",
-            ButtonKind::Normal,
-            false,
-            None,
-        )
-        .clicked();
-        if cancel || winui::escape_pressed(ui) {
-            return Outcome::Closed;
+            o,
+            GALLERY_W,
+            GALLERY_BODY,
+            &mut [
+                FooterItem::Button(FooterButton::new("Helpers...", ButtonKind::Normal).leading()),
+                FooterItem::Button(
+                    FooterButton::new("Download Now", kind(true))
+                        .primary()
+                        .enter(ready),
+                ),
+                FooterItem::Button(FooterButton::new("Later", kind(false))),
+                FooterItem::Button(FooterButton::new("Cancel", ButtonKind::Normal).escape(true)),
+            ],
+        );
+        match pressed {
+            Some(0) => {
+                if self.helpers.is_none() {
+                    self.helpers = Some(crate::helpers::Programs::new());
+                }
+                Outcome::Open
+            }
+            Some(3) => Outcome::Closed,
+            Some(k) if ready => {
+                self.start_now = Some(k == 1);
+                Outcome::Done(())
+            }
+            _ => Outcome::Open,
         }
-        if ready && (now || later) {
-            self.start_now = Some(now);
-            return Outcome::Done(());
-        }
-        Outcome::Open
     }
 }

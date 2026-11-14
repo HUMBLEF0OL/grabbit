@@ -98,7 +98,9 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
       until it is merged)
 - [ ] 07c Watching and finishing (`ui/07c-watching-finishing`, until it is merged; the error
       state's and the tab row menu's `/show` are left)
-- [ ] 07d Torrents, video and more
+- [ ] 07d Torrents, video and more (footers done in `ui/07d-torrents-video`, until it is merged;
+      the insides on `form`, the torrent window, the looking-up ring, playlist and Files
+      already there remain)
 - [ ] 07e Organising and the rest
 - [ ] 08a Options side list
 - [ ] 08b Options pages
