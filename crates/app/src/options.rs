@@ -1308,9 +1308,15 @@ impl OptionsDialog {
         let p = ui.painter().clone();
         // Get System as wide as its label (#192), its right end kept, on the heading's row
         // (the heading is the window's, `heading`).
-        let (get_x, get_w) =
-            winui::button_row(&p, &[("Get System", 307.0, 93.0)], 0.0, 307.0, 160.0)[0];
-        let get_y = HEAD_TOP + (HEAD_TILE - 21.0) / 2.0 - PAGE_AT.y;
+        let (get_x, get_w) = winui::button_row(
+            &p,
+            &[("Get System", PROXY_GET_X, 93.0)],
+            0.0,
+            PROXY_GET_X,
+            160.0,
+        )[0];
+        // On whole pixels: a half-pixel button's edges blur.
+        let get_y = HEAD_TOP + ((HEAD_TILE - 21.0) / 2.0).floor() - PAGE_AT.y;
         let s = &mut self.s;
         if winui::button_light(
             ui,
@@ -1885,7 +1891,8 @@ impl OptionsDialog {
             // i18n: Options → Sites Logins → Cookies for video sites: read the cookies of the browser chosen in the list after it
             "From browser:",
             true,
-            Some(194.0),
+            // Before the browser list (`until` is a window x, not the page's).
+            Some(o.x + 194.0),
         )
         .on_hover_text(tip);
         let choose = |s: &mut Settings, i: usize| s.video_cookies = browsers[i].to_owned();
@@ -2688,16 +2695,21 @@ impl OptionsDialog {
             return false;
         };
         ctx.request_repaint_after(std::time::Duration::from_millis(500));
+        // The mockup's layout: the sentence, the QR code, the address, the code and how long it
+        // works, the footer.
+        const W: f32 = 380.0;
+        const BODY: f32 = 380.0;
         let out = window(
             ctx,
             "opt-pair",
             // i18n: window title: Options → Remote → Pair a device...
             "Pair a device",
-            [360.0, 420.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
+                let e = winui::EDGE;
                 let urls = remote.urls();
                 let (shown, paired) = remote.pairing();
                 let close_label = if paired.is_some() {
@@ -2706,28 +2718,34 @@ impl OptionsDialog {
                 } else {
                     "Close"
                 };
-                let close = winui::button_light(
+                // First in Tab order, as before. Escape closes; Enter too once a device paired
+                // (while MDM can be reached).
+                let close = winui::footer(
                     ui,
-                    r(o, 274.0, 387.0, 73.0, 21.0),
-                    close_label,
-                    ButtonKind::Default,
-                    false,
+                    o,
+                    W,
+                    BODY,
+                    &mut [FooterItem::Button(
+                        FooterButton::new(close_label, ButtonKind::Default)
+                            .enter(paired.is_some() && !urls.is_empty())
+                            .escape(true),
+                    )],
                 )
-                .clicked();
+                .is_some();
                 let Some(url) = urls.first() else {
                     winui::paragraph(
                         &p,
-                        o.x + 14.0,
-                        o.y + 30.0,
+                        o.x + e,
+                        o.y + 29.0,
                         // i18n: Options → Remote → Pair a device: the remote control isn't listening (no network, port taken): the Remote page says why
                         crate::i18n::t(
                             "MDM can't be reached on the network now: Options → Remote says why.",
                         ),
                         crate::theme::colors().error_strong,
-                        o.x + 346.0,
-                        14.0,
+                        o.x + W - e,
+                        LINE,
                     );
-                    return if close || winui::escape_pressed(ui) {
+                    return if close {
                         Outcome::Closed
                     } else {
                         Outcome::Open
@@ -2741,14 +2759,14 @@ impl OptionsDialog {
                     );
                     winui::paragraph(
                         &p,
-                        o.x + 14.0,
-                        o.y + 30.0,
+                        o.x + e,
+                        o.y + 29.0,
                         &line,
                         LIGHT_TEXT(),
-                        o.x + 346.0,
-                        14.0,
+                        o.x + W - e,
+                        LINE,
                     );
-                    return if close || winui::escape_pressed(ui) || winui::enter_pressed(ui) {
+                    return if close {
                         Outcome::Done(())
                     } else {
                         Outcome::Open
@@ -2756,38 +2774,34 @@ impl OptionsDialog {
                 }
                 winui::paragraph(
                     &p,
-                    o.x + 14.0,
-                    o.y + 24.0,
+                    o.x + e,
+                    o.y + 29.0,
                     // i18n: Options → Remote → Pair a device: how to pair
                     crate::i18n::t(
                         "On the phone, scan this code with the camera, or open the address and enter the code.",
                     ),
                     LIGHT_TEXT(),
-                    o.x + 346.0,
-                    14.0,
+                    o.x + W - e,
+                    LINE,
                 );
                 let link = match &shown {
                     Some((code, _)) => format!("{url}#pair={code}"),
                     None => url.clone(),
                 };
-                crate::remote::paint_qr(&p, r(o, 90.0, 56.0, 180.0, 180.0), &link);
-                readonly_ltr(ui, r(o, 14.0, 246.0, 332.0, 21.0), url);
+                crate::remote::paint_qr(&p, r(o, (W - 180.0) / 2.0, 62.0, 180.0, 180.0), &link);
+                readonly_ltr(ui, r(o, e, 256.0, W - 2.0 * e, winui::CONTROL_H), url);
                 match &shown {
                     Some((code, left)) => {
-                        text(
-                            &p,
-                            o.x + 14.0,
-                            o.y + 300.0,
-                            // i18n: Options → Remote → Pair a device: label before the 8-digit code
-                            crate::i18n::t("Code:"),
-                            LIGHT_TEXT(),
-                        );
+                        // i18n: Options → Remote → Pair a device: label before the 8-digit code
+                        let label = crate::i18n::t("Code:");
+                        let baseline = o.y + winui::baseline_in(300.0, winui::CONTROL_H);
+                        text(&p, o.x + e, baseline, label, LIGHT_TEXT());
                         let big = egui::FontId::new(26.0, winui::tahoma_bold().family);
                         winui::text_font(
                             &p,
                             big,
-                            o.x + 80.0,
-                            o.y + 304.0,
+                            o.x + e + winui::text_width(&p, label) + 10.0,
+                            baseline + 4.0,
                             &crate::i18n::ltr(&format!("{} {}", &code[..4], &code[4..])),
                             LIGHT_TEXT(),
                         );
@@ -2797,30 +2811,23 @@ impl OptionsDialog {
                             crate::i18n::t("Waiting for the device. The code works for {time}."),
                             &[("time", &format!("{}:{:02}", secs / 60, secs % 60))],
                         );
-                        winui::paragraph(
-                            &p,
-                            o.x + 14.0,
-                            o.y + 336.0,
-                            &line,
-                            LIGHT_TEXT(),
-                            o.x + 346.0,
-                            14.0,
-                        );
+                        hint(&p, o, e, 347.0, &line, W - e);
                     }
                     None => {
                         winui::paragraph(
                             &p,
-                            o.x + 14.0,
-                            o.y + 300.0,
+                            o.x + e,
+                            o.y + 313.0,
                             // i18n: Options → Remote → Pair a device: the code ran out (10 minutes, or 5 wrong tries)
                             crate::i18n::t("This code can't be used any more."),
                             crate::theme::colors().error_strong,
-                            o.x + 346.0,
-                            14.0,
+                            o.x + W - e,
+                            LINE,
                         );
+                        let w = winui::footer_button_width(&p, "New code", false);
                         if winui::button_light(
                             ui,
-                            r(o, 14.0, 318.0, 100.0, 21.0),
+                            r(o, e, 330.0, w, winui::CONTROL_H),
                             // i18n: Options → Remote → Pair a device: button: show a new code
                             "New code",
                             ButtonKind::Normal,
@@ -2832,7 +2839,7 @@ impl OptionsDialog {
                         }
                     }
                 }
-                if close || winui::escape_pressed(ui) {
+                if close {
                     Outcome::Closed
                 } else {
                     Outcome::Open
@@ -2858,54 +2865,30 @@ impl OptionsDialog {
                 } else {
                     crate::i18n::mark("New login")
                 };
+                // The mockup's layout: three form rows, the footer.
+                const W: f32 = 340.0;
+                const BODY: f32 = 142.0;
                 let out = window(
                     ctx,
                     "opt-login",
                     title,
-                    [300.0, 150.0],
+                    [W, BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| {
                         let p = ui.painter().clone();
-                        // i18n: label before a web address (site and folder)
-                        winui::text_right(
-                            &p,
-                            o.x + 70.0,
-                            o.y + 26.0,
-                            crate::i18n::t("Site/path:"),
-                            LIGHT_TEXT(),
-                        );
-                        winui::edit_light(
-                            ui,
-                            r(o, 78.0, 12.0, 210.0, 23.0),
-                            &mut site,
-                            true,
-                            false,
-                        );
-                        // i18n: noun: label before the user name
-                        winui::text_right(
-                            &p,
-                            o.x + 70.0,
-                            o.y + 57.0,
-                            crate::i18n::t("User:"),
-                            LIGHT_TEXT(),
-                        );
-                        winui::edit_light(
-                            ui,
-                            r(o, 78.0, 43.0, 210.0, 23.0),
-                            &mut user,
-                            true,
-                            false,
-                        );
-                        winui::text_right(
-                            &p,
-                            o.x + 70.0,
-                            o.y + 88.0,
-                            crate::i18n::t("Password:"),
-                            LIGHT_TEXT(),
-                        );
-                        password(ui, r(o, 78.0, 74.0, 210.0, 23.0), &mut pass, true);
-                        ok_cancel(ui, o, 136.0, 117.0, !site.trim().is_empty())
+                        let (e, h) = (winui::EDGE, winui::CONTROL_H);
+                        // i18n: Site/path: label before a web address (site and folder); User: noun, label before the user name
+                        let labels = ["Site/path:", "User:", "Password:"];
+                        let fx = winui::form(&p, e, &labels, false);
+                        let fw = W - e - fx;
+                        winui::form_label(&p, o, e, 16.0, h, labels[0], true);
+                        winui::edit_light(ui, r(o, fx, 16.0, fw, h), &mut site, true, false);
+                        winui::form_label(&p, o, e, 56.0, h, labels[1], true);
+                        winui::edit_light(ui, r(o, fx, 56.0, fw, h), &mut user, true, false);
+                        winui::form_label(&p, o, e, 96.0, h, labels[2], true);
+                        winui::password_light(ui, r(o, fx, 96.0, fw, h), &mut pass, true);
+                        ok_cancel(ui, o, W, BODY, !site.trim().is_empty())
                     },
                 );
                 match out {
@@ -2927,41 +2910,34 @@ impl OptionsDialog {
                 } else {
                     crate::i18n::mark("New exception")
                 };
+                // The mockup's layout: two form rows, the footer.
+                const W: f32 = 340.0;
+                const BODY: f32 = 102.0;
                 let out = window(
                     ctx,
                     "opt-exception",
                     title,
-                    [300.0, 118.0],
+                    [W, BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| {
                         let p = ui.painter().clone();
-                        // i18n: noun: label before a server name
-                        winui::text_right(
-                            &p,
-                            o.x + 70.0,
-                            o.y + 26.0,
-                            crate::i18n::t("Server:"),
-                            LIGHT_TEXT(),
-                        );
+                        let (e, h) = (winui::EDGE, winui::CONTROL_H);
+                        // i18n: Server: noun, label before a server name; Connections: label before the number of connections allowed
+                        let labels = ["Server:", "Connections:"];
+                        let fx = winui::form(&p, e, &labels, false);
+                        winui::form_label(&p, o, e, 16.0, h, labels[0], true);
                         winui::edit_light(
                             ui,
-                            r(o, 78.0, 12.0, 210.0, 23.0),
+                            r(o, fx, 16.0, W - e - fx, h),
                             &mut server,
                             true,
                             false,
                         );
-                        // i18n: label before the number of connections allowed
-                        winui::text_right(
-                            &p,
-                            o.x + 70.0,
-                            o.y + 57.0,
-                            crate::i18n::t("Connections:"),
-                            LIGHT_TEXT(),
-                        );
+                        winui::form_label(&p, o, e, 56.0, h, labels[1], true);
                         winui::spin_box(
                             ui,
-                            r(o, 78.0, 43.0, 60.0, 23.0),
+                            r(o, fx, 56.0, 90.0, h),
                             &mut number,
                             1,
                             u64::from(limit),
@@ -2971,7 +2947,7 @@ impl OptionsDialog {
                         let in_range = number
                             .parse::<u32>()
                             .is_ok_and(|n| (1..=limit).contains(&n));
-                        ok_cancel(ui, o, 136.0, 85.0, !server.trim().is_empty() && in_range)
+                        ok_cancel(ui, o, W, BODY, !server.trim().is_empty() && in_range)
                     },
                 );
                 match out {
@@ -2990,19 +2966,24 @@ impl OptionsDialog {
                 }
             }
             Sub::Panels(mut on, mut sites, mut said) => {
+                // The mockup's layout: the check box, the sites, Export and Import with what
+                // they did, the footer.
+                const W: f32 = 400.0;
+                const BODY: f32 = 196.0;
                 let out = window(
                     ctx,
                     "opt-panels",
                     // i18n: window title: the download button the extension shows over videos
                     "Download panels",
-                    [380.0, 190.0],
+                    [W, BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| {
                         let p = ui.painter().clone();
+                        let e = winui::EDGE;
                         winui::checkbox_light(
                             ui,
-                            o + vec2(14.0, 16.0),
+                            o + vec2(e, 16.0),
                             &mut on,
                             "Show a download button over videos in browsers",
                             true,
@@ -3010,39 +2991,35 @@ impl OptionsDialog {
                         winui::text_in_window(
                             ui,
                             &p,
-                            o.x + 14.0,
-                            o.y + 55.0,
+                            o.x + e,
+                            o.y + 57.0,
                             crate::i18n::t("Never show it on these sites:"),
                             if on { LIGHT_TEXT() } else { LIGHT_DISABLED() },
                         );
                         multiline(
                             ui,
-                            r(o, 14.0, 62.0, 352.0, 55.0),
+                            r(o, e, 66.0, W - 2.0 * e, 56.0),
                             &mut sites,
                             "panel-sites",
                             on,
                         );
-                        winui::text_in_window(
-                            ui,
+                        hint(
                             &p,
-                            o.x + 14.0,
-                            o.y + 133.0,
+                            o,
+                            e,
+                            139.0,
                             crate::i18n::t("(separate names by spaces)"),
-                            LIGHT_TEXT(),
+                            W - e,
                         );
                         // The list as a file, to keep or carry to a new installation (#424).
-                        let [export_at, import_at] = winui::button_row(
-                            &p,
-                            &[("Export...", 212.0, 73.0), ("Import...", 293.0, 73.0)],
-                            8.0,
-                            160.0,
-                            140.0,
-                        )[..] else {
-                            unreachable!("two buttons")
-                        };
+                        let export_w = winui::footer_button_width(&p, "Export...", false);
+                        let import_w = winui::footer_button_width(&p, "Import...", false);
+                        let export_at = (e, export_w);
+                        let import_at = (e + export_w + 8.0, import_w);
+                        let row = 150.0;
                         if winui::button_light(
                             ui,
-                            r(o, export_at.0, 128.0, export_at.1, 21.0),
+                            r(o, export_at.0, row, export_at.1, winui::CONTROL_H),
                             "Export...",
                             ButtonKind::Normal,
                             false,
@@ -3060,7 +3037,7 @@ impl OptionsDialog {
                         }
                         if winui::button_light(
                             ui,
-                            r(o, import_at.0, 128.0, import_at.1, 21.0),
+                            r(o, import_at.0, row, import_at.1, winui::CONTROL_H),
                             "Import...",
                             ButtonKind::Normal,
                             false,
@@ -3110,19 +3087,20 @@ impl OptionsDialog {
                             };
                         }
                         if !said.is_empty() {
+                            // After the buttons, as the mockup's hint.
                             let (rect, cut) = winui::text_fit(
                                 &p,
-                                o.x + 14.0,
-                                o.y + 163.0,
+                                o.x + import_at.0 + import_at.1 + 12.0,
+                                o.y + winui::baseline_in(row, winui::CONTROL_H),
                                 &said,
-                                LIGHT_TEXT(),
-                                o.x + 205.0,
+                                crate::theme::colors().muted,
+                                o.x + W - e,
                             );
                             if cut {
                                 winui::full_on_hover(ui, rect, "opt-panels-said", &said);
                             }
                         }
-                        ok_cancel(ui, o, 212.0, 157.0, true)
+                        ok_cancel(ui, o, W, BODY, true)
                     },
                 );
                 match out {
@@ -3141,7 +3119,7 @@ impl OptionsDialog {
                     "opt-dns",
                     // i18n: window title: the settings of the DNS chosen in Options → Connection
                     "DNS settings",
-                    [400.0, 312.0],
+                    [DNS_W, DNS_BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| dns_dialog(ui, o, &mut e),
@@ -3158,7 +3136,7 @@ impl OptionsDialog {
                     "opt-account",
                     // i18n: window title: adding a debrid service account (Real-Debrid…)
                     "Add an account",
-                    [420.0, 300.0],
+                    [ACCOUNT_W, ACCOUNT_BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| account_dialog(ui, o, &mut e),
@@ -3184,35 +3162,41 @@ impl OptionsDialog {
                 }
             }
             Sub::Addresses(mut list) => {
+                // The mockup's layout: the sentence, the list, the footer.
+                const W: f32 = 420.0;
+                const BODY: f32 = 200.0;
                 let out = window(
                     ctx,
                     "opt-addresses",
                     // i18n: window title: the addresses whose downloads stay with the browser
                     "Addresses left to the browser",
-                    [420.0, 230.0],
+                    [W, BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| {
                         let p = ui.painter().clone();
-                        winui::paragraph(
+                        let e = winui::EDGE;
+                        let lines = winui::paragraph(
                             &p,
-                            o.x + 14.0,
-                            o.y + 20.0,
+                            o.x + e,
+                            o.y + 29.0,
                             crate::i18n::t(
                                 "One address per line; * stands for any text: example.com/private/*",
                             ),
                             LIGHT_TEXT(),
-                            o.x + 406.0,
-                            14.0,
+                            o.x + W - e,
+                            LINE,
                         );
+                        // Under the sentence (one or two lines), down to the footer's room.
+                        let top = 16.0 + lines as f32 * LINE + 10.0;
                         multiline(
                             ui,
-                            r(o, 14.0, 44.0, 392.0, 130.0),
+                            r(o, e, top, W - 2.0 * e, BODY - e - top),
                             &mut list,
                             "addresses",
                             true,
                         );
-                        ok_cancel(ui, o, 252.0, 192.0, true)
+                        ok_cancel(ui, o, W, BODY, true)
                     },
                 );
                 match out {
@@ -3229,35 +3213,39 @@ impl OptionsDialog {
                 }
             }
             Sub::Keys(mut opened) => {
+                // The mockup's layout: the sentence, the check box, the footer.
+                const W: f32 = 400.0;
+                const BODY: f32 = 96.0;
                 let out = window(
                     ctx,
                     "opt-keys",
                     // i18n: window title: the keys that force or prevent downloading with MDM
                     "Keys",
-                    [400.0, 160.0],
+                    [W, BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| {
                         let p = ui.painter().clone();
-                        winui::paragraph(
+                        let e = winui::EDGE;
+                        let lines = winui::paragraph(
                             &p,
-                            o.x + 14.0,
-                            o.y + 22.0,
+                            o.x + e,
+                            o.y + 29.0,
                             crate::i18n::t(
                                 "Hold Alt while clicking a link to let the browser download it instead of Mister Download Manager.",
                             ),
                             LIGHT_TEXT(),
-                            o.x + 386.0,
-                            14.0,
+                            o.x + W - e,
+                            LINE,
                         );
                         winui::checkbox_light(
                             ui,
-                            o + vec2(14.0, 70.0),
+                            o + vec2(e, 16.0 + lines.max(2) as f32 * LINE + 16.0),
                             &mut opened,
                             "Also take files the browser would open (PDF, music, video)",
                             true,
                         );
-                        ok_cancel(ui, o, 232.0, 127.0, true)
+                        ok_cancel(ui, o, W, BODY, true)
                     },
                 );
                 match out {
@@ -3267,82 +3255,81 @@ impl OptionsDialog {
                 }
             }
             Sub::Test(mut checks) => {
-                let h = 120.0 + checks.len() as f32 * 22.0;
+                // The mockup's layout: a status icon and a line per check, the footer with the
+                // fixes at its start.
+                const W: f32 = 440.0;
+                const ROW: f32 = 26.0;
+                let body = 2.0 * winui::EDGE + checks.len() as f32 * ROW - 6.0;
                 let mut set_up = false;
                 let out = window(
                     ctx,
                     "opt-test",
                     // i18n: window title: Options → General → Test browser integration
                     "Test browser integration",
-                    [440.0, h],
+                    [W, body + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| {
                         let p = ui.painter().clone();
+                        let e = winui::EDGE;
                         for (k, c) in checks.iter().enumerate() {
-                            let y = o.y + 22.0 + k as f32 * 22.0;
-                            let (mark, color) = if c.ok {
-                                ("\u{2714}", winui::SUCCESS())
+                            let top = e + k as f32 * ROW;
+                            let (need, color) = if c.ok {
+                                ("st-complete", winui::SUCCESS())
                             } else {
-                                ("\u{2716}", winui::ERROR())
+                                ("st-error", winui::ERROR())
                             };
-                            winui::text_in_window(ui, &p, o.x + 14.0, y, mark, color);
-                            winui::text_in_window(ui, &p, o.x + 34.0, y, &c.text, LIGHT_TEXT());
+                            crate::themeicons::paint_in(
+                                ui,
+                                &p,
+                                need,
+                                r(o, e, top + 2.0, 16.0, 16.0),
+                                color,
+                                true,
+                            );
+                            winui::text_in_window(
+                                ui,
+                                &p,
+                                o.x + e + 24.0,
+                                o.y + winui::baseline_in(top, 20.0),
+                                &c.text,
+                                LIGHT_TEXT(),
+                            );
                         }
                         let first = checks.iter().find(|c| !c.ok);
-                        let y = h - 46.0;
-                        // As wide as their labels in this language (#192), short of Close.
-                        let [fix_at, set_up_at] = winui::button_row_from_left(
-                            &p,
-                            &[("How to fix it", 14.0, 110.0), ("Set it up", 132.0, 110.0)],
-                            8.0,
-                            440.0 - 14.0 - 73.0 - 8.0,
-                            200.0,
-                        )[..] else {
-                            unreachable!("two buttons")
-                        };
-                        if let Some(c) = first {
-                            if let Some(why) = c.why
-                                && winui::button_light(
-                                    ui,
-                                    r(o, fix_at.0, y, fix_at.1, 25.0),
-                                    // i18n: button in Test browser integration: open the help page's section for the problem
-                                    "How to fix it",
-                                    ButtonKind::Normal,
-                                    false,
-                                )
-                                .clicked()
-                            {
+                        let fix = first.and_then(|c| c.why);
+                        let can_set_up = first.is_some_and(|c| c.why == Some("not-installed"))
+                            && mdm_ipc::portable_dir().is_none();
+                        // Tab and the footer as before: How to fix it, Set it up, Close; Enter
+                        // and Escape both close.
+                        let mut items = Vec::new();
+                        if fix.is_some() {
+                            items.push(FooterItem::Button(
+                                // i18n: button in Test browser integration: open the help page's section for the problem
+                                FooterButton::new("How to fix it", ButtonKind::Ghost).leading(),
+                            ));
+                        }
+                        if can_set_up {
+                            items.push(FooterItem::Button(
+                                // i18n: button in Test browser integration: register MDM's helper with the browsers
+                                FooterButton::new("Set it up", ButtonKind::Normal).leading(),
+                            ));
+                        }
+                        let close = items.len();
+                        items.push(FooterItem::Button(
+                            FooterButton::new("Close", ButtonKind::Default)
+                                .enter(true)
+                                .escape(true),
+                        ));
+                        match (winui::footer(ui, o, W, body, &mut items), fix) {
+                            (Some(i), _) if i == close => return Outcome::<()>::Closed,
+                            (Some(0), Some(why)) => {
                                 crate::help::open_page(&mdm_ipc::extension::help_doc(why));
                             }
-                            if c.why == Some("not-installed")
-                                && mdm_ipc::portable_dir().is_none()
-                                && winui::button_light(
-                                    ui,
-                                    r(o, set_up_at.0, y, set_up_at.1, 25.0),
-                                    // i18n: button in Test browser integration: register MDM's helper with the browsers
-                                    "Set it up",
-                                    ButtonKind::Normal,
-                                    false,
-                                )
-                                .clicked()
-                            {
-                                set_up = true;
-                            }
+                            (Some(_), _) => set_up = true,
+                            (None, _) => {}
                         }
-                        let close = winui::button_light(
-                            ui,
-                            r(o, 440.0 - 14.0 - 73.0, y, 73.0, 25.0),
-                            "Close",
-                            ButtonKind::Default,
-                            false,
-                        );
-                        if close.clicked() || winui::enter_pressed(ui) || winui::escape_pressed(ui)
-                        {
-                            Outcome::<()>::Closed
-                        } else {
-                            Outcome::Open
-                        }
+                        Outcome::Open
                     },
                 );
                 // Set it up runs on a thread of its own; the checks are read again once it's done.
@@ -3390,12 +3377,13 @@ fn display_dir(dir: &std::path::Path) -> String {
 fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
     use mdm_engine::dns::{Mode, Preset};
     let p = ui.painter().clone();
+    let (edge, h, w) = (winui::EDGE, winui::CONTROL_H, DNS_W);
     let preset = Preset::by_id(&e.provider);
     // i18n: Options → DNS settings: heading over the ways of asking the DNS
     text(
         &p,
-        o.x + 14.0,
-        o.y + 22.0,
+        o.x + edge,
+        o.y + 29.0,
         crate::i18n::t("Ask it with:"),
         LIGHT_TEXT(),
     );
@@ -3404,20 +3392,17 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
         (2, Mode::Tls, "DNS over TLS"),
         (3, Mode::Https, "DNS over HTTPS"),
     ];
+    // The three in a line, as the mockup's.
     let mut clicked = Vec::new();
-    for (row, (n, m, caption)) in modes.iter().enumerate() {
+    let mut x = edge;
+    for (n, m, caption) in &modes {
         let offered = preset.is_none_or(|p| p.offers(*m));
-        let r = winui::radio_light(
-            ui,
-            o + vec2(24.0, 32.0 + 20.0 * row as f32),
-            e.mode == *n,
-            caption,
-            offered,
-        );
+        let r = winui::radio_light(ui, o + vec2(x, 48.0), e.mode == *n, caption, offered);
         if r.clicked() && offered {
             e.mode = *n;
         }
         clicked.push(r);
+        x = winui::checkbox_caption_end(&p, x, caption) + 16.0;
     }
     if let Some(i) = winui::radio_keys(ui, &clicked) {
         let (n, m, _) = modes[i];
@@ -3425,15 +3410,24 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
             e.mode = n;
         }
     }
+    // One label column for every mode's rows, so it doesn't move when the mode changes.
+    let fx = winui::form(
+        &p,
+        edge,
+        &[
+            "Server:",
+            "Configuration ID:",
+            "Servers:",
+            "Certificate name:",
+            "Address:",
+            "IP addresses (optional):",
+        ],
+        false,
+    );
+    let (row1, row2) = (DNS_ROWS, DNS_ROWS + h + 10.0);
     let field = |ui: &mut Ui, y: f32, label: &str, value: &mut String, enabled: bool| {
-        winui::text_right(
-            &p,
-            o.x + 130.0,
-            o.y + y + 14.0,
-            crate::i18n::t(label),
-            LIGHT_TEXT(),
-        );
-        winui::edit_light(ui, r(o, 138.0, y, 248.0, 21.0), value, enabled, false);
+        winui::form_label(&p, o, edge, y, h, label, enabled);
+        winui::edit_light(ui, r(o, fx, y, w - edge - fx, h), value, enabled, false);
     };
     let mode = settings::dns_mode(e.mode).unwrap_or(Mode::Https);
     match preset {
@@ -3445,21 +3439,15 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
                 Mode::Https => pr.doh.to_owned(),
             };
             // i18n: Options → DNS settings: label before the chosen service's server (an address)
-            winui::text_right(
-                &p,
-                o.x + 130.0,
-                o.y + 112.0,
-                crate::i18n::t("Server:"),
-                LIGHT_TEXT(),
-            );
+            winui::form_label(&p, o, edge, row1, h, "Server:", true);
             let (rect, cut) = winui::label_into(
                 &p,
-                o.x + 138.0,
-                o.y + 112.0,
+                o.x + fx,
+                o.y + winui::baseline_in(row1, h),
                 &shown,
                 LIGHT_DISABLED(),
-                o.x + 386.0,
-                o.x + 138.0,
+                o.x + w - edge,
+                o.x + fx,
             );
             if cut {
                 winui::full_on_hover(ui, rect, "dns-server", &shown);
@@ -3468,7 +3456,7 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
                 // i18n: Options → DNS settings: NextDNS's own configuration ID (optional)
                 field(
                     ui,
-                    122.0,
+                    row2,
                     "Configuration ID:",
                     &mut e.nextdns_id,
                     mode != Mode::Plain,
@@ -3478,39 +3466,39 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
         // The user's own DNS.
         None => match mode {
             // i18n: Options → DNS settings: label before the DNS servers' addresses, as IP addresses
-            Mode::Plain => field(ui, 98.0, "Servers:", &mut e.servers, true),
+            Mode::Plain => field(ui, row1, "Servers:", &mut e.servers, true),
             Mode::Tls => {
-                field(ui, 98.0, "Servers:", &mut e.servers, true);
+                field(ui, row1, "Servers:", &mut e.servers, true);
                 // i18n: Options → DNS over TLS: label before the name the server's certificate shows
-                field(ui, 124.0, "Certificate name:", &mut e.tls_name, true);
+                field(ui, row2, "Certificate name:", &mut e.tls_name, true);
             }
             Mode::Https => {
                 // i18n: Options → DNS over HTTPS: label before the server's https:// address
-                field(ui, 98.0, "Address:", &mut e.doh_url, true);
+                field(ui, row1, "Address:", &mut e.doh_url, true);
                 // i18n: Options → DNS over HTTPS: label before the server's IP addresses, which may be left empty
-                field(ui, 124.0, "IP addresses (optional):", &mut e.servers, true);
+                field(ui, row2, "IP addresses (optional):", &mut e.servers, true);
             }
         },
     }
+    let check_y = row2 + h + 14.0;
     winui::checkbox_light(
         ui,
-        o + vec2(14.0, 158.0),
+        o + vec2(edge, check_y),
         &mut e.fallback,
         // i18n: Options → DNS settings: checkbox: when the chosen DNS can't be reached, use the system's instead
         "If it can't be reached, use the system's DNS",
         true,
     );
-    winui::paragraph(
+    hint(
         &p,
-        o.x + 14.0,
-        o.y + 192.0,
+        o,
+        edge,
+        check_y + 13.0 + 14.0 + 13.0,
         // i18n: Options → DNS settings: what the DNS choice covers and what it doesn't
         crate::i18n::t(
             "Names in your hosts file and local names (single words, .local, .lan) stay with the system's DNS. Video pages and torrent trackers use the system's DNS for now.",
         ),
-        LIGHT_TEXT(),
-        o.x + 386.0,
-        14.0,
+        w - edge,
     );
     let choice = e.choice();
     // Test: asks github.com through the choice, without falling back, on a thread of its own.
@@ -3520,8 +3508,11 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
     } else {
         ButtonKind::Disabled
     };
+    // The Test line: the button, then its answer (or why the choice can't be used).
+    let test_y = DNS_BODY - edge - h;
+    let test_w = winui::footer_button_width(&p, "Test", false);
     // i18n: button: asks the chosen DNS for an address, to see it works
-    if winui::button_light(ui, r(o, 14.0, 232.0, 73.0, 21.0), "Test", kind, false).clicked()
+    if winui::button_light(ui, r(o, edge, test_y, test_w, h), "Test", kind, false).clicked()
         && let Ok(c) = &choice
     {
         let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
@@ -3573,21 +3564,27 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
         } else {
             crate::theme::colors().error_strong
         };
+        let x = o.x + edge + test_w + 8.0;
         let (rect, cut) = winui::label_into(
             &p,
-            o.x + 95.0,
-            o.y + 247.0,
+            x,
+            o.y + winui::baseline_in(test_y, h),
             &line,
             color,
-            o.x + 386.0,
-            o.x + 95.0,
+            o.x + w - edge,
+            x,
         );
         if cut {
             winui::full_on_hover(ui, rect, "dns-test", &line);
         }
     }
-    ok_cancel(ui, o, 238.0, 278.0, choice.is_ok())
+    ok_cancel(ui, o, w, DNS_BODY, choice.is_ok())
 }
+
+/// DNS settings (the mockup's): its width, its body above the footer, its form rows' top.
+const DNS_W: f32 = 420.0;
+const DNS_BODY: f32 = 302.0;
+const DNS_ROWS: f32 = 84.0;
 
 /// Accounts → Add...: the service, a token typed in, and the sign-in on its thread (#44).
 #[derive(Default)]
@@ -3605,20 +3602,18 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
     let ctx = ui.ctx().clone();
     let state = e.signin.get();
     let busy = matches!(state, S::Starting | S::Waiting { .. } | S::Checking);
+    // The mockup's layout: the service, Sign in in the browser, the code's box, the token's
+    // line, Find my token with how the sign-in went, the footer.
+    let (edge, h, w) = (winui::EDGE, winui::CONTROL_H, ACCOUNT_W);
     // i18n: Options → Add an account: label before the choice of debrid service
-    text(
-        &p,
-        o.x + 14.0,
-        o.y + 26.0,
-        crate::i18n::t("Service:"),
-        LIGHT_TEXT(),
-    );
+    let fx = winui::form(&p, edge, &["Service:"], false);
+    winui::form_label(&p, o, edge, 16.0, h, "Service:", true);
     let all = mdm_debrid::ServiceKind::ALL;
     let names: Vec<&str> = all.iter().map(|k| k.name()).collect();
     let at = all.iter().position(|k| *k == e.service).unwrap_or(0);
     if let Some(i) = winui::combo_light(
         ui,
-        r(o, 90.0, 12.0, 200.0, 21.0),
+        r(o, fx, 16.0, w - edge - fx, h),
         &names,
         at,
         !busy,
@@ -3641,7 +3636,13 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
     // i18n: button: sign in to the debrid service in the browser, by typing a code there
     if winui::button_light(
         ui,
-        r(o, 14.0, 44.0, 220.0, 23.0),
+        r(
+            o,
+            edge,
+            60.0,
+            winui::footer_button_width(&p, "Sign in in the browser", false),
+            h,
+        ),
         "Sign in in the browser",
         kind(!busy && by_code),
         false,
@@ -3654,21 +3655,32 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         e.signin.by_code(e.service, &ctx);
     }
     if let S::Waiting { code, page, until } = &state {
-        // The code, large, to type at the service's page.
+        // In a box, as the mockup's: the code, large, to type at the service's page, its
+        // buttons beside it, and what to do with it.
+        let c = crate::theme::colors();
+        let rc = r(o, edge, 104.0, w - 2.0 * edge, 94.0);
+        p.rect_filled(rc, 6.0, c.panel);
+        p.rect_stroke(
+            rc,
+            6.0,
+            egui::Stroke::new(1.0, c.menubar_line),
+            egui::StrokeKind::Inside,
+        );
+        let (x, row) = (edge + 12.0, 116.0);
         let code_font = egui::FontId::monospace(crate::theme::metrics().font_code);
         p.text(
-            o + vec2(14.0, 78.0),
-            egui::Align2::LEFT_TOP,
+            o + vec2(x, row + h / 2.0),
+            egui::Align2::LEFT_CENTER,
             code,
             code_font.clone(),
             LIGHT_TEXT(),
         );
         // The buttons as wide as their labels in this language (#192), short of the code.
-        let code_end = 14.0 + winui::text_width_font(&p, code_font, code);
+        let code_end = x + winui::text_width_font(&p, code_font, code);
         let [copy_at, open_at] = winui::button_row(
             &p,
-            &[("Copy code", 200.0, 90.0), ("Open the page", 296.0, 110.0)],
-            6.0,
+            &[("Copy code", 200.0, 90.0), ("Open the page", 298.0, 110.0)],
+            8.0,
             (code_end + 12.0).min(200.0),
             200.0,
         )[..] else {
@@ -3677,7 +3689,7 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         // i18n: button: copy the sign-in code
         if winui::button_light(
             ui,
-            r(o, copy_at.0, 80.0, copy_at.1, 21.0),
+            r(o, copy_at.0, row, copy_at.1, h),
             "Copy code",
             ButtonKind::Normal,
             false,
@@ -3689,7 +3701,7 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         // i18n: button: open the service's page where the code is typed
         if winui::button_light(
             ui,
-            r(o, open_at.0, 80.0, open_at.1, 21.0),
+            r(o, open_at.0, row, open_at.1, h),
             "Open the page",
             ButtonKind::Normal,
             false,
@@ -3701,10 +3713,11 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         let left = until
             .saturating_duration_since(std::time::Instant::now())
             .as_secs();
-        winui::paragraph(
+        hint(
             &p,
-            o.x + 14.0,
-            o.y + 120.0,
+            o,
+            x,
+            row + h + 8.0 + 13.0,
             &crate::i18n::fmt(
                 // i18n: Options → Add an account: waiting while the user types the code at the service's page; {page} its address, {time} minutes:seconds left
                 crate::i18n::t(
@@ -3715,9 +3728,7 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
                     ("time", &format!("{}:{:02}", left / 60, left % 60)),
                 ],
             ),
-            LIGHT_TEXT(),
-            o.x + 406.0,
-            14.0,
+            w - edge - 12.0,
         );
         ctx.request_repaint_after(std::time::Duration::from_secs(1));
     }
@@ -3728,20 +3739,20 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         // i18n: Options → Add an account: label before the field for the service's API key (Premiumize: the only way to sign in; the key is on the service's Account page)
         crate::i18n::t("Paste your API key (from the service's Account page):")
     };
-    text(&p, o.x + 14.0, o.y + 178.0, label, LIGHT_TEXT());
-    // As wide as its label in this language (#192); the box ends 6 px before it.
-    let (use_x, use_w) =
-        winui::buttons_to_right(&p, 406.0, 0.0, &[("Use the token", 106.0)], 200.0)[0];
+    text(&p, o.x + edge, o.y + 225.0, label, LIGHT_TEXT());
+    // As wide as its label in this language (#192); the box ends 8 before it.
+    let use_w = winui::footer_button_width(&p, "Use the token", false);
+    let use_x = w - edge - use_w;
     winui::password_light(
         ui,
-        r(o, 14.0, 186.0, use_x - 6.0 - 14.0, 21.0),
+        r(o, edge, 234.0, use_x - 8.0 - edge, h),
         &mut e.token,
         !busy,
     );
     // i18n: button: sign in with the token typed in
     if winui::button_light(
         ui,
-        r(o, use_x, 186.0, use_w, 21.0),
+        r(o, use_x, 234.0, use_w, h),
         "Use the token",
         kind(!busy && !e.token.trim().is_empty()),
         false,
@@ -3751,17 +3762,12 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         e.signin.by_token(e.service, e.token.clone(), &ctx);
     }
     // i18n: button: open the service's page that shows the user's API token
+    let find_w = winui::footer_button_width(&p, "Find my token", false);
     if winui::button_light(
         ui,
-        r(
-            o,
-            14.0,
-            212.0,
-            winui::button_fit_width(&p, "Find my token", 160.0, 392.0),
-            21.0,
-        ),
+        r(o, edge, 278.0, find_w, h),
         "Find my token",
-        ButtonKind::Normal,
+        ButtonKind::Ghost,
         false,
     )
     .clicked()
@@ -3787,20 +3793,22 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
     } else {
         crate::theme::colors().error_strong
     };
+    // After Find my token, on its line.
+    let x = o.x + edge + find_w + 12.0;
     let (rect, cut) = winui::label_into(
         &p,
-        o.x + 14.0,
-        o.y + 252.0,
+        x,
+        o.y + winui::baseline_in(278.0, h),
         &line,
         color,
-        o.x + 406.0,
-        o.x + 14.0,
+        o.x + w - edge,
+        x,
     );
     if cut {
         winui::full_on_hover(ui, rect, "opt-account-state", &line);
     }
     let done = matches!(state, S::Done { .. });
-    match ok_cancel(ui, o, 252.0, 266.0, done) {
+    match ok_cancel(ui, o, w, ACCOUNT_BODY, done) {
         Outcome::Done(()) => match state {
             S::Done {
                 user,
@@ -3821,6 +3829,10 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
     }
 }
 
+/// Add an account (the mockup's): its width and its body above the footer.
+const ACCOUNT_W: f32 = 440.0;
+const ACCOUNT_BODY: f32 = 324.0;
+
 /// Open a service's web page in the browser; never in an off-screen test run (MDM_OFFSCREEN),
 /// whose clicks come from scripts, not from a person at the browser.
 fn open_page(url: &str) {
@@ -3840,29 +3852,47 @@ fn read_sites_file(path: &std::path::Path) -> std::io::Result<String> {
     String::from_utf8(text).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
-fn ok_cancel(ui: &mut Ui, o: Pos2, x: f32, y: f32, valid: bool) -> Outcome<()> {
+/// A sub-dialog's footer at English `y` across `w`: Cancel, OK* (OK greyed until `valid`).
+/// Enter is OK while `valid`, Escape is Cancel, as before; Tab: OK, then Cancel.
+fn ok_cancel(ui: &mut Ui, o: Pos2, w: f32, y: f32, valid: bool) -> Outcome<()> {
     let kind = if valid {
         ButtonKind::Default
     } else {
         ButtonKind::Disabled
     };
-    let ok = winui::button_light(ui, r(o, x, y, 73.0, 21.0), "OK", kind, false).clicked();
-    let cancel = winui::button_light(
+    let pressed = winui::footer(
         ui,
-        r(o, x + 81.0, y, 73.0, 21.0),
-        "Cancel",
-        ButtonKind::Normal,
-        false,
-    )
-    .clicked();
-    if cancel || winui::escape_pressed(ui) {
-        Outcome::Closed
-    } else if valid && (ok || winui::enter_pressed(ui)) {
-        Outcome::Done(())
-    } else {
-        Outcome::Open
+        o,
+        w,
+        y,
+        &mut [
+            FooterItem::Button(FooterButton::new("OK", kind).primary().enter(true)),
+            FooterItem::Button(FooterButton::new("Cancel", ButtonKind::Normal).escape(true)),
+        ],
+    );
+    match pressed {
+        Some(1) => Outcome::Closed,
+        Some(_) if valid => Outcome::Done(()),
+        _ => Outcome::Open,
     }
 }
+
+/// A sub-dialog's hint (the mockup's `.hint`): `s` wrapped from English `x` at `baseline` to
+/// `right` (window-relative to `o`), in the muted colour. Its line count.
+fn hint(p: &egui::Painter, o: Pos2, x: f32, baseline: f32, s: &str, right: f32) -> usize {
+    winui::paragraph(
+        p,
+        o.x + x,
+        o.y + baseline,
+        s,
+        crate::theme::colors().muted,
+        o.x + right,
+        LINE,
+    )
+}
+
+/// A sub-dialog's line height for wrapped text.
+const LINE: f32 = 16.0;
 
 /// The window: the side list ([`SIDE_W`]), the page area, the footer ([`winui::footer`]).
 /// The mock's 820 x 520 (plan 08b).
@@ -3882,17 +3912,16 @@ const HEAD_TOP: f32 = 16.0;
 const HEAD_TILE: f32 = 40.0;
 /// Where a page's controls go, in its English pixels: under its heading, 16 in from the list
 /// and the window's edge, 8 above the footer. The test holds every page to it; 08b's pages lay
-/// out on it.
-#[allow(dead_code)] // ponytail: the pages' first users come with plan 08b
-mod area {
-    use super::*;
-    pub const PAGE_LEFT: f32 = winui::EDGE;
-    pub const PAGE_RIGHT: f32 = W - SIDE_W - winui::EDGE;
-    pub const PAGE_TOP: f32 = HEAD_TOP + HEAD_TILE + winui::EDGE - PAGE_AT.y;
-    pub const PAGE_BOTTOM: f32 = H - winui::FOOTER_H - 8.0 - PAGE_AT.y;
-}
-#[allow(unused_imports)]
-use area::*;
+/// out on it (only the test reads the first three until then).
+#[cfg_attr(not(test), allow(dead_code))]
+const PAGE_LEFT: f32 = winui::EDGE;
+#[cfg_attr(not(test), allow(dead_code))]
+const PAGE_RIGHT: f32 = W - SIDE_W - winui::EDGE;
+#[cfg_attr(not(test), allow(dead_code))]
+const PAGE_TOP: f32 = HEAD_TOP + HEAD_TILE + winui::EDGE - PAGE_AT.y;
+const PAGE_BOTTOM: f32 = H - winui::FOOTER_H - 8.0 - PAGE_AT.y;
+/// Proxy's Get System, on its heading's row: its English x, where the heading's title ends.
+const PROXY_GET_X: f32 = 307.0;
 
 /// The pages in the list's order, which is the old tabs' (Remote, ours, after Connection): page
 /// number (as `on_page` and `/show options:<n>` take it), its name in the list, its Graphite
@@ -4119,12 +4148,13 @@ fn heading(ui: &Ui, o: Pos2, page: usize) {
     let p = ui.painter();
     let left = o.x + x + HEAD_TILE + 12.0;
     let full = crate::i18n::t(title);
-    let shown = winui::ellipsize(
-        p,
-        &winui::tahoma_title(),
-        full,
-        o.x + W - winui::EDGE - left,
-    );
+    // Proxy's title ends before its Get System, on the same row.
+    let end = if page == 5 {
+        PAGE_AT.x + PROXY_GET_X - 8.0
+    } else {
+        W - winui::EDGE
+    };
+    let shown = winui::ellipsize(p, &winui::tahoma_title(), full, o.x + end - left);
     let drawn = winui::text_at(
         p,
         winui::tahoma_title(),
@@ -4316,7 +4346,7 @@ fn readonly_ltr(ui: &mut Ui, rc: Rect, value: &str) {
     );
 }
 
-/// A password edit (characters shown as bullets): the shared one, on the tab page.
+/// A password edit (characters shown as bullets): the shared one, on the page.
 fn password(ui: &mut Ui, rc: Rect, value: &mut String, enabled: bool) {
     winui::password_light_on(ui, rc, value, enabled, LIGHT_PAGE());
 }
@@ -4459,6 +4489,25 @@ mod tests {
         assert_eq!(back, Some(10), "Ctrl+Shift+Tab wraps back to Archives");
     }
 
+    /// Plan 08b3: a sub-dialog's footer keeps its keys: Enter is OK only while the entry is
+    /// valid, Escape is Cancel either way.
+    #[test]
+    fn sub_dialog_enter_is_ok_only_when_valid_escape_cancels() {
+        let ctx = egui::Context::default();
+        let pass = |k: egui::Key, valid: bool| {
+            let mut out = Outcome::Open;
+            let mut o = ctx.run_ui(input(vec![key(k, Default::default())]), |ui| {
+                out = ok_cancel(ui, Pos2::ZERO, 340.0, 100.0, valid);
+            });
+            o.textures_delta.clear();
+            out
+        };
+        assert!(matches!(pass(egui::Key::Enter, true), Outcome::Done(())));
+        assert!(matches!(pass(egui::Key::Enter, false), Outcome::Open));
+        assert!(matches!(pass(egui::Key::Escape, true), Outcome::Closed));
+        assert!(matches!(pass(egui::Key::Escape, false), Outcome::Closed));
+    }
+
     /// One pass of the window's page area on `page`, AccessKit on: its tree.
     fn page_pass(
         ctx: &egui::Context,
@@ -4527,6 +4576,17 @@ mod tests {
                 })
                 .collect();
             assert!(!controls.is_empty(), "{label}: no controls");
+            // A caption's limit is a window x: Sites Logins' "From browser:" was cut down to
+            // "..." when given as a page x.
+            if page == 6 {
+                let b = tree
+                    .nodes
+                    .iter()
+                    .find(|(_, n)| n.label() == Some("From browser:"))
+                    .and_then(|(_, n)| n.bounds())
+                    .expect("From browser:");
+                assert!(b.x1 - b.x0 > 60.0, "\"From browser:\" cut: {b:?}");
+            }
             for (_, rc, _) in &controls {
                 assert!(
                     area.expand(0.5).contains_rect(*rc),
