@@ -517,7 +517,8 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   corners, and buttons, boxes and drop-downs share rounder-than-Windows corners in proportion to
   their height, so a dialog's short buttons no longer look like pills.
 - ✅ A new app icon, Grabbit's double chevron in Graphite's cyan and amethyst, with no tile behind
-  it: in the title bar, the taskbar, the tray, the installer, About and the browser extension.
+  it: in the title bar, the taskbar, the tray, the installer, About and the browser extension,
+  and on the website (logo, favicon, home-screen icon) and the repository's social preview.
 
 ## Being worked on
 
