@@ -3931,11 +3931,13 @@ pub fn footer_slots(items: &[(f32, Side, bool)], client_w: f32) -> Vec<f32> {
 }
 
 /// The button a key presses, of `buttons` given as `(enabled, enter, escape)`: the first
-/// enabled one marked for Enter when `enter` was pressed, else for Escape when `escape` was.
+/// enabled one marked for Escape when `escape` was pressed, else for Enter when `enter` was.
+/// Escape first, as the dialogs tested it before the kit: Enter and Escape in one frame answer
+/// No, never Yes (Confirm deletion).
 pub fn footer_key(buttons: &[(bool, bool, bool)], enter: bool, escape: bool) -> Option<usize> {
     let marked =
         |pick: fn(&(bool, bool, bool)) -> bool| buttons.iter().position(|b| b.0 && pick(b));
-    (enter.then(|| marked(|b| b.1)).flatten()).or_else(|| escape.then(|| marked(|b| b.2)).flatten())
+    (escape.then(|| marked(|b| b.2)).flatten()).or_else(|| enter.then(|| marked(|b| b.1)).flatten())
 }
 
 /// A dialog's footer band at English `y` across `client_w` (window-relative to `o`): the
