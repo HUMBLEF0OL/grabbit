@@ -3973,9 +3973,7 @@ const ACCOUNT_BODY: f32 = 324.0;
 /// Open a service's web page in the browser; never in an off-screen test run (MDM_OFFSCREEN),
 /// whose clicks come from scripts, not from a person at the browser.
 fn open_page(url: &str) {
-    if !crate::offscreen() {
-        crate::launch::open(url);
-    }
+    crate::launch::open_page(url);
 }
 
 /// A list of sites from a file (Download panels' Import, #424): text, and no more than a list

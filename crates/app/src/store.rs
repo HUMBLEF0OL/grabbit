@@ -120,6 +120,9 @@ fn load_from(p: &Path, empty: Loaded) -> Loaded {
     match parsed {
         Some(mut f) => {
             for i in &mut f.items {
+                // The page it came from is sent again (upstream issue 795): the browser's other
+                // context (cookies, User-Agent) is memory only.
+                i.context.referer = i.referer.clone();
                 // Downloads that were running when the app closed are now stopped (resumable).
                 if i.status == Status::Downloading {
                     i.status = Status::Stopped;
@@ -458,6 +461,29 @@ mod tests {
         saver.flush();
         assert_eq!(saver.outcome(), Some(Ok(())));
         assert_eq!(std::fs::read(&p).unwrap(), b"9");
+    }
+
+    /// Upstream issue 795: a download's Referer is kept with the list and sent again after a
+    /// restart; the browser's other context (its cookies) is not written to disk.
+    #[test]
+    fn a_downloads_referer_is_kept_across_a_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("downloads.json");
+        let layout = crate::list::ListState::default().layout();
+        let url = url::Url::parse("https://files.example.net/a.zip").unwrap();
+        let mut a = Item::new(1, url, "a.zip".into(), crate::model::Category::Compressed);
+        a.set_referer(Some("https://www.example.com/get".into()));
+        a.context.cookies = Some("sid=1".into());
+        save_to(&p, 2, &[a], &layout, &Settings::default(), &[]).unwrap();
+        assert!(!std::fs::read_to_string(&p).unwrap().contains("sid=1"));
+        let back = load_from(&p, empty());
+        let b = &back.items[0];
+        assert_eq!(b.referer.as_deref(), Some("https://www.example.com/get"));
+        assert_eq!(
+            b.context.referer.as_deref(),
+            Some("https://www.example.com/get")
+        );
+        assert_eq!(b.context.cookies, None);
     }
 
     #[test]

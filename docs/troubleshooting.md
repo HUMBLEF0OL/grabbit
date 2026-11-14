@@ -17,6 +17,7 @@ Every download keeps a log of its recent events: retries, redirects, the server'
 3. If the link has expired (common for links from sites you sign in to, or links with a time limit in them), get a new one: right-click → **Refresh download address**. See [Resume a broken download](guide-resume-broken-download.md).
 4. If it says **the file changed on the server**, the file isn't the one MDM started with. Right-click → **Redownload** to start again from the beginning.
 5. If it says **Google Drive won't give this file now**, Drive's download limit for that file was reached. See [Google Drive links](adding-downloads.md#google-drive-links).
+6. If it says **the site sent a web page instead of the file**, the link led to the site's own page: a file host's countdown, a captcha, a **Download** button to press, or a sign-in. MDM never saves that page as your file. Click **Open in browser** in the download's progress window (or open the link yourself), finish there, and when the browser starts the real download, MDM's extension hands it to MDM. Without the extension, let the browser download it.
 
 ## A download starts over instead of resuming
 
@@ -81,10 +82,11 @@ MDM draws its windows with Direct3D 12. A graphics driver can still misbehave: a
 *View → Draw with: the other way of drawing.*
 
 - If Direct3D can't start on your computer (no driver for it, some virtual machines), or its first window doesn't show within 10 seconds of its own (the time MDM spends loading your list and its icons doesn't count, however slow the computer is just after it starts), MDM draws with OpenGL, and **View → Draw with** says so and why. Choosing it again tries it again at the next start.
-- If neither can start, MDM draws with a software renderer (Microsoft's), so the window still opens (Remote Desktop, a virtual machine without a graphics driver). It works, but keeps the processor busier.
+- If neither can start, MDM draws with a software renderer (Microsoft's), so the window still opens (Remote Desktop, a virtual machine without a graphics driver). It works, but keeps the processor busier while a window changes.
+- When OpenGL fails on a card without Direct3D 12, MDM draws with Direct3D on Microsoft's software renderer (WARP) from the next start, and **View → Draw with** says why: OpenGL couldn't start, it is too old to draw MDM (older than 3.0, such as Intel's first HD Graphics, whose OpenGL 2.1 drew MDM's windows as garbage), its first window didn't show within 10 seconds, or MDM froze inside the graphics driver while OpenGL showed a frame (the older Intel HD Graphics and AMD Radeon cards' drivers did). Choosing **OpenGL** there tries it again.
 - If the graphics card is reset while MDM runs (a driver update), MDM starts again by itself. Lost twice in 10 minutes, it goes back to OpenGL, and **View → Draw with** says why.
 - Updating the graphics driver from the card maker's site (Intel, AMD or NVIDIA) fixes many of these problems.
-- A freeze whose report shows the window thread inside the graphics driver as it shows a frame (`ig4icd64.dll` or `ig9icd64.dll` for Intel, `nvoglv64.dll` for NVIDIA, `atio6axx.dll` for AMD, under `opengl32.dll`) is the driver's OpenGL stuck, not MDM: choose **View → Draw with → Direct3D** (the default) and restart MDM, and update the graphics driver. If **Draw with** says Direct3D didn't start there, the line under it says why.
+- A freeze whose report shows the window thread inside the graphics driver as it shows a frame (`ig4icd64.dll` or `ig9icd64.dll` for Intel, `nvoglv64.dll` for NVIDIA, `atio6axx.dll` for AMD, under `opengl32.dll`) is the driver's OpenGL stuck, not MDM: choose **View → Draw with → Direct3D** (the default) and restart MDM, and update the graphics driver. If **Draw with** says Direct3D didn't start there, the line under it says why; MDM then remembers the freeze and draws with WARP from the next start.
 - A freeze or crash report says which one was drawing, on which graphics card and driver, and why that one (chosen, the default, or the other one failing), on its `Drawing with:` line near the top: include it when you report a problem. A freeze report also says whether MDM was busy, waiting, or hardly ran at all (a computer too busy to run it); see [Crash reports](crash-reports.md).
 
 ## The setup or MDM won't start

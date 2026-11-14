@@ -286,14 +286,8 @@ impl Updates {
         // once the new copy (or the installer) has started.
         if let Some(res) = self.job.as_ref().and_then(crate::update::Job::result) {
             self.job = None;
-            let started = res.and_then(|next| match next {
-                crate::update::Next::Restart(mut cmd) => cmd
-                    .spawn()
-                    .map(|_| crate::update::Next::Restart(cmd))
-                    .map_err(|e| e.to_string()),
-            });
-            match started {
-                Ok(crate::update::Next::Restart(_)) => return Outcome::Done(true),
+            match res {
+                Ok(crate::update::Next::Restart) => return Outcome::Done(true),
                 Err(e) => self.status = Some(UpdateStatus::Failed(e)),
             }
         }

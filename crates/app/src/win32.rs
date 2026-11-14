@@ -4042,6 +4042,14 @@ pub fn gl_driver(gl: &eframe::glow::Context) -> String {
     format!("{renderer} ({version})")
 }
 
+/// Windows' clipboard sequence number: it changes each time the clipboard does, and asking for
+/// it neither opens the clipboard nor waits for its owner (clipboard.rs: the watch for copied
+/// links reads the clipboard only when it changed).
+pub fn clipboard_sequence() -> u32 {
+    // SAFETY: takes nothing, returns a number.
+    unsafe { windows_sys::Win32::System::DataExchange::GetClipboardSequenceNumber() }
+}
+
 /// End process `pid` (a frozen MDM the user chose to close from the crash report).
 pub fn end_process(pid: u32) -> bool {
     use windows_sys::Win32::Foundation::CloseHandle;
@@ -4157,7 +4165,11 @@ pub fn browsers() -> Vec<(String, std::path::PathBuf)> {
 
 /// Open `url` in the browser whose program is `program` (from `browsers`).
 pub fn open_in(program: &std::path::Path, url: &str) {
-    let _ = std::process::Command::new(program).arg(url).spawn();
+    let program = program.to_owned();
+    let url = url.to_owned();
+    crate::launch::spawn("open browser", move || {
+        let _ = std::process::Command::new(program).arg(url).spawn();
+    });
 }
 
 /// Mark-of-the-Web on a file being downloaded from `url` (`referrer`'s page): the zone stream
@@ -4511,10 +4523,12 @@ pub fn open_power_options() {
         return;
     }
     use std::os::windows::process::CommandExt;
-    let _ = std::process::Command::new("control.exe")
-        .arg("powercfg.cpl,,3")
-        .creation_flags(0x0800_0000)
-        .spawn();
+    crate::launch::spawn("power options", move || {
+        let _ = std::process::Command::new("control.exe")
+            .arg("powercfg.cpl,,3")
+            .creation_flags(0x0800_0000)
+            .spawn();
+    });
 }
 
 /// A change to the wake timer, and where its result goes.
