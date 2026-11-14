@@ -805,16 +805,14 @@ impl Scheduler {
             false,
             LIGHT_PAGE(),
         );
-        let browse = winui::button_light(
+        // Graphite's browse button (plan 07: `gx-dots` on every "..."), as tall as its box.
+        let browse = winui::icon_only_button(
             ui,
-            r(o, 592.0, 319.0 + DY, 21.0, 21.0),
-            "...",
-            if f.open_on {
-                ButtonKind::Normal
-            } else {
-                ButtonKind::Disabled
-            },
-            false,
+            r(o, 592.0, 318.0 + DY, 23.0, 23.0),
+            "gx-dots",
+            // i18n: tooltip of the "..." after the Scheduler's file to open: choose the file
+            "Browse",
+            f.open_on,
         )
         .clicked();
         if browse && f.open_on {
