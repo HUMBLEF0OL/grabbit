@@ -417,6 +417,11 @@ pub struct Item {
     /// (or its one file, once known).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote: Option<RemoteSpec>,
+    /// The page it was found on, as the browser sent it (its Referer): kept with the list, so
+    /// File Properties shows it and a start after a restart sends it again (upstream issue
+    /// 795). The request's own copy is `context.referer`; this one follows it (`set_referer`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub referer: Option<String>,
     #[serde(skip)]
     pub live: Option<Live>,
     /// The session's temporary view while a torrent is being checked; never saved.
@@ -726,6 +731,7 @@ impl Item {
             server: None,
             direct: false,
             remote: None,
+            referer: None,
             live: None,
             torrent_check: None,
             snap: None,
@@ -734,6 +740,14 @@ impl Item {
             notices: Vec::new(),
         }
     }
+
+    /// The referer sent with it from now on (the browser's, File Properties'): the request's
+    /// copy and the list's together (upstream issue 795).
+    pub fn set_referer(&mut self, referer: Option<String>) {
+        self.referer = referer.clone().filter(|r| !r.is_empty());
+        self.context.referer = referer;
+    }
+
     /// This row's resume state is at its place. `downloaded` can't say: after a crash the list
     /// holds what it held at its last save, often nothing.
     pub fn owns_resume_state(&self) -> bool {
