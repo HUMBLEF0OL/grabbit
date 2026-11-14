@@ -23,6 +23,25 @@ Plans and PRs link here instead of explaining a missing check again.
 - **Until then:** no release (`dev` → `main`), since the website is published from `main`.
 - **What closes it:** plan 10.
 
+### G4 · Screenshots owed by the upstream-port PRs (2026-11-14)
+
+- **What:** CLAUDE.md rule 6 asks each changed window in pictures, before and after, light and
+  dark. The upstream-port batches were merged with their checks as proof and these pictures
+  still owed:
+  - PR 39: **View → Draw with**'s reason line; the progress window's error for a file host's
+    page (**Open in browser**).
+  - PR 41: **Options → Save to**'s new **Mark downloaded files as coming from the internet**
+    row (the temporary-folder row below it moved down 22 px); **Download video** with a
+    sound-only choice (Music's folder) and with a title that has line breaks; the progress
+    window's connections row while yt-dlp works; the notice when a file dragged out of
+    **Download complete** was moved elsewhere.
+  - PR 42: **Options → Downloads**' User-Agent row with its new **Automatic** box;
+    **Download video**'s JavaScript-runtime note for YouTube.
+- **Until then:** the PRs' test output stands in for them (each window's logic is tested).
+- **What closes it:** one shot run (`plans/00-conventions.md`, Screenshots) for these windows,
+  put on pr-shots under each PR's number and linked from its description. Plan 09's review
+  (R1–R3) passes through every one of these windows and can take them there.
+
 ## Closed
 
 ### G1 · No screenshots on this PC (2026-11-12 to 2026-11-13)

@@ -509,8 +509,10 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   nothing to take), picks the ones that apply onto a sync branch and records every decision;
   each run reaches `dev` by a pull request, and a weekly report (from the first release on)
   lists what waits. Looked at up to upstream `9f7a6fc9ce8a` (2026-11-14): 24 fixes taken and
-  46 ported by hand (the critical ones), 42 skipped, 11 deferred; the rest wait to be ported by
-  hand, the critical ones first. Ready for Graphite only: an old
+  46 ported by hand, 42 skipped, 14 deferred: upstream's rework that downloads videos, streams
+  and galleries through MDM's own engine (and the fixes built on it), a connection that copies a
+  browser's TLS, the tray menu's look and release tooling, each waiting for a decision; what the
+  ports' reviews left to do is in `tools/upstream-sync/follow-ups.md`. Ready for Graphite only: an old
   theme's licence never counts as moved to Graphite's, and a commit with a theme other than
   Graphite says to skip it.
 - ✅ No crash at start on a damaged or unreadable system font (ported from upstream issue 931):
