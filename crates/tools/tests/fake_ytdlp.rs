@@ -105,6 +105,16 @@ fn fake_ytdlp() -> ExitCode {
         const PAGE: &str = r#"{"title": "Talk", "language": "ru", "formats": [
             {"format_id": "18", "ext": "mp4", "height": 360, "vcodec": "avc1", "acodec": "mp4a"}],
             "automatic_captions": {"en": [{"name": "English"}], "ru": [{"name": "Russian"}]}}"#;
+        // Upstream issue 852: YouTube looked up without a JavaScript runtime, as yt-dlp says it.
+        if args
+            .last()
+            .is_some_and(|u| u == "https://nojs.example/watch")
+        {
+            eprint!(
+                "{}",
+                include_str!("fixtures/ytdlp-js-runtime/no-runtime.stderr")
+            );
+        }
         println!("{PAGE}");
         return ExitCode::SUCCESS;
     }
@@ -400,10 +410,14 @@ fn list_checks(me: &Path) {
         Looked::List(l) => assert_eq!((l.title.as_str(), l.total), ("A fake playlist", Some(6000))),
         Looked::Video(_) => panic!("a playlist taken for a video"),
     }
-    assert!(matches!(
-        look_up(&exe, "https://video.example/talk", &none).unwrap(),
-        Looked::Video(_)
-    ));
+    // Upstream issue 852: yt-dlp's warnings reach the look-up. A video looked up without a
+    // JavaScript runtime says so (yt-dlp's own words, `fixtures/ytdlp-js-runtime`); another doesn't.
+    let runtime_said = |url: &str| match look_up(&exe, url, &none).unwrap() {
+        Looked::Video(v) => v.needs_js_runtime,
+        Looked::List(_) => panic!("a video taken for a list"),
+    };
+    assert!(!runtime_said("https://video.example/talk"));
+    assert!(runtime_said("https://nojs.example/watch"));
 
     // #352: cookies that leave yt-dlp nothing to offer: the same page without them.
     let page = "https://cookies.example/none";

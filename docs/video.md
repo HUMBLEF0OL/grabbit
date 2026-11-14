@@ -38,6 +38,16 @@ Already have yt-dlp or ffmpeg for another program? Use those instead of a second
 ![The video helpers window: yt-dlp and ffmpeg, each with its version and Use another program...](images/help/video-helpers.webp)
 *Helpers...: use your own yt-dlp or ffmpeg instead.*
 
+### A JavaScript runtime for YouTube {#javascript-runtime}
+
+YouTube hides most of a video's qualities behind small puzzles that yt-dlp solves with a JavaScript runtime: **Deno**, **Node.js** or **Bun**. Without one, the list is short, sometimes only the sound and a low quality, and MDM says so: *YouTube needs a JavaScript runtime to list its video qualities*. Other sites don't need one.
+
+Install one of them, either works, then look the video up again. MDM finds Deno, Node.js (also one installed with nvm) and Bun by itself, and Deno or Node.js just installed with winget or Node.js's installer. If it still says so, the new program's folder isn't on the `PATH` MDM started with: quit MDM (**Tasks → Exit**) and start it again.
+
+- `winget install DenoLand.Deno`, or `winget install OpenJS.NodeJS.LTS`. The installers on [deno.com](https://deno.com) and [nodejs.org](https://nodejs.org) work too.
+
+If the list stays short, your own yt-dlp may be too old for YouTube: click **Use MDM's own copy** beside yt-dlp in **Helpers...**.
+
 ## Choose the quality
 
 1. Wait for the list. It shows each resolution with its size, best first, then the sound alone:

@@ -23,6 +23,9 @@ pub struct Video {
     /// A plain file at this address, not a page or a stream (yt-dlp's `direct`). yt-dlp says
     /// nothing of its size then: the server is asked (`needs_size`, #320).
     pub direct: bool,
+    /// yt-dlp said it had no JavaScript runtime for the site's qualities (upstream issue 852,
+    /// [`proc::missing_js_runtime`]): YouTube's list is short without one.
+    pub needs_js_runtime: bool,
 }
 
 impl Video {
@@ -172,6 +175,7 @@ pub fn parse(json: &[u8]) -> Option<Video> {
         automatic: tracks(raw.automatic_captions),
         language: raw.language,
         direct: raw.direct,
+        needs_js_runtime: false,
     })
 }
 
@@ -265,7 +269,8 @@ pub fn parse_looked(json: &[u8]) -> Option<Looked> {
 /// Look `url` up with yt-dlp: one video (`--no-playlist`: a video in a playlist is that video),
 /// or, for a page that is a list, only what it is and its first entry, flat (#69: never every
 /// video of a 6,000-long playlist at once; `--flat-playlist -I 1:1` doesn't change a video's
-/// look-up).
+/// look-up). yt-dlp's warnings stay on: the one saying it has no JavaScript runtime is how a
+/// short YouTube list explains itself (upstream issue 852, `Video::needs_js_runtime`).
 pub fn look_up(exe: &Path, url: &str, browser: &proc::FromBrowser) -> Result<Looked, ProcError> {
     let mut args: Vec<String> = [
         "-J",
@@ -273,7 +278,6 @@ pub fn look_up(exe: &Path, url: &str, browser: &proc::FromBrowser) -> Result<Loo
         "--flat-playlist",
         "--playlist-items",
         "1:1",
-        "--no-warnings",
     ]
     .map(String::from)
     .to_vec();
@@ -281,10 +285,14 @@ pub fn look_up(exe: &Path, url: &str, browser: &proc::FromBrowser) -> Result<Loo
     let (theirs, _cookies) = browser.args(url)?;
     args.extend(theirs);
     let out = proc::look_up(exe, &args, url, Duration::from_secs(90))?;
-    parse_looked(&out.json).ok_or_else(|| ProcError::Failed {
+    let mut looked = parse_looked(&out.json).ok_or_else(|| ProcError::Failed {
         tool: "yt-dlp".into(),
         message: "it gave no video information".into(),
-    })
+    })?;
+    if let Looked::Video(v) = &mut looked {
+        v.needs_js_runtime = proc::missing_js_runtime(&out.warnings, proc::js_runtime_here());
+    }
+    Ok(looked)
 }
 
 /// Look `url` up as one video (a list is an error here).
@@ -572,6 +580,7 @@ mod tests {
             automatic: Vec::new(),
             language: None,
             direct: false,
+            needs_js_runtime: false,
         };
         let labels: Vec<String> = choices(&v, true)
             .into_iter()

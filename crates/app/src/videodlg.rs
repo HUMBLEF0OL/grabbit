@@ -322,14 +322,16 @@ impl VideoDialog {
     }
 
     /// A page like YouTube's when yt-dlp has no JavaScript runtime (#351): videos and sound
-    /// apart, nothing carrying both (`/show video-adaptive`).
-    pub fn show_sample_adaptive(&mut self) {
+    /// apart, nothing carrying both (`/show video-adaptive`); `runtime_said`: yt-dlp said why
+    /// (upstream issue 852, `/show video-adaptive:runtime`).
+    pub fn show_sample_adaptive(&mut self, runtime_said: bool) {
         const SAMPLE: &str = r#"{"title": "A conference talk about download managers, recorded in Lisbon",
             "duration": 1830, "language": "en", "formats": [
             {"format_id": "140", "ext": "m4a", "vcodec": "none", "acodec": "mp4a", "filesize": 29000000},
             {"format_id": "137", "ext": "mp4", "height": 1080, "vcodec": "avc1", "acodec": "none", "filesize": 412000000},
             {"format_id": "136", "ext": "mp4", "height": 720, "vcodec": "avc1", "acodec": "none", "filesize": 201000000}]}"#;
-        if let Some(v) = mdm_tools::resolve::parse(SAMPLE.as_bytes()) {
+        if let Some(mut v) = mdm_tools::resolve::parse(SAMPLE.as_bytes()) {
+            v.needs_js_runtime = runtime_said;
             self.page = "https://video.example/talk".into();
             self.looked_up = self.page.clone();
             self.auto_look = false;
@@ -734,6 +736,14 @@ impl VideoDialog {
             .filter(|(v, _)| ffmpeg.is_none() && mdm_tools::resolve::needs_merging(v))
             .and(offer.as_ref())
             .map(|(_, _, msg)| *msg);
+        // Upstream issue 852: YouTube looked up without a JavaScript runtime lists only some of
+        // its qualities (on some days only the sound): said on the title's line and the one
+        // under it, with the help page's section on installing one.
+        let runtime_note = self.error.is_none()
+            && self
+                .video
+                .as_ref()
+                .is_some_and(|(v, _)| v.needs_js_runtime);
         if let Some(t) = installing {
             crate::torrentdlg::spinner(ui, pos2(o.x + LX + 7.0, line_y - 4.0), 6.0);
             let msg = if t == Tool::YtDlp {
@@ -753,6 +763,22 @@ impl VideoDialog {
             );
         } else if self.list.is_some() {
             // The list draws its own (PlaylistView::middle).
+        } else if runtime_note {
+            if winui::note_with_link(
+                ui,
+                &p,
+                o.x + LX,
+                line_y,
+                16.0,
+                js_runtime_note(),
+                winui::ERROR(),
+                o.x + status_right,
+                // i18n: link after the note that YouTube needs a JavaScript runtime: opens the help page that says how to install Node.js or Deno
+                "How to install one",
+                "video-runtime",
+            ) {
+                crate::help::open_page(JS_RUNTIME_HELP);
+            }
         } else if let Some(msg) = merge_note {
             winui::fit(
                 ui,
@@ -816,11 +842,12 @@ impl VideoDialog {
             if cut {
                 winui::full_on_hover(ui, rect, "video-error", e);
             }
-        } else if self
-            .video
-            .as_ref()
-            .and_then(|(_, c)| c.get(self.chosen))
-            .is_some_and(|c| c.selector == mdm_tools::resolve::FLAC)
+        } else if !runtime_note
+            && self
+                .video
+                .as_ref()
+                .and_then(|(_, c)| c.get(self.chosen))
+                .is_some_and(|c| c.selector == mdm_tools::resolve::FLAC)
         {
             // The honest word on FLAC (#70): the site's sound is compressed with losses already.
             winui::fit(
@@ -1329,6 +1356,18 @@ fn without_media_extension(title: &str) -> &str {
         }
         _ => title,
     }
+}
+
+/// Upstream issue 852: the help page's section on installing a JavaScript runtime for yt-dlp.
+pub(crate) const JS_RUNTIME_HELP: &str = "video.md#javascript-runtime";
+
+/// Upstream issue 852: what a YouTube look-up yt-dlp made without a JavaScript runtime says in
+/// the Download video window.
+pub(crate) fn js_runtime_note() -> &'static str {
+    // i18n: in Download video: yt-dlp had no JavaScript runtime, so YouTube listed only some qualities (often only the sound); Node.js and Deno are program names
+    crate::i18n::t(
+        "YouTube needs a JavaScript runtime to list its video qualities: install Node.js or Deno, then look it up again",
+    )
 }
 
 #[cfg(test)]
