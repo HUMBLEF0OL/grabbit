@@ -92,16 +92,15 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
 - [x] 06a Paste bar (complete, PR 18 merged 2026-11-13)
 - [x] 06b Details pane (complete, in PR 18 with 06a, merged 2026-11-13; the on-screen
       keyboard and Narrator pass is left to 09a, see its plan's "Left from 06")
-- [ ] 07a Dialog kit (in the 07b PR, `ui/07b-dialog-kit-adding`, until it is merged; step 8's
-      "Escape in the progress window leaves the download running" test comes with 07c)
-- [ ] 07b Adding (Add URL, Download File Info, Download later, Duplicate download link; in PR,
-      until it is merged)
-- [ ] 07c Watching and finishing (`ui/07c-watching-finishing`, until it is merged; the error
-      state's and the tab row menu's `/show` are left)
-- [ ] 07d Torrents, video and more (in `ui/07d-torrents-video`, until it is merged; the torrent
-      window keeps its five tabs and pieces grid, its frame is 07c's progress window; "Add many
-      downloads" is the shared Confirm, done with 07e)
-- [ ] 07e Organising and the rest (`ui/07e-organising-rest`, until it is merged)
+- [x] 07a Dialog kit (complete, PR 20 merged 2026-11-14 with 07b; step 8's "Escape in the
+      progress window leaves the download running" test came with 07c)
+- [x] 07b Adding (complete, PR 20 merged 2026-11-14)
+- [x] 07c Watching and finishing (complete, PR 21 merged 2026-11-14; what is left is plan 09's
+      "Left from 07")
+- [x] 07d Torrents, video and more (complete, PR 22 merged 2026-11-14; "Add many downloads" is
+      the shared Confirm, done with 07e)
+- [x] 07e Organising and the rest (complete, PR 23 merged 2026-11-14; what is left is plan 09's
+      "Left from 07")
 - [ ] 08a Options side list
 - [ ] 08b Options pages
 - [ ] 09a Finish
