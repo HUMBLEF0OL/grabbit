@@ -578,8 +578,10 @@ These ship in a later version, when they're ready.
   going back a page), at the mock's 820 x 520, and the windows its pages open on the dialogs'
   common parts (DNS settings, Add an account, Addresses left to the browser, Keys, Test browser
   integration, Download panels, Pair a device, New and Edit login and exception), their keys
-  unchanged (still to come: the help page's pictures, retaken by the docs-shots workflow).
-  Next: the Options pages on the dialogs' common parts (plan 08b)
+  unchanged (still to come: the help page's pictures, retaken by the docs-shots workflow), and
+  the General, File types, Save to, Downloads and Connection pages on them (a label column,
+  hairlines in place of group boxes, Connection's number in a spin box). Next: the other seven
+  Options pages on them (plan 08b)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:

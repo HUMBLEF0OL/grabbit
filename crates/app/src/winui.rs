@@ -3287,26 +3287,6 @@ pub fn checkbox_until(
     )
 }
 
-/// The gap a check box at English `x` leaves in a group box's top line for its caption (English
-/// pixels): IDM's measured end (`english_end`) in English, else 2 px past the translated caption
-/// (`light`: a [`checkbox_light`], caption at +16; else a [`checkbox`], at +18).
-pub fn caption_gap(
-    p: &Painter,
-    x: f32,
-    english_end: f32,
-    caption: &str,
-    light: bool,
-) -> (f32, f32) {
-    let shown = crate::i18n::t(caption);
-    if shown == caption {
-        return (x, english_end);
-    }
-    // Every check box's caption starts 16 px after it (`light`: kept for its callers).
-    let _ = light;
-    let lead = 16.0;
-    (x, x + lead + text_width(p, shown) + 2.0)
-}
-
 /// Group box frame (`rc` on screen) with a gap in its top line for a checkbox caption (`gap` =
 /// English x range, inclusive pixels).
 pub fn group_box(p: &Painter, rc: Rect, gap: Option<(f32, f32)>) {

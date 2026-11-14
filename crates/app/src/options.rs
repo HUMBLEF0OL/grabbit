@@ -429,56 +429,51 @@ impl OptionsDialog {
         if portable {
             s.launch_on_startup = false;
         }
-        let checks: [(f32, &mut bool, &str); 7] = [
+        // The mock's check boxes, 22 apart (closer than its 30, so the page fits its area).
+        let checks: [(&mut bool, &str); 7] = [
             (
-                94.0,
                 &mut s.launch_on_startup,
                 crate::i18n::mark("Launch Mister Download Manager on startup"),
             ),
             (
-                113.0,
                 &mut s.clipboard_autostart,
                 crate::i18n::mark("Offer to download links copied to the clipboard"),
             ),
             (
-                133.0,
                 &mut s.mv2_extensions,
                 crate::i18n::mark("Extend the availability of Manifest 2 Chrome extensions"),
             ),
             (
-                152.0,
                 &mut s.advanced_integration,
                 crate::i18n::mark("Use advanced browser integration"),
             ),
             // MDM's: turns back on the delete confirmation that "Don't show this dialog again"
-            // turned off. The browsers' group below starts a row lower for it.
+            // turned off.
             (
-                172.0,
                 &mut s.confirm_delete,
                 crate::i18n::mark("Confirm before deleting downloads"),
             ),
             // MDM's (#63): Minimize hides the main window and progress windows in the tray too.
-            // The browsers' group starts a row lower again, its list a row shorter (it scrolls).
             (
-                191.0,
                 &mut s.minimize_to_tray,
                 // i18n: checkbox: the Minimize button hides MDM's windows to the notification area (system tray) instead of the taskbar
                 crate::i18n::mark("Minimize to the notification area"),
             ),
             // MDM's: the × hides the window in the notification area, or quits.
             (
-                210.0,
                 &mut s.close_to_tray,
                 // i18n: checkbox: closing keeps MDM running, in the notification area when available or else the taskbar, instead of quitting
                 crate::i18n::mark("Keep running when closing the window"),
             ),
         ];
-        for (i, (y, v, label)) in checks.into_iter().enumerate() {
+        let (left, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
+        for (i, (v, label)) in checks.into_iter().enumerate() {
             // Portable: nothing is written to the registry, so no start with Windows. Manifest 2
             // extensions: an IDM-era Chrome policy with no meaning for MDM's extension (MV3):
             // shown as IDM has it, greyed (D-021).
             let enabled = !(portable && i == 0) && i != 2;
-            let check = winui::checkbox_light(ui, o + vec2(30.0, y), v, label, enabled);
+            let at = o + vec2(left, PAGE_TOP + 22.0 * i as f32);
+            let check = winui::checkbox_light(ui, at, v, label, enabled);
             // Where a start with the session leaves the window (#226).
             if i == 0 && enabled && check.hovered() {
                 check.on_hover_text(
@@ -492,24 +487,41 @@ impl OptionsDialog {
                 ));
             }
         }
-        group(
-            ui,
+        // The browsers under a hairline and their title, Test and Add
+        // browser at the list's end (one width, as wide as the longer label in this language,
+        // #192).
+        // The list's top: its rows out of view are there for screen readers (#111), the twelve
+        // default browsers' last one 206 below it, still inside the page's area.
+        let list_y = 267.0;
+        winui::rule(&p, o, left, 240.0, right - left);
+        winui::form_label(
+            &p,
             o,
+            left,
+            246.0,
             16.0,
-            234.0,
-            392.0,
-            160.0,
             "Capture downloads from the following browsers:",
+            true,
         );
+        let (col_x, col_w) = winui::buttons_to_right(
+            &p,
+            right,
+            0.0,
+            &[(
+                winui::widest_label(&p, &["Test browser integration...", "Add browser..."]),
+                73.0,
+            )],
+            260.0,
+        )[0];
         // Check list: one row per browser in the shared row list (Space ticks the selected
         // one; the box and its name tick it too).
         let browsers = &mut s.browsers;
-        // Named by its group's caption, which says what the list is (#102).
+        // Named by its title, which says what the list is (#102).
         self.browser_rows.name = crate::i18n::t("Capture downloads from the following browsers:");
         let ev = winui::row_list(
             ui,
             "browsers",
-            r(o, 30.0, 244.0, 362.0, 78.0),
+            r(o, left, list_y, col_x - 8.0 - left, 78.0),
             browsers.len(),
             17.0,
             &mut self.browser_rows,
@@ -540,28 +552,15 @@ impl OptionsDialog {
         let off = |ui: &mut Ui, rc: Rect, label: &str| {
             winui::button_light(ui, rc, label, ButtonKind::Disabled, false);
         };
-        // Both as wide as their labels in this language (#192), within the group box.
-        let [test_at, add_at] = winui::button_row(
-            &p,
-            &[
-                ("Test browser integration...", 30.0, 180.0),
-                ("Add browser...", 286.0, 106.0),
-            ],
-            8.0,
-            30.0,
-            260.0,
-        )[..] else {
-            unreachable!("two buttons")
-        };
         off(
             ui,
-            r(o, add_at.0, 328.0, add_at.1, 21.0),
+            r(o, col_x, list_y + 36.0, col_w, h),
             crate::i18n::mark("Add browser..."),
         );
         // MDM's: what stands between a browser and MDM, checked in order.
         if winui::button_light(
             ui,
-            r(o, test_at.0, 328.0, test_at.1, 21.0),
+            r(o, col_x, list_y, col_w, h),
             "Test browser integration...",
             ButtonKind::Normal,
             false,
@@ -570,28 +569,41 @@ impl OptionsDialog {
         {
             self.sub = Some(Sub::Test(crate::extension::checks(&self.s)));
         }
-        winui::etched_h(&p, o.x + 34.0, o.y + 356.0, 357.0);
-        // The buttons at the right as wide as their labels in this language (#192), their
-        // captions ending 6 px before them.
-        let fit_right =
-            |label: &str| winui::buttons_to_right(&p, 392.0, 0.0, &[(label, 73.0)], 160.0)[0];
-        let keys_at = fit_right("Keys...");
-        let label = crate::i18n::t("Customize keys to prevent or force downloading with MDM");
-        // Inside the browsers' group box: it starts no further out than the group's frame.
-        let (rect, cut) = winui::text_right_within(
+        winui::rule(&p, o, left, 357.0, right - left);
+        // Three rows under a hairline: a sentence at the leading edge, its button at the end
+        // (one width, as wide as the longer label in this language, #192).
+        // i18n: verb: edit the item
+        let edit = "Edit...";
+        let (end_x, end_w) = winui::buttons_to_right(
             &p,
-            o.x + keys_at.0 - 6.0,
-            o.y + 379.0,
-            label,
+            right,
+            0.0,
+            &[(winui::widest_label(&p, &["Keys...", edit]), 73.0)],
+            160.0,
+        )[0];
+        let caption = |ui: &Ui, top: f32, label: &str, color| {
+            let (rect, cut) = winui::text_fit(
+                &p,
+                o.x + left,
+                o.y + winui::baseline_in(top, h),
+                label,
+                color,
+                o.x + end_x - 8.0,
+            );
+            if cut {
+                winui::full_on_hover(ui, rect, ("general-right", top as i32), label);
+            }
+        };
+        let (keys_y, menu_y, panels_y) = (369.0, 404.0, 439.0);
+        caption(
+            ui,
+            keys_y,
+            crate::i18n::t("Customize keys to prevent or force downloading with MDM"),
             LIGHT_TEXT(),
-            o.x + 22.0,
         );
-        if cut {
-            winui::full_on_hover(ui, rect, ("general-right", 379), label);
-        }
         if winui::button_light(
             ui,
-            r(o, keys_at.0, 365.0, keys_at.1, 21.0),
+            r(o, end_x, keys_y, end_w, h),
             "Keys...",
             ButtonKind::Normal,
             false,
@@ -600,29 +612,23 @@ impl OptionsDialog {
         {
             self.sub = Some(Sub::Keys(self.s.capture_opened));
         }
-        let label = crate::i18n::t("Customize MDM menu items in context menu of browsers");
-        let (rect, cut) = winui::text_right(&p, o.x + 313.0, o.y + 419.0, label, LIGHT_DISABLED());
-        if cut {
-            winui::full_on_hover(ui, rect, ("general-right", 419), label);
-        }
-        // i18n: verb: edit the item
-        off(ui, r(o, 289.0, 406.0, 103.0, 21.0), "Edit...");
+        caption(
+            ui,
+            menu_y,
+            crate::i18n::t("Customize MDM menu items in context menu of browsers"),
+            LIGHT_DISABLED(),
+        );
+        off(ui, r(o, end_x, menu_y, end_w, h), edit);
         // The download button over videos in the browsers (our own panel, Sub::Panels).
-        let label = crate::i18n::t("Customize MDM Download panels in browsers");
-        let panels_at = fit_right("Edit...");
-        let (rect, cut) = winui::text_right(
-            &p,
-            o.x + panels_at.0 - 6.0,
-            o.y + 452.0,
-            label,
+        caption(
+            ui,
+            panels_y,
+            crate::i18n::t("Customize MDM Download panels in browsers"),
             LIGHT_TEXT(),
         );
-        if cut {
-            winui::full_on_hover(ui, rect, ("general-right", 452), label);
-        }
         if winui::button_light(
             ui,
-            r(o, panels_at.0, 438.0, panels_at.1, 21.0),
+            r(o, end_x, panels_y, end_w, h),
             // i18n: verb: edit the item
             "Edit...",
             ButtonKind::Normal,
@@ -640,25 +646,35 @@ impl OptionsDialog {
 
     fn file_types(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        text(
-            &p,
-            o.x + 21.0,
-            o.y + 103.0,
+        let (left, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
+        // A sentence at the leading edge, centred on a row `top`..`top + height`.
+        let line = |top: f32, height: f32, s: &str| {
+            text(
+                &p,
+                o.x + left,
+                o.y + winui::baseline_in(top, height),
+                s,
+                LIGHT_TEXT(),
+            )
+        };
+        line(
+            88.0,
+            16.0,
             crate::i18n::t("Automatically start downloading the following file types:"),
-            LIGHT_TEXT(),
         );
         multiline(
             ui,
-            r(o, 22.0, 110.0, 380.0, 59.0),
+            r(o, left, 108.0, right - left, 72.0),
             &mut self.s.auto_types,
             "auto-types",
             true,
         );
-        // Default as wide as its label in this language (#192), growing to the left.
-        let default_at = winui::buttons_to_right(&p, 389.0, 0.0, &[("Default", 73.0)], 200.0)[0];
+        // Default as wide as its label in this language (#192), at the end.
+        let (default_x, default_w) =
+            winui::buttons_to_right(&p, right, 0.0, &[("Default", 73.0)], 200.0)[0];
         if winui::button_light(
             ui,
-            r(o, default_at.0, 175.0, default_at.1, 21.0),
+            r(o, default_x, 186.0, default_w, h),
             // i18n: button: put back the default list
             "Default",
             ButtonKind::Normal,
@@ -668,38 +684,23 @@ impl OptionsDialog {
         {
             self.s.auto_types = settings::DEFAULT_AUTO_TYPES.into();
         }
-        text(
-            &p,
-            o.x + 21.0,
-            o.y + 222.0,
+        line(
+            224.0,
+            16.0,
             crate::i18n::t("Don't start downloading automatically from the following sites:"),
-            LIGHT_TEXT(),
         );
         multiline(
             ui,
-            r(o, 22.0, 229.0, 380.0, 49.0),
+            r(o, left, 244.0, right - left, 44.0),
             &mut self.s.excluded_sites,
             "excluded-sites",
             true,
         );
-        let spaces = text(
-            &p,
-            o.x + 21.0,
-            o.y + 293.0,
-            crate::i18n::t("(separate names by spaces)"),
-            LIGHT_TEXT(),
-        );
-        // Short of the note before it.
-        let default_at = winui::button_row(
-            &p,
-            &[("Default", 316.0, 73.0)],
-            0.0,
-            winui::rect(spaces).right() - o.x + 8.0,
-            200.0,
-        )[0];
+        // The note, and Default at the end of its row (the mock's line).
+        line(294.0, h, crate::i18n::t("(separate names by spaces)"));
         if winui::button_light(
             ui,
-            r(o, default_at.0, 284.0, default_at.1, 21.0),
+            r(o, default_x, 294.0, default_w, h),
             // i18n: button: put back the default list
             "Default",
             ButtonKind::Normal,
@@ -709,19 +710,30 @@ impl OptionsDialog {
         {
             self.s.excluded_sites = settings::DEFAULT_EXCLUDED_SITES.into();
         }
-        text(
-            &p,
-            o.x + 21.0,
-            o.y + 327.0,
-            crate::i18n::t("Don't start downloading automatically from the following addresses:"),
-            LIGHT_TEXT(),
-        );
-        let (list_x, list_w) =
-            winui::button_row_from_left(&p, &[("Edit list ...", 22.0, 135.0)], 0.0, 389.0, 260.0)
-                [0];
+        // The last two rows as the mock's lines: a sentence, its control right after it (the
+        // control kept inside the page; a longer translation cut with "...", whole on hover).
+        let after = |s: &str, w: f32| (left + winui::text_width(&p, s) + 8.0).min(right - w);
+        let lead = |ui: &Ui, top: f32, s: &str, end: f32| {
+            let (rect, cut) = winui::text_fit(
+                &p,
+                o.x + left,
+                o.y + winui::baseline_in(top, h),
+                s,
+                LIGHT_TEXT(),
+                o.x + end - 8.0,
+            );
+            if cut {
+                winui::full_on_hover(ui, rect, ("types-lead", top as i32), s);
+            }
+        };
+        let label =
+            crate::i18n::t("Don't start downloading automatically from the following addresses:");
+        let list_w = winui::button_fit_width(&p, "Edit list ...", 73.0, 260.0);
+        let list_x = after(label, list_w);
+        lead(ui, 336.0, label, list_x);
         if winui::button_light(
             ui,
-            r(o, list_x, 334.0, list_w, 21.0),
+            r(o, list_x, 336.0, list_w, h),
             "Edit list ...",
             ButtonKind::Normal,
             false,
@@ -732,22 +744,11 @@ impl OptionsDialog {
         }
         // MDM's: a receipt or an icon isn't worth a download window.
         let label = crate::i18n::t("Don't take files smaller than (KB, 0 = any size):");
-        // Before its box: a longer translation is cut with "..." and shown whole on hover.
-        let (rect, cut) = winui::label_into(
-            &p,
-            o.x + 21.0,
-            o.y + 383.0,
-            label,
-            LIGHT_TEXT(),
-            o.x + 316.0,
-            o.x + 21.0,
-        );
-        if cut {
-            winui::full_on_hover(ui, rect, ("types-min", 383), label);
-        }
+        let min_x = after(label, 73.0);
+        lead(ui, 374.0, label, min_x);
         winui::number_field(
             ui,
-            r(o, 316.0, 370.0, 73.0, 21.0),
+            r(o, min_x, 374.0, 73.0, h),
             &mut self.min_kb,
             0,
             10_000_000,
@@ -758,23 +759,44 @@ impl OptionsDialog {
 
     fn save_to(&mut self, ui: &mut Ui, o: Pos2, downloads: &std::path::Path) {
         let p = ui.painter().clone();
-        group(ui, o, 21.0, 94.0, 380.0, 201.0, "Save To...");
-        // i18n: noun: label before the list of categories
-        text(
-            &p,
-            o.x + 30.0,
-            o.y + 127.0,
-            crate::i18n::t("Category"),
-            LIGHT_TEXT(),
-        );
+        let (left, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
         // IDM's, Torrents and the user's (the registry follows this dialog's edits).
         let cats = Category::all();
         self.category = self.category.min(cats.len() - 1);
+        let cat = cats[self.category];
+        let label = cat.shown();
+        let with_category = |template: &str| crate::i18n::fmt(template, &[("category", &label)]);
+        let dir_line = with_category(crate::i18n::t(
+            "Default download directory for \"{category}\" category",
+        ));
+        // New / Edit... (D-021): a category of the user's; a built-in one's folder. One width for
+        // both, as wide as the longer label in this language (#192), after the list.
+        let col_w = winui::button_fit_width(
+            &p,
+            winui::widest_label(&p, &["New", "Edit..."]),
+            73.0,
+            142.0,
+        );
+        let (edit_x, new_x) = (right - col_w, right - 2.0 * col_w - 8.0);
+        // The mock's wide form (240): Category, the folder, the temporary directory. A long
+        // category name widens the folder's label only so far: the list keeps 120, the label is
+        // cut with "..." (whole on hover).
+        let fx = winui::form(
+            &p,
+            left,
+            &["Category", &dir_line, "Temporary directory"],
+            true,
+        )
+        .min(new_x - 8.0 - 120.0);
+        // The page's title over its rows.
+        winui::form_label(&p, o, left, 88.0, 16.0, "Save To...", true);
+        // i18n: noun: label before the list of categories
+        winui::form_label(&p, o, left, 110.0, h, "Category", true);
         let names: Vec<String> = cats.iter().map(|c| c.label().into_owned()).collect();
         let labels: Vec<&str> = names.iter().map(String::as_str).collect();
         if let Some(i) = winui::combo_light(
             ui,
-            r(o, 30.0, 136.0, 212.0, 21.0),
+            r(o, fx, 110.0, new_x - 8.0 - fx, h),
             &labels,
             self.category,
             true,
@@ -785,19 +807,9 @@ impl OptionsDialog {
             self.category = i;
             self.cat_dir = display_dir(&self.s.category_dir(cats[i], downloads));
         }
-        // New / Edit... (D-021): a category of the user's; a built-in one's folder. One width for
-        // both, as wide as the longer label in this language (#192), into the room after the
-        // list (it ends at 242).
-        let (col_x, col_w) = winui::buttons_to_right(
-            &p,
-            392.0,
-            0.0,
-            &[(winui::widest_label(&p, &["New", "Edit..."]), 73.0)],
-            142.0,
-        )[0];
         if winui::button_light(
             ui,
-            r(o, col_x, 105.0, col_w, 21.0),
+            r(o, new_x, 110.0, col_w, h),
             // i18n: button: create a new item
             "New",
             ButtonKind::Normal,
@@ -810,7 +822,7 @@ impl OptionsDialog {
         }
         if winui::button_light(
             ui,
-            r(o, col_x, 137.0, col_w, 21.0),
+            r(o, edit_x, 110.0, col_w, h),
             // i18n: verb: edit the item
             "Edit...",
             ButtonKind::Normal,
@@ -823,25 +835,43 @@ impl OptionsDialog {
             let folder = self.s.category_dir(cat, downloads);
             self.cat_edit = Some(crate::categories::CategoryDialog::edit(cat, &folder));
         }
+        // The category chosen this frame names the rows after it.
         let cat = cats[self.category];
         let label = cat.shown();
         let with_category = |template: &str| crate::i18n::fmt(template, &[("category", &label)]);
         let line = with_category(crate::i18n::t(
             "Automatically put in \"{category}\" category the following file types:",
         ));
-        winui::text_in_window(ui, &p, o.x + 31.0, o.y + 178.0, &line, LIGHT_TEXT());
+        winui::text_in_window(
+            ui,
+            &p,
+            o.x + left,
+            o.y + winui::baseline_in(150.0, 16.0),
+            &line,
+            LIGHT_TEXT(),
+        );
         let types = cat.types_text();
-        readonly(ui, r(o, 31.0, 185.0, 362.0, 23.0), &types);
+        readonly(ui, r(o, left, 170.0, right - left, h), &types);
         let dir_line = with_category(crate::i18n::t(
             "Default download directory for \"{category}\" category",
         ));
-        winui::text_in_window(ui, &p, o.x + 30.0, o.y + 230.0, &dir_line, LIGHT_TEXT());
-        // Browse as wide as its label in this language (#192); the box ends 7 px before it.
+        let (rect, cut) = winui::text_fit(
+            &p,
+            o.x + left,
+            o.y + winui::baseline_in(210.0, h),
+            &dir_line,
+            crate::theme::colors().text_secondary,
+            o.x + fx - 12.0,
+        );
+        if cut {
+            winui::full_on_hover(ui, rect, "save-to-dir", &dir_line);
+        }
+        // Browse as wide as its label in this language (#192); the box ends 8 px before it.
         let (browse_x, browse_w) =
-            winui::buttons_to_right(&p, 392.0, 0.0, &[("Browse", 73.0)], 160.0)[0];
+            winui::buttons_to_right(&p, right, 0.0, &[("Browse", 73.0)], 160.0)[0];
         winui::edit_light_on(
             ui,
-            r(o, 31.0, 239.0, browse_x - 7.0 - 31.0, 23.0),
+            r(o, fx, 210.0, browse_x - 8.0 - fx, h),
             &mut self.cat_dir,
             true,
             false,
@@ -849,7 +879,7 @@ impl OptionsDialog {
         );
         if winui::button_light(
             ui,
-            r(o, browse_x, 240.0, browse_w, 21.0),
+            r(o, browse_x, 210.0, browse_w, h),
             // i18n: verb: choose a folder
             "Browse",
             ButtonKind::Normal,
@@ -874,28 +904,28 @@ impl OptionsDialog {
         ));
         winui::checkbox_light(
             ui,
-            o + vec2(33.0, 271.0),
+            o + vec2(left, 252.0),
             &mut self.s.change_folder_on_last,
             &line,
             true,
         );
         winui::checkbox_light(
             ui,
-            o + vec2(33.0, 306.0),
+            o + vec2(left, 274.0),
             &mut self.s.set_creation_date,
             "Set file creation date as provided by the server",
             true,
         );
-        group(ui, o, 21.0, 334.0, 380.0, 105.0, "Temporary directory");
+        // The temporary directory under a hairline, a row of the form.
+        winui::rule(&p, o, left, 297.0, right - left);
+        winui::form_label(&p, o, left, 305.0, h, "Temporary directory", true);
         // D-004: no temporary directory — parts are written next to the file, so there is
         // nothing to assemble at the end.
         let none = crate::i18n::t("Not used: file parts are written next to the file");
-        let (browse_x, browse_w) =
-            winui::buttons_to_right(&p, 390.0, 0.0, &[("Browse", 73.0)], 160.0)[0];
-        readonly(ui, r(o, 30.0, 349.0, browse_x - 6.0 - 30.0, 23.0), none);
+        readonly(ui, r(o, fx, 305.0, browse_x - 8.0 - fx, h), none);
         winui::button_light(
             ui,
-            r(o, browse_x, 350.0, browse_w, 21.0),
+            r(o, browse_x, 305.0, browse_w, h),
             // i18n: verb: choose a folder
             "Browse",
             ButtonKind::Disabled,
@@ -903,20 +933,21 @@ impl OptionsDialog {
         );
         winui::paragraph(
             &p,
-            o.x + 30.0,
-            o.y + 387.0,
+            o.x + left,
+            o.y + 355.0,
             crate::i18n::t(
                 "Mister Download Manager writes every connection straight into the final\nfile (a sparse part file next to it), so no temporary directory and no\nassembling step are needed.",
             ),
             LIGHT_TEXT(),
-            o.x + 426.0,
+            o.x + right,
             13.0,
         );
-        // #93: the built-in categories by file type as shipped again (on this page only: under
-        // its last group, since the footer is the window's).
+        // #93: the built-in categories by file type as shipped again (on this page only: at
+        // its foot, since the footer is the window's).
+        let restore_w = winui::button_fit_width(&p, "Restore the built-in categories", 73.0, 400.0);
         if winui::button_light(
             ui,
-            r(o, 21.0, PAGE_BOTTOM - 21.0, 232.0, 21.0),
+            r(o, left, PAGE_BOTTOM - h, restore_w, h),
             "Restore the built-in categories",
             ButtonKind::Normal,
             false,
@@ -959,28 +990,44 @@ impl OptionsDialog {
     fn downloads(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
         let s = &mut self.s;
-        // Edit... as wide as its label in this language (#192), its caption before it.
+        let (left, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
+        let w = right - left;
+        // Edit... as wide as its label in this language (#192) at the end of its row, its
+        // sentence at the leading edge (greyed, as the button: neither is built yet).
         let (edit_x, edit_w) =
-            winui::buttons_to_right(&p, 392.0, 0.0, &[("Edit...", 73.0)], 160.0)[0];
-        winui::text_right(
-            &p,
-            o.x + edit_x - 13.0,
-            o.y + 104.0,
+            winui::buttons_to_right(&p, right, 0.0, &[("Edit...", 73.0)], 160.0)[0];
+        // A longer translation is cut with "..." before the button, whole on hover.
+        let greyed = |ui: &Ui, top: f32, s: &str| {
+            let (rect, cut) = winui::text_fit(
+                &p,
+                o.x + left,
+                o.y + winui::baseline_in(top, h),
+                s,
+                LIGHT_DISABLED(),
+                o.x + edit_x - 8.0,
+            );
+            if cut {
+                winui::full_on_hover(ui, rect, ("downloads-greyed", top as i32), s);
+            }
+        };
+        greyed(
+            ui,
+            88.0,
             crate::i18n::t("Customize \"Download progress\" dialog"),
-            LIGHT_DISABLED(),
         );
         // The progress dialog customisation dialog is not built yet.
         winui::button_light(
             ui,
-            r(o, edit_x, 89.0, edit_w, 21.0),
+            r(o, edit_x, 88.0, edit_w, h),
             // i18n: verb: edit the item
             "Edit...",
             ButtonKind::Disabled,
             false,
         );
+        // The mock's check boxes, 22 apart (closer than its 30, so the page fits its area).
         winui::checkbox_light(
             ui,
-            o + vec2(24.0, 120.0),
+            o + vec2(left, 126.0),
             &mut s.show_start_dialog,
             "Show start download dialog",
             true,
@@ -988,65 +1035,56 @@ impl OptionsDialog {
         let on = s.show_start_dialog;
         winui::checkbox_light(
             ui,
-            o + vec2(50.0, 141.0),
+            o + vec2(left + 24.0, 148.0),
             &mut s.only_add_to_queue,
             "Do not start downloading, only add files to the queue",
             !on,
         );
         winui::checkbox_light(
             ui,
-            o + vec2(24.0, 160.0),
+            o + vec2(left, 170.0),
             &mut s.show_complete,
             "Show download complete dialog",
             true,
         );
         text(
             &p,
-            o.x + 31.0,
-            o.y + 191.0,
+            o.x + left,
+            o.y + winui::baseline_in(190.0, 16.0),
             crate::i18n::t("Note: These settings don't relate to queue processing"),
             LIGHT_TEXT(),
         );
-        winui::etched_h(&p, o.x + 21.0, o.y + 198.0, 381.0);
-        winui::checkbox_light(
-            ui,
-            o + vec2(24.0, 212.0),
-            &mut s.start_immediately,
-            "Start downloading immediately while displaying \"Download File Info\" dialog",
-            true,
-        );
-        winui::checkbox_light(
-            ui,
-            o + vec2(24.0, 241.0),
-            &mut s.queue_panel_later,
-            "Show queue selection panel on pressing \"Download Later\" button",
-            true,
-        );
-        winui::checkbox_light(
-            ui,
-            o + vec2(24.0, 266.0),
-            &mut s.queue_panel_batch,
-            "Show queue selection panel on closing batch download dialogs",
-            true,
-        );
-        winui::checkbox_light(
-            ui,
-            o + vec2(24.0, 290.0),
-            &mut s.ignore_mtime,
-            "Ignore file modification time changes when resuming a download",
-            true,
-        );
-        winui::etched_h(&p, o.x + 21.0, o.y + 314.0, 381.0);
-        text(
-            &p,
-            o.x + 21.0,
-            o.y + 334.0,
-            crate::i18n::t("If a duplicate download link is added:"),
-            LIGHT_TEXT(),
-        );
+        winui::rule(&p, o, left, 214.0, w);
+        let checks: [(&mut bool, &str); 4] = [
+            (
+                &mut s.start_immediately,
+                "Start downloading immediately while displaying \"Download File Info\" dialog",
+            ),
+            (
+                &mut s.queue_panel_later,
+                "Show queue selection panel on pressing \"Download Later\" button",
+            ),
+            (
+                &mut s.queue_panel_batch,
+                "Show queue selection panel on closing batch download dialogs",
+            ),
+            (
+                &mut s.ignore_mtime,
+                "Ignore file modification time changes when resuming a download",
+            ),
+        ];
+        for (i, (v, label)) in checks.into_iter().enumerate() {
+            winui::checkbox_light(ui, o + vec2(left, 222.0 + 22.0 * i as f32), v, label, true);
+        }
+        winui::rule(&p, o, left, 311.0, w);
+        // The mock's wide form (240): the duplicate's choice and the User-Agent.
+        let dup = "If a duplicate download link is added:";
+        let agent = "User-Agent for manually added downloads:";
+        let fx = winui::form(&p, left, &[dup, agent], true);
+        winui::form_label(&p, o, left, 319.0, h, dup, true);
         if let Some(i) = winui::combo_light(
             ui,
-            r(o, 21.0, 340.0, 380.0, 21.0),
+            r(o, fx, 319.0, right - fx, h),
             &DUPLICATE,
             s.duplicate_action as usize,
             true,
@@ -1054,32 +1092,19 @@ impl OptionsDialog {
         ) {
             s.duplicate_action = i as u8;
         }
-        winui::etched_h(&p, o.x + 21.0, o.y + 367.0, 381.0);
-        text(
-            &p,
-            o.x + 21.0,
-            o.y + 388.0,
-            crate::i18n::t("User-Agent for manually added downloads:"),
-            LIGHT_TEXT(),
-        );
+        winui::form_label(&p, o, left, 359.0, h, agent, true);
         winui::edit_light(
             ui,
-            r(o, 21.0, 398.0, 381.0, 23.0),
+            r(o, fx, 359.0, right - fx, h),
             &mut s.user_agent,
             true,
             false,
         );
-        winui::etched_h(&p, o.x + 21.0, o.y + 426.0, 381.0);
-        winui::text_right(
-            &p,
-            o.x + edit_x - 17.0,
-            o.y + 451.0,
-            crate::i18n::t("Virus checking settings"),
-            LIGHT_DISABLED(),
-        );
+        winui::rule(&p, o, left, 399.0, w);
+        greyed(ui, 407.0, crate::i18n::t("Virus checking settings"));
         winui::button_light(
             ui,
-            r(o, edit_x, 436.0, edit_w, 21.0),
+            r(o, edit_x, 407.0, edit_w, h),
             // i18n: verb: edit the item
             "Edit...",
             ButtonKind::Disabled,
@@ -1089,24 +1114,18 @@ impl OptionsDialog {
 
     fn connection(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        group(ui, o, 21.0, 102.0, 380.0, 195.0, "Max. connections number");
-        let label = crate::i18n::t("Default max. conn. number");
-        let (rect, cut) = winui::label_into(
-            &p,
-            o.x + 130.0,
-            o.y + 126.0,
-            label,
-            LIGHT_TEXT(),
-            o.x + 268.0,
-            o.x + 30.0,
-        );
-        if cut {
-            winui::full_on_hover(ui, rect, "max-conns", label);
-        }
+        let (left, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
+        // Titles over the groups, the groups between hairlines (the mock's).
+        let max = "Default max. conn. number";
+        // i18n: label before the choice of DNS (the service that turns names into addresses)
+        let dns = "DNS:";
+        let fx = winui::form(&p, left, &[max, dns], false);
+        winui::form_label(&p, o, left, 88.0, 16.0, "Max. connections number", true);
+        winui::form_label(&p, o, left, 108.0, h, max, true);
         // Typed, or stepped with the arrows (IDM's drop-down offered 1 to 32; issue #12).
         winui::spin_box(
             ui,
-            r(o, 268.0, 112.0, 101.0, 21.0),
+            r(o, fx, 108.0, 90.0, h),
             &mut self.conns,
             1,
             u64::from(self.s.connection_limit()),
@@ -1122,7 +1141,7 @@ impl OptionsDialog {
         let was = self.s.many_connections;
         winui::checkbox_light(
             ui,
-            o + vec2(33.0, 142.0),
+            o + vec2(left, 146.0),
             &mut self.s.many_connections,
             &line,
             true,
@@ -1136,15 +1155,8 @@ impl OptionsDialog {
                 *n = (*n).min(locked);
             }
         }
-        winui::etched_h(&p, o.x + 30.0, o.y + 163.0, 359.0);
         // i18n: plural noun: label before a list of exceptions
-        text(
-            &p,
-            o.x + 33.0,
-            o.y + 180.0,
-            crate::i18n::t("Exceptions:"),
-            LIGHT_TEXT(),
-        );
+        winui::form_label(&p, o, left, 167.0, 16.0, "Exceptions:", true);
         // The user's exceptions, then the caps the engine learned (read-only "(auto)" rows).
         let rows: Vec<Vec<String>> = self
             .s
@@ -1172,22 +1184,23 @@ impl OptionsDialog {
             )
             .collect();
         // New, Delete and Edit: one width, as wide as the longest label in this language (#192),
-        // the list ending 8 px before them (its Number column ends at 291).
+        // the list ending 8 px before them (its Number column 20 short of the list's end).
         let (col_x, col_w) = winui::buttons_to_right(
             &p,
-            392.0,
+            right,
             0.0,
             &[(winui::widest_label(&p, &["New", "Delete", "Edit"]), 73.0)],
             92.0,
         )[0];
+        let list_end = col_x - 8.0;
         let (dbl, del_key) = report(
             ui,
             o,
-            r(o, 30.0, 184.0, col_x - 8.0 - 30.0, 100.0),
+            r(o, left, 187.0, list_end - left, 98.0),
             // i18n: column titles: the server, and the number of connections allowed to it
             &[
-                (crate::i18n::mark("Server"), 241.0),
-                (crate::i18n::mark("Number"), 291.0),
+                (crate::i18n::mark("Server"), list_end - 90.0),
+                (crate::i18n::mark("Number"), list_end - 20.0),
             ],
             &rows,
             &mut self.exc_rows,
@@ -1201,7 +1214,7 @@ impl OptionsDialog {
             .filter(|i| *i < self.s.conn_exceptions.len());
         let new = winui::button_light(
             ui,
-            r(o, col_x, 195.0, col_w, 21.0),
+            r(o, col_x, 187.0, col_w, h),
             // i18n: button: create a new item
             "New",
             ButtonKind::Normal,
@@ -1214,12 +1227,12 @@ impl OptionsDialog {
             ButtonKind::Disabled
         };
         // i18n: verb: delete the item
-        let del = winui::button_light(ui, r(o, col_x, 224.0, col_w, 21.0), "Delete", kind, false)
+        let del = winui::button_light(ui, r(o, col_x, 221.0, col_w, h), "Delete", kind, false)
             .clicked()
             || del_key;
         let edit =
             // i18n: verb: edit the item
-            winui::button_light(ui, r(o, col_x, 254.0, col_w, 21.0), "Edit", kind, false)
+            winui::button_light(ui, r(o, col_x, 255.0, col_w, h), "Edit", kind, false)
                 .clicked();
         if new {
             self.sub = Some(Sub::Exception(None, String::new(), "1".into()));
@@ -1233,37 +1246,35 @@ impl OptionsDialog {
                 self.sub = Some(Sub::Exception(Some(i), server, n.to_string()));
             }
         }
-        // Download limits (shared with the Scheduler's page).
-        let gp = r(o, 21.0, 315.0, 380.0, 82.0);
-        let gap = winui::caption_gap(&p, o.x + 37.0, o.x + 132.0, "Download limits", true);
-        winui::group_box(&p, gp, Some(gap));
+        // Download limits (shared with the Scheduler's page): its check box leads the group,
+        // the sentence and the warning indented under it (the mock's).
+        winui::rule(&p, o, left, 295.0, right - left);
         winui::checkbox_light(
             ui,
-            o + vec2(37.0, 310.0),
+            o + vec2(left, 303.0),
             &mut self.s.limits_on,
             "Download limits",
             true,
         );
         let on = self.s.limits_on;
-        let line =
-            |lead: f32, lead_baseline: f32, y: f32, gap: f32, baseline: f32| winui::SentenceLine {
-                lead: winui::Lead::Right(o.x + lead),
-                lead_baseline: o.y + lead_baseline,
-                boxes: o + vec2(178.0, y),
+        // Each line's words on its box's text baseline; the labels end at one column, 8 before
+        // the boxes.
+        let line = |y: f32, gap: f32| {
+            let baseline = o.y + winui::baseline_in(y, 24.0);
+            winui::SentenceLine {
+                lead: winui::Lead::Right(o.x + left + 150.0),
+                lead_baseline: baseline,
+                boxes: o + vec2(left + 158.0, y),
                 gap,
-                baseline: o.y + baseline,
-            };
+                baseline,
+            }
+        };
         let boxes = winui::sentence(
             ui,
             &p,
             crate::i18n::t(crate::quota::LIMITS_SENTENCE),
-            // Each line's words on its box's text baseline (the 20 px boxes at 330 and 351:
-            // winui::baseline_in gives 343 and 364; they sat 2–3 px below the numbers).
-            &[
-                line(170.0, 343.0, 330.0, 8.0, 343.0),
-                line(170.0, 364.0, 351.0, 11.0, 364.0),
-            ],
-            &[("mb", vec2(36.0, 20.0)), ("hours", vec2(36.0, 20.0))],
+            &[line(322.0, 8.0), line(350.0, 8.0)],
+            &[("mb", vec2(64.0, 24.0)), ("hours", vec2(64.0, 24.0))],
             |p, x, baseline, s| {
                 winui::label(p, x, baseline, s, on);
             },
@@ -1272,25 +1283,22 @@ impl OptionsDialog {
         winui::number_field(ui, boxes[1], &mut self.hours, 1, 999, on, LIGHT_PAGE());
         winui::checkbox_light(
             ui,
-            o + vec2(37.0, 376.0),
+            o + vec2(left + 24.0, 382.0),
             &mut self.s.limits_warn,
             "Show warning before stopping downloads",
             on,
         );
         // DNS (#36): who answers the names; the details in Settings....
-        // i18n: label before the choice of DNS (the service that turns names into addresses)
-        text(
-            &p,
-            o.x + 21.0,
-            o.y + 421.0,
-            crate::i18n::t("DNS:"),
-            LIGHT_TEXT(),
-        );
+        winui::rule(&p, o, left, 405.0, right - left);
+        winui::form_label(&p, o, left, 413.0, h, dns, true);
+        // Settings... as wide as its label in this language (#192) at the row's end.
+        let (set_x, set_w) =
+            winui::buttons_to_right(&p, right, 0.0, &[("Settings...", 73.0)], 160.0)[0];
         let names = dns_names();
         let labels: Vec<&str> = names.iter().map(String::as_str).collect();
         if let Some(i) = winui::combo_light(
             ui,
-            r(o, 70.0, 406.0, 211.0, 21.0),
+            r(o, fx, 413.0, set_x - 8.0 - fx, h),
             &labels,
             dns_index(&self.s),
             true,
@@ -1307,14 +1315,8 @@ impl OptionsDialog {
             ButtonKind::Normal
         };
         // i18n: button: opens the DNS's details (how it's asked, its servers, a test)
-        if winui::button_light(
-            ui,
-            r(o, 289.0, 406.0, 103.0, 21.0),
-            "Settings...",
-            kind,
-            false,
-        )
-        .clicked()
+        if winui::button_light(ui, r(o, set_x, 413.0, set_w, h), "Settings...", kind, false)
+            .clicked()
         {
             self.sub = Some(Sub::Dns(DnsEdit::from(&self.s)));
         }
