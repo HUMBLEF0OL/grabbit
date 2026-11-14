@@ -157,7 +157,8 @@ scroll = "overlay"
 caption = "metro"
 
 [sizes]
-radius = 8
+# The mock's 8 on its 30-point controls, in proportion on MDM's 23-point ones.
+radius = 6
 "radius.button" = 8
 "radius.part" = 6
 "radius.check" = 4
