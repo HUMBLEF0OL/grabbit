@@ -37,6 +37,7 @@ the fork (by patch-id), made without the tool.
     python tools/upstream-sync/sync.py report           # status + watch as Markdown (CI's issue)
     python tools/upstream-sync/sync.py pick <sha>... [--lock] [--allow-sensitive] [--keep-going]
     python tools/upstream-sync/sync.py record <sha> <skipped|covered|deferred|ported> --note "…"
+    python tools/upstream-sync/sync.py record-many FILE  # many: sha<TAB>status<TAB>ref<TAB>note a line
     python tools/upstream-sync/sync.py pr --title "…" --body-file F [--draft] [--force]
 
 Python 3.10 or later; a git whose merge-tree takes --merge-base and -X (`doctor` checks); gh for
@@ -1285,6 +1286,34 @@ def cmd_record(a) -> int:
     return 0
 
 
+def cmd_record_many(a) -> int:
+    """`record` for many commits in one call: FILE has one decision a line,
+    `sha<TAB>status<TAB>ref<TAB>note` (ref may be empty; blank lines and # lines are skipped).
+    Every line is checked before any is written, so a bad line writes nothing."""
+    ctx = context()
+    rows = []
+    for n, line in enumerate(Path(a.file).read_text(encoding="utf-8").splitlines(), 1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) != 4:
+            raise Fail(f"{a.file}:{n}: want sha<TAB>status<TAB>ref<TAB>note, got {len(parts)} fields")
+        short, status, ref, note = (p.strip() for p in parts)
+        sha = full_sha(short)
+        if not sha or sha not in ctx.in_range:
+            raise Fail(f"{a.file}:{n}: {short} is not an upstream commit since the fork point")
+        if status not in RECORDABLE:
+            raise Fail(f"{a.file}:{n}: status {status!r} is not one of {', '.join(RECORDABLE)}")
+        if not note:
+            raise Fail(f"{a.file}:{n}: the note is required: say why")
+        if status in ("covered", "ported") and not ref:
+            raise Fail(f"{a.file}:{n}: {status} needs a ref: the fork's commit or PR")
+        rows.append((sha, status, ref, note))
+    for row in rows:
+        print(write_row(*row))
+    return 0
+
+
 def sync_branches() -> list[str]:
     """What earlier runs left: sync branches not in dev, by their PR's state when gh can tell."""
     forkref = fork_ref()
@@ -1464,6 +1493,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("status", choices=RECORDABLE)
     r.add_argument("--note", required=True)
     r.add_argument("--ref", help="the fork's commit or PR, for ported and covered")
+    rm = sub.add_parser("record-many", help="record from a file: sha<TAB>status<TAB>ref<TAB>note")
+    rm.add_argument("file")
     pr = sub.add_parser("pr")
     pr.add_argument("--title", required=True)
     pr.add_argument("--body-file", required=True)
@@ -1478,7 +1509,8 @@ def main(argv: list[str] | None = None) -> int:
                 raise Fail(f"-C {a.repo}: {e.strerror}")
         os.chdir(root())  # pathspecs are relative to the current folder; ours are the repo's
         return {"doctor": cmd_doctor, "status": cmd_status, "show": cmd_show, "watch": cmd_watch,
-                "report": cmd_report, "pick": cmd_pick, "record": cmd_record, "pr": cmd_pr}[a.cmd](a)
+                "report": cmd_report, "pick": cmd_pick, "record": cmd_record,
+                "record-many": cmd_record_many, "pr": cmd_pr}[a.cmd](a)
     except Fail as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
