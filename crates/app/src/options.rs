@@ -398,8 +398,8 @@ impl OptionsDialog {
         }
     }
 
-    /// The chosen page under its heading. The pages keep their English pixels from the old tab
-    /// frame (x 6..421): moved as a whole into the area right of the list ([`PAGE_AT`]).
+    /// The chosen page under its heading, drawn in its own English pixels ([`PAGE_LEFT`] ..
+    /// [`PAGE_BOTTOM`]) placed right of the list ([`PAGE_AT`]).
     fn page_area(&mut self, ui: &mut Ui, o: Pos2, downloads: &std::path::Path) {
         heading(ui, o, self.page);
         let o = o + PAGE_AT;
@@ -4041,8 +4041,8 @@ const SIDE_W: f32 = 190.0;
 const ROW_H: f32 = 30.0;
 const ROW_GAP: f32 = 1.0;
 const SIDE_TOP: f32 = 10.0;
-/// Where a page's English pixels (laid out in the old tab frame, x 6..421, its header at y 54..80)
-/// go in the window: their left edge 16 after the list, the content under the page's heading.
+/// Where a page's English pixels go in the window: x 0 at the list's edge (its controls from
+/// [`PAGE_LEFT`], 16 in), y under the page's heading from [`PAGE_TOP`].
 const PAGE_AT: egui::Vec2 = vec2(SIDE_W, -16.0);
 /// The page heading's icon tile: 40, 16 from the page area's top and leading edge.
 const HEAD_TOP: f32 = 16.0;
