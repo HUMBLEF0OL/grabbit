@@ -487,7 +487,7 @@ impl OptionsDialog {
                 ));
             }
         }
-        // The browsers under a hairline and their title (the group box was), Test and Add
+        // The browsers under a hairline and their title, Test and Add
         // browser at the list's end (one width, as wide as the longer label in this language,
         // #192).
         // The list's top: its rows out of view are there for screen readers (#111), the twelve
@@ -516,7 +516,7 @@ impl OptionsDialog {
         // Check list: one row per browser in the shared row list (Space ticks the selected
         // one; the box and its name tick it too).
         let browsers = &mut s.browsers;
-        // Named by its group's caption, which says what the list is (#102).
+        // Named by its title, which says what the list is (#102).
         self.browser_rows.name = crate::i18n::t("Capture downloads from the following browsers:");
         let ev = winui::row_list(
             ui,
@@ -769,17 +769,6 @@ impl OptionsDialog {
         let dir_line = with_category(crate::i18n::t(
             "Default download directory for \"{category}\" category",
         ));
-        // The mock's wide form (240): Category, the folder, the temporary directory.
-        let fx = winui::form(
-            &p,
-            left,
-            &["Category", &dir_line, "Temporary directory"],
-            true,
-        );
-        // The group box's caption as a title over its rows.
-        winui::form_label(&p, o, left, 88.0, 16.0, "Save To...", true);
-        // i18n: noun: label before the list of categories
-        winui::form_label(&p, o, left, 110.0, h, "Category", true);
         // New / Edit... (D-021): a category of the user's; a built-in one's folder. One width for
         // both, as wide as the longer label in this language (#192), after the list.
         let col_w = winui::button_fit_width(
@@ -789,6 +778,20 @@ impl OptionsDialog {
             142.0,
         );
         let (edit_x, new_x) = (right - col_w, right - 2.0 * col_w - 8.0);
+        // The mock's wide form (240): Category, the folder, the temporary directory. A long
+        // category name widens the folder's label only so far: the list keeps 120, the label is
+        // cut with "..." (whole on hover).
+        let fx = winui::form(
+            &p,
+            left,
+            &["Category", &dir_line, "Temporary directory"],
+            true,
+        )
+        .min(new_x - 8.0 - 120.0);
+        // The page's title over its rows.
+        winui::form_label(&p, o, left, 88.0, 16.0, "Save To...", true);
+        // i18n: noun: label before the list of categories
+        winui::form_label(&p, o, left, 110.0, h, "Category", true);
         let names: Vec<String> = cats.iter().map(|c| c.label().into_owned()).collect();
         let labels: Vec<&str> = names.iter().map(String::as_str).collect();
         if let Some(i) = winui::combo_light(
@@ -852,7 +855,17 @@ impl OptionsDialog {
         let dir_line = with_category(crate::i18n::t(
             "Default download directory for \"{category}\" category",
         ));
-        winui::form_label(&p, o, left, 210.0, h, &dir_line, true);
+        let (rect, cut) = winui::text_fit(
+            &p,
+            o.x + left,
+            o.y + winui::baseline_in(210.0, h),
+            &dir_line,
+            crate::theme::colors().text_secondary,
+            o.x + fx - 12.0,
+        );
+        if cut {
+            winui::full_on_hover(ui, rect, "save-to-dir", &dir_line);
+        }
         // Browse as wide as its label in this language (#192); the box ends 8 px before it.
         let (browse_x, browse_w) =
             winui::buttons_to_right(&p, right, 0.0, &[("Browse", 73.0)], 160.0)[0];
@@ -903,7 +916,7 @@ impl OptionsDialog {
             "Set file creation date as provided by the server",
             true,
         );
-        // The temporary directory under a hairline (its group box was), a row of the form.
+        // The temporary directory under a hairline, a row of the form.
         winui::rule(&p, o, left, 297.0, right - left);
         winui::form_label(&p, o, left, 305.0, h, "Temporary directory", true);
         // D-004: no temporary directory — parts are written next to the file, so there is
@@ -983,17 +996,22 @@ impl OptionsDialog {
         // sentence at the leading edge (greyed, as the button: neither is built yet).
         let (edit_x, edit_w) =
             winui::buttons_to_right(&p, right, 0.0, &[("Edit...", 73.0)], 160.0)[0];
-        let greyed = |top: f32, s: &str| {
-            winui::text_fit(
+        // A longer translation is cut with "..." before the button, whole on hover.
+        let greyed = |ui: &Ui, top: f32, s: &str| {
+            let (rect, cut) = winui::text_fit(
                 &p,
                 o.x + left,
                 o.y + winui::baseline_in(top, h),
                 s,
                 LIGHT_DISABLED(),
                 o.x + edit_x - 8.0,
-            )
+            );
+            if cut {
+                winui::full_on_hover(ui, rect, ("downloads-greyed", top as i32), s);
+            }
         };
         greyed(
+            ui,
             88.0,
             crate::i18n::t("Customize \"Download progress\" dialog"),
         );
@@ -1083,7 +1101,7 @@ impl OptionsDialog {
             false,
         );
         winui::rule(&p, o, left, 399.0, w);
-        greyed(407.0, crate::i18n::t("Virus checking settings"));
+        greyed(ui, 407.0, crate::i18n::t("Virus checking settings"));
         winui::button_light(
             ui,
             r(o, edit_x, 407.0, edit_w, h),
@@ -1097,7 +1115,7 @@ impl OptionsDialog {
     fn connection(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
         let (left, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
-        // The group boxes' captions as titles, their groups between hairlines (the mock's).
+        // Titles over the groups, the groups between hairlines (the mock's).
         let max = "Default max. conn. number";
         // i18n: label before the choice of DNS (the service that turns names into addresses)
         let dns = "DNS:";
@@ -1255,7 +1273,7 @@ impl OptionsDialog {
             ui,
             &p,
             crate::i18n::t(crate::quota::LIMITS_SENTENCE),
-            &[line(322.0, 8.0), line(350.0, 11.0)],
+            &[line(322.0, 8.0), line(350.0, 8.0)],
             &[("mb", vec2(64.0, 24.0)), ("hours", vec2(64.0, 24.0))],
             |p, x, baseline, s| {
                 winui::label(p, x, baseline, s, on);
