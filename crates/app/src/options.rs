@@ -220,6 +220,10 @@ pub struct OptionsDialog {
     /// Sites Logins → Cookies for video sites (#229): the browser in the list (an index into
     /// `mdm_tools::proc::cookie_browsers`), kept while Off is chosen.
     cookie_browser: usize,
+    /// Downloads → User-Agent → Automatic (upstream issue 668): the default browser's, the box
+    /// then shows it; unticked, the box's own text (empty is automatic again when the window
+    /// opens next).
+    ua_auto: bool,
 }
 
 impl OptionsDialog {
@@ -297,6 +301,7 @@ impl OptionsDialog {
             port: settings.remote_port.to_string(),
             device_rows: Default::default(),
             cookie_browser: cookie_browser_at(settings),
+            ua_auto: settings.own_user_agent().is_none(),
         }
     }
 
@@ -1105,13 +1110,49 @@ impl OptionsDialog {
             s.duplicate_action = i as u8;
         }
         winui::form_label(&p, o, left, 359.0, h, agent, true);
-        winui::edit_light(
+        // Automatic (upstream issue 668), at the row's end: the default browser's User-Agent,
+        // shown read-only in the box; unticked, the box's own text.
+        // i18n: checkbox: the User-Agent is the default browser's, which MDM finds itself
+        let automatic = "Automatic";
+        let auto_x = right - winui::checkbox_caption_end(&p, 0.0, automatic) - 2.0;
+        let agent = mdm_engine::agent::automatic();
+        let tip = match mdm_engine::agent::automatic_browser() {
+            Some(browser) => crate::i18n::fmt(
+                // i18n: tooltip; {browser} is a browser and its version, e.g. "Brave 157"
+                crate::i18n::t("Your default browser's User-Agent: {browser}"),
+                &[("browser", browser.as_str())],
+            ),
+            None if mdm_engine::agent::looked_for() => crate::i18n::t(
+                "Your default browser isn't one MDM knows: a current Chrome's User-Agent",
+            )
+            .to_owned(),
+            None => crate::i18n::t("Looking for your default browser...").to_owned(),
+        };
+        let tip = format!("{tip}\n{agent}");
+        let was = self.ua_auto;
+        winui::checkbox_light(
             ui,
-            r(o, fx, 359.0, right - fx, h),
-            &mut s.user_agent,
+            o + vec2(auto_x, winui::baseline_in(359.0, h) - 10.0),
+            &mut self.ua_auto,
+            automatic,
             true,
-            false,
-        );
+        )
+        .on_hover_text(tip.as_str());
+        if self.ua_auto != was {
+            // Ticked: the automatic one. Unticked: the box starts from it, to be changed.
+            s.user_agent = if self.ua_auto {
+                String::new()
+            } else {
+                agent.clone()
+            };
+        }
+        let rc = r(o, fx, 359.0, auto_x - 12.0 - fx, h);
+        if self.ua_auto {
+            let mut shown = agent;
+            winui::edit_light(ui, rc, &mut shown, false, false).on_hover_text(tip.as_str());
+        } else {
+            winui::edit_light(ui, rc, &mut s.user_agent, true, false);
+        }
         winui::rule(&p, o, left, 399.0, w);
         greyed(ui, 407.0, crate::i18n::t("Virus checking settings"));
         winui::button_light(

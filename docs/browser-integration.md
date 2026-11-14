@@ -131,8 +131,12 @@ too. The toolbar button lists what the page has loaded, so you can still save it
   for a video, its picture size.
 
 Start the video first: the list fills as the page loads things, and it's emptied when the tab goes
-to another page. With **Prefix media file names with the page title** on, a file from the list is
-named after the page, then its own name (`The page - clip.mp4`). Click **Download** beside one: a stream opens MDM's **Download video from a page**
+to another page. Each file is listed under the name it will be saved with. A file the site sends
+through a program's address (`stream.php`, `remote_control.php`, `videoplayback`, a bare number)
+has no name of its own: it's named after the page (`The page.mp4`), or after the `file=` name in
+its address when there is one, with the type its server says it is (MP4, not PHP). With **Prefix
+media file names with the page title** on, a file with a name of its own is named after the page,
+then that name (`The page - clip.mp4`). Click **Download** beside one: a stream opens MDM's **Download video from a page**
 window, which reads its qualities (yt-dlp does the work); a file goes to MDM's list like any other
 download. Your cookies for its server, the page as the referrer and your browser's User-Agent go
 with it, as they do for a link you click.
@@ -147,7 +151,7 @@ browser closes.
 
 ## Right-click: Download with Mister Download Manager
 
-Right-click a link, a video, a sound or a picture and choose **Download with Mister Download Manager**. MDM downloads it whatever its type: you asked for it, so the file types list and the excluded sites don't apply here (they only decide which downloads MDM takes over by itself). A video that plays as a stream goes to the **Download video** window with the stream its player loaded (HLS or DASH), as the [button over videos](#the-download-button-over-videos) sends it, with your cookies for the stream's server and the page as the referrer.
+Right-click a link, a video, a sound or a picture and choose **Download with Mister Download Manager**. MDM downloads it whatever its type: you asked for it, so the file types list and the excluded sites don't apply here (they only decide which downloads MDM takes over by itself). A video that plays as a stream goes to the **Download video** window with the stream its player loaded (HLS or DASH), as the [button over videos](#the-download-button-over-videos) sends it, with your cookies for the stream's server and what the browser sent with the stream (its referrer and origin, else the page as the referrer).
 
 Select part of a page and right-click it for **Download selected links with Mister Download Manager**, or right-click the page for **Download all links with Mister Download Manager**: the links open in **[Link grabber](link-grabber.md)**, sorted into packages, where you tick the ones you want.
 
@@ -158,7 +162,7 @@ If MDM can't be reached when you choose one of these, the help page opens at the
 ![The Download video button over a YouTube video in Chrome](images/help/video-button.webp)
 *The button over a video. Drag it where you like; it stays there.*
 
-Point at a video on a web page and a small **Download video** button appears at its edge. Click it and MDM's **Download video from a page** window opens and looks up the qualities it can download. It takes the video you clicked: its own file when it plays one, or the stream the player loaded (HLS or DASH), else the page. When the button can't tell which one you mean, the toolbar button's [Media on this page](#media-on-this-page) lists them all. Embedded players work too, and your sign-in for the site, the page that embeds the player and your browser's User-Agent go with it, so videos for members, or that play only on the site that embeds them, can be downloaded. Sound players get the button too.
+Point at a video on a web page and a small **Download video** button appears at its edge. Click it and MDM's **Download video from a page** window opens and looks up the qualities it can download. It takes the video you clicked: its own file when it plays one, or the stream the player loaded (HLS or DASH), else the page. When the button can't tell which one you mean, the toolbar button's [Media on this page](#media-on-this-page) lists them all. Embedded players work too, and your sign-in for the site, the page that embeds the player and your browser's User-Agent go with it, so videos for members, or that play only on the site that embeds them, can be downloaded. A stream goes with what the browser sent when the player asked for it, its referrer, its origin and its cookies (a player embedded from another site may have cookies the browser keeps for that page only), and they are sent again with its playlists and pieces: a site's video server that serves its own pages' players only lets MDM through as well. Sound players get the button too.
 
 It stays out of the way: it shows only while you point at a video (or the player has the keyboard's focus; **Tab** then moves to the button), fades when the pointer rests, and leaves out small videos and short muted loops (animated pictures, backgrounds). In fullscreen it follows the video when the player allows it. On a copy-protected video (DRM) it says that the video can't be saved.
 
@@ -173,7 +177,7 @@ The button follows the rest of the integration: it doesn't show when **Use advan
 
 ## Keys to force or prevent capture
 
-Hold **Alt** while clicking a link to let the browser download it instead of MDM. In Firefox, Alt+click saves a link only when its `browser.altClickSave` setting is on (in `about:config`); otherwise right-click the link and choose **Save Link As...**, which the browser keeps. **Options → General → Keys...** says so, and holds **Also take files the browser would open**.
+Hold **Alt** while clicking a link to let the browser download it instead of MDM. Chromium browsers download such a link themselves. Firefox does nothing with that click, so the extension follows the link for it, as a plain click would, and the browser keeps what comes of it. When the link redirects, or the page it leads to starts the download by script ("your download starts in 5 seconds"), that download stays with the browser too when it starts within ten seconds. **Options → General → Keys...** says so, and holds **Also take files the browser would open**.
 
 To keep a site's downloads in the browser for good, use the toolbar button's **Never take downloads from**, or add the site to **Don't start downloading automatically from the following sites**. To keep a file type in the browser, take it off the file types list.
 

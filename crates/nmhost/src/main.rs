@@ -110,6 +110,42 @@ struct Message {
     /// `rules`) without asking about it: for MDM's log. Under its own key, with no `url`: an
     /// older host takes it for an address it can't download, and hands nothing over.
     declined: Option<Notice>,
+    /// With `video`: what the browser sent with `src` as its page's player asked for it
+    /// (upstream issue 900), sent again with it and each of its pieces. An older extension sends
+    /// none: the page is the stream's Referer then, as before.
+    fetched_with: FetchedWith,
+}
+
+/// The headers the browser sent with a stream (`Message::fetched_with`): its Referer and Origin.
+#[derive(Debug, Default, Deserialize, PartialEq)]
+#[serde(default)]
+struct FetchedWith {
+    referer: Option<String>,
+    origin: Option<String>,
+}
+
+/// `v` when it is a web address fit for a header (http or https, no space or control character,
+/// at most 8 KB): what the extension takes from the browser's own request.
+fn web_header(v: Option<&str>) -> Option<&str> {
+    v.map(str::trim).filter(|v| {
+        (v.starts_with("http://") || v.starts_with("https://"))
+            && v.len() <= 8192
+            && !v.chars().any(|c| c.is_whitespace() || c.is_control())
+    })
+}
+
+/// Whether web addresses `a` and `b` have the same origin (scheme, host and port, any case).
+/// ponytail: textual, so `https://x:443` and `https://x` differ; browsers send neither form.
+fn same_origin(a: &str, b: &str) -> bool {
+    let origin = |u: &str| {
+        let (scheme, rest) = u.split_once("://")?;
+        let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+        Some((
+            scheme.to_ascii_lowercase(),
+            rest[..end].to_ascii_lowercase(),
+        ))
+    };
+    matches!((origin(a), origin(b)), (Some(x), Some(y)) if x == y)
 }
 
 /// A download the extension left to the browser: why (a `Declined` code, or `site-access`:
@@ -408,14 +444,28 @@ fn video_command(
         .src
         .clone()
         .filter(|s| s.starts_with("http://") || s.starts_with("https://"));
-    let referer = match &src {
-        Some(_) => Some(m.url.clone()),
-        None => m.referrer.clone().filter(|r| !r.is_empty()),
+    // A stream or file of the page's, fetched as the browser fetched it (upstream issue 900):
+    // with the Referer and Origin its player sent, else from the page. A Referer of the page's
+    // own site (often only its origin) keeps the whole page: the app sends no more than the
+    // browser would anyway (`sent_referrer`), and the page is what finds a Drive file behind its
+    // player (#34) and what File Properties shows.
+    let (referer, origin) = match &src {
+        Some(_) => (
+            Some(
+                web_header(m.fetched_with.referer.as_deref())
+                    .filter(|r| !same_origin(r, &m.url))
+                    .unwrap_or(&m.url)
+                    .to_owned(),
+            ),
+            web_header(m.fetched_with.origin.as_deref()).map(str::to_owned),
+        ),
+        None => (m.referrer.clone().filter(|r| !r.is_empty()), None),
     };
     Ok(mdm_ipc::Command {
         video_page: Some(src.unwrap_or_else(|| m.url.clone())),
         video_title: m.title.clone().filter(|t| !t.trim().is_empty()),
         referer,
+        origin,
         cookies: m.cookies.clone().filter(|c| !c.is_empty()),
         cookie_jar: m.cookie_jar.clone(),
         user_agent: m.user_agent.clone(),
@@ -502,6 +552,14 @@ fn to_command(m: Message) -> mdm_ipc::Command {
         user_agent: m.user_agent,
         size: m.size.filter(|s| *s > 0),
         mime: some(m.mime),
+        // A page's media from the toolbar button's list (upstream issue 800): its page's title
+        // names a file whose address names nothing.
+        video_title: m
+            .title
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(|t| t.chars().take(TITLE_MAX).collect()),
         post_type: m.post.as_ref().and(some(m.post_type)),
         post: m.post,
         private: m.private,
@@ -516,6 +574,10 @@ fn to_command(m: Message) -> mdm_ipc::Command {
 
 /// The largest proxy auto-config script taken from the browser (#42).
 const PAC_MAX: usize = 256 * 1024;
+
+/// The most characters of a page's title taken with a download (the extension sends at most
+/// as many).
+const TITLE_MAX: usize = 300;
 
 /// The browser's proxy (#42) if it is one the app can use: `scheme://host:port`, the scheme
 /// http, https, socks4 or socks5(h), the host a name or an IP address (IPv6 in brackets), nothing
@@ -1001,6 +1063,51 @@ mod tests {
         assert_eq!(m.hide_site.as_deref(), Some("tube.test"));
     }
 
+    /// Upstream issue 900: a stream goes with the Referer and Origin its page's player sent for
+    /// it (the extension's `fetchedWith`); without them (an older extension), or with what isn't
+    /// a web address, the page is its Referer and no Origin goes. Only for a stream or file: a
+    /// page looked up keeps its own referrer.
+    #[test]
+    fn a_stream_goes_with_the_referer_and_origin_the_browser_sent() {
+        let rules = mdm_ipc::capture::CaptureRules::default();
+        let page = "https://anime.test/watch/12";
+        let src = "https://cdn.video.test/manifest/x.m3u8?sec=abc";
+        let fetched = r#""fetchedWith":{"referer":"https://player.video.test/","origin":"https://player.video.test"}"#;
+        let click = |extra: &str, src: &str| -> mdm_ipc::Command {
+            let m: Message = serde_json::from_str(&format!(
+                r#"{{"video":true,"explicit":true,"url":"{page}","src":"{src}","referrer":"https://search.test/"{extra}}}"#
+            ))
+            .unwrap();
+            video_command(&m, &rules, "").unwrap()
+        };
+        let cmd = click(&format!(",{fetched}"), src);
+        assert_eq!(cmd.referer.as_deref(), Some("https://player.video.test/"));
+        assert_eq!(cmd.origin.as_deref(), Some("https://player.video.test"));
+        // An older extension: from the page, no Origin.
+        let cmd = click("", src);
+        assert_eq!(cmd.referer.as_deref(), Some(page));
+        assert_eq!(cmd.origin, None);
+        // Not web addresses (a header's line break, the browser's "null" origin): left out.
+        let odd = r#","fetchedWith":{"referer":"https://x.test/\r\nX-Evil: 1","origin":"null"}"#;
+        let cmd = click(odd, src);
+        assert_eq!(cmd.referer.as_deref(), Some(page));
+        assert_eq!(cmd.origin, None);
+        // No stream (a player playing from blob:): the page, with its own referrer.
+        let cmd = click(&format!(",{fetched}"), "blob:https://anime.test/1");
+        assert_eq!(cmd.referer.as_deref(), Some("https://search.test/"));
+        assert_eq!(cmd.origin, None);
+        // The page's own site sent (its origin only, across to the stream's host): the whole
+        // page stays the Referer, so a Drive player's stream still finds its file (#34).
+        let drive = "https://drive.google.com/file/d/ID/view";
+        let m: Message = serde_json::from_str(&format!(
+            r#"{{"video":true,"explicit":true,"url":"{drive}","src":"https://abc.c.drive.google.com/videoplayback?id=1","fetchedWith":{{"referer":"https://Drive.google.com/","origin":"https://drive.google.com"}}}}"#
+        ))
+        .unwrap();
+        let cmd = video_command(&m, &rules, "").unwrap();
+        assert_eq!(cmd.referer.as_deref(), Some(drive));
+        assert_eq!(cmd.origin.as_deref(), Some("https://drive.google.com"));
+    }
+
     #[test]
     fn the_browsers_whole_context_reaches_the_app() {
         let m: Message = serde_json::from_str(
@@ -1278,6 +1385,25 @@ mod tests {
         );
         assert!(!c.later && !c.silent);
         assert_eq!((c.proxy, c.proxy_pac, c.proxy_login), (None, None, false));
+        assert_eq!(c.video_title, None);
+    }
+
+    /// Upstream issue 800: a page's media from the toolbar button's list goes with its page's
+    /// title (for a file whose address names nothing), trimmed and cut; a blank one is none.
+    #[test]
+    fn a_media_files_page_title_goes_with_it() {
+        let m: Message = serde_json::from_str(
+            r#"{"url":"https://x/remote_control.php?id=1","mime":"video/mp4","title":"  A talk  "}"#,
+        )
+        .unwrap();
+        let c = to_command(m);
+        assert_eq!(c.video_title.as_deref(), Some("A talk"));
+        assert_eq!(c.mime.as_deref(), Some("video/mp4"));
+        let long = format!(r#"{{"url":"https://x/a","title":"{}"}}"#, "t".repeat(400));
+        let c = to_command(serde_json::from_str(&long).unwrap());
+        assert_eq!(c.video_title.unwrap().len(), TITLE_MAX);
+        let blank: Message = serde_json::from_str(r#"{"url":"https://x/a","title":" "}"#).unwrap();
+        assert_eq!(to_command(blank).video_title, None);
     }
 
     #[test]

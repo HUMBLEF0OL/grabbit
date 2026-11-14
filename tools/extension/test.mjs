@@ -50,9 +50,11 @@ function fakeApi({
   const event = (name) => {
     const fns = [];
     return {
-      addListener: (f) => {
+      addListener: (f, ...spec) => {
         fns.push(f);
         listeners[name] = (...a) => fns.reduce((r, g) => g(...a) ?? r, undefined);
+        // Its filter and extra info, as the listener asked (upstream issue 900: Chromium's extraHeaders).
+        listeners[`${name}Spec`] = spec;
       },
     };
   };
@@ -163,7 +165,10 @@ function fakeApi({
     webRequest: {
       onBeforeRequest: event("beforeRequest"),
       onBeforeSendHeaders: event("beforeSendHeaders"),
+      onSendHeaders: event("sendHeaders"),
+      onErrorOccurred: event("errorOccurred"),
       onHeadersReceived: event("headersReceived"),
+      onBeforeRedirect: event("beforeRedirect"),
       onResponseStarted: event("responseStarted"),
       onAuthRequired: event("authRequired"),
     },
@@ -368,6 +373,52 @@ const ok = (what) => {
   assert.ok(suggested);
   assert.deepEqual(steps(calls), []);
   ok("Chrome: declined, the browser's own");
+}
+
+// Chrome, upstream issue 578: a download left to the browser keeps another extension's name.
+// What Chromium does with each listener's answer (downloads_custom_bindings.js, then
+// downloads_api.cc DetermineFilename and DeterminerCallback): no valid suggestion goes as an
+// empty name with no conflict action, which counts as a name; a name the browser refuses is
+// emptied after the answer is counted, and only an empty name with "uniquify" is no name at all.
+// The newest extension's name wins (here MDM's, updated after Save In was installed).
+{
+  const answer = (s) => {
+    const valid = s && typeof s === "object" && typeof s.filename === "string" && s.filename.length > 0;
+    const [name, action] = valid ? [s.filename, s.conflictAction || ""] : ["", ""];
+    const safe = name && !name.split("/").some((p) => p === "" || p === "." || p === "..") && !/^[a-z]:|^\//i.test(name);
+    const filename = safe ? name : "";
+    return filename || action !== "uniquify" ? { filename } : null; // null: no suggestion
+  };
+  // The determination of one download: `answers` in install order, oldest first.
+  const determined = (creator, answers) => {
+    let name = creator;
+    let by = -1;
+    answers.forEach((a, i) => {
+      const s = answer(a);
+      if (s && i >= by) [name, by] = [s.filename, i];
+    });
+    return name;
+  };
+  for (const [what, item, creator] of [
+    ["its own listener's folder (Save In)", { id: 70, url: "https://img.test/cat.jpg", filename: "cat.jpg", byExtensionId: "savein" }, ""],
+    ["a downloads.download filename", { id: 71, url: "https://img.test/dog.jpg", filename: "dog.jpg", byExtensionId: "savein" }, "Pic/OthersW/dog.jpg"],
+    ["a page's download", { id: 72, url: "https://x/page.html", filename: "page.html" }, ""],
+  ]) {
+    const { api, listeners } = fakeApi({ firefox: false });
+    load(api, false);
+    const other = item.byExtensionId && !creator ? { filename: `Pic/OthersW/${item.filename}` } : undefined;
+    let mdm = "none";
+    listeners.determining(item, (s) => (mdm = s));
+    await settle();
+    assert.notEqual(mdm, "none", `${what}: answered, the download doesn't wait`);
+    const want = other ? other.filename : creator;
+    assert.equal(determined(creator, other ? [other, mdm] : [mdm]), want, `${what}: MDM's answer gives no name of its own`);
+  }
+  // The model, checked: Chromium's own cases.
+  assert.equal(determined("Pic/a.jpg", [undefined]), "", "suggest() empties the creator's name");
+  assert.equal(determined("", [{ filename: "Pic/b.jpg" }, undefined]), "", "and the older extension's");
+  assert.equal(determined("", [undefined, { filename: "Pic/b.jpg" }]), "Pic/b.jpg", "an older suggest() loses");
+  ok("Chrome: a download left alone keeps another extension's name and folder (upstream issue 578)");
 }
 
 // Firefox: a small file finished before it could be stopped: the browser's copy is removed.
@@ -882,6 +933,97 @@ const MPD = (protect) => `<?xml version="1.0"?>
   ok("media list: cleared on another page, kept within one");
 }
 {
+  // Upstream issues 695 and 800: a video a server's program sends (`remote_control.php`,
+  // `stream.php?file=…`) is listed and saved as the app's engine names it: the tab's title (or the
+  // `file=` value) and the type its server said, never "remote_control.php · PHP". The popup's
+  // switch puts the title before a real name.
+  const tabs = { 9: { id: 9, url: "https://watch.test/v/2", title: "Movie: the title", incognito: false } };
+  const { api, calls, listeners } = fakeApi({ firefox: false, frames: { 0: { href: "https://watch.test/v/2", players: [] } }, tabs });
+  load(api, false);
+  listeners.tabUpdated(9, { url: "https://watch.test/v/2" });
+  await settle();
+  const big = (type) => H(type, { "Content-Length": "176900000" });
+  const script = "https://files.test/remote_control.php?id=7&t=1";
+  const given = "https://files.test/baigiang/stream.php?file=FL262-1E01-4.mp4&token=x";
+  const bare = "https://files.test/videoplayback?id=3";
+  const real = "https://files.test/a/movie.mp4";
+  for (const [u, type] of [[script, "video/mp4"], [given, "video/mp4"], [bare, "video/webm"], [real, "video/mp4"]]) {
+    listeners.responseStarted(res(u, "media", big(type)));
+  }
+  await settle();
+  const list = async () => (await popupAsk(listeners, { type: "media", tab: 9 })).media.map((m) => [m.name, m.ext]);
+  assert.deepEqual(await list(), [
+    ["Movie the title.mp4", "mp4"],
+    ["FL262-1E01-4.mp4", "mp4"],
+    ["Movie the title.webm", "webm"],
+    ["movie.mp4", "mp4"],
+  ]);
+  const saved = async (u) => {
+    await popupAsk(listeners, { type: "media-download", tab: 9, url: u });
+    const m = natives(calls).filter((x) => x.url === u).at(-1);
+    return [m.filename, m.title, m.mime];
+  };
+  assert.deepEqual(await saved(script), ["Movie the title.mp4", "Movie: the title", "video/mp4"]);
+  // A name the app gives itself (the `file=` value, a real one) isn't sent: a server's own name
+  // (Content-Disposition) still wins there.
+  assert.deepEqual(await saved(given), ["", "Movie: the title", "video/mp4"]);
+  assert.deepEqual(await saved(real), ["", "Movie: the title", "video/mp4"]);
+  await api.storage.local.set({ mediaTitleName: true });
+  assert.deepEqual(await list(), [
+    ["Movie the title.mp4", "mp4"],
+    ["Movie the title - FL262-1E01-4.mp4", "mp4"],
+    ["Movie the title.webm", "webm"],
+    ["Movie the title - movie.mp4", "mp4"],
+  ]);
+  assert.equal((await saved(given))[0], "Movie the title - FL262-1E01-4.mp4");
+  assert.equal((await saved(bare))[0], "Movie the title.webm");
+  // The popup's tag is the saved file's type (popup.js tagOf), its name the saved one (nameOf).
+  // A Windows checkout's CRLF read as LF, for the "\n}\n" the functions end at.
+  const popup = readFileSync(new URL("../../extension/popup.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const part = (name) => popup.slice(popup.indexOf(`function ${name}(`), popup.indexOf("\n}\n", popup.indexOf(`function ${name}(`)) + 2);
+  const [tagOf, nameOf] = new Function(`const TYPES = {}; ${part("tagOf")}\n${part("nameOf")}\nreturn [tagOf, nameOf];`)();
+  const listed = (await popupAsk(listeners, { type: "media", tab: 9 })).media;
+  assert.deepEqual(listed.map((m) => `${nameOf(m)} · ${tagOf(m)}`), [
+    "Movie the title.mp4 · MP4",
+    "Movie the title - FL262-1E01-4.mp4 · MP4",
+    "Movie the title.webm · WEBM",
+    "Movie the title - movie.mp4 · MP4",
+  ]);
+  ok("media list: a script's video named by the title or its file= value, typed by its server (upstream issues 695, 800)");
+}
+{
+  // The names the extension gives a page's media are the app's engine's (crates/engine/src/naming.rs):
+  // the same cases (crates/engine/tests/data/media-names.json), the same types, the same scripts.
+  const ctx = {
+    URL,
+    URLSearchParams,
+    console: quietConsole,
+    setTimeout,
+    clearTimeout,
+    Promise,
+    TextDecoder,
+    fetch: fakeFetch,
+    navigator: { userAgent: "UA", userAgentData: { brands: [{ brand: "Chromium" }] } },
+  };
+  ctx.chrome = fakeApi({ firefox: false }).api;
+  vm.runInNewContext(code, ctx);
+  const cases = JSON.parse(readFileSync(new URL("../../crates/engine/tests/data/media-names.json", import.meta.url), "utf8")).cases;
+  for (const [u, mime, title, want] of cases) assert.equal(ctx.mediaName(u, mime, title, false).name, want, u);
+  const naming = readFileSync(new URL("../../crates/engine/src/naming.rs", import.meta.url), "utf8");
+  const table = naming.slice(naming.indexOf("pub const TYPES"), naming.indexOf("];", naming.indexOf("pub const TYPES")));
+  const rustTypes = Object.fromEntries([...table.matchAll(/\("([^"]+)", "([^"]+)"\)/g)].map((m) => [m[1], m[2]]));
+  assert.ok(Object.keys(rustTypes).length > 30);
+  const types = vm.runInNewContext("TYPE_EXTENSIONS", ctx);
+  assert.deepEqual({ ...types }, rustTypes, "background.js' TYPE_EXTENSIONS is naming.rs' TYPES");
+  const list = (name) => {
+    const at = naming.indexOf(`pub const ${name}`);
+    return [...naming.slice(at, naming.indexOf("];", at)).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  };
+  assert.deepEqual([...vm.runInNewContext("SCRIPT_EXTENSIONS", ctx)], list("SCRIPT_EXTENSIONS"));
+  assert.deepEqual([...vm.runInNewContext("PAGE_EXTENSIONS", ctx)], list("PAGE_EXTENSIONS"));
+  ok("media names: the extension's are the engine's (types, scripts, cases)");
+}
+{
   // Bounded: a page loading file after file keeps at most 60 per tab, its first stream (the one
   // the button sends) included; at most 50 tabs.
   served = {};
@@ -913,6 +1055,60 @@ const MPD = (protect) => `<?xml version="1.0"?>
   const v = natives(calls).find((m) => m.video);
   assert.deepEqual([v.url, v.referrer, v.src], ["https://emb.test/player/1", "https://blog.test/post", "https://emb.test/e/master.m3u8"]);
   ok("media list: a frame's stream goes with the frame's page");
+}
+{
+  // Upstream issue 900: what the browser sent with a stream (its Referer, Origin and Cookie;
+  // Chromium shows them with extraHeaders only) goes with it, from the media list and from the
+  // button over its player: the Referer and Origin its player sent, and the cookies it sent that
+  // no store lists (a frame's own) beside the store's, for its host. A request that failed leaves
+  // nothing.
+  const url = "https://cdn.video.test/manifest/x.m3u8?sec=abc";
+  const other = "https://cdn.video.test/x.m3u8";
+  served = { [url]: { body: "#EXTM3U\n#EXT-X-STREAM-INF:RESOLUTION=1280x720\nhd.m3u8\n" }, [other]: { body: "#EXTM3U\n#EXT-X-STREAM-INF:RESOLUTION=640x360\nsd.m3u8\n" } };
+  for (const firefox of [false, true]) {
+    const frames = { 0: { href: "https://anime.test/ep/1", players: [] }, 2: { href: "https://player.video.test/embed/x", players: [] } };
+    const tabs = { 9: { id: 9, url: "https://anime.test/ep/1", title: "Episode 1" } };
+    const { api, calls, listeners } = fakeApi({ firefox, frames, tabs });
+    load(api, firefox);
+    await settle();
+    assert.deepEqual(JSON.parse(JSON.stringify(listeners.sendHeadersSpec[1])), firefox ? ["requestHeaders"] : ["requestHeaders", "extraHeaders"]);
+    const headers = [
+      { name: "Accept", value: "*/*" },
+      { name: "Origin", value: "https://player.video.test" },
+      { name: "Referer", value: "https://player.video.test/" },
+      { name: "Cookie", value: "sid=1; part=p1" },
+    ];
+    // Another request that failed (its answer is another's), then the stream's.
+    listeners.sendHeaders({ requestId: "6", tabId: 9, frameId: 0, url: other, requestHeaders: [{ name: "Origin", value: "https://wrong.test" }] });
+    listeners.errorOccurred({ requestId: "6" });
+    listeners.responseStarted(res(other, "xmlhttprequest", H("application/vnd.apple.mpegurl"), { requestId: "6" }));
+    listeners.sendHeaders({ requestId: "7", tabId: 9, frameId: 2, url, requestHeaders: headers });
+    listeners.responseStarted(res(url, "xmlhttprequest", H("application/vnd.apple.mpegurl"), { frameId: 2, requestId: "7" }));
+    await settle();
+    assert.equal((await popupAsk(listeners, { type: "media-download", tab: 9, url })).ok, true);
+    const v = natives(calls).find((m) => m.video);
+    assert.deepEqual(v.fetchedWith, { referer: "https://player.video.test/", origin: "https://player.video.test" });
+    assert.equal(v.cookies, "sid=1; part=p1", "the header the browser sent for it");
+    assert.deepEqual(
+      v.cookieJar.map((c) => [c.name, c.value, c.domain, c.hostOnly]),
+      [
+        ["sid", "1", ".tube.test", false],
+        ["part", "p1", "cdn.video.test", true],
+      ],
+      "the store's, and the frame's own for its host",
+    );
+    await popupAsk(listeners, { type: "media-download", tab: 9, url: other });
+    const failed = natives(calls).filter((m) => m.video).at(-1);
+    assert.deepEqual([failed.src, failed.fetchedWith], [other, undefined], "nothing kept from a failed request");
+    // The button over the frame's player (playing from blob:): its stream, the same way.
+    const sender = { id: "ours", url: "https://player.video.test/embed/x", frameId: 2, tab: { id: 9, url: "https://anime.test/ep/1", incognito: false } };
+    await new Promise((r) => listeners.message({ type: "video", src: "blob:https://player.video.test/1", title: "" }, sender, r));
+    const m = natives(calls).filter((x) => x.video).at(-1);
+    assert.equal(m.src, url);
+    assert.deepEqual(m.fetchedWith, { referer: "https://player.video.test/", origin: "https://player.video.test" });
+    assert.equal(m.cookieJar.length, 2);
+  }
+  ok("a stream goes with the Referer, Origin and cookies its player sent (upstream issue 900)");
 }
 {
   // The browser stopped the script and started it again: what the tab loaded is read back.
@@ -1125,27 +1321,22 @@ const MPD = (protect) => `<?xml version="1.0"?>
   ok("video button logo");
 }
 
+// video.js's videoPage, with what it calls (from it to its end mark), run against `location` and
+// `document`: the address the button hands the app for a <video>.
+const videoPageOn = (() => {
+  const source = readFileSync(new URL("../../extension/video.js", import.meta.url), "utf8");
+  const start = source.indexOf("function videoPage(v) {");
+  const end = source.indexOf("// ---- the video's own address: end.");
+  assert.ok(start > 0 && end > start, "video.js has videoPage and its end mark");
+  const body = `${source.slice(start, end)}; return videoPage;`;
+  return (location, document) => new Function("location", "document", body)(location, document);
+})();
+
 // The address the button hands the app (video.js's videoPage): the video's own page, not the page
 // that plays it. YouTube's home, a search, a channel or a playlist is a list to yt-dlp, and a watch
 // page opened from a mix carries the list in its address: the button sent either, and the app
 // offered the whole feed (~50 videos) instead of the one playing. #311.
 {
-  const source = readFileSync(new URL("../../extension/video.js", import.meta.url), "utf8");
-  const start = source.indexOf("function videoPage(v) {");
-  assert.ok(start > 0, "video.js has videoPage");
-  // The function's own braces, so a test never runs a half of it.
-  let depth = 0;
-  let end = start;
-  for (let i = source.indexOf("{", start); i < source.length; i += 1) {
-    if (source[i] === "{") depth += 1;
-    if (source[i] === "}") {
-      depth -= 1;
-      if (depth === 0) {
-        end = i + 1;
-        break;
-      }
-    }
-  }
   // A page: its address, an optional ytd-watch-flexy video-id, and the cards a player can sit in
   // (each level on the way up from the video element names the video links it contains).
   const at = (href, { flexy = null, cards = [] } = {}) => {
@@ -1156,8 +1347,7 @@ const MPD = (protect) => `<?xml version="1.0"?>
     const chain = cards.map(element);
     for (let i = 0; i < chain.length; i += 1) chain[i].parentElement = chain[i + 1] || null;
     const document = { querySelector: (sel) => (sel === "ytd-watch-flexy" && flexy ? { getAttribute: () => flexy } : null) };
-    const fn = new Function("location", "document", `${source.slice(start, end)}; return videoPage;`)({ href }, document);
-    return fn(chain[0] || element([]));
+    return videoPageOn({ href }, document)(chain[0] || element([]));
   };
   // A watch page from a mix or a playlist: the video's own address, without the list.
   assert.equal(at("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=RDdQw4w9WgXcQ&start_radio=1"), "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
@@ -1249,22 +1439,213 @@ const MPD = (protect) => `<?xml version="1.0"?>
   ok("in-place navigation and YouTube's player: the video playing now, or nothing");
 }
 
+// A small DOM for the sample pages (tools/extension/feeds): elements with their attributes, open
+// shadow roots (<template shadowrootmode>), `a.href`, and querySelector(All) with the simple
+// selectors video.js uses (a tag, #id, [attr], [attr="v"], [attr*="v"], [attr^="v"], lists).
+function samplePage(html) {
+  const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"]);
+  const ENTITY = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'" };
+  const decode = (s) => s.replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => ENTITY[e]);
+  let base = "about:blank";
+  // Descendants in document order, not into shadow roots (as the DOM's own).
+  const descendants = function* (n) {
+    for (const c of n.children) {
+      yield c;
+      yield* descendants(c);
+    }
+  };
+  const compound = (sel) => {
+    const m = /^([a-z][\w-]*)?(?:#([\w-]+))?((?:\[[^\]]+\])*)$/i.exec(sel.trim());
+    assert.ok(m, `a selector the sample DOM reads: ${sel}`);
+    const attrs = [...m[3].matchAll(/\[([\w-]+)(?:([*^]?=)"([^"]*)")?\]/g)].map((a) => ({ name: a[1], op: a[2], value: a[3] }));
+    return (el) =>
+      (!m[1] || el.localName === m[1].toLowerCase()) &&
+      (!m[2] || el.getAttribute("id") === m[2]) &&
+      attrs.every(({ name, op, value }) => {
+        const v = el.getAttribute(name);
+        if (v === null) return false;
+        return !op || (op === "=" ? v === value : op === "*=" ? v.includes(value) : v.startsWith(value));
+      });
+  };
+  const finder = {
+    querySelectorAll(sel) {
+      const any = sel.split(",").map(compound);
+      return [...descendants(this)].filter((el) => any.some((f) => f(el)));
+    },
+    querySelector(sel) {
+      return this.querySelectorAll(sel)[0] || null;
+    },
+  };
+  class Element {
+    constructor(name, attributes, parent) {
+      this.localName = name;
+      this.attributes = attributes;
+      this.children = [];
+      this.parentNode = parent;
+      this.shadowRoot = null;
+    }
+    get parentElement() {
+      return this.parentNode instanceof Element ? this.parentNode : null;
+    }
+    getAttribute(name) {
+      const a = this.attributes.find((x) => x.name === name);
+      return a ? a.value : null;
+    }
+    get href() {
+      return new URL(this.getAttribute("href"), base).href;
+    }
+  }
+  Object.assign(Element.prototype, finder);
+  const doc = { children: [], localName: "#document", ...finder };
+  const stack = [doc];
+  const tags = /<!--[\s\S]*?-->|<!doctype[^>]*>|<\/([\w-]+)\s*>|<([\w-]+)((?:\s+[^\s=/>]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+))?)*)\s*\/?>/gi;
+  for (const t of html.matchAll(tags)) {
+    if (t[1]) {
+      const name = t[1].toLowerCase();
+      const at = stack.findLastIndex((n) => n.localName === name || (name === "template" && n.isShadow));
+      if (at > 0) stack.length = at;
+      continue;
+    }
+    if (!t[2]) continue;
+    const name = t[2].toLowerCase();
+    const attributes = [...(t[3] || "").matchAll(/([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+)))?/g)].map((a) => ({
+      name: a[1].toLowerCase(),
+      value: decode(a[2] ?? a[3] ?? a[4] ?? ""),
+    }));
+    const parent = stack[stack.length - 1];
+    // A declarative shadow root: what follows, up to its </template>, is the host's shadow tree.
+    if (name === "template" && attributes.some((a) => a.name === "shadowrootmode" && a.value === "open")) {
+      const root = { children: [], localName: "#shadow-root", isShadow: true, host: parent, ...finder };
+      parent.shadowRoot = root;
+      stack.push(root);
+      continue;
+    }
+    const el = new Element(name, attributes, parent);
+    parent.children.push(el);
+    if (!VOID.has(name)) stack.push(el);
+  }
+  // Every element, into shadow roots too (the button finds the videos there).
+  const all = function* (n) {
+    for (const c of n.children) {
+      yield c;
+      if (c.shadowRoot) yield* all(c.shadowRoot);
+      yield* all(c);
+    }
+  };
+  const page = doc.querySelector('meta[name="mdm-page"]').getAttribute("content");
+  base = page;
+  return { document: doc, page, videos: [...all(doc)].filter((e) => e.localName === "video") };
+}
+
+// Upstream issues 689, 643: a video in a feed names the post it sits in, never the feed. Each
+// sample page (our own, reduced to what names a post on each site; tools/extension/feeds) says
+// what each of its videos must name: an address ({origin}: the page's own), "page" (the page is
+// the video's) or "none" (nothing names it: the feed is not sent; its own plain file is, when it
+// has one).
+{
+  const dir = new URL("feeds/", import.meta.url);
+  const pages = readdirSync(dir).filter((f) => f.endsWith(".html"));
+  assert.ok(pages.length >= 12, "the sample pages");
+  // Each page at its own address, and at the big sites' other hosts too.
+  const OTHER = {
+    "x.html": ["https://twitter.com/home", "https://mobile.x.com/home"],
+    "reddit.html": ["https://sh.reddit.com/"],
+    "linkedin.html": ["https://linkedin.com/feed/foryou/"],
+    "facebook.html": ["https://web.facebook.com/", "https://m.facebook.com/"],
+  };
+  let checked = 0;
+  for (const file of pages) {
+    const { document, page, videos } = samplePage(readFileSync(new URL(file, dir), "utf8"));
+    assert.ok(videos.length, `${file}: its videos`);
+    for (const at of [page, ...(OTHER[file] || [])]) {
+      const location = new URL(at);
+      const videoPage = videoPageOn(location, document);
+      for (const [i, v] of videos.entries()) {
+        const expect = v.getAttribute("data-expect");
+        const want = expect === "page" ? location.href : expect === "none" ? null : expect.replaceAll("{origin}", location.origin);
+        const got = videoPage(v);
+        assert.equal(got, want, `${file} at ${at}: video ${i + 1}`);
+        // Never the page itself, unless it is the video's own.
+        if (expect !== "page") assert.notEqual(got, location.href, `${file}: video ${i + 1} named the page`);
+        checked += 1;
+      }
+    }
+  }
+  ok(`upstream 689: a video in a feed names its post, never the feed (${pages.length} sample pages, ${checked} videos)`);
+}
+
+// What the resolvers build is a form yt-dlp's extractors read (their _VALID_URL, yt-dlp
+// 2026.08.19), so the app's lookup finds the one video.
+{
+  const YTDLP = [
+    /^https?:\/\/(?:www\.)?linkedin\.com\/feed\/update\/urn:li:activity:(\d+)/,
+    /^https?:\/\/(?:[\w-]+\.)?facebook\.com\/(?:(?:permalink\.php|video\.php|watch\/?)\?(?:.*?)(?:v|story_fbid)=|[^/]+\/videos\/(?:[^/]+\/)?|[^/]+\/posts\/|groups\/[^/]+\/(?:permalink|posts)\/|reel\/)(pfbid[A-Za-z0-9]+|\d+)/,
+    /^https?:\/\/(?:(?:www|m(?:obile)?)\.)?(?:twitter|x)\.com\/(?:(?:i\/web|[^/]+)\/status|statuses)\/(\d+)/,
+    /^https?:\/\/(?:www\.)?instagram\.com(?:\/[^/?#]+)?\/(?:p|tv|reels?)\/([^/?#&]+)/,
+    /^https?:\/\/(?:\w+\.)?reddit\.com\/(?:(?:r|user)\/[^/]+\/)?comments\/([^/?#&]+)/,
+    /^https?:\/\/www\.tiktok\.com\/@[\w.-]+\/video\/(\d+)/,
+    /^https?:\/\/vimeo\.com\/(\d+)(?:\/[\da-f]{10})?$/,
+    /^https?:\/\/www\.dailymotion\.com\/video\/([^/?_&#]+)/,
+  ];
+  const dir = new URL("feeds/", import.meta.url);
+  let checked = 0;
+  for (const file of readdirSync(dir).filter((f) => f.endsWith(".html") && !/^(social|article)\.html$/.test(f))) {
+    const { page, videos } = samplePage(readFileSync(new URL(file, dir), "utf8"));
+    for (const v of videos) {
+      const expect = v.getAttribute("data-expect").replaceAll("{origin}", new URL(page).origin);
+      // fb.watch's short links lead to the video's page; a LinkedIn post known by its ugcPost
+      // URN is its public page, which yt-dlp's generic reader reads.
+      if (expect === "none" || expect === "page" || expect.startsWith("https://fb.watch/") || /urn:li:ugcPost:/.test(expect)) continue;
+      assert.ok(YTDLP.some((r) => r.test(expect)), `${file}: ${expect} is a form yt-dlp reads`);
+      checked += 1;
+    }
+  }
+  ok(`upstream 689: the ${checked} addresses built are forms yt-dlp's extractors read`);
+}
+
+// Upstream issue 689: what the background does with what video.js named on a feed. A post: it
+// goes alone (no stream the tab loaded, which may be another video's, nor the feed's title), the
+// feed as its Referer. Nothing named: never the feed; the video's own plain file when it has one
+// (the feed as its Referer), else nothing and the button says to open the post.
+{
+  const message = (listeners, m, sender) => new Promise((r) => listeners.message(m, sender, (x) => r(JSON.parse(JSON.stringify(x)))));
+  const at = (url) => ({ id: "ours", url, frameId: 0, tab: { id: 4, url, incognito: false } });
+  const videos = (calls) => natives(calls).filter((m) => m.video);
+  const { api, calls, listeners } = fakeApi({ firefox: false });
+  load(api, false);
+  const feed = "https://www.linkedin.com/feed/";
+  // A stream the feed loaded (another video's, as far as anyone knows).
+  listeners.responseStarted({ tabId: 4, frameId: 0, url: "https://cdn.test/feed/master.m3u8", responseHeaders: [] });
+  const post = "https://www.linkedin.com/feed/update/urn:li:activity:7390000000000000001/";
+  assert.equal((await message(listeners, { type: "video", url: post, src: "", title: "Feed | LinkedIn" }, at(feed))).ok, true);
+  assert.deepEqual(
+    (({ url, src, title, referrer }) => ({ url, src, title, referrer }))(videos(calls).at(-1)),
+    { url: post, src: undefined, title: "", referrer: feed },
+    "the post alone, the feed as its Referer",
+  );
+  // Nothing names it, no file of its own: nothing goes, and the button says why.
+  const r = await message(listeners, { type: "video", url: null, src: "", title: "Feed | LinkedIn" }, at(feed));
+  assert.deepEqual([r.ok, r.why], [false, "feed"]);
+  assert.equal(videos(calls).length, 1, "the feed is never sent");
+  // Nothing names it, its own plain file: that file, the feed as its Referer, no title.
+  await message(listeners, { type: "video", url: null, src: "https://media.test/clip.mp4", title: "Home" }, at("https://social.test/home"));
+  const file = videos(calls).at(-1);
+  assert.deepEqual([file.src, file.url, file.title], ["https://media.test/clip.mp4", "https://social.test/home", ""]);
+  // Another host of the same site is the site's (Facebook's short links, X's old name).
+  await message(listeners, { type: "video", url: "https://fb.watch/sAmPlE7x/", src: "" }, at("https://web.facebook.com/"));
+  assert.equal(videos(calls).at(-1).url, "https://fb.watch/sAmPlE7x/");
+  await message(listeners, { type: "video", url: "https://x.com/someone/status/1", src: "" }, at("https://twitter.com/home"));
+  assert.equal(videos(calls).at(-1).url, "https://x.com/someone/status/1");
+  // Another site's address named by a page is not taken: the page's own goes, as before.
+  await message(listeners, { type: "video", url: "https://elsewhere.test/v/1", src: "" }, at("https://news.test/story"));
+  assert.equal(videos(calls).at(-1).url, "https://news.test/story");
+  ok("upstream 689: a post alone, the video's own file, or nothing; never the feed");
+}
+
 // Shorts and live streams name their video in the path (video.js videoPage); the page is the
 // video's, not a list. Their addresses as yt-dlp reads them (the same video as watch?v=).
 {
-  const source = readFileSync(new URL("../../extension/video.js", import.meta.url), "utf8");
-  const start = source.indexOf("function videoPage(v) {");
-  let depth = 0;
-  let end = start;
-  for (let i = source.indexOf("{", start); i < source.length; i += 1) {
-    if (source[i] === "{") depth += 1;
-    if (source[i] === "}" && --depth === 0) {
-      end = i + 1;
-      break;
-    }
-  }
-  const named = (href) =>
-    new Function("location", "document", `${source.slice(start, end)}; return videoPage;`)({ href }, { querySelector: () => null })({ parentElement: null, querySelectorAll: () => [] });
+  const named = (href) => videoPageOn({ href }, { querySelector: () => null })({ parentElement: null, querySelectorAll: () => [] });
   assert.equal(named("https://www.youtube.com/shorts/cxkLg22mWco"), "https://www.youtube.com/watch?v=cxkLg22mWco");
   assert.equal(named("https://www.youtube.com/shorts/cxkLg22mWco?feature=share"), "https://www.youtube.com/watch?v=cxkLg22mWco");
   assert.equal(named("https://m.youtube.com/shorts/cxkLg22mWco"), "https://www.youtube.com/watch?v=cxkLg22mWco");
@@ -1272,6 +1653,27 @@ const MPD = (protect) => `<?xml version="1.0"?>
   // The Shorts landing page, before it moves to the first one, names none.
   assert.equal(named("https://www.youtube.com/shorts/"), null);
   ok("video.js: Shorts and live pages name their video");
+}
+
+// Upstream issue 336: Firefox starts an updated extension's copy of video.js in a world of its
+// own, beside the old copy, which can't be reached; its button stayed on the page beside the new
+// one. The new copy takes away any button already there, and a copy cut off from the extension
+// takes itself away instead of showing.
+{
+  const source = readFileSync(new URL("../../extension/video.js", import.meta.url), "utf8");
+  const start = source.indexOf("const prev = globalThis.__mdmVideoButton;");
+  const end = source.indexOf("\n", source.indexOf("const ext = globalThis.browser ?? globalThis.chrome;"));
+  assert.ok(start > 0 && end > start, "video.js starts by finding an older copy");
+  // The older copy's button, left on the page; this world has no __mdmVideoButton (Firefox).
+  const page = ["mdm-video-button"];
+  const document = {
+    querySelectorAll: (sel) => (sel === "mdm-video-button" ? page.map((name) => ({ remove: () => page.splice(page.indexOf(name), 1) })) : []),
+  };
+  new Function("globalThis", "document", `${source.slice(start, end)}`)({ chrome: { runtime: { id: "ours" } } }, document);
+  assert.deepEqual(page, [], "the older copy's button is taken away");
+  const show = source.slice(source.indexOf("function show(v) {"), source.indexOf("if (video !== v) {", source.indexOf("function show(v) {")));
+  assert.match(show, /if \(!ext\.runtime\?\.id\) return teardown\(\);/, "a copy cut off from the extension goes instead of showing");
+  ok("upstream issue 336: one video button after the extension is updated");
 }
 
 // No other download manager's name in what ships (the clean-room rule, CLAUDE.md).
@@ -1827,6 +2229,80 @@ const ask = (listeners) => (m, sender) => new Promise((r) => listeners.message(m
   assert.deepEqual(natives(calls), []);
   ok("#208 Firefox: Alt, excluded sites, small files, file uploads and pause stay the browser's");
 }
+// Upstream issue 332: Alt held on a link, in the order each browser's events come. page.js says
+// it as the button goes down and again at the click; the download may come before the click's
+// word, under the link's address, its redirect's end, or another address a page's script went
+// to. Each is the browser's; one click leaves one such download to it, for ten seconds.
+{
+  const clock = { t: Date.now() };
+  class FakeDate extends Date {
+    static now() {
+      return clock.t;
+    }
+  }
+  const page = { id: "ours", url: "https://site.test/files", frameId: 0, tab: { id: 3, url: "https://site.test/files" } };
+  // Chromium: Alt+click downloads the link itself, at the click; only the press was said by then.
+  {
+    const { api, calls, listeners } = fakeApi({ firefox: false });
+    load(api, false, { Date: FakeDate });
+    const send = (m, sender) => new Promise((r) => listeners.message(m, sender, r));
+    const kept = async (item) => {
+      let suggested = false;
+      listeners.determining(item, () => (suggested = true));
+      await settle();
+      return suggested;
+    };
+    await send({ type: "bypass", url: "https://site.test/get?id=7" }, page);
+    assert.ok(await kept({ id: 60, url: "https://site.test/get?id=7", finalUrl: "https://cdn.test/a.zip", referrer: "https://site.test/files", filename: "a.zip" }), "redirected: the link's own address");
+    // The click's word comes after: still the same click, nothing more is left to the browser.
+    await send({ type: "bypass", url: "https://site.test/get?id=7" }, page);
+    assert.ok(!(await kept({ id: 61, url: "https://site.test/b.zip", referrer: "https://site.test/files", filename: "b.zip" })), "a later plain download from the page");
+    assert.equal(natives(calls).length, 1);
+    // A link the page's script took: the download it started instead, under another address,
+    // sent from the page (the referrer cut to the site, the default across sites); once.
+    calls.length = 0;
+    await send({ type: "bypass", url: "https://site.test/dl/9" }, page);
+    assert.ok(await kept({ id: 62, url: "https://files.test/token/c.zip", referrer: "https://site.test/", filename: "c.zip" }), "a script's download");
+    assert.ok(!(await kept({ id: 63, url: "https://files.test/token/d.zip", referrer: "https://site.test/", filename: "d.zip" })), "only one");
+    assert.equal(natives(calls).length, 1);
+    // Another site's download meanwhile is not the click's.
+    calls.length = 0;
+    await send({ type: "bypass", url: "https://site.test/dl/10" }, page);
+    assert.ok(!(await kept({ id: 64, url: "https://other.test/e.zip", referrer: "https://other.test/page", filename: "e.zip" })), "another site's");
+    // Ten seconds on, the click is forgotten: its link goes to MDM again.
+    clock.t += 10001;
+    assert.ok(!(await kept({ id: 65, url: "https://site.test/dl/10", referrer: "https://site.test/files", filename: "f.zip" })), "forgotten");
+    assert.equal(natives(calls).length, 2);
+  }
+  // Firefox: page.js follows the link once the background has it; the page load's answer is the
+  // download. Straight, by a redirect, or a page whose script goes to the file in the same tab.
+  {
+    const { api, calls, listeners } = fakeApi({ firefox: true });
+    load(api, true, { Date: FakeDate });
+    await settle();
+    const send = ask(listeners);
+    const zip = { "Content-Type": "application/zip" };
+    await send({ type: "bypass", url: "https://site.test/a.zip" }, page);
+    assert.deepEqual(await held(listeners, answer("https://site.test/a.zip", zip)), {}, "straight");
+    await send({ type: "bypass", url: "https://site.test/go?f=b" }, page);
+    listeners.beforeRedirect({ url: "https://site.test/go?f=b", redirectUrl: "https://cdn.test/b.zip", type: "main_frame", tabId: 3 });
+    assert.deepEqual(await held(listeners, answer("https://cdn.test/b.zip", zip, { requestId: "r2" })), {}, "redirected");
+    await send({ type: "bypass", url: "https://site.test/thanks?f=c" }, page);
+    assert.deepEqual(await held(listeners, answer("https://cdn.test/c.zip", zip, { requestId: "r3" })), {}, "a script's, same tab");
+    assert.deepEqual(natives(calls), []);
+    // That click's leave is used: the next download in the tab is MDM's.
+    assert.deepEqual(await held(listeners, answer("https://cdn.test/d.zip", zip, { requestId: "r4" })), { cancel: true });
+    assert.equal(natives(calls).length, 1);
+    // The download Firefox itself makes of it (a save with browser.altClickSave): by its address.
+    calls.length = 0;
+    await send({ type: "bypass", url: "https://site.test/e.zip" }, page);
+    listeners.created({ id: 70, url: "https://site.test/e.zip", filename: "/dl/e.zip", referrer: "https://site.test/files" });
+    await settle();
+    assert.deepEqual(natives(calls), []);
+    assert.deepEqual(steps(calls), []);
+  }
+  ok("upstream issue 332: Alt+click: the link, its redirect, a script's download after it, once; Chrome and Firefox orders");
+}
 // A private window's download goes as one; a tab opened only for it closes with it.
 {
   const { api, calls, listeners } = fakeApi({ firefox: true });
@@ -1995,34 +2471,91 @@ const ask = (listeners) => (m, sender) => new Promise((r) => listeners.message(m
   assert.ok(english.status_remote, "status_remote");
   ok("another MDM: the app's file types, every pairing message");
 }
-// page.js, in a page: Alt held tells the app the click is the browser's (`bypass`); a plain
-// click is never held (the downloads API takes it).
+// page.js, in a page: Alt held tells the app the click is the browser's (`bypass`), as the button
+// goes down and at the click; a plain click is never held (the downloads API takes it). Upstream
+// issue 332: Firefox does nothing itself with an Alt+click, so there the link is followed as a
+// plain click once the background has it.
 {
   const pageCode = readFileSync(new URL("../../extension/page.js", import.meta.url), "utf8");
-  const sent = [];
-  const handlers = {};
-  const api = {
-    runtime: { id: "ours", sendMessage: async (m) => (sent.push(JSON.parse(JSON.stringify(m))), { ok: true }) },
+  const run = async ({ firefox }) => {
+    const sent = [];
+    // The capture listeners by the event's name, the bubbling ones as "name:bubble".
+    const handlers = {};
+    class Element {
+      constructor(href) {
+        this.href = href;
+        this.clicks = 0;
+      }
+      closest() {
+        return this;
+      }
+      // The script's own click: not trusted, without Alt.
+      click() {
+        this.clicks++;
+        this.again = { type: "click", button: 0, isTrusted: false, altKey: false, target: this, defaultPrevented: false, preventDefault() {} };
+        handlers.click(this.again);
+        handlers["click:bubble"](this.again);
+      }
+    }
+    const api = {
+      runtime: {
+        id: "ours",
+        getURL: (p) => (firefox ? "moz-extension://5d0c/" : "chrome-extension://ours/") + p,
+        sendMessage: async (m) => (sent.push(JSON.parse(JSON.stringify(m))), { ok: true }),
+      },
+    };
+    vm.runInNewContext(pageCode, {
+      browser: api,
+      Element,
+      Promise,
+      addEventListener: (n, f, capture) => (handlers[capture ? n : `${n}:bubble`] = f),
+      removeEventListener() {},
+    });
+    // A person's click: the button pressed, then the click going down to the link (capture) and
+    // back up to the window (`page`: what the page's own listener does with it on the way).
+    const click = (href, extra = {}, page = () => {}) => {
+      const a = new Element(href);
+      const e = { type: "click", button: 0, isTrusted: true, altKey: false, target: a, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...extra };
+      handlers.pointerdown({ ...e, type: "pointerdown" });
+      handlers.click(e);
+      page(e);
+      handlers["click:bubble"](e);
+      return { a, e };
+    };
+    return { click, sent };
   };
-  class Element {
-    constructor(href) {
-      this.href = href;
-    }
-    closest() {
-      return this;
-    }
+  // Chromium downloads an Alt-clicked link itself: the press said it, the click is left as it is.
+  let t = await run({ firefox: false });
+  let { a, e } = t.click("https://x.test/f/a.zip");
+  await settle();
+  assert.ok(!e.defaultPrevented && a.clicks === 0);
+  assert.deepEqual(t.sent, []);
+  ({ a, e } = t.click("https://x.test/f/a.zip", { altKey: true }));
+  await settle();
+  assert.ok(!e.defaultPrevented && a.clicks === 0, "Alt: the browser's");
+  assert.deepEqual(t.sent, [{ type: "bypass", url: "https://x.test/f/a.zip" }, { type: "bypass", url: "https://x.test/f/a.zip" }], "at the press, and the click");
+  // Firefox: its own handling is stopped, and once the background has it the link is followed
+  // as a plain click (one click, not trusted, without Alt).
+  t = await run({ firefox: true });
+  ({ a, e } = t.click("https://x.test/go?f=a", { altKey: true }));
+  assert.ok(e.defaultPrevented && a.clicks === 0, "not before the background has it");
+  await settle();
+  assert.ok(a.clicks === 1 && !a.again.altKey && a.again.isTrusted !== true, "followed");
+  assert.ok(t.sent.length >= 2 && t.sent.every((m) => m.type === "bypass" && m.url === "https://x.test/go?f=a"));
+  // A link the page's own script took, Alt with Shift, Ctrl or Meta: left as they are.
+  ({ a, e } = t.click("https://x.test/go?f=b", { altKey: true }, (ev) => ev.preventDefault()));
+  await settle();
+  assert.equal(a.clicks, 0, "the page's script");
+  for (const keys of [{ shiftKey: true }, { metaKey: true }, { ctrlKey: true }]) {
+    ({ a, e } = t.click("https://x.test/go?f=c", { altKey: true, ...keys }));
+    await settle();
+    assert.ok(!e.defaultPrevented && a.clicks === 0, JSON.stringify(keys));
   }
-  vm.runInNewContext(pageCode, { browser: api, Element, addEventListener: (n, f) => (handlers[n] = f), removeEventListener() {} });
-  const click = (extra = {}) => {
-    const e = { type: "click", button: 0, isTrusted: true, altKey: false, target: new Element("https://x.test/f/a.zip"), defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...extra };
-    handlers.click(e);
-    return e;
-  };
-  assert.ok(!click().defaultPrevented);
-  assert.deepEqual(sent, []);
-  assert.ok(!click({ altKey: true }).defaultPrevented, "Alt: the browser's");
-  assert.deepEqual(sent, [{ type: "bypass", url: "https://x.test/f/a.zip" }]);
-  ok("page.js: Alt tells the app, a plain click is never held");
+  // Without Alt nothing changes.
+  ({ a, e } = t.click("https://x.test/f/a.zip"));
+  await settle();
+  assert.ok(!e.defaultPrevented && a.clicks === 0);
+  ok("page.js: Alt tells the app at the press and the click, a plain click is never held; upstream issue 332: Firefox follows the link");
 }
 assert.deepEqual(complaints, [], "nothing written to the console as an error or warning");
 

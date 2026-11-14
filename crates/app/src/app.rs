@@ -2459,10 +2459,11 @@ impl App {
                 }
             }
             // A page whose videos need ffmpeg (#351): without it the list has only the sound.
+            // `video-adaptive:runtime`: yt-dlp said it had no JavaScript runtime (upstream issue 852).
             "video-adaptive" => {
                 self.run(Cmd::VideoPage, None, ctx);
                 if let Some(v) = &mut self.video_dlg {
-                    v.show_sample_adaptive();
+                    v.show_sample_adaptive(tab == "runtime");
                 }
             }
             // A sample playlist (#69), its quality by its place in the list: `video-playlist:7`.
@@ -2692,6 +2693,8 @@ impl App {
         if let Some(file) = drive_file_behind_player(&cmd) {
             cmd.video_page = None;
             cmd.url = Some(file);
+            // Drive names its file itself; its page's title ("… - Google Drive") doesn't.
+            cmd.video_title = None;
         }
         // The browser's download button over a video: the Download video window, looking the
         // page up at once. Only the dialog opens (upstream issue 520): it is a window of its own.
@@ -2791,7 +2794,7 @@ impl App {
             let name = cmd
                 .name
                 .clone()
-                .unwrap_or_else(|| mdm_engine::naming::file_name(None, &url));
+                .unwrap_or_else(|| crate::model::browser_guess(&url, &cmd));
             let name = mdm_engine::naming::sanitize(&name);
             // The automation API's `category` (by its key) and `queue` (by name), when given.
             let category = cmd
@@ -2855,6 +2858,8 @@ impl App {
             .and_then(|r| sent_referrer(url, r));
         for (name, v) in [
             (reqwest::header::REFERER, &referer),
+            // A video's file or stream, with the Origin its page's player sent (upstream issue 900).
+            (reqwest::header::ORIGIN, &context.origin),
             (reqwest::header::COOKIE, &context.cookies),
             (reqwest::header::CONTENT_TYPE, &post_type.cloned()),
         ] {
@@ -2862,7 +2867,10 @@ impl App {
                 headers.insert(name, v);
             }
         }
-        let ua = self.settings.user_agent.trim();
+        // The browser's own User-Agent when it handed the download over, else the one set in
+        // Options, else the automatic one (the default browser's, upstream issue 668).
+        let own = self.settings.own_user_agent();
+        let given = context.user_agent.as_deref().or(own);
         let opts = Options {
             max_connections: self.settings.connections_for(url),
             proxy: self.settings.proxy_for(context),
@@ -2875,20 +2883,17 @@ impl App {
             ignore_mtime: self.settings.ignore_mtime,
             server_time: self.settings.set_creation_date,
             ftp_passive: self.settings.ftp_passive,
-            user_agent: match context.user_agent.as_deref() {
-                Some(browser) => browser.to_owned(),
-                None if ua.is_empty() => Options::default().user_agent,
-                None => ua.to_owned(),
+            user_agent: given.map_or_else(mdm_engine::agent::automatic, str::to_owned),
+            automatic_agent: given.is_none(),
+            // A browser's User-Agent (handed over, or the automatic one) may be refused on this
+            // connection (#372): the one set in Options, else MDM's former one (Internet
+            // Explorer 11's, which such bot checks let through), is tried once then. One the
+            // user set is the user's choice: no other.
+            agent_fallback: match (context.user_agent.is_some(), own) {
+                (true, Some(own)) => Some(own.to_owned()),
+                (_, None) => Some(mdm_engine::agent::IE11_USER_AGENT.to_owned()),
+                (false, Some(_)) => None,
             },
-            // The browser's User-Agent may be refused on this connection (#372): MDM's own
-            // (Options' or the default) is tried once then, as Add URL would.
-            agent_fallback: context.user_agent.is_some().then(|| {
-                if ua.is_empty() {
-                    Options::default().user_agent
-                } else {
-                    ua.to_owned()
-                }
-            }),
             // Where the browser's own download of it ended: asked when the link itself is
             // refused (#630, a one-time or session-bound token the browser already used).
             browser_final: context
@@ -2903,6 +2908,9 @@ impl App {
             // And the size it announced: larger than any waiting page, a page in its place is
             // the site's (upstream issue 701).
             expected_size: context.size,
+            // The page a media file was played on (upstream issue 800): a file whose address
+            // names nothing (a script, a bare id) is named by its title when the engine names it.
+            page_title: context.video_title.clone(),
             ..Options::default()
         };
         RequestParts { headers, opts }
@@ -9771,7 +9779,7 @@ impl App {
             let name = context
                 .name
                 .clone()
-                .unwrap_or_else(|| mdm_engine::naming::file_name(None, &url));
+                .unwrap_or_else(|| crate::model::browser_guess(&url, &context));
             let name = mdm_engine::naming::sanitize(&name);
             let category = Category::of(&name);
             let dir = self.settings.category_dir(category, &self.downloads);

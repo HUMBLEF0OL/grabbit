@@ -11,6 +11,7 @@ mod countries;
 mod crash;
 mod crashui;
 mod debrid;
+mod defaultbrowser;
 mod derive;
 mod dialogs;
 mod droptarget;
@@ -225,6 +226,13 @@ fn main() -> std::process::ExitCode {
     // misterdownloadmanager-cli's commands (crates/cli): its launcher starts this program for
     // them. Nothing of the app's runs: no window, instance, crash monitor or crash log.
     if let Some(cli) = mdm_cli::launched(std::env::args_os().collect()) {
+        // The default browser's User-Agent (upstream issue 668): a command's download starts at
+        // once, so it waits for it a moment (read from the registry). Only `get` and `resume`
+        // download with it: the others don't wait.
+        let found = defaultbrowser::start();
+        if mdm_cli::downloads(&cli.args) {
+            defaultbrowser::wait(&found, std::time::Duration::from_secs(3));
+        }
         // A windowed program has no console: the launcher's, unless the output goes to a file
         // or a pipe.
         win32::cli_console(cli.launcher);
@@ -347,6 +355,9 @@ fn app() -> eframe::Result {
             crash::session("en", loaded.settings.dark_mode_support),
         );
     }
+    // The default browser, looked for once on a thread of its own (logged): its User-Agent is
+    // the one links added by hand go with (upstream issue 668).
+    defaultbrowser::start();
     // Secrets from before (sealed, or kept as they were) go to the system's keychain now; the
     // list is saved with their references once it holds them (secrets.rs, #44).
     let _ = loaded.settings.for_disk();
