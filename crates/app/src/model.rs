@@ -882,6 +882,18 @@ impl Item {
             ) || (self.status == Status::Complete && self.gallery.is_some()))
     }
 
+    /// It failed because the site sent a web page where its file was expected (a file host's
+    /// countdown or captcha, upstream issue 701): the browser gets past it, so the progress
+    /// window offers to open the link there. As its last run ended (the engine's failure, this
+    /// session only).
+    pub fn got_web_page(&self) -> bool {
+        self.status == Status::Error
+            && self.live.is_none()
+            && self.snap.as_ref().is_some_and(|s| {
+                s.state == State::Failed && matches!(s.failure, Some(mdm_engine::Error::GotWebPage))
+            })
+    }
+
     pub fn rate(&self) -> f64 {
         self.live.as_ref().map_or(0.0, |l| l.rate)
     }

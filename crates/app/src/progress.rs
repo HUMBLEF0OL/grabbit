@@ -416,6 +416,12 @@ impl Progress {
                 .ceil()
                 .max(73.0)
         };
+        // The site sent its page instead of the file (upstream issue 701): a button after
+        // Details opens the link in the browser, which gets past the page (its download then
+        // comes back to MDM).
+        // i18n: button in a download's progress window when the site sent a web page (a waiting page, a captcha) instead of the file: opens the download's link in the web browser
+        let open_label = crate::i18n::mark("Open in browser");
+        let web_page = item.got_web_page();
         let widths = [
             width(winui::widest_label(
                 &p,
@@ -423,20 +429,22 @@ impl Progress {
             )),
             width(winui::widest_label(&p, &["Pause", "Resume"])),
             width("Cancel"),
+            width(open_label),
         ];
+        let mut row = vec![
+            (widths[0], winui::Side::Leading, false),
+            (widths[1], winui::Side::Trailing, true),
+            (widths[2], winui::Side::Trailing, false),
+        ];
+        if web_page {
+            row.push((widths[3], winui::Side::Leading, false));
+        }
         // Within the bar's span (17..530): the footer's edges laid out on 545 points, moved
         // right by 1.
-        let slots: Vec<f32> = winui::footer_slots(
-            &[
-                (widths[0], winui::Side::Leading, false),
-                (widths[1], winui::Side::Trailing, true),
-                (widths[2], winui::Side::Trailing, false),
-            ],
-            545.0,
-        )
-        .into_iter()
-        .map(|x| x + 1.0)
-        .collect();
+        let slots: Vec<f32> = winui::footer_slots(&row, 545.0)
+            .into_iter()
+            .map(|x| x + 1.0)
+            .collect();
         let (details_at, pause_at, cancel_at) = (
             (slots[0], widths[0]),
             (slots[1], widths[1]),
@@ -454,6 +462,19 @@ impl Progress {
         .clicked()
         {
             self.details = !self.details;
+        }
+        if let Some(&open_x) = slots.get(3)
+            && winui::button(
+                ui,
+                r(o, open_x, BUTTONS_Y, widths[3], winui::CONTROL_H),
+                open_label,
+                ButtonKind::Normal,
+                false,
+                None,
+            )
+            .clicked()
+        {
+            crate::launch::open_page(item.url.as_str());
         }
         let running = item.status == Status::Downloading;
         let can_resume = matches!(item.status, Status::Stopped | Status::Error);

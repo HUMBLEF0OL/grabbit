@@ -101,7 +101,8 @@ pub struct Options {
     /// From the browser: the address its own download of this file ended at, its redirects
     /// followed. When the address asked for is refused before any byte (`link_refused`: a
     /// one-time link the browser already spent, a token bound to its session, a site that
-    /// turns away whatever isn't that browser), the download asks there once instead (#630),
+    /// turns away whatever isn't that browser, or answers with its page, upstream issue 701),
+    /// the download asks there once instead (#630),
     /// the address's cookies and logins going only if it is the same site (`scoped_headers`).
     /// Never for a form's POST (its body goes where it was given) or through a service account.
     pub browser_final: Option<Url>,
@@ -165,6 +166,10 @@ pub struct Options {
     /// type is the server refusing MDM (a firewall's "The requested URL was rejected"), an error
     /// and never saved as the file (#533, `expects_other_file`).
     pub expected_type: Option<String>,
+    /// From the browser: the size its own download announced. A file larger than any waiting
+    /// page: a web page in its place is the site's (a countdown, a captcha), never the file
+    /// (upstream issue 701, `expects_other_file`).
+    pub expected_size: Option<u64>,
     /// Tests and measurements: a disk slower than the network, behind a write cache, whose
     /// flush holds every write to the file (as NTFS's does, #361, upstream issue 782). None: the
     /// real disk.
@@ -250,6 +255,7 @@ impl Default for Options {
             post: None,
             on_file_created: None,
             expected_type: None,
+            expected_size: None,
             slow_disk: None,
         }
     }
@@ -336,8 +342,11 @@ pub enum Error {
     /// Longer than Windows programs can open (MAX_PATH).
     #[error("the path is too long for Windows: {}", .0.display())]
     PathTooLong(PathBuf),
-    /// A web page (a sign-in wall, an expired link's notice) came instead of the file.
-    #[error("the server sent a web page instead of the file (sign-in needed or the link expired?)")]
+    /// A web page came instead of the file (a file host's countdown or captcha, a sign-in wall,
+    /// an expired link's notice, #533, upstream issue 701): the browser gets past it, MDM doesn't.
+    #[error(
+        "the site sent a web page instead of the file (a waiting page, a captcha or a sign-in): open the link in your browser, finish there, and the download comes back to MDM"
+    )]
     GotWebPage,
     /// A full answer to a range request for the same, unchanged file: the server (or one CDN
     /// edge) didn't serve the range this time. Retried; the file did not change.
@@ -780,6 +789,9 @@ pub struct KeptAnswer {
     client: Client,
     as_get: AsGet,
     resp: Response,
+    /// The body's first bytes, read already to tell a web page from the file (`not_a_page`):
+    /// they come first. Empty when none were read.
+    first: Bytes,
     headers: HeaderMap,
     took: Duration,
     at: std::time::Instant,
@@ -832,7 +844,12 @@ pub async fn probe_kept(
     };
     let seen = Arc::new(crate::server::ServerSeen::default());
     let client = client(opts, &target, &as_get, &seen)?;
-    let expects = expects_other_file(opts.expected_type.as_deref(), None, &url);
+    let expects = expects_other_file(
+        opts.expected_type.as_deref(),
+        opts.expected_size,
+        None,
+        &url,
+    );
     // A browser's User-Agent refused (#372): asked once more as MDM.
     let (client, asked) = match get(
         &client,
@@ -863,7 +880,7 @@ pub async fn probe_kept(
         }
         asked => (client, asked),
     };
-    let (resp, headers, took) = asked?;
+    let (mut resp, headers, took) = asked?;
     seen.answered(&resp);
     let final_url = resp.url().clone();
     let (size, from_zero) = match resp.status() {
@@ -876,6 +893,13 @@ pub async fn probe_kept(
     };
     let cd = header_text(resp.headers(), header::CONTENT_DISPOSITION);
     let file_name = name_for(cd.as_deref(), &final_url, unlocked.as_ref());
+    // A page where a file that never is one was expected, whatever type it came as (upstream
+    // issue 701): said before anything is saved.
+    let first = if from_zero && never_a_page(opts.expected_type.as_deref(), &file_name) {
+        not_a_page(&mut resp, &CancellationToken::new()).await?
+    } else {
+        Bytes::new()
+    };
     let info = ProbeInfo {
         final_url,
         size: size.or(unlocked.as_ref().and_then(|u| u.size)),
@@ -888,6 +912,7 @@ pub async fn probe_kept(
         seen,
         as_get,
         resp,
+        first,
         headers,
         took,
         at: std::time::Instant::now(),
@@ -1229,6 +1254,9 @@ struct Ctx {
     as_get: AsGet,
     /// The file itself is a web page; otherwise an HTML answer is a sign-in wall or an error.
     web_page_ok: bool,
+    /// The file is a kind whose bytes never start as a web page's ([`never_a_page`], upstream
+    /// issue 701): a whole answer that does is the site's page, whatever type it came as.
+    never_page: bool,
     /// An FTP download's server and its idle sessions (else HTTP through `client`).
     ftp: Option<Arc<crate::ftp::Site>>,
 }
@@ -1237,14 +1265,30 @@ struct Ctx {
 enum Body {
     Http(Response),
     Ftp(crate::ftp::Transfer),
+    /// An HTTP response whose first bytes were read already (to tell a web page from the file,
+    /// upstream issue 701): they come first, then the rest.
+    Prefixed(Option<Bytes>, Response),
 }
 
 impl Body {
+    /// `resp`'s body, its `first` bytes (read from it already, maybe none) first.
+    fn after(first: Bytes, resp: Response) -> Body {
+        if first.is_empty() {
+            Body::Http(resp)
+        } else {
+            Body::Prefixed(Some(first), resp)
+        }
+    }
+
     /// The next bytes; None at the end.
     async fn chunk(&mut self) -> Result<Option<bytes::Bytes>, Error> {
         match self {
             Body::Http(r) => Ok(r.chunk().await?),
             Body::Ftp(t) => t.chunk().await,
+            Body::Prefixed(first, r) => match first.take().filter(|b| !b.is_empty()) {
+                Some(b) => Ok(Some(b)),
+                None => Ok(r.chunk().await?),
+            },
         }
     }
 
@@ -1253,6 +1297,7 @@ impl Body {
         match self {
             Body::Http(r) => r.content_length(),
             Body::Ftp(t) => t.expected(),
+            Body::Prefixed(_, r) => r.content_length(),
         }
     }
 
@@ -1260,7 +1305,7 @@ impl Body {
     async fn done(self, at_end: bool) {
         match self {
             // Read the end of the body so the connection goes back to the pool.
-            Body::Http(mut r) => {
+            Body::Http(mut r) | Body::Prefixed(_, mut r) => {
                 if !at_end {
                     let _ = r.chunk().await;
                 }
@@ -1543,6 +1588,7 @@ async fn run_fresh(
     // answer, asked before the file's name was settled, is asked for again then (`get` says so).
     let expects = expects_other_file(
         opts.expected_type.as_deref(),
+        opts.expected_size,
         dest_name(&req.dest),
         &req.url,
     );
@@ -1552,12 +1598,15 @@ async fn run_fresh(
             && !(expects && is_web_page(k.resp.headers()) && !named(k.resp.headers()))
     });
     let mut unlocked = kept.as_ref().and_then(|k| k.unlocked.clone());
-    let (as_get, client0, (resp, headers), ttfb) = match kept {
+    // The body's first bytes the look read already (`KeptAnswer::first`).
+    let mut first = Bytes::new();
+    let (as_get, client0, (mut resp, headers), ttfb) = match kept {
         Some(k) => {
             shared.event(
                 "Connection 1: continuing from the answer the file's information window got",
             );
             let _ = shared.seen.set(k.seen);
+            first = k.first;
             (k.as_get, k.client, (k.resp, k.headers), k.took)
         }
         None => {
@@ -1687,11 +1736,23 @@ async fn run_fresh(
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned);
-    let (dest, _reservation, file) = open_destination(&req.dest, size, &opts, || {
+    let server_name = {
         let cd = header_text(resp.headers(), header::CONTENT_DISPOSITION);
         name_for(cd.as_deref(), &final_url, unlocked.as_ref())
-    })
-    .await?;
+    };
+    // Upstream issue 701: a page where a kind of file that never is one was expected, whatever
+    // type it came as (application/octet-stream, none, or text/html under a file's name of the
+    // server's): its first bytes say so, before anything is saved. The name is the one it would
+    // be saved as. The look's answer was read into already when it said the same.
+    let never_page = never_a_page(
+        opts.expected_type.as_deref(),
+        dest_name(&req.dest).unwrap_or(&server_name),
+    );
+    if never_page && first.is_empty() {
+        first = not_a_page(&mut resp, cancel).await?;
+    }
+    let (dest, _reservation, file) =
+        open_destination(&req.dest, size, &opts, || server_name).await?;
     downloading(shared, &dest, size, ranges);
     let file = Arc::new(file);
 
@@ -1734,9 +1795,10 @@ async fn run_fresh(
             range_answered: Default::default(),
             as_get,
             web_page_ok: expects_web_page(&dest, content_type.as_deref()),
+            never_page,
             ftp: None,
         });
-        match segmented(ctx, saved, Some(Body::Http(resp))).await {
+        match segmented(ctx, saved, Some(Body::after(first, resp))).await {
             Ok(()) => size,
             // The server ignores ranges and the probe's data can't be kept: start over on
             // one connection.
@@ -1744,7 +1806,7 @@ async fn run_fresh(
                 *shared.planner.lock().unwrap() = None;
                 shared.view.lock().unwrap().resumable = Some(false);
                 let agent = &opts.user_agent;
-                let (resp, ..) = get(
+                let (mut resp, ..) = get(
                     &client0,
                     final_url,
                     headers,
@@ -1754,13 +1816,18 @@ async fn run_fresh(
                     cancel,
                 )
                 .await?;
-                let body = Body::Http(resp);
+                let first = if never_page {
+                    not_a_page(&mut resp, cancel).await?
+                } else {
+                    Bytes::new()
+                };
+                let body = Body::after(first, resp);
                 single_stream(body, &file, shared, opts.global.as_deref(), cancel).await?
             }
             Err(e) => return Err(e),
         }
     } else {
-        let body = Body::Http(resp);
+        let body = Body::after(first, resp);
         single_stream(body, &file, shared, opts.global.as_deref(), cancel).await?
     };
     verify_part(shared, &dest, checksum.as_ref()).await?;
@@ -1949,6 +2016,7 @@ async fn run_fresh_ftp(
             range_answered: Default::default(),
             as_get: AsGet::default(),
             web_page_ok: true,
+            never_page: false,
             ftp: Some(site.clone()),
         });
         match segmented(ctx, saved, Some(first)).await {
@@ -2085,6 +2153,11 @@ async fn run_resume(
     let (dest, size) = (saved.dest.clone(), saved.size);
     let checksum = opts.checksum.clone().or_else(|| saved.checksum.clone());
     let web_page_ok = expects_web_page(&dest, saved.content_type.as_deref());
+    // The server's type for it then stands for the browser's (upstream issue 701).
+    let never_page = never_a_page(
+        saved.content_type.as_deref(),
+        &dest.file_name().unwrap_or_default().to_string_lossy(),
+    );
     let ctx = Arc::new(Ctx {
         client,
         validators: Mutex::new({
@@ -2116,6 +2189,7 @@ async fn run_resume(
         range_answered: Default::default(),
         as_get,
         web_page_ok,
+        never_page,
         ftp,
     });
     let stamp = ctx
@@ -2447,6 +2521,9 @@ fn forced_gap(force: bool, took: Duration) -> Duration {
 /// to whatever isn't a browser). A site's bot check stays the site's call (#376).
 fn link_refused(e: &Error) -> bool {
     matches!(e, Error::Status(s) if matches!(s.as_u16(), 401 | 403 | 404 | 410 | 412))
+        // The site's page where the browser got the file (upstream issue 701): its link spent,
+        // or bound to the browser's visit.
+        || matches!(e, Error::GotWebPage)
 }
 
 /// What a download's first request needs besides its address, headers and options.
@@ -3132,7 +3209,7 @@ async fn request(ctx: &Ctx, target: &Target, from: u64, to: u64) -> Result<Body,
     if let Some(v) = &if_range {
         req = req.header(header::IF_RANGE, v);
     }
-    let resp = cancellable(&ctx.cancel, async { Ok(req.send().await?) }).await?;
+    let mut resp = cancellable(&ctx.cancel, async { Ok(req.send().await?) }).await?;
     if resp.status().is_success() && !ctx.web_page_ok && is_web_page(resp.headers()) {
         return Err(Error::GotWebPage);
     }
@@ -3148,11 +3225,15 @@ async fn request(ctx: &Ctx, target: &Target, from: u64, to: u64) -> Result<Body,
         // A full body for a ranged request once ranges are known to work: If-Range failed (the
         // file changed), unless it is still the same file and this answer just lacks the range.
         StatusCode::OK if ctx.ranges.load(Ordering::SeqCst) == RANGES_YES => {
-            return Err(if same_file(ctx, &resp) {
-                Error::RangesUnavailable
-            } else {
-                Error::FileChanged
-            });
+            if same_file(ctx, &resp) {
+                return Err(Error::RangesUnavailable);
+            }
+            // Not the file any more: the site's page where it was, whatever its type says
+            // (upstream issue 701), else another file.
+            if ctx.never_page && !ctx.web_page_ok {
+                not_a_page(&mut resp, &ctx.cancel).await?;
+            }
+            return Err(Error::FileChanged);
         }
         StatusCode::OK => {
             ctx.learn_ranges(false);
@@ -3332,20 +3413,130 @@ const FILE_EXTENSIONS: &[&str] = &[
     "torrent",
 ];
 
+/// Of [`FILE_EXTENSIONS`], the ones programs also save web pages under (a report "exported to
+/// Excel" is an HTML table named `.xls`; Word opens a page named `.doc`): their bytes may be a
+/// page's and still be the file.
+const PAGE_LIKE_EXTENSIONS: &[&str] = &["doc", "dot", "xls", "ppt", "pps"];
+
+/// A web page's own names.
+const PAGE_EXTENSIONS: &[&str] = &["htm", "html", "xhtml", "shtml"];
+
+fn extension_in(name: &str, list: &[&str]) -> bool {
+    Path::new(name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| list.iter().any(|x| e.eq_ignore_ascii_case(x)))
+}
+
 /// The download expects a kind of file a web page isn't (#533): the browser's own download had
-/// another type (`expected_type`), or its name (`name`, else the address's) is a file's. A web
+/// another type (`expected_type`), or its name (`name`, else the address's) is a file's, or the
+/// browser announced a size no waiting page has (`expected_size`, upstream issue 701). A web
 /// page in its place, without a name of the server's, is an error (`Error::GotWebPage`). A page
 /// the browser saved as one (`text/html`), a `.html` link, or a server's own type for the file
 /// (`application/octet-stream`) are downloads like any other.
-fn expects_other_file(expected_type: Option<&str>, name: Option<&str>, url: &Url) -> bool {
+fn expects_other_file(
+    expected_type: Option<&str>,
+    expected_size: Option<u64>,
+    name: Option<&str>,
+    url: &Url,
+) -> bool {
     if let Some(t) = expected_type.map(str::trim).filter(|t| !t.is_empty()) {
         return !is_web_page_type(t);
     }
     let name = name.map_or_else(|| naming::file_name(None, url), str::to_owned);
-    Path::new(&name)
-        .extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| FILE_EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)))
+    extension_in(&name, FILE_EXTENSIONS)
+        || (expected_size.is_some_and(|n| n > PAGE_PEEK as u64)
+            && !extension_in(&name, PAGE_EXTENSIONS))
+}
+
+/// Types the browser gives files whose bytes never start as a web page's (besides every
+/// picture but SVG, audio and video, and the Office and OpenDocument formats, which are zips).
+const FILE_TYPES: &[&str] = &[
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/x-rar-compressed",
+    "application/x-rar",
+    "application/vnd.rar",
+    "application/x-7z-compressed",
+    "application/gzip",
+    "application/x-gzip",
+    "application/x-tar",
+    "application/x-bzip2",
+    "application/x-xz",
+    "application/zstd",
+    "application/x-zstd",
+    "application/pdf",
+    "application/epub+zip",
+    "application/x-msdownload",
+    "application/x-msdos-program",
+    "application/x-dosexec",
+    "application/vnd.microsoft.portable-executable",
+    "application/x-msi",
+    "application/x-ms-installer",
+    "application/vnd.android.package-archive",
+    "application/x-iso9660-image",
+    "application/x-cd-image",
+    "application/x-apple-diskimage",
+    "application/vnd.debian.binary-package",
+    "application/x-debian-package",
+    "application/x-rpm",
+    "application/x-redhat-package-manager",
+    "application/java-archive",
+    "application/x-bittorrent",
+];
+
+/// Whether the download is a kind of file whose bytes never start as a web page's (upstream
+/// issue 701): an archive, a program, a disk image, a PDF, a picture, audio or video, by its
+/// name (`name`) or, when that names no such kind, the browser's own type for it
+/// (`expected_type`). Its first bytes reading as HTML are then the site's page in its place (a
+/// countdown, a captcha), whatever type the server sent them as. Never a download the browser
+/// had as a page, nor the old Office formats ([`PAGE_LIKE_EXTENSIONS`]).
+fn never_a_page(expected_type: Option<&str>, name: &str) -> bool {
+    let expected = expected_type.map(str::trim).filter(|t| !t.is_empty());
+    if expected.is_some_and(is_web_page_type) {
+        return false;
+    }
+    if extension_in(name, FILE_EXTENSIONS) {
+        return !extension_in(name, PAGE_LIKE_EXTENSIONS);
+    }
+    !extension_in(name, PAGE_EXTENSIONS)
+        && expected.is_some_and(|t| {
+            let mime = t
+                .split(';')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_ascii_lowercase();
+            match mime.split_once('/') {
+                Some(("image", sub)) => sub != "svg+xml",
+                Some(("audio" | "video", _)) => true,
+                _ => {
+                    FILE_TYPES.contains(&mime.as_str())
+                        || mime.starts_with("application/vnd.openxmlformats-officedocument.")
+                        || mime.starts_with("application/vnd.oasis.opendocument.")
+                }
+            }
+        })
+}
+
+/// How many first bytes [`not_a_page`] reads: enough for a page's blank lines before its first
+/// tag.
+const PAGE_SNIFF_BYTES: usize = 1024;
+
+/// `Error::GotWebPage` when `resp`'s body starts as a web page's (upstream issue 701), else its
+/// first bytes (up to [`PAGE_SNIFF_BYTES`], fewer at its end), read from it already: they go
+/// first to the file ([`Body::after`]). For a file [`never_a_page`] says isn't one, from its start.
+async fn not_a_page(resp: &mut Response, cancel: &CancellationToken) -> Result<Bytes, Error> {
+    let mut seen: Vec<u8> = Vec::new();
+    while seen.len() < PAGE_SNIFF_BYTES {
+        let next = cancellable(cancel, async { Ok(resp.chunk().await?) }).await?;
+        let Some(c) = next else { break };
+        seen.extend_from_slice(&c);
+    }
+    if sniffs_as_html(&seen) {
+        return Err(Error::GotWebPage);
+    }
+    Ok(Bytes::from(seen))
 }
 
 /// Bytes that start as an HTML document (after a byte order mark and white space).
@@ -3360,19 +3551,150 @@ fn sniffs_as_html(body: &[u8]) -> bool {
         .take(16)
         .map(u8::to_ascii_lowercase)
         .collect();
-    ["<!doctype html", "<html", "<head", "<body", "<title"]
-        .iter()
-        .any(|t| head.starts_with(t.as_bytes()))
+    [
+        "<!doctype html",
+        "<html",
+        "<head",
+        "<body",
+        "<title",
+        "<meta",
+        "<script",
+        "<!--",
+    ]
+    .iter()
+    .any(|t| head.starts_with(t.as_bytes()))
 }
 
 /// Whether the download is itself a web page (it was served as one, or is named like one).
 fn expects_web_page(dest: &Path, content_type: Option<&str>) -> bool {
     content_type.is_some_and(is_web_page_type)
-        || dest.extension().and_then(|e| e.to_str()).is_some_and(|e| {
-            ["htm", "html", "xhtml", "shtml"]
-                .iter()
-                .any(|x| e.eq_ignore_ascii_case(x))
-        })
+        || dest
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| extension_in(n, PAGE_EXTENSIONS))
+}
+
+#[cfg(test)]
+mod web_page_tests {
+    use super::*;
+
+    fn url(u: &str) -> Url {
+        u.parse().unwrap()
+    }
+
+    /// #533, upstream issue 701: what says a file is expected where a web page came.
+    #[test]
+    fn a_file_is_expected_by_type_name_or_announced_size() {
+        let link = url("https://drop.example/dl/AbC123");
+        // The browser's own type for it, whichever its name.
+        assert!(expects_other_file(
+            Some("application/zip"),
+            None,
+            None,
+            &link
+        ));
+        assert!(!expects_other_file(
+            Some("text/html; charset=utf-8"),
+            Some(300 << 20),
+            Some("KtK.zip"),
+            &link
+        ));
+        // Its name (the browser's, else the address's).
+        assert!(expects_other_file(None, None, Some("KtK.zip"), &link));
+        assert!(expects_other_file(
+            None,
+            None,
+            None,
+            &url("https://host.example/cedbo/hwinfo_8.60.zip")
+        ));
+        assert!(!expects_other_file(None, None, None, &link));
+        // A size the browser announced, larger than any waiting page; never for a page's name.
+        assert!(expects_other_file(None, Some(320 << 20), None, &link));
+        assert!(!expects_other_file(None, Some(40 << 10), None, &link));
+        assert!(!expects_other_file(
+            None,
+            Some(320 << 20),
+            Some("big.html"),
+            &link
+        ));
+    }
+
+    /// Upstream issue 701: the kinds of file whose bytes never start as a page's, by name, else
+    /// by type.
+    #[test]
+    fn archives_programs_and_media_are_never_pages() {
+        for name in [
+            "KtK.zip",
+            "a.RAR",
+            "x.7z",
+            "setup.exe",
+            "disk.iso",
+            "v.mp4",
+            "b.pdf",
+        ] {
+            assert!(never_a_page(None, name), "{name}");
+        }
+        // Programs write pages as old Office files; a page is a page; a name saying nothing.
+        for name in [
+            "report.xls",
+            "letter.doc",
+            "deck.ppt",
+            "page.html",
+            "AbC123",
+            "x.bin",
+        ] {
+            assert!(!never_a_page(None, name), "{name}");
+        }
+        // The browser's type when the name says nothing.
+        for t in [
+            "application/zip",
+            "application/x-rar-compressed",
+            "video/mp4",
+            "image/png",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ] {
+            assert!(never_a_page(Some(t), "AbC123"), "{t}");
+        }
+        for t in [
+            "application/octet-stream",
+            "image/svg+xml",
+            "text/plain",
+            "",
+        ] {
+            assert!(!never_a_page(Some(t), "AbC123"), "{t}");
+        }
+        // The browser had it as a page: a page it is.
+        assert!(!never_a_page(Some("text/html"), "KtK.zip"));
+        // An old Office name, even with a file's type, may hold a page.
+        assert!(!never_a_page(
+            Some("application/vnd.ms-excel"),
+            "report.xls"
+        ));
+    }
+
+    #[test]
+    fn a_pages_first_bytes_are_told_from_a_files() {
+        for page in [
+            &b"<!DOCTYPE html><html>"[..],
+            b"\r\n\r\n   <html lang=ru>",
+            b"\xEF\xBB\xBF<!-- generated --><!doctype html>",
+            b"<HEAD><meta charset=utf-8>",
+            b"<script>location='x'</script>",
+        ] {
+            assert!(sniffs_as_html(page), "{page:?}");
+        }
+        for file in [
+            &b"PK\x03\x04\x14\0"[..],
+            b"Rar!\x1a\x07\x01\0",
+            b"MZ\x90\0",
+            b"%PDF-1.7",
+            b"",
+            b"   ",
+            b"<?xml version=\"1.0\"?><svg",
+        ] {
+            assert!(!sniffs_as_html(file), "{file:?}");
+        }
+    }
 }
 
 /// Stream a response into the file at `from`. `Some(end)` when the segment is complete,
