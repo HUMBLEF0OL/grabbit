@@ -4,8 +4,9 @@
 // to download. background.js does the work.
 const ext = globalThis.browser ?? globalThis.chrome;
 const HELP = "https://misterdownloadmanager.com/help/browser-help.html";
-// The creator's GitHub Sponsors page (the app's Help → Support MDM): a plain link, in a new tab.
-const SPONSORS = "https://github.com/sponsors/anefzaoui";
+// The app's Help → Support MDM target: this fork's repository until its owner's GitHub Sponsors
+// page exists (see .github/FUNDING.yml). A plain link, in a new tab.
+const SPONSORS = "https://github.com/HUMBLEF0OL/grabbit";
 const t = (key, ...subs) => ext.i18n.getMessage(key, subs) || key;
 const $ = (id) => document.getElementById(id);
 const ask = (m) => ext.runtime.sendMessage(m).catch(() => ({ ok: false }));

@@ -6,7 +6,7 @@ MDM runs on 64-bit Windows 10 and Windows 11.
 
 ## Choose a download
 
-Every version is on the [Releases](https://github.com/anefzaoui/misterdownloadmanager/releases) page. There are three files:
+Every version is on the [Releases](https://github.com/HUMBLEF0OL/grabbit/releases) page. There are three files:
 
 | File | What it is |
 |---|---|
@@ -62,7 +62,7 @@ From top to bottom:
   - **File** — the selected download: **Stop Download**, **Remove**, **Download Now**, **Redownload**.
   - **Downloads** — **Pause All**, **Stop All**, **Delete All Completed**, **Find**, the **Scheduler**, queues, the **Speed Limiter** and **Options**.
   - **View** — show or hide the categories, sort the list (**Arrange files**), **Dark Mode support**, **Always dark**, **Theme**, **Interface size** (every window larger, 100 % to 200 %; **Ctrl +**, **Ctrl −** and **Ctrl 0** too), **Draw with** (OpenGL or Direct3D) and **Language**.
-  - **Help** — help pages and tutorials (on the website), **Keyboard shortcuts**, **Report a problem**, **Check for updates**, **About**, **Tell a friend** and **Support MDM** (its creator's GitHub Sponsors page: optional, nothing in MDM changes).
+  - **Help** — help pages and tutorials (on the website), **Keyboard shortcuts**, **Report a problem**, **Check for updates**, **About**, **Tell a friend** and **Support MDM** (MDM's page on GitHub, to star it: optional, nothing in MDM changes).
 - **Toolbar.** **Add URL**, **Add Torrent**, **Resume**, **Stop**, **Stop All**, **Delete**, **Delete Completed**, **Options**, **Scheduler**, **Start Queue**, **Stop Queue**. The small arrow next to **Add Torrent**, **Start Queue** and **Stop Queue** opens more choices.
 - **Categories** (left). Choose what the list shows: **All Downloads**, **Unfinished**, **Finished** and **Queues**, each with its categories. Drag the gap between the pane and the list to make it wider.
 - **Download list** (right). One row per download. See [The download list](download-list.md).

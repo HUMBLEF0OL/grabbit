@@ -146,7 +146,7 @@ focus = "ring"
 Every colour role, size and control style, with what it sets, is listed on the website's
 [Themes page](https://misterdownloadmanager.com/themes.html#make-your-own) (read from MDM's own
 code, so it never drifts). Graphite is written the same way:
-[read it on GitHub](https://github.com/anefzaoui/misterdownloadmanager/tree/main/crates/app/assets/themes).
+[read it on GitHub](https://github.com/HUMBLEF0OL/grabbit/tree/main/crates/app/assets/themes).
 
 A key MDM doesn't know, or a value it can't read, is skipped and written to MDM's log (the `logs`
 folder beside the themes folder), so a file made for a newer MDM still loads. A file that isn't
@@ -159,7 +159,7 @@ A theme in a folder of its own (`harbour/theme.toml`) can bring its icons in `ic
 `icons/24` (and, for PNG pictures, `icons/32` and `icons/48`, used on a screen scaled to 150 % and
 more), each named for what it shows (`tb-add-url.svg`, `cat-music.png`…). SVG and PNG files keep
 their colours; `-symbolic.svg` and `-symbolic.png` ones, as GNOME and KDE name them, take the
-theme's text colour. An icon the set lacks is Graphite's. The full list of names is in [themeicons.rs](https://github.com/anefzaoui/misterdownloadmanager/blob/main/crates/app/src/themeicons.rs) (`NEEDS`).
+theme's text colour. An icon the set lacks is Graphite's. The full list of names is in [themeicons.rs](https://github.com/HUMBLEF0OL/grabbit/blob/main/crates/app/src/themeicons.rs) (`NEEDS`).
 Its `EXTRAS` (`gx-link.svg`, `gx-search.svg`…) are the icons of Graphite's menu rows, buttons,
 Options pages, banners and tiles.
 
@@ -177,7 +177,7 @@ from a description.
 ## Share it
 
 Made something others would like? Open a
-[pull request](https://github.com/anefzaoui/misterdownloadmanager/pulls) that adds it to
+[pull request](https://github.com/HUMBLEF0OL/grabbit/pulls) that adds it to
 `crates/app/assets/themes`, with:
 
 - the `.toml` file, and its folder of icons if it has one;
@@ -187,7 +187,7 @@ Made something others would like? Open a
   program.
 
 Not sure yet? Show it in the
-[discussions](https://github.com/anefzaoui/misterdownloadmanager/discussions) first.
+[issues](https://github.com/HUMBLEF0OL/grabbit/issues) first.
 [CONTRIBUTING.md](../CONTRIBUTING.md) explains how pull requests work here.
 
 ## Next steps

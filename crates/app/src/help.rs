@@ -14,9 +14,10 @@ use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r};
 /// The repository: problem reports, releases, source, licences. This fork's own: its users'
 /// reports and its builds' updates come here, not to the original (anefzaoui/misterdownloadmanager).
 pub const REPO: &str = "https://github.com/HUMBLEF0OL/grabbit";
-/// The creator's GitHub Sponsors page: Help → Support MDM, About's last line. The website, the
-/// extension's popup and the repository's Sponsor button (.github/FUNDING.yml) point there too.
-pub const SPONSORS: &str = "https://github.com/sponsors/anefzaoui";
+/// Where Help → Support MDM and About's last line go: this fork's repository until its owner's
+/// GitHub Sponsors page exists (then https://github.com/sponsors/HUMBLEF0OL, with the website's,
+/// the extension popup's and .github/FUNDING.yml's).
+pub const SPONSORS: &str = REPO;
 /// This fork's releases (none yet: GitHub's 404 reads as up to date).
 const LATEST: &str = "https://api.github.com/repos/HUMBLEF0OL/grabbit/releases/latest";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -717,9 +718,9 @@ impl About {
                     }
                     y += 16.0;
                 }
-                // Its own row under them: the creator's Sponsors page (Help → Support MDM).
+                // Its own row under them: SPONSORS (Help → Support MDM).
                 y += 6.0;
-                let support_label = "Support MDM on GitHub Sponsors";
+                let support_label = "Support MDM on GitHub";
                 let sw = width(support_label);
                 if winui::link(ui, &p, (cx - sw / 2.0).round(), y, support_label, "support") {
                     support();

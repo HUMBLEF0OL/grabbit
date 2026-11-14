@@ -38,4 +38,4 @@ Nothing opens a window, so a download that would ask a question, such as a dupli
 settings, or isn't added. Don't publish the port on the internet: reach your home network through
 a VPN instead.
 
-Server mode is new, so please [tell us how it goes](https://github.com/anefzaoui/misterdownloadmanager/issues).
+Server mode is new, so please [tell us how it goes](https://github.com/HUMBLEF0OL/grabbit/issues).

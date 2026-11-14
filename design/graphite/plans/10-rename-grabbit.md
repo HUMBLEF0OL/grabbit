@@ -133,9 +133,12 @@ both host names.
 
 ## 10d · Distribution
 
-1. Everything to the fork (decision 1): the 41 links to the original's repository and the 5
-   Sponsors links listed there (no repository is renamed: the fork is already
-   `HUMBLEF0OL/grabbit`, and the app's constants already name it); 390 links to the original in ROADMAP (206) and CHANGELOG (184) (history entries keep
+1. Done early (PR "Links: everything to the fork", 2026-11-14): the links to the original's
+   repository and the 5 Sponsors links now point to the fork (Sponsors to its repository page and
+   a commented-out `.github/FUNDING.yml` until the owner enables GitHub Sponsors). Left on
+   purpose: the egui and rqbit dependencies (`Cargo.toml`, on the original author's forks of
+   those projects), `tools/contributors.py` (whose people the README and website thank), the
+   creator's name where it credits him, and the upstream-sync tooling. 390 links to the original in ROADMAP (206) and CHANGELOG (184) (history entries keep
    their URLs).
 2. Update feed: installed versions look for `MisterDownloadManager-{version}-{tail}` assets
    (`crates/tools/src/update.rs:76`; extension assets `.github/workflows/release.yml:144-145`, the
