@@ -43,10 +43,23 @@ Recorded in `../PLAN.md`. Counts are lines (`git grep -c`) on dev e9d327d3.
    host path, `update.rs:293`, docs (`command-line.md` and `ai-assistants.md` 12 lines each), the
    website and the lab and shot scripts in `tools/` (the `docs-shots`/`baseline` scripts launch the
    exe by name). Migrations: see 10c's "Binaries" row.
-3. **Crates are renamed to `grabbit-*`** (and their `mdm_*::` paths to `grabbit_*::`): 10e, the
-   very last step, when no other branch is open (every open branch would conflict). Costs: 151
-   lines in 73 files (`Cargo.toml`s, CI, `cargo -p` in Rust and workflows, the docs and
-   `CLAUDE.md` commands such as `cargo run -p mdm-app`) and 1,067 `mdm_*::` paths in 101 Rust files.
+3. **Crates are renamed to `grabbit-*`, their code paths stay `mdm_*::`**: each package is named
+   `grabbit-…`, and every dependency on it is declared under its old key with
+   `mdm-engine = { package = "grabbit-engine", path = … }`, so the Rust code keeps
+   `use mdm_engine::…`. 10e, the very last step, when no other branch is open. Costs: 151 lines in
+   73 files (`Cargo.toml`s, CI, `cargo -p` in Rust and workflows, the docs and `CLAUDE.md` commands
+   such as `cargo run -p mdm-app`); none of the 1,067 `mdm_*::` paths in 101 Rust files.
+   **Why the paths stay (the upstream sync):** `tools/upstream-sync/sync.py` cherry-picks upstream's
+   commits. Over the 3 months to 2026-11-14, 124 of upstream's 367 commits (34 %) changed lines
+   with `mdm_*::` paths: renamed paths would make about a third of upstream's fixes conflict, and
+   even clean picks would bring code naming the old crates. Only 7 (2 %) touched the `Cargo.toml`
+   name and dependency lines this rename changes. The crate folders (`crates/app`, `crates/engine`…)
+   have no `mdm` in them and don't move. Check `sync.py pick --lock` against the renamed packages
+   in Cargo.lock as part of 10e.
+   **Exes (decision 2), for comparison:** 30 of the 367 (8 %) touched exe names, mostly the
+   installer, `release.yml` and the CLI/MCP docs: those parts become small hand fixes in a port.
+   **Before 10e:** clear the upstream-sync backlog (`sync.py status`; 36 commits waiting for a port
+   on 2026-11-14), so the rename doesn't land on a long queue.
 4. **The removed themes' control styles go** (`luna`, `aero`, `aqua`, `adwaita`, `breeze`,
    `metro`), with their drawing code: 10e, with the crate rename. A theme file naming one gets
    Graphite's control (the fork has no users relying on them).
@@ -137,9 +150,10 @@ both host names.
    with the groundwork).
 ## 10e · Internal names and old styles (last, when no other branch is open)
 
-1. Crates `mdm-*` → `grabbit-*` and paths `mdm_*::` → `grabbit_*::` (decision 3), in one
-   mechanical commit with nothing else in it, so a later merge from an old branch is easy to redo;
-   then `CLAUDE.md`, the docs and the workflows' `cargo -p` commands.
+1. Packages `mdm-*` → `grabbit-*`, dependencies declared `mdm-x = { package = "grabbit-x", … }`
+   so the code's `mdm_*::` paths stay (decision 3), in one mechanical commit with nothing else in
+   it; then `CLAUDE.md`, the docs and the workflows' `cargo -p` commands. Then one upstream pick
+   with `--lock` as a check that `sync.py` still works.
 2. The removed themes' control styles and their drawing code (decision 4; "Left from 05.5" below).
 3. Full `cargo build`, `cargo test`, `cargo clippy --all-targets`, `node tools/extension/test.mjs`.
 

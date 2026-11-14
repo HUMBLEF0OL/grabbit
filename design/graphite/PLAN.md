@@ -28,7 +28,7 @@ phase that must decide them before it starts.
 | Safari steps, Linux and macOS wake lines | Decided (audit) | Not built: `dev` is Windows only (07e) |
 | Options: a Cancel button under Graphite | **Open, owner 08** | Decide before 08a; recommended: none (Escape and the close box already discard changes, `options.rs:3`) |
 | Tabular digits: Geist's own or Geist Mono | Decided in 04 | Geist's default figures are proportional (a 1 is 384 units wide, a 0 663), so the list's numeric cells (sizes, rates, time left, percent) keep Segoe UI's tabular figures; Geist Mono is not bundled. 05b draws those cells in the `numbers` family it adds (Segoe UI, falling back like the others) |
-| Which repository the app points at; exe and crate names; the old control styles | Decided 2026-11-14 | Everything (links, Sponsors) points to the fork only; exes renamed to `grabbit*.exe` in 10c; crates renamed to `grabbit-*` and the old control styles removed in 10e, last. Details and costs: plan 10, "Decisions" |
+| Which repository the app points at; exe and crate names; the old control styles | Decided 2026-11-14 | Everything (links, Sponsors) points to the fork only; exes renamed to `grabbit*.exe` in 10c; crates renamed to `grabbit-*` (code paths stay `mdm_*::`, for the upstream sync) and the old control styles removed in 10e, last. Details and costs: plan 10, "Decisions" |
 
 ## Build order
 
