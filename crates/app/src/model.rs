@@ -1363,7 +1363,11 @@ mod helper_connection_tests {
         let s = tool_snapshot(p.clone(), &page);
         assert_eq!(s.connections.len(), 1);
         assert_eq!(
-            (s.connections[0].id, s.connections[0].downloaded, s.connections[0].speed),
+            (
+                s.connections[0].id,
+                s.connections[0].downloaded,
+                s.connections[0].speed
+            ),
             (0, 5_000, 1_000)
         );
         assert!(matches!(s.connections[0].status, ConnStatus::Receiving));
