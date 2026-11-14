@@ -334,7 +334,7 @@ fn dialog_window<T>(
     // Hidden until `keep_theme` has given it its theme (see there).
     let mut builder = ViewportBuilder::default()
         .with_visible(false)
-        .with_title(title)
+        .with_title(crate::i18n::os_text(title))
         .with_inner_size(shown)
         // The thin frame trims the sizing borders and keeps the size fixed.
         .with_resizable(drawn)

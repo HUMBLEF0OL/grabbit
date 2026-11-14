@@ -4396,6 +4396,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "tray-icon",
+ "unicode-bidi",
  "unicode-segmentation",
  "url",
  "wgpu",
