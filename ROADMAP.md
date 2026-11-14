@@ -509,7 +509,7 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   nothing to take), picks the ones that apply onto a sync branch and records every decision;
   each run reaches `dev` by a pull request, and a weekly report (from the first release on)
   lists what waits. Looked at up to upstream `9f7a6fc9ce8a` (2026-11-14): 24 fixes taken and
-  36 ported by hand (the critical ones), 42 skipped, 15 deferred; the rest wait to be ported by
+  46 ported by hand (the critical ones), 42 skipped, 11 deferred; the rest wait to be ported by
   hand, the critical ones first. Ready for Graphite only: an old
   theme's licence never counts as moved to Graphite's, and a commit with a theme other than
   Graphite says to skip it.
