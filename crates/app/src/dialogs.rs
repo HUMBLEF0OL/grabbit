@@ -380,7 +380,7 @@ fn dialog_window<T>(
                     let hwnd = ui.ctx().data(|d| d.get_temp::<isize>(key.with("hwnd")));
                     match drawn_title(ui, origin, shown[0], title, &buttons, hwnd) {
                         Some(CaptionButton::Close) => caption_close = true,
-                        Some(CaptionButton::Minimize) => minimize(ui.ctx(), hwnd),
+                        Some(CaptionButton::Minimize) => self::minimize(ui.ctx(), hwnd),
                         _ => {}
                     }
                 }
