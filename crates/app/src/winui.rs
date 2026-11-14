@@ -7089,6 +7089,8 @@ mod tests {
         // Nothing marked: the keys do nothing (the progress window's Enter).
         let none = [(true, false, false), (true, false, false)];
         assert_eq!(footer_key(&none, true, true), None);
+        // Enter and Escape in one frame: Escape's (No), never Enter's (Yes).
+        assert_eq!(footer_key(&ok_cancel, true, true), Some(1));
     }
 
     #[test]
