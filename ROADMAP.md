@@ -515,6 +515,8 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   Graphite says to skip it.
 - ✅ No crash at start on a damaged or unreadable system font (ported from upstream issue 931):
   the font is passed over for the next one in line, and the log names it.
+- ✅ No false "window stopped responding" report in the minute after the computer wakes, and
+  every freeze report names what the window was doing (ported from upstream issues 574 and 613).
 - ✅ GitHub Actions run for `main` only: the build and tests on pull requests into `main` (a
   release or a hotfix), none on `dev`, where the same checks run locally before a merge; the
   website builds on its own changes or by hand, with no daily run.
@@ -575,7 +577,18 @@ These ship in a later version, when they're ready.
   to come, with plan 09's polish: the Scheduler at the mockup's width and short enough for a
   1080p screen at 200 %), and the help pages, the website's Themes page, its theme prompt and
   llms.txt describing Graphite as the only look (its picture there comes with the new
-  screenshots). Next: the Options window (plan 08)
+  screenshots), and the Options window's pages listed down the side (each with its icon and
+  title at the top, OK and Help in a footer; Up and Down added to its keys, and Ctrl+Shift+Tab
+  going back a page), at the mock's 820 x 520, and the windows its pages open on the dialogs'
+  common parts (DNS settings, Add an account, Addresses left to the browser, Keys, Test browser
+  integration, Download panels, Pair a device, New and Edit login and exception), their keys
+  unchanged, and the General, File types, Save to, Downloads and Connection pages on them (a
+  label column, hairlines in place of group boxes, Connection's number in a spin box), and the
+  other seven on them too (Remote's state and Accounts' warning in banners) (still to come, with
+  plan 09's polish: Options short enough for a 1080p screen at 200 %, banners that wrap their
+  title and that screen readers read, the side list as a list for screen readers, greyed icon
+  buttons' icons greyed, Pair a device centred, Add an account's hint box sized to its text).
+  Next: the finish and review (plan 09)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:

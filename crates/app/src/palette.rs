@@ -165,8 +165,7 @@ palette! {
     selection_muted: "selection.muted", "Secondary text on the selection" = grey(0xe0), grey(0xe0);
     selection_inactive: "selection.inactive", "A selected row in a list without the focus" = grey(0x4a), grey(0xd9);
     selection_focus: "selection.focus", "The focused row's dotted outline on a selected row" = rgb(0xff, 0x99, 0x33), rgb(0xff, 0x99, 0x33);
-    // ---- group boxes, separators, tabs ----
-    group_line: "group.line", "A group box's frame" = grey(0x50), grey(0xdc);
+    // ---- separators, tabs ----
     etch_shadow: "etch.shadow", "An etched separator's shadow line" = grey(0x22), grey(0xa0);
     etch_light: "etch.light", "An etched separator's highlight line" = grey(0x50), grey(0xff);
     tab_page: "tab.page", "A tab page's body" = grey(0x40), grey(0xf9);

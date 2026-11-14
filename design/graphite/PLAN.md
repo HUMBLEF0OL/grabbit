@@ -26,7 +26,7 @@ phase that must decide them before it starts.
 | When to rename to Grabbit | Decided in 01 | Last (10): it touches data paths and the extension |
 | Tray menu | Decided (audit) | Stays native (`tray_icon`): the mock's tray menu is not built (07e) |
 | Safari steps, Linux and macOS wake lines | Decided (audit) | Not built: `dev` is Windows only (07e) |
-| Options: a Cancel button under Graphite | **Open, owner 08** | Decide before 08a; recommended: none (Escape and the close box already discard changes, `options.rs:3`) |
+| Options: a Cancel button under Graphite | Decided in 08a (2026-11-14) | None, as recommended: Escape and the close box already discard the changes (`options.rs:3`); the footer is Help (Ghost), OK* |
 | Tabular digits: Geist's own or Geist Mono | Decided in 04 | Geist's default figures are proportional (a 1 is 384 units wide, a 0 663), so the list's numeric cells (sizes, rates, time left, percent) keep Segoe UI's tabular figures; Geist Mono is not bundled. 05b draws those cells in the `numbers` family it adds (Segoe UI, falling back like the others) |
 | Which repository the app points at; exe and crate names; the old control styles | Decided 2026-11-14 | Everything (links, Sponsors) points to the fork only; exes renamed to `grabbit*.exe` in 10c; crates renamed to `grabbit-*` (code paths stay `mdm_*::`, for the upstream sync) and the old control styles removed in 10e, last. Details and costs: plan 10, "Decisions" |
 
@@ -101,8 +101,9 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
       the shared Confirm, done with 07e)
 - [x] 07e Organising and the rest (complete, PR 23 merged 2026-11-14; what is left is plan 09's
       "Left from 07")
-- [ ] 08a Options side list
-- [ ] 08b Options pages
+- [x] 08a Options side list (complete, PR 25; ticked here in 08b3's PR, which follows it)
+- [x] 08b Options pages (complete with its three PRs: 08b3 the window's size and sub-dialogs,
+      08b1 and 08b2 the pages)
 - [ ] 09a Finish
 - [ ] 09b Default
 - [ ] 10a to 10e Rename

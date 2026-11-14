@@ -1,11 +1,10 @@
-//! Options (Downloads → Options, the toolbar's Options): IDM's configuration dialog, nine pages
-//! in a two-row tab control (notes/ui-spec/options-dialog.md). Light in both modes, as IDM's.
+//! Options (Downloads → Options, the toolbar's Options): the configuration dialog, twelve pages
+//! listed down its side (plan 08; IDM's two rows of tabs before, notes/ui-spec/options-dialog.md).
 //! It edits a copy of the settings: OK applies it, the close box and Escape discard it.
 
 use egui::{Pos2, Rect, Sense, Ui, pos2, vec2};
 
 use crate::dialogs::{Outcome, window};
-use crate::icons::Icon;
 use crate::model::Category;
 use crate::regional::DateOrder;
 use crate::settings::{self, Settings};
@@ -13,7 +12,8 @@ use crate::settings::{self, Settings};
 // starts at an English pen, and a widget given a screen rect (from `r`) turns it back into its
 // English rect (`winui::rect` both ways) before laying out its inside.
 use crate::winui::{
-    self, ButtonKind, LIGHT_BG, LIGHT_DISABLED, LIGHT_PAGE, LIGHT_TEXT, fill_l as fill, r, text,
+    self, ButtonKind, FooterButton, FooterItem, LIGHT_BG, LIGHT_DISABLED, LIGHT_PAGE, LIGHT_TEXT,
+    fill_l as fill, r, text,
 };
 
 pub const DUPLICATE: [&str; 4] = [
@@ -54,7 +54,7 @@ enum Sub {
     Pair,
 }
 
-/// Options → Remote's page number (the tabs' numbers).
+/// Options → Remote's page number (the numbers in `PAGES`).
 const REMOTE_PAGE: usize = 11;
 
 /// Connection → DNS's sub-dialog: a copy of the DNS fields, kept on OK.
@@ -223,8 +223,9 @@ pub struct OptionsDialog {
 }
 
 impl OptionsDialog {
-    /// Open on tab `page` (the numbers in `tabs`: 0 General … 4 Connection, 5 Proxy / Socks,
-    /// 6 Sites Logins, 7 Accounts, 8 Sounds, 9 Regional, 10 Archives); for `/show options:<tab>`.
+    /// Open on page `page` (the numbers in `PAGES`: 0 General … 4 Connection, 5 Proxy / Socks,
+    /// 6 Sites Logins, 7 Accounts, 8 Sounds, 9 Regional, 10 Archives, 11 Remote); for
+    /// `/show options:<page>`.
     pub fn on_page(mut self, page: usize) -> Self {
         self.page = page;
         self
@@ -306,57 +307,39 @@ impl OptionsDialog {
             ctx,
             "options",
             "Mister Download Manager Configuration",
-            [430.0, 506.0],
+            [W, H],
             false,
             LIGHT_BG(),
             |ui, o| {
-                // Ctrl+Tab through the pages in the tabs' order (Archives, 10, came last).
-                const ORDER: [usize; 12] = [0, 1, 2, 3, 4, 11, 5, 6, 7, 8, 9, 10];
-                let at = ORDER.iter().position(|p| *p == self.page).unwrap_or(0);
-                let by_key = winui::tab_keys(ui, ORDER.len(), at).map(|i| ORDER[i]);
-                if let Some(p) = tabs(ui, o, self.page).or(by_key) {
+                if let Some(p) = side_list(ui, o, self.page) {
                     self.page = p;
                 }
-                match self.page {
-                    0 => self.general(ui, o),
-                    1 => self.file_types(ui, o),
-                    2 => self.save_to(ui, o, downloads),
-                    3 => self.downloads(ui, o),
-                    4 => self.connection(ui, o),
-                    5 => self.proxy(ui, o),
-                    6 => self.logins(ui, o),
-                    7 => self.accounts(ui, o),
-                    9 => self.regional(ui, o),
-                    10 => self.archives(ui, o),
-                    REMOTE_PAGE => self.remote_page(ui, o),
-                    8 => self.sounds(ui, o),
-                    _ => self.regional(ui, o),
-                }
-                let ok = winui::button_light(
+                self.page_area(ui, o, downloads);
+                // No Cancel (PLAN.md): Escape and the close box discard the changes, as before.
+                // Escape and Enter keep their old order: Escape first.
+                let escape = winui::escape_pressed(ui);
+                let pressed = winui::footer(
                     ui,
-                    r(o, 269.0, 477.0, 73.0, 21.0),
-                    "OK",
-                    ButtonKind::Default,
-                    false,
-                )
-                .clicked();
-                if winui::button_light(
-                    ui,
-                    r(o, 350.0, 477.0, 73.0, 21.0),
-                    // i18n: noun: button that opens the help
-                    "Help",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked()
-                {
+                    o,
+                    W,
+                    H - winui::FOOTER_H,
+                    // Tab order as before: OK, then Help.
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("OK", ButtonKind::Default).enter(!modal),
+                        ),
+                        // i18n: noun: button that opens the help
+                        FooterItem::Button(FooterButton::new("Help", ButtonKind::Ghost).leading()),
+                    ],
+                );
+                if pressed == Some(1) {
                     crate::help::open_page("options.md");
                 }
                 if modal {
                     Outcome::Open
-                } else if winui::escape_pressed(ui) {
+                } else if escape {
                     Outcome::Closed
-                } else if ok || winui::enter_pressed(ui) {
+                } else if pressed == Some(0) {
                     Outcome::Done(())
                 } else {
                     Outcome::Open
@@ -415,75 +398,82 @@ impl OptionsDialog {
         }
     }
 
+    /// The chosen page under its heading, drawn in its own English pixels ([`PAGE_LEFT`] ..
+    /// [`PAGE_BOTTOM`]) placed right of the list ([`PAGE_AT`]).
+    fn page_area(&mut self, ui: &mut Ui, o: Pos2, downloads: &std::path::Path) {
+        heading(ui, o, self.page);
+        let o = o + PAGE_AT;
+        match self.page {
+            0 => self.general(ui, o),
+            1 => self.file_types(ui, o),
+            2 => self.save_to(ui, o, downloads),
+            3 => self.downloads(ui, o),
+            4 => self.connection(ui, o),
+            5 => self.proxy(ui, o),
+            6 => self.logins(ui, o),
+            7 => self.accounts(ui, o),
+            8 => self.sounds(ui, o),
+            9 => self.regional(ui, o),
+            10 => self.archives(ui, o),
+            REMOTE_PAGE => self.remote_page(ui, o),
+            _ => self.regional(ui, o),
+        }
+    }
+
     // ---- pages --------------------------------------------------------------------------
 
     fn general(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        header(
-            ui,
-            o,
-            Icon::PageGeneral,
-            "Browser/System Integration",
-            false,
-            260.0,
-            63.0,
-            405.0,
-        );
         let portable = mdm_ipc::portable_dir().is_some();
         let s = &mut self.s;
         if portable {
             s.launch_on_startup = false;
         }
-        let checks: [(f32, &mut bool, &str); 7] = [
+        // The mock's check boxes, 22 apart (closer than its 30, so the page fits its area).
+        let checks: [(&mut bool, &str); 7] = [
             (
-                94.0,
                 &mut s.launch_on_startup,
                 crate::i18n::mark("Launch Mister Download Manager on startup"),
             ),
             (
-                113.0,
                 &mut s.clipboard_autostart,
                 crate::i18n::mark("Offer to download links copied to the clipboard"),
             ),
             (
-                133.0,
                 &mut s.mv2_extensions,
                 crate::i18n::mark("Extend the availability of Manifest 2 Chrome extensions"),
             ),
             (
-                152.0,
                 &mut s.advanced_integration,
                 crate::i18n::mark("Use advanced browser integration"),
             ),
             // MDM's: turns back on the delete confirmation that "Don't show this dialog again"
-            // turned off. The browsers' group below starts a row lower for it.
+            // turned off.
             (
-                172.0,
                 &mut s.confirm_delete,
                 crate::i18n::mark("Confirm before deleting downloads"),
             ),
             // MDM's (#63): Minimize hides the main window and progress windows in the tray too.
-            // The browsers' group starts a row lower again, its list a row shorter (it scrolls).
             (
-                191.0,
                 &mut s.minimize_to_tray,
                 // i18n: checkbox: the Minimize button hides MDM's windows to the notification area (system tray) instead of the taskbar
                 crate::i18n::mark("Minimize to the notification area"),
             ),
             // MDM's: the × hides the window in the notification area, or quits.
             (
-                210.0,
                 &mut s.close_to_tray,
                 // i18n: checkbox: closing keeps MDM running, in the notification area when available or else the taskbar, instead of quitting
                 crate::i18n::mark("Keep running when closing the window"),
             ),
         ];
-        for (i, (y, v, label)) in checks.into_iter().enumerate() {
+        let (left, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
+        for (i, (v, label)) in checks.into_iter().enumerate() {
             // Portable: nothing is written to the registry, so no start with Windows. Manifest 2
             // extensions: an IDM-era Chrome policy with no meaning for MDM's extension (MV3):
             // shown as IDM has it, greyed (D-021).
             let enabled = !(portable && i == 0) && i != 2;
-            let check = winui::checkbox_light(ui, o + vec2(30.0, y), v, label, enabled);
+            let at = o + vec2(left, PAGE_TOP + 22.0 * i as f32);
+            let check = winui::checkbox_light(ui, at, v, label, enabled);
             // Where a start with the session leaves the window (#226).
             if i == 0 && enabled && check.hovered() {
                 check.on_hover_text(
@@ -497,24 +487,41 @@ impl OptionsDialog {
                 ));
             }
         }
-        group(
-            ui,
+        // The browsers under a hairline and their title, Test and Add
+        // browser at the list's end (one width, as wide as the longer label in this language,
+        // #192).
+        // The list's top: its rows out of view are there for screen readers (#111), the twelve
+        // default browsers' last one 206 below it, still inside the page's area.
+        let list_y = 267.0;
+        winui::rule(&p, o, left, 240.0, right - left);
+        winui::form_label(
+            &p,
             o,
+            left,
+            246.0,
             16.0,
-            234.0,
-            392.0,
-            160.0,
             "Capture downloads from the following browsers:",
+            true,
         );
+        let (col_x, col_w) = winui::buttons_to_right(
+            &p,
+            right,
+            0.0,
+            &[(
+                winui::widest_label(&p, &["Test browser integration...", "Add browser..."]),
+                73.0,
+            )],
+            260.0,
+        )[0];
         // Check list: one row per browser in the shared row list (Space ticks the selected
         // one; the box and its name tick it too).
         let browsers = &mut s.browsers;
-        // Named by its group's caption, which says what the list is (#102).
+        // Named by its title, which says what the list is (#102).
         self.browser_rows.name = crate::i18n::t("Capture downloads from the following browsers:");
         let ev = winui::row_list(
             ui,
             "browsers",
-            r(o, 30.0, 244.0, 362.0, 78.0),
+            r(o, left, list_y, col_x - 8.0 - left, 78.0),
             browsers.len(),
             17.0,
             &mut self.browser_rows,
@@ -545,28 +552,15 @@ impl OptionsDialog {
         let off = |ui: &mut Ui, rc: Rect, label: &str| {
             winui::button_light(ui, rc, label, ButtonKind::Disabled, false);
         };
-        // Both as wide as their labels in this language (#192), within the group box.
-        let [test_at, add_at] = winui::button_row(
-            &p,
-            &[
-                ("Test browser integration...", 30.0, 180.0),
-                ("Add browser...", 286.0, 106.0),
-            ],
-            8.0,
-            30.0,
-            260.0,
-        )[..] else {
-            unreachable!("two buttons")
-        };
         off(
             ui,
-            r(o, add_at.0, 328.0, add_at.1, 21.0),
+            r(o, col_x, list_y + 36.0, col_w, h),
             crate::i18n::mark("Add browser..."),
         );
         // MDM's: what stands between a browser and MDM, checked in order.
         if winui::button_light(
             ui,
-            r(o, test_at.0, 328.0, test_at.1, 21.0),
+            r(o, col_x, list_y, col_w, h),
             "Test browser integration...",
             ButtonKind::Normal,
             false,
@@ -575,28 +569,41 @@ impl OptionsDialog {
         {
             self.sub = Some(Sub::Test(crate::extension::checks(&self.s)));
         }
-        winui::etched_h(&p, o.x + 34.0, o.y + 356.0, 357.0);
-        // The buttons at the right as wide as their labels in this language (#192), their
-        // captions ending 6 px before them.
-        let fit_right =
-            |label: &str| winui::buttons_to_right(&p, 392.0, 0.0, &[(label, 73.0)], 160.0)[0];
-        let keys_at = fit_right("Keys...");
-        let label = crate::i18n::t("Customize keys to prevent or force downloading with MDM");
-        // Inside the browsers' group box: it starts no further out than the group's frame.
-        let (rect, cut) = winui::text_right_within(
+        winui::rule(&p, o, left, 357.0, right - left);
+        // Three rows under a hairline: a sentence at the leading edge, its button at the end
+        // (one width, as wide as the longer label in this language, #192).
+        // i18n: verb: edit the item
+        let edit = "Edit...";
+        let (end_x, end_w) = winui::buttons_to_right(
             &p,
-            o.x + keys_at.0 - 6.0,
-            o.y + 379.0,
-            label,
+            right,
+            0.0,
+            &[(winui::widest_label(&p, &["Keys...", edit]), 73.0)],
+            160.0,
+        )[0];
+        let caption = |ui: &Ui, top: f32, label: &str, color| {
+            let (rect, cut) = winui::text_fit(
+                &p,
+                o.x + left,
+                o.y + winui::baseline_in(top, h),
+                label,
+                color,
+                o.x + end_x - 8.0,
+            );
+            if cut {
+                winui::full_on_hover(ui, rect, ("general-right", top as i32), label);
+            }
+        };
+        let (keys_y, menu_y, panels_y) = (369.0, 404.0, 439.0);
+        caption(
+            ui,
+            keys_y,
+            crate::i18n::t("Customize keys to prevent or force downloading with MDM"),
             LIGHT_TEXT(),
-            o.x + 22.0,
         );
-        if cut {
-            winui::full_on_hover(ui, rect, ("general-right", 379), label);
-        }
         if winui::button_light(
             ui,
-            r(o, keys_at.0, 365.0, keys_at.1, 21.0),
+            r(o, end_x, keys_y, end_w, h),
             "Keys...",
             ButtonKind::Normal,
             false,
@@ -605,29 +612,23 @@ impl OptionsDialog {
         {
             self.sub = Some(Sub::Keys(self.s.capture_opened));
         }
-        let label = crate::i18n::t("Customize MDM menu items in context menu of browsers");
-        let (rect, cut) = winui::text_right(&p, o.x + 313.0, o.y + 419.0, label, LIGHT_DISABLED());
-        if cut {
-            winui::full_on_hover(ui, rect, ("general-right", 419), label);
-        }
-        // i18n: verb: edit the item
-        off(ui, r(o, 289.0, 406.0, 103.0, 21.0), "Edit...");
+        caption(
+            ui,
+            menu_y,
+            crate::i18n::t("Customize MDM menu items in context menu of browsers"),
+            LIGHT_DISABLED(),
+        );
+        off(ui, r(o, end_x, menu_y, end_w, h), edit);
         // The download button over videos in the browsers (our own panel, Sub::Panels).
-        let label = crate::i18n::t("Customize MDM Download panels in browsers");
-        let panels_at = fit_right("Edit...");
-        let (rect, cut) = winui::text_right(
-            &p,
-            o.x + panels_at.0 - 6.0,
-            o.y + 452.0,
-            label,
+        caption(
+            ui,
+            panels_y,
+            crate::i18n::t("Customize MDM Download panels in browsers"),
             LIGHT_TEXT(),
         );
-        if cut {
-            winui::full_on_hover(ui, rect, ("general-right", 452), label);
-        }
         if winui::button_light(
             ui,
-            r(o, panels_at.0, 438.0, panels_at.1, 21.0),
+            r(o, end_x, panels_y, end_w, h),
             // i18n: verb: edit the item
             "Edit...",
             ButtonKind::Normal,
@@ -645,35 +646,35 @@ impl OptionsDialog {
 
     fn file_types(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        header(
-            ui,
-            o,
-            Icon::PageFileTypes,
-            "Downloaded file types",
-            true,
-            254.0,
-            63.0,
-            405.0,
-        );
-        text(
-            &p,
-            o.x + 21.0,
-            o.y + 103.0,
+        let (left, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
+        // A sentence at the leading edge, centred on a row `top`..`top + height`.
+        let line = |top: f32, height: f32, s: &str| {
+            text(
+                &p,
+                o.x + left,
+                o.y + winui::baseline_in(top, height),
+                s,
+                LIGHT_TEXT(),
+            )
+        };
+        line(
+            88.0,
+            16.0,
             crate::i18n::t("Automatically start downloading the following file types:"),
-            LIGHT_TEXT(),
         );
         multiline(
             ui,
-            r(o, 22.0, 110.0, 380.0, 59.0),
+            r(o, left, 108.0, right - left, 72.0),
             &mut self.s.auto_types,
             "auto-types",
             true,
         );
-        // Default as wide as its label in this language (#192), growing to the left.
-        let default_at = winui::buttons_to_right(&p, 389.0, 0.0, &[("Default", 73.0)], 200.0)[0];
+        // Default as wide as its label in this language (#192), at the end.
+        let (default_x, default_w) =
+            winui::buttons_to_right(&p, right, 0.0, &[("Default", 73.0)], 200.0)[0];
         if winui::button_light(
             ui,
-            r(o, default_at.0, 175.0, default_at.1, 21.0),
+            r(o, default_x, 186.0, default_w, h),
             // i18n: button: put back the default list
             "Default",
             ButtonKind::Normal,
@@ -683,38 +684,23 @@ impl OptionsDialog {
         {
             self.s.auto_types = settings::DEFAULT_AUTO_TYPES.into();
         }
-        text(
-            &p,
-            o.x + 21.0,
-            o.y + 222.0,
+        line(
+            224.0,
+            16.0,
             crate::i18n::t("Don't start downloading automatically from the following sites:"),
-            LIGHT_TEXT(),
         );
         multiline(
             ui,
-            r(o, 22.0, 229.0, 380.0, 49.0),
+            r(o, left, 244.0, right - left, 44.0),
             &mut self.s.excluded_sites,
             "excluded-sites",
             true,
         );
-        let spaces = text(
-            &p,
-            o.x + 21.0,
-            o.y + 293.0,
-            crate::i18n::t("(separate names by spaces)"),
-            LIGHT_TEXT(),
-        );
-        // Short of the note before it.
-        let default_at = winui::button_row(
-            &p,
-            &[("Default", 316.0, 73.0)],
-            0.0,
-            winui::rect(spaces).right() - o.x + 8.0,
-            200.0,
-        )[0];
+        // The note, and Default at the end of its row (the mock's line).
+        line(294.0, h, crate::i18n::t("(separate names by spaces)"));
         if winui::button_light(
             ui,
-            r(o, default_at.0, 284.0, default_at.1, 21.0),
+            r(o, default_x, 294.0, default_w, h),
             // i18n: button: put back the default list
             "Default",
             ButtonKind::Normal,
@@ -724,19 +710,30 @@ impl OptionsDialog {
         {
             self.s.excluded_sites = settings::DEFAULT_EXCLUDED_SITES.into();
         }
-        text(
-            &p,
-            o.x + 21.0,
-            o.y + 327.0,
-            crate::i18n::t("Don't start downloading automatically from the following addresses:"),
-            LIGHT_TEXT(),
-        );
-        let (list_x, list_w) =
-            winui::button_row_from_left(&p, &[("Edit list ...", 22.0, 135.0)], 0.0, 389.0, 260.0)
-                [0];
+        // The last two rows as the mock's lines: a sentence, its control right after it (the
+        // control kept inside the page; a longer translation cut with "...", whole on hover).
+        let after = |s: &str, w: f32| (left + winui::text_width(&p, s) + 8.0).min(right - w);
+        let lead = |ui: &Ui, top: f32, s: &str, end: f32| {
+            let (rect, cut) = winui::text_fit(
+                &p,
+                o.x + left,
+                o.y + winui::baseline_in(top, h),
+                s,
+                LIGHT_TEXT(),
+                o.x + end - 8.0,
+            );
+            if cut {
+                winui::full_on_hover(ui, rect, ("types-lead", top as i32), s);
+            }
+        };
+        let label =
+            crate::i18n::t("Don't start downloading automatically from the following addresses:");
+        let list_w = winui::button_fit_width(&p, "Edit list ...", 73.0, 260.0);
+        let list_x = after(label, list_w);
+        lead(ui, 336.0, label, list_x);
         if winui::button_light(
             ui,
-            r(o, list_x, 334.0, list_w, 21.0),
+            r(o, list_x, 336.0, list_w, h),
             "Edit list ...",
             ButtonKind::Normal,
             false,
@@ -747,22 +744,11 @@ impl OptionsDialog {
         }
         // MDM's: a receipt or an icon isn't worth a download window.
         let label = crate::i18n::t("Don't take files smaller than (KB, 0 = any size):");
-        // Before its box: a longer translation is cut with "..." and shown whole on hover.
-        let (rect, cut) = winui::label_into(
-            &p,
-            o.x + 21.0,
-            o.y + 383.0,
-            label,
-            LIGHT_TEXT(),
-            o.x + 316.0,
-            o.x + 21.0,
-        );
-        if cut {
-            winui::full_on_hover(ui, rect, ("types-min", 383), label);
-        }
+        let min_x = after(label, 73.0);
+        lead(ui, 374.0, label, min_x);
         winui::number_field(
             ui,
-            r(o, 316.0, 370.0, 73.0, 21.0),
+            r(o, min_x, 374.0, 73.0, h),
             &mut self.min_kb,
             0,
             10_000_000,
@@ -773,33 +759,44 @@ impl OptionsDialog {
 
     fn save_to(&mut self, ui: &mut Ui, o: Pos2, downloads: &std::path::Path) {
         let p = ui.painter().clone();
-        header(
-            ui,
-            o,
-            Icon::PageSaveTo,
-            "Categories, file types, folders",
-            true,
-            201.0,
-            58.0,
-            398.0,
-        );
-        group(ui, o, 21.0, 94.0, 380.0, 201.0, "Save To...");
-        // i18n: noun: label before the list of categories
-        text(
-            &p,
-            o.x + 30.0,
-            o.y + 127.0,
-            crate::i18n::t("Category"),
-            LIGHT_TEXT(),
-        );
+        let (left, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
         // IDM's, Torrents and the user's (the registry follows this dialog's edits).
         let cats = Category::all();
         self.category = self.category.min(cats.len() - 1);
+        let cat = cats[self.category];
+        let label = cat.shown();
+        let with_category = |template: &str| crate::i18n::fmt(template, &[("category", &label)]);
+        let dir_line = with_category(crate::i18n::t(
+            "Default download directory for \"{category}\" category",
+        ));
+        // New / Edit... (D-021): a category of the user's; a built-in one's folder. One width for
+        // both, as wide as the longer label in this language (#192), after the list.
+        let col_w = winui::button_fit_width(
+            &p,
+            winui::widest_label(&p, &["New", "Edit..."]),
+            73.0,
+            142.0,
+        );
+        let (edit_x, new_x) = (right - col_w, right - 2.0 * col_w - 8.0);
+        // The mock's wide form (240): Category, the folder, the temporary directory. A long
+        // category name widens the folder's label only so far: the list keeps 120, the label is
+        // cut with "..." (whole on hover).
+        let fx = winui::form(
+            &p,
+            left,
+            &["Category", &dir_line, "Temporary directory"],
+            true,
+        )
+        .min(new_x - 8.0 - 120.0);
+        // The page's title over its rows.
+        winui::form_label(&p, o, left, 88.0, 16.0, "Save To...", true);
+        // i18n: noun: label before the list of categories
+        winui::form_label(&p, o, left, 110.0, h, "Category", true);
         let names: Vec<String> = cats.iter().map(|c| c.label().into_owned()).collect();
         let labels: Vec<&str> = names.iter().map(String::as_str).collect();
         if let Some(i) = winui::combo_light(
             ui,
-            r(o, 30.0, 136.0, 212.0, 21.0),
+            r(o, fx, 110.0, new_x - 8.0 - fx, h),
             &labels,
             self.category,
             true,
@@ -810,19 +807,9 @@ impl OptionsDialog {
             self.category = i;
             self.cat_dir = display_dir(&self.s.category_dir(cats[i], downloads));
         }
-        // New / Edit... (D-021): a category of the user's; a built-in one's folder. One width for
-        // both, as wide as the longer label in this language (#192), into the room after the
-        // list (it ends at 242).
-        let (col_x, col_w) = winui::buttons_to_right(
-            &p,
-            392.0,
-            0.0,
-            &[(winui::widest_label(&p, &["New", "Edit..."]), 73.0)],
-            142.0,
-        )[0];
         if winui::button_light(
             ui,
-            r(o, col_x, 105.0, col_w, 21.0),
+            r(o, new_x, 110.0, col_w, h),
             // i18n: button: create a new item
             "New",
             ButtonKind::Normal,
@@ -835,7 +822,7 @@ impl OptionsDialog {
         }
         if winui::button_light(
             ui,
-            r(o, col_x, 137.0, col_w, 21.0),
+            r(o, edit_x, 110.0, col_w, h),
             // i18n: verb: edit the item
             "Edit...",
             ButtonKind::Normal,
@@ -848,25 +835,43 @@ impl OptionsDialog {
             let folder = self.s.category_dir(cat, downloads);
             self.cat_edit = Some(crate::categories::CategoryDialog::edit(cat, &folder));
         }
+        // The category chosen this frame names the rows after it.
         let cat = cats[self.category];
         let label = cat.shown();
         let with_category = |template: &str| crate::i18n::fmt(template, &[("category", &label)]);
         let line = with_category(crate::i18n::t(
             "Automatically put in \"{category}\" category the following file types:",
         ));
-        winui::text_in_window(ui, &p, o.x + 31.0, o.y + 178.0, &line, LIGHT_TEXT());
+        winui::text_in_window(
+            ui,
+            &p,
+            o.x + left,
+            o.y + winui::baseline_in(150.0, 16.0),
+            &line,
+            LIGHT_TEXT(),
+        );
         let types = cat.types_text();
-        readonly(ui, r(o, 31.0, 185.0, 362.0, 23.0), &types);
+        readonly(ui, r(o, left, 170.0, right - left, h), &types);
         let dir_line = with_category(crate::i18n::t(
             "Default download directory for \"{category}\" category",
         ));
-        winui::text_in_window(ui, &p, o.x + 30.0, o.y + 230.0, &dir_line, LIGHT_TEXT());
-        // Browse as wide as its label in this language (#192); the box ends 7 px before it.
+        let (rect, cut) = winui::text_fit(
+            &p,
+            o.x + left,
+            o.y + winui::baseline_in(210.0, h),
+            &dir_line,
+            crate::theme::colors().text_secondary,
+            o.x + fx - 12.0,
+        );
+        if cut {
+            winui::full_on_hover(ui, rect, "save-to-dir", &dir_line);
+        }
+        // Browse as wide as its label in this language (#192); the box ends 8 px before it.
         let (browse_x, browse_w) =
-            winui::buttons_to_right(&p, 392.0, 0.0, &[("Browse", 73.0)], 160.0)[0];
+            winui::buttons_to_right(&p, right, 0.0, &[("Browse", 73.0)], 160.0)[0];
         winui::edit_light_on(
             ui,
-            r(o, 31.0, 239.0, browse_x - 7.0 - 31.0, 23.0),
+            r(o, fx, 210.0, browse_x - 8.0 - fx, h),
             &mut self.cat_dir,
             true,
             false,
@@ -874,7 +879,7 @@ impl OptionsDialog {
         );
         if winui::button_light(
             ui,
-            r(o, browse_x, 240.0, browse_w, 21.0),
+            r(o, browse_x, 210.0, browse_w, h),
             // i18n: verb: choose a folder
             "Browse",
             ButtonKind::Normal,
@@ -899,28 +904,28 @@ impl OptionsDialog {
         ));
         winui::checkbox_light(
             ui,
-            o + vec2(33.0, 271.0),
+            o + vec2(left, 252.0),
             &mut self.s.change_folder_on_last,
             &line,
             true,
         );
         winui::checkbox_light(
             ui,
-            o + vec2(33.0, 306.0),
+            o + vec2(left, 274.0),
             &mut self.s.set_creation_date,
             "Set file creation date as provided by the server",
             true,
         );
-        group(ui, o, 21.0, 334.0, 380.0, 118.0, "Temporary directory");
+        // The temporary directory under a hairline, a row of the form.
+        winui::rule(&p, o, left, 297.0, right - left);
+        winui::form_label(&p, o, left, 305.0, h, "Temporary directory", true);
         // D-004: no temporary directory — parts are written next to the file, so there is
         // nothing to assemble at the end.
         let none = crate::i18n::t("Not used: file parts are written next to the file");
-        let (browse_x, browse_w) =
-            winui::buttons_to_right(&p, 390.0, 0.0, &[("Browse", 73.0)], 160.0)[0];
-        readonly(ui, r(o, 30.0, 349.0, browse_x - 6.0 - 30.0, 23.0), none);
+        readonly(ui, r(o, fx, 305.0, browse_x - 8.0 - fx, h), none);
         winui::button_light(
             ui,
-            r(o, browse_x, 350.0, browse_w, 21.0),
+            r(o, browse_x, 305.0, browse_w, h),
             // i18n: verb: choose a folder
             "Browse",
             ButtonKind::Disabled,
@@ -928,19 +933,21 @@ impl OptionsDialog {
         );
         winui::paragraph(
             &p,
-            o.x + 30.0,
-            o.y + 387.0,
+            o.x + left,
+            o.y + 355.0,
             crate::i18n::t(
                 "Mister Download Manager writes every connection straight into the final\nfile (a sparse part file next to it), so no temporary directory and no\nassembling step are needed.",
             ),
             LIGHT_TEXT(),
-            o.x + 426.0,
+            o.x + right,
             13.0,
         );
-        // #93: the built-in categories by file type as shipped again (beside OK, on this page).
+        // #93: the built-in categories by file type as shipped again (on this page only: at
+        // its foot, since the footer is the window's).
+        let restore_w = winui::button_fit_width(&p, "Restore the built-in categories", 73.0, 400.0);
         if winui::button_light(
             ui,
-            r(o, 21.0, 477.0, 232.0, 21.0),
+            r(o, left, PAGE_BOTTOM - h, restore_w, h),
             "Restore the built-in categories",
             ButtonKind::Normal,
             false,
@@ -982,39 +989,45 @@ impl OptionsDialog {
 
     fn downloads(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        header(
-            ui,
-            o,
-            Icon::PageDownloads,
-            "Default download settings",
-            true,
-            222.0,
-            58.0,
-            398.0,
-        );
         let s = &mut self.s;
-        // Edit... as wide as its label in this language (#192), its caption before it.
+        let (left, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
+        let w = right - left;
+        // Edit... as wide as its label in this language (#192) at the end of its row, its
+        // sentence at the leading edge (greyed, as the button: neither is built yet).
         let (edit_x, edit_w) =
-            winui::buttons_to_right(&p, 392.0, 0.0, &[("Edit...", 73.0)], 160.0)[0];
-        winui::text_right(
-            &p,
-            o.x + edit_x - 13.0,
-            o.y + 104.0,
+            winui::buttons_to_right(&p, right, 0.0, &[("Edit...", 73.0)], 160.0)[0];
+        // A longer translation is cut with "..." before the button, whole on hover.
+        let greyed = |ui: &Ui, top: f32, s: &str| {
+            let (rect, cut) = winui::text_fit(
+                &p,
+                o.x + left,
+                o.y + winui::baseline_in(top, h),
+                s,
+                LIGHT_DISABLED(),
+                o.x + edit_x - 8.0,
+            );
+            if cut {
+                winui::full_on_hover(ui, rect, ("downloads-greyed", top as i32), s);
+            }
+        };
+        greyed(
+            ui,
+            88.0,
             crate::i18n::t("Customize \"Download progress\" dialog"),
-            LIGHT_DISABLED(),
         );
         // The progress dialog customisation dialog is not built yet.
         winui::button_light(
             ui,
-            r(o, edit_x, 89.0, edit_w, 21.0),
+            r(o, edit_x, 88.0, edit_w, h),
             // i18n: verb: edit the item
             "Edit...",
             ButtonKind::Disabled,
             false,
         );
+        // The mock's check boxes, 22 apart (closer than its 30, so the page fits its area).
         winui::checkbox_light(
             ui,
-            o + vec2(24.0, 120.0),
+            o + vec2(left, 126.0),
             &mut s.show_start_dialog,
             "Show start download dialog",
             true,
@@ -1022,65 +1035,56 @@ impl OptionsDialog {
         let on = s.show_start_dialog;
         winui::checkbox_light(
             ui,
-            o + vec2(50.0, 141.0),
+            o + vec2(left + 24.0, 148.0),
             &mut s.only_add_to_queue,
             "Do not start downloading, only add files to the queue",
             !on,
         );
         winui::checkbox_light(
             ui,
-            o + vec2(24.0, 160.0),
+            o + vec2(left, 170.0),
             &mut s.show_complete,
             "Show download complete dialog",
             true,
         );
         text(
             &p,
-            o.x + 31.0,
-            o.y + 191.0,
+            o.x + left,
+            o.y + winui::baseline_in(190.0, 16.0),
             crate::i18n::t("Note: These settings don't relate to queue processing"),
             LIGHT_TEXT(),
         );
-        winui::etched_h(&p, o.x + 21.0, o.y + 198.0, 381.0);
-        winui::checkbox_light(
-            ui,
-            o + vec2(24.0, 212.0),
-            &mut s.start_immediately,
-            "Start downloading immediately while displaying \"Download File Info\" dialog",
-            true,
-        );
-        winui::checkbox_light(
-            ui,
-            o + vec2(24.0, 241.0),
-            &mut s.queue_panel_later,
-            "Show queue selection panel on pressing \"Download Later\" button",
-            true,
-        );
-        winui::checkbox_light(
-            ui,
-            o + vec2(24.0, 266.0),
-            &mut s.queue_panel_batch,
-            "Show queue selection panel on closing batch download dialogs",
-            true,
-        );
-        winui::checkbox_light(
-            ui,
-            o + vec2(24.0, 290.0),
-            &mut s.ignore_mtime,
-            "Ignore file modification time changes when resuming a download",
-            true,
-        );
-        winui::etched_h(&p, o.x + 21.0, o.y + 314.0, 381.0);
-        text(
-            &p,
-            o.x + 21.0,
-            o.y + 334.0,
-            crate::i18n::t("If a duplicate download link is added:"),
-            LIGHT_TEXT(),
-        );
+        winui::rule(&p, o, left, 214.0, w);
+        let checks: [(&mut bool, &str); 4] = [
+            (
+                &mut s.start_immediately,
+                "Start downloading immediately while displaying \"Download File Info\" dialog",
+            ),
+            (
+                &mut s.queue_panel_later,
+                "Show queue selection panel on pressing \"Download Later\" button",
+            ),
+            (
+                &mut s.queue_panel_batch,
+                "Show queue selection panel on closing batch download dialogs",
+            ),
+            (
+                &mut s.ignore_mtime,
+                "Ignore file modification time changes when resuming a download",
+            ),
+        ];
+        for (i, (v, label)) in checks.into_iter().enumerate() {
+            winui::checkbox_light(ui, o + vec2(left, 222.0 + 22.0 * i as f32), v, label, true);
+        }
+        winui::rule(&p, o, left, 311.0, w);
+        // The mock's wide form (240): the duplicate's choice and the User-Agent.
+        let dup = "If a duplicate download link is added:";
+        let agent = "User-Agent for manually added downloads:";
+        let fx = winui::form(&p, left, &[dup, agent], true);
+        winui::form_label(&p, o, left, 319.0, h, dup, true);
         if let Some(i) = winui::combo_light(
             ui,
-            r(o, 21.0, 340.0, 380.0, 21.0),
+            r(o, fx, 319.0, right - fx, h),
             &DUPLICATE,
             s.duplicate_action as usize,
             true,
@@ -1088,32 +1092,19 @@ impl OptionsDialog {
         ) {
             s.duplicate_action = i as u8;
         }
-        winui::etched_h(&p, o.x + 21.0, o.y + 367.0, 381.0);
-        text(
-            &p,
-            o.x + 21.0,
-            o.y + 388.0,
-            crate::i18n::t("User-Agent for manually added downloads:"),
-            LIGHT_TEXT(),
-        );
+        winui::form_label(&p, o, left, 359.0, h, agent, true);
         winui::edit_light(
             ui,
-            r(o, 21.0, 398.0, 381.0, 23.0),
+            r(o, fx, 359.0, right - fx, h),
             &mut s.user_agent,
             true,
             false,
         );
-        winui::etched_h(&p, o.x + 21.0, o.y + 426.0, 381.0);
-        winui::text_right(
-            &p,
-            o.x + edit_x - 17.0,
-            o.y + 451.0,
-            crate::i18n::t("Virus checking settings"),
-            LIGHT_DISABLED(),
-        );
+        winui::rule(&p, o, left, 399.0, w);
+        greyed(ui, 407.0, crate::i18n::t("Virus checking settings"));
         winui::button_light(
             ui,
-            r(o, edit_x, 436.0, edit_w, 21.0),
+            r(o, edit_x, 407.0, edit_w, h),
             // i18n: verb: edit the item
             "Edit...",
             ButtonKind::Disabled,
@@ -1123,34 +1114,18 @@ impl OptionsDialog {
 
     fn connection(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        header(
-            ui,
-            o,
-            Icon::PageConnection,
-            "Connections and Limits",
-            true,
-            245.0,
-            63.0,
-            399.0,
-        );
-        group(ui, o, 21.0, 102.0, 380.0, 195.0, "Max. connections number");
-        let label = crate::i18n::t("Default max. conn. number");
-        let (rect, cut) = winui::label_into(
-            &p,
-            o.x + 130.0,
-            o.y + 126.0,
-            label,
-            LIGHT_TEXT(),
-            o.x + 268.0,
-            o.x + 30.0,
-        );
-        if cut {
-            winui::full_on_hover(ui, rect, "max-conns", label);
-        }
+        let (left, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
+        // Titles over the groups, the groups between hairlines (the mock's).
+        let max = "Default max. conn. number";
+        // i18n: label before the choice of DNS (the service that turns names into addresses)
+        let dns = "DNS:";
+        let fx = winui::form(&p, left, &[max, dns], false);
+        winui::form_label(&p, o, left, 88.0, 16.0, "Max. connections number", true);
+        winui::form_label(&p, o, left, 108.0, h, max, true);
         // Typed, or stepped with the arrows (IDM's drop-down offered 1 to 32; issue #12).
         winui::spin_box(
             ui,
-            r(o, 268.0, 112.0, 101.0, 21.0),
+            r(o, fx, 108.0, 90.0, h),
             &mut self.conns,
             1,
             u64::from(self.s.connection_limit()),
@@ -1166,7 +1141,7 @@ impl OptionsDialog {
         let was = self.s.many_connections;
         winui::checkbox_light(
             ui,
-            o + vec2(33.0, 142.0),
+            o + vec2(left, 146.0),
             &mut self.s.many_connections,
             &line,
             true,
@@ -1180,15 +1155,8 @@ impl OptionsDialog {
                 *n = (*n).min(locked);
             }
         }
-        winui::etched_h(&p, o.x + 30.0, o.y + 163.0, 359.0);
         // i18n: plural noun: label before a list of exceptions
-        text(
-            &p,
-            o.x + 33.0,
-            o.y + 180.0,
-            crate::i18n::t("Exceptions:"),
-            LIGHT_TEXT(),
-        );
+        winui::form_label(&p, o, left, 167.0, 16.0, "Exceptions:", true);
         // The user's exceptions, then the caps the engine learned (read-only "(auto)" rows).
         let rows: Vec<Vec<String>> = self
             .s
@@ -1216,22 +1184,23 @@ impl OptionsDialog {
             )
             .collect();
         // New, Delete and Edit: one width, as wide as the longest label in this language (#192),
-        // the list ending 8 px before them (its Number column ends at 291).
+        // the list ending 8 px before them (its Number column 20 short of the list's end).
         let (col_x, col_w) = winui::buttons_to_right(
             &p,
-            392.0,
+            right,
             0.0,
             &[(winui::widest_label(&p, &["New", "Delete", "Edit"]), 73.0)],
             92.0,
         )[0];
+        let list_end = col_x - 8.0;
         let (dbl, del_key) = report(
             ui,
             o,
-            r(o, 30.0, 184.0, col_x - 8.0 - 30.0, 100.0),
+            r(o, left, 187.0, list_end - left, 98.0),
             // i18n: column titles: the server, and the number of connections allowed to it
             &[
-                (crate::i18n::mark("Server"), 241.0),
-                (crate::i18n::mark("Number"), 291.0),
+                (crate::i18n::mark("Server"), list_end - 90.0),
+                (crate::i18n::mark("Number"), list_end - 20.0),
             ],
             &rows,
             &mut self.exc_rows,
@@ -1245,7 +1214,7 @@ impl OptionsDialog {
             .filter(|i| *i < self.s.conn_exceptions.len());
         let new = winui::button_light(
             ui,
-            r(o, col_x, 195.0, col_w, 21.0),
+            r(o, col_x, 187.0, col_w, h),
             // i18n: button: create a new item
             "New",
             ButtonKind::Normal,
@@ -1258,12 +1227,12 @@ impl OptionsDialog {
             ButtonKind::Disabled
         };
         // i18n: verb: delete the item
-        let del = winui::button_light(ui, r(o, col_x, 224.0, col_w, 21.0), "Delete", kind, false)
+        let del = winui::button_light(ui, r(o, col_x, 221.0, col_w, h), "Delete", kind, false)
             .clicked()
             || del_key;
         let edit =
             // i18n: verb: edit the item
-            winui::button_light(ui, r(o, col_x, 254.0, col_w, 21.0), "Edit", kind, false)
+            winui::button_light(ui, r(o, col_x, 255.0, col_w, h), "Edit", kind, false)
                 .clicked();
         if new {
             self.sub = Some(Sub::Exception(None, String::new(), "1".into()));
@@ -1277,37 +1246,35 @@ impl OptionsDialog {
                 self.sub = Some(Sub::Exception(Some(i), server, n.to_string()));
             }
         }
-        // Download limits (shared with the Scheduler's page).
-        let gp = r(o, 21.0, 315.0, 380.0, 82.0);
-        let gap = winui::caption_gap(&p, o.x + 37.0, o.x + 132.0, "Download limits", true);
-        winui::group_box(&p, gp, Some(gap));
+        // Download limits (shared with the Scheduler's page): its check box leads the group,
+        // the sentence and the warning indented under it (the mock's).
+        winui::rule(&p, o, left, 295.0, right - left);
         winui::checkbox_light(
             ui,
-            o + vec2(37.0, 310.0),
+            o + vec2(left, 303.0),
             &mut self.s.limits_on,
             "Download limits",
             true,
         );
         let on = self.s.limits_on;
-        let line =
-            |lead: f32, lead_baseline: f32, y: f32, gap: f32, baseline: f32| winui::SentenceLine {
-                lead: winui::Lead::Right(o.x + lead),
-                lead_baseline: o.y + lead_baseline,
-                boxes: o + vec2(178.0, y),
+        // Each line's words on its box's text baseline; the labels end at one column, 8 before
+        // the boxes.
+        let line = |y: f32, gap: f32| {
+            let baseline = o.y + winui::baseline_in(y, 24.0);
+            winui::SentenceLine {
+                lead: winui::Lead::Right(o.x + left + 150.0),
+                lead_baseline: baseline,
+                boxes: o + vec2(left + 158.0, y),
                 gap,
-                baseline: o.y + baseline,
-            };
+                baseline,
+            }
+        };
         let boxes = winui::sentence(
             ui,
             &p,
             crate::i18n::t(crate::quota::LIMITS_SENTENCE),
-            // Each line's words on its box's text baseline (the 20 px boxes at 330 and 351:
-            // winui::baseline_in gives 343 and 364; they sat 2–3 px below the numbers).
-            &[
-                line(170.0, 343.0, 330.0, 8.0, 343.0),
-                line(170.0, 364.0, 351.0, 11.0, 364.0),
-            ],
-            &[("mb", vec2(36.0, 20.0)), ("hours", vec2(36.0, 20.0))],
+            &[line(322.0, 8.0), line(350.0, 8.0)],
+            &[("mb", vec2(64.0, 24.0)), ("hours", vec2(64.0, 24.0))],
             |p, x, baseline, s| {
                 winui::label(p, x, baseline, s, on);
             },
@@ -1316,25 +1283,22 @@ impl OptionsDialog {
         winui::number_field(ui, boxes[1], &mut self.hours, 1, 999, on, LIGHT_PAGE());
         winui::checkbox_light(
             ui,
-            o + vec2(37.0, 376.0),
+            o + vec2(left + 24.0, 382.0),
             &mut self.s.limits_warn,
             "Show warning before stopping downloads",
             on,
         );
         // DNS (#36): who answers the names; the details in Settings....
-        // i18n: label before the choice of DNS (the service that turns names into addresses)
-        text(
-            &p,
-            o.x + 21.0,
-            o.y + 421.0,
-            crate::i18n::t("DNS:"),
-            LIGHT_TEXT(),
-        );
+        winui::rule(&p, o, left, 405.0, right - left);
+        winui::form_label(&p, o, left, 413.0, h, dns, true);
+        // Settings... as wide as its label in this language (#192) at the row's end.
+        let (set_x, set_w) =
+            winui::buttons_to_right(&p, right, 0.0, &[("Settings...", 73.0)], 160.0)[0];
         let names = dns_names();
         let labels: Vec<&str> = names.iter().map(String::as_str).collect();
         if let Some(i) = winui::combo_light(
             ui,
-            r(o, 70.0, 406.0, 211.0, 21.0),
+            r(o, fx, 413.0, set_x - 8.0 - fx, h),
             &labels,
             dns_index(&self.s),
             true,
@@ -1351,14 +1315,8 @@ impl OptionsDialog {
             ButtonKind::Normal
         };
         // i18n: button: opens the DNS's details (how it's asked, its servers, a test)
-        if winui::button_light(
-            ui,
-            r(o, 289.0, 406.0, 103.0, 21.0),
-            "Settings...",
-            kind,
-            false,
-        )
-        .clicked()
+        if winui::button_light(ui, r(o, set_x, 413.0, set_w, h), "Settings...", kind, false)
+            .clicked()
         {
             self.sub = Some(Sub::Dns(DnsEdit::from(&self.s)));
         }
@@ -1366,40 +1324,21 @@ impl OptionsDialog {
 
     fn proxy(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        Icon::PageProxy
-            .image(true)
-            .paint_at(ui, r(o, 21.0, 50.0, 32.0, 32.0));
-        // Get System as wide as its label in this language (#192), its right end kept. A
-        // translated title ends where the English one does, unless the button needs that room or
-        // it would start less than 8 px after the icon: then it ends 8 px before the button, in
-        // two lines where one doesn't fit there.
-        let font = winui::tahoma_bold();
-        let english_end =
-            112.0 + winui::text_width_font(&p, font.clone(), "Proxy / socks configuration");
-        // The icon ends at 53; the button never moves right of its English place.
-        let (start, max_w) = (53.0 + 8.0, 160.0);
-        let get_whole = winui::button_fit_width(&p, "Get System", 93.0, max_w);
-        let room = (400.0 - get_whole).min(307.0) - 8.0 - start;
-        let (lines, title_w) =
-            page_title_lines(&p, font.clone(), "Proxy / socks configuration", room);
-        let from = (start + title_w + 8.0).min(307.0);
-        let (get_x, get_w) =
-            winui::button_row(&p, &[("Get System", 307.0, 93.0)], 0.0, from, max_w)[0];
-        if lines.len() == 1 && get_x - 8.0 >= english_end && english_end - title_w >= start {
-            page_title(
-                &p,
-                font,
-                o.x + 112.0,
-                o.y + 69.0,
-                "Proxy / socks configuration",
-            );
-        } else {
-            page_title_ending(&p, font, o.x + get_x - 8.0, o.y + 69.0, &lines);
-        }
+        // Get System as wide as its label (#192), its right end kept, on the heading's row
+        // (the heading is the window's, `heading`).
+        let (get_x, get_w) = winui::button_row(
+            &p,
+            &[("Get System", PROXY_GET_X, 93.0)],
+            0.0,
+            PROXY_GET_X,
+            160.0,
+        )[0];
+        // On whole pixels: a half-pixel button's edges blur.
+        let get_y = HEAD_TOP + ((HEAD_TILE - 21.0) / 2.0).floor() - PAGE_AT.y;
         let s = &mut self.s;
         if winui::button_light(
             ui,
-            r(o, get_x, 61.0, get_w, 21.0),
+            r(o, get_x, get_y, get_w, 21.0),
             "Get System",
             ButtonKind::Normal,
             false,
@@ -1413,9 +1352,10 @@ impl OptionsDialog {
             s.proxy_http = true;
             s.proxy_https = true;
         }
+        let h = winui::CONTROL_H;
         winui::checkbox_light(
             ui,
-            o + vec2(30.0, 100.0),
+            o + vec2(PAGE_LEFT, PAGE_TOP + 4.0),
             &mut s.proxy_from_browser,
             "",
             true,
@@ -1423,42 +1363,44 @@ impl OptionsDialog {
         // The checkbox's caption, in two lines as IDM has it (clicking it ticks the box).
         let lines = winui::paragraph(
             &p,
-            o.x + 46.0,
-            o.y + 104.0,
+            o.x + PAGE_LEFT + 16.0,
+            o.y + PAGE_TOP + 8.0,
             crate::i18n::t(
                 "Use proxy/socks from a browser's request if there are download errors /\nfor the downloads intercepted from the browser",
             ),
             LIGHT_TEXT(),
-            o.x + 426.0,
+            o.x + PAGE_RIGHT,
             13.0,
         );
         winui::caption_click(
             ui,
-            r(o, 46.0, 99.0, 380.0, 13.0 * lines as f32 + 2.0),
+            r(
+                o,
+                PAGE_LEFT + 16.0,
+                PAGE_TOP + 3.0,
+                PAGE_RIGHT - PAGE_LEFT - 16.0,
+                13.0 * lines as f32 + 2.0,
+            ),
             "proxy-from-browser",
             &mut s.proxy_from_browser,
             true,
         );
-        winui::etched_h(&p, o.x + 22.0, o.y + 128.0, 380.0);
+        // The four ways, 22 apart; the script's address after the third, the manual rows after
+        // the fourth (mock: no rules between them).
         let modes = [
-            (21.0, 137.0, crate::i18n::mark("No proxy/socks")),
-            (21.0, 167.0, crate::i18n::mark("Use system settings")),
+            (124.0, crate::i18n::mark("No proxy/socks")),
+            (146.0, crate::i18n::mark("Use system settings")),
             (
-                21.0,
-                194.0,
+                168.0,
                 crate::i18n::mark("Use automatic configuration script"),
             ),
-            (
-                22.0,
-                250.0,
-                crate::i18n::mark("Manual proxy/socks configuration"),
-            ),
+            (228.0, crate::i18n::mark("Manual proxy/socks configuration")),
         ];
         let mut group = Vec::new();
-        for (i, (x, y, label)) in modes.iter().enumerate() {
+        for (i, (y, label)) in modes.iter().enumerate() {
             let resp = winui::radio_light(
                 ui,
-                o + vec2(*x, *y),
+                o + vec2(PAGE_LEFT, *y),
                 s.proxy_mode as usize == i,
                 label,
                 true,
@@ -1471,37 +1413,39 @@ impl OptionsDialog {
         if let Some(i) = winui::radio_keys(ui, &group) {
             s.proxy_mode = i as u8;
         }
-        winui::etched_h(&p, o.x + 22.0, o.y + 159.0, 380.0);
-        winui::etched_h(&p, o.x + 21.0, o.y + 187.0, 380.0);
-        winui::etched_h(&p, o.x + 21.0, o.y + 242.0, 380.0);
+        // One label column for the script's address and the manual rows, under the radios.
+        let lx = PAGE_LEFT + 24.0;
+        let fx = winui::form(
+            &p,
+            lx,
+            // i18n: noun: the web address (URL)
+            &["Address", "Proxy server address", "UserName"],
+            false,
+        );
         // The script's address (http, https or file): MDM fetches and runs it (pacfetch.rs,
         // mdm_engine::pac).
         let script = s.proxy_mode == 2;
-        // i18n: noun: the web address (URL)
-        disabled_label(&p, o.x + 30.0, o.y + 228.0, "Address", script, false);
+        winui::form_label(&p, o, lx, 188.0, h, "Address", script);
         winui::edit_light_on(
             ui,
-            r(o, 90.0, 213.0, 305.0, 23.0),
+            r(o, fx, 188.0, PAGE_RIGHT - fx, h),
             &mut s.proxy_script,
             script,
             false,
             LIGHT_PAGE(),
         );
+        // Manual: two rows of two (server, port; user, password).
         let manual = s.proxy_mode == 3;
-        disabled_label(
-            &p,
-            o.x + 30.0,
-            o.y + 280.0,
-            "Proxy server address",
-            manual,
-            false,
-        );
-        disabled_label(&p, o.x + 172.0, o.y + 278.0, "Port", manual, false);
-        disabled_label(&p, o.x + 229.0, o.y + 278.0, "UserName", manual, false);
-        disabled_label(&p, o.x + 313.0, o.y + 278.0, "Password", manual, false);
+        let x2 = ((fx + PAGE_RIGHT) / 2.0).round();
+        let fx2 = winui::form(&p, x2, &["Port", "Password"], false).min(PAGE_RIGHT - 90.0);
+        let (row1, row2) = (248.0, 286.0);
+        winui::form_label(&p, o, lx, row1, h, "Proxy server address", manual);
+        winui::form_label(&p, o, x2, row1, h, "Port", manual);
+        winui::form_label(&p, o, lx, row2, h, "UserName", manual);
+        winui::form_label(&p, o, x2, row2, h, "Password", manual);
         winui::edit_light_on(
             ui,
-            r(o, 30.0, 286.0, 137.0, 24.0),
+            r(o, fx, row1, x2 - 12.0 - fx, h),
             &mut s.proxy_host,
             manual,
             false,
@@ -1509,7 +1453,7 @@ impl OptionsDialog {
         );
         winui::number_field(
             ui,
-            r(o, 172.0, 286.0, 51.0, 24.0),
+            r(o, fx2, row1, 100.0_f32.min(PAGE_RIGHT - fx2), h),
             &mut s.proxy_port,
             1,
             65535,
@@ -1518,7 +1462,7 @@ impl OptionsDialog {
         );
         winui::edit_light_on(
             ui,
-            r(o, 229.0, 286.0, 78.0, 24.0),
+            r(o, fx, row2, x2 - 12.0 - fx, h),
             &mut s.proxy_user,
             manual,
             false,
@@ -1526,45 +1470,50 @@ impl OptionsDialog {
         );
         password(
             ui,
-            r(o, 312.0, 286.0, 83.0, 24.0),
+            r(o, fx2, row2, PAGE_RIGHT - fx2, h),
             &mut s.proxy_pass,
             manual,
         );
-        disabled_label(
-            &p,
-            o.x + 30.0,
-            o.y + 326.0,
-            "Use this proxy for the following protocols:",
-            manual,
-            false,
-        );
-        winui::checkbox_light(ui, o + vec2(30.0, 334.0), &mut s.proxy_http, "http", manual);
-        winui::checkbox_light(
-            ui,
-            o + vec2(97.0, 334.0),
-            &mut s.proxy_https,
-            "https",
-            manual,
-        );
+        // The protocols on one row after their sentence.
+        let protocols = "Use this proxy for the following protocols:";
+        let check_y = 326.0;
+        disabled_label(&p, o.x + lx, o.y + check_y + 10.0, protocols, manual, false);
+        let mut x = (lx + winui::text_width(&p, crate::i18n::t(protocols)) + 16.0).ceil();
+        let mut next = |label: &str| {
+            let at = x;
+            x = (x + 16.0 + winui::text_width(&p, crate::i18n::t(label)) + 24.0).ceil();
+            o + vec2(at, check_y)
+        };
+        let (http_at, https_at, ftp_at) = (next("http"), next("https"), next("ftp"));
+        winui::checkbox_light(ui, http_at, &mut s.proxy_http, "http", manual);
+        winui::checkbox_light(ui, https_at, &mut s.proxy_https, "https", manual);
         // FTP connects to its servers directly, never through an HTTP proxy: the ftp box
         // stays greyed (D-021).
-        winui::checkbox_light(ui, o + vec2(174.0, 334.0), &mut s.proxy_ftp, "ftp", false);
-        // Socks settings: with the proxy work in M10.
+        winui::checkbox_light(ui, ftp_at, &mut s.proxy_ftp, "ftp", false);
+        // Socks settings: with the proxy work in M10. PASV beside it, as the mock has them.
+        let (adv_x, adv_w) = winui::button_row_from_left(
+            &p,
+            &[("Advanced / Socks...", lx, 159.0)],
+            8.0,
+            PAGE_RIGHT,
+            240.0,
+        )[0];
+        let row3 = 346.0;
         winui::button_light(
             ui,
-            r(o, 235.0, 339.0, 159.0, 21.0),
+            r(o, adv_x, row3, adv_w, h),
             "Advanced / Socks...",
             ButtonKind::Disabled,
             false,
         );
-        winui::etched_h(&p, o.x + 21.0, o.y + 447.0, 381.0);
         winui::checkbox_light(
             ui,
-            o + vec2(27.0, 453.0),
+            o + vec2(adv_x + adv_w + 24.0, row3 + 9.0),
             &mut s.ftp_passive,
             "Use FTP in PASV mode",
             true,
         );
+        winui::rule(&p, o, PAGE_LEFT, 388.0, PAGE_RIGHT - PAGE_LEFT);
         self.adapter_row(ui, o);
     }
 
@@ -1586,15 +1535,11 @@ impl OptionsDialog {
             .map(|(_, a)| a.clone())
             .unwrap_or_default();
         let p = ui.painter().clone();
-        winui::etched_h(&p, o.x + 21.0, o.y + 372.0, 381.0);
+        // Under Proxy's rule (at 388): the adapter's row, then what it does now.
+        let (h, y) = (winui::CONTROL_H, 398.0);
         // i18n: label before the choice of network adapter (Ethernet, Wi-Fi, a VPN's) every connection must go through
-        text(
-            &p,
-            o.x + 27.0,
-            o.y + 395.0,
-            crate::i18n::t("Network adapter:"),
-            LIGHT_TEXT(),
-        );
+        let fx = winui::form(&p, PAGE_LEFT, &["Network adapter:"], false);
+        winui::form_label(&p, o, PAGE_LEFT, y, h, "Network adapter:", true);
         // The choices: any, then each adapter with its address (the ones with none too: a VPN
         // switched off), the chosen one kept when it's gone.
         let chosen = self.s.net_adapter.trim().to_owned();
@@ -1631,7 +1576,7 @@ impl OptionsDialog {
         let shown: Vec<&str> = labels.iter().map(String::as_str).collect();
         if let Some(i) = winui::combo_light(
             ui,
-            r(o, 130.0, 380.0, 265.0, 21.0),
+            r(o, fx, y, PAGE_RIGHT - fx, h),
             &shown,
             at,
             true,
@@ -1677,12 +1622,12 @@ impl OptionsDialog {
         for (row, part) in line.lines().take(2).enumerate() {
             let (rect, cut) = winui::label_into(
                 &p,
-                o.x + 27.0,
-                o.y + 422.0 + 15.0 * row as f32,
+                o.x + fx,
+                o.y + y + h + 18.0 + 15.0 * row as f32,
                 part,
                 color,
-                o.x + 400.0,
-                o.x + 27.0,
+                o.x + PAGE_RIGHT + 5.0,
+                o.x + fx,
             );
             if cut {
                 winui::full_on_hover(ui, rect, ("opt-adapter-state", row), part);
@@ -1693,16 +1638,6 @@ impl OptionsDialog {
     /// Accounts (#44, ours): debrid service accounts that download file-host links. The list is
     /// asked in its order; a link goes through the first account whose service takes its host.
     fn accounts(&mut self, ui: &mut Ui, o: Pos2) {
-        header(
-            ui,
-            o,
-            Icon::PageAccounts,
-            "Debrid service accounts",
-            true,
-            117.0,
-            63.0,
-            399.0,
-        );
         let vault = crate::secrets::vault();
         let rows: Vec<Vec<String>> = self
             .s
@@ -1728,17 +1663,29 @@ impl OptionsDialog {
                 ]
             })
             .collect();
+        // The list, its buttons in a column at its side (the mock's).
+        let h = winui::CONTROL_H;
+        let (bw, gap) = (100.0, 8.0);
+        let bx = PAGE_RIGHT - bw;
+        let list_right = bx - gap;
+        let list_bottom = PAGE_TOP + 4.0 * h + 3.0 * gap;
         let (_, del_key) = report(
             ui,
             o,
-            r(o, 21.0, 93.0, 383.0, 124.0),
+            r(
+                o,
+                PAGE_LEFT,
+                PAGE_TOP,
+                list_right - PAGE_LEFT,
+                list_bottom - PAGE_TOP,
+            ),
             &[
                 // i18n: column title: the debrid service (Real-Debrid…)
-                (crate::i18n::mark("Service"), 110.0),
+                (crate::i18n::mark("Service"), PAGE_LEFT + 140.0),
                 // i18n: column title: the account's name at the service
-                (crate::i18n::mark("Account"), 205.0),
+                (crate::i18n::mark("Account"), PAGE_LEFT + 300.0),
                 // i18n: column title: the account's state (premium, days left)
-                (crate::i18n::mark("State"), 387.0),
+                (crate::i18n::mark("State"), list_right - 17.0),
             ],
             &rows,
             &mut self.account_rows,
@@ -1747,14 +1694,8 @@ impl OptionsDialog {
         );
         let sel = self.account_rows.selected.filter(|i| *i < rows.len());
         // i18n: button: add a debrid service account (opens the sign-in)
-        let add = winui::button_light(
-            ui,
-            r(o, 21.0, 225.0, 90.0, 21.0),
-            "Add...",
-            ButtonKind::Normal,
-            false,
-        )
-        .clicked();
+        let at = |k: f32| r(o, bx, PAGE_TOP + k * (h + gap), bw, h);
+        let add = winui::button_light(ui, at(0.0), "Add...", ButtonKind::Normal, false).clicked();
         let kind = |on: bool| {
             if on {
                 ButtonKind::Normal
@@ -1762,28 +1703,16 @@ impl OptionsDialog {
                 ButtonKind::Disabled
             }
         };
-        let remove = winui::button_light(
-            ui,
-            r(o, 117.0, 225.0, 90.0, 21.0),
-            "Remove",
-            kind(sel.is_some()),
-            false,
-        )
-        .clicked()
+        let remove = winui::button_light(ui, at(1.0), "Remove", kind(sel.is_some()), false)
+            .clicked()
             || del_key;
         // i18n: button (short): move the account up the list (accounts are asked in the list's order)
-        let up = winui::button_light(
-            ui,
-            r(o, 213.0, 225.0, 90.0, 21.0),
-            "Up",
-            kind(sel.is_some_and(|i| i > 0)),
-            false,
-        )
-        .clicked();
+        let up = winui::button_light(ui, at(2.0), "Up", kind(sel.is_some_and(|i| i > 0)), false)
+            .clicked();
         // i18n: button (short): move the account down the list
         let down = winui::button_light(
             ui,
-            r(o, 309.0, 225.0, 95.0, 21.0),
+            at(3.0),
             "Down",
             kind(sel.is_some_and(|i| i + 1 < rows.len())),
             false,
@@ -1811,18 +1740,43 @@ impl OptionsDialog {
             // i18n: Options → Accounts: a note that the debrid services' support (Real-Debrid, AllDebrid, Premiumize) is new and not yet tried with real paid accounts
             "Experimental: built from the services' public API documentation, not yet confirmed with real accounts.",
         );
+        // A warning banner (the mock's): its sentence wraps in the title's place, as the kit's
+        // banner has no wrapping title.
+        let banner_top = list_bottom + 12.0;
+        let room = r(
+            o,
+            PAGE_LEFT,
+            banner_top,
+            PAGE_RIGHT - PAGE_LEFT,
+            winui::status_banner_height(0),
+        );
+        // The kit's text place: after the 12 + 17 + 10 of the icon, 12 before the edge.
+        let (text_x, text_right) = (room.left() + 39.0, room.right() - 12.0);
+        let lines = winui::wrap_lines(&p, note, text_right - text_x)
+            .len()
+            .max(1);
+        let banner_h = winui::status_banner_height(lines - 1);
+        winui::status_banner(
+            ui,
+            room.with_max_y(room.top() + banner_h),
+            winui::BannerKind::Warning,
+            "st-error",
+            "",
+            "",
+        );
         winui::paragraph(
             &p,
-            o.x + 21.0,
-            o.y + 256.0,
+            text_x,
+            room.top() + 23.0,
             note,
-            crate::theme::colors().warning,
-            o.x + 404.0,
-            14.0,
+            LIGHT_TEXT(),
+            text_right,
+            17.0,
         );
+        let check_y = banner_top + banner_h + 12.0;
         winui::checkbox_light(
             ui,
-            o + vec2(21.0, 302.0),
+            o + vec2(PAGE_LEFT, check_y),
             &mut self.s.debrid_on,
             // i18n: Options → Accounts: checkbox: links of the file hosts these services support are downloaded through the accounts
             "Download supported file-host links through these accounts",
@@ -1830,24 +1784,26 @@ impl OptionsDialog {
         );
         winui::checkbox_light(
             ui,
-            o + vec2(21.0, 324.0),
+            o + vec2(PAGE_LEFT, check_y + 26.0),
             &mut self.s.debrid_torrents,
             // i18n: Options → Accounts: checkbox: magnet links and .torrent files go to the first account's service, which downloads them; MDM then downloads the files from it (no connections to peers)
             "Send torrents and magnet links to the first account instead of to peers",
             self.s.debrid_on,
         );
         let p = ui.painter().clone();
+        // The two notes, as the mock's hints.
+        let para_y = check_y + 26.0 + 13.0 + 22.0;
         let lines = winui::paragraph(
             &p,
-            o.x + 21.0,
-            o.y + 358.0,
+            o.x + PAGE_LEFT,
+            o.y + para_y,
             // i18n: Options → Accounts: what these accounts are, and the services' rule against sharing
             crate::i18n::t(
                 "A debrid service downloads a file host's link with your own paid account and gives MDM a direct link. Use only your own account: sharing an account or its links breaks the services' terms and can get it suspended. Downloads the browser already started stay as they are.",
             ),
-            LIGHT_TEXT(),
-            o.x + 404.0,
-            14.0,
+            winui::MUTED(),
+            o.x + PAGE_RIGHT,
+            16.0,
         );
         // Where the sign-ins are kept (#44, secrets.rs); the list is two rows shorter for it.
         let kept = vault.kept();
@@ -1858,27 +1814,19 @@ impl OptionsDialog {
         if let Some(text) = kept_text(kept) {
             winui::paragraph(
                 &p,
-                o.x + 21.0,
-                o.y + 358.0 + lines as f32 * 14.0 + 6.0,
+                o.x + PAGE_LEFT,
+                o.y + para_y + lines as f32 * 16.0 + 6.0,
                 crate::i18n::t(text),
-                LIGHT_TEXT(),
-                o.x + 404.0,
-                14.0,
+                winui::MUTED(),
+                o.x + PAGE_RIGHT,
+                16.0,
             );
         }
     }
 
     fn logins(&mut self, ui: &mut Ui, o: Pos2) {
-        header(
-            ui,
-            o,
-            Icon::PageLogins,
-            "User names and passwords for servers/sites",
-            true,
-            117.0,
-            63.0,
-            399.0,
-        );
+        /// The New / Edit / Remove row's top; Cookies for video sites under it (from 296).
+        const LOGINS_BUTTONS: f32 = 252.0;
         let rows: Vec<Vec<String>> = self
             .s
             .site_logins
@@ -1891,13 +1839,19 @@ impl OptionsDialog {
         let (dbl, del_key) = report(
             ui,
             o,
-            r(o, 21.0, 93.0, 383.0, 140.0),
+            r(
+                o,
+                PAGE_LEFT,
+                PAGE_TOP,
+                PAGE_RIGHT - PAGE_LEFT,
+                LOGINS_BUTTONS - 8.0 - PAGE_TOP,
+            ),
             &[
                 // i18n: column title: the site (and path) a login is for
-                (crate::i18n::mark("Site/path"), 262.0),
+                (crate::i18n::mark("Site/path"), PAGE_LEFT + 340.0),
                 // i18n: column title: the user name
-                (crate::i18n::mark("User"), 332.0),
-                (crate::i18n::mark("Password"), 387.0),
+                (crate::i18n::mark("User"), PAGE_LEFT + 480.0),
+                (crate::i18n::mark("Password"), PAGE_RIGHT - 17.0),
             ],
             &rows,
             &mut self.login_rows,
@@ -1905,23 +1859,24 @@ impl OptionsDialog {
             "opt-logins",
         );
         let sel = self.login_rows.selected.filter(|i| *i < rows.len());
-        // As wide as their labels in this language (#192), under the list (it ends at 404).
+        // As wide as their labels in this language (#192), under the list.
         let [new_at, edit_at, remove_at] = winui::button_row_from_left(
             &ui.painter().clone(),
             &[
-                ("New", 31.0, 73.0),
-                ("Edit", 125.0, 73.0),
-                ("Remove", 220.0, 73.0),
+                ("New", PAGE_LEFT, 80.0),
+                ("Edit", PAGE_LEFT + 88.0, 80.0),
+                ("Remove", PAGE_LEFT + 176.0, 80.0),
             ],
-            21.0,
-            404.0,
-            140.0,
+            8.0,
+            PAGE_RIGHT,
+            160.0,
         )[..] else {
             unreachable!("three buttons")
         };
+        let (y, h) = (LOGINS_BUTTONS, winui::CONTROL_H);
         let new = winui::button_light(
             ui,
-            r(o, new_at.0, 241.0, new_at.1, 21.0),
+            r(o, new_at.0, y, new_at.1, h),
             // i18n: button: create a new item
             "New",
             ButtonKind::Normal,
@@ -1935,11 +1890,11 @@ impl OptionsDialog {
         };
         let edit =
             // i18n: verb: edit the item
-            winui::button_light(ui, r(o, edit_at.0, 241.0, edit_at.1, 21.0), "Edit", kind, false).clicked();
+            winui::button_light(ui, r(o, edit_at.0, y, edit_at.1, h), "Edit", kind, false).clicked();
         // i18n: verb: remove the item
         let remove = winui::button_light(
             ui,
-            r(o, remove_at.0, 241.0, remove_at.1, 21.0),
+            r(o, remove_at.0, y, remove_at.1, h),
             "Remove",
             kind,
             false,
@@ -1971,8 +1926,10 @@ impl OptionsDialog {
     /// profile (a name, or a folder: a Chromium fork's).
     fn video_cookies(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
+        let h = winui::CONTROL_H;
+        winui::rule(&p, o, PAGE_LEFT, 296.0, PAGE_RIGHT - PAGE_LEFT);
         // i18n: Options → Sites Logins: group box title: yt-dlp signs in to video sites with a browser's cookies
-        group(ui, o, 16.0, 270.0, 392.0, 130.0, "Cookies for video sites");
+        Self::group_title(ui, o, PAGE_LEFT, 316.0, "Cookies for video sites");
         let browsers = mdm_tools::proc::cookie_browsers();
         let at = self.cookie_browser.min(browsers.len() - 1);
         let on = !self.s.video_cookies.is_empty();
@@ -1982,15 +1939,24 @@ impl OptionsDialog {
         );
         // i18n: Options → Sites Logins → Cookies for video sites: don't read any browser's cookies (the default)
         let off =
-            winui::radio_light(ui, o + vec2(30.0, 288.0), !on, "Off", true).on_hover_text(tip);
+            winui::radio_light(ui, o + vec2(PAGE_LEFT, 328.0), !on, "Off", true).on_hover_text(tip);
+        // The browser's list right after the caption, wherever it ends (at 200 % a fixed place
+        // cut it to "..."); the profile's box lines up with it.
+        let (row, combo_w) = (350.0, 200.0);
+        // i18n: Options → Sites Logins → Cookies for video sites: read the cookies of the browser chosen in the list after it
+        let from_caption = "From browser:";
+        let combo_x =
+            (PAGE_LEFT + 16.0 + winui::text_width(&p, crate::i18n::t(from_caption)) + 12.0)
+                .ceil()
+                .min(PAGE_RIGHT - combo_w);
         let from = winui::radio_light_until(
             ui,
-            o + vec2(30.0, 314.0),
+            o + vec2(PAGE_LEFT, row + 9.0),
             on,
-            // i18n: Options → Sites Logins → Cookies for video sites: read the cookies of the browser chosen in the list after it
-            "From browser:",
+            from_caption,
             true,
-            Some(194.0),
+            // Before the browser list (`until` is a window x, not the page's).
+            Some(o.x + combo_x - 6.0),
         )
         .on_hover_text(tip);
         let choose = |s: &mut Settings, i: usize| s.video_cookies = browsers[i].to_owned();
@@ -2008,7 +1974,7 @@ impl OptionsDialog {
             .collect();
         if let Some(i) = winui::combo_light(
             ui,
-            r(o, 200.0, 311.0, 192.0, 21.0),
+            r(o, combo_x, row, combo_w, h),
             &names,
             at,
             on,
@@ -2018,17 +1984,18 @@ impl OptionsDialog {
             choose(&mut self.s, i);
         }
         // The profile: a name (Firefox's, "Profile 1") or a folder; empty, the last one used.
-        let ink = if on { LIGHT_TEXT() } else { LIGHT_DISABLED() };
+        // Its label under the radios' captions (the mock's indent), its box at the list's x or
+        // after a longer label.
+        let row = 388.0;
+        let lx = PAGE_LEFT + 16.0;
         // i18n: Options → Sites Logins → Cookies for video sites: label before the browser profile's name or folder (may stay empty)
-        let label = crate::i18n::t("Profile (optional):");
-        let (rect, cut) =
-            winui::text_right_within(&p, o.x + 194.0, o.y + 354.0, label, ink, o.x + 30.0);
-        if cut {
-            winui::full_on_hover(ui, rect, "cookie-profile", label);
-        }
+        let label = "Profile (optional):";
+        let fx = combo_x.max((lx + winui::text_width(&p, crate::i18n::t(label)) + 12.0).ceil());
+        winui::form_label(&p, o, lx, row, h, label, on);
+        let browse_x = PAGE_RIGHT - h;
         winui::edit_light_on(
             ui,
-            r(o, 200.0, 338.0, 160.0, 23.0),
+            r(o, fx, row, browse_x - 8.0 - fx, h),
             &mut self.s.video_cookies_profile,
             on,
             false,
@@ -2039,14 +2006,10 @@ impl OptionsDialog {
             "A profile's name or its folder. Empty: the profile used last. For a browser built on Chromium that isn't listed (Helium, Thorium...), choose Chromium and its profile's folder.",
         ));
         // i18n: Options → Sites Logins → Cookies for video sites: the title of the window, and the tooltip of the button, that pick a browser profile's folder
-        let pick_title = crate::i18n::t("Choose the profile's folder");
-        let kind = if on {
-            ButtonKind::Normal
-        } else {
-            ButtonKind::Disabled
-        };
-        if winui::button_light(ui, r(o, 365.0, 339.0, 27.0, 21.0), "...", kind, false)
-            .on_hover_text(pick_title)
+        let pick_title_en = "Choose the profile's folder";
+        let pick_title = crate::i18n::t(pick_title_en);
+        // The browse button as every other one: gx-dots, its tooltip its name.
+        if winui::icon_only_button(ui, r(o, browse_x, row, h, h), "gx-dots", pick_title_en, on)
             .clicked()
         {
             let title = pick_title.to_owned();
@@ -2072,57 +2035,59 @@ impl OptionsDialog {
             (
                 // i18n: Options → Sites Logins → Cookies for video sites: a note under the choices
                 crate::i18n::t("Read on this computer only, and sent only to the video's site."),
-                LIGHT_DISABLED(),
+                winui::MUTED(),
             )
         };
         // Two lines at most: a longer language wraps rather than being cut.
-        winui::paragraph(&p, o.x + 30.0, o.y + 380.0, note, ink, o.x + 400.0, 13.0);
+        winui::paragraph(
+            &p,
+            o.x + PAGE_LEFT,
+            o.y + row + h + 20.0,
+            note,
+            ink,
+            o.x + PAGE_RIGHT,
+            15.0,
+        );
     }
 
     /// Archives (ours, #37): extracting archives when their download completes, what becomes
     /// of them, and Link grabber's ways.
     fn archives(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        // i18n: Options page title: extracting downloaded archives, and Link grabber
-        let title = crate::i18n::mark("Archives and Link grabber");
-        let w = winui::text_width_font(&p, winui::tahoma_bold(), title);
-        header(
-            ui,
-            o,
-            Icon::PageArchives,
-            title,
-            true,
-            406.0 - w,
-            61.0,
-            406.0,
-        );
         let s = &mut self.s;
+        let (l, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
         // i18n: Options → Archives: group box title
-        group(ui, o, 16.0, 92.0, 392.0, 196.0, "Archives");
+        Self::group_title(ui, o, l, PAGE_TOP + 10.0, "Archives");
         winui::checkbox_light(
             ui,
-            o + vec2(30.0, 110.0),
+            o + vec2(l, 110.0),
             &mut s.extract_auto,
             // i18n: Options → Archives check box (a Link grabber package has its own "Extract when done")
             "Extract archives when their download completes",
             true,
         );
+        // Under the box it follows (the mock's indent).
         winui::checkbox_light(
             ui,
-            o + vec2(30.0, 134.0),
+            o + vec2(l + 24.0, 134.0),
             &mut s.extract_delete,
             // i18n: Options → Archives check box
             "Then move the archives to the Recycle Bin",
             true,
         );
+        // i18n: Options → Archives: a label before the list of where extracted files go
+        let into_label = crate::i18n::t("What an archive holds goes:");
+        let into_y = 158.0;
         text(
             &p,
-            o.x + 30.0,
-            o.y + 174.0,
-            // i18n: Options → Archives: a label before the list of where extracted files go
-            crate::i18n::t("What an archive holds goes:"),
+            o.x + l,
+            o.y + winui::baseline_in(into_y, h),
+            into_label,
             LIGHT_TEXT(),
         );
+        let into_x = (l + winui::text_width(&p, into_label) + 12.0)
+            .ceil()
+            .min(right - 200.0);
         const INTO: [&str; 3] = [
             // i18n: Options → Archives: where extracted files go
             crate::i18n::mark("Into a folder named after it, when it holds several things"),
@@ -2133,7 +2098,7 @@ impl OptionsDialog {
         ];
         if let Some(i) = winui::combo_light(
             ui,
-            r(o, 30.0, 181.0, 364.0, 21.0),
+            r(o, into_x, into_y, right - into_x, h),
             &INTO,
             s.extract_subfolder.min(2) as usize,
             true,
@@ -2141,17 +2106,19 @@ impl OptionsDialog {
         ) {
             s.extract_subfolder = i as u8;
         }
-        winui::paragraph(
+        // The notes, as the mock's hints.
+        let lines = winui::paragraph(
             &p,
-            o.x + 30.0,
-            o.y + 226.0,
+            o.x + l,
+            o.y + into_y + h + 20.0,
             crate::i18n::t(
                 "ZIP, 7Z, RAR, TAR, GZ and XZ; a split archive (.part1.rar, .7z.001) once\nevery volume is in. A file there already is kept: the new one is numbered.",
             ),
-            LIGHT_TEXT(),
-            o.x + 400.0,
-            13.0,
+            winui::MUTED(),
+            o.x + right,
+            15.0,
         );
+        let tool_y = into_y + h + 20.0 + 15.0 * lines as f32 + 4.0;
         let (rar, ink) = match &self.seven_zip {
             Some(path) => (
                 crate::i18n::fmt(
@@ -2159,7 +2126,7 @@ impl OptionsDialog {
                     crate::i18n::t("7z and RAR archives are extracted by 7-Zip ({path})."),
                     &[("path", &crate::i18n::ltr(&path.display().to_string()))],
                 ),
-                LIGHT_TEXT(),
+                winui::MUTED(),
             ),
             None => (
                 // i18n: Options → Archives, when 7-Zip isn't installed
@@ -2173,18 +2140,21 @@ impl OptionsDialog {
         winui::fit(
             ui,
             &p,
-            o.x + 30.0,
-            o.y + 272.0,
+            o.x + l,
+            o.y + tool_y,
             &rar,
             ink,
-            o.x + 400.0,
+            o.x + right,
             "opt-rar-tool",
         );
+        // Link grabber under a rule (it was its own group box).
+        let rule_y = tool_y + 18.0;
+        winui::rule(&p, o, l, rule_y, right - l);
         // i18n: Options → Archives: group box title
-        group(ui, o, 16.0, 300.0, 392.0, 100.0, "Link grabber");
+        Self::group_title(ui, o, l, rule_y + 20.0, "Link grabber");
         winui::checkbox_light(
             ui,
-            o + vec2(30.0, 318.0),
+            o + vec2(l, rule_y + 32.0),
             &mut s.grabber_check,
             // i18n: Options → Archives → Link grabber check box (IDM's Download all links looks every link up)
             "Look links up when they arrive (name, size, online)",
@@ -2192,21 +2162,21 @@ impl OptionsDialog {
         );
         winui::checkbox_light(
             ui,
-            o + vec2(30.0, 342.0),
+            o + vec2(l, rule_y + 56.0),
             &mut s.grabber_hide_pages,
             "Hide web pages",
             true,
         );
         winui::paragraph(
             &p,
-            o.x + 30.0,
-            o.y + 380.0,
+            o.x + l,
+            o.y + rule_y + 88.0,
             crate::i18n::t(
                 "Tasks → Link grabber, or the browser's \"Download all links\": a split\narchive's volumes are one package, the other links of a page another.",
             ),
-            LIGHT_DISABLED(),
-            o.x + 400.0,
-            13.0,
+            winui::MUTED(),
+            o.x + right,
+            15.0,
         );
     }
 
@@ -2214,26 +2184,17 @@ impl OptionsDialog {
     /// system's region writes them or the user's own way.
     fn regional(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        header(
-            ui,
-            o,
-            Icon::PageRegional,
-            "Dates and times",
-            true,
-            302.0,
-            61.0,
-            406.0,
-        );
         let reg = &mut self.s.regional;
-        group(ui, o, 16.0, 92.0, 392.0, 250.0, "Write dates and times");
+        let (l, h) = (PAGE_LEFT, winui::CONTROL_H);
+        Self::group_title(ui, o, l, PAGE_TOP + 10.0, "Write dates and times");
         let system = winui::radio_light(
             ui,
-            o + vec2(30.0, 112.0),
+            o + vec2(l, 110.0),
             !reg.custom,
             "As the system's region writes them",
             true,
         );
-        let own = winui::radio_light(ui, o + vec2(30.0, 140.0), reg.custom, "My own way:", true);
+        let own = winui::radio_light(ui, o + vec2(l, 134.0), reg.custom, "My own way:", true);
         match winui::radio_keys(ui, &[system.clone(), own.clone()]) {
             Some(i) => reg.custom = i == 1,
             None if system.clicked() => reg.custom = false,
@@ -2241,16 +2202,23 @@ impl OptionsDialog {
             None => {}
         }
         let on = reg.custom;
-        // Each choice: its label right-aligned before its box.
+        // Each choice on the form (sentence labels: the wide column), under the radios' captions.
+        let lx = l + 24.0;
+        let fx = winui::form(
+            &p,
+            lx,
+            &[
+                "Date order:",
+                "Clock:",
+                "First day of the week:",
+                "Example:",
+            ],
+            true,
+        );
+        let combo_w = 240.0_f32.min(PAGE_RIGHT - fx);
         let row = |ui: &mut Ui, y: f32, label: &str, items: &[&str], at: usize, id: &str| {
-            let label = crate::i18n::t(label);
-            let color = if on { LIGHT_TEXT() } else { LIGHT_DISABLED() };
-            let (rect, cut) =
-                winui::text_right_within(&p, o.x + 186.0, o.y + y + 15.0, label, color, o.x + 48.0);
-            if cut {
-                winui::full_on_hover(ui, rect, ("regional-label", y as i32), label);
-            }
-            winui::combo_light(ui, r(o, 192.0, y, 200.0, 21.0), items, at, on, id)
+            winui::form_label(&p, o, lx, y, h, label, on);
+            winui::combo_light(ui, r(o, fx, y, combo_w, h), items, at, on, id)
         };
         let orders = [
             // i18n: a date's order: day first (30/10/2026)
@@ -2268,7 +2236,7 @@ impl OptionsDialog {
         // i18n: label before the choice of a date's order
         if let Some(i) = row(
             ui,
-            168.0,
+            158.0,
             crate::i18n::mark("Date order:"),
             &orders,
             order_at,
@@ -2285,7 +2253,7 @@ impl OptionsDialog {
         // i18n: label before the choice of a 12- or 24-hour clock
         if let Some(i) = row(
             ui,
-            198.0,
+            196.0,
             crate::i18n::mark("Clock:"),
             &clocks,
             reg.clock24 as usize,
@@ -2306,7 +2274,7 @@ impl OptionsDialog {
         // i18n: label before the choice of the week's first day (in the Scheduler's calendar)
         if let Some(i) = row(
             ui,
-            228.0,
+            234.0,
             crate::i18n::mark("First day of the week:"),
             &days,
             day_at,
@@ -2317,15 +2285,15 @@ impl OptionsDialog {
         // What it looks like, now.
         let now = crate::clock::now().naive_local();
         let sample = crate::regional::format_with(crate::regional::effective(reg), now);
+        // The form's last row: the sample where the boxes are.
+        let example_y = 272.0;
         // i18n: label before an example date and time written the chosen way
-        let label = crate::i18n::t("Example:");
-        text(&p, o.x + 48.0, o.y + 290.0, label, LIGHT_TEXT());
-        let lw = winui::text_width(&p, label);
+        winui::form_label(&p, o, lx, example_y, h, "Example:", true);
         winui::text_in_window(
             ui,
             &p,
-            o.x + 48.0 + lw + 8.0,
-            o.y + 290.0,
+            o.x + fx,
+            o.y + winui::baseline_in(example_y, h),
             &crate::i18n::ltr(&sample),
             LIGHT_TEXT(),
         );
@@ -2333,35 +2301,27 @@ impl OptionsDialog {
         winui::text_in_window(
             ui,
             &p,
-            o.x + 30.0,
-            o.y + 320.0,
+            o.x + l,
+            o.y + example_y + h + 22.0,
             crate::i18n::t("Used by the list of downloads and the Scheduler."),
-            LIGHT_DISABLED(),
+            winui::MUTED(),
         );
     }
 
     fn sounds(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        header(
+        let (l, h) = (PAGE_LEFT, winui::CONTROL_H);
+        Self::group_title(
             ui,
             o,
-            Icon::PageSounds,
-            "Sound settings",
-            true,
-            304.0,
-            61.0,
-            406.0,
-        );
-        group(
-            ui,
-            o,
-            25.0,
-            102.0,
-            383.0,
-            299.0,
+            l,
+            PAGE_TOP + 10.0,
             "Select sounds for Mister Download Manager events",
         );
-        let list_on_screen = r(o, 33.0, 112.0, 366.0, 250.0);
+        // The list from under its title to above its buttons; the event column ends at `div`.
+        let buttons_y = PAGE_BOTTOM - h;
+        let list_on_screen = r(o, l, 108.0, PAGE_RIGHT - l, buttons_y - 8.0 - 108.0);
+        let div = l + 300.0;
         list_frame(&p, list_on_screen);
         let list = winui::rect(list_on_screen);
         let head_y = list.top() + 1.0;
@@ -2375,15 +2335,15 @@ impl OptionsDialog {
         );
         fill(
             &p,
-            o.x + 224.0,
+            o.x + div,
             head_y + 1.0,
-            o.x + 224.0,
+            o.x + div,
             head_y + 23.0,
             winui::HEADER_LINE(),
         );
         text(
             &p,
-            o.x + 231.0,
+            o.x + div + 7.0,
             head_y + 16.0,
             crate::i18n::t("Sound file"),
             LIGHT_TEXT(),
@@ -2407,14 +2367,21 @@ impl OptionsDialog {
             |ui, clip, i, row, look| {
                 let top = row.top();
                 fill(clip, row.left(), top + 16.0, row.right(), top + 16.0, grid);
-                fill(clip, o.x + 225.0, top, o.x + 225.0, top + 16.0, grid);
+                fill(
+                    clip,
+                    o.x + div + 1.0,
+                    top,
+                    o.x + div + 1.0,
+                    top + 16.0,
+                    grid,
+                );
                 let (on, file) = &mut sounds[i];
                 let event = crate::i18n::t(SOUND_EVENTS[i]);
                 look.name = event.to_owned();
                 winui::row_check(
                     ui,
                     clip,
-                    pos2(o.x + 39.0, top + 2.0),
+                    pos2(o.x + l + 6.0, top + 2.0),
                     on,
                     event,
                     ("sound", i),
@@ -2422,11 +2389,11 @@ impl OptionsDialog {
                 winui::fit(
                     ui,
                     clip,
-                    o.x + 57.0,
+                    o.x + l + 24.0,
                     top + 12.0,
                     event,
                     look.ink,
-                    o.x + 221.0,
+                    o.x + div - 3.0,
                     ("sound-event", i),
                 );
                 let name = std::path::Path::new(file.as_str())
@@ -2436,7 +2403,7 @@ impl OptionsDialog {
                 let drawn = winui::fit(
                     ui,
                     clip,
-                    o.x + 231.0,
+                    o.x + div + 7.0,
                     top + 12.0,
                     &name,
                     look.ink,
@@ -2471,19 +2438,13 @@ impl OptionsDialog {
         } else {
             ButtonKind::Disabled
         };
-        // Both as wide as their labels in this language (#192), each around its English centre.
-        let browse_at = winui::button_around(&p, "Browse...", 106.0, 73.0, 21.0, 233.0);
-        let play_at = winui::button_around(
-            &p,
-            "Play",
-            241.0,
-            73.0,
-            browse_at.0 + browse_at.1 + 8.0,
-            404.0,
-        );
+        // Both as wide as their labels in this language (#192), from the list's left (the mock's).
+        let browse_at = winui::button_around(&p, "Browse...", l, 90.0, l, PAGE_RIGHT);
+        let play_x = browse_at.0 + browse_at.1 + 8.0;
+        let play_at = winui::button_around(&p, "Play", play_x, 90.0, play_x, PAGE_RIGHT);
         let browse = winui::button_light(
             ui,
-            r(o, browse_at.0, 371.0, browse_at.1, 21.0),
+            r(o, browse_at.0, buttons_y, browse_at.1, h),
             "Browse...",
             kind,
             false,
@@ -2497,7 +2458,7 @@ impl OptionsDialog {
         };
         let play =
             // i18n: verb: plays the sound
-            winui::button_light(ui, r(o, play_at.0, 371.0, play_at.1, 21.0), "Play", play_kind, false)
+            winui::button_light(ui, r(o, play_at.0, buttons_y, play_at.1, h), "Play", play_kind, false)
                 .clicked();
         if let Some(i) = sel {
             if browse || pick_file == Some(i) {
@@ -2518,6 +2479,22 @@ impl OptionsDialog {
                 play_sound(&self.s.sounds[i].1);
             }
         }
+    }
+
+    /// A group's title where its group box's caption was (the mock's `.grp-t`): muted, at
+    /// English `x` with its baseline at `y` (page coordinates), cut with "..." at the page's edge.
+    fn group_title(ui: &Ui, o: Pos2, x: f32, y: f32, caption: &str) {
+        let s = crate::i18n::t(caption);
+        winui::fit(
+            ui,
+            ui.painter(),
+            o.x + x,
+            o.y + y,
+            s,
+            winui::MUTED(),
+            o.x + PAGE_RIGHT,
+            ("grp-t", caption),
+        );
     }
 
     // ---- entry dialogs --------------------------------------------------------------------
@@ -2569,29 +2546,22 @@ impl OptionsDialog {
     /// downloads from a page MDM serves, once paired with a code shown here.
     fn remote_page(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        // i18n: Options page title: control MDM from a phone or another computer on the local network
-        let title = crate::i18n::mark("Remote control");
-        let w = winui::text_width_font(&p, winui::tahoma_bold(), title);
-        header(ui, o, Icon::PageRemote, title, true, 406.0 - w, 61.0, 406.0);
         let adapters = self.adapters_now();
+        let (l, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
         winui::checkbox_light(
             ui,
-            o + vec2(21.0, 92.0),
+            o + vec2(l, PAGE_TOP),
             &mut self.s.remote_on,
             // i18n: Options → Remote check box (off by default)
             "Let phones and computers on the local network control MDM",
             true,
         );
         let on = self.s.remote_on;
-        let color = if on { LIGHT_TEXT() } else { LIGHT_DISABLED() };
-        text(
-            &p,
-            o.x + 21.0,
-            o.y + 131.0,
-            // i18n: Options → Remote: label before the choice of the address MDM listens on
-            crate::i18n::t("Listen on:"),
-            color,
-        );
+        // Listen on and Port on the form.
+        let (listen_y, port_y) = (108.0, 146.0);
+        // i18n: Options → Remote: label before the choice of the address MDM listens on
+        let fx = winui::form(&p, l, &["Listen on:", "Port:"], false);
+        winui::form_label(&p, o, l, listen_y, h, "Listen on:", on);
         let chosen = self.s.remote_listen.trim().to_owned();
         let mut values = vec![String::new(), mdm_remote::addrs::THIS_COMPUTER.to_owned()];
         let mut labels = vec![
@@ -2621,7 +2591,7 @@ impl OptionsDialog {
         let shown: Vec<&str> = labels.iter().map(String::as_str).collect();
         if let Some(i) = winui::combo_light(
             ui,
-            r(o, 130.0, 118.0, 278.0, 21.0),
+            r(o, fx, listen_y, right - fx, h),
             &shown,
             at,
             on,
@@ -2630,43 +2600,50 @@ impl OptionsDialog {
             self.s.remote_listen = values[i].clone();
         }
         // i18n: Options → Remote: label before the port number box
-        text(&p, o.x + 21.0, o.y + 159.0, crate::i18n::t("Port:"), color);
+        winui::form_label(&p, o, l, port_y, h, "Port:", on);
         winui::spin_box(
             ui,
-            r(o, 130.0, 146.0, 80.0, 21.0),
+            r(o, fx, port_y, 110.0, h),
             &mut self.port,
             1024,
             65535,
             on,
             "opt-remote-port",
         );
-        // What it does now: as saved, or what OK changes.
-        group(ui, o, 16.0, 178.0, 392.0, 96.0, "Status");
+        // What it does now: as saved, or what OK changes, in a banner under its title.
+        Self::group_title(ui, o, l, 196.0, "Status");
         let running = self.remote.as_ref().map(|r| r.status());
         let urls = self.remote.as_ref().map(|r| r.urls()).unwrap_or_default();
         let changed = self.remote_config() != crate::remote::config(&self.from);
         use mdm_remote::Status;
-        let (line, ok) = match &running {
+        use winui::BannerKind::{Error, Info, Warning};
+        // Each state's banner and icon: on, the mock's check; off or waiting for OK, an info
+        // mark (a check would say all is done); no network yet, a warning; can't listen, an error.
+        let (line, kind, icon) = match &running {
             _ if changed => (
                 // i18n: Options → Remote → Status: the settings were changed; they apply on OK
                 crate::i18n::t("The changes apply when you click OK.").to_owned(),
-                true,
+                Info,
+                "gx-info",
             ),
             None | Some(Status::Off) => (
                 // i18n: Options → Remote → Status: the remote control is off
                 crate::i18n::t("Off: nothing on the network can reach MDM.").to_owned(),
-                true,
+                Info,
+                "gx-info",
             ),
             Some(Status::Listening(_)) => (
                 // i18n: Options → Remote → Status: on; the address follows in a box below
                 crate::i18n::t("On. On the phone, open this address:").to_owned(),
-                true,
+                Info,
+                "st-complete",
             ),
             Some(Status::NoAddress) => (
                 // i18n: Options → Remote → Status: on, but the computer has no local network address now
                 crate::i18n::t("No local network now: it starts when the computer joins one.")
                     .to_owned(),
-                false,
+                Warning,
+                "st-error",
             ),
             Some(Status::PortInUse(port)) => (
                 crate::i18n::fmt(
@@ -2674,7 +2651,8 @@ impl OptionsDialog {
                     crate::i18n::t("Port {port} is used by another program: choose another."),
                     &[("port", &port.to_string())],
                 ),
-                false,
+                Error,
+                "st-error",
             ),
             Some(Status::Failed(e)) => (
                 crate::i18n::fmt(
@@ -2682,30 +2660,35 @@ impl OptionsDialog {
                     crate::i18n::t("It could not start: {error}"),
                     &[("error", e)],
                 ),
-                false,
+                Error,
+                "st-error",
             ),
         };
-        let ink = if ok {
-            LIGHT_TEXT()
-        } else {
-            crate::theme::colors().error_strong
+        // The banner (the mock's): its title the status line (cut with "...", whole on hover),
+        // then the address and the certificate's fingerprint inside it, at the title's x.
+        let url = urls.first().filter(|_| !changed);
+        let fingerprint = self.remote.as_ref().and_then(|r| r.fingerprint());
+        let banner_top = 204.0;
+        let url_y = banner_top + 33.0;
+        let cert_y = url.map_or(url_y, |_| url_y + h + 8.0);
+        let banner_h = match (url, &fingerprint) {
+            (None, None) => winui::status_banner_height(0),
+            (_, None) => url_y + h + 10.0 - banner_top,
+            (_, Some(_)) => cert_y + 20.0 - banner_top,
         };
-        let (rect, cut) = winui::label_into(
-            &p,
-            o.x + 30.0,
-            o.y + 207.0,
-            &line,
-            ink,
-            o.x + 400.0,
-            o.x + 30.0,
-        );
-        if cut {
-            winui::full_on_hover(ui, rect, "opt-remote-state", &line);
+        let banner = r(o, l, banner_top, right - l, banner_h);
+        winui::status_banner(ui, banner, kind, icon, &line, "");
+        // The kit's title place: after the 12 + 17 + 10 of the icon, 12 before the edge.
+        let inner = l + 39.0;
+        let inner_right = right - 12.0;
+        if let Some(first) = url {
+            readonly_ltr(
+                ui,
+                r(o, inner, url_y, 320.0_f32.min(inner_right - inner), h),
+                first,
+            );
         }
-        if !changed && let Some(first) = urls.first() {
-            readonly_ltr(ui, r(o, 30.0, 215.0, 364.0, 21.0), first);
-        }
-        if let Some(fp) = self.remote.as_ref().and_then(|r| r.fingerprint()) {
+        if let Some(fp) = fingerprint {
             let label = crate::i18n::fmt(
                 // i18n: Options → Remote → Status: the certificate's fingerprint, which the phone's browser shows when it warns about it; {fingerprint} = hex digits
                 crate::i18n::t("Certificate (SHA-256): {fingerprint}"),
@@ -2713,22 +2696,25 @@ impl OptionsDialog {
             );
             let (rect, cut) = winui::label_into(
                 &p,
-                o.x + 30.0,
-                o.y + 260.0,
+                o.x + inner,
+                o.y + cert_y + 12.0,
                 &label,
-                LIGHT_TEXT(),
-                o.x + 400.0,
-                o.x + 30.0,
+                winui::MUTED(),
+                o.x + inner_right + 5.0,
+                o.x + inner,
             );
             if cut {
                 winui::full_on_hover(ui, rect, "opt-remote-cert", &label);
             }
         }
-        // The paired devices.
+        // The paired devices right under the banner (no hole while it's short); the list ends at
+        // a fixed place, so only its top moves when the banner grows or shrinks.
+        let devices_y = banner_top + banner_h + 18.0;
+        let buttons_y = 402.0;
         text(
             &p,
-            o.x + 21.0,
-            o.y + 296.0,
+            o.x + l,
+            o.y + devices_y,
             // i18n: Options → Remote: label above the list of paired phones and computers
             crate::i18n::t("Paired devices:"),
             LIGHT_TEXT(),
@@ -2750,14 +2736,20 @@ impl OptionsDialog {
         let (_, del_key) = report(
             ui,
             o,
-            r(o, 16.0, 302.0, 392.0, 88.0),
+            r(
+                o,
+                l,
+                devices_y + 7.0,
+                right - l,
+                buttons_y - 8.0 - devices_y - 7.0,
+            ),
             &[
                 // i18n: column title: a paired phone's or computer's name
-                (crate::i18n::mark("Device"), 120.0),
+                (crate::i18n::mark("Device"), l + 260.0),
                 // i18n: column title: when the device was paired
-                (crate::i18n::mark("Paired"), 256.0),
+                (crate::i18n::mark("Paired"), l + 430.0),
                 // i18n: column title: when the device last reached MDM
-                (crate::i18n::mark("Last seen"), 392.0),
+                (crate::i18n::mark("Last seen"), right - 17.0),
             ],
             &rows,
             &mut self.device_rows,
@@ -2770,10 +2762,20 @@ impl OptionsDialog {
         } else {
             ButtonKind::Disabled
         };
+        // As wide as their labels (#192), from the list's left.
+        let [pair_at, remove_at] = winui::button_row_from_left(
+            &p,
+            &[("Pair a device...", l, 130.0), ("Remove", l + 138.0, 90.0)],
+            8.0,
+            right,
+            220.0,
+        )[..] else {
+            unreachable!("two buttons")
+        };
         let pair = winui::why_disabled(
             winui::button_light(
                 ui,
-                r(o, 16.0, 398.0, 130.0, 21.0),
+                r(o, pair_at.0, buttons_y, pair_at.1, h),
                 // i18n: Options → Remote button: shows a code (and a QR code) that pairs a phone
                 "Pair a device...",
                 pair_kind,
@@ -2791,7 +2793,7 @@ impl OptionsDialog {
         };
         let remove = winui::button_light(
             ui,
-            r(o, 154.0, 398.0, 90.0, 21.0),
+            r(o, remove_at.0, buttons_y, remove_at.1, h),
             "Remove",
             remove_kind,
             false,
@@ -2811,15 +2813,15 @@ impl OptionsDialog {
         }
         winui::paragraph(
             &p,
-            o.x + 21.0,
-            o.y + 438.0,
+            o.x + l,
+            o.y + buttons_y + h + 18.0,
             // i18n: Options → Remote, at the bottom of the page
             crate::i18n::t(
                 "Only paired devices see or change anything. The first time, the phone's browser warns about MDM's own certificate: its fingerprint is the one above.",
             ),
-            LIGHT_TEXT(),
-            o.x + 406.0,
-            13.0,
+            winui::MUTED(),
+            o.x + right,
+            15.0,
         );
     }
 
@@ -2830,16 +2832,21 @@ impl OptionsDialog {
             return false;
         };
         ctx.request_repaint_after(std::time::Duration::from_millis(500));
+        // The mockup's layout: the sentence, the QR code, the address, the code and how long it
+        // works, the footer.
+        const W: f32 = 380.0;
+        const BODY: f32 = 380.0;
         let out = window(
             ctx,
             "opt-pair",
             // i18n: window title: Options → Remote → Pair a device...
             "Pair a device",
-            [360.0, 420.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
+                let e = winui::EDGE;
                 let urls = remote.urls();
                 let (shown, paired) = remote.pairing();
                 let close_label = if paired.is_some() {
@@ -2848,28 +2855,34 @@ impl OptionsDialog {
                 } else {
                     "Close"
                 };
-                let close = winui::button_light(
+                // First in Tab order, as before. Escape closes; Enter too once a device paired
+                // (while MDM can be reached).
+                let close = winui::footer(
                     ui,
-                    r(o, 274.0, 387.0, 73.0, 21.0),
-                    close_label,
-                    ButtonKind::Default,
-                    false,
+                    o,
+                    W,
+                    BODY,
+                    &mut [FooterItem::Button(
+                        FooterButton::new(close_label, ButtonKind::Default)
+                            .enter(paired.is_some() && !urls.is_empty())
+                            .escape(true),
+                    )],
                 )
-                .clicked();
+                .is_some();
                 let Some(url) = urls.first() else {
                     winui::paragraph(
                         &p,
-                        o.x + 14.0,
-                        o.y + 30.0,
+                        o.x + e,
+                        o.y + 29.0,
                         // i18n: Options → Remote → Pair a device: the remote control isn't listening (no network, port taken): the Remote page says why
                         crate::i18n::t(
                             "MDM can't be reached on the network now: Options → Remote says why.",
                         ),
                         crate::theme::colors().error_strong,
-                        o.x + 346.0,
-                        14.0,
+                        o.x + W - e,
+                        LINE,
                     );
-                    return if close || winui::escape_pressed(ui) {
+                    return if close {
                         Outcome::Closed
                     } else {
                         Outcome::Open
@@ -2883,14 +2896,14 @@ impl OptionsDialog {
                     );
                     winui::paragraph(
                         &p,
-                        o.x + 14.0,
-                        o.y + 30.0,
+                        o.x + e,
+                        o.y + 29.0,
                         &line,
                         LIGHT_TEXT(),
-                        o.x + 346.0,
-                        14.0,
+                        o.x + W - e,
+                        LINE,
                     );
-                    return if close || winui::escape_pressed(ui) || winui::enter_pressed(ui) {
+                    return if close {
                         Outcome::Done(())
                     } else {
                         Outcome::Open
@@ -2898,38 +2911,34 @@ impl OptionsDialog {
                 }
                 winui::paragraph(
                     &p,
-                    o.x + 14.0,
-                    o.y + 24.0,
+                    o.x + e,
+                    o.y + 29.0,
                     // i18n: Options → Remote → Pair a device: how to pair
                     crate::i18n::t(
                         "On the phone, scan this code with the camera, or open the address and enter the code.",
                     ),
                     LIGHT_TEXT(),
-                    o.x + 346.0,
-                    14.0,
+                    o.x + W - e,
+                    LINE,
                 );
                 let link = match &shown {
                     Some((code, _)) => format!("{url}#pair={code}"),
                     None => url.clone(),
                 };
-                crate::remote::paint_qr(&p, r(o, 90.0, 56.0, 180.0, 180.0), &link);
-                readonly_ltr(ui, r(o, 14.0, 246.0, 332.0, 21.0), url);
+                crate::remote::paint_qr(&p, r(o, (W - 180.0) / 2.0, 62.0, 180.0, 180.0), &link);
+                readonly_ltr(ui, r(o, e, 256.0, W - 2.0 * e, winui::CONTROL_H), url);
                 match &shown {
                     Some((code, left)) => {
-                        text(
-                            &p,
-                            o.x + 14.0,
-                            o.y + 300.0,
-                            // i18n: Options → Remote → Pair a device: label before the 8-digit code
-                            crate::i18n::t("Code:"),
-                            LIGHT_TEXT(),
-                        );
+                        // i18n: Options → Remote → Pair a device: label before the 8-digit code
+                        let label = crate::i18n::t("Code:");
+                        let baseline = o.y + winui::baseline_in(300.0, winui::CONTROL_H);
+                        text(&p, o.x + e, baseline, label, LIGHT_TEXT());
                         let big = egui::FontId::new(26.0, winui::tahoma_bold().family);
                         winui::text_font(
                             &p,
                             big,
-                            o.x + 80.0,
-                            o.y + 304.0,
+                            o.x + e + winui::text_width(&p, label) + 10.0,
+                            baseline + 4.0,
                             &crate::i18n::ltr(&format!("{} {}", &code[..4], &code[4..])),
                             LIGHT_TEXT(),
                         );
@@ -2939,30 +2948,23 @@ impl OptionsDialog {
                             crate::i18n::t("Waiting for the device. The code works for {time}."),
                             &[("time", &format!("{}:{:02}", secs / 60, secs % 60))],
                         );
-                        winui::paragraph(
-                            &p,
-                            o.x + 14.0,
-                            o.y + 336.0,
-                            &line,
-                            LIGHT_TEXT(),
-                            o.x + 346.0,
-                            14.0,
-                        );
+                        hint(&p, o, e, 347.0, &line, W - e);
                     }
                     None => {
                         winui::paragraph(
                             &p,
-                            o.x + 14.0,
-                            o.y + 300.0,
+                            o.x + e,
+                            o.y + 313.0,
                             // i18n: Options → Remote → Pair a device: the code ran out (10 minutes, or 5 wrong tries)
                             crate::i18n::t("This code can't be used any more."),
                             crate::theme::colors().error_strong,
-                            o.x + 346.0,
-                            14.0,
+                            o.x + W - e,
+                            LINE,
                         );
+                        let w = winui::footer_button_width(&p, "New code", false);
                         if winui::button_light(
                             ui,
-                            r(o, 14.0, 318.0, 100.0, 21.0),
+                            r(o, e, 330.0, w, winui::CONTROL_H),
                             // i18n: Options → Remote → Pair a device: button: show a new code
                             "New code",
                             ButtonKind::Normal,
@@ -2974,7 +2976,7 @@ impl OptionsDialog {
                         }
                     }
                 }
-                if close || winui::escape_pressed(ui) {
+                if close {
                     Outcome::Closed
                 } else {
                     Outcome::Open
@@ -3000,54 +3002,30 @@ impl OptionsDialog {
                 } else {
                     crate::i18n::mark("New login")
                 };
+                // The mockup's layout: three form rows, the footer.
+                const W: f32 = 340.0;
+                const BODY: f32 = 142.0;
                 let out = window(
                     ctx,
                     "opt-login",
                     title,
-                    [300.0, 150.0],
+                    [W, BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| {
                         let p = ui.painter().clone();
-                        // i18n: label before a web address (site and folder)
-                        winui::text_right(
-                            &p,
-                            o.x + 70.0,
-                            o.y + 26.0,
-                            crate::i18n::t("Site/path:"),
-                            LIGHT_TEXT(),
-                        );
-                        winui::edit_light(
-                            ui,
-                            r(o, 78.0, 12.0, 210.0, 23.0),
-                            &mut site,
-                            true,
-                            false,
-                        );
-                        // i18n: noun: label before the user name
-                        winui::text_right(
-                            &p,
-                            o.x + 70.0,
-                            o.y + 57.0,
-                            crate::i18n::t("User:"),
-                            LIGHT_TEXT(),
-                        );
-                        winui::edit_light(
-                            ui,
-                            r(o, 78.0, 43.0, 210.0, 23.0),
-                            &mut user,
-                            true,
-                            false,
-                        );
-                        winui::text_right(
-                            &p,
-                            o.x + 70.0,
-                            o.y + 88.0,
-                            crate::i18n::t("Password:"),
-                            LIGHT_TEXT(),
-                        );
-                        password(ui, r(o, 78.0, 74.0, 210.0, 23.0), &mut pass, true);
-                        ok_cancel(ui, o, 136.0, 117.0, !site.trim().is_empty())
+                        let (e, h) = (winui::EDGE, winui::CONTROL_H);
+                        // i18n: Site/path: label before a web address (site and folder); User: noun, label before the user name
+                        let labels = ["Site/path:", "User:", "Password:"];
+                        let fx = winui::form(&p, e, &labels, false);
+                        let fw = W - e - fx;
+                        winui::form_label(&p, o, e, 16.0, h, labels[0], true);
+                        winui::edit_light(ui, r(o, fx, 16.0, fw, h), &mut site, true, false);
+                        winui::form_label(&p, o, e, 56.0, h, labels[1], true);
+                        winui::edit_light(ui, r(o, fx, 56.0, fw, h), &mut user, true, false);
+                        winui::form_label(&p, o, e, 96.0, h, labels[2], true);
+                        winui::password_light(ui, r(o, fx, 96.0, fw, h), &mut pass, true);
+                        ok_cancel(ui, o, W, BODY, !site.trim().is_empty())
                     },
                 );
                 match out {
@@ -3069,41 +3047,34 @@ impl OptionsDialog {
                 } else {
                     crate::i18n::mark("New exception")
                 };
+                // The mockup's layout: two form rows, the footer.
+                const W: f32 = 340.0;
+                const BODY: f32 = 102.0;
                 let out = window(
                     ctx,
                     "opt-exception",
                     title,
-                    [300.0, 118.0],
+                    [W, BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| {
                         let p = ui.painter().clone();
-                        // i18n: noun: label before a server name
-                        winui::text_right(
-                            &p,
-                            o.x + 70.0,
-                            o.y + 26.0,
-                            crate::i18n::t("Server:"),
-                            LIGHT_TEXT(),
-                        );
+                        let (e, h) = (winui::EDGE, winui::CONTROL_H);
+                        // i18n: Server: noun, label before a server name; Connections: label before the number of connections allowed
+                        let labels = ["Server:", "Connections:"];
+                        let fx = winui::form(&p, e, &labels, false);
+                        winui::form_label(&p, o, e, 16.0, h, labels[0], true);
                         winui::edit_light(
                             ui,
-                            r(o, 78.0, 12.0, 210.0, 23.0),
+                            r(o, fx, 16.0, W - e - fx, h),
                             &mut server,
                             true,
                             false,
                         );
-                        // i18n: label before the number of connections allowed
-                        winui::text_right(
-                            &p,
-                            o.x + 70.0,
-                            o.y + 57.0,
-                            crate::i18n::t("Connections:"),
-                            LIGHT_TEXT(),
-                        );
+                        winui::form_label(&p, o, e, 56.0, h, labels[1], true);
                         winui::spin_box(
                             ui,
-                            r(o, 78.0, 43.0, 60.0, 23.0),
+                            r(o, fx, 56.0, 90.0, h),
                             &mut number,
                             1,
                             u64::from(limit),
@@ -3113,7 +3084,7 @@ impl OptionsDialog {
                         let in_range = number
                             .parse::<u32>()
                             .is_ok_and(|n| (1..=limit).contains(&n));
-                        ok_cancel(ui, o, 136.0, 85.0, !server.trim().is_empty() && in_range)
+                        ok_cancel(ui, o, W, BODY, !server.trim().is_empty() && in_range)
                     },
                 );
                 match out {
@@ -3132,19 +3103,24 @@ impl OptionsDialog {
                 }
             }
             Sub::Panels(mut on, mut sites, mut said) => {
+                // The mockup's layout: the check box, the sites, Export and Import with what
+                // they did, the footer.
+                const W: f32 = 400.0;
+                const BODY: f32 = 196.0;
                 let out = window(
                     ctx,
                     "opt-panels",
                     // i18n: window title: the download button the extension shows over videos
                     "Download panels",
-                    [380.0, 190.0],
+                    [W, BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| {
                         let p = ui.painter().clone();
+                        let e = winui::EDGE;
                         winui::checkbox_light(
                             ui,
-                            o + vec2(14.0, 16.0),
+                            o + vec2(e, 16.0),
                             &mut on,
                             "Show a download button over videos in browsers",
                             true,
@@ -3152,39 +3128,35 @@ impl OptionsDialog {
                         winui::text_in_window(
                             ui,
                             &p,
-                            o.x + 14.0,
-                            o.y + 55.0,
+                            o.x + e,
+                            o.y + 57.0,
                             crate::i18n::t("Never show it on these sites:"),
                             if on { LIGHT_TEXT() } else { LIGHT_DISABLED() },
                         );
                         multiline(
                             ui,
-                            r(o, 14.0, 62.0, 352.0, 55.0),
+                            r(o, e, 66.0, W - 2.0 * e, 56.0),
                             &mut sites,
                             "panel-sites",
                             on,
                         );
-                        winui::text_in_window(
-                            ui,
+                        hint(
                             &p,
-                            o.x + 14.0,
-                            o.y + 133.0,
+                            o,
+                            e,
+                            139.0,
                             crate::i18n::t("(separate names by spaces)"),
-                            LIGHT_TEXT(),
+                            W - e,
                         );
                         // The list as a file, to keep or carry to a new installation (#424).
-                        let [export_at, import_at] = winui::button_row(
-                            &p,
-                            &[("Export...", 212.0, 73.0), ("Import...", 293.0, 73.0)],
-                            8.0,
-                            160.0,
-                            140.0,
-                        )[..] else {
-                            unreachable!("two buttons")
-                        };
+                        let export_w = winui::footer_button_width(&p, "Export...", false);
+                        let import_w = winui::footer_button_width(&p, "Import...", false);
+                        let export_at = (e, export_w);
+                        let import_at = (e + export_w + 8.0, import_w);
+                        let row = 150.0;
                         if winui::button_light(
                             ui,
-                            r(o, export_at.0, 128.0, export_at.1, 21.0),
+                            r(o, export_at.0, row, export_at.1, winui::CONTROL_H),
                             "Export...",
                             ButtonKind::Normal,
                             false,
@@ -3202,7 +3174,7 @@ impl OptionsDialog {
                         }
                         if winui::button_light(
                             ui,
-                            r(o, import_at.0, 128.0, import_at.1, 21.0),
+                            r(o, import_at.0, row, import_at.1, winui::CONTROL_H),
                             "Import...",
                             ButtonKind::Normal,
                             false,
@@ -3252,19 +3224,21 @@ impl OptionsDialog {
                             };
                         }
                         if !said.is_empty() {
+                            // After the buttons, where the mockup has it; in the text's own
+                            // colour, as before: it may say the file could not be read.
                             let (rect, cut) = winui::text_fit(
                                 &p,
-                                o.x + 14.0,
-                                o.y + 163.0,
+                                o.x + import_at.0 + import_at.1 + 12.0,
+                                o.y + winui::baseline_in(row, winui::CONTROL_H),
                                 &said,
                                 LIGHT_TEXT(),
-                                o.x + 205.0,
+                                o.x + W - e,
                             );
                             if cut {
                                 winui::full_on_hover(ui, rect, "opt-panels-said", &said);
                             }
                         }
-                        ok_cancel(ui, o, 212.0, 157.0, true)
+                        ok_cancel(ui, o, W, BODY, true)
                     },
                 );
                 match out {
@@ -3283,7 +3257,7 @@ impl OptionsDialog {
                     "opt-dns",
                     // i18n: window title: the settings of the DNS chosen in Options → Connection
                     "DNS settings",
-                    [400.0, 312.0],
+                    [DNS_W, DNS_BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| dns_dialog(ui, o, &mut e),
@@ -3300,7 +3274,7 @@ impl OptionsDialog {
                     "opt-account",
                     // i18n: window title: adding a debrid service account (Real-Debrid…)
                     "Add an account",
-                    [420.0, 300.0],
+                    [ACCOUNT_W, ACCOUNT_BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| account_dialog(ui, o, &mut e),
@@ -3326,35 +3300,41 @@ impl OptionsDialog {
                 }
             }
             Sub::Addresses(mut list) => {
+                // The mockup's layout: the sentence, the list, the footer.
+                const W: f32 = 420.0;
+                const BODY: f32 = 200.0;
                 let out = window(
                     ctx,
                     "opt-addresses",
                     // i18n: window title: the addresses whose downloads stay with the browser
                     "Addresses left to the browser",
-                    [420.0, 230.0],
+                    [W, BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| {
                         let p = ui.painter().clone();
-                        winui::paragraph(
+                        let e = winui::EDGE;
+                        let lines = winui::paragraph(
                             &p,
-                            o.x + 14.0,
-                            o.y + 20.0,
+                            o.x + e,
+                            o.y + 29.0,
                             crate::i18n::t(
                                 "One address per line; * stands for any text: example.com/private/*",
                             ),
                             LIGHT_TEXT(),
-                            o.x + 406.0,
-                            14.0,
+                            o.x + W - e,
+                            LINE,
                         );
+                        // Under the sentence (one or two lines), down to the footer's room.
+                        let top = 16.0 + lines as f32 * LINE + 10.0;
                         multiline(
                             ui,
-                            r(o, 14.0, 44.0, 392.0, 130.0),
+                            r(o, e, top, W - 2.0 * e, BODY - e - top),
                             &mut list,
                             "addresses",
                             true,
                         );
-                        ok_cancel(ui, o, 252.0, 192.0, true)
+                        ok_cancel(ui, o, W, BODY, true)
                     },
                 );
                 match out {
@@ -3371,35 +3351,39 @@ impl OptionsDialog {
                 }
             }
             Sub::Keys(mut opened) => {
+                // The mockup's layout: the sentence, the check box, the footer.
+                const W: f32 = 400.0;
+                const BODY: f32 = 96.0;
                 let out = window(
                     ctx,
                     "opt-keys",
                     // i18n: window title: the keys that force or prevent downloading with MDM
                     "Keys",
-                    [400.0, 160.0],
+                    [W, BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| {
                         let p = ui.painter().clone();
-                        winui::paragraph(
+                        let e = winui::EDGE;
+                        let lines = winui::paragraph(
                             &p,
-                            o.x + 14.0,
-                            o.y + 22.0,
+                            o.x + e,
+                            o.y + 29.0,
                             crate::i18n::t(
                                 "Hold Alt while clicking a link to let the browser download it instead of Mister Download Manager.",
                             ),
                             LIGHT_TEXT(),
-                            o.x + 386.0,
-                            14.0,
+                            o.x + W - e,
+                            LINE,
                         );
                         winui::checkbox_light(
                             ui,
-                            o + vec2(14.0, 70.0),
+                            o + vec2(e, 16.0 + lines.max(2) as f32 * LINE + 16.0),
                             &mut opened,
                             "Also take files the browser would open (PDF, music, video)",
                             true,
                         );
-                        ok_cancel(ui, o, 232.0, 127.0, true)
+                        ok_cancel(ui, o, W, BODY, true)
                     },
                 );
                 match out {
@@ -3409,82 +3393,81 @@ impl OptionsDialog {
                 }
             }
             Sub::Test(mut checks) => {
-                let h = 120.0 + checks.len() as f32 * 22.0;
+                // The mockup's layout: a status icon and a line per check, the footer with the
+                // fixes at its start.
+                const W: f32 = 440.0;
+                const ROW: f32 = 26.0;
+                let body = 2.0 * winui::EDGE + checks.len() as f32 * ROW - 6.0;
                 let mut set_up = false;
                 let out = window(
                     ctx,
                     "opt-test",
                     // i18n: window title: Options → General → Test browser integration
                     "Test browser integration",
-                    [440.0, h],
+                    [W, body + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| {
                         let p = ui.painter().clone();
+                        let e = winui::EDGE;
                         for (k, c) in checks.iter().enumerate() {
-                            let y = o.y + 22.0 + k as f32 * 22.0;
-                            let (mark, color) = if c.ok {
-                                ("\u{2714}", winui::SUCCESS())
+                            let top = e + k as f32 * ROW;
+                            let (need, color) = if c.ok {
+                                ("st-complete", winui::SUCCESS())
                             } else {
-                                ("\u{2716}", winui::ERROR())
+                                ("st-error", winui::ERROR())
                             };
-                            winui::text_in_window(ui, &p, o.x + 14.0, y, mark, color);
-                            winui::text_in_window(ui, &p, o.x + 34.0, y, &c.text, LIGHT_TEXT());
+                            crate::themeicons::paint_in(
+                                ui,
+                                &p,
+                                need,
+                                r(o, e, top + 2.0, 16.0, 16.0),
+                                color,
+                                true,
+                            );
+                            winui::text_in_window(
+                                ui,
+                                &p,
+                                o.x + e + 24.0,
+                                o.y + winui::baseline_in(top, 20.0),
+                                &c.text,
+                                LIGHT_TEXT(),
+                            );
                         }
                         let first = checks.iter().find(|c| !c.ok);
-                        let y = h - 46.0;
-                        // As wide as their labels in this language (#192), short of Close.
-                        let [fix_at, set_up_at] = winui::button_row_from_left(
-                            &p,
-                            &[("How to fix it", 14.0, 110.0), ("Set it up", 132.0, 110.0)],
-                            8.0,
-                            440.0 - 14.0 - 73.0 - 8.0,
-                            200.0,
-                        )[..] else {
-                            unreachable!("two buttons")
-                        };
-                        if let Some(c) = first {
-                            if let Some(why) = c.why
-                                && winui::button_light(
-                                    ui,
-                                    r(o, fix_at.0, y, fix_at.1, 25.0),
-                                    // i18n: button in Test browser integration: open the help page's section for the problem
-                                    "How to fix it",
-                                    ButtonKind::Normal,
-                                    false,
-                                )
-                                .clicked()
-                            {
+                        let fix = first.and_then(|c| c.why);
+                        let can_set_up = first.is_some_and(|c| c.why == Some("not-installed"))
+                            && mdm_ipc::portable_dir().is_none();
+                        // Tab and the footer as before: How to fix it, Set it up, Close; Enter
+                        // and Escape both close.
+                        let mut items = Vec::new();
+                        if fix.is_some() {
+                            items.push(FooterItem::Button(
+                                // i18n: button in Test browser integration: open the help page's section for the problem
+                                FooterButton::new("How to fix it", ButtonKind::Ghost).leading(),
+                            ));
+                        }
+                        if can_set_up {
+                            items.push(FooterItem::Button(
+                                // i18n: button in Test browser integration: register MDM's helper with the browsers
+                                FooterButton::new("Set it up", ButtonKind::Normal).leading(),
+                            ));
+                        }
+                        let close = items.len();
+                        items.push(FooterItem::Button(
+                            FooterButton::new("Close", ButtonKind::Default)
+                                .enter(true)
+                                .escape(true),
+                        ));
+                        match (winui::footer(ui, o, W, body, &mut items), fix) {
+                            (Some(i), _) if i == close => return Outcome::<()>::Closed,
+                            (Some(0), Some(why)) => {
                                 crate::help::open_page(&mdm_ipc::extension::help_doc(why));
                             }
-                            if c.why == Some("not-installed")
-                                && mdm_ipc::portable_dir().is_none()
-                                && winui::button_light(
-                                    ui,
-                                    r(o, set_up_at.0, y, set_up_at.1, 25.0),
-                                    // i18n: button in Test browser integration: register MDM's helper with the browsers
-                                    "Set it up",
-                                    ButtonKind::Normal,
-                                    false,
-                                )
-                                .clicked()
-                            {
-                                set_up = true;
-                            }
+                            (Some(_), _) => set_up = true,
+                            (None, _) => {}
                         }
-                        let close = winui::button_light(
-                            ui,
-                            r(o, 440.0 - 14.0 - 73.0, y, 73.0, 25.0),
-                            "Close",
-                            ButtonKind::Default,
-                            false,
-                        );
-                        if close.clicked() || winui::enter_pressed(ui) || winui::escape_pressed(ui)
-                        {
-                            Outcome::<()>::Closed
-                        } else {
-                            Outcome::Open
-                        }
+                        Outcome::Open
                     },
                 );
                 // Set it up runs on a thread of its own; the checks are read again once it's done.
@@ -3527,17 +3510,17 @@ fn display_dir(dir: &std::path::Path) -> String {
     }
 }
 
-/// OK / Cancel at (x, y), OK only when `valid`.
 /// Connection → DNS → Settings...: how it's asked, its servers, the fallback, a test.
 fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
     use mdm_engine::dns::{Mode, Preset};
     let p = ui.painter().clone();
+    let (edge, h, w) = (winui::EDGE, winui::CONTROL_H, DNS_W);
     let preset = Preset::by_id(&e.provider);
     // i18n: Options → DNS settings: heading over the ways of asking the DNS
     text(
         &p,
-        o.x + 14.0,
-        o.y + 22.0,
+        o.x + edge,
+        o.y + 29.0,
         crate::i18n::t("Ask it with:"),
         LIGHT_TEXT(),
     );
@@ -3546,20 +3529,17 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
         (2, Mode::Tls, "DNS over TLS"),
         (3, Mode::Https, "DNS over HTTPS"),
     ];
+    // The three in a line, as the mockup's.
     let mut clicked = Vec::new();
-    for (row, (n, m, caption)) in modes.iter().enumerate() {
+    let mut x = edge;
+    for (n, m, caption) in &modes {
         let offered = preset.is_none_or(|p| p.offers(*m));
-        let r = winui::radio_light(
-            ui,
-            o + vec2(24.0, 32.0 + 20.0 * row as f32),
-            e.mode == *n,
-            caption,
-            offered,
-        );
+        let r = winui::radio_light(ui, o + vec2(x, 48.0), e.mode == *n, caption, offered);
         if r.clicked() && offered {
             e.mode = *n;
         }
         clicked.push(r);
+        x = winui::checkbox_caption_end(&p, x, caption) + 16.0;
     }
     if let Some(i) = winui::radio_keys(ui, &clicked) {
         let (n, m, _) = modes[i];
@@ -3567,15 +3547,24 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
             e.mode = n;
         }
     }
+    // One label column for every mode's rows, so it doesn't move when the mode changes.
+    let fx = winui::form(
+        &p,
+        edge,
+        &[
+            "Server:",
+            "Configuration ID:",
+            "Servers:",
+            "Certificate name:",
+            "Address:",
+            "IP addresses (optional):",
+        ],
+        false,
+    );
+    let (row1, row2) = (DNS_ROWS, DNS_ROWS + h + 10.0);
     let field = |ui: &mut Ui, y: f32, label: &str, value: &mut String, enabled: bool| {
-        winui::text_right(
-            &p,
-            o.x + 130.0,
-            o.y + y + 14.0,
-            crate::i18n::t(label),
-            LIGHT_TEXT(),
-        );
-        winui::edit_light(ui, r(o, 138.0, y, 248.0, 21.0), value, enabled, false);
+        winui::form_label(&p, o, edge, y, h, label, enabled);
+        winui::edit_light(ui, r(o, fx, y, w - edge - fx, h), value, enabled, false);
     };
     let mode = settings::dns_mode(e.mode).unwrap_or(Mode::Https);
     match preset {
@@ -3587,21 +3576,15 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
                 Mode::Https => pr.doh.to_owned(),
             };
             // i18n: Options → DNS settings: label before the chosen service's server (an address)
-            winui::text_right(
-                &p,
-                o.x + 130.0,
-                o.y + 112.0,
-                crate::i18n::t("Server:"),
-                LIGHT_TEXT(),
-            );
+            winui::form_label(&p, o, edge, row1, h, "Server:", true);
             let (rect, cut) = winui::label_into(
                 &p,
-                o.x + 138.0,
-                o.y + 112.0,
+                o.x + fx,
+                o.y + winui::baseline_in(row1, h),
                 &shown,
                 LIGHT_DISABLED(),
-                o.x + 386.0,
-                o.x + 138.0,
+                o.x + w - edge,
+                o.x + fx,
             );
             if cut {
                 winui::full_on_hover(ui, rect, "dns-server", &shown);
@@ -3610,7 +3593,7 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
                 // i18n: Options → DNS settings: NextDNS's own configuration ID (optional)
                 field(
                     ui,
-                    122.0,
+                    row2,
                     "Configuration ID:",
                     &mut e.nextdns_id,
                     mode != Mode::Plain,
@@ -3620,39 +3603,39 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
         // The user's own DNS.
         None => match mode {
             // i18n: Options → DNS settings: label before the DNS servers' addresses, as IP addresses
-            Mode::Plain => field(ui, 98.0, "Servers:", &mut e.servers, true),
+            Mode::Plain => field(ui, row1, "Servers:", &mut e.servers, true),
             Mode::Tls => {
-                field(ui, 98.0, "Servers:", &mut e.servers, true);
+                field(ui, row1, "Servers:", &mut e.servers, true);
                 // i18n: Options → DNS over TLS: label before the name the server's certificate shows
-                field(ui, 124.0, "Certificate name:", &mut e.tls_name, true);
+                field(ui, row2, "Certificate name:", &mut e.tls_name, true);
             }
             Mode::Https => {
                 // i18n: Options → DNS over HTTPS: label before the server's https:// address
-                field(ui, 98.0, "Address:", &mut e.doh_url, true);
+                field(ui, row1, "Address:", &mut e.doh_url, true);
                 // i18n: Options → DNS over HTTPS: label before the server's IP addresses, which may be left empty
-                field(ui, 124.0, "IP addresses (optional):", &mut e.servers, true);
+                field(ui, row2, "IP addresses (optional):", &mut e.servers, true);
             }
         },
     }
+    let check_y = row2 + h + 14.0;
     winui::checkbox_light(
         ui,
-        o + vec2(14.0, 158.0),
+        o + vec2(edge, check_y),
         &mut e.fallback,
         // i18n: Options → DNS settings: checkbox: when the chosen DNS can't be reached, use the system's instead
         "If it can't be reached, use the system's DNS",
         true,
     );
-    winui::paragraph(
+    hint(
         &p,
-        o.x + 14.0,
-        o.y + 192.0,
+        o,
+        edge,
+        check_y + 13.0 + 14.0 + 13.0,
         // i18n: Options → DNS settings: what the DNS choice covers and what it doesn't
         crate::i18n::t(
             "Names in your hosts file and local names (single words, .local, .lan) stay with the system's DNS. Video pages and torrent trackers use the system's DNS for now.",
         ),
-        LIGHT_TEXT(),
-        o.x + 386.0,
-        14.0,
+        w - edge,
     );
     let choice = e.choice();
     // Test: asks github.com through the choice, without falling back, on a thread of its own.
@@ -3662,8 +3645,11 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
     } else {
         ButtonKind::Disabled
     };
+    // The Test line: the button, then its answer (or why the choice can't be used).
+    let test_y = DNS_BODY - edge - h;
+    let test_w = winui::footer_button_width(&p, "Test", false);
     // i18n: button: asks the chosen DNS for an address, to see it works
-    if winui::button_light(ui, r(o, 14.0, 232.0, 73.0, 21.0), "Test", kind, false).clicked()
+    if winui::button_light(ui, r(o, edge, test_y, test_w, h), "Test", kind, false).clicked()
         && let Ok(c) = &choice
     {
         let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
@@ -3715,21 +3701,27 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
         } else {
             crate::theme::colors().error_strong
         };
+        let x = o.x + edge + test_w + 8.0;
         let (rect, cut) = winui::label_into(
             &p,
-            o.x + 95.0,
-            o.y + 247.0,
+            x,
+            o.y + winui::baseline_in(test_y, h),
             &line,
             color,
-            o.x + 386.0,
-            o.x + 95.0,
+            o.x + w - edge,
+            x,
         );
         if cut {
             winui::full_on_hover(ui, rect, "dns-test", &line);
         }
     }
-    ok_cancel(ui, o, 238.0, 278.0, choice.is_ok())
+    ok_cancel(ui, o, w, DNS_BODY, choice.is_ok())
 }
+
+/// DNS settings (the mockup's): its width, its body above the footer, its form rows' top.
+const DNS_W: f32 = 420.0;
+const DNS_BODY: f32 = 302.0;
+const DNS_ROWS: f32 = 84.0;
 
 /// Accounts → Add...: the service, a token typed in, and the sign-in on its thread (#44).
 #[derive(Default)]
@@ -3747,20 +3739,18 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
     let ctx = ui.ctx().clone();
     let state = e.signin.get();
     let busy = matches!(state, S::Starting | S::Waiting { .. } | S::Checking);
+    // The mockup's layout: the service, Sign in in the browser, the code's box, the token's
+    // line, Find my token with how the sign-in went, the footer.
+    let (edge, h, w) = (winui::EDGE, winui::CONTROL_H, ACCOUNT_W);
     // i18n: Options → Add an account: label before the choice of debrid service
-    text(
-        &p,
-        o.x + 14.0,
-        o.y + 26.0,
-        crate::i18n::t("Service:"),
-        LIGHT_TEXT(),
-    );
+    let fx = winui::form(&p, edge, &["Service:"], false);
+    winui::form_label(&p, o, edge, 16.0, h, "Service:", true);
     let all = mdm_debrid::ServiceKind::ALL;
     let names: Vec<&str> = all.iter().map(|k| k.name()).collect();
     let at = all.iter().position(|k| *k == e.service).unwrap_or(0);
     if let Some(i) = winui::combo_light(
         ui,
-        r(o, 90.0, 12.0, 200.0, 21.0),
+        r(o, fx, 16.0, w - edge - fx, h),
         &names,
         at,
         !busy,
@@ -3783,7 +3773,13 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
     // i18n: button: sign in to the debrid service in the browser, by typing a code there
     if winui::button_light(
         ui,
-        r(o, 14.0, 44.0, 220.0, 23.0),
+        r(
+            o,
+            edge,
+            60.0,
+            winui::footer_button_width(&p, "Sign in in the browser", false),
+            h,
+        ),
         "Sign in in the browser",
         kind(!busy && by_code),
         false,
@@ -3796,21 +3792,32 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         e.signin.by_code(e.service, &ctx);
     }
     if let S::Waiting { code, page, until } = &state {
-        // The code, large, to type at the service's page.
+        // In a box, as the mockup's: the code, large, to type at the service's page, its
+        // buttons beside it, and what to do with it.
+        let c = crate::theme::colors();
+        let rc = r(o, edge, 104.0, w - 2.0 * edge, 94.0);
+        p.rect_filled(rc, 6.0, c.panel);
+        p.rect_stroke(
+            rc,
+            6.0,
+            egui::Stroke::new(1.0, c.menubar_line),
+            egui::StrokeKind::Inside,
+        );
+        let (x, row) = (edge + 12.0, 116.0);
         let code_font = egui::FontId::monospace(crate::theme::metrics().font_code);
         p.text(
-            o + vec2(14.0, 78.0),
-            egui::Align2::LEFT_TOP,
+            o + vec2(x, row + h / 2.0),
+            egui::Align2::LEFT_CENTER,
             code,
             code_font.clone(),
             LIGHT_TEXT(),
         );
         // The buttons as wide as their labels in this language (#192), short of the code.
-        let code_end = 14.0 + winui::text_width_font(&p, code_font, code);
+        let code_end = x + winui::text_width_font(&p, code_font, code);
         let [copy_at, open_at] = winui::button_row(
             &p,
-            &[("Copy code", 200.0, 90.0), ("Open the page", 296.0, 110.0)],
-            6.0,
+            &[("Copy code", 200.0, 90.0), ("Open the page", 298.0, 110.0)],
+            8.0,
             (code_end + 12.0).min(200.0),
             200.0,
         )[..] else {
@@ -3819,7 +3826,7 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         // i18n: button: copy the sign-in code
         if winui::button_light(
             ui,
-            r(o, copy_at.0, 80.0, copy_at.1, 21.0),
+            r(o, copy_at.0, row, copy_at.1, h),
             "Copy code",
             ButtonKind::Normal,
             false,
@@ -3831,7 +3838,7 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         // i18n: button: open the service's page where the code is typed
         if winui::button_light(
             ui,
-            r(o, open_at.0, 80.0, open_at.1, 21.0),
+            r(o, open_at.0, row, open_at.1, h),
             "Open the page",
             ButtonKind::Normal,
             false,
@@ -3843,10 +3850,11 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         let left = until
             .saturating_duration_since(std::time::Instant::now())
             .as_secs();
-        winui::paragraph(
+        hint(
             &p,
-            o.x + 14.0,
-            o.y + 120.0,
+            o,
+            x,
+            row + h + 8.0 + 13.0,
             &crate::i18n::fmt(
                 // i18n: Options → Add an account: waiting while the user types the code at the service's page; {page} its address, {time} minutes:seconds left
                 crate::i18n::t(
@@ -3857,9 +3865,7 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
                     ("time", &format!("{}:{:02}", left / 60, left % 60)),
                 ],
             ),
-            LIGHT_TEXT(),
-            o.x + 406.0,
-            14.0,
+            w - edge - 12.0,
         );
         ctx.request_repaint_after(std::time::Duration::from_secs(1));
     }
@@ -3870,20 +3876,20 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         // i18n: Options → Add an account: label before the field for the service's API key (Premiumize: the only way to sign in; the key is on the service's Account page)
         crate::i18n::t("Paste your API key (from the service's Account page):")
     };
-    text(&p, o.x + 14.0, o.y + 178.0, label, LIGHT_TEXT());
-    // As wide as its label in this language (#192); the box ends 6 px before it.
-    let (use_x, use_w) =
-        winui::buttons_to_right(&p, 406.0, 0.0, &[("Use the token", 106.0)], 200.0)[0];
+    text(&p, o.x + edge, o.y + 225.0, label, LIGHT_TEXT());
+    // As wide as its label in this language (#192); the box ends 8 before it.
+    let use_w = winui::footer_button_width(&p, "Use the token", false);
+    let use_x = w - edge - use_w;
     winui::password_light(
         ui,
-        r(o, 14.0, 186.0, use_x - 6.0 - 14.0, 21.0),
+        r(o, edge, 234.0, use_x - 8.0 - edge, h),
         &mut e.token,
         !busy,
     );
     // i18n: button: sign in with the token typed in
     if winui::button_light(
         ui,
-        r(o, use_x, 186.0, use_w, 21.0),
+        r(o, use_x, 234.0, use_w, h),
         "Use the token",
         kind(!busy && !e.token.trim().is_empty()),
         false,
@@ -3893,17 +3899,12 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         e.signin.by_token(e.service, e.token.clone(), &ctx);
     }
     // i18n: button: open the service's page that shows the user's API token
+    let find_w = winui::footer_button_width(&p, "Find my token", false);
     if winui::button_light(
         ui,
-        r(
-            o,
-            14.0,
-            212.0,
-            winui::button_fit_width(&p, "Find my token", 160.0, 392.0),
-            21.0,
-        ),
+        r(o, edge, 278.0, find_w, h),
         "Find my token",
-        ButtonKind::Normal,
+        ButtonKind::Ghost,
         false,
     )
     .clicked()
@@ -3929,20 +3930,22 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
     } else {
         crate::theme::colors().error_strong
     };
+    // After Find my token, on its line.
+    let x = o.x + edge + find_w + 12.0;
     let (rect, cut) = winui::label_into(
         &p,
-        o.x + 14.0,
-        o.y + 252.0,
+        x,
+        o.y + winui::baseline_in(278.0, h),
         &line,
         color,
-        o.x + 406.0,
-        o.x + 14.0,
+        o.x + w - edge,
+        x,
     );
     if cut {
         winui::full_on_hover(ui, rect, "opt-account-state", &line);
     }
     let done = matches!(state, S::Done { .. });
-    match ok_cancel(ui, o, 252.0, 266.0, done) {
+    match ok_cancel(ui, o, w, ACCOUNT_BODY, done) {
         Outcome::Done(()) => match state {
             S::Done {
                 user,
@@ -3963,6 +3966,10 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
     }
 }
 
+/// Add an account (the mockup's): its width and its body above the footer.
+const ACCOUNT_W: f32 = 440.0;
+const ACCOUNT_BODY: f32 = 324.0;
+
 /// Open a service's web page in the browser; never in an off-screen test run (MDM_OFFSCREEN),
 /// whose clicks come from scripts, not from a person at the browser.
 fn open_page(url: &str) {
@@ -3982,356 +3989,315 @@ fn read_sites_file(path: &std::path::Path) -> std::io::Result<String> {
     String::from_utf8(text).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
-fn ok_cancel(ui: &mut Ui, o: Pos2, x: f32, y: f32, valid: bool) -> Outcome<()> {
+/// A sub-dialog's footer at English `y` across `w`: Cancel, OK* (OK greyed until `valid`).
+/// Enter is OK while `valid`, Escape is Cancel, as before; Tab: OK, then Cancel.
+fn ok_cancel(ui: &mut Ui, o: Pos2, w: f32, y: f32, valid: bool) -> Outcome<()> {
     let kind = if valid {
         ButtonKind::Default
     } else {
         ButtonKind::Disabled
     };
-    let ok = winui::button_light(ui, r(o, x, y, 73.0, 21.0), "OK", kind, false).clicked();
-    let cancel = winui::button_light(
+    let pressed = winui::footer(
         ui,
-        r(o, x + 81.0, y, 73.0, 21.0),
-        "Cancel",
-        ButtonKind::Normal,
-        false,
+        o,
+        w,
+        y,
+        &mut [
+            FooterItem::Button(FooterButton::new("OK", kind).primary().enter(true)),
+            FooterItem::Button(FooterButton::new("Cancel", ButtonKind::Normal).escape(true)),
+        ],
+    );
+    match pressed {
+        Some(1) => Outcome::Closed,
+        Some(_) if valid => Outcome::Done(()),
+        _ => Outcome::Open,
+    }
+}
+
+/// A sub-dialog's hint (the mockup's `.hint`): `s` wrapped from English `x` at `baseline` to
+/// `right` (window-relative to `o`), in the muted colour. Its line count.
+fn hint(p: &egui::Painter, o: Pos2, x: f32, baseline: f32, s: &str, right: f32) -> usize {
+    winui::paragraph(
+        p,
+        o.x + x,
+        o.y + baseline,
+        s,
+        crate::theme::colors().muted,
+        o.x + right,
+        LINE,
     )
-    .clicked();
-    if cancel || winui::escape_pressed(ui) {
-        Outcome::Closed
-    } else if valid && (ok || winui::enter_pressed(ui)) {
-        Outcome::Done(())
-    } else {
-        Outcome::Open
-    }
 }
 
-/// A row of tabs as shown: IDM's measured tabs in English; a translation's sized by its labels
-/// (each label centred, the room left over shared out), so the row keeps its span (x 8..419)
-/// and no label is cut.
-fn tab_row(
-    p: &egui::Painter,
-    row: &[(usize, &'static str, f32, f32, f32)],
-    measured: bool,
-) -> Vec<(usize, &'static str, f32, f32, f32)> {
-    // `measured`: the row's English positions are IDM's (a row of ours is sized as a translation).
-    if measured && row.iter().all(|t| crate::i18n::t(t.1) == t.1) {
-        return row.to_vec();
-    }
-    let (left, right) = (row[0].2, row[row.len() - 1].3);
-    let widths: Vec<f32> = row
-        .iter()
-        .map(|t| winui::text_width(p, crate::i18n::t(t.1)).ceil())
-        .collect();
-    let total: f32 = widths.iter().map(|w| w + 16.0).sum();
-    let spare = ((right - left - total) / row.len() as f32).floor();
-    let padded: Vec<f32> = widths.iter().map(|w| w + 16.0).collect();
-    let cap = winui::width_cap(&padded, right - left);
-    let mut x0 = left;
-    row.iter()
-        .zip(&widths)
-        .enumerate()
-        .map(|(k, (t, w))| {
-            let x1 = if k + 1 == row.len() {
-                right
-            } else if spare < 0.0 {
-                // Too wide for the strip: the narrow tabs keep their width, the wide ones share
-                // the rest (their labels cut where drawn).
-                x0 + (w + 16.0).min(cap)
-            } else {
-                x0 + w + 16.0 + spare
-            };
-            let tab = (t.0, t.1, x0, x1, x0 + ((x1 - x0 - w) / 2.0).floor());
-            x0 = x1;
-            tab
-        })
-        .collect()
+/// A sub-dialog's line height for wrapped text.
+const LINE: f32 = 16.0;
+
+/// The window: the side list ([`SIDE_W`]), the page area, the footer ([`winui::footer`]).
+/// The mock's 820 x 520 (plan 08b).
+const W: f32 = 820.0;
+const H: f32 = 520.0;
+/// The side list's width (its right border at this x).
+const SIDE_W: f32 = 190.0;
+/// A side list row: its height and the gap after it, from the list's top `SIDE_TOP`.
+const ROW_H: f32 = 30.0;
+const ROW_GAP: f32 = 1.0;
+const SIDE_TOP: f32 = 10.0;
+/// Where a page's English pixels go in the window: x 0 at the list's edge (its controls from
+/// [`PAGE_LEFT`], 16 in), y under the page's heading from [`PAGE_TOP`].
+const PAGE_AT: egui::Vec2 = vec2(SIDE_W, -16.0);
+/// The page heading's icon tile: 40, 16 from the page area's top and leading edge.
+const HEAD_TOP: f32 = 16.0;
+const HEAD_TILE: f32 = 40.0;
+/// Where a page's controls go, in its English pixels: under its heading, 16 in from the list
+/// and the window's edge, 8 above the footer. The pages lay out on it; the test holds them to it.
+const PAGE_LEFT: f32 = winui::EDGE;
+const PAGE_RIGHT: f32 = W - SIDE_W - winui::EDGE;
+const PAGE_TOP: f32 = HEAD_TOP + HEAD_TILE + winui::EDGE - PAGE_AT.y;
+const PAGE_BOTTOM: f32 = H - winui::FOOTER_H - 8.0 - PAGE_AT.y;
+/// Proxy's Get System, on its heading's row: its English x, where the heading's title ends.
+const PROXY_GET_X: f32 = 307.0;
+
+/// The pages in the list's order, which is the old tabs' (Remote, ours, after Connection): page
+/// number (as `on_page` and `/show options:<n>` take it), its name in the list, its Graphite
+/// icon, and its heading (the old page title).
+const PAGES: [(usize, &str, &str, &str); 12] = [
+    // i18n: Options page name: general settings
+    (
+        0,
+        crate::i18n::mark("General"),
+        "gx-adjust",
+        crate::i18n::mark("Browser/System Integration"),
+    ),
+    // i18n: Options page name
+    (
+        1,
+        crate::i18n::mark("File types"),
+        "ft-generic",
+        crate::i18n::mark("Downloaded file types"),
+    ),
+    (
+        2,
+        // i18n: Options page name: where downloads are saved
+        crate::i18n::mark("Save to"),
+        "cat-folder",
+        crate::i18n::mark("Categories, file types, folders"),
+    ),
+    (
+        3,
+        // i18n: Options page name: download settings
+        crate::i18n::mark("Downloads"),
+        "gx-download",
+        crate::i18n::mark("Default download settings"),
+    ),
+    (
+        4,
+        // i18n: Options page name: connection settings
+        crate::i18n::mark("Connection"),
+        "gx-network",
+        crate::i18n::mark("Connections and Limits"),
+    ),
+    (
+        REMOTE_PAGE,
+        // i18n: Options page name: control MDM from a phone or another computer on the local network
+        crate::i18n::mark("Remote"),
+        "gx-device",
+        // i18n: Options page title: control MDM from a phone or another computer on the local network
+        crate::i18n::mark("Remote control"),
+    ),
+    (
+        5,
+        // i18n: Options page name
+        crate::i18n::mark("Proxy / Socks"),
+        "gx-shield",
+        crate::i18n::mark("Proxy / socks configuration"),
+    ),
+    (
+        6,
+        // i18n: Options page name: user names and passwords for sites
+        crate::i18n::mark("Sites Logins"),
+        "gx-key",
+        crate::i18n::mark("User names and passwords for servers/sites"),
+    ),
+    (
+        7,
+        // i18n: Options page name: the user's debrid service accounts (Real-Debrid…)
+        crate::i18n::mark("Accounts"),
+        "gx-user",
+        crate::i18n::mark("Debrid service accounts"),
+    ),
+    // i18n: Options page name: sound settings
+    (
+        8,
+        crate::i18n::mark("Sounds"),
+        "gx-volume",
+        crate::i18n::mark("Sound settings"),
+    ),
+    (
+        9,
+        // i18n: Options page name: how dates and times are written (date order, 12- or 24-hour clock)
+        crate::i18n::mark("Regional"),
+        "gx-world",
+        crate::i18n::mark("Dates and times"),
+    ),
+    (
+        10,
+        // i18n: Options page name: extracting downloaded archives, and Link grabber
+        crate::i18n::mark("Archives"),
+        "ft-archive",
+        // i18n: Options page title: extracting downloaded archives, and Link grabber
+        crate::i18n::mark("Archives and Link grabber"),
+    ),
+];
+
+/// The page's place in [`PAGES`] (0 for a number that is none).
+fn page_at(page: usize) -> usize {
+    PAGES.iter().position(|p| p.0 == page).unwrap_or(0)
 }
 
-/// The two-row tab strip and the page frame; returns the page clicked.
-fn tabs(ui: &mut Ui, o: Pos2, page: usize) -> Option<usize> {
-    // (page, label, x0, x1, label x): the rows never move sideways, only swap front and back.
-    // Remote (#141, ours) joins the first row, which is sized by its labels since.
-    const G: [(usize, &str, f32, f32, f32); 6] = [
-        // i18n: tab title: general settings
-        (0, crate::i18n::mark("General"), 8.0, 82.0, 26.0),
-        // i18n: tab title
-        (1, crate::i18n::mark("File types"), 82.0, 166.0, 101.0),
-        // i18n: tab title: where downloads are saved
-        (2, crate::i18n::mark("Save to"), 166.0, 241.0, 185.0),
-        // i18n: tab title: download settings
-        (3, crate::i18n::mark("Downloads"), 241.0, 330.0, 260.0),
-        // i18n: tab title: connection settings
-        (4, crate::i18n::mark("Connection"), 330.0, 419.0, 349.0),
-        (
-            REMOTE_PAGE,
-            // i18n: tab title: control MDM from a phone or another computer on the local network
-            crate::i18n::mark("Remote"),
-            380.0,
-            419.0,
-            390.0,
-        ),
-    ];
-    // IDM's Dial Up / VPN tab is gone (D-021: no modem support; it did nothing); ours, Regional
-    // (how dates and times are written), Accounts (#44, debrid services) and Archives (#37) share
-    // the row, sized by their labels.
-    const P: [(usize, &str, f32, f32, f32); 6] = [
-        // i18n: tab title
-        (5, crate::i18n::mark("Proxy / Socks"), 8.0, 104.0, 20.0),
-        // i18n: tab title: user names and passwords for sites
-        (6, crate::i18n::mark("Sites Logins"), 104.0, 192.0, 116.0),
-        // i18n: tab title: the user's debrid service accounts (Real-Debrid…)
-        (7, crate::i18n::mark("Accounts"), 192.0, 265.0, 204.0),
-        // i18n: tab title: sound settings
-        (8, crate::i18n::mark("Sounds"), 265.0, 336.0, 279.0),
-        // i18n: tab title: how dates and times are written (date order, 12- or 24-hour clock)
-        (9, crate::i18n::mark("Regional"), 336.0, 380.0, 350.0),
-        // i18n: tab title: extracting downloaded archives, and Link grabber
-        (10, crate::i18n::mark("Archives"), 380.0, 419.0, 390.0),
-    ];
+/// Side list row `k`'s rect (window-relative to `o`).
+fn side_row(o: Pos2, k: usize) -> Rect {
+    r(
+        o,
+        8.0,
+        SIDE_TOP + k as f32 * (ROW_H + ROW_GAP),
+        SIDE_W - 16.0,
+        ROW_H,
+    )
+}
+
+/// The pages down the side (plan 08a): one Tab stop, the chosen row; Up / Down and Left / Right
+/// move through them, Home / End go to the ends, Ctrl+Tab / Ctrl+Shift+Tab (and Ctrl+Page Down
+/// / Up) wrap round from anywhere in the window, a click picks one. The page picked.
+fn side_list(ui: &mut Ui, o: Pos2, page: usize) -> Option<usize> {
+    let c = crate::theme::colors();
     let p = ui.painter().clone();
-    let border = winui::HEADER_LINE();
-    let (g, pr) = (tab_row(&p, &G, false), tab_row(&p, &P, false));
-    let first_row = page < 5 || page == REMOTE_PAGE;
-    let (front, back): (&[_], &[_]) = if first_row { (&g, &pr) } else { (&pr, &g) };
-    let mut clicked = None;
-    let mut tab = |ui: &mut Ui,
-                   (i, label, x0, x1, lx): (usize, &str, f32, f32, f32),
-                   top: f32,
-                   base: f32,
-                   sel: bool| {
-        let (x0, x1) = if sel {
-            (x0 - if x0 <= 8.0 { 2.0 } else { 1.0 }, x1 + 2.0)
-        } else {
-            (x0, x1)
-        };
-        let bottom = if sel { 45.0 } else { top + 17.0 };
-        // From the leading edge: the first tab at the right in RTL.
-        let rc = winui::rect(Rect::from_min_max(
-            o + vec2(x0, top),
-            o + vec2(x1 + 1.0, bottom + 1.0),
-        ));
-        // The strip is one Tab stop, the chosen tab (Windows' tab control); the arrows move.
+    let at = page_at(page);
+    let foot = H - winui::FOOTER_H;
+    p.rect_filled(r(o, 0.0, 0.0, SIDE_W, foot), 0.0, c.panel);
+    fill(
+        &p,
+        o.x + SIDE_W,
+        o.y,
+        o.x + SIDE_W,
+        o.y + foot - 1.0,
+        c.menubar_line,
+    );
+    let mut picked = winui::tab_keys(ui, PAGES.len(), at);
+    for (k, (_, label, icon, _)) in PAGES.iter().enumerate() {
+        let sel = k == at;
+        let rc = side_row(o, k);
         let sense = if sel {
             Sense::click()
         } else {
             winui::pointer_only()
         };
-        let resp = ui.interact(rc, egui::Id::unique(("opt-tab", i)), sense);
-        winui::expose(
-            &resp,
-            egui::Role::Tab,
-            crate::i18n::t(label),
-            true,
-            Some(sel),
-        );
+        let resp = ui.interact(rc, egui::Id::unique(("opt-page", k)), sense);
+        let label = crate::i18n::t(label);
+        winui::expose(&resp, egui::Role::ListItem, label, true, Some(sel));
         let resp = winui::enter_is_not_a_click(ui, resp);
         if resp.clicked() && !sel {
-            clicked = Some(i);
+            picked = Some(k);
         }
         if sel {
-            winui::keep_keys(ui, &resp, true, false, false);
+            winui::keep_keys(ui, &resp, true, true, false);
             if resp.has_focus() {
-                // Left / Right (mirrored in RTL), Home / End through the pages in order.
-                const ORDER: [usize; 12] = [0, 1, 2, 3, 4, 11, 5, 6, 7, 8, 9, 10];
-                let at = ORDER.iter().position(|p| *p == i).unwrap_or(0) as isize;
-                let fwd = if winui::rtl() { -1 } else { 1 };
-                let to = if winui::take_key(ui, egui::Key::ArrowRight) {
-                    Some(at + fwd)
-                } else if winui::take_key(ui, egui::Key::ArrowLeft) {
-                    Some(at - fwd)
+                let last = PAGES.len() - 1;
+                let to = if winui::take_key(ui, egui::Key::ArrowDown)
+                    || winui::take_key(ui, egui::Key::ArrowRight)
+                {
+                    Some((k + 1).min(last))
+                } else if winui::take_key(ui, egui::Key::ArrowUp)
+                    || winui::take_key(ui, egui::Key::ArrowLeft)
+                {
+                    Some(k.saturating_sub(1))
                 } else if winui::take_key(ui, egui::Key::Home) {
                     Some(0)
                 } else if winui::take_key(ui, egui::Key::End) {
-                    Some(ORDER.len() as isize - 1)
+                    Some(last)
                 } else {
                     None
                 };
                 if let Some(to) = to {
-                    let next = ORDER[to.clamp(0, ORDER.len() as isize - 1) as usize];
-                    clicked = Some(next);
-                    // The keys stay on the strip: the new tab takes the focus.
-                    ui.memory_mut(|m| m.request_focus(egui::Id::unique(("opt-tab", next))));
+                    picked = Some(to);
+                    // The keys stay on the list: the new row takes the focus.
+                    ui.memory_mut(|m| m.request_focus(egui::Id::unique(("opt-page", to))));
                 }
             }
         }
         let face = if sel {
-            LIGHT_PAGE()
+            Some(c.selection)
         } else if resp.hovered() {
-            winui::TAB_HOT()
+            Some(c.subtle_hot)
         } else {
-            winui::TAB_UNSELECTED()
+            None
         };
-        fill(&p, o.x + x0, o.y + top, o.x + x1, o.y + bottom, face);
-        fill(
-            &p,
-            o.x + x0 + 1.0,
-            o.y + top,
-            o.x + x1 - 1.0,
-            o.y + top,
-            border,
-        );
-        fill(
-            &p,
-            o.x + x0,
-            o.y + top + 1.0,
-            o.x + x0,
-            o.y + bottom,
-            border,
-        );
-        fill(
-            &p,
-            o.x + x1,
-            o.y + top + 1.0,
-            o.x + x1,
-            o.y + bottom,
-            border,
-        );
-        // A translated row too wide for the strip has narrower tabs (`tab_row`): their labels are
-        // cut with "..." and shown whole on hover.
-        let full = crate::i18n::t(label);
-        let shown = winui::ellipsize(&p, &winui::tahoma(), full, x1 - x0 - 6.0);
-        if shown == full {
-            text(&p, o.x + lx, o.y + base, full, LIGHT_TEXT());
-        } else {
-            let w = winui::text_width(&p, &shown);
-            let lx = x0 + ((x1 - x0 - w) / 2.0).floor();
-            let rc = text(&p, o.x + lx, o.y + base, &shown, LIGHT_TEXT());
-            winui::full_on_hover(ui, rc, ("opt-tab-label", i), full);
+        if let Some(face) = face {
+            p.rect_filled(rc, winui::control_radius(), face);
         }
-        winui::show_focus(ui, &resp, rc.shrink(2.0));
-    };
-    for t in back {
-        tab(ui, *t, 9.0, 22.0, false);
+        let (ink, glyph) = if sel {
+            (c.selection_text, c.accent)
+        } else {
+            (c.text_secondary, c.text_secondary)
+        };
+        crate::themeicons::paint_in(
+            ui,
+            &p,
+            icon,
+            Rect::from_min_size(pos2(rc.left() + 9.0, rc.center().y - 8.0), vec2(16.0, 16.0)),
+            glyph,
+            true,
+        );
+        winui::fit(
+            ui,
+            &p,
+            rc.left() + 34.0,
+            winui::baseline_in(rc.top(), rc.height()),
+            label,
+            ink,
+            rc.right() - 6.0,
+            ("opt-page-label", k),
+        );
+        winui::show_focus(ui, &resp, rc);
     }
-    for t in front.iter().filter(|t| t.0 != page) {
-        tab(ui, *t, 27.0, 40.0, false);
-    }
-    // Page frame (x 6..421, y 45..468) with its shadow, then the selected tab over its top.
-    fill(
-        &p,
-        o.x + 6.0,
-        o.y + 45.0,
-        o.x + 421.0,
-        o.y + 468.0,
-        LIGHT_PAGE(),
-    );
-    fill(&p, o.x + 6.0, o.y + 45.0, o.x + 421.0, o.y + 45.0, border);
-    fill(&p, o.x + 6.0, o.y + 468.0, o.x + 421.0, o.y + 468.0, border);
-    fill(&p, o.x + 6.0, o.y + 45.0, o.x + 6.0, o.y + 468.0, border);
-    fill(
-        &p,
-        o.x + 421.0,
-        o.y + 45.0,
-        o.x + 421.0,
-        o.y + 468.0,
-        border,
-    );
-    let shadow = winui::TAB_UNSELECTED();
-    fill(
-        &p,
-        o.x + 422.0,
-        o.y + 45.0,
-        o.x + 423.0,
-        o.y + 469.0,
-        shadow,
-    );
-    fill(&p, o.x + 6.0, o.y + 469.0, o.x + 423.0, o.y + 469.0, shadow);
-    if let Some(t) = front.iter().find(|t| t.0 == page) {
-        tab(ui, *t, 25.0, 38.0, true);
-    }
-    clicked
-}
-
-/// Page header: the icon, the title (bold, right-aligned as IDM's) and the etched rule.
-#[allow(clippy::too_many_arguments)]
-fn header(
-    ui: &mut Ui,
-    o: Pos2,
-    icon: Icon,
-    title: &str,
-    bold: bool,
-    ink_x: f32,
-    rule_x0: f32,
-    rule_x1: f32,
-) {
-    let p = ui.painter().clone();
-    icon.image(true).paint_at(ui, r(o, 21.0, 54.0, 32.0, 32.0));
-    let font = if bold {
-        winui::tahoma_bold()
+    if let Some(k) = picked
+        && k != at
+    {
+        Some(PAGES[k].0)
     } else {
-        winui::tahoma()
-    };
-    page_title(&p, font, o.x + ink_x, o.y + 69.0, title);
-    winui::etched_h(&p, o.x + rule_x0, o.y + 78.0, rule_x1 - rule_x0 + 2.0);
-}
-
-/// A page title, right-aligned as IDM's: English at its measured pen `x`, a translation ending
-/// where the English ends (in RTL: starting there, at the mirrored edge).
-fn page_title(p: &egui::Painter, font: egui::FontId, x: f32, baseline: f32, english: &str) {
-    let shown = crate::i18n::t(english);
-    let x = if shown == english {
-        x
-    } else {
-        let end = x + winui::text_width_font(p, font.clone(), english);
-        end - winui::text_width_font(p, font.clone(), shown)
-    };
-    winui::text_font(p, font, x, baseline, shown, LIGHT_TEXT());
-}
-
-/// `english` translated, as [`page_title_ending`] draws it in `room` px: one line where it fits,
-/// else two ([`winui::fit_lines`]); and how wide it is drawn.
-fn page_title_lines(
-    p: &egui::Painter,
-    font: egui::FontId,
-    english: &str,
-    room: f32,
-) -> (Vec<String>, f32) {
-    let lines = winui::fit_lines(p, font.clone(), crate::i18n::t(english), room);
-    let w = lines
-        .iter()
-        .map(|l| winui::text_width_font(p, font.clone(), l))
-        .fold(0.0, f32::max);
-    (lines, w)
-}
-
-/// A page title's `lines` ([`page_title_lines`]) ending at English x `end` (a control after it
-/// needs the room up to there): one line on `baseline`, two around it (beside the page's icon),
-/// each starting where the wider one does.
-fn page_title_ending(
-    p: &egui::Painter,
-    font: egui::FontId,
-    end: f32,
-    baseline: f32,
-    lines: &[String],
-) {
-    let w = lines
-        .iter()
-        .map(|l| winui::text_width_font(p, font.clone(), l))
-        .fold(0.0, f32::max);
-    // Bold Tahoma's rows are 15 px apart; two lines share the one line's middle.
-    let first = baseline - 7.5 * (lines.len() as f32 - 1.0);
-    for (i, line) in lines.iter().enumerate() {
-        let y = (first + 15.0 * i as f32).round();
-        winui::text_font(p, font.clone(), end - w, y, line, LIGHT_TEXT());
+        None
     }
 }
 
-/// Group box (`#dcdcdc` frame) with its caption (translated here) at x + 9.
-fn group(ui: &Ui, o: Pos2, x: f32, y: f32, w: f32, h: f32, caption: &str) {
+/// The page's heading above it: its icon on a tile and its title.
+fn heading(ui: &Ui, o: Pos2, page: usize) {
+    let (_, _, icon, title) = PAGES[page_at(page)];
+    let x = SIDE_W + winui::EDGE;
+    winui::icon_tile(
+        ui,
+        r(o, x, HEAD_TOP, HEAD_TILE, HEAD_TILE),
+        icon,
+        crate::theme::colors().accent,
+        8.0,
+    );
     let p = ui.painter();
-    let full = crate::i18n::t(caption);
-    // A caption longer than the box is cut with "..." before its right edge (whole on hover).
-    let caption = winui::ellipsize(p, &winui::tahoma(), full, w - 18.0);
-    let cw = winui::text_width(p, &caption);
-    winui::group_box(
+    let left = o.x + x + HEAD_TILE + 12.0;
+    let full = crate::i18n::t(title);
+    // Proxy's title ends before its Get System, on the same row.
+    let end = if page == 5 {
+        PAGE_AT.x + PROXY_GET_X - 8.0
+    } else {
+        W - winui::EDGE
+    };
+    let shown = winui::ellipsize(p, &winui::tahoma_title(), full, o.x + end - left);
+    let drawn = winui::text_at(
         p,
-        r(o, x, y, w, h),
-        Some((o.x + x + 7.0, o.x + x + 9.0 + cw + 2.0)),
+        winui::tahoma_title(),
+        left,
+        o.y + winui::baseline_in(HEAD_TOP, HEAD_TILE),
+        &shown,
+        crate::theme::colors().text,
     );
-    let rc = text(p, o.x + x + 9.0, o.y + y + 4.0, &caption, LIGHT_TEXT());
-    if caption != full {
-        winui::full_on_hover(ui, rc, ("group", caption.as_str()), full);
+    if shown != full {
+        winui::full_on_hover(ui, drawn, ("opt-heading", page), full);
     }
 }
 
@@ -4495,7 +4461,7 @@ fn readonly_ltr(ui: &mut Ui, rc: Rect, value: &str) {
     );
 }
 
-/// A password edit (characters shown as bullets): the shared one, on the tab page.
+/// A password edit (characters shown as bullets): the shared one, on the page.
 fn password(ui: &mut Ui, rc: Rect, value: &mut String, enabled: bool) {
     winui::password_light_on(ui, rc, value, enabled, LIGHT_PAGE());
 }
@@ -4528,6 +4494,244 @@ fn kept_text(kept: crate::secrets::Kept) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use egui::accesskit::{NodeId, Role, TreeUpdate};
+
+    fn input(events: Vec<egui::Event>) -> egui::RawInput {
+        egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(W, H))),
+            events,
+            ..Default::default()
+        }
+    }
+
+    fn key(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    /// A press (`down`) or release of the left button at `at`.
+    fn button(at: Pos2, down: bool) -> Vec<egui::Event> {
+        vec![
+            egui::Event::PointerMoved(at),
+            egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: down,
+                modifiers: Default::default(),
+            },
+        ]
+    }
+
+    /// One pass of the side list on `page`: the page it picked.
+    fn list_pass(ctx: &egui::Context, page: usize, events: Vec<egui::Event>) -> Option<usize> {
+        let mut picked = None;
+        let mut out = ctx.run_ui(input(events), |ui| picked = side_list(ui, Pos2::ZERO, page));
+        out.textures_delta.clear();
+        picked
+    }
+
+    /// Plan 08 tests: every page is picked by a click on its row, Up / Down walk the list in
+    /// its order (Home / End to its ends), and Ctrl+Tab / Ctrl+Shift+Tab wrap round it.
+    #[test]
+    fn every_page_is_reached_by_click_arrows_and_ctrl_tab() {
+        let ctx = egui::Context::default();
+        let order: Vec<usize> = PAGES.iter().map(|p| p.0).collect();
+        assert_eq!(
+            order,
+            [0, 1, 2, 3, 4, 11, 5, 6, 7, 8, 9, 10],
+            "the old tabs' order"
+        );
+        for (_, label, need, _) in PAGES {
+            assert!(
+                crate::themeicons::graphite_has(need, 16)
+                    && crate::themeicons::graphite_has(need, 24),
+                "{label}: Graphite's set lacks {need}"
+            );
+        }
+        for (k, &want) in order.iter().enumerate() {
+            let from = if want == 0 { 1 } else { 0 };
+            let at = side_row(Pos2::ZERO, k).center();
+            list_pass(&ctx, from, vec![egui::Event::PointerMoved(at)]);
+            list_pass(&ctx, from, button(at, true));
+            assert_eq!(
+                list_pass(&ctx, from, button(at, false)),
+                Some(want),
+                "click row {k}"
+            );
+        }
+        // A key on `page`'s row, focused as Tab leaves it.
+        let press = |page: usize, k: egui::Key| {
+            list_pass(&ctx, page, vec![]);
+            ctx.memory_mut(|m| m.request_focus(egui::Id::unique(("opt-page", page_at(page)))));
+            list_pass(&ctx, page, vec![key(k, Default::default())])
+        };
+        for w in order.windows(2) {
+            assert_eq!(
+                press(w[0], egui::Key::ArrowDown),
+                Some(w[1]),
+                "Down from {}",
+                w[0]
+            );
+            assert_eq!(
+                press(w[1], egui::Key::ArrowUp),
+                Some(w[0]),
+                "Up from {}",
+                w[1]
+            );
+        }
+        assert_eq!(press(10, egui::Key::ArrowDown), None, "the end");
+        assert_eq!(press(0, egui::Key::ArrowUp), None, "the start");
+        assert_eq!(press(4, egui::Key::Home), Some(0));
+        assert_eq!(press(4, egui::Key::End), Some(10));
+        // Ctrl+Tab from anywhere: no row focused.
+        ctx.memory_mut(|m| m.surrender_focus(egui::Id::unique(("opt-page", 0))));
+        let ctrl = egui::Modifiers::COMMAND;
+        let mut page = order[0];
+        for &want in order.iter().cycle().skip(1).take(order.len()) {
+            page = list_pass(&ctx, page, vec![key(egui::Key::Tab, ctrl)]).expect("Ctrl+Tab");
+            assert_eq!(page, want);
+        }
+        let back = list_pass(
+            &ctx,
+            0,
+            vec![key(egui::Key::Tab, ctrl | egui::Modifiers::SHIFT)],
+        );
+        assert_eq!(back, Some(10), "Ctrl+Shift+Tab wraps back to Archives");
+    }
+
+    /// Plan 08b3: a sub-dialog's footer keeps its keys: Enter is OK only while the entry is
+    /// valid, Escape is Cancel either way.
+    #[test]
+    fn sub_dialog_enter_is_ok_only_when_valid_escape_cancels() {
+        let ctx = egui::Context::default();
+        let pass = |k: egui::Key, valid: bool| {
+            let mut out = Outcome::Open;
+            let mut o = ctx.run_ui(input(vec![key(k, Default::default())]), |ui| {
+                out = ok_cancel(ui, Pos2::ZERO, 340.0, 100.0, valid);
+            });
+            o.textures_delta.clear();
+            out
+        };
+        assert!(matches!(pass(egui::Key::Enter, true), Outcome::Done(())));
+        assert!(matches!(pass(egui::Key::Enter, false), Outcome::Open));
+        assert!(matches!(pass(egui::Key::Escape, true), Outcome::Closed));
+        assert!(matches!(pass(egui::Key::Escape, false), Outcome::Closed));
+    }
+
+    /// One pass of the window's page area on `page`, AccessKit on: its tree.
+    fn page_pass(
+        ctx: &egui::Context,
+        d: &mut OptionsDialog,
+        events: Vec<egui::Event>,
+    ) -> TreeUpdate {
+        let dir = std::env::temp_dir();
+        let mut out = ctx.run_ui(input(events), |ui| d.page_area(ui, Pos2::ZERO, &dir));
+        out.textures_delta.clear();
+        out.platform_output
+            .accesskit_update
+            .expect("AccessKit is on")
+    }
+
+    /// Plan 08 tests: at its new place every page's controls lie in the page area (right of the
+    /// list, above the footer), and its first control is hit where it is drawn: a click on it
+    /// gives it the keys.
+    #[test]
+    fn every_page_lies_in_its_area_and_is_hit_where_drawn() {
+        let area = Rect::from_min_max(pos2(PAGE_LEFT, PAGE_TOP), pos2(PAGE_RIGHT, PAGE_BOTTOM))
+            .translate(PAGE_AT)
+            // Proxy's Get System sits on the heading's row.
+            .with_min_y(HEAD_TOP)
+            // A check box's click area runs on to the window's edge after its caption.
+            .with_max_x(W);
+        for (page, label, ..) in PAGES {
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            let s = Settings::default();
+            let mut d = OptionsDialog::new(&s, &std::env::temp_dir(), vec![]).on_page(page);
+            page_pass(&ctx, &mut d, vec![]);
+            let tree = page_pass(&ctx, &mut d, vec![]);
+            let controls: Vec<(NodeId, Rect, u8)> = tree
+                .nodes
+                .iter()
+                .filter(|(_, n)| {
+                    matches!(
+                        n.role(),
+                        Role::Button
+                            | Role::CheckBox
+                            | Role::RadioButton
+                            | Role::TextInput
+                            | Role::ComboBox
+                            | Role::ListBox
+                            | Role::SpinButton
+                    )
+                })
+                .filter_map(|(id, n)| {
+                    let b = n.bounds()?;
+                    let rc = Rect::from_min_max(
+                        pos2(b.x0 as f32, b.y0 as f32),
+                        pos2(b.x1 as f32, b.y1 as f32),
+                    );
+                    // A Tab stop (0): not greyed, nor pointer-only (`winui::pointer_only`, spin
+                    // arrows). A list (1) only where there is nothing else (Sounds, its buttons
+                    // greyed until a row is chosen): its first row is clicked, its blank area
+                    // takes no click.
+                    let focusable =
+                        !n.is_disabled() && n.supports_action(egui::accesskit::Action::Focus);
+                    let rank = match (focusable, n.role() == Role::ListBox) {
+                        (true, false) => 0,
+                        (true, true) => 1,
+                        _ => 2,
+                    };
+                    Some((*id, rc, rank))
+                })
+                .collect();
+            assert!(!controls.is_empty(), "{label}: no controls");
+            // A caption's limit is a window x: Sites Logins' "From browser:" was cut down to
+            // "..." when given as a page x.
+            if page == 6 {
+                let b = tree
+                    .nodes
+                    .iter()
+                    .find(|(_, n)| n.label() == Some("From browser:"))
+                    .and_then(|(_, n)| n.bounds())
+                    .expect("From browser:");
+                assert!(b.x1 - b.x0 > 60.0, "\"From browser:\" cut: {b:?}");
+            }
+            for (_, rc, _) in &controls {
+                assert!(
+                    area.expand(0.5).contains_rect(*rc),
+                    "{label}: {rc:?} outside {area:?}"
+                );
+            }
+            // The page's first control (a Tab stop, topmost, then leftmost), clicked.
+            let (first, rc, rank) = *controls
+                .iter()
+                .filter(|c| c.2 < 2)
+                .min_by(|a, b| {
+                    (a.2, a.1.top(), a.1.left())
+                        .partial_cmp(&(b.2, b.1.top(), b.1.left()))
+                        .unwrap()
+                })
+                .unwrap_or_else(|| panic!("{label}: no Tab stop among {controls:?}"));
+            let at = if rank == 1 {
+                pos2(rc.center().x, rc.top() + 8.0)
+            } else {
+                rc.center()
+            };
+            page_pass(&ctx, &mut d, button(at, true));
+            page_pass(&ctx, &mut d, button(at, false));
+            let tree = page_pass(&ctx, &mut d, vec![]);
+            assert_eq!(
+                tree.focus, first,
+                "{label}: the click at {rc:?} reached its control"
+            );
+        }
+    }
 
     /// #424: the list written and read back through a real file: nothing lost, nothing doubled.
     #[test]

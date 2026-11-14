@@ -13,8 +13,6 @@ crate::theme::themed! {
     /// Dialog background (light: light-dialogs.md).
     pub BG => window;
     pub TEXT => text;
-    /// A group box's frame (it was #dcdcdc in dark too: brighter than the separators in it).
-    pub GROUP_LINE => group_line;
     /// A list's column headers (the main list's): every list and table has the same (they had
     /// four: none, #f3f3f3, white).
     pub LIST_HEADER => header;
@@ -3287,46 +3285,6 @@ pub fn checkbox_until(
     )
 }
 
-/// The gap a check box at English `x` leaves in a group box's top line for its caption (English
-/// pixels): IDM's measured end (`english_end`) in English, else 2 px past the translated caption
-/// (`light`: a [`checkbox_light`], caption at +16; else a [`checkbox`], at +18).
-pub fn caption_gap(
-    p: &Painter,
-    x: f32,
-    english_end: f32,
-    caption: &str,
-    light: bool,
-) -> (f32, f32) {
-    let shown = crate::i18n::t(caption);
-    if shown == caption {
-        return (x, english_end);
-    }
-    // Every check box's caption starts 16 px after it (`light`: kept for its callers).
-    let _ = light;
-    let lead = 16.0;
-    (x, x + lead + text_width(p, shown) + 2.0)
-}
-
-/// Group box frame (`rc` on screen) with a gap in its top line for a checkbox caption (`gap` =
-/// English x range, inclusive pixels).
-pub fn group_box(p: &Painter, rc: Rect, gap: Option<(f32, f32)>) {
-    let (l, t, rr, b) = (rc.left(), rc.top(), rc.right() - 1.0, rc.bottom() - 1.0);
-    let gap = gap.map(|(g0, g1)| {
-        let (a, b) = (mcol(g0), mcol(g1));
-        (a.min(b), a.max(b))
-    });
-    match gap {
-        Some((g0, g1)) => {
-            hline(p, l, g0 - 1.0, t, GROUP_LINE());
-            hline(p, g1 + 1.0, rr, t, GROUP_LINE());
-        }
-        None => hline(p, l, rr, t, GROUP_LINE()),
-    }
-    vline(p, l, t, b, GROUP_LINE());
-    vline(p, rr, t, b, GROUP_LINE());
-    hline(p, l, rr, b, GROUP_LINE());
-}
-
 // ---- light dialogs (Speed Limiter, Scheduler, Options) ------------------------------------
 // notes/ui-spec/scheduler-and-misc.md "Light dialog control styles".
 
@@ -4148,7 +4106,6 @@ pub fn icon_only_button(ui: &mut Ui, rc: Rect, need: &str, tip: &str, enabled: b
 pub enum BannerKind {
     Error,
     Info,
-    #[allow(dead_code)] // ponytail: first used by plan 08 (Options' Remote and Accounts banners)
     Warning,
 }
 
@@ -5603,10 +5560,11 @@ pub fn tab_keys(ui: &Ui, n: usize, current: usize) -> Option<usize> {
     let (next, prev) = ui.input_mut(|i| {
         let ctrl = egui::Modifiers::COMMAND;
         let ctrl_shift = egui::Modifiers::COMMAND | egui::Modifiers::SHIFT;
-        (
-            i.consume_key(ctrl, egui::Key::Tab) || i.consume_key(ctrl, egui::Key::PageDown),
-            i.consume_key(ctrl_shift, egui::Key::Tab) || i.consume_key(ctrl, egui::Key::PageUp),
-        )
+        // Ctrl+Shift+Tab first: `consume_key` ignores Shift, so Ctrl+Tab's would take it too.
+        let prev =
+            i.consume_key(ctrl_shift, egui::Key::Tab) || i.consume_key(ctrl, egui::Key::PageUp);
+        let next = i.consume_key(ctrl, egui::Key::Tab) || i.consume_key(ctrl, egui::Key::PageDown);
+        (next, prev)
     });
     match (next, prev) {
         (true, _) => Some((current + 1) % n),
@@ -6008,7 +5966,8 @@ pub fn combo_light(
         &p,
         tahoma(),
         lead(rc) + 5.0 * fwd(),
-        rc.top() + 13.0,
+        // Centred at any height (the kit's 30-px fields); `top + 13` at 21 px, as before.
+        baseline_in(rc.top(), rc.height()),
         &label,
         color,
     );
@@ -6021,7 +5980,9 @@ pub fn combo_light(
     } else {
         rc.right() - 13.0
     };
-    chevron_light(&p, pos2(chevron_x, rc.top() + 8.0), enabled);
+    // Centred too: `top + 8` at 21 px.
+    let chevron_y = rc.top() + ((rc.height() - 5.0) / 2.0).floor();
+    chevron_light(&p, pos2(chevron_x, chevron_y), enabled);
     // Over the face (drawn before it, the face hid it).
     show_focus(ui, &resp, rc.shrink(3.0));
     if open {
