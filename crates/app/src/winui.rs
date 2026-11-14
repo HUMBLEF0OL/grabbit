@@ -2594,11 +2594,13 @@ pub fn combo(ui: &mut Ui, rc: Rect, value: &str, id: &str) -> Response {
     show_focus(ui, &resp, rc.shrink(2.0));
     // Short of the arrow zone: a longer value ends in "..." and shows whole on hover.
     let shown = ellipsize(ui.painter(), &tahoma(), value, rc.width() - 5.0 - 22.0);
+    // On a button's baseline: IDM's 13 in a 21-point box, centred in a taller one (the kit's
+    // 30-point rows).
     text_start(
         ui.painter(),
         tahoma(),
         lead(rc) + 5.0 * fwd(),
-        rc.top() + 13.0,
+        rc.top() + button_baseline(rc.height()),
         &shown,
         TEXT(),
     );
