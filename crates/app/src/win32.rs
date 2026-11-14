@@ -431,6 +431,7 @@ pub fn forget_caption(hwnd: isize) {
             s.remove(&hwnd);
         }
     });
+    unlist_animation(hwnd);
 }
 
 /// Was "Hide to the notification area" chosen in window `hwnd`'s system menu (once)?
@@ -554,8 +555,9 @@ pub fn thin_frame(
             }
         }
         // The window is the client and the frame its styles describe round it, for its own DPI:
-        // none on Windows 11, the 1 px border on Windows 10.
-        let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
+        // none on Windows 11, the 1 px border on Windows 10 (without the caption style a
+        // minimized window has for its animation, [`animation_caption`]).
+        let style = drawn_style(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32, kind);
         let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
         let mut rc = RECT {
             left: 0,
@@ -718,6 +720,7 @@ unsafe fn caption_back(hwnd: HWND) {
     // SAFETY: (the caller's) our own window; DWM attributes read from locals during the calls.
     unsafe {
         RemoveWindowSubclass(hwnd, Some(caption_less_proc), DRAWN_SUBCLASS);
+        dwm_frame_off(hwnd, false);
         let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
         SetWindowLongPtrW(hwnd, GWL_STYLE, ((style & !WS_POPUP) | WS_CAPTION) as isize);
         let corner = DWMWCP_DEFAULT;
@@ -749,6 +752,222 @@ unsafe fn caption_back(hwnd: HWND) {
             m.remove(&(hwnd as isize));
         }
     });
+    unlist_animation(hwnd as isize);
+}
+
+/// A set of windows by HWND, kept by the window thread ([`ANIMATING`], [`FADING`]).
+type WindowSet = std::thread::LocalKey<std::cell::RefCell<std::collections::HashSet<isize>>>;
+
+thread_local! {
+    /// The windows framed by [`caption_less`] that have the caption style for the length of a
+    /// minimize, maximize or restore ([`animation_caption`]), by HWND.
+    static ANIMATING: std::cell::RefCell<std::collections::HashSet<isize>> = Default::default();
+    /// Those of them that have it for the moment they are hidden ([`fade_caption`]).
+    static FADING: std::cell::RefCell<std::collections::HashSet<isize>> = Default::default();
+}
+
+fn listed(set: &'static WindowSet, hwnd: HWND) -> bool {
+    set.with(|s| s.try_borrow().is_ok_and(|s| s.contains(&(hwnd as isize))))
+}
+
+fn list(set: &'static WindowSet, hwnd: HWND, on: bool) {
+    set.with(|s| {
+        if let Ok(mut s) = s.try_borrow_mut() {
+            if on {
+                s.insert(hwnd as isize);
+            } else {
+                s.remove(&(hwnd as isize));
+            }
+        }
+    });
+}
+
+/// The window is gone or has the system's title bar back: out of both sets.
+fn unlist_animation(hwnd: isize) {
+    list(&ANIMATING, hwnd as HWND, false);
+    list(&FADING, hwnd as HWND, false);
+}
+
+fn animating(hwnd: HWND) -> bool {
+    listed(&ANIMATING, hwnd)
+}
+
+fn fading(hwnd: HWND) -> bool {
+    listed(&FADING, hwnd)
+}
+
+/// The message a window framed by [`caption_less`] posts itself when it changed size or place
+/// with the caption style of its animation still on: it is taken off once the window is out of
+/// the taskbar ([`animation_caption`]).
+fn settled_message() -> u32 {
+    use windows_sys::Win32::UI::WindowsAndMessaging::RegisterWindowMessageW;
+    static ID: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+    *ID.get_or_init(|| {
+        let name: Vec<u16> = "MDM.caption-less.settled\0".encode_utf16().collect();
+        // SAFETY: a NUL-terminated string read during the call.
+        unsafe { RegisterWindowMessageW(name.as_ptr()) }
+    })
+}
+
+/// The caption style on (`on`) or off a window framed by [`caption_less`], for the length of the
+/// system's minimize, maximize or restore (upstream issue 874). Windows plays those animations
+/// only for a window with a caption style; one without just pops in and out. The style is given
+/// as the system's command starts and taken back as soon as the window is in its new state
+/// (minimized: once it is back), and WM_NCCALCSIZE keeps the frame of the window without it the
+/// whole time (the client filling the window inside its frame), so its picture never moves: a
+/// caption style hidden for good is what put the black band above the title bar on Windows 10
+/// (#620, #802).
+///
+/// # Safety
+/// `hwnd` is a window of this thread framed by [`caption_less`] as `kind`.
+unsafe fn animation_caption(hwnd: HWND, kind: Drawn, on: bool) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{IsZoomed, SWP_NOSIZE, WS_CAPTION};
+    if animating(hwnd) == on {
+        return;
+    }
+    // First: the subclass's WM_STYLECHANGING keeps the caption style only while it is listed.
+    list(&ANIMATING, hwnd, on);
+    // SAFETY: (the caller's) our own window, on its thread.
+    unsafe {
+        if on {
+            dwm_frame_off(hwnd, true);
+        }
+        let style = drawn_style(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32, kind);
+        let style = if on { style | WS_CAPTION } else { style };
+        SetWindowLongPtrW(hwnd, GWL_STYLE, style as isize);
+        // The frame measured again: the same, by our WM_NCCALCSIZE with the caption style on, by
+        // the system's without it. Maximized with the caption style, the window was placed by
+        // the system for a caption's frame, a pixel wider than its own on every side: put back
+        // where it is maximized without it, its client the work area.
+        let maximized = (!on && kind == Drawn::Sizable && IsZoomed(hwnd) != 0)
+            .then(|| maximized_to_work_area(hwnd))
+            .flatten();
+        let (r, place) = match maximized {
+            Some((r, _)) => (r, 0),
+            None => (zeroed(), SWP_NOMOVE | SWP_NOSIZE),
+        };
+        SetWindowPos(
+            hwnd,
+            std::ptr::null_mut(),
+            r.left,
+            r.top,
+            r.right - r.left,
+            r.bottom - r.top,
+            SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOACTIVATE | place,
+        );
+        if !on {
+            dwm_frame_off(hwnd, false);
+        }
+    }
+}
+
+/// The caption style on (`on`) or off a window framed by [`caption_less`] for the moment it is
+/// hidden (the main window or a progress window into the tray): Windows fades a window out only
+/// when it has a caption style as it goes (upstream issue 874). Unlike [`animation_caption`], the
+/// style alone changes: nothing is measured again, so the window's frame and picture stay as they
+/// are. Not while it has the caption of a minimize, nor taken off one minimized meanwhile (its
+/// restore takes it off). Shown again, a window appears at once: Windows fades in none of MDM's
+/// windows.
+///
+/// # Safety
+/// `hwnd` is a window of this thread framed by [`caption_less`] as `kind`.
+unsafe fn fade_caption(hwnd: HWND, kind: Drawn, on: bool) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{IsIconic, WS_CAPTION};
+    if on == fading(hwnd) || (on && animating(hwnd)) {
+        return;
+    }
+    // First: the subclass's WM_STYLECHANGING keeps the caption style only while it is listed.
+    list(&FADING, hwnd, on);
+    // SAFETY: (the caller's) our own window, on its thread.
+    unsafe {
+        if !on && IsIconic(hwnd) != 0 {
+            return;
+        }
+        list(&ANIMATING, hwnd, on);
+        if on {
+            dwm_frame_off(hwnd, true);
+        }
+        let style = drawn_style(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32, kind);
+        let style = if on { style | WS_CAPTION } else { style };
+        SetWindowLongPtrW(hwnd, GWL_STYLE, style as isize);
+        if !on {
+            dwm_frame_off(hwnd, false);
+        }
+    }
+}
+
+/// DWM's own frame off (`caption`) or back on a window framed by [`caption_less`] for as long as
+/// it has the caption style of an animation or a fade, on Windows 10: there DWM draws the caption
+/// style's title bar over the window's for those frames, a white (or accent-coloured) band above
+/// MDM's own title bar (upstream issue 874). With DWM's frame off, a thin edge shows instead; the
+/// window is the same before and after. Windows 11 draws no such band.
+///
+/// # Safety
+/// `hwnd` is a window of this thread.
+unsafe fn dwm_frame_off(hwnd: HWND, caption: bool) {
+    use windows_sys::Win32::Graphics::Dwm::{
+        DWMNCRP_DISABLED, DWMNCRP_USEWINDOWSTYLE, DWMWA_NCRENDERING_POLICY, DwmSetWindowAttribute,
+    };
+    if windows_11() {
+        return;
+    }
+    let policy = if caption {
+        DWMNCRP_DISABLED
+    } else {
+        DWMNCRP_USEWINDOWSTYLE
+    };
+    // SAFETY: (the caller's) our own window; the policy is read from a local during the call.
+    unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_NCRENDERING_POLICY as u32,
+            &policy as *const _ as *const c_void,
+            size_of::<i32>() as u32,
+        );
+    }
+}
+
+/// The frame (left, top, right, bottom) of a window framed by [`caption_less`] as `kind`, in its
+/// own DPI's pixels, without the caption style of its animation ([`animation_caption`]).
+///
+/// # Safety
+/// `hwnd` is a window of this thread.
+unsafe fn drawn_frame_edges(hwnd: HWND, kind: Drawn) -> [i32; 4] {
+    use windows_sys::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForWindow};
+    // SAFETY: (the caller's) our own window; the rectangle is a local.
+    unsafe {
+        let style = drawn_style(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32, kind);
+        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
+        let mut f: RECT = zeroed();
+        AdjustWindowRectExForDpi(&mut f, style, 0, ex, GetDpiForWindow(hwnd).max(96));
+        [-f.left, -f.top, f.right, f.bottom]
+    }
+}
+
+/// Minimize our window `hwnd` as its title bar's own Minimize does: by the system's command
+/// (WM_SYSCOMMAND), which a window framed by [`caption_less`] animates (upstream issue 874),
+/// where winit minimizes it at once.
+pub fn minimize(hwnd: isize) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{PostMessageW, SC_MINIMIZE, WM_SYSCOMMAND};
+    // SAFETY: a message posted to our own window, a system command it handles.
+    unsafe { PostMessageW(hwnd as HWND, WM_SYSCOMMAND, SC_MINIMIZE as WPARAM, 0) };
+}
+
+/// Maximize our window `hwnd`, or restore it when it is maximized, as its title bar's own
+/// Maximize does (see [`minimize`]).
+pub fn toggle_maximized(hwnd: isize) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        IsZoomed, PostMessageW, SC_MAXIMIZE, SC_RESTORE, WM_SYSCOMMAND,
+    };
+    // SAFETY: a query about our own window, and a system command posted to it.
+    unsafe {
+        let cmd = if IsZoomed(hwnd as HWND) != 0 {
+            SC_RESTORE
+        } else {
+            SC_MAXIMIZE
+        };
+        PostMessageW(hwnd as HWND, WM_SYSCOMMAND, cmd as WPARAM, 0);
+    }
 }
 
 thread_local! {
@@ -852,10 +1071,11 @@ unsafe extern "system" fn caption_less_proc(
         TME_LEAVE, TME_NONCLIENT, TRACKMOUSEEVENT, TrackMouseEvent,
     };
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        DefWindowProcW, HTMAXBUTTON, IsZoomed, PostMessageW, SC_CLOSE, SC_MAXIMIZE, SC_RESTORE,
-        STYLESTRUCT, SendMessageW, WM_GETMINMAXINFO, WM_NCACTIVATE, WM_NCLBUTTONDBLCLK,
-        WM_NCLBUTTONDOWN, WM_NCLBUTTONUP, WM_NCMOUSELEAVE, WM_NCMOUSEMOVE, WM_NCRBUTTONUP,
-        WM_STYLECHANGING, WM_SYSCOMMAND,
+        DefWindowProcW, HTMAXBUTTON, IsIconic, IsZoomed, NCCALCSIZE_PARAMS, PostMessageW, SC_CLOSE,
+        SC_MAXIMIZE, SC_MINIMIZE, SC_RESTORE, STYLESTRUCT, SWP_HIDEWINDOW, SendMessageW, WINDOWPOS,
+        WM_GETMINMAXINFO, WM_NCACTIVATE, WM_NCLBUTTONDBLCLK, WM_NCLBUTTONDOWN, WM_NCLBUTTONUP,
+        WM_NCMOUSELEAVE, WM_NCMOUSEMOVE, WM_NCRBUTTONUP, WM_STYLECHANGING, WM_SYSCOMMAND,
+        WM_WINDOWPOSCHANGED, WM_WINDOWPOSCHANGING, WS_CAPTION, WS_MINIMIZE,
     };
     const HT_MAX: LRESULT = HTMAXBUTTON as LRESULT;
     let kind = Drawn::of(data);
@@ -872,15 +1092,92 @@ unsafe extern "system" fn caption_less_proc(
             // whose styleNew the window may alter (Win32 contract).
             let s = unsafe { &mut *(lparam as *mut STYLESTRUCT) };
             match wparam as i32 {
-                GWL_STYLE => s.styleNew = drawn_style(s.styleNew, kind),
+                GWL_STYLE => {
+                    // The caption style stays only for the length of an animation.
+                    let caption = if animating(hwnd) { WS_CAPTION } else { 0 };
+                    s.styleNew = drawn_style(s.styleNew, kind) | caption;
+                }
                 GWL_EXSTYLE => s.styleNew = drawn_ex_style(s.styleNew),
                 _ => {}
             }
             return 0;
         }
+        // With the caption style of an animation (upstream issue 874): the frame of the window
+        // without it, the client filling the window inside its sizing frame as before, so its
+        // picture doesn't move. Minimized, the system's.
+        // SAFETY: our own window.
+        WM_NCCALCSIZE
+            if lparam != 0
+                && animating(hwnd)
+                && unsafe { GetWindowLongPtrW(hwnd, GWL_STYLE) } as u32 & WS_MINIMIZE == 0 =>
+        {
+            // SAFETY: with wParam TRUE, lParam points to NCCALCSIZE_PARAMS, whose first
+            // rectangle is the window's and becomes its client's; with FALSE, to that rectangle
+            // alone (Win32 contract).
+            let r = unsafe {
+                if wparam != 0 {
+                    &mut (*(lparam as *mut NCCALCSIZE_PARAMS)).rgrc[0]
+                } else {
+                    &mut *(lparam as *mut RECT)
+                }
+            };
+            // SAFETY: our own window, on its thread.
+            let [l, t, rt, b] = unsafe { drawn_frame_edges(hwnd, kind) };
+            r.left += l;
+            r.top += t;
+            r.right -= rt;
+            r.bottom -= b;
+            return 0;
+        }
         // The system's frame for these styles, nothing of ours or winit's: what any reading of
         // the styles finds.
         WM_NCCALCSIZE => return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
+        // Minimize, maximize and restore (the title bar's buttons, the taskbar, Win+Up and
+        // Win+Down, the window menu all send these) animated: the caption style for their
+        // length (upstream issue 874), taken back once the window is in its new state, or once
+        // it is back when it went to the taskbar.
+        WM_SYSCOMMAND
+            if matches!(
+                (wparam & 0xFFF0) as u32,
+                SC_MINIMIZE | SC_MAXIMIZE | SC_RESTORE
+            ) =>
+        {
+            // SAFETY: our own window, framed by caption_less as `kind`, on its thread.
+            unsafe {
+                animation_caption(hwnd, kind, true);
+                let res = DefSubclassProc(hwnd, msg, wparam, lparam);
+                if IsIconic(hwnd) == 0 {
+                    animation_caption(hwnd, kind, false);
+                }
+                return res;
+            }
+        }
+        // Hidden (into the tray): the caption style for that moment, so it fades out as a window
+        // with a title bar does (upstream issue 874), taken back once it is hidden. Back from the
+        // taskbar some other way than the system's command (winit restoring it, a program's
+        // ShowWindow): the animation's caption style goes as soon as the change is over.
+        WM_WINDOWPOSCHANGING | WM_WINDOWPOSCHANGED if lparam != 0 => {
+            // SAFETY: for both, lParam points to the WINDOWPOS of the change (Win32 contract),
+            // read here.
+            let flags = unsafe { (*(lparam as *const WINDOWPOS)).flags };
+            if flags & SWP_HIDEWINDOW != 0 {
+                // SAFETY: our own window, framed by caption_less as `kind`, on its thread.
+                unsafe { fade_caption(hwnd, kind, msg == WM_WINDOWPOSCHANGING) };
+            }
+            if msg == WM_WINDOWPOSCHANGED && animating(hwnd) {
+                // SAFETY: a message posted to our own window.
+                unsafe { PostMessageW(hwnd, settled_message(), 0, 0) };
+            }
+        }
+        m if m == settled_message() => {
+            // SAFETY: our own window, framed by caption_less as `kind`, on its thread.
+            unsafe {
+                if IsIconic(hwnd) == 0 {
+                    animation_caption(hwnd, kind, false);
+                }
+            }
+            return 0;
+        }
         // Activation changes repaint the non-client area: with lParam -1 the system skips that.
         WM_NCACTIVATE => return unsafe { DefSubclassProc(hwnd, msg, wparam, -1) },
         WM_SYSCOMMAND if (wparam & 0xFFF0) == SC_HIDE_TO_TRAY => {
@@ -978,9 +1275,15 @@ unsafe extern "system" fn caption_less_proc(
             let info = unsafe {
                 &mut *(lparam as *mut windows_sys::Win32::UI::WindowsAndMessaging::MINMAXINFO)
             };
-            if let Some((pos, size)) = maximized_to_work_area(hwnd) {
-                info.ptMaxPosition = pos;
-                info.ptMaxSize = size;
+            if let Some((r, m)) = maximized_to_work_area(hwnd) {
+                info.ptMaxPosition = POINT {
+                    x: r.left - m.x,
+                    y: r.top - m.y,
+                };
+                info.ptMaxSize = POINT {
+                    x: r.right - r.left,
+                    y: r.bottom - r.top,
+                };
             }
             return res;
         }
@@ -1012,21 +1315,16 @@ unsafe extern "system" fn caption_less_proc(
     res
 }
 
-/// Where and how large window `hwnd` is when maximized: its monitor's work area (not over the
-/// taskbar), with its sizing frame beyond the work area's edges, as a window with a caption
-/// style is maximized (Windows maximizes one without a caption over the whole monitor). In the
-/// coordinates WM_GETMINMAXINFO takes: from the monitor's top left.
-fn maximized_to_work_area(
-    hwnd: HWND,
-) -> Option<(
-    windows_sys::Win32::Foundation::POINT,
-    windows_sys::Win32::Foundation::POINT,
-)> {
+/// Where window `hwnd` is when maximized, on the screen: its monitor's work area (not over the
+/// taskbar), with its sizing frame (without the caption style it has while it maximizes,
+/// upstream issue 874) beyond the work area's edges, as a window with a caption style is
+/// maximized (Windows maximizes one without a caption over the whole monitor). And its monitor's
+/// top left, from which WM_GETMINMAXINFO counts.
+fn maximized_to_work_area(hwnd: HWND) -> Option<(RECT, windows_sys::Win32::Foundation::POINT)> {
     use windows_sys::Win32::Foundation::POINT;
     use windows_sys::Win32::Graphics::Gdi::{
         GetMonitorInfoW, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
     };
-    use windows_sys::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForWindow};
     // SAFETY: plain queries about our own window and its monitor, into locals.
     unsafe {
         let mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
@@ -1035,24 +1333,18 @@ fn maximized_to_work_area(
         if mon.is_null() || GetMonitorInfoW(mon, &mut mi) == 0 {
             return None;
         }
-        let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
-        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
-        let mut f = RECT {
-            left: 0,
-            top: 0,
-            right: 0,
-            bottom: 0,
-        };
-        AdjustWindowRectExForDpi(&mut f, style, 0, ex, GetDpiForWindow(hwnd).max(96));
         let (w, m) = (mi.rcWork, mi.rcMonitor);
+        let [l, t, r, b] = drawn_frame_edges(hwnd, Drawn::Sizable);
         Some((
-            POINT {
-                x: w.left - m.left + f.left,
-                y: w.top - m.top + f.top,
+            RECT {
+                left: w.left - l,
+                top: w.top - t,
+                right: w.right + r,
+                bottom: w.bottom + b,
             },
             POINT {
-                x: (w.right - w.left) + f.right - f.left,
-                y: (w.bottom - w.top) + f.bottom - f.top,
+                x: m.left,
+                y: m.top,
             },
         ))
     }
@@ -1130,9 +1422,10 @@ mod frame_tests {
 mod caption_less_tests {
     use super::*;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        AdjustWindowRectEx, CreateWindowExW, DestroyWindow, GetClientRect, GetWindowRect,
-        MINMAXINFO, SendMessageW, WM_GETMINMAXINFO, WS_BORDER, WS_CAPTION, WS_EX_APPWINDOW,
-        WS_POPUP,
+        AdjustWindowRectEx, CreateWindowExW, DestroyWindow, DispatchMessageW, GetClientRect,
+        GetWindowRect, MINMAXINFO, MSG, PM_REMOVE, PeekMessageW, SWP_HIDEWINDOW, SWP_NOSIZE,
+        SWP_SHOWWINDOW, SendMessageW, WINDOWPOS, WM_GETMINMAXINFO, WM_WINDOWPOSCHANGED,
+        WM_WINDOWPOSCHANGING, WS_BORDER, WS_CAPTION, WS_EX_APPWINDOW, WS_POPUP,
     };
 
     /// The styles winit gives the progress window (a caption, a sizing frame trimmed by us, a
@@ -1295,7 +1588,31 @@ mod caption_less_tests {
                 );
                 GetClientRect(hwnd, &mut c);
                 assert_eq!([c.right, c.bottom], [700 - l - r, 500 - t - b]);
-                // Maximized (asked, not done: that would show it): its monitor's work area.
+                // Minimizing, maximizing or restoring (upstream issue 874): the caption style for
+                // the length of the animation, and the window framed as without it, its client
+                // in place.
+                animation_caption(hwnd, kind, true);
+                let on = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
+                assert_eq!(on, st | WS_CAPTION);
+                // winit setting its own styles again: it stays while the animation lasts.
+                SetWindowLongPtrW(hwnd, GWL_STYLE, st as isize);
+                assert_eq!(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32, on);
+                let framed = |hwnd| {
+                    let (mut w, mut c): (RECT, RECT) = (zeroed(), zeroed());
+                    GetWindowRect(hwnd, &mut w);
+                    GetClientRect(hwnd, &mut c);
+                    let mut at = windows_sys::Win32::Foundation::POINT { x: 0, y: 0 };
+                    windows_sys::Win32::Graphics::Gdi::ClientToScreen(hwnd, &mut at);
+                    [
+                        at.x - w.left,
+                        at.y - w.top,
+                        w.right - w.left - c.right,
+                        w.bottom - w.top - c.bottom,
+                    ]
+                };
+                assert_eq!(framed(hwnd), [l, t, l + r, t + b]);
+                // Maximized (asked, not done: that would show it): its monitor's work area, with
+                // the caption style of the animation on as without it.
                 if sizable {
                     let mut info: MINMAXINFO = zeroed();
                     SendMessageW(
@@ -1322,6 +1639,63 @@ mod caption_less_tests {
                         [wa.right - wa.left + l + r, wa.bottom - wa.top + t + b]
                     );
                 }
+                // Moved or sized with it on (a window back from the taskbar): it goes once the
+                // window has settled, by the message the window posts itself; nothing else moves.
+                SetWindowPos(
+                    hwnd,
+                    std::ptr::null_mut(),
+                    -19990,
+                    -19990,
+                    0,
+                    0,
+                    SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+                assert_eq!(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32, on);
+                assert_eq!(framed(hwnd), [l, t, l + r, t + b]);
+                let mut msg: MSG = zeroed();
+                while PeekMessageW(&mut msg, hwnd, 0, 0, PM_REMOVE) != 0 {
+                    DispatchMessageW(&msg);
+                }
+                assert_eq!(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32, st);
+                assert!(!animating(hwnd));
+                assert_eq!(framed(hwnd), [l, t, l + r, t + b]);
+                // Hidden (into the tray, so Windows fades it out): the caption style from the
+                // change's start, kept if winit sets its styles meanwhile, the frame untouched,
+                // gone once it is hidden. Shown, or moved, nothing changes. (The messages of the
+                // change, sent as the system sends them: the test window itself never shows.)
+                for change in [SWP_HIDEWINDOW, SWP_SHOWWINDOW, 0] {
+                    let mut pos: WINDOWPOS = zeroed();
+                    pos.hwnd = hwnd;
+                    pos.flags = change | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE;
+                    let lp = &mut pos as *mut WINDOWPOS as LPARAM;
+                    SendMessageW(hwnd, WM_WINDOWPOSCHANGING, 0, lp);
+                    let during = if change == SWP_HIDEWINDOW {
+                        st | WS_CAPTION
+                    } else {
+                        st
+                    };
+                    assert_eq!(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32, during);
+                    SetWindowLongPtrW(hwnd, GWL_STYLE, st as isize);
+                    assert_eq!(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32, during);
+                    assert_eq!(framed(hwnd), [l, t, l + r, t + b]);
+                    SendMessageW(hwnd, WM_WINDOWPOSCHANGED, 0, lp);
+                    assert_eq!(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32, st);
+                    assert!(!animating(hwnd) && !fading(hwnd));
+                    assert_eq!(framed(hwnd), [l, t, l + r, t + b]);
+                }
+                // Hidden while it sits minimized with the caption of its animation: it keeps
+                // it (it goes once the window is back, as above).
+                animation_caption(hwnd, kind, true);
+                let mut pos: WINDOWPOS = zeroed();
+                pos.hwnd = hwnd;
+                pos.flags = SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER;
+                let lp = &mut pos as *mut WINDOWPOS as LPARAM;
+                SendMessageW(hwnd, WM_WINDOWPOSCHANGING, 0, lp);
+                SendMessageW(hwnd, WM_WINDOWPOSCHANGED, 0, lp);
+                assert_eq!(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32, st | WS_CAPTION);
+                assert!(animating(hwnd));
+                animation_caption(hwnd, kind, false);
+                assert_eq!(GetWindowLongPtrW(hwnd, GWL_STYLE) as u32, st);
                 DestroyWindow(hwnd);
             }
         }

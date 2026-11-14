@@ -3608,7 +3608,7 @@ impl App {
                 OnClose::Minimize => {
                     tracing::info!("close: no visible tray icon; minimizing to the taskbar");
                     ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                    crate::dialogs::minimize(ctx, self.main_hwnd);
                 }
                 OnClose::Quit => {
                     tracing::info!("close: quitting");
@@ -7054,13 +7054,15 @@ impl App {
         let ctx = ui.ctx();
         match bar.pressed {
             Some(CaptionButton::Close) => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
-            Some(CaptionButton::Minimize) => {
-                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true))
-            }
-            Some(CaptionButton::Maximize) => {
-                let max = ctx.input(|i| i.viewport().maximized) == Some(true);
-                ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!max));
-            }
+            Some(CaptionButton::Minimize) => crate::dialogs::minimize(ctx, self.main_hwnd),
+            Some(CaptionButton::Maximize) => match self.main_hwnd {
+                // The system's command, as the frame's own Maximize sends it (upstream 874).
+                Some(h) => crate::win32::toggle_maximized(h),
+                None => {
+                    let max = ctx.input(|i| i.viewport().maximized) == Some(true);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!max));
+                }
+            },
             _ => {}
         }
         let rest =

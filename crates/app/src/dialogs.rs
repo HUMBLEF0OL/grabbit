@@ -380,10 +380,7 @@ fn dialog_window<T>(
                     let hwnd = ui.ctx().data(|d| d.get_temp::<isize>(key.with("hwnd")));
                     match drawn_title(ui, origin, shown[0], title, &buttons, hwnd) {
                         Some(CaptionButton::Close) => caption_close = true,
-                        Some(CaptionButton::Minimize) => {
-                            ui.ctx()
-                                .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-                        }
+                        Some(CaptionButton::Minimize) => minimize(ui.ctx(), hwnd),
                         _ => {}
                     }
                 }
@@ -2592,6 +2589,16 @@ it from Mister Download Manager list of downloads?",
                 }
             },
         )
+    }
+}
+
+/// Minimize a window as its title bar's Minimize asks (`hwnd`: the window, once known): by the
+/// system's own command, as the system's title bar sends it, so a window whose title bar is ours
+/// animates down to the taskbar like any other (upstream issue 874). Not known yet: winit's.
+pub fn minimize(ctx: &egui::Context, hwnd: Option<isize>) {
+    match hwnd {
+        Some(h) => crate::win32::minimize(h),
+        None => ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true)),
     }
 }
 
