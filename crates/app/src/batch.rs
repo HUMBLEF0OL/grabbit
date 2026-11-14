@@ -6,9 +6,18 @@ use egui::{Pos2, Ui, vec2};
 use crate::dialogs::{Outcome, window};
 use crate::winui::{self, ButtonKind, FooterButton, FooterItem, LIGHT_BG, LIGHT_TEXT, r, text};
 
-/// The window's width and where its footer starts (the old OK row's top, less its margin).
-const W: f32 = 474.0;
-const BODY: f32 = 346.0;
+/// The window's width and where its footer starts (the mockup's layout).
+const W: f32 = 540.0;
+const BODY: f32 = 448.0;
+/// Its left edge, and its rows' tops: 30 high, 10 apart, under the note.
+const LX: f32 = winui::EDGE;
+const ADDRESS_Y: f32 = 96.0;
+const REPLACE_Y: f32 = 136.0;
+const FROM_Y: f32 = 176.0;
+const AUTH_Y: f32 = 216.0;
+const LOGIN_Y: f32 = 246.0;
+/// The first preview row's top (the second 26 under it, the last 74).
+const PREVIEW_Y: f32 = 336.0;
 
 pub struct Batch {
     address: String,
@@ -193,21 +202,24 @@ impl Batch {
         why: Option<&'static str>,
     ) -> Outcome<()> {
         let p = ui.painter().clone();
+        let h = winui::CONTROL_H;
+        let right = W - LX;
+        // The note in muted text, then the rows on the labels' column (the mockup's).
         let lines = winui::paragraph(
             &p,
-            o.x + 11.0,
-            o.y + 17.0,
+            o.x + LX,
+            o.y + 29.0,
             crate::i18n::t(
                 "It's possible to add a group of sequential file names like img001.jpg, img002.jpg, etc.,\nimg100.jpg to MDM download queue. Use the asterisk wildcard for the file name pattern.",
             ),
-            LIGHT_TEXT(),
-            o.x + 470.0,
-            13.0,
+            winui::MUTED(),
+            o.x + right,
+            15.0,
         );
         text(
             &p,
-            o.x + 11.0,
-            o.y + 17.0 + 13.0 * lines as f32,
+            o.x + LX,
+            o.y + 29.0 + 15.0 * lines as f32,
             &crate::i18n::fmt(
                 // i18n: {address} = an example web address with a * in the file name
                 crate::i18n::t("For example:  {address}"),
@@ -216,19 +228,32 @@ impl Batch {
                     &crate::i18n::ltr("http://www.example.com/pictures/img*.jpg"),
                 )],
             ),
-            LIGHT_TEXT(),
+            winui::MUTED(),
         );
-        // i18n: noun: the web address (URL) pattern
-        text(
+        let fx = winui::form(
             &p,
-            o.x + 11.0,
-            o.y + 86.0,
-            crate::i18n::t("Address"),
-            LIGHT_TEXT(),
+            LX,
+            &[
+                // i18n: noun: the web address (URL) pattern
+                "Address",
+                // i18n: label: what the * in the address is replaced with (numbers or letters)
+                "Replace asterisk to",
+                // i18n: label before the first value of the range (an input box follows)
+                "From:",
+                // i18n: noun: the user name for the server (an input box follows)
+                "Login",
+                "Password",
+                // i18n: the first file name the pattern gives (its name follows)
+                "First file:",
+                "Second file:",
+                "Last file:",
+            ],
+            false,
         );
+        winui::form_label(&p, o, LX, ADDRESS_Y, h, "Address", true);
         let edit = winui::edit_light(
             ui,
-            r(o, 59.0, 72.0, 405.0, 21.0),
+            r(o, fx, ADDRESS_Y, right - fx, h),
             &mut self.address,
             true,
             false,
@@ -238,18 +263,19 @@ impl Batch {
             self.focused = true;
         }
 
-        // Replace asterisk to: Numbers / Letters, From, To, Wildcard size.
-        // i18n: group box title: what the * in the address is replaced with (numbers or letters)
-        let caption = crate::i18n::t("Replace asterisk to");
-        let cw = winui::text_width(&p, caption);
-        // A hairline after the caption groups the row (it was a group box).
-        let after = (28.0 + cw).ceil();
-        winui::rule(&p, o, after, 110.0, 464.0 - after);
-        text(&p, o.x + 20.0, o.y + 114.0, caption, LIGHT_TEXT());
+        // Replace asterisk to: Numbers / Letters, then From, To, Wildcard size.
+        winui::form_label(&p, o, LX, REPLACE_Y, h, "Replace asterisk to", true);
+        let radio_y = REPLACE_Y + ((h - 13.0) / 2.0).round();
         // i18n: the * in the address runs through numbers
-        let numbers = winui::radio_light(ui, o + vec2(23.0, 129.0), !self.letters, "Numbers", true);
+        let numbers = winui::radio_light(ui, o + vec2(fx, radio_y), !self.letters, "Numbers", true);
         // i18n: the * in the address runs through letters
-        let letters = winui::radio_light(ui, o + vec2(138.0, 129.0), self.letters, "Letters", true);
+        let letters = winui::radio_light(
+            ui,
+            o + vec2(fx + 115.0, radio_y),
+            self.letters,
+            "Letters",
+            true,
+        );
         let key = winui::radio_keys(ui, &[numbers.clone(), letters.clone()]);
         if (numbers.clicked() || key == Some(0)) && self.letters {
             self.letters = false;
@@ -261,87 +287,72 @@ impl Batch {
             self.from = "a".into();
             self.to = "z".into();
         }
-        // i18n: label before the first value of the range (an input box follows)
-        text(
-            &p,
-            o.x + 17.0,
-            o.y + 173.0,
-            crate::i18n::t("From:"),
-            LIGHT_TEXT(),
-        );
-        self.spin(ui, o, 80.0, 115.0, "from");
+        // From, then To and Wildcard size on the same row, each label 12 after the box before it.
+        winui::form_label(&p, o, LX, FROM_Y, h, "From:", true);
+        let base = o.y + winui::baseline_in(FROM_Y, h);
+        self.spin(ui, o, fx, 70.0, "from");
         // i18n: label before the last value of the range (an input box follows)
-        text(
-            &p,
-            o.x + 161.0,
-            o.y + 173.0,
-            crate::i18n::t("To:"),
-            LIGHT_TEXT(),
-        );
-        self.spin(ui, o, 204.0, 239.0, "to");
-        // A longer translation starts earlier instead of running into the box (down to just
-        // after the To box), cut with "..." past that, whole on hover.
+        let to_label = crate::i18n::t("To:");
+        let to_label_x = fx + 70.0 + 12.0;
+        text(&p, o.x + to_label_x, base, to_label, LIGHT_TEXT());
+        let to_x = (to_label_x + winui::text_width(&p, to_label) + 8.0).ceil();
+        self.spin(ui, o, to_x, 70.0, "to");
+        // The size box at the row's end; a longer label is cut with "..." before it, whole on
+        // hover.
+        let size_x = right - 60.0;
         let size_label = crate::i18n::t("Wildcard size");
         let (rect, cut) = winui::label_into(
             &p,
-            o.x + 334.0,
-            o.y + 173.0,
+            o.x + to_x + 70.0 + 12.0,
+            base,
             size_label,
             LIGHT_TEXT(),
-            o.x + 402.0,
-            o.x + 270.0,
+            o.x + size_x,
+            o.x + to_x + 70.0 + 12.0,
         );
         if cut {
             winui::full_on_hover(ui, rect, "batch-size", size_label);
         }
-        self.spin(ui, o, 402.0, 429.0, "size");
+        self.spin(ui, o, size_x, 60.0, "size");
 
-        // Use authorization: a hairline after the check box groups its row (it was a group box).
-        let after = winui::checkbox_caption_end(&p, 20.0, "Use authorization").ceil() + 8.0;
-        winui::rule(&p, o, after, 211.0, 464.0 - after);
+        // Use authorization, and its two rows (greyed while it is off).
         winui::checkbox_light(
             ui,
-            o + vec2(20.0, 205.0),
+            o + vec2(fx, AUTH_Y + 3.0),
             &mut self.auth,
             "Use authorization",
             true,
         );
         let on = self.auth;
-        // i18n: noun: the user name for the server (an input box follows)
-        winui::label(&p, o.x + 85.0, o.y + 236.0, crate::i18n::t("Login"), on);
+        winui::form_label(&p, o, LX, LOGIN_Y, h, "Login", on);
         winui::edit_light(
             ui,
-            r(o, 116.0, 221.0, 117.0, 23.0),
+            r(o, fx, LOGIN_Y, right - fx, h),
             &mut self.login,
             on,
             false,
         );
-        winui::label(&p, o.x + 290.0, o.y + 236.0, crate::i18n::t("Password"), on);
-        winui::password_light(ui, r(o, 342.0, 221.0, 113.0, 23.0), &mut self.password, on);
+        winui::form_label(&p, o, LX, LOGIN_Y + 40.0, h, "Password", on);
+        winui::password_light(
+            ui,
+            r(o, fx, LOGIN_Y + 40.0, right - fx, h),
+            &mut self.password,
+            on,
+        );
 
         // Preview: first, second and last file.
         let name = |i: Option<&url::Url>| {
             i.map(|u| mdm_engine::naming::file_name(None, u))
                 .unwrap_or_default()
         };
+        // Under a rule (it was its own box): the first, second and last file, and how many.
+        winui::rule(&p, o, LX, PREVIEW_Y - 10.0, right - LX);
         let rows = [
-            // i18n: the first file name the pattern gives (its name follows)
+            ("First file:", PREVIEW_Y, name(urls.first())),
+            ("Second file:", PREVIEW_Y + 26.0, name(urls.get(1))),
             (
-                crate::i18n::t("First file:"),
-                280.0,
-                268.0,
-                name(urls.first()),
-            ),
-            (
-                crate::i18n::t("Second file:"),
-                301.0,
-                289.0,
-                name(urls.get(1)),
-            ),
-            (
-                crate::i18n::t("Last file:"),
-                337.0,
-                323.0,
+                "Last file:",
+                PREVIEW_Y + 74.0,
                 if urls.len() > 1 {
                     name(urls.last())
                 } else {
@@ -349,20 +360,19 @@ impl Batch {
                 },
             ),
         ];
-        for (label, _, y, value) in rows {
-            let rc = r(o, 102.0, y, 362.0, 18.0);
-            // The caption on the field's text line.
-            let base = winui::baseline_in(o.y + y, 18.0);
-            text(&p, o.x + 11.0, base, label, LIGHT_TEXT());
-            // The shared read-only field (it was a hand-drawn Windows 7 sunken box): the address
-            // can be selected and copied, and screen readers read it.
+        for (label, y, value) in rows {
+            let rc = r(o, fx, y, right - fx, 22.0);
+            winui::form_label(&p, o, LX, y, 22.0, label, true);
+            // The shared read-only field: the address can be selected and copied, and screen
+            // readers read it.
             winui::readonly_file(ui, rc, &value, ("batch-preview", y as i32));
         }
-        text(&p, o.x + 23.0, o.y + 317.0, "...", LIGHT_TEXT());
+        let gap = o.y + winui::baseline_in(PREVIEW_Y + 52.0, 18.0);
+        text(&p, o.x + LX + 12.0, gap, "...", LIGHT_TEXT());
         if urls.len() > 2 {
             // i18n: how many files the pattern gives in all
             let more = crate::i18n::tn(urls.len() as u64, "{n} file", "{n} files");
-            text(&p, o.x + 102.0, o.y + 317.0, &more, LIGHT_TEXT());
+            text(&p, o.x + fx, gap, &more, LIGHT_TEXT());
         }
 
         let valid = !urls.is_empty();
@@ -393,16 +403,15 @@ impl Batch {
         }
     }
 
-    /// An edit with its up-down buddy (`x` edit, `spin_x` buddy), 26 px tall.
-    fn spin(&mut self, ui: &mut Ui, o: Pos2, x: f32, spin_x: f32, which: &str) {
+    /// A spin box (its arrows inside) at English `x`, `w` wide, on the From row.
+    fn spin(&mut self, ui: &mut Ui, o: Pos2, x: f32, w: f32, which: &str) {
         let letters = self.letters && which != "size";
         let value = match which {
             "from" => &mut self.from,
             "to" => &mut self.to,
             _ => &mut self.size,
         };
-        // One box, its arrows inside (they were a separate up-down beside it).
-        let rc = r(o, x, 154.0, spin_x + 18.0 - x, 26.0);
+        let rc = r(o, x, FROM_Y, w, winui::CONTROL_H);
         let id = format!("batch-{which}");
         // The wildcard size runs 1 to 10 (what expand() makes); from and to, any number.
         let (min, max) = if which == "size" {

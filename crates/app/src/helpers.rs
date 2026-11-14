@@ -323,7 +323,7 @@ impl Helpers {
         }
 
         // The way back later, then the answer.
-        winui::etched_h(&p, o.x + 16.0, o.y + y, w - 32.0);
+        winui::rule(&p, o, 16.0, y, w - 32.0);
         let later = if self.job.is_some() && running {
             crate::i18n::t("They keep downloading if you close this window.")
         } else if self.job.is_some() && !failed {
@@ -469,12 +469,22 @@ impl Programs {
 
     fn body(&mut self, ui: &mut Ui, o: Pos2) -> Outcome<()> {
         let p = ui.painter().clone();
+        let c = crate::theme::colors();
         for (k, h) in HELPERS.into_iter().enumerate() {
             let y = o.y + 8.0 + k as f32 * 78.0;
+            // Each helper in a box of its own (the mockup's), its parts 12 inside.
+            let card = r(o, 8.0, y - o.y, PROGRAMS_W - 16.0, 73.0);
+            p.rect_filled(card, 8.0, c.panel);
+            p.rect_stroke(
+                card,
+                8.0,
+                egui::Stroke::new(1.0, c.menubar_line),
+                egui::StrokeKind::Inside,
+            );
             winui::text_font(
                 &p,
                 winui::tahoma_bold(),
-                o.x + 14.0,
+                o.x + 20.0,
                 y + 16.0,
                 h.name(),
                 winui::TEXT(),
@@ -524,11 +534,11 @@ impl Programs {
             winui::fit(
                 ui,
                 &p,
-                o.x + 14.0,
+                o.x + 20.0,
                 y + 36.0,
                 &status,
                 winui::MUTED(),
-                o.x + 486.0,
+                o.x + PROGRAMS_W - 20.0,
                 ("helper", k),
             );
             let busy = self.checking.is_some();
@@ -536,11 +546,11 @@ impl Programs {
             let [other_at, own_at] = winui::button_row_from_left(
                 &p,
                 &[
-                    ("Use another program...", 14.0, 180.0),
-                    ("Use MDM's own copy", 202.0, 180.0),
+                    ("Use another program...", 20.0, 180.0),
+                    ("Use MDM's own copy", 208.0, 180.0),
                 ],
                 8.0,
-                486.0,
+                PROGRAMS_W - 20.0,
                 260.0,
             )[..] else {
                 unreachable!("two buttons")
@@ -587,9 +597,6 @@ impl Programs {
                     .err()
                     .map(|e| crate::errors::tools(&e));
                 self.look();
-            }
-            if k + 1 < HELPERS.len() {
-                winui::etched_h(&p, o.x + 14.0, o.y + 82.0 + k as f32 * 78.0, 472.0);
             }
         }
         if let Some(e) = &self.error {

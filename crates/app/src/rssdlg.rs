@@ -621,13 +621,13 @@ impl RssWindow {
             true,
             false,
         );
-        if winui::button(
+        // i18n: tooltip of the "..." after Save to: choose the folder
+        if winui::icon_only_button(
             ui,
             r(o, 716.0, 248.0, 24.0, 22.0),
-            "...",
-            ButtonKind::Normal,
-            false,
-            None,
+            "gx-dots",
+            "Browse",
+            true,
         )
         .clicked()
         {

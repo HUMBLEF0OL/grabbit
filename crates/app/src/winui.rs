@@ -2947,7 +2947,7 @@ pub fn icon_label_button_width(p: &Painter, label: &str) -> f32 {
 /// side, with room before it) to fit its translated `label` whole, with the room [`button`]
 /// keeps inside the border, at most to `max_width`. English labels fit IDM's buttons, so
 /// English never changes; a label that would still not fit ends in "..." and shows whole on
-/// hover, as on every button. (A row of buttons: [`buttons_from_left`], [`buttons_to_right`].)
+/// hover, as on every button. (A row of buttons: [`buttons_to_right`].)
 pub fn button_rect_for(p: &Painter, rc: Rect, label: &str, max_width: f32) -> Rect {
     let w = button_fit_width(p, label, rc.width(), max_width);
     // Widened in English, where its right edge stays; on screen in RTL its left edge stays and
@@ -3044,31 +3044,10 @@ fn label_width(p: &Painter, label: &str, english: f32) -> f32 {
     }
 }
 
-/// A row of [`button`]s laid out for their translated labels, `gap` apart, the first starting
-/// at English x `left`: each `(label, English width)` as wide as [`button_fit_width`] says (at
-/// most `max`). Their English (x, width) in the order given, for [`r`]; in English every button
-/// keeps its place.
-pub fn buttons_from_left(
-    p: &Painter,
-    left: f32,
-    gap: f32,
-    buttons: &[(&str, f32)],
-    max: f32,
-) -> Vec<(f32, f32)> {
-    let mut x = left;
-    buttons
-        .iter()
-        .map(|(label, min)| {
-            let w = button_fit_width(p, label, *min, max);
-            let at = (x, w);
-            x += w + gap;
-            at
-        })
-        .collect()
-}
-
-/// [`buttons_from_left`] for a row that ends at English x `right` (the last button's right
-/// edge): it grows to the left.
+/// A row of [`button`]s laid out for their translated labels, `gap` apart, ending at English x
+/// `right` (the last button's right edge) and growing to the left: each `(label, English
+/// width)` as wide as [`button_fit_width`] says (at most `max`). Their English (x, width) in the
+/// order given, for [`r`]; in English every button keeps its place.
 pub fn buttons_to_right(
     p: &Painter,
     right: f32,
@@ -7156,10 +7135,6 @@ mod tests {
                 buttons_to_right(p, 489.0, 8.0, &row, 160.0),
                 vec![(335.0, 73.0), (416.0, 73.0)]
             );
-            assert_eq!(
-                buttons_from_left(p, 11.0, 8.0, &row, 160.0),
-                vec![(11.0, 73.0), (92.0, 73.0)]
-            );
             // A long one is as wide as its text and the room inside the border, up to the most
             // allowed; the row keeps its end and its gaps.
             let long = "A label much longer than its English button";
@@ -7168,8 +7143,6 @@ mod tests {
             let placed = buttons_to_right(p, 489.0, 8.0, &row, 400.0);
             assert_eq!(placed[0], (489.0 - 73.0 - 8.0 - want, want));
             assert_eq!(placed[1], (416.0, 73.0));
-            let placed = buttons_from_left(p, 11.0, 8.0, &row, 400.0);
-            assert_eq!(placed[1].0, 11.0 + want + 8.0);
             assert_eq!(buttons_to_right(p, 489.0, 8.0, &row, 120.0)[0].1, 120.0);
             // Its label then fits whole (no "...").
             let rc = Rect::from_min_size(pos2(0.0, 0.0), vec2(want, 21.0));

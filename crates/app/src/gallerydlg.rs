@@ -12,9 +12,12 @@ use egui::{Pos2, Ui, pos2};
 use crate::dialogs::{Outcome, window};
 use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r, text};
 
-/// Download a gallery's width, and where its footer starts (the old bottom row's top).
-const GALLERY_W: f32 = 500.0;
-const GALLERY_BODY: f32 = 174.0;
+/// Download a gallery's width, and where its footer starts (the mockup's layout).
+const GALLERY_W: f32 = 520.0;
+const GALLERY_BODY: f32 = 232.0;
+/// Its content's left and right edges.
+const LX: f32 = winui::EDGE;
+const RIGHT: f32 = GALLERY_W - winui::EDGE;
 
 type Slot<T> = Arc<Mutex<Option<Result<T, String>>>>;
 
@@ -132,16 +135,22 @@ impl GalleryDialog {
     fn body(&mut self, ui: &mut Ui, o: Pos2, rt: &tokio::runtime::Handle) -> Outcome<()> {
         let p = ui.painter().clone();
         let tool = self.tool.get_or_insert_with(tool).clone();
-        text(
+        let h = winui::CONTROL_H;
+        let fx = winui::form(
             &p,
-            o.x + 11.0,
-            o.y + 21.0,
-            crate::i18n::t("Page address"),
-            winui::TEXT(),
+            LX,
+            &[
+                "Page address",
+                "Save to",
+                // i18n: label before the box for how many of a gallery's files to download at most
+                "Files at most",
+            ],
+            false,
         );
+        winui::form_label(&p, o, LX, 16.0, h, "Page address", true);
         winui::edit(
             ui,
-            r(o, 11.0, 28.0, 478.0, 21.0),
+            r(o, fx, 16.0, RIGHT - fx, h),
             &mut self.page,
             true,
             false,
@@ -165,18 +174,20 @@ impl GalleryDialog {
             self.error = None;
         }
 
-        // The status line: gallery-dl missing or installing / checking / what it said.
-        let line_y = o.y + 70.0;
+        // The status: gallery-dl missing or installing / checking (a line), what it said (a
+        // banner), in the band under the address.
+        let band = (60.0, winui::status_banner_height(0));
+        let line_y = o.y + winui::baseline_in(band.0, band.1);
         let can_install = mdm_tools::gallery::asset().is_some();
         let readable = self
             .checked
             .as_ref()
             .is_some_and(|(p, ok)| *p == page && *ok);
-        let mut status_right = 489.0;
+        let mut status_right = RIGHT;
         if self.install.is_some() {
-            crate::torrentdlg::spinner(ui, pos2(o.x + 18.0, line_y - 4.0), 6.0);
+            crate::torrentdlg::spinner(ui, pos2(o.x + LX + 7.0, line_y - 4.0), 6.0);
             let msg = crate::i18n::t("Downloading and verifying gallery-dl...");
-            text(&p, o.x + 31.0, line_y, msg, winui::TEXT());
+            text(&p, o.x + LX + 20.0, line_y, msg, winui::TEXT());
         } else if tool.is_none() {
             // i18n: in Download a gallery, before gallery-dl is installed
             let msg = crate::i18n::t(
@@ -185,7 +196,8 @@ impl GalleryDialog {
             // The Install button, as wide as its label in this language (#192), and the line
             // up to 9 px before it.
             let install_at = can_install.then(|| {
-                winui::buttons_to_right(&p, 489.0, 8.0, &[("Install gallery-dl", 90.0)], 200.0)[0]
+                let w = winui::footer_button_width(&p, "Install gallery-dl", false);
+                (RIGHT - w, w)
             });
             if let Some((x, _)) = install_at {
                 status_right = x - 9.0;
@@ -193,7 +205,7 @@ impl GalleryDialog {
             let rc = winui::fit(
                 ui,
                 &p,
-                o.x + 11.0,
+                o.x + LX,
                 line_y,
                 msg,
                 winui::MUTED(),
@@ -204,7 +216,7 @@ impl GalleryDialog {
             if let Some((x, w)) = install_at
                 && winui::button(
                     ui,
-                    r(o, x, 57.0, w, 21.0),
+                    r(o, x, band.0 + ((band.1 - h) / 2.0).round(), w, h),
                     // i18n: button: download and install the gallery-dl program
                     "Install gallery-dl",
                     ButtonKind::Normal,
@@ -226,16 +238,17 @@ impl GalleryDialog {
                 self.error = None;
             }
         } else if self.check.is_some() {
-            crate::torrentdlg::spinner(ui, pos2(o.x + 18.0, line_y - 4.0), 6.0);
+            crate::torrentdlg::spinner(ui, pos2(o.x + LX + 7.0, line_y - 4.0), 6.0);
             // i18n: in Download a gallery, while gallery-dl checks the address (offline)
             let msg = crate::i18n::t("Checking the address with gallery-dl...");
-            text(&p, o.x + 31.0, line_y, msg, winui::TEXT());
+            text(&p, o.x + LX + 20.0, line_y, msg, winui::TEXT());
         } else if let Some((_, ok)) = self.checked.as_ref().filter(|(p, _)| *p == page) {
-            let (msg, color) = if *ok {
+            let (msg, kind, icon) = if *ok {
                 // i18n: in Download a gallery: gallery-dl can read the address
                 (
                     crate::i18n::t("gallery-dl can download this gallery's files."),
-                    winui::TEXT(),
+                    winui::BannerKind::Info,
+                    "st-complete",
                 )
             } else {
                 // i18n: in Download a gallery: gallery-dl has no way to read the address
@@ -243,75 +256,42 @@ impl GalleryDialog {
                     crate::i18n::t(
                         "gallery-dl can't read this address. Add it as a file instead (Add URL).",
                     ),
-                    winui::ERROR(),
+                    winui::BannerKind::Error,
+                    "st-error",
                 )
             };
-            let rc = winui::fit(
-                ui,
-                &p,
-                o.x + 11.0,
-                line_y,
-                msg,
-                color,
-                o.x + 489.0,
-                "gallery-checked",
-            );
+            // The answer in a banner (the mockup's), read out as before.
+            let rc = r(o, LX, band.0, RIGHT - LX, band.1);
+            winui::status_banner(ui, rc, kind, icon, msg, "");
             winui::readable(ui, rc, "gallery-status", msg);
         }
         if let Some(e) = &self.error {
             let rc = winui::fit(
                 ui,
                 &p,
-                o.x + 11.0,
-                o.y + 88.0,
+                o.x + LX,
+                o.y + 112.0,
                 e,
                 winui::ERROR(),
-                o.x + 489.0,
+                o.x + RIGHT,
                 "gallery-error",
             );
             winui::readable(ui, rc, "gallery-error", e);
         }
 
-        // Save to, and how many files at most.
-        let labels = [
-            crate::i18n::t("Save to"),
-            // i18n: label before the box for how many of a gallery's files to download at most
-            crate::i18n::t("Files at most"),
-        ];
-        let widest = labels
-            .iter()
-            .map(|l| winui::text_width(&p, l))
-            .fold(0.0, f32::max);
-        let bx = (11.0 + widest + 6.0).clamp(70.0, 150.0);
-        for (i, l) in labels.iter().enumerate() {
-            let y = 116.0 + i as f32 * 31.0;
-            winui::fit(
-                ui,
-                &p,
-                o.x + 11.0,
-                o.y + y,
-                l,
-                winui::TEXT(),
-                o.x + bx - 5.0,
-                ("gallery-label", i),
-            );
-        }
+        // Save to, and how many files at most, on the labels' column.
+        let (save_y, limit_y) = (124.0, 164.0);
+        winui::form_label(&p, o, LX, save_y, h, "Save to", true);
         winui::edit(
             ui,
-            r(o, bx, 103.0, 459.0 - bx, 21.0),
+            r(o, fx, save_y, RIGHT - h - 8.0 - fx, h),
             &mut self.folder,
             true,
             false,
         );
         // i18n: tooltip of the "..." after Save to: choose the folder
-        if winui::icon_only_button(
-            ui,
-            r(o, 467.0, 103.0, 22.0, 21.0),
-            "gx-dots",
-            "Browse",
-            true,
-        )
-        .clicked()
+        if winui::icon_only_button(ui, r(o, RIGHT - h, save_y, h, h), "gx-dots", "Browse", true)
+            .clicked()
         {
             let from = self.folder.clone();
             winui::start_pick(ui.ctx(), "gallery-folder", move || {
@@ -322,22 +302,24 @@ impl GalleryDialog {
             self.folder = d.display().to_string();
         }
         self.limit.retain(|c| c.is_ascii_digit());
+        winui::form_label(&p, o, LX, limit_y, h, "Files at most", true);
         winui::edit(
             ui,
-            r(o, bx, 134.0, 70.0, 21.0),
+            r(o, fx, limit_y, 110.0, h),
             &mut self.limit,
             true,
             false,
         );
+        // The hint on its own line under the box (the mockup's).
         winui::fit(
             ui,
             &p,
-            o.x + bx + 78.0,
-            o.y + 147.0,
+            o.x + fx,
+            o.y + 212.0,
             // i18n: in Download a gallery, after the "Files at most" box
             crate::i18n::t("Empty: all of them. On most sites the newest come first."),
             winui::MUTED(),
-            o.x + 489.0,
+            o.x + RIGHT,
             "gallery-limit-hint",
         );
 

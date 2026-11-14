@@ -19,11 +19,11 @@ use crate::winui::{self, ButtonKind, FooterButton, FooterItem, fill_l as fill, r
 
 /// Add torrent's width, and where its footer starts (under "Files go to").
 const ADD_W: f32 = 600.0;
-const ADD_BODY: f32 = 420.0;
+const ADD_BODY: f32 = 474.0;
 /// Torrent settings' and Add trackers' widths and footers (where their OK rows were).
-const SETTINGS_W: f32 = 470.0;
+const SETTINGS_W: f32 = 480.0;
 const SETTINGS_BODY: f32 = 448.0;
-const TRACKERS_W: f32 = 460.0;
+const TRACKERS_W: f32 = 440.0;
 const TRACKERS_BODY: f32 = 212.0;
 
 /// How long a magnet may take to get its file list from peers.
@@ -103,7 +103,8 @@ pub fn category_of(_meta: &Meta) -> Category {
     Category::Torrents
 }
 
-/// A turning ring: the loading sign while something is fetched (also the video dialog's).
+/// A turning ring: the loading sign while something is fetched (also the video dialog's), in the
+/// progress bar's colours: its track, and its fill turning on it.
 pub(crate) fn spinner(ui: &Ui, center: Pos2, radius: f32) {
     let t = ui.input(|i| i.time) as f32;
     let start = t * 5.0;
@@ -115,8 +116,9 @@ pub(crate) fn spinner(ui: &Ui, center: Pos2, radius: f32) {
         })
         .collect();
     let p = ui.painter();
-    p.circle_stroke(center, radius, Stroke::new(2.0, LIST_LINE()));
-    p.line(points, Stroke::new(2.0, winui::accent()));
+    let c = crate::theme::colors();
+    p.circle_stroke(center, radius, Stroke::new(2.0, c.progress_track));
+    p.line(points, Stroke::new(2.0, c.progress_bar));
     ui.ctx().request_repaint();
 }
 
@@ -460,16 +462,22 @@ impl TorrentDialog {
             (true, false) => ButtonKind::Normal,
         };
 
-        // The source: a magnet link, or a .torrent file chosen with "...".
+        // The mockup's layout: a label column, rows 30 high, 14 apart.
+        let h = winui::CONTROL_H;
+        let right = ADD_W - winui::EDGE;
         // i18n: noun: label before the torrent file or magnet link
-        let source_label = crate::i18n::t("Torrent");
-        let folder_label = crate::i18n::t("Save to");
-        // The fields start after the longer label (German "Speichern unter").
-        let fx = winui::label_column(&p, 11.0, &[source_label, folder_label], 70.0);
-        text(&p, o.x + 11.0, o.y + 23.0, source_label, winui::TEXT());
+        let fx = winui::form(&p, winui::EDGE, &["Torrent", "Save to"], false);
+        // Look up as wide as the wider of its two labels, so it keeps its size as they change.
+        let look_w = winui::footer_button_width(&p, "Look up", true)
+            .max(winui::footer_button_width(&p, "Stop", false));
+        let look_x = right - look_w;
+        let browse_x = look_x - 8.0 - h;
+
+        // The source: a magnet link, or a .torrent file chosen with "...".
+        winui::form_label(&p, o, winui::EDGE, 16.0, h, "Torrent", true);
         let edit = winui::edit(
             ui,
-            r(o, fx, 9.0, 480.0 - fx, 21.0),
+            r(o, fx, 16.0, browse_x - 8.0 - fx, h),
             &mut self.source,
             !busy,
             false,
@@ -480,7 +488,7 @@ impl TorrentDialog {
         }
         // i18n: tooltip of the "..." after the torrent: choose a .torrent file
         let browse =
-            winui::icon_only_button(ui, r(o, 486.0, 9.0, 22.0, 21.0), "gx-dots", "Browse", !busy)
+            winui::icon_only_button(ui, r(o, browse_x, 16.0, h, h), "gx-dots", "Browse", !busy)
                 .clicked();
         if browse && !busy {
             // i18n: the kind of file the Open dialog lists
@@ -501,7 +509,7 @@ impl TorrentDialog {
         // While it looks up, the button stops it (a magnet with no peers took up to 3 minutes).
         let look = winui::button_icon(
             ui,
-            r(o, 514.0, 9.0, 75.0, 21.0),
+            r(o, look_x, 16.0, look_w, h),
             (!busy).then_some("gx-search"),
             // i18n: button: stop looking the torrent up
             if busy {
@@ -529,9 +537,10 @@ impl TorrentDialog {
         }
 
         // Status: looking up (with a spinner and the seconds) / name and size / what went wrong.
-        let line = o.y + 50.0;
+        let line = o.y + winui::baseline_in(60.0, 20.0);
+        let lx = winui::EDGE;
         if busy {
-            spinner(ui, pos2(o.x + 18.0, line - 4.0), 6.0);
+            spinner(ui, pos2(o.x + lx + 7.0, line - 4.0), 6.0);
             let secs = self.started.map_or(0, |s| s.elapsed().as_secs());
             let msg = if self.from_magnet {
                 crate::i18n::fmt(
@@ -542,9 +551,9 @@ impl TorrentDialog {
             } else {
                 crate::i18n::t("Reading the torrent...").to_owned()
             };
-            text(&p, o.x + 31.0, line, &msg, winui::TEXT());
+            text(&p, o.x + lx + 20.0, line, &msg, winui::TEXT());
         } else if let Some(e) = &self.error {
-            let (rect, cut) = winui::text_fit(&p, o.x + 11.0, line, e, winui::ERROR(), o.x + 589.0);
+            let (rect, cut) = winui::text_fit(&p, o.x + lx, line, e, winui::ERROR(), o.x + right);
             if cut {
                 winui::full_on_hover(ui, rect, "torrent-error", e);
             }
@@ -567,30 +576,24 @@ impl TorrentDialog {
             } else {
                 crate::fileicons::Kind::File(&m.name)
             };
-            crate::fileicons::paint_at(ui, &p, kind, egui::pos2(o.x + 11.0, line - 12.0), 16.0);
-            let x = o.x + 11.0 + crate::fileicons::INDENT;
-            let (rect, cut) = winui::text_fit(&p, x, line, &summary, winui::TEXT(), o.x + 589.0);
+            crate::fileicons::paint_at(ui, &p, kind, egui::pos2(o.x + lx, line - 12.0), 16.0);
+            let x = o.x + lx + crate::fileicons::INDENT;
+            let (rect, cut) = winui::text_fit(&p, x, line, &summary, winui::TEXT(), o.x + right);
             if cut {
                 winui::full_on_hover(ui, rect, "torrent-name", &summary);
             }
         }
 
-        self.file_list(ui, r(o, 11.0, 58.0, 578.0, 262.0));
+        self.file_list(ui, r(o, lx, 94.0, right - lx, 250.0));
 
-        // Select all / none, each as wide as its label in this language (#192), and what is chosen.
+        // Select all / none, each as wide as its label (#192), and what is chosen.
         let has = self.meta.is_some();
-        let [all_at, none_at] = winui::buttons_from_left(
-            &p,
-            11.0,
-            6.0,
-            &[("Select all", 90.0), ("Select none", 90.0)],
-            160.0,
-        )[..] else {
-            unreachable!("two buttons")
-        };
+        let all_w = winui::footer_button_width(&p, "Select all", false);
+        let none_w = winui::footer_button_width(&p, "Select none", false);
+        let (all_at, none_at) = ((lx, all_w), (lx + all_w + 8.0, none_w));
         if winui::button(
             ui,
-            r(o, all_at.0, 328.0, all_at.1, 21.0),
+            r(o, all_at.0, 358.0, all_at.1, h),
             "Select all",
             kind(has, false),
             false,
@@ -603,7 +606,7 @@ impl TorrentDialog {
         }
         if winui::button(
             ui,
-            r(o, none_at.0, 328.0, none_at.1, 21.0),
+            r(o, none_at.0, 358.0, none_at.1, h),
             "Select none",
             kind(has, false),
             false,
@@ -617,8 +620,8 @@ impl TorrentDialog {
         if has {
             winui::text_right(
                 &p,
-                o.x + 589.0,
-                o.y + 343.0,
+                o.x + right,
+                o.y + winui::baseline_in(358.0, h),
                 &crate::i18n::fmt(
                     // i18n: the files chosen: {files} = "3 files", {size} = their total size
                     crate::i18n::t("Selected: {files}, {size}"),
@@ -630,15 +633,15 @@ impl TorrentDialog {
                         ("size", &crate::dialogs::dialog_size(bytes)),
                     ],
                 ),
-                winui::TEXT(),
+                winui::MUTED(),
             );
         }
 
         // Where.
-        text(&p, o.x + 11.0, o.y + 375.0, folder_label, winui::TEXT());
+        winui::form_label(&p, o, lx, 402.0, h, "Save to", true);
         if winui::edit(
             ui,
-            r(o, fx, 361.0, 561.0 - fx, 21.0),
+            r(o, fx, 402.0, right - h - 8.0 - fx, h),
             &mut self.folder,
             true,
             false,
@@ -648,14 +651,8 @@ impl TorrentDialog {
             self.folder_edited = true;
         }
         // i18n: tooltip of the "..." after Save to: choose the folder
-        if winui::icon_only_button(
-            ui,
-            r(o, 567.0, 361.0, 22.0, 21.0),
-            "gx-dots",
-            "Browse",
-            true,
-        )
-        .clicked()
+        if winui::icon_only_button(ui, r(o, right - h, 402.0, h, h), "gx-dots", "Browse", true)
+            .clicked()
         {
             let from = self.folder.clone();
             winui::start_pick(ui.ctx(), "torrent-folder", move || {
@@ -674,7 +671,7 @@ impl TorrentDialog {
                 &[("folder", &crate::i18n::ltr(&goes.display().to_string()))],
             );
             let (rect, cut) =
-                winui::text_fit(&p, o.x + fx, o.y + 402.0, &s, winui::MUTED(), o.x + 589.0);
+                winui::text_fit(&p, o.x + fx, o.y + 456.0, &s, winui::MUTED(), o.x + right);
             if cut {
                 winui::full_on_hover(ui, rect, "torrent-goes", &s);
             }
@@ -688,6 +685,14 @@ impl TorrentDialog {
             ADD_W,
             ADD_BODY,
             &mut [
+                // #39: its files' start first, to watch a video while it downloads (also later,
+                // from its right-click menu). Greyed until there are files.
+                FooterItem::Check(
+                    // i18n: Add torrent, a checkbox: download the files from their start, to watch a video while it downloads
+                    "Download in order",
+                    &mut self.in_order,
+                    has,
+                ),
                 FooterItem::Button(
                     FooterButton::new("Download Now", kind(ready, true))
                         .primary()
@@ -700,31 +705,10 @@ impl TorrentDialog {
                 FooterItem::Button(FooterButton::new("Cancel", ButtonKind::Normal).escape(true)),
             ],
         );
-        // #39: its files' start first, to watch a video while it downloads (also later, from
-        // its right-click menu). At the footer's start, greyed until there are files; drawn
-        // over the footer's band (the kit's check has no greyed state).
-        winui::checkbox_until(
-            ui,
-            pos2(
-                o.x + winui::EDGE,
-                o.y + ADD_BODY + ((winui::FOOTER_H - 13.0) / 2.0).round(),
-            ),
-            &mut self.in_order,
-            // i18n: Add torrent, a checkbox: download the files from their start, to watch a video while it downloads
-            "Download in order",
-            has,
-            Some(
-                o.x + winui::footer_trailing_left(
-                    ADD_W,
-                    &["Download Now", "Later", "Cancel"]
-                        .map(|l| winui::footer_button_width(&p, l, false)),
-                ),
-            ),
-        );
         match pressed {
-            Some(2) => Outcome::Closed,
-            Some(k) if ready => {
-                self.start_now = Some(k == 0);
+            Some(3) => Outcome::Closed,
+            Some(k @ (1 | 2)) if ready => {
+                self.start_now = Some(k == 1);
                 Outcome::Done(())
             }
             _ => Outcome::Open,
@@ -1159,7 +1143,7 @@ impl TorrentSettings {
                     o.x + 456.0,
                     ("torrent-settings", 2),
                 );
-                winui::etched_h(&p, o.x + 14.0, o.y + 150.0, 442.0);
+                winui::rule(&p, o, 14.0, 150.0, SETTINGS_W - 28.0);
                 let n = &mut self.net;
                 winui::checkbox(
                     ui,
@@ -1435,21 +1419,21 @@ impl AddTrackers {
                 winui::fit(
                     ui,
                     &p,
-                    o.x + 14.0,
-                    o.y + 24.0,
+                    o.x + winui::EDGE,
+                    o.y + 29.0,
                     &crate::i18n::fmt(
                         // i18n: Add trackers: above the box; {name} is the torrent's name
                         crate::i18n::t("Trackers to add to {name}, one address a line:"),
                         &[("name", &crate::i18n::isolate(&self.name))],
                     ),
                     winui::TEXT(),
-                    o.x + 446.0,
+                    o.x + TRACKERS_W - winui::EDGE,
                     ("add-trackers", 1),
                 );
                 let before = self.text.clone();
                 let field = winui::multiline_light(
                     ui,
-                    r(o, 14.0, 32.0, 432.0, 140.0),
+                    r(o, winui::EDGE, 42.0, TRACKERS_W - 2.0 * winui::EDGE, 120.0),
                     &mut self.text,
                     "add-trackers",
                     true,
@@ -1470,7 +1454,15 @@ impl AddTrackers {
                     ),
                 };
                 // Two lines' room: a translated reason is long.
-                winui::paragraph(&p, o.x + 14.0, o.y + 190.0, &line, color, o.x + 446.0, 14.0);
+                winui::paragraph(
+                    &p,
+                    o.x + winui::EDGE,
+                    o.y + 183.0,
+                    &line,
+                    color,
+                    o.x + TRACKERS_W - winui::EDGE,
+                    14.0,
+                );
                 // Enter is a new line in the box: only OK adds them. Escape Cancel.
                 let pressed = winui::footer(
                     ui,

@@ -22,7 +22,10 @@ use crate::winui::{
 const ROW: f32 = 18.0;
 /// Where the window's footer starts (Add to queue, Start, Cancel), and its width.
 const FOOTER_Y: f32 = 438.0;
-const GRABBER_W: f32 = 640.0;
+const GRABBER_W: f32 = 680.0;
+/// Where the content ends: the list's and the rows' right edge, and the package's boxes'.
+const RIGHT: f32 = GRABBER_W - 11.0;
+const BOX_RIGHT: f32 = GRABBER_W - 19.0;
 /// Links looked up at once, and at once from one host.
 const CHECKS: usize = 8;
 const CHECKS_PER_HOST: usize = 4;
@@ -507,12 +510,12 @@ impl Grabber {
             o.y + 20.0,
             &line,
             LIGHT_TEXT(),
-            o.x + 629.0,
+            o.x + RIGHT,
             "grabber-source",
         );
         self.list(
             ui,
-            Rect::from_min_size(o + vec2(11.0, 30.0), vec2(618.0, 258.0)),
+            Rect::from_min_size(o + vec2(11.0, 30.0), vec2(RIGHT - 11.0, 258.0)),
         );
 
         // Under the list: Hide web pages, the count, Check all / Uncheck all.
@@ -535,7 +538,7 @@ impl Grabber {
         let picks = winui::buttons_light_right(
             ui,
             o,
-            629.0,
+            RIGHT,
             296.0,
             &[
                 // i18n: Link grabber button (IDM's): tick every link
@@ -878,11 +881,9 @@ impl Grabber {
         // i18n: Link grabber: the box that edits the selected package
         let caption = crate::i18n::t("Package");
         let cw = winui::text_width(&p, caption);
-        winui::group_box(
-            &p,
-            r(o, 11.0, 330.0, 618.0, 106.0),
-            Some((o.x + 18.0, o.x + 22.0 + cw)),
-        );
+        // A hairline after the caption groups the package's rows (it was a group box).
+        let after = (28.0 + cw).ceil();
+        winui::rule(&p, o, after, 330.0, RIGHT - after);
         text(&p, o.x + 20.0, o.y + 334.0, caption, LIGHT_TEXT());
         let mut blank = (String::new(), String::new(), String::new(), false, false);
         let pk = self.packages.get_mut(self.current).filter(|_| enabled);
@@ -940,7 +941,12 @@ impl Grabber {
             false,
         );
         label(ui, pw_x, 360.0, pw_label, pbx - 4.0);
-        let pw = winui::password_light(ui, r(o, pbx, 345.0, 621.0 - pbx, 23.0), password, enabled);
+        let pw = winui::password_light(
+            ui,
+            r(o, pbx, 345.0, BOX_RIGHT - pbx, 23.0),
+            password,
+            enabled,
+        );
         // i18n: what a screen reader calls Link grabber's password box
         let pw_name = crate::i18n::t("Archive password");
         ui.ctx().accesskit_node_builder(pw.id, |n| {
@@ -951,11 +957,11 @@ impl Grabber {
         });
         // Row 2: the folder, and Browse.
         label(ui, 21.0, 391.0, folder_label, bx - 4.0);
-        // i18n: verb: choose a folder
-        let bw = winui::button_width(&p, "Browse", 73.0);
+        // The "..." browse button, square, at the row's end.
+        let bw = 23.0;
         let typed = winui::edit_light(
             ui,
-            r(o, bx, 376.0, 621.0 - bw - 8.0 - bx, 23.0),
+            r(o, bx, 376.0, BOX_RIGHT - bw - 8.0 - bx, 23.0),
             folder,
             enabled,
             false,
@@ -970,20 +976,17 @@ impl Grabber {
                 o.y + 391.0,
                 each,
                 winui::MUTED(),
-                o.x + 621.0 - bw - 12.0,
+                o.x + BOX_RIGHT - bw - 12.0,
                 "grabber-each",
             );
         }
-        let browse = winui::button_light(
+        // i18n: verb: choose a folder (the "..." button's tooltip)
+        let browse = winui::icon_only_button(
             ui,
-            r(o, 621.0 - bw, 377.0, bw, 21.0),
+            r(o, BOX_RIGHT - bw, 376.0, bw, 23.0),
+            "gx-dots",
             "Browse",
-            if enabled {
-                ButtonKind::Normal
-            } else {
-                ButtonKind::Disabled
-            },
-            false,
+            enabled,
         )
         .clicked();
         if browse {
