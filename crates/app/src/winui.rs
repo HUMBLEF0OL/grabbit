@@ -2312,8 +2312,42 @@ fn readonly_with_icon(
     if cut { resp.on_hover_text(value) } else { resp }
 }
 
+/// A text box's right-click menu, each item enabled or not.
+fn edit_entries(
+    undo: bool,
+    copy: bool,
+    paste: bool,
+    delete: bool,
+    select_all: bool,
+) -> Vec<crate::chrome::MenuEntry<EditCmd>> {
+    use crate::chrome::MenuEntry;
+    vec![
+        MenuEntry::Item("&Undo", EditCmd::Undo, undo, false),
+        MenuEntry::Sep,
+        MenuEntry::Item("Cu&t", EditCmd::Cut, copy, false),
+        MenuEntry::Item("&Copy", EditCmd::Copy, copy, false),
+        MenuEntry::Item("&Paste", EditCmd::Paste, paste, false),
+        MenuEntry::Item("&Delete", EditCmd::Delete, delete, false),
+        MenuEntry::Sep,
+        MenuEntry::Item("Select &all", EditCmd::SelectAll, select_all, false),
+    ]
+}
+
+/// A text box's right-click menu, for the access keys' test (app.rs).
+#[cfg(test)]
+pub fn text_box_menu() -> Vec<crate::chrome::MenuEntry<()>> {
+    use crate::chrome::MenuEntry;
+    edit_entries(true, true, true, true, true)
+        .into_iter()
+        .map(|e| match e {
+            MenuEntry::Item(l, _, en, on) => MenuEntry::Item(l, (), en, on),
+            _ => MenuEntry::Sep,
+        })
+        .collect()
+}
+
 pub fn edit_menu(resp: &Response, value: &mut String, password: bool, multiline: bool) {
-    use crate::chrome::{MenuEntry, PopupResult};
+    use crate::chrome::PopupResult;
     use egui::text::{CCursor, CCursorRange};
     use egui::text_edit::TextEditState;
     let ctx = resp.ctx.clone();
@@ -2364,16 +2398,13 @@ pub fn edit_menu(resp: &Response, value: &mut String, password: bool, multiline:
     // egui's own undo history (Ctrl+Z uses it too).
     let mut undoer = state.undoer();
     let now = (state.cursor.char_range().unwrap_or_default(), value.clone());
-    let entries = vec![
-        MenuEntry::Item("&Undo", EditCmd::Undo, undoer.has_undo(&now), false),
-        MenuEntry::Sep,
-        MenuEntry::Item("Cu&t", EditCmd::Cut, has && !password, false),
-        MenuEntry::Item("&Copy", EditCmd::Copy, has && !password, false),
-        MenuEntry::Item("&Paste", EditCmd::Paste, clip.is_some(), false),
-        MenuEntry::Item("&Delete", EditCmd::Delete, has, false),
-        MenuEntry::Sep,
-        MenuEntry::Item("Select &all", EditCmd::SelectAll, n > 0, false),
-    ];
+    let entries = edit_entries(
+        undoer.has_undo(&now),
+        has && !password,
+        clip.is_some(),
+        has,
+        n > 0,
+    );
     let cmd = match crate::chrome::popup(
         &ctx,
         crate::chrome::MenuKind::Context,

@@ -1095,6 +1095,14 @@ pub fn menu_letter(label: &str) -> String {
         .unwrap_or_default()
 }
 
+/// The access key of `label`: the letter after its `&`, in lower case (None without one). An
+/// open menu runs its first enabled item with the key pressed.
+pub fn access_key(label: &str) -> Option<String> {
+    let (text, at) = plain(label);
+    at.and_then(|at| text.chars().nth(at))
+        .map(|c| c.to_lowercase().to_string())
+}
+
 fn plain(label: &str) -> (String, Option<usize>) {
     let mut out = String::new();
     let mut mnemonic = None;
@@ -1290,10 +1298,7 @@ fn keyboard<C: Clone>(
                 if name.chars().count() == 1 {
                     target = level.iter().position(|e| {
                         entry_label(e).is_some_and(|(l, en)| {
-                            let (t, m) = plain(crate::i18n::tc("menu", l));
-                            en && m
-                                .and_then(|m| t.chars().nth(m))
-                                .is_some_and(|c| c.to_lowercase().to_string() == name)
+                            en && access_key(crate::i18n::tc("menu", l)).is_some_and(|k| k == name)
                         })
                     });
                 }
