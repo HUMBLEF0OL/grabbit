@@ -9,9 +9,12 @@
 | Tabler Icons 3.31.0, its outline icons (every icon MDM draws: the 53 slots of Graphite's icon set, toolbar, categories, file types, statuses, the Scheduler's buttons and the title-bar buttons, and its 37 extras, the Options pages' headers, the video helpers window, Download complete's drag handle, the Scheduler's queues, the Server row, the menus, buttons and banners), drawn white at stroke 1.75 to be tinted, by `design/graphite/source/export_icons.py` | Paweł Kuna, <https://tabler.io/icons> | MIT — `crates/app/assets/themes/graphite/icons/LICENSE` | `crates/app/assets/themes/graphite/icons/` (the design files' copy in `design/graphite/assets/icons/`, the package in `design/graphite/vendor/`) |
 | Geist 1.900 (release v1.9.2), Regular, Medium and SemiBold (MDM's typeface, built into the app), unchanged | Vercel and the Geist Project Authors, <https://github.com/vercel/geist-font> | SIL Open Font License 1.1 — `crates/app/assets/fonts/geist/OFL.txt` | `crates/app/assets/fonts/geist/` (the design files' copy and its sources in `design/graphite/assets/fonts/`) |
 
-The app icon (`art/Mister Download Manager.png`) was made for Mister Download Manager by its
-author, Ahmed Nefzaoui, with ChatGPT (OpenAI's image generation); every icon size is built from
-it by `tools/icon/build_icon.py`.
+The app icon (`art/grabbit.svg`), Grabbit's double-chevron mark, is drawn as plain vector shapes
+in the Graphite theme's colours; every icon size is built from it by `tools/icon/build_icon.py`.
+
+The original app icon (`art/Mister Download Manager.png`), still used by the README's pictures
+and social preview until they move to the new mark, was made for Mister Download Manager by its
+author, Ahmed Nefzaoui, with ChatGPT (OpenAI's image generation).
 
 The README's block icons (`docs/images/icons/`: arrow, globe, gift, magnet) were made for it
 with OpenAI's GPT-5 Image Mini by `tools/readme/icons.py`, given the app icon as the style to follow.

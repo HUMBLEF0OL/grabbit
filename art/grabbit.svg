@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -25 620 620" width="620" height="620">
+  <!-- Grabbit's mark: a double chevron, Graphite's electric cyan into royal amethyst.
+       The source of every app icon size (tools/icon/build_icon.py reads these polygons,
+       the gradient and the stroke width that rounds the corners). -->
+  <defs>
+    <linearGradient id="g" gradientUnits="userSpaceOnUse" x1="100" y1="0" x2="500" y2="570">
+      <stop offset="0" stop-color="#1FE0F0"/>
+      <stop offset="1" stop-color="#B08CFF"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#g)" stroke="url(#g)" stroke-width="12" stroke-linejoin="round">
+    <polygon points="145,17 365,17 582,252 340,252"/>
+    <polygon points="360,277 582,277 350,552 110,552"/>
+    <polygon points="28,128 150,128 268,252 148,252"/>
+    <polygon points="150,277 268,277 140,417 17,417"/>
+  </g>
+</svg>
