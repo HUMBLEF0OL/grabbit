@@ -1404,6 +1404,19 @@ async function drop(item) {
   closeLeftTab([firstUrl(item), item.url, item.finalUrl].filter(Boolean)).catch(() => {});
 }
 
+// A download left to the browser keeps the name it has, or the one another extension gives it
+// (Save In's folders, upstream issue 578; a `downloads.download` with a `filename`). Chromium
+// counts every listener's answer as a name of its own, an empty one too: `suggest()` without a
+// suggestion reaches it as an empty name with no conflict action, and when the most recently
+// installed extension answers so, its empty name wins and the others' are dropped (the download
+// lands in the Downloads folder, and the browser may warn of a conflict). Only an answer with
+// "uniquify" and no name is no suggestion at all, and the binding lets no empty name through: a
+// name the browser refuses, which it empties after counting the answer, is how a listener gives
+// none ("Invalid filename" is logged once).
+function noName(suggest) {
+  suggest({ filename: "..", conflictAction: "uniquify" });
+}
+
 if (!FIREFOX) {
   // Chromium: once the final file name is known (after redirects and Content-Disposition). The
   // download waits for `suggest`, writing nothing, while the app is asked: taken, it is
@@ -1416,10 +1429,10 @@ if (!FIREFOX) {
         const taken = Boolean(c && c.name && !c.left) && (await offer(item, url, c.name));
         if (taken) return drop(item);
         // The browser goes on first; why is said after.
-        suggest();
+        noName(suggest);
         leftAlone(c, item, url);
       })
-      .catch(() => suggest());
+      .catch(() => noName(suggest));
     return true; // suggest() comes later
   });
 } else {
