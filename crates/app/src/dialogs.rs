@@ -2676,7 +2676,7 @@ pub fn open_file_now(path: &Path) -> bool {
             ),
             &[("file", &name)],
         )
-    } else if let Err(e) = open::that_detached(path) {
+    } else if let Err(e) = crate::win32::open_file_shell(path) {
         crate::i18n::fmt(
             crate::i18n::t("{file} could not be opened: {error}"),
             &[("file", &name), ("error", &e.to_string())],

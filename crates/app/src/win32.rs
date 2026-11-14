@@ -4958,6 +4958,53 @@ mod classic_text {
     }
 }
 
+/// Open `path` with the program Windows has for its type, through `ShellExecuteW` (upstream
+/// issue 811): handed to explorer.exe instead (the `open` crate), a file whose program is
+/// another one, such as 7-Zip for a .zip, failed and its folder was shown.
+pub fn open_file_shell(path: &std::path::Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+
+    // Shell extensions behind the file's program may need COM on the calling thread.
+    com_on_this_thread();
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    // SAFETY: lpFile is a null-terminated UTF-16 string that outlives the call; a null verb
+    // runs the type's default action; the other pointers may be null.
+    let ret = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            wide.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    // Above 32 is success; 32 or below is an SE_ERR code (most are Win32 error numbers).
+    let code = ret as usize;
+    if code > 32 {
+        return Ok(());
+    }
+    let err = std::io::Error::last_os_error();
+    Err(if err.raw_os_error().unwrap_or(0) != 0 {
+        err
+    } else {
+        std::io::Error::from_raw_os_error(code as i32)
+    })
+}
+
+#[cfg(test)]
+mod open_file_shell_tests {
+    /// A file that isn't there is an error, not a folder shown in its place.
+    #[test]
+    fn a_missing_file_is_an_error() {
+        let dir = std::env::temp_dir().join("mdm-open-file-shell-test-missing");
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(super::open_file_shell(&dir.join("nothing here.zip")).is_err());
+    }
+}
+
 /// The program Windows runs to open folders, when that isn't Explorer (a file manager such as
 /// Directory Opus set up to replace it, #446); None for Explorer, or when Windows doesn't say.
 pub fn folder_opener() -> Option<String> {
