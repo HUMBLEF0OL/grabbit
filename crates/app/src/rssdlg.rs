@@ -9,7 +9,18 @@ use egui::{Pos2, Ui, pos2};
 
 use crate::dialogs::{Outcome, window};
 use crate::rss::{Article, Rule, Store};
-use crate::winui::{self, ButtonKind, r, text};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r, text};
+
+/// The window's width, and where its footer starts (under the tabs' pane).
+const RSS_W: f32 = 760.0;
+const RSS_BODY: f32 = 462.0;
+
+/// A page's bottom row on the footer's band (its controls 22 high, centred under the band's
+/// top rule): the box's top and the text's baseline.
+fn band_row() -> (f32, f32) {
+    let top = RSS_BODY + 1.0 + ((winui::FOOTER_H - 1.0 - 22.0) / 2.0).floor();
+    (top, winui::baseline_in(top, 22.0))
+}
 
 /// What the window asks of the app.
 #[derive(Debug, PartialEq, Eq)]
@@ -69,7 +80,7 @@ impl RssWindow {
             ctx,
             "rss",
             "RSS feeds",
-            [760.0, 500.0],
+            [RSS_W, RSS_BODY + winui::FOOTER_H],
             true,
             winui::BG(),
             |ui, o| {
@@ -94,21 +105,25 @@ impl RssWindow {
                 {
                     self.tab = i;
                 }
+                // The footer's band first: each page's bottom row (Feeds' "Check feeds every",
+                // Rules' last log line) sits on it, before Close, keeping its Tab place.
+                winui::footer_band(ui, o, RSS_W, RSS_BODY);
                 asked = if self.tab == 0 {
                     self.feeds_page(ui, o, store, busy)
                 } else {
                     self.rules_page(ui, o, store)
                 };
-                let close = winui::button(
+                // The footer: Close, and Escape, as before (Enter is the pages' own).
+                let close = winui::footer_items(
                     ui,
-                    r(o, 663.0, 466.0, 87.0, 21.0),
-                    "Close",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
-                if close || winui::escape_pressed(ui) {
+                    o,
+                    RSS_W,
+                    RSS_BODY,
+                    &mut [FooterItem::Button(
+                        FooterButton::new("Close", ButtonKind::Normal).escape(true),
+                    )],
+                );
+                if close.is_some() {
                     Outcome::<()>::Closed
                 } else {
                     Outcome::Open
@@ -386,16 +401,18 @@ impl RssWindow {
         );
         // How often feeds are fetched.
         // i18n: RSS feeds window, at the bottom: "Check feeds every [30] minutes"
+        // On the footer's band, at its start (Close is at its end).
         let every = crate::i18n::t("Check feeds every");
-        text(&p, o.x + 22.0, o.y + 482.0, every, winui::TEXT());
+        let (top, base) = band_row();
+        text(&p, o.x + 22.0, o.y + base, every, winui::TEXT());
         let x = 22.0 + winui::text_width(&p, every).ceil() + 6.0;
-        winui::edit_right(ui, r(o, x, 467.0, 44.0, 22.0), &mut self.minutes, true);
+        winui::edit_right(ui, r(o, x, top, 44.0, 22.0), &mut self.minutes, true);
         self.minutes.retain(|c| c.is_ascii_digit());
         self.minutes.truncate(4);
         text(
             &p,
             o.x + x + 50.0,
-            o.y + 482.0,
+            o.y + base,
             // i18n: RSS feeds window: the unit after the minutes box
             crate::i18n::t("minutes"),
             winui::TEXT(),
@@ -616,13 +633,13 @@ impl RssWindow {
             true,
             false,
         );
-        if winui::button(
+        // i18n: tooltip of the "..." after Save to: choose the folder
+        if winui::icon_only_button(
             ui,
             r(o, 716.0, 248.0, 24.0, 22.0),
-            "...",
-            ButtonKind::Normal,
-            false,
-            None,
+            "gx-dots",
+            "Browse",
+            true,
         )
         .clicked()
         {
@@ -769,7 +786,7 @@ impl RssWindow {
                 );
             },
         );
-        // What the rules did last, at the bottom.
+        // What the rules did last, on the footer's band before Close.
         if let Some((t, what)) = store.log.last() {
             let at = crate::clock::local_at(*t)
                 .map(|d| d.format("%H:%M").to_string())
@@ -778,7 +795,7 @@ impl RssWindow {
                 ui,
                 &p,
                 o.x + 22.0,
-                o.y + 482.0,
+                o.y + band_row().1,
                 &format!("{}  {what}", crate::i18n::ltr(&at)),
                 winui::MUTED(),
                 o.x + 650.0,

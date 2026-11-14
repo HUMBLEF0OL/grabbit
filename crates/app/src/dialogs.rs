@@ -3165,17 +3165,20 @@ impl ExistingFiles {
                 "and {n} other files",
             )
         });
+        // The mockup's width; the footer where the old button row was.
+        const W: f32 = 520.0;
+        const BODY: f32 = 166.0;
         question(
             ctx,
             "existing-files",
             "Files already there",
-            [460.0, 206.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 let ink = winui::TEXT();
-                let (left, right) = (o.x + 11.0, o.x + 449.0);
+                let (left, right) = (o.x + winui::EDGE, o.x + W - winui::EDGE);
                 let lines = winui::paragraph(
                     &p,
                     left,
@@ -3230,31 +3233,25 @@ impl ExistingFiles {
                     right,
                     18.0,
                 );
-                let yes = winui::button(
-                    ui,
-                    r(o, 294.0, 172.0, 73.0, 21.0),
-                    "Yes",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
                 // No is the default: a file the user didn't mean to give up stays as it is.
-                let no = winui::button(
+                // Enter and Escape both answer No, as before.
+                match winui::footer(
                     ui,
-                    r(o, 376.0, 172.0, 73.0, 21.0),
-                    "No",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked();
-                if yes {
-                    Outcome::Done(())
-                } else if no || winui::escape_pressed(ui) || winui::enter_pressed(ui) {
-                    Outcome::Closed
-                } else {
-                    Outcome::Open
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(FooterButton::new("Yes", ButtonKind::Normal)),
+                        FooterItem::Button(
+                            FooterButton::new("No", ButtonKind::Default)
+                                .enter(true)
+                                .escape(true),
+                        ),
+                    ],
+                ) {
+                    Some(0) => Outcome::Done(()),
+                    Some(_) => Outcome::Closed,
+                    None => Outcome::Open,
                 }
             },
         )

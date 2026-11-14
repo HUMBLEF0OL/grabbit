@@ -11,7 +11,16 @@ use mdm_tools::resolve::{Choice, Looked, SubChoice, Video};
 use mdm_tools::video::{ALL_UPLOADERS, Subs};
 
 use crate::dialogs::{Outcome, window};
-use crate::winui::{self, ButtonKind, r, text};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r, text};
+
+/// Download video's width, and where its footer starts (the mockup's layout).
+const VIDEO_W: f32 = 600.0;
+const VIDEO_BODY: f32 = 382.0;
+/// Its content's left and right edges (the playlist's too, playlistdlg.rs).
+pub(crate) const LX: f32 = winui::EDGE;
+pub(crate) const RIGHT: f32 = VIDEO_W - winui::EDGE;
+/// The rows under the list: Save to, then File name (a playlist's Quality), then Subtitles.
+const ROWS_Y: [f32; 3] = [256.0, 296.0, 336.0];
 
 type Slot<T> = Arc<Mutex<Option<Result<T, String>>>>;
 
@@ -408,7 +417,7 @@ impl VideoDialog {
             ctx,
             "video-page",
             "Download video from a page",
-            [500.0, 391.0],
+            [VIDEO_W, VIDEO_BODY + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| self.body(ui, o, rt),
@@ -511,19 +520,29 @@ impl VideoDialog {
     fn body(&mut self, ui: &mut Ui, o: Pos2, rt: &tokio::runtime::Handle) -> Outcome<()> {
         let p = ui.painter().clone();
         let (dir, ytdlp, ffmpeg) = self.tools.get_or_insert_with(tools).clone();
-        text(
+        // The labels' column (the rows under the list share it).
+        let bx = winui::form(
             &p,
-            o.x + 11.0,
-            o.y + 21.0,
-            crate::i18n::t("Page address"),
-            winui::TEXT(),
+            LX,
+            &[
+                "Page address",
+                "Save to",
+                "File name",
+                // i18n: label before the quality chosen for all of a playlist's videos
+                "Quality",
+                // i18n: label before the list of a video's subtitle languages
+                "Subtitles",
+            ],
+            false,
         );
+        let h = winui::CONTROL_H;
+        winui::form_label(&p, o, LX, 16.0, h, "Page address", true);
         // Look up is as wide as its label in this language (#172); the address ends 8 px before.
-        let (look_x, look_w) =
-            winui::buttons_to_right(&p, 489.0, 8.0, &[("Look up", 90.0)], 160.0)[0];
+        let look_w = winui::footer_button_width(&p, "Look up", true);
+        let look_x = RIGHT - look_w;
         let edit = winui::edit(
             ui,
-            r(o, 11.0, 28.0, look_x - 8.0 - 11.0, 21.0),
+            r(o, bx, 16.0, look_x - 8.0 - bx, h),
             &mut self.page,
             true,
             false,
@@ -536,9 +555,10 @@ impl VideoDialog {
         let page_ok =
             url::Url::parse(self.page.trim()).is_ok_and(|u| matches!(u.scheme(), "http" | "https"));
         let can_look = page_ok && !busy && ytdlp.is_some();
-        let look = winui::button(
+        let look = winui::button_icon(
             ui,
-            r(o, look_x, 28.0, look_w, 21.0),
+            r(o, look_x, 16.0, look_w, h),
+            Some("gx-search"),
             "Look up",
             if can_look {
                 ButtonKind::Default
@@ -618,9 +638,9 @@ impl VideoDialog {
             .as_ref()
             .filter(|(_, label, _)| !label.is_empty() && installing.is_none())
             .map(|(_, label, _)| {
-                winui::buttons_to_right(&p, 489.0, 8.0, &[(label, 90.0)], 200.0)[0]
+                winui::buttons_to_right(&p, RIGHT, 8.0, &[(label, 90.0)], 200.0)[0]
             });
-        let status_right = install_at.map_or(489.0, |(x, _)| x - 9.0);
+        let status_right = install_at.map_or(RIGHT, |(x, _)| x - 9.0);
         // #351: a page whose better videos need ffmpeg says so in place of its title (still in
         // File name): YouTube without a JavaScript runtime leaves nothing but the sound to offer
         // here, and the list alone gives no reason.
@@ -631,18 +651,18 @@ impl VideoDialog {
             .and(offer.as_ref())
             .map(|(_, _, msg)| *msg);
         if let Some(t) = installing {
-            crate::torrentdlg::spinner(ui, pos2(o.x + 18.0, line_y - 4.0), 6.0);
+            crate::torrentdlg::spinner(ui, pos2(o.x + LX + 7.0, line_y - 4.0), 6.0);
             let msg = if t == Tool::YtDlp {
                 crate::i18n::t("Downloading and verifying yt-dlp...")
             } else {
                 crate::i18n::t("Downloading and verifying ffmpeg (about 80 MB)...")
             };
-            text(&p, o.x + 31.0, line_y, msg, winui::TEXT());
+            text(&p, o.x + LX + 20.0, line_y, msg, winui::TEXT());
         } else if self.lookup.is_some() {
-            crate::torrentdlg::spinner(ui, pos2(o.x + 18.0, line_y - 4.0), 6.0);
+            crate::torrentdlg::spinner(ui, pos2(o.x + LX + 7.0, line_y - 4.0), 6.0);
             text(
                 &p,
-                o.x + 31.0,
+                o.x + LX + 20.0,
                 line_y,
                 crate::i18n::t("Looking the page up..."),
                 winui::TEXT(),
@@ -653,7 +673,7 @@ impl VideoDialog {
             winui::fit(
                 ui,
                 &p,
-                o.x + 11.0,
+                o.x + LX,
                 line_y,
                 msg,
                 winui::MUTED(),
@@ -663,7 +683,7 @@ impl VideoDialog {
         } else if let Some((v, _)) = &self.video {
             let (rect, cut) = winui::text_fit(
                 &p,
-                o.x + 11.0,
+                o.x + LX,
                 line_y,
                 &v.title,
                 winui::TEXT(),
@@ -676,7 +696,7 @@ impl VideoDialog {
             winui::fit(
                 ui,
                 &p,
-                o.x + 11.0,
+                o.x + LX,
                 line_y,
                 msg,
                 winui::MUTED(),
@@ -705,10 +725,10 @@ impl VideoDialog {
             && self
                 .error
                 .as_ref()
-                .is_some_and(|e| winui::text_width(&p, e) > 478.0);
+                .is_some_and(|e| winui::text_width(&p, e) > RIGHT - LX);
         if let Some(e) = self.error.as_ref().filter(|_| !error_in_list) {
             let (rect, cut) =
-                winui::text_fit(&p, o.x + 11.0, o.y + 86.0, e, winui::ERROR(), o.x + 489.0);
+                winui::text_fit(&p, o.x + LX, o.y + 86.0, e, winui::ERROR(), o.x + RIGHT);
             if cut {
                 winui::full_on_hover(ui, rect, "video-error", e);
             }
@@ -722,14 +742,14 @@ impl VideoDialog {
             winui::fit(
                 ui,
                 &p,
-                o.x + 11.0,
+                o.x + LX,
                 o.y + 86.0,
                 // i18n: a note in Download video while FLAC is chosen: FLAC keeps the site's (already lossy) sound exactly, it can't make it better, the file is only bigger
                 crate::i18n::t(
                     "FLAC keeps the sound exactly, but it can't add quality the site's sound doesn't have: the file is only bigger.",
                 ),
                 winui::MUTED(),
-                o.x + 489.0,
+                o.x + RIGHT,
                 "video-flac",
             );
         }
@@ -740,7 +760,7 @@ impl VideoDialog {
             list.middle(ui, o, installing.is_none().then_some(status_right));
         } else {
             // The choices: the shared row list.
-            let list = r(o, 11.0, 94.0, 478.0, 150.0);
+            let list = r(o, LX, 94.0, RIGHT - LX, 150.0);
             let mut picked = None;
             let choices = self.video.as_ref().map_or(&[][..], |(_, c)| c.as_slice());
             self.rows.selected = Some(self.chosen).filter(|c| *c < choices.len());
@@ -810,54 +830,19 @@ impl VideoDialog {
             }
         }
 
-        // The labels before the boxes: a column as wide as the longest of them in this
-        // language (German's "Speichern unter" is past the English 59 px), up to 150 px, the
-        // boxes after it; longer still, a label is cut and shown whole on hover.
-        let labels = [
-            crate::i18n::t("Save to"),
-            if self.list.is_some() {
-                // i18n: label before the quality chosen for all of a playlist's videos
-                crate::i18n::t("Quality")
-            } else {
-                crate::i18n::t("File name")
-            },
-            // i18n: label before the list of a video's subtitle languages
-            crate::i18n::t("Subtitles"),
-        ];
-        let widest = labels
-            .iter()
-            .map(|l| winui::text_width(&p, l))
-            .fold(0.0, f32::max);
-        let bx = (11.0 + widest + 6.0).clamp(70.0, 150.0);
-        let label = |ui: &Ui, y: f32, s: &str, color| {
-            winui::fit(
-                ui,
-                &p,
-                o.x + 11.0,
-                o.y + y,
-                s,
-                color,
-                o.x + bx - 5.0,
-                ("video-label", y as i32),
-            );
-        };
-        label(ui, 266.0, labels[0], winui::TEXT());
+        // The rows on the labels' column (`bx`, from the page address's row).
+        let [save_y, name_y, subs_y] = ROWS_Y;
+        winui::form_label(&p, o, LX, save_y, h, "Save to", true);
         winui::edit(
             ui,
-            r(o, bx, 253.0, 459.0 - bx, 21.0),
+            r(o, bx, save_y, RIGHT - h - 8.0 - bx, h),
             &mut self.folder,
             true,
             false,
         );
-        if winui::button(
-            ui,
-            r(o, 467.0, 253.0, 22.0, 21.0),
-            "...",
-            ButtonKind::Normal,
-            false,
-            None,
-        )
-        .clicked()
+        // i18n: tooltip of the "..." after Save to: choose the folder
+        if winui::icon_only_button(ui, r(o, RIGHT - h, save_y, h, h), "gx-dots", "Browse", true)
+            .clicked()
         {
             let from = self.folder.clone();
             winui::start_pick(ui.ctx(), "video-folder", move || {
@@ -867,25 +852,21 @@ impl VideoDialog {
         if let Some(d) = winui::picked(ui.ctx(), "video-folder") {
             self.folder = d.display().to_string();
         }
-        label(ui, 297.0, labels[1], winui::TEXT());
         if let Some(list) = &mut self.list {
             // One quality for every video; their names are their titles (no subtitles).
-            list.quality_row(ui, r(o, bx, 284.0, 489.0 - bx, 21.0), ffmpeg.is_some());
+            winui::form_label(&p, o, LX, name_y, h, "Quality", true);
+            list.quality_row(ui, r(o, bx, name_y, RIGHT - bx, h), ffmpeg.is_some());
         } else {
+            winui::form_label(&p, o, LX, name_y, h, "File name", true);
             winui::edit(
                 ui,
-                r(o, bx, 284.0, 489.0 - bx, 21.0),
+                r(o, bx, name_y, RIGHT - bx, h),
                 &mut self.name,
                 true,
                 false,
             );
-            let on = self.subtitles_row(ui, o, bx, ffmpeg.is_some());
-            let shade = if on {
-                winui::TEXT()
-            } else {
-                winui::TEXT_DISABLED()
-            };
-            label(ui, 328.0, labels[2], shade);
+            let on = self.subtitles_row(ui, o, bx, subs_y, ffmpeg.is_some());
+            winui::form_label(&p, o, LX, subs_y, h, "Subtitles", on);
         }
 
         // The choices belong to the address looked up: an edited address is looked up first
@@ -906,75 +887,54 @@ impl VideoDialog {
             (true, true) => ButtonKind::Default,
             (true, false) => ButtonKind::Normal,
         };
-        // The bottom row, each button as wide as its label in this language (#172): Helpers at the
-        // left, as wide as the room before Download Now allows.
-        let [now_at, later_at, cancel_at] = winui::buttons_to_right(
-            &p,
-            489.0,
-            8.0,
-            &[("Download Now", 105.0), ("Later", 73.0), ("Cancel", 73.0)],
-            160.0,
-        )[..] else {
-            unreachable!("three buttons")
-        };
-        let helpers_at = winui::buttons_from_left(
-            &p,
-            11.0,
-            8.0,
-            &[("Helpers...", 90.0)],
-            now_at.0 - 8.0 - 11.0,
-        )[0];
-        // Where yt-dlp and ffmpeg come from: MDM's own copies or the person's (#51).
-        if winui::button(
-            ui,
-            r(o, helpers_at.0, 358.0, helpers_at.1, 21.0),
-            // i18n: button in Download video: where MDM takes yt-dlp and ffmpeg from
-            "Helpers...",
-            ButtonKind::Normal,
-            false,
-            None,
-        )
-        .clicked()
-        {
-            self.open_helpers();
-        }
-        let now = winui::button(
-            ui,
-            r(o, now_at.0, 358.0, now_at.1, 21.0),
-            "Download Now",
-            kind(true),
-            false,
-            None,
-        );
-        // i18n: why Download Now is greyed: the page address was changed after the look-up
-        let now = winui::why_disabled(now, stale, "Look up the new address first");
-        // i18n: why Download Now is greyed: a playlist's videos are still being listed
-        let now = winui::why_disabled(now, listing, "Wait for the list, or stop listing").clicked()
-            || (ready && winui::enter_pressed(ui));
-        let later = winui::button(
-            ui,
-            r(o, later_at.0, 358.0, later_at.1, 21.0),
-            // i18n: button: add it now, start downloading later
-            "Later",
-            kind(false),
-            false,
-            None,
-        )
-        .clicked();
-        let cancel = winui::button(
-            ui,
-            r(o, cancel_at.0, 358.0, cancel_at.1, 21.0),
-            "Cancel",
-            ButtonKind::Normal,
-            false,
-            None,
-        )
-        .clicked();
+        // Why Download Now is greyed: each reason that holds, one a line (as both showed before).
+        // English keys here: the footer's tip translates what it is given, once.
+        let why = [
+            // i18n: why Download Now is greyed: the page address was changed after the look-up
+            (stale, crate::i18n::mark("Look up the new address first")),
+            // i18n: why Download Now is greyed: a playlist's videos are still being listed
+            (
+                listing,
+                crate::i18n::mark("Wait for the list, or stop listing"),
+            ),
+        ]
+        .iter()
+        .filter(|(on, _)| *on)
+        .map(|(_, s)| *s)
+        .collect::<Vec<_>>()
+        .join("\n");
         // Escape answers the playlist's question first, when it's asked.
         let asking = self.list.as_ref().is_some_and(|l| l.asking());
-        if cancel || (winui::escape_pressed(ui) && !asking) {
+        // The footer: Helpers at its start; Enter Download Now (while it can), Escape Cancel.
+        let pressed = winui::footer(
+            ui,
+            o,
+            VIDEO_W,
+            VIDEO_BODY,
+            &mut [
+                // Where yt-dlp and ffmpeg come from: MDM's own copies or the person's (#51).
+                // i18n: button in Download video: where MDM takes yt-dlp and ffmpeg from
+                FooterItem::Button(FooterButton::new("Helpers...", ButtonKind::Normal).leading()),
+                FooterItem::Button(
+                    FooterButton::new("Download Now", kind(true))
+                        .primary()
+                        .enter(ready)
+                        .tip(!why.is_empty(), &why),
+                ),
+                FooterItem::Button(
+                    // i18n: button: add it now, start downloading later
+                    FooterButton::new("Later", kind(false)),
+                ),
+                FooterItem::Button(FooterButton::new("Cancel", ButtonKind::Normal).escape(!asking)),
+            ],
+        );
+        if pressed == Some(0) {
+            self.open_helpers();
+        }
+        if pressed == Some(3) {
             return Outcome::Closed;
         }
+        let (now, later) = (pressed == Some(1), pressed == Some(2));
         if ready && (now || later) {
             // A playlist of many asks first; Yes comes back as `confirmed`.
             if let Some(list) = &mut self.list
@@ -998,9 +958,9 @@ impl VideoDialog {
 impl VideoDialog {
     /// Subtitles (#68): a language the video has, from the uploader or the site's automatic
     /// captions, saved beside the video (`<name>.<language>.srt`) or put into it (ffmpeg).
-    /// The list starts at `bx`, after the labels' column; true when it can be chosen from (its
-    /// label is greyed otherwise).
-    fn subtitles_row(&mut self, ui: &mut Ui, o: Pos2, bx: f32, ffmpeg: bool) -> bool {
+    /// The list starts at `bx`, after the labels' column, on the row at `y`; true when it can be
+    /// chosen from (its label is greyed otherwise).
+    fn subtitles_row(&mut self, ui: &mut Ui, o: Pos2, bx: f32, y: f32, ffmpeg: bool) -> bool {
         let choice = self
             .video
             .as_ref()
@@ -1013,7 +973,7 @@ impl VideoDialog {
         let pick = if on { self.sub_pick } else { 0 };
         if let Some(i) = winui::combo_light(
             ui,
-            r(o, bx, 315.0, 200.0, 21.0),
+            r(o, bx, y, 200.0, winui::CONTROL_H),
             &shown,
             pick.min(shown.len().saturating_sub(1)),
             on,
@@ -1028,12 +988,15 @@ impl VideoDialog {
         let mut embed = self.embed && chosen && ffmpeg && holds;
         let resp = winui::checkbox_until(
             ui,
-            pos2(o.x + bx + 212.0, o.y + 319.0),
+            pos2(
+                o.x + bx + 212.0,
+                o.y + y + ((winui::CONTROL_H - 13.0) / 2.0).round(),
+            ),
             &mut embed,
             // i18n: checkbox in Download video: subtitles go inside the video file instead of a separate .srt file beside it
             "Put them into the video",
             chosen && ffmpeg && holds,
-            Some(o.x + 489.0),
+            Some(o.x + RIGHT),
         );
         let resp = winui::why_disabled(
             resp,

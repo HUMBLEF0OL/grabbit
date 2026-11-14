@@ -14,7 +14,11 @@ use mdm_tools::playlist::{Entry, Listing, PAGE};
 use mdm_tools::resolve::ListPage;
 
 use crate::dialogs::{Confirm, Outcome};
+use crate::videodlg::{LX, RIGHT};
 use crate::winui::{self, ButtonKind, r};
+
+/// The top of the row under the checklist (Select all, Select none, Stop listing…).
+const BUTTONS_Y: f32 = 216.0;
 
 /// Adding more than this many downloads at once is asked first.
 pub const CONFIRM_ABOVE: usize = 500;
@@ -315,7 +319,7 @@ impl PlaylistView {
         let line_y = o.y + 70.0;
         let n = self.entries.len();
         let status = if self.listing.is_some() {
-            crate::torrentdlg::spinner(ui, pos2(o.x + 18.0, line_y - 4.0), 6.0);
+            crate::torrentdlg::spinner(ui, pos2(o.x + LX + 7.0, line_y - 4.0), 6.0);
             match self.total {
                 Some(t) => crate::i18n::fmt(
                     // i18n: in Download video, while a playlist is listed: {n} videos listed so far, {total} in all
@@ -363,7 +367,11 @@ impl PlaylistView {
                 ],
             )
         };
-        let x = if self.listing.is_some() { 31.0 } else { 11.0 };
+        let x = if self.listing.is_some() {
+            LX + 20.0
+        } else {
+            LX
+        };
         let rc = winui::fit(
             ui,
             &p,
@@ -399,11 +407,11 @@ impl PlaylistView {
         let rc = winui::fit(
             ui,
             &p,
-            o.x + 11.0,
+            o.x + LX,
             o.y + 86.0,
             &text,
             color,
-            o.x + 489.0,
+            o.x + RIGHT,
             "playlist-note",
         );
         winui::readable(ui, rc, "playlist-note", &text);
@@ -421,7 +429,7 @@ impl PlaylistView {
         let ev = winui::row_list(
             ui,
             "playlist-rows",
-            r(o, 11.0, 94.0, 478.0, 120.0),
+            r(o, LX, 94.0, RIGHT - LX, 112.0),
             n,
             17.0,
             &mut self.rows,
@@ -496,19 +504,21 @@ impl PlaylistView {
         } else {
             list_rest
         };
-        // Each as wide as its label in this language (#172), side by side from the left.
-        let [all_at, none_at, third_at] = winui::buttons_from_left(
-            &p,
-            11.0,
-            8.0,
-            &[("Select all", 90.0), ("Select none", 90.0), (third, 100.0)],
-            150.0,
-        )[..] else {
-            unreachable!("three buttons")
-        };
+        // Each as wide as its label in this language (#172), side by side from the left; the
+        // third as wide as the widest of its three labels, so it keeps its size as they change.
+        let h = winui::CONTROL_H;
+        let all_w = winui::footer_button_width(&p, "Select all", false);
+        let none_w = winui::footer_button_width(&p, "Select none", false);
+        let third_w = [stop, load_more, list_rest]
+            .map(|l| winui::footer_button_width(&p, l, false))
+            .into_iter()
+            .fold(0.0, f32::max);
+        let all_at = (LX, all_w);
+        let none_at = (LX + all_w + 8.0, none_w);
+        let third_at = (none_at.0 + none_w + 8.0, third_w);
         let all = winui::button(
             ui,
-            r(o, all_at.0, 222.0, all_at.1, 21.0),
+            r(o, all_at.0, BUTTONS_Y, all_at.1, h),
             // i18n: button in Download video for a playlist: tick every video
             "Select all",
             ButtonKind::Normal,
@@ -518,7 +528,7 @@ impl PlaylistView {
         .clicked();
         let none = winui::button(
             ui,
-            r(o, none_at.0, 222.0, none_at.1, 21.0),
+            r(o, none_at.0, BUTTONS_Y, none_at.1, h),
             // i18n: button in Download video for a playlist: untick every video
             "Select none",
             ButtonKind::Normal,
@@ -536,7 +546,7 @@ impl PlaylistView {
         if self.listing.is_some() {
             if winui::button(
                 ui,
-                r(o, third_at.0, 222.0, third_at.1, 21.0),
+                r(o, third_at.0, BUTTONS_Y, third_at.1, h),
                 stop,
                 ButtonKind::Normal,
                 false,
@@ -553,7 +563,7 @@ impl PlaylistView {
         } else if self.more
             && winui::button(
                 ui,
-                r(o, third_at.0, 222.0, third_at.1, 21.0),
+                r(o, third_at.0, BUTTONS_Y, third_at.1, h),
                 third,
                 ButtonKind::Normal,
                 false,
@@ -573,7 +583,13 @@ impl PlaylistView {
                 ("total", &crate::i18n::integer(n as u64)),
             ],
         );
-        winui::text_right(&p, o.x + 489.0, o.y + 236.0, &chosen, winui::MUTED());
+        winui::text_right(
+            &p,
+            o.x + RIGHT,
+            o.y + winui::baseline_in(BUTTONS_Y, h),
+            &chosen,
+            winui::MUTED(),
+        );
     }
 
     /// The Quality drop-down (where a single video has its File name).
