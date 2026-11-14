@@ -468,8 +468,47 @@ function firstUrl(item) {
   return r && Date.now() - r.at < 120000 ? r.from : item.url;
 }
 
-// Links clicked with Alt held (page.js): the browser keeps their download.
-const bypass = new Map();
+// Links clicked with Alt held (page.js): the browser keeps their download. By the link's
+// address (the click's own download, the start of a redirect), and once per click the download
+// that follows it under another address in the next seconds (upstream issue 332): one in the same
+// tab (Firefox says which tab a page load is in), or one whose referrer is the link or the page
+// it was on (a page's script that starts the download, a link to a page whose script does).
+const bypass = new Map(); // address -> {at, tab, page, used}
+const BYPASS_MS = 10000;
+
+function altClicked(item, url, first) {
+  forget(bypass, BYPASS_MS);
+  const exact = [item.url, url, first].map((u) => u && bypass.get(u)).find(Boolean);
+  if (exact) {
+    exact.used = true;
+    return true;
+  }
+  const ref = item.referrer || "";
+  for (const [link, b] of bypass) {
+    if (b.used) continue;
+    const tab = Number.isInteger(item.tabId) && item.tabId >= 0 && item.tabId === b.tab;
+    if (tab || fromPage(ref, link) || fromPage(ref, b.page)) {
+      b.used = true;
+      return true;
+    }
+  }
+  return false;
+}
+
+// Whether `ref` (a download's referrer) names `page`: the same address without its #part, or
+// only its site's, as browsers cut a referrer sent to another site by default.
+function fromPage(ref, page) {
+  if (!ref || !page) return false;
+  try {
+    const r = new URL(ref);
+    const p = new URL(page);
+    p.hash = "";
+    r.hash = "";
+    return r.href === p.href || (r.pathname === "/" && !r.search && r.origin === p.origin);
+  } catch {
+    return false;
+  }
+}
 
 // ---- the media a tab loaded (#38) ------------------------------------------------------------
 
@@ -1299,10 +1338,8 @@ async function candidate(item, url) {
   if (!/^https?:/i.test(url)) return null; // blob:, data:, file: stay the browser's
   const { paused } = await ext.storage.local.get({ paused: false });
   if (paused) return null;
-  forget(bypass, 10000);
-  if (bypass.has(item.url) || bypass.has(url)) return null;
   const first = firstUrl(item);
-  if (bypass.has(first) || postOf(first) === null) return null; // Alt; a form not to post again
+  if (altClicked(item, url, first) || postOf(first) === null) return null; // Alt; a form not to post again
   if (colabRuntimeProxy(first, url)) return null;
   const r = await currentRules();
   if (!r) return null;
@@ -1667,6 +1704,7 @@ async function headersReceived(d) {
   const ref = referrers.get(d.requestId);
   const item = {
     url: d.url,
+    tabId: d.tabId,
     filename: file.name,
     totalBytes: file.size,
     fileSize: file.size,
@@ -1967,8 +2005,10 @@ async function pageMessage(m, sender) {
     const top = tab.url && /^https?:/i.test(tab.url) ? tab.url : "";
     return { on: page ? await panelOn(page, top) : false };
   }
+  // Alt held on a link: as the button went down, and at the click (page.js).
   if (m.type === "bypass" && typeof m.url === "string") {
-    bypass.set(m.url, { at: Date.now() });
+    const was = bypass.get(m.url);
+    bypass.set(m.url, { at: Date.now(), tab: tab.id, page: page || "", used: Boolean(was && was.used) });
     return { ok: true };
   }
   if (m.type === "video" && page) {

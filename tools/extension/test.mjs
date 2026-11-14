@@ -164,6 +164,7 @@ function fakeApi({
       onBeforeRequest: event("beforeRequest"),
       onBeforeSendHeaders: event("beforeSendHeaders"),
       onHeadersReceived: event("headersReceived"),
+      onBeforeRedirect: event("beforeRedirect"),
       onResponseStarted: event("responseStarted"),
       onAuthRequired: event("authRequired"),
     },
@@ -1894,6 +1895,80 @@ const ask = (listeners) => (m, sender) => new Promise((r) => listeners.message(m
   assert.deepEqual(natives(calls), []);
   ok("#208 Firefox: Alt, excluded sites, small files, file uploads and pause stay the browser's");
 }
+// Upstream issue 332: Alt held on a link, in the order each browser's events come. page.js says
+// it as the button goes down and again at the click; the download may come before the click's
+// word, under the link's address, its redirect's end, or another address a page's script went
+// to. Each is the browser's; one click leaves one such download to it, for ten seconds.
+{
+  const clock = { t: Date.now() };
+  class FakeDate extends Date {
+    static now() {
+      return clock.t;
+    }
+  }
+  const page = { id: "ours", url: "https://site.test/files", frameId: 0, tab: { id: 3, url: "https://site.test/files" } };
+  // Chromium: Alt+click downloads the link itself, at the click; only the press was said by then.
+  {
+    const { api, calls, listeners } = fakeApi({ firefox: false });
+    load(api, false, { Date: FakeDate });
+    const send = (m, sender) => new Promise((r) => listeners.message(m, sender, r));
+    const kept = async (item) => {
+      let suggested = false;
+      listeners.determining(item, () => (suggested = true));
+      await settle();
+      return suggested;
+    };
+    await send({ type: "bypass", url: "https://site.test/get?id=7" }, page);
+    assert.ok(await kept({ id: 60, url: "https://site.test/get?id=7", finalUrl: "https://cdn.test/a.zip", referrer: "https://site.test/files", filename: "a.zip" }), "redirected: the link's own address");
+    // The click's word comes after: still the same click, nothing more is left to the browser.
+    await send({ type: "bypass", url: "https://site.test/get?id=7" }, page);
+    assert.ok(!(await kept({ id: 61, url: "https://site.test/b.zip", referrer: "https://site.test/files", filename: "b.zip" })), "a later plain download from the page");
+    assert.equal(natives(calls).length, 1);
+    // A link the page's script took: the download it started instead, under another address,
+    // sent from the page (the referrer cut to the site, the default across sites); once.
+    calls.length = 0;
+    await send({ type: "bypass", url: "https://site.test/dl/9" }, page);
+    assert.ok(await kept({ id: 62, url: "https://files.test/token/c.zip", referrer: "https://site.test/", filename: "c.zip" }), "a script's download");
+    assert.ok(!(await kept({ id: 63, url: "https://files.test/token/d.zip", referrer: "https://site.test/", filename: "d.zip" })), "only one");
+    assert.equal(natives(calls).length, 1);
+    // Another site's download meanwhile is not the click's.
+    calls.length = 0;
+    await send({ type: "bypass", url: "https://site.test/dl/10" }, page);
+    assert.ok(!(await kept({ id: 64, url: "https://other.test/e.zip", referrer: "https://other.test/page", filename: "e.zip" })), "another site's");
+    // Ten seconds on, the click is forgotten: its link goes to MDM again.
+    clock.t += 10001;
+    assert.ok(!(await kept({ id: 65, url: "https://site.test/dl/10", referrer: "https://site.test/files", filename: "f.zip" })), "forgotten");
+    assert.equal(natives(calls).length, 2);
+  }
+  // Firefox: page.js follows the link once the background has it; the page load's answer is the
+  // download. Straight, by a redirect, or a page whose script goes to the file in the same tab.
+  {
+    const { api, calls, listeners } = fakeApi({ firefox: true });
+    load(api, true, { Date: FakeDate });
+    await settle();
+    const send = ask(listeners);
+    const zip = { "Content-Type": "application/zip" };
+    await send({ type: "bypass", url: "https://site.test/a.zip" }, page);
+    assert.deepEqual(await held(listeners, answer("https://site.test/a.zip", zip)), {}, "straight");
+    await send({ type: "bypass", url: "https://site.test/go?f=b" }, page);
+    listeners.beforeRedirect({ url: "https://site.test/go?f=b", redirectUrl: "https://cdn.test/b.zip", type: "main_frame", tabId: 3 });
+    assert.deepEqual(await held(listeners, answer("https://cdn.test/b.zip", zip, { requestId: "r2" })), {}, "redirected");
+    await send({ type: "bypass", url: "https://site.test/thanks?f=c" }, page);
+    assert.deepEqual(await held(listeners, answer("https://cdn.test/c.zip", zip, { requestId: "r3" })), {}, "a script's, same tab");
+    assert.deepEqual(natives(calls), []);
+    // That click's leave is used: the next download in the tab is MDM's.
+    assert.deepEqual(await held(listeners, answer("https://cdn.test/d.zip", zip, { requestId: "r4" })), { cancel: true });
+    assert.equal(natives(calls).length, 1);
+    // The download Firefox itself makes of it (a save with browser.altClickSave): by its address.
+    calls.length = 0;
+    await send({ type: "bypass", url: "https://site.test/e.zip" }, page);
+    listeners.created({ id: 70, url: "https://site.test/e.zip", filename: "/dl/e.zip", referrer: "https://site.test/files" });
+    await settle();
+    assert.deepEqual(natives(calls), []);
+    assert.deepEqual(steps(calls), []);
+  }
+  ok("upstream issue 332: Alt+click: the link, its redirect, a script's download after it, once; Chrome and Firefox orders");
+}
 // A private window's download goes as one; a tab opened only for it closes with it.
 {
   const { api, calls, listeners } = fakeApi({ firefox: true });
@@ -2062,34 +2137,91 @@ const ask = (listeners) => (m, sender) => new Promise((r) => listeners.message(m
   assert.ok(english.status_remote, "status_remote");
   ok("another MDM: the app's file types, every pairing message");
 }
-// page.js, in a page: Alt held tells the app the click is the browser's (`bypass`); a plain
-// click is never held (the downloads API takes it).
+// page.js, in a page: Alt held tells the app the click is the browser's (`bypass`), as the button
+// goes down and at the click; a plain click is never held (the downloads API takes it). Upstream
+// issue 332: Firefox does nothing itself with an Alt+click, so there the link is followed as a
+// plain click once the background has it.
 {
   const pageCode = readFileSync(new URL("../../extension/page.js", import.meta.url), "utf8");
-  const sent = [];
-  const handlers = {};
-  const api = {
-    runtime: { id: "ours", sendMessage: async (m) => (sent.push(JSON.parse(JSON.stringify(m))), { ok: true }) },
+  const run = async ({ firefox }) => {
+    const sent = [];
+    // The capture listeners by the event's name, the bubbling ones as "name:bubble".
+    const handlers = {};
+    class Element {
+      constructor(href) {
+        this.href = href;
+        this.clicks = 0;
+      }
+      closest() {
+        return this;
+      }
+      // The script's own click: not trusted, without Alt.
+      click() {
+        this.clicks++;
+        this.again = { type: "click", button: 0, isTrusted: false, altKey: false, target: this, defaultPrevented: false, preventDefault() {} };
+        handlers.click(this.again);
+        handlers["click:bubble"](this.again);
+      }
+    }
+    const api = {
+      runtime: {
+        id: "ours",
+        getURL: (p) => (firefox ? "moz-extension://5d0c/" : "chrome-extension://ours/") + p,
+        sendMessage: async (m) => (sent.push(JSON.parse(JSON.stringify(m))), { ok: true }),
+      },
+    };
+    vm.runInNewContext(pageCode, {
+      browser: api,
+      Element,
+      Promise,
+      addEventListener: (n, f, capture) => (handlers[capture ? n : `${n}:bubble`] = f),
+      removeEventListener() {},
+    });
+    // A person's click: the button pressed, then the click going down to the link (capture) and
+    // back up to the window (`page`: what the page's own listener does with it on the way).
+    const click = (href, extra = {}, page = () => {}) => {
+      const a = new Element(href);
+      const e = { type: "click", button: 0, isTrusted: true, altKey: false, target: a, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...extra };
+      handlers.pointerdown({ ...e, type: "pointerdown" });
+      handlers.click(e);
+      page(e);
+      handlers["click:bubble"](e);
+      return { a, e };
+    };
+    return { click, sent };
   };
-  class Element {
-    constructor(href) {
-      this.href = href;
-    }
-    closest() {
-      return this;
-    }
+  // Chromium downloads an Alt-clicked link itself: the press said it, the click is left as it is.
+  let t = await run({ firefox: false });
+  let { a, e } = t.click("https://x.test/f/a.zip");
+  await settle();
+  assert.ok(!e.defaultPrevented && a.clicks === 0);
+  assert.deepEqual(t.sent, []);
+  ({ a, e } = t.click("https://x.test/f/a.zip", { altKey: true }));
+  await settle();
+  assert.ok(!e.defaultPrevented && a.clicks === 0, "Alt: the browser's");
+  assert.deepEqual(t.sent, [{ type: "bypass", url: "https://x.test/f/a.zip" }, { type: "bypass", url: "https://x.test/f/a.zip" }], "at the press, and the click");
+  // Firefox: its own handling is stopped, and once the background has it the link is followed
+  // as a plain click (one click, not trusted, without Alt).
+  t = await run({ firefox: true });
+  ({ a, e } = t.click("https://x.test/go?f=a", { altKey: true }));
+  assert.ok(e.defaultPrevented && a.clicks === 0, "not before the background has it");
+  await settle();
+  assert.ok(a.clicks === 1 && !a.again.altKey && a.again.isTrusted !== true, "followed");
+  assert.ok(t.sent.length >= 2 && t.sent.every((m) => m.type === "bypass" && m.url === "https://x.test/go?f=a"));
+  // A link the page's own script took, Alt with Shift, Ctrl or Meta: left as they are.
+  ({ a, e } = t.click("https://x.test/go?f=b", { altKey: true }, (ev) => ev.preventDefault()));
+  await settle();
+  assert.equal(a.clicks, 0, "the page's script");
+  for (const keys of [{ shiftKey: true }, { metaKey: true }, { ctrlKey: true }]) {
+    ({ a, e } = t.click("https://x.test/go?f=c", { altKey: true, ...keys }));
+    await settle();
+    assert.ok(!e.defaultPrevented && a.clicks === 0, JSON.stringify(keys));
   }
-  vm.runInNewContext(pageCode, { browser: api, Element, addEventListener: (n, f) => (handlers[n] = f), removeEventListener() {} });
-  const click = (extra = {}) => {
-    const e = { type: "click", button: 0, isTrusted: true, altKey: false, target: new Element("https://x.test/f/a.zip"), defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...extra };
-    handlers.click(e);
-    return e;
-  };
-  assert.ok(!click().defaultPrevented);
-  assert.deepEqual(sent, []);
-  assert.ok(!click({ altKey: true }).defaultPrevented, "Alt: the browser's");
-  assert.deepEqual(sent, [{ type: "bypass", url: "https://x.test/f/a.zip" }]);
-  ok("page.js: Alt tells the app, a plain click is never held");
+  // Without Alt nothing changes.
+  ({ a, e } = t.click("https://x.test/f/a.zip"));
+  await settle();
+  assert.ok(!e.defaultPrevented && a.clicks === 0);
+  ok("page.js: Alt tells the app at the press and the click, a plain click is never held; upstream issue 332: Firefox follows the link");
 }
 assert.deepEqual(complaints, [], "nothing written to the console as an error or warning");
 
