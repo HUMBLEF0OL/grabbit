@@ -87,8 +87,8 @@ A window larger than the screen at a big interface size scrolls.
 | **Esc** | Close the dialog (an open drop-down list first) |
 | **Alt** + an underlined letter | That button or control |
 | **Ctrl+Tab** / **Ctrl+Shift+Tab** | The next / previous tab, or Options page (also **Ctrl+Page Down** / **Page Up**) |
-| **Left** / **Right** | The next tab of a focused tab strip; the next choice of a radio group |
-| **Up** / **Down** | The next Options page of its focused list; the next choice of a drop-down list or radio group; a number up or down |
+| **Left** / **Right** | The next tab of a focused tab strip, or Options page of its focused side list; the next choice of a radio group |
+| **Up** / **Down** | The next Options page of its focused side list; the next choice of a drop-down list or radio group; a number up or down |
 | **Alt+Down** or **F4** | Open a drop-down list |
 | Type a name | Jump to the item that starts with it, in a list or a drop-down |
 | **Delete** | Remove the selected item of a list (a login, an exception, a queue: asks first) |
