@@ -568,7 +568,9 @@ These ship in a later version, when they're ready.
   password, 7-Zip needed, Create folder, Download limits, the notices, the browser extension's
   offer and the drop target; "Add many downloads" is that Confirm), their keys unchanged (still
   to come, with plan 09's polish: the Scheduler at the mockup's width and short enough for a
-  1080p screen at 200 %). Next: the Options window (plan 08)
+  1080p screen at 200 %), and the help pages, the website's Themes page, its theme prompt and
+  llms.txt describing Graphite as the only look (its picture there comes with the new
+  screenshots). Next: the Options window (plan 08)
 
 ### Bugs being looked into
 

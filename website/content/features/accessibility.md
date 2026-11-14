@@ -51,11 +51,8 @@ menu bar and every right-click menu as menus whose items can be run. Screen read
 every row of a list, not only those in view, with its place ("12 of 40"), and lists such as Download video's qualities and Add torrent's files will read with their
 names and ticks. A window will show its contents the first time a screen reader reads it, and a
 drop-down's choice can be set by its text. In dark mode, grey notes and error texts will have the
-4.5:1 contrast WCAG asks for. **View → Theme** adds **High contrast**: black and white, a bright
-accent, every edge drawn, text at 7:1 or more (see [themes](/themes.html)). **View → Interface
+4.5:1 contrast WCAG asks for. A theme file with `contrast = "high"` draws every edge and text in
+stronger colours (see [themes](/themes.html)). **View → Interface
 size** will make every window larger, from 100 % to 200 % on top of the system's display scale,
 with **Ctrl +**, **Ctrl −** and **Ctrl 0** in any MDM window, as in a browser; a window larger
 than the screen scrolls the rest.
-
-![The main window's toolbar and categories in the High contrast theme](images/help/theme-high-contrast.webp)
-*The High contrast theme.*
