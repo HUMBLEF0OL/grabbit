@@ -3,22 +3,20 @@
 [← Back to docs index](README.md)
 
 A theme changes how MDM looks and keeps everything where it was: the same windows, menus and
-buttons in the same places, drawn in other colours, shapes and icons. Each theme has a light and
+buttons in the same places, drawn in other colours, sizes and shapes. Each theme has a light and
 a dark side.
 
-## Pick one
+## Graphite
 
-Open **View → Theme** and click a theme: the whole window changes at once, nothing to restart.
-**View → Dark Mode support** and **View → Always dark** then choose its light or dark side, as
-for the classic look ([Dark mode](getting-started.md#dark-mode)).
+MDM's look is **Graphite**, its only built-in theme: near-black or white with royal amethyst and
+electric cyan, rounded corners, one-colour icons and its own typeface, Geist
+([Getting started](getting-started.md#themes) describes it). The earlier themes (Classic, Native,
+High contrast, Metro, Adwaita, Breeze, Luna, Aero and Aqua) are gone: a copy of MDM, or a theme
+file, that names one gets Graphite, and the log says so.
 
-The built-in themes are **Classic** (MDM's own look, the default), **Native** (your system's
-accent colour and contrast), **High contrast**, and the style themes **Metro**, **Adwaita**,
-**Breeze**, **Luna**, **Aero** and **Aqua**, each with its own control shapes and icons, and on
-Windows its own title bar, and **Graphite**, MDM's own new look, with its own icons (its
-typeface still to come). [Getting started](getting-started.md#themes) describes each one; the
-website's [Themes page](https://misterdownloadmanager.com/themes.html) shows them light and dark
-(Graphite once a release has it).
+**View → Dark Mode support** and **View → Always dark** choose its light or dark side
+([Dark mode](getting-started.md#dark-mode)). Theme files of your own build on Graphite: open
+**View → Theme** and click one, and the whole window changes at once, nothing to restart.
 
 ## Where theme files go
 
@@ -30,7 +28,7 @@ opens it (and makes it the first time). It is in MDM's data folder:
 | Installed or the plain zip | `%APPDATA%\misterdownloadmanager\themes` |
 | [Portable copy](portable.md) | `data\themes` beside the program |
 
-Within two seconds a new file shows in **View → Theme**, under the built-in themes, by the `name`
+Within two seconds a new file shows in **View → Theme**, under Graphite, by the `name`
 it gives itself. After you edit a file, pick it again in **View → Theme** to see the change.
 
 A theme can be one file (`harbour.toml`) or a folder of its own (`harbour/theme.toml`) when it
@@ -61,7 +59,7 @@ writes new colours, MDM takes them within two seconds. It looks only at the file
 every two seconds, and only while pywal is the theme. A copy added with **Add a theme file…**
 keeps the colours it had.
 
-A scheme changes colours only, on the classic look: every window, button and menu stays where it
+A scheme changes colours only, on Graphite: every window, button and menu stays where it
 was. A dark scheme makes MDM dark and a light one light, whatever **View → Always dark** says. The
 scheme's colours go where they mean the same:
 
@@ -87,7 +85,6 @@ what you like:
 ```toml
 name = "Gruvbox, my way"
 inherits = "gruvbox-dark-medium"   # gruvbox-dark-medium.yaml, beside it
-icons = "accent"
 
 [sizes]
 radius = 6
@@ -103,8 +100,7 @@ everything else comes from the theme it `inherits`:
 
 ```toml
 name = "Harbour"
-inherits = "classic"
-icons = "color"
+inherits = "graphite"
 
 [seeds.light]
 background = "#eef3f6"
@@ -126,9 +122,7 @@ focus = "ring"
 ```
 
 - **`name`** — what **View → Theme** lists; the file's name when there is none.
-- **`inherits`** — the theme yours starts from: `classic` (the default when it's left out), a
-  built-in theme's id (`metro`, `adwaita`, `breeze`, `luna`, `aero`, `aqua`, `graphite`,
-  `high-contrast`), or
+- **`inherits`** — the theme yours starts from: `graphite` (the default when it's left out), or
   another theme file in the same folder, by its file name without `.toml`. A file that inherits
   another can be inherited in turn; a theme can't inherit itself.
 - **`[seeds]`** — a handful of colours (`background`, `surface`, `header`, `text`, `accent`,
@@ -139,28 +133,25 @@ focus = "ring"
   with transparency. The roles a file sets win over its seeds.
 - **`[sizes]`** — corner radii, border widths, font sizes and row heights, in pixels.
 - **`[controls]`** — the shape of text boxes, check boxes, buttons, progress bars, scroll bars,
-  the focus mark and the title bar; and `chrome`, the windows' layout: `classic` (IDM's, the
-  default) or `graphite` (Graphite's). Under `graphite` the main window has its menus and a Find
-  button in the title bar, a grouped toolbar, a flatter Categories tree and progress in the Status
-  column (its dialogs, footers and banners come later), drawn with the roles `panel`, `tile`,
-  `text.secondary`, `menu.shortcut`, `toolbar.checked`, `button.danger`, `button.danger.text`,
-  `banner.error`, `banner.info`, `banner.warning`, `glow`, `button.accent.top` and
-  `progress.bar.end` (`glow`, `button.accent.top` and `progress.bar.end` are transparent by
-  default: no glow, a flat face).
-- **`icons`** — `color`, `mono` (one colour) or `accent`.
+  the focus mark and the title bar. The layout is Graphite's in every theme (a `chrome` key is
+  no longer read). Its parts are drawn with the roles `panel`, `tile`, `text.secondary`,
+  `menu.shortcut`, `toolbar.checked`, `button.danger`, `button.danger.text`, `banner.error`,
+  `banner.info`, `banner.warning`, `glow`, `button.accent.top` and `progress.bar.end` (`glow`,
+  `button.accent.top` and `progress.bar.end` are transparent unless a theme sets them: no glow,
+  a flat face).
 - **`font`** — a font MDM carries, for every text: `"geist"` (Geist, as the Graphite theme has it).
   Without it, or with a name MDM doesn't carry, the windows keep Windows' own fonts.
 - **`contrast = "high"`** — strengthens every edge and text colour on top of the rest.
 
 Every colour role, size and control style, with what it sets, is listed on the website's
 [Themes page](https://misterdownloadmanager.com/themes.html#make-your-own) (read from MDM's own
-code, so it never drifts). The built-in themes are written the same way:
-[read them on GitHub](https://github.com/anefzaoui/misterdownloadmanager/tree/main/crates/app/assets/themes).
+code, so it never drifts). Graphite is written the same way:
+[read it on GitHub](https://github.com/anefzaoui/misterdownloadmanager/tree/main/crates/app/assets/themes).
 
 A key MDM doesn't know, or a value it can't read, is skipped and written to MDM's log (the `logs`
 folder beside the themes folder), so a file made for a newer MDM still loads. A file that isn't
-valid TOML or JSON doesn't load, and the log says why. A file named like a built-in theme
-(`metro.toml`) is passed over: give yours a name of its own.
+valid TOML or JSON doesn't load, and the log says why. A file named like the built-in theme
+(`graphite.toml`) is passed over: give yours a name of its own.
 
 ### Icons
 
@@ -168,12 +159,9 @@ A theme in a folder of its own (`harbour/theme.toml`) can bring its icons in `ic
 `icons/24` (and, for PNG pictures, `icons/32` and `icons/48`, used on a screen scaled to 150 % and
 more), each named for what it shows (`tb-add-url.svg`, `cat-music.png`…). SVG and PNG files keep
 their colours; `-symbolic.svg` and `-symbolic.png` ones, as GNOME and KDE name them, take the
-theme's text colour. An icon the set lacks is drawn as the classic look draws it. In the
-categories, Finished keeps its tick and Queues its page stack over your icons, as in the classic
-look. The full list of names is in [themeicons.rs](https://github.com/anefzaoui/misterdownloadmanager/blob/main/crates/app/src/themeicons.rs) (`NEEDS`).
-Its `EXTRAS` (`gx-link.svg`, `gx-search.svg`…) are drawn only where the theme's layout asks for
-them: Graphite's menu rows, buttons, Options pages, banners and tiles. A set without them draws no
-icon there; the classic layout never asks.
+theme's text colour. An icon the set lacks is Graphite's. The full list of names is in [themeicons.rs](https://github.com/anefzaoui/misterdownloadmanager/blob/main/crates/app/src/themeicons.rs) (`NEEDS`).
+Its `EXTRAS` (`gx-link.svg`, `gx-search.svg`…) are the icons of Graphite's menu rows, buttons,
+Options pages, banners and tiles.
 
 ## Make one
 
