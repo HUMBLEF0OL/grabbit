@@ -225,8 +225,13 @@ impl VideoDialog {
 
     /// The choices for a looked-up video: merged qualities when ffmpeg is there.
     fn set_video(&mut self, mut v: Video) {
-        // No page reader for this site: the page's own title rather than a hash (#345).
-        if let Some(title) = self.context.video_title.as_deref().map(str::trim)
+        // No page reader for this site: the page's own title rather than a hash (#345), without
+        // a media extension when the page is titled with the file's name (upstream 622).
+        if let Some(title) = self
+            .context
+            .video_title
+            .as_deref()
+            .map(|t| without_media_extension(t.trim()))
             && !title.is_empty()
             && self.page.trim() == self.from_browser
             && mdm_tools::resolve::named_after_address(&v.title, &self.page)
@@ -1223,9 +1228,44 @@ pub(crate) fn choice_label(label: &str) -> String {
     }
 }
 
+/// `title` without a video or sound file's extension at its end (`Episode 31.mp4` → `Episode
+/// 31`): a page that shows one file (Dropbox's, a server's listing) is often titled with the
+/// file's name, and the choice adds its own type (it was `Episode 31.mp4.mp4`, upstream 622).
+/// As it is otherwise, or when nothing would be left.
+fn without_media_extension(title: &str) -> &str {
+    match title.rsplit_once('.') {
+        Some((stem, ext))
+            if !stem.trim().is_empty()
+                && mdm_tools::video::MEDIA
+                    .iter()
+                    .any(|m| m.eq_ignore_ascii_case(ext)) =>
+        {
+            stem.trim_end()
+        }
+        _ => title,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Upstream 622: a Dropbox page is titled with the file's name, extension and all; the video
+    /// named by it got the choice's extension once more (`Episode 31.mp4.mp4`).
+    #[test]
+    fn a_page_titled_with_the_file_name_names_it_once() {
+        for (title, want) in [
+            ("Episode 31.mp4", "Episode 31"),
+            ("Episode 31.MKV", "Episode 31"),
+            ("Episode 31.m4a", "Episode 31"),
+            // Not a media file's extension: a title as it is.
+            ("Episode 31. The end", "Episode 31. The end"),
+            ("Report v2.0", "Report v2.0"),
+            (".mp4", ".mp4"),
+        ] {
+            assert_eq!(without_media_extension(title), want, "{title}");
+        }
+    }
 
     /// #359: a Dailymotion player embedded in another site is looked up at the video's own page,
     /// without that site as its Referer (Dailymotion answers 403); any other page keeps it.
