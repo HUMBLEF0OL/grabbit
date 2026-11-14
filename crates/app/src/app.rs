@@ -658,12 +658,6 @@ pub struct App {
     /// Run without a window (`--headless`, #157): nothing is shown or asked; what arrives is
     /// added as the remote control adds it.
     headless: bool,
-    /// Clipboard watching (Options → General): the text last seen (outer None: not looked
-    /// yet) and when.
-    clip_seen: Option<Option<String>>,
-    clip_checked: Option<Instant>,
-    /// The monitor's ask for the clipboard, its read off the window thread (#418).
-    clip_asked: Option<crate::clipboard::Ask>,
     confirm_delete: Option<dialogs::ConfirmDelete>,
     /// Queue right-click → Delete, asking first: the queue and the question.
     confirm_queue_delete: Option<(usize, dialogs::Confirm)>,
@@ -1285,9 +1279,6 @@ impl App {
             host_limits: Default::default(),
             quota: Default::default(),
             limit_notice: None,
-            clip_seen: None,
-            clip_checked: None,
-            clip_asked: None,
             tray: None,
             tray_limiter: None,
             // Started with the session (#226): hidden from the first frame.
@@ -3598,40 +3589,12 @@ impl App {
     /// it, so Download File Info opens with it (unless that window is turned off). Only read,
     /// never written; on by default.
     fn watch_clipboard(&mut self, ctx: &egui::Context) {
-        if !self.settings.clipboard_autostart {
-            self.clip_seen = None;
-            return;
-        }
-        ctx.request_repaint_after(Duration::from_secs(1));
-        // Read off the window's thread (clipboard.rs): the program that owns the clipboard may
-        // hang, and a read that waits for it took the window with it (#418). An ask that is
-        // never answered just means no new look at the clipboard.
-        let text = match self.clip_asked {
-            Some(ask) => match crate::clipboard::answer(ask) {
-                Some(text) => {
-                    self.clip_asked = None;
-                    text
-                }
-                None => return,
-            },
-            None => {
-                if self
-                    .clip_checked
-                    .is_some_and(|t| t.elapsed() < Duration::from_secs(1))
-                {
-                    return;
-                }
-                self.clip_checked = Some(Instant::now());
-                self.clip_asked = Some(crate::clipboard::ask());
-                return;
-            }
-        };
-        let text = text.map(|t| t.trim().to_owned());
-        // The first look only notes what is there: turning it on doesn't grab an old link.
-        let Some(before) = self.clip_seen.replace(text.clone()) else {
-            return;
-        };
-        let Some(text) = text.filter(|t| Some(t) != before.as_ref()) else {
+        // Looked at off the window's thread (clipboard.rs): the program that owns the clipboard
+        // may hang, and a read that waits for it took the window with it (#418). The watch wakes
+        // the window only for a newly copied text: an idle MDM draws no frame for it (#847).
+        let on = self.settings.clipboard_autostart;
+        crate::clipboard::watch(on);
+        let Some(text) = crate::clipboard::copied().filter(|_| on) else {
             return;
         };
         let Ok(url) = url::Url::parse(&text) else {
@@ -5639,6 +5602,10 @@ impl App {
                 // Chosen again after it failed here: its next start is tried.
                 if Some(api) == crate::renderer::GPU {
                     crate::renderer::forget_failure();
+                } else {
+                    // OpenGL chosen again after it couldn't draw MDM (#835, #847): tried and
+                    // checked again.
+                    crate::renderer::forget_gl_failure();
                 }
                 tracing::info!("draw with {api:?} from the next start");
                 self.settings.renderer = Some(api);
@@ -6385,8 +6352,9 @@ impl App {
     }
 
     /// View → Draw with (#89): OpenGL or Direct3D, used from the next start. Greyed lines say when
-    /// what draws now isn't the choice: the system's API failed here (and why), or the choice
-    /// waits for the next start. `setting`: the choice saved in the settings.
+    /// what draws now isn't the choice: the system's API failed here (and why), OpenGL can't draw
+    /// MDM here (#835, #847), a software renderer draws, or the choice waits for the next start.
+    /// `setting`: the choice saved in the settings.
     fn draw_with_menu(setting: Option<crate::renderer::Api>) -> MenuEntry<Cmd> {
         use crate::renderer::{self, Api, Why};
         use MenuEntry::{Item as I, Radio, Sep, Sub};
@@ -6395,25 +6363,38 @@ impl App {
         let gpu = renderer::GPU.unwrap_or(Api::OpenGl);
         let on = chosen == gpu;
         let draw = Cmd::DrawWith(gpu);
-        // Its choice, and the note when it failed here.
-        let (choice, failed_note) = match gpu {
+        // Its choice, the note when it failed here, the one when a software renderer draws it,
+        // and the one when that is because the card has no driver for it (WARP, #847).
+        let (choice, failed_note, software_note, no_driver_note) = match gpu {
             Api::Direct3D => (
                 // i18n: View → Draw with: a graphics system's name (Microsoft's), usually kept as is
                 Radio("Direct3D", draw, true, on),
                 // i18n: View → Draw with: a greyed note; Direct3D failed on this computer, so OpenGL draws the windows
                 off("Direct3D didn't start here: OpenGL draws"),
+                // i18n: View → Draw with: a greyed note; Direct3D draws the windows through Windows' own software renderer (WARP) instead of a graphics card
+                off("Direct3D draws with Windows' software renderer (WARP)"),
+                // i18n: View → Draw with: a greyed note; what draws the windows and why: Direct3D 12 through Windows' own software renderer (WARP, keep the name), because this computer's graphics card has no Direct3D 12 driver
+                Some(off(
+                    "Direct3D 12 (WARP): this graphics card has no Direct3D 12 driver",
+                )),
             ),
             Api::Vulkan => (
                 // i18n: View → Draw with: a graphics system's name (Khronos', used on Linux), usually kept as is
                 Radio("Vulkan", draw, true, on),
                 // i18n: View → Draw with: a greyed note; Vulkan failed on this computer, so OpenGL draws the windows
                 off("Vulkan didn't start here: OpenGL draws"),
+                // i18n: View → Draw with: a greyed note; Vulkan draws the windows through a software renderer instead of a graphics card
+                off("Vulkan draws with a software renderer"),
+                None,
             ),
             _ => (
                 // i18n: View → Draw with: a graphics system's name (Apple's), usually kept as is
                 Radio("Metal", draw, true, on),
                 // i18n: View → Draw with: a greyed note; Metal failed on this computer, so OpenGL draws the windows
                 off("Metal didn't start here: OpenGL draws"),
+                // i18n: View → Draw with: a greyed note; Metal draws the windows through a software renderer instead of a graphics card
+                off("Metal draws with a software renderer"),
+                None,
             ),
         };
         let mut items = vec![
@@ -6427,13 +6408,24 @@ impl App {
             choice,
         ];
         let failed = renderer::gpu_failed().filter(|_| on);
-        if renderer::active().is_some_and(|a| a != chosen) {
+        let active = renderer::active();
+        // The system's API on a software renderer (WARP): said, with why below (no card for
+        // it, an OpenGL that can't draw MDM).
+        let software = active == Some(gpu) && renderer::software();
+        // OpenGL can't draw MDM here (#835, #847): said, and why, where it changed what draws.
+        let unfit = renderer::gl_failed().filter(|_| active == Some(gpu) && (software || !on));
+        // The software renderer draws because no card here has a driver for the system's API:
+        // one line says both (#847).
+        let no_driver = no_driver_note.filter(|_| software && failed == Some(Why::NoAdapter));
+        if active.is_some_and(|a| a != chosen) || software {
             items.push(Sep);
-            let last = match failed {
-                Some(why) => {
-                    items.push(failed_note);
+            let mut notes = Vec::new();
+            match (failed, no_driver) {
+                (_, Some(note)) => items.push(note),
+                (Some(why), None) => {
+                    items.push(if software { software_note } else { failed_note });
                     // Why, under it ("it": Direct3D, Vulkan or Metal).
-                    match why {
+                    notes.push(match why {
                         // i18n: View → Draw with: a greyed note under "… didn't start here"; why: no graphics card here has a driver for that graphics system ("it")
                         Why::NoAdapter => off("No graphics card here has a driver for it"),
                         // i18n: View → Draw with: a greyed note under "… didn't start here"; why: the window stayed empty, so MDM started again with OpenGL
@@ -6443,13 +6435,30 @@ impl App {
                         // i18n: View → Draw with: a greyed note under "… didn't start here"; why: the graphics card stopped working twice (a driver update or reset)
                         Why::LostTwice => off("The graphics card was lost twice in 10 minutes"),
                         // i18n: View → Draw with: a greyed note under "… didn't start here"; why: another error, written in MDM's log
-                        Why::Other => off("It couldn't start: the log says why"),
-                    }
+                        _ => off("It couldn't start: the log says why"),
+                    });
                 }
+                // A software renderer that draws for want of a card says only that.
+                (None, None) if software => items.push(software_note),
+                (None, None) if unfit.is_some() => {}
                 // i18n: View → Draw with: a greyed note under the choices; the choice takes effect when MDM is started again
-                None => off("Applies the next time MDM starts"),
-            };
-            items.push(last);
+                (None, None) => notes.push(off("Applies the next time MDM starts")),
+            }
+            if let Some(why) = unfit {
+                notes.push(match why {
+                    // i18n: View → Draw with: a greyed note; this computer's OpenGL (its graphics driver) is too old, so MDM doesn't draw with it
+                    Why::TooOld => off("OpenGL here is too old to draw MDM"),
+                    // i18n: View → Draw with: a greyed note; why MDM no longer draws with OpenGL: its window froze inside the graphics card's driver while OpenGL drew
+                    Why::FrozeInDriver => off("OpenGL froze inside the graphics driver here"),
+                    // i18n: View → Draw with: a greyed note; why MDM no longer draws with OpenGL: its window stayed empty for 10 seconds, so MDM started again another way
+                    Why::NoFirstFrame => off("OpenGL's first frame didn't show within 10 seconds"),
+                    // i18n: View → Draw with: a greyed note; why MDM no longer draws with OpenGL: MDM crashed or was closed while starting with it
+                    Why::EndedEarly => off("OpenGL's last start ended before its first frame"),
+                    // i18n: View → Draw with: a greyed note; why MDM no longer draws with OpenGL: it couldn't start on this computer
+                    _ => off("OpenGL didn't start here"),
+                });
+            }
+            items.extend(notes);
         }
         // i18n: View menu: submenu choosing what draws MDM's windows: OpenGL, or Direct3D, Vulkan or Metal (graphics systems)
         Sub("Draw with", true, items)
