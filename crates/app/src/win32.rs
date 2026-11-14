@@ -3298,7 +3298,6 @@ fn file_icon_once(what: &crate::fileicons::What, px: u32) -> Option<crate::filei
     use windows_sys::Win32::UI::Shell::SHGFI_SYSICONINDEX;
     com_on_this_thread();
     let (name, attrs) = match what {
-        What::FolderOpen => return list_icon(open_folder_index()?, px),
         What::Folder => ("folder".to_string(), FILE_ATTRIBUTE_DIRECTORY),
         What::File(Some(ext)) => (format!("file.{ext}"), FILE_ATTRIBUTE_NORMAL),
         What::File(None) => ("file".to_string(), FILE_ATTRIBUTE_NORMAL),
@@ -3518,20 +3517,6 @@ unsafe fn dib_rgba(
             }
             px
         })
-    }
-}
-
-/// Windows' own "open folder" (Download complete's, as IDM shows), as its system image list index.
-fn open_folder_index() -> Option<i32> {
-    use windows_sys::Win32::UI::Shell::{
-        SHGSI_SYSICONINDEX, SHGetStockIconInfo, SHSTOCKICONINFO, SIID_FOLDEROPEN,
-    };
-    // SAFETY: `info` is zeroed with its size set; SYSICONINDEX returns no icon to free.
-    unsafe {
-        let mut info: SHSTOCKICONINFO = zeroed();
-        info.cbSize = size_of::<SHSTOCKICONINFO>() as u32;
-        (SHGetStockIconInfo(SIID_FOLDEROPEN, SHGSI_SYSICONINDEX, &mut info) == 0)
-            .then_some(info.iSysImageIndex)
     }
 }
 
