@@ -549,7 +549,13 @@ These ship in a later version, when they're ready.
   **View**, the pane also with the toolbar's **Details**), and the dialogs' common parts (a
   footer with the default button last, a label column, a file card, status banners) with the
   first dialogs laid out on them: Add URL, Download File Info, Download later and Duplicate
-  download link, their keys unchanged. Next: the other dialogs
+  download link, their keys unchanged, and the progress window's buttons (Pause or Resume last
+  and filled), its status with an icon and a failed download's reason in an error banner,
+  Download complete (a card with the file's icon and size, a drag strip), Speed Limiter settings
+  and File Properties on them too (still to come, with plan 09's polish: the Hide tab button's
+  place, the torrent window's General-tab banner, and a way for the screenshot script to open a
+  failed download's window and the tab row's menu). Next:
+  the other dialogs
 
 ### Bugs being looked into
 

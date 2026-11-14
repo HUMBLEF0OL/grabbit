@@ -96,7 +96,8 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
       "Escape in the progress window leaves the download running" test comes with 07c)
 - [ ] 07b Adding (Add URL, Download File Info, Download later, Duplicate download link; in PR,
       until it is merged)
-- [ ] 07c Watching and finishing
+- [ ] 07c Watching and finishing (`ui/07c-watching-finishing`, until it is merged; the error
+      state's and the tab row menu's `/show` are left)
 - [ ] 07d Torrents, video and more
 - [ ] 07e Organising and the rest
 - [ ] 08a Options side list

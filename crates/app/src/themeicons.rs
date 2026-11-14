@@ -595,7 +595,6 @@ pub fn paint_graphite(
 }
 
 /// [`paint_graphite`] in `ink` (a status banner's icon in its kind's colour).
-#[allow(dead_code)] // ponytail: first used by the 07c-07e waves (status banners)
 pub fn paint_graphite_in(
     ui: &egui::Ui,
     painter: &egui::Painter,

@@ -80,6 +80,20 @@ Line numbers drift as phases land: find each item by its name first.
   test), a file name without break points staying on one line in the pane's header, tests of the
   splitter and of a short pane, and `/show details` while a column filter is set.
 
+## Left from 07
+
+09a's full review (step 5) takes these, from 07c's and 07d's audits:
+
+- the progress window's **Hide tab** at the page's top right, as the mock has it, 30 high: the
+  Speed Limiter and completion pages need their rows checked for room first (it keeps its old
+  place and size until then);
+- the torrent window's **General** tab: the mock's info banner ("Complete, sharing", the rate to
+  its peers) above the property table. The table starts at a fixed 274 under the piece bar, so
+  the banner needs that page's geometry reworked (the frame's buttons are 07c's row already);
+- `/show` entries for the progress window's error state and its tab row's menu (07c's
+  screenshots), and for the queue-done countdown, Archive password, Create folder and the drop
+  target (07e's), each without a real side effect.
+
 ## Done when
 
 - [ ] Graphite's default button and progress show the two-tone finish; dark mode shows the glow; light does not

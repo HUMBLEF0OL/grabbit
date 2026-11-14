@@ -3841,14 +3841,12 @@ impl<'a> FooterButton<'a> {
             ..self
         }
     }
-    #[allow(dead_code)] // ponytail: first used by the 07c-07e waves
     pub fn leading(self) -> Self {
         Self {
             side: Side::Leading,
             ..self
         }
     }
-    #[allow(dead_code)] // ponytail: first used by the 07c-07e waves
     pub fn icon(self, need: &'a str) -> Self {
         Self {
             icon: Some(need),
@@ -4162,17 +4160,17 @@ pub fn icon_only_button(ui: &mut Ui, rc: Rect, need: &str, tip: &str, enabled: b
 
 /// What a [`status_banner`] tells of.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[allow(dead_code)] // ponytail: first used by the 07c-07e waves
 pub enum BannerKind {
     Error,
+    #[allow(dead_code)] // ponytail: first used by the 07d-07e waves
     Info,
+    #[allow(dead_code)] // ponytail: first used by the 07d-07e waves
     Warning,
 }
 
 /// A status banner (`rc` on screen; not the first-start [`banner`]): the kind's soft colour
 /// (`banner.error`, `banner.info`, `banner.warning`), Graphite's `icon` in the kind's ink, a bold
 /// `title` and a `sub` line that wraps. The lines its `sub` took.
-#[allow(dead_code)] // ponytail: first used by the 07c-07e waves
 pub fn status_banner(
     ui: &Ui,
     rc: Rect,

@@ -60,7 +60,7 @@ Footer order today (left to right, default marked *) and after 07:
 | Add torrent | `torrentdlg.rs:659` | Download Now*, Later, Cancel | Download in order (check) ; Later, Cancel, Download Now* |
 | Torrent settings | `torrentdlg.rs:1314-1323` | OK*, Cancel | ; Cancel, OK* |
 | Download video | `videodlg.rs:886-921` | Helpers... ; Download Now*, Later, Cancel | Helpers... ; Later, Cancel, Download Now* |
-| File Properties | `properties.rs:412-456` | Files..., Open, OK* | Files..., Open ; OK* |
+| File Properties | `properties.rs:412-456` | Files..., Open, OK* | Open, Files... ; OK* (07c: in Tab order, Open first, as Tab went before; the footer places leading buttons in Tab order) |
 | Find file | `find.rs:151-173` | Find*, Cancel | ; Cancel, Find* |
 | Batch | `batch.rs:365-377` | OK*, Cancel | ; Cancel, OK* |
 | Link grabber | `grabber.rs:562` | Add to queue, Start*, Cancel | ; Add to queue, Cancel, Start* |

@@ -8836,12 +8836,11 @@ impl App {
         let mut changes = Vec::new();
         let mut files_requested = Vec::new();
         let items = &self.items;
-        let icons = &mut self.icons;
         self.properties.retain_mut(|pr| {
             let Some(item) = items.iter().find(|i| i.id == pr.id) else {
                 return false;
             };
-            match pr.show(ctx, icons, item) {
+            match pr.show(ctx, item) {
                 Outcome::Open => {
                     if pr.take_files_requested() {
                         files_requested.push(pr.id);

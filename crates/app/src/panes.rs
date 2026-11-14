@@ -588,7 +588,7 @@ pub struct OneDownload {
     pub id: u64,
     /// As the list's Name column has it.
     pub file_name: String,
-    /// The file type's 32-point icon key (`IconKey::ExtLarge`), as File Properties finds it.
+    /// The file type's 32-point icon key (`IconKey::ExtLarge`): the file name's extension.
     pub icon_ext: String,
     /// "Stopped, 63.00%" ([`status_line`], D8).
     pub status_line: String,

@@ -5,10 +5,13 @@ use std::path::{Path, PathBuf};
 
 use egui::{Pos2, Ui, vec2};
 
-use crate::chrome::{IconKey, ShellIcons};
 use crate::dialogs::{Outcome, window};
 use crate::model::{Item, Status};
 use crate::winui::{self, ButtonKind, LIGHT_BG, LIGHT_TEXT, r, text};
+
+/// The window's width, and its height above the footer (the Result line ends at 425).
+const WIDTH: f32 = 477.0;
+const BODY: f32 = 428.0;
 
 /// What OK changes.
 pub struct Changes {
@@ -62,20 +65,15 @@ impl Properties {
     }
 
     /// `item` is read every frame, so status and size stay live.
-    pub fn show(
-        &mut self,
-        ctx: &egui::Context,
-        icons: &mut ShellIcons,
-        item: &Item,
-    ) -> Outcome<Changes> {
+    pub fn show(&mut self, ctx: &egui::Context, item: &Item) -> Outcome<Changes> {
         let outcome = window(
             ctx,
             &format!("properties-{}", self.id),
             "File Properties",
-            [477.0, 420.0],
+            [WIDTH, BODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
-            |ui, o| self.body(ui, o, icons, item),
+            |ui, o| self.body(ui, o, item),
         );
         match outcome {
             Outcome::Done(()) => {
@@ -99,7 +97,7 @@ impl Properties {
         }
     }
 
-    fn body(&mut self, ui: &mut Ui, o: Pos2, icons: &mut ShellIcons, item: &Item) -> Outcome<()> {
+    fn body(&mut self, ui: &mut Ui, o: Pos2, item: &Item) -> Outcome<()> {
         let p = ui.painter().clone();
         let complete = item.status == Status::Complete;
         let running = item.live.is_some();
@@ -109,14 +107,26 @@ impl Properties {
             .extension()
             .map(|e| e.to_string_lossy().to_ascii_lowercase())
             .unwrap_or_default();
-        icons.paint(ui, IconKey::ExtLarge(ext.clone()), o + vec2(11.0, 11.0));
         let fit = |ui: &mut Ui, x: f32, base: f32, s: &str| {
             let (rect, cut) =
                 winui::text_fit(&p, o.x + x, o.y + base, s, LIGHT_TEXT(), o.x + 466.0);
             winui::copyable(ui, rect, ("props", base as i32), s, cut);
         };
-        fit(ui, 87.0, 31.0, &item.file_name);
-        winui::etched_h(&p, o.x + 11.0, o.y + 50.0, 456.0);
+        // The file's card (plan 07): its kind's icon, its name (whole on hover) over its type,
+        // both copyable as before (right-click → Copy): the name from the card, the type from
+        // its line.
+        let card = r(o, 11.0, 8.0, 456.0, 62.0);
+        let kind = file_type(&item.file_name, &ext);
+        let (_, type_at) = winui::file_card(
+            ui,
+            card,
+            crate::fileicons::Kind::File(&item.file_name),
+            &item.file_name,
+            &kind,
+            None,
+        );
+        winui::copyable(ui, card, "props-name", &item.file_name, true);
+        winui::copyable(ui, type_at, "props-type", &kind, false);
         let size = item.size.map_or_else(String::new, |s| {
             crate::i18n::fmt(
                 crate::i18n::t("{size} ({bytes} Bytes)"),
@@ -129,7 +139,6 @@ impl Properties {
         // The values' column: IDM's 87, or after the widest label when a translation is longer
         // (the boxes keep their right edges).
         let col = [
-            "Type:",
             "Status:",
             "Size:",
             "Save To:",
@@ -141,13 +150,8 @@ impl Properties {
         .iter()
         .map(|l| 11.0 + winui::text_width(&p, crate::i18n::t(l)).ceil() + 6.0)
         .fold(87.0_f32, f32::max);
+        // The type is in the card.
         for (label, base, value) in [
-            // i18n: label before the kind of file ("ZIP File")
-            (
-                crate::i18n::mark("Type:"),
-                69.0,
-                file_type(&item.file_name, &ext),
-            ),
             // i18n: label before the download's state
             (crate::i18n::mark("Status:"), 88.0, item.status_text()),
             (crate::i18n::mark("Size:"), 108.0, size),
@@ -386,12 +390,14 @@ impl Properties {
                 o.y + 415.0,
                 e,
                 winui::ERROR(),
-                o.x + 250.0,
+                o.x + 466.0,
                 "props-error",
             );
         } else if !complete {
             let result = item.error.clone().unwrap_or_else(|| item.status_text());
-            let x1 = o.x + 250.0;
+            // To the window's text edge: the buttons that once ended it at 250 are in the
+            // footer now.
+            let x1 = o.x + 466.0;
             let (rect, cut) = winui::text_fit(
                 &p,
                 o.x + 11.0,
@@ -408,62 +414,47 @@ impl Properties {
                 winui::full_on_hover(ui, rect, "props-result", &result);
             }
         }
-        // As wide as its label in this language (#192), into the room before OK.
-        let (open_x, open_w) = winui::button_row_from_left(
-            &ui.painter().clone(),
-            &[("Open", 259.0, 73.0)],
-            8.0,
-            385.0,
-            120.0,
-        )[0];
-        let open = winui::button_light(
-            ui,
-            r(o, open_x, 390.0, open_w, 21.0),
+        // The footer (plan 07): Open and a torrent's Files... at the start, OK last; Enter
+        // presses OK, as before. Escape closes the window (it has no Cancel), as before. The
+        // leading buttons keep their Tab order (Open, then Files...), so Open comes first on
+        // screen too: the kit places them in Tab order (the plan's table notes it).
+        let mut items = vec![winui::FooterItem::Button(
             // i18n: verb: opens the file
-            "Open",
-            if complete {
-                ButtonKind::Normal
-            } else {
-                ButtonKind::Disabled
-            },
-            false,
-        );
-        let open = winui::why_disabled(
-            open,
-            !complete,
+            winui::FooterButton::new(
+                "Open",
+                if complete {
+                    ButtonKind::Normal
+                } else {
+                    ButtonKind::Disabled
+                },
+            )
+            .leading()
             // i18n: tooltip of the greyed Open button in File Properties
-            "The download isn't complete yet",
-        )
-        .clicked();
-        if open && complete {
+            .tip(!complete, "The download isn't complete yet"),
+        )];
+        if item.torrent.is_some() {
+            items.push(winui::FooterItem::Button(
+                // i18n: File Properties button that opens the selected torrent's file list
+                winui::FooterButton::new("Files...", ButtonKind::Normal).leading(),
+            ));
+        }
+        items.push(winui::FooterItem::Button(
+            winui::FooterButton::new("OK", ButtonKind::Default).enter(true),
+        ));
+        let ok_at = items.len() - 1;
+        let pressed = winui::footer(ui, o, WIDTH, BODY, &mut items);
+        if pressed == Some(0) && complete {
             crate::dialogs::open_file(&item.dest);
         }
-        if item.torrent.is_some()
-            && winui::button_light(
-                ui,
-                r(o, 170.0, 390.0, 78.0, 21.0),
-                // i18n: File Properties button that opens the selected torrent's file list
-                "Files...",
-                ButtonKind::Normal,
-                false,
-            )
-            .clicked()
-        {
+        if item.torrent.is_some() && pressed == Some(1) {
             self.files_requested = true;
         }
-        let ok = winui::button_light(
-            ui,
-            r(o, 393.0, 390.0, 73.0, 21.0),
-            "OK",
-            ButtonKind::Default,
-            false,
-        )
-        .clicked();
+        let ok = pressed == Some(ok_at);
         let address_ok = !editable
             || url::Url::parse(self.address.trim()).is_ok_and(|u| mdm_engine::supported(&u));
         if winui::escape_pressed(ui) {
             Outcome::Closed
-        } else if ok || winui::enter_pressed(ui) {
+        } else if ok {
             if address_ok {
                 Outcome::Done(())
             } else {

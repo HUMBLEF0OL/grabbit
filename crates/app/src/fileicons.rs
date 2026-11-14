@@ -12,8 +12,6 @@ pub enum Kind<'a> {
     File(&'a str),
     /// A folder (a torrent's folder, a tree's branch).
     Folder,
-    /// An open folder (Download complete's: the file is in it).
-    FolderOpen,
 }
 
 /// A folder, or a file by its extension (lowercase; None: a file without one): what the icon
@@ -21,7 +19,6 @@ pub enum Kind<'a> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum What {
     Folder,
-    FolderOpen,
     File(Option<String>),
 }
 
@@ -29,7 +26,6 @@ impl What {
     pub fn of(kind: Kind) -> Self {
         match kind {
             Kind::Folder => What::Folder,
-            Kind::FolderOpen => What::FolderOpen,
             Kind::File(name) => What::File(extension(name)),
         }
     }
@@ -38,7 +34,6 @@ impl What {
     fn need(&self) -> &'static str {
         match self {
             What::Folder => "cat-folder",
-            What::FolderOpen => "cat-folder-open",
             What::File(ext) => crate::themeicons::file_need(ext.as_deref()),
         }
     }
@@ -114,9 +109,8 @@ mod tests {
         assert_eq!(of("README"), "ft-text");
         assert_eq!(of("data.xyz"), "ft-text");
         assert_eq!(What::Folder.need(), "cat-folder");
-        assert_eq!(What::FolderOpen.need(), "cat-folder-open");
         // Every one is in Graphite's set, the fallback.
-        for what in [What::Folder, What::FolderOpen, What::File(None)] {
+        for what in [What::Folder, What::File(None)] {
             assert!(crate::themeicons::graphite_has(what.need(), 16));
         }
     }

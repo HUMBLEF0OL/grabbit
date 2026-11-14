@@ -18,8 +18,6 @@ pub enum Icon {
     Scheduler,
     StartQueue,
     StopQueue,
-    /// Download complete's drag handle: drag the file out.
-    DragOut,
     /// Options page headers (Graphite's icons, the mockup's).
     PageGeneral,
     PageFileTypes,
@@ -60,7 +58,6 @@ impl Icon {
             Icon::Scheduler => "tb-scheduler",
             Icon::StartQueue => "tb-start-queue",
             Icon::StopQueue => "tb-stop-queue",
-            Icon::DragOut => "gx-grip",
             Icon::PageGeneral => "gx-adjust",
             Icon::PageFileTypes => "ft-generic",
             Icon::PageSaveTo => "cat-folder",
@@ -128,7 +125,6 @@ mod tests {
             Scheduler,
             StartQueue,
             StopQueue,
-            DragOut,
             PageGeneral,
             PageFileTypes,
             PageSaveTo,
@@ -150,10 +146,10 @@ mod tests {
         for icon in all {
             match icon {
                 AddUrl | AddTorrent | Resume | Stop | StopAll | Delete | DeleteCompleted
-                | Options | Scheduler | StartQueue | StopQueue | DragOut | PageGeneral
-                | PageFileTypes | PageSaveTo | PageDownloads | PageConnection | PageProxy
-                | PageLogins | PageSounds | PageRegional | PageArchives | PageRemote
-                | PageAccounts | HelperVideo | HelperMerge | HelperChecked | Details => {}
+                | Options | Scheduler | StartQueue | StopQueue | PageGeneral | PageFileTypes
+                | PageSaveTo | PageDownloads | PageConnection | PageProxy | PageLogins
+                | PageSounds | PageRegional | PageArchives | PageRemote | PageAccounts
+                | HelperVideo | HelperMerge | HelperChecked | Details => {}
             }
         }
         for icon in all {

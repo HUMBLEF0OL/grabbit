@@ -1736,7 +1736,7 @@ fn start_probe(
     probe
 }
 
-// ---- Download complete (client 455 × 215) --------------------------------------------------
+// ---- Download complete (client 540 × 317, 339 with a notice) -------------------------------
 
 pub struct Complete {
     pub id: u64,
@@ -1759,31 +1759,22 @@ impl Complete {
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         let id = format!("complete-{}", self.id);
         self.seen |= notice_seen(ctx, &id);
+        // The mockup's layout: the file's card, a label column, the drag strip, the footer. A
+        // notice (a video's subtitles refused) takes a line of its own under the card.
+        const W: f32 = 540.0;
+        let dy = if self.notices.is_empty() { 0.0 } else { 22.0 };
+        let body = 262.0 + dy;
         notice(
             ctx,
             &id,
             "Download complete",
-            [455.0, 215.0],
+            [W, body + winui::FOOTER_H],
             true,
             winui::BG(),
             !self.seen,
             |ui, o| {
                 let p = ui.painter().clone();
-                // The system's open folder (IDM shows one here): the shared file icons'.
-                crate::fileicons::paint_at(
-                    ui,
-                    &p,
-                    crate::fileicons::Kind::FolderOpen,
-                    o + vec2(10.0, 11.0),
-                    32.0,
-                );
-                winui::text(
-                    &p,
-                    o.x + 51.0,
-                    o.y + 21.0,
-                    crate::i18n::t("Download complete"),
-                    winui::TEXT(),
-                );
+                let (lx, right, h) = (winui::EDGE, W - winui::EDGE, winui::CONTROL_H);
                 let line = crate::i18n::fmt(
                     crate::i18n::t("Downloaded {size} ({bytes} Bytes)"),
                     &[
@@ -1791,99 +1782,110 @@ impl Complete {
                         ("bytes", &crate::i18n::integer(self.size)),
                     ],
                 );
-                winui::text(&p, o.x + 51.0, o.y + 34.0, &line, winui::TEXT());
+                let name = self
+                    .path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                winui::file_card(
+                    ui,
+                    r(o, lx, 16.0, right - lx, 66.0),
+                    crate::fileicons::Kind::File(&name),
+                    crate::i18n::t("Download complete"),
+                    &line,
+                    None,
+                );
                 // What didn't come with it (a video's subtitles the site refused), shortened to
                 // the window and whole on hover.
                 if !self.notices.is_empty() {
                     winui::fit(
                         ui,
                         &p,
-                        o.x + 51.0,
-                        o.y + 52.0,
+                        o.x + lx,
+                        o.y + 100.0,
                         &self.notices.join(" "),
                         winui::ERROR(),
-                        o.x + 444.0,
+                        o.x + right,
                         ("complete-notice", self.id),
                     );
                 }
+                let fx = winui::form(&p, lx, &["Address", "The file saved as"], false);
                 // i18n: noun: the web address (URL)
-                winui::text(
-                    &p,
-                    o.x + 11.0,
-                    o.y + 72.0,
-                    crate::i18n::t("Address"),
-                    winui::TEXT(),
-                );
+                winui::form_label(&p, o, lx, 96.0 + dy, h, "Address", true);
                 // Read-only and copyable (an editable copy let typing seem to work, then reverted).
                 winui::readonly_field(
                     ui,
-                    r(o, 11.0, 78.0, 434.0, 23.0),
+                    r(o, fx, 96.0 + dy, right - fx, h),
                     &self.url,
                     winui::BG(),
                     true,
                     "complete-url",
                 );
-                winui::text(
-                    &p,
-                    o.x + 11.0,
-                    o.y + 117.0,
-                    crate::i18n::t("The file saved as"),
-                    winui::TEXT(),
-                );
+                winui::form_label(&p, o, lx, 136.0 + dy, h, "The file saved as", true);
                 winui::readonly_field(
                     ui,
-                    r(o, 11.0, 124.0, 434.0, 23.0),
+                    r(o, fx, 136.0 + dy, right - fx, h),
                     &display_path(&self.path),
                     winui::BG(),
                     true,
                     "complete-saved",
                 );
 
-                let btn = |ui: &mut Ui, (x, w): (f32, f32), label: &str, kind| {
-                    winui::button(ui, r(o, x, 157.0, w, 21.0), label, kind, false, None)
-                };
-                // As wide as their labels in this language (#192): a longer one pushes those
-                // after it right, Close last at the window's edge.
-                let [open_at, with_at, folder_at, close_at] = winui::button_row_from_left(
-                    &p,
-                    &[
-                        ("Open", 12.0, 90.0),
-                        ("Open with...", 115.0, 90.0),
-                        ("Open folder", 219.0, 90.0),
-                        ("Close", 354.0, 90.0),
+                // Enter: Open, the default button (as in the other dialogs); Escape: Close. The
+                // keys of a drag out of the grip are the drag's (Escape cancels it), not this
+                // window's (#561: the drag runs beside the window, which sees them too). The
+                // footer comes first so Tab keeps its order: the buttons, the check box, the grip.
+                let dragging = crate::win32::dragging_out();
+                let pressed = winui::footer(
+                    ui,
+                    o,
+                    W,
+                    body,
+                    &mut [
+                        // i18n: verb: opens the downloaded file
+                        FooterItem::Button(
+                            FooterButton::new("Open", ButtonKind::Default)
+                                .icon("gx-external")
+                                .enter(!dragging),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Open with...", ButtonKind::Normal).leading(),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Open folder", ButtonKind::Normal)
+                                .icon("cat-folder-open")
+                                .leading(),
+                        ),
+                        // i18n: verb: closes this window
+                        FooterItem::Button(
+                            FooterButton::new("Close", ButtonKind::Normal).escape(!dragging),
+                        ),
                     ],
-                    13.0,
-                    444.0,
-                    200.0,
-                )[..] else {
-                    unreachable!("four buttons")
-                };
-                // i18n: verb: opens the downloaded file
-                let open = btn(ui, open_at, "Open", ButtonKind::Default);
-                let with = btn(ui, with_at, "Open with...", ButtonKind::Normal);
-                let folder = btn(ui, folder_at, "Open folder", ButtonKind::Normal);
-                // i18n: verb: closes this window
-                let close = btn(ui, close_at, "Close", ButtonKind::Normal);
+                );
+                let (open, with, folder, close) = (
+                    pressed == Some(0),
+                    pressed == Some(1),
+                    pressed == Some(2),
+                    pressed == Some(3),
+                );
                 winui::checkbox(
                     ui,
-                    o + vec2(24.0, 191.0),
+                    o + vec2(lx, 229.0 + dy),
                     &mut self.dont_show,
                     "Don't show this dialog again",
                     true,
                 );
 
-                // Drag handle: white box with a 1 px #828790 border; drag it to drop the file into
-                // Explorer, a mail or a chat (IDM 5.05), through OLE.
+                // The drag strip: drag it to drop the file into Explorer, a mail or a chat (IDM
+                // 5.05), through OLE. A dashed box with Graphite's grip and what it does.
                 {
-                    let handle = r(o, 414.0, 187.0, 27.0, 20.0);
-                    let grip = ui
-                        .interact(
-                            handle,
-                            egui::Id::unique(("drag-out", self.id)),
-                            winui::pointer_drag(),
-                        )
-                        // i18n: tooltip of the handle in Download complete: drag it to drop the downloaded file somewhere
-                        .on_hover_text(crate::i18n::t("Drag the file into a folder or an app"));
+                    let handle = r(o, lx, 176.0 + dy, right - lx, 40.0);
+                    // Its line says what it does (no tooltip repeating it).
+                    let grip = ui.interact(
+                        handle,
+                        egui::Id::unique(("drag-out", self.id)),
+                        winui::pointer_drag(),
+                    );
                     if grip.hovered() {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
                     }
@@ -1896,23 +1898,37 @@ impl Complete {
                     {
                         tracing::warn!("drag out: {e}");
                     }
-                    p.rect_filled(handle, 0.0, winui::FIELD());
-                    p.rect_stroke(
-                        handle,
-                        0.0,
-                        egui::Stroke::new(1.0, winui::FIELD_EDGE()),
-                        egui::StrokeKind::Inside,
+                    let edge = handle.shrink(0.5);
+                    let corners = [
+                        edge.left_top(),
+                        edge.right_top(),
+                        edge.right_bottom(),
+                        edge.left_bottom(),
+                        edge.left_top(),
+                    ];
+                    p.extend(egui::Shape::dashed_line(
+                        &corners,
+                        egui::Stroke::new(1.0, crate::theme::colors().menubar_line),
+                        4.0,
+                        3.0,
+                    ));
+                    let ink = crate::theme::colors().text_secondary;
+                    let glyph = egui::Rect::from_min_size(
+                        egui::pos2(handle.left() + 12.0, handle.center().y - 9.0),
+                        vec2(18.0, 18.0),
                     );
-                    crate::icons::Icon::DragOut.image(true).paint_at(
-                        ui,
-                        egui::Rect::from_center_size(handle.center(), vec2(16.0, 16.0)),
+                    crate::themeicons::paint_graphite_in(ui, &p, "gx-grip", glyph, ink);
+                    winui::text_at(
+                        &p,
+                        winui::tahoma(),
+                        glyph.right() + 10.0,
+                        o.y + winui::baseline_in(176.0 + dy, 40.0),
+                        // i18n: Download complete: the drag strip's line: drag it to drop the downloaded file somewhere
+                        crate::i18n::t("Drag the file into a folder or an app"),
+                        ink,
                     );
                 }
 
-                // Enter: Open, the default button (as in the other dialogs).
-                // The keys of a drag out of the grip are the drag's (Escape cancels it), not
-                // this window's (#561: the drag runs beside the window, which sees them too).
-                let dragging = crate::win32::dragging_out();
                 // A file that can't open says why (the box stays for Open folder). Looked for and
                 // handed over off the window's thread (upstream issue 743): the box closes once it
                 // opened.
@@ -1920,9 +1936,7 @@ impl Complete {
                 if opened.is_some() {
                     self.opening = None;
                 }
-                if (open.clicked() || (!dragging && winui::enter_pressed(ui)))
-                    && self.opening.is_none()
-                {
+                if open && self.opening.is_none() {
                     let opening = crate::launch::Asked::default();
                     let _ = opening.get(
                         &self.path,
@@ -1935,13 +1949,13 @@ impl Complete {
                 }
                 if opened == Some(true) {
                     Outcome::Done(())
-                } else if with.clicked() {
+                } else if with {
                     open_with(&self.path);
                     Outcome::Done(())
-                } else if folder.clicked() {
+                } else if folder {
                     show_in_folder(&self.path);
                     Outcome::Done(())
-                } else if close.clicked() || (!dragging && winui::escape_pressed(ui)) {
+                } else if close {
                     Outcome::Done(())
                 } else {
                     Outcome::Open
@@ -1989,11 +2003,14 @@ impl SpeedSettings {
 
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<SpeedChoice> {
         let extra = self.note_extra;
+        // The mockup's width; the rows as they were, then the footer.
+        const W: f32 = 480.0;
+        let body = 172.0 + extra;
         window(
             ctx,
             "speed-settings",
             "Speed Limiter settings",
-            [453.0, 197.0 + extra],
+            [W, body + winui::FOOTER_H],
             false,
             winui::LIGHT_BG(),
             |ui, o| {
@@ -2031,8 +2048,15 @@ impl SpeedSettings {
                 );
                 // Wrapped inside the window (IDM's English runs to x 440); a translation longer than three
                 // lines pushes the rest down and the window grows.
-                let lines =
-                    winui::paragraph(&p, o.x + 11.0, o.y + 47.0, note, black, o.x + 449.0, 13.0);
+                let lines = winui::paragraph(
+                    &p,
+                    o.x + 11.0,
+                    o.y + 47.0,
+                    note,
+                    black,
+                    o.x + W - winui::EDGE,
+                    13.0,
+                );
                 self.note_extra = lines.saturating_sub(3) as f32 * 13.0;
                 let o = o + vec2(0.0, self.note_extra);
                 winui::checkbox_light(
@@ -2043,7 +2067,8 @@ impl SpeedSettings {
                     true,
                 );
                 // Beyond IDM: a limit for all downloads together.
-                winui::etched_h(&p, o.x + 11.0, o.y + 108.0, 431.0);
+                // Across to the window's text edge (464 of its 480).
+                winui::etched_h(&p, o.x + 11.0, o.y + 108.0, 453.0);
                 winui::checkbox_light_until(
                     ui,
                     o + vec2(11.0, 121.0),
@@ -2078,25 +2103,28 @@ impl SpeedSettings {
                     "Only while I'm using the computer",
                     on,
                 );
-                let ok = winui::button_light(
+                // Enter OK, Escape Cancel, as before. (`o` moved down by the note's extra lines:
+                // the footer is placed on the window's own top.)
+                let pressed = winui::footer(
                     ui,
-                    r(o, 285.0, 164.0, 73.0, 21.0),
-                    "OK",
-                    ButtonKind::Default,
-                    true,
-                )
-                .clicked();
-                let cancel = winui::button_light(
-                    ui,
-                    r(o, 369.0, 164.0, 73.0, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                if cancel || winui::escape_pressed(ui) {
+                    o - vec2(0.0, self.note_extra),
+                    W,
+                    body,
+                    &mut [
+                        FooterItem::Button(
+                            // Its ring shows while nothing has the keys, as before.
+                            FooterButton::new("OK", ButtonKind::Default)
+                                .enter(true)
+                                .ring(true),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                if pressed == Some(1) {
                     Outcome::Closed
-                } else if ok || winui::enter_pressed(ui) {
+                } else if pressed == Some(0) {
                     Outcome::Done(SpeedChoice {
                         kb: winui::number_in(&self.kb, 1, 9_999_999),
                         on_startup: self.on_startup,
