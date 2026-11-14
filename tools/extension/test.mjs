@@ -978,7 +978,8 @@ const MPD = (protect) => `<?xml version="1.0"?>
   assert.equal((await saved(given))[0], "Movie the title - FL262-1E01-4.mp4");
   assert.equal((await saved(bare))[0], "Movie the title.webm");
   // The popup's tag is the saved file's type (popup.js tagOf), its name the saved one (nameOf).
-  const popup = readFileSync(new URL("../../extension/popup.js", import.meta.url), "utf8");
+  // A Windows checkout's CRLF read as LF, for the "\n}\n" the functions end at.
+  const popup = readFileSync(new URL("../../extension/popup.js", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const part = (name) => popup.slice(popup.indexOf(`function ${name}(`), popup.indexOf("\n}\n", popup.indexOf(`function ${name}(`)) + 2);
   const [tagOf, nameOf] = new Function(`const TYPES = {}; ${part("tagOf")}\n${part("nameOf")}\nreturn [tagOf, nameOf];`)();
   const listed = (await popupAsk(listeners, { type: "media", tab: 9 })).media;
