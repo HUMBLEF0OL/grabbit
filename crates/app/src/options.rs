@@ -2598,27 +2598,34 @@ impl OptionsDialog {
         let urls = self.remote.as_ref().map(|r| r.urls()).unwrap_or_default();
         let changed = self.remote_config() != crate::remote::config(&self.from);
         use mdm_remote::Status;
-        let (line, ok) = match &running {
+        use winui::BannerKind::{Error, Info, Warning};
+        // Each state's banner and icon: on, the mock's check; off or waiting for OK, an info
+        // mark (a check would say all is done); no network yet, a warning; can't listen, an error.
+        let (line, kind, icon) = match &running {
             _ if changed => (
                 // i18n: Options → Remote → Status: the settings were changed; they apply on OK
                 crate::i18n::t("The changes apply when you click OK.").to_owned(),
-                true,
+                Info,
+                "gx-info",
             ),
             None | Some(Status::Off) => (
                 // i18n: Options → Remote → Status: the remote control is off
                 crate::i18n::t("Off: nothing on the network can reach MDM.").to_owned(),
-                true,
+                Info,
+                "gx-info",
             ),
             Some(Status::Listening(_)) => (
                 // i18n: Options → Remote → Status: on; the address follows in a box below
                 crate::i18n::t("On. On the phone, open this address:").to_owned(),
-                true,
+                Info,
+                "st-complete",
             ),
             Some(Status::NoAddress) => (
                 // i18n: Options → Remote → Status: on, but the computer has no local network address now
                 crate::i18n::t("No local network now: it starts when the computer joins one.")
                     .to_owned(),
-                false,
+                Warning,
+                "st-error",
             ),
             Some(Status::PortInUse(port)) => (
                 crate::i18n::fmt(
@@ -2626,7 +2633,8 @@ impl OptionsDialog {
                     crate::i18n::t("Port {port} is used by another program: choose another."),
                     &[("port", &port.to_string())],
                 ),
-                false,
+                Error,
+                "st-error",
             ),
             Some(Status::Failed(e)) => (
                 crate::i18n::fmt(
@@ -2634,12 +2642,12 @@ impl OptionsDialog {
                     crate::i18n::t("It could not start: {error}"),
                     &[("error", e)],
                 ),
-                false,
+                Error,
+                "st-error",
             ),
         };
-        // The banner (the mock's): Info while all is well, Error when it can't listen. Its title
-        // the status line (cut with "...", whole on hover), then the address and the
-        // certificate's fingerprint inside it, at the title's x.
+        // The banner (the mock's): its title the status line (cut with "...", whole on hover),
+        // then the address and the certificate's fingerprint inside it, at the title's x.
         let url = urls.first().filter(|_| !changed);
         let fingerprint = self.remote.as_ref().and_then(|r| r.fingerprint());
         let banner_top = 204.0;
@@ -2649,11 +2657,6 @@ impl OptionsDialog {
             (None, None) => winui::status_banner_height(0),
             (_, None) => url_y + h + 10.0 - banner_top,
             (_, Some(_)) => cert_y + 20.0 - banner_top,
-        };
-        let (kind, icon) = if ok {
-            (winui::BannerKind::Info, "st-complete")
-        } else {
-            (winui::BannerKind::Error, "st-error")
         };
         let banner = r(o, l, banner_top, right - l, banner_h);
         winui::status_banner(ui, banner, kind, icon, &line, "");
@@ -2686,8 +2689,9 @@ impl OptionsDialog {
                 winui::full_on_hover(ui, rect, "opt-remote-cert", &label);
             }
         }
-        // The paired devices, from a fixed place under the banner at its tallest.
-        let devices_y = 313.0;
+        // The paired devices right under the banner (no hole while it's short); the list ends at
+        // a fixed place, so only its top moves when the banner grows or shrinks.
+        let devices_y = banner_top + banner_h + 18.0;
         let buttons_y = 402.0;
         text(
             &p,
