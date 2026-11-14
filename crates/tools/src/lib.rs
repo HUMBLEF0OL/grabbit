@@ -16,6 +16,7 @@ pub mod resolve;
 pub mod servers;
 pub mod update;
 pub mod video;
+pub mod workdir;
 
 use std::path::{Path, PathBuf};
 
