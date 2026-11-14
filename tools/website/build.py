@@ -42,16 +42,16 @@ WEB = ROOT / "website"
 CONTENT = WEB / "content"
 OUT = ROOT / "target" / "site"
 SITE = "https://misterdownloadmanager.com"
-REPO = "https://github.com/anefzaoui/misterdownloadmanager"
+REPO = "https://github.com/HUMBLEF0OL/grabbit"
 # The Firefox add-on's listing (crates/ipc/src/extension.rs FIREFOX_PAGE): {{AMO}} in pages, and
 # <!--@amo--> for its Add to Firefox button.
 AMO = "https://addons.mozilla.org/firefox/addon/mister-download-manager/"
 # The extension's listing in the Chrome Web Store (crates/ipc/src/extension.rs STORE_ID), for
 # Chrome, Edge, Brave, Opera and Vivaldi: {{CWS}} in pages; <!--@stores--> is both buttons.
 CWS = "https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp"
-# The creator's GitHub Sponsors page: the header, the footer and the home page's Support MDM
-# (the app's Help menu and About, the extension's popup and .github/FUNDING.yml point there too).
-SPONSORS = "https://github.com/sponsors/anefzaoui"
+# The header's, the footer's and the home page's Support MDM: this fork's repository until its
+# owner's GitHub Sponsors page exists (see .github/FUNDING.yml; the app and the popup match).
+SPONSORS = REPO
 NAME = "Mister Download Manager"
 # The next release, as the site announces it. What is in the source but not in a download yet
 # says "Coming with version <this>" (coming_banner(): the feature pages, the Themes page, the
@@ -408,7 +408,7 @@ def header(section: str = "") -> str:
           <svg class="for-light-i" aria-hidden="true"><use href="#i-moon"/></svg><svg class="for-dark-i" aria-hidden="true"><use href="#i-sun"/></svg>
         </button>
         <a class="icon-btn top-gh" href="{REPO}" aria-label="Mister Download Manager on GitHub" title="GitHub"><svg aria-hidden="true"><use href="#i-github"/></svg></a>
-        <a class="icon-btn top-sponsor" href="{SPONSORS}" aria-label="Sponsor the creator on GitHub" title="Sponsor"><svg aria-hidden="true"><use href="#i-heart"/></svg></a>
+        <a class="icon-btn top-sponsor" href="{SPONSORS}" aria-label="Support MDM on GitHub" title="Support"><svg aria-hidden="true"><use href="#i-heart"/></svg></a>
         <a class="btn btn-go top-dl" href="/download.html">Download</a>
         <details class="menu">
           <summary class="icon-btn" aria-label="Menu"><svg aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
@@ -416,7 +416,7 @@ def header(section: str = "") -> str:
             {links}
             <a href="/contributing.html">Contribute</a>
             <a href="{REPO}">GitHub</a>
-            <a href="{SPONSORS}">Sponsor</a>
+            <a href="{SPONSORS}">Support</a>
           </nav>
         </details>
       </div>
@@ -462,7 +462,7 @@ def footer() -> str:
           <a class="brand" href="/"><img src="/assets/logo-64.png" width="34" height="34" alt=""><span>{NAME}</span></a>
           <p class="foot-tag">The download manager you already know, rebuilt to be faster. Free, open source and written from scratch in Rust.</p>
           <a class="text-link foot-star" href="{REPO}"><svg aria-hidden="true"><use href="#i-star"/></svg> Star it on GitHub</a>
-          <a class="text-link foot-star" href="{SPONSORS}"><svg aria-hidden="true"><use href="#i-heart"/></svg> Sponsor the creator</a>
+          <a class="text-link foot-star" href="{SPONSORS}"><svg aria-hidden="true"><use href="#i-heart"/></svg> Support MDM</a>
         </div>
         <div>
           <h2>Product</h2>

@@ -497,7 +497,9 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   translated website and the translation tools are removed. File names in any script still show
   as they are. The earlier state is kept on the `archive/multiplatform-i18n` branch.
 - ✅ Problem reports, crash reports, update checks, the security contact and the installer's
-  links go to this fork's repository, not the original's.
+  links go to this fork's repository, not the original's; so do the README's, the help pages'
+  and the website's links, and **Help → Support MDM** (the fork's page on GitHub, until it has a
+  GitHub Sponsors page).
 - ✅ Windows only: the Linux and macOS builds (AppImage, .deb, .rpm, tar.gz, .dmg), the Safari
   extension and the Docker image are no longer made, and their code, packaging, CI jobs and help
   pages are removed. MDM on Windows works as before. The multi-platform state is kept on the

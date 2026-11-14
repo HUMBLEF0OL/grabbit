@@ -12,7 +12,7 @@ MDM supports three services: **Real-Debrid**, **AllDebrid** and **Premiumize**.
 > real paid account. AllDebrid's answers were also checked against its real API with the public
 > demo key from its documentation, which answers with sample data, not a real file. If something
 > doesn't work with your account, please
-> [open an issue](https://github.com/anefzaoui/misterdownloadmanager/issues) (never paste your
+> [open an issue](https://github.com/HUMBLEF0OL/grabbit/issues) (never paste your
 > token or key in it).
 
 ## Add your account
