@@ -739,11 +739,8 @@ impl VideoDialog {
         // Upstream issue 852: YouTube looked up without a JavaScript runtime lists only some of
         // its qualities (on some days only the sound): said on the title's line and the one
         // under it, with the help page's section on installing one.
-        let runtime_note = self.error.is_none()
-            && self
-                .video
-                .as_ref()
-                .is_some_and(|(v, _)| v.needs_js_runtime);
+        let runtime_note =
+            self.error.is_none() && self.video.as_ref().is_some_and(|(v, _)| v.needs_js_runtime);
         if let Some(t) = installing {
             crate::torrentdlg::spinner(ui, pos2(o.x + LX + 7.0, line_y - 4.0), 6.0);
             let msg = if t == Tool::YtDlp {
