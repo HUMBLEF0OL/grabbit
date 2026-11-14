@@ -1274,6 +1274,27 @@ const MPD = (protect) => `<?xml version="1.0"?>
   ok("video.js: Shorts and live pages name their video");
 }
 
+// Upstream issue 336: Firefox starts an updated extension's copy of video.js in a world of its
+// own, beside the old copy, which can't be reached; its button stayed on the page beside the new
+// one. The new copy takes away any button already there, and a copy cut off from the extension
+// takes itself away instead of showing.
+{
+  const source = readFileSync(new URL("../../extension/video.js", import.meta.url), "utf8");
+  const start = source.indexOf("const prev = globalThis.__mdmVideoButton;");
+  const end = source.indexOf("\n", source.indexOf("const ext = globalThis.browser ?? globalThis.chrome;"));
+  assert.ok(start > 0 && end > start, "video.js starts by finding an older copy");
+  // The older copy's button, left on the page; this world has no __mdmVideoButton (Firefox).
+  const page = ["mdm-video-button"];
+  const document = {
+    querySelectorAll: (sel) => (sel === "mdm-video-button" ? page.map((name) => ({ remove: () => page.splice(page.indexOf(name), 1) })) : []),
+  };
+  new Function("globalThis", "document", `${source.slice(start, end)}`)({ chrome: { runtime: { id: "ours" } } }, document);
+  assert.deepEqual(page, [], "the older copy's button is taken away");
+  const show = source.slice(source.indexOf("function show(v) {"), source.indexOf("if (video !== v) {", source.indexOf("function show(v) {")));
+  assert.match(show, /if \(!ext\.runtime\?\.id\) return teardown\(\);/, "a copy cut off from the extension goes instead of showing");
+  ok("upstream issue 336: one video button after the extension is updated");
+}
+
 // No other download manager's name in what ships (the clean-room rule, CLAUDE.md).
 {
   for (const file of readdirSync(new URL("../../extension/", import.meta.url))) {
