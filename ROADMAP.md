@@ -586,10 +586,10 @@ These ship in a later version, when they're ready.
   integration, Download panels, Pair a device, New and Edit login and exception), their keys
   unchanged, and the General, File types, Save to, Downloads and Connection pages on them (a
   label column, hairlines in place of group boxes, Connection's number in a spin box), and the
-  other seven on them too (Remote's state and Accounts' warning in banners) (still to come, with
-  plan 09's polish: Options short enough for a 1080p screen at 200 %, banners that wrap their
-  title and that screen readers read, the side list as a list for screen readers, greyed icon
-  buttons' icons greyed, Pair a device centred, Add an account's hint box sized to its text).
+  other seven on them too (Remote's state and Accounts' warning in banners), and, with plan 09's
+  polish, Options short enough for a 1080p screen at 200 % (its page scrolls), banners that wrap
+  their title and that screen readers read, the side list as a list for screen readers, Pair a
+  device centred, Add an account's hint box sized to its text.
   And the finish: filled buttons shaded from a lighter cyan at their top and progress bars
   shaded along their fill, glowing in dark mode.
   And About's mark drawn sharp, the two first-start offers without their logo band.
