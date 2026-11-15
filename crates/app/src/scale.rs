@@ -261,7 +261,14 @@ pub fn pane<R>(
     let at = origin(off);
     let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_size(at, content)));
     inner.set_clip_rect(port.intersect(ui.clip_rect()));
+    let layer = ui.layer_id();
+    let count = || {
+        ui.ctx()
+            .viewport(|v| v.this_pass.widgets.get_layer(layer).count())
+    };
+    let first = count();
     let out = body(&mut inner, at);
+    let drawn = first..count();
 
     // The control the keyboard just focused (Tab), into view.
     let focus_key = id.with("pane-focus");
@@ -272,12 +279,29 @@ pub fn pane<R>(
             .data(|d| d.get_temp::<Option<egui::Id>>(focus_key))
             .flatten()
     {
-        ui.ctx().data_mut(|d| d.insert_temp(focus_key, focused));
-        if let Some(r) = focused
-            .and_then(|f| ui.ctx().read_response(f))
-            .map(|r| r.rect)
-        {
-            off += into_view(r, port);
+        // A pane inside this one (Options' page in a window that scrolls too) ran first and
+        // followed the control this pass: this one follows it next pass, from where that one
+        // moved it.
+        let followed_key = egui::Id::unique("scale-pane-followed");
+        let pass = ui.ctx().cumulative_pass_nr();
+        let inner_followed = focused.is_some()
+            && ui
+                .ctx()
+                .data(|d| d.get_temp::<(Option<egui::Id>, u64)>(followed_key))
+                == Some((focused, pass));
+        if inner_followed {
+            ui.ctx().request_repaint();
+        } else {
+            ui.ctx().data_mut(|d| d.insert_temp(focus_key, focused));
+            let order = focused.and_then(|f| ui.ctx().viewport(|v| v.this_pass.widgets.order(f)));
+            if let Some(r) = focused
+                .filter(|_| drawn_in(order, layer, &drawn))
+                .and_then(|f| ui.ctx().read_response(f))
+            {
+                ui.ctx()
+                    .data_mut(|d| d.insert_temp(followed_key, (focused, pass)));
+                off += into_view(r.rect, port);
+            }
         }
     }
     // The wheel, unless a list inside took it.
@@ -349,6 +373,23 @@ fn bars(content: Vec2, view: Vec2, ppp: f32) -> (bool, bool) {
     let h = over(content.x, view.x - if v { THICK } else { 0.0 });
     v = v || (h && over(content.y, view.y - THICK));
     (v, h)
+}
+
+/// A [`pane`] `id` shown from its top again (Options: a page chosen, the window reopened).
+pub fn to_top(ctx: &egui::Context, id: egui::Id) {
+    ctx.data_mut(|d| d.remove_temp::<Vec2>(id.with("pane")));
+}
+
+/// Whether a widget at `order` (its layer and place there, this pass) was drawn by a [`pane`]'s
+/// body: on the pane's `layer`, among the `drawn` it added. A widget beside the pane (a
+/// footer's button, a side list) is not, and focusing it must not scroll the pane, wherever an
+/// enclosing pane's clip left its rect (wholly cut, it is empty).
+fn drawn_in(
+    order: Option<(egui::LayerId, usize)>,
+    layer: egui::LayerId,
+    drawn: &std::ops::Range<usize>,
+) -> bool {
+    order.is_some_and(|(l, i)| l == layer && drawn.contains(&i))
 }
 
 /// How far to scroll (offset change) to bring `r` inside `port`, with a little margin.
@@ -504,6 +545,24 @@ mod tests {
         assert_eq!(into_view(inside, port), Vec2::ZERO);
         let right = Rect::from_min_max(pos2(420.0, 10.0), pos2(480.0, 31.0));
         assert_eq!(into_view(right, port), vec2(84.0, 0.0));
+    }
+
+    /// Only a control the pane's body drew is followed, shown or scrolled out; not a side list
+    /// row drawn before it or a footer button after it (Options' page pane), even when the
+    /// window's own pane cut that one wholly away, nor one on another layer (a popup).
+    #[test]
+    fn focus_beside_the_pane_does_not_scroll_it() {
+        let layer = egui::LayerId::background();
+        let popup = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("popup"));
+        let drawn = 12..40;
+        assert!(drawn_in(Some((layer, 12)), layer, &drawn));
+        assert!(drawn_in(Some((layer, 39)), layer, &drawn));
+        let side_row = Some((layer, 5));
+        assert!(!drawn_in(side_row, layer, &drawn));
+        let footer_ok = Some((layer, 40));
+        assert!(!drawn_in(footer_ok, layer, &drawn));
+        assert!(!drawn_in(Some((popup, 20)), layer, &drawn));
+        assert!(!drawn_in(None, layer, &drawn));
     }
 
     /// #672: a client one device pixel short of the content is the window's size rounded down

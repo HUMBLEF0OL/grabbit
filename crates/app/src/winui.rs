@@ -804,6 +804,32 @@ pub fn paragraph(
     lines.len()
 }
 
+/// [`paragraph`] with each line centred between `x` and `right` (a centred column, as Pair a
+/// device's); returns the lines drawn.
+pub fn paragraph_centred(
+    p: &Painter,
+    x: f32,
+    baseline: f32,
+    s: &str,
+    color: Color32,
+    right: f32,
+    line_h: f32,
+) -> usize {
+    let lines = centred_lines(p, s, x, right);
+    for (i, (left, l)) in lines.iter().enumerate() {
+        text(p, *left, baseline + line_h * i as f32, l, color);
+    }
+    lines.len()
+}
+
+/// `s` wrapped between `x` and `right`, each line with the left that centres it there.
+fn centred_lines(p: &Painter, s: &str, x: f32, right: f32) -> Vec<(f32, String)> {
+    wrap_lines(p, s, (right - x).max(1.0))
+        .into_iter()
+        .map(|l| (((x + right - text_width(p, &l)) / 2.0).round(), l))
+        .collect()
+}
+
 /// Data shown as it is (a crash report, release notes), from English `x` to `right`, first
 /// baseline at `baseline`, `line_h` apart; returns the lines drawn. Its line breaks are its own
 /// in every language (a line longer than the room wraps, as in [`paragraph`]), and it reads left
@@ -845,6 +871,12 @@ fn data_left(x: f32, right: f32) -> f32 {
 /// `s` broken into the lines it shows in `room` px: at its own line breaks, and where a line is
 /// too long, at spaces, or between any two characters in scripts written without spaces.
 pub fn wrap_lines(p: &Painter, s: &str, room: f32) -> Vec<String> {
+    wrap_lines_font(p, tahoma(), s, room)
+}
+
+/// [`wrap_lines`] measured in `font` (a bold title).
+pub fn wrap_lines_font(p: &Painter, font: FontId, s: &str, room: f32) -> Vec<String> {
+    let text_width = |p: &Painter, s: &str| text_width_font(p, font.clone(), s);
     let mut lines: Vec<String> = Vec::new();
     for given in s.split('\n') {
         // A Windows line end (a report written there) breaks the line too.
@@ -4257,7 +4289,10 @@ pub enum BannerKind {
 
 /// A status banner (`rc` on screen; not the first-start [`banner`]): the kind's soft colour
 /// (`banner.error`, `banner.info`, `banner.warning`), Graphite's `icon` in the kind's ink, a bold
-/// `title` and a `sub` line that wraps. The lines its `sub` took.
+/// `title` and a `sub` line that wrap. The title takes the lines it needs as far as `rc`'s height
+/// leaves room above the sub ([`status_banner_lines`], [`status_banner_height_for`]); past
+/// that its last line is cut with "...", whole on hover. No title: the sub in its place. Screen
+/// readers read it as a status, its title then its sub. The lines its `sub` took.
 pub fn status_banner(
     ui: &Ui,
     rc: Rect,
@@ -4274,20 +4309,104 @@ pub fn status_banner(
         BannerKind::Warning => (c.banner_warning, c.warning),
     };
     p.rect_filled(rc, 8.0, fill);
+    // For screen readers: one status, its title and its sub.
+    let said = [title.trim(), sub.trim()]
+        .iter()
+        .filter(|s| !s.is_empty())
+        .copied()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if !said.is_empty() {
+        let resp = ui.interact(
+            rc,
+            widget_id(ui, ("status-banner", rc.min.x as i32, rc.min.y as i32)),
+            Sense::hover(),
+        );
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Status, true, &said));
+    }
     let glyph = Rect::from_min_size(pos2(rc.left() + 12.0, rc.top() + 10.0), vec2(17.0, 17.0));
     crate::themeicons::paint_graphite_in(ui, p, icon, glyph, ink);
-    let x = glyph.right() + 10.0;
+    let x = rc.left() + BANNER_TEXT_X;
+    let right = rc.right() - BANNER_TEXT_END;
+    // No title: the sub (a plain sentence, Accounts' warning) in its place.
+    if title.trim().is_empty() {
+        if sub.is_empty() {
+            return 0;
+        }
+        return paragraph(p, x, rc.top() + 23.0, sub, c.text, right, BANNER_LINE);
+    }
+    let sub_lines = if sub.is_empty() {
+        0
+    } else {
+        wrap_lines(p, sub, (right - x).max(1.0)).len()
+    };
     let bold = tahoma_bold();
-    let shown = ellipsize(p, &bold, title, (rc.right() - 12.0 - x).max(0.0));
-    let drawn = text_at(p, bold, x, rc.top() + 23.0, &shown, c.text);
+    let room = banner_title_room(rc.height(), sub_lines);
+    let mut lines = wrap_lines_font(p, bold.clone(), title, (right - x).max(1.0));
+    let cut = lines.len() > room;
+    if cut {
+        // The lines past the room join the last one, cut with "...".
+        let rest = lines.split_off(room - 1).join(" ");
+        lines.push(ellipsize(p, &bold, &rest, (right - x).max(0.0)));
+    }
+    let mut last = Rect::NOTHING;
+    for (i, line) in lines.iter().enumerate() {
+        last = text_at(
+            p,
+            bold.clone(),
+            x,
+            rc.top() + 23.0 + BANNER_LINE * i as f32,
+            line,
+            c.text,
+        );
+    }
     // Cut with "...": whole on hover, as every cut text.
-    if shown != title {
-        full_on_hover(ui, drawn, ("status-banner", rc.min.y as i32), title);
+    if cut {
+        full_on_hover(ui, last, ("status-banner", rc.min.y as i32), title);
     }
     if sub.is_empty() {
         return 0;
     }
-    paragraph(p, x, rc.top() + 41.0, sub, c.text, rc.right() - 12.0, 17.0)
+    let extra = BANNER_LINE * (lines.len().max(1) - 1) as f32;
+    paragraph(
+        p,
+        x,
+        rc.top() + 41.0 + extra,
+        sub,
+        c.text,
+        right,
+        BANNER_LINE,
+    )
+}
+
+/// A [`status_banner`]'s text: its line height, where it starts from the banner's leading edge
+/// (after the 12 + 17 + 10 of the icon) and its room before the trailing edge.
+pub const BANNER_LINE: f32 = 17.0;
+pub const BANNER_TEXT_X: f32 = 39.0;
+pub const BANNER_TEXT_END: f32 = 12.0;
+
+/// How many title lines a banner `height` tall has room for above a sub of `sub_lines` lines
+/// (at least one).
+fn banner_title_room(height: f32, sub_lines: usize) -> usize {
+    let spare = height - status_banner_height(sub_lines);
+    1 + (spare / BANNER_LINE + 0.01).floor().max(0.0) as usize
+}
+
+/// The lines a [`status_banner`] `width` wide wraps its `title` and its `sub` into (none for an
+/// empty one), for [`status_banner_height_for`].
+pub fn status_banner_lines(p: &Painter, width: f32, title: &str, sub: &str) -> (usize, usize) {
+    let room = (width - BANNER_TEXT_X - BANNER_TEXT_END).max(1.0);
+    let title_lines = if title.trim().is_empty() {
+        0
+    } else {
+        wrap_lines_font(p, tahoma_bold(), title, room).len()
+    };
+    let sub_lines = if sub.is_empty() {
+        0
+    } else {
+        wrap_lines(p, sub, room).len()
+    };
+    (title_lines, sub_lines)
 }
 
 /// How tall a [`status_banner`] is whose `sub` takes `lines` lines (none: a title alone).
@@ -4295,8 +4414,17 @@ pub fn status_banner_height(lines: usize) -> f32 {
     if lines == 0 {
         37.0
     } else {
-        37.0 + 17.0 * lines as f32 + 2.0
+        37.0 + BANNER_LINE * lines as f32 + 2.0
     }
+}
+
+/// [`status_banner_height`] for a title of `title_lines` lines; no title (0): the sub's lines in
+/// the title's place.
+pub fn status_banner_height_for(title_lines: usize, sub_lines: usize) -> f32 {
+    if title_lines == 0 {
+        return status_banner_height_for(sub_lines.max(1), 0);
+    }
+    status_banner_height(sub_lines) + BANNER_LINE * (title_lines - 1) as f32
 }
 
 /// A push button in the current theme (dark: IDM's dark buttons; light: Windows 11's), its
@@ -7184,6 +7312,68 @@ mod tests {
         out.textures_delta.clear();
     }
 
+    /// 09r3: a status banner's title wraps as far as its height has room, the sub below it; no
+    /// title puts the sub in its place; screen readers read it as one status.
+    #[test]
+    fn a_status_banner_wraps_its_title_and_is_read_as_a_status() {
+        // One-line title: the heights as before.
+        assert_eq!(status_banner_height_for(1, 0), status_banner_height(0));
+        assert_eq!(status_banner_height_for(1, 2), status_banner_height(2));
+        assert_eq!(status_banner_height_for(3, 0), 37.0 + 2.0 * BANNER_LINE);
+        // No title: the sub's lines in the title's place.
+        assert_eq!(status_banner_height_for(0, 1), 37.0);
+        assert_eq!(status_banner_height_for(0, 2), 37.0 + BANNER_LINE);
+        // A banner a title's height tall (the progress window's 30, Verify checksum's 37) keeps
+        // one line, cut; a taller one has room for more.
+        assert_eq!(banner_title_room(30.0, 0), 1);
+        assert_eq!(banner_title_room(37.0, 0), 1);
+        assert_eq!(banner_title_room(status_banner_height_for(2, 0), 0), 2);
+        assert_eq!(banner_title_room(status_banner_height_for(2, 1), 1), 2);
+        with_painter(|p| {
+            let long = "Port 8765 is used by another program: choose another, then click OK.";
+            let (title, sub) = status_banner_lines(p, 300.0, long, "");
+            assert!(title > 1, "a long title wraps");
+            assert_eq!(sub, 0);
+            assert_eq!(status_banner_lines(p, 600.0, "", "A short note.").0, 0);
+        });
+        let ctx = egui::Context::default();
+        let mut defs = egui::FontDefinitions::default();
+        install_fonts(&mut defs, None);
+        ctx.set_fonts(defs);
+        ctx.enable_accesskit();
+        let pass = || {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                let rc = Rect::from_min_size(pos2(10.0, 10.0), vec2(400.0, 56.0));
+                status_banner(ui, rc, BannerKind::Warning, "st-error", "Title", "The sub.");
+            });
+            out.textures_delta.clear();
+            out.platform_output
+                .accesskit_update
+                .expect("AccessKit is on")
+        };
+        pass();
+        let tree = pass();
+        assert!(
+            tree.nodes.iter().any(|(_, n)| n.role() == egui::Role::Status
+                && n.label() == Some("Title The sub.")),
+            "a status node"
+        );
+    }
+
+    /// 09r3: a centred paragraph's lines are centred in their room.
+    #[test]
+    fn a_centred_paragraph_centres_each_line() {
+        with_painter(|p| {
+            let s = "On the phone, scan this code with the camera, or open the address and enter the code.";
+            let lines = centred_lines(p, s, 16.0, 364.0);
+            assert!(lines.len() > 1);
+            for (left, l) in &lines {
+                let mid = left + text_width(p, l) / 2.0;
+                assert!((mid - 190.0).abs() <= 1.0, "{l:?} centred at {mid}");
+            }
+        });
+    }
+
     #[test]
     fn a_footer_puts_the_default_last_and_keeps_leading_ones_left() {
         // Download complete: Open*, Open with..., Open folder, Close (the old Tab order).
@@ -8175,6 +8365,9 @@ mod tests {
             }
             let disabled = button_colors(ButtonKind::Disabled, State::Disabled, c);
             let enabled = button_colors(ButtonKind::Normal, State::Normal, c);
+            // A greyed button's label and icon (`button_face` inks its icon with `face.text`)
+            // take `text.disabled` (plan 08's greyed `icon_only_button`).
+            assert_eq!(disabled.text, c.text_disabled, "greyed ink");
             let gap = |a: Color32, b: Color32| (a.r() as i32 - b.r() as i32).abs();
             assert!(
                 gap(disabled.text, enabled.text) >= 0x50,

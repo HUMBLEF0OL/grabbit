@@ -224,6 +224,9 @@ pub struct OptionsDialog {
     /// then shows it; unticked, the box's own text (empty is automatic again when the window
     /// opens next).
     ua_auto: bool,
+    /// The page the scrolled page pane's offset belongs to (none until the window first
+    /// draws): a page chosen, or the window opened again, starts at its top.
+    scrolled: Option<usize>,
 }
 
 impl OptionsDialog {
@@ -302,32 +305,69 @@ impl OptionsDialog {
             device_rows: Default::default(),
             cookie_browser: cookie_browser_at(settings),
             ua_auto: settings.own_user_agent().is_none(),
+            scrolled: None,
         }
     }
 
     /// `Done(settings)` on OK.
     pub fn show(&mut self, ctx: &egui::Context, downloads: &std::path::Path) -> Outcome<Settings> {
         let modal = self.sub.is_some() || self.cat_edit.is_some() || self.restore_ask.is_some();
+        // Shorter where the screen is (a large interface size): the page scrolls between the
+        // side list and the footer, which stay.
+        let caption = if crate::dialogs::drawn_captions() {
+            winui::caption::CAPTION_H
+        } else {
+            0.0
+        };
+        let h = fit_height(
+            crate::dialogs::shown_size(ctx, [W, H + caption])[1] - caption,
+            ctx.pixels_per_point(),
+        );
+        // Wider by the page's scroll bar when it has one.
+        let w = if h < H {
+            W + crate::scrollbar::THICK
+        } else {
+            W
+        };
         let outcome = window(
             ctx,
             "options",
             "Mister Download Manager Configuration",
-            [W, H],
+            [w, h],
             false,
             LIGHT_BG(),
             |ui, o| {
-                if let Some(p) = side_list(ui, o, self.page) {
+                let foot = h - winui::FOOTER_H;
+                if let Some(p) = side_list(ui, o, self.page, foot) {
                     self.page = p;
                 }
-                self.page_area(ui, o, downloads);
+                if h < H {
+                    // Right of the list's border: its English x 0 is the window's SIDE_W + 1.
+                    let view = r(o, SIDE_W + 1.0, 0.0, w - SIDE_W - 1.0, foot);
+                    let mut page = ui.new_child(egui::UiBuilder::new().max_rect(view));
+                    page.set_clip_rect(view.intersect(ui.clip_rect()));
+                    let pane = egui::Id::unique("options-page");
+                    if self.scrolled != Some(self.page) {
+                        self.scrolled = Some(self.page);
+                        crate::scale::to_top(ui.ctx(), pane);
+                    }
+                    crate::scale::pane(
+                        &mut page,
+                        pane,
+                        vec2(W - SIDE_W - 1.0, H - winui::FOOTER_H),
+                        |ui, at| self.page_area(ui, at - vec2(SIDE_W + 1.0, 0.0), downloads),
+                    );
+                } else {
+                    self.page_area(ui, o, downloads);
+                }
                 // No Cancel (PLAN.md): Escape and the close box discard the changes, as before.
                 // Escape and Enter keep their old order: Escape first.
                 let escape = winui::escape_pressed(ui);
                 let pressed = winui::footer(
                     ui,
                     o,
-                    W,
-                    H - winui::FOOTER_H,
+                    w,
+                    foot,
                     // Tab order as before: OK, then Help.
                     &mut [
                         FooterItem::Button(
@@ -1793,38 +1833,18 @@ impl OptionsDialog {
             // i18n: Options → Accounts: a note that the debrid services' support (Real-Debrid, AllDebrid, Premiumize) is new and not yet tried with real paid accounts
             "Experimental: built from the services' public API documentation, not yet confirmed with real accounts.",
         );
-        // A warning banner (the mock's): its sentence wraps in the title's place, as the kit's
-        // banner has no wrapping title.
+        // A warning banner (the mock's): its plain sentence, wrapped, in the title's place.
         let banner_top = list_bottom + 12.0;
-        let room = r(
-            o,
-            PAGE_LEFT,
-            banner_top,
-            PAGE_RIGHT - PAGE_LEFT,
-            winui::status_banner_height(0),
-        );
-        // The kit's text place: after the 12 + 17 + 10 of the icon, 12 before the edge.
-        let (text_x, text_right) = (room.left() + 39.0, room.right() - 12.0);
-        let lines = winui::wrap_lines(&p, note, text_right - text_x)
-            .len()
-            .max(1);
-        let banner_h = winui::status_banner_height(lines - 1);
+        let (title_lines, sub_lines) =
+            winui::status_banner_lines(&p, PAGE_RIGHT - PAGE_LEFT, "", note);
+        let banner_h = winui::status_banner_height_for(title_lines, sub_lines);
         winui::status_banner(
             ui,
-            room.with_max_y(room.top() + banner_h),
+            r(o, PAGE_LEFT, banner_top, PAGE_RIGHT - PAGE_LEFT, banner_h),
             winui::BannerKind::Warning,
             "st-error",
             "",
-            "",
-        );
-        winui::paragraph(
-            &p,
-            text_x,
-            room.top() + 23.0,
             note,
-            LIGHT_TEXT(),
-            text_right,
-            17.0,
         );
         let check_y = banner_top + banner_h + 12.0;
         winui::checkbox_light(
@@ -2717,23 +2737,24 @@ impl OptionsDialog {
                 "st-error",
             ),
         };
-        // The banner (the mock's): its title the status line (cut with "...", whole on hover),
-        // then the address and the certificate's fingerprint inside it, at the title's x.
+        // The banner (the mock's): its title the status line (wrapped), then the address and
+        // the certificate's fingerprint inside it, at the title's x.
         let url = urls.first().filter(|_| !changed);
         let fingerprint = self.remote.as_ref().and_then(|r| r.fingerprint());
         let banner_top = 204.0;
-        let url_y = banner_top + 33.0;
+        let (title_lines, _) = winui::status_banner_lines(&p, right - l, &line, "");
+        let url_y = banner_top + 33.0 + winui::BANNER_LINE * (title_lines.max(1) - 1) as f32;
         let cert_y = url.map_or(url_y, |_| url_y + h + 8.0);
         let banner_h = match (url, &fingerprint) {
-            (None, None) => winui::status_banner_height(0),
+            (None, None) => winui::status_banner_height_for(title_lines, 0),
             (_, None) => url_y + h + 10.0 - banner_top,
             (_, Some(_)) => cert_y + 20.0 - banner_top,
         };
         let banner = r(o, l, banner_top, right - l, banner_h);
         winui::status_banner(ui, banner, kind, icon, &line, "");
         // The kit's title place: after the 12 + 17 + 10 of the icon, 12 before the edge.
-        let inner = l + 39.0;
-        let inner_right = right - 12.0;
+        let inner = l + winui::BANNER_TEXT_X;
+        let inner_right = right - winui::BANNER_TEXT_END;
         if let Some(first) = url {
             readonly_ltr(
                 ui,
@@ -2922,8 +2943,9 @@ impl OptionsDialog {
                     )],
                 )
                 .is_some();
+                // The mock's column is centred: its lines, the code's line and the button.
                 let Some(url) = urls.first() else {
-                    winui::paragraph(
+                    winui::paragraph_centred(
                         &p,
                         o.x + e,
                         o.y + 29.0,
@@ -2947,7 +2969,7 @@ impl OptionsDialog {
                         crate::i18n::t("{device} is paired. It can control MDM now."),
                         &[("device", &crate::i18n::isolate(name))],
                     );
-                    winui::paragraph(
+                    winui::paragraph_centred(
                         &p,
                         o.x + e,
                         o.y + 29.0,
@@ -2962,7 +2984,7 @@ impl OptionsDialog {
                         Outcome::Open
                     };
                 }
-                winui::paragraph(
+                winui::paragraph_centred(
                     &p,
                     o.x + e,
                     o.y + 29.0,
@@ -2985,26 +3007,43 @@ impl OptionsDialog {
                         // i18n: Options → Remote → Pair a device: label before the 8-digit code
                         let label = crate::i18n::t("Code:");
                         let baseline = o.y + winui::baseline_in(300.0, winui::CONTROL_H);
-                        text(&p, o.x + e, baseline, label, LIGHT_TEXT());
                         let big = egui::FontId::new(26.0, winui::tahoma_bold().family);
-                        winui::text_font(
+                        let shown_code =
+                            crate::i18n::ltr(&format!("{} {}", &code[..4], &code[4..]));
+                        // The label and the code, centred as one line.
+                        let label_w = winui::text_width(&p, label);
+                        let whole =
+                            label_w + 10.0 + winui::text_width_font(&p, big.clone(), &shown_code);
+                        let x = o.x + ((W - whole) / 2.0).round();
+                        text(&p, x, baseline, label, LIGHT_TEXT());
+                        let drawn = winui::text_font(
                             &p,
                             big,
-                            o.x + e + winui::text_width(&p, label) + 10.0,
+                            x + label_w + 10.0,
                             baseline + 4.0,
-                            &crate::i18n::ltr(&format!("{} {}", &code[..4], &code[4..])),
+                            &shown_code,
                             LIGHT_TEXT(),
                         );
+                        // Painted text: screen readers get the code too.
+                        winui::readable(ui, drawn, "opt-pair-code", &format!("{label} {code}"));
                         let secs = left.as_secs();
                         let line = crate::i18n::fmt(
                             // i18n: Options → Remote → Pair a device: how long the code stays valid; {time} = minutes:seconds ("9:58")
                             crate::i18n::t("Waiting for the device. The code works for {time}."),
                             &[("time", &format!("{}:{:02}", secs / 60, secs % 60))],
                         );
-                        hint(&p, o, e, 347.0, &line, W - e);
+                        winui::paragraph_centred(
+                            &p,
+                            o.x + e,
+                            o.y + 347.0,
+                            &line,
+                            crate::theme::colors().muted,
+                            o.x + W - e,
+                            LINE,
+                        );
                     }
                     None => {
-                        winui::paragraph(
+                        winui::paragraph_centred(
                             &p,
                             o.x + e,
                             o.y + 313.0,
@@ -3017,7 +3056,7 @@ impl OptionsDialog {
                         let w = winui::footer_button_width(&p, "New code", false);
                         if winui::button_light(
                             ui,
-                            r(o, e, 330.0, w, winui::CONTROL_H),
+                            r(o, ((W - w) / 2.0).round(), 330.0, w, winui::CONTROL_H),
                             // i18n: Options → Remote → Pair a device: button: show a new code
                             "New code",
                             ButtonKind::Normal,
@@ -3322,12 +3361,14 @@ impl OptionsDialog {
                 }
             }
             Sub::Account(mut e) => {
+                // Taller by what the code's box grew (its hint on more than two lines).
+                let body = ACCOUNT_BODY + e.grown;
                 let out = window(
                     ctx,
                     "opt-account",
                     // i18n: window title: adding a debrid service account (Real-Debrid…)
                     "Add an account",
-                    [ACCOUNT_W, ACCOUNT_BODY + winui::FOOTER_H],
+                    [ACCOUNT_W, body + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
                     |ui, o| account_dialog(ui, o, &mut e),
@@ -3782,6 +3823,16 @@ struct AccountEdit {
     service: mdm_debrid::ServiceKind,
     token: String,
     signin: crate::debrid::SignIn,
+    /// How much taller than the layout's the code's box was last drawn (its hint on more than
+    /// two lines): the window grows by it.
+    grown: f32,
+}
+
+/// Add an account's code box: as tall as its hint's `lines` need (the layout has room for two),
+/// and how much taller than that room it is.
+fn account_box(lines: usize) -> (f32, f32) {
+    let h = 94.0 + LINE * (lines.max(1) as f32 - 2.0);
+    (h, (h - 94.0).max(0.0))
 }
 
 /// Accounts → Add...: sign in by code in the browser (Real-Debrid's device flow, AllDebrid's PIN),
@@ -3844,11 +3895,31 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
             .store(false, std::sync::atomic::Ordering::Relaxed);
         e.signin.by_code(e.service, &ctx);
     }
+    // Below the code's box, moved down by what it grew.
+    let mut grown = 0.0;
     if let S::Waiting { code, page, until } = &state {
         // In a box, as the mockup's: the code, large, to type at the service's page, its
         // buttons beside it, and what to do with it.
         let c = crate::theme::colors();
-        let rc = r(o, edge, 104.0, w - 2.0 * edge, 94.0);
+        let (x, row) = (edge + 12.0, 116.0);
+        let left = until
+            .saturating_duration_since(std::time::Instant::now())
+            .as_secs();
+        let what = crate::i18n::fmt(
+            // i18n: Options → Add an account: waiting while the user types the code at the service's page; {page} its address, {time} minutes:seconds left
+            crate::i18n::t(
+                "Type this code at {page} and allow MDM; waiting for you (the code expires in {time}).",
+            ),
+            &[
+                ("page", &crate::i18n::ltr(page)),
+                ("time", &format!("{}:{:02}", left / 60, left % 60)),
+            ],
+        );
+        let hint_right = w - edge - 12.0;
+        let lines = winui::wrap_lines(&p, &what, hint_right - x).len();
+        let (box_h, extra) = account_box(lines);
+        grown = extra;
+        let rc = r(o, edge, 104.0, w - 2.0 * edge, box_h);
         p.rect_filled(rc, 6.0, c.panel);
         p.rect_stroke(
             rc,
@@ -3856,15 +3927,16 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
             egui::Stroke::new(1.0, c.menubar_line),
             egui::StrokeKind::Inside,
         );
-        let (x, row) = (edge + 12.0, 116.0);
         let code_font = egui::FontId::monospace(crate::theme::metrics().font_code);
-        p.text(
+        let drawn = p.text(
             o + vec2(x, row + h / 2.0),
             egui::Align2::LEFT_CENTER,
             code,
             code_font.clone(),
             LIGHT_TEXT(),
         );
+        // Painted text: screen readers get the code too.
+        winui::readable(ui, drawn, "opt-account-code", code);
         // The buttons as wide as their labels in this language (#192), short of the code.
         let code_end = x + winui::text_width_font(&p, code_font, code);
         let [copy_at, open_at] = winui::button_row(
@@ -3900,28 +3972,14 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         {
             open_page(page);
         }
-        let left = until
-            .saturating_duration_since(std::time::Instant::now())
-            .as_secs();
-        hint(
-            &p,
-            o,
-            x,
-            row + h + 8.0 + 13.0,
-            &crate::i18n::fmt(
-                // i18n: Options → Add an account: waiting while the user types the code at the service's page; {page} its address, {time} minutes:seconds left
-                crate::i18n::t(
-                    "Type this code at {page} and allow MDM; waiting for you (the code expires in {time}).",
-                ),
-                &[
-                    ("page", &crate::i18n::ltr(page)),
-                    ("time", &format!("{}:{:02}", left / 60, left % 60)),
-                ],
-            ),
-            w - edge - 12.0,
-        );
+        hint(&p, o, x, row + h + 8.0 + 13.0, &what, hint_right);
         ctx.request_repaint_after(std::time::Duration::from_secs(1));
     }
+    // Grown or shrunk: the window takes its new height on the next pass, at once.
+    if e.grown != grown {
+        ctx.request_repaint();
+    }
+    e.grown = grown;
     let label = if by_code {
         // i18n: Options → Add an account: label before the field for the service's API token (the other way to sign in)
         crate::i18n::t("Or paste your API token:")
@@ -3929,6 +3987,7 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         // i18n: Options → Add an account: label before the field for the service's API key (Premiumize: the only way to sign in; the key is on the service's Account page)
         crate::i18n::t("Paste your API key (from the service's Account page):")
     };
+    let o = o + vec2(0.0, grown);
     text(&p, o.x + edge, o.y + 225.0, label, LIGHT_TEXT());
     // As wide as its label in this language (#192); the box ends 8 before it.
     let use_w = winui::footer_button_width(&p, "Use the token", false);
@@ -4086,6 +4145,21 @@ const LINE: f32 = 16.0;
 /// The mock's 820 x 520 (plan 08b).
 const W: f32 = 820.0;
 const H: f32 = 520.0;
+/// The shortest the window gets on a short screen: the side list whole above the footer.
+const MIN_H: f32 = SIDE_TOP + PAGES.len() as f32 * (ROW_H + ROW_GAP) + 8.0 + winui::FOOTER_H;
+
+/// The window's client height when `room` points are left for it on the screen: [`H`] where it
+/// fits; shorter where it doesn't (its page scrolls), but never below [`MIN_H`] (the whole
+/// window scrolls then, as before). At `ppp` pixels per point: a page short by a device pixel
+/// or less shows no scroll bar (`scale::pane`), so the window keeps [`H`] then.
+fn fit_height(room: f32, ppp: f32) -> f32 {
+    let h = room.floor();
+    if room >= H || ((H - h) * ppp).round() <= 1.0 {
+        H
+    } else {
+        h.max(MIN_H)
+    }
+}
 /// The side list's width (its right border at this x).
 const SIDE_W: f32 = 190.0;
 /// A side list row: its height and the gap after it, from the list's top `SIDE_TOP`.
@@ -4218,12 +4292,22 @@ fn side_row(o: Pos2, k: usize) -> Rect {
 /// The pages down the side (plan 08a): one Tab stop, the chosen row; Up / Down and Left / Right
 /// move through them, Home / End go to the ends, Ctrl+Tab / Ctrl+Shift+Tab (and Ctrl+Page Down
 /// / Up) wrap round from anywhere in the window, a click picks one. The page picked.
-fn side_list(ui: &mut Ui, o: Pos2, page: usize) -> Option<usize> {
+fn side_list(ui: &mut Ui, o: Pos2, page: usize, foot: f32) -> Option<usize> {
     let c = crate::theme::colors();
     let p = ui.painter().clone();
     let at = page_at(page);
-    let foot = H - winui::FOOTER_H;
-    p.rect_filled(r(o, 0.0, 0.0, SIDE_W, foot), 0.0, c.panel);
+    let pane = r(o, 0.0, 0.0, SIDE_W, foot);
+    // For screen readers: a list, the pages its items.
+    let list = ui.interact(pane, egui::Id::unique("opt-pages"), Sense::hover());
+    // i18n: Options: the list of its pages down the side, to screen readers
+    winui::expose(&list, egui::Role::List, crate::i18n::t("Pages"), true, None);
+    let mut items = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(ui.max_rect())
+            .accessibility_parent(list.id),
+    );
+    let ui = &mut items;
+    p.rect_filled(pane, 0.0, c.panel);
     fill(
         &p,
         o.x + SIDE_W,
@@ -4581,9 +4665,85 @@ mod tests {
     /// One pass of the side list on `page`: the page it picked.
     fn list_pass(ctx: &egui::Context, page: usize, events: Vec<egui::Event>) -> Option<usize> {
         let mut picked = None;
-        let mut out = ctx.run_ui(input(events), |ui| picked = side_list(ui, Pos2::ZERO, page));
+        let mut out = ctx.run_ui(input(events), |ui| {
+            picked = side_list(ui, Pos2::ZERO, page, H - winui::FOOTER_H)
+        });
         out.textures_delta.clear();
         picked
+    }
+
+    /// 09r3: the side list is a list for screen readers, its rows its items.
+    #[test]
+    fn the_side_list_is_a_list_of_its_pages() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let pass = || {
+            let mut out = ctx.run_ui(input(vec![]), |ui| {
+                side_list(ui, Pos2::ZERO, 0, H - winui::FOOTER_H);
+            });
+            out.textures_delta.clear();
+            out.platform_output
+                .accesskit_update
+                .expect("AccessKit is on")
+        };
+        pass();
+        let tree = pass();
+        let nodes: std::collections::HashMap<NodeId, &egui::accesskit::Node> =
+            tree.nodes.iter().map(|(id, n)| (*id, n)).collect();
+        let (list, _) = tree
+            .nodes
+            .iter()
+            .find(|(_, n)| n.role() == Role::List)
+            .expect("a list");
+        // The list's descendants (through egui's unnamed containers, which screen readers skip).
+        let mut under = vec![*list];
+        let mut i = 0;
+        while i < under.len() {
+            if let Some(n) = nodes.get(&under[i]) {
+                under.extend_from_slice(n.children());
+            }
+            i += 1;
+        }
+        let items: Vec<NodeId> = tree
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.role() == Role::ListItem)
+            .map(|(id, _)| *id)
+            .collect();
+        assert_eq!(items.len(), PAGES.len());
+        assert!(
+            items.iter().all(|i| under.contains(i)),
+            "every row under the list"
+        );
+    }
+
+    /// 09r3: Add an account's code box is as tall as its hint (two lines: the layout's 94), and
+    /// the window grows by what a longer hint adds.
+    #[test]
+    fn the_code_box_is_sized_to_its_hint() {
+        assert_eq!(account_box(2), (94.0, 0.0));
+        assert_eq!(account_box(1), (94.0 - LINE, 0.0));
+        assert_eq!(account_box(3), (94.0 + LINE, LINE));
+        assert_eq!(account_box(4), (94.0 + 2.0 * LINE, 2.0 * LINE));
+    }
+
+    /// 09r3: the window keeps the mock's height where the screen has room, and is shorter (its
+    /// page scrolling) where it hasn't, the side list still whole.
+    #[test]
+    fn options_fits_a_short_screen() {
+        assert_eq!(fit_height(900.0, 1.0), H);
+        assert_eq!(fit_height(H, 1.0), H);
+        // 1080p at 200 %: about 496 points less a drawn title bar.
+        assert_eq!(fit_height(464.4, 2.0), 464.0);
+        assert_eq!(fit_height(300.0, 1.0), MIN_H);
+        // A device pixel short shows no bar (scale::pane): the window keeps its height, with no
+        // empty bar strip; two pixels short scroll.
+        assert_eq!(fit_height(H - 0.6, 1.0), H);
+        assert_eq!(fit_height(H - 0.6, 2.0), H - 1.0);
+        assert_eq!(fit_height(H - 1.6, 1.0), H - 2.0);
+        const { assert!(MIN_H < 464.0, "fits 1080p at 200 %") };
+        let last = side_row(Pos2::ZERO, PAGES.len() - 1);
+        assert!(last.bottom() <= MIN_H - winui::FOOTER_H, "the list whole");
     }
 
     /// Plan 08 tests: every page is picked by a click on its row, Up / Down walk the list in

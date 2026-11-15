@@ -586,10 +586,10 @@ These ship in a later version, when they're ready.
   integration, Download panels, Pair a device, New and Edit login and exception), their keys
   unchanged, and the General, File types, Save to, Downloads and Connection pages on them (a
   label column, hairlines in place of group boxes, Connection's number in a spin box), and the
-  other seven on them too (Remote's state and Accounts' warning in banners) (still to come, with
-  plan 09's polish: Options short enough for a 1080p screen at 200 %, banners that wrap their
-  title and that screen readers read, the side list as a list for screen readers, greyed icon
-  buttons' icons greyed, Pair a device centred, Add an account's hint box sized to its text).
+  other seven on them too (Remote's state and Accounts' warning in banners), and, with plan 09's
+  polish, Options short enough for a 1080p screen at 200 % (its page scrolls), banners that wrap
+  their title and that screen readers read, the side list as a list for screen readers, Pair a
+  device centred, Add an account's hint box sized to its text.
   And the finish: filled buttons shaded from a lighter cyan at their top and progress bars
   shaded along their fill, glowing in dark mode.
   And About's mark drawn sharp, the two first-start offers without their logo band.
@@ -600,6 +600,9 @@ These ship in a later version, when they're ready.
   side by side with the mockup in the running app (light and dark, at 100 %, 150 % and 200 %),
   and their keyboard and screen-reader passes.
   Next: the review (plan 09)
+  Follow-up, still to do at the screen: Options' light and dark screenshots at 100, 150 and
+  200 %, its scrolling page on a real 1080p screen at 200 %, and a screen reader over its side
+  list, banners and codes.
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:

@@ -203,14 +203,32 @@ Line numbers drift as phases land: find each item by its name first.
 
 09a's full review (step 5) takes these, from 08a's and 08b's audits (PRs 25, 32, 33, 34):
 
-- **Options at 200 %**: its 820 x 520 client scrolls on a 1080p screen (as before 08);
+- **Options at 200 %**: its 820 x 520 client scrolls on a 1080p screen (as before 08). (Done in
+  09r3: shorter where the screen is, `fit_height`, down to the side list's whole height; its
+  page scrolls between the list and the footer, the window wider by the bar; 100 % unchanged.)
 - **`status_banner`**: no wrapping title (Accounts draws its sentence in the title's place itself)
-  and nothing a screen reader can read; Remote's and Accounts' banners need both;
-- the side list's rows (`ListItem`) have no `List` parent node for screen readers;
+  and nothing a screen reader can read; Remote's and Accounts' banners need both. (Done in 09r3:
+  the title wraps as far as the banner's height has room, `status_banner_lines` and
+  `status_banner_height_for` size it; no title puts the sub in its place, which Accounts uses;
+  every banner is a `Status` node named by its title and sub.)
+- the side list's rows (`ListItem`) have no `List` parent node for screen readers. (Done in 09r3.)
 - a greyed **`icon_only_button`** keeps its icon dark (Sites Logins' "..." with cookies Off): the
-  greyed tint in `button_face`;
-- **Pair a device**: the mock centres its column; the kit has no centred paragraph;
+  greyed tint in `button_face`. (Checked in 09r3: not a fault. The 08b2 shots' dots are
+  `text.disabled` exactly, #a5a0b6 light and #5e596c dark, as Edit's greyed label; three solid
+  dots only read darker than a thin label. Tests hold a greyed button's ink at `text.disabled`
+  and `themeicons::graphite` inking a drawing with the ink given.)
+- **Pair a device**: the mock centres its column; the kit has no centred paragraph. (Done in
+  09r3: `winui::paragraph_centred`; the sentence, the code's line, the hint, the expired line and
+  New code centred.)
 - **Add an account**: its waiting hint's box is a fixed 94 px (two lines; a third would overflow).
+  (Done in 09r3: sized to its hint; a longer one moves the rest down and the window grows.)
+- 09r3's review of Options, its sub-dialogs, About and the two offers against m-options, m-dns,
+  m-acct, m-leftb, m-keys, m-testbi, m-panels, m-pair, m-newlogin, m-newexc, m-about, m-ext and
+  m-helpers (m-socks and m-virus are proposals, not built): Pair a device's and Add an account's
+  codes, painted text, are now read by screen readers. Left, needing a person at the screen:
+  the light/dark side-by-side at 100, 150 and 200 % (screenshots), Narrator over the side list,
+  the banners and the codes, and Options at 200 % on a real 1080p screen (the page's scroll bar
+  and Tab bringing a control into view).
 
 ## Done when
 
