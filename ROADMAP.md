@@ -564,9 +564,9 @@ These ship in a later version, when they're ready.
   download link, their keys unchanged, and the progress window's buttons (Pause or Resume last
   and filled), its status with an icon and a failed download's reason in an error banner,
   Download complete (a card with the file's icon and size, a drag strip), Speed Limiter settings
-  and File Properties on them too (still to come, with plan 09's polish: the Hide tab button's
-  place, the torrent window's General-tab banner, and a way for the screenshot script to open a
-  failed download's window and the tab row's menu), and the torrent, video and list dialogs on
+  and File Properties on them too, with the Hide tab button at the page's top right, the torrent
+  window's General-tab banner while it is shared, and the screenshot script's way to open a
+  failed download's window and the tab row's menu, and the torrent, video and list dialogs on
   them: Add torrent (its looking-up ring in the progress bar's colours), Torrent settings, Add
   trackers, Files already there, Download video and its playlist, Download a gallery
   (gallery-dl's answer in a banner), the video helpers' offer and Helpers, Batch download, Link
@@ -593,6 +593,9 @@ These ship in a later version, when they're ready.
   And the finish: filled buttons shaded from a lighter cyan at their top and progress bars
   shaded along their fill, glowing in dark mode.
   And About's mark drawn sharp, the two first-start offers without their logo band.
+  And the contrast checks extended to every colour that carries text or meaning (the filled
+  buttons' lighter top included) and to greyed text, and screenshot entries for Create folder,
+  Archive password, Add category and the drop target.
   Next: the review (plan 09)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension

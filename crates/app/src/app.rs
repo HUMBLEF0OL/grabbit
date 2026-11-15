@@ -526,6 +526,12 @@ pub struct App {
     /// "Files already there", opened on its own by `/show existing-files` (screenshots and the
     /// translations' fit check); Add torrent asks it itself.
     shown_existing: Option<crate::dialogs::ExistingFiles>,
+    /// "Create folder", opened on its own by `/show create-folder` (plan 09a's screenshots):
+    /// Yes makes no folder.
+    shown_create_folder: Option<crate::dialogs::CreateFolder>,
+    /// The drop target shown by `/show drop-target` (the screenshots') while the setting is
+    /// off: shown this run only, the setting left as it is.
+    drop_target_sample: bool,
     /// The browser extension's offer (extension.rs), and whether this run has weighed it.
     extension: Option<crate::extension::Extension>,
     extension_weighed: bool,
@@ -1258,6 +1264,8 @@ impl App {
             tell_friend: None,
             helpers: None,
             shown_existing: None,
+            shown_create_folder: None,
+            drop_target_sample: false,
             extension: None,
             extension_weighed: false,
             auto_update: None,
@@ -2487,6 +2495,23 @@ impl App {
                 ]));
             }
             "extension" => self.extension = Some(crate::extension::Extension::new()),
+            // Plan 09a's screenshots of 07's dialogs, each a look only: Create folder for a
+            // folder in General's (Yes makes nothing), Archive password for an archive that is
+            // nowhere (its answer extracts nothing), Add category (nothing is made until OK),
+            // the drop target shown this run with its setting left as it is.
+            "create-folder" => {
+                let dir = self
+                    .settings
+                    .category_dir(Category::General, &self.downloads)
+                    .join("Holiday photos");
+                self.shown_create_folder = Some(crate::dialogs::CreateFolder::sample(dir));
+            }
+            "archive-password" if self.extracts.ask.is_none() => {
+                self.extracts.ask =
+                    Some(crate::extractq::PasswordDialog::sample("photos-2026.zip"));
+            }
+            "add-category" => self.run(Cmd::AddCategory, None, ctx),
+            "drop-target" => self.drop_target_sample = !self.settings.drop_target,
             "move-rename" => self.run(Cmd::MoveRename, None, ctx),
             "shortcuts" => self.run(Cmd::Shortcuts, None, ctx),
             // The Help menu's windows and Download a gallery, for screenshots (#192). updates
@@ -6003,6 +6028,8 @@ impl App {
                 self.confirm_category_delete = Some(dialogs::DeleteCategory::new(c));
             }
             Cmd::DeleteCategory(_) => {}
+            // A screenshot's drop target (`/show drop-target`) is hidden, the setting untouched.
+            Cmd::ToggleDropTarget if self.drop_target_sample => self.drop_target_sample = false,
             Cmd::ToggleDropTarget => {
                 self.settings.drop_target = !self.settings.drop_target;
                 self.dirty = true;
@@ -8136,7 +8163,7 @@ impl App {
     /// Tasks → Show drop target: the box while it's on; what is dropped on it is added as if
     /// given on the command line (an address, a magnet link, a .torrent file).
     fn drop_target(&mut self, ctx: &egui::Context) {
-        if !self.settings.drop_target {
+        if !self.settings.drop_target && !self.drop_target_sample {
             self.drop_target = None;
             return;
         }
@@ -8846,6 +8873,11 @@ impl App {
             && !matches!(q.show(ctx), Outcome::Open)
         {
             self.shown_existing = None;
+        }
+        if let Some(q) = &mut self.shown_create_folder
+            && !matches!(q.show(ctx), Outcome::Open)
+        {
+            self.shown_create_folder = None;
         }
         // Then the browser extension, once per start until a browser has it (extension.rs).
         if self.helpers.is_none() && !self.extension_weighed {

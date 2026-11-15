@@ -121,6 +121,12 @@ Line numbers drift as phases land: find each item by its name first.
 5. **Full review**: every mock state, light and dark, at 100% and 150%, side by side with the mock; a
    list of differences fixed or recorded as follow-ups. It includes:
    - a contrast pass with the real colours (the WCAG tests in `palette.rs` plus a manual check of greyed text);
+     **done in 09r2**: `built_in_themes_text_and_meaning_roles_read` (and `make_theme.py`'s
+     check) covers the rest of the text and meaning roles, the filled button's label on its
+     lighter top included (white on `#00829a` 4.51:1 light, 14.12:1 dark). Greyed text is exempt
+     from WCAG 1.4.3 and held at 2:1 on every face it is drawn on, below the secondary text's
+     ratio: measured 2.14 (light, a menu item on the pointer's face) to 2.97 (dark, on the
+     window), 2.24 to 2.53 light and 2.44 to 2.97 dark elsewhere. No colour failed, none changed;
    - a full keyboard pass (Tab order, Alt and menu letters, Enter and Escape) over every changed window;
    - an accessibility-tree pass over every changed window (names, roles, disabled states, bounds);
    - interface size 200%.
@@ -158,18 +164,24 @@ Line numbers drift as phases land: find each item by its name first.
 
 09a's full review (step 5) takes these, from 07c's, 07d's and 07e's audits:
 
-- the progress window's **Hide tab** at the page's top right, as the mock has it, 30 high: the
-  Speed Limiter and completion pages need their rows checked for room first (it keeps its old
-  place and size until then);
-- the torrent window's **General** tab: the mock's info banner ("Complete, sharing", the rate to
-  its peers) above the property table. The table starts at a fixed 274 under the piece bar, so
-  the banner needs that page's geometry reworked (the frame's buttons are 07c's row already);
-- `/show` entries for the progress window's error state and its tab row's menu (07c's
-  screenshots), and for Create folder, Archive password, Add category (the script shoots
-  Properties) and the drop target (07e's), each without a real side effect; the queue-done
-  countdown gets none that runs (it turns the computer off after 30 s);
-- the **Scheduler** at the mockup's 800 (it keeps 651 and its panes' places), and short enough for
-  a 1080p screen at 200 % (its client is 527 high: at 200 % it scrolls by about 45 px).
+- (done in 09r2) the progress window's **Hide tab** at the page's top right, as the mock has it,
+  30 high: x to 521, y 34 to 64 (the Speed Limiter's check boxes start at 64; Options on
+  completion's Save To path now stops 8 before it);
+- (done in 09r2) the torrent window's **General** tab: the mock's info banner ("Complete,
+  sharing", the rate to its peers) in the piece bar's place while a finished torrent is shared,
+  the property table 19 lower with 5 rows (the rest scroll), ending at 403 inside the page;
+- (done in 09r2) `/show` entries for the progress window's error state (`progress:error`, a
+  sample reason, the download untouched) and its tab row's menu (`progress:menu`), and for
+  `create-folder` (Yes makes nothing), `archive-password` (its answer extracts nothing),
+  `add-category` and `drop-target` (shown this run, the setting untouched), all in
+  `baseline.ps1`'s states; the queue-done countdown gets none that runs (it turns the computer
+  off after 30 s);
+- **Follow-up (09r2 could not do it):** the **Scheduler** at the mockup's 800 (it keeps 651 and
+  its panes' places), and short enough for a 1080p screen at 200 % (its client is 527 high: at
+  200 % it scrolls by about 45 px). Its three pages are laid out at fixed points (627 is the
+  right edge of every row, the Schedule page runs to y 460), so the width and the 45 px are a
+  relayout of all three pages (the weekdays on one row at 800 would give back 32 of them), which
+  needs the app running to check side by side with the mock: R2 ran without a build.
 
 ## Left from 08
 
