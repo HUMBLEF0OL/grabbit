@@ -575,9 +575,9 @@ These ship in a later version, when they're ready.
   Delete category, Confirm deletion, Redownload and the other yes-or-no questions, Check for
   updates, About, Keyboard shortcuts, Tell a friend, Verify checksum, the crash report, Archive
   password, 7-Zip needed, Create folder, Download limits, the notices, the browser extension's
-  offer and the drop target; "Add many downloads" is that Confirm), their keys unchanged (still
-  to come, with plan 09's polish: the Scheduler at the mockup's width and short enough for a
-  1080p screen at 200 %), and the help pages, the website's Themes page, its theme prompt and
+  offer and the drop target; "Add many downloads" is that Confirm), their keys unchanged, the
+  Scheduler at the mockup's 800 wide and short enough for a 1080p screen at 200 %, and the help
+  pages, the website's Themes page, its theme prompt and
   llms.txt describing Graphite as the only look (its picture there comes with the new
   screenshots), and the Options window's pages listed down the side (each with its icon and
   title at the top, OK and Help in a footer; Up and Down added to its keys, and Ctrl+Shift+Tab

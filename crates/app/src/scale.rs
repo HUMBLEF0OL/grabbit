@@ -131,8 +131,7 @@ pub fn work_area(ctx: &egui::Context, at: Pos2) -> Option<Rect> {
 pub fn room(ctx: &egui::Context, at: Pos2) -> Option<Vec2> {
     let zoom = ctx.zoom_factor();
     if let Some(screen) = test_screen() {
-        let ppp = ctx.pixels_per_point();
-        return Some(vec2(screen.x, screen.y - 40.0) / ppp - FRAME / zoom);
+        return Some(room_on(screen, ctx.pixels_per_point(), zoom));
     }
     {
         let ppp = ctx.pixels_per_point();
@@ -140,6 +139,12 @@ pub fn room(ctx: &egui::Context, at: Pos2) -> Option<Vec2> {
             crate::win32::work_area((at.x * ppp).round() as i32, (at.y * ppp).round() as i32)?;
         Some(vec2((r - l) as f32, (b - t) as f32) / ppp - FRAME / zoom)
     }
+}
+
+/// [`room`] on a `screen` of that many pixels with a 40 px taskbar, at `ppp` pixels per point
+/// and interface size `zoom` (the rule windows are sized to fit, e.g. 1920 x 1080 at 200 %).
+pub fn room_on(screen: Vec2, ppp: f32, zoom: f32) -> Vec2 {
+    vec2(screen.x, screen.y - 40.0) / ppp - FRAME / zoom
 }
 
 /// `size` made no larger than `room` (each side at least 120 points, a usable window).

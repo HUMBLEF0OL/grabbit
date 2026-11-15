@@ -176,12 +176,13 @@ Line numbers drift as phases land: find each item by its name first.
   `add-category` and `drop-target` (shown this run, the setting untouched), all in
   `baseline.ps1`'s states; the queue-done countdown gets none that runs (it turns the computer
   off after 30 s);
-- **Follow-up (09r2 could not do it):** the **Scheduler** at the mockup's 800 (it keeps 651 and
-  its panes' places), and short enough for a 1080p screen at 200 % (its client is 527 high: at
-  200 % it scrolls by about 45 px). Its three pages are laid out at fixed points (627 is the
-  right edge of every row, the Schedule page runs to y 460), so the width and the 45 px are a
-  relayout of all three pages (the weekdays on one row at 800 would give back 32 of them), which
-  needs the app running to check side by side with the mock: R2 ran without a build.
+- (done in 09r2, the follow-up after its build) the **Scheduler** at the mockup's 800 and short
+  enough for a 1080p screen at 200 %: client 800 x 493 (was 651 x 527, which scrolled there).
+  The queue list keeps its place; the pages' rows end at 776 (`RIGHT`, was 627), the weekdays
+  take four columns of two rows (16 back), Hang up and Exit share a row (18 back), the files
+  list's name column takes the width. A unit test checks the client against `scale::room_on`
+  (1920 x 1080, 40 px taskbar, the frame, at 200 %: 952 x 500), the rule `dialogs::shown_size`
+  shows windows by. Not yet compared side by side with the mock in the running app.
 
 ## Left from 08
 
