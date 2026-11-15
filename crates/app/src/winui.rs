@@ -8365,6 +8365,9 @@ mod tests {
             }
             let disabled = button_colors(ButtonKind::Disabled, State::Disabled, c);
             let enabled = button_colors(ButtonKind::Normal, State::Normal, c);
+            // A greyed button's label and icon (`button_face` inks its icon with `face.text`)
+            // take `text.disabled` (plan 08's greyed `icon_only_button`).
+            assert_eq!(disabled.text, c.text_disabled, "greyed ink");
             let gap = |a: Color32, b: Color32| (a.r() as i32 - b.r() as i32).abs();
             assert!(
                 gap(disabled.text, enabled.text) >= 0x50,

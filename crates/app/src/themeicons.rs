@@ -672,11 +672,11 @@ pub fn file_need(ext: Option<&str>) -> &'static str {
 mod tests {
     use super::*;
 
-    /// 09r3 (plan 08's greyed `icon_only_button`): a greyed button's icon is drawn in the greyed
-    /// ink it is given (`button_face` gives `text.disabled`), not in the text's: its white
-    /// strokes take the ink, untinted.
+    /// [`graphite`] inks a one-colour drawing with the ink it is given, greyed or not: its white
+    /// strokes take the ink and it is drawn untinted. (That a greyed button's ink is
+    /// `text.disabled` is held in `winui`'s `button_states_differ`.)
     #[test]
-    fn a_greyed_icon_takes_the_greyed_ink() {
+    fn graphite_inks_with_the_ink_given() {
         let ink = Color32::from_rgb(0xa5, 0xa0, 0xb6);
         let (src, tint) = graphite("gx-dots", 16.0, ink, false).expect("gx-dots");
         let ImageSource::Bytes { bytes, .. } = src else {

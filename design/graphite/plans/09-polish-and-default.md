@@ -215,7 +215,8 @@ Line numbers drift as phases land: find each item by its name first.
 - a greyed **`icon_only_button`** keeps its icon dark (Sites Logins' "..." with cookies Off): the
   greyed tint in `button_face`. (Checked in 09r3: not a fault. The 08b2 shots' dots are
   `text.disabled` exactly, #a5a0b6 light and #5e596c dark, as Edit's greyed label; three solid
-  dots only read darker than a thin label. A test holds the greyed ink.)
+  dots only read darker than a thin label. Tests hold a greyed button's ink at `text.disabled`
+  and `themeicons::graphite` inking a drawing with the ink given.)
 - **Pair a device**: the mock centres its column; the kit has no centred paragraph. (Done in
   09r3: `winui::paragraph_centred`; the sentence, the code's line, the hint, the expired line and
   New code centred.)
