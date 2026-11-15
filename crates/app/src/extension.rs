@@ -125,7 +125,7 @@ impl Extension {
     fn body(&mut self, ui: &mut Ui, o: Pos2, h: f32, answer: &mut Option<bool>) {
         let p = ui.painter().clone();
         let (ink, muted) = (winui::TEXT(), winui::MUTED());
-        // The banner: the logo, what the extension does, in one line, and how.
+        // The banner: what the extension does, in one line, and how.
         let extra = winui::banner(
             ui,
             &p,
