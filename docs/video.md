@@ -35,8 +35,8 @@ Both are kept in a `tools` folder in MDM's data folder.
 
 Already have yt-dlp or ffmpeg for another program? Use those instead of a second copy: in **Download video from a page**, click **Helpers...**, then **Use another program...** beside yt-dlp or ffmpeg, and choose the program. MDM runs it once to check that it is that program, and uses it from then on, the command line too. MDM doesn't update a program you chose: keep it up to date yourself (yt-dlp: `yt-dlp -U`, or your package manager). **Use MDM's own copy** goes back to the one MDM downloads and checks.
 
-![The video helpers window: yt-dlp and ffmpeg, each with its version and Use another program...](images/help/video-helpers.webp)
-*Helpers...: use your own yt-dlp or ffmpeg instead.*
+![The Helpers window: yt-dlp, ffmpeg and gallery-dl, each with Use another program... and Use MDM's own copy](images/help/video-helpers.webp)
+*Helpers...: use your own yt-dlp, ffmpeg or gallery-dl instead.*
 
 ### A JavaScript runtime for YouTube {#javascript-runtime}
 

@@ -314,7 +314,8 @@ try {
         Start-Sleep -Milliseconds 200
       }
       $also = @($t)
-      $t = @($new | Where-Object { $_ -ne $also[0] })[0]
+      # By its title where it has a known one (Helpers), else the new window that isn't the first.
+      $t = @($new | Where-Object { $_ -ne $also[0] -and ($what -ne "video-helpers" -or $_ -eq "Helpers") })[0]
       if (-not $t) { Write-Warning "${name}: no dialog"; Close-Ours $app.Id $also[0]; continue }
     }
     Start-Sleep -Milliseconds 1500

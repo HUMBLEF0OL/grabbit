@@ -145,7 +145,7 @@ id = "options-integration"
 page = "browser-integration.md"
 under = "What it takes"
 take = "options:general"
-crop = [195, 162, 618, 214]
+crop = [195, 162, 618, 199]
 marks = [{ at = "Use advanced browser integration", side = "right" }, { at = [206, 266, 255, 16], side = "right" }]
 alt = "Options, General: Use advanced browser integration and the list of browsers MDM takes downloads from"
 caption = "1 must be on, and 2 your browser ticked."
@@ -201,8 +201,8 @@ id = "video-helpers"
 page = "video.md"
 under = "Use your own copies"
 take = "video-helpers"
-alt = "The video helpers window: yt-dlp and ffmpeg, each with its version and Use another program..."
-caption = "Helpers...: use your own yt-dlp or ffmpeg instead."
+alt = "The Helpers window: yt-dlp, ffmpeg and gallery-dl, each with Use another program... and Use MDM's own copy"
+caption = "Helpers...: use your own yt-dlp, ffmpeg or gallery-dl instead."
 
 [[shot]]
 id = "video-subtitles"
@@ -255,7 +255,7 @@ id = "rss-feeds"
 page = "torrents.md"
 under = "RSS feeds"
 take = "rss"
-alt = "RSS feeds before any is added: the list of feeds, their items and the rules"
+alt = "RSS feeds before any is added: the list of feeds, their items, and the Download rules tab"
 caption = "RSS feeds, and the rules that pick what to download."
 
 [[shot]]
@@ -449,7 +449,7 @@ under = "Steps"
 take = "addurl"
 ring = ["OK"]
 alt = "Enter new address to download, its OK button ringed"
-caption = "Add URL: the copied address is already there. Click OK."
+caption = "Add URL: MDM puts the address you copied in the Address box (paste it there if it isn't). Click OK."
 
 [[shot]]
 id = "first-file-info"
