@@ -131,7 +131,8 @@ Line numbers drift as phases land: find each item by its name first.
    - an accessibility-tree pass over every changed window (names, roles, disabled states, bounds);
    - interface size 200%.
 
-   09r2 ran only the contrast pass. Over 07's dialogs it leaves, as follow-ups under the
+   Of step 5's passes, 09r2 ran only the contrast pass (besides the "Left from 07" items
+   below, which it did). Over 07's dialogs it leaves, as follow-ups under the
    ROADMAP's Graphite item: the side-by-side with the mock in the running app (light and dark,
    100/150/200 %, the Scheduler included), the keyboard pass and the accessibility-tree pass.
    It also keeps `[profile.dev.package.mdm-crash] debug = "full"` in `Cargo.toml`: the checks
