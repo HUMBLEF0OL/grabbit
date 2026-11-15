@@ -613,7 +613,7 @@ fn cjk(c: char) -> bool {
 }
 
 /// Closing punctuation that a line broken between characters must not start with.
-fn no_line_start(c: char) -> bool {
+pub(crate) fn no_line_start(c: char) -> bool {
     "、。，．・：；？！ー）」』】〕｝〉》々ゝゞぁぃぅぇぉっゃゅょァィゥェォッャュョ,.:;?!)]}%"
         .contains(c)
 }

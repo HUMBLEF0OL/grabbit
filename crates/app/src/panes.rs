@@ -973,6 +973,12 @@ fn break_inside(width: impl Fn(&str) -> f32, s: &str, room: f32) -> Option<(Stri
             hi = mid - 1;
         }
     }
+    // Never a second line that starts with closing punctuation (Chinese and Japanese: 、。」）):
+    // the cut moves back before the character that would end up first.
+    let starts_badly = |at: usize| s[at..].chars().next().is_some_and(winui::no_line_start);
+    while lo > 1 && starts_badly(ends[lo - 1]) {
+        lo -= 1;
+    }
     let at = ends[lo - 1];
     Some((s[..at].to_owned(), s[at..].to_owned()))
 }
@@ -2328,6 +2334,9 @@ mod tests {
         // A character is never split (an accent kept on its letter).
         let accents = "e\u{301}e\u{301}e\u{301}";
         assert_eq!(split(accents, 20.0), pair("e\u{301}", "e\u{301}e\u{301}"));
+        // The second line never starts with closing punctuation: the cut moves back.
+        assert_eq!(split("報告書。一覧", 30.0), pair("報告", "書。一覧"));
+        assert_eq!(split("報告」」一覧", 20.0), pair("報", "告」」一覧"));
     }
 
     /// The pane's lines with real text (09r1): a name without a space, a slash or a hyphen
