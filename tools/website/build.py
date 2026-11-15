@@ -47,7 +47,7 @@ REPO = "https://github.com/HUMBLEF0OL/grabbit"
 # <!--@amo--> for its Add to Firefox button.
 AMO = "https://addons.mozilla.org/firefox/addon/mister-download-manager/"
 # The extension's listing in the Chrome Web Store (crates/ipc/src/extension.rs STORE_ID), for
-# Chrome, Edge, Brave, Opera and Vivaldi: {{CWS}} in pages; <!--@stores--> is both buttons.
+# Chrome, Edge, Brave, Opera and Vivaldi: {{CWS}} in pages; <!--@cws--> for its Add to Chrome button.
 CWS = "https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp"
 # The header's, the footer's and the home page's Support MDM: this fork's repository until its
 # owner's GitHub Sponsors page exists (see .github/FUNDING.yml; the app and the popup match).
@@ -210,31 +210,6 @@ def people_count(n: int) -> str:
     return f'<span translate="no">{n}</span> {"person" if n == 1 else "people"}'
 
 
-# How many photos the home page's row shows, by the screen's width (styles.css .pile, the same
-# breakpoints): (from this width up, photos). The rest are "+N", which opens /contributors.html.
-PILE_TIERS = [(0, 7), (561, 11), (1200, 15)]
-
-
-def crew_pile() -> str:
-    """The home page's thanks, on the board beside the hero's label (under the window; after the
-    label on a phone): "Made possible by these amazing humans", a row of round photos, overlapping,
-    and "+N" for the ones the row has no room for."""
-    if not CREW:
-        return ""
-    n = len(CREW)
-    shown = max(cap for _, cap in PILE_TIERS)
-    # "+N" for each width where the row is full: its count there, and only there.
-    more = "".join(f'<span class="pile-n pile-n-{cap}">+{n - cap}</span>' for _, cap in PILE_TIERS if n > cap)
-    more_li = (f'<li class="pile-more"><a href="/contributors.html"><span translate="no" dir="ltr">{more}</span> '
-               f'<span class="sr-only">Everyone who helped</span></a></li>' if more else "")
-    full = " ".join(f"pile-full-{cap}" for _, cap in PILE_TIERS if n > cap)
-    return f"""<div class="parcel-crew">
-          <p class="crew-title" id="crew-title">Made possible by these amazing humans</p>
-          <ul class="faces pile {full}" style="--face: 44px" role="list" aria-labelledby="crew-title">{"".join(face(p, 44) for p in CREW[:shown])}{more_li}</ul>
-          <p class="crew-fine">{people_count(n)} who sent a pull request, reported a problem or joined a conversation on GitHub. <a href="/contributors.html">Meet them all</a></p>
-        </div>"""
-
-
 def esc(s: str) -> str:
     return html.escape(s, quote=True)
 
@@ -331,15 +306,6 @@ NAV = [
 ]
 
 
-def gh_pill(cls: str = "gh-pill") -> str:
-    """The GitHub link with its star count (when known): header, hero, open-source card."""
-    stars = STATS.get("stars")
-    count = f'<span class="gh-count">{stars}</span>' if stars else ""
-    return (f'<a class="{cls}" href="{REPO}" aria-label="Mister Download Manager on GitHub'
-            f'{f", {stars} stars" if stars else ""}">'
-            f'<svg aria-hidden="true"><use href="#i-github"/></svg><span class="gh-label">GitHub</span>{count}</a>')
-
-
 def os_menu() -> str:
     """The split download button's list: every file (hero, final call)."""
     rows = [
@@ -380,11 +346,6 @@ def cws_button(extra_class: str = "") -> str:
     Vivaldi install from it too), drawn as Add to Firefox is."""
     return (f'<a class="btn btn-line store-btn{extra_class}" href="{CWS}">'
             '<img src="/assets/browsers/chrome.svg" width="22" height="22" alt=""> Add to Chrome</a>')
-
-
-def store_buttons() -> str:
-    """Both stores' buttons side by side: Firefox's, then the Chrome Web Store's."""
-    return f'<span class="store-btns">{amo_button()}{cws_button()}</span>'
 
 
 def header(section: str = "") -> str:
@@ -1138,6 +1099,25 @@ def bench_report() -> str:
     return md(table) + f'<p class="fine">{esc(env)}</p>'
 
 
+def bench_bars(axis: int = 16) -> str:
+    """The home page's chart: each scenario's end-to-end median from website/bench/results.json,
+    MDM's bar over IDM's on one shared time axis (seconds). Drawn here so the page and the data
+    can't disagree; home.css styles it and home.js only adds the grow-in."""
+    data = json.loads((WEB / "bench" / "results.json").read_text("utf-8"))
+    rows = []
+    for s in data["scenarios"]:
+        us = s["clients"]["MDM"]["stats"]["e2e_ms"]["median"] / 1000
+        them = s["clients"]["IDM"]["stats"]["e2e_ms"]["median"] / 1000
+        rows.append(
+            f'<li class="bench-row"><span class="bench-name">{esc(s["title"])}</span>'
+            f'<span class="bench-bars">'
+            f'<span class="bench-bar us" style="--w:{us / axis * 100:.2f}%"><i></i><b>{us:.2f} s</b></span>'
+            f'<span class="bench-bar them" style="--w:{them / axis * 100:.2f}%"><i></i><b>{them:.2f} s</b></span>'
+            f'</span></li>')
+    ticks = "".join(f'<span style="left:{t / axis * 100:g}%">{t} s</span>' for t in range(0, axis + 1, 4))
+    return f'<ul class="bench" data-bench>{"".join(rows)}<li class="bench-axis" aria-hidden="true">{ticks}</li></ul>'
+
+
 # ---- Pages written as Markdown (legal) -----------------------------------------------------------
 
 def front(text: str) -> tuple[dict, str]:
@@ -1185,16 +1165,16 @@ def fill(text: str) -> str:
         text = text.replace("{{FILE_" + k.upper() + "}}", v)
     if "{{BENCH_REPORT}}" in text:
         text = text.replace("{{BENCH_REPORT}}", bench_report())
+    if "<!--@benchbars-->" in text:
+        text = text.replace("<!--@benchbars-->", bench_bars())
     for k in ("stars", "forks", "issues", "watchers"):
         text = text.replace("{{" + k.upper() + "}}", STATS.get(k, "–"))
-    text = text.replace("<!--@split-->", split_button()).replace("<!--@gh-->", gh_pill("btn btn-ghost btn-big gh-big"))
-    text = text.replace("<!--@stores-->", store_buttons()).replace("<!--@amo-->", amo_button())
+    text = text.replace("<!--@split-->", split_button()).replace("<!--@amo-->", amo_button())
     text = text.replace("<!--@cws-->", cws_button())
     text = text.replace("{{AMO}}", AMO).replace("{{CWS}}", CWS)
     if "<!--@features-->" in text:
         text = text.replace("<!--@features-->", manifest(feature_list()))
     text = coming_marks(text.replace("<!--@coming-->", coming_banner()))
-    text = text.replace("<!--@crew-->", crew_pile())
     text = text.replace("<!--@fields-->", waybill_fields()).replace("<!--@barcode-->", barcode.svg(f"MDM {VERSION}"))
     return (text.replace("{{VERSION}}", VERSION).replace("{{REPO}}", REPO).replace("{{SITE}}", SITE)
             .replace("{{SPONSORS}}", SPONSORS).replace("{{SOFTWARE_LD}}", json.dumps(SOFTWARE_LD, ensure_ascii=False, separators=(",", ":"))))

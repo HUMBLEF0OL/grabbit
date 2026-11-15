@@ -1,10 +1,10 @@
 // Mister Download Manager — site behaviour: light/dark, the download for your system, the
-// split button's menu, the "What do you download?" chips and the tour.
+// split button's menu and the "What do you download?" chips (the home page's own motion is in
+// home.js).
 (function () {
   "use strict";
   var root = document.documentElement;
-  // Visitors who asked for less motion get every moving part at rest: the race at its finish,
-  // the tour still.
+  // Visitors who asked for less motion get every moving part at rest: the race at its finish.
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   function each(selector, fn) {
@@ -392,119 +392,6 @@
       });
     });
   })();
-
-  // ---- The tour: the app one window at a time -----------------------------------------------
-  // A tablist of features beside a stage whose panels share one spot and crossfade. While it is
-  // on screen it moves on every DWELL ms by itself, the chosen tab's line filling up to show when
-  // (--p, from the time spent, so a pause holds it exactly where it was). A pointer over the tour
-  // or the focus inside it holds it; choosing a tab (click, Enter, arrows, a swipe) or opening a
-  // picture stops it for good, as someone reading shouldn't have it change under them. Panels
-  // left behind stay laid out, only faded, inert and hidden from screen readers: the stage keeps
-  // its height, and the lightbox still goes through every picture. Never on its own with reduced
-  // motion (`reduce`).
-  each("[data-tour]", function (tour) {
-    var DWELL = 6000;
-    var list = tour.querySelector('[role="tablist"]');
-    var stage = tour.querySelector(".tour-stage");
-    var tabs = list.querySelectorAll('[role="tab"]');
-    var panels = [];
-    for (var i = 0; i < tabs.length; i++) panels.push(document.getElementById(tabs[i].getAttribute("aria-controls")));
-    var at = 0, auto = !reduce, seen = !("IntersectionObserver" in window), over = false, inside = false;
-    var spent = 0, last = 0, frame = 0;
-
-    function select(k) {
-      at = (k + tabs.length) % tabs.length;
-      for (var i = 0; i < tabs.length; i++) {
-        var on = i === at;
-        tabs[i].setAttribute("aria-selected", on ? "true" : "false");
-        tabs[i].tabIndex = on ? 0 : -1;
-        tabs[i].style.setProperty("--p", "0");
-        if (on) { panels[i].setAttribute("data-on", ""); panels[i].removeAttribute("aria-hidden"); }
-        else { panels[i].removeAttribute("data-on"); panels[i].setAttribute("aria-hidden", "true"); }
-        panels[i].inert = !on;
-      }
-      spent = 0;
-      // On a phone the tabs are a row of chips that scrolls: bring the chosen one into it (the
-      // row only, never the page).
-      if (list.scrollWidth > list.clientWidth + 1) {
-        var r = list.getBoundingClientRect(), t = tabs[at].getBoundingClientRect();
-        var by = t.left + t.width / 2 - (r.left + r.width / 2);
-        if (list.scrollBy) list.scrollBy({ left: by, behavior: reduce ? "auto" : "smooth" });
-        else list.scrollLeft += by;
-      }
-    }
-    function running() { return auto && seen && !over && !inside && !document.hidden; }
-    function tick(now) {
-      frame = 0;
-      if (!running()) { last = 0; return; }
-      if (last) spent += now - last;
-      last = now;
-      if (spent >= DWELL) select(at + 1);
-      tabs[at].style.setProperty("--p", Math.min(1, spent / DWELL).toFixed(4));
-      frame = requestAnimationFrame(tick);
-    }
-    function wake() { if (running() && !frame) { last = 0; frame = requestAnimationFrame(tick); } }
-    function stop() {
-      auto = false;
-      tour.classList.remove("is-auto");
-      if (frame) cancelAnimationFrame(frame);
-      frame = 0;
-    }
-    function choose(k, focus) {
-      stop();
-      select(k);
-      if (focus) tabs[at].focus();
-    }
-
-    for (var j = 0; j < tabs.length; j++) {
-      (function (k) { tabs[k].addEventListener("click", function () { choose(k); }); })(j);
-    }
-    // Arrows go through the tabs whichever way they're laid out (a column, or a row on a phone).
-    list.addEventListener("keydown", function (e) {
-      var k = { ArrowDown: at + 1, ArrowRight: at + 1, ArrowUp: at - 1, ArrowLeft: at - 1, Home: 0, End: tabs.length - 1 }[e.key];
-      if (k === undefined || e.altKey || e.ctrlKey || e.metaKey) return;
-      e.preventDefault();
-      choose(k, true);
-    });
-    var narrow = window.matchMedia ? window.matchMedia("(max-width: 820px)") : null;
-    function orient() { list.setAttribute("aria-orientation", narrow && narrow.matches ? "horizontal" : "vertical"); }
-    orient();
-    if (narrow && narrow.addEventListener) narrow.addEventListener("change", orient);
-
-    // Held while a mouse is over it (a touch has no hover to end) or the focus is in it.
-    tour.addEventListener("pointerenter", function (e) { if (e.pointerType !== "touch") { over = true; } });
-    tour.addEventListener("pointerleave", function (e) { if (e.pointerType !== "touch") { over = false; wake(); } });
-    tour.addEventListener("focusin", function () { inside = true; });
-    tour.addEventListener("focusout", function (e) { inside = !!(e.relatedTarget && tour.contains(e.relatedTarget)); wake(); });
-    document.addEventListener("visibilitychange", function () { last = 0; wake(); });
-    // A picture opened in the lightbox: the tour stays on it, so closing comes back to it.
-    stage.addEventListener("click", stop);
-    stage.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") stop(); });
-    // A sideways swipe on the stage goes to the next or previous feature (touch-action: pan-y
-    // leaves the vertical one to the page).
-    var swipe = null;
-    stage.addEventListener("pointerdown", function (e) {
-      swipe = e.pointerType === "touch" ? { x: e.clientX, y: e.clientY, id: e.pointerId } : null;
-    });
-    stage.addEventListener("pointerup", function (e) {
-      if (!swipe || swipe.id !== e.pointerId) return;
-      var dx = e.clientX - swipe.x, dy = e.clientY - swipe.y;
-      swipe = null;
-      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) choose(at + (dx < 0 ? 1 : -1));
-    });
-    stage.addEventListener("pointercancel", function () { swipe = null; });
-
-    select(0);
-    if (auto) tour.classList.add("is-auto");
-    // Only while it's on screen: nobody misses a feature that went by out of sight.
-    if (!seen) {
-      new IntersectionObserver(function (es) {
-        seen = es[es.length - 1].isIntersecting;
-        if (seen) wake();
-      }, { threshold: 0.35 }).observe(tour);
-    }
-    wake();
-  });
 
   // ---- Your system -------------------------------------------------------------------------
   // The Windows card (.os-card[data-os]) carries the main file and label; the download buttons

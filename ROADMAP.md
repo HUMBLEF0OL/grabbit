@@ -612,6 +612,10 @@ These ship in a later version, when they're ready.
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:
   a checker that lists every place the old name is still shown (`tools/rename/check.py`) and the
   plan refreshed against today's code
+- 🔄 The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a
+  centred stage, then a walk through adding, downloading, torrents and video as you scroll), the
+  benchmark's seven medians drawn from its results file, the Grabbit mark and Geist, light and
+  dark. The other pages keep the current look until they are moved over
 
 ### Bugs being looked into
 
