@@ -600,6 +600,9 @@ These ship in a later version, when they're ready.
   side by side with the mockup in the running app (light and dark, at 100 %, 150 % and 200 %),
   and their keyboard and screen-reader passes.
   Next: the review (plan 09)
+  Follow-up, still to do at the screen: Options' light and dark screenshots at 100, 150 and
+  200 %, its scrolling page on a real 1080p screen at 200 %, and a screen reader over its side
+  list, banners and codes.
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:

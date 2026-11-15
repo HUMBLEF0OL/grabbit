@@ -262,10 +262,9 @@ impl GalleryDialog {
                     "st-error",
                 )
             };
-            // The answer in a banner (the mockup's), read out as before.
+            // The answer in a banner (the mockup's), read out by the banner itself.
             let rc = r(o, LX, band.0, RIGHT - LX, band.1);
             winui::status_banner(ui, rc, kind, icon, msg, "");
-            winui::readable(ui, rc, "gallery-status", msg);
         }
         if let Some(e) = &self.error {
             let rc = winui::fit(

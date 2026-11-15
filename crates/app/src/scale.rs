@@ -275,6 +275,7 @@ pub fn pane<R>(
         ui.ctx().data_mut(|d| d.insert_temp(focus_key, focused));
         if let Some(r) = focused
             .and_then(|f| ui.ctx().read_response(f))
+            .filter(|r| drawn_in(r.interact_rect, port))
             .map(|r| r.rect)
         {
             off += into_view(r, port);
@@ -349,6 +350,19 @@ fn bars(content: Vec2, view: Vec2, ppp: f32) -> (bool, bool) {
     let h = over(content.x, view.x - if v { THICK } else { 0.0 });
     v = v || (h && over(content.y, view.y - THICK));
     (v, h)
+}
+
+/// A [`pane`] `id` shown from its top again (Options: a page chosen, the window reopened).
+pub fn to_top(ctx: &egui::Context, id: egui::Id) {
+    ctx.data_mut(|d| d.remove_temp::<Vec2>(id.with("pane")));
+}
+
+/// Whether a widget whose clipped (interact) rect is `clipped` was drawn inside a [`pane`]
+/// whose port is `port`: its content is clipped to the port, so its rect there is inside it,
+/// or empty when scrolled wholly out. A widget beside the pane (a footer's button, a side
+/// list) shows outside the port, and focusing it must not scroll the pane.
+fn drawn_in(clipped: Rect, port: Rect) -> bool {
+    !clipped.is_positive() || port.expand(0.5).contains_rect(clipped)
 }
 
 /// How far to scroll (offset change) to bring `r` inside `port`, with a little margin.
@@ -504,6 +518,21 @@ mod tests {
         assert_eq!(into_view(inside, port), Vec2::ZERO);
         let right = Rect::from_min_max(pos2(420.0, 10.0), pos2(480.0, 31.0));
         assert_eq!(into_view(right, port), vec2(84.0, 0.0));
+    }
+
+    /// Only a control drawn in the pane is followed: one clipped to the port (partly or wholly
+    /// out of it), not a footer button or a side list row beside it (Options' page pane).
+    #[test]
+    fn focus_beside_the_pane_does_not_scroll_it() {
+        let port = Rect::from_min_max(pos2(191.0, 0.0), pos2(820.0, 420.0));
+        let shown = Rect::from_min_max(pos2(210.0, 400.0), pos2(300.0, 420.0));
+        assert!(drawn_in(shown, port));
+        let below = Rect::from_min_max(pos2(210.0, 440.0), pos2(300.0, 460.0));
+        assert!(drawn_in(below.intersect(port), port));
+        let footer_ok = Rect::from_min_max(pos2(700.0, 430.0), pos2(800.0, 460.0));
+        assert!(!drawn_in(footer_ok, port));
+        let side_row = Rect::from_min_max(pos2(8.0, 40.0), pos2(182.0, 70.0));
+        assert!(!drawn_in(side_row, port));
     }
 
     /// #672: a client one device pixel short of the content is the window's size rounded down

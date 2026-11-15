@@ -224,6 +224,9 @@ pub struct OptionsDialog {
     /// then shows it; unticked, the box's own text (empty is automatic again when the window
     /// opens next).
     ua_auto: bool,
+    /// The page the scrolled page pane's offset belongs to (none until the window first
+    /// draws): a page chosen, or the window opened again, starts at its top.
+    scrolled: Option<usize>,
 }
 
 impl OptionsDialog {
@@ -302,6 +305,7 @@ impl OptionsDialog {
             device_rows: Default::default(),
             cookie_browser: cookie_browser_at(settings),
             ua_auto: settings.own_user_agent().is_none(),
+            scrolled: None,
         }
     }
 
@@ -315,7 +319,10 @@ impl OptionsDialog {
         } else {
             0.0
         };
-        let h = fit_height(crate::dialogs::shown_size(ctx, [W, H + caption])[1] - caption);
+        let h = fit_height(
+            crate::dialogs::shown_size(ctx, [W, H + caption])[1] - caption,
+            ctx.pixels_per_point(),
+        );
         // Wider by the page's scroll bar when it has one.
         let w = if h < H {
             W + crate::scrollbar::THICK
@@ -339,9 +346,14 @@ impl OptionsDialog {
                     let view = r(o, SIDE_W + 1.0, 0.0, w - SIDE_W - 1.0, foot);
                     let mut page = ui.new_child(egui::UiBuilder::new().max_rect(view));
                     page.set_clip_rect(view.intersect(ui.clip_rect()));
+                    let pane = egui::Id::unique("options-page");
+                    if self.scrolled != Some(self.page) {
+                        self.scrolled = Some(self.page);
+                        crate::scale::to_top(ui.ctx(), pane);
+                    }
                     crate::scale::pane(
                         &mut page,
-                        egui::Id::unique("options-page"),
+                        pane,
                         vec2(W - SIDE_W - 1.0, H - winui::FOOTER_H),
                         |ui, at| self.page_area(ui, at - vec2(SIDE_W + 1.0, 0.0), downloads),
                     );
@@ -4138,12 +4150,14 @@ const MIN_H: f32 = SIDE_TOP + PAGES.len() as f32 * (ROW_H + ROW_GAP) + 8.0 + win
 
 /// The window's client height when `room` points are left for it on the screen: [`H`] where it
 /// fits; shorter where it doesn't (its page scrolls), but never below [`MIN_H`] (the whole
-/// window scrolls then, as before).
-fn fit_height(room: f32) -> f32 {
-    if room >= H {
+/// window scrolls then, as before). At `ppp` pixels per point: a page short by a device pixel
+/// or less shows no scroll bar (`scale::pane`), so the window keeps [`H`] then.
+fn fit_height(room: f32, ppp: f32) -> f32 {
+    let h = room.floor();
+    if room >= H || ((H - h) * ppp).round() <= 1.0 {
         H
     } else {
-        room.floor().max(MIN_H)
+        h.max(MIN_H)
     }
 }
 /// The side list's width (its right border at this x).
@@ -4717,11 +4731,16 @@ mod tests {
     /// page scrolling) where it hasn't, the side list still whole.
     #[test]
     fn options_fits_a_short_screen() {
-        assert_eq!(fit_height(900.0), H);
-        assert_eq!(fit_height(H), H);
+        assert_eq!(fit_height(900.0, 1.0), H);
+        assert_eq!(fit_height(H, 1.0), H);
         // 1080p at 200 %: about 496 points less a drawn title bar.
-        assert_eq!(fit_height(464.4), 464.0);
-        assert_eq!(fit_height(300.0), MIN_H);
+        assert_eq!(fit_height(464.4, 2.0), 464.0);
+        assert_eq!(fit_height(300.0, 1.0), MIN_H);
+        // A device pixel short shows no bar (scale::pane): the window keeps its height, with no
+        // empty bar strip; two pixels short scroll.
+        assert_eq!(fit_height(H - 0.6, 1.0), H);
+        assert_eq!(fit_height(H - 0.6, 2.0), H - 1.0);
+        assert_eq!(fit_height(H - 1.6, 1.0), H - 2.0);
         const { assert!(MIN_H < 464.0, "fits 1080p at 200 %") };
         let last = side_row(Pos2::ZERO, PAGES.len() - 1);
         assert!(last.bottom() <= MIN_H - winui::FOOTER_H, "the list whole");
