@@ -281,14 +281,27 @@ it, Shift+Tab, Escape; its UI Automation tree's names, roles, enabled states and
 150 and 200 %, and Options at 200 % on the 1920 x 1080 monitor: every Tab order cycles, Escape
 closes each dialog, the progress window's Escape leaves its download running, and Options at
 200 % is 837 x 496 with its page scrolling and every stop reached. What it found unnamed or named
-twice is fixed (branch `ui/09-finish`). Its 150 and 200 % pictures, reviewed, left these to fix:
+twice is fixed (branch `ui/09-finish`). Its 150 and 200 % pictures, reviewed, found seven
+defects. These are fixed (branch `ui/09-finish`):
 
-- the main window with the details pane open: toolbar labels cut ("Add Torr…", "Delete Co…",
-  "Start Que…", "Stop Que…"), and at 200 % the pane's last row under its buttons;
-- the progress window at 150 %: the connection bar shows its first tick only;
-- the Scheduler: the Schedule tab's label without side padding, Stop download at's check box 2 px
-  right of the others, the retries box a little high at 200 %;
-- About's and Helpers' icons at 150 and 200 %, light: a faint square behind them;
-- Create folder: the path cut at its end (the folder made is the part hidden);
-- Add an account: "Find my token" out of line with the left column;
-- Narrator itself, by a person at the screen.
+- the details pane's last row under its buttons at 200 %: the pane scrolls its content above them
+  (the wheel and the shared bar) once it is taller than the room;
+- the progress window's connection ticks at 150 %: each tick is a whole number of pixels, the
+  same width wherever it falls (1 or 2 pixels by place before, so the 1-pixel ones all but vanished);
+- the Scheduler: the light tabs are sized to their labels in the drawn font (IDM's fixed places
+  fitted Tahoma), Stop download at and the retries row on the page's left column, the retries
+  box centred on its row;
+- Create folder: the path cut in its middle, so its end (the folder made) shows;
+- Add an account: "Find my token" a bordered button on the left column, as Sign in in the browser.
+
+Kept as designed: the toolbar labels cut with "…" ("Add Torre…", "Delete Co…") when the window is
+narrower than their full width. `chrome::toolbar` shrinks the longest labels first
+(`label_cap`), cuts them with "…" and names them whole on hover and to screen readers; the
+band is full to its Details toggle at 150 and 200 %.
+
+Left:
+
+- About's and Helpers' icons (and every image), light mode, on Intel Iris Xe with Direct3D 12: a
+  faint square, 1/255 darker. The egui fork's driver guard (`egui-wgpu`, commit 49ec54b6,
+  gfx-rs/wgpu#10651) uploads every transparent texel as (0, 0, 0, 1) on that adapter; MDM's code
+  cannot undo it. The fix belongs in that fork: guard one texel per 4 x 4 block, not every one.

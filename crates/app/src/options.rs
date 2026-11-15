@@ -4020,11 +4020,13 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
     }
     // i18n: button: open the service's page that shows the user's API token
     let find_w = winui::footer_button_width(&p, "Find my token", false);
+    // A button as Sign in in the browser is, its face on the left column (a ghost's bare label
+    // sat its padding right of it, and read as plain text).
     if winui::button_light(
         ui,
         r(o, edge, 278.0, find_w, h),
         "Find my token",
-        ButtonKind::Ghost,
+        ButtonKind::Normal,
         false,
     )
     .clicked()

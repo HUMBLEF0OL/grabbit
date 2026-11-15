@@ -602,11 +602,8 @@ These ship in a later version, when they're ready.
   the Themes page with its picture, and a keyboard and screen-reader pass at 100, 150 and
   200 % (Options at 200 % on a 1080p screen included): the title bar's buttons, four Options
   lists, Speed Limiter's box and the offers' repeated buttons named for screen readers.
-  Left (plan 09's follow-ups): at 150 and 200 %, toolbar labels cut with the details pane open
-  and the pane's last row under its buttons, the progress window's connection ticks at 150 %,
-  the Scheduler's tab padding and a checkbox 2 px off, a faint square behind About's and
-  Helpers' icons in light mode, Create folder's path cut at its end, Add an account's "Find
-  my token" out of line; Narrator itself, by a person (its accessibility tree is checked).
+  Left (plan 09's follow-ups): a faint square behind images in light mode on Intel Iris Xe
+  graphics with Direct3D (a driver workaround in the graphics library).
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:

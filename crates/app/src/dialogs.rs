@@ -3256,7 +3256,8 @@ impl CreateFolder {
                     ink,
                 );
                 let bold = winui::tahoma_bold();
-                let shown = winui::ellipsize(&p, &bold, &folder, right - x);
+                // Cut in its middle: its end is the folder this makes.
+                let shown = winui::ellipsize_middle(&p, &bold, &folder, right - x);
                 let rect = winui::text_font(&p, bold, x, o.y + 47.0, &shown, ink);
                 if shown != folder {
                     winui::full_on_hover(ui, rect, "create-folder-path", &folder);
