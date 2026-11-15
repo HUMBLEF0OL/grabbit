@@ -4368,7 +4368,15 @@ pub fn status_banner(
         return 0;
     }
     let extra = BANNER_LINE * (lines.len().max(1) - 1) as f32;
-    paragraph(p, x, rc.top() + 41.0 + extra, sub, c.text, right, BANNER_LINE)
+    paragraph(
+        p,
+        x,
+        rc.top() + 41.0 + extra,
+        sub,
+        c.text,
+        right,
+        BANNER_LINE,
+    )
 }
 
 /// A [`status_banner`]'s text: its line height, where it starts from the banner's leading edge

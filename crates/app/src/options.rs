@@ -4722,7 +4722,7 @@ mod tests {
         // 1080p at 200 %: about 496 points less a drawn title bar.
         assert_eq!(fit_height(464.4), 464.0);
         assert_eq!(fit_height(300.0), MIN_H);
-        assert!(MIN_H < 464.0, "fits 1080p at 200 %");
+        const { assert!(MIN_H < 464.0, "fits 1080p at 200 %") };
         let last = side_row(Pos2::ZERO, PAGES.len() - 1);
         assert!(last.bottom() <= MIN_H - winui::FOOTER_H, "the list whole");
     }
