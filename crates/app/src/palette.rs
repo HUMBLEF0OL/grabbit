@@ -773,6 +773,118 @@ mod tests {
         }
     }
 
+    /// Plan 09a's contrast pass: the rest of the roles that carry text or meaning, light and dark.
+    /// Text at 4.5:1 (WCAG 2.1 AA), including the accent button's label on both stops of its
+    /// two-tone face; parts that carry meaning without text at 3:1 (non-text contrast). Greyed
+    /// text is exempt from 1.4.3; it is held at 2:1 on every face it is drawn on, so it still
+    /// reads, and below the secondary text's ratio, so it still looks greyed. Graphite measures
+    /// 2.14 light (menu, on the pointer's face) to 2.97 dark (text, on the window).
+    #[test]
+    fn built_in_themes_text_and_meaning_roles_read() {
+        use crate::derive::contrast;
+        const GREYED: f32 = 2.0;
+        for t in builtins() {
+            for p in [&t.light, &t.dark] {
+                let id = |what: &str, r: f32| format!("{} dark {}: {what} {r:.2}", t.id, p.dark);
+                let top = if p.button_accent_top.a() > 0 {
+                    p.button_accent_top
+                } else {
+                    p.button_accent
+                };
+                for (what, fg, bg) in [
+                    ("accent button text / top stop", p.button_accent_text, top),
+                    (
+                        "accent button text / hot",
+                        p.button_accent_text,
+                        p.button_accent_hot,
+                    ),
+                    (
+                        "accent button text pressed / pressed",
+                        p.button_accent_text_pressed,
+                        p.button_accent_pressed,
+                    ),
+                    (
+                        "button text pressed",
+                        p.button_text_pressed,
+                        p.button_pressed,
+                    ),
+                    ("secondary text / panel", p.text_secondary, p.panel),
+                    ("secondary text / window", p.text_secondary, p.window),
+                    ("muted / panel", p.muted, p.panel),
+                    ("muted / tile", p.muted, p.tile),
+                    ("text / menu hot", p.menu_text, p.menu_hot),
+                    ("text / inactive selection", p.text, p.selection_inactive),
+                    ("text / tab page", p.text, p.tab_page),
+                    ("chip text / web chip", p.chip_text, p.chip_web),
+                    ("chip text / torrent chip", p.chip_text, p.chip_torrent),
+                    ("caption text", p.caption_text, p.caption),
+                    ("caption text inactive", p.caption_text_inactive, p.caption),
+                    ("error / window", p.error, p.window),
+                    ("error / panel", p.error, p.panel),
+                    ("error / error banner", p.error, p.banner_error),
+                    ("warning / window", p.warning, p.window),
+                    ("success / window", p.success, p.window),
+                    ("progress status / window", p.status_value, p.window),
+                    ("link / panel", p.link, p.panel),
+                    ("tooltip text", p.egui_text, p.egui_window),
+                ] {
+                    let r = contrast(fg, bg);
+                    assert!(r >= 4.5, "{}", id(what, r));
+                }
+                let end = if p.progress_bar_end.a() > 0 {
+                    p.progress_bar_end
+                } else {
+                    p.progress_bar
+                };
+                for (what, fg, bg) in [
+                    ("check mark / checked", p.check_mark, p.check_on),
+                    ("check border / panel", p.check_border, p.panel),
+                    ("check border / field", p.check_border, p.field),
+                    ("progress fill / track", p.progress_bar, p.progress_track),
+                    ("progress fill end / track", end, p.progress_track),
+                ] {
+                    let r = contrast(fg, bg);
+                    assert!(r >= 3.0, "{}", id(what, r));
+                }
+                for (what, fg, bg) in [
+                    ("greyed text / window", p.text_disabled, p.window),
+                    ("greyed text / panel", p.text_disabled, p.panel),
+                    ("greyed text / tab page", p.text_disabled, p.tab_page),
+                    (
+                        "greyed text / greyed box",
+                        p.text_disabled,
+                        p.field_disabled,
+                    ),
+                    (
+                        "greyed text / greyed button",
+                        p.text_disabled,
+                        p.button_disabled,
+                    ),
+                    ("greyed menu item / menu", p.menu_text_disabled, p.menu),
+                    (
+                        "greyed menu item / menu hot",
+                        p.menu_text_disabled,
+                        p.menu_hot,
+                    ),
+                    (
+                        "greyed toolbar label / panel",
+                        p.toolbar_text_disabled,
+                        p.panel,
+                    ),
+                    ("greyed label / window", p.progress_label_disabled, p.window),
+                ] {
+                    let r = contrast(fg, bg);
+                    assert!(r >= GREYED, "{}", id(what, r));
+                }
+                let (greyed, muted) = (
+                    contrast(p.text_disabled, p.window),
+                    contrast(p.muted, p.window),
+                );
+                assert!(greyed < muted, "{}", id("greyed against muted", greyed));
+            }
+        }
+    }
+
     /// The keyboard focus ring is seen (WCAG 2.1 non-text contrast, 3:1) on the window and on the
     /// boxes, light and dark, its transparency included.
     #[test]

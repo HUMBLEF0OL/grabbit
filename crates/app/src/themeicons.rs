@@ -672,6 +672,22 @@ pub fn file_need(ext: Option<&str>) -> &'static str {
 mod tests {
     use super::*;
 
+    /// [`graphite`] inks a one-colour drawing with the ink it is given, greyed or not: its white
+    /// strokes take the ink and it is drawn untinted. (That a greyed button's ink is
+    /// `text.disabled` is held in `winui`'s `button_states_differ`.)
+    #[test]
+    fn graphite_inks_with_the_ink_given() {
+        let ink = Color32::from_rgb(0xa5, 0xa0, 0xb6);
+        let (src, tint) = graphite("gx-dots", 16.0, ink, false).expect("gx-dots");
+        let ImageSource::Bytes { bytes, .. } = src else {
+            panic!("bytes")
+        };
+        let svg = std::str::from_utf8(&bytes).expect("SVG text");
+        assert!(svg.contains("stroke=\"#a5a0b6\""), "{svg}");
+        assert!(!svg.contains("#ffffff"), "{svg}");
+        assert_eq!(tint, Color32::WHITE);
+    }
+
     /// Graphite has every need and every extra at 16 and 24 pixels: Tabler's outline drawings,
     /// one colour. As carried, each is stroked white once (on its root) and fills nothing (no
     /// part names a fill but `none`, which the ink would fill), and names no other colour;

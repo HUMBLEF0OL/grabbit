@@ -304,7 +304,7 @@ impl Extracts {
     /// The password window's answer: extract again with it, or leave the archive.
     pub fn answer(&mut self, password: Option<String>) {
         let Some(ask) = self.ask.take() else { return };
-        if let Some(pw) = password {
+        if let Some(pw) = password.filter(|_| !ask.look_only) {
             let mut job = ask.job;
             job.password = Some(pw);
             if self.seen.insert(job.archive.clone()) {
@@ -547,6 +547,8 @@ pub struct PasswordDialog {
     wrong: bool,
     password: String,
     focused: bool,
+    /// Opened alone for a screenshot (`/show archive-password`): its answer extracts nothing.
+    look_only: bool,
 }
 
 impl PasswordDialog {
@@ -561,6 +563,27 @@ impl PasswordDialog {
             wrong,
             password,
             focused: false,
+            look_only: false,
+        }
+    }
+
+    /// The question for an archive named `name` that is nowhere (`/show archive-password`, the
+    /// screenshots'): Extract and Cancel only close it.
+    pub fn sample(name: &str) -> Self {
+        let job = Job {
+            ids: Vec::new(),
+            archive: PathBuf::from(name),
+            files: Vec::new(),
+            password: None,
+            delete: false,
+            by_hand: true,
+            subfolder: mdm_extract::Subfolder::default(),
+            url: url::Url::parse("https://example.org/").expect("a valid address"),
+            referer: None,
+        };
+        PasswordDialog {
+            look_only: true,
+            ..Self::new(job, false)
         }
     }
 
@@ -769,5 +792,16 @@ mod tests {
         q.offer(&items[0], &items, &off, true);
         assert_eq!(q.queue.len(), 2);
         assert!(!q.queue[0].delete, "Options' default keeps the archive");
+    }
+
+    /// `/show archive-password` (plan 09a's screenshots): its answer extracts nothing.
+    #[test]
+    fn a_sample_password_question_extracts_nothing() {
+        let mut q = Extracts {
+            ask: Some(PasswordDialog::sample("photos-2026.zip")),
+            ..Default::default()
+        };
+        q.answer(Some("secret".into()));
+        assert!(q.ask.is_none() && q.queue.is_empty() && q.seen.is_empty());
     }
 }

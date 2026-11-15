@@ -84,7 +84,24 @@ impl Progress {
     /// Open on a tab by its English name in lower case: a top tab ("status", "limit", "done") or
     /// a torrent's details tab ("peers"; /show progress:peers, for the docs' screenshots and the
     /// fit audit); any other name leaves it as it is. A top tab hidden with "Hide tab" comes back.
+    /// Two states for the screenshots, each a look only (plan 09a): "error" shows Download
+    /// status as for a failed download (a sample reason; the download itself is left as it
+    /// is), "menu" opens the tab row's right-click menu.
     pub fn show_tab(&mut self, name: &str) {
+        match name {
+            "error" => {
+                self.sample_error = Some(crate::errors::describe(&mdm_engine::Error::Status(
+                    reqwest::StatusCode::NOT_FOUND,
+                )));
+                self.tab = Tab::Status;
+                return;
+            }
+            "menu" => {
+                self.menu_asked = true;
+                return;
+            }
+            _ => {}
+        }
         let top = match name {
             "status" => Some(Tab::Status),
             "limit" => Some(Tab::Limiter),
@@ -92,6 +109,8 @@ impl Progress {
             _ => None,
         };
         if let Some(t) = top {
+            // A tab asked for by name shows the download as it is again.
+            self.sample_error = None;
             self.hidden_tabs.retain(|h| *h != t);
             self.tab = t;
             return;
@@ -160,6 +179,11 @@ pub struct Progress {
     turn_off_on: bool,
     turn_off: usize,
     force: bool,
+    /// `/show progress:error`: Download status painted as failed with this reason, the
+    /// download left as it is (a screenshot's state).
+    sample_error: Option<String>,
+    /// `/show progress:menu`: the tab row's menu opens at the next frame.
+    menu_asked: bool,
 }
 
 pub enum Action {
@@ -215,6 +239,8 @@ impl Progress {
             turn_off_on: false,
             turn_off: 0,
             force: false,
+            sample_error: None,
+            menu_asked: false,
         }
     }
 
@@ -377,9 +403,15 @@ impl Progress {
     ) -> Action {
         let p = ui.painter().clone();
         self.tabs(ui, o);
+        // The state painted: the download's, or a screenshot's failed one (`sample_error`).
+        let state = if self.sample_error.is_some() {
+            Status::Error
+        } else {
+            item.status
+        };
         let hide_tab = match self.tab {
             Tab::Status => {
-                status_page(ui, o, item, snap, frac);
+                status_page(ui, o, item, snap, frac, self.sample_error.as_deref());
                 false
             }
             Tab::Limiter => self.limiter_page(ui, o, item),
@@ -476,8 +508,8 @@ impl Progress {
         {
             crate::launch::open_page(item.url.as_str());
         }
-        let running = item.status == Status::Downloading;
-        let can_resume = matches!(item.status, Status::Stopped | Status::Error);
+        let running = state == Status::Downloading;
+        let can_resume = matches!(state, Status::Stopped | Status::Error);
         // Filled as the row's last answer; its look only (no key presses it).
         let (label, pkind) = if running {
             // i18n: verb: pause the download
@@ -498,7 +530,10 @@ impl Progress {
         )
         .clicked()
         {
-            action = if running {
+            // A screenshot's failed state resumes nothing: the press only ends it.
+            action = if self.sample_error.take().is_some() {
+                Action::None
+            } else if running {
                 Action::Pause
             } else {
                 Action::Resume
@@ -602,7 +637,10 @@ impl Progress {
                 }
             })
         };
-        if let Some(at) = by_pointer.or_else(by_keys) {
+        // `/show progress:menu` (a screenshot's): under the strip's first tab.
+        let asked =
+            std::mem::take(&mut self.menu_asked).then(|| row.left_bottom() + vec2(2.0, 0.0));
+        if let Some(at) = asked.or(by_pointer).or_else(by_keys) {
             ctx.data_mut(|d| d.insert_temp(key, at));
         }
         let Some(at) = ctx.data(|d| d.get_temp::<Pos2>(key)) else {
@@ -847,9 +885,10 @@ impl Progress {
     /// Returns true when "Hide tab" is pressed.
     fn completion_page(&mut self, ui: &mut Ui, o: Pos2, item: &Item) -> bool {
         let p = ui.painter().clone();
-        // The label as wide as its language makes it (half the row at most), then the path to
-        // the row's end, shortened in the middle so the file's name stays in sight (#62).
-        let (left, right) = (o.x + 33.0, o.x + 33.0 + 474.0);
+        // The label as wide as its language makes it (half the row at most), then the path up
+        // to "Hide tab" (at the page's top right, on this row), shortened in the middle so the
+        // file's name stays in sight (#62).
+        let (left, right) = (o.x + 33.0, o.x + hide_tab_left(&p) - 8.0);
         let label = winui::fit(
             ui,
             &p,
@@ -942,15 +981,38 @@ impl Progress {
     }
 }
 
-/// "Hide tab" (401,135,96,21) with its 1 px #f9f9f9 focus ring.
+/// "Hide tab" at the page's top right, as the mock has it (plan 09a): 30 high, 8 inside the
+/// page's frame on the right (x 18..529) and 6 under its top (y 28), so it ends at y 64, where
+/// the Speed Limiter's check boxes start.
+const HIDE_TAB_RIGHT: f32 = 521.0;
+const HIDE_TAB_Y: f32 = 34.0;
+// Inside the page's frame, and clear of the Speed Limiter's check boxes (y 64) and Options on
+// completion's rule (y 74).
+const _: () = assert!(HIDE_TAB_Y >= 28.0 && HIDE_TAB_RIGHT <= 529.0);
+const _: () = assert!(HIDE_TAB_Y + winui::CONTROL_H <= 64.0);
+
+/// "Hide tab"'s English width: its label's, a longer translation widening it to the left.
+const HIDE_TAB_W: f32 = 74.0;
+const HIDE_TAB_MAX_W: f32 = 190.0;
+
+/// Where "Hide tab" starts (English x). What shares its rows (Options on completion's Save To
+/// path) stops before it.
+fn hide_tab_left(p: &egui::Painter) -> f32 {
+    HIDE_TAB_RIGHT - winui::button_fit_width(p, "Hide tab", HIDE_TAB_W, HIDE_TAB_MAX_W)
+}
+
 fn hide_tab(ui: &mut Ui, o: Pos2) -> bool {
-    // A longer translation ("Registerkarte ausblenden") widens it to the left, into the free
-    // room right of the Remember caption (which ends before x 300).
     let rc = winui::button_rect_for(
         ui.painter(),
-        r(o, 401.0, 135.0, 96.0, 21.0),
+        r(
+            o,
+            HIDE_TAB_RIGHT - HIDE_TAB_W,
+            HIDE_TAB_Y,
+            HIDE_TAB_W,
+            winui::CONTROL_H,
+        ),
         "Hide tab",
-        190.0,
+        HIDE_TAB_MAX_W,
     );
     winui::button(ui, rc, "Hide tab", ButtonKind::Normal, false, None).clicked()
 }
@@ -986,16 +1048,31 @@ fn status_icon(status: Status) -> &'static str {
 
 // The rows sit 7 px inside the page's frame at the top and at the bottom (the Server row's
 // descent included), with a slightly wider break after Status, as before.
-fn status_page(ui: &Ui, o: Pos2, item: &Item, snap: Option<&Snapshot>, frac: Option<f64>) {
+/// `failed_with`: paint it as failed for this reason (a screenshot's state), whatever its status.
+fn status_page(
+    ui: &Ui,
+    o: Pos2,
+    item: &Item,
+    snap: Option<&Snapshot>,
+    frac: Option<f64>,
+    failed_with: Option<&str>,
+) {
     let p = &ui.painter().clone();
+    let state = if failed_with.is_some() {
+        Status::Error
+    } else {
+        item.status
+    };
     // Long values are cut with "..." at the page edge and shown whole on hover.
     let fit = |key: &str, x: f32, base: f32, s: &str, color| {
         let (rect, cut) = winui::text_fit(p, o.x + x, o.y + base, s, color, o.x + PAGE_TEXT_RIGHT);
         winui::copyable(ui, rect, key, s, cut);
     };
-    let status = match item.status {
+    let status = match state {
         // A torrent reading and checking its files says so, not "Receiving data" (#39).
-        _ if let Some(checking) = item.torrent_checking() => checking,
+        _ if let Some(checking) = item.torrent_checking().filter(|_| failed_with.is_none()) => {
+            checking
+        }
         // A torrent its debrid service is downloading (#44).
         Status::Downloading if item.at_service().is_some() => item.at_service().unwrap_or_default(),
         Status::Downloading => {
@@ -1025,7 +1102,9 @@ fn status_page(ui: &Ui, o: Pos2, item: &Item, snap: Option<&Snapshot>, frac: Opt
             &[(
                 "error",
                 // i18n: the reason a download failed is not known
-                item.error.as_deref().unwrap_or(crate::i18n::t("unknown")),
+                failed_with
+                    .or(item.error.as_deref())
+                    .unwrap_or(crate::i18n::t("unknown")),
             )],
         ),
     };
@@ -1040,7 +1119,7 @@ fn status_page(ui: &Ui, o: Pos2, item: &Item, snap: Option<&Snapshot>, frac: Opt
     // address and Status, whole and copyable on hover; Status then says only "Error". The rows
     // move down under it, without Transfer rate and Time left (both blank unless it is
     // downloading), so they end where they end in every other state.
-    let failed = item.status == Status::Error;
+    let failed = state == Status::Error;
     let status = if failed {
         let at = r(o, 33.0, 50.0, PAGE_TEXT_RIGHT - 33.0, 30.0);
         winui::status_banner(ui, at, winui::BannerKind::Error, "st-error", &status, "");
@@ -1076,7 +1155,7 @@ fn status_page(ui: &Ui, o: Pos2, item: &Item, snap: Option<&Snapshot>, frac: Opt
             crate::i18n::mark("Transfer rate"),
             112.0,
             135.0,
-            if item.status == Status::Downloading {
+            if state == Status::Downloading {
                 model::rate(item.rate())
             } else {
                 String::new()
@@ -1138,13 +1217,13 @@ fn status_page(ui: &Ui, o: Pos2, item: &Item, snap: Option<&Snapshot>, frac: Opt
         if label == "Status" {
             // The status word after its state's icon (plan 07: status as icon + word), in the
             // status colour, or the error colour for a failed download.
-            let vc = if item.status == Status::Error {
+            let vc = if failed {
                 winui::ERROR()
             } else {
                 crate::theme::colors().status_value
             };
             let icon = winui::r(o, vx, base - 12.0, 16.0, 16.0);
-            crate::themeicons::paint_graphite_in(ui, p, status_icon(item.status), icon, vc);
+            crate::themeicons::paint_graphite_in(ui, p, status_icon(state), icon, vc);
             fit(label, vx + 20.0, base, &value, vc);
         } else {
             fit(label, vx, base, &value, winui::TEXT());
@@ -1226,7 +1305,39 @@ impl Progress {
             self.ttab = tabs[i].0;
         }
         let pieces = d.as_ref().map(|d| d.pieces.as_slice()).unwrap_or(&[]);
-        piece_bar(p, o, pieces);
+        // General, once the torrent is complete and shared (plan 09a, the mock's): an info
+        // banner where the piece map is (every piece is there), the table under it.
+        let sharing = d
+            .as_ref()
+            .and_then(|d| d.stats.as_ref())
+            .filter(|s| {
+                self.ttab == TTab::General
+                    && item.status == Status::Complete
+                    && s.phase == mdm_torrent::Phase::Finished
+            })
+            .map(sharing_line);
+        if let Some(line) = &sharing {
+            let at = r(o, 17.0, 249.0, 513.0, winui::status_banner_height(0));
+            winui::status_banner(
+                ui,
+                at,
+                winui::BannerKind::Info,
+                "st-seeding",
+                // i18n: a torrent's General tab, in a banner: it is all downloaded and shared with other peers
+                crate::i18n::t("Complete, sharing"),
+                "",
+            );
+            let (rc, cut) = winui::text_right(
+                p,
+                o.x + 17.0 + 513.0 - 12.0,
+                o.y + 249.0 + 23.0,
+                line,
+                crate::theme::colors().text_secondary,
+            );
+            winui::copyable(ui, rc, "sharing-line", line, cut);
+        } else {
+            piece_bar(p, o, pieces);
+        }
         let Some(d) = &d else {
             table(ui, p, o, "t-none", &[(25.0, "")], &[], &[], false, None);
             text(
@@ -1415,10 +1526,17 @@ impl Progress {
                         },
                     ],
                 ];
-                table(
+                // Under the banner the table starts lower and shows fewer rows (the rest
+                // scroll), ending inside the page as before.
+                let (at, shown) = if sharing.is_some() {
+                    (o + vec2(0.0, GENERAL_BANNER_DROP), GENERAL_BANNER_ROWS)
+                } else {
+                    (o, 6)
+                };
+                table_sized(
                     ui,
                     p,
-                    o,
+                    at,
                     "t-general",
                     &[
                         (25.0, crate::i18n::mark("Property")),
@@ -1428,10 +1546,28 @@ impl Progress {
                     &rows,
                     false,
                     None,
+                    shown,
                 );
             }
         }
     }
+}
+
+/// The General tab under its sharing banner: the table 19 lower (the banner's 37 from the
+/// piece map's top, 249, and 6 under it) with 5 rows, so its frame ends at 403, inside the
+/// page (226 + 180).
+const GENERAL_BANNER_DROP: f32 = 19.0;
+const GENERAL_BANNER_ROWS: usize = 5;
+
+/// The sharing banner's line: the rate sent and to how many peers ("410.0 KB/sec to 6 peers").
+fn sharing_line(s: &mdm_torrent::Stats) -> String {
+    // i18n: how many peers a torrent sends to now
+    let peers = crate::i18n::tn(s.peers_live as u64, "{n} peer", "{n} peers");
+    crate::i18n::fmt(
+        // i18n: a torrent's General tab, under "Complete, sharing": {rate} = what it sends now (such as 410.0 KB/sec); {peers} = to how many peers (such as 6 peers)
+        crate::i18n::t("{rate} to {peers}"),
+        &[("rate", &model::rate(s.up_speed)), ("peers", &peers)],
+    )
 }
 
 /// The segment bar as a piece map: a column is filled when the pieces under it are there.
@@ -1947,5 +2083,49 @@ mod tests {
         p.show_hidden_tabs();
         assert!(p.hidden_tabs.is_empty(), "every tab back on the strip");
         assert_eq!(p.tab, Tab::Status, "the page shown stays as it was");
+    }
+
+    /// The General tab's sharing banner says the rate sent and to how many peers, counted.
+    #[test]
+    fn sharing_line_says_the_rate_and_the_peers() {
+        let mut s = mdm_torrent::Stats {
+            phase: mdm_torrent::Phase::Finished,
+            checked: None,
+            done: 100,
+            total: 100,
+            uploaded: 0,
+            fetched: 0,
+            down_speed: 0.0,
+            up_speed: 410.0 * 1024.0,
+            file_done: Vec::new(),
+            peers_live: 6,
+            peers_seen: 38,
+            error: None,
+        };
+        let line = sharing_line(&s);
+        assert!(line.contains("6 peers") && line.contains("410"), "{line}");
+        s.peers_live = 1;
+        let line = sharing_line(&s);
+        assert!(line.contains("1 peer") && !line.contains("peers"), "{line}");
+    }
+
+    /// `/show progress:error` and `progress:menu` (plan 09a's screenshots) are looks only: the
+    /// failed state is a sample reason on Download status, the menu a flag the next frame takes.
+    #[test]
+    fn show_states_are_looks_only() {
+        let mut p = Progress::new(1, true);
+        p.tab = Tab::Limiter;
+        p.show_tab("error");
+        assert_eq!(p.tab, Tab::Status);
+        assert!(p.sample_error.as_deref().is_some_and(|e| e.contains("404")));
+        assert!(!p.menu_asked);
+        p.show_tab("menu");
+        assert!(p.menu_asked);
+        assert_eq!(p.tab, Tab::Status, "the menu leaves the page as it is");
+        p.show_tab("status");
+        assert!(
+            p.sample_error.is_none(),
+            "a tab by name shows the download again"
+        );
     }
 }

@@ -3204,6 +3204,8 @@ pub struct CreateFolder {
     error: Option<String>,
     /// Yes was pressed: the folder is made off the window's thread (#743), its answer to come.
     making: Option<crate::launch::Asked<PathBuf, Result<(), String>>>,
+    /// Opened alone for a screenshot (`/show create-folder`): Yes makes nothing, it closes.
+    look_only: bool,
 }
 
 impl CreateFolder {
@@ -3212,6 +3214,15 @@ impl CreateFolder {
             folder,
             error: None,
             making: None,
+            look_only: false,
+        }
+    }
+
+    /// The question about `folder` with no folder made by Yes (`/show create-folder`).
+    pub fn sample(folder: PathBuf) -> Self {
+        CreateFolder {
+            look_only: true,
+            ..Self::new(folder)
         }
     }
 
@@ -3285,7 +3296,7 @@ impl CreateFolder {
                         &[("error", e)],
                     ));
                 }
-                if no {
+                if no || (yes && self.look_only) {
                     Outcome::Closed
                 } else if made == Some(Ok(())) {
                     Outcome::Done(())

@@ -564,9 +564,9 @@ These ship in a later version, when they're ready.
   download link, their keys unchanged, and the progress window's buttons (Pause or Resume last
   and filled), its status with an icon and a failed download's reason in an error banner,
   Download complete (a card with the file's icon and size, a drag strip), Speed Limiter settings
-  and File Properties on them too (still to come, with plan 09's polish: the Hide tab button's
-  place, the torrent window's General-tab banner, and a way for the screenshot script to open a
-  failed download's window and the tab row's menu), and the torrent, video and list dialogs on
+  and File Properties on them too, with the Hide tab button at the page's top right, the torrent
+  window's General-tab banner while it is shared, and the screenshot script's way to open a
+  failed download's window and the tab row's menu, and the torrent, video and list dialogs on
   them: Add torrent (its looking-up ring in the progress bar's colours), Torrent settings, Add
   trackers, Files already there, Download video and its playlist, Download a gallery
   (gallery-dl's answer in a banner), the video helpers' offer and Helpers, Batch download, Link
@@ -575,9 +575,9 @@ These ship in a later version, when they're ready.
   Delete category, Confirm deletion, Redownload and the other yes-or-no questions, Check for
   updates, About, Keyboard shortcuts, Tell a friend, Verify checksum, the crash report, Archive
   password, 7-Zip needed, Create folder, Download limits, the notices, the browser extension's
-  offer and the drop target; "Add many downloads" is that Confirm), their keys unchanged (still
-  to come, with plan 09's polish: the Scheduler at the mockup's width and short enough for a
-  1080p screen at 200 %), and the help pages, the website's Themes page, its theme prompt and
+  offer and the drop target; "Add many downloads" is that Confirm), their keys unchanged, the
+  Scheduler at the mockup's 800 wide and short enough for a 1080p screen at 200 %, and the help
+  pages, the website's Themes page, its theme prompt and
   llms.txt describing Graphite as the only look (its picture there comes with the new
   screenshots), and the Options window's pages listed down the side (each with its icon and
   title at the top, OK and Help in a footer; Up and Down added to its keys, and Ctrl+Shift+Tab
@@ -586,19 +586,24 @@ These ship in a later version, when they're ready.
   integration, Download panels, Pair a device, New and Edit login and exception), their keys
   unchanged, and the General, File types, Save to, Downloads and Connection pages on them (a
   label column, hairlines in place of group boxes, Connection's number in a spin box), and the
-  other seven on them too (Remote's state and Accounts' warning in banners) (still to come, with
-  plan 09's polish: Options short enough for a 1080p screen at 200 %, banners that wrap their
-  title and that screen readers read, the side list as a list for screen readers, greyed icon
-  buttons' icons greyed, Pair a device centred, Add an account's hint box sized to its text).
+  other seven on them too (Remote's state and Accounts' warning in banners), and, with plan 09's
+  polish, Options short enough for a 1080p screen at 200 % (its page scrolls), banners that wrap
+  their title and that screen readers read, the side list as a list for screen readers, Pair a
+  device centred, Add an account's hint box sized to its text.
   And the finish: filled buttons shaded from a lighter cyan at their top and progress bars
   shaded along their fill, glowing in dark mode.
   And About's mark drawn sharp, the two first-start offers without their logo band.
-  And the review of the paste bar and the details pane: a long file name without spaces on the
-  pane's two lines, and the screenshot script's details pane keeping the list's column filters
-  (still to come, with plan 09's polish: the on-screen keyboard and Narrator pass over the paste
-  bar, the details pane and their toggles, and both at interface sizes 150 % and 200 %; the rest
-  of the main window against the mock, with its keyboard and accessibility passes).
-  Next: the rest of the review (plan 09)
+  And the contrast checks extended to every colour that carries text or meaning (the filled
+  buttons' lighter top included) and to greyed text, screenshot entries for Create folder,
+  Archive password, Add category and the drop target, and the review of the paste bar and the
+  details pane: a long file name without spaces on the pane's two lines, and the screenshot
+  script's details pane keeping the list's column filters.
+  Still to come, at the screen (plan 09's follow-ups): the on-screen keyboard and Narrator
+  passes over the paste bar, the details pane and their toggles, the moved Hide tab, the
+  torrent window's banner, Options' side list, banners and codes; the windows compared side by
+  side with the mockup at 150 % and 200 %, Options' scrolling page on a real 1080p screen at
+  200 %; the rest of the main window against the mock.
+  Next: the website's and the help's screenshots in Graphite (plan 09b)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:

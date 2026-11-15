@@ -172,6 +172,11 @@ opt-level = 3
 # info, for stepping through them in a debugger.
 [profile.dev.package."*"]
 debug = "line-tables-only"
+# The crash reports' end-to-end tests read examples/crashy's own debug info to name the function
+# that froze, panicked or crashed: kept even when a build turns debug info off
+# (`--config profile.dev.debug=0`, which saves disk).
+[profile.dev.package.mdm-crash]
+debug = "full"
 
 # storytold's egui fork (as storytold/craft-libs, D-003) plus MDM's commits on anefzaoui/egui
 # (branch mdm-start-hidden, on mdm-wgpu, on mdm-accesskit-windows): every window created hidden
