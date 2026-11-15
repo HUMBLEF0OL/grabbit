@@ -174,7 +174,8 @@ const DY: f32 = 40.0;
 /// The Scheduler's width, and where its footer starts (Graphite, plan 07e; the mock's 800 in
 /// plan 09): the queue list as before, New queue and Delete under it, the window's buttons in
 /// the footer. The right pane takes the width, which gives back the height of a weekday row
-/// (`DAYS_UP`) and of a "when done" row (`DONE_UP`), so the window fits a 1080p screen at 200 %.
+/// (`DAYS_UP`), of a "when done" row (`DONE_UP`) and of the file-to-open's own row (`OPEN_UP`),
+/// so the window, with Graphite's drawn title bar, fits a 1080p screen at 200 %.
 const W: f32 = 800.0;
 /// The right edge of the pages' rows (627 at IDM's 651).
 const RIGHT: f32 = W - 24.0;
@@ -184,7 +185,9 @@ const DX: f32 = RIGHT - 627.0;
 const DAYS_UP: f32 = 16.0;
 /// "Hang up modem" and "Exit … when done" on one row.
 const DONE_UP: f32 = 18.0;
-const UP: f32 = DAYS_UP + DONE_UP;
+/// The file to open on its caption's row, not under it.
+const OPEN_UP: f32 = 25.0;
+const UP: f32 = DAYS_UP + DONE_UP + OPEN_UP;
 const BODY: f32 = 432.0 + DY - UP;
 
 // i18n: checkbox in the Scheduler, under the start time: wake the computer from sleep shortly before the queue starts, and keep it awake while the queue runs
@@ -810,17 +813,25 @@ impl Scheduler {
             f.retries_on,
             LIGHT_PAGE(),
         );
-        winui::etched_h(&p, o.x + 229.0, o.y + 290.0 + dy, RIGHT - 229.0);
-        winui::checkbox_light(
+        winui::etched_h(&p, o.x + 229.0, o.y + 288.0 + dy, RIGHT - 229.0);
+        // The box after its caption, on its row (under it at IDM's 651), ending where it did.
+        let open_x = after(
+            228.0,
+            "Open the following file when done:",
+            228.0,
+            RIGHT - 43.0 - 120.0,
+        );
+        winui::checkbox_light_until(
             ui,
-            at(228.0, 300.0 + dy),
+            at(228.0, 299.0 + dy),
             &mut f.open_on,
             "Open the following file when done:",
             true,
+            Some(o.x + open_x),
         );
         winui::edit_light_on(
             ui,
-            r(o, 228.0, 318.0 + dy, 356.0 + DX, 23.0),
+            r(o, open_x, 294.0 + dy, RIGHT - 43.0 - open_x, 23.0),
             &mut f.open_file,
             f.open_on,
             false,
@@ -829,7 +840,7 @@ impl Scheduler {
         // Graphite's browse button (plan 07: `gx-dots` on every "..."), as tall as its box.
         let browse = winui::icon_only_button(
             ui,
-            r(o, 592.0 + DX, 318.0 + dy, 23.0, 23.0),
+            r(o, RIGHT - 35.0, 294.0 + dy, 23.0, 23.0),
             "gx-dots",
             // i18n: tooltip of the "..." after the Scheduler's file to open: choose the file
             "Browse",
@@ -847,6 +858,7 @@ impl Scheduler {
         }
         // Dial-up is hung up through Windows' rasdial. Exit beside it, halfway across the page
         // (one row at 800, two at IDM's 651).
+        let dy = dy - OPEN_UP;
         let exit_x = ((228.0 + RIGHT) / 2.0_f32).round();
         winui::checkbox_light_until(
             ui,
@@ -2197,10 +2209,11 @@ mod tests {
     use super::*;
 
     /// Plan 09: the mock's 800 wide, and on a 1080p screen at interface size 200 % shown whole,
-    /// without a scroll bar (the rule every fixed window is shown by: `dialogs::shown_size`).
+    /// without a scroll bar (the rule every fixed window is shown by: `dialogs::shown_size`),
+    /// with the title bar Graphite draws in the client (`dialog_window` adds it before sizing).
     #[test]
     fn the_window_fits_a_1080p_screen_at_200_percent() {
-        let client = vec2(W, BODY + winui::FOOTER_H);
+        let client = vec2(W, BODY + winui::FOOTER_H + winui::caption::CAPTION_H);
         assert_eq!(W, 800.0);
         let room = crate::scale::room_on(vec2(1920.0, 1080.0), 2.0, 2.0);
         assert_eq!(

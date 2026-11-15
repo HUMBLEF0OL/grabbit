@@ -271,8 +271,10 @@ try {
       for ($i = 0; $i -lt 50 -and -not (@(Titles $app.Id) -like "misterdownloadmanager menu*"); $i++) { Start-Sleep -Milliseconds 200 }
       Start-Sleep -Milliseconds 1200
       Shot $app.Id "" $name -All
-      # The menu's windows are ours: closed like any other.
+      # The menu's windows are ours: closed like any other, with the window it opened over when
+      # that one came with it (progress:menu's progress window), so the next shot opens it anew.
       Close-Ours $app.Id "misterdownloadmanager menu*"
+      @(Titles $app.Id | Where-Object { $before -notcontains $_ }) | ForEach-Object { Close-Ours $app.Id ([WildcardPattern]::Escape($_)) }
       Start-Sleep -Milliseconds 800
       continue
     }

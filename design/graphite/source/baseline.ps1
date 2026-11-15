@@ -90,7 +90,7 @@ $states = @(
   @("progress-status", "progress:status", ""),
   @("progress-limit", "progress:limit", ""),
   @("progress-done", "progress:done", ""),
-  @("progress-menu", "progress:menu", "The tab row's right-click menu"),
+  @("progress-menu", "@menu:progress:menu", "The tab row's right-click menu, over its window"),
   @("limiter", "speedlimit", ""),
   @("complete", "@complete:gen/2M/release-notes-2026.pdf", ""),
   @("props", "properties", ""),
@@ -194,7 +194,8 @@ foreach ($s in $states) {
   if ($what -eq "updates" -and -not $Updates) { continue }
   if ($what -like "@download:*") { $late += "$name=$what"; continue }
   if ($what -like "@complete:*") { $last += "$name=$what"; continue }
-  if ($what -like "progress:*") { $prog += , "$name=$what"; continue }
+  # progress:menu is shot as a menu (@menu:, every window composed), still a progress window.
+  if ($what -like "progress:*" -or $what -like "@menu:progress:*") { $prog += , "$name=$what"; continue }
   $show += "$name=$what"
 }
 # The progress window's tabs apart, other windows between them: a /show progress right after

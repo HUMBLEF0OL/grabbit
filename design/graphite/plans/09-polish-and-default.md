@@ -169,20 +169,26 @@ Line numbers drift as phases land: find each item by its name first.
   completion's Save To path now stops 8 before it);
 - (done in 09r2) the torrent window's **General** tab: the mock's info banner ("Complete,
   sharing", the rate to its peers) in the piece bar's place while a finished torrent is shared,
-  the property table 19 lower with 5 rows (the rest scroll), ending at 403 inside the page;
+  the property table 19 lower with 5 rows (the rest scroll), ending at 403 inside the page. One
+  difference from the mock, kept on purpose: the rate sits on the title's row, at the banner's
+  right, not on a second line under it (a two-line banner, 56 high, would cost the table more
+  rows);
 - (done in 09r2) `/show` entries for the progress window's error state (`progress:error`, a
-  sample reason, the download untouched) and its tab row's menu (`progress:menu`), and for
+  sample reason, the download untouched) and its tab row's menu (`progress:menu`, shot as `@menu:progress:menu`: the menu is a window
+  of its own, composed over the progress window, both closed after), and for
   `create-folder` (Yes makes nothing), `archive-password` (its answer extracts nothing),
   `add-category` and `drop-target` (shown this run, the setting untouched), all in
   `baseline.ps1`'s states; the queue-done countdown gets none that runs (it turns the computer
   off after 30 s);
 - (done in 09r2, the follow-up after its build) the **Scheduler** at the mockup's 800 and short
-  enough for a 1080p screen at 200 %: client 800 x 493 (was 651 x 527, which scrolled there).
-  The queue list keeps its place; the pages' rows end at 776 (`RIGHT`, was 627), the weekdays
-  take four columns of two rows (16 back), Hang up and Exit share a row (18 back), the files
-  list's name column takes the width. A unit test checks the client against `scale::room_on`
-  (1920 x 1080, 40 px taskbar, the frame, at 200 %: 952 x 500), the rule `dialogs::shown_size`
-  shows windows by. Not yet compared side by side with the mock in the running app.
+  enough for a 1080p screen at 200 %: client 800 x 500 with Graphite's drawn 32-high title bar
+  (468 under it; was 651 x 559, which scrolled there). The queue list keeps its place; the
+  pages' rows end at 776 (`RIGHT`, was 627), the weekdays take four columns of two rows (16
+  back), Hang up and Exit share a row (18 back), the file to open sits after its caption on its
+  row (25 back), the files list's name column takes the width. A unit test checks the client,
+  title bar included, against `scale::room_on` (1920 x 1080, 40 px taskbar, the frame, at
+  200 %: 952 x 500), the rule `dialogs::shown_size` shows windows by. Not yet compared side by
+  side with the mock in the running app.
 
 ## Left from 08
 
