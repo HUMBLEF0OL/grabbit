@@ -52,15 +52,17 @@ pub enum PasteEvent {
 const SIDE: f32 = 10.0;
 /// Between the field, the hint and the button.
 const GAP: f32 = 8.0;
-/// The field's and the button's top inside the band, and their height.
+/// The field's top inside the band, and its height (the mock's `.paste .fld`).
 const FIELD_TOP: f32 = 8.0;
 const FIELD_H: f32 = 32.0;
+/// The button's height (the mock's `.btn`), centred on the field's row.
+const BUTTON_H: f32 = 30.0;
 /// The narrowest field beside the hint: narrower, the hint is left out.
 const FIELD_WITH_HINT: f32 = 160.0;
 /// The narrowest field ever: past it the button's label gives way.
 const FIELD_MIN: f32 = 120.0;
 /// The narrowest button: its icon alone (the label all "...").
-const BUTTON_MIN: f32 = FIELD_H;
+const BUTTON_MIN: f32 = BUTTON_H;
 
 /// Where the paste bar's parts go in a band `w` wide, from its widths whole: the hint's (or the
 /// error's) `hint_w` and the Download button's `button_w`.
@@ -183,7 +185,10 @@ pub fn paste_bar(
     }
     // At the band's end, never over the field (a window narrower than the narrowest parts).
     let left = (o.x + w - SIDE - g.button).max(o.x + SIDE + g.field + GAP);
-    let button_rc = winui::rect(Rect::from_min_size(pos2(left, y), vec2(g.button, FIELD_H)));
+    let button_rc = winui::rect(Rect::from_min_size(
+        pos2(left, y + (FIELD_H - BUTTON_H) / 2.0),
+        vec2(g.button, BUTTON_H),
+    ));
     // A click leaves no widget focused (a main-window button), so Enter after it is not a
     // second submit; a screen reader's Focus, or egui's order from another focused widget,
     // still reaches it. From the keyboard, Enter in the field submits as it does.
@@ -867,8 +872,8 @@ const ROW_LINE: f32 = 16.0;
 const ROW_GAP: f32 = 7.0;
 /// A line of the name (SemiBold 13).
 const NAME_LINE: f32 = 17.0;
-/// The buttons' height, and the room between two.
-const PANE_BUTTON_H: f32 = 32.0;
+/// The buttons' height (the mock's `.btn`), and the room between two.
+const PANE_BUTTON_H: f32 = 30.0;
 const PANE_BUTTON_GAP: f32 = 6.0;
 
 /// Where the details pane's buttons go in its English rect `rc`, at its bottom: the primary
@@ -913,16 +918,24 @@ fn pane_text(
     }
 }
 
-/// `s` on at most 2 lines `room` wide: [`winui::fit_lines`]'s, or, where its first line is
-/// still too wide (a file name without a space, a slash or a hyphen, or a first word longer
-/// than the room), broken inside it by [`break_inside`], so it takes its second line before it
-/// is cut. A break at a space whose first line fits is kept, its second line cut: as the
-/// mock's `overflow-wrap:anywhere`, which breaks inside a word only where nothing else fits.
+/// `s` on at most 2 lines `room` wide: [`winui::fit_lines`]'s; where its first line is too
+/// wide, the latest space, slash or hyphen break ([`winui::line_breaks`]) whose first line
+/// fits, its second line cut; where none fits (a file name without such a break, or a first
+/// word longer than the room), broken inside it by [`break_inside`], so it takes its second
+/// line before it is cut. As the mock's `overflow-wrap:anywhere`, which breaks inside a word
+/// only where nothing else fits.
 fn pane_lines(p: &egui::Painter, font: &egui::FontId, s: &str, room: f32) -> Vec<String> {
     let lines = winui::fit_lines(p, font.clone(), s, room);
     let width = |t: &str| winui::text_width_font(p, font.clone(), t);
     if width(&lines[0]) <= room {
         return lines;
+    }
+    if let Some((a, b)) = winui::line_breaks(s)
+        .into_iter()
+        .rev()
+        .find(|(a, _)| width(a) <= room)
+    {
+        return vec![a.to_owned(), b.to_owned()];
     }
     break_inside(width, s, room).map_or(lines, |(a, b)| vec![a, b])
 }
@@ -2270,7 +2283,9 @@ mod tests {
         // 50 toward the list: 50 wider; 30 away from it: 30 narrower.
         assert_eq!(dragged_width(1240.0, 917.0, 3.0, 1240.0, 224.0), 326);
         assert_eq!(dragged_width(1240.0, 997.0, 3.0, 1240.0, 224.0), 246);
-        // Half points round to whole ones.
+        // Fractions round to the nearest whole point: 326.6 gives 327 (not floor's 326),
+        // 326.4 gives 326.
+        assert_eq!(dragged_width(1240.0, 916.4, 3.0, 1240.0, 224.0), 327);
         assert_eq!(dragged_width(1240.0, 916.6, 3.0, 1240.0, 224.0), 326);
         // Past the bounds: 200 at the narrowest, half the window at the widest.
         assert_eq!(dragged_width(1240.0, 1200.0, 3.0, 1240.0, 224.0), 200);
@@ -2330,6 +2345,13 @@ mod tests {
             assert_eq!(
                 pane_lines(p, &font, mixed, room),
                 vec!["Holiday", "averyveryverylongunbrokenname0123456789.zip"]
+            );
+            // Two spaces where the balanced break (before the last word) leaves the first
+            // line too wide: the break after the first word, which fits, is taken.
+            let three = "01 averyveryverylongunbrokenname0123456789 track.mp3";
+            assert_eq!(
+                pane_lines(p, &font, three, room),
+                vec!["01", "averyveryverylongunbrokenname0123456789 track.mp3"]
             );
         });
         out.textures_delta.clear();

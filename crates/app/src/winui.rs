@@ -3136,8 +3136,25 @@ pub fn fit_lines(p: &Painter, font: FontId, s: &str, room: f32) -> Vec<String> {
     if width(s) <= room {
         return vec![s.to_owned()];
     }
+    let mut best: Option<(f32, &str, &str)> = None;
+    for (a, b) in line_breaks(s) {
+        let w = width(a).max(width(b));
+        if best.is_none_or(|(bw, ..)| w < bw) {
+            best = Some((w, a, b));
+        }
+    }
+    match best {
+        Some((_, a, b)) => vec![a.to_owned(), b.to_owned()],
+        None => vec![s.to_owned()],
+    }
+}
+
+/// Every way [`fit_lines`] may put `s` on two lines, first lines shortest first: at a space,
+/// after a slash or a hyphen, or between two characters of Chinese or Japanese; each line
+/// trimmed and never empty.
+pub fn line_breaks(s: &str) -> Vec<(&str, &str)> {
     let g: Vec<(usize, &str)> = s.grapheme_indices(true).collect();
-    let mut best: Option<(f32, String, String)> = None;
+    let mut out = Vec::new();
     for k in 1..g.len() {
         let (at, here) = g[k];
         let before = g[k - 1].1;
@@ -3154,18 +3171,11 @@ pub fn fit_lines(p: &Painter, font: FontId, s: &str, room: f32) -> Vec<String> {
             continue;
         };
         let (a, b) = (a.trim_end(), b.trim_start());
-        if a.is_empty() || b.is_empty() {
-            continue;
-        }
-        let w = width(a).max(width(b));
-        if best.as_ref().is_none_or(|(bw, ..)| w < *bw) {
-            best = Some((w, a.to_owned(), b.to_owned()));
+        if !a.is_empty() && !b.is_empty() {
+            out.push((a, b));
         }
     }
-    match best {
-        Some((_, a, b)) => vec![a, b],
-        None => vec![s.to_owned()],
-    }
+    out
 }
 
 /// How wide a [`combo_light`] must be for each of its translated `items` to show whole before

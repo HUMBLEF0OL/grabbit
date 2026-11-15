@@ -2316,20 +2316,16 @@ impl App {
             // with a stopped download" screenshots). As `paste`, the pane is turned on and the
             // next settings save keeps it on. A download the view hides is shown in All
             // Downloads, as Find next does, so the list keeps the selection. Column filters are
-            // kept (09r1): the pick is among the downloads they let through, in this view,
-            // else in All Downloads. When they hide every download (`/show filtered`), they
-            // are cleared as `/show unfiltered` does and the pick is among them all, or the
-            // list would drop the selection and the pane show nothing.
+            // kept (09r1): the pick is among the downloads they let through in All Downloads
+            // (without filters, all of them, as before). When they hide every download
+            // (`/show filtered`), they are cleared as `/show unfiltered` does and the pick is
+            // among them all, or the list would drop the selection and the pane show nothing.
             "details" if is_show_details(name) => {
                 self.settings.show_details = true;
-                let in_view = self.shown_ids();
-                let pick = show_details_pick(self.items.iter().filter(|i| in_view.contains(&i.id)))
-                    .or_else(|| {
-                        let view = std::mem::replace(&mut self.view, View::All);
-                        let in_all = self.shown_ids();
-                        self.view = view;
-                        show_details_pick(self.items.iter().filter(|i| in_all.contains(&i.id)))
-                    })
+                let view = std::mem::replace(&mut self.view, View::All);
+                let in_all = self.shown_ids();
+                self.view = view;
+                let pick = show_details_pick(self.items.iter().filter(|i| in_all.contains(&i.id)))
                     .or_else(|| {
                         let pick = show_details_pick(self.items.iter());
                         if pick.is_some() {
@@ -10946,6 +10942,14 @@ mod route_new_url_tests {
         app.show_named("details", &ctx);
         assert!(app.settings.show_details);
         assert_eq!(app.selection.ids(), [1]);
+
+        // No filter, the view (Finished) hides the stopped one: still the stopped one, shown
+        // in All Downloads (requirement 21.1's pick across the list).
+        let mut app = self::app(items());
+        app.view = View::Finished(None);
+        app.show_named("details", &ctx);
+        assert_eq!(app.selection.ids(), [1]);
+        assert_eq!(app.view, View::All);
 
         // Only complete downloads shown: the complete one, the filter kept.
         let mut app = self::app(items());

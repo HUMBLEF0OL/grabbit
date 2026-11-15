@@ -157,20 +157,23 @@ Line numbers drift as phases land: find each item by its name first.
     with `App::assemble`: the history and `dirty` for every kind of address, `request_parts`'
     login on a .torrent's fetch, the Video and General folders, the duplicate check);
   - a file name without break points staying on one line in the pane's header (done in 09r1:
-    the pane's `pane_lines` breaks such a name inside it, as the mock's `overflow-wrap:anywhere`,
-    only where its first line has no break that fits;
-    `winui::fit_lines` is unchanged for its other callers);
+    the pane's `pane_lines` takes `winui::fit_lines`' break, else, when its first line is too
+    wide, the latest space, slash or hyphen break whose first line fits, and breaks inside the
+    name only where none fits, as the mock's `overflow-wrap:anywhere`; `winui::fit_lines`
+    behaves as before for its other callers, its breaks now listed by `winui::line_breaks`);
   - tests of the splitter and of a short pane (done in 09r1: `panes::dragged_width`, pulled out
     of `App::details`, and a 276 × 150 pane that paints nothing outside itself);
   - `/show details` while a column filter is set (done in 09r1: it picked a download the
     filter hid, which the list then unselected, so the pane was empty; it now keeps the filter
-    and picks among the downloads it lets through, and when the filters hide every download,
+    and picks among the downloads it lets through in All Downloads (without a filter, the first
+    stopped download across the list, as before), and when the filters hide every download,
     as `/show filtered` does, it clears them as `/show unfiltered` does and picks among all).
 - 09r1's review against the mock (`m-main`, the paste bar, the details pane): the paste band
-  (padding 8 × 10, gap 8, field and button 32 high), the pane (padding 14, icon 32 + 10, name
-  SemiBold 13 on 2 lines, the label row 12 muted then 6, the cells 8 × 8 high 2 apart, the rows'
-  96-point label column 12 before the value, 7 between rows, the buttons 2 + 1 at 32 high 6
-  apart) and their roles match. Recorded, not changed: the pane's cells take the download's
+  (padding 8 × 10, gap 8, the field 32 high, the button 30 high centred on it), the pane
+  (padding 14, icon 32 + 10, name SemiBold 13 on 2 lines, the label row 12 muted then 6, the
+  cells 8 × 8 high 2 apart, the rows' 96-point label column 12 before the value, 7 between
+  rows, the buttons 2 + 1 at 30 high 6 apart) and their roles match (the buttons were 32 high,
+  set to the mock's `.btn` 30 in 09r1's audit). Recorded, not changed: the pane's cells take the download's
   status colour (06's choice, as the list's Status cell) where the mock always uses the
   progress colour.
 
