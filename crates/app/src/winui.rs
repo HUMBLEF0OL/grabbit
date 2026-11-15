@@ -6758,7 +6758,9 @@ pub mod caption {
         };
         let resp = ui.interact(rc, widget_id(ui, ("caption-button", b.name())), sense);
         let name = crate::i18n::t(b.name());
-        if b == CaptionButton::ToTray || !SYSTEM_SPEAKS {
+        // Tab reaches it too (plan 09's keyboard pass): while it has the keys it is ours to
+        // speak, or a screen reader would say nothing there.
+        if b == CaptionButton::ToTray || !SYSTEM_SPEAKS || resp.has_focus() {
             expose(&resp, egui::Role::Button, name, enabled, None);
         } else {
             unspoken(ui, &resp);

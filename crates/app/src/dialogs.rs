@@ -2050,7 +2050,7 @@ impl SpeedSettings {
                         winui::text(p, x, baseline, s, black);
                     },
                 );
-                winui::number_field(
+                let kb = winui::number_field(
                     ui,
                     kb_box[0],
                     &mut self.kb,
@@ -2059,6 +2059,11 @@ impl SpeedSettings {
                     true,
                     winui::LIGHT_BG(),
                 );
+                // Inside its sentence, so no caption names it: named here for screen readers.
+                // i18n: what a screen reader calls the Speed Limiter's box for one file's speed
+                let name = crate::i18n::t("Maximum download speed for one file");
+                ui.ctx()
+                    .accesskit_node_builder(kb.id, |n| n.set_label(name));
                 let note = crate::i18n::t(
                     "Note: Internet servers may break connection when the speed is too limited! Thus it's not\nrecommended to use Speed Limiter to download from servers that do not support\n\"resume\" feature.",
                 );

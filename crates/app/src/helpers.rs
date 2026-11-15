@@ -599,7 +599,20 @@ impl Programs {
             )[..] else {
                 unreachable!("two buttons")
             };
-            if winui::button(
+            // Every helper's buttons read the same: a screen reader hears which program they are for.
+            let spoken = |resp: &egui::Response, label: &str| {
+                let name = crate::i18n::fmt(
+                    // i18n: what a screen reader calls a button that one row of a window has for each thing it lists; {label} is the button's text, {what} the row's browser or program
+                    crate::i18n::t("{label} for {what}"),
+                    &[
+                        ("label", crate::i18n::t(label)),
+                        ("what", &crate::i18n::ltr(h.name())),
+                    ],
+                );
+                resp.ctx
+                    .accesskit_node_builder(resp.id, |n| n.set_label(name));
+            };
+            let other = winui::button(
                 ui,
                 r(o, other_at.0, y - o.y + 46.0, other_at.1, 21.0),
                 // i18n: Video helpers: button: pick a program (yt-dlp or ffmpeg) already on the computer
@@ -611,9 +624,9 @@ impl Programs {
                 },
                 false,
                 None,
-            )
-            .clicked()
-            {
+            );
+            spoken(&other, "Use another program...");
+            if other.clicked() {
                 // i18n: file picker title; {name} = yt-dlp or ffmpeg
                 let title =
                     crate::i18n::fmt(crate::i18n::t("Choose {name}"), &[("name", h.name())]);
@@ -621,7 +634,7 @@ impl Programs {
                     rfd::FileDialog::new().set_title(title).pick_file()
                 });
             }
-            if winui::button(
+            let own = winui::button(
                 ui,
                 r(o, own_at.0, y - o.y + 46.0, own_at.1, 21.0),
                 // i18n: Video helpers: button: go back to the copy MDM downloads and checks itself
@@ -633,8 +646,9 @@ impl Programs {
                 },
                 false,
                 None,
-            )
-            .clicked()
+            );
+            spoken(&own, "Use MDM's own copy");
+            if own.clicked()
                 && let Some(dir) = self.dir.clone()
             {
                 self.error = mdm_tools::chosen::forget(&dir, h)

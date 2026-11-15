@@ -1286,6 +1286,8 @@ impl OptionsDialog {
             92.0,
         )[0];
         let list_end = col_x - 8.0;
+        // i18n: what a screen reader calls the list of servers with their own number of connections (Options → Connection)
+        self.exc_rows.name = crate::i18n::t("Exceptions");
         let (dbl, del_key) = report(
             ui,
             o,
@@ -1762,6 +1764,8 @@ impl OptionsDialog {
         let bx = PAGE_RIGHT - bw;
         let list_right = bx - gap;
         let list_bottom = PAGE_TOP + 4.0 * h + 3.0 * gap;
+        // i18n: what a screen reader calls the list of debrid service accounts (Options → Accounts)
+        self.account_rows.name = crate::i18n::t("Debrid service accounts");
         let (_, del_key) = report(
             ui,
             o,
@@ -1909,6 +1913,8 @@ impl OptionsDialog {
             })
             .collect();
         // The list leaves the page's foot to Cookies for video sites (#229).
+        // i18n: what a screen reader calls the list of sites and their logins (Options → Sites Logins)
+        self.login_rows.name = crate::i18n::t("Sites and their logins");
         let (dbl, del_key) = report(
             ui,
             o,
@@ -2807,6 +2813,8 @@ impl OptionsDialog {
             .iter()
             .map(|d| vec![d.name.clone(), when(d.added), when(d.seen)])
             .collect();
+        // i18n: what a screen reader calls the list of phones and computers paired with MDM (Options → Remote)
+        self.device_rows.name = crate::i18n::t("Paired devices");
         let (_, del_key) = report(
             ui,
             o,
