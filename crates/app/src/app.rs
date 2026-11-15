@@ -10769,7 +10769,7 @@ mod details_cmd_tests {
 /// built as the menus' test builds one (09r1, from 06's audit). Nothing runs: the runtime is
 /// never driven, so no dialog's look-up goes out.
 #[cfg(test)]
-mod route_tests {
+mod route_new_url_tests {
     use super::*;
 
     /// The window's state with `items`, its downloads folder a test path.
