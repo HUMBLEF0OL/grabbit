@@ -640,13 +640,22 @@ impl About {
             |ui, o| {
                 let p = ui.painter().clone();
                 let ink = winui::TEXT();
-                // The mockup's About: everything centred under today's app icon at 56.
+                // The mockup's About: everything centred under the app's mark at 56, from the
+                // icon's PNG just above that size on screen (the 48 one stretched blurred at 150
+                // and 200 %; Direct3D has no mipmaps, so a far larger one would shimmer at 100).
                 let cx = o.x + W / 2.0;
-                egui::Image::from_bytes(
-                    "bytes://mdm-48.png",
-                    include_bytes!("../assets/icons/app/mdm-48.png"),
-                )
-                .paint_at(ui, winui::r(o, W / 2.0 - 28.0, 24.0, 56.0, 56.0));
+                let mark = if 56.0 * ui.ctx().pixels_per_point() <= 64.0 {
+                    egui::Image::from_bytes(
+                        "bytes://mdm-64.png",
+                        include_bytes!("../assets/icons/app/mdm-64.png"),
+                    )
+                } else {
+                    egui::Image::from_bytes(
+                        "bytes://mdm-128.png",
+                        include_bytes!("../assets/icons/app/mdm-128.png"),
+                    )
+                };
+                mark.paint_at(ui, winui::r(o, W / 2.0 - 28.0, 24.0, 56.0, 56.0));
                 let centred = |font: egui::FontId, baseline: f32, s: &str, color| {
                     let w = winui::text_width_font(&p, font.clone(), s);
                     winui::text_at(&p, font, (cx - w / 2.0).round(), baseline, s, color)

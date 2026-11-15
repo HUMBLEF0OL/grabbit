@@ -176,7 +176,7 @@ impl Helpers {
         let p = ui.painter().clone();
         let (ink, muted) = (winui::TEXT(), winui::MUTED());
         let w = 520.0;
-        // The banner: MDM's own logo, what this is for, in one line, and why now.
+        // The banner: what this is for, in one line, and why now.
         let extra = winui::banner(
             ui,
             &p,

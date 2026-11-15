@@ -592,6 +592,7 @@ These ship in a later version, when they're ready.
   buttons' icons greyed, Pair a device centred, Add an account's hint box sized to its text).
   And the finish: filled buttons shaded from a lighter cyan at their top and progress bars
   shaded along their fill, glowing in dark mode.
+  And About's mark drawn sharp, the two first-start offers without their logo band.
   Next: the review (plan 09)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension

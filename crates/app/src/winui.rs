@@ -211,8 +211,9 @@ pub fn galley(p: &Painter, font: FontId, s: &str, color: Color32) -> std::sync::
     p.layout_job(job)
 }
 
-/// The banner atop a first-start window (the browser extension's offer, the video helpers):
-/// MDM's logo at the start side, a bold headline, and a muted subline that wraps. 84 px tall, and
+/// The banner atop a first-start window (the browser extension's offer, the video helpers): a
+/// bold headline and a muted subline that wraps, on the window's own background (the mock draws
+/// no logo band, plan 09a2). 84 px tall, and
 /// taller by what a long translation's extra lines need: that extra is returned, for the window
 /// to add to its height and to move what is below the banner down by (it is known from the frame
 /// before: [`crate::dialogs::grow_extra`] under `key`).
@@ -228,29 +229,17 @@ pub fn banner(
 ) -> f32 {
     const PLANNED: f32 = 84.0;
     let extra = crate::dialogs::grow_extra(ui.ctx(), key);
-    let h = PLANNED + extra;
-    // `r` gives the rect where it is on screen (mirrored in RTL): the logo at the start side.
-    p.rect_filled(r(o, 0.0, 0.0, w, h), 0.0, FIELD());
-    fill_l(p, o.x, o.y + h, o.x + w - 1.0, o.y + h, FIELD_EDGE());
-    egui::Image::new(egui::include_image!("../assets/icons/app/mdm-48.png"))
-        .paint_at(ui, r(o, 18.0, 18.0, 48.0, 48.0));
+    // The window's 22 px side margin, as the rows under it.
+    const X: f32 = 22.0;
     // The headline on one line: cut with "..." at the far edge (a long translation), whole on
     // hover.
     let bold = tahoma_title();
-    let shown = ellipsize(p, &bold, headline, w - 18.0 - 80.0);
-    let drawn = text_font(p, bold, o.x + 80.0, o.y + 36.0, &shown, TEXT());
+    let shown = ellipsize(p, &bold, headline, w - 2.0 * X);
+    let drawn = text_font(p, bold, o.x + X, o.y + 36.0, &shown, TEXT());
     if shown != headline {
         full_on_hover(ui, drawn, (key, "headline"), headline);
     }
-    let lines = paragraph(
-        p,
-        o.x + 80.0,
-        o.y + 57.0,
-        subline,
-        MUTED(),
-        o.x + w - 18.0,
-        14.0,
-    );
+    let lines = paragraph(p, o.x + X, o.y + 57.0, subline, MUTED(), o.x + w - X, 14.0);
     // As planned, two lines: the second one's baseline at 71, then 13 px of descent and margin.
     let need = 57.0 + 14.0 * (lines.max(2) as f32 - 1.0) + 13.0;
     crate::dialogs::grow_px(ui.ctx(), key, need - PLANNED);
