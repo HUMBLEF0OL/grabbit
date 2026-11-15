@@ -1384,7 +1384,7 @@ fn status_cell(
                 ),
             );
             if done.width() > 0.5 {
-                p.rect_filled(winui::rect(done), 2.0, bar);
+                winui::bar_fill(p, winui::rect(done), 2.0, bar, winui::rtl());
             }
         }
     };

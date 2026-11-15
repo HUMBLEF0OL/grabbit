@@ -453,6 +453,9 @@ pub enum ButtonLook {
     Aero,
     /// Mac OS X: a gel face, round at the ends, the default button in the accent's gel.
     Aqua,
+    /// Graphite: Windows 11's, an accent button's face shaded from `button.accent.top` down to
+    /// `button.accent`, the `glow` role under it.
+    Graphite,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -469,6 +472,9 @@ pub enum ProgressLook {
     Blocks,
     /// Windows 7 and Mac OS X: a glossy fill on a shaded, bordered track.
     Gloss,
+    /// Graphite: `Line`, its fill shaded across from `progress.bar` to `progress.bar.end`, the
+    /// `glow` role under it.
+    Graphite,
 }
 
 /// A drawn title bar's look: its buttons and where the title sits.
@@ -534,10 +540,12 @@ impl Controls {
             ("button", "luna") => self.button = ButtonLook::Luna,
             ("button", "aero") => self.button = ButtonLook::Aero,
             ("button", "aqua") => self.button = ButtonLook::Aqua,
+            ("button", "graphite") => self.button = ButtonLook::Graphite,
             ("progress", "line") => self.progress = ProgressLook::Line,
             ("progress", "bar") => self.progress = ProgressLook::Bar,
             ("progress", "blocks") => self.progress = ProgressLook::Blocks,
             ("progress", "gloss") => self.progress = ProgressLook::Gloss,
+            ("progress", "graphite") => self.progress = ProgressLook::Graphite,
             ("scroll", "overlay") => self.scroll = ScrollLook::Overlay,
             ("scroll", "classic") => self.scroll = ScrollLook::Classic,
             ("caption", "system") => self.caption = CaptionLook::System,
@@ -832,13 +840,20 @@ mod tests {
             Controls {
                 field_focus: FieldFocus::Ring,
                 check: CheckLook::Fluent,
-                progress: ProgressLook::Line,
+                progress: ProgressLook::Graphite,
                 scroll: ScrollLook::Overlay,
                 caption: CaptionLook::Metro,
                 focus: FocusLook::Ring,
-                button: ButtonLook::Fluent,
+                button: ButtonLook::Graphite,
             }
         );
+        // Plan 09a: the two-tone finish in both modes, the glow in dark only.
+        for p in [&t.light, &t.dark] {
+            assert!(p.button_accent_top.a() > 0 && p.button_accent_top != p.button_accent);
+            assert!(p.progress_bar_end.a() > 0 && p.progress_bar_end != p.progress_bar);
+        }
+        assert_eq!(t.light.glow.a(), 0);
+        assert!(t.dark.glow.a() > 0);
         // Plan 02b's roles, as make_theme.py maps them from pal.py's tokens.
         for p in [&t.light, &t.dark] {
             assert_eq!(p.panel, p.caption, "panel and caption: both `surface`");

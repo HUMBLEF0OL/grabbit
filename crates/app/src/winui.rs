@@ -683,13 +683,15 @@ pub fn progress_bar(p: &Painter, rc: Rect, fraction: Option<f32>, time: f64) {
     );
     if to > from {
         let w = rc.width();
-        p.rect_filled(
+        bar_fill(
+            p,
             rect(Rect::from_min_max(
                 pos2(rc.left() + from * w, rc.top()),
                 pos2(rc.left() + to * w, rc.bottom()),
             )),
             r,
             accent,
+            rtl(),
         );
     }
 }
@@ -1635,11 +1637,34 @@ pub fn fill_shaded(p: &Painter, rc: Rect, radius: f32, stops: &[(f32, Color32)])
 /// [`fill_shaded`] with the top corners rounded by `top` and the bottom ones by `bottom` (a
 /// button hung from a title bar's edge).
 pub fn fill_shaded_corners(p: &Painter, rc: Rect, top: f32, bottom: f32, stops: &[(f32, Color32)]) {
+    p.add(egui::Shape::mesh(shaded_mesh(rc, top, bottom, stops)));
+}
+
+/// [`fill_shaded`] across: `stops` run from `rc`'s left (0) to its right (1). Graphite's
+/// progress fill.
+pub fn fill_shaded_across(p: &Painter, rc: Rect, radius: f32, stops: &[(f32, Color32)]) {
+    p.add(egui::Shape::mesh(across_mesh(rc, radius, stops)));
+}
+
+/// The mesh [`fill_shaded_across`] paints: the vertical one of `rc` turned on its diagonal,
+/// then turned back.
+fn across_mesh(rc: Rect, radius: f32, stops: &[(f32, Color32)]) -> egui::Mesh {
+    let flip = |r: Rect| Rect::from_min_max(pos2(r.min.y, r.min.x), pos2(r.max.y, r.max.x));
+    let mut mesh = shaded_mesh(flip(rc), radius, radius, stops);
+    for v in &mut mesh.vertices {
+        v.pos = pos2(v.pos.y, v.pos.x);
+    }
+    mesh
+}
+
+/// The mesh [`fill_shaded_corners`] paints.
+fn shaded_mesh(rc: Rect, top: f32, bottom: f32, stops: &[(f32, Color32)]) -> egui::Mesh {
+    let mut mesh = egui::Mesh::default();
     let (Some(first), Some(last)) = (stops.first(), stops.last()) else {
-        return;
+        return mesh;
     };
     if rc.width() <= 0.0 || rc.height() <= 0.0 {
-        return;
+        return mesh;
     }
     let most = rc.width().min(rc.height()) / 2.0;
     let (rt, rb) = (top.clamp(0.0, most), bottom.clamp(0.0, most));
@@ -1668,7 +1693,6 @@ pub fn fill_shaded_corners(p: &Painter, rc: Rect, top: f32, bottom: f32, stops: 
     all.extend(stops.iter().map(|&(t, c)| (t.clamp(0.0, 1.0), c)));
     all.push((1.0, last.1));
     let h = rc.height();
-    let mut mesh = egui::Mesh::default();
     for w in all.windows(2) {
         let ((t0, c0), (t1, c1)) = (w[0], w[1]);
         if t1 <= t0 {
@@ -1706,7 +1730,61 @@ pub fn fill_shaded_corners(p: &Painter, rc: Rect, top: f32, bottom: f32, stops: 
             mesh.add_triangle(i + 1, i + 3, i + 2);
         }
     }
-    p.add(egui::Shape::mesh(mesh));
+    mesh
+}
+
+/// Graphite's glow: a soft shadow in the `glow` role from `rc` (on screen), `dy` below it,
+/// grown by `spread` and blurred by `blur` (egui caps the blur at the grown rect's smaller
+/// side). Nothing where the role is transparent (Graphite light).
+fn glow(p: &Painter, rc: Rect, radius: f32, dy: i8, spread: u8, blur: u8) {
+    let color = crate::theme::colors().glow;
+    if color.a() > 0 {
+        let shadow = egui::epaint::Shadow {
+            offset: [0, dy],
+            blur,
+            spread,
+            color,
+        };
+        p.add(shadow.as_shape(rc, radius));
+    }
+}
+
+/// How [`bar_fill`] fills: Graphite's progress style shades a fill in the bar's colour (not an
+/// error's or a stopped download's) from `bar` at its start to `end` (the colours at its left
+/// and right: reversed when the bar runs `from_right`); None draws it flat.
+fn bar_shade(
+    graphite: bool,
+    fill: Color32,
+    bar: Color32,
+    end: Color32,
+    from_right: bool,
+) -> Option<(Color32, Color32)> {
+    if !graphite || fill != bar || end.a() == 0 {
+        return None;
+    }
+    Some(if from_right { (end, fill) } else { (fill, end) })
+}
+
+/// A progress bar's done part in `rc` (on screen) in `fill`, filled from its right when
+/// `from_right` (a bar mirrored in a right-to-left interface): shaded with its glow around it in
+/// Graphite's progress style (the mock's `.meter i`, [`bar_shade`]), else flat.
+pub fn bar_fill(p: &Painter, rc: Rect, radius: f32, fill: Color32, from_right: bool) {
+    let c = crate::theme::colors();
+    let graphite =
+        crate::theme::current().controls.progress == crate::palette::ProgressLook::Graphite;
+    let Some((left, right)) = bar_shade(
+        graphite,
+        fill,
+        c.progress_bar,
+        c.progress_bar_end,
+        from_right,
+    ) else {
+        p.rect_filled(rc, radius, fill);
+        return;
+    };
+    // The mock's 10 px glow all round: grown by 4 first, the bars being too thin for the blur.
+    glow(p, rc, radius, 0, 4, 10);
+    fill_shaded_across(p, rc, radius, &[(0.0, left), (1.0, right)]);
 }
 
 /// How an era theme's glossy parts shade (#45): Windows XP's soft fall from white, Windows 7's
@@ -1727,7 +1805,7 @@ impl Shine {
     fn of_button(look: crate::palette::ButtonLook) -> Option<Self> {
         use crate::palette::ButtonLook as B;
         match look {
-            B::Fluent | B::Breeze => None,
+            B::Fluent | B::Breeze | B::Graphite => None,
             B::Luna => Some(Shine::Luna),
             B::Aero => Some(Shine::Aero),
             B::Aqua => Some(Shine::Aqua),
@@ -1857,7 +1935,7 @@ pub fn meter(p: &Painter, rc: Rect, fraction: f32) {
     let w = (fraction.clamp(0.0, 1.0) * inner.width()).floor();
     if w > 0.0 {
         let done = Rect::from_min_size(inner.min, vec2(w, inner.height()));
-        p.rect_filled(done, (radius - border).max(0.0), c.meter_fill);
+        bar_fill(p, done, (radius - border).max(0.0), c.meter_fill, false);
     }
     p.rect_stroke(
         rc,
@@ -4387,13 +4465,26 @@ fn paint_button(
     let radius = match look {
         _ if shape == Shape::DropDown => control_radius(),
         _ if part => control_radius().min((rc.height() / 3.0).floor()),
-        ButtonLook::Fluent | ButtonLook::Breeze => control_radius(),
+        ButtonLook::Fluent | ButtonLook::Breeze | ButtonLook::Graphite => control_radius(),
         ButtonLook::Luna | ButtonLook::Aero => m.button_radius,
         // Mac OS X's push buttons are round at the ends.
         ButtonLook::Aqua => (rc.height() / 2.0).floor(),
     };
     let Some(shine) = Shine::of_button(look) else {
-        p.rect_filled(rc, radius, face.fill);
+        // Graphite: an accent (filled) button's glow under it, its face at rest shaded from
+        // `button.accent.top` down (the mock's `.btn.primary`); flat under the pointer, pressed.
+        let accent = look == ButtonLook::Graphite && kind == ButtonKind::Accent;
+        if accent && state != State::Disabled {
+            // The mock's `0 6px 18px -8px`: narrower than the face and 6 lower, so it shows
+            // only under the button.
+            glow(p, rc.shrink2(vec2(8.0, 0.0)), radius, 6, 0, 12);
+        }
+        let top = c.button_accent_top;
+        if accent && state == State::Normal && top.a() > 0 {
+            fill_shaded(p, rc, radius, &[(0.0, top), (1.0, face.fill)]);
+        } else {
+            p.rect_filled(rc, radius, face.fill);
+        }
         p.rect_stroke(
             rc,
             radius,
@@ -7014,6 +7105,43 @@ pub mod caption {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Graphite's progress fill (plan 09a) shades left to right, its rounded ends inside `rc`:
+    /// the vertical mesh turned on its side.
+    #[test]
+    fn shaded_across_runs_left_to_right() {
+        let rc = Rect::from_min_max(pos2(10.0, 20.0), pos2(110.0, 26.0));
+        let (a, b) = (Color32::from_rgb(0, 0, 0), Color32::from_rgb(200, 100, 50));
+        let mesh = across_mesh(rc, 3.0, &[(0.0, a), (1.0, b)]);
+        assert!(!mesh.vertices.is_empty());
+        for v in &mesh.vertices {
+            assert!(rc.expand(0.01).contains(v.pos), "{:?} outside", v.pos);
+            // The colour follows x alone: a at the left, b at the right.
+            let t = (v.pos.x - rc.left()) / rc.width();
+            assert!(
+                (v.color.r() as f32 - 200.0 * t).abs() <= 1.0,
+                "{:?} at {t}",
+                v.color
+            );
+        }
+    }
+
+    /// Graphite's progress style shades only a fill in the bar's colour, from its start (plan
+    /// 09a): an error's or a stopped download's fill, another style or a theme without the end
+    /// colour stays flat; a bar running from the right shades the other way.
+    #[test]
+    fn only_a_moving_bar_is_shaded_from_its_start() {
+        let (bar, end) = (
+            Color32::from_rgb(0, 120, 142),
+            Color32::from_rgb(0, 130, 154),
+        );
+        let error = Color32::from_rgb(198, 40, 40);
+        assert_eq!(bar_shade(true, bar, bar, end, false), Some((bar, end)));
+        assert_eq!(bar_shade(true, bar, bar, end, true), Some((end, bar)));
+        assert_eq!(bar_shade(true, error, bar, end, false), None);
+        assert_eq!(bar_shade(false, bar, bar, end, false), None);
+        assert_eq!(bar_shade(true, bar, bar, Color32::TRANSPARENT, false), None);
+    }
 
     /// A flat button's bottom line stays on the straight part between its corners: past how
     /// far the curve reaches into the bottom row (Windows 11's 3 unchanged).
