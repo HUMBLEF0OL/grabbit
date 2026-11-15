@@ -126,7 +126,7 @@ components:
 
 # Design System: Grabbit website
 
-> **Status.** The home page (`website/index.html`, `website/home.css`, `website/home.js`, and the benchmark chart drawn by `bench_bars()` in `tools/website/build.py`) is the reference implementation of this system. The other pages (download, benchmark, IDM alternative, features, help, FAQ, news, legal) still render in an older look from `website/styles.css` and are still to be moved over. When you port a page, build it from this document and `home.css`, not from `styles.css`.
+> **Status.** The home page (`website/index.html`, `website/home.css`, `website/home.js`, and the benchmark chart drawn by `bench_bars()` in `tools/website/build.py`) is the reference implementation of this system. The other pages (download, benchmark, IDM alternative, features, help, FAQ, news, legal) render from `website/styles.css`, whose tokens map onto this system: the ground (`--board`), the tray (`--paper`), ink, signal cyan (`--go`), amethyst (`--link`), Geist and pill buttons. Their layouts are the older ones (sheets with bands, the IDM alternative's label), restyled. New pages and reworked sections are built from this document and `home.css`.
 
 ## Overview
 
@@ -266,4 +266,4 @@ Eight 6px tracks, numbered in 12.5px Mute, that fill in cyan in real time to the
 - **Don't** draw a mock window or retouch a screenshot. Don't use IDM artwork, and don't present Grabbit as an IDM look-alike.
 - **Don't** add a second typeface or set headings in uppercase or with wide tracking.
 - **Don't** use square corners on controls or radii outside the 8 / 12 / 16 / 24 / pill set.
-- **Don't** port the old blue-board look (Archivo, `styles.css`) into new or moved pages.
+- **Don't** bring back the old blue-board look (Archivo, the blue board, green buttons, tilted labels) in any page.

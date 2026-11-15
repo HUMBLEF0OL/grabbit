@@ -52,7 +52,7 @@ CWS = "https://chromewebstore.google.com/detail/mister-download-manager/ejoleppd
 # The header's, the footer's and the home page's Support MDM: this fork's repository until its
 # owner's GitHub Sponsors page exists (see .github/FUNDING.yml; the app and the popup match).
 SPONSORS = REPO
-NAME = "Mister Download Manager"
+NAME = "Grabbit"
 # The next release, as the site announces it. What is in the source but not in a download yet
 # says "Coming with version <this>" (coming_banner(): the feature pages, the Themes page, the
 # features' tiles), shown for a feature whose `since` is this version or later. At that release
@@ -358,7 +358,7 @@ def header(section: str = "") -> str:
   <header class="top">
     <div class="wrap top-inner">
       <a class="brand" href="/">
-        <img src="/assets/logo-64.png" width="34" height="34" alt="">
+        <img src="/assets/grabbit.svg" width="30" height="30" alt="">
         <span>{NAME}</span>
       </a>
       <nav class="nav" aria-label="Main">
@@ -408,7 +408,7 @@ HEADER_FIT = """<script>
       }
       fit();
       if (window.ResizeObserver) new ResizeObserver(fit).observe(row);
-      // Archivo may arrive after this runs (or start loading only once laid out): fit again then.
+      // The font may arrive after this runs (or start loading only once laid out): fit again then.
       if (document.fonts) { document.fonts.ready.then(fit); document.fonts.addEventListener('loadingdone', fit); }
     })();
   </script>"""
@@ -420,7 +420,7 @@ def footer() -> str:
     <div class="wrap">
       <div class="foot-cols">
         <div class="foot-brand">
-          <a class="brand" href="/"><img src="/assets/logo-64.png" width="34" height="34" alt=""><span>{NAME}</span></a>
+          <a class="brand" href="/"><img src="/assets/grabbit.svg" width="30" height="30" alt=""><span>{NAME}</span></a>
           <p class="foot-tag">The download manager you already know, rebuilt to be faster. Free, open source and written from scratch in Rust.</p>
           <a class="text-link foot-star" href="{REPO}"><svg aria-hidden="true"><use href="#i-star"/></svg> Star it on GitHub</a>
           <a class="text-link foot-star" href="{SPONSORS}"><svg aria-hidden="true"><use href="#i-heart"/></svg> Support MDM</a>
@@ -482,7 +482,7 @@ def footer() -> str:
 
 # In every head (templated pages get it through <!--@theme-->): the font, then the theme before
 # the first paint.
-THEME_SCRIPT = """<link rel="preload" href="/vendor/archivo/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+THEME_SCRIPT = """<link rel="preload" href="/assets/fonts/geist/Geist-SemiBold.ttf" as="font" type="font/ttf" crossorigin>
   <script>
     (function () {
       var d = document.documentElement;
@@ -508,8 +508,8 @@ def head(path: str, title: str, desc: str, *, jsonld: list | None = None, og_typ
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{esc(title)}</title>
   <meta name="description" content="{esc(desc)}">{robots}
-  <meta name="theme-color" content="#1f63d6" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0c1a33" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f7f6fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#09080d" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
   <link rel="canonical" href="{url}">
   <meta property="og:type" content="{og_type}">
@@ -1332,7 +1332,7 @@ def feature_label(m: dict) -> str:
     if m.get("help"):
         rows.append(f'<div class="wide"><dt>Full guide</dt><dd><a href="{help_href(m["help"])}">Step by step in the help</a></dd></div>')
     return (f'<aside class="waybill feature-label" aria-label="At a glance"><div class="wb-band">'
-            f'<img src="/assets/logo-64.png" width="32" height="32" alt=""><span class="wb-from"><b>{esc(m["name"])}</b>'
+            f'<img src="/assets/grabbit.svg" width="32" height="32" alt=""><span class="wb-from"><b>{esc(m["name"])}</b>'
             f'<small>Mister Download Manager</small></span></div><dl class="fields">{"".join(rows)}</dl></aside>')
 
 

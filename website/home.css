@@ -97,7 +97,6 @@ html{scrollbar-color:var(--line) transparent}
 .shot{position:absolute;left:50%;top:56px;transform:translate(-50%,14px) scale(.97);opacity:0;transition:opacity .6s,transform .9s cubic-bezier(.16,1,.3,1);border-radius:8px;overflow:hidden;box-shadow:var(--lift);border:1px solid var(--line)}
 .shot.on{opacity:1;transform:translate(-50%,0)}
 .shot img{width:auto;max-width:none}
-.shot img.w560{width:560px}
 .mshot{display:none}
 .steps{position:absolute;inset:0;pointer-events:none}
 .steps div{height:75vh}
