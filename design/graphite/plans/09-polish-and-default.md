@@ -148,11 +148,29 @@ Line numbers drift as phases land: find each item by its name first.
 09a's full review (step 5) takes these. Plan 06's "Left from 06" has the details:
 
 - the on-screen keyboard and Narrator pass over the paste bar, the details pane and their toggles
-  (skipped in 06; the headless tests cover the logic);
-- interface sizes 150 % and 200 % for both (06's screenshots are at 100 % only);
-- the audit's deferred nits: tests of `route_new_url`'s side effects (they need an `App` built in a
-  test), a file name without break points staying on one line in the pane's header, tests of the
-  splitter and of a short pane, and `/show details` while a column filter is set.
+  (skipped in 06; the headless tests cover the logic). Left to a person at the screen (09r1 cannot
+  run Narrator or the on-screen keyboard);
+- interface sizes 150 % and 200 % for both (06's screenshots are at 100 % only). Left to 09b-shots
+  (`baseline.ps1` at 150 and 200 with `/show paste:…` and `/show details`);
+- the audit's deferred nits:
+  - tests of `route_new_url`'s side effects (done in 09r1: `app::route_tests` builds an `App`
+    with `App::assemble`: the history and `dirty` for every kind of address, `request_parts`'
+    login on a .torrent's fetch, the Video and General folders, the duplicate check);
+  - a file name without break points staying on one line in the pane's header (done in 09r1:
+    the pane's `pane_lines` breaks such a name inside it, as the mock's `overflow-wrap:anywhere`;
+    `winui::fit_lines` is unchanged for its other callers);
+  - tests of the splitter and of a short pane (done in 09r1: `panes::dragged_width`, pulled out
+    of `App::details`, and a 276 × 150 pane that paints nothing outside itself);
+  - `/show details` while a column filter is set (done in 09r1: it picked a download the
+    filter hid, which the list then unselected, so the pane was empty; it now keeps the filter
+    and picks among the downloads it lets through, `/show filtered` setting one first).
+- 09r1's review against the mock (`m-main`, the paste bar, the details pane): the paste band
+  (padding 8 × 10, gap 8, field and button 32 high), the pane (padding 14, icon 32 + 10, name
+  SemiBold 13 on 2 lines, the label row 12 muted then 6, the cells 8 × 8 high 2 apart, the rows'
+  96-point label column 12 before the value, 7 between rows, the buttons 2 + 1 at 32 high 6
+  apart) and their roles match. Recorded, not changed: the pane's cells take the download's
+  status colour (06's choice, as the list's Status cell) where the mock always uses the
+  progress colour.
 
 ## Left from 07
 

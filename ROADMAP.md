@@ -593,7 +593,10 @@ These ship in a later version, when they're ready.
   And the finish: filled buttons shaded from a lighter cyan at their top and progress bars
   shaded along their fill, glowing in dark mode.
   And About's mark drawn sharp, the two first-start offers without their logo band.
-  Next: the review (plan 09)
+  And the review of the main window, the paste bar and the details pane: a long file name without
+  spaces on the pane's two lines, and the screenshot script's details pane keeping the list's
+  column filters.
+  Next: the rest of the review (plan 09)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:

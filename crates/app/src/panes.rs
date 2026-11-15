@@ -568,6 +568,16 @@ pub fn details_width(saved: u32, w: f32, list_left: f32) -> f32 {
     (saved as f32).clamp(MIN, max).round()
 }
 
+/// The details pane's width while its splitter is dragged (`App::details`): the pointer at
+/// English x `pointer`, taken `grab` points inside the pane's leading edge, in a client area
+/// whose trailing edge is at English x `right`, `w` wide, the list's leading edge at
+/// `list_left`. The pane keeps the point where it was taken under the pointer, as far as
+/// [`details_width`] lets it.
+pub fn dragged_width(right: f32, pointer: f32, grab: f32, w: f32, list_left: f32) -> u32 {
+    let nw = (right - (pointer - grab)).round().max(0.0);
+    details_width(nw as u32, w, list_left) as u32
+}
+
 /// What the details pane shows this frame (C10), built from the downloads the list draws in the
 /// same frame (`App::details_view`).
 #[derive(Debug, PartialEq)]
@@ -903,8 +913,43 @@ fn pane_text(
     }
 }
 
+/// `s` on at most 2 lines `room` wide: [`winui::fit_lines`]'s, or, where one of those is still
+/// too wide (a file name without a space, a slash or a hyphen), broken inside it by
+/// [`break_inside`], so it takes its second line before it is cut.
+fn pane_lines(p: &egui::Painter, font: &egui::FontId, s: &str, room: f32) -> Vec<String> {
+    let lines = winui::fit_lines(p, font.clone(), s, room);
+    let width = |t: &str| winui::text_width_font(p, font.clone(), t);
+    if lines.iter().all(|l| width(l) <= room) {
+        return lines;
+    }
+    break_inside(width, s, room).map_or(lines, |(a, b)| vec![a, b])
+}
+
+/// `s` in two at a character: as many characters as fit in `room` (by `width`) on the first
+/// line, at least one, the rest on the second. None for a single character.
+fn break_inside(width: impl Fn(&str) -> f32, s: &str, room: f32) -> Option<(String, String)> {
+    use unicode_segmentation::UnicodeSegmentation;
+    // Where a line may end: before each character but the first.
+    let ends: Vec<usize> = s.grapheme_indices(true).skip(1).map(|(i, _)| i).collect();
+    if ends.is_empty() {
+        return None;
+    }
+    // The most characters that fit, by binary search (widths grow with the prefix).
+    let (mut lo, mut hi) = (1, ends.len());
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        if width(&s[..ends[mid - 1]]) <= room {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    let at = ends[lo - 1];
+    Some((s[..at].to_owned(), s[at..].to_owned()))
+}
+
 /// `s` on at most 2 lines `room` wide from English `x`, the first baseline at `baseline`, each
-/// line ending in "..." when it is still too wide ([`winui::fit_lines`]). Its lines' count and
+/// line ending in "..." when it is still too wide ([`pane_lines`]). Its lines' count and
 /// whether it was cut.
 fn two_lines(
     p: &egui::Painter,
@@ -914,7 +959,7 @@ fn two_lines(
     room: f32,
     ink: egui::Color32,
 ) -> (usize, bool) {
-    let lines = winui::fit_lines(p, font.clone(), s, room);
+    let lines = pane_lines(p, font, s, room);
     let mut cut = false;
     for (k, l) in lines.iter().enumerate() {
         let shown = winui::ellipsize(p, font, l, room);
@@ -2214,6 +2259,73 @@ mod tests {
         assert_eq!(details_width(615, 1640.0, 824.6), 615.0);
     }
 
+    /// The splitter dragged (09r1): the point taken stays under the pointer, so dragging toward
+    /// the list widens the pane by as much; the result is [`details_width`]'s clamp.
+    #[test]
+    fn dragging_the_splitter_keeps_the_point_taken_under_the_pointer() {
+        // 1240 wide, Categories 224: the pane 276 wide starts at 964, taken 3 inside it.
+        assert_eq!(dragged_width(1240.0, 967.0, 3.0, 1240.0, 224.0), 276);
+        // 50 toward the list: 50 wider; 30 away from it: 30 narrower.
+        assert_eq!(dragged_width(1240.0, 917.0, 3.0, 1240.0, 224.0), 326);
+        assert_eq!(dragged_width(1240.0, 997.0, 3.0, 1240.0, 224.0), 246);
+        // Half points round to whole ones.
+        assert_eq!(dragged_width(1240.0, 916.6, 3.0, 1240.0, 224.0), 326);
+        // Past the bounds: 200 at the narrowest, half the window at the widest.
+        assert_eq!(dragged_width(1240.0, 1200.0, 3.0, 1240.0, 224.0), 200);
+        assert_eq!(dragged_width(1240.0, 1300.0, 3.0, 1240.0, 224.0), 200);
+        assert_eq!(dragged_width(1240.0, 100.0, 3.0, 1240.0, 224.0), 620);
+        assert_eq!(dragged_width(1240.0, -5000.0, 3.0, 1240.0, 224.0), 620);
+        // A client area not at 0 (a drawn frame's border): the same pane.
+        assert_eq!(dragged_width(1248.0, 975.0, 3.0, 1240.0, 224.0), 276);
+    }
+
+    /// A name with no place to break (09r1): as much as fits on the first line, the rest on
+    /// the second; never an empty line.
+    #[test]
+    fn a_name_without_break_points_breaks_inside_it() {
+        let width = |t: &str| 10.0 * t.chars().count() as f32;
+        let split = |s: &str, room| break_inside(width, s, room);
+        let pair = |a: &str, b: &str| Some((a.to_owned(), b.to_owned()));
+        assert_eq!(split("abcdefghij", 45.0), pair("abcd", "efghij"));
+        assert_eq!(split("abcdefghij", 40.0), pair("abcd", "efghij"));
+        // Room for less than a character: one on the first line all the same.
+        assert_eq!(split("abcdefghij", 5.0), pair("a", "bcdefghij"));
+        // Room for all of it: the last character still goes to the second line.
+        assert_eq!(split("abcdefghij", 500.0), pair("abcdefghi", "j"));
+        assert_eq!(split("a", 5.0), None);
+        assert_eq!(split("", 5.0), None);
+        // A character is never split (an accent kept on its letter).
+        let accents = "e\u{301}e\u{301}e\u{301}";
+        assert_eq!(split(accents, 20.0), pair("e\u{301}", "e\u{301}e\u{301}"));
+    }
+
+    /// The pane's lines with real text (09r1): a name without a space, a slash or a hyphen
+    /// takes two lines, the first no wider than the room; a name with a space still breaks
+    /// there; a short one stays whole.
+    #[test]
+    fn the_panes_lines_break_a_long_name_and_keep_a_short_one() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let p = ui.painter();
+            let font = row_font();
+            let width = |t: &str| crate::winui::text_width_font(p, font.clone(), t);
+            let long = "averyveryverylongfilenamewithoutanybreakpoints0123456789.zip";
+            let room = 200.0;
+            assert!(width(long) > room);
+            let lines = pane_lines(p, &font, long, room);
+            assert_eq!(lines.len(), 2, "{lines:?}");
+            assert!(width(&lines[0]) <= room, "{lines:?}");
+            assert_eq!(lines.concat(), long);
+            assert_eq!(pane_lines(p, &font, "a.zip", room), vec!["a.zip"]);
+            let spaced = "My holiday photos from the long summer.zip";
+            let two = pane_lines(p, &font, spaced, width(spaced) - 1.0);
+            assert_eq!(two.len(), 2);
+            assert!(two[0].ends_with(|c: char| c != ' ') && !two[1].starts_with(' '));
+        });
+        out.textures_delta.clear();
+    }
+
     /// Property 8 (width clamp), over saved widths, window widths and Categories edges.
     mod details_width_props {
         use proptest::prelude::*;
@@ -2959,6 +3071,53 @@ mod details_tests {
             assert_eq!(one.primary.is_some(), want.is_some(), "{status:?}");
             let view = DetailsView::One(Box::new(one));
             assert_eq!(pane(&view, click_primary()), want, "{status:?}");
+        }
+    }
+
+    /// A short pane, 276 × 150 (09r1): its three buttons fit inside it, and everything it
+    /// paints for a running download with a long name and every row is clipped to it (the
+    /// content above the buttons, the rest at the pane's edges).
+    #[test]
+    fn a_short_pane_paints_nothing_outside_itself() {
+        let _fonts = crate::theme::font_tests();
+        let rc = Rect::from_min_size(pos2(964.0, 550.0), vec2(276.0, 150.0));
+        for b in details_buttons(rc) {
+            assert!(rc.contains_rect(b), "{b:?}");
+        }
+        let mut it = item(
+            "https://example.org/a/very/long/path/archive.zip",
+            Status::Downloading,
+        );
+        it.file_name = "averyveryverylongfilenamewithoutanybreakpoints0123456789.zip".into();
+        it.size = Some(92 * MB);
+        it.downloaded = 58 * MB;
+        it.resumable = Some(true);
+        it.last_try = Some("Oct 28 21:44:12 2026".into());
+        it.snap = Some(snap(8, &vec![ConnStatus::Receiving; 8]));
+        let view = DetailsView::One(Box::new(one_download(
+            &it,
+            Some(1e6),
+            Some("Main download queue"),
+        )));
+        let ctx = egui::Context::default();
+        for _ in 0..2 {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1240.0, 700.0))),
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                let mut icons = crate::chrome::ShellIcons;
+                details_pane(ui, rc, &view, &mut icons);
+            });
+            out.textures_delta.clear();
+            assert!(!out.shapes.is_empty());
+            for s in &out.shapes {
+                assert!(
+                    rc.expand(0.01).contains_rect(s.clip_rect),
+                    "painted outside the pane: {:?}",
+                    s.clip_rect
+                );
+            }
         }
     }
 
