@@ -188,7 +188,10 @@ const DONE_UP: f32 = 18.0;
 /// The file to open on its caption's row, not under it.
 const OPEN_UP: f32 = 25.0;
 const UP: f32 = DAYS_UP + DONE_UP + OPEN_UP;
-const BODY: f32 = 432.0 + DY - UP;
+/// Under the pages' last rows, 4 less room than IDM's, so the window fits Windows 11's 48 px
+/// taskbar too (the rows don't move).
+const PAGE_UP: f32 = 4.0;
+const BODY: f32 = 432.0 + DY - UP - PAGE_UP;
 
 // i18n: checkbox in the Scheduler, under the start time: wake the computer from sleep shortly before the queue starts, and keep it awake while the queue runs
 const WAKE_LABEL: &str = crate::i18n::mark("Wake the computer to run this queue");
@@ -459,7 +462,7 @@ impl Scheduler {
             if let Some(t) = winui::tabs_light(
                 ui,
                 o,
-                r(o, 213.0, 23.0, 428.0 + DX, 403.0 + DY - UP),
+                r(o, 213.0, 23.0, 428.0 + DX, 403.0 + DY - UP - PAGE_UP),
                 &tabs,
                 current,
             )
@@ -2210,12 +2213,13 @@ mod tests {
 
     /// Plan 09: the mock's 800 wide, and on a 1080p screen at interface size 200 % shown whole,
     /// without a scroll bar (the rule every fixed window is shown by: `dialogs::shown_size`),
-    /// with the title bar Graphite draws in the client (`dialog_window` adds it before sizing).
+    /// with the title bar Graphite draws in the client (`dialog_window` adds it before sizing),
+    /// above Windows 11's 48 px taskbar (8 more than `room_on`'s 40).
     #[test]
     fn the_window_fits_a_1080p_screen_at_200_percent() {
         let client = vec2(W, BODY + winui::FOOTER_H + winui::caption::CAPTION_H);
         assert_eq!(W, 800.0);
-        let room = crate::scale::room_on(vec2(1920.0, 1080.0), 2.0, 2.0);
+        let room = crate::scale::room_on(vec2(1920.0, 1080.0 - 8.0), 2.0, 2.0);
         assert_eq!(
             crate::scale::shown(client, Some(room)),
             client,

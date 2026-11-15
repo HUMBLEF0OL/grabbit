@@ -596,6 +596,9 @@ These ship in a later version, when they're ready.
   And the contrast checks extended to every colour that carries text or meaning (the filled
   buttons' lighter top included) and to greyed text, and screenshot entries for Create folder,
   Archive password, Add category and the drop target.
+  Still to come for these dialogs, with the review: the Scheduler and the rest of them compared
+  side by side with the mockup in the running app (light and dark, at 100 %, 150 % and 200 %),
+  and their keyboard and screen-reader passes.
   Next: the review (plan 09)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension

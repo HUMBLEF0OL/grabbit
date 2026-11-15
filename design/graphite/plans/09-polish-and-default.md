@@ -131,6 +131,13 @@ Line numbers drift as phases land: find each item by its name first.
    - an accessibility-tree pass over every changed window (names, roles, disabled states, bounds);
    - interface size 200%.
 
+   09r2 ran only the contrast pass. Over 07's dialogs it leaves, as follow-ups under the
+   ROADMAP's Graphite item: the side-by-side with the mock in the running app (light and dark,
+   100/150/200 %, the Scheduler included), the keyboard pass and the accessibility-tree pass.
+   It also keeps `[profile.dev.package.mdm-crash] debug = "full"` in `Cargo.toml`: the checks
+   build with `--config profile.dev.debug=0`, and mdm-crash's end-to-end tests read crashy's own
+   debug info to name the function, so they fail without it (build setting only, no app change).
+
 ## 09b · Graphite by default
 
 1. **Done in 05.5c**: Graphite is the default and the only built-in look; no one-time question is
@@ -181,13 +188,14 @@ Line numbers drift as phases land: find each item by its name first.
   `baseline.ps1`'s states; the queue-done countdown gets none that runs (it turns the computer
   off after 30 s);
 - (done in 09r2, the follow-up after its build) the **Scheduler** at the mockup's 800 and short
-  enough for a 1080p screen at 200 %: client 800 x 500 with Graphite's drawn 32-high title bar
-  (468 under it; was 651 x 559, which scrolled there). The queue list keeps its place; the
+  enough for a 1080p screen at 200 %: client 800 x 496 with Graphite's drawn 32-high title bar
+  (464 under it; was 651 x 559, which scrolled there; the pages end 4 above IDM's, `PAGE_UP`,
+  for Windows 11's 48 px taskbar). The queue list keeps its place; the
   pages' rows end at 776 (`RIGHT`, was 627), the weekdays take four columns of two rows (16
   back), Hang up and Exit share a row (18 back), the file to open sits after its caption on its
   row (25 back), the files list's name column takes the width. A unit test checks the client,
-  title bar included, against `scale::room_on` (1920 x 1080, 40 px taskbar, the frame, at
-  200 %: 952 x 500), the rule `dialogs::shown_size` shows windows by. Not yet compared side by
+  title bar included, against `scale::room_on` (1920 x 1080, Windows 11's 48 px taskbar, the
+  frame, at 200 %: 952 x 496), the rule `dialogs::shown_size` shows windows by. Not yet compared side by
   side with the mock in the running app.
 
 ## Left from 08

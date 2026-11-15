@@ -6281,7 +6281,8 @@ impl App {
                     "Show &drop target",
                     Cmd::ToggleDropTarget,
                     true,
-                    self.settings.drop_target,
+                    // Checked while it shows, a screenshot's sample too: choosing it hides it.
+                    self.settings.drop_target || self.drop_target_sample,
                 ),
                 Sep,
                 // i18n: verb: save the download list to a file
@@ -8185,6 +8186,8 @@ impl App {
                 Event::Drop(s) => self.dropped(vec![s], ctx),
                 Event::ShowMain => self.show_window(ctx),
                 Event::Context(screen) => self.drop_target_menu(screen, ctx),
+                // A screenshot's sample leaves the settings as they are.
+                Event::Moved(_) if self.drop_target_sample => {}
                 Event::Moved(p) => {
                     self.settings.drop_target_pos = Some((p.x.round() as i32, p.y.round() as i32));
                     self.dirty = true;
