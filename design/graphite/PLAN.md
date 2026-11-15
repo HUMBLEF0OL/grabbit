@@ -104,8 +104,9 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
 - [x] 08a Options side list (complete, PR 25; ticked here in 08b3's PR, which follows it)
 - [x] 08b Options pages (complete with its three PRs: 08b3 the window's size and sub-dialogs,
       08b1 and 08b2 the pages)
-- [ ] 09a Finish
-- [ ] 09b Default
+- [x] 09a Finish (complete: 09a1 PR 44, 09a2 PR 45, the review 09r2 PR 46, 09r3 PR 47, 09r1
+      PR 48, merged 2026-11-15; the passes at the screen are left, see its plan's "Done when")
+- [x] 09b Default (complete: 09b-text PR 29, 09b-shots in this PR)
 - [ ] 10a to 10e Rename
 
 ## What is in this folder

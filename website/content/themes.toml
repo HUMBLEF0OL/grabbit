@@ -8,5 +8,4 @@
 id = "graphite"
 name = "Graphite"
 feel = "MDM's own look and the only built-in one: near-black or white, royal amethyst for what you chose, electric cyan for what moves, rounded corners and one-colour icons."
-# The picture comes with the next screenshots (site-theme-graphite in tools/shots/shots.toml):
-# shot = "images/help/site-theme-graphite.webp"
+shot = "images/help/site-theme-graphite.webp"

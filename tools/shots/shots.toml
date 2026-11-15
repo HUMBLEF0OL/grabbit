@@ -42,9 +42,9 @@ id = "main-window"
 page = "getting-started.md"
 under = "The main window"
 take = "@main"
-# The toolbar has no accessible names: a rectangle at its end. 1 right of the menu bar's last
-# menu, 2 right of the toolbar, 3 and 4 in the empty part of the categories and the list.
-marks = [{ at = "MenuItem:Help", side = "right" }, { at = [810, 60, 10, 50], side = "right" }, { at = "Tree:Categories", side = "center" }, { at = "List:Downloads", side = "center" }]
+# 1 right of the menu bar's last menu, 2 on the toolbar's rule between its delete and its
+# settings groups, 3 and 4 in the empty space under the categories and the list's rows.
+marks = [{ at = "MenuItem:Help", side = "right" }, { at = [520, 70, 0, 0], side = "center" }, { at = [0, 446, 223, 22], side = "center" }, { at = [224, 408, 708, 44], side = "center" }]
 alt = "The main window: the menu bar, the toolbar, the categories on the left and the download list on the right"
 caption = "1 the menu bar, 2 the toolbar, 3 the categories, 4 the download list."
 
@@ -83,8 +83,8 @@ id = "download-file-info"
 page = "adding-downloads.md"
 under = "Download File Info"
 take = "@download:gen/250M/project-files-2026.zip"
-# 1 and 2 in the margin before the labels.
-marks = [{ at = [30, 61, 0, 21], side = "center" }, { at = [30, 91, 0, 20], side = "center" }, { at = "Start Download", side = "corner" }, { at = "Download Later", side = "corner" }]
+# 1 and 2 between the labels and their boxes.
+marks = [{ at = "ComboBox:Category", side = "left" }, { at = "Edit:Save As", side = "left" }, { at = "Start Download", side = "corner" }, { at = "Download Later", side = "corner" }]
 alt = "Download File Info for a ZIP file: its address, the Compressed category, the folder it goes to, its size, and the Download Later, Start Download and Cancel buttons"
 caption = "1 the category, 2 where the file goes, 3 start now, 4 or put it in a queue."
 
@@ -209,9 +209,9 @@ id = "video-subtitles"
 page = "video.md"
 under = "Subtitles"
 take = "video-subs"
-# The Subtitles list has no accessible name of its own: its rectangle.
-crop = [0, 268, 0, 100]
-ring = [[71, 340, 199, 21]]
+# The Subtitles box has no accessible name of its own: its rectangle.
+crop = [0, 318, 0, 90]
+ring = [[139, 367, 201, 30]]
 alt = "The Subtitles list of the video window, with Put them into the video"
 caption = "Choose the subtitles; tick Put them into the video to keep them inside the file."
 
@@ -482,8 +482,8 @@ id = "catch-file-types"
 page = "guide-catch-browser-downloads.md"
 under = "Choose what MDM takes"
 take = "options:types"
-# The two lists have no accessible names: their rectangles.
-marks = [{ at = [22, 135, 378, 57], side = "right" }, { at = [22, 253, 378, 48], side = "right" }]
+# The two lists have no accessible names: above their right ends, beside their labels.
+marks = [{ at = [700, 122, 103, 72], side = "top" }, { at = [700, 258, 103, 44], side = "top" }]
 alt = "Options, File types: the file types MDM takes from the browser, and the sites it leaves alone"
 caption = "1 the file types MDM takes, 2 the sites it leaves to the browser."
 
@@ -585,9 +585,8 @@ caption = "Test browser integration... says whether the browser reaches MDM."
 [[shot]]
 id = "site-theme-graphite"
 page = "website/content/themes.toml"
-take = "theme:graphite+@main"
+take = "@main"
 # The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-# Not taken yet (plan 09b-shots): take it, then uncomment `shot` in website/content/themes.toml.
 crop = [0, 0, 930, 300]
 alt = "The main window in the Graphite theme"
 caption = "Graphite"
