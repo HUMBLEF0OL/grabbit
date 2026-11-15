@@ -243,7 +243,7 @@ def check() -> list[str]:
         ("link / window", "acct", "bg", 4.5),
         ("accent / window", "acc", "bg", 3.0),
         ("accent button text", "onout", "out", 4.5),
-        ("accent button text, hot", "onout", "out2", 4.5),
+        ("accent button text, hot and top stop", "onout", "out2", 4.5),
         ("accent button text, pressed", "onout", "outp", 4.5),
         ("check mark / check", "onacc", "acc", 4.5),
         ("check border / window", "ctl", "bg", 3.0),
@@ -264,6 +264,19 @@ def check() -> list[str]:
         ("text / warning banner", "ink", "warnSoft", 4.5),
         ("text / tile", "ink", "tile", 4.5),
         ("toolbar label / checked", "ink2", "sel", 4.5),
+        # Plan 09a's contrast pass (palette.rs, built_in_themes_text_and_meaning_roles_read).
+        ("progress fill end / track", "out2", "track", 3.0),
+        ("check border / panel", "ctl", "surface", 3.0),
+        ("chip text / torrent chip", "chipt", "tile", 4.5),
+        ("text / inactive selection", "ink", "hover", 4.5),
+        ("muted / tile", "ink3", "tile", 4.5),
+        ("error / error banner", "err", "errSoft", 4.5),
+        # Greyed text (text, menu and toolbar `dis`) is exempt from WCAG 1.4.3; it is held at 2:1
+        # on every face it is drawn on, so it still reads (pal.py asks 2.3 on the panel).
+        ("greyed text / window", "dis", "bg", 2.0),
+        ("greyed text / panel", "dis", "surface", 2.0),
+        ("greyed text / greyed box", "dis", "tile", 2.0),
+        ("greyed menu item / menu hot", "dis", "sel", 2.0),
     ]
     pairs += [
         ("focus ring / window", RING, "bg", 3.0),

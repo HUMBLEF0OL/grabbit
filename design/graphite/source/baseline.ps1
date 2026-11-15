@@ -90,7 +90,7 @@ $states = @(
   @("progress-status", "progress:status", ""),
   @("progress-limit", "progress:limit", ""),
   @("progress-done", "progress:done", ""),
-  @("progress-menu", "-", "No /show for the tab row's menu"),
+  @("progress-menu", "@menu:progress:menu", "The tab row's right-click menu, over its window"),
   @("limiter", "speedlimit", ""),
   @("complete", "@complete:gen/2M/release-notes-2026.pdf", ""),
   @("props", "properties", ""),
@@ -148,21 +148,21 @@ $states = @(
   @("socks", "-", "A proposal: no such window today"),
   @("virus", "-", "A proposal: no such window today"),
   @("find", "find", ""),
-  @("cat", "category:music", "Today's nearest: a category's Properties (Add category has no /show)"),
+  @("cat", "add-category", ""),
   @("delcat", "category-delete:music", ""),
   @("delete", "delete", ""),
   @("redl", "redownload", "The first download's, when it can be downloaded again"),
-  @("error", "-", "Needs a failed download; no /show"),
+  @("error", "progress:error", "A sample reason; the download is left as it is"),
   @("tray", "-", "The notification area's menu; no /show"),
-  @("drop", "-", "The drop target is off in a test copy; no /show"),
+  @("drop", "drop-target", "Shown this run only; the setting is left off"),
   @("ext", "extension", ""),
   @("upd", "updates", "Asks GitHub: only with -Updates"),
   @("about", "about", ""),
   @("sum", "checksum", ""),
   @("crash", "crash", ""),
-  @("archpw", "-", "Asked while extracting a locked archive; no /show"),
+  @("archpw", "archive-password", "A sample archive; its answer extracts nothing"),
   @("zip", "7zip", ""),
-  @("mkfolder", "-", "No /show for Create folder"),
+  @("mkfolder", "create-folder", "Yes makes no folder"),
   @("limits", "limit-notice", ""),
   @("generic", "notice", ""),
   @("shortcuts", "shortcuts", ""),
@@ -194,7 +194,8 @@ foreach ($s in $states) {
   if ($what -eq "updates" -and -not $Updates) { continue }
   if ($what -like "@download:*") { $late += "$name=$what"; continue }
   if ($what -like "@complete:*") { $last += "$name=$what"; continue }
-  if ($what -like "progress:*") { $prog += , "$name=$what"; continue }
+  # progress:menu is shot as a menu (@menu:, every window composed), still a progress window.
+  if ($what -like "progress:*" -or $what -like "@menu:progress:*") { $prog += , "$name=$what"; continue }
   $show += "$name=$what"
 }
 # The progress window's tabs apart, other windows between them: a /show progress right after
