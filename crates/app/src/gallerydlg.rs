@@ -71,6 +71,12 @@ impl GalleryDialog {
         }
     }
 
+    /// Save to as it opened (`App::route_new_url`'s tests).
+    #[cfg(test)]
+    pub(crate) fn folder(&self) -> &str {
+        &self.folder
+    }
+
     pub fn show(
         &mut self,
         ctx: &egui::Context,

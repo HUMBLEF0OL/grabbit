@@ -217,6 +217,12 @@ impl TorrentDialog {
         &self.source
     }
 
+    /// How a .torrent on the web is asked for (`App::route_new_url`'s tests).
+    #[cfg(test)]
+    pub(crate) fn remote(&self) -> Option<&crate::torrents::Remote> {
+        self.remote.as_ref()
+    }
+
     /// `source`: a magnet link, a .torrent path or a .torrent's web address (`remote`: how to
     /// ask for it) to look up at once, or None (the clipboard's magnet, if any, is offered and
     /// looked up on the frame it comes: the clipboard is read off the window's thread).

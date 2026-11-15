@@ -594,15 +594,16 @@ These ship in a later version, when they're ready.
   shaded along their fill, glowing in dark mode.
   And About's mark drawn sharp, the two first-start offers without their logo band.
   And the contrast checks extended to every colour that carries text or meaning (the filled
-  buttons' lighter top included) and to greyed text, and screenshot entries for Create folder,
-  Archive password, Add category and the drop target.
-  Still to come for these dialogs, with the review: the Scheduler and the rest of them compared
-  side by side with the mockup in the running app (light and dark, at 100 %, 150 % and 200 %),
-  and their keyboard and screen-reader passes.
-  Next: the review (plan 09)
-  Follow-up, still to do at the screen: Options' light and dark screenshots at 100, 150 and
-  200 %, its scrolling page on a real 1080p screen at 200 %, and a screen reader over its side
-  list, banners and codes.
+  buttons' lighter top included) and to greyed text, screenshot entries for Create folder,
+  Archive password, Add category and the drop target, and the review of the paste bar and the
+  details pane: a long file name without spaces on the pane's two lines, and the screenshot
+  script's details pane keeping the list's column filters.
+  Still to come, at the screen (plan 09's follow-ups): the on-screen keyboard and Narrator
+  passes over the paste bar, the details pane and their toggles, the moved Hide tab, the
+  torrent window's banner, Options' side list, banners and codes; the windows compared side by
+  side with the mockup at 150 % and 200 %, Options' scrolling page on a real 1080p screen at
+  200 %; the rest of the main window against the mock.
+  Next: the website's and the help's screenshots in Graphite (plan 09b)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:

@@ -809,11 +809,11 @@ fn is_show_details(name: &str) -> bool {
 /// The download `/show details` selects (requirement 21.1), in `self.items` order (the list's
 /// own order when it is not sorted): the first stopped one that Resume may start, else the
 /// first download; None without downloads.
-fn show_details_pick(items: &[Item]) -> Option<u64> {
+fn show_details_pick<'a>(items: impl Iterator<Item = &'a Item> + Clone) -> Option<u64> {
     items
-        .iter()
+        .clone()
         .find(|i| i.status == Status::Stopped && i.can_start())
-        .or_else(|| items.first())
+        .or_else(|| items.clone().next())
         .map(|i| i.id)
 }
 
@@ -2323,10 +2323,26 @@ impl App {
             // The details pane on with a stopped download selected (plan 06's "details pane
             // with a stopped download" screenshots). As `paste`, the pane is turned on and the
             // next settings save keeps it on. A download the view hides is shown in All
-            // Downloads, as Find next does, so the list keeps the selection.
+            // Downloads, as Find next does, so the list keeps the selection. Column filters are
+            // kept (09r1): the pick is among the downloads they let through in All Downloads
+            // (without filters, all of them, as before). When they hide every download
+            // (`/show filtered`), they are cleared as `/show unfiltered` does and the pick is
+            // among them all, or the list would drop the selection and the pane show nothing.
             "details" if is_show_details(name) => {
                 self.settings.show_details = true;
-                if let Some(id) = show_details_pick(&self.items) {
+                let view = std::mem::replace(&mut self.view, View::All);
+                let in_all = self.shown_ids();
+                self.view = view;
+                let pick = show_details_pick(self.items.iter().filter(|i| in_all.contains(&i.id)))
+                    .or_else(|| {
+                        let pick = show_details_pick(self.items.iter());
+                        if pick.is_some() {
+                            self.list.close_filter();
+                            self.list.filters.iter_mut().for_each(|f| *f = None);
+                        }
+                        pick
+                    });
+                if let Some(id) = pick {
                     self.selection.set(id);
                     if !self.shown_ids().contains(&id) {
                         self.view = View::All;
@@ -7392,9 +7408,8 @@ impl App {
         {
             // The pane's width from the window's trailing edge (the left in RTL).
             let at = ctx.data(|d| d.get_temp::<f32>(grab)).unwrap_or(0.0);
-            let nw = (o.x + w - (winui::mx(p.x) - at)).round().max(0.0);
             self.settings.details_width =
-                crate::panes::details_width(nw as u32, w, list_left) as u32;
+                crate::panes::dragged_width(o.x + w, winui::mx(p.x), at, w, list_left);
         }
         if sr.drag_stopped() {
             self.dirty = true;
@@ -10617,9 +10632,9 @@ mod show_details_tests {
             item(5, Status::Stopped),
             item(6, Status::Stopped),
         ];
-        assert_eq!(show_details_pick(&items), Some(5));
-        assert_eq!(show_details_pick(&items[..4]), Some(1));
-        assert_eq!(show_details_pick(&[]), None);
+        assert_eq!(show_details_pick(items.iter()), Some(5));
+        assert_eq!(show_details_pick(items[..4].iter()), Some(1));
+        assert_eq!(show_details_pick(std::iter::empty::<&Item>()), None);
     }
 }
 
@@ -10787,6 +10802,219 @@ mod details_cmd_tests {
         for (action, cmd) in table {
             assert_eq!(details_cmd(action), cmd, "{action:?}");
         }
+    }
+}
+
+/// `App::route_new_url`'s side effects and `/show details` under a column filter, on an `App`
+/// built as the menus' test builds one (09r1, from 06's audit). Nothing runs: the runtime is
+/// never driven, so no dialog's look-up goes out.
+#[cfg(test)]
+mod route_new_url_tests {
+    use super::*;
+
+    /// The window's state with `items`, its downloads folder a test path.
+    fn app(items: Vec<Item>) -> std::mem::ManuallyDrop<App> {
+        let rt = Box::leak(Box::new(
+            tokio::runtime::Builder::new_current_thread()
+                .build()
+                .unwrap(),
+        ));
+        let loaded = store::Loaded {
+            next_id: 10,
+            items,
+            columns: None,
+            settings: Settings::default(),
+            queues: Vec::new(),
+        };
+        let (_, commands) = std::sync::mpsc::channel();
+        // Never dropped: an App saves its list as it goes.
+        let mut app = std::mem::ManuallyDrop::new(App::assemble(
+            &egui::Context::default(),
+            rt.handle().clone(),
+            commands,
+            loaded,
+            crate::Start::Shown,
+        ));
+        app.downloads = PathBuf::from(r"C:\mdm-route-test\Downloads");
+        app
+    }
+
+    fn item(id: u64, name: &str, status: Status) -> Item {
+        let url = url::Url::parse(&format!("https://example.com/{name}")).unwrap();
+        let mut i = Item::new(id, url, PathBuf::from(name), Category::Compressed);
+        i.status = status;
+        i
+    }
+
+    fn new_url(url: &str, login: Option<(&str, &str)>) -> dialogs::NewUrl {
+        dialogs::NewUrl {
+            url: url::Url::parse(url).unwrap(),
+            login: login.map(|(u, p)| (u.to_owned(), p.to_owned())),
+        }
+    }
+
+    const MAGNET: &str = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567";
+    const TORRENT: &str = "https://example.org/linux.torrent";
+    const VIDEO: &str = "https://www.youtube.com/watch?v=abc";
+    const GALLERY: &str = "https://commons.wikimedia.org/wiki/Category:Cats";
+    const FILE: &str = "https://example.org/a.zip";
+
+    /// Every kind of address goes first in the Address drop list and asks for a save, and
+    /// opens the window it belongs in.
+    #[test]
+    fn every_address_is_remembered_and_opens_its_window() {
+        for address in [MAGNET, TORRENT, VIDEO, GALLERY, FILE] {
+            let mut app = app(Vec::new());
+            let ctx = egui::Context::default();
+            app.settings.url_history = vec!["https://example.org/older".into()];
+            let new = new_url(address, None);
+            let want = new.url.to_string();
+            app.route_new_url(new, &ctx);
+            assert_eq!(app.settings.url_history[0], want, "{address}");
+            assert_eq!(app.settings.url_history.len(), 2, "{address}");
+            assert!(app.dirty, "{address}: a save asked for");
+            let opened = [
+                app.torrent_dlg.is_some(),
+                app.video_dlg.is_some(),
+                app.gallery_dlg.is_some(),
+                app.file_info.is_some(),
+            ];
+            let want = match address {
+                MAGNET | TORRENT => [true, false, false, false],
+                VIDEO => [false, true, false, false],
+                GALLERY => [false, false, true, false],
+                _ => [false, false, false, true],
+            };
+            assert_eq!(opened, want, "{address}");
+        }
+    }
+
+    /// A .torrent's address: Add torrent opens on it and fetches it with the download's own
+    /// request (`request_parts`), the login typed in Add URL with it.
+    #[test]
+    fn a_torrents_address_is_fetched_with_its_request() {
+        let mut app = app(Vec::new());
+        let ctx = egui::Context::default();
+        app.route_new_url(new_url(TORRENT, Some(("user", "secret"))), &ctx);
+        let dlg = app.torrent_dlg.as_ref().expect("Add torrent");
+        assert_eq!(dlg.source(), TORRENT);
+        let remote = dlg.remote().expect("fetched from the web");
+        assert_eq!(remote.url.as_str(), TORRENT);
+        let auth = remote
+            .parts
+            .headers
+            .get(reqwest::header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok());
+        // "user:secret" in base64.
+        assert_eq!(auth, Some("Basic dXNlcjpzZWNyZXQ="));
+        // A magnet link has no request: it is looked up among peers.
+        let mut app = self::app(Vec::new());
+        app.route_new_url(new_url(MAGNET, None), &ctx);
+        let dlg = app.torrent_dlg.as_ref().expect("Add torrent");
+        assert_eq!(dlg.source(), MAGNET);
+        assert!(dlg.remote().is_none());
+    }
+
+    /// A video's page opens the video window on the Video category's folder; a gallery's page
+    /// the gallery window on General's.
+    #[test]
+    fn video_and_gallery_pages_open_in_their_categories_folders() {
+        let ctx = egui::Context::default();
+        let mut app = app(Vec::new());
+        let video = app.settings.category_dir(Category::Video, &app.downloads);
+        let general = app.settings.category_dir(Category::General, &app.downloads);
+        assert_ne!(video, general);
+        app.route_new_url(new_url(VIDEO, None), &ctx);
+        let dlg = app.video_dlg.as_ref().expect("Download video");
+        assert_eq!(dlg.save_folder(), video);
+        app.route_new_url(new_url(GALLERY, None), &ctx);
+        let dlg = app.gallery_dlg.as_ref().expect("Download a gallery");
+        assert_eq!(dlg.folder(), general.display().to_string());
+    }
+
+    /// A file's address already in the list: "Duplicate download link" is asked (Options'
+    /// default) and Download File Info waits for the answer; with "add it with a numbered
+    /// name" it opens at once, as it does for a new address.
+    #[test]
+    fn a_files_address_goes_through_the_duplicate_check() {
+        let ctx = egui::Context::default();
+        let mut app = app(vec![item(1, "a.zip", Status::Stopped)]);
+        app.settings.duplicate_action = 0;
+        let dup = "https://example.com/a.zip";
+        app.route_new_url(new_url(dup, None), &ctx);
+        let (id, pending, _) = app.duplicate.as_ref().expect("asked");
+        assert_eq!(*id, 1);
+        assert!(matches!(pending, Pending::Url(n) if n.url.as_str() == dup));
+        assert!(app.file_info.is_none(), "waits for the answer");
+
+        let mut app = self::app(vec![item(1, "a.zip", Status::Stopped)]);
+        app.settings.duplicate_action = 1;
+        app.route_new_url(new_url(dup, None), &ctx);
+        assert!(app.duplicate.is_none());
+        assert_eq!(app.file_info.as_ref().map(|f| f.url.as_str()), Some(dup));
+
+        let mut app = self::app(vec![item(1, "a.zip", Status::Stopped)]);
+        app.settings.duplicate_action = 0;
+        app.route_new_url(new_url(FILE, None), &ctx);
+        assert!(app.duplicate.is_none(), "not in the list");
+        assert_eq!(app.file_info.as_ref().map(|f| f.url.as_str()), Some(FILE));
+    }
+
+    /// `/show details` with a column filter set keeps the filter and selects a download it
+    /// lets through, so the pane shows it (before, it picked the first stopped download the
+    /// filter hid, which the list then unselected).
+    #[test]
+    fn show_details_picks_a_download_the_filters_let_through() {
+        let ctx = egui::Context::default();
+        let items = || {
+            vec![
+                item(1, "a.zip", Status::Stopped),
+                item(2, "b.zip", Status::Complete),
+            ]
+        };
+        // No filter: the stopped one.
+        let mut app = app(items());
+        app.show_named("details", &ctx);
+        assert!(app.settings.show_details);
+        assert_eq!(app.selection.ids(), [1]);
+
+        // No filter, the view (Finished) hides the stopped one: still the stopped one, shown
+        // in All Downloads (requirement 21.1's pick across the list).
+        let mut app = self::app(items());
+        app.view = View::Finished(None);
+        app.show_named("details", &ctx);
+        assert_eq!(app.selection.ids(), [1]);
+        assert_eq!(app.view, View::All);
+
+        // Only complete downloads shown: the complete one, the filter kept.
+        let mut app = self::app(items());
+        app.list.filters[3] = Some(list::Filter::Values(vec!["Complete"]));
+        app.show_named("details", &ctx);
+        assert_eq!(app.selection.ids(), [2]);
+        assert!(app.shown_ids().contains(&2));
+        assert!(app.list.filters[3].is_some(), "the filter is kept");
+
+        // The view (Finished) shows only the complete one and the filter only stopped ones:
+        // the stopped one, shown in All Downloads under the same filter.
+        let mut app = self::app(items());
+        app.view = View::Finished(None);
+        app.list.filters[3] = Some(list::Filter::Values(vec!["Stopped"]));
+        app.show_named("details", &ctx);
+        assert_eq!(app.selection.ids(), [1]);
+        assert_eq!(app.view, View::All);
+        assert!(app.shown_ids().contains(&1));
+
+        // `/show filtered` hides every download: the filters are cleared, the stopped one
+        // selected and shown, the view kept.
+        let mut app = self::app(items());
+        app.show_named("filtered", &ctx);
+        assert!(app.shown_ids().is_empty());
+        let view = app.view;
+        app.show_named("details", &ctx);
+        assert_eq!(app.selection.ids(), [1]);
+        assert!(app.shown_ids().contains(&1));
+        assert!(app.list.filters.iter().all(Option::is_none));
+        assert_eq!(app.view, view);
     }
 }
 
