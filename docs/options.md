@@ -64,8 +64,8 @@ MDM doesn't use a temporary folder: every connection writes straight into the fi
 
 ## Connection
 
-![Options on its Connection page: connections per download, the network adapter and per-server exceptions](images/help/options-connection.webp)
-*Connection: how many connections, through which network adapter.*
+![Options on its Connection page: connections per download, per-server exceptions, download limits and DNS](images/help/options-connection.webp)
+*Connection: how many connections, exceptions per server, download limits and DNS.*
 
 - **Default max. conn. number** — how many connections each download may use, from 1 to 32 (8 by default). Type the number or use the arrows.
 - **Allow more than 32 connections** — raises the most to 128, for the number above and for the exceptions. Most servers allow far fewer from one address; MDM notices and asks those for fewer. Turned off again, any higher number comes back to 32.
@@ -106,7 +106,7 @@ More in [Connections and speed](connections-and-speed.md).
 
 ## Sites Logins
 
-![Options on its Sites Logins page: a list of sites with their user names](images/help/options-logins.webp)
+![Options on its Sites Logins page, before any site is added: the list of sites with their user names](images/help/options-logins.webp)
 *Sites Logins: a user name and password per site.*
 
 User names and passwords for sites that ask for them. **New** adds a row: the site (with a path if the login is only for part of it), the user name and the password. **Edit** and **Remove** change or delete the selected row. MDM uses the login for every download from that site. A login typed in **Add URL** (**Use authorization**) takes priority for that one download.

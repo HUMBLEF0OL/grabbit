@@ -74,7 +74,7 @@ id = "add-url"
 page = "adding-downloads.md"
 under = "Add URL"
 take = "addurl"
-marks = [{ at = "Address", n = 3, side = "corner" }, { at = "Use authorization", n = 4, side = "right" }, { at = "OK", n = 5 }]
+marks = [{ at = "Address", n = 3, side = "corner" }, { at = "Use authorization", n = 4, side = "right" }, { at = "OK", n = 5, side = "corner" }]
 alt = "Enter new address to download, with the Address box, Use authorization and OK"
 caption = "The numbers are the steps above: 3 the address, 4 a login if the server needs one, 5 OK."
 
@@ -145,8 +145,8 @@ id = "options-integration"
 page = "browser-integration.md"
 under = "What it takes"
 take = "options:general"
-crop = { around = ["Use advanced browser integration", "List:Capture downloads from the following browsers"], pad = 16 }
-marks = ["Use advanced browser integration", "List:Capture downloads from the following browsers"]
+crop = [195, 162, 618, 214]
+marks = [{ at = "Use advanced browser integration", side = "right" }, { at = [206, 266, 255, 16], side = "right" }]
 alt = "Options, General: Use advanced browser integration and the list of browsers MDM takes downloads from"
 caption = "1 must be on, and 2 your browser ticked."
 
@@ -255,7 +255,7 @@ id = "rss-feeds"
 page = "torrents.md"
 under = "RSS feeds"
 take = "rss"
-alt = "RSS feeds: the feeds MDM follows and their items"
+alt = "RSS feeds before any is added: the list of feeds, their items and the rules"
 caption = "RSS feeds, and the rules that pick what to download."
 
 [[shot]]
@@ -389,8 +389,8 @@ id = "options-connection"
 page = "options.md"
 under = "Connection"
 take = "options:connection"
-alt = "Options on its Connection page: connections per download, the network adapter and per-server exceptions"
-caption = "Connection: how many connections, through which network adapter."
+alt = "Options on its Connection page: connections per download, per-server exceptions, download limits and DNS"
+caption = "Connection: how many connections, exceptions per server, download limits and DNS."
 
 [[shot]]
 id = "options-proxy"
@@ -405,7 +405,7 @@ id = "options-logins"
 page = "options.md"
 under = "Sites Logins"
 take = "options:logins"
-alt = "Options on its Sites Logins page: a list of sites with their user names"
+alt = "Options on its Sites Logins page, before any site is added: the list of sites with their user names"
 caption = "Sites Logins: a user name and password per site."
 
 [[shot]]
@@ -448,7 +448,7 @@ page = "guide-first-download.md"
 under = "Steps"
 take = "addurl"
 ring = ["OK"]
-alt = "Enter new address to download with the copied address filled in"
+alt = "Enter new address to download, its OK button ringed"
 caption = "Add URL: the copied address is already there. Click OK."
 
 [[shot]]
@@ -492,7 +492,7 @@ id = "overnight-later"
 page = "guide-download-overnight.md"
 under = "1. Put the downloads in a queue"
 take = "@download:gen/250M/project-files-2026.zip"
-crop = [0, 84, 0, 0]
+crop = [0, 30, 0, 0]
 ring = ["Download Later"]
 alt = "Download File Info with Download Later ringed"
 caption = "Download Later puts it in a queue instead of starting it."
@@ -502,7 +502,7 @@ id = "overnight-start"
 page = "guide-download-overnight.md"
 under = "2. Set the start time"
 take = "scheduler"
-crop = [215, 130, 560, 185]
+crop = [208, 130, 567, 192]
 marks = [{ at = "Start download at", side = "right" }, { at = "Daily", side = "right" }, { at = "Stop download at", side = "right" }]
 alt = "The Scheduler's Schedule tab: Start download at, Once at or Daily, and Stop download at"
 caption = "1 the start time, 2 once or daily, 3 a stop time if you want one."
@@ -512,7 +512,7 @@ id = "overnight-done"
 page = "guide-download-overnight.md"
 under = "4. Decide what happens at the end (optional)"
 take = "scheduler"
-crop = [218, 316, 420, 122]
+crop = [218, 342, 562, 90]
 ring = ["CheckBox:Turn off computer when done"]
 alt = "The Scheduler's choices for when the queue is done, Turn off computer when done among them"
 caption = "When the queue is done: open a file, quit MDM, or turn the computer off."
@@ -522,8 +522,8 @@ id = "speed-limiter"
 page = "guide-keep-speed-for-everything-else.md"
 under = "Cap MDM as a whole (recommended)"
 take = "speedlimit"
-alt = "Speed Limiter settings: the maximum speed for all downloads"
-caption = "Downloads → Speed Limiter → Settings...: one speed for all of MDM."
+alt = "Speed Limiter settings: the maximum speed for one file, and a limit for all downloads together"
+caption = "Downloads → Speed Limiter → Settings...: a speed for each file, or one for all downloads together."
 
 [[shot]]
 id = "usb-save-to"

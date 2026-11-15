@@ -15,8 +15,8 @@ This cap is shared by every download, however many run at once. It works on its 
 
 To remove it, open the same window and untick **Limit all downloads together to**.
 
-![Speed Limiter settings: the maximum speed for all downloads](images/help/speed-limiter.webp)
-*Downloads → Speed Limiter → Settings...: one speed for all of MDM.*
+![Speed Limiter settings: the maximum speed for one file, and a limit for all downloads together](images/help/speed-limiter.webp)
+*Downloads → Speed Limiter → Settings...: a speed for each file, or one for all downloads together.*
 
 ## Cap each file instead
 

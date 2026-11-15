@@ -304,9 +304,10 @@ try {
       & $Exe /show $what
     }
     try { $t = New-Window $app.Id $before } catch { Write-Warning "${name}: no window"; continue }
-    # Options → Download panels opens a dialog over Options: that dialog is the shot.
+    # Options → Download panels opens a dialog over Options, and video-helpers Helpers over the
+    # video window: that dialog is the shot.
     $also = @()
-    if ($what -eq "options:panels") {
+    if ($what -in "options:panels", "video-helpers") {
       for ($i = 0; $i -lt 50; $i++) {
         $new = @(Titles $app.Id | Where-Object { $before -notcontains $_ })
         if ($new.Count -ge 2) { break }

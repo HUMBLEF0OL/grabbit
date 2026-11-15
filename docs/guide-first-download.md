@@ -16,7 +16,7 @@ From a copied link to an opened file in a minute or two.
 
 <!-- steps -->
 
-1. ![Enter new address to download with the copied address filled in](images/help/first-add-url.webp)
+1. ![Enter new address to download, its OK button ringed](images/help/first-add-url.webp)
    *Add URL: the copied address is already there. Click OK.*
 2. ![Download File Info with the file's name, size and folder](images/help/first-file-info.webp)
    *Check the folder, then Start Download.*
