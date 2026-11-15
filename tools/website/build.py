@@ -34,7 +34,6 @@ import markdown
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import barcode  # noqa: E402
 import contributors  # noqa: E402  (tools/contributors.py: the people the site thanks)
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -421,7 +420,7 @@ def footer() -> str:
       <div class="foot-cols">
         <div class="foot-brand">
           <a class="brand" href="/"><img src="/assets/grabbit.svg" width="30" height="30" alt=""><span>{NAME}</span></a>
-          <p class="foot-tag">The download manager you already know, rebuilt to be faster. Free, open source and written from scratch in Rust.</p>
+          <p class="foot-tag">A free, open-source download manager for Windows, written from scratch in Rust and measured faster than IDM.</p>
           <a class="text-link foot-star" href="{REPO}"><svg aria-hidden="true"><use href="#i-star"/></svg> Star it on GitHub</a>
           <a class="text-link foot-star" href="{SPONSORS}"><svg aria-hidden="true"><use href="#i-heart"/></svg> Support MDM</a>
         </div>
@@ -520,7 +519,7 @@ def head(path: str, title: str, desc: str, *, jsonld: list | None = None, og_typ
   <meta property="og:image" content="{SITE}/assets/social.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
-  <meta property="og:image:alt" content="{NAME}: the download manager you already know, rebuilt to be faster">
+  <meta property="og:image:alt" content="{NAME}: a free, open-source download manager for Windows">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48 64x64">
   <link rel="icon" href="/assets/favicon-32.png" type="image/png" sizes="32x32">
@@ -603,12 +602,12 @@ def cta_band(text: str = "Free, open source, no ads, no trial.") -> str:
 
 
 def waybill_fields() -> str:
-    """The release's facts in the label's field grammar (the home page's waybill and the
-    download page): what the visitor gets, for what, at what postage."""
+    """The release's facts as label/value rows (the IDM alternative page): its price, speed,
+    system and version."""
     size = f' <small>{SETUP_SIZE}</small>' if SETUP_SIZE else ""
     return (f'<dl class="fields">'
-            f'<div><dt>Postage</dt><dd>Free</dd></div>'
-            f'<div><dt>Delivery</dt><dd><a href="/benchmark.html">1 GiB in 1.0 s</a> <small>IDM: 5.5 s</small></dd></div>'
+            f'<div><dt>Price</dt><dd>Free</dd></div>'
+            f'<div><dt>Speed</dt><dd><a href="/benchmark.html">1 GiB in 1.0 s</a> <small>IDM: 5.5 s</small></dd></div>'
             f'<div><dt>System</dt><dd>Windows 10 and 11</dd></div>'
             f'<div><dt>Version</dt><dd><a href="/news.html">{VERSION}</a>{size}</dd></div></dl>')
 
@@ -1175,7 +1174,7 @@ def fill(text: str) -> str:
     if "<!--@features-->" in text:
         text = text.replace("<!--@features-->", manifest(feature_list()))
     text = coming_marks(text.replace("<!--@coming-->", coming_banner()))
-    text = text.replace("<!--@fields-->", waybill_fields()).replace("<!--@barcode-->", barcode.svg(f"MDM {VERSION}"))
+    text = text.replace("<!--@fields-->", waybill_fields())
     return (text.replace("{{VERSION}}", VERSION).replace("{{REPO}}", REPO).replace("{{SITE}}", SITE)
             .replace("{{SPONSORS}}", SPONSORS).replace("{{SOFTWARE_LD}}", json.dumps(SOFTWARE_LD, ensure_ascii=False, separators=(",", ":"))))
 
@@ -1318,7 +1317,7 @@ def help_href(ref: str) -> str:
 
 
 def feature_label(m: dict) -> str:
-    """A feature's facts in the waybill's field grammar, stuck on its picture."""
+    """A feature's facts as label/value rows, in a card beside or under its picture."""
     if is_coming(m["since"]):
         since = f'<dd>Version {esc(upcoming())} <small>coming</small></dd>'
     else:
@@ -1328,12 +1327,12 @@ def feature_label(m: dict) -> str:
         where = re.sub(r"`([^`]+)`", r'<code translate="no">\1</code>', esc(m["where"]))
         rows.append(f'<div class="wide"><dt>In the app</dt><dd>{where}</dd></div>')
     rows.append(f"<div><dt>Since</dt>{since}</div>")
-    rows.append('<div class="pair"><dt>Postage</dt><dd>Free</dd></div>')
+    rows.append('<div class="pair"><dt>Price</dt><dd>Free</dd></div>')
     if m.get("help"):
         rows.append(f'<div class="wide"><dt>Full guide</dt><dd><a href="{help_href(m["help"])}">Step by step in the help</a></dd></div>')
     return (f'<aside class="waybill feature-label" aria-label="At a glance"><div class="wb-band">'
             f'<img src="/assets/grabbit.svg" width="32" height="32" alt=""><span class="wb-from"><b>{esc(m["name"])}</b>'
-            f'<small>Mister Download Manager</small></span></div><dl class="fields">{"".join(rows)}</dl></aside>')
+            f'<small>{NAME}</small></span></div><dl class="fields">{"".join(rows)}</dl></aside>')
 
 
 def build_features() -> None:
