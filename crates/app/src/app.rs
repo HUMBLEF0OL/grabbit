@@ -2317,7 +2317,9 @@ impl App {
             // next settings save keeps it on. A download the view hides is shown in All
             // Downloads, as Find next does, so the list keeps the selection. Column filters are
             // kept (09r1): the pick is among the downloads they let through, in this view,
-            // else in All Downloads, else (they hide every download) among them all.
+            // else in All Downloads. When they hide every download (`/show filtered`), they
+            // are cleared as `/show unfiltered` does and the pick is among them all, or the
+            // list would drop the selection and the pane show nothing.
             "details" if is_show_details(name) => {
                 self.settings.show_details = true;
                 let in_view = self.shown_ids();
@@ -2328,7 +2330,14 @@ impl App {
                         self.view = view;
                         show_details_pick(self.items.iter().filter(|i| in_all.contains(&i.id)))
                     })
-                    .or_else(|| show_details_pick(self.items.iter()));
+                    .or_else(|| {
+                        let pick = show_details_pick(self.items.iter());
+                        if pick.is_some() {
+                            self.list.close_filter();
+                            self.list.filters.iter_mut().for_each(|f| *f = None);
+                        }
+                        pick
+                    });
                 if let Some(id) = pick {
                     self.selection.set(id);
                     if !self.shown_ids().contains(&id) {
@@ -10955,6 +10964,18 @@ mod route_new_url_tests {
         assert_eq!(app.selection.ids(), [1]);
         assert_eq!(app.view, View::All);
         assert!(app.shown_ids().contains(&1));
+
+        // `/show filtered` hides every download: the filters are cleared, the stopped one
+        // selected and shown, the view kept.
+        let mut app = self::app(items());
+        app.show_named("filtered", &ctx);
+        assert!(app.shown_ids().is_empty());
+        let view = app.view;
+        app.show_named("details", &ctx);
+        assert_eq!(app.selection.ids(), [1]);
+        assert!(app.shown_ids().contains(&1));
+        assert!(app.list.filters.iter().all(Option::is_none));
+        assert_eq!(app.view, view);
     }
 }
 

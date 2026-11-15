@@ -913,13 +913,15 @@ fn pane_text(
     }
 }
 
-/// `s` on at most 2 lines `room` wide: [`winui::fit_lines`]'s, or, where one of those is still
-/// too wide (a file name without a space, a slash or a hyphen), broken inside it by
-/// [`break_inside`], so it takes its second line before it is cut.
+/// `s` on at most 2 lines `room` wide: [`winui::fit_lines`]'s, or, where its first line is
+/// still too wide (a file name without a space, a slash or a hyphen, or a first word longer
+/// than the room), broken inside it by [`break_inside`], so it takes its second line before it
+/// is cut. A break at a space whose first line fits is kept, its second line cut: as the
+/// mock's `overflow-wrap:anywhere`, which breaks inside a word only where nothing else fits.
 fn pane_lines(p: &egui::Painter, font: &egui::FontId, s: &str, room: f32) -> Vec<String> {
     let lines = winui::fit_lines(p, font.clone(), s, room);
     let width = |t: &str| winui::text_width_font(p, font.clone(), t);
-    if lines.iter().all(|l| width(l) <= room) {
+    if width(&lines[0]) <= room {
         return lines;
     }
     break_inside(width, s, room).map_or(lines, |(a, b)| vec![a, b])
@@ -2322,6 +2324,13 @@ mod tests {
             let two = pane_lines(p, &font, spaced, width(spaced) - 1.0);
             assert_eq!(two.len(), 2);
             assert!(two[0].ends_with(|c: char| c != ' ') && !two[1].starts_with(' '));
+            // A short word, then one too long for a line: the break at the space is kept
+            // (the second line is cut), not a break inside the first word.
+            let mixed = "Holiday averyveryverylongunbrokenname0123456789.zip";
+            assert_eq!(
+                pane_lines(p, &font, mixed, room),
+                vec!["Holiday", "averyveryverylongunbrokenname0123456789.zip"]
+            );
         });
         out.textures_delta.clear();
     }

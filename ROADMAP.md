@@ -595,7 +595,9 @@ These ship in a later version, when they're ready.
   And About's mark drawn sharp, the two first-start offers without their logo band.
   And the review of the main window, the paste bar and the details pane: a long file name without
   spaces on the pane's two lines, and the screenshot script's details pane keeping the list's
-  column filters.
+  column filters (still to come, with plan 09's polish: the on-screen keyboard and Narrator pass
+  over the paste bar, the details pane and their toggles, and both at interface sizes 150 % and
+  200 %).
   Next: the rest of the review (plan 09)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension

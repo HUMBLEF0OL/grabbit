@@ -37,7 +37,7 @@ The parts (each its own PR):
 | R1 | The main window, the details pane, the paste bar, and **Left from 06** |
 | R2 | 07's dialogs, and the contrast pass (the WCAG tests in `palette.rs`, greyed text by hand) |
 | R3 | Options and its nine sub-dialogs, About, the extension and video-helpers offers |
-| 09b-shots | `tools/shots/` and `docs/` screenshots in Graphite, the `site-theme-graphite` shot |
+| 09b-shots | `tools/shots/` and `docs/` screenshots in Graphite, the `site-theme-graphite` shot; R1's check of the paste bar and details pane at 150 and 200 (Left from 06) |
 
 Each review part covers its windows in light and dark at interface sizes 100, 150 and 200, side by side
 with the mock, plus the keyboard pass (Tab order, Alt and menu letters, Enter and Escape) and the
@@ -153,17 +153,19 @@ Line numbers drift as phases land: find each item by its name first.
 - interface sizes 150 % and 200 % for both (06's screenshots are at 100 % only). Left to 09b-shots
   (`baseline.ps1` at 150 and 200 with `/show paste:…` and `/show details`);
 - the audit's deferred nits:
-  - tests of `route_new_url`'s side effects (done in 09r1: `app::route_tests` builds an `App`
+  - tests of `route_new_url`'s side effects (done in 09r1: `app::route_new_url_tests` builds an `App`
     with `App::assemble`: the history and `dirty` for every kind of address, `request_parts`'
     login on a .torrent's fetch, the Video and General folders, the duplicate check);
   - a file name without break points staying on one line in the pane's header (done in 09r1:
-    the pane's `pane_lines` breaks such a name inside it, as the mock's `overflow-wrap:anywhere`;
+    the pane's `pane_lines` breaks such a name inside it, as the mock's `overflow-wrap:anywhere`,
+    only where its first line has no break that fits;
     `winui::fit_lines` is unchanged for its other callers);
   - tests of the splitter and of a short pane (done in 09r1: `panes::dragged_width`, pulled out
     of `App::details`, and a 276 × 150 pane that paints nothing outside itself);
   - `/show details` while a column filter is set (done in 09r1: it picked a download the
     filter hid, which the list then unselected, so the pane was empty; it now keeps the filter
-    and picks among the downloads it lets through, `/show filtered` setting one first).
+    and picks among the downloads it lets through, and when the filters hide every download,
+    as `/show filtered` does, it clears them as `/show unfiltered` does and picks among all).
 - 09r1's review against the mock (`m-main`, the paste bar, the details pane): the paste band
   (padding 8 × 10, gap 8, field and button 32 high), the pane (padding 14, icon 32 + 10, name
   SemiBold 13 on 2 lines, the label row 12 muted then 6, the cells 8 × 8 high 2 apart, the rows'
