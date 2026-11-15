@@ -158,9 +158,9 @@ Line numbers drift as phases land: find each item by its name first.
     login on a .torrent's fetch, the Video and General folders, the duplicate check);
   - a file name without break points staying on one line in the pane's header (done in 09r1:
     the pane's `pane_lines` takes `winui::fit_lines`' break, else, when its first line is too
-    wide, the latest space, slash or hyphen break whose first line fits, and breaks inside the
-    name only where none fits, as the mock's `overflow-wrap:anywhere`; `winui::fit_lines`
-    behaves as before for its other callers, its breaks now listed by `winui::line_breaks`);
+    wide, the latest space, slash or hyphen break whose first line fits (listed by the pane's
+    own `name_breaks`), and breaks inside the name only where none fits, as the mock's
+    `overflow-wrap:anywhere`; the shared `winui` kit is unchanged);
   - tests of the splitter and of a short pane (done in 09r1: `panes::dragged_width`, pulled out
     of `App::details`, and a 276 × 150 pane that paints nothing outside itself);
   - `/show details` while a column filter is set (done in 09r1: it picked a download the
@@ -170,12 +170,19 @@ Line numbers drift as phases land: find each item by its name first.
     as `/show filtered` does, it clears them as `/show unfiltered` does and picks among all).
 - 09r1's review against the mock (`m-main`, the paste bar, the details pane): the paste band
   (padding 8 × 10, gap 8, the field 32 high, the button 30 high centred on it), the pane
-  (padding 14, icon 32 + 10, name SemiBold 13 on 2 lines, the label row 12 muted then 6, the
+  (padding 14, name SemiBold 13 on 2 lines, the label row 12 muted then 6, the
   cells 8 × 8 high 2 apart, the rows' 96-point label column 12 before the value, 7 between
   rows, the buttons 2 + 1 at 30 high 6 apart) and their roles match (the buttons were 32 high,
   set to the mock's `.btn` 30 in 09r1's audit). Recorded, not changed: the pane's cells take the download's
   status colour (06's choice, as the list's Status cell) where the mock always uses the
-  progress colour.
+  progress colour; the header's icon is the shell's file icon at 32 with no tile, then 10,
+  where the mock's `.ficon` is a 40 tile (`--tile`, radius r-m) with a 21 icon inside, so the
+  name starts 8 points further left than the mock's.
+- Follow-ups of 09r1 (not reviewed in it; the next review part or 09b-shots takes them): the
+  rest of `m-main` against the mock, light and dark at 100, 150 and 200: the toolbar, Categories,
+  the list and its columns, the menu bar and its menus, the context menu, the column chooser, the
+  filter box, the empty and filtered overlays, the status bar; and the keyboard pass and the
+  accessibility-tree pass over the whole main window.
 
 ## Left from 07
 

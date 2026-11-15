@@ -919,18 +919,18 @@ fn pane_text(
 }
 
 /// `s` on at most 2 lines `room` wide: [`winui::fit_lines`]'s; where its first line is too
-/// wide, the latest space, slash or hyphen break ([`winui::line_breaks`]) whose first line
-/// fits, its second line cut; where none fits (a file name without such a break, or a first
-/// word longer than the room), broken inside it by [`break_inside`], so it takes its second
-/// line before it is cut. As the mock's `overflow-wrap:anywhere`, which breaks inside a word
-/// only where nothing else fits.
+/// wide, the latest space, slash or hyphen break ([`name_breaks`]) whose first line fits, its
+/// second line cut; where none fits (a file name without such a break, or a first word longer
+/// than the room), broken inside it by [`break_inside`], so it takes its second line before it
+/// is cut. As the mock's `overflow-wrap:anywhere`, which breaks inside a word only where nothing
+/// else fits.
 fn pane_lines(p: &egui::Painter, font: &egui::FontId, s: &str, room: f32) -> Vec<String> {
     let lines = winui::fit_lines(p, font.clone(), s, room);
     let width = |t: &str| winui::text_width_font(p, font.clone(), t);
     if width(&lines[0]) <= room {
         return lines;
     }
-    if let Some((a, b)) = winui::line_breaks(s)
+    if let Some((a, b)) = name_breaks(s)
         .into_iter()
         .rev()
         .find(|(a, _)| width(a) <= room)
@@ -938,6 +938,20 @@ fn pane_lines(p: &egui::Painter, font: &egui::FontId, s: &str, room: f32) -> Vec
         return vec![a.to_owned(), b.to_owned()];
     }
     break_inside(width, s, room).map_or(lines, |(a, b)| vec![a, b])
+}
+
+/// Every way `s` breaks in two at a space or after a slash or a hyphen, first lines shortest
+/// first; each line trimmed and never empty. (The pane's own list, kept out of the shared
+/// `winui` kit.)
+fn name_breaks(s: &str) -> Vec<(&str, &str)> {
+    s.char_indices()
+        .filter(|&(_, c)| matches!(c, ' ' | '/' | '-'))
+        .map(|(i, c)| {
+            let a = if c == ' ' { &s[..i] } else { &s[..=i] };
+            (a.trim_end(), s[i + 1..].trim_start())
+        })
+        .filter(|(a, b)| !a.is_empty() && !b.is_empty())
+        .collect()
 }
 
 /// `s` in two at a character: as many characters as fit in `room` (by `width`) on the first
@@ -2355,6 +2369,17 @@ mod tests {
             );
         });
         out.textures_delta.clear();
+    }
+
+    /// The pane's breaks: at a space (trimmed), after a slash or a hyphen, never an empty line.
+    #[test]
+    fn the_panes_name_breaks_at_spaces_slashes_and_hyphens() {
+        assert_eq!(
+            name_breaks("a b/c-d"),
+            vec![("a", "b/c-d"), ("a b/", "c-d"), ("a b/c-", "d")]
+        );
+        assert!(name_breaks(" abc-").is_empty());
+        assert!(name_breaks("plain.zip").is_empty());
     }
 
     /// Property 8 (width clamp), over saved widths, window widths and Categories edges.
