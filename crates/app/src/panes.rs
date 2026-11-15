@@ -1134,7 +1134,8 @@ pub fn details_pane(
     let content_bottom = (first.top() - PANE_BUTTON_GAP).max(rc.top());
     let content = Rect::from_min_max(rc.min, pos2(rc.right(), content_bottom));
     let page = content.height();
-    let scroll_key = egui::Id::unique((ui.ctx().viewport_id(), "details-scroll"));
+    // Per download: another one selected opens at its top, not where the last was scrolled.
+    let scroll_key = egui::Id::unique((ui.ctx().viewport_id(), "details-scroll", one.id));
     // The offset, and the content's height as last painted (it decides the bar before painting).
     let (off, total_was): (f32, f32) = pane.data(|d| d.get_temp(scroll_key)).unwrap_or_default();
     let off = pane_scroll(off, total_was, page);

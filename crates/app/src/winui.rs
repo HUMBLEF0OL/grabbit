@@ -5911,7 +5911,7 @@ pub fn px_l(p: &Painter, x: f32, y: f32, c: Color32) {
 
 /// One tab of a light tab control: its x range (inclusive, from the client origin) when
 /// selected and when not (Windows draws the selected tab wider). [`tabs_light`] sizes the tabs
-/// to their labels from the first one's place; the others' ranges are IDM's, for reference.
+/// to their labels from the first one's place: only the first tab's start is read.
 pub struct LightTab {
     pub label: &'static str,
     pub sel: (f32, f32),
