@@ -599,14 +599,11 @@ These ship in a later version, when they're ready.
   details pane: a long file name without spaces on the pane's two lines, and the screenshot
   script's details pane keeping the list's column filters.
   And the help's, the README's and the website's pictures taken again in Graphite, its tile on
-  the Themes page with its picture (still to take again: the video's progress window, in the
-  README and two help pages, which needs yt-dlp; and File Properties' type line, which names
-  the shooting computer's own video player).
-  Left for a person at the screen (plan 09's follow-ups): the on-screen keyboard and Narrator
-  passes over the paste bar, the details pane and their toggles, the moved Hide tab, the
-  torrent window's banner, Options' side list, banners and codes; the windows compared side by
-  side with the mockup at 150 % and 200 %, Options' scrolling page on a real 1080p screen at
-  200 %; the rest of the main window against the mock.
+  the Themes page with its picture, and a keyboard and screen-reader pass at 100, 150 and
+  200 % (Options at 200 % on a 1080p screen included): the title bar's buttons, four Options
+  lists, Speed Limiter's box and the offers' repeated buttons named for screen readers.
+  Left (plan 09's follow-ups): a faint square behind images in light mode on Intel Iris Xe
+  graphics with Direct3D (a driver workaround in the graphics library).
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:

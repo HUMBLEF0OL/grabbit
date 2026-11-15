@@ -5910,7 +5910,8 @@ pub fn px_l(p: &Painter, x: f32, y: f32, c: Color32) {
 }
 
 /// One tab of a light tab control: its x range (inclusive, from the client origin) when
-/// selected and when not (Windows draws the selected tab wider).
+/// selected and when not (Windows draws the selected tab wider). [`tabs_light`] sizes the tabs
+/// to their labels from the first one's place: only the first tab's start is read.
 pub struct LightTab {
     pub label: &'static str,
     pub sel: (f32, f32),
@@ -6003,13 +6004,11 @@ pub fn tabs_light(
     hline(&p, l, rr + 2.0, b + 1.0, shadow);
     // (selected range, unselected range, label x, label shown), from the client origin.
     type Placed = ((f32, f32), (f32, f32), f32, String);
-    let placed: Vec<Placed> = if tabs.iter().all(|t| crate::i18n::t(t.label) == t.label) {
-        tabs.iter()
-            .map(|t| (t.sel, t.unsel, t.sel.0 + 8.0, t.label.to_owned()))
-            .collect()
-    } else {
-        // A translation: tabs sized to their labels from the first tab's place, within the pane
-        // (the selected one 2 px wider each side).
+    // Tabs sized to their labels in the font they are drawn in, from the first tab's place,
+    // within the pane (the selected one 2 px wider each side). IDM's fixed places, kept for
+    // English, fitted Tahoma: Graphite's wider labels ran past their tabs' ends (Scheduler's
+    // "Schedule" touching the next tab).
+    let placed: Vec<Placed> = {
         let labels: Vec<&str> = tabs.iter().map(|t| crate::i18n::t(t.label)).collect();
         let (start, left) = tabs.first().map_or((0.0, 0.0), |t| (t.unsel.0, t.sel.0));
         tab_row(&p, &labels, start, left + rc.width() - 3.0 - 2.0, 2.0, 8.0)
@@ -6758,7 +6757,9 @@ pub mod caption {
         };
         let resp = ui.interact(rc, widget_id(ui, ("caption-button", b.name())), sense);
         let name = crate::i18n::t(b.name());
-        if b == CaptionButton::ToTray || !SYSTEM_SPEAKS {
+        // Tab reaches it too (plan 09's keyboard pass): while it has the keys it is ours to
+        // speak, or a screen reader would say nothing there.
+        if b == CaptionButton::ToTray || !SYSTEM_SPEAKS || resp.has_focus() {
             expose(&resp, egui::Role::Button, name, enabled, None);
         } else {
             unspoken(ui, &resp);
@@ -7310,6 +7311,22 @@ mod tests {
             }
         });
         out.textures_delta.clear();
+    }
+
+    /// The light tabs, English too, are sized to their labels in the font they are drawn in: 8
+    /// either side of each label, 2 apart (Scheduler's "Schedule" ran past IDM's fixed end).
+    #[test]
+    fn light_tabs_pad_their_labels() {
+        with_painter(|p| {
+            let labels = ["Schedule", "Files in the queue"];
+            let row = tab_row(p, &labels, 215.0, 640.0, 2.0, 8.0);
+            assert_eq!(row[0].0, 215.0);
+            for ((x0, x1, shown), label) in row.iter().zip(labels) {
+                assert_eq!(shown, label);
+                assert_eq!(x1 - x0, text_width(p, label).ceil() + 16.0);
+            }
+            assert_eq!(row[1].0, row[0].1 + 2.0);
+        });
     }
 
     /// 09r3: a status banner's title wraps as far as its height has room, the sub below it; no

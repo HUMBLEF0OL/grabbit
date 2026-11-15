@@ -201,6 +201,22 @@ impl Extension {
                 false,
                 None,
             );
+            // Every row's button reads the same: a screen reader hears which browser it is for.
+            let browser = if name.is_empty() {
+                crate::i18n::t("Your browser")
+            } else {
+                name.as_str()
+            };
+            let spoken = crate::i18n::fmt(
+                // i18n: what a screen reader calls a button that one row of a window has for each thing it lists; {label} is the button's text, {what} the row's browser or program
+                crate::i18n::t("{label} for {what}"),
+                &[
+                    ("label", crate::i18n::t(label)),
+                    ("what", &crate::i18n::ltr(browser)),
+                ],
+            );
+            ui.ctx()
+                .accesskit_node_builder(add.id, |n| n.set_label(spoken));
             if add.clicked() {
                 // No store page: the tutorial on the website, in the interface language.
                 let url = page

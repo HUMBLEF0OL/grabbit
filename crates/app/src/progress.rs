@@ -1881,14 +1881,33 @@ fn segment_bar(p: &egui::Painter, o: Pos2, item: &Item, snap: Option<&Snapshot>)
             .collect(),
         _ => vec![(0, item.downloaded)],
     };
+    let ppp = p.pixels_per_point();
     for (start, done) in segments {
         let sx = ix + col(start);
         let n = col(done);
         if n > 1.0 {
             run(sx + 1.0, (sx + n - 1.0).min(ix + 510.0), 1);
         }
-        run(sx, sx, 2);
+        // The start's tick, as wide in whole pixels wherever it falls (a 1-point column at
+        // 150 % came out 2 pixels or 1 by its place, the 1-pixel ones all but gone).
+        let column = egui::Rect::from_min_size(egui::pos2(sx, y0), vec2(1.0, 1.0));
+        let (a, b) = tick_span(winui::rect(column).left(), ppp);
+        for (row, cols) in seg_rows().enumerate() {
+            let y = y0 + 1.0 + row as f32;
+            winui::solid(
+                p,
+                egui::Rect::from_min_max(egui::pos2(a, y), egui::pos2(b, y + 1.0)),
+                cols.2,
+            );
+        }
     }
+}
+
+/// The start tick's columns from point `x` at `ppp` pixels a point: from `x`'s nearest pixel,
+/// one point rounded to whole pixels (at least one) wide, so every tick is the same width.
+fn tick_span(x: f32, ppp: f32) -> (f32, f32) {
+    let a = (x * ppp).round() / ppp;
+    (a, a + ppp.round().max(1.0) / ppp)
 }
 
 /// The connections table (spec "Connections table"): N. · Downloaded · Info.
@@ -2042,6 +2061,24 @@ mod tests {
     fn the_title_has_a_percentage_only_with_a_size() {
         assert!(!window_title(None, "clip.mp4").contains('%'));
         assert!(window_title(Some(0.445), "clip.mp4").starts_with("44% "));
+    }
+
+    /// Every start tick of the connection bar is the same whole number of pixels wide wherever
+    /// it falls: 1 at 100 and 125 %, 2 at 150 and 200 % (at 150 % it was 1 or 2 by its place).
+    #[test]
+    fn start_ticks_are_equally_wide_at_any_scale() {
+        for (ppp, want) in [(1.0, 1.0), (1.25, 1.0), (1.5, 2.0), (1.75, 2.0), (2.0, 2.0)] {
+            for k in 0..64 {
+                let x = 17.5 + k as f32 * 63.875;
+                let (a, b) = tick_span(x, ppp);
+                let pixels = (b * ppp).round() - (a * ppp).round();
+                assert_eq!(pixels, want, "x {x} at {ppp}");
+                assert!(
+                    ((a * ppp) - (a * ppp).round()).abs() < 1e-3,
+                    "on a pixel edge"
+                );
+            }
+        }
     }
 
     /// Escape in the progress window hides it and leaves the download running (plan 07a): it

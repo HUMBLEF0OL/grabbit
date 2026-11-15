@@ -273,3 +273,35 @@ Line numbers drift as phases land: find each item by its name first.
   `vfp-progress` made from it), which needs yt-dlp, and File Properties' type line naming this PC's video
   player, for a run on a stock Windows)
 - [x] Done within the 3½-hour box, or what's left listed under its part's ROADMAP item (over the box; what is left is listed)
+
+## Left after 09 (the screen pass, 2026-11-15)
+
+An automated keyboard and accessibility-tree pass (each changed window on the screen, Tab through
+it, Shift+Tab, Escape; its UI Automation tree's names, roles, enabled states and bounds) at 100,
+150 and 200 %, and Options at 200 % on the 1920 x 1080 monitor: every Tab order cycles, Escape
+closes each dialog, the progress window's Escape leaves its download running, and Options at
+200 % is 837 x 496 with its page scrolling and every stop reached. What it found unnamed or named
+twice is fixed (branch `ui/09-finish`). Its 150 and 200 % pictures, reviewed, found seven
+defects. These are fixed (branch `ui/09-finish`):
+
+- the details pane's last row under its buttons at 200 %: the pane scrolls its content above them
+  (the wheel and the shared bar) once it is taller than the room;
+- the progress window's connection ticks at 150 %: each tick is a whole number of pixels, the
+  same width wherever it falls (1 or 2 pixels by place before, so the 1-pixel ones all but vanished);
+- the Scheduler: the light tabs are sized to their labels in the drawn font (IDM's fixed places
+  fitted Tahoma), Stop download at and the retries row on the page's left column, the retries
+  box centred on its row;
+- Create folder: the path cut in its middle, so its end (the folder made) shows;
+- Add an account: "Find my token" a bordered button on the left column, as Sign in in the browser.
+
+Kept as designed: the toolbar labels cut with "…" ("Add Torre…", "Delete Co…") when the window is
+narrower than their full width. `chrome::toolbar` shrinks the longest labels first
+(`label_cap`), cuts them with "…" and names them whole on hover and to screen readers; the
+band is full to its Details toggle at 150 and 200 %.
+
+Left:
+
+- About's and Helpers' icons (and every image), light mode, on Intel Iris Xe with Direct3D 12: a
+  faint square, 1/255 darker. The egui fork's driver guard (`egui-wgpu`, commit 49ec54b6,
+  gfx-rs/wgpu#10651) uploads every transparent texel as (0, 0, 0, 1) on that adapter; MDM's code
+  cannot undo it. The fix belongs in that fork: guard one texel per 4 x 4 block, not every one.

@@ -67,7 +67,7 @@ if (Test-Path $Work) { throw "$Work exists: give -Work a folder that doesn't (th
 # first start), "crash" (the crash report), "tprog:<tab>" (progress-shots.ps1), "updates"; or
 # "-" and why there is nothing to shoot today.
 $states = @(
-  @("main-details", "@main", "No details pane today: the main window as it is"),
+  @("main-details", "details+@main", "The main window with the details pane open (/show details)"),
   @("main-plain", "@main", ""),
   # Before the menu bar's menus: /show menu (a row's menu) leaves an open menu-bar menu open.
   @("main-ctx", "@menu:menu", "The first download's right-click menu"),

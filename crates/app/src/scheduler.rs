@@ -779,11 +779,12 @@ impl Scheduler {
         let f = &mut self.forms[self.selected];
         // Under the weekdays' two rows.
         let dy = DY - DAYS_UP;
-        winui::etched_h(&p, o.x + 229.0, o.y + 227.0 + dy, RIGHT - 229.0);
-        let stop_x = after(229.0, "Stop download at", 384.0, RIGHT - 89.0);
+        // The page's left column, as the rows above (IDM's 229 put these a point right of it).
+        winui::etched_h(&p, o.x + 228.0, o.y + 227.0 + dy, RIGHT - 228.0);
+        let stop_x = after(228.0, "Stop download at", 384.0, RIGHT - 89.0);
         winui::checkbox_light_until(
             ui,
-            at(229.0, 243.0 + dy),
+            at(228.0, 243.0 + dy),
             &mut f.stop_at_on,
             "Stop download at",
             true,
@@ -801,22 +802,23 @@ impl Scheduler {
         let retries_x = 541.0 + DX;
         winui::checkbox_light_until(
             ui,
-            at(229.0, 267.0 + dy),
+            at(228.0, 267.0 + dy),
             &mut f.retries_on,
             "Number of retries for each file if downloading failed :",
             true,
             Some(o.x + retries_x),
         );
+        // Centred on its check box's row, as the time box above is on Stop download at's.
         winui::number_field(
             ui,
-            r(o, retries_x, 260.0 + dy, 48.0, 23.0),
+            r(o, retries_x, 262.0 + dy, 48.0, 23.0),
             &mut f.retries,
             1,
             9999,
             f.retries_on,
             LIGHT_PAGE(),
         );
-        winui::etched_h(&p, o.x + 229.0, o.y + 288.0 + dy, RIGHT - 229.0);
+        winui::etched_h(&p, o.x + 228.0, o.y + 288.0 + dy, RIGHT - 228.0);
         // The box after its caption, on its row (under it at IDM's 651), ending where it did.
         let open_x = after(
             228.0,

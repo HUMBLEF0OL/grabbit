@@ -890,6 +890,12 @@ fn details_buttons(rc: Rect) -> [Rect; 3] {
     ]
 }
 
+/// The details pane's scroll offset `off` kept inside its content: `total` high in a `page` it
+/// shows; 0 when it fits.
+fn pane_scroll(off: f32, total: f32, page: f32) -> f32 {
+    off.clamp(0.0, (total - page).max(0.0))
+}
+
 /// The pane's fonts: its rows' (12.5), its small labels' (12) and the name's (SemiBold 13).
 fn row_font() -> egui::FontId {
     egui::FontId::proportional(12.5)
@@ -1044,8 +1050,8 @@ fn detail_row(ui: &Ui, p: &egui::Painter, (l, r): (f32, f32), y: f32, row: (&str
 /// most 2 lines, the status line), the segment cells under their label row coloured by
 /// [`StatusKind`] as the list's Status cell, the label/value rows, and at the bottom the
 /// buttons (Resume or Stop filled with the accent, Open folder, Show progress window greyed for
-/// a finished download). A short pane cuts its content above the buttons, and everything at its
-/// own edges. Nothing selected: a muted line in the middle; several: their count and total
+/// a finished download). A short pane scrolls its content above the buttons, and cuts
+/// everything at its own edges. Nothing selected: a muted line in the middle; several: their count and total
 /// size. Exposed as a group named "Details" holding its texts. What was pressed.
 pub fn details_pane(
     ui: &mut Ui,
@@ -1123,9 +1129,26 @@ pub fn details_pane(
     };
 
     let [first, second, third] = details_buttons(rc);
-    // The content above the buttons: a short pane cuts it there.
+    // The content above the buttons. A pane too short for it (200 %, a low window) scrolls it
+    // there, by the wheel and the shared bar at its end: no row ever sits under the buttons.
     let content_bottom = (first.top() - PANE_BUTTON_GAP).max(rc.top());
     let content = Rect::from_min_max(rc.min, pos2(rc.right(), content_bottom));
+    let page = content.height();
+    // Per download: another one selected opens at its top, not where the last was scrolled.
+    let scroll_key = egui::Id::unique((ui.ctx().viewport_id(), "details-scroll", one.id));
+    // The offset, and the content's height as last painted (it decides the bar before painting).
+    let (off, total_was): (f32, f32) = pane.data(|d| d.get_temp(scroll_key)).unwrap_or_default();
+    let off = pane_scroll(off, total_was, page);
+    let track = Rect::from_min_max(
+        pos2(rc.right() - crate::scrollbar::THICK, rc.top()),
+        content.max,
+    );
+    let r = if total_was > page {
+        track.left() - 4.0
+    } else {
+        r
+    };
+    let top = top - off;
     // A child of `pane` made before the buttons: a screen reader reads the content, then them.
     let mut body = pane.new_child(egui::UiBuilder::new().max_rect(screen));
     body.set_clip_rect(winui::rect(content).intersect(clip));
@@ -1202,6 +1225,30 @@ pub fn details_pane(
     for (label, value) in &one.rows {
         y += detail_row(&body, &bp, (l, r), y, (*label, value.as_str())) + ROW_GAP;
     }
+    // The content's height from the pane's top (the last row's gap kept as room under it).
+    let total = y + off - rc.top();
+    let line = ROW_LINE + ROW_GAP;
+    let mut moved = off;
+    if pane.rect_contains_pointer(winui::rect(content)) {
+        moved += winui::wheel_rows(&pane, line, (page / line).floor().max(1.0)) * line;
+    }
+    if total > page {
+        crate::scrollbar::bar(
+            &mut pane,
+            scroll_key.with("bar"),
+            winui::rect(track),
+            true,
+            total,
+            page,
+            line,
+            &mut moved,
+        );
+    }
+    let moved = pane_scroll(moved, total, page);
+    if moved != off || (total > page) != (total_was > page) {
+        ui.ctx().request_repaint();
+    }
+    pane.data_mut(|d| d.insert_temp(scroll_key, (moved, total)));
 
     // The buttons at the bottom.
     let (label, need, primary) = match one.primary {
@@ -2271,6 +2318,22 @@ mod tests {
         assert_eq!(details_width(u32::MAX, 1240.0, 224.0), 620.0);
         // A wide Categories pane: the list keeps 200, so the bound is 1000 - 500 - 200 = 300.
         assert_eq!(details_width(400, 1000.0, 500.0), 300.0);
+    }
+
+    /// Content that fits never scrolls; taller content scrolls exactly far enough for its last
+    /// row to clear the buttons (the page's bottom), never past it or above its top.
+    #[test]
+    fn details_scroll_reaches_the_last_row_and_no_further() {
+        assert_eq!(pane_scroll(50.0, 200.0, 300.0), 0.0);
+        assert_eq!(pane_scroll(-5.0, 400.0, 300.0), 0.0);
+        assert_eq!(pane_scroll(40.0, 400.0, 300.0), 40.0);
+        assert_eq!(pane_scroll(1000.0, 400.0, 300.0), 100.0);
+        // The buttons' top edge stays below the content, whatever the pane's height.
+        let rc = Rect::from_min_size(pos2(0.0, 0.0), vec2(260.0, 380.0));
+        let [first, ..] = details_buttons(rc);
+        let page = first.top() - PANE_BUTTON_GAP - rc.top();
+        let total = page + 30.0;
+        assert_eq!(total - pane_scroll(f32::MAX, total, page), page);
     }
 
     /// A window too narrow for both minimums: the pane stays 200 wide and the list gets less.
