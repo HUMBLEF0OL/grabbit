@@ -53,7 +53,7 @@ id = "view-dark-mode"
 page = "getting-started.md"
 under = "Dark mode"
 take = "@menu:menu:3"
-crop = [145, 28, 230, 300]
+crop = { around = ["MenuItem:View", "Font"], pad = 12 }
 marks = [{ at = "Dark Mode support", side = "right" }, { at = "Always dark", side = "right" }]
 alt = "The View menu open, with Dark Mode support and Always dark"
 caption = "1 Dark Mode support follows the system; 2 Always dark keeps MDM dark."
@@ -63,7 +63,7 @@ id = "view-theme"
 page = "getting-started.md"
 under = "Themes"
 take = "@menu:menu:3:theme"
-crop = [145, 28, 366, 466]
+crop = { around = ["MenuItem:View", "Font", "Open themes folder"], pad = 12 }
 alt = "View → Theme open: Graphite, Add a theme file… and Open themes folder"
 caption = "View → Theme switches at once, keeping the layout."
 
@@ -284,8 +284,8 @@ id = "list-columns"
 page = "download-list.md"
 under = "Columns"
 take = "@main"
-crop = [150, 120, 0, 345]
-alt = "The download list with its columns: Source, File Name, Q, Size, Status, Time left, Transfer rate and more"
+crop = [224, 148, 0, 310]
+alt = "The download list with its columns: Source, File Name, Q, Size and Status, and more to the right"
 caption = "Click a column title to sort; its funnel filters."
 
 [[shot]]
@@ -293,7 +293,7 @@ id = "list-categories"
 page = "download-list.md"
 under = "Categories"
 take = "@main"
-crop = [0, 118, 151, 190]
+crop = { around = ["Tree:Categories"], pad = 0 }
 alt = "The Categories pane: All Downloads with a category per file type, Unfinished, Finished and Queues"
 caption = "All Downloads, Unfinished, Finished and Queues, each by category."
 
@@ -338,7 +338,7 @@ page = "troubleshooting.md"
 under = "The window freezes or draws wrongly"
 take = "@menu:menu:3:draw"
 # Down to Font: a computer without Direct3D (GitHub's runner) adds why under the choices.
-crop = [145, 28, 306, 274]
+crop = { around = ["MenuItem:View", "Font", "Direct3D"], pad = 12 }
 alt = "View → Draw with open: OpenGL and Direct3D"
 caption = "View → Draw with: the other way of drawing."
 
@@ -502,7 +502,7 @@ id = "overnight-start"
 page = "guide-download-overnight.md"
 under = "2. Set the start time"
 take = "scheduler"
-crop = [220, 128, 412, 162]
+crop = [215, 130, 560, 185]
 marks = [{ at = "Start download at", side = "right" }, { at = "Daily", side = "right" }, { at = "Stop download at", side = "right" }]
 alt = "The Scheduler's Schedule tab: Start download at, Once at or Daily, and Stop download at"
 caption = "1 the start time, 2 once or daily, 3 a stop time if you want one."
@@ -573,7 +573,7 @@ id = "test-integration"
 page = "browser-integration.md"
 under = "When MDM isn't running"
 take = "options:general"
-crop = [18, 172, 380, 208]
+crop = [195, 256, 618, 114]
 ring = ["Test browser integration..."]
 alt = "Options, General with Test browser integration..."
 caption = "Test browser integration... says whether the browser reaches MDM."

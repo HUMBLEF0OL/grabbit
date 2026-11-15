@@ -266,9 +266,10 @@ Line numbers drift as phases land: find each item by its name first.
 - [x] Frame-time budget met (−1.4 %, 09a step 4)
 - [x] Every mock state reviewed in code (visual, keyboard, accessibility, 200%); follow-ups filed (PRs 46 to 48); the passes that need a person at the screen (Narrator, the on-screen keyboard, side by side at 150 and 200 %) are listed under the ROADMAP item
 - [x] An upgrade from the last release starts in Graphite, and the release notes say so (05.5c; CHANGELOG)
-- [x] Screenshots, docs, website, ROADMAP, CHANGELOG (09b-text PR 29, 09b-shots: the 121 help
-  pictures, the README's and the site's, taken on this PC with `make.py`, `docs-shots.ps1` and
+- [x] Screenshots, docs, website, ROADMAP, CHANGELOG (09b-text PR 29, 09b-shots: the help
+  pictures, the README's and the site's (seven crops and four marks set again for the new layout), taken on this PC with `make.py`, `docs-shots.ps1` and
   `progress-shots.ps1`, addresses on `localhost:8099` as no hosts entry could be added; left:
-  `progress-video`, which needs yt-dlp, and File Properties' type line naming this PC's video
+  the video's progress window (`progress-video`, and the help's `video-progress` and
+  `vfp-progress` made from it), which needs yt-dlp, and File Properties' type line naming this PC's video
   player, for a run on a stock Windows)
 - [x] Done within the 3½-hour box, or what's left listed under its part's ROADMAP item (over the box; what is left is listed)

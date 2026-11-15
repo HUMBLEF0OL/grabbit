@@ -14,7 +14,7 @@ branches and the category or queue you were looking at.
 
 ## Columns
 
-![The download list with its columns: Source, File Name, Q, Size, Status, Time left, Transfer rate and more](images/help/list-columns.webp)
+![The download list with its columns: Source, File Name, Q, Size and Status, and more to the right](images/help/list-columns.webp)
 *Click a column title to sort; its funnel filters.*
 
 | Column | What it shows |

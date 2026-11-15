@@ -599,9 +599,9 @@ These ship in a later version, when they're ready.
   details pane: a long file name without spaces on the pane's two lines, and the screenshot
   script's details pane keeping the list's column filters.
   And the help's, the README's and the website's pictures taken again in Graphite, its tile on
-  the Themes page with its picture (still to take again: the video's progress window, which
-  needs yt-dlp; and File Properties' type line, which names the shooting computer's own
-  video player).
+  the Themes page with its picture (still to take again: the video's progress window, in the
+  README and two help pages, which needs yt-dlp; and File Properties' type line, which names
+  the shooting computer's own video player).
   Left for a person at the screen (plan 09's follow-ups): the on-screen keyboard and Narrator
   passes over the paste bar, the details pane and their toggles, the moved Hide tab, the
   torrent window's banner, Options' side list, banners and codes; the windows compared side by
