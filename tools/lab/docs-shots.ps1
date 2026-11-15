@@ -304,16 +304,18 @@ try {
       & $Exe /show $what
     }
     try { $t = New-Window $app.Id $before } catch { Write-Warning "${name}: no window"; continue }
-    # Options → Download panels opens a dialog over Options: that dialog is the shot.
+    # Options → Download panels opens a dialog over Options, and video-helpers Helpers over the
+    # video window: that dialog is the shot.
     $also = @()
-    if ($what -eq "options:panels") {
+    if ($what -in "options:panels", "video-helpers") {
       for ($i = 0; $i -lt 50; $i++) {
         $new = @(Titles $app.Id | Where-Object { $before -notcontains $_ })
         if ($new.Count -ge 2) { break }
         Start-Sleep -Milliseconds 200
       }
       $also = @($t)
-      $t = @($new | Where-Object { $_ -ne $also[0] })[0]
+      # By its title where it has a known one (Helpers), else the new window that isn't the first.
+      $t = @($new | Where-Object { $_ -ne $also[0] -and ($what -ne "video-helpers" -or $_ -eq "Helpers") })[0]
       if (-not $t) { Write-Warning "${name}: no dialog"; Close-Ours $app.Id $also[0]; continue }
     }
     Start-Sleep -Milliseconds 1500

@@ -544,7 +544,7 @@ These ship in a later version, when they're ready.
 - 🔄 A torrent's upload speed, peers and share ratio as columns in the download list
   ([#357](https://github.com/anefzaoui/misterdownloadmanager/issues/357)): the last one in review
 - 🔄 The browser extension's media list naming a file after its page, as an option: in review
-- 🔄 A new look, "Graphite": a theme with its own colours, icons and typeface, the main window
+- ✅ A new look, "Graphite": a theme with its own colours, icons and typeface, the main window
   and every dialog restyled, with an optional paste bar and details pane; the plan and mockups are
   in `design/graphite/`. Done: the Graphite theme in **View → Theme** (its colours, rounded
   corners and controls, light and dark, in today's layout) and its icons (Tabler's outline
@@ -598,12 +598,15 @@ These ship in a later version, when they're ready.
   Archive password, Add category and the drop target, and the review of the paste bar and the
   details pane: a long file name without spaces on the pane's two lines, and the screenshot
   script's details pane keeping the list's column filters.
-  Still to come, at the screen (plan 09's follow-ups): the on-screen keyboard and Narrator
+  And the help's, the README's and the website's pictures taken again in Graphite, its tile on
+  the Themes page with its picture (still to take again: the video's progress window, in the
+  README and two help pages, which needs yt-dlp; and File Properties' type line, which names
+  the shooting computer's own video player).
+  Left for a person at the screen (plan 09's follow-ups): the on-screen keyboard and Narrator
   passes over the paste bar, the details pane and their toggles, the moved Hide tab, the
   torrent window's banner, Options' side list, banners and codes; the windows compared side by
   side with the mockup at 150 % and 200 %, Options' scrolling page on a real 1080p screen at
   200 %; the rest of the main window against the mock.
-  Next: the website's and the help's screenshots in Graphite (plan 09b)
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:

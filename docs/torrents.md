@@ -74,7 +74,7 @@ A torrent in order isn't faster to finish, and it helps the swarm less: use it f
 
 Many sites publish their new torrents as an RSS or Atom feed. MDM can watch feeds, list what they hold, and add the new torrents you want by itself. Choose **Tasks → RSS feeds...**, or click the arrow next to **Add Torrent**.
 
-![RSS feeds: the feeds MDM follows and their items](images/help/rss-feeds.webp)
+![RSS feeds before any is added: the list of feeds, their items, and the Download rules tab](images/help/rss-feeds.webp)
 *RSS feeds, and the rules that pick what to download.*
 
 **Feeds** tab:
