@@ -1683,7 +1683,8 @@ impl App {
                 it.size.map_or(String::new(), model::size_list),
                 status,
                 it.time_left(),
-                if it.live.is_some() {
+                // Every byte in (upstream issue 736): no rate, as once it is complete.
+                if it.live.is_some() && !it.past_last_byte() {
                     model::rate(it.rate())
                 } else {
                     String::new()

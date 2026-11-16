@@ -708,7 +708,9 @@ impl Progress {
             crate::i18n::t("Transfer rate"),
             winui::TEXT(),
         );
-        let rate = if item.status == Status::Downloading {
+        // Every byte in (upstream issue 736): nothing comes in while the file is checked or
+        // joined.
+        let rate = if item.status == Status::Downloading && !item.past_last_byte() {
             model::rate(item.rate())
         } else {
             String::new()
@@ -1176,7 +1178,9 @@ fn status_page(
             crate::i18n::mark("Transfer rate"),
             112.0,
             135.0,
-            if state == Status::Downloading {
+            // Every byte in (upstream issue 736): nothing comes in while the file is checked or
+            // joined.
+            if state == Status::Downloading && !item.past_last_byte() {
                 model::rate(item.rate())
             } else {
                 String::new()
