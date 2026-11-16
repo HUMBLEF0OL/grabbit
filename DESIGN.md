@@ -11,6 +11,11 @@ colors:
   on-go: "#ffffff"
   amethyst: "#6527d4"
   selection: "#efe7fe"
+  ink-2: "#4b4760"
+  tray-2: "#f3f1f9"
+  go-wash: "#f0f7f8"
+  go-tint: "#e0eff2"
+  go-tint-strong: "#d6ebef"
   ground-dark: "#09080d"
   tray-dark: "#121019"
   ink-dark: "#f0eef7"
@@ -20,6 +25,11 @@ colors:
   on-go-dark: "#00171c"
   amethyst-dark: "#b08cff"
   selection-dark: "#231a3a"
+  ink-2-dark: "#bab4cc"
+  tray-2-dark: "#1c1828"
+  go-wash-dark: "#131c26"
+  go-tint-dark: "#13252f"
+  go-tint-strong-dark: "#14313b"
 typography:
   display:
     fontFamily: "Geist, Segoe UI, system-ui, sans-serif"
@@ -66,7 +76,12 @@ typography:
     fontSize: "14px"
     fontWeight: 400
     lineHeight: 1.5
+  code:
+    fontFamily: "Cascadia Mono, Consolas, SF Mono, ui-monospace, monospace"
+    fontSize: "0.88em"
+    fontWeight: 400
 rounded:
+  micro: "4px"
   window: "8px"
   well: "12px"
   core: "16px"
@@ -151,7 +166,7 @@ IDM appears only as the benchmark's yardstick (grey bars, plain-weight figures) 
 Graphite's palette: neutral grounds with a faint violet cast, one cyan that does the work, and one amethyst that only points.
 
 ### Primary
-- **Signal Cyan** (go / go-dark): the Download pill (nav, hero, close), Grabbit's bar and figures in the benchmark chart, the cyan words of the benchmark statement, the active walk-through rail segment, the filling connection bars, and the "Complete" state. It sits on On-Cyan text: white in light mode, near-black teal in dark mode.
+- **Signal Cyan** (go / go-dark): the Download pill (nav, hero, close), Grabbit's bar and figures in the benchmark chart, the cyan words of the benchmark statement, the active walk-through rail segment, the filling connection bars, and the "Complete" state. It sits on On-Cyan text: white in light mode, near-black teal in dark mode. Its tints mark Grabbit's own row and results, never decoration: go-wash (6% on the tray) behind the comparison's own row, go-tint (12%) behind its live strip and table row, go-tint-strong (16%) for the result pills ("Delivered") with ink text.
 
 ### Secondary
 - **Amethyst** (amethyst / amethyst-dark): inline links (underlined 1px at a 4px offset), the 2px focus ring, and the selection tint (selection / selection-dark). Never used for fills, headings or buttons.
@@ -160,6 +175,7 @@ Graphite's palette: neutral grounds with a faint violet cast, one cyan that does
 - **Ground** (ground / ground-dark): the page itself.
 - **Tray** (tray / tray-dark): the one raised surface. It carries the stage's core, the chart, the bento cells and the glass nav (at 78% with blur).
 - **Ink** (ink / ink-dark): headings, primary text, the ghost button's label, and "Free". Translucent ink is the system's only tint: 4-9% for wells, ghost fills and hovers, 22% for the IDM bars, 8% for empty connection tracks.
+- **Ink 2** (ink-2 / ink-2-dark): secondary reading text on the inner pages (answers, captions, values beside a figure). **Tray 2** (tray-2 / tray-2-dark): the band header of a tray and selected rows on the inner pages.
 - **Mute** (mute / mute-dark): ledes, body copy in cells, the second line of the hero headline, nav links, chart labels and footer links.
 - **Hairline** (line / line-dark): 1px rings around the tray surfaces, window borders, section rules, and the inactive rail.
 
@@ -185,6 +201,7 @@ Graphite's palette: neutral grounds with a faint violet cast, one cyan that does
 - **Lede** (400, 20px, 1.5, max 600px, pretty wrap): the line under the hero headline, in Mute.
 - **Body** (400, 18px, 1.5): the page default. Copy in cells and steps sits at 15.5-17px in Mute.
 - **Label** (400, 14px): nav links, chart key, chart note, footer links. The chart's figures are 600 at 13.5px for Grabbit and 400 for IDM. Axis ticks are 12px.
+- **Code** (Cascadia Mono, 0.88em): only for what a person types or reads as code: command lines, switches, file paths and keys in the help and comparison pages. Never as a "technical" costume.
 
 ### Named Rules
 **The Tighter As It Grows Rule.** Tracking scales with size: -0.01em at 15-18px, -0.02em at titles, -0.035 to -0.045em at headlines and display. Body copy is never tracked.
@@ -217,7 +234,7 @@ Depth comes from tonal layering plus a single lift. The ground is flat. The tray
 
 ## Shapes
 
-The geometry is soft and nested. Controls are full pills (999px), and so are the skip link, nav links and the theme button (a circle). Stages are a double bezel: a 24px outer shell (4% ink, hairline ring, 10px padding) around a 16px tray core, so the inner radius equals the outer radius minus the padding. Bento cells and the chart use the same 24px. App windows sit at 8px (in the hero stage only the top corners are rounded, because the window bleeds out of the bottom). The path well is 12px. Bars and connection tracks have half-height radii (4px and 3px). The inactive rail is 3px wide with 2px ends. Lists use a short 8 x 1.5px dash, never a glyph bullet.
+The geometry is soft and nested. Controls are full pills (999px), and so are the skip link, nav links and the theme button (a circle). Stages are a double bezel: a 24px outer shell (4% ink, hairline ring, 10px padding) around a 16px tray core, so the inner radius equals the outer radius minus the padding. Bento cells and the chart use the same 24px. App windows sit at 8px (in the hero stage only the top corners are rounded, because the window bleeds out of the bottom). The path well is 12px. Tags and badges are pills like the controls; links, menus, logos and pictures inside pages take the window's 8px. Elements under 20px (code, keys, check boxes, flags, grid cells, thin bars) take a 4px micro radius, the one size below 8px. Bars and connection tracks have half-height radii (4px and 3px). The inactive rail is 3px wide with 2px ends. Lists use a short 8 x 1.5px dash, never a glyph bullet.
 
 ## Components
 

@@ -113,7 +113,7 @@ html{scrollbar-color:var(--line) transparent}
 .chart .top h2{font:inherit}
 .chart .top b{font-weight:600;font-size:18px;letter-spacing:-.01em}
 .chart .key{display:flex;gap:20px;font-size:14px;color:var(--mute)}
-.chart .key i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:7px;vertical-align:-1px}
+.chart .key i{display:inline-block;width:10px;height:10px;border-radius:4px;margin-right:7px;vertical-align:-1px}
 .chart .key .g{background:var(--go)}.chart .key .x{background:color-mix(in srgb,var(--ink) 22%,transparent)}
 .bench{display:grid;gap:16px;position:relative;padding-bottom:30px;list-style:none}
 .bench-row{display:grid;grid-template-columns:250px 1fr;gap:28px;align-items:center}
@@ -149,8 +149,8 @@ html:not(.js-off) .bench:not(.in) .bench-bar i{width:0}
 .clock .s.ok{color:var(--go)}
 .conns{margin-top:auto;display:grid;gap:5px;list-style:none}
 .conns li{display:grid;grid-template-columns:22px 1fr;align-items:center;gap:12px;font-size:12.5px;color:var(--mute)}
-.conns i{height:6px;border-radius:3px;background:color-mix(in srgb,var(--ink) 8%,transparent);position:relative;overflow:hidden}
-.conns i b{position:absolute;inset:0;background:var(--go);transform-origin:left;transform:scaleX(var(--k,1));border-radius:3px}
+.conns i{height:6px;border-radius:4px;background:color-mix(in srgb,var(--ink) 8%,transparent);position:relative;overflow:hidden}
+.conns i b{position:absolute;inset:0;background:var(--go);transform-origin:left;transform:scaleX(var(--k,1));border-radius:4px}
 .conns i:not(.done) b{background:color-mix(in srgb,var(--go) 75%,var(--tray))}
 .b2 .crop{top:auto;bottom:-40px;left:28px;width:546px}
 .b4 .free{color:var(--ink);margin-top:auto;font-weight:600;font-size:88px;line-height:.85;letter-spacing:-.06em}
