@@ -361,7 +361,7 @@ mod tests {
     /// A dark scheme in the classic layout (Gruvbox-like, colours of our own picking).
     const DARK_CLASSIC: &str = r##"
 scheme: "Test Dark Classic"
-author: "MDM's tests"
+author: "Grabbit's tests"
 base00: "282828" # ----
 base01: "3c3836" # ---
 base02: "504945"
@@ -385,10 +385,10 @@ base0F: "d65d0e"
 name: "Test Light"
 slug: "test-light"
 scheme: "Old name"
-author: "MDM's tests (https://example.org/tests)"
+author: "Grabbit's tests (https://example.org/tests)"
 description: >
   A folded text over two lines,
-  which MDM passes over.
+  which Grabbit passes over.
 variant: "light"
 palette:
   base00: "#fdf6e3"
@@ -551,7 +551,7 @@ palette:
 
     #[test]
     fn pywal_malformed_and_missing() {
-        let v: Value = serde_json::from_str(r#"{ "name": "An MDM theme" }"#).unwrap();
+        let v: Value = serde_json::from_str(r#"{ "name": "A Grabbit theme" }"#).unwrap();
         assert!(!is_pywal(&v));
         // MDM's own JSON theme files use `colors` too, for roles: not pywal's.
         let v: Value = serde_json::from_str(r##"{ "colors": { "accent": "#ff0000" } }"##).unwrap();

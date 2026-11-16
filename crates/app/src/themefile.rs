@@ -272,7 +272,7 @@ fn load_in(
         return Ok(Loaded {
             theme: palette::graphite().clone(),
             warnings: vec![format!(
-                "{id}: MDM no longer has this theme (Graphite is its only look); Graphite instead"
+                "{id}: Grabbit no longer has this theme (Graphite is its only look); Graphite instead"
             )],
         });
     }
@@ -304,7 +304,7 @@ fn load_in(
         } else {
             loaded
                 .warnings
-                .push("icons: no icon MDM knows in the folder".into());
+                .push("icons: no icon Grabbit knows in the folder".into());
         }
     }
     Ok(loaded)
@@ -344,7 +344,7 @@ fn read_value(path: &Path, text: &str) -> Result<(Value, Vec<String>), String> {
 /// has that name; the same file already there is used as it is. The copy must load (with the
 /// themes it inherits, beside it), or it is taken out again. Returns the theme's id.
 pub fn add(source: &Path) -> Result<String, String> {
-    let folder = dir().ok_or("MDM has no data folder")?;
+    let folder = dir().ok_or("Grabbit has no data folder")?;
     add_in(&folder, source)
 }
 
@@ -511,7 +511,7 @@ pub fn parse(
                 Some(name) if palette::REMOVED.contains(&name) => {
                     theme.icon_set = Some("graphite".into());
                     warnings.push(format!(
-                        "icon-set: MDM no longer has {name}'s icons; Graphite's instead"
+                        "icon-set: Grabbit no longer has {name}'s icons; Graphite's instead"
                     ));
                 }
                 Some(name) => theme.icon_set = Some(name.to_owned().into()),
@@ -525,14 +525,14 @@ pub fn parse(
                 _ => {
                     theme.font = None;
                     warnings.push(format!(
-                        "font: {value} is not a font MDM carries (geist); the system's is used"
+                        "font: {value} is not a font Grabbit carries (geist); the system's is used"
                     ));
                 }
             },
             // How the old outline icons were inked: MDM's icons are Graphite's, in one colour
             // (plan 05.5); read and ignored.
             "icons" => warnings.push(format!(
-                "icons: {value}: ignored (MDM's icons are drawn in one colour)"
+                "icons: {value}: ignored (Grabbit's icons are drawn in one colour)"
             )),
             "sizes" => sizes(value, &mut theme, &mut warnings),
             "controls" => match value.as_object() {

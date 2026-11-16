@@ -283,7 +283,7 @@ palette! {
     piece_partial: "pieces.partial", "A square standing for pieces partly here" = rgb(0x3a, 0x6e, 0x4b), rgb(0x9c, 0xd2, 0xae);
     piece_missing: "pieces.missing", "A piece not here yet" = grey(0x45), grey(0xd6);
     // ---- title bars we draw ----
-    caption: "caption", "A title bar MDM draws itself" = grey(0x20), grey(0xff);
+    caption: "caption", "A title bar Grabbit draws itself" = grey(0x20), grey(0xff);
     caption_text: "caption.text", "Its title and glyphs" = grey(0xff), grey(0x00);
     caption_text_inactive: "caption.text.inactive", "Its title and glyphs while the window isn't the active one, and a greyed button's" = grey(0x8a), grey(0x8a);
     caption_hot: "caption.hot", "A caption button under the pointer (a tint over the bar)" = rgba(0xff, 0xff, 0xff, 0x0f), rgba(0x00, 0x00, 0x00, 0x09);
@@ -291,7 +291,7 @@ palette! {
     caption_button: "caption.button", "A caption button at rest, where the style shows one (a tint over the bar; transparent: none)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
     caption_close: "caption.close", "Close under the pointer" = rgb(0xc4, 0x2b, 0x1c), rgb(0xc4, 0x2b, 0x1c);
     caption_close_text: "caption.close.text", "Close's glyph under the pointer" = grey(0xff), grey(0xff);
-    caption_inactive: "caption.inactive", "A title bar MDM draws, while its window isn't the active one (transparent: as when active)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
+    caption_inactive: "caption.inactive", "A title bar Grabbit draws, while its window isn't the active one (transparent: as when active)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
     // ---- other ----
     drop_edge: "drop-target.edge", "The drop target's edge at rest" = grey(0x8d), grey(0x8d);
     // ---- the Graphite layout's parts: drawn only where `[controls] chrome = "graphite"`. The

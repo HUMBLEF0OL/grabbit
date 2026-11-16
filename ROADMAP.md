@@ -608,13 +608,16 @@ These ship in a later version, when they're ready.
   and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:
   a checker that lists every place the old name is still shown (`tools/rename/check.py`) and the
-  plan refreshed against today's code
+  plan refreshed against today's code. Done: the name the app, the command line, the AI
+  assistants' server, the remote page, the installer and the extension show (10a). Next: moving
+  the data folder, saved logins, autostart, the `.torrent` link and the browser host to the new
+  name (10c), then the website, docs and downloads (10d)
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a
   centred stage, then a walk through adding, downloading, torrents and video as you scroll), the
   benchmark's seven medians drawn from its results file, the Grabbit mark and Geist, light and
   dark; every other page in the same colours, type and buttons, the Grabbit name and mark in
   the header and footer, and the video window's picture taken again in Graphite. The pages'
-  own text still says Mister Download Manager until the rename below
+  own text still says Mister Download Manager until the rename above
 
 ### Bugs being looked into
 

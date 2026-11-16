@@ -651,7 +651,7 @@ impl Scheduler {
             ui,
             at(228.0, 79.0),
             &mut f.start_on_startup,
-            "Start download on Mister Download Manager startup",
+            "Start download on Grabbit startup",
             true,
         );
         winui::etched_h(&p, o.x + 228.0, o.y + 99.0, RIGHT - 228.0);
@@ -877,7 +877,7 @@ impl Scheduler {
             ui,
             at(exit_x, 348.0 + dy),
             &mut f.exit,
-            "Exit Mister Download Manager when done",
+            "Exit Grabbit when done",
             true,
             Some(o.x + RIGHT),
         );
@@ -948,7 +948,7 @@ impl Scheduler {
         if enabled {
             resp.on_hover_text(crate::i18n::t(
                 // i18n: tooltip on the Scheduler's "Wake the computer to run this queue"
-                "The computer is woken a minute before the start time and kept awake while the queue runs. Mister Download Manager has to be running (it can wait in the notification area).",
+                "The computer is woken a minute before the start time and kept awake while the queue runs. Grabbit has to be running (it can wait in the notification area).",
             ));
         }
         // The line under it: a problem (in the error colour when it stops the wake), else when

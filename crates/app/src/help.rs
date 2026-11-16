@@ -148,7 +148,7 @@ async fn latest() -> Result<Found, String> {
     // The chosen DNS and network adapter, as downloads have them (#36, #35).
     let client = mdm_engine::net::client_builder(&net.dns, &net.route, &feed)
         .map_err(|e| e.to_string())?
-        .user_agent(concat!("MisterDownloadManager/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("Grabbit/", env!("CARGO_PKG_VERSION")))
         .timeout(Duration::from_secs(20))
         .build()
         .map_err(|e| e.to_string())?;
@@ -336,9 +336,7 @@ impl Updates {
                     }
                     Some(Ok(Found::Latest)) => {
                         let line = crate::i18n::fmt(
-                            crate::i18n::t(
-                                "You have the latest version of Mister Download Manager ({version}).",
-                            ),
+                            crate::i18n::t("You have the latest version of Grabbit ({version})."),
                             &[("version", VERSION)],
                         );
                         winui::paragraph(&p, tx, o.y + 31.0, &line, ink, right, 13.0);
@@ -355,9 +353,7 @@ impl Updates {
                     }
                     Some(Ok(Found::Newer(rel))) => {
                         let line = crate::i18n::fmt(
-                            crate::i18n::t(
-                                "Mister Download Manager {version} is available (released {date}).",
-                            ),
+                            crate::i18n::t("Grabbit {version} is available (released {date})."),
                             &[("version", &rel.version), ("date", &rel.date)],
                         );
                         winui::fit(ui, &p, tx, o.y + 31.0, &line, ink, right, "update-line");
@@ -633,7 +629,7 @@ impl About {
         window(
             ctx,
             "about",
-            "About Mister Download Manager",
+            "About Grabbit",
             [W, body + winui::FOOTER_H],
             false,
             winui::BG(),
@@ -663,7 +659,7 @@ impl About {
                 centred(
                     winui::tahoma_title(),
                     o.y + 104.0,
-                    crate::i18n::t("Mister Download Manager"),
+                    crate::i18n::t("Grabbit"),
                     ink,
                 );
                 let version = crate::i18n::fmt(
@@ -723,7 +719,7 @@ impl About {
                 }
                 // Its own row under them: SPONSORS (Help → Support MDM).
                 y += 6.0;
-                let support_label = "Support MDM on GitHub";
+                let support_label = "Support Grabbit on GitHub";
                 let sw = width(support_label);
                 if winui::link(ui, &p, (cx - sw / 2.0).round(), y, support_label, "support") {
                     support();
@@ -889,7 +885,7 @@ impl TellFriend {
     fn message() -> String {
         crate::i18n::fmt(
             crate::i18n::t(
-                "I download with Mister Download Manager: fast, free, and it looks like the download manager you already know. {link}",
+                "I download with Grabbit: fast, free, and it looks like the download manager you already know. {link}",
             ),
             &[("link", SITE)],
         )
@@ -989,7 +985,7 @@ impl TellFriend {
                             .collect::<String>()
                             .replace('+', "%20")
                     };
-                    let subject = crate::i18n::t("Mister Download Manager");
+                    let subject = crate::i18n::t("Grabbit");
                     let opened = open::that_detached(format!(
                         "mailto:?subject={}&body={}",
                         enc(subject),

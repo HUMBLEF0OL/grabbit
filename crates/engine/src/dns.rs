@@ -86,7 +86,7 @@ impl RuntimeProvider for Through {
     ) -> Pin<Box<dyn Send + Future<Output = Result<Self::Udp, io::Error>>>> {
         // Never asked for: every server is configured for TCP, TLS or HTTPS. Refused all the same:
         // a UDP socket would be a listening socket to Windows' firewall.
-        Box::pin(async { Err(io::Error::other("MDM asks DNS over TCP only")) })
+        Box::pin(async { Err(io::Error::other("Grabbit asks DNS over TCP only")) })
     }
 }
 

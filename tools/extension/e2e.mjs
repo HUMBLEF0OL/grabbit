@@ -1859,7 +1859,7 @@ const CASES = {
       // The right-click menu on the player (Firefox: its menu can be driven headless).
       if (t.session.menu) {
         done.push(await named(`${kind} menu`, () => streamLookedUp(async () => {
-          const r = await t.session.menu((v.l + v.r) / 2, (v.t + v.b) / 2, "Download with Mister Download Manager");
+          const r = await t.session.menu((v.l + v.r) / 2, (v.t + v.b) / 2, "Download with Grabbit");
           if (!String(r).startsWith("chosen")) throw new Error(`the right-click menu: ${r}`);
           if (process.env.E2E_DEBUG) console.error("menu:", r);
         }, manifest, page, cookie)));
@@ -1992,7 +1992,7 @@ const CASES = {
       if (theirs.length) throw new Error(`refused: ${theirs.map(brief).join("; ")}`);
       if (!mdm.length) throw new Error("no request for the file");
       const said = await until("the popup's word", 5000, () => popup.evaluate(`document.getElementById("media-said").textContent`));
-      if (!/Sent to Mister Download Manager/.test(said)) throw new Error(`the popup said "${said}"`);
+      if (!/Sent to Grabbit/.test(said)) throw new Error(`the popup said "${said}"`);
       // Each stream: the Download video window, for its manifest.
       const pid = appPid();
       const opened = [];

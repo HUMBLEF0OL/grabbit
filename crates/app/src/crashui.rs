@@ -73,7 +73,7 @@ pub fn monitor_main(m: MonitorArgs) -> eframe::Result {
                 if !clean && notes.session.is_some() {
                     // Kept for a later look, without a window (a shutdown can look the same).
                     let made = report::make(None, Kind::Exit, notes, &m.data, &[]);
-                    tracing::warn!("MDM ended unexpectedly: {}", made.path.display());
+                    tracing::warn!("Grabbit ended unexpectedly: {}", made.path.display());
                 }
                 return Ok(());
             }
@@ -94,7 +94,7 @@ pub fn monitor_main(m: MonitorArgs) -> eframe::Result {
     let zoom = crate::scale::startup(settings.interface_size);
     let builder = crate::quiet(
         ViewportBuilder::default()
-            .with_title(crate::i18n::t("Mister Download Manager crash report"))
+            .with_title(crate::i18n::t("Grabbit crash report"))
             .with_inner_size([CLIENT[0] * zoom, CLIENT[1] * zoom])
             .with_resizable(false)
             .with_maximize_button(false)
@@ -249,7 +249,7 @@ fn prepare(job: &Job, shared: Arc<Mutex<Shared>>, ctx: egui::Context) {
             return;
         };
         let Ok(http) = reqwest::Client::builder()
-            .user_agent(concat!("MisterDownloadManager/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("Grabbit/", env!("CARGO_PKG_VERSION")))
             .timeout(Duration::from_secs(120))
             .build()
         else {
@@ -350,7 +350,7 @@ impl eframe::App for ReportWindow {
         // And through DWM, as the main window's, once the window is there.
         if !self.caption_dwm {
             self.caption_dwm = crate::win32::caption_dark(
-                crate::i18n::t("Mister Download Manager crash report"),
+                crate::i18n::t("Grabbit crash report"),
                 crate::theme::dark_surface(),
             );
         }
@@ -378,14 +378,14 @@ impl ReportWindow {
         match self.job.kind {
             // i18n: crash report window heading: the window of MDM stopped answering, then answered again
             Kind::Freeze if self.recovered => {
-                crate::i18n::t("Mister Download Manager stopped responding for a while")
+                crate::i18n::t("Grabbit stopped responding for a while")
             }
             // i18n: crash report window heading: MDM's window doesn't answer (frozen)
-            Kind::Freeze => crate::i18n::t("Mister Download Manager stopped responding"),
+            Kind::Freeze => crate::i18n::t("Grabbit stopped responding"),
             // i18n: crash report window heading: an internal error, MDM still running
-            Kind::Panic if alive => crate::i18n::t("Mister Download Manager hit an internal error"),
+            Kind::Panic if alive => crate::i18n::t("Grabbit hit an internal error"),
             // i18n: crash report window heading: MDM crashed and is gone
-            _ => crate::i18n::t("Mister Download Manager closed unexpectedly"),
+            _ => crate::i18n::t("Grabbit closed unexpectedly"),
         }
     }
 
@@ -548,10 +548,10 @@ impl ReportWindow {
         let frozen = self.job.kind == Kind::Freeze && alive && !self.recovered;
         let restart_label = if frozen {
             // i18n: crash report window button: end the frozen MDM and start it again
-            "End and restart MDM"
+            "End and restart Grabbit"
         } else {
             // i18n: crash report window button: start MDM again
-            "Restart MDM"
+            "Restart Grabbit"
         };
         // The footer: Open folder (and Restart, when MDM is gone or frozen) at its start; Copy
         // report, Close and Send last. No key presses any, as before; Tab keeps its order.

@@ -337,7 +337,7 @@ pub fn refresh_blocklist(
                         );
                     }
                 }
-                None => tracing::warn!("blocklist: {url} is not a list MDM can read"),
+                None => tracing::warn!("blocklist: {url} is not a list Grabbit can read"),
             },
             Err(e) => tracing::warn!("blocklist: {e}"),
         }

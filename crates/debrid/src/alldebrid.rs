@@ -76,7 +76,7 @@ fn read<T: serde::de::DeserializeOwned>(
         return Err(Fault::Service(if status >= 500 {
             F::ServiceDown
         } else {
-            F::Other("an answer MDM can't read".into())
+            F::Other("an answer Grabbit can't read".into())
         }));
     };
     match (e.status.as_str(), e.data, e.error) {

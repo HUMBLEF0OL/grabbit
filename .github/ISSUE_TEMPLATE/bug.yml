@@ -3,13 +3,13 @@
 # Installed with are text fields, not dropdowns: GitHub's page showed a dropdown's value from the
 # address for a moment, then put it back to none.
 name: Bug report
-description: Something in Mister Download Manager doesn't work as it should.
+description: Something in Grabbit doesn't work as it should.
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time. **Help → Report a problem** in MDM opens this form with your version and system already filled in.
+        Thanks for taking the time. **Help → Report a problem** in Grabbit opens this form with your version and system already filled in.
         A security problem? Please don't report it here: see the [security page](https://misterdownloadmanager.com/security.html).
   - type: input
     id: os
@@ -30,7 +30,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: MDM version
+      label: Grabbit version
       description: Help → About shows it.
       placeholder: "0.2.0"
     validations:
@@ -46,7 +46,7 @@ body:
   - type: dropdown
     id: area
     attributes:
-      label: Part of MDM
+      label: Part of Grabbit
       options:
         - Downloads (speed, resuming, errors)
         - Browser extension
@@ -54,7 +54,7 @@ body:
         - Torrents
         - Queues and the Scheduler
         - The window, menus and dialogs
-        - Installing, updating or removing MDM
+        - Installing, updating or removing Grabbit
         - Command line, automation API or MCP server
         - Something else
   - type: input
@@ -66,7 +66,7 @@ body:
   - type: input
     id: language
     attributes:
-      label: MDM's language
+      label: Grabbit's language
       placeholder: en
   - type: textarea
     id: what
@@ -96,7 +96,7 @@ body:
     attributes:
       label: Log or screenshots
       description: |
-        A download's recent events: hover over its **Status** in the list. A crash: crash.log in MDM's data folder (Windows: %APPDATA%\misterdownloadmanager). Drag screenshots in here.
+        A download's recent events: hover over its **Status** in the list. A crash: crash.log in Grabbit's data folder (Windows: %APPDATA%\misterdownloadmanager). Drag screenshots in here.
   - type: checkboxes
     id: searched
     attributes:

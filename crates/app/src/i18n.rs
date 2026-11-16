@@ -243,10 +243,7 @@ mod tests {
         let title = format!("71% {}", isolate("TeraLace_1.2.3_universal.apk"));
         assert_eq!(os_text(&title), "71% TeraLace_1.2.3_universal.apk");
         // No isolate: untouched.
-        assert_eq!(
-            os_text("Mister Download Manager"),
-            "Mister Download Manager"
-        );
+        assert_eq!(os_text("Grabbit"), "Grabbit");
         assert_eq!(os_text("مدير التنزيل"), "مدير التنزيل");
         let cases = [
             // A Hebrew or Arabic name can't pull "71%" over to its side.
@@ -258,11 +255,7 @@ mod tests {
                 &[("file", "ملف (2).mp4"), ("folder", &ltr(r"C:\dl\new"))],
             ),
             // The tray's tip, one count per line; a name with its own isolate inside.
-            format!(
-                "Mister Download Manager\n{} {}",
-                isolate("ملف"),
-                ltr("1.2 MB/s")
-            ),
+            format!("Grabbit\n{} {}", isolate("ملف"), ltr("1.2 MB/s")),
             format!("x {}", isolate(&format!("ب {} ج", ltr("1 2")))),
         ];
         for text in &cases {

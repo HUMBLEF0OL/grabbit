@@ -2380,7 +2380,7 @@ impl App {
                 ));
             }
             "notice" => dialogs::tell(
-                crate::i18n::mark("Mister Download Manager"),
+                crate::i18n::mark("Grabbit"),
                 crate::i18n::t("Invalid address").to_owned(),
             ),
             "7zip" => {
@@ -3611,7 +3611,7 @@ impl App {
         if self.hidden && self.at_login.is_none() && self.tray.as_ref().is_some_and(|t| t.rescue())
         {
             tracing::info!(
-                "hidden, and the shell has no tray icon of MDM's: back in the taskbar, minimized"
+                "hidden, and the shell has no tray icon of Grabbit's: back in the taskbar, minimized"
             );
             self.hidden = false;
             self.trim_when_hidden = None;
@@ -4358,7 +4358,7 @@ impl App {
             item.note(crate::i18n::fmt(
                 // i18n: event log: a torrent goes through the user's debrid account, not to peers; {service} its name ("Real-Debrid")
                 crate::i18n::t(
-                    "Through {service}: the service downloads the torrent, then MDM its files",
+                    "Through {service}: the service downloads the torrent, then Grabbit its files",
                 ),
                 &[("service", service.name())],
             ));
@@ -5179,7 +5179,7 @@ impl App {
             .ok()
             .filter(mdm_engine::supported)
         else {
-            return fail("unsupported", "not an address MDM downloads");
+            return fail("unsupported", "not an address Grabbit downloads");
         };
         // Already in the list: no one at the computer to ask, so Options' choice, with "ask"
         // taken as "add it again" (under a numbered name).
@@ -5615,10 +5615,12 @@ impl App {
                     ));
                 }
                 dialogs::DraggedOut::MovedAway => {
-                    tracing::info!("drag out: download {id}'s file moved where MDM can't follow");
+                    tracing::info!(
+                        "drag out: download {id}'s file moved where Grabbit can't follow"
+                    );
                     item.moved_away = true;
                     item.note(crate::i18n::t(
-                        "Dragged out of Download complete and moved to a place MDM couldn't learn",
+                        "Dragged out of Download complete and moved to a place Grabbit couldn't learn",
                     ));
                 }
             }
@@ -6243,10 +6245,10 @@ impl App {
                 Err(e) => {
                     if self.save_failed.as_ref() != Some(&e) {
                         self.notice = Some((
-                            crate::i18n::mark("Mister Download Manager"),
+                            crate::i18n::mark("Grabbit"),
                             crate::i18n::fmt(
                                 crate::i18n::t(
-                                    "The download list could not be saved: {error}. Changes are kept while MDM runs.",
+                                    "The download list could not be saved: {error}. Changes are kept while Grabbit runs.",
                                 ),
                                 &[("error", &e)],
                             ),
@@ -6426,20 +6428,15 @@ impl App {
                 I("&Video downloads", Cmd::HelpPage("video.md"), true, false),
                 I("&Keyboard shortcuts", Cmd::Shortcuts, true, false),
                 Sep,
-                I(
-                    "Mister Download Manager &Home Page",
-                    Cmd::HelpPage(""),
-                    true,
-                    false,
-                ),
+                I("Grabbit &Home Page", Cmd::HelpPage(""), true, false),
                 I("&Report a problem", Cmd::ReportProblem, true, false),
                 Sep,
                 I("Check for &updates...", Cmd::CheckUpdates, true, false),
                 Sep,
-                I("&About Mister Download Manager", Cmd::About, true, false),
+                I("&About Grabbit", Cmd::About, true, false),
                 I("Tell a &friend", Cmd::TellFriend, true, false),
                 // MDM's, not IDM's: `help::SPONSORS`, asked for only.
-                I("Support &MDM", Cmd::Support, true, false),
+                I("Support &Grabbit", Cmd::Support, true, false),
             ],
         }
     }
@@ -6664,12 +6661,12 @@ impl App {
                 (None, None) if software => items.push(software_note),
                 (None, None) if unfit.is_some() => {}
                 // i18n: View → Draw with: a greyed note under the choices; the choice takes effect when MDM is started again
-                (None, None) => notes.push(off("Applies the next time MDM starts")),
+                (None, None) => notes.push(off("Applies the next time Grabbit starts")),
             }
             if let Some(why) = unfit {
                 notes.push(match why {
                     // i18n: View → Draw with: a greyed note; this computer's OpenGL (its graphics driver) is too old, so MDM doesn't draw with it
-                    Why::TooOld => off("OpenGL here is too old to draw MDM"),
+                    Why::TooOld => off("OpenGL here is too old to draw Grabbit"),
                     // i18n: View → Draw with: a greyed note; why MDM no longer draws with OpenGL: its window froze inside the graphics card's driver while OpenGL drew
                     Why::FrozeInDriver => off("OpenGL froze inside the graphics driver here"),
                     // i18n: View → Draw with: a greyed note; why MDM no longer draws with OpenGL: its window stayed empty for 10 seconds, so MDM started again another way
@@ -6795,7 +6792,7 @@ impl App {
             Popup::Node(node) => (self.node_entries(node), None),
             Popup::DropTarget => (
                 vec![
-                    MenuEntry::Item("Show Mister Download Manager", Cmd::ShowMain, true, false),
+                    MenuEntry::Item("Show Grabbit", Cmd::ShowMain, true, false),
                     MenuEntry::Item("&Add new download", Cmd::AddUrl, true, false),
                     MenuEntry::Sep,
                     MenuEntry::Item("Hide drop target", Cmd::ToggleDropTarget, true, false),
@@ -8430,7 +8427,7 @@ impl App {
             } else {
                 // A file MDM can't download or import (a picture, a program).
                 self.notice = Some((
-                    crate::i18n::mark("Mister Download Manager"),
+                    crate::i18n::mark("Grabbit"),
                     crate::i18n::fmt(
                         crate::i18n::t(
                             "Nothing to download in {item}: drop links, a .torrent file, or a list of addresses (.txt, .ef2).",

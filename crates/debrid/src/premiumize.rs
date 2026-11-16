@@ -59,14 +59,14 @@ fn read<T: serde::de::DeserializeOwned>(
         return Err(Fault::Service(if status >= 500 {
             F::ServiceDown
         } else {
-            F::Other("an answer MDM can't read".into())
+            F::Other("an answer Grabbit can't read".into())
         }));
     };
     if s.status != "success" {
         return Err(fault_of(&s.code, &s.message));
     }
     serde_json::from_slice(body)
-        .map_err(|_| Fault::Service(F::Other("an answer MDM can't read".into())))
+        .map_err(|_| Fault::Service(F::Other("an answer Grabbit can't read".into())))
 }
 
 async fn call<T: serde::de::DeserializeOwned>(

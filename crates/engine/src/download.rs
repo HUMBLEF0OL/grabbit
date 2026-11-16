@@ -369,7 +369,7 @@ pub enum Error {
     /// A web page came instead of the file (a file host's countdown or captcha, a sign-in wall,
     /// an expired link's notice, #533, upstream issue 701): the browser gets past it, MDM doesn't.
     #[error(
-        "the site sent a web page instead of the file (a waiting page, a captcha or a sign-in): open the link in your browser, finish there, and the download comes back to MDM"
+        "the site sent a web page instead of the file (a waiting page, a captcha or a sign-in): open the link in your browser, finish there, and the download comes back to Grabbit"
     )]
     GotWebPage,
     /// A full answer to a range request for the same, unchanged file: the server (or one CDN
@@ -2600,9 +2600,7 @@ impl FirstAsk<'_> {
             Err(e) if agent_refused(&e) && opts.agent_fallback.is_some() => {
                 // #372: the rest of the download goes as MDM too.
                 opts.user_agent = opts.agent_fallback.take().unwrap_or_default();
-                shared.event(
-                    "The server refused the browser's User-Agent; asking as Mister Download Manager",
-                );
+                shared.event("The server refused the browser's User-Agent; asking as Grabbit");
                 let client1 = client(opts, url, self.as_get, self.seen)?;
                 let first = first_get(&client1, url, headers, opts, expects, shared, cancel).await;
                 Ok((client1, first, true))

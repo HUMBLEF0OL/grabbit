@@ -1,6 +1,6 @@
 [package]
 name = "mdm-nmhost"
-description = "Browser native messaging host: hands captured downloads to MDM"
+description = "Browser native messaging host: hands captured downloads to Grabbit"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

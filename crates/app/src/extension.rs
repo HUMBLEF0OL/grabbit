@@ -106,7 +106,7 @@ impl Extension {
             ctx,
             "extension",
             // i18n: title of the window that offers the browser extension
-            "Add Mister Download Manager to your browser",
+            "Add Grabbit to your browser",
             [W, h - 32.0 + winui::FOOTER_H + extra],
             false,
             winui::BG(),
@@ -244,7 +244,7 @@ impl Extension {
                 o.x + 18.0,
                 o.y + y,
                 crate::i18n::t(
-                    "Browser integration isn't set up on this computer, so no browser can reach Mister Download Manager yet.",
+                    "Browser integration isn't set up on this computer, so no browser can reach Grabbit yet.",
                 ),
                 winui::ERROR(),
                 o.x + fix_x - 10.0,
@@ -425,7 +425,7 @@ pub fn checks(settings: &crate::settings::Settings) -> Vec<Check> {
         Registration::Ready | Registration::Missing => check(
             registration == Registration::Ready,
             // i18n: a check of Test browser integration: the browsers find MDM's helper program
-            "The browsers can find Mister Download Manager",
+            "The browsers can find Grabbit",
             Some("not-installed"),
         ),
         Registration::HelperMissing(path) => {

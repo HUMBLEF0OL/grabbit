@@ -73,7 +73,7 @@ pub async fn find(http: &reqwest::Client, signature: &str) -> Option<Found> {
     let r = http
         .get(url)
         .header("Accept", "application/vnd.github+json")
-        .header("User-Agent", "MisterDownloadManager crash reporter")
+        .header("User-Agent", "Grabbit crash reporter")
         .send()
         .await
         .ok()?

@@ -135,11 +135,7 @@ impl Tray {
             m.append(&item).ok();
             item
         };
-        add(
-            &menu,
-            crate::i18n::mark("Open Mister Download Manager"),
-            TrayCmd::Show,
-        );
+        add(&menu, crate::i18n::mark("Open Grabbit"), TrayCmd::Show);
         menu.append(&PredefinedMenuItem::separator()).ok();
         let mark = crate::i18n::mark;
         add(&menu, mark("Add new download"), TrayCmd::AddUrl);

@@ -332,7 +332,7 @@ impl OptionsDialog {
         let outcome = window(
             ctx,
             "options",
-            "Mister Download Manager Configuration",
+            "Grabbit Configuration",
             [w, h],
             false,
             LIGHT_BG(),
@@ -478,7 +478,7 @@ impl OptionsDialog {
         let checks: [(&mut bool, &str); 7] = [
             (
                 &mut s.launch_on_startup,
-                crate::i18n::mark("Launch Mister Download Manager on startup"),
+                crate::i18n::mark("Launch Grabbit on startup"),
             ),
             (
                 &mut s.clipboard_autostart,
@@ -522,13 +522,13 @@ impl OptionsDialog {
             // Where a start with the session leaves the window (#226).
             if i == 0 && enabled && check.hovered() {
                 check.on_hover_text(
-                    // i18n: tooltip of "Launch Mister Download Manager on startup": started with the computer, MDM's window stays hidden, its icon in the notification area (system tray)
+                    // i18n: tooltip of "Launch Grabbit on startup": started with the computer, Grabbit's window stays hidden, its icon in the notification area (system tray)
                     crate::i18n::t("Started with the computer, it waits in the notification area"),
                 );
             } else if i == 6 && check.hovered() {
                 // i18n: tooltip of the close-setting: checked keeps MDM running when the window closes, in the notification area when available or else the taskbar; downloads continue; unchecked closing quits
                 check.on_hover_text(crate::i18n::t(
-                    "Checked, closing the window keeps MDM running: it hides in the notification area when available, or minimizes to the taskbar otherwise, and downloads continue; unchecked, closing quits MDM",
+                    "Checked, closing the window keeps Grabbit running: it hides in the notification area when available, or minimizes to the taskbar otherwise, and downloads continue; unchecked, closing quits Grabbit",
                 ));
             }
         }
@@ -643,7 +643,7 @@ impl OptionsDialog {
         caption(
             ui,
             keys_y,
-            crate::i18n::t("Customize keys to prevent or force downloading with MDM"),
+            crate::i18n::t("Customize keys to prevent or force downloading with Grabbit"),
             LIGHT_TEXT(),
         );
         if winui::button_light(
@@ -660,7 +660,7 @@ impl OptionsDialog {
         caption(
             ui,
             menu_y,
-            crate::i18n::t("Customize MDM menu items in context menu of browsers"),
+            crate::i18n::t("Customize Grabbit menu items in context menu of browsers"),
             LIGHT_DISABLED(),
         );
         off(ui, r(o, end_x, menu_y, end_w, h), edit);
@@ -668,7 +668,7 @@ impl OptionsDialog {
         caption(
             ui,
             panels_y,
-            crate::i18n::t("Customize MDM Download panels in browsers"),
+            crate::i18n::t("Customize Grabbit Download panels in browsers"),
             LIGHT_TEXT(),
         );
         if winui::button_light(
@@ -993,7 +993,7 @@ impl OptionsDialog {
             o.x + left,
             o.y + 377.0,
             crate::i18n::t(
-                "Mister Download Manager writes every connection straight into the final\nfile (a sparse part file next to it), so no temporary directory and no\nassembling step are needed.",
+                "Grabbit writes every connection straight into the final\nfile (a sparse part file next to it), so no temporary directory and no\nassembling step are needed.",
             ),
             LIGHT_TEXT(),
             o.x + right,
@@ -1163,7 +1163,7 @@ impl OptionsDialog {
                 &[("browser", browser.as_str())],
             ),
             None if mdm_engine::agent::looked_for() => crate::i18n::t(
-                "Your default browser isn't one MDM knows: a current Chrome's User-Agent",
+                "Your default browser isn't one Grabbit knows: a current Chrome's User-Agent",
             )
             .to_owned(),
             None => crate::i18n::t("Looking for your default browser...").to_owned(),
@@ -1876,7 +1876,7 @@ impl OptionsDialog {
             o.y + para_y,
             // i18n: Options → Accounts: what these accounts are, and the services' rule against sharing
             crate::i18n::t(
-                "A debrid service downloads a file host's link with your own paid account and gives MDM a direct link. Use only your own account: sharing an account or its links breaks the services' terms and can get it suspended. Downloads the browser already started stay as they are.",
+                "A debrid service downloads a file host's link with your own paid account and gives Grabbit a direct link. Use only your own account: sharing an account or its links breaks the services' terms and can get it suspended. Downloads the browser already started stay as they are.",
             ),
             winui::MUTED(),
             o.x + PAGE_RIGHT,
@@ -2395,7 +2395,7 @@ impl OptionsDialog {
             o,
             l,
             PAGE_TOP + 10.0,
-            "Select sounds for Mister Download Manager events",
+            "Select sounds for Grabbit events",
         );
         // The list from under its title to above its buttons; the event column ends at `div`.
         let buttons_y = PAGE_BOTTOM - h;
@@ -2632,7 +2632,7 @@ impl OptionsDialog {
             o + vec2(l, PAGE_TOP),
             &mut self.s.remote_on,
             // i18n: Options → Remote check box (off by default)
-            "Let phones and computers on the local network control MDM",
+            "Let phones and computers on the local network control Grabbit",
             true,
         );
         let on = self.s.remote_on;
@@ -2707,7 +2707,7 @@ impl OptionsDialog {
             ),
             None | Some(Status::Off) => (
                 // i18n: Options → Remote → Status: the remote control is off
-                crate::i18n::t("Off: nothing on the network can reach MDM.").to_owned(),
+                crate::i18n::t("Off: nothing on the network can reach Grabbit.").to_owned(),
                 Info,
                 "gx-info",
             ),
@@ -2899,7 +2899,7 @@ impl OptionsDialog {
             o.y + buttons_y + h + 18.0,
             // i18n: Options → Remote, at the bottom of the page
             crate::i18n::t(
-                "Only paired devices see or change anything. The first time, the phone's browser warns about MDM's own certificate: its fingerprint is the one above.",
+                "Only paired devices see or change anything. The first time, the phone's browser warns about Grabbit's own certificate: its fingerprint is the one above.",
             ),
             winui::MUTED(),
             o.x + right,
@@ -2959,7 +2959,7 @@ impl OptionsDialog {
                         o.y + 29.0,
                         // i18n: Options → Remote → Pair a device: the remote control isn't listening (no network, port taken): the Remote page says why
                         crate::i18n::t(
-                            "MDM can't be reached on the network now: Options → Remote says why.",
+                            "Grabbit can't be reached on the network now: Options → Remote says why.",
                         ),
                         crate::theme::colors().error_strong,
                         o.x + W - e,
@@ -2974,7 +2974,7 @@ impl OptionsDialog {
                 if let Some(name) = &paired {
                     let line = crate::i18n::fmt(
                         // i18n: Options → Remote → Pair a device: done; {device} = the name it was given
-                        crate::i18n::t("{device} is paired. It can control MDM now."),
+                        crate::i18n::t("{device} is paired. It can control Grabbit now."),
                         &[("device", &crate::i18n::isolate(name))],
                     );
                     winui::paragraph_centred(
@@ -3472,7 +3472,7 @@ impl OptionsDialog {
                             o.x + e,
                             o.y + 29.0,
                             crate::i18n::t(
-                                "Hold Alt while clicking a link to let the browser download it instead of Mister Download Manager.",
+                                "Hold Alt while clicking a link to let the browser download it instead of Grabbit.",
                             ),
                             LIGHT_TEXT(),
                             o.x + W - e,
@@ -3916,7 +3916,7 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         let what = crate::i18n::fmt(
             // i18n: Options → Add an account: waiting while the user types the code at the service's page; {page} its address, {time} minutes:seconds left
             crate::i18n::t(
-                "Type this code at {page} and allow MDM; waiting for you (the code expires in {time}).",
+                "Type this code at {page} and allow Grabbit; waiting for you (the code expires in {time}).",
             ),
             &[
                 ("page", &crate::i18n::ltr(page)),
@@ -4627,11 +4627,11 @@ fn kept_text(kept: crate::secrets::Kept) -> Option<&'static str> {
         ),
         // i18n: Options → Accounts: the system keyring is locked (MDM never unlocks it: that would ask for its password), so the sign-ins stay in MDM's settings folder, which only the user's account may read
         Kept::Locked => crate::i18n::mark(
-            "The system keyring is locked and MDM doesn't unlock it, so sign-ins and passwords are kept in MDM's settings, which only you can read.",
+            "The system keyring is locked and Grabbit doesn't unlock it, so sign-ins and passwords are kept in Grabbit's settings, which only you can read.",
         ),
         // i18n: Options → Accounts: Windows Credential Manager didn't answer, so the sign-ins stay in MDM's settings, encrypted so that only this Windows account can read them
         Kept::Missing => crate::i18n::mark(
-            "Windows Credential Manager didn't answer, so sign-ins and passwords are kept in MDM's settings, encrypted for your Windows account.",
+            "Windows Credential Manager didn't answer, so sign-ins and passwords are kept in Grabbit's settings, encrypted for your Windows account.",
         ),
     })
 }

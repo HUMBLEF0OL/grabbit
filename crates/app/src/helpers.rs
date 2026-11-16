@@ -216,7 +216,7 @@ impl Helpers {
                 // i18n: a promise in the helpers window: the helpers are free, official and checked
                 "Free, official and checked",
                 crate::i18n::t(
-                    "Both are open source. MDM gets them from their official releases with its own downloader and checks each file's signature before it runs. About 100 MB, once.",
+                    "Both are open source. Grabbit gets them from their official releases with its own downloader and checks each file's signature before it runs. About 100 MB, once.",
                 )
                 .to_owned(),
             ),
@@ -552,7 +552,7 @@ impl Programs {
                 (Some(old), _) => crate::i18n::fmt(
                     // i18n: Video helpers: the person's own gallery-dl is too old and not used; {version} = its version, {oldest} = the oldest MDM can use
                     crate::i18n::t(
-                        "Your own program ({version}) is too old: MDM needs {oldest} or newer",
+                        "Your own program ({version}) is too old: Grabbit needs {oldest} or newer",
                     ),
                     &[
                         ("version", &old.version),
@@ -569,7 +569,7 @@ impl Programs {
                 ),
                 (None, Some(i)) => crate::i18n::fmt(
                     // i18n: Video helpers: {version} = the version of MDM's own copy
-                    crate::i18n::t("Mister Download Manager's own copy, version {version}"),
+                    crate::i18n::t("Grabbit's own copy, version {version}"),
                     &[("version", &i.version)],
                 ),
                 // i18n: Video helpers: no copy of this helper yet
@@ -591,7 +591,7 @@ impl Programs {
                 &p,
                 &[
                     ("Use another program...", 20.0, 180.0),
-                    ("Use MDM's own copy", 208.0, 180.0),
+                    ("Use Grabbit's own copy", 208.0, 180.0),
                 ],
                 8.0,
                 PROGRAMS_W - 20.0,
@@ -638,7 +638,7 @@ impl Programs {
                 ui,
                 r(o, own_at.0, y - o.y + 46.0, own_at.1, 21.0),
                 // i18n: Video helpers: button: go back to the copy MDM downloads and checks itself
-                "Use MDM's own copy",
+                "Use Grabbit's own copy",
                 if mine && !busy {
                     ButtonKind::Normal
                 } else {
@@ -647,7 +647,7 @@ impl Programs {
                 false,
                 None,
             );
-            spoken(&own, "Use MDM's own copy");
+            spoken(&own, "Use Grabbit's own copy");
             if own.clicked()
                 && let Some(dir) = self.dir.clone()
             {

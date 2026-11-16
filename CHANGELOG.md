@@ -5,6 +5,10 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ## [Unreleased]
 
+### Changed
+
+- **Mister Download Manager is now Grabbit.** The app's windows, menus and messages, the notification area, the crash report, the command line, the AI assistants' server, the remote page, the installer and the browser extension say Grabbit. Your downloads, settings and sign-ins are untouched, and the program files keep their names for now. An upgrade replaces the old Start menu and desktop shortcuts with Grabbit's (pin it again to Start or the taskbar if you had pinned it). The bug, crash and idea forms on GitHub say Grabbit too. Sites and services now see Grabbit's name in its User-Agent (`Grabbit/<version>`).
+
 ### Removed
 
 - MDM is Windows only now: Linux, macOS, Safari and Docker builds are no longer made.

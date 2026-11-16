@@ -321,7 +321,7 @@ impl Http {
         let (status, body, retry_after) = self.send(ServiceKind::RealDebrid, req).await?;
         if (200..300).contains(&status) {
             return serde_json::from_slice(&body).map_err(|_| {
-                Fault::Service(ServiceFault::Other("an answer MDM can't read".into()))
+                Fault::Service(ServiceFault::Other("an answer Grabbit can't read".into()))
             });
         }
         let f = fault(status, &body, retry_after);
@@ -330,7 +330,7 @@ impl Http {
     }
 }
 
-const USER_AGENT: &str = concat!("MisterDownloadManager/", env!("CARGO_PKG_VERSION"));
+const USER_AGENT: &str = concat!("Grabbit/", env!("CARGO_PKG_VERSION"));
 
 /// One account, signed in: its access token in memory (Real-Debrid's device flow gives tokens
 /// that expire; a pasted token doesn't).
@@ -501,7 +501,7 @@ pub(crate) fn plain_id(id: &str) -> Result<&str, Fault> {
         Ok(id)
     } else {
         Err(Fault::Service(ServiceFault::Other(
-            "the service gave an id MDM can't use".into(),
+            "the service gave an id Grabbit can't use".into(),
         )))
     }
 }

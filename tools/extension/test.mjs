@@ -199,7 +199,7 @@ function fakeApi({
       onClicked: event("menu"),
     },
     // The browser's language: German here.
-    i18n: { getMessage: (key) => ({ menu: "Download with Mister Download Manager" })[key] ?? "" },
+    i18n: { getMessage: (key) => ({ menu: "Download with Grabbit" })[key] ?? "" },
   };
   if (!firefox) api.declarativeNetRequest = { getSessionRules: async () => [], updateSessionRules: async (r) => calls.push(["dnr", r]) };
   if (appName) api.runtime.getBrowserInfo = async () => ({ name: appName, vendor: "Mozilla", version: "1.0" });
@@ -1693,7 +1693,7 @@ function samplePage(html) {
   load(api, false);
   await listeners.installed({ reason: "update" });
   const item = calls.find((c) => c[0] === "menu-item")[1];
-  assert.equal(item.title, "Download with Mister Download Manager");
+  assert.equal(item.title, "Download with Grabbit");
   const dir = new URL("../../extension/_locales/", import.meta.url);
   assert.deepEqual(readdirSync(dir), ["en"], "English only");
   const english = JSON.parse(readFileSync(new URL("en/messages.json", dir), "utf8"));

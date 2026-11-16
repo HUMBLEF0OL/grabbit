@@ -39,9 +39,16 @@ ALLOW = [
     (r"\bmdm-[a-z0-9-]+", "crate names (decision: keep)"),
     (r"\bMDM_[A-Z0-9_]+", "environment variables (10c adds GRABBIT_ ones, keeps these)"),
     (r"\bMDM\.popup\b", "internal window-property marker, never shown"),
+    (r"\bMDM\.caption-less\.settled\b", "internal window-property marker, never shown"),
     (r"\bMDM-test-[\w{}:-]*", "keychain names of off-screen test copies, never shown"),
 ]
 ALLOW_RE = re.compile("|".join(f"(?:{p})" for p, _ in ALLOW))
+
+# Whole texts kept on purpose at one place: (file, the text as listed) -> why.
+KEPT = {
+    ("crates/app/src/secrets.rs", "Mister Download Manager"): "keychain service: saved logins live under it (10c migrates)",
+    ("tools/installer/mdm.iss", '#define OldAppName "Mister Download Manager"'): "the old shortcuts an upgrade removes",
+}
 
 TEXT_EXT = {".md", ".html", ".json", ".txt", ".css", ".js", ".toml", ".yml", ".tsv", ".jsonl", ".webmanifest"}
 
@@ -156,7 +163,7 @@ def run(summary):
         found = []
         for path, scan in sources():
             rel = path.relative_to(ROOT).as_posix()
-            found += [(rel, *hit) for hit in scan(path)]
+            found += [(rel, *hit) for hit in scan(path) if (rel, hit[2]) not in KEPT]
         counts = {t: sum(1 for f in found if f[2] == t and not f[4]) for t in TERMS}
         tests = sum(1 for f in found if f[4])
         nfiles = len({f[0] for f in found})
@@ -198,7 +205,7 @@ const AFTER: &str = "MDM after";
         "com.misterdownloadmanager.host", "MisterDownloadManager.Running", "mdm-app",
         "https://misterdownloadmanager.com/help/", "integration@misterdownloadmanager.com",
         "MisterDownloadManager-{version}-{tail}", "AppId={{667DB4D8-32C2-4487-A0E5-5825BF29778C}",
-        "keychain:MDM-test-unit/aaaa0001/",
+        "keychain:MDM-test-unit/aaaa0001/", "MDM.caption-less.settled\\0",
     ]:
         assert hits_in(kept) == [], kept
     assert hits_in("Support MDM") == ["MDM"]
