@@ -3366,7 +3366,12 @@ impl App {
                 // A video's streams and their parts, kept for Resume (an unfinished run, a
                 // failed merge, the engine's pieces): they go with it (upstream 6196f9ad).
                 for f in video_leftovers(&self.items, id) {
-                    let _ = std::fs::remove_file(f);
+                    // The engine's pieces wait in a folder of their own.
+                    let _ = if f.is_dir() {
+                        std::fs::remove_dir_all(f)
+                    } else {
+                        std::fs::remove_file(f)
+                    };
                 }
             }
             self.items.retain(|i| i.id != id);
@@ -11646,5 +11651,53 @@ mod access_key_tests {
         found.sort();
         found.dedup();
         assert!(found.is_empty(), "{}", found.join(", "));
+    }
+}
+
+#[cfg(test)]
+mod video_leftover_tests {
+    use super::{Item, video_leftovers};
+    use crate::model::{Category, VideoSpec};
+
+    /// Deleting a video of one stream (saved straight as `Clip.mp4`) takes what yt-dlp and the
+    /// engine left for it: its `.mdm` files and its pieces' folder; never a file another row in
+    /// that folder is named after.
+    #[test]
+    fn a_single_stream_videos_leftovers_go_and_no_others() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        let url: url::Url = "https://videos.test/watch?v=1".parse().unwrap();
+        let mut video = Item::new(1, url.clone(), d.join("Clip.mp4"), Category::Video);
+        video.video = Some(VideoSpec {
+            selector: "18".into(),
+            subs: Default::default(),
+            parts: Vec::new(),
+        });
+        // Another row: a plain download named alike, with its own part file.
+        let other = Item::new(2, url, d.join("Clip.v2.zip"), Category::General);
+        for f in [
+            "Clip.mp4.mdm.part",
+            "Clip.mp4.mdm.json",
+            "Clip.mp4.part",
+            "Clip.v2.zip.mdm.part",
+            "Clip.notes.txt",
+        ] {
+            std::fs::write(d.join(f), b"x").unwrap();
+        }
+        std::fs::create_dir(d.join("Clip.ts.mdm.pieces")).unwrap();
+        let mut names: Vec<String> = video_leftovers(&[video, other], 1)
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            [
+                "Clip.mp4.mdm.json",
+                "Clip.mp4.mdm.part",
+                "Clip.mp4.part",
+                "Clip.ts.mdm.pieces"
+            ]
+        );
     }
 }

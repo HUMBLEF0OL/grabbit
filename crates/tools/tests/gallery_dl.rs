@@ -94,7 +94,7 @@ fn every_release_mdm_can_drive_saves_a_gallery() {
             "{v}: chosen, reads and refuses addresses, saved {} with MDM's User-Agent",
             saved[0].file_name().to_string_lossy()
         ));
-        // #769: with MDM's engine, gallery-dl lists the file (1.26 and later) and the engine
+        // #769: with MDM's engine, gallery-dl lists the file (1.32 and later) and the engine
         // saves it under gallery-dl's name; gallery-dl then finds it there. An older one
         // downloads it itself, as before.
         lab.clear_log();

@@ -13,8 +13,9 @@
 //! path it would save it to (`--print prepare-after:…`, nothing downloaded), the engine brings
 //! them in several at once into those paths, under the speed limits, and gallery-dl then runs as
 //! before: it finds them there and fetches only what the engine couldn't have (a site that wants
-//! headers of its own, a sign-in). A gallery-dl too old to list them (before 1.32) downloads them all
-//! itself, as before.
+//! headers of its own). A gallery-dl too old to list them (before 1.32), or a gallery behind the
+//! browser's sign-in (its cookies passed, [`engine_may_fetch`]), downloads them all itself, as
+//! before.
 
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -445,6 +446,15 @@ pub struct GalleryJob {
     on_helper: Arc<std::sync::atomic::AtomicBool>,
 }
 
+/// Whether the engine may fetch the files gallery-dl lists, with gallery-dl's arguments `args`:
+/// not when the browser's cookies go with them (a gallery behind a sign-in). The listing gives
+/// each file's address only, so the engine would ask without them and could save the site's
+/// sign-in page under the picture's name, which gallery-dl would then take as already there;
+/// gallery-dl downloads such a gallery itself, cookies and all.
+fn engine_may_fetch(args: &[String]) -> bool {
+    !args.iter().any(|a| a.starts_with("--cookies"))
+}
+
 /// The line gallery-dl prints for each file it lists (`--print`): its address and its path.
 const LISTED: &str = "prepare-after:MDMG {_url}\t{_path}";
 
@@ -506,7 +516,7 @@ impl GalleryJob {
             .unwrap_or_else(|| USER_AGENT.to_owned());
         ours.extend(theirs);
         std::fs::create_dir_all(folder).map_err(|e| ProcError::Start("gallery-dl".into(), e))?;
-        let engine = engine.filter(|_| Accepts::of(&tool.version).print);
+        let engine = engine.filter(|_| Accepts::of(&tool.version).print && engine_may_fetch(&ours));
         // The listing: gallery-dl's own options, no wait between files (nothing is downloaded).
         let list_args: Vec<String> = {
             let mut a = Vec::new();
@@ -762,6 +772,24 @@ fn finish(shared: &Mutex<Shared>, child: &Mutex<Option<Spawned>>, folder: PathBu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A gallery behind the browser's sign-in (its cookies passed) stays gallery-dl's: the
+    /// engine fetches only what needs no cookies.
+    #[test]
+    fn a_signed_in_gallery_stays_with_gallery_dl() {
+        let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert!(engine_may_fetch(&a(&["--directory", "/g", "--sleep", "1"])));
+        assert!(!engine_may_fetch(&a(&[
+            "--cookies",
+            "/c.txt",
+            "--user-agent",
+            "F/1"
+        ])));
+        assert!(!engine_may_fetch(&a(&[
+            "--cookies-from-browser",
+            "firefox"
+        ])));
+    }
 
     const SUMS: &[u8] = include_bytes!("../tests/fixtures/gallery-dl-SHA256SUMS");
     const SIG: &[u8] = include_bytes!("../tests/fixtures/gallery-dl-SHA256SUMS.sig");

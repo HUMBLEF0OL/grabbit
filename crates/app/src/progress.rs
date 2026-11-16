@@ -2003,7 +2003,10 @@ fn helper_line(why: &mdm_tools::streams::Helper) -> String {
         Helper::Protocol(protocol) => crate::i18n::fmt(
             // i18n: progress window, a video's line: {protocol} = a streaming protocol's short name (rtmp, rtsp, mms); the engine doesn't speak it, so the helper program yt-dlp downloads it
             crate::i18n::t("yt-dlp downloads it itself: {protocol}"),
-            &[("protocol", &protocol.to_ascii_uppercase())],
+            &[(
+                "protocol",
+                &crate::i18n::ltr(&protocol.to_ascii_uppercase()),
+            )],
         ),
         Helper::Protected => {
             // i18n: progress window, a video's line: the stream is copy-protected (DRM), left to the helper program yt-dlp, which refuses it

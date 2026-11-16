@@ -797,10 +797,11 @@ const SUBTITLES: [&str; 10] = [
 /// saved as `<stem>.%(ext)s`: an unfinished run's (`<ext>.part`, `<ext>.ytdl`,
 /// `<ext>.part-Frag<N>[.part]`, each also for one stream of a merged choice as `f<id>.<ext>…`,
 /// that stream once whole, `f<id>.<ext>`, and a merge's `temp.<ext>`; the engine's part file,
-/// resume state and pieces for such a stream, `f<id>.<ext>.mdm.part|json|pieces`, upstream
+/// resume state and pieces' folder for a stream, `[f<id>.]<ext>.mdm.part|json|pieces`, upstream
 /// issue 769); with `outputs`, also the finished file (`<ext>`) and its subtitles
-/// (`<language>.<srt|vtt…>`). Nothing else: another download's files (our own `.mdm.part`), a
-/// file merely named alike. Ported from upstream `97e31ad5`/`6196f9ad`.
+/// (`<language>.<srt|vtt…>`). Nothing else: a file merely named alike. Another download named
+/// `<stem>.<ext>` in the same folder owns `<stem>.<ext>.mdm.*` too: the app leaves out what
+/// another row's name starts (`video_leftovers`). Ported from upstream `97e31ad5`/`6196f9ad`.
 fn yt_dlp_leftover(rest: &str, outputs: bool) -> bool {
     let media = |s: &str| LEFTOVER_MEDIA.contains(&s);
     let word = |s: &str| {
@@ -835,6 +836,8 @@ fn yt_dlp_leftover(rest: &str, outputs: bool) -> bool {
         ["temp", ext] => media(ext),
         [f, ext] if format(f) => media(ext),
         [f, ext, "mdm", "part" | "json" | "pieces"] if format(f) => media(ext),
+        // A choice of one stream, which the engine saves straight as `<stem>.<ext>`.
+        [ext, "mdm", "part" | "json" | "pieces"] => media(ext),
         [f, tail @ ..] if format(f) => unfinished(tail),
         p => unfinished(p),
     };
@@ -849,14 +852,24 @@ fn yt_dlp_leftover(rest: &str, outputs: bool) -> bool {
 
 /// What yt-dlp left in `dir` for a download saved as `<stem>.%(ext)s` (our template), as
 /// [`yt_dlp_leftover`] tells them, letter case aside: what an unfinished run left, and with
-/// `outputs` the finished file and its subtitles. A file not of that shape is left alone.
+/// `outputs` the finished file and its subtitles. A file not of that shape is left alone; the
+/// only folders are the engine's pieces' (`….mdm.pieces`), to be removed whole.
 pub fn own_files(dir: &Path, stem: &str, outputs: bool) -> Vec<PathBuf> {
     let prefix = format!("{}.", stem.to_lowercase());
     let Ok(rd) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
     rd.filter_map(Result::ok)
-        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter(|e| {
+            e.file_type().is_ok_and(|t| {
+                t.is_file()
+                    || (t.is_dir()
+                        && e.file_name()
+                            .to_string_lossy()
+                            .to_lowercase()
+                            .ends_with(".mdm.pieces"))
+            })
+        })
         .filter(|e| {
             let name = e.file_name().to_string_lossy().to_lowercase();
             name.strip_prefix(&prefix)
@@ -870,7 +883,10 @@ pub fn own_files(dir: &Path, stem: &str, outputs: bool) -> Vec<PathBuf> {
 /// files, streams named by a numbered or `hls-` id), and each stream of format `ids` by its name,
 /// `<stem>.f<id>.<ext>`, however yt-dlp named it (`Talk.faud-English.mp4`, an HLS sound's).
 fn kept_parts(dir: &Path, stem: &str, ids: &[String]) -> Vec<PathBuf> {
-    let mut kept = own_files(dir, stem, false);
+    let mut kept: Vec<PathBuf> = own_files(dir, stem, false)
+        .into_iter()
+        .filter(|p| p.is_file())
+        .collect();
     let named: Vec<String> = ids
         .iter()
         .map(|id| format!("{}.f{}.", stem, id).to_lowercase())
@@ -1688,10 +1704,12 @@ mod tests {
             "Clip.f137.mp4.mdm.part",
             "Clip.f137.mp4.mdm.json",
             "Clip.fhls-720p.mp4.mdm.pieces",
+            // A choice of one stream, saved straight as the video's own name.
+            "Clip.mp4.mdm.part",
+            "Clip.webm.mdm.json",
         ];
         let finished = ["Clip.mp4", "Clip.en.srt"];
         let others = [
-            "Clip.mp4.mdm.part",
             "Clip.v2.zip.mdm.part",
             "Clip.zip",
             "Clip.notes.txt",
@@ -1717,6 +1735,12 @@ mod tests {
         want.sort();
         assert_eq!(names(true), want);
         assert!(own_files(&d.join("missing"), "Clip", true).is_empty());
+        // The engine's pieces wait in a folder: the video's own, to go whole; no other folder.
+        std::fs::create_dir(d.join("Clip.ts.mdm.pieces")).unwrap();
+        std::fs::create_dir(d.join("Clip.extras")).unwrap();
+        let mut with_pieces = names(false);
+        with_pieces.retain(|n| !want.contains(n));
+        assert_eq!(with_pieces, ["Clip.ts.mdm.pieces"]);
         // A failed merge's streams by their format ids, however yt-dlp named them.
         std::fs::write(d.join("Clip.faud-English.mp4"), b"x").unwrap();
         let kept = kept_parts(d, "Clip", &["137".into(), "aud-English".into()]);
