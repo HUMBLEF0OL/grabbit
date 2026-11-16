@@ -39,8 +39,62 @@ pub struct Extension {
     registered: bool,
     /// When the status files were read last (once a second, not every frame).
     looked: std::time::Instant,
+    /// The read under way beside the window, one at a time ([`Reading`]).
+    reading: Option<Reading<Looked>>,
     /// Set it up's runs seen finished ([`set_up_finished`]).
     set_up_seen: u64,
+}
+
+/// What the window shows of the extension's state, as read from the status files, the
+/// browsers' folders and the registry.
+struct Looked {
+    connected: bool,
+    seen: Vec<String>,
+    registered: bool,
+}
+
+impl Looked {
+    fn now() -> Looked {
+        Looked {
+            connected: mdm_ipc::extension::seen(),
+            seen: seen_names(),
+            registered: registered(),
+        }
+    }
+}
+
+/// A read made on a thread of its own, its answer taken once it came: a browser's folder slow
+/// to answer (a sleeping disk, a profile on the network) held the window's thread each second
+/// the window was open (upstream issue 1218).
+struct Reading<T> {
+    answer: std::sync::mpsc::Receiver<T>,
+}
+
+impl<T: Send + 'static> Reading<T> {
+    /// Start `read` beside the window; the window repaints when it's done. None when no thread
+    /// could be made (the window keeps what it showed).
+    fn start(ctx: &egui::Context, read: impl FnOnce() -> T + Send + 'static) -> Option<Self> {
+        let (tx, answer) = std::sync::mpsc::channel();
+        let ctx = ctx.clone();
+        std::thread::Builder::new()
+            .name("extension status".into())
+            .spawn(move || {
+                let _ = tx.send(read());
+                ctx.request_repaint();
+            })
+            .ok()?;
+        Some(Reading { answer })
+    }
+
+    /// The answer, once it came (`Some(None)` when the read ended without one); None while it
+    /// runs.
+    fn take(&self) -> Option<Option<T>> {
+        match self.answer.try_recv() {
+            Ok(v) => Some(Some(v)),
+            Err(std::sync::mpsc::TryRecvError::Empty) => None,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => Some(None),
+        }
+    }
 }
 
 /// Whether `row` (a browser as the window lists it) is among the browsers seen (as Options
@@ -82,6 +136,7 @@ impl Extension {
             seen: seen_names(),
             registered: registered(),
             looked: std::time::Instant::now(),
+            reading: None,
             set_up_seen: 0,
         }
     }
@@ -89,13 +144,22 @@ impl Extension {
     /// Open until closed; Done when "Don't ask again" was pressed.
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         // The host marks the extension seen when a browser starts it: look again now and then
-        // (each browser's own, as each adds it).
-        if self.looked.elapsed() >= Duration::from_secs(1) || set_up_finished(&mut self.set_up_seen)
+        // (each browser's own, as each adds it), beside the window, one read at a time; what
+        // was read last shows meanwhile.
+        if let Some(answer) = self.reading.as_ref().and_then(Reading::take) {
+            self.reading = None;
+            if let Some(l) = answer {
+                self.connected = l.connected;
+                self.seen = l.seen;
+                self.registered = l.registered;
+            }
+        }
+        if self.reading.is_none()
+            && (self.looked.elapsed() >= Duration::from_secs(1)
+                || set_up_finished(&mut self.set_up_seen))
         {
             self.looked = std::time::Instant::now();
-            self.connected = mdm_ipc::extension::seen();
-            self.seen = seen_names();
-            self.registered = registered();
+            self.reading = Reading::start(ctx, Looked::now);
         }
         ctx.request_repaint_after(Duration::from_secs(1));
         let h = BANNER + 16.0 + self.browsers.len() as f32 * ROW + 104.0;
@@ -478,6 +542,40 @@ pub fn checks(settings: &crate::settings::Settings) -> Vec<Check> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Upstream issue 1218: a read slow to answer (a browser's folder on a sleeping disk) doesn't
+    /// hold the caller: it starts at once, nothing is there while it runs, and its answer is
+    /// taken once it comes.
+    #[test]
+    fn a_slow_read_is_made_beside_the_window() {
+        let ctx = egui::Context::default();
+        let (go, wait) = std::sync::mpsc::channel::<()>();
+        let started = std::time::Instant::now();
+        let reading = Reading::start(&ctx, move || {
+            let _ = wait.recv_timeout(Duration::from_secs(10));
+            7
+        })
+        .expect("a thread");
+        assert!(started.elapsed() < Duration::from_secs(1));
+        assert_eq!(reading.take(), None, "nothing while it reads");
+        go.send(()).unwrap();
+        let until = std::time::Instant::now() + Duration::from_secs(10);
+        let answer = loop {
+            if let Some(a) = reading.take() {
+                break a;
+            }
+            assert!(std::time::Instant::now() < until, "the answer never came");
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        assert_eq!(answer, Some(7));
+        // A read that ends without an answer (its code panicked) is over too.
+        let gone = Reading::<u8>::start(&ctx, || panic!("a read's code panics")).unwrap();
+        let until = std::time::Instant::now() + Duration::from_secs(10);
+        while gone.take().is_none() {
+            assert!(std::time::Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
 
     /// #41: Helium says it is Chrome; Zen gives its own name; each row reads its own status.
     #[test]
