@@ -14,6 +14,7 @@ pub mod proc;
 pub mod relay;
 pub mod resolve;
 pub mod servers;
+pub mod streams;
 pub mod update;
 pub mod video;
 pub mod workdir;

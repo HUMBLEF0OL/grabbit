@@ -44,6 +44,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
   this project's own repository, HUMBLEF0OL/grabbit, instead of the original Mister Download
   Manager's: reports reach the people who make this build, and it updates only from its own
   releases. Until its first release, the update check says MDM is up to date.
+- **Videos come down through the app's own downloader** (ported from upstream issue 769): yt-dlp now finds a video and its sound, and the app downloads them the way it downloads any file: over as many connections as **Options → Connection** gives (the progress window's connections table and segment map show them), YouTube's in requests of 10 MB at most as yt-dlp asks for them, under the speed limits (a change applies at once), paused and resumed like a file, and with a fresh address asked of yt-dlp when one expires. yt-dlp then joins them, adds the subtitles and converts the sound as before. Live streams, streams in pieces (HLS, DASH, for now) and RTMP, RTSP, MMS or FTP streams are still yt-dlp's to download, and the progress window says so.
 
 ### Fixed
 

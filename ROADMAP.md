@@ -528,6 +528,11 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
 - ✅ A new app icon, Grabbit's double chevron in Graphite's cyan and amethyst, with no tile behind
   it: in the title bar, the taskbar, the tray, the installer, About and the browser extension,
   and on the website (logo, favicon, home-screen icon) and the repository's social preview.
+- ✅ Videos in one file (most of YouTube's) come down through the app's own downloader, ported
+  from upstream issue 769: yt-dlp finds the video and its sound, the downloader brings them in
+  over several connections, under the speed limits, paused and resumed like a file, with a fresh
+  address when one expires; yt-dlp joins them as before. Streams in pieces (HLS, DASH) and
+  galleries come next.
 
 ## Being worked on
 

@@ -1229,16 +1229,29 @@ fn status_page(
             fit(label, vx, base, &value, winui::TEXT());
         }
     }
-    // Where its server is (#140): a file download's (a torrent, a video or a gallery has no
-    // single server of MDM's own). As the running download sees it, else as its last run did.
-    if item.torrent.is_none() && item.video.is_none() && item.gallery.is_none() {
+    // Where its server is (#140): a file download's, and a video's whose streams the engine
+    // downloads (upstream issue 769; a torrent or a gallery has no single server of our own). As
+    // the running download sees it, else as its last run did.
+    let seen = snap
+        .and_then(|s| s.server.as_ref())
+        .map(crate::whereis::Seen::from)
+        .or_else(|| item.server.clone());
+    // A video yt-dlp downloads itself (upstream issue 769): why, in that row.
+    if let Some(why) = item.video_helper() {
+        fit(
+            "helper",
+            33.0,
+            server_base,
+            &helper_line(&why),
+            winui::TEXT(),
+        );
+    } else if item.torrent.is_none()
+        && item.gallery.is_none()
+        && (item.video.is_none() || seen.is_some())
+    {
         // i18n: label before where a download's server is (its country and round trip)
         let label = crate::i18n::t("Server");
         text(p, o.x + 33.0, o.y + server_base, label, winui::TEXT());
-        let seen = snap
-            .and_then(|s| s.server.as_ref())
-            .map(crate::whereis::Seen::from)
-            .or_else(|| item.server.clone());
         crate::whereis::line(
             ui,
             o.x + column.max(33.0 + winui::text_width(p, label).ceil() + 6.0),
@@ -1908,6 +1921,31 @@ fn segment_bar(p: &egui::Painter, o: Pos2, item: &Item, snap: Option<&Snapshot>)
 fn tick_span(x: f32, ppp: f32) -> (f32, f32) {
     let a = (x * ppp).round() / ppp;
     (a, a + ppp.round().max(1.0) / ppp)
+}
+
+/// Why yt-dlp downloads a video itself rather than the engine (upstream issue 769), as one
+/// short line.
+fn helper_line(why: &mdm_tools::streams::Helper) -> String {
+    use mdm_tools::streams::Helper;
+    match why {
+        // i18n: progress window, a video's line: the engine can't take a live broadcast, so the helper program yt-dlp records it
+        Helper::Live => crate::i18n::t("yt-dlp downloads it itself: a live stream").to_owned(),
+        Helper::Pieces(_) => {
+            // i18n: progress window, a video's line: a stream sent in many small pieces (HLS, DASH), which the helper program yt-dlp downloads itself for now
+            crate::i18n::t("yt-dlp downloads it itself: a stream in pieces").to_owned()
+        }
+        Helper::Protocol(protocol) => crate::i18n::fmt(
+            // i18n: progress window, a video's line: {protocol} = a streaming protocol's short name (rtmp, rtsp, mms); the engine doesn't speak it, so the helper program yt-dlp downloads it
+            crate::i18n::t("yt-dlp downloads it itself: {protocol}"),
+            &[("protocol", &protocol.to_ascii_uppercase())],
+        ),
+        Helper::Protected => {
+            // i18n: progress window, a video's line: the stream is copy-protected (DRM), left to the helper program yt-dlp, which refuses it
+            crate::i18n::t("yt-dlp downloads it itself: protected (DRM)").to_owned()
+        }
+        // i18n: progress window, a video's line: the helper program yt-dlp gave no address the engine could use
+        Helper::NoAddress => crate::i18n::t("yt-dlp downloads it itself").to_owned(),
+    }
 }
 
 /// The connections table (spec "Connections table"): N. · Downloaded · Info.
