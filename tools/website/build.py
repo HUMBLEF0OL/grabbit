@@ -627,7 +627,7 @@ SOFTWARE_LD = {
     "downloadUrl": SITE + "/download.html",
     "installUrl": FILES["setup"],
     "screenshot": SITE + "/assets/screens/main-light.webp",
-    "image": SITE + "/assets/logo-640.png",
+    "image": SITE + "/assets/grabbit.svg",
     "author": {"@type": "Person", "name": "Ahmed Nefzaoui", "url": "https://github.com/anefzaoui"},
     "codeRepository": REPO,
     "featureList": [
@@ -1577,19 +1577,20 @@ def copy_static() -> None:
     (OUT / "CNAME").write_text("misterdownloadmanager.com\n", "utf-8")
     (OUT / ".nojekyll").write_text("", "utf-8")
     (OUT / "site.webmanifest").write_text(json.dumps({
-        "name": NAME, "short_name": "MDM", "start_url": "/", "display": "browser",
-        "background_color": "#ffffff", "theme_color": "#0f7b0f",
-        "icons": [{"src": "/assets/logo-640.png", "sizes": "640x640", "type": "image/png"},
+        "name": NAME, "short_name": NAME, "start_url": "/", "display": "browser",
+        "background_color": "#f7f6fb", "theme_color": "#f7f6fb",
+        "icons": [{"src": "/assets/grabbit.svg", "sizes": "any", "type": "image/svg+xml"},
+                  {"src": "/assets/logo-640.png", "sizes": "640x640", "type": "image/png"},
                   {"src": "/assets/apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}],
     }, indent=2), "utf-8")
 
 
 def bust_caches() -> None:
-    """Every page asks for /styles.css, /main.js and /bench.js by their content hash, so a
-    browser never pairs a new page with an old cached stylesheet."""
+    """Every page asks for /styles.css, /main.js, /bench.js and the home page's /home.css and
+    /home.js by their content hash, so a browser never pairs a new page with an old cached file."""
     import hashlib
     tags = {}
-    for name in ("styles.css", "main.js", "bench.js"):
+    for name in ("styles.css", "main.js", "bench.js", "home.css", "home.js"):
         tags[name] = hashlib.sha256((OUT / name).read_bytes()).hexdigest()[:10]
     for page in OUT.rglob("*.html"):
         text = page.read_text("utf-8")
