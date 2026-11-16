@@ -9984,24 +9984,13 @@ impl App {
 
     /// Every end's last work, once (`Drop`, or [`App::end_session`] before the process ends):
     /// the downloads that run stop and save where they are, so they resume there at the next
-    /// start; a rename on completion under way finishes; the feeds, the list and the settings
-    /// are written. `deadline`: the session's end, which can't wait for a disk that holds its
-    /// writes; an Exit waits for the list however long it takes.
+    /// start; the feeds, the list and the settings are written. `deadline`: the session's end,
+    /// which can't wait for a disk that holds its writes; an Exit waits for the list however
+    /// long it takes.
     fn finish(&mut self, deadline: Option<Instant>) {
         let began = Instant::now();
         // The longest first: the downloads save while the rest is done.
         let stopping = self.stop_for_the_end();
-        let left = |cap: Duration| {
-            deadline.map_or(cap, |d| {
-                d.saturating_duration_since(Instant::now()).min(cap)
-            })
-        };
-        // Let any rename on completion under way finish and update `item.dest` before saving.
-        for (id, rx) in std::mem::take(&mut self.renaming) {
-            if let Ok((r, sharing_error)) = rx.recv_timeout(left(Duration::from_secs(2))) {
-                self.apply_finished_rename(id, r, sharing_error, false);
-            }
-        }
         // An archive being extracted stops; its staging folder goes with it.
         self.extracts.stop();
         // No wake for a queue MDM won't be there to start.

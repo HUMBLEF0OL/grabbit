@@ -166,7 +166,7 @@ fn a_panic_is_reported_when_the_monitor_is_slow_to_start() {
     let r = report_with("panic", Some(Duration::from_millis(1500)));
     assert!(r.contains("crashy: a test panic"), "{r}");
     assert!(
-        signed(&r, "Signature: panic in crashy::crashy_panics_here"),
+        r.contains("Signature: panic in crashy::crashy_panics_here"),
         "{r}"
     );
 }
