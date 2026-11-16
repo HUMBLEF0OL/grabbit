@@ -971,12 +971,14 @@ impl ByEngine {
             crate::streams::Fetched::Done => Engined::Ready,
             crate::streams::Fetched::Stopped => Engined::Stopped,
             crate::streams::Fetched::Failed(e) => Engined::Failed(e),
+            crate::streams::Fetched::Helper(why) => Engined::Helper(why),
         }
     }
 }
 
-/// Today's address and headers of format `id` on the page: looked up again (as the browser
-/// asked, `browser`), its servers moved as the run moved them, and chosen with `-f <id>`.
+/// Format `id` on the page as yt-dlp gives it today (its address, headers, pieces): looked up
+/// again (as the browser asked, `browser`), its servers moved as the run moved them, and chosen
+/// with `-f <id>`.
 fn relink(
     exe: &Path,
     url: &str,
@@ -985,7 +987,7 @@ fn relink(
     dead: &std::collections::BTreeSet<String>,
     reroute: bool,
     id: &str,
-) -> Result<(url::Url, Vec<(String, String)>), String> {
+) -> Result<serde_json::Value, String> {
     let (mut info, _) = look_up(exe, url, browser)?;
     moved(&mut info, dead, reroute);
     let file = info_file();
@@ -993,7 +995,8 @@ fn relink(
         .map_err(|e| format!("Cannot write the video information: {e}"))?;
     let _cleanup = Remove(file.clone());
     let chosen = choose(exe, &with_selector(choose_args, id), &file)?;
-    crate::streams::format_link(&chosen, id)
+    crate::streams::format_of(&chosen, id)
+        .cloned()
         .ok_or_else(|| format!("the page no longer offers format {id}"))
 }
 
@@ -1146,6 +1149,13 @@ impl VideoJob {
                 "--ffmpeg-location".into(),
                 dir.to_string_lossy().into_owned(),
             ]);
+        }
+        // With the engine, every HLS stream is yt-dlp's hlsnative's (`--hls-prefer-native`): the
+        // engine joins its pieces as hlsnative does, and yt-dlp's fixups after it then follow
+        // (a live one hlsnative hands to ffmpeg, as before).
+        if engine.is_some() {
+            ours.push("--hls-prefer-native".into());
+            choose.push("--hls-prefer-native".into());
         }
         let retry = with_subs.then(|| SubsRetry {
             automatic: subs.automatic,

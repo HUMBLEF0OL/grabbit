@@ -9,6 +9,7 @@ pub mod ffmpeg;
 pub mod gallery;
 mod openpgp;
 pub mod pages;
+pub mod pieces;
 pub mod playlist;
 pub mod proc;
 pub mod relay;
