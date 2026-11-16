@@ -21,6 +21,10 @@ instructs agents: never batch-picked), A earlier upstream commits not taken here
 files or crates, I upstream's identity in added lines, P another platform, a language or text
 direction in added lines.
 
+The fork is Grabbit; upstream still writes Mister Download Manager and MDM. After each pick,
+`pick` lists any old name it brought back where the rename is done (tools/rename/check.py
+--done), and `pr` pushes nothing while one is left.
+
 The record of what was decided is LEDGER (one row per upstream commit, written by `pick` and
 `record`), backed by the trailers `pick` and a port leave in this fork's history
 (`Upstream-Pick: <sha>`, `Upstream-Port: <sha>`): a revert in the fork (of a pick, a merged sync
@@ -54,6 +58,7 @@ import re
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -66,6 +71,8 @@ FORK_BASE = "dev"
 PROTECTED = ("dev", "main")
 SYNC_PREFIX = "upstream-sync/"
 LEDGER = "tools/upstream-sync/ledger.md"
+# Plan 10's checker: the old name where the rename to Grabbit is done (old_names).
+RENAME_CHECK = "tools/rename/check.py"
 # The fork's own record of what changed and what's planned: upstream's lines never land here.
 OWN = ("CHANGELOG.md", "ROADMAP.md", LEDGER)
 STATUSES = ("picked", "ported", "skipped", "covered", "deferred")
@@ -1110,8 +1117,62 @@ def apply_lock(sha: str) -> str | None:
     return None
 
 
+def old_names() -> tuple[Counter, str | None]:
+    """The fork's old name (Mister Download Manager, MDM) where the rename to Grabbit is done
+    (plan 10: `tools/rename/check.py --done`): "file: term: text" counted, so one more of a
+    text already there still shows. Upstream still writes the old name, so a clean pick can
+    bring it back unseen. The second value says why the check couldn't be trusted (no checker,
+    a crash, hits it couldn't read): the callers then fail closed, never read it as clean."""
+    script = root() / RENAME_CHECK
+    if not script.is_file():
+        return Counter(), f"{RENAME_CHECK} is missing"
+    r = subprocess.run([sys.executable, str(script), "--done"], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", cwd=root())
+    if r.returncode not in (0, 1):
+        return Counter(), f"{RENAME_CHECK} failed ({r.returncode}): {r.stderr.strip()[-300:]}"
+    hits = Counter()
+    for ln in r.stdout.splitlines():
+        m = re.match(r"(.+?):\d+: ([^:]+): (.*)", ln)
+        if m and "[test]" not in m.group(2):  # tests follow the texts: they don't count
+            hits[f"{m.group(1)}: {m.group(2)}: {m.group(3)}"] += 1
+    if r.returncode == 1 and not hits:
+        return hits, f"{RENAME_CHECK} found the old name but its list couldn't be read"
+    return hits, None
+
+
+# What the rename's checker reads (tools/rename/check.py's done areas, widened): a commit that
+# touches none of these can't bring the old name back, and costs no run of the checker (about
+# 6 s). 10d adds "website/content/", "docs/" and "README.md" when it marks those areas done.
+RENAMED_PATHS = ("crates/", "extension/", "tools/installer/")
+
+
+def name_check(sha: str, names: dict) -> str:
+    """After `sha` is picked: its `!` lines about the old name, and `names` (the hits before,
+    from cmd_pick) brought up to date. A pick that changes the checker itself isn't run here:
+    its code is read first (S), then run by hand."""
+    touched = {p for _, x, y in changes(sha) for p in (x, y) if p}
+    if any(p.startswith("tools/rename/") for p in touched):
+        names["problem"] = "a pick changed tools/rename/: read it, then check by hand"
+        return ("\n    ! it changes the rename's checker (tools/rename/), so the old name wasn't "
+                "checked: read it, then run `python tools/rename/check.py --done`")
+    if not any(p.startswith(RENAMED_PATHS) for p in touched):
+        return ""
+    before, was = names["hits"], names["problem"]
+    names["hits"], names["problem"] = old_names()
+    if names["problem"]:
+        return f"\n    ! the old name wasn't checked: {names['problem']}"
+    back = sorted((names["hits"] - before).keys())
+    lines = "".join(f"\n    ! the old name is back: {h}" for h in back)
+    if back:
+        lines += ("\n    ! say Grabbit there, in a commit of its own (upstream's meaning, the "
+                  "fork's name); `pr` refuses until then")
+    if was:
+        lines += f"\n    ! the check before this pick couldn't run ({was}): compare by hand"
+    return lines
+
+
 def pick_one(sha: str, ctx: Context, commits: list[Commit], messages: dict[str, str],
-             a) -> tuple[bool, str]:
+             a, names: dict) -> tuple[bool, str]:
     """One upstream commit onto HEAD, with the fork's rules. (taken?, what happened)."""
     status = ctx.t.of(sha)
     if status in DONE:
@@ -1188,7 +1249,7 @@ def pick_one(sha: str, ctx: Context, commits: list[Commit], messages: dict[str, 
     write_row(sha, "picked", new, f"left out {len(left_out)} file(s)" if left_out else "")
     ctx.t.status[sha] = "picked"
     extra = f", left out {len(left_out)} file(s)" if left_out else ""
-    warn = "".join(f"\n    ! {n}" for n in c.notes)
+    warn = "".join(f"\n    ! {n}" for n in c.notes) + name_check(sha, names)
     return True, f"{sha[:12]} picked as {new}{extra}{warn}"
 
 
@@ -1236,10 +1297,14 @@ def cmd_pick(a) -> int:
     shas.sort(key=order.index)  # upstream's order: a fix can build on the one before
     ledger = root() / LEDGER
     failed = 0
+    # The old name's hits before the first pick, then after each (name_check): one run of the
+    # checker per pick that touches a renamed area, none for the rest.
+    hits, problem = old_names()
+    names = {"hits": hits, "problem": problem}
     for sha in shas:
         saved = ledger.read_bytes() if ledger.exists() else None
         try:
-            ok, line = pick_one(sha, ctx, commits, messages, a)
+            ok, line = pick_one(sha, ctx, commits, messages, a, names)
         except (Fail, OSError) as e:
             undo_pick()
             ok, line = False, f"{sha[:12]}: stopped half way ({e}); undone, nothing changed"
@@ -1356,6 +1421,14 @@ def fork_slug() -> str:
 
 def cmd_pr(a) -> int:
     branch = guard_sync_branch()
+    back, problem = old_names()
+    if problem:
+        raise Fail(f"the old name couldn't be checked ({problem}); nothing pushed")
+    if back:
+        raise Fail("the old name is back on this branch (tools/rename/check.py --done):\n  "
+                   + "\n  ".join(sorted(back))
+                   + "\nsay Grabbit there in a commit of its own (if `dev` has it too, fix dev "
+                   "first: no pick brought it); nothing pushed")
     target = fork_slug()
     if not shutil.which("gh"):
         raise Fail("gh is not installed: nothing pushed")

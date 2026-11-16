@@ -40,7 +40,7 @@ const SORRY: &[&str] = &[
 pub fn text(input: &Input, home: Option<&Path>) -> String {
     let kind = input.kind.unwrap_or(Kind::Crash);
     let mut s = String::new();
-    let _ = writeln!(s, "---- Mister Download Manager crash report ----");
+    let _ = writeln!(s, "---- Grabbit crash report ----");
     let n = input.time.bytes().map(usize::from).sum::<usize>();
     let _ = writeln!(s, "// {}", SORRY[n % SORRY.len()]);
     let _ = writeln!(s);
@@ -109,7 +109,7 @@ pub fn text(input: &Input, home: Option<&Path>) -> String {
                             secs(b.wall_ms)
                         ),
                         (Some(Stuck::Starved), Some(b)) => format!(
-                            ". Its thread ran only {} of {} s, and not in a wait: the computer was too busy to run MDM, or slow to load it from disk{}. Most likely not a bug in MDM.",
+                            ". Its thread ran only {} of {} s, and not in a wait: the computer was too busy to run Grabbit, or slow to load it from disk{}. Most likely not a bug in Grabbit.",
                             secs(b.cpu_ms),
                             secs(b.wall_ms),
                             b.faults
@@ -132,7 +132,7 @@ pub fn text(input: &Input, home: Option<&Path>) -> String {
                 _ => {
                     let _ = writeln!(
                         s,
-                        "A dump asked for while MDM was running (a freeze or a panic): the window thread first."
+                        "A dump asked for while Grabbit was running (a freeze or a panic): the window thread first."
                     );
                 }
             }
@@ -162,7 +162,7 @@ pub fn text(input: &Input, home: Option<&Path>) -> String {
         Kind::Exit => {
             let _ = writeln!(
                 s,
-                "MDM ended without closing normally, and no crash was caught (it may have been ended from outside, or the system stopped it)."
+                "Grabbit ended without closing normally, and no crash was caught (it may have been ended from outside, or the system stopped it)."
             );
         }
     }
@@ -195,7 +195,7 @@ pub fn text(input: &Input, home: Option<&Path>) -> String {
 
     // What MDM was doing.
     if !input.log_tail.is_empty() {
-        let _ = writeln!(s, "-- What MDM was doing (its log) --");
+        let _ = writeln!(s, "-- What Grabbit was doing (its log) --");
         for l in &input.log_tail {
             let _ = writeln!(s, "{l}");
         }
@@ -205,7 +205,7 @@ pub fn text(input: &Input, home: Option<&Path>) -> String {
     // The system.
     let _ = writeln!(s, "-- System details --");
     if let Some(ss) = &input.notes.session {
-        let _ = writeln!(s, "MDM: {} ({})", ss.version, ss.commit);
+        let _ = writeln!(s, "Grabbit: {} ({})", ss.version, ss.commit);
         let _ = writeln!(s, "Installed with: {}", ss.install);
         let _ = writeln!(s, "System: {} ({})", ss.os_version, ss.arch);
         let _ = writeln!(s, "Language: {}", ss.language);
@@ -370,11 +370,11 @@ pub fn make(
 /// The kind in a sentence.
 pub fn description(kind: Kind, notes: &Notes) -> &'static str {
     match kind {
-        Kind::Crash => "MDM crashed",
-        Kind::Panic => "MDM hit an internal error and closed",
+        Kind::Crash => "Grabbit crashed",
+        Kind::Panic => "Grabbit hit an internal error and closed",
         Kind::Freeze if notes.recovered => "The window stopped responding (it recovered)",
         Kind::Freeze => "The window stopped responding",
-        Kind::Exit => "MDM closed unexpectedly",
+        Kind::Exit => "Grabbit closed unexpectedly",
     }
 }
 
@@ -790,7 +790,7 @@ mod tests {
                 }),
                 session: Some(Session {
                     version: "0.2.3".into(),
-                    exe: r"C:\Users\Someone\AppData\Local\MDM\mdm.exe".into(),
+                    exe: r"C:\Users\Someone\AppData\Local\Grabbit\mdm.exe".into(),
                     started: 1_793_505_000,
                     ..Default::default()
                 }),
@@ -806,7 +806,7 @@ mod tests {
         let t = text(&input, Some(Path::new(r"C:\Users\Someone")));
         assert!(t.contains("-- Window thread (frozen): main (1) --"));
         assert!(t.contains("at crates/app/src/winui.rs:2088"));
-        assert!(t.contains(r"Program: ~\AppData\Local\MDM\mdm.exe"));
+        assert!(t.contains(r"Program: ~\AppData\Local\Grabbit\mdm.exe"));
         assert!(!t.contains("Someone"));
         // The watchdog's thread is listed among the others.
         assert!(t.contains("-- Thread watchdog (2) --"));
@@ -887,7 +887,7 @@ mod tests {
         let t = text(&input, None);
         assert!(t.contains("Its thread ran only 0.4 of 7.5 s, and not in a wait"));
         assert!(t.contains("(12000 page faults meanwhile)"));
-        assert!(t.contains("Most likely not a bug in MDM."));
+        assert!(t.contains("Most likely not a bug in Grabbit."));
         // Without symbols, MDM's own module counts as ordinary code, a system one as a wait.
         let mut bare = stopped_in_own_code();
         bare.modules = vec![crate::analyze::ModuleInfo {

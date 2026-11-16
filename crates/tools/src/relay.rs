@@ -135,7 +135,7 @@ async fn serve(mut client: TcpStream, inner: Arc<Inner>) -> io::Result<()> {
         return client
             .write_all(
                 b"HTTP/1.1 407 Proxy Authentication Required\r\n\
-                  Proxy-Authenticate: Basic realm=\"MDM\"\r\n\
+                  Proxy-Authenticate: Basic realm=\"Grabbit\"\r\n\
                   Content-Length: 0\r\nConnection: close\r\n\r\n",
             )
             .await;

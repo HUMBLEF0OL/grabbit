@@ -15,7 +15,7 @@ pub fn start() -> mpsc::Receiver<()> {
         .spawn(move || {
             let started = std::time::Instant::now();
             let found = crate::win32::default_browser();
-            let browser = found.as_ref().map_or("none MDM knows".to_owned(), |f| {
+            let browser = found.as_ref().map_or("none Grabbit knows".to_owned(), |f| {
                 format!("{:?} {}", f.browser, f.version.as_deref().unwrap_or("?"))
             });
             mdm_engine::agent::set_automatic(found);

@@ -22,6 +22,8 @@ identifiers. Across the whole repo (`git grep -c`, lines): "Mister Download Mana
   (pushed to origin = `HUMBLEF0OL/grabbit` only, per 00)
 - Needs: 09b; a Grabbit logo before 10b (owner: the maintainer; done, `art/grabbit.svg`, PR 26)
 - Release: 10a to 10c ship together in one release; 10d follows the store and site moves
+- Before 10c and again before 10e: the upstream-sync backlog cleared (see "Upstream sync through
+  the rename")
 
 ## Decisions (decided by the maintainer, 2026-11-14)
 
@@ -64,6 +66,32 @@ Recorded in `../PLAN.md`. Counts are lines (`git grep -c`) on dev e9d327d3.
    `metro`), with their drawing code: 10e, with the crate rename. A theme file naming one gets
    Graphite's control (the fork has no users relying on them).
 
+## Upstream sync through the rename (added 2026-11-16)
+
+Upstream's fixes are the fork's fastest source of bug fixes, so the rename must not cut them
+off. Measured on upstream's 512 commits from 2026-08-14 to 2026-11-16: 209 (41 %) changed lines
+naming "MDM" or "Mister Download Manager" in `crates/`, `extension/` or the installer (comments
+included; 10a renamed only string literals, so fewer conflict), and 56 (11 %) changed lines with
+the identifiers 10c moves (`misterdownloadmanager…`, `MisterDownloadManager…`) in those folders
+and `.github/` (51 without `.github/`). Both by `git log --no-merges -G "<terms>" upstream/main --
+<folders>`.
+
+- **Words kept where users don't see them.** Comments, `// i18n:` notes and `mdm_*::` paths
+  stay upstream's (decision 3 likewise), so most fixes still pick clean.
+- **The old name can't come back unseen.** `tools/rename/check.py --done` checks the areas
+  already renamed (each area's `done` mark; 10d marks the website, docs and README). Runs:
+  `sync.py pick` after each pick that touches a renamed folder (`! the old name is back`; a pick
+  changing the checker itself is checked by hand), `sync.py pr` (pushes nothing while one is
+  left, nor when the checker is missing or fails: closed, never read as clean), CI on pull
+  requests into `main` (`ci.yml`) and CONTRIBUTING's checks before `dev`. `test_sync.py`'s
+  `old_name_case`.
+- **Conflicts on renamed texts are ports:** upstream's wording, Grabbit's name.
+- **After 10c**, a fix touching the moved identifiers is ported onto the new names and the
+  migration code, never picked over it.
+- **Before 10c, not only 10e:** clear the upstream-sync backlog (`sync.py status`), since 10c's
+  migrations change the same code 11 % of upstream's commits touch.
+- The upstream-sync skill's "The fork's name" section is the working rule.
+
 ## Never change
 
 - The Windows installer `AppId` (`tools/installer/mdm.iss:22`): upgrades depend on it.
@@ -74,6 +102,11 @@ Recorded in `../PLAN.md`. Counts are lines (`git grep -c`) on dev e9d327d3.
   makes a new extension and cuts existing users off.
 
 ## 10a · Display text (safe)
+
+Done on `rename/10a-display` (2026-11-16): `check.py` shows 0 for the app, remote page, installer
+and extension; the website, docs and README are 10d step 4. Kept on purpose (`check.py` KEPT):
+the keychain `SERVICE` (10c). The installer removes the old-named Start menu and desktop
+shortcuts on upgrade (`[InstallDelete]`); the GitHub issue forms say Grabbit too.
 
 `python tools/rename/check.py` lists every remaining user-visible name with file:line; 10a is done
 when it exits 0.
@@ -114,7 +147,7 @@ when it exits 0.
 | --- | --- | --- |
 | Data folder `…/misterdownloadmanager` | `crates/ipc/src/lib.rs:228-249` (`data_dir`) | Reuse the existing one-time rename (the `idmnext` move at 242-245): if the new folder is missing and the old one exists, rename it once. Portable mode (a `data` folder next to the exe) unchanged |
 | `MDM_DATA_DIR` env var | `crates/ipc/src/lib.rs:234` and 60 lines in 31 files | Accept `GRABBIT_DATA_DIR`, keep reading `MDM_DATA_DIR` |
-| Saved logins `SERVICE = "Mister Download Manager"` | `crates/app/src/secrets.rs:27` | Read new then old; on finding an old entry, write it under the new name and delete the old one |
+| Saved logins `SERVICE = "Mister Download Manager"` | `crates/app/src/secrets.rs:27` | Read new then old; on finding an old entry, write it under the new name and delete the old one. Since 10a new entries are labelled "Grabbit: …" while old ones keep "Mister Download Manager: …": the move rewrites the label too |
 | Autostart Run value `MisterDownloadManager` | `win32.rs:3093-3100` (`run_value`), `mdm.iss:104` | On start, if the old value exists, write the new one and delete the old |
 | Torrent ProgID `MisterDownloadManager.Torrent` | `win32.rs:3004` (`set_torrent_handlers`), `mdm.iss:106-110, 194` (the installer writes `.torrent`; registry keys ignore case) | Register the new ProgID; repoint `.torrent` if it pointed at the old one; remove the old |
 | Single-instance mutex `MisterDownloadManager.Running` | `win32.rs:3992` (`mark_running`), `mdm.iss:133` | App and installer change in the same release; the installer checks both names |

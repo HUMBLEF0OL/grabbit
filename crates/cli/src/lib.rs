@@ -18,8 +18,8 @@ use serde_json::json;
 #[derive(Parser)]
 #[command(
     version,
-    about = "Mister Download Manager command line",
-    long_about = "Mister Download Manager command line: downloads, videos and torrents without the \
+    about = "Grabbit command line",
+    long_about = "Grabbit command line: downloads, videos and torrents without the \
                   window, and the running app's automation API. Guide: \
                   https://misterdownloadmanager.com/help/command-line.html"
 )]
@@ -320,8 +320,8 @@ impl std::error::Error for Reported {}
 /// Ask the running app (automation API) and print its answer, which is JSON already; an
 /// `{"error"}` answer fails the command.
 fn ask(cmd: mdm_ipc::Command) -> anyhow::Result<()> {
-    let answer = mdm_ipc::request(&cmd)
-        .map_err(|e| anyhow::anyhow!("Mister Download Manager isn't running ({e})"))?;
+    let answer =
+        mdm_ipc::request(&cmd).map_err(|e| anyhow::anyhow!("Grabbit isn't running ({e})"))?;
     println!("{answer}");
     if serde_json::from_str::<mdm_ipc::api::ErrorAnswer>(&answer).is_ok() {
         return Err(Reported.into());
@@ -335,7 +335,7 @@ fn pair() -> anyhow::Result<()> {
         pair: true,
         ..Default::default()
     })
-    .map_err(|e| anyhow::anyhow!("Mister Download Manager isn't running ({e})"))?;
+    .map_err(|e| anyhow::anyhow!("Grabbit isn't running ({e})"))?;
     match mdm_ipc::api::parse::<mdm_ipc::api::PairAnswer>(&answer).map_err(anyhow::Error::msg)? {
         Ok(a) => {
             println!("{}", a.qr);
@@ -545,18 +545,20 @@ async fn run(cmd: Cmd, json: bool, accounts: Option<&dyn Accounts>) -> anyhow::R
             // A gallery-dl of the person's too old for MDM is passed over (#236), said plainly.
             let old = mdm_tools::gallery::chosen_too_old(&dir).map(|old| {
                 format!(
-                    "your gallery-dl {} ({}) is too old: MDM needs {} or newer",
+                    "your gallery-dl {} ({}) is too old: Grabbit needs {} or newer",
                     old.version,
                     old.exe.display(),
                     mdm_tools::gallery::OLDEST
                 )
             });
             let tool = mdm_tools::gallery::installed(&dir).ok_or_else(|| match &old {
-                Some(why) => anyhow::anyhow!("{why}; run install-gallery-dl for MDM's own copy"),
+                Some(why) => {
+                    anyhow::anyhow!("{why}; run install-gallery-dl for Grabbit's own copy")
+                }
                 None => anyhow::anyhow!("gallery-dl is not installed: run install-gallery-dl"),
             })?;
             if let Some(why) = &old {
-                eprintln!("{why}: using MDM's own copy, {}", tool.version);
+                eprintln!("{why}: using Grabbit's own copy, {}", tool.version);
             }
             if !mdm_tools::gallery::handles(&tool, &url)? {
                 anyhow::bail!("gallery-dl can't read this address");

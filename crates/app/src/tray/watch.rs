@@ -431,7 +431,7 @@ mod tests {
         let start = Instant::now();
         for _ in 0..10_000 {
             assert_eq!(w.latest(), None);
-            assert!(w.tip("MDM"));
+            assert!(w.tip("Grabbit"));
             assert_eq!(icon(w.latest(), Instant::now()), Icon::Unknown);
         }
         drop(w);
@@ -454,7 +454,7 @@ mod tests {
         assert_eq!(w.latest(), None);
         assert_eq!(icon(w.latest(), Instant::now()), Icon::Unknown);
         assert!(
-            !w.tip("MDM"),
+            !w.tip("Grabbit"),
             "a busy watch takes the tip at the next frame"
         );
     }
@@ -468,7 +468,7 @@ mod tests {
         let w = Watch::every(QUICK, port, move || {
             let _ = woke.send(());
         });
-        tip(&w, "MDM 1");
+        tip(&w, "Grabbit 1");
         // Not held yet: no tip set.
         was_asked.recv_timeout(Duration::from_secs(5)).unwrap();
         answer.send(NONE).unwrap();
@@ -481,7 +481,7 @@ mod tests {
         woken.recv_timeout(Duration::from_secs(5)).unwrap();
         assert_eq!(
             tipped.recv_timeout(Duration::from_secs(5)).unwrap(),
-            "MDM 1"
+            "Grabbit 1"
         );
         // The same answer again: no wake, and the tip isn't sent again.
         was_asked.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -489,12 +489,12 @@ mod tests {
         assert!(woken.recv_timeout(Duration::from_millis(300)).is_err());
         assert!(tipped.try_recv().is_err());
         // A new tip goes with the next answer.
-        tip(&w, "MDM 2");
+        tip(&w, "Grabbit 2");
         was_asked.recv_timeout(Duration::from_secs(5)).unwrap();
         answer.send(HELD).unwrap();
         assert_eq!(
             tipped.recv_timeout(Duration::from_secs(5)).unwrap(),
-            "MDM 2"
+            "Grabbit 2"
         );
         // The icon lost and added back (Explorer started again): the tip is set again.
         was_asked.recv_timeout(Duration::from_secs(5)).unwrap();
@@ -504,7 +504,7 @@ mod tests {
         answer.send(HELD).unwrap();
         assert_eq!(
             tipped.recv_timeout(Duration::from_secs(5)).unwrap(),
-            "MDM 2"
+            "Grabbit 2"
         );
     }
 

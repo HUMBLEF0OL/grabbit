@@ -271,7 +271,7 @@ impl Waker {
         }
         let reason = crate::i18n::fmt(
             // i18n: why the computer isn't going to sleep, in the system's list of programs that keep it awake; {queue} = the queue's name
-            crate::i18n::t("Mister Download Manager is running the queue \"{queue}\""),
+            crate::i18n::t("Grabbit is running the queue \"{queue}\""),
             &[("queue", crate::i18n::t(queue))],
         );
         if !self.holder.hold(reason) {
@@ -440,7 +440,7 @@ impl Holder {
                 Ok(_) => {}
                 Err(_) => {
                     tracing::warn!(
-                        "wake: the system hasn't answered within {limit:?}; MDM's hold ends with it"
+                        "wake: the system hasn't answered within {limit:?}; Grabbit's hold ends with it"
                     );
                     return false;
                 }
@@ -586,7 +586,7 @@ mod tests {
             ..Waker::default()
         };
         // The translations are read once, on the first text (the app has read them long before).
-        let _ = crate::i18n::t("Mister Download Manager is running the queue \"{queue}\"");
+        let _ = crate::i18n::t("Grabbit is running the queue \"{queue}\"");
         (w, asked)
     }
 

@@ -129,7 +129,7 @@ fn make(names: &[String]) -> Result<(Vec<u8>, Vec<u8>), String> {
     let mut params = CertificateParams::new(names.to_vec()).map_err(e)?;
     params
         .distinguished_name
-        .push(DnType::CommonName, "Mister Download Manager");
+        .push(DnType::CommonName, "Grabbit");
     params.extended_key_usages = vec![ExtendedKeyUsagePurpose::ServerAuth];
     let (y, m, d) = civil(today() - 1);
     params.not_before = rcgen::date_time_ymd(y, m, d);

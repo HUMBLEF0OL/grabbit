@@ -13,7 +13,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("misterdownloadmanager-mcp {}", env!("CARGO_PKG_VERSION"))
             }
             _ => println!(
-                "misterdownloadmanager-mcp: Mister Download Manager's MCP server, for AI \
+                "misterdownloadmanager-mcp: Grabbit's MCP server, for AI \
                  assistants. The assistant starts it (no arguments) and talks to it on stdin and \
                  stdout. Setup: \
                  https://misterdownloadmanager.com/help/ai-assistants.html"

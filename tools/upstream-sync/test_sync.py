@@ -15,6 +15,7 @@ import tempfile
 from pathlib import Path
 
 SYNC = Path(__file__).with_name("sync.py")
+CHECK = SYNC.parents[1] / "rename" / "check.py"
 LEDGER = "tools/upstream-sync/ledger.md"
 HEADER = "| upstream | status | date | ref | subject | note |\n|---|---|---|---|---|---|\n"
 
@@ -99,6 +100,8 @@ def main() -> None:
         write(r, "Cargo.lock", 'name = "dep"\nversion = "1.0.0"\n# fork\n')
         write(r, "CHANGELOG.md", "# Changelog\n\n- the fork's\n- old\n")
         write(r, LEDGER, HEADER)
+        # The rename's checker, as the fork has it (sync.py fails closed without one).
+        write(r, "tools/rename/check.py", CHECK.read_text(encoding="utf-8"))
         commit(r, "fork: Windows and English only")
         git(r, "update-ref", "refs/remotes/origin/dev", "HEAD")
 
@@ -608,8 +611,62 @@ def move_rule_case() -> None:
     print("ok: whole moves, exact icon renames and in-folder notice renames stay moves")
 
 
+def old_name_case() -> None:
+    """Plan 10: the fork is Grabbit, upstream still writes MDM. A clean pick that brings the old
+    name back into a renamed area is flagged, and `pr` pushes nothing until it is renamed; a
+    pick that adds nothing of it says nothing (the real tools/rename/check.py, copied in)."""
+    check = CHECK
+    with tempfile.TemporaryDirectory() as tmp:
+        r = Path(tmp)
+        git(r, "init", "-q", "-b", "main")
+        for k, v in {"user.name": "T", "user.email": "t@example.com", "commit.gpgsign": "false",
+                     "core.autocrlf": "false", "protocol.https.allow": "never"}.items():
+            git(r, "config", k, v)
+        src = "crates/x/src/lib.rs"
+        write(r, src, 'fn f() {\n    say("MDM runs");\n}\nfn g() {}\n')
+        commit(r, "base")
+        git(r, "checkout", "-q", "-b", "dev")
+        write(r, src, 'fn f() {\n    say("Grabbit runs");\n}\nfn g() {}\n')
+        write(r, "tools/rename/check.py", check.read_text(encoding="utf-8"))
+        write(r, LEDGER, HEADER)
+        commit(r, "fork: Grabbit")
+        git(r, "update-ref", "refs/remotes/origin/dev", "HEAD")
+
+        git(r, "checkout", "-q", "main")
+        write(r, "crates/x/src/other.rs", "// MDM in a comment is no text\nfn h() {}\n")
+        quiet = commit(r, "other.rs")
+        write(r, src, 'fn f() {\n    say("MDM runs");\n}\nfn g() {\n    say("MDM is back");\n}\n')
+        loud = commit(r, "g says something")
+        git(r, "update-ref", "refs/remotes/upstream/main", "HEAD")
+
+        git(r, "checkout", "-q", "-b", "upstream-sync/name", "dev")
+        out = sync(r, "pick", quiet).stdout
+        assert "old name" not in out, out
+        out = sync(r, "pick", loud).stdout
+        assert "picked as" in out and "the old name is back: crates/x/src/lib.rs: MDM:" in out, out
+        assert "MDM is back" in out and "MDM runs" not in out, out
+        body = r / ".git" / "body.md"
+        refused = sync(r, "pr", "--title", "t", "--body-file", str(body), ok=False)
+        assert refused.returncode != 0 and "old name is back" in refused.stderr + refused.stdout, refused
+        write(r, src, 'fn f() {\n    say("Grabbit runs");\n}\nfn g() {\n    say("Grabbit is back");\n}\n')
+        commit(r, "Grabbit, not MDM")
+        again = sync(r, "pr", "--title", "t", "--body-file", str(body), ok=False)
+        assert "old name" not in again.stderr + again.stdout, again
+        # Fails closed: a checker that crashes, or none, never reads as clean.
+        write(r, "tools/rename/check.py", "raise SystemExit(3)\n")
+        commit(r, "a broken checker")
+        broken = sync(r, "pr", "--title", "t", "--body-file", str(body), ok=False)
+        assert "couldn't be checked" in broken.stderr + broken.stdout, broken
+        git(r, "rm", "-q", "tools/rename/check.py")
+        commit(r, "no checker")
+        gone = sync(r, "pr", "--title", "t", "--body-file", str(body), ok=False)
+        assert "is missing" in gone.stderr + gone.stdout, gone
+    print("ok: a pick that brings the old name back is flagged, and pr waits for the rename")
+
+
 if __name__ == "__main__":
     main()
+    old_name_case()
     graphite_only_case()
     move_rule_case()
     lock_case()

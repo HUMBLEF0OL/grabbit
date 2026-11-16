@@ -330,7 +330,7 @@ impl RemoteTorrent {
         for f in &files {
             let link = Url::parse(&f.link).map_err(|_| {
                 Fault::Service(ServiceFault::Other(
-                    "the service gave a link MDM can't read".into(),
+                    "the service gave a link Grabbit can't read".into(),
                 ))
             })?;
             let dest = match safe_path(&within(&f.path)) {

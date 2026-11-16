@@ -11,7 +11,9 @@
 #ifndef AppVersion
   #define AppVersion "0.5.2"
 #endif
-#define AppName "Mister Download Manager"
+#define AppName "Grabbit"
+; The name before the rename (plan 10): its shortcuts are removed on upgrade.
+#define OldAppName "Mister Download Manager"
 #define AppExe "misterdownloadmanager.exe"
 #define HostExe "misterdownloadmanager-nmhost.exe"
 #define Root "..\.."
@@ -93,6 +95,11 @@ Source: "{#Root}\target\extension\chromium\*"; DestDir: "{app}\extension\chromiu
 Source: "{#Root}\target\extension\mdm-firefox.xpi"; DestDir: "{app}\extension"; Flags: ignoreversion
 Source: "{#Root}\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "{#Root}\ATTRIBUTION.md"; DestDir: "{app}"; DestName: "ATTRIBUTION.txt"; Flags: ignoreversion
+
+[InstallDelete]
+; The shortcuts an install under the old name made (an upgrade keeps its folder, not these).
+Type: files; Name: "{autoprograms}\{#OldAppName}.lnk"
+Type: files; Name: "{autodesktop}\{#OldAppName}.lnk"
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"

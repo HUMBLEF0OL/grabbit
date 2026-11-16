@@ -1,6 +1,6 @@
 [package]
 name = "mdm-cli"
-description = "Mister Download Manager, headless command line (in the app's program) and its launcher"
+description = "Grabbit, headless command line (in the app's program) and its launcher"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

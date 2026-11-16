@@ -11,7 +11,7 @@ use std::sync::{Arc, atomic::AtomicBool, atomic::Ordering};
 use egui::{Pos2, ViewportCommand, ViewportId, pos2, vec2};
 
 /// The window's title (its OLE target is found by it).
-const TITLE: &str = "Mister Download Manager drop target"; // not translated: an id
+const TITLE: &str = "Grabbit drop target"; // not translated: an id
 /// The box (Graphite's, the mockup's): its download glyph over its line.
 const SIZE: egui::Vec2 = vec2(150.0, 110.0);
 

@@ -170,7 +170,7 @@ impl std::fmt::Display for Error {
             }
             Error::TooMany => write!(f, "too many entries or folders too deep"),
             Error::NoTool => write!(f, "7z and RAR archives need 7-Zip, and none was found"),
-            Error::Unsupported => write!(f, "not an archive MDM extracts"),
+            Error::Unsupported => write!(f, "not an archive Grabbit extracts"),
             Error::Cancelled => write!(f, "cancelled"),
             Error::Io(e) => write!(f, "{e}"),
         }

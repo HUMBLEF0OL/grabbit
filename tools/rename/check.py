@@ -2,6 +2,7 @@
 
     python tools/rename/check.py              every hit, grouped by area, with file:line
     python tools/rename/check.py --summary    counts only
+    python tools/rename/check.py --done       only the areas already renamed (CI, upstream sync)
     python tools/rename/check.py --self-test  the checker's own asserts
 
 Exits 1 while any user-visible hit remains. Hits inside Rust `#[cfg(test)]` code are listed
@@ -39,9 +40,16 @@ ALLOW = [
     (r"\bmdm-[a-z0-9-]+", "crate names (decision: keep)"),
     (r"\bMDM_[A-Z0-9_]+", "environment variables (10c adds GRABBIT_ ones, keeps these)"),
     (r"\bMDM\.popup\b", "internal window-property marker, never shown"),
+    (r"\bMDM\.caption-less\.settled\b", "internal window-property marker, never shown"),
     (r"\bMDM-test-[\w{}:-]*", "keychain names of off-screen test copies, never shown"),
 ]
 ALLOW_RE = re.compile("|".join(f"(?:{p})" for p, _ in ALLOW))
+
+# Whole texts kept on purpose at one place: (file, the text as listed) -> why.
+KEPT = {
+    ("crates/app/src/secrets.rs", "Mister Download Manager"): "keychain service: saved logins live under it (10c migrates)",
+    ("tools/installer/mdm.iss", '#define OldAppName "Mister Download Manager"'): "the old shortcuts an upgrade removes",
+}
 
 TEXT_EXT = {".md", ".html", ".json", ".txt", ".css", ".js", ".toml", ".yml", ".tsv", ".jsonl", ".webmanifest"}
 
@@ -137,26 +145,33 @@ def files(pattern):
     return sorted(p for p in ROOT.glob(pattern) if p.is_file())
 
 
+# (area, its files, done): a done area has no hit left, and `--done` keeps it that way (CI, and
+# tools/upstream-sync/sync.py after each pick: upstream still writes the old name). 10d marks
+# the website, docs and README done once it has renamed them.
 AREAS = [
     # ponytail: labserver is a developer's test server, never shipped; skipped.
-    ("App (Rust strings)", lambda: [(p, scan_rust) for p in files("crates/*/src/**/*.rs") + files("crates/*/build.rs") if p.parts[len(ROOT.parts) + 1] != "labserver"]),
-    ("App remote page", lambda: [(p, lambda q: scan_text(q, comment=("//", "/*", "*", "<!--"))) for p in files("crates/remote/web/*") if p.suffix in TEXT_EXT]),
-    ("Installer", lambda: [(p, lambda q: scan_text(q, comment=(";", "//", "{"))) for p in files("tools/installer/*.iss")]),
-    ("Extension", lambda: [(p, scan_text) for p in files("extension/_locales/**/*.json") + files("extension/*.html")]),
-    ("Website", lambda: [(p, scan_text) for p in files("website/content/**/*") if p.suffix in TEXT_EXT]),
-    ("Docs", lambda: [(p, scan_text) for p in files("docs/**/*") if p.suffix in TEXT_EXT]),
-    ("README", lambda: [(p, scan_text) for p in files("README.md")]),
+    ("App (Rust strings)", lambda: [(p, scan_rust) for p in files("crates/*/src/**/*.rs") + files("crates/*/build.rs") if p.parts[len(ROOT.parts) + 1] != "labserver"], True),
+    ("App remote page", lambda: [(p, lambda q: scan_text(q, comment=("//", "/*", "*", "<!--"))) for p in files("crates/remote/web/*") if p.suffix in TEXT_EXT], True),
+    ("Installer", lambda: [(p, lambda q: scan_text(q, comment=(";", "//", "{"))) for p in files("tools/installer/*.iss")], True),
+    # Its scripts too: video.js's fallback texts, and any text a script shows (comments skipped).
+    ("Extension", lambda: [(p, scan_text) for p in files("extension/_locales/**/*.json") + files("extension/*.html") + files("extension/manifest*.json")]
+     + [(p, lambda q: scan_text(q, comment=("//", "/*", "*"))) for p in files("extension/*.js")], True),
+    ("Website", lambda: [(p, scan_text) for p in files("website/content/**/*") if p.suffix in TEXT_EXT], False),
+    ("Docs", lambda: [(p, scan_text) for p in files("docs/**/*") if p.suffix in TEXT_EXT], False),
+    ("README", lambda: [(p, scan_text) for p in files("README.md")], False),
 ]
 
 
-def run(summary):
+def run(summary, done_only=False):
     failing = 0
     rows = []
-    for area, sources in AREAS:
+    for area, sources, done in AREAS:
+        if done_only and not done:
+            continue
         found = []
         for path, scan in sources():
             rel = path.relative_to(ROOT).as_posix()
-            found += [(rel, *hit) for hit in scan(path)]
+            found += [(rel, *hit) for hit in scan(path) if (rel, hit[2]) not in KEPT]
         counts = {t: sum(1 for f in found if f[2] == t and not f[4]) for t in TERMS}
         tests = sum(1 for f in found if f[4])
         nfiles = len({f[0] for f in found})
@@ -198,7 +213,7 @@ const AFTER: &str = "MDM after";
         "com.misterdownloadmanager.host", "MisterDownloadManager.Running", "mdm-app",
         "https://misterdownloadmanager.com/help/", "integration@misterdownloadmanager.com",
         "MisterDownloadManager-{version}-{tail}", "AppId={{667DB4D8-32C2-4487-A0E5-5825BF29778C}",
-        "keychain:MDM-test-unit/aaaa0001/",
+        "keychain:MDM-test-unit/aaaa0001/", "MDM.caption-less.settled\\0",
     ]:
         assert hits_in(kept) == [], kept
     assert hits_in("Support MDM") == ["MDM"]
@@ -211,4 +226,4 @@ if __name__ == "__main__":
     if "--self-test" in sys.argv:
         self_test()
         sys.exit(0)
-    sys.exit(run("--summary" in sys.argv))
+    sys.exit(run("--summary" in sys.argv, "--done" in sys.argv))

@@ -244,7 +244,7 @@ impl Because {
             Because::Default => "the default here".into(),
             Because::Override => "the testing override (/renderer, MDM_RENDERER)".into(),
             Because::OpenGlUnfit => format!(
-                "OpenGL can't draw MDM here: {}",
+                "OpenGL can't draw Grabbit here: {}",
                 details(&GL_DETAILS).unwrap_or_default()
             ),
             Because::FailedBefore => format!(
@@ -683,7 +683,7 @@ pub fn gl_driver_frame<'a>(
 /// software renderer when the card has none (#847).
 pub fn remember_gl_froze(module: &str, seconds: u64) {
     let details = format!("the window froze for {seconds} s inside {module} as OpenGL drew");
-    tracing::warn!("OpenGL can't draw MDM here: {details}; passed over from the next start");
+    tracing::warn!("OpenGL can't draw Grabbit here: {details}; passed over from the next start");
     remember_failure(Way::OpenGl, Why::FrozeInDriver, &details);
 }
 
@@ -747,7 +747,7 @@ fn check_gl(gl: &eframe::glow::Context, checked: bool, driver: &str) {
     };
     let known = GL_FAILED_WHY.lock().is_ok_and(|u| u.is_some());
     if known || !checked || GPU.is_none() {
-        tracing::warn!("{why}: it may draw MDM wrong, but nothing else could start");
+        tracing::warn!("{why}: it may draw Grabbit wrong, but nothing else could start");
         return;
     }
     let details = format!("{why} ({driver})");
@@ -756,7 +756,7 @@ fn check_gl(gl: &eframe::glow::Context, checked: bool, driver: &str) {
     if let Some((starting, _)) = Way::OpenGl.files() {
         let _ = std::fs::remove_file(starting);
     }
-    gpu::start_again(&format!("OpenGL can't draw MDM here: {details}"));
+    gpu::start_again(&format!("OpenGL can't draw Grabbit here: {details}"));
 }
 
 /// A test's failure asked for (`name`=1), honoured only by off-screen test copies.
@@ -1202,7 +1202,7 @@ mod gpu {
     /// End this copy and start MDM again: the new one waits for this one to be gone (as after
     /// an update), and draws as the failure markers now say.
     pub(super) fn start_again(why: &str) {
-        tracing::warn!("{why}: starting MDM again");
+        tracing::warn!("{why}: starting Grabbit again");
         let program = std::env::current_exe().ok();
         let started = program.and_then(|exe| {
             std::process::Command::new(exe)
@@ -1213,7 +1213,7 @@ mod gpu {
                 .ok()
         });
         if started.is_none() {
-            tracing::error!("MDM couldn't start again");
+            tracing::error!("Grabbit couldn't start again");
         }
         crate::crash::clean_exit();
         // The window thread may be stuck in the driver: end at once, without unwinding.
@@ -1266,7 +1266,7 @@ mod gpu {
             }
         }));
         setup.device_descriptor = Arc::new(|_adapter| wgpu::DeviceDescriptor {
-            label: Some("MDM"),
+            label: Some("Grabbit"),
             required_limits: wgpu::Limits {
                 // As eframe asks: windows as large as 4K and more.
                 max_texture_dimension_2d: 8192,

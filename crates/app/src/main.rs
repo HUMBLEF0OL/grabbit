@@ -71,7 +71,7 @@ mod win32;
 mod winui;
 
 /// The main window's title (dialogs find their owner by it).
-pub const MAIN_TITLE: &str = concat!("Mister Download Manager ", env!("CARGO_PKG_VERSION"));
+pub const MAIN_TITLE: &str = concat!("Grabbit ", env!("CARGO_PKG_VERSION"));
 
 /// The app icon (art/, made with ChatGPT; sizes by tools/icon/build_icon.py), for windows that
 /// show one as IDM's do: the 256 px size, which the system scales down for the title bar, the
@@ -132,7 +132,7 @@ const CLIPBOARD_WAIT: std::time::Duration = std::time::Duration::from_millis(500
 fn clipboard_lock() -> Option<egui_winit::clipboard::SystemClipboardLock> {
     let lock = egui_winit::clipboard::lock_system_clipboard(CLIPBOARD_WAIT);
     if lock.is_none() {
-        tracing::warn!("clipboard: still in use elsewhere in MDM, not read or written");
+        tracing::warn!("clipboard: still in use elsewhere in Grabbit, not read or written");
     }
     lock
 }
@@ -345,11 +345,7 @@ fn app() -> eframe::Result {
     // The log (release builds too) and the crash monitor.
     if let Some(data) = mdm_ipc::data_dir() {
         mdm_crash::logs::init(&data, mdm_crash::logs::APP);
-        tracing::info!(
-            "Mister Download Manager {} ({}) starting",
-            help::VERSION,
-            help::COMMIT
-        );
+        tracing::info!("Grabbit {} ({}) starting", help::VERSION, help::COMMIT);
         crash::start(
             &data,
             crash::session("en", loaded.settings.dark_mode_support),

@@ -310,7 +310,7 @@ fn answer(m: Message, rules: &mdm_ipc::capture::CaptureRules) -> Reply {
             .cloned()
             .collect();
         if links.is_empty() {
-            return Reply::failed("refused", "no link MDM downloads");
+            return Reply::failed("refused", "no link Grabbit downloads");
         }
         Some(mdm_ipc::Command {
             links,
@@ -649,9 +649,7 @@ fn deliver(cmd: &mdm_ipc::Command) -> Result<(), Undelivered> {
             break;
         }
     }
-    Err(Undelivered::NotRunning(
-        "Mister Download Manager did not start".into(),
-    ))
+    Err(Undelivered::NotRunning("Grabbit did not start".into()))
 }
 
 /// Start the app outside the browser's reach: browsers end a host's whole process tree (a job
@@ -732,7 +730,7 @@ fn this_program() -> Result<PathBuf, String> {
 fn chromium_manifest(program: &std::path::Path) -> serde_json::Value {
     serde_json::json!({
         "name": HOST_NAME,
-        "description": "Mister Download Manager",
+        "description": "Grabbit",
         "path": program,
         "type": "stdio",
         "allowed_origins": chromium_ids().into_iter().map(origin).collect::<Vec<_>>(),
@@ -743,7 +741,7 @@ fn chromium_manifest(program: &std::path::Path) -> serde_json::Value {
 fn firefox_manifest(program: &std::path::Path) -> serde_json::Value {
     serde_json::json!({
         "name": HOST_NAME,
-        "description": "Mister Download Manager",
+        "description": "Grabbit",
         "path": program,
         "type": "stdio",
         "allowed_extensions": [FIREFOX_ID],
@@ -762,7 +760,7 @@ fn portable_refused() -> Result<(), String> {
     if mdm_ipc::portable_dir().is_some() {
         return Err(
             "portable mode: browser integration is not registered (nothing is written outside \
-             its folder); install Mister Download Manager to use it"
+             its folder); install Grabbit to use it"
                 .into(),
         );
     }
@@ -876,7 +874,7 @@ fn main() {
         // manifests' allowed_origins / allowed_extensions say the same; this is a second check).
         _ if our_caller(&args) => serve().map_err(|e| e.to_string()),
         _ => Err(format!(
-            "refusing caller {args:?}: not the Mister Download Manager extension"
+            "refusing caller {args:?}: not the Grabbit extension"
         )),
     };
     if let Err(e) = result {
@@ -1379,10 +1377,7 @@ mod tests {
         assert_eq!(c.referer.as_deref(), Some("https://x/"));
         assert_eq!(c.cookies.as_deref(), Some("a=1"));
         assert_eq!(c.user_agent.as_deref(), Some("UA"));
-        assert_eq!(
-            c.name, None,
-            "empty filename means: let Mister Download Manager decide"
-        );
+        assert_eq!(c.name, None, "empty filename means: let Grabbit decide");
         assert!(!c.later && !c.silent);
         assert_eq!((c.proxy, c.proxy_pac, c.proxy_login), (None, None, false));
         assert_eq!(c.video_title, None);

@@ -97,8 +97,8 @@ pub fn folders() -> &'static Folders {
                 dir.display()
             ),
             (None, _) => tracing::warn!(
-                "helpers: neither the temporary folder {} nor MDM's data folder can be \
-                 written; the helpers run where MDM does",
+                "helpers: neither the temporary folder {} nor Grabbit's data folder can be \
+                 written; the helpers run where Grabbit does",
                 std::env::temp_dir().display()
             ),
             _ => {}

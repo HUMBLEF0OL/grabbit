@@ -65,7 +65,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
     }
     let Some(_instance) = mdm_ipc::instance_lock() else {
         eprintln!(
-            "Another Mister Download Manager uses the data folder {}.",
+            "Another copy of Grabbit uses the data folder {}.",
             data.display()
         );
         return ExitCode::FAILURE;
@@ -75,7 +75,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
     // the one links added by hand go with (upstream issue 668).
     crate::defaultbrowser::start();
     tracing::info!(
-        "Mister Download Manager {} ({}) starting without a window",
+        "Grabbit {} ({}) starting without a window",
         crate::help::VERSION,
         crate::help::COMMIT
     );
@@ -185,7 +185,7 @@ fn writable(dir: &std::path::Path) -> std::io::Result<()> {
 /// there yet (`-v /srv/mdm-config:/config`) as root's, and MDM runs as another user.
 fn not_ours(e: &std::io::Error) -> &'static str {
     if e.kind() == std::io::ErrorKind::PermissionDenied {
-        "\nIt belongs to another user: make it before the first start, owned by the user MDM runs \
+        "\nIt belongs to another user: make it before the first start, owned by the user Grabbit runs \
          as (`mkdir`, then `chown` it or give Docker that user with `--user`)."
     } else {
         ""

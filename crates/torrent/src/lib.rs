@@ -644,7 +644,7 @@ impl Torrents {
             }),
             // Major and minor only: the exact build would help someone aiming at one (#40).
             client_name_and_version: Some(format!(
-                "MisterDownloadManager/{}.{}",
+                "Grabbit/{}.{}",
                 env!("CARGO_PKG_VERSION_MAJOR"),
                 env!("CARGO_PKG_VERSION_MINOR")
             )),
