@@ -71,15 +71,20 @@ Recorded in `../PLAN.md`. Counts are lines (`git grep -c`) on dev e9d327d3.
 Upstream's fixes are the fork's fastest source of bug fixes, so the rename must not cut them
 off. Measured on upstream's 512 commits from 2026-08-14 to 2026-11-16: 209 (41 %) changed lines
 naming "MDM" or "Mister Download Manager" in `crates/`, `extension/` or the installer (comments
-included; 10a renamed only string literals, so fewer conflict), and 56 (11 %) lines with the
-identifiers 10c moves (`misterdownloadmanager…`, `MisterDownloadManager…`).
+included; 10a renamed only string literals, so fewer conflict), and 56 (11 %) changed lines with
+the identifiers 10c moves (`misterdownloadmanager…`, `MisterDownloadManager…`) in those folders
+and `.github/` (51 without `.github/`). Both by `git log --no-merges -G "<terms>" upstream/main --
+<folders>`.
 
 - **Words kept where users don't see them.** Comments, `// i18n:` notes and `mdm_*::` paths
   stay upstream's (decision 3 likewise), so most fixes still pick clean.
 - **The old name can't come back unseen.** `tools/rename/check.py --done` checks the areas
   already renamed (each area's `done` mark; 10d marks the website, docs and README). Runs:
-  `sync.py pick` after each pick (`! the old name is back`), `sync.py pr` (pushes nothing while
-  one is left), CI (`ci.yml`) and CONTRIBUTING's checks. `test_sync.py`'s `old_name_case`.
+  `sync.py pick` after each pick that touches a renamed folder (`! the old name is back`; a pick
+  changing the checker itself is checked by hand), `sync.py pr` (pushes nothing while one is
+  left, nor when the checker is missing or fails: closed, never read as clean), CI on pull
+  requests into `main` (`ci.yml`) and CONTRIBUTING's checks before `dev`. `test_sync.py`'s
+  `old_name_case`.
 - **Conflicts on renamed texts are ports:** upstream's wording, Grabbit's name.
 - **After 10c**, a fix touching the moved identifiers is ported onto the new names and the
   migration code, never picked over it.

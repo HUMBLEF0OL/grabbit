@@ -108,7 +108,9 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
    upstream author, and never picks a commit twice. Read its `!` lines after each pick.
    `! the old name is back`: the pick added "Mister Download Manager" or "MDM" where the fork
    says Grabbit (see "The fork's name" below). Rename it in a commit of its own right after the
-   pick; `pr` refuses to push until it's gone.
+   pick; `pr` refuses to push until it's gone (and when the checker is missing or fails).
+   `! it changes the rename's checker`: that pick is `S`; read it, then run
+   `python tools/rename/check.py --done` yourself.
 
 6. **Port by hand** (a fix the fork needs, in code the fork changed), on its own branch
    `upstream-sync/<date>-<issue>` from `origin/dev` (made like step 2):
@@ -191,7 +193,8 @@ matters more than anything here, so the rename is built to stay out of their way
   `.torrent` ProgID, mutex, native host name, exe names) move once with migrations (10c). A fix
   that touches them after 10c is ported onto the fork's names and its migration code, never
   picked over it: one wrong pick there breaks upgrades. Before 10c they are upstream's.
-- **The docs, README and website** become the fork's own in 10d (the website already is): an
+- **The docs, README and website** become the fork's own in 10d (the website's text is already
+  the fork's own, its name renamed in 10d): an
   upstream change there is ported for its facts only, in the fork's words, or skipped when it
   only reworded.
 - **Crate packages** become `grabbit-*` in 10e with their `mdm_*` code paths kept (decision 3):

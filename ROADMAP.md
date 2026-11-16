@@ -609,8 +609,9 @@ These ship in a later version, when they're ready.
   carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:
   a checker that lists every place the old name is still shown (`tools/rename/check.py`) and the
   plan refreshed against today's code. Done: the name the app, the command line, the AI
-  assistants' server, the remote page, the installer and the extension show (10a), with the
-  upstream sync and CI keeping the old name from coming back with upstream's fixes. Next: moving
+  assistants' server, the remote page, the installer and the extension show (10a); the upstream
+  sync's picks and pull requests (and CI on releases) stop the old name coming back with
+  upstream's fixes. Next: moving
   the data folder, saved logins, autostart, the `.torrent` link and the browser host to the new
   name (10c), then the website, docs and downloads (10d)
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a

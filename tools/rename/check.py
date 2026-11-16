@@ -153,7 +153,9 @@ AREAS = [
     ("App (Rust strings)", lambda: [(p, scan_rust) for p in files("crates/*/src/**/*.rs") + files("crates/*/build.rs") if p.parts[len(ROOT.parts) + 1] != "labserver"], True),
     ("App remote page", lambda: [(p, lambda q: scan_text(q, comment=("//", "/*", "*", "<!--"))) for p in files("crates/remote/web/*") if p.suffix in TEXT_EXT], True),
     ("Installer", lambda: [(p, lambda q: scan_text(q, comment=(";", "//", "{"))) for p in files("tools/installer/*.iss")], True),
-    ("Extension", lambda: [(p, scan_text) for p in files("extension/_locales/**/*.json") + files("extension/*.html")], True),
+    # Its scripts too: video.js's fallback texts, and any text a script shows (comments skipped).
+    ("Extension", lambda: [(p, scan_text) for p in files("extension/_locales/**/*.json") + files("extension/*.html") + files("extension/manifest*.json")]
+     + [(p, lambda q: scan_text(q, comment=("//", "/*", "*"))) for p in files("extension/*.js")], True),
     ("Website", lambda: [(p, scan_text) for p in files("website/content/**/*") if p.suffix in TEXT_EXT], False),
     ("Docs", lambda: [(p, scan_text) for p in files("docs/**/*") if p.suffix in TEXT_EXT], False),
     ("README", lambda: [(p, scan_text) for p in files("README.md")], False),

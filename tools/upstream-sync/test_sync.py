@@ -15,6 +15,7 @@ import tempfile
 from pathlib import Path
 
 SYNC = Path(__file__).with_name("sync.py")
+CHECK = SYNC.parents[1] / "rename" / "check.py"
 LEDGER = "tools/upstream-sync/ledger.md"
 HEADER = "| upstream | status | date | ref | subject | note |\n|---|---|---|---|---|---|\n"
 
@@ -99,6 +100,8 @@ def main() -> None:
         write(r, "Cargo.lock", 'name = "dep"\nversion = "1.0.0"\n# fork\n')
         write(r, "CHANGELOG.md", "# Changelog\n\n- the fork's\n- old\n")
         write(r, LEDGER, HEADER)
+        # The rename's checker, as the fork has it (sync.py fails closed without one).
+        write(r, "tools/rename/check.py", CHECK.read_text(encoding="utf-8"))
         commit(r, "fork: Windows and English only")
         git(r, "update-ref", "refs/remotes/origin/dev", "HEAD")
 
@@ -612,7 +615,7 @@ def old_name_case() -> None:
     """Plan 10: the fork is Grabbit, upstream still writes MDM. A clean pick that brings the old
     name back into a renamed area is flagged, and `pr` pushes nothing until it is renamed; a
     pick that adds nothing of it says nothing (the real tools/rename/check.py, copied in)."""
-    check = SYNC.parents[1] / "rename" / "check.py"
+    check = CHECK
     with tempfile.TemporaryDirectory() as tmp:
         r = Path(tmp)
         git(r, "init", "-q", "-b", "main")
@@ -649,6 +652,15 @@ def old_name_case() -> None:
         commit(r, "Grabbit, not MDM")
         again = sync(r, "pr", "--title", "t", "--body-file", str(body), ok=False)
         assert "old name" not in again.stderr + again.stdout, again
+        # Fails closed: a checker that crashes, or none, never reads as clean.
+        write(r, "tools/rename/check.py", "raise SystemExit(3)\n")
+        commit(r, "a broken checker")
+        broken = sync(r, "pr", "--title", "t", "--body-file", str(body), ok=False)
+        assert "couldn't be checked" in broken.stderr + broken.stdout, broken
+        git(r, "rm", "-q", "tools/rename/check.py")
+        commit(r, "no checker")
+        gone = sync(r, "pr", "--title", "t", "--body-file", str(body), ok=False)
+        assert "is missing" in gone.stderr + gone.stdout, gone
     print("ok: a pick that brings the old name back is flagged, and pr waits for the rename")
 
 
