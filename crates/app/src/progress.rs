@@ -426,12 +426,14 @@ impl Progress {
             ui.ctx().request_repaint();
         }
 
-        // The progress bar: IDM's green on the shared, themed track.
-        winui::meter(
-            &p,
-            r(o, 17.0, 180.0, 513.0, 16.0),
-            frac.unwrap_or(0.0) as f32,
-        );
+        // The progress bar on the shared, themed track. After the last byte, while the file is
+        // checked or a video joined (upstream issue 736), it starts again in the accent colour
+        // and shows how far that is.
+        let bar = r(o, 17.0, 180.0, 513.0, 16.0);
+        match finishing_fraction(snap) {
+            Some(f) => winui::meter_in(&p, bar, f as f32, crate::theme::colors().accent),
+            None => winui::meter(&p, bar, frac.unwrap_or(0.0) as f32),
+        }
 
         let mut action = Action::None;
         let details_label = if self.details {
@@ -1073,6 +1075,11 @@ fn status_page(
         _ if let Some(checking) = item.torrent_checking().filter(|_| failed_with.is_none()) => {
             checking
         }
+        // After the last byte: the file checked, a video's streams joined (upstream issue 736),
+        // as the list says, not "Connecting...".
+        _ if let Some(finishing) = item.finishing(false).filter(|_| failed_with.is_none()) => {
+            finishing
+        }
         // A torrent its debrid service is downloading (#44).
         Status::Downloading if item.at_service().is_some() => item.at_service().unwrap_or_default(),
         Status::Downloading => {
@@ -1083,7 +1090,21 @@ fn status_page(
                     .any(|c| matches!(c.status, ConnStatus::Receiving))
             }) || ((item.video.is_some() || item.torrent.is_some())
                 && item.rate() > 0.0);
-            if receiving {
+            // Every byte in and none on its way (upstream issue 736): the last of it written
+            // out, the file named; nothing is connecting.
+            let completing = item.torrent.is_none()
+                && snap.is_some_and(|s| {
+                    s.state == mdm_engine::download::State::Completing
+                        || (s.size.is_some_and(|t| t > 0 && s.downloaded >= t)
+                            && !s
+                                .connections
+                                .iter()
+                                .any(|c| matches!(c.status, ConnStatus::Connecting)))
+                });
+            if completing {
+                // i18n: a download's status: every byte is in, the file is being written out and given its name
+                crate::i18n::t("Finishing...")
+            } else if receiving {
                 crate::i18n::t("Receiving data...")
             } else {
                 crate::i18n::t("Connecting...")
@@ -1897,9 +1918,8 @@ fn segment_bar(p: &egui::Painter, o: Pos2, item: &Item, snap: Option<&Snapshot>)
     let ppp = p.pixels_per_point();
     for (start, done) in segments {
         let sx = ix + col(start);
-        let n = col(done);
-        if n > 1.0 {
-            run(sx + 1.0, (sx + n - 1.0).min(ix + 510.0), 1);
+        if let Some((a, b)) = segment_columns(start, done as f64, total, 511.0) {
+            run(ix + a, ix + b, 1);
         }
         // The start's tick, as wide in whole pixels wherever it falls (a 1-point column at
         // 150 % came out 2 pixels or 1 by its place, the 1-pixel ones all but gone).
@@ -1913,6 +1933,48 @@ fn segment_bar(p: &egui::Painter, o: Pos2, item: &Item, snap: Option<&Snapshot>)
                 cols.2,
             );
         }
+    }
+}
+
+/// How far the check or the merge after the last byte has come (upstream issue 736), when it
+/// is under way and that is known.
+fn finishing_fraction(snap: Option<&Snapshot>) -> Option<f64> {
+    use mdm_engine::download::State;
+    let s = snap.filter(|s| matches!(s.state, State::Verifying | State::Merging))?;
+    s.finishing.map(|f| f.clamp(0.0, 1.0))
+}
+
+/// The columns a segment fills in the segment bar, from its start column's right to its end's
+/// left, `total` bytes across `width` columns: a finished segment reaches the next one's start
+/// column, so a finished download leaves no gap (upstream issue 736). None when it fills none.
+fn segment_columns(start: u64, done: f64, total: u64, width: f64) -> Option<(f32, f32)> {
+    let col = |v: f64| (v / total as f64 * width).floor();
+    let first = col(start as f64);
+    let end = col((start as f64 + done).min(total as f64));
+    let last = (end - 1.0).min(width - 1.0);
+    (last > first).then_some(((first + 1.0) as f32, last as f32))
+}
+
+#[cfg(test)]
+mod segment_tests {
+    use super::segment_columns;
+
+    /// Upstream issue 736: two finished halves fill every column up to the next one's start, and
+    /// the last one to the bar's end: no gap at 100 %.
+    #[test]
+    fn finished_segments_leave_no_gap() {
+        let (total, width) = (1000, 511.0);
+        assert_eq!(segment_columns(0, 500.0, total, width), Some((1.0, 254.0)));
+        // The second one's start column is 255 (drawn red), its fill runs to the end.
+        assert_eq!(
+            segment_columns(500, 500.0, total, width),
+            Some((256.0, 510.0))
+        );
+        // Under way: up to where it has come.
+        assert_eq!(segment_columns(0, 100.0, total, width), Some((1.0, 50.0)));
+        // Nothing yet, or less than a column: no fill.
+        assert_eq!(segment_columns(0, 0.0, total, width), None);
+        assert_eq!(segment_columns(500, 1.0, total, width), None);
     }
 }
 

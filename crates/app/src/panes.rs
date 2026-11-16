@@ -2704,6 +2704,7 @@ mod details_tests {
             failure: None,
             events: Vec::new(),
             server: None,
+            finishing: None,
         }
     }
 

@@ -516,6 +516,7 @@ impl RemoteTorrent {
             }),
             events,
             server,
+            finishing: None,
         }
     }
 }
