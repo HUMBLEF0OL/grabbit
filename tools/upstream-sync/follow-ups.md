@@ -57,11 +57,6 @@ Strike an item through (or remove it) in the PR that settles it.
   torrents' Zone.Identifier test) fail where Windows' "do not preserve zone information" policy
   is on: give them a policy override (PR 41).
 
-- **A deleted video's stream files.** Removing a video download deletes its own part and state
-  files only (`app.rs` `remove_files_of`): yt-dlp's `<stem>.f<id>.<ext>.part` and, since the
-  engine downloads the streams (upstream issue 769), `<stem>.f<id>.<ext>.mdm.part` / `.mdm.json`
-  stay in the folder. Upstream lists them with `yt_dlp_leftover` (from `97e31ad5`).
-
 ## Tests to add (the fixes work; their proof is thinner than upstream's)
 
 - End-to-end cases upstream has and the ports left out: Firefox Alt+click with

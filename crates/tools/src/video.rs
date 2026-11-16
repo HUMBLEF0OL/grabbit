@@ -47,6 +47,11 @@ pub struct Progress {
     /// Once every stream is in: their file being joined into one (ffmpeg, run by yt-dlp;
     /// upstream issue 736), with how far that is (0 to 1) when its file's size tells.
     pub merging: Option<Option<f64>>,
+    /// It failed joining its streams: what of it is kept beside its file, the whole streams
+    /// among them, for Resume to join again without downloading them (yt-dlp takes them as they
+    /// are; the engine's `fetch` keeps a whole one). Deleting the download with its files
+    /// removes them.
+    pub merge_failed: Option<Vec<PathBuf>>,
 }
 
 /// A subtitle language the site wouldn't give (#68).
@@ -279,6 +284,9 @@ enum Attempt {
         error: String,
         rerouted: bool,
     },
+    /// Every stream came, and joining them failed: no other server or look-up mends that. With
+    /// the streams' format ids (`MDMQ`'s `1280+aud-English`).
+    MergeFailed(String, Vec<String>),
 }
 
 /// End yt-dlp and everything it started (#79): whenever the download is given up, nothing may
@@ -374,6 +382,21 @@ fn supervise(
                         p.downloaded = len;
                     }
                     p.state = State::Done(f);
+                }
+                return;
+            }
+            Attempt::MergeFailed(error, ids) => {
+                end(child);
+                // The streams stay for Resume (the merge's own unfinished file is gone).
+                let kept = template_of(&ours)
+                    .map(|(dir, stem)| kept_parts(&dir, &stem, &ids))
+                    .unwrap_or_default();
+                let mut p = progress.lock().unwrap();
+                if p.state != State::Stopped {
+                    p.speed = 0.0;
+                    p.merging = None;
+                    p.merge_failed = Some(kept);
+                    p.state = State::Failed(error);
                 }
                 return;
             }
@@ -552,6 +575,8 @@ struct Ran {
     warnings: Vec<String>,
     /// What it said when it failed.
     failure: String,
+    /// The merge's file when yt-dlp said it merges next and never that it was done.
+    merging: Option<PathBuf>,
 }
 
 /// Run yt-dlp with `ours` on the page looked up into `file`, following its progress with
@@ -626,6 +651,7 @@ fn run(
         }
         read_all.store(true, std::sync::atomic::Ordering::Relaxed);
     });
+    let merging = merged.into_inner().unwrap_or_else(|e| e.into_inner());
     // Poll (the lock is free in between, so stop() can still kill it).
     let status = loop {
         let mut slot = child.lock().unwrap();
@@ -655,6 +681,7 @@ fn run(
         quality,
         warnings,
         failure,
+        merging,
     }))
 }
 
@@ -699,8 +726,10 @@ fn watch_merge(
             continue;
         };
         let mut p = progress.lock().unwrap();
-        if p.merging.is_some() && p.downloaded > 0 {
-            p.merging = Some(Some(merge_fraction(len, p.downloaded)));
+        if let Some(was) = p.merging
+            && p.downloaded > 0
+        {
+            p.merging = Some(Some(merge_step(was, merge_fraction(len, p.downloaded))));
         }
     }
 }
@@ -719,26 +748,147 @@ fn merge_fraction(written: u64, streams: u64) -> f64 {
     (written as f64 / streams.max(1) as f64).min(0.99)
 }
 
+/// The merge's share after a reading of `now`, from `was` (none yet): never back. The file can
+/// read smaller than before (empty a moment while it is written again, made again by a second
+/// pass, read between ffmpeg's truncating and writing it): the bar holds where it was.
+fn merge_step(was: Option<f64>, now: f64) -> f64 {
+    was.map_or(now, |was| was.max(now))
+}
+
 /// The media file yt-dlp saved under our output name (`<dir>/<stem>.%(ext)s`), when it didn't say
 /// where, or said it in a form that names no file (#79). Its subtitles (`<stem>.<lang>.srt`) and
 /// unfinished parts don't count; the newest one wins.
 fn saved_by_name(ours: &[String]) -> Option<PathBuf> {
-    let template = ours
-        .iter()
-        .position(|a| a == "-o")
-        .and_then(|i| ours.get(i + 1))?;
-    let t = Path::new(template);
-    let dir = t.parent()?;
-    let stem = t
-        .file_name()?
-        .to_string_lossy()
-        .strip_suffix(".%(ext)s")?
-        .replace("%%", "%");
+    let (dir, stem) = template_of(ours)?;
     MEDIA
         .iter()
         .map(|ext| dir.join(format!("{stem}.{ext}")))
         .filter(|p| p.is_file())
         .max_by_key(|p| std::fs::metadata(p).and_then(|m| m.modified()).ok())
+}
+
+/// The folder and the file stem of our output template (`-o <dir>/<stem>.%(ext)s`).
+fn template_of(ours: &[String]) -> Option<(PathBuf, String)> {
+    let template = ours
+        .iter()
+        .position(|a| a == "-o")
+        .and_then(|i| ours.get(i + 1))?;
+    let t = Path::new(template);
+    let stem = t
+        .file_name()?
+        .to_string_lossy()
+        .strip_suffix(".%(ext)s")?
+        .replace("%%", "%");
+    Some((t.parent()?.to_path_buf(), stem))
+}
+
+/// The containers and sounds yt-dlp saves (`%(ext)s`), merged, converted or as the site has them,
+/// for telling its leftovers ([`yt_dlp_leftover`]).
+const LEFTOVER_MEDIA: [&str; 19] = [
+    "mp4", "m4a", "m4v", "webm", "weba", "mkv", "mka", "mov", "flv", "3gp", "ts", "mp3", "opus",
+    "ogg", "oga", "flac", "wav", "aac", "avi",
+];
+/// The subtitle files yt-dlp saves beside a video (#68).
+const SUBTITLES: [&str; 10] = [
+    "srt", "vtt", "ass", "ssa", "ttml", "srv1", "srv2", "srv3", "json3", "lrc",
+];
+
+/// Whether `rest`, a file name after `<stem>.` (lower case), is one yt-dlp writes for a download
+/// saved as `<stem>.%(ext)s`: an unfinished run's (`<ext>.part`, `<ext>.ytdl`,
+/// `<ext>.part-Frag<N>[.part]`, each also for one stream of a merged choice as `f<id>.<ext>…`,
+/// that stream once whole, `f<id>.<ext>`, and a merge's `temp.<ext>`; the engine's part file,
+/// resume state and pieces for such a stream, `f<id>.<ext>.mdm.part|json|pieces`, upstream
+/// issue 769); with `outputs`, also the finished file (`<ext>`) and its subtitles
+/// (`<language>.<srt|vtt…>`). Nothing else: another download's files (our own `.mdm.part`), a
+/// file merely named alike. Ported from upstream `97e31ad5`/`6196f9ad`.
+fn yt_dlp_leftover(rest: &str, outputs: bool) -> bool {
+    let media = |s: &str| LEFTOVER_MEDIA.contains(&s);
+    let word = |s: &str| {
+        !s.is_empty()
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    };
+    // A format id as yt-dlp names a stream: `137`, `hls-720p`, `dash-1`, `http-480`.
+    let format = |s: &str| {
+        s.strip_prefix('f').is_some_and(|id| {
+            word(id)
+                && (id.starts_with(|c: char| c.is_ascii_digit())
+                    || ["hls-", "dash-", "http-"].iter().any(|p| {
+                        id.strip_prefix(p)
+                            .is_some_and(|r| r.chars().any(|c| c.is_ascii_digit()))
+                    }))
+        })
+    };
+    let fragment = |s: &str| {
+        s.strip_prefix("part-frag")
+            .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+    };
+    let parts: Vec<&str> = rest.split('.').collect();
+    // An unfinished file: `<ext>` then `part`, `ytdl`, `part-frag<N>` or `part-frag<N>.part`.
+    let unfinished = |p: &[&str]| match p {
+        [ext, "part" | "ytdl"] => media(ext),
+        [ext, frag] => media(ext) && fragment(frag),
+        [ext, frag, "part"] => media(ext) && fragment(frag),
+        _ => false,
+    };
+    let working = match parts.as_slice() {
+        ["temp", ext] => media(ext),
+        [f, ext] if format(f) => media(ext),
+        [f, ext, "mdm", "part" | "json" | "pieces"] if format(f) => media(ext),
+        [f, tail @ ..] if format(f) => unfinished(tail),
+        p => unfinished(p),
+    };
+    let finished = outputs
+        && match parts.as_slice() {
+            [ext] => media(ext),
+            [language, sub] => word(language) && SUBTITLES.contains(sub),
+            _ => false,
+        };
+    working || finished
+}
+
+/// What yt-dlp left in `dir` for a download saved as `<stem>.%(ext)s` (our template), as
+/// [`yt_dlp_leftover`] tells them, letter case aside: what an unfinished run left, and with
+/// `outputs` the finished file and its subtitles. A file not of that shape is left alone.
+pub fn own_files(dir: &Path, stem: &str, outputs: bool) -> Vec<PathBuf> {
+    let prefix = format!("{}.", stem.to_lowercase());
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    rd.filter_map(Result::ok)
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().to_lowercase();
+            name.strip_prefix(&prefix)
+                .is_some_and(|rest| yt_dlp_leftover(rest, outputs))
+        })
+        .map(|e| e.path())
+        .collect()
+}
+
+/// What a failed merge left in `dir` for `<stem>.%(ext)s`: what [`own_files`] tells (unfinished
+/// files, streams named by a numbered or `hls-` id), and each stream of format `ids` by its name,
+/// `<stem>.f<id>.<ext>`, however yt-dlp named it (`Talk.faud-English.mp4`, an HLS sound's).
+fn kept_parts(dir: &Path, stem: &str, ids: &[String]) -> Vec<PathBuf> {
+    let mut kept = own_files(dir, stem, false);
+    let named: Vec<String> = ids
+        .iter()
+        .map(|id| format!("{}.f{}.", stem, id).to_lowercase())
+        .collect();
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.filter_map(Result::ok) {
+            let name = e.file_name().to_string_lossy().to_lowercase();
+            let whole = named.iter().any(|n| {
+                name.strip_prefix(n.as_str())
+                    .is_some_and(|ext| LEFTOVER_MEDIA.contains(&ext))
+            });
+            if whole && e.file_type().is_ok_and(|t| t.is_file()) && !kept.contains(&e.path()) {
+                kept.push(e.path());
+            }
+        }
+    }
+    kept.sort();
+    kept
 }
 
 /// Wait `d`, or less if the download is stopped meanwhile (false then).
@@ -848,6 +998,18 @@ fn attempt(
         }
         (Ok(s), None) if s.success() => {
             return failed("yt-dlp didn't say where it saved the file".into(), rerouted);
+        }
+        // Every stream in, and joining them failed (yt-dlp said it merges next, never that it
+        // was done): what ffmpeg left half written goes.
+        _ if let Some(temp) = &ran.merging => {
+            let _ = std::fs::remove_file(temp);
+            let ids = ran
+                .quality
+                .as_deref()
+                .and_then(|q| q.split_whitespace().next())
+                .map(|ids| ids.split('+').map(str::to_owned).collect())
+                .unwrap_or_default();
+            return Attempt::MergeFailed(ran.failure, ids);
         }
         _ => return failed(ran.failure, rerouted),
     };
@@ -1289,6 +1451,7 @@ impl VideoJob {
             engine: None,
             helper: None,
             merging: None,
+            merge_failed: None,
         }));
         let child: Child = Arc::new(Mutex::new(None));
         let current = Arc::new(crate::streams::Current::new(
@@ -1508,6 +1671,59 @@ mod tests {
         again.stop();
     }
 
+    /// What a video download owns in its folder: yt-dlp's and the engine's leftovers for its
+    /// stem, never another download's files or a file merely named alike (upstream `6196f9ad`).
+    #[test]
+    fn own_files_are_only_the_videos() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        let working = [
+            "Clip.mp4.part",
+            "Clip.mp4.ytdl",
+            "Clip.mp4.part-Frag3",
+            "Clip.f137.mp4.part",
+            "Clip.f140.m4a",
+            "clip.temp.mp4",
+            "Clip.fhls-720p.mp4",
+            "Clip.f137.mp4.mdm.part",
+            "Clip.f137.mp4.mdm.json",
+            "Clip.fhls-720p.mp4.mdm.pieces",
+        ];
+        let finished = ["Clip.mp4", "Clip.en.srt"];
+        let others = [
+            "Clip.mp4.mdm.part",
+            "Clip.v2.zip.mdm.part",
+            "Clip.zip",
+            "Clip.notes.txt",
+            "Clip.final cut.mp4",
+            "Clip.f137.mp4.mdm.zip",
+            "Other.mp4.part",
+        ];
+        for f in working.iter().chain(&finished).chain(&others) {
+            std::fs::write(d.join(f), b"x").unwrap();
+        }
+        let names = |outputs: bool| {
+            let mut n: Vec<String> = own_files(d, "Clip", outputs)
+                .iter()
+                .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+                .collect();
+            n.sort();
+            n
+        };
+        let mut want: Vec<String> = working.iter().map(|s| s.to_string()).collect();
+        want.sort();
+        assert_eq!(names(false), want);
+        want.extend(finished.iter().map(|s| s.to_string()));
+        want.sort();
+        assert_eq!(names(true), want);
+        assert!(own_files(&d.join("missing"), "Clip", true).is_empty());
+        // A failed merge's streams by their format ids, however yt-dlp named them.
+        std::fs::write(d.join("Clip.faud-English.mp4"), b"x").unwrap();
+        let kept = kept_parts(d, "Clip", &["137".into(), "aud-English".into()]);
+        assert!(kept.iter().any(|p| p.ends_with("Clip.faud-English.mp4")));
+        assert!(!kept.iter().any(|p| p.ends_with("Clip.mp4")));
+    }
+
     /// Upstream issue 736: the merge's own file, which yt-dlp renames when it's done, and its
     /// share done.
     #[test]
@@ -1523,6 +1739,10 @@ mod tests {
         assert_eq!(merge_fraction(45, 100), 0.45);
         // About as big as the streams, never "done" before the rename.
         assert_eq!(merge_fraction(120, 100), 0.99);
+        // A smaller file read later (truncated and written again): the share holds, then goes on.
+        assert_eq!(merge_step(None, 0.4), 0.4);
+        assert_eq!(merge_step(Some(0.4), 0.0), 0.4);
+        assert_eq!(merge_step(Some(0.4), 0.45), 0.45);
         // A merge is a choice of several streams, as `MDMQ` names them.
         assert!(several_streams("401+140 3840x2160"));
         assert!(!several_streams("18 640x360"));
@@ -1546,6 +1766,7 @@ mod tests {
             engine: None,
             helper: None,
             merging: None,
+            merge_failed: None,
         };
         lines
             .iter()

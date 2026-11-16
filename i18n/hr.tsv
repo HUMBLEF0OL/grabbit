@@ -2683,10 +2683,13 @@
 #, machine
 	medium	srednje
 #. text in the download list (sizes, speeds, status)
+<<<<<<< HEAD
 #. the list's Status column while a video's picture and sound are joined into one file (ffmpeg); {percent} how far, e.g. "45%". One short word: the column is narrow
 #, machine
 	Merging {percent}	Spajanje {percent}
 #. text in the download list (sizes, speeds, status)
+=======
+>>>>>>> 6196f9ad (A video whose merge fails says why and keeps its parts for Resume; Delete removes them; merge percentages never go back (#918))
 #. a video's status while its picture and sound are joined into one file (ffmpeg)
 #. the trailing ... means it is still going on: keep it
 #, machine

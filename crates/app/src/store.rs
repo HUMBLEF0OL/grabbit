@@ -528,6 +528,7 @@ mod tests {
                 i.video = Some(crate::model::VideoSpec {
                     selector: "bv*[height<=1080]+ba/b[height<=1080]".into(),
                     subs: Default::default(),
+                    parts: Vec::new(),
                 });
                 i
             })
