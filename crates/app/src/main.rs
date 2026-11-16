@@ -349,6 +349,7 @@ fn app() -> eframe::Result {
         crash::start(
             &data,
             crash::session("en", loaded.settings.dark_mode_support),
+            start == Start::Session,
         );
     }
     // The default browser, looked for once on a thread of its own (logged): its User-Agent is
