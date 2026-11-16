@@ -654,7 +654,7 @@ impl Job {
     pub fn is_helper(&self) -> bool {
         match self {
             Job::Video { job, .. } => job.helper().is_some(),
-            Job::Gallery { .. } => true,
+            Job::Gallery { job, .. } => job.on_helper(),
             _ => false,
         }
     }
@@ -668,7 +668,7 @@ impl Job {
             Job::Torrent(t) => t.set_speed_limit(rate),
             Job::Remote(r) => r.set_speed_limit(rate),
             Job::Video { job, .. } => job.set_speed_limit(rate),
-            Job::Gallery { .. } => {}
+            Job::Gallery { job, .. } => job.set_speed_limit(rate),
         }
     }
 
@@ -677,7 +677,8 @@ impl Job {
             Job::File(d) => d.speed_limit(),
             Job::Torrent(t) => t.speed_limit(),
             Job::Video { job, .. } => job.speed_limit(),
-            Job::Remote(_) | Job::Gallery { .. } => None,
+            Job::Gallery { job, .. } => job.speed_limit(),
+            Job::Remote(_) => None,
         }
     }
 }
