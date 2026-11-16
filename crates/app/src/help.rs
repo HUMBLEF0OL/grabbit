@@ -148,7 +148,7 @@ pub fn check(rt: &tokio::runtime::Handle, ctx: &egui::Context) -> Slot {
 fn settled(joined: Result<Result<Found, String>, tokio::task::JoinError>) -> Result<Found, String> {
     joined.unwrap_or_else(|e| {
         tracing::warn!("the update check stopped: {e}");
-        Err(crate::i18n::t("Mister Download Manager hit an internal error").to_owned())
+        Err(crate::i18n::t("Grabbit hit an internal error").to_owned())
     })
 }
 
