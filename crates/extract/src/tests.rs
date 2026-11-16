@@ -250,9 +250,6 @@ fn limits_stop_a_bomb_behind_an_unsafe_name() {
             depth: 8,
         },
         tool: None,
-        hatchzip: None,
-        in_place: false,
-        runs: None,
         on_file: &mut on_file,
         cancel: None,
     };
