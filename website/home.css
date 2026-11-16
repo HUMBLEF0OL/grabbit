@@ -104,7 +104,7 @@ html{scrollbar-color:var(--line) transparent}
 /* Benchmark. */
 .say{max-width:1200px;margin:120px auto 0;padding:0 18% 0 32px;font-weight:500;font-size:clamp(34px,4.2vw,58px);line-height:1.1;letter-spacing:-.04em;text-wrap:balance}
 @supports (animation-timeline:view()){@media (prefers-reduced-motion:no-preference){
-  .say span{opacity:.2;animation:lit linear both;animation-timeline:view();animation-range:cover calc(16% + var(--i) * 2.2%) cover calc(24% + var(--i) * 2.2%)}
+  html:not(.js-off) .say span{opacity:.2;animation:lit linear both;animation-timeline:view();animation-range:cover calc(16% + var(--i) * 2.2%) cover calc(24% + var(--i) * 2.2%)}
   @keyframes lit{to{opacity:1}}
 }}
 .say .c{color:var(--go)}
@@ -194,4 +194,11 @@ html:not(.js-off) .bench:not(.in) .bench-bar i{width:0}
   .hero{padding-top:120px}.btns .go,.btns .ghost{width:100%;justify-content:center}
   .nav .name span{display:none}
 }
+/* Without JavaScript the walk-through can't follow the scroll: it stacks, every job with its window,
+   as on a narrow screen (the build's theme script removes js-off when scripts run). */
+.js-off .pin{height:auto}
+.js-off .stick{position:static;height:auto;grid-template-columns:1fr;gap:24px;margin-top:96px}
+.js-off .step{opacity:1;grid-template-columns:1fr;gap:0;padding:20px 0}.js-off .step p{max-height:none}.js-off .step .bar{display:none}
+.js-off .view,.js-off .steps{display:none}
+.js-off .mshot{display:block;max-width:640px;margin-top:16px;border-radius:8px;overflow:hidden;box-shadow:var(--lift);border:1px solid var(--line)}.js-off .mshot img{width:100%}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

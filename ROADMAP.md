@@ -618,8 +618,10 @@ These ship in a later version, when they're ready.
   centred stage, then a walk through adding, downloading, torrents and video as you scroll), the
   benchmark's seven medians drawn from its results file, the Grabbit mark and Geist, light and
   dark; every other page in the same colours, type and buttons, the Grabbit name and mark in
-  the header and footer, and the video window's picture taken again in Graphite. The pages'
-  own text still says Mister Download Manager until the rename above
+  the header and footer, and the video window's picture taken again in Graphite; the site's
+  install manifest and search data carry Grabbit's name, mark and colours, the home page's walk
+  through reads in full without JavaScript, and its stylesheet and script are never served stale
+  after an update. The pages' own text still says Mister Download Manager until the rename above
 
 ### Bugs being looked into
 
