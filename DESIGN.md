@@ -282,5 +282,5 @@ Eight 6px tracks, numbered in 12.5px Mute, that fill in cyan in real time to the
 - **Don't** put drop shadows on panels or cells. Only app windows lift, the nav floats, and the Download pill has its bevel.
 - **Don't** draw a mock window or retouch a screenshot. Don't use IDM artwork, and don't present Grabbit as an IDM look-alike.
 - **Don't** add a second typeface or set headings in uppercase or with wide tracking.
-- **Don't** use square corners on controls or radii outside the 8 / 12 / 16 / 24 / pill set.
+- **Don't** use square corners on controls or radii outside the 4 (micro, under 20px) / 8 / 12 / 16 / 24 / pill set.
 - **Don't** bring back the old blue-board look (Archivo, the blue board, green buttons, tilted labels) in any page.

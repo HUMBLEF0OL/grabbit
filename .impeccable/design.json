@@ -1,14 +1,20 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-15T00:00:00+00:00",
+  "generatedAt": "2026-11-16T00:00:00+00:00",
   "title": "Design System: Grabbit website",
   "extensions": {
-    "status": "The home page (website/index.html, home.css, home.js, bench_bars() in tools/website/build.py) is the reference implementation. Other pages still use website/styles.css and are to be moved over.",
+    "status": "The home page (website/index.html, website/home.css, website/home.js, and the benchmark chart drawn by bench_bars() in tools/website/build.py) is the reference implementation of this system. The other pages (download, benchmark, IDM alternative, features, help, FAQ, news, legal) render from website/styles.css, whose tokens map onto this system: the ground (--board), the tray (--paper), ink, signal cyan (--go), amethyst (--link), Geist and pill buttons. Their layouts are the older ones (sheets with bands, the IDM alternative's label), restyled. New pages and reworked sections are built from this document and home.css.",
     "colorMeta": {
       "go": { "role": "primary", "displayName": "Signal Cyan", "canonical": "#00788e", "purpose": "Download pill and Grabbit's own numbers (light).", "tonalRamp": ["#00222a", "#003a46", "#005666", "#00788e", "#2e9cb0", "#6cbfcd", "#a9dde5", "#e2f5f8"] },
       "go-dark": { "role": "primary", "displayName": "Signal Cyan (dark)", "canonical": "#1fe0f0", "purpose": "Download pill and Grabbit's own numbers (dark).", "tonalRamp": ["#00262a", "#004a51", "#00727c", "#00a2ae", "#1fe0f0", "#6aedf6", "#aef5fa", "#e3fcfd"] },
       "on-go": { "role": "primary", "displayName": "On-Cyan (light)", "canonical": "#ffffff" },
       "on-go-dark": { "role": "primary", "displayName": "On-Cyan (dark)", "canonical": "#00171c" },
+      "go-wash": { "role": "primary", "displayName": "Cyan Wash", "canonical": "#f0f7f8", "purpose": "6% on the tray, behind the comparison's own row (light)." },
+      "go-wash-dark": { "role": "primary", "displayName": "Cyan Wash (dark)", "canonical": "#131c26", "purpose": "6% on the tray, behind the comparison's own row (dark)." },
+      "go-tint": { "role": "primary", "displayName": "Cyan Tint", "canonical": "#e0eff2", "purpose": "12%, behind Grabbit's live strip and table row (light)." },
+      "go-tint-dark": { "role": "primary", "displayName": "Cyan Tint (dark)", "canonical": "#13252f", "purpose": "12%, behind Grabbit's live strip and table row (dark)." },
+      "go-tint-strong": { "role": "primary", "displayName": "Cyan Tint Strong", "canonical": "#d6ebef", "purpose": "16%, the result pills (\"Delivered\") with ink text (light)." },
+      "go-tint-strong-dark": { "role": "primary", "displayName": "Cyan Tint Strong (dark)", "canonical": "#14313b", "purpose": "16%, the result pills (\"Delivered\") with ink text (dark)." },
       "amethyst": { "role": "secondary", "displayName": "Amethyst", "canonical": "#6527d4", "purpose": "Links, focus ring (light).", "tonalRamp": ["#1a0840", "#2f1172", "#4a1ca8", "#6527d4", "#8656e6", "#a989f2", "#cdbaf9", "#efe7fe"] },
       "amethyst-dark": { "role": "secondary", "displayName": "Amethyst (dark)", "canonical": "#b08cff", "purpose": "Links, focus ring (dark).", "tonalRamp": ["#1e0f45", "#3a1f7c", "#5a36b3", "#7f5be0", "#b08cff", "#c6abff", "#ddcdff", "#f3edff"] },
       "selection": { "role": "secondary", "displayName": "Selection Tint", "canonical": "#efe7fe" },
@@ -17,8 +23,12 @@
       "ground-dark": { "role": "neutral", "displayName": "Jet Ground", "canonical": "#09080d" },
       "tray": { "role": "neutral", "displayName": "Tray", "canonical": "#ffffff" },
       "tray-dark": { "role": "neutral", "displayName": "Tray (dark)", "canonical": "#121019" },
+      "tray-2": { "role": "neutral", "displayName": "Tray 2", "canonical": "#f3f1f9", "purpose": "The band header of a tray and selected rows on the inner pages (light)." },
+      "tray-2-dark": { "role": "neutral", "displayName": "Tray 2 (dark)", "canonical": "#1c1828", "purpose": "The band header of a tray and selected rows on the inner pages (dark)." },
       "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#0d0b14", "tonalRamp": ["#0d0b14", "#26222f", "#3f3a4c", "#5a5570", "#7c7790", "#a29eb2", "#ccc9d6", "#f0eef7"] },
       "ink-dark": { "role": "neutral", "displayName": "Ink (dark)", "canonical": "#f0eef7" },
+      "ink-2": { "role": "neutral", "displayName": "Ink 2", "canonical": "#4b4760", "purpose": "Secondary reading text on the inner pages: answers, captions, values beside a figure (light)." },
+      "ink-2-dark": { "role": "neutral", "displayName": "Ink 2 (dark)", "canonical": "#bab4cc", "purpose": "Secondary reading text on the inner pages: answers, captions, values beside a figure (dark)." },
       "mute": { "role": "neutral", "displayName": "Mute", "canonical": "#5a5570" },
       "mute-dark": { "role": "neutral", "displayName": "Mute (dark)", "canonical": "#9a94ad" },
       "line": { "role": "neutral", "displayName": "Hairline", "canonical": "#d9d5e3" },
@@ -32,7 +42,8 @@
       "lede": { "displayName": "Lede", "purpose": "The line under the hero headline, Mute." },
       "body": { "displayName": "Body", "purpose": "Page default, tabular figures." },
       "small": { "displayName": "Small", "purpose": "Copy inside cells, chart row names." },
-      "label": { "displayName": "Label", "purpose": "Nav, chart key and note, footer links." }
+      "label": { "displayName": "Label", "purpose": "Nav, chart key and note, footer links." },
+      "code": { "displayName": "Code", "purpose": "Only for what a person types or reads as code: command lines, switches, file paths and keys in the help and comparison pages. Never as a \"technical\" costume." }
     },
     "shadows": [
       { "name": "tray-edge", "value": "inset 0 1px 0 var(--edge), 0 0 0 1px var(--line)", "purpose": "Every tray surface; edge is rgb(255 255 255 / .7) light, / .07 dark." },
@@ -134,8 +145,8 @@
       "Don't put drop shadows on panels or cells. Only app windows lift, the nav floats, and the Download pill has its bevel.",
       "Don't draw a mock window or retouch a screenshot. Don't use IDM artwork, and don't present Grabbit as an IDM look-alike.",
       "Don't add a second typeface or set headings in uppercase or with wide tracking.",
-      "Don't use square corners on controls or radii outside the 8 / 12 / 16 / 24 / pill set.",
-      "Don't port the old blue-board look (Archivo, styles.css) into new or moved pages."
+      "Don't use square corners on controls or radii outside the 4 (micro, under 20px) / 8 / 12 / 16 / 24 / pill set.",
+      "Don't bring back the old blue-board look (Archivo, the blue board, green buttons, tilted labels) in any page."
     ]
   }
 }
