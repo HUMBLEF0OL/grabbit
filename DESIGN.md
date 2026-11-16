@@ -1,363 +1,286 @@
 ---
-name: Mister Download Manager website
-description: A download is a delivery. The site is the file's waybill, stuck on the real app window.
+name: Grabbit website
+description: Graphite at page scale. One stage where the real app does the work, one cyan for the action and Grabbit's own numbers.
 colors:
-  board: "#1f63d6"
-  board-deep: "#1854bb"
-  board-edge: "#3b78e0"
-  on-board: "#ffffff"
-  on-board-2: "#e6eefd"
-  paper: "#fcfcfb"
-  paper-2: "#f0f3f7"
-  ink: "#111318"
-  ink-2: "#434956"
-  ink-3: "#5f6676"
-  line: "#dde1e8"
-  go: "#57cc5a"
-  go-hover: "#47b94a"
-  go-ink: "#08200b"
-  link: "#0d58c9"
-  stamp: "#1b7a26"
-  board-dark: "#0c1a33"
-  board-deep-dark: "#081226"
-  board-edge-dark: "#1c2e52"
-  on-board-dark: "#f2f5fb"
-  on-board-2-dark: "#c3cde0"
-  paper-dark: "#11151d"
-  paper-2-dark: "#192030"
-  ink-dark: "#eef1f6"
-  ink-2-dark: "#c3cad6"
-  ink-3-dark: "#98a1b1"
-  line-dark: "#2a3242"
-  link-dark: "#86b6ff"
-  stamp-dark: "#6bdb6e"
+  ground: "#f7f6fb"
+  tray: "#ffffff"
+  ink: "#0d0b14"
+  mute: "#5a5570"
+  line: "#d9d5e3"
+  go: "#00788e"
+  on-go: "#ffffff"
+  amethyst: "#6527d4"
+  selection: "#efe7fe"
+  ink-2: "#4b4760"
+  tray-2: "#f3f1f9"
+  go-wash: "#f0f7f8"
+  go-tint: "#e0eff2"
+  go-tint-strong: "#d6ebef"
+  ground-dark: "#09080d"
+  tray-dark: "#121019"
+  ink-dark: "#f0eef7"
+  mute-dark: "#9a94ad"
+  line-dark: "#2a2637"
+  go-dark: "#1fe0f0"
+  on-go-dark: "#00171c"
+  amethyst-dark: "#b08cff"
+  selection-dark: "#231a3a"
+  ink-2-dark: "#bab4cc"
+  tray-2-dark: "#1c1828"
+  go-wash-dark: "#131c26"
+  go-tint-dark: "#13252f"
+  go-tint-strong-dark: "#14313b"
 typography:
   display:
-    fontFamily: "Archivo, Segoe UI, system-ui, sans-serif"
-    fontSize: "clamp(48px, 8vw, 116px)"
-    fontWeight: 900
-    lineHeight: 0.92
-    letterSpacing: "-0.025em"
-    fontVariation: "'wdth' 68"
-  headline:
-    fontFamily: "Archivo, Segoe UI, system-ui, sans-serif"
-    fontSize: "clamp(36px, 4.8vw, 62px)"
-    fontWeight: 800
-    lineHeight: 1.05
-    letterSpacing: "-0.01em"
-    fontVariation: "'wdth' 78"
-  page-title:
-    fontFamily: "Archivo, Segoe UI, system-ui, sans-serif"
-    fontSize: "clamp(40px, 5.6vw, 72px)"
-    fontWeight: 850
-    lineHeight: 1.05
-    letterSpacing: "-0.015em"
-    fontVariation: "'wdth' 72"
-  label-headline:
-    fontFamily: "Archivo, Segoe UI, system-ui, sans-serif"
-    fontSize: "clamp(30px, 3vw, 40px)"
-    fontWeight: 850
+    fontFamily: "Geist, Segoe UI, system-ui, sans-serif"
+    fontSize: "clamp(46px, 6vw, 84px)"
+    fontWeight: 600
     lineHeight: 1
-    letterSpacing: "-0.012em"
-    fontVariation: "'wdth' 72"
-  title:
-    fontFamily: "Archivo, Segoe UI, system-ui, sans-serif"
-    fontSize: "clamp(26px, 2.6vw, 32px)"
-    fontWeight: 800
+    letterSpacing: "-0.045em"
+  statement:
+    fontFamily: "Geist, Segoe UI, system-ui, sans-serif"
+    fontSize: "clamp(34px, 4.2vw, 58px)"
+    fontWeight: 500
+    lineHeight: 1.1
+    letterSpacing: "-0.04em"
+  headline:
+    fontFamily: "Geist, Segoe UI, system-ui, sans-serif"
+    fontSize: "clamp(32px, 3.6vw, 48px)"
+    fontWeight: 600
     lineHeight: 1.05
-    fontVariation: "'wdth' 78"
-  band:
-    fontFamily: "Archivo, Segoe UI, system-ui, sans-serif"
-    fontSize: "17px"
-    fontWeight: 800
-    lineHeight: 1.15
-    fontVariation: "'wdth' 80"
+    letterSpacing: "-0.035em"
+  title:
+    fontFamily: "Geist, Segoe UI, system-ui, sans-serif"
+    fontSize: "22px"
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: "-0.02em"
   lede:
-    fontFamily: "Archivo, Segoe UI, system-ui, sans-serif"
-    fontSize: "19px"
+    fontFamily: "Geist, Segoe UI, system-ui, sans-serif"
+    fontSize: "20px"
     fontWeight: 400
     lineHeight: 1.5
   body:
-    fontFamily: "Archivo, Segoe UI, system-ui, sans-serif"
-    fontSize: "17px"
+    fontFamily: "Geist, Segoe UI, system-ui, sans-serif"
+    fontSize: "18px"
     fontWeight: 400
-    lineHeight: 1.6
-  field-value:
-    fontFamily: "Archivo, Segoe UI, system-ui, sans-serif"
-    fontSize: "16.5px"
-    fontWeight: 650
-    lineHeight: 1.35
+    lineHeight: 1.5
     fontFeature: "'tnum' 1"
-  fine:
-    fontFamily: "Archivo, Segoe UI, system-ui, sans-serif"
+  small:
+    fontFamily: "Geist, Segoe UI, system-ui, sans-serif"
+    fontSize: "15.5px"
+    fontWeight: 400
+    lineHeight: 1.5
+  label:
+    fontFamily: "Geist, Segoe UI, system-ui, sans-serif"
     fontSize: "14px"
     fontWeight: 400
-    lineHeight: 1.55
-  field-name:
-    fontFamily: "Archivo, Segoe UI, system-ui, sans-serif"
-    fontSize: "12px"
-    fontWeight: 750
-    letterSpacing: "0.045em"
-    fontVariation: "'wdth' 74"
-  mono:
+    lineHeight: 1.5
+  code:
     fontFamily: "Cascadia Mono, Consolas, SF Mono, ui-monospace, monospace"
     fontSize: "0.88em"
+    fontWeight: 400
 rounded:
-  hairline: "2px"
-  tag: "4px"
-  item: "6px"
-  control: "8px"
-  sheet: "10px"
-  label: "12px"
+  micro: "4px"
+  window: "8px"
+  well: "12px"
+  core: "16px"
+  shell: "24px"
+  pill: "999px"
 spacing:
-  gutter: "clamp(16px, 4vw, 40px)"
-  wrap: "1240px"
-  wrap-narrow: "880px"
-  section: "clamp(56px, 7vw, 96px)"
-  sheet-pad: "clamp(24px, 4vw, 56px)"
-  row-pad: "clamp(18px, 3vw, 32px)"
-  field: "10px 16px 11px"
+  wrap: "1200px"
+  gutter: "32px"
+  gutter-phone: "16px"
+  grid-gap: "16px"
+  cell-pad: "28px"
+  section: "160px"
 components:
   button-go:
     backgroundColor: "{colors.go}"
-    textColor: "{colors.go-ink}"
-    rounded: "{rounded.control}"
-    padding: "0 20px"
-    height: "46px"
-  button-go-hover:
-    backgroundColor: "{colors.go-hover}"
-    textColor: "{colors.go-ink}"
-  button-line:
+    textColor: "{colors.on-go}"
+    typography: "{typography.body}"
+    rounded: "{rounded.pill}"
+    padding: "0 24px"
+    height: "52px"
+  button-go-dark:
+    backgroundColor: "{colors.go-dark}"
+    textColor: "{colors.on-go-dark}"
+    rounded: "{rounded.pill}"
+    padding: "0 24px"
+    height: "52px"
+  button-ghost:
     backgroundColor: "transparent"
     textColor: "{colors.ink}"
-    rounded: "{rounded.control}"
-    padding: "0 20px"
-    height: "46px"
-  sheet:
-    backgroundColor: "{colors.paper}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.sheet}"
-  waybill:
-    backgroundColor: "{colors.paper}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.label}"
-  label-band:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.paper}"
-    typography: "{typography.band}"
-    padding: "12px 18px"
-  field:
-    textColor: "{colors.ink}"
-    typography: "{typography.field-value}"
-    padding: "{spacing.field}"
-  tag:
-    textColor: "{colors.ink}"
-    rounded: "{rounded.tag}"
-    padding: "3px 8px"
-  tag-stable:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.paper}"
-    rounded: "{rounded.tag}"
-    padding: "3px 8px"
-  stamp:
-    backgroundColor: "{colors.paper}"
-    textColor: "{colors.stamp}"
-    rounded: "{rounded.item}"
-    padding: "5px 12px"
-  segmented-tab-selected:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.paper}"
-    padding: "10px 16px"
-  header:
-    backgroundColor: "{colors.board}"
-    textColor: "{colors.on-board}"
-    height: "68px"
+    rounded: "{rounded.pill}"
+    padding: "0 24px"
+    height: "52px"
+  nav-pill:
+    backgroundColor: "{colors.tray}"
+    textColor: "{colors.mute}"
+    rounded: "{rounded.pill}"
+    height: "48px"
   nav-link:
-    textColor: "{colors.on-board}"
-    rounded: "{rounded.item}"
-    padding: "8px 10px"
-  footer:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.paper}"
+    textColor: "{colors.mute}"
+    rounded: "{rounded.pill}"
+    padding: "7px 12px"
+  stage-bezel:
+    rounded: "{rounded.shell}"
+    padding: "10px"
+  stage-core:
+    backgroundColor: "{colors.tray}"
+    rounded: "{rounded.core}"
+    padding: "48px 64px 0"
+  cell:
+    backgroundColor: "{colors.tray}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.shell}"
+    padding: "{spacing.cell-pad}"
+  window:
+    rounded: "{rounded.window}"
 ---
 
-# Design System: Mister Download Manager website
+# Design System: Grabbit website
+
+> **Status.** The home page (`website/index.html`, `website/home.css`, `website/home.js`, and the benchmark chart drawn by `bench_bars()` in `tools/website/build.py`) is the reference implementation of this system. The other pages (download, benchmark, IDM alternative, features, help, FAQ, news, legal) render from `website/styles.css`, whose tokens map onto this system: the ground (`--board`), the tray (`--paper`), ink, signal cyan (`--go`), amethyst (`--link`), Geist and pill buttons. Their layouts are the older ones (sheets with bands, the IDM alternative's label), restyled. New pages and reworked sections are built from this document and `home.css`.
 
 ## Overview
 
-**Creative North Star: "The Waybill on the Parcel"**
+**Creative North Star: "One Take"**
 
-A download is a delivery. The page is the board the parcel sits on, in the logo's blue; the real app window is the parcel; what the visitor reads is printed on thermal-label sheets stuck to it, in black ink with hairline field rules, ranked like a courier label: who sends it, the headline, the fine print, the fields, a real barcode. The benchmark is tracking: two shipments scanned event by event to the measured times, each event showing its rate as well as its time.
+The camera never cuts. A single centred stage holds the real Grabbit window doing its work. As the visitor scrolls, the stage stays put and the copy walks through the app's four jobs beside it. The site is Graphite, the app's own look, at page scale: a jet-black or near-white ground, one raised tray surface, hairlines lit along the top edge, and a single cyan that means "this is Grabbit acting". Proof comes from the app and its measured numbers. Nothing on the page is drawn to look like the app.
 
-The world is the owner's choice. The blue board (#1f63d6) replaced kraft brown after four rendered options; dark theme is a navy depot where the same labels print in reverse (near-black stock, cool white ink). Density is a label's, not a brochure's: few elements, each one a field with a name and a value, numbers in tabular figures. Every screenshot is the real, unretouched app, shown at full content width; the site never draws a fake window, a glowing mock-up or a row of icon cards. Reading pages (help, FAQ, news, legal) take the same world with restraint: the board above, one sheet to read.
+Density is calm and generous: a 1200px column, 160px between sections, big tight-tracked headings, muted ink for everything secondary. Colour is scarce on purpose. Cyan marks the Download action and Grabbit's own figures, amethyst marks links, focus and selection, and the gradient lives only inside the double-chevron mark. Light and dark are equal citizens and follow the visitor's system setting by default.
 
-The site ships in English. Direction-bound values stay logical properties.
+IDM appears only as the benchmark's yardstick (grey bars, plain-weight figures) and as a "moving from IDM" path. It is never the frame of reference for the look.
 
 **Key Characteristics:**
-- Blue board, white label stock, black ink; green only for Download and delivered.
-- One self-hosted face, Archivo, condensed by its width axis for headings and field names.
-- Fields, not cards: name over value, ink rules between.
-- Real artefacts only: the unretouched app, a scannable Code 128 barcode, the benchmark's own times.
-- Motion is mechanical and rare: the label feeds out once, progress moves in real time, a stamp lands.
+- Jet-black / near-white ground, one tray surface, 1px hairlines with a top light edge.
+- One accent, cyan, for Download and Grabbit's own numbers. Amethyst for links, focus and selection only.
+- Geist in three weights, tight negative tracking, tabular figures everywhere.
+- Pills for controls, nested 24/16px shells for stages and cells, 8px for app windows.
+- Every image is the real app in its light and dark versions, framed and lifted, never mocked.
+- Motion plays once or runs to measured time, and every element has a finished state at rest.
 
 ## Colors
 
-Two materials and one law: the board in the logo's blue, label stock in white and ink, and the logo's green reserved for the action and for arrival.
+Graphite's palette: neutral grounds with a faint violet cast, one cyan that does the work, and one amethyst that only points.
 
 ### Primary
-- **Logo Blue Board** (board): the page itself, the sticky header and every surface between sheets. Text on it is On-Board White or On-Board Haze only (both checked WCAG AA). Board Deep marks the closing section; Board Edge is the header's and closing's hairline.
-- **Navy Depot** (board-dark family): the same roles in dark theme; a deep navy board, never black.
+- **Signal Cyan** (go / go-dark): the Download pill (nav, hero, close), Grabbit's bar and figures in the benchmark chart, the cyan words of the benchmark statement, the active walk-through rail segment, the filling connection bars, and the "Complete" state. It sits on On-Cyan text: white in light mode, near-black teal in dark mode. Its tints mark Grabbit's own row and results, never decoration: go-wash (6% on the tray) behind the comparison's own row, go-tint (12%) behind its live strip and table row, go-tint-strong (16%) for the result pills ("Delivered") with ink text.
 
 ### Secondary
-- **Dispatch Green** (go): the Download button, the finished lane of the tracking race, and nothing else. Its text is Go Ink, a near-black green, never white; hover darkens to Go Hover.
-- **Stamp Ink** (stamp): a darker delivered green for green text and rules printed on label stock (the rubber stamp, "Delivered"); lightens to a bright green on the navy depot.
-
-### Tertiary
-- **Label Link Blue** (link): links inside sheets (prose, FAQ answers) and the focus ring everywhere. On the board, links take the board's text colour and are underlined instead.
+- **Amethyst** (amethyst / amethyst-dark): inline links (underlined 1px at a 4px offset), the 2px focus ring, and the selection tint (selection / selection-dark). Never used for fills, headings or buttons.
 
 ### Neutral
-- **Thermal Paper** (paper): every sheet, label, menu and dialog. Paper Grey (paper-2) is the hover and selected row on a sheet, code and quote wells.
-- **Label Ink** (ink): reading text on sheets, field rules, the label band, the footer and selected segmented tabs. Ink 2 is secondary text (sublines, answers); Ink 3 is field names, fine print and captions on sheets.
-- **Hairline** (line): quiet dividers inside a sheet (table rows, list rows, the help nav's edge).
+- **Ground** (ground / ground-dark): the page itself.
+- **Tray** (tray / tray-dark): the one raised surface. It carries the stage's core, the chart, the bento cells and the glass nav (at 78% with blur).
+- **Ink** (ink / ink-dark): headings, primary text, the ghost button's label, and "Free". Translucent ink is the system's only tint: 4-9% for wells, ghost fills and hovers, 22% for the IDM bars, 8% for empty connection tracks.
+- **Ink 2** (ink-2 / ink-2-dark): secondary reading text on the inner pages (answers, captions, values beside a figure). **Tray 2** (tray-2 / tray-2-dark): the band header of a tray and selected rows on the inner pages.
+- **Mute** (mute / mute-dark): ledes, body copy in cells, the second line of the hero headline, nav links, chart labels and footer links.
+- **Hairline** (line / line-dark): 1px rings around the tray surfaces, window borders, section rules, and the inactive rail.
 
 ### Named Rules
-**The Green By Law Rule.** Green appears only on the Download action and on delivered states (the done lane, the stamp). Never on a secondary button, a badge, a link or a decorative accent. One exception, the owner's choice: on the comparison page, MDM's line is live. Its foot carries a strip of eight connections that fill in green, each at its own pace with a head where the bytes arrive; then a Delivered stamp lands ("1 GiB in 1.01 s", the benchmark's median), and it loops every 6 s. Its ticks in the declaration are green. Reduced motion shows it delivered, at rest.
+**The One Signal Rule.** Cyan means Grabbit is acting: the Download action, or a number Grabbit measured. Never use it for decoration, a heading, a link or the comparison's bars.
 
-**The Two Text Systems Rule.** Text on the board is on-board or on-board-2; text on label stock is ink, ink-2 or ink-3. Never put ink on the board or board text on a sheet; every element printed on stock declares ink colour, whatever it inherits.
+**The Amethyst Points Rule.** Amethyst only shows where you can go or where you are: links, focus, selection. It never fills a surface.
 
-**The Colour Lives In Fields Rule.** Reading text stays ink. Colour belongs to the board, the action, the stamp and links, not to paragraphs or headings.
+**The Mark Owns The Gradient Rule.** The cyan-to-amethyst gradient appears only inside the Grabbit mark (`website/assets/grabbit.svg`). There is no gradient text, gradient fill or glow anywhere else.
 
 ## Typography
 
-**Display Font:** Archivo, variable width, condensed (with Segoe UI, system-ui)
-**Body Font:** Archivo at normal width (with Segoe UI, system-ui; Tahoma and Noto Sans Arabic for Arabic and Persian)
-**Label/Mono Font:** Cascadia Mono (with Consolas, SF Mono) for code and the barcode's human-readable line
+**Display Font:** Geist SemiBold 600 (falling back to Segoe UI, then system-ui)
+**Body Font:** Geist Regular 400 and Medium 500, self-hosted (`website/assets/fonts/geist`, OFL)
 
-**Character:** One self-hosted grotesk does everything, by its width axis: narrowed to about 68-80% and heavy for headlines, stamps and field names, normal width for reading. The condensed caps carry the label's voice; the plain body is the fine print you actually read.
+**Character:** One neutral grotesk in three weights. Hierarchy comes from size and negative tracking, which gets tighter as the size grows. All figures are tabular, so times line up.
 
 ### Hierarchy
-- **Display** (900, clamp(48px, 8vw, 116px), 0.92, width 68%): one word or phrase per section at poster scale: the closing line, the race's ratio (up to 200px, width 70%), the 404 number.
-- **Headline** (800, clamp(36px, 4.8vw, 62px), 1.05, width 78%): section headings on the board.
-- **Page title** (850, clamp(40px, 5.6vw, 72px), width 72%): inner pages' h1 on the board, max 20ch.
-- **Label headline** (850, clamp(30px, 3vw, 40px), 1.0, width 72%): the headline printed on a waybill.
-- **Title** (800, clamp(26px, 2.6vw, 32px), width 78%): prose h2; h3 at 21px width 86%.
-- **Band** (800, 17px, width 80%): the sender line in a label's ink band.
-- **Lede** (400, 19px, 1.5): section and page introductions, max 62-64ch.
-- **Body** (400, 17px, 1.6; 1.7 in prose): reading text, max 72ch; 16.5px on phones.
-- **Field value** (650, 16.5px, 1.35, tabular figures): the value under a field name.
-- **Fine** (400, 14px, 1.55): captions, sources, small print.
-- **Field name** (750, 12px, 0.045em, uppercase, width 74%): the name over a field value, table column heads, the help nav's group names.
+- **Display** (600, clamp(46px, 6vw, 84px), 1.0, -0.045em, balanced wrap): the hero headline in two lines, the second in Mute. The closing "Get Grabbit" uses the same voice at clamp(44px, 5.4vw, 76px).
+- **Statement** (500, clamp(34px, 4.2vw, 58px), 1.1, -0.04em): the one benchmark sentence, lit word by word, with its Grabbit figure in cyan.
+- **Headline** (600, clamp(32px, 3.6vw, 48px), 1.05, -0.035em, max 18ch): section headings.
+- **Title** (600, 21-22px, 1.25, -0.02em): walk-through steps and bento cells.
+- **Lede** (400, 20px, 1.5, max 600px, pretty wrap): the line under the hero headline, in Mute.
+- **Body** (400, 18px, 1.5): the page default. Copy in cells and steps sits at 15.5-17px in Mute.
+- **Label** (400, 14px): nav links, chart key, chart note, footer links. The chart's figures are 600 at 13.5px for Grabbit and 400 for IDM. Axis ticks are 12px.
+- **Code** (Cascadia Mono, 0.88em): only for what a person types or reads as code: command lines, switches, file paths and keys in the help and comparison pages. Never as a "technical" costume.
 
 ### Named Rules
-**The Tabular Figures Rule.** Every number that can be compared (times, sizes, ratios, versions, dates) is set in tabular figures.
+**The Tighter As It Grows Rule.** Tracking scales with size: -0.01em at 15-18px, -0.02em at titles, -0.035 to -0.045em at headlines and display. Body copy is never tracked.
 
-**The Condense, Don't Swap Rule.** Hierarchy comes from Archivo's width and weight axes, never from a second display face. Scripts Archivo lacks fall back to the system's face, without condensing, tracking or uppercase.
+**The Tabular Figures Rule.** Tabular figures are set on the body, so every time, size and count lines up without extra work.
 
 ## Layout
 
-A centred wrap of 1240px (880px for narrow reading) with a fluid gutter (clamp(16px, 4vw, 40px)); sections breathe at clamp(72px, 10vw, 128px), and consecutive sections drop their top padding. Section intros sit on the board, max 760px wide; their content sits on sheets below. Two-column sections split about 5:7 or 5:6 (text, then sheet).
+A centred 1200px wrap with 32px side padding (16px under 560px). Sections sit 160px apart. The benchmark statement starts 120px below the walk-through and leaves 18% empty on its right so it wraps short.
 
-The home's first viewport is the parcel: the real window at full content width, the waybill stuck across its lower end corner (its start edge on a column boundary so no clipped value peeks out), hanging a little past the edge. Under 980px everything becomes one column and the waybill moves below the window, overlapping its foot; the nav collapses to a menu under 1100px; under 720px field grids stack (the waybill keeps two columns) and segmented tabs stack vertically.
-
-Help pages are one sheet with a sticky 250px nav column and the prose beside it; the nav folds into two, then one, column above the prose on narrow screens. Charts, screenshots and code stay left to right in RTL pages; everything else mirrors.
+- **Hero:** centred, 148px from the top (120px on phones). Headline, then the lede 24px below, then the buttons 36px below that, then the stage 64px below. The stage is up to 1080px wide, and a mask fades its lower ~38% into the ground at the fold.
+- **Walk-through (signature):** a 300vh section with a sticky full-viewport grid. Steps on the left, stage on the right (5fr / 7fr, 72px gap). A 600px tall stage cross-fades between the jobs' windows. Under 1000px the pin goes away: the steps stack, and each one shows its own screenshot inline.
+- **Benchmark chart:** one tray panel. Rows are a 250px name column plus the bars, all on one shared seconds axis (0-16 s, a tick every 4 s). Under 1000px each name sits above its bars.
+- **Bento:** a 12-column grid, 320px rows, 16px gaps, with cells spanning 7/5(two rows)/4/3/6/6. It becomes one column under 1000px (cells at least 240px tall).
+- **Close and footer:** a centred close section above a hairline, 120px padding. Then a four-column footer (2fr 1fr 1fr 1fr), two columns under 1000px.
+- **Breakpoints:** 1000px (nav links hide, pin and bento collapse) and 560px (gutters shrink, hero buttons go full width, the nav's wordmark hides).
 
 ## Elevation & Depth
 
-Two physical layers: the board, and paper laid on it. Sheets cast a short contact line plus a soft, board-tinted drop; labels that are stuck on (the waybill, menus, dialogs, screenshots) lift higher. Screenshots inside prose take a lighter contact shadow; nothing else has one. Rules and hairlines do the separating inside a sheet. In the navy depot the shadows turn to plain black.
+Depth comes from tonal layering plus a single lift. The ground is flat. The tray rises from it through a 1px hairline ring and a 1px inner light edge along the top. Only real app windows cast a shadow, so they read as objects sitting on the stage. The glass nav is the one floating control.
 
 ### Shadow Vocabulary
-- **Sheet** (`box-shadow: 0 1px 0 rgba(6, 22, 60, .14), 0 16px 32px -14px rgba(4, 18, 52, .5)`): every sheet lying on the board.
-- **Lift** (`box-shadow: 0 2px 0 rgba(6, 22, 60, .16), 0 28px 48px -18px rgba(3, 14, 44, .6)`): the waybill, screenshots, menus, the language dialog, the language offer.
-- **Sticker edge** (`box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .18), 0 0 0 1.5px rgba(4, 32, 10, .55)`): the Download button only; a pressed-in lower edge and a dark rim, not a drop.
+- **Tray edge** (`box-shadow: inset 0 1px 0 var(--edge), 0 0 0 1px var(--line)`): every tray surface (chart, bento cells, nav). Edge is white at 70% in light mode and 7% in dark mode. On hover a cell's ring deepens to 18% ink.
+- **Window lift** (`box-shadow: 0 40px 80px -30px rgb(40 22 90 / .28), 0 2px 6px rgb(40 22 90 / .08)`, dark: `0 40px 80px -30px rgb(0 0 0 / .7), 0 2px 6px rgb(0 0 0 / .4)`): app screenshots only, always together with a 1px hairline border.
+- **Nav float** (`inset 0 1px 0 var(--edge), 0 0 0 1px var(--line), 0 10px 30px -14px rgb(0 0 0 / .35)` with `backdrop-filter: blur(14px) saturate(1.4)`): the glass pill nav only.
+- **Pill bevel** (`inset 0 1px 0 rgb(255 255 255 / .25), inset 0 -1px 0 rgb(0 0 0 / .15)`): the cyan Download pill only.
 
 ### Named Rules
-**The Paper On Board Rule.** Depth means paper on the board. A surface either lies (Sheet) or is stuck on (Lift); there is no third height and no glow.
+**The Only Windows Lift Rule.** Drop shadows belong to the app's windows. Panels and cells rise through a hairline and a top light edge, never through a drop shadow or a glow.
 
 ## Shapes
 
-Gently rounded, like die-cut label stock: sheets 10px, stuck-on labels and dialogs 12px, controls and screenshots 8px, rows and stamps 6px, tags 4px, flags 2px. Rules carry the structure: 1.5px ink rules between fields and around segmented controls, 1px hairlines between quiet rows, a 2px dashed tear line above the barcode. The hero's label card is the one object with depth, and its depth is all in the shadow under it (a contact shadow and a long soft one, `--shadow-card`, neutral black in dark): it sits flat, turned 2deg, on the window's start corner (the owner's choice), in the same grid cell as the window so the section always clears it. The closing label sits turned 1.2deg; both mirror in RTL; stamps tilt 4-6deg. Everything else is square to the grid. Sections sit one rhythm apart (`--gap-section`, 56-96px): each carries the gap above it only, so gaps never stack, and the last block before the footer carries it below; an intro set beside its content has no bottom margin.
+The geometry is soft and nested. Controls are full pills (999px), and so are the skip link, nav links and the theme button (a circle). Stages are a double bezel: a 24px outer shell (4% ink, hairline ring, 10px padding) around a 16px tray core, so the inner radius equals the outer radius minus the padding. Bento cells and the chart use the same 24px. App windows sit at 8px (in the hero stage only the top corners are rounded, because the window bleeds out of the bottom). The path well is 12px. Tags and badges are pills like the controls; links, menus, logos and pictures inside pages take the window's 8px. Elements under 20px (code, keys, check boxes, flags, grid cells, thin bars) take a 4px micro radius, the one size below 8px. Bars and connection tracks have half-height radii (4px and 3px). The inactive rail is 3px wide with 2px ends. Lists use a short 8 x 1.5px dash, never a glyph bullet.
 
 ## Components
 
 ### Buttons
-Tactile and few. One green sticker, everything else drawn in line.
-- **Shape:** gently rounded (8px), 46px tall (40px in the header, 38px in the language offer).
-- **Long labels:** a label wider than its space wraps to two lines inside the button's height; only the header's Download stays on one line.
-- **Primary (Download):** Dispatch Green with Go Ink text, 700 weight at width 92%, 20px side padding, the sticker edge. A split variant keeps the system's download on the left and the other systems under an arrow that opens a sheet menu.
-- **Hover / Focus:** hover darkens to Go Hover; press moves 1px down; focus is a 3px Label Link Blue ring offset 2px.
-- **Line:** transparent with a 1.5px inset ring in the current text colour; hover tints 10% of that colour. Works on both board and sheet.
-- **Icon button:** 40px square, transparent, 12% tint on hover.
+Few and round: one cyan pill and one ghost.
+- **Shape:** pill (999px), 52px tall, 24px horizontal padding, 600 at 16px, an optional 18px stroke icon with a 10px gap. In the nav: 36px tall, 16px padding, 14px text.
+- **Primary (Download):** Signal Cyan with On-Cyan text and the pill bevel.
+- **Ghost:** 5% ink fill with a hairline ring and ink text. Hover goes to 9%.
+- **Hover / Active / Focus:** primary rises 1px and brightens to 1.06 on a springy `cubic-bezier(.34,1.56,.64,1)` over .45s. Both buttons press to scale .97. Focus is the global 2px amethyst ring at a 4px offset.
 
-### Chips (tags)
-- **Style:** 4px corners, 11.5px uppercase caps at 0.06em, 1.5px ink ring on paper.
-- **State:** Stable is filled ink with paper text; Recommended and Experimental are outlined.
-
-### Cards / Containers (sheets)
-- **Corner Style:** 10px; 12px for stuck-on labels.
-- **Background:** Thermal Paper, ink text.
-- **Shadow Strategy:** Sheet when lying, Lift when stuck on (see Elevation).
-- **Border:** none outside; inside, 1.5px ink rules or 1px hairlines between rows.
-- **Internal Padding:** clamp(24px, 4vw, 56px) for reading sheets; clamp(18px, 3vw, 32px) for rows.
-- **Labelled sheet:** a sheet may open with an ink band: what it is on the start side (17px, 800, width 80%), its fine print on the end side.
-
-### Inputs / Fields
-The site has no form inputs. Its "fields" are the label's data grid: two columns, field name over value, a 1.5px ink rule above each and between the pair; one column on phones.
+### Cards / Containers (tray cells)
+- **Corner Style:** 24px.
+- **Background:** Tray, with the tray edge (see Elevation).
+- **Internal Padding:** 28px. The chart uses 36px 40px 28px.
+- **Content:** a 21px title, a Mute line no wider than 34ch, then one piece of proof pinned to the bottom (a live connection strip, browser logos at 38px, an 88px ink "Free", a lifted screenshot crop bleeding off an edge, or a menu-path well). Hovering lifts a crop 6px over .7s.
 
 ### Navigation
-- **Header:** the board, 68px (60px on phones), a 1px Board Edge hairline under it, sticky. Links 15px/600 on-board, 6px rounded 12% tint on hover, the current page underlined 2px at 8px offset. The language button is outlined at 55% of the text colour; the header's green Download is always present.
-- **Menu (under 1100px):** a Lift sheet with ink links.
-- **Fit:** the header never runs past its row. Where a language's words don't fit, it gives up, in order and only as far as needed: the Sponsor heart, some spacing (16px gaps, 7px link padding), the links for the menu, then the language's name beside its flag.
-- **Help nav:** field-name group labels, 14.5px links in ink-2, the current page filled ink with paper text.
-- **Footer:** a full ink band with paper text, field-name column heads.
+- **Style:** a floating glass pill fixed 16px from the top and centred, 48px tall. It holds the mark and wordmark (600, 15px), Mute pill links (14px) that hover to ink on a 6% ink tint, a 34px circular theme toggle, and the small cyan Download.
+- **Mobile:** under 1000px only the mark, the toggle and Download remain. Under 560px the wordmark hides too.
 
-### The Waybill (signature)
-The label stuck on the parcel: an ink band with the logo and sender line, the label headline, an ink-2 subline, the green split Download, the other systems in fine print, the fields (postage, delivery time, systems, version and size), and a real Code 128 barcode of the release under a dashed tear line with its text in spaced mono. On first load it feeds out once, top to bottom, like a thermal printer (1.1s, cubic-bezier(.16, 1, .3, 1)); at rest it never moves.
+### Stage (signature)
+A double-bezel tray that frames real app windows. In the hero it is 1080px wide, the window has 48px 64px of breathing room, and the whole thing fades out at the fold. In the walk-through it is 600px tall, and each job's window enters with a .6s fade plus a .9s rise from 14px at .97 scale on `cubic-bezier(.16,1,.3,1)`.
 
-### The Tracking Race (signature)
-Two lanes on one shared time axis, one continuous rule each: dashed while the app starts, solid ink while the file comes in (ink-2 for IDM), green once delivered, when a Delivered stamp thunks onto the finish. Events below list time and rate in tabular figures; the ratio grows at display scale in the foot. It plays in real time to the benchmark's measured medians, replays on demand, and shows the finish at once for reduced motion. Scenario tabs are an ink-ruled segmented control; selected is filled ink.
+### Walk-through Rail (signature)
+Four steps, each with a 3px rail segment and a 22px title. Inactive steps sit at 38% opacity. The active step goes to full opacity, fills its rail with cyan, and opens its Mute description. The step that crosses mid-viewport becomes active.
 
-### Rubber Stamp
-Stamp Ink caps at width 70%, 900 weight, a 2.5px rule plus a 1.5px outline offset 2px (inked twice round), on paper, set at a slant. Used only for delivered.
+### Benchmark Chart (signature)
+Rendered from `website/bench/results.json` by `bench_bars()`, so the page and the data cannot disagree. Each scenario gets two 8px bars on a shared axis: Grabbit in cyan with a 600 cyan figure, IDM in 22% ink with a 400 Mute figure. A key and a sourcing note in Mute complete it. The bars grow once from zero over 1.1s when the chart scrolls into view, and they rest at full width without JS or with reduced motion.
 
-### Language Dialog
-A Lift sheet, 12px corners, with an ink title band; a grid of flag, native name (isolated with `bdi`) and English name; the current language ringed in ink on Paper Grey. It slides up 14px over .28s on a navy backdrop.
-
-### Coming Sticker (in transit)
-What is in the source but not in a download yet: a paper sticker, ink text, a 1.5px **dashed** ink rule just inside its edge (in transit, like the race's dashed lane before the file moves), a clock icon, "Coming with version 0.5" and a fine line naming the current release. Three sizes from one builder (`build.py coming_banner`): on a page (Sheet shadow, on the board), on a section (Paper Grey, inside prose), on a tile (a 12px tag). Never green: nothing is delivered yet. One setting (`UPCOMING`) shows or removes them all.
-
-### Contents (the packing list)
-Every feature in one labelled sheet: an ink band ("Contents", the count in fine print), then one row per group, the group's field name in the start column and its features in a ruled grid (1px hairlines between cells, no card per item, no icons). Each cell is a link: the name at 17.5px/750 width 86%, its one line in ink-2, an arrow that moves 3px on hover, the coming tag when it applies. The home page and /features/ show the same sheet.
-
-### Feature Parcel
-A feature page's first view repeats the home's memorable moment at a smaller scale: the real window on the board (Lift, natural size, never upscaled) with a small waybill stuck across its lower end corner, tilted 1.6deg (mirrored in RTL), carrying the facts as fields (In the app, Since, Postage: Free, Full guide). Without a screenshot the label stands alone. Under 980px the label sits under the window's foot, overlapping it by 18px.
-
-### Theme Tiles
-Paper tiles two to a row, each its screenshot (light or dark: the switch above the grid chooses, the site's theme by default) over a 1.5px ink rule, then the name and its feel. Rows share their heights (subgrid). The last tile is empty: no paper, a 2px dashed outline on the board, a dashed plus, "Make your own theme". The three make-your-own steps are numbered at poster scale (900, width 68%), because their order is the instruction.
-
-### The Crew (contributors)
-The people who make MDM possible, from GitHub's public record (`tools/contributors.py`): round photos that link to each GitHub profile, with the login in an ink tag over the photo on hover and focus (kept inside the row by `main.js`). Real photos only, and no counts or claims beyond what GitHub shows.
-- **In the hero (the owner's choice: a "liked by" line):** on the board under the window's caption, beside the label (after the label and the caption under 980px). The title "Made possible by these amazing humans" in board text, 800 weight at width 78%; then one row of 44px photos that overlap by 8px, each ringed 2.5px in on-board so it reads on the blue board and the navy depot; then "+N", an on-board disc in board-coloured figures, which opens `/contributors.html`. The row shows 7, 11 or 15 photos by width (`PILE_TIERS`). Hover lifts a photo 3px; reduced motion keeps it still.
-- **On `/contributors.html`:** one labelled sheet per group (pull requests, issues, comments), its people in a ruled roster of 1px hairlines: a 48px photo ringed 1.5px in ink, the login at 750 weight, the counts in ink-2 with their numbers in tabular ink.
-- **At the end of each release on the News page:** "Thanks to", then 40px photos ringed in ink, row under row, and a fine line naming the release before.
+### Connection Strip
+Eight 6px tracks, numbered in 12.5px Mute, that fill in cyan in real time to the benchmark's 1.01 s median. Tracks still filling show 75% cyan, finished ones full cyan. A 34px clock counts up, the state reads Starting, Downloading, then Complete (in cyan), holds for 1.8 s and replays while visible. Reduced motion shows it complete.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** set every page on the board (#1f63d6, navy #0c1a33 in dark) and everything read on paper sheets in ink.
-- **Do** keep green for the Download action and delivered states only, with Go Ink text on it.
-- **Do** use on-board / on-board-2 for text on the board and ink / ink-2 / ink-3 on sheets; check AA in both themes.
-- **Do** present facts as fields: a 12px condensed uppercase name over a 650-weight tabular value, 1.5px ink rules between.
-- **Do** show only the real, unretouched app in screenshots, in its day and night versions.
-- **Do** use logical properties for every direction.
-- **Do** keep the barcode a real, scannable Code 128 of what it says.
-- **Do** show the other download managers on the comparison page with their own logos, 24px beside their names, unretouched, with the trademark notice and `website/assets/alts/SOURCES.txt`; never IDM's.
-- **Do** honour reduced motion: the race shows its finish, the label does not feed, bars and grids sit at rest.
+- **Do** build every page from the Ground / Tray / Ink / Mute / Hairline tokens, in both themes, defaulting to the visitor's system choice.
+- **Do** keep cyan to Download and Grabbit's own numbers, and amethyst to links, focus and selection.
+- **Do** frame real app screenshots, in light and dark versions, in an 8px window with a hairline and the window lift, inside a 24/16px double bezel or a tray cell.
+- **Do** set type in Geist 400/500/600 with tracking that tightens as the size grows, and tabular figures.
+- **Do** draw every chart from its data file at build time, and show IDM in neutral ink beside Grabbit's cyan.
+- **Do** give every motion a finished state at rest: entrance rise once (.9s, `cubic-bezier(.16,1,.3,1)`), bars grow once, and reduced motion or no JS shows the end state.
 
 ### Don't:
-- **Don't** use green on secondary buttons, tags, links, icons or decoration.
-- **Don't** put ink-coloured reading text directly on the board, or board text on a sheet.
-- **Don't** add a second typeface for display; condense Archivo instead.
-- **Don't** set a field name above a section headline as a kicker; field names name fields, table columns and nav groups.
-- **Don't** add elevations beyond Sheet, Lift and the Download sticker edge (screenshots inside prose take a lighter contact shadow), and never a glow.
-- **Don't** draw a mock window, retouch a screenshot or use IDM artwork; IDM appears only as a named, text-marked comparison.
-- **Don't** animate anything on entry except the label's single feed and progress moving into place (the race, the speed-up bars, the connection grids).
+- **Don't** use gradient text, glows, or any gradient outside the Grabbit mark.
+- **Don't** put drop shadows on panels or cells. Only app windows lift, the nav floats, and the Download pill has its bevel.
+- **Don't** draw a mock window or retouch a screenshot. Don't use IDM artwork, and don't present Grabbit as an IDM look-alike.
+- **Don't** add a second typeface or set headings in uppercase or with wide tracking.
+- **Don't** use square corners on controls or radii outside the 4 (micro, under 20px) / 8 / 12 / 16 / 24 / pill set.
+- **Don't** bring back the old blue-board look (Archivo, the blue board, green buttons, tilted labels) in any page.

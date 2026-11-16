@@ -34,7 +34,6 @@ import markdown
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import barcode  # noqa: E402
 import contributors  # noqa: E402  (tools/contributors.py: the people the site thanks)
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -47,12 +46,12 @@ REPO = "https://github.com/HUMBLEF0OL/grabbit"
 # <!--@amo--> for its Add to Firefox button.
 AMO = "https://addons.mozilla.org/firefox/addon/mister-download-manager/"
 # The extension's listing in the Chrome Web Store (crates/ipc/src/extension.rs STORE_ID), for
-# Chrome, Edge, Brave, Opera and Vivaldi: {{CWS}} in pages; <!--@stores--> is both buttons.
+# Chrome, Edge, Brave, Opera and Vivaldi: {{CWS}} in pages; <!--@cws--> for its Add to Chrome button.
 CWS = "https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp"
 # The header's, the footer's and the home page's Support MDM: this fork's repository until its
 # owner's GitHub Sponsors page exists (see .github/FUNDING.yml; the app and the popup match).
 SPONSORS = REPO
-NAME = "Mister Download Manager"
+NAME = "Grabbit"
 # The next release, as the site announces it. What is in the source but not in a download yet
 # says "Coming with version <this>" (coming_banner(): the feature pages, the Themes page, the
 # features' tiles), shown for a feature whose `since` is this version or later. At that release
@@ -210,31 +209,6 @@ def people_count(n: int) -> str:
     return f'<span translate="no">{n}</span> {"person" if n == 1 else "people"}'
 
 
-# How many photos the home page's row shows, by the screen's width (styles.css .pile, the same
-# breakpoints): (from this width up, photos). The rest are "+N", which opens /contributors.html.
-PILE_TIERS = [(0, 7), (561, 11), (1200, 15)]
-
-
-def crew_pile() -> str:
-    """The home page's thanks, on the board beside the hero's label (under the window; after the
-    label on a phone): "Made possible by these amazing humans", a row of round photos, overlapping,
-    and "+N" for the ones the row has no room for."""
-    if not CREW:
-        return ""
-    n = len(CREW)
-    shown = max(cap for _, cap in PILE_TIERS)
-    # "+N" for each width where the row is full: its count there, and only there.
-    more = "".join(f'<span class="pile-n pile-n-{cap}">+{n - cap}</span>' for _, cap in PILE_TIERS if n > cap)
-    more_li = (f'<li class="pile-more"><a href="/contributors.html"><span translate="no" dir="ltr">{more}</span> '
-               f'<span class="sr-only">Everyone who helped</span></a></li>' if more else "")
-    full = " ".join(f"pile-full-{cap}" for _, cap in PILE_TIERS if n > cap)
-    return f"""<div class="parcel-crew">
-          <p class="crew-title" id="crew-title">Made possible by these amazing humans</p>
-          <ul class="faces pile {full}" style="--face: 44px" role="list" aria-labelledby="crew-title">{"".join(face(p, 44) for p in CREW[:shown])}{more_li}</ul>
-          <p class="crew-fine">{people_count(n)} who sent a pull request, reported a problem or joined a conversation on GitHub. <a href="/contributors.html">Meet them all</a></p>
-        </div>"""
-
-
 def esc(s: str) -> str:
     return html.escape(s, quote=True)
 
@@ -331,15 +305,6 @@ NAV = [
 ]
 
 
-def gh_pill(cls: str = "gh-pill") -> str:
-    """The GitHub link with its star count (when known): header, hero, open-source card."""
-    stars = STATS.get("stars")
-    count = f'<span class="gh-count">{stars}</span>' if stars else ""
-    return (f'<a class="{cls}" href="{REPO}" aria-label="Mister Download Manager on GitHub'
-            f'{f", {stars} stars" if stars else ""}">'
-            f'<svg aria-hidden="true"><use href="#i-github"/></svg><span class="gh-label">GitHub</span>{count}</a>')
-
-
 def os_menu() -> str:
     """The split download button's list: every file (hero, final call)."""
     rows = [
@@ -382,11 +347,6 @@ def cws_button(extra_class: str = "") -> str:
             '<img src="/assets/browsers/chrome.svg" width="22" height="22" alt=""> Add to Chrome</a>')
 
 
-def store_buttons() -> str:
-    """Both stores' buttons side by side: Firefox's, then the Chrome Web Store's."""
-    return f'<span class="store-btns">{amo_button()}{cws_button()}</span>'
-
-
 def header(section: str = "") -> str:
     links = "\n        ".join(
         f'<a href="{href}"{" aria-current=\"page\"" if key == section else ""}>{label}</a>'
@@ -397,7 +357,7 @@ def header(section: str = "") -> str:
   <header class="top">
     <div class="wrap top-inner">
       <a class="brand" href="/">
-        <img src="/assets/logo-64.png" width="34" height="34" alt="">
+        <img src="/assets/grabbit.svg" width="30" height="30" alt="">
         <span>{NAME}</span>
       </a>
       <nav class="nav" aria-label="Main">
@@ -447,7 +407,7 @@ HEADER_FIT = """<script>
       }
       fit();
       if (window.ResizeObserver) new ResizeObserver(fit).observe(row);
-      // Archivo may arrive after this runs (or start loading only once laid out): fit again then.
+      // The font may arrive after this runs (or start loading only once laid out): fit again then.
       if (document.fonts) { document.fonts.ready.then(fit); document.fonts.addEventListener('loadingdone', fit); }
     })();
   </script>"""
@@ -459,8 +419,8 @@ def footer() -> str:
     <div class="wrap">
       <div class="foot-cols">
         <div class="foot-brand">
-          <a class="brand" href="/"><img src="/assets/logo-64.png" width="34" height="34" alt=""><span>{NAME}</span></a>
-          <p class="foot-tag">The download manager you already know, rebuilt to be faster. Free, open source and written from scratch in Rust.</p>
+          <a class="brand" href="/"><img src="/assets/grabbit.svg" width="30" height="30" alt=""><span>{NAME}</span></a>
+          <p class="foot-tag">A free, open-source download manager for Windows, written from scratch in Rust and measured faster than IDM.</p>
           <a class="text-link foot-star" href="{REPO}"><svg aria-hidden="true"><use href="#i-star"/></svg> Star it on GitHub</a>
           <a class="text-link foot-star" href="{SPONSORS}"><svg aria-hidden="true"><use href="#i-heart"/></svg> Support MDM</a>
         </div>
@@ -521,7 +481,7 @@ def footer() -> str:
 
 # In every head (templated pages get it through <!--@theme-->): the font, then the theme before
 # the first paint.
-THEME_SCRIPT = """<link rel="preload" href="/vendor/archivo/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+THEME_SCRIPT = """<link rel="preload" href="/assets/fonts/geist/Geist-SemiBold.ttf" as="font" type="font/ttf" crossorigin>
   <script>
     (function () {
       var d = document.documentElement;
@@ -547,8 +507,8 @@ def head(path: str, title: str, desc: str, *, jsonld: list | None = None, og_typ
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{esc(title)}</title>
   <meta name="description" content="{esc(desc)}">{robots}
-  <meta name="theme-color" content="#1f63d6" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0c1a33" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f7f6fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#09080d" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
   <link rel="canonical" href="{url}">
   <meta property="og:type" content="{og_type}">
@@ -559,7 +519,7 @@ def head(path: str, title: str, desc: str, *, jsonld: list | None = None, og_typ
   <meta property="og:image" content="{SITE}/assets/social.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
-  <meta property="og:image:alt" content="{NAME}: the download manager you already know, rebuilt to be faster">
+  <meta property="og:image:alt" content="{NAME}: a free, open-source download manager for Windows">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48 64x64">
   <link rel="icon" href="/assets/favicon-32.png" type="image/png" sizes="32x32">
@@ -642,12 +602,12 @@ def cta_band(text: str = "Free, open source, no ads, no trial.") -> str:
 
 
 def waybill_fields() -> str:
-    """The release's facts in the label's field grammar (the home page's waybill and the
-    download page): what the visitor gets, for what, at what postage."""
+    """The release's facts as label/value rows (the IDM alternative page): its price, speed,
+    system and version."""
     size = f' <small>{SETUP_SIZE}</small>' if SETUP_SIZE else ""
     return (f'<dl class="fields">'
-            f'<div><dt>Postage</dt><dd>Free</dd></div>'
-            f'<div><dt>Delivery</dt><dd><a href="/benchmark.html">1 GiB in 1.0 s</a> <small>IDM: 5.5 s</small></dd></div>'
+            f'<div><dt>Price</dt><dd>Free</dd></div>'
+            f'<div><dt>Speed</dt><dd><a href="/benchmark.html">1 GiB in 1.0 s</a> <small>IDM: 5.5 s</small></dd></div>'
             f'<div><dt>System</dt><dd>Windows 10 and 11</dd></div>'
             f'<div><dt>Version</dt><dd><a href="/news.html">{VERSION}</a>{size}</dd></div></dl>')
 
@@ -1138,6 +1098,25 @@ def bench_report() -> str:
     return md(table) + f'<p class="fine">{esc(env)}</p>'
 
 
+def bench_bars(axis: int = 16) -> str:
+    """The home page's chart: each scenario's end-to-end median from website/bench/results.json,
+    MDM's bar over IDM's on one shared time axis (seconds). Drawn here so the page and the data
+    can't disagree; home.css styles it and home.js only adds the grow-in."""
+    data = json.loads((WEB / "bench" / "results.json").read_text("utf-8"))
+    rows = []
+    for s in data["scenarios"]:
+        us = s["clients"]["MDM"]["stats"]["e2e_ms"]["median"] / 1000
+        them = s["clients"]["IDM"]["stats"]["e2e_ms"]["median"] / 1000
+        rows.append(
+            f'<li class="bench-row"><span class="bench-name">{esc(s["title"])}</span>'
+            f'<span class="bench-bars">'
+            f'<span class="bench-bar us" style="--w:{us / axis * 100:.2f}%"><i></i><b>{us:.2f} s</b></span>'
+            f'<span class="bench-bar them" style="--w:{them / axis * 100:.2f}%"><i></i><b>{them:.2f} s</b></span>'
+            f'</span></li>')
+    ticks = "".join(f'<span style="left:{t / axis * 100:g}%">{t} s</span>' for t in range(0, axis + 1, 4))
+    return f'<ul class="bench" data-bench>{"".join(rows)}<li class="bench-axis" aria-hidden="true">{ticks}</li></ul>'
+
+
 # ---- Pages written as Markdown (legal) -----------------------------------------------------------
 
 def front(text: str) -> tuple[dict, str]:
@@ -1185,17 +1164,17 @@ def fill(text: str) -> str:
         text = text.replace("{{FILE_" + k.upper() + "}}", v)
     if "{{BENCH_REPORT}}" in text:
         text = text.replace("{{BENCH_REPORT}}", bench_report())
+    if "<!--@benchbars-->" in text:
+        text = text.replace("<!--@benchbars-->", bench_bars())
     for k in ("stars", "forks", "issues", "watchers"):
         text = text.replace("{{" + k.upper() + "}}", STATS.get(k, "–"))
-    text = text.replace("<!--@split-->", split_button()).replace("<!--@gh-->", gh_pill("btn btn-ghost btn-big gh-big"))
-    text = text.replace("<!--@stores-->", store_buttons()).replace("<!--@amo-->", amo_button())
+    text = text.replace("<!--@split-->", split_button()).replace("<!--@amo-->", amo_button())
     text = text.replace("<!--@cws-->", cws_button())
     text = text.replace("{{AMO}}", AMO).replace("{{CWS}}", CWS)
     if "<!--@features-->" in text:
         text = text.replace("<!--@features-->", manifest(feature_list()))
     text = coming_marks(text.replace("<!--@coming-->", coming_banner()))
-    text = text.replace("<!--@crew-->", crew_pile())
-    text = text.replace("<!--@fields-->", waybill_fields()).replace("<!--@barcode-->", barcode.svg(f"MDM {VERSION}"))
+    text = text.replace("<!--@fields-->", waybill_fields())
     return (text.replace("{{VERSION}}", VERSION).replace("{{REPO}}", REPO).replace("{{SITE}}", SITE)
             .replace("{{SPONSORS}}", SPONSORS).replace("{{SOFTWARE_LD}}", json.dumps(SOFTWARE_LD, ensure_ascii=False, separators=(",", ":"))))
 
@@ -1338,7 +1317,7 @@ def help_href(ref: str) -> str:
 
 
 def feature_label(m: dict) -> str:
-    """A feature's facts in the waybill's field grammar, stuck on its picture."""
+    """A feature's facts as label/value rows, in a card beside or under its picture."""
     if is_coming(m["since"]):
         since = f'<dd>Version {esc(upcoming())} <small>coming</small></dd>'
     else:
@@ -1348,12 +1327,12 @@ def feature_label(m: dict) -> str:
         where = re.sub(r"`([^`]+)`", r'<code translate="no">\1</code>', esc(m["where"]))
         rows.append(f'<div class="wide"><dt>In the app</dt><dd>{where}</dd></div>')
     rows.append(f"<div><dt>Since</dt>{since}</div>")
-    rows.append('<div class="pair"><dt>Postage</dt><dd>Free</dd></div>')
+    rows.append('<div class="pair"><dt>Price</dt><dd>Free</dd></div>')
     if m.get("help"):
         rows.append(f'<div class="wide"><dt>Full guide</dt><dd><a href="{help_href(m["help"])}">Step by step in the help</a></dd></div>')
     return (f'<aside class="waybill feature-label" aria-label="At a glance"><div class="wb-band">'
-            f'<img src="/assets/logo-64.png" width="32" height="32" alt=""><span class="wb-from"><b>{esc(m["name"])}</b>'
-            f'<small>Mister Download Manager</small></span></div><dl class="fields">{"".join(rows)}</dl></aside>')
+            f'<img src="/assets/grabbit.svg" width="32" height="32" alt=""><span class="wb-from"><b>{esc(m["name"])}</b>'
+            f'<small>{NAME}</small></span></div><dl class="fields">{"".join(rows)}</dl></aside>')
 
 
 def build_features() -> None:
