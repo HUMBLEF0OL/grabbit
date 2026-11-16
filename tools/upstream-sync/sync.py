@@ -21,6 +21,10 @@ instructs agents: never batch-picked), A earlier upstream commits not taken here
 files or crates, I upstream's identity in added lines, P another platform, a language or text
 direction in added lines.
 
+The fork is Grabbit; upstream still writes Mister Download Manager and MDM. After each pick,
+`pick` lists any old name it brought back where the rename is done (tools/rename/check.py
+--done), and `pr` pushes nothing while one is left.
+
 The record of what was decided is LEDGER (one row per upstream commit, written by `pick` and
 `record`), backed by the trailers `pick` and a port leave in this fork's history
 (`Upstream-Pick: <sha>`, `Upstream-Port: <sha>`): a revert in the fork (of a pick, a merged sync
@@ -66,6 +70,8 @@ FORK_BASE = "dev"
 PROTECTED = ("dev", "main")
 SYNC_PREFIX = "upstream-sync/"
 LEDGER = "tools/upstream-sync/ledger.md"
+# Plan 10's checker: the old name where the rename to Grabbit is done (old_names).
+RENAME_CHECK = "tools/rename/check.py"
 # The fork's own record of what changed and what's planned: upstream's lines never land here.
 OWN = ("CHANGELOG.md", "ROADMAP.md", LEDGER)
 STATUSES = ("picked", "ported", "skipped", "covered", "deferred")
@@ -1110,6 +1116,23 @@ def apply_lock(sha: str) -> str | None:
     return None
 
 
+def old_names() -> set[str]:
+    """The fork's old name (Mister Download Manager, MDM) where the rename to Grabbit is done
+    (plan 10: `tools/rename/check.py --done`), one "file: term: text" each. Upstream still
+    writes the old name, so a clean pick can bring it back unseen. Empty without the checker."""
+    script = root() / RENAME_CHECK
+    if not script.is_file():
+        return set()
+    r = subprocess.run([sys.executable, str(script), "--done"], capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", cwd=root())
+    hits = set()
+    for ln in r.stdout.splitlines():
+        m = re.match(r"(\S+?):\d+: ([^:]+): (.*)", ln)
+        if m and "[test]" not in m.group(2):  # tests follow the texts: they don't count
+            hits.add(f"{m.group(1)}: {m.group(2)}: {m.group(3)}")
+    return hits
+
+
 def pick_one(sha: str, ctx: Context, commits: list[Commit], messages: dict[str, str],
              a) -> tuple[bool, str]:
     """One upstream commit onto HEAD, with the fork's rules. (taken?, what happened)."""
@@ -1136,6 +1159,7 @@ def pick_one(sha: str, ctx: Context, commits: list[Commit], messages: dict[str, 
     if c.kind == "lock" and not a.lock:
         return False, f"{sha[:12]} conflicts only in Cargo.lock: pick it with --lock"
     gone = set(c.left_out) - set(OWN)
+    named = old_names()
     r = git("cherry-pick", "--no-commit", "-X", RENAMES, sha, check=False)
     conflicted = set(zlist("diff", "--name-only", "--diff-filter=U", "-z"))
     if r.returncode != 0 and not conflicted:
@@ -1189,6 +1213,11 @@ def pick_one(sha: str, ctx: Context, commits: list[Commit], messages: dict[str, 
     ctx.t.status[sha] = "picked"
     extra = f", left out {len(left_out)} file(s)" if left_out else ""
     warn = "".join(f"\n    ! {n}" for n in c.notes)
+    back = sorted(old_names() - named)
+    if back:
+        warn += "".join(f"\n    ! the old name is back: {h}" for h in back)
+        warn += ("\n    ! say Grabbit there, in a commit of its own (upstream's meaning, the fork's "
+                 "name); `pr` refuses until then")
     return True, f"{sha[:12]} picked as {new}{extra}{warn}"
 
 
@@ -1356,6 +1385,11 @@ def fork_slug() -> str:
 
 def cmd_pr(a) -> int:
     branch = guard_sync_branch()
+    back = old_names()
+    if back:
+        raise Fail("the old name is back on this branch (tools/rename/check.py --done):\n  "
+                   + "\n  ".join(sorted(back))
+                   + "\nsay Grabbit there in a commit of its own; nothing pushed")
     target = fork_slug()
     if not shutil.which("gh"):
         raise Fail("gh is not installed: nothing pushed")

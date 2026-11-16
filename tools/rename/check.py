@@ -2,6 +2,7 @@
 
     python tools/rename/check.py              every hit, grouped by area, with file:line
     python tools/rename/check.py --summary    counts only
+    python tools/rename/check.py --done       only the areas already renamed (CI, upstream sync)
     python tools/rename/check.py --self-test  the checker's own asserts
 
 Exits 1 while any user-visible hit remains. Hits inside Rust `#[cfg(test)]` code are listed
@@ -144,22 +145,27 @@ def files(pattern):
     return sorted(p for p in ROOT.glob(pattern) if p.is_file())
 
 
+# (area, its files, done): a done area has no hit left, and `--done` keeps it that way (CI, and
+# tools/upstream-sync/sync.py after each pick: upstream still writes the old name). 10d marks
+# the website, docs and README done once it has renamed them.
 AREAS = [
     # ponytail: labserver is a developer's test server, never shipped; skipped.
-    ("App (Rust strings)", lambda: [(p, scan_rust) for p in files("crates/*/src/**/*.rs") + files("crates/*/build.rs") if p.parts[len(ROOT.parts) + 1] != "labserver"]),
-    ("App remote page", lambda: [(p, lambda q: scan_text(q, comment=("//", "/*", "*", "<!--"))) for p in files("crates/remote/web/*") if p.suffix in TEXT_EXT]),
-    ("Installer", lambda: [(p, lambda q: scan_text(q, comment=(";", "//", "{"))) for p in files("tools/installer/*.iss")]),
-    ("Extension", lambda: [(p, scan_text) for p in files("extension/_locales/**/*.json") + files("extension/*.html")]),
-    ("Website", lambda: [(p, scan_text) for p in files("website/content/**/*") if p.suffix in TEXT_EXT]),
-    ("Docs", lambda: [(p, scan_text) for p in files("docs/**/*") if p.suffix in TEXT_EXT]),
-    ("README", lambda: [(p, scan_text) for p in files("README.md")]),
+    ("App (Rust strings)", lambda: [(p, scan_rust) for p in files("crates/*/src/**/*.rs") + files("crates/*/build.rs") if p.parts[len(ROOT.parts) + 1] != "labserver"], True),
+    ("App remote page", lambda: [(p, lambda q: scan_text(q, comment=("//", "/*", "*", "<!--"))) for p in files("crates/remote/web/*") if p.suffix in TEXT_EXT], True),
+    ("Installer", lambda: [(p, lambda q: scan_text(q, comment=(";", "//", "{"))) for p in files("tools/installer/*.iss")], True),
+    ("Extension", lambda: [(p, scan_text) for p in files("extension/_locales/**/*.json") + files("extension/*.html")], True),
+    ("Website", lambda: [(p, scan_text) for p in files("website/content/**/*") if p.suffix in TEXT_EXT], False),
+    ("Docs", lambda: [(p, scan_text) for p in files("docs/**/*") if p.suffix in TEXT_EXT], False),
+    ("README", lambda: [(p, scan_text) for p in files("README.md")], False),
 ]
 
 
-def run(summary):
+def run(summary, done_only=False):
     failing = 0
     rows = []
-    for area, sources in AREAS:
+    for area, sources, done in AREAS:
+        if done_only and not done:
+            continue
         found = []
         for path, scan in sources():
             rel = path.relative_to(ROOT).as_posix()
@@ -218,4 +224,4 @@ if __name__ == "__main__":
     if "--self-test" in sys.argv:
         self_test()
         sys.exit(0)
-    sys.exit(run("--summary" in sys.argv))
+    sys.exit(run("--summary" in sys.argv, "--done" in sys.argv))

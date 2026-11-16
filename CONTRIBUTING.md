@@ -43,6 +43,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 node tools/extension/test.mjs
 python tools/upstream-sync/test_sync.py
+python tools/rename/check.py --done
 ```
 
 Keep changes focused and match the code around them. A few rules hold everywhere:

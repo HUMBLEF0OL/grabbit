@@ -22,6 +22,8 @@ identifiers. Across the whole repo (`git grep -c`, lines): "Mister Download Mana
   (pushed to origin = `HUMBLEF0OL/grabbit` only, per 00)
 - Needs: 09b; a Grabbit logo before 10b (owner: the maintainer; done, `art/grabbit.svg`, PR 26)
 - Release: 10a to 10c ship together in one release; 10d follows the store and site moves
+- Before 10c and again before 10e: the upstream-sync backlog cleared (see "Upstream sync through
+  the rename")
 
 ## Decisions (decided by the maintainer, 2026-11-14)
 
@@ -63,6 +65,27 @@ Recorded in `../PLAN.md`. Counts are lines (`git grep -c`) on dev e9d327d3.
 4. **The removed themes' control styles go** (`luna`, `aero`, `aqua`, `adwaita`, `breeze`,
    `metro`), with their drawing code: 10e, with the crate rename. A theme file naming one gets
    Graphite's control (the fork has no users relying on them).
+
+## Upstream sync through the rename (added 2026-11-16)
+
+Upstream's fixes are the fork's fastest source of bug fixes, so the rename must not cut them
+off. Measured on upstream's 512 commits from 2026-08-14 to 2026-11-16: 209 (41 %) changed lines
+naming "MDM" or "Mister Download Manager" in `crates/`, `extension/` or the installer (comments
+included; 10a renamed only string literals, so fewer conflict), and 56 (11 %) lines with the
+identifiers 10c moves (`misterdownloadmanager…`, `MisterDownloadManager…`).
+
+- **Words kept where users don't see them.** Comments, `// i18n:` notes and `mdm_*::` paths
+  stay upstream's (decision 3 likewise), so most fixes still pick clean.
+- **The old name can't come back unseen.** `tools/rename/check.py --done` checks the areas
+  already renamed (each area's `done` mark; 10d marks the website, docs and README). Runs:
+  `sync.py pick` after each pick (`! the old name is back`), `sync.py pr` (pushes nothing while
+  one is left), CI (`ci.yml`) and CONTRIBUTING's checks. `test_sync.py`'s `old_name_case`.
+- **Conflicts on renamed texts are ports:** upstream's wording, Grabbit's name.
+- **After 10c**, a fix touching the moved identifiers is ported onto the new names and the
+  migration code, never picked over it.
+- **Before 10c, not only 10e:** clear the upstream-sync backlog (`sync.py status`), since 10c's
+  migrations change the same code 11 % of upstream's commits touch.
+- The upstream-sync skill's "The fork's name" section is the working rule.
 
 ## Never change
 

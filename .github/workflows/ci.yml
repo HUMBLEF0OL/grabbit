@@ -71,6 +71,11 @@ jobs:
       - name: Logic against fake Firefox and Chrome APIs
         run: node tools/extension/test.mjs
 
+      # Plan 10: no "Mister Download Manager" or "MDM" back where the rename to Grabbit is
+      # done (upstream's fixes still carry the old name).
+      - name: The old name stays gone
+        run: python3 tools/rename/check.py --done
+
       # Chrome, Edge, Brave, Opera, Vivaldi (mdm-chromium.zip), Firefox (mdm-firefox.xpi) and
       # the Chrome Web Store's copy (mdm-chrome-store.zip).
       - name: Pack for every browser

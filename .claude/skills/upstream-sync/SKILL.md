@@ -106,6 +106,9 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
    `pick` stops at the first commit that won't apply and leaves the branch as before that one;
    it records each pick in the ledger and in the commit (`Upstream-Pick: <sha>`), keeping the
    upstream author, and never picks a commit twice. Read its `!` lines after each pick.
+   `! the old name is back`: the pick added "Mister Download Manager" or "MDM" where the fork
+   says Grabbit (see "The fork's name" below). Rename it in a commit of its own right after the
+   pick; `pr` refuses to push until it's gone.
 
 6. **Port by hand** (a fix the fork needs, in code the fork changed), on its own branch
    `upstream-sync/<date>-<issue>` from `origin/dev` (made like step 2):
@@ -138,7 +141,8 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
    cargo clippy --workspace --all-targets -j 2 -- -D warnings
    cargo test --workspace -j 2
    node tools/extension/test.mjs              # when the extension changed
-   python tools/upstream-sync/test_sync.py    # when the tool changed
+   python tools/upstream-sync/test_sync.py    # when the tool (or tools/rename) changed
+   python tools/rename/check.py --done        # the old name stays gone (pr checks it too)
    ```
    This is the only check before `dev`: CI runs only on pull requests into `main` (GitHub
    Actions minutes are counted). Paste the output into the PR as its proof.
@@ -170,6 +174,28 @@ the decisions are rows in `tools/upstream-sync/ledger.md`, written by the tool.
    `pick` won't take either again.
 
 10. **After the merge**, remove the run's worktree and its branch, locally and on origin.
+
+## The fork's name
+
+The fork is **Grabbit**; upstream is still Mister Download Manager (MDM), and its fixes keep
+coming with that name (plan 10, `design/graphite/plans/10-rename-grabbit.md`). Taking them fast
+matters more than anything here, so the rename is built to stay out of their way:
+
+- **Comments and code paths keep upstream's words.** The rename changed only what users see
+  (string literals, pages, the installer, the extension); comments, `// i18n:` notes and the
+  `mdm_*::` paths are upstream's, so most fixes still apply clean. Don't rename them in a sync.
+- **A conflict on a renamed text is a small port:** keep upstream's new wording, say Grabbit.
+- **New texts from a clean pick:** `pick` flags the old name (`tools/rename/check.py --done`);
+  rename it in a commit of its own, never by editing the pick. `pr` refuses until then.
+- **Identifiers carrying users' data** (data folder, saved logins' keychain name, Run value,
+  `.torrent` ProgID, mutex, native host name, exe names) move once with migrations (10c). A fix
+  that touches them after 10c is ported onto the fork's names and its migration code, never
+  picked over it: one wrong pick there breaks upgrades. Before 10c they are upstream's.
+- **The docs, README and website** become the fork's own in 10d (the website already is): an
+  upstream change there is ported for its facts only, in the fork's words, or skipped when it
+  only reworded.
+- **Crate packages** become `grabbit-*` in 10e with their `mdm_*` code paths kept (decision 3):
+  a conflict only in a `Cargo.toml`'s name or dependency lines is a hand fix of those lines.
 
 ## Watching between runs
 
