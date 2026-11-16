@@ -25,7 +25,7 @@ fn main() {
     let mode = args[1].clone();
     let data = PathBuf::from(&args[2]);
     let exe = std::env::current_exe().unwrap();
-    let reporter = Arc::new(Reporter::start(&exe, &data).expect("the monitor starts"));
+    let reporter = Reporter::start(&exe, &data).expect("the monitor starts");
     reporter.session(&Session {
         version: "test".into(),
         pid: std::process::id(),
@@ -38,6 +38,13 @@ fn main() {
         })
         .unwrap(),
     );
+    // The monitor answers on a thread of its own once the first half second has passed (#1073):
+    // a crash before then has no one to dump it, as in the app. The tests are about the reports,
+    // so they wait for the connection first (a slow CI runner can take seconds to start it).
+    let until = std::time::Instant::now() + Duration::from_secs(60);
+    while !reporter.connected() && std::time::Instant::now() < until {
+        std::thread::sleep(Duration::from_millis(50));
+    }
 
     match mode.as_str() {
         "freeze" => {
