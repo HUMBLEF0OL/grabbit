@@ -532,7 +532,9 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   from upstream issue 769: yt-dlp finds the video and its sound, the downloader brings them in
   over several connections, under the speed limits, paused and resumed like a file, with a fresh
   address when one expires; yt-dlp joins them as before. Streams in pieces (HLS, DASH) come down
-  the same way, several pieces at once (AES-128 too). Galleries come next.
+  the same way, several pieces at once (AES-128 too), and so do image galleries' files; after
+  the last byte, checking and joining say how far they are, and a failed join keeps its parts
+  for Resume.
 
 ## Being worked on
 
