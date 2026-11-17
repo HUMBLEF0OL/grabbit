@@ -461,6 +461,12 @@ pub struct Item {
     /// #68), in the interface language; memory only.
     #[serde(skip)]
     pub notices: Vec<String>,
+    /// Whether its resume state is at its place, as read beside the window at start
+    /// (resumeread.rs): the place read and the answer. Until that read comes it is taken as there
+    /// (the safe side: the row keeps its place, and no other row takes it), and it is forgotten as
+    /// the row starts (its run makes or removes the state). Memory only.
+    #[serde(skip)]
+    pub(crate) state_here: Option<(PathBuf, bool)>,
 }
 
 /// A Link grabber package, as each of its downloads keeps it (#37).
@@ -869,6 +875,7 @@ impl Item {
             login: None,
             context: Default::default(),
             notices: Vec::new(),
+            state_here: None,
         }
     }
 
@@ -880,8 +887,14 @@ impl Item {
     }
 
     /// This row's resume state is at its place. `downloaded` can't say: after a crash the list
-    /// holds what it held at its last save, often nothing.
+    /// holds what it held at its last save, often nothing. As read beside the window at start
+    /// while that holds (`state_here`), else from the disk.
     pub fn owns_resume_state(&self) -> bool {
+        if let Some((at, here)) = &self.state_here
+            && *at == self.dest
+        {
+            return *here;
+        }
         let state = mdm_engine::state::state_path(&self.dest);
         mdm_engine::state::ResumeState::load(&state).is_ok_and(|s| s.url == self.url)
     }
