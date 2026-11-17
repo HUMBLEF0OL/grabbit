@@ -139,7 +139,9 @@ fn every_release_mdm_can_drive_saves_a_gallery() {
         let events: Vec<&str> = p.events.iter().map(|(_, e)| e.as_str()).collect();
         let by_engine = mdm_tools::gallery::Accepts::of(&v).print;
         assert_eq!(
-            events.iter().any(|e| e.starts_with("MDM saved 1 files")),
+            events
+                .iter()
+                .any(|e| e.starts_with("Grabbit saved 1 files")),
             by_engine,
             "{v}: {events:?}"
         );
