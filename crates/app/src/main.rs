@@ -12,6 +12,7 @@ mod crash;
 mod crashui;
 mod debrid;
 mod defaultbrowser;
+mod deleter;
 mod derive;
 mod dialogs;
 mod droptarget;
