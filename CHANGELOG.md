@@ -145,6 +145,11 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 - **Exit when done** quits Grabbit, even with **Keep running when closing the window** on, instead of hiding it in the notification area (upstream issue 1145).
 - **Stop All** (and **Pause All**) stops the running queues too, so none starts its next download, and downloads waiting to start again by themselves stay stopped (upstream issue 1164).
 - The computer stays awake while anything downloads, not only during a queue that woke it; the screen still turns off as Windows' settings say (upstream issue 939).
+- No freeze when downloads are deleted with their files (**Delete** with **Also delete the file from disk**, **Shift+Delete**, **Delete All Completed**): the rows leave the list at once and their files are deleted beside the window, one after the other, instead of by the window, which waited for the disk at each file. A download added meanwhile under a deleted one's name is numbered, as it would be with the file still there; a file that can't be deleted is still said (upstream issue 1170).
+- No freeze when a torrent is deleted while Grabbit's data folder is slow to answer: the copy of the `.torrent` file kept for it is deleted beside the window (upstream issue 1230).
+- With screens at different display scales (a laptop at 125 % and a monitor at 100 %), **Options**, the **Scheduler** and the other windows opened from the main window open centred on it, on its screen, instead of out of sight; a window on no screen is brought onto the main window's (upstream issue 1311).
+- Internet Archive downloads that need an account: the browser's sign-in for archive.org now goes on to Internet Archive's storage servers (`ia600100.us.archive.org`, …) it hands the download to, and to nothing else, instead of the file answering *403 Forbidden* (upstream issue 1298).
+- **Telegram Web**: a file downloaded from web.telegram.org stays with the browser, which builds it in the page, instead of going to Grabbit and sitting at 0 % (upstream issue 1345).
 ### Added
 
 - Options → General → **Customize MDM Download panels in browsers**: Export... and Import... for the sites the download button stays off, a plain text file with one site a line ([#424](https://github.com/anefzaoui/misterdownloadmanager/issues/424)).
