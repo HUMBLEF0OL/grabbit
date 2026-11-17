@@ -35,8 +35,12 @@ pub struct Doomed {
     /// What else it left there, looked for in its turn.
     later: Option<Later>,
     /// `place`, held from the moment its row left the list. None: another download in this
-    /// process held it then (one of this row's that has just stopped and is letting go).
+    /// process held it then (one of this row's that has just stopped and is letting go), or it
+    /// is being cleared for a download to start there (`clearing`).
     hold: Option<Reservation>,
+    /// Its files go so that a download starts at `place` afresh ([`Doomed::clearing`]): the
+    /// downloads starting in its folder wait for them meanwhile.
+    clearing: Option<naming::Clearing>,
 }
 
 impl Doomed {
@@ -49,7 +53,42 @@ impl Doomed {
             finished,
             later,
             hold,
+            clearing: None,
         }
+    }
+
+    /// A download's files deleted for a download that starts at `place` afresh, under the same
+    /// name (a Redownload, a duplicate overwritten, a restart under the same name). Its name
+    /// isn't held, so that the next download takes it; instead the downloads that start in its
+    /// folder, and the looks that number a name there, wait until these files are gone
+    /// ([`naming::clear`]): none starts writing at `place` before then, nor finds the old state.
+    pub fn clearing(name: String, place: PathBuf, finished: bool, later: Option<Later>) -> Doomed {
+        let clearing = Some(naming::clear(&place));
+        Doomed {
+            name,
+            place,
+            finished,
+            later,
+            hold: None,
+            clearing,
+        }
+    }
+
+    /// What goes, in order: its resume state and part file, what it left beside them, then its
+    /// finished file (last: its name stays taken on the disk as long as anything of it is
+    /// there). Its leftovers are looked for here, so this is in its turn.
+    fn files(&mut self) -> (Vec<PathBuf>, Option<PathBuf>) {
+        let mut working = vec![
+            mdm_engine::state::state_path(&self.place),
+            naming::part_path(&self.place),
+        ];
+        for f in self.later.take().map(|l| l()).unwrap_or_default() {
+            if !working.contains(&f) && !(self.finished && f == self.place) {
+                working.push(f);
+            }
+        }
+        let finished = self.finished.then(|| self.place.clone());
+        (working, finished)
     }
 }
 
@@ -68,8 +107,8 @@ const LET_GO: Duration = Duration::from_secs(2);
 /// finished file, last, so its name stays taken on the disk as long as anything of it is there.
 /// A file already gone is no failure, and only the finished file's are told: the rest is the
 /// download's own working data.
-fn delete_one(d: Doomed, remove: &dyn Fn(&Path) -> io::Result<()>) -> Option<Failure> {
-    let hold = d.hold.or_else(|| {
+fn delete_one(mut d: Doomed, remove: &dyn Fn(&Path) -> io::Result<()>) -> Option<Failure> {
+    let hold = d.hold.take().or_else(|| {
         let until = Instant::now() + LET_GO;
         loop {
             if let Some(h) = naming::reserve(&d.place) {
@@ -81,21 +120,15 @@ fn delete_one(d: Doomed, remove: &dyn Fn(&Path) -> io::Result<()>) -> Option<Fai
             std::thread::sleep(Duration::from_millis(50));
         }
     });
-    let Some(_hold) = hold else {
+    let Some(hold) = hold else {
         tracing::warn!(
             "delete: another download is saving as {} now; the deleted one's files stay",
             d.place.display()
         );
         return None;
     };
-    let working = [
-        mdm_engine::state::state_path(&d.place),
-        naming::part_path(&d.place),
-    ];
-    for f in working
-        .into_iter()
-        .chain(d.later.map(|l| l()).unwrap_or_default())
-    {
+    let (working, finished) = d.files();
+    for f in working {
         // A video's pieces from the engine wait in a folder of their own (upstream 6196f9ad).
         let _ = if f.is_dir() {
             std::fs::remove_dir_all(&f)
@@ -103,16 +136,18 @@ fn delete_one(d: Doomed, remove: &dyn Fn(&Path) -> io::Result<()>) -> Option<Fai
             remove(&f)
         };
     }
-    if !d.finished {
-        return None;
-    }
-    match remove(&d.place) {
+    let failed = finished.and_then(|f| match remove(&f) {
         Err(e) if e.kind() != io::ErrorKind::NotFound => Some(Failure {
-            name: d.name,
+            name: std::mem::take(&mut d.name),
             error: e.to_string(),
         }),
         _ => None,
-    }
+    });
+    // Its place let go first, then the downloads waiting in its folder go on: the one that
+    // starts there finds its name free.
+    drop(hold);
+    drop(d.clearing.take());
+    failed
 }
 
 /// A batch, in order; the finished files that couldn't go.
@@ -172,7 +207,7 @@ impl Deleter {
     }
 
     /// [`Deleter::new`] with its own way to delete a file and to say what failed (tests).
-    fn with(
+    pub(crate) fn with(
         remove: impl Fn(&Path) -> io::Result<()> + Send + Sync + 'static,
         report: impl Fn(Vec<Failure>) + Send + Sync + 'static,
     ) -> Deleter {
