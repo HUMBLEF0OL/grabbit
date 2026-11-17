@@ -463,7 +463,15 @@ fn listed(line: &str, folder: &Path) -> Option<(url::Url, PathBuf)> {
     let (url, path) = line.strip_prefix("MDMG ")?.split_once('\t')?;
     let url = url::Url::parse(url.trim()).ok()?;
     let path = PathBuf::from(path.trim_end_matches(['\r', '\n']));
-    let inside = path.parent() == Some(folder) || path.starts_with(folder);
+    // Inside the folder for real, not only by its spelling: after the folder, plain names alone
+    // (`<folder>/../x.jpg` starts with the folder but is outside it; gallery-dl's line is the
+    // site's to shape).
+    let inside = path.strip_prefix(folder).is_ok_and(|rest| {
+        rest.components().next().is_some()
+            && rest
+                .components()
+                .all(|c| matches!(c, std::path::Component::Normal(_)))
+    });
     (matches!(url.scheme(), "http" | "https") && inside && path.file_name().is_some())
         .then_some((url, path))
 }
@@ -772,6 +780,24 @@ fn finish(shared: &Mutex<Shared>, child: &Mutex<Option<Spawned>>, folder: PathBu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A listed file is taken only inside the gallery's folder, by its components, not its
+    /// spelling: `..` that leads out of it is refused.
+    #[test]
+    fn a_listed_file_outside_the_folder_is_refused() {
+        let folder = Path::new(r"C:\Demo\gallery");
+        let line = |p: &str| format!("MDMG https://img.test/a.jpg\t{p}\n");
+        assert!(listed(&line(r"C:\Demo\gallery\a.jpg"), folder).is_some());
+        assert!(listed(&line(r"C:\Demo\gallery\sub\a.jpg"), folder).is_some());
+        // Spelled as inside, but outside: refused.
+        assert!(listed(&line(r"C:\Demo\gallery\..\outside.jpg"), folder).is_none());
+        assert!(listed(&line(r"C:\Demo\gallery\sub\..\..\x.jpg"), folder).is_none());
+        assert!(listed(&line(r"C:\Demo\other\a.jpg"), folder).is_none());
+        assert!(listed(&line(r"C:\Demo\gallery"), folder).is_none());
+        // Not a web address.
+        let ftp = format!("MDMG ftp://img.test/a.jpg\t{}\n", r"C:\Demo\gallery\a.jpg");
+        assert!(listed(&ftp, folder).is_none());
+    }
 
     /// A gallery behind the browser's sign-in (its cookies passed) stays gallery-dl's: the
     /// engine fetches only what needs no cookies.

@@ -828,20 +828,55 @@ async fn fetch_piece(run: &Run, c: usize, i: usize, piece: &Piece) -> Result<(),
     if !(200..300).contains(&status) {
         return Err(dead_or_again(status, run.one(), retry_after(&resp)));
     }
-    let len = resp.content_length();
-    let mut body = Vec::with_capacity(len.unwrap_or(0) as usize);
+    // What of the answer is the piece: all of it; for a byte range, a 206 of exactly that range,
+    // or from a server that ignores ranges (200, the whole resource) only that range, read up to
+    // its end. Any other answer is never saved as the piece.
+    let (skip, want) = match piece.range {
+        Some((start, len)) => {
+            let len = len.max(1);
+            match status {
+                206 if range_start(&resp) == Some(start) => (0, Some(len)),
+                206 => {
+                    return Err(PieceError::Again(format!(
+                        "{}: the server answered another range",
+                        run.one()
+                    )));
+                }
+                _ => (start, Some(len)),
+            }
+        }
+        None => (0, None),
+    };
+    let len = want.or(resp.content_length());
+    let file = run.file(i);
+    let part = {
+        let mut s = file.as_os_str().to_owned();
+        s.push(".mdm.part");
+        PathBuf::from(s)
+    };
+    // Each chunk goes to the part file as it comes: what is in memory is the chunk under way,
+    // whatever the piece's size and however many come at once.
+    let mut out = tokio::fs::File::create(&part)
+        .await
+        .map_err(|e| PieceError::Dead(format!("{} can't be saved: {e}", run.one())))?;
     run.shared.each.lock().unwrap()[i] = (0, len);
     set_conn(run, c, |v| v.status = ConnStatus::Receiving);
     let started = Instant::now();
-    let mut got = 0u64;
-    let undo = |got: u64| {
-        run.shared.downloaded.fetch_sub(got, Ordering::Relaxed);
+    // `seen`: the answer's bytes read; `kept`: those that are the piece (written).
+    let (mut seen, mut kept) = (0u64, 0u64);
+    let undo = |kept: u64| {
+        run.shared.downloaded.fetch_sub(kept, Ordering::Relaxed);
         run.shared.each.lock().unwrap()[i] = (0, None);
+        let _ = std::fs::remove_file(&part);
     };
     loop {
+        if want.is_some_and(|w| kept >= w) {
+            break; // the range is in: the rest of a whole resource isn't the piece's
+        }
         let chunk = tokio::select! {
             _ = run.cancel.cancelled() => {
-                undo(got);
+                drop(out);
+                undo(kept);
                 return Err(PieceError::Stopped);
             }
             c = resp.chunk() => c,
@@ -850,7 +885,8 @@ async fn fetch_piece(run: &Run, c: usize, i: usize, piece: &Piece) -> Result<(),
             Ok(Some(c)) => c,
             Ok(None) => break,
             Err(e) => {
-                undo(got);
+                drop(out);
+                undo(kept);
                 return Err(PieceError::Again(e.to_string()));
             }
         };
@@ -863,52 +899,98 @@ async fn fetch_piece(run: &Run, c: usize, i: usize, piece: &Piece) -> Result<(),
         };
         tokio::select! {
             _ = run.cancel.cancelled() => {
-                undo(got);
+                drop(out);
+                undo(kept);
                 return Err(PieceError::Stopped);
             }
             _ = paid => {}
         }
-        body.extend_from_slice(&chunk);
-        got += n;
-        run.shared.downloaded.fetch_add(n, Ordering::Relaxed);
-        run.shared.each.lock().unwrap()[i].0 = got;
+        let from = skip.saturating_sub(seen).min(n) as usize;
+        let to = match want {
+            Some(w) => (skip + w).saturating_sub(seen).min(n) as usize,
+            None => n as usize,
+        };
+        seen += n;
+        let piece_bytes = &chunk[from..to.max(from)];
+        if !piece_bytes.is_empty() {
+            use tokio::io::AsyncWriteExt;
+            if let Err(e) = out.write_all(piece_bytes).await {
+                drop(out);
+                undo(kept);
+                return Err(PieceError::Dead(format!(
+                    "{} can't be saved: {e}",
+                    run.one()
+                )));
+            }
+            let k = piece_bytes.len() as u64;
+            kept += k;
+            run.shared.downloaded.fetch_add(k, Ordering::Relaxed);
+            run.shared.each.lock().unwrap()[i].0 = kept;
+        }
         let secs = started.elapsed().as_secs_f64().max(0.001);
         set_conn(run, c, |v| {
             v.downloaded += n;
-            v.speed = (got as f64 / secs) as u64;
+            v.speed = (seen as f64 / secs) as u64;
         });
     }
-    if len.is_some_and(|l| l != got) {
-        undo(got);
+    let flushed = {
+        use tokio::io::AsyncWriteExt;
+        out.flush().await
+    };
+    drop(out);
+    if len.is_some_and(|l| l != kept) || flushed.is_err() {
+        undo(kept);
         return Err(PieceError::Again(format!("{} came short", run.one())));
     }
     set_conn(run, c, |v| v.speed = 0);
-    let data = match &piece.key {
-        Some(k) => {
-            let key = key_of(run, &k.uri).await?;
-            decrypt(&body, &key, &k.iv)
-                .ok_or_else(|| PieceError::Dead("the piece can't be decrypted".into()))?
+    // AES-128: the whole piece decrypted once it is in (a piece at a time on this connection).
+    let key = match &piece.key {
+        Some(k) => Some((key_of(run, &k.uri).await?, k.iv)),
+        None => None,
+    };
+    let (from, to) = (part.clone(), file.clone());
+    let saved = tokio::task::spawn_blocking(move || -> std::io::Result<Option<u64>> {
+        if let Some((key, iv)) = key {
+            let sealed = std::fs::read(&from)?;
+            let Some(plain) = decrypt(&sealed, &key, &iv) else {
+                return Ok(None);
+            };
+            std::fs::write(&from, &plain)?;
         }
-        None => body,
-    };
-    let file = run.file(i);
-    let part = {
-        let mut s = file.as_os_str().to_owned();
-        s.push(".mdm.part");
-        PathBuf::from(s)
-    };
-    let size = data.len() as u64;
-    let written = tokio::task::spawn_blocking(move || {
-        std::fs::write(&part, &data).and_then(|_| std::fs::rename(&part, &file))
+        let size = std::fs::metadata(&from)?.len();
+        std::fs::rename(&from, &to)?;
+        Ok(Some(size))
     })
     .await;
-    if !matches!(written, Ok(Ok(()))) {
-        undo(got);
-        return Err(PieceError::Dead(format!("{} can't be saved", run.one())));
-    }
+    let size = match saved {
+        Ok(Ok(Some(size))) => size,
+        Ok(Ok(None)) => {
+            undo(kept);
+            return Err(PieceError::Dead("the piece can't be decrypted".into()));
+        }
+        _ => {
+            undo(kept);
+            return Err(PieceError::Dead(format!("{} can't be saved", run.one())));
+        }
+    };
     run.shared.whole_bytes.fetch_add(size, Ordering::Relaxed);
     run.shared.whole.fetch_add(1, Ordering::Relaxed);
     Ok(())
+}
+
+/// Where a 206 answer's range starts (`Content-Range: bytes <start>-<end>/<total>`).
+fn range_start(resp: &reqwest::Response) -> Option<u64> {
+    resp.headers()
+        .get(reqwest::header::CONTENT_RANGE)?
+        .to_str()
+        .ok()?
+        .trim()
+        .strip_prefix("bytes ")?
+        .split('-')
+        .next()?
+        .trim()
+        .parse()
+        .ok()
 }
 
 #[cfg(test)]
@@ -1130,5 +1212,64 @@ mod tests {
             notes.iter().any(|n| n.contains("closed, the others go on")),
             "{notes:?}"
         );
+    }
+
+    /// Pieces that are byte ranges of one file (an HLS `EXT-X-BYTERANGE`): each is exactly its
+    /// range, from a server that answers the range (206) and from one that ignores it and sends
+    /// the whole file (200), of which only the range is kept; no part file is left.
+    #[test]
+    fn byte_range_pieces_are_their_range_whatever_the_server_sends() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let lab = rt
+            .block_on(mdm_labserver::LabServer::start(Default::default()))
+            .unwrap();
+        let mut whole = vec![0; 256 * 1024];
+        mdm_labserver::content::fill(7, 0, &mut whole);
+        let ranges = [(0u64, 100_000u64), (100_000, 100_000), (200_000, 62_144)];
+        for faults in ["", "&no_range=1"] {
+            let dir = tempfile::tempdir().unwrap();
+            let url = Url::parse(&lab.url(&format!("/gen/256K/r.ts?seed=7{faults}"))).unwrap();
+            let pieces: Vec<Piece> = ranges
+                .iter()
+                .map(|r| Piece {
+                    url: url.clone(),
+                    range: Some(*r),
+                    key: None,
+                })
+                .collect();
+            let paths: Vec<PathBuf> = (0..ranges.len())
+                .map(|i| dir.path().join(format!("{i}.ts")))
+                .collect();
+            let ended = rt.block_on(download(
+                pieces,
+                Target::Files(paths.clone()),
+                HeaderMap::new(),
+                mdm_engine::Options {
+                    max_connections: 3,
+                    retry_delay: Duration::from_millis(50),
+                    ..Default::default()
+                },
+                Arc::new(Limiter::new(None)),
+                CancellationToken::new(),
+                Arc::new(Shared::default()),
+                Arc::new(|| Err("listed once".into())),
+            ));
+            assert!(matches!(ended, Ended::Done(_)), "{faults}: {ended:?}");
+            for (p, (start, len)) in paths.iter().zip(ranges) {
+                let got = std::fs::read(p).unwrap();
+                let want = &whole[start as usize..(start + len) as usize];
+                assert!(
+                    got == want,
+                    "{faults}: piece at {start}: {} bytes",
+                    got.len()
+                );
+            }
+            let left: Vec<_> = std::fs::read_dir(dir.path())
+                .unwrap()
+                .filter_map(Result::ok)
+                .filter(|e| e.file_name().to_string_lossy().ends_with(".mdm.part"))
+                .collect();
+            assert!(left.is_empty(), "{faults}: {left:?}");
+        }
     }
 }

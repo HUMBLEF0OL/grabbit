@@ -84,15 +84,44 @@ impl Progress {
     /// Open on a tab by its English name in lower case: a top tab ("status", "limit", "done") or
     /// a torrent's details tab ("peers"; /show progress:peers, for the docs' screenshots and the
     /// fit audit); any other name leaves it as it is. A top tab hidden with "Hide tab" comes back.
-    /// Two states for the screenshots, each a look only (plan 09a): "error" shows Download
+    /// States for the screenshots, each a look only (plan 09a): "error" shows Download
     /// status as for a failed download (a sample reason; the download itself is left as it
-    /// is), "menu" opens the tab row's right-click menu.
+    /// is), "menu" opens the tab row's right-click menu; for a video (upstream issues 769, 736)
+    /// "merging" shows its picture and sound being joined (45 %), "helper" the line saying why
+    /// yt-dlp downloads it itself (an RTMP stream), "mergefail" a failed join's reason.
     pub fn show_tab(&mut self, name: &str) {
+        // One sample state at a time: each one asked for replaces the one before.
+        if matches!(name, "error" | "mergefail" | "merging" | "helper") {
+            self.sample_error = None;
+            self.sample_merging = None;
+            self.sample_helper = None;
+        }
         match name {
             "error" => {
                 self.sample_error = Some(crate::errors::describe(&mdm_engine::Error::Status(
                     reqwest::StatusCode::NOT_FOUND,
                 )));
+                self.tab = Tab::Status;
+                return;
+            }
+            "mergefail" => {
+                self.sample_error = Some(crate::model::merge_failure(
+                    "Postprocessing: Conversion failed!",
+                    &[
+                        std::path::PathBuf::from("open-movie-trailer.f137.mp4"),
+                        std::path::PathBuf::from("open-movie-trailer.f140.m4a"),
+                    ],
+                ));
+                self.tab = Tab::Status;
+                return;
+            }
+            "merging" => {
+                self.sample_merging = Some(0.45);
+                self.tab = Tab::Status;
+                return;
+            }
+            "helper" => {
+                self.sample_helper = Some(mdm_tools::streams::Helper::Protocol("rtmp".into()));
                 self.tab = Tab::Status;
                 return;
             }
@@ -111,6 +140,8 @@ impl Progress {
         if let Some(t) = top {
             // A tab asked for by name shows the download as it is again.
             self.sample_error = None;
+            self.sample_merging = None;
+            self.sample_helper = None;
             self.hidden_tabs.retain(|h| *h != t);
             self.tab = t;
             return;
@@ -182,6 +213,12 @@ pub struct Progress {
     /// `/show progress:error`: Download status painted as failed with this reason, the
     /// download left as it is (a screenshot's state).
     sample_error: Option<String>,
+    /// `/show progress:merging`: Download status and the bar as while a video's streams are
+    /// joined, this far (a screenshot's state).
+    sample_merging: Option<f64>,
+    /// `/show progress:helper`: the Server row as for a video yt-dlp downloads itself, for this
+    /// reason (a screenshot's state).
+    sample_helper: Option<mdm_tools::streams::Helper>,
     /// `/show progress:menu`: the tab row's menu opens at the next frame.
     menu_asked: bool,
 }
@@ -240,6 +277,8 @@ impl Progress {
             turn_off: 0,
             force: false,
             sample_error: None,
+            sample_merging: None,
+            sample_helper: None,
             menu_asked: false,
         }
     }
@@ -411,7 +450,18 @@ impl Progress {
         };
         let hide_tab = match self.tab {
             Tab::Status => {
-                status_page(ui, o, item, snap, frac, self.sample_error.as_deref());
+                status_page(
+                    ui,
+                    o,
+                    item,
+                    snap,
+                    frac,
+                    Samples {
+                        failed_with: self.sample_error.as_deref(),
+                        merging: self.sample_merging,
+                        helper: self.sample_helper.as_ref(),
+                    },
+                );
                 false
             }
             Tab::Limiter => self.limiter_page(ui, o, item),
@@ -430,7 +480,7 @@ impl Progress {
         // checked or a video joined (upstream issue 736), it starts again in the accent colour
         // and shows how far that is.
         let bar = r(o, 17.0, 180.0, 513.0, 16.0);
-        match finishing_fraction(snap) {
+        match self.sample_merging.or(finishing_fraction(snap)) {
             Some(f) => winui::meter_in(&p, bar, f as f32, crate::theme::colors().accent),
             None => winui::meter(&p, bar, frac.unwrap_or(0.0) as f32),
         }
@@ -1050,17 +1100,28 @@ fn status_icon(status: Status) -> &'static str {
     }
 }
 
+/// A screenshot's states for Download status (`/show progress:<state>`, looks only): failed for
+/// this reason, a video's streams joined this far, a video yt-dlp downloads itself for this
+/// reason.
+#[derive(Clone, Copy, Default)]
+struct Samples<'a> {
+    failed_with: Option<&'a str>,
+    merging: Option<f64>,
+    helper: Option<&'a mdm_tools::streams::Helper>,
+}
+
 // The rows sit 7 px inside the page's frame at the top and at the bottom (the Server row's
 // descent included), with a slightly wider break after Status, as before.
-/// `failed_with`: paint it as failed for this reason (a screenshot's state), whatever its status.
+/// `samples`: a screenshot's state painted instead of the download's own.
 fn status_page(
     ui: &Ui,
     o: Pos2,
     item: &Item,
     snap: Option<&Snapshot>,
     frac: Option<f64>,
-    failed_with: Option<&str>,
+    samples: Samples,
 ) {
+    let failed_with = samples.failed_with;
     let p = &ui.painter().clone();
     let state = if failed_with.is_some() {
         Status::Error
@@ -1079,6 +1140,13 @@ fn status_page(
         }
         // After the last byte: the file checked, a video's streams joined (upstream issue 736),
         // as the list says, not "Connecting...".
+        _ if let Some(f) = samples.merging.filter(|_| failed_with.is_none()) => {
+            crate::i18n::fmt(
+                // i18n: a video's status while its picture and sound are joined into one file (ffmpeg); {percent} how far, e.g. "45%"
+                crate::i18n::t("Merging... ({percent})"),
+                &[("percent", &crate::i18n::percent(f, 0))],
+            )
+        }
         _ if let Some(finishing) = item.finishing(false).filter(|_| failed_with.is_none()) => {
             finishing
         }
@@ -1262,7 +1330,7 @@ fn status_page(
         .map(crate::whereis::Seen::from)
         .or_else(|| item.server.clone());
     // A video yt-dlp downloads itself (upstream issue 769): why, in that row.
-    if let Some(why) = item.video_helper() {
+    if let Some(why) = samples.helper.cloned().or_else(|| item.video_helper()) {
         fit(
             "helper",
             33.0,
@@ -2271,5 +2339,26 @@ mod tests {
             p.sample_error.is_none(),
             "a tab by name shows the download again"
         );
+        // A video's states (upstream issues 769, 736): looks only, gone with a tab by name.
+        p.tab = Tab::Limiter;
+        p.show_tab("merging");
+        assert_eq!(p.tab, Tab::Status);
+        assert_eq!(p.sample_merging, Some(0.45));
+        // Each one replaces the one before.
+        p.show_tab("helper");
+        assert!(p.sample_helper.is_some() && p.sample_merging.is_none());
+        p.show_tab("mergefail");
+        assert!(p.sample_helper.is_none());
+        assert!(
+            p.sample_error
+                .as_deref()
+                .is_some_and(|e| e.contains("Conversion failed!") && e.contains("Resume")),
+            "{:?}",
+            p.sample_error
+        );
+        p.show_tab("merging");
+        p.show_tab("status");
+        assert!(p.sample_error.is_none() && p.sample_merging.is_none());
+        assert!(p.sample_helper.is_none());
     }
 }

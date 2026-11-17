@@ -518,7 +518,7 @@ pub struct GallerySpec {
 /// Why a video failed when joining its picture and sound did (ffmpeg's `error`, in English),
 /// and what became of what was downloaded: `kept` beside its file, for Resume to join again
 /// without downloading it, until the download is deleted with its files (upstream `6196f9ad`).
-fn merge_failure(error: &str, kept: &[PathBuf]) -> String {
+pub(crate) fn merge_failure(error: &str, kept: &[PathBuf]) -> String {
     let error = crate::i18n::ltr(error);
     if kept.is_empty() {
         return crate::i18n::fmt(

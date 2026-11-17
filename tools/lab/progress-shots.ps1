@@ -23,6 +23,9 @@ param(
   # The torrent's other details tabs too ("peers", "trackers", "pieces", "general"), each
   # as progress-torrent-<tab>.png (/show progress:<tab>).
   [string[]]$TorrentTabs = @(),
+  # The video's sample states too ("merging", "helper", "mergefail": upstream issues 769 and
+  # 736), each as progress-video-<state>.png (/show progress:<state>, looks only).
+  [string[]]$VideoTabs = @(),
   # Dark mode (View → Always dark, whatever Windows' own mode); the same file names, or with
   # -Suffix ("-dark") after each.
   [switch]$Dark,
@@ -174,7 +177,7 @@ try {
         [IO.File]::WriteAllText("$dir\data\tools\$t\current.json", ($cur | ConvertTo-Json))
       }
     }
-    Scenario "video" $item 12 $copyTools
+    Scenario "video" $item 12 $copyTools $VideoTabs
   }
 
   if (Want "torrent") {
