@@ -524,6 +524,13 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   the font is passed over for the next one in line, and the log names it.
 - ✅ No false "window stopped responding" report in the minute after the computer wakes, and
   every freeze report names what the window was doing (ported from upstream issues 574 and 613).
+- ✅ Fewer freezes, crashes and lost progress, ported from upstream (2026-11-16 sync, part 2):
+  shutting down or signing out saves like Exit; the window doesn't wait for its crash monitor,
+  which is still reached when slow; no freeze report in the first minutes after a start with
+  Windows; no crash at the first secure connection on some PCs; Link grabber and the browser
+  extension's window no longer freeze; Exit when done quits; Stop All stops the queues; the
+  computer stays awake while anything downloads (upstream issues 1156, 476, 1238, 1126, 1123,
+  1063, 1218, 1145, 1164 and 939).
 - ✅ GitHub Actions run for `main` only: the build and tests on pull requests into `main` (a
   release or a hotfix), none on `dev`, where the same checks run locally before a merge; the
   website builds on its own changes or by hand, with no daily run.
