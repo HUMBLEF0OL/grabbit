@@ -756,7 +756,7 @@ fn finish(shared: &Mutex<Shared>, child: &Mutex<Option<Spawned>>, folder: PathBu
         SystemTime::now(),
         if engine > 0 {
             format!(
-                "MDM saved {engine} files, gallery-dl {saved} ({} already there)",
+                "Grabbit saved {engine} files, gallery-dl {saved} ({} already there)",
                 there.saturating_sub(engine)
             )
         } else {

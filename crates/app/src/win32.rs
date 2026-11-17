@@ -6022,6 +6022,11 @@ fn com_on_this_thread() {
 /// Open `path` with the program Windows has for its type, through `ShellExecuteW` (upstream
 /// issue 811): handed to explorer.exe instead (the `open` crate), a file whose program is
 /// another one, such as 7-Zip for a .zip, failed and its folder was shown.
+///
+/// The program starts in the file's folder, as Explorer starts it (upstream issue 1216):
+/// without a folder it would start in Grabbit's own working folder, which is
+/// `C:\Windows\System32` when Windows started it with the session, and a downloaded program
+/// writing beside itself would be refused there.
 pub fn open_file_shell(path: &std::path::Path) -> std::io::Result<()> {
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::UI::Shell::ShellExecuteW;
@@ -6030,15 +6035,19 @@ pub fn open_file_shell(path: &std::path::Path) -> std::io::Result<()> {
     // Shell extensions behind the file's program may need COM on the calling thread.
     com_on_this_thread();
     let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
-    // SAFETY: lpFile is a null-terminated UTF-16 string that outlives the call; a null verb
-    // runs the type's default action; the other pointers may be null.
+    let folder: Option<Vec<u16>> = std::path::absolute(path).ok().and_then(|p| {
+        p.parent()
+            .map(|d| d.as_os_str().encode_wide().chain(Some(0)).collect())
+    });
+    // SAFETY: lpFile and lpDirectory (or null) are null-terminated UTF-16 strings that outlive
+    // the call; a null verb runs the type's default action; the other pointers may be null.
     let ret = unsafe {
         ShellExecuteW(
             std::ptr::null_mut(),
             std::ptr::null(),
             wide.as_ptr(),
             std::ptr::null(),
-            std::ptr::null(),
+            folder.as_ref().map_or(std::ptr::null(), |f| f.as_ptr()),
             SW_SHOWNORMAL,
         )
     };
@@ -6057,6 +6066,31 @@ pub fn open_file_shell(path: &std::path::Path) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod open_file_shell_tests {
+    /// Upstream issue 1216: the program a file opens with starts in the file's folder, not in
+    /// Grabbit's own working folder. A batch file writes where it runs; Windows shows its
+    /// console a moment, so it is run by hand:
+    /// `cargo test -p mdm-app a_file_is_opened_in_its_folder -- --ignored`.
+    #[test]
+    #[ignore = "opens a console window for a moment"]
+    fn a_file_is_opened_in_its_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("where.cmd");
+        std::fs::write(&script, "@cd > \"%~dp0cwd.txt\"\r\n").unwrap();
+        assert_ne!(std::env::current_dir().unwrap(), dir.path());
+        super::open_file_shell(&script).unwrap();
+        let said = dir.path().join("cwd.txt");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        let text = loop {
+            match std::fs::read_to_string(&said) {
+                Ok(t) if t.ends_with('\n') => break t,
+                _ if std::time::Instant::now() > deadline => panic!("the batch file didn't run"),
+                _ => std::thread::sleep(std::time::Duration::from_millis(100)),
+            }
+        };
+        let real = |p: &std::path::Path| std::fs::canonicalize(p).unwrap();
+        assert_eq!(real(std::path::Path::new(text.trim())), real(dir.path()));
+    }
+
     /// A file that isn't there is an error, not a folder shown in its place.
     #[test]
     fn a_missing_file_is_an_error() {

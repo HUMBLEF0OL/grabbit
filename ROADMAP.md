@@ -508,10 +508,15 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   upstream's new commits (applies, applies without the removed parts, needs a port by hand,
   nothing to take), picks the ones that apply onto a sync branch and records every decision;
   each run reaches `dev` by a pull request, and a weekly report (from the first release on)
-  lists what waits. Looked at up to upstream `9f7a6fc9ce8a` (2026-11-14): 24 fixes taken and
-  46 ported by hand, 42 skipped, 14 deferred: upstream's rework that downloads videos, streams
-  and galleries through MDM's own engine (and the fixes built on it), a connection that copies a
-  browser's TLS, the tray menu's look and release tooling, each waiting for a decision; what the
+  lists what waits. Looked at up to upstream `9d1fc9248239` (2026-11-16), before plan 10c:
+  37 fixes taken and 75 ported by hand (the video engine's among them, and this run's freeze,
+  crash and quit fixes, which reach `dev` in a pull request of their own), 79 skipped, 4 already
+  fixed here, 9 deferred: a connection that copies a browser's TLS (and the fixes built on it),
+  the video button's quality menu, the tray menu's look, release tooling, an egui pin and a
+  clipboard fix, each waiting for a decision. 41 of upstream's commits from 2026-11-14 to
+  2026-11-16 still wait for a port by hand
+  (`sync.py status` lists them: the window-thread disk waits of Delete, Redownload and new
+  names, the hidden-window freeze grace, accessibility and menu keys among them); what the
   ports' reviews left to do is in `tools/upstream-sync/follow-ups.md`. Ready for Graphite only: an old
   theme's licence never counts as moved to Graphite's, and a commit with a theme other than
   Graphite says to skip it.

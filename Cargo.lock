@@ -1069,6 +1069,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cap"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f125eb85b84a24c36b02ed1d22c9dd8632f53b3cde6e4d23512f94021030003"
+
+[[package]]
 name = "cc"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1844,7 +1850,7 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 [[package]]
 name = "ecolor"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
+source = "git+https://github.com/anefzaoui/egui.git?rev=91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d#91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d"
 dependencies = [
  "bytemuck",
  "emath",
@@ -1853,7 +1859,7 @@ dependencies = [
 [[package]]
 name = "eframe"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
+source = "git+https://github.com/anefzaoui/egui.git?rev=91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d#91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -1889,7 +1895,7 @@ dependencies = [
 [[package]]
 name = "egui"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
+source = "git+https://github.com/anefzaoui/egui.git?rev=91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d#91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d"
 dependencies = [
  "accesskit",
  "ahash",
@@ -1908,7 +1914,7 @@ dependencies = [
 [[package]]
 name = "egui-wgpu"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
+source = "git+https://github.com/anefzaoui/egui.git?rev=91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d#91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -1927,7 +1933,7 @@ dependencies = [
 [[package]]
 name = "egui-winit"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
+source = "git+https://github.com/anefzaoui/egui.git?rev=91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d#91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d"
 dependencies = [
  "accesskit_winit",
  "arboard",
@@ -1952,7 +1958,7 @@ dependencies = [
 [[package]]
 name = "egui_extras"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
+source = "git+https://github.com/anefzaoui/egui.git?rev=91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d#91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d"
 dependencies = [
  "ahash",
  "egui",
@@ -1968,7 +1974,7 @@ dependencies = [
 [[package]]
 name = "egui_glow"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
+source = "git+https://github.com/anefzaoui/egui.git?rev=91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d#91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d"
 dependencies = [
  "bytemuck",
  "egui",
@@ -1995,7 +2001,7 @@ dependencies = [
 [[package]]
 name = "emath"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
+source = "git+https://github.com/anefzaoui/egui.git?rev=91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d#91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d"
 dependencies = [
  "bytemuck",
 ]
@@ -2064,7 +2070,7 @@ dependencies = [
 [[package]]
 name = "epaint"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
+source = "git+https://github.com/anefzaoui/egui.git?rev=91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d#91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -2090,7 +2096,7 @@ dependencies = [
 [[package]]
 name = "epaint_default_fonts"
 version = "0.37.0"
-source = "git+https://github.com/anefzaoui/egui.git?rev=4ad60e5365470a6d12166a8075478f8aea44c9f8#4ad60e5365470a6d12166a8075478f8aea44c9f8"
+source = "git+https://github.com/anefzaoui/egui.git?rev=91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d#91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d"
 
 [[package]]
 name = "equivalent"
@@ -3828,7 +3834,7 @@ dependencies = [
 [[package]]
 name = "librqbit"
 version = "9.1.0"
-source = "git+https://github.com/anefzaoui/rqbit.git?rev=694291b61fcfd6a77fef7762541b0ef25773ae31#694291b61fcfd6a77fef7762541b0ef25773ae31"
+source = "git+https://github.com/anefzaoui/rqbit.git?rev=fab046042915709ab160626ebc59cce08de4d779#fab046042915709ab160626ebc59cce08de4d779"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -3891,7 +3897,7 @@ dependencies = [
 [[package]]
 name = "librqbit-bencode"
 version = "9.1.0"
-source = "git+https://github.com/anefzaoui/rqbit.git?rev=694291b61fcfd6a77fef7762541b0ef25773ae31#694291b61fcfd6a77fef7762541b0ef25773ae31"
+source = "git+https://github.com/anefzaoui/rqbit.git?rev=fab046042915709ab160626ebc59cce08de4d779#fab046042915709ab160626ebc59cce08de4d779"
 dependencies = [
  "anyhow",
  "arrayvec",
@@ -3907,7 +3913,7 @@ dependencies = [
 [[package]]
 name = "librqbit-buffers"
 version = "9.1.0"
-source = "git+https://github.com/anefzaoui/rqbit.git?rev=694291b61fcfd6a77fef7762541b0ef25773ae31#694291b61fcfd6a77fef7762541b0ef25773ae31"
+source = "git+https://github.com/anefzaoui/rqbit.git?rev=fab046042915709ab160626ebc59cce08de4d779#fab046042915709ab160626ebc59cce08de4d779"
 dependencies = [
  "bytes",
  "librqbit-clone-to-owned",
@@ -3918,7 +3924,7 @@ dependencies = [
 [[package]]
 name = "librqbit-clone-to-owned"
 version = "9.1.0"
-source = "git+https://github.com/anefzaoui/rqbit.git?rev=694291b61fcfd6a77fef7762541b0ef25773ae31#694291b61fcfd6a77fef7762541b0ef25773ae31"
+source = "git+https://github.com/anefzaoui/rqbit.git?rev=fab046042915709ab160626ebc59cce08de4d779#fab046042915709ab160626ebc59cce08de4d779"
 dependencies = [
  "bytes",
 ]
@@ -3926,7 +3932,7 @@ dependencies = [
 [[package]]
 name = "librqbit-core"
 version = "9.1.0"
-source = "git+https://github.com/anefzaoui/rqbit.git?rev=694291b61fcfd6a77fef7762541b0ef25773ae31#694291b61fcfd6a77fef7762541b0ef25773ae31"
+source = "git+https://github.com/anefzaoui/rqbit.git?rev=fab046042915709ab160626ebc59cce08de4d779#fab046042915709ab160626ebc59cce08de4d779"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3955,7 +3961,7 @@ dependencies = [
 [[package]]
 name = "librqbit-dht"
 version = "9.1.0"
-source = "git+https://github.com/anefzaoui/rqbit.git?rev=694291b61fcfd6a77fef7762541b0ef25773ae31#694291b61fcfd6a77fef7762541b0ef25773ae31"
+source = "git+https://github.com/anefzaoui/rqbit.git?rev=fab046042915709ab160626ebc59cce08de4d779#fab046042915709ab160626ebc59cce08de4d779"
 dependencies = [
  "anyhow",
  "backon",
@@ -4002,7 +4008,7 @@ dependencies = [
 [[package]]
 name = "librqbit-lsd"
 version = "9.1.0"
-source = "git+https://github.com/anefzaoui/rqbit.git?rev=694291b61fcfd6a77fef7762541b0ef25773ae31#694291b61fcfd6a77fef7762541b0ef25773ae31"
+source = "git+https://github.com/anefzaoui/rqbit.git?rev=fab046042915709ab160626ebc59cce08de4d779#fab046042915709ab160626ebc59cce08de4d779"
 dependencies = [
  "anyhow",
  "atoi",
@@ -4021,7 +4027,7 @@ dependencies = [
 [[package]]
 name = "librqbit-peer-protocol"
 version = "9.1.0"
-source = "git+https://github.com/anefzaoui/rqbit.git?rev=694291b61fcfd6a77fef7762541b0ef25773ae31#694291b61fcfd6a77fef7762541b0ef25773ae31"
+source = "git+https://github.com/anefzaoui/rqbit.git?rev=fab046042915709ab160626ebc59cce08de4d779#fab046042915709ab160626ebc59cce08de4d779"
 dependencies = [
  "anyhow",
  "bitvec",
@@ -4041,7 +4047,7 @@ dependencies = [
 [[package]]
 name = "librqbit-sha1-wrapper"
 version = "9.1.0"
-source = "git+https://github.com/anefzaoui/rqbit.git?rev=694291b61fcfd6a77fef7762541b0ef25773ae31#694291b61fcfd6a77fef7762541b0ef25773ae31"
+source = "git+https://github.com/anefzaoui/rqbit.git?rev=fab046042915709ab160626ebc59cce08de4d779#fab046042915709ab160626ebc59cce08de4d779"
 dependencies = [
  "assert_cfg",
  "aws-lc-rs",
@@ -4050,7 +4056,7 @@ dependencies = [
 [[package]]
 name = "librqbit-tracker-comms"
 version = "9.1.0"
-source = "git+https://github.com/anefzaoui/rqbit.git?rev=694291b61fcfd6a77fef7762541b0ef25773ae31#694291b61fcfd6a77fef7762541b0ef25773ae31"
+source = "git+https://github.com/anefzaoui/rqbit.git?rev=fab046042915709ab160626ebc59cce08de4d779#fab046042915709ab160626ebc59cce08de4d779"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -4078,7 +4084,7 @@ dependencies = [
 [[package]]
 name = "librqbit-upnp"
 version = "9.1.0"
-source = "git+https://github.com/anefzaoui/rqbit.git?rev=694291b61fcfd6a77fef7762541b0ef25773ae31#694291b61fcfd6a77fef7762541b0ef25773ae31"
+source = "git+https://github.com/anefzaoui/rqbit.git?rev=fab046042915709ab160626ebc59cce08de4d779#fab046042915709ab160626ebc59cce08de4d779"
 dependencies = [
  "anyhow",
  "bstr",
@@ -4400,6 +4406,7 @@ version = "0.5.2"
 dependencies = [
  "base64 0.23.1",
  "bytes",
+ "cap",
  "craft-atomic",
  "crc32fast",
  "futures",
@@ -4898,8 +4905,7 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 [[package]]
 name = "naga"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a616d2fb8c89516ac2723a581f69d6c18576046bed761bd6b305e5618e6ae130"
+source = "git+https://github.com/anefzaoui/wgpu.git?rev=1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04#1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04"
 dependencies = [
  "arrayvec",
  "bit-set 0.10.0",
@@ -4923,8 +4929,7 @@ dependencies = [
 [[package]]
 name = "naga-types"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "590afbf58a6f4f62873cd5cff4468061844bafa1cdf399cc954537c22d768d49"
+source = "git+https://github.com/anefzaoui/wgpu.git?rev=1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04#1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04"
 dependencies = [
  "hashbrown 0.17.1",
  "indexmap 2.14.2",
@@ -8748,8 +8753,7 @@ checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 [[package]]
 name = "wgpu"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "527ccdf43dd5b2e8676eed9984ce00e2bbb0a1b85b70c1969dcb6cd2eb55ab9e"
+source = "git+https://github.com/anefzaoui/wgpu.git?rev=1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04#1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04"
 dependencies = [
  "arrayvec",
  "bitflags 2.13.2",
@@ -8776,8 +8780,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14c018fce9b6270aa203c2fdd56f3cce996713534bd757e4ea58c8560b121f14"
+source = "git+https://github.com/anefzaoui/wgpu.git?rev=1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04#1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04"
 dependencies = [
  "arrayvec",
  "bit-set 0.10.0",
@@ -8808,8 +8811,7 @@ dependencies = [
 [[package]]
 name = "wgpu-core-deps-windows-linux-android"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7586165fd5f6d881cb9ce4bb71f40d6caab2c0f1837e3fc1d9788a197fb6004f"
+source = "git+https://github.com/anefzaoui/wgpu.git?rev=1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04#1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04"
 dependencies = [
  "wgpu-hal",
 ]
@@ -8817,8 +8819,7 @@ dependencies = [
 [[package]]
 name = "wgpu-hal"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6b7fb58561a792bc237628ba0792e332de418fefe145f13b5ed8201e6d52f58"
+source = "git+https://github.com/anefzaoui/wgpu.git?rev=1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04#1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04"
 dependencies = [
  "arrayvec",
  "bit-set 0.10.0",
@@ -8852,8 +8853,7 @@ dependencies = [
 [[package]]
 name = "wgpu-naga-bridge"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2f62e73117bb7a62bfd9c5a5841438a823f6566c6442a808ee269d2d055c081"
+source = "git+https://github.com/anefzaoui/wgpu.git?rev=1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04#1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04"
 dependencies = [
  "naga",
  "wgpu-types",
@@ -8862,8 +8862,7 @@ dependencies = [
 [[package]]
 name = "wgpu-types"
 version = "30.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99dad6f1fbdbbdb4c278a6508b059d44688f5cebddf78d005a46a31340269286"
+source = "git+https://github.com/anefzaoui/wgpu.git?rev=1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04#1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04"
 dependencies = [
  "bitflags 2.13.2",
  "bytemuck",
@@ -9857,3 +9856,8 @@ dependencies = [
  "syn 3.0.9",
  "winnow 1.0.4",
 ]
+
+[[patch.unused]]
+name = "wgpu-core-deps-apple"
+version = "30.0.1"
+source = "git+https://github.com/anefzaoui/wgpu.git?rev=1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04#1c6f336e239ff7bc46b4dec194f1d96d3d4f8e04"

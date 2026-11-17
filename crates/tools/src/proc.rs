@@ -8,6 +8,7 @@ use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -182,6 +183,10 @@ pub struct LookedUp {
 /// (it looks for Deno alone) every video is dropped: "Requested format is not available". The
 /// same page without the cookies lists its qualities, so a look-up that fails this way and had
 /// cookies is made once more without them; if that fails too, the first error is the one told.
+/// A look-up whose secure connection failed for a certificate yt-dlp doesn't trust is made once
+/// more with the system's certificates ([`with_system_certs`], #955).
+///
+/// Each try waits [`QUICK_SOCKET`] on a server first, then yt-dlp's own time ([`quick_first`]).
 pub fn look_up(
     exe: &Path,
     ours: &[String],
@@ -190,10 +195,12 @@ pub fn look_up(
 ) -> Result<LookedUp, ProcError> {
     // A plain file a server's program sends gets its real type (upstream issue 695).
     let run = |args: &[String]| {
-        output_warned(ytdlp(exe, &[], args, url)?, "yt-dlp", timeout)
-            .map(|(json, warnings)| (crate::resolve::typed_scripts(json), warnings))
+        quick_first(args, |args| {
+            output_warned(ytdlp(exe, &[], args, url)?, "yt-dlp", timeout)
+                .map(|(json, warnings)| (crate::resolve::typed_scripts(json), warnings))
+        })
     };
-    match run(ours) {
+    match with_system_certs(&SYSTEM_CERTS, || run(ours)) {
         Ok((json, warnings)) => Ok(LookedUp {
             json,
             without_cookies: false,
@@ -214,6 +221,115 @@ pub fn look_up(
         }
         Err(e) => Err(e),
     }
+}
+
+/// yt-dlp checks the sites' certificates with the system's (`--compat-options no-certifi`)
+/// rather than its own list, Mozilla's (#955). Set once a look-up needed it: every later run of
+/// yt-dlp (the download, a fresh address, a playlist) needs it too.
+static SYSTEM_CERTS: AtomicBool = AtomicBool::new(false);
+
+/// yt-dlp's arguments for the certificates it checks sites with: its own list (Mozilla's, from
+/// Python's `certifi`), or the system's (`system`). The system's is what MDM's own connections
+/// and the browsers trust (rustls-platform-verifier, #668): there an antivirus's web filter or a
+/// proxy that reads HTTPS adds the certificate it signs sites with, and yt-dlp's own list,
+/// without it, said `CERTIFICATE_VERIFY_FAILED` for every page the browser opened (#955). Not
+/// the default: Windows fetches a root certificate the first time a connection needs it, so its
+/// store can lack one Mozilla's list has.
+fn cert_args(system: bool) -> &'static [&'static str] {
+    if system {
+        &["--compat-options", "no-certifi"]
+    } else {
+        &[]
+    }
+}
+
+/// Did yt-dlp fail for a certificate it doesn't trust (Python's `ssl` words, in yt-dlp's
+/// message)? An expired or another site's certificate says so in other words.
+pub fn untrusted_certificate(message: &str) -> bool {
+    message.contains("CERTIFICATE_VERIFY_FAILED")
+        && (message.contains("unable to get local issuer certificate")
+            || message.contains("self-signed certificate in certificate chain")
+            || message.contains("self signed certificate in certificate chain"))
+}
+
+/// `run` a yt-dlp run; when it failed for a certificate its own list doesn't trust, once more
+/// with the system's (`system`, [`cert_args`]), kept for the runs after when that worked. A
+/// second refusal of the certificate goes back to yt-dlp's own list and tells the first error;
+/// another failure is the new run's (the certificate was fine).
+fn with_system_certs<T>(
+    system: &AtomicBool,
+    mut run: impl FnMut() -> Result<T, ProcError>,
+) -> Result<T, ProcError> {
+    let first = match run() {
+        Err(e) if !system.load(Ordering::Relaxed) && untrusted_certificate(&e.to_string()) => e,
+        done => return done,
+    };
+    tracing::info!(
+        "yt-dlp didn't trust the site's certificate: asking with the system's ({first})"
+    );
+    system.store(true, Ordering::Relaxed);
+    match run() {
+        Err(e) if untrusted_certificate(&e.to_string()) => {
+            system.store(false, Ordering::Relaxed);
+            Err(first)
+        }
+        done => done,
+    }
+}
+
+/// How long a look-up's first try lets a server keep it waiting, in seconds (`--socket-timeout`;
+/// yt-dlp's own is 20). yt-dlp tries a host's addresses one after the other, each for that long,
+/// and a host the network drops without a word (#1053: YouTube's HLS manifest server, where a
+/// network blocks it; a dead first address, as broken IPv6 gives) cost each look-up 20 s before
+/// yt-dlp went on without it. A page's servers answer within a second when they answer.
+pub const QUICK_SOCKET: &str = "5";
+
+/// `run` with `args`, [`QUICK_SOCKET`] and no retries of yt-dlp's own, then, only when that try
+/// failed on the network ([`network_failure`]: a server too slow for it among them), once more
+/// with `args` alone: yt-dlp's own wait and retries, so a slow server still gets its time. The
+/// first try retries nothing itself: yt-dlp retries a request that timed out up to 3 times, and a
+/// server answering in 8 s cost 41 s before it gave up, against 11 s with them off (#1053). A
+/// caller's own `--socket-timeout` or `--extractor-retries` is kept as it is, tried once.
+pub(crate) fn quick_first<T>(
+    args: &[String],
+    mut run: impl FnMut(&[String]) -> Result<T, ProcError>,
+) -> Result<T, ProcError> {
+    if args
+        .iter()
+        .any(|a| a == "--socket-timeout" || a == "--extractor-retries")
+    {
+        return run(args);
+    }
+    let mut quick = args.to_vec();
+    quick.extend(["--socket-timeout", QUICK_SOCKET, "--extractor-retries", "0"].map(str::to_owned));
+    match run(&quick) {
+        Err(ProcError::Failed { message, .. }) if network_failure(&message) => run(args),
+        other => other,
+    }
+}
+
+/// Does yt-dlp's error say the network failed it, as its own retries would have tried again: a
+/// server that didn't answer in time ("Read timed out. (read timeout=5.0)", "Connection to …
+/// timed out. (connect timeout=5.0)", "The read operation timed out"), a connection that broke,
+/// or a server's error (HTTP 5xx)?
+pub(crate) fn network_failure(message: &str) -> bool {
+    // A certificate yt-dlp doesn't trust is no network trouble: `with_system_certs` asks again.
+    if message.contains("CERTIFICATE_VERIFY_FAILED") {
+        return false;
+    }
+    let m = message.to_ascii_lowercase();
+    [
+        "timed out",
+        "read timeout",
+        "connect timeout",
+        "transporterror",
+        "connection reset",
+        "connection aborted",
+        "remote end closed",
+        "http error 5",
+    ]
+    .iter()
+    .any(|k| m.contains(k))
 }
 
 /// Did yt-dlp's look-up say YouTube's qualities went missing for want of a JavaScript runtime
@@ -458,9 +574,8 @@ pub fn gallery_dl(
     ours: &[String],
     url: &str,
 ) -> Result<Command, ProcError> {
-    let mut cmd = Command::new(&tool.exe);
+    let mut cmd = helper_command(&tool.exe);
     let route = through_adapter(&mut cmd, Helper::GalleryDl, Some(url))?;
-    cmd.env("PYTHONIOENCODING", "utf-8");
     for a in ours {
         cmd.arg(safe(a)?);
     }
@@ -668,9 +783,18 @@ fn cookie_file(text: &str) -> std::io::Result<CookieFile> {
 /// Python's.
 const UTF8: [&str; 2] = ["--encoding", "utf-8"];
 
-fn ytdlp_command(exe: &Path) -> Command {
+/// yt-dlp's or gallery-dl's program, built as it will run: output in UTF-8 ([`UTF8`]), and in
+/// the helpers' folder with it as TEMP, TMP and TMPDIR ([`crate::workdir`]), never MDM's own
+/// working folder, which is whatever started MDM gave it: the install folder from the Start
+/// menu or the browser (#834: Chrome starts its host in the host's folder), and
+/// `C:\Windows\System32` when Windows starts it with the session (#1216). On Windows yt-dlp
+/// makes the small file it tries a format with (a YouTube video put online in the last two
+/// days, a stream marked as protected) in its working folder: its `get_output_path('temp')` is
+/// `.` there when MDM gives no `-P temp:`. [`spawn`] gives the same to any other program.
+fn helper_command(exe: &Path) -> Command {
     let mut cmd = Command::new(exe);
     cmd.env("PYTHONIOENCODING", "utf-8");
+    crate::workdir::apply(&mut cmd, crate::workdir::folders());
     cmd
 }
 
@@ -887,11 +1011,12 @@ pub fn ytdlp(
     ours: &[String],
     url: &str,
 ) -> Result<Command, ProcError> {
-    let mut cmd = ytdlp_command(exe);
+    let mut cmd = helper_command(exe);
     let route = through_adapter(&mut cmd, Helper::YtDlp, Some(url))?;
     layers(&mut cmd, user, ours)?;
     cmd.args(["--ignore-config", "--no-exec", "--no-update"]);
     cmd.args(js_runtime_args());
+    cmd.args(cert_args(SYSTEM_CERTS.load(Ordering::Relaxed)));
     cmd.args(UTF8);
     cmd.args(route);
     cmd.arg("--");
@@ -907,11 +1032,12 @@ pub fn ytdlp_info(
     ours: &[String],
     info: &Path,
 ) -> Result<Command, ProcError> {
-    let mut cmd = ytdlp_command(exe);
+    let mut cmd = helper_command(exe);
     let route = through_adapter(&mut cmd, Helper::YtDlp, None)?;
     layers(&mut cmd, user, ours)?;
     cmd.args(["--ignore-config", "--no-exec", "--no-update"]);
     cmd.args(js_runtime_args());
+    cmd.args(cert_args(SYSTEM_CERTS.load(Ordering::Relaxed)));
     cmd.args(UTF8);
     cmd.args(route);
     cmd.arg("--load-info-json");
@@ -1117,6 +1243,100 @@ pub fn output_warned(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #1053: a look-up waits 5 s on a server first; only a try that failed for a server that
+    /// didn't answer in time is made again, once, with yt-dlp's own wait.
+    #[test]
+    fn a_look_up_waits_briefly_then_once_as_long_as_ytdlp_would() {
+        let args = vec!["-J".to_owned()];
+        let quick: Vec<String> = [
+            "-J",
+            "--socket-timeout",
+            QUICK_SOCKET,
+            "--extractor-retries",
+            "0",
+        ]
+        .map(str::to_owned)
+        .to_vec();
+        let failed = |message: &str| ProcError::Failed {
+            tool: "yt-dlp".into(),
+            message: message.into(),
+        };
+        // Answered: one try, with the short wait.
+        let mut tried = Vec::new();
+        let r = quick_first(&args, |a| {
+            tried.push(a.to_vec());
+            Ok::<_, ProcError>("json")
+        });
+        assert_eq!(r.unwrap(), "json");
+        assert_eq!(tried, std::slice::from_ref(&quick));
+        // A server too slow for it: again with yt-dlp's own wait, which answers.
+        let mut tried = Vec::new();
+        let r = quick_first(&args, |a| {
+            tried.push(a.to_vec());
+            if tried.len() == 1 {
+                Err(failed(
+                    "ERROR: [generic] Unable to download webpage: HTTPSConnectionPool(host='slow.test', port=443): Read timed out. (read timeout=5.0)",
+                ))
+            } else {
+                Ok("json")
+            }
+        });
+        assert_eq!(r.unwrap(), "json");
+        assert_eq!(tried, [quick.clone(), args.clone()]);
+        // Timed out both times: twice only, the second error told.
+        let mut tried = 0;
+        let r: Result<(), _> = quick_first(&args, |_| {
+            tried += 1;
+            Err(failed(&format!(
+                "try {tried}: The read operation timed out"
+            )))
+        });
+        assert_eq!(tried, 2);
+        assert!(r.unwrap_err().to_string().contains("try 2"));
+        // Any other failure, or MDM's own limit on the whole run: not made again.
+        for e in [
+            failed("ERROR: [youtube] x: Video unavailable"),
+            ProcError::Timeout("yt-dlp".into()),
+        ] {
+            let mut tried = 0;
+            let mut e = Some(e);
+            let r: Result<(), _> = quick_first(&args, |_| {
+                tried += 1;
+                Err(e.take().unwrap())
+            });
+            assert!(r.is_err());
+            assert_eq!(tried, 1);
+        }
+        // A caller's own wait or retries stay, tried once.
+        for own in [["--socket-timeout", "60"], ["--extractor-retries", "9"]] {
+            let own = own.map(str::to_owned).to_vec();
+            let mut tried = Vec::new();
+            let _ = quick_first(&own, |a| {
+                tried.push(a.to_vec());
+                Err::<(), _>(failed("Read timed out."))
+            });
+            assert_eq!(tried, std::slice::from_ref(&own));
+        }
+        // yt-dlp's words for the network failing it, which its own retries would try again.
+        for m in [
+            "Read timed out. (read timeout=5.0)",
+            "HTTPSConnectionPool(host='x', port=443): Max retries exceeded (Caused by ConnectTimeoutError(<…>, 'Connection to x timed out. (connect timeout=5.0)'))",
+            "<urlopen error The read operation timed out>",
+            "Unable to download API page: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response')) (caused by TransportError(...))",
+            "Unable to download webpage: HTTP Error 503: Service Unavailable",
+        ] {
+            assert!(network_failure(m), "{m}");
+        }
+        for m in [
+            "HTTP Error 403: Forbidden",
+            "Video unavailable",
+            "Requested format is not available",
+            "Unable to download webpage: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1032)> (caused by TransportError(...))",
+        ] {
+            assert!(!network_failure(m), "{m}");
+        }
+    }
 
     /// A program is looked for in absolute folders only: `.` on the PATH would be wherever MDM
     /// was started from.
@@ -1747,6 +1967,91 @@ foreach ($d in $env:PATH.Split(';')) {
         );
     }
 
+    /// #955: yt-dlp's words for a certificate its own list doesn't trust (an antivirus or a
+    /// proxy that reads HTTPS), as the reporter's yt-dlp 2026.10.26 said them on Windows.
+    const UNTRUSTED: &str = "[youtube] X6ek6j1gTQA: Unable to download API page: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1085) (caused by CertificateVerifyError('[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1085)')); please report this issue on  https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the appropriate issue template. Confirm you are on the latest version using  yt-dlp -U";
+
+    fn failed(message: &str) -> ProcError {
+        ProcError::Failed {
+            tool: "yt-dlp".into(),
+            message: message.into(),
+        }
+    }
+
+    #[test]
+    fn an_untrusted_certificate_is_told_apart() {
+        assert!(untrusted_certificate(UNTRUSTED));
+        assert!(untrusted_certificate(
+            "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1006)"
+        ));
+        // The system's certificates wouldn't help: an expired one, another site's.
+        assert!(!untrusted_certificate(
+            "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: certificate has expired (_ssl.c:1006)"
+        ));
+        assert!(!untrusted_certificate(
+            "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: Hostname mismatch, certificate is not valid for 'x'. (_ssl.c:1006)"
+        ));
+        assert!(!untrusted_certificate(
+            "Sign in to confirm you're not a bot."
+        ));
+        assert_eq!(cert_args(false), &[] as &[&str]);
+        assert_eq!(cert_args(true), ["--compat-options", "no-certifi"]);
+    }
+
+    /// The reporter's computer: an antivirus or a proxy signs the sites, and only the system has
+    /// its certificate. yt-dlp's own list refuses; once more with the system's works, and the
+    /// runs after (the download, a fresh address) keep it.
+    #[test]
+    fn a_certificate_yt_dlp_refuses_is_asked_with_the_systems() {
+        let system = AtomicBool::new(false);
+        let mut runs = Vec::new();
+        let mut run = || {
+            let with_system = system.load(Ordering::Relaxed);
+            runs.push(with_system);
+            if with_system {
+                Ok("json")
+            } else {
+                Err(failed(UNTRUSTED))
+            }
+        };
+        assert_eq!(with_system_certs(&system, &mut run).unwrap(), "json");
+        assert_eq!(with_system_certs(&system, &mut run).unwrap(), "json");
+        assert_eq!(runs, [false, true, true]);
+        assert!(system.load(Ordering::Relaxed));
+    }
+
+    /// The system doesn't trust it either: back to yt-dlp's own list, and the first error is
+    /// told. Another failure isn't a certificate's: no second run.
+    #[test]
+    fn a_certificate_nobody_trusts_goes_back_to_yt_dlps_list() {
+        let system = AtomicBool::new(false);
+        let mut runs = 0;
+        let e = with_system_certs(&system, || -> Result<(), _> {
+            runs += 1;
+            Err(failed(&format!("{UNTRUSTED} ({runs})")))
+        })
+        .unwrap_err();
+        assert_eq!(runs, 2);
+        assert!(e.to_string().ends_with("(1)"), "{e}");
+        assert!(!system.load(Ordering::Relaxed));
+        let mut runs = 0;
+        let e = with_system_certs(&system, || -> Result<(), _> {
+            runs += 1;
+            Err(failed("Video unavailable"))
+        })
+        .unwrap_err();
+        assert_eq!(runs, 1);
+        assert!(e.to_string().contains("Video unavailable"), "{e}");
+        // With the system's already: a refusal isn't asked again.
+        system.store(true, Ordering::Relaxed);
+        let mut runs = 0;
+        let _ = with_system_certs(&system, || -> Result<(), _> {
+            runs += 1;
+            Err(failed(UNTRUSTED))
+        });
+        assert_eq!(runs, 1);
+    }
+
     #[test]
     fn hostile_text_never_reaches_the_argument_list() {
         let exe = Path::new("yt-dlp");
@@ -1826,6 +2131,38 @@ foreach ($d in $env:PATH.Split(';')) {
         );
         for temp in &lines[1..] {
             assert_eq!(Path::new(temp), dir, "{out}");
+        }
+    }
+
+    /// #1216: yt-dlp's and gallery-dl's commands are built to start in the helpers' folder, with
+    /// it as TEMP, TMP and TMPDIR, whatever folder MDM itself was started in
+    /// (`C:\Windows\System32` when Windows starts it with the session): yt-dlp made the file
+    /// it tries a format with there, and Windows refused it.
+    #[test]
+    fn the_helpers_commands_start_in_the_helpers_folder() {
+        let dir = crate::workdir::folders()
+            .dir
+            .clone()
+            .expect("a temporary folder that can be written");
+        let exe = Path::new("yt-dlp");
+        let tool = crate::Installed {
+            version: "1.32.0".into(),
+            exe: "gallery-dl".into(),
+        };
+        let built = [
+            ytdlp(exe, &[], &["-J".into()], "https://x.test/v").unwrap(),
+            ytdlp_info(exe, &[], &[], Path::new("/info.json")).unwrap(),
+            gallery_dl(&tool, &[], "https://x.test/g").unwrap(),
+        ];
+        for cmd in &built {
+            let program = cmd.get_program().to_string_lossy();
+            assert_eq!(cmd.get_current_dir(), Some(dir.as_path()), "{program}");
+            for var in crate::workdir::TEMP_VARS {
+                let value = cmd.get_envs().find(|(k, _)| *k == var).and_then(|(_, v)| v);
+                assert_eq!(value, Some(dir.as_os_str()), "{program} {var}");
+            }
+            // And nothing it inherits is taken away: the rest of MDM's environment goes too.
+            assert!(cmd.get_envs().all(|(_, v)| v.is_some()), "{program}");
         }
     }
 
