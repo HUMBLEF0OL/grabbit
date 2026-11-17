@@ -374,7 +374,7 @@ impl After {
     fn since(self) -> &'static str {
         match self {
             After::Wake => "since the computer woke",
-            After::Login => "since MDM started with the session",
+            After::Login => "since Grabbit started with the session",
         }
     }
 
@@ -382,7 +382,7 @@ impl After {
     fn mark(self) -> &'static str {
         match self {
             After::Wake => "the wake",
-            After::Login => "MDM's start",
+            After::Login => "Grabbit's start",
         }
     }
 
@@ -390,7 +390,7 @@ impl After {
     fn had_just(self) -> &'static str {
         match self {
             After::Wake => "the computer had just woken",
-            After::Login => "MDM had just started with the session",
+            After::Login => "Grabbit had just started with the session",
         }
     }
 }
@@ -680,7 +680,7 @@ mod watchdog_tests {
     fn the_log_says_whose_time_it_was() {
         assert_eq!(
             Computers::login().after.since(),
-            "since MDM started with the session"
+            "since Grabbit started with the session"
         );
         assert_eq!(Computers::wake(1).after.since(), "since the computer woke");
         for a in [After::Wake, After::Login] {
