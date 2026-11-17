@@ -749,7 +749,10 @@ impl Grabber {
             return;
         }
         // Once a frame, in one pass over the links (upstream issue 1063).
-        let View { rows, packages: shown } = self.view();
+        let View {
+            rows,
+            packages: shown,
+        } = self.view();
         // i18n: what a screen reader calls Link grabber's list
         self.rows.name = crate::i18n::t("Links");
         let mut toggle_link = None;

@@ -753,10 +753,7 @@ mod tests {
         assert_eq!(why_awake(&queues, false), Some(Awake::Queue(QUEUE)));
         assert_eq!(why_awake(&queues, true), Some(Awake::Queue(QUEUE)));
         let _ = crate::i18n::t("Grabbit is downloading");
-        assert_eq!(
-            Awake::Downloads.reason(),
-            "Grabbit is downloading"
-        );
+        assert_eq!(Awake::Downloads.reason(), "Grabbit is downloading");
     }
 
     /// The queue that woke the computer is done and its downloads go on: the hold is asked again
@@ -784,10 +781,7 @@ mod tests {
         let asked = asked.lock().unwrap().clone();
         assert_eq!(asked.len(), 3, "{asked:?}");
         assert!(asked[0].as_deref().unwrap().contains(QUEUE));
-        assert_eq!(
-            asked[1].as_deref(),
-            Some("Grabbit is downloading")
-        );
+        assert_eq!(asked[1].as_deref(), Some("Grabbit is downloading"));
         assert_eq!(asked[2], None, "let go");
         assert!(!w.awake);
     }
