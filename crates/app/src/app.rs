@@ -198,6 +198,27 @@ fn member_in(members: &std::collections::HashMap<u64, Member>, id: u64) -> Membe
     members.get(&id).copied().unwrap_or(Member::Complete)
 }
 
+/// What Stop All stops (#1164): every queue that runs (the main queue, synchronization queues,
+/// the user's: one left running would start its next download as soon as this one stopped),
+/// with its downloads; then, by hand, the other downloads that run (`live`) or would start
+/// again by themselves (`pending`), each once. A running queue's downloads aren't stopped by
+/// hand: starting the queue again, by hand or on its schedule, goes on with them.
+fn stop_all_plan(
+    queues: &[Queue],
+    live: impl IntoIterator<Item = u64>,
+    pending: impl IntoIterator<Item = u64>,
+) -> (Vec<usize>, Vec<u64>) {
+    let running: Vec<usize> = (0..queues.len()).filter(|q| queues[*q].running).collect();
+    let in_running = |id: &u64| running.iter().any(|q| queues[*q].items.contains(id));
+    let mut ids: Vec<u64> = Vec::new();
+    for id in live.into_iter().chain(pending) {
+        if !in_running(&id) && !ids.contains(&id) {
+            ids.push(id);
+        }
+    }
+    (running, ids)
+}
+
 /// A file move's answer, from its thread.
 type MoveDone = std::sync::mpsc::Receiver<Result<(), String>>;
 
@@ -664,8 +685,6 @@ pub struct App {
     moving: Vec<(u64, PathBuf, MoveDone)>,
     /// A finished queue asked to turn the computer off: the countdown, cancellable.
     turn_off: Option<dialogs::TurnOffCountdown>,
-    /// A finished queue asked to exit.
-    exit_requested: bool,
     /// The global speed cap shared by every download (Speed Limiter settings).
     global: std::sync::Arc<mdm_engine::limiter::Limiter>,
     /// Connection caps learned per host, shared by every download.
@@ -1175,9 +1194,22 @@ impl App {
         self
     }
 
-    /// Asked to quit (File → Exit, `/exit`, the Scheduler's "Exit when done").
+    /// Asked to quit (File → Exit, `/exit`, the Scheduler's "Exit when done"): [`App::quit`].
     pub fn wants_exit(&self) -> bool {
-        self.exiting || self.exit_requested
+        self.exiting
+    }
+
+    /// Every way MDM is asked to quit comes here: File → Exit, the tray's Exit, `/exit` (the
+    /// command line, a second launch), Update now, and a queue's or a download's "Exit when done".
+    /// The close that follows quits whatever Options' "Keep running when closing the window" says
+    /// (`tray::on_close`); only closing the window itself follows that setting. As the app goes
+    /// (`Drop`: `finish`) the downloads stop where they are and the list and the settings are
+    /// saved, and the crash monitor is told it's a clean exit (main.rs). A headless run stops at
+    /// its next pass (`wants_exit`). The session's end does the same at once (`end_session`).
+    fn quit(&mut self, ctx: &egui::Context) {
+        tracing::info!("quitting");
+        self.exiting = true;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
 
     pub fn new(
@@ -1389,7 +1421,6 @@ impl App {
             save_failed: None,
             moving: Vec::new(),
             turn_off: None,
-            exit_requested: false,
             global: std::sync::Arc::new(mdm_engine::limiter::Limiter::new(None)),
             host_limits: Default::default(),
             quota: Default::default(),
@@ -3299,18 +3330,55 @@ impl App {
 
     /// The user's Stop (or Pause): it stays stopped, even in a queue that is running (#341).
     fn stop_by_hand(&mut self, id: u64) {
-        self.stop(id);
+        self.halt(id);
         self.stopped_by_hand.insert(id);
     }
 
+    /// Stop, and not start again by itself for a network adapter, a speed limit or the
+    /// download limit (#1164): the user's Stop, Stop All and a queue's stop.
+    fn halt(&mut self, id: u64) {
+        self.stop(id);
+        self.adapter_paused.retain(|x| *x != id);
+        self.limit_restarts.retain(|x| *x != id);
+        if let Some(at) = self.quota.held.iter().position(|x| *x == id) {
+            self.quota.held.remove(at);
+            if let Some(item) = self.item(id)
+                && item.live.is_none()
+                && item.status == Status::Queued
+            {
+                item.status = Status::Stopped;
+            }
+            self.dirty = true;
+        }
+    }
+
+    /// Downloads waiting to start again by themselves: for the network adapter (#35), a new
+    /// speed limit (#708) or room under the download limit.
+    fn restarts_pending(&self) -> Vec<u64> {
+        let mut ids = self.adapter_paused.clone();
+        ids.extend(&self.limit_restarts);
+        ids.extend(&self.quota.held);
+        ids
+    }
+
+    /// Stop All (and Pause All) has something to stop: a download, a queue, or a download that
+    /// would start again by itself.
+    fn can_stop_all(&self) -> bool {
+        self.items.iter().any(|i| i.live.is_some())
+            || self.queues.iter().any(|q| q.running)
+            || !self.restarts_pending().is_empty()
+    }
+
+    /// Stop All: everything stops, the queues too (#1164), and nothing starts again by itself.
+    /// A running queue's downloads stop with it (not by hand), so starting it again, or its
+    /// schedule, goes on with them.
     fn stop_all(&mut self) {
-        let running: Vec<u64> = self
-            .items
-            .iter()
-            .filter(|i| i.live.is_some())
-            .map(|i| i.id)
-            .collect();
-        for id in running {
+        let live = self.items.iter().filter(|i| i.live.is_some()).map(|i| i.id);
+        let (queues, ids) = stop_all_plan(&self.queues, live, self.restarts_pending());
+        for q in queues {
+            self.stop_queue(q);
+        }
+        for id in ids {
             self.stop_by_hand(id);
         }
     }
@@ -3726,17 +3794,19 @@ impl App {
         // taskbar instead: still reachable, downloads still going. No answer from the shell is
         // not such a "no" (upstream issue 750, `tray::on_close`). Otherwise closing closes, as
         // any window's does: Options' "Keep running when closing the window" off, or no tray.
-        if !self.exiting && ctx.input(|i| i.viewport().close_requested()) {
+        // Asked to quit (`quit`: File → Exit, Exit when done…), the close quits whatever the option.
+        if ctx.input(|i| i.viewport().close_requested()) {
             use crate::tray::OnClose;
+            let quitting = self.exiting;
             let keep = self.settings.close_to_tray;
             let tray = self.tray.is_some();
             // The shell's answer, only when it matters.
-            let icon = if keep && tray {
+            let icon = if keep && tray && !quitting {
                 self.tray_icon_now()
             } else {
                 crate::tray::Icon::Gone
             };
-            match crate::tray::on_close(keep, tray, icon) {
+            match crate::tray::on_close(quitting, keep, tray, icon) {
                 OnClose::Hide => {
                     tracing::info!("close: hidden to the notification area (tray icon: {icon:?})");
                     ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -5521,7 +5591,7 @@ impl App {
     fn stop_queue(&mut self, q: usize) {
         self.queues[q].running = false;
         for id in self.queues[q].items.clone() {
-            self.stop(id);
+            self.halt(id);
         }
     }
 
@@ -5593,16 +5663,13 @@ impl App {
                 self.queue_done(q);
             }
         }
-        // The next wake follows the schedules (set again when they change), and a queue that
-        // wakes the computer keeps it awake while it runs (#142).
+        // The next wake follows the schedules (set again when they change). The computer is
+        // kept awake while a queue that woke it runs (#142), and while anything downloads (#939):
+        // its own idle sleep would stop them halfway.
         self.wake.sync(&self.queues);
-        let waking = self
-            .queues
-            .iter()
-            .find(|q| q.running && q.schedule.wake)
-            .map(|q| q.name.clone());
-        self.wake
-            .keep_awake(waking.is_some(), waking.as_deref().unwrap_or_default());
+        let downloading = self.items.iter().any(|i| i.status == Status::Downloading);
+        let why = crate::wake::why_awake(&self.queues, downloading);
+        self.wake.keep_awake(why);
     }
 
     /// Scheduler → Download limits: stop at the limit, go on when the window has room.
@@ -5684,7 +5751,9 @@ impl App {
         if let Some(mode) = w.turn_off {
             self.turn_off = Some(dialogs::TurnOffCountdown::new(mode, w.force));
         } else if w.exit {
-            self.exit_requested = true;
+            tracing::info!("when done: exit");
+            let ctx = self.ui_ctx.clone();
+            self.quit(&ctx);
         }
     }
 
@@ -5771,10 +5840,7 @@ impl App {
             .is_some_and(|i| i.moved_away);
         match cmd {
             Cmd::AddUrl => self.add_url = Some(AddUrl::from_clipboard(&self.settings.url_history)),
-            Cmd::Exit => {
-                self.exiting = true;
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-            }
+            Cmd::Exit => self.quit(ctx),
             Cmd::Stop => {
                 for id in many {
                     if self.item(id).is_some_and(|i| i.live.is_some()) {
@@ -6363,7 +6429,7 @@ impl App {
         let running = picked.iter().any(|i| i.live.is_some());
         let resumable = picked.iter().any(|i| i.can_start());
         let deletable = picked.iter().any(|i| i.live.is_none());
-        let any_running = self.items.iter().any(|i| i.live.is_some());
+        let can_stop_all = self.can_stop_all();
         match index {
             0 => vec![
                 I("&Add new download", Cmd::AddUrl, true, false),
@@ -6448,8 +6514,8 @@ impl App {
                 ),
             ],
             2 => vec![
-                I("&Pause All", Cmd::StopAll, any_running, false),
-                I("&Stop All", Cmd::StopAll, any_running, false),
+                I("&Pause All", Cmd::StopAll, can_stop_all, false),
+                I("&Stop All", Cmd::StopAll, can_stop_all, false),
                 Sep,
                 I(
                     "&Delete All Completed",
@@ -7724,7 +7790,7 @@ impl App {
         let running = picked.iter().any(|i| i.live.is_some());
         let resumable = picked.iter().any(|i| i.can_start());
         let deletable = picked.iter().any(|i| i.live.is_none());
-        let any_running = self.items.iter().any(|i| i.live.is_some());
+        let can_stop_all = self.can_stop_all();
         let any_complete = self.items.iter().any(|i| i.status == Status::Complete);
         let buttons = [
             (Icon::AddUrl, "Add URL", true, Cmd::AddUrl),
@@ -7733,7 +7799,7 @@ impl App {
             (Icon::Resume, "Resume", resumable, Cmd::Resume),
             // i18n: verb: stop the selected downloads
             (Icon::Stop, "Stop", running, Cmd::Stop),
-            (Icon::StopAll, "Stop All", any_running, Cmd::StopAll),
+            (Icon::StopAll, "Stop All", can_stop_all, Cmd::StopAll),
             // i18n: verb: delete the selected downloads
             (Icon::Delete, "Delete", deletable, Cmd::Remove),
             (
@@ -8734,12 +8800,14 @@ impl App {
                     context,
                     crate::i18n::mark("by Link grabber"),
                 );
-                if let Some(i) = self.items.iter_mut().find(|i| i.id == id) {
+                // The download just added is the list's last: not looked for among them all,
+                // for each link (upstream issue 1063: 37,000 links took seconds).
+                if let Some(i) = self.items.last_mut().filter(|i| i.id == id) {
                     i.package = Some(tag.clone());
-                }
-                // A name the server didn't give (none looked up) may still change.
-                if size.is_none() {
-                    self.name_guessed(id, true);
+                    // A name the server didn't give (none looked up) may still change.
+                    if size.is_none() {
+                        i.name_from_url = true;
+                    }
                 }
                 self.queues[0].items.push(id);
                 added.push(id);
@@ -9207,9 +9275,6 @@ impl App {
             && !matches!(n.show(ctx), Outcome::Open)
         {
             self.limit_notice = None;
-        }
-        if std::mem::take(&mut self.exit_requested) {
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
         if let Some(t) = &mut self.turn_off {
             match t.show(ctx) {
@@ -9944,24 +10009,133 @@ impl App {
 }
 
 impl Drop for App {
+    /// Exit, a closed window that quits, a headless run's end: [`App::finish`].
     fn drop(&mut self) {
+        self.finish(None);
+    }
+}
+
+/// How long the session's end may take ([`App::end_session`]): Windows lists a program that
+/// takes 5 s over it as one that keeps the computer from shutting down. Windows only so far
+/// (main.rs says what Linux and macOS do).
+#[cfg(windows)]
+const SESSION_END: Duration = Duration::from_millis(4000);
+
+/// What of [`SESSION_END`] is kept for writing the list, after the downloads' last saves.
+const SESSION_END_LIST: Duration = Duration::from_millis(1200);
+
+/// How long an Exit waits for the running downloads' last saves (its window is gone by then).
+const EXIT_STOP_WAIT: Duration = Duration::from_secs(10);
+
+impl App {
+    /// The session is ending (Windows: shut down, restart, sign out, or an installer closing
+    /// MDM through the Restart Manager; `win32::on_session_end`): what an Exit does at its end,
+    /// now, within [`SESSION_END`], on the window's thread between two frames. Nobody is there to
+    /// answer a question: nothing is asked. The process ends right after (main.rs).
+    #[cfg(windows)]
+    pub fn end_session(&mut self) {
+        tracing::info!("the session is ending: stopping the downloads and saving the list");
+        self.exiting = true;
+        self.finish(Some(Instant::now() + SESSION_END));
+    }
+
+    /// The tray icon goes, as at an Exit: when only MDM is closed (the Restart Manager) and the
+    /// session goes on, it would stay in the notification area until the pointer passed over it.
+    /// Last, once all is saved: the shell may be slow to answer (#747).
+    #[cfg(windows)]
+    pub fn take_down_tray(&mut self) {
+        self.tray = None;
+    }
+
+    /// Every end's last work, once (`Drop`, or [`App::end_session`] before the process ends):
+    /// the downloads that run stop and save where they are, so they resume there at the next
+    /// start; the feeds, the list and the settings are written. `deadline`: the session's end,
+    /// which can't wait for a disk that holds its writes; an Exit waits for the list however
+    /// long it takes.
+    fn finish(&mut self, deadline: Option<Instant>) {
+        let began = Instant::now();
+        // The longest first: the downloads save while the rest is done.
+        let stopping = self.stop_for_the_end();
         // An archive being extracted stops; its staging folder goes with it.
         self.extracts.stop();
         // No wake for a queue MDM won't be there to start.
         self.wake.clear();
         self.keep_unseen();
+        let saves_by = deadline.map_or(began + EXIT_STOP_WAIT, |d| {
+            d.checked_sub(SESSION_END_LIST).unwrap_or(d)
+        });
+        let unsaved = self.wait_stopped(&stopping, saves_by);
+        match (stopping.len(), unsaved) {
+            (0, _) => {}
+            (n, 0) => tracing::info!(
+                "{n} download(s) stopped, each saved where it was ({} ms)",
+                began.elapsed().as_millis()
+            ),
+            (n, u) => tracing::warn!(
+                "{n} download(s) stopped, {u} still saving after {} ms: those resume from \
+                 their last save",
+                began.elapsed().as_millis()
+            ),
+        }
         // The feeds as last handed to their saver.
-        self.rss_saver.flush();
-        // What the saver has in hand first, then the last state, written here and now.
-        self.saver.flush();
-        let _ = store::save(
+        if !self.rss_saver.flush_until(deadline) {
+            tracing::warn!("rss: the feeds weren't written in time");
+        }
+        // The last state, after what the saver has in hand.
+        if let Err(e) = self.saver.save(
             self.next_id,
             &self.items,
             &self.list.layout(),
             &self.settings,
             &self.queues,
-        );
+        ) {
+            tracing::warn!("the list wasn't saved: {e}");
+        } else if !self.saver.flush_until(deadline) {
+            tracing::warn!("the list wasn't written in time (the disk held it)");
+        } else if deadline.is_some() {
+            tracing::info!("the list is saved ({} ms)", began.elapsed().as_millis());
+        }
     }
+
+    /// The end ([`App::finish`]): the file downloads that run are stopped as Stop stops them,
+    /// which flushes what they received and saves their resume state; their ids. Torrents keep
+    /// their own resume data as they go, and a video's or a gallery's helpers end with MDM.
+    fn stop_for_the_end(&self) -> Vec<u64> {
+        self.items
+            .iter()
+            .filter_map(|i| match i.live.as_ref().map(|l| &l.dl) {
+                Some(model::Job::File(d)) => {
+                    d.cancel();
+                    Some(i.id)
+                }
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// Wait until the downloads `ids` have ended (their last state saved) or `until`; how many
+    /// still run then.
+    fn wait_stopped(&self, ids: &[u64], until: Instant) -> usize {
+        loop {
+            let running = self
+                .items
+                .iter()
+                .filter(|i| ids.contains(&i.id))
+                .filter_map(|i| i.live.as_ref())
+                .filter(|l| !ended(&l.dl.snapshot().state))
+                .count();
+            if running == 0 || Instant::now() >= until {
+                return running;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
+}
+
+/// A download's run is over, its last state saved: done, failed or stopped.
+fn ended(state: &mdm_engine::download::State) -> bool {
+    use mdm_engine::download::State;
+    matches!(state, State::Done | State::Failed | State::Cancelled)
 }
 
 /// The event log's line when a seeding limit stops a torrent's sharing.
@@ -11699,5 +11873,43 @@ mod video_leftover_tests {
                 "Clip.ts.mdm.pieces"
             ]
         );
+    }
+}
+
+#[cfg(test)]
+mod stop_all_tests {
+    use super::*;
+
+    fn queue(name: &str, sync: bool, items: &[u64], running: bool) -> Queue {
+        Queue {
+            items: items.to_vec(),
+            running,
+            ..Queue::new(name, sync)
+        }
+    }
+
+    /// #1164: Stop All turns off every running queue (the main one, a synchronization queue, the
+    /// user's), so none starts its next download; their downloads stop with them, not by hand
+    /// (the queue goes on with them when started again); the rest stop by hand, once each.
+    #[test]
+    fn stop_all_stops_every_running_queue_too() {
+        let queues = [
+            queue("Main download queue", false, &[1, 2, 3], true),
+            queue("Synchronization queue", true, &[4], true),
+            queue("Queue # 3", false, &[5, 6], false),
+            queue("Queue # 4", false, &[7], true),
+        ];
+        // 1 and 4 run in their queues, 5 was started by hand in a queue that is off, 8 is in no
+        // queue; 9 waits to start again by itself (a new speed limit), 8 too (listed twice).
+        let (stop, by_hand) = stop_all_plan(&queues, [1, 4, 5, 8], [9, 8, 2]);
+        assert_eq!(stop, [0, 1, 3]);
+        assert_eq!(by_hand, [5, 8, 9]);
+    }
+
+    #[test]
+    fn nothing_running_stops_nothing() {
+        let queues = [queue("Main download queue", false, &[1], false)];
+        let (stop, by_hand) = stop_all_plan(&queues, [], []);
+        assert!(stop.is_empty() && by_hand.is_empty());
     }
 }
