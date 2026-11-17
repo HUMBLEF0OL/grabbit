@@ -5161,7 +5161,9 @@ impl App {
             let name = mdm_engine::naming::file_name(None, &url);
             let category = Category::of(&name);
             let dir = self.settings.category_dir(category, &self.downloads);
-            let dest = mdm_engine::naming::destination(&dir, &name);
+            // Numbered on as it starts if the name is taken then (#743): no disk here
+            // (upstream issue 1232).
+            let dest = mdm_engine::naming::guess(&dir, &name);
             let id = self.push_item(
                 url,
                 dest,
@@ -5173,6 +5175,7 @@ impl App {
                 crate::i18n::mark("by batch download"),
             );
             self.name_guessed(id, true);
+            self.number_at_start(id);
             ids.push(id);
         }
         self.queue_later(ids, self.settings.queue_panel_batch);
@@ -5439,7 +5442,9 @@ impl App {
         let name = mdm_engine::naming::sanitize(&mdm_engine::naming::file_name(None, &url));
         let category = category.unwrap_or_else(|| Category::of(&name));
         let dir = self.settings.category_dir(category, &self.downloads);
-        let dest = mdm_engine::naming::destination(&dir, &name);
+        // Numbered on as it starts if the name is taken then (#743): no disk here (upstream
+        // issue 1232).
+        let dest = mdm_engine::naming::guess(&dir, &name);
         cmd.remote = false;
         let id = self.push_item(
             url,
@@ -5453,6 +5458,7 @@ impl App {
             crate::i18n::mark("from a paired device"),
         );
         self.name_guessed(id, true);
+        self.number_at_start(id);
         match queue {
             Some(q) => self.queues[q].items.push(id),
             None => self.start(id, false),
@@ -8953,7 +8959,9 @@ impl App {
                 } else {
                     pk.folder.clone()
                 };
-                let dest = mdm_engine::naming::destination(&dir, &name);
+                // Numbered on as it starts if the name is taken then (#743): no disk here, for
+                // each of thousands of links (upstream issue 1232).
+                let dest = mdm_engine::naming::guess(&dir, &name);
                 let context = ipc::Command {
                     referer: d.referer,
                     cookies: d.cookies,
@@ -8975,6 +8983,7 @@ impl App {
                 // for each link (upstream issue 1063: 37,000 links took seconds).
                 if let Some(i) = self.items.last_mut().filter(|i| i.id == id) {
                     i.package = Some(tag.clone());
+                    i.number_at_start = true;
                     // A name the server didn't give (none looked up) may still change.
                     if size.is_none() {
                         i.name_from_url = true;
@@ -10169,7 +10178,9 @@ impl App {
             let name = mdm_engine::naming::sanitize(&name);
             let category = Category::of(&name);
             let dir = self.settings.category_dir(category, &self.downloads);
-            let dest = mdm_engine::naming::destination(&dir, &name);
+            // Numbered on as it starts if the name is taken then (#743): no disk here (upstream
+            // issue 1232).
+            let dest = mdm_engine::naming::guess(&dir, &name);
             let size = context.size;
             let id = self.push_item(
                 url,
@@ -10182,6 +10193,7 @@ impl App {
                 crate::i18n::mark("from the browser"),
             );
             self.name_guessed(id, guessed);
+            self.number_at_start(id);
             self.queues[0].items.push(id);
         }
         // The channel's receiver goes with it: later commands are answered "gone".
@@ -10940,6 +10952,28 @@ mod window_thread_tests {
         );
         assert!(app.deleter.finish(Duration::from_secs(10)));
         assert!(!a.exists());
+    }
+
+    /// Upstream issue 1232: Add batch download's links take their names as given, without
+    /// looking at the folder on the window's thread; each is numbered on as it starts
+    /// (`Item::number_at_start`) if the name is taken then.
+    #[test]
+    fn batch_links_leave_their_names_to_their_starts() {
+        let downloads = tempfile::tempdir().unwrap();
+        let mut app = app(Vec::new(), downloads.path());
+        let dir = app
+            .settings
+            .category_dir(Category::of("a.zip"), &app.downloads);
+        assert!(dir.starts_with(downloads.path()), "{}", dir.display());
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("a.zip"), b"someone's").unwrap();
+        app.add_batch(crate::batch::Added {
+            urls: vec![address("a.zip")],
+            login: None,
+        });
+        let item = app.items.last().unwrap();
+        assert_eq!(item.dest, dir.join("a.zip"));
+        assert!(item.number_at_start);
     }
 
     /// Overwriting a duplicate deletes its files beside the window: the call returns at once,
