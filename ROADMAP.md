@@ -509,7 +509,8 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   nothing to take), picks the ones that apply onto a sync branch and records every decision;
   each run reaches `dev` by a pull request, and a weekly report (from the first release on)
   lists what waits. Looked at up to upstream `9d1fc9248239` (2026-11-16), before plan 10c:
-  37 fixes taken and 75 ported by hand (the video engine's among them), 79 skipped, 4 already
+  37 fixes taken and 75 ported by hand (the video engine's among them, and this run's freeze,
+  crash and quit fixes, which reach `dev` in a pull request of their own), 79 skipped, 4 already
   fixed here, 9 deferred: a connection that copies a browser's TLS (and the fixes built on it),
   the video button's quality menu, the tray menu's look, release tooling, an egui pin and a
   clipboard fix, each waiting for a decision. 41 of upstream's commits from 2026-11-14 to

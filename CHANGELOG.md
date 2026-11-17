@@ -51,16 +51,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ### Fixed
 
-- Shutting down, restarting or signing out of Windows while Grabbit runs saves it as **File → Exit** does: the running downloads stop where they are and are saved, with the list, before Windows is answered, so they resume where they were instead of from their last save, and no "closed unexpectedly" report is left. An installer closing Grabbit through Windows' Restart Manager closes it the same way. **File → Exit** too now stops the running downloads where they are before it quits (upstream issue 1156).
-- The window no longer waits up to five seconds for its crash monitor at start (a cold disk at sign-in, a socket the system refuses for a while), and a monitor slower than half a second to start is still connected to, instead of the session going without crash reports (upstream issues 476 and 1238).
-- No **The window stopped responding** report in the first three minutes after Grabbit starts with Windows: a stall then is written to the log and reported only if it lasts past them (upstream issue 1126).
-- A crash at the first secure connection (usually the update check at start) on some PCs and virtual machines, where the TLS library's CPU-timing random source fails its checks. A check for updates that goes wrong in any way now says why, and a release whose version can't be read is reported as such (upstream issue 1123).
-- **Link grabber** no longer freezes the window with thousands of links, such as a big page's **Download all links**: its list, its packages and **Add to queue** now each go over the links once (upstream issue 1063).
-- The **Add Grabbit to your browser** window no longer freezes Grabbit while a browser's folder is slow to answer: it reads the browsers' state beside the window (upstream issue 1218).
 - Looking up a video no longer fails with "Permission denied" in `C:\Windows\System32` when Grabbit started with Windows: yt-dlp and gallery-dl run in the helpers' own folder. A downloaded file opened from Grabbit starts its program in the file's folder, as Explorer does (upstream issue 1216).
-- **Exit when done** quits Grabbit, even with **Keep running when closing the window** on, instead of hiding it in the notification area (upstream issue 1145).
-- **Stop All** (and **Pause All**) stops the running queues too, so none starts its next download, and downloads waiting to start again by themselves stay stopped (upstream issue 1164).
-- The computer stays awake while anything downloads, not only during a queue that woke it; the screen still turns off as Windows' settings say (upstream issue 939).
 - The progress window's connections table shows the numbers of connections 10 and up instead of **...**, and scrolls with the wheel and a scroll bar (upstream issue 1101).
 - **Create new queue** opened from the Scheduler shows its name box in front of the Scheduler, and proposes a name no queue has (upstream issue 1237).
 - A failed download says why in Grabbit's log too, with the site's name and without the addresses' queries, which often carry a sign-in token (upstream issue 1262).
