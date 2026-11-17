@@ -46,7 +46,9 @@ pub enum OnClose {
     Quit,
 }
 
-/// What closing the main window does: `keep_running` is Options' "Keep running when closing the
+/// What closing the main window does: `quitting` whether MDM was asked to quit (File → Exit, the
+/// tray's Exit, `/exit`, Update now, a queue's or a download's "Exit when done": `App::quit`),
+/// which quits whatever the rest says; `keep_running` is Options' "Keep running when closing the
 /// window", `tray` whether a tray object exists, `icon` what the shell last said of its icon
 /// ([`Tray::icon`]); else the window waits in the taskbar.
 ///
@@ -55,8 +57,8 @@ pub enum OnClose {
 /// (upstream issues 750, 718 and 754: a shell that couldn't confirm the icon left the window in
 /// the taskbar with the icon right there); such a window still comes back from the icon once the
 /// shell answers, and a second start of MDM always brings it back.
-pub fn on_close(keep_running: bool, tray: bool, icon: Icon) -> OnClose {
-    if !(keep_running && tray) {
+pub fn on_close(quitting: bool, keep_running: bool, tray: bool, icon: Icon) -> OnClose {
+    if quitting || !(keep_running && tray) {
         OnClose::Quit
     } else if icon != Icon::Gone {
         OnClose::Hide
@@ -390,9 +392,9 @@ mod tests {
     #[test]
     fn closing_hides_unless_the_shell_says_the_icon_is_gone() {
         for icon in [Icon::There, Icon::Unknown] {
-            assert_eq!(on_close(true, true, icon), OnClose::Hide, "{icon:?}");
+            assert_eq!(on_close(false, true, true, icon), OnClose::Hide, "{icon:?}");
         }
-        assert_eq!(on_close(true, true, Icon::Gone), OnClose::Minimize);
+        assert_eq!(on_close(false, true, true, Icon::Gone), OnClose::Minimize);
     }
 
     /// The rest of the close decision (#457).
@@ -400,9 +402,29 @@ mod tests {
     fn closing_quits_with_the_option_off_or_no_tray() {
         // The option off, or no tray object at all: closing quits, whatever the shell says.
         for icon in [Icon::There, Icon::Unknown, Icon::Gone] {
-            assert_eq!(on_close(false, true, icon), OnClose::Quit);
-            assert_eq!(on_close(true, false, icon), OnClose::Quit);
+            assert_eq!(on_close(false, false, true, icon), OnClose::Quit);
+            assert_eq!(on_close(false, true, false, icon), OnClose::Quit);
         }
+    }
+
+    /// Asked to quit (File → Exit, the tray's Exit, `/exit`, Update now, "Exit when done"), MDM
+    /// quits whatever "Keep running when closing the window" and the shell say; only a plain close
+    /// of the window follows them (a finished queue set to exit used to hide MDM in the tray).
+    #[test]
+    fn a_quit_request_quits_whatever_the_close_setting_says() {
+        for keep in [true, false] {
+            for tray in [true, false] {
+                for icon in [Icon::There, Icon::Unknown, Icon::Gone] {
+                    assert_eq!(
+                        on_close(true, keep, tray, icon),
+                        OnClose::Quit,
+                        "{keep} {tray} {icon:?}"
+                    );
+                }
+            }
+        }
+        // The same window closed by hand, with the defaults: hidden in the tray.
+        assert_eq!(on_close(false, true, true, Icon::There), OnClose::Hide);
     }
 
     #[test]
