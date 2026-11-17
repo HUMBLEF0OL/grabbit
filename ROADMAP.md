@@ -534,7 +534,9 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   address when one expires; yt-dlp joins them as before. Streams in pieces (HLS, DASH) come down
   the same way, several pieces at once (AES-128 too), and so do image galleries' files; after
   the last byte, checking and joining say how far they are, and a failed join keeps its parts
-  for Resume.
+  for Resume. Hardened after its review: a gallery's files in subfolders are saved, an
+  encrypted piece whose key can't be had leaves nothing behind, and deleting a video takes its
+  HLS audio stream's files too.
 
 ## Being worked on
 

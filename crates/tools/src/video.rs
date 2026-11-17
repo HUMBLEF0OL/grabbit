@@ -810,10 +810,18 @@ fn yt_dlp_leftover(rest: &str, outputs: bool) -> bool {
                 .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
     };
     // A format id as yt-dlp names a stream: `137`, `hls-720p`, `dash-1`, `http-480`.
+    // An HLS audio rendition: yt-dlp's `<GROUP-ID>-<NAME>` (`aud-English`, `audio-English`,
+    // `audio_aac-English`), named without a digit, as the docs' `Talk.faud-English.mp4` is.
+    let audio = |id: &str| {
+        ["aud-", "audio-", "audio_"]
+            .iter()
+            .any(|p| id.strip_prefix(p).is_some_and(|r| !r.is_empty()))
+    };
     let format = |s: &str| {
         s.strip_prefix('f').is_some_and(|id| {
             word(id)
                 && (id.starts_with(|c: char| c.is_ascii_digit())
+                    || audio(id)
                     || ["hls-", "dash-", "http-"].iter().any(|p| {
                         id.strip_prefix(p)
                             .is_some_and(|r| r.chars().any(|c| c.is_ascii_digit()))
@@ -1707,6 +1715,11 @@ mod tests {
             // A choice of one stream, saved straight as the video's own name.
             "Clip.mp4.mdm.part",
             "Clip.webm.mdm.json",
+            // An HLS audio rendition's stream, named `<group>-<name>` without a digit.
+            "Clip.faud-English.mp4",
+            "Clip.faud-English.mp4.part",
+            "Clip.faudio-English.m4a.mdm.part",
+            "Clip.faudio_aac-English.mp4.ytdl",
         ];
         let finished = ["Clip.mp4", "Clip.en.srt"];
         let others = [
@@ -1714,6 +1727,10 @@ mod tests {
             "Clip.zip",
             "Clip.notes.txt",
             "Clip.final cut.mp4",
+            // Named like a format but not one: no digit, no rendition's prefix.
+            "Clip.final.mp4",
+            "Clip.faud-.mp4",
+            "Clip.faudit.mp4",
             "Clip.f137.mp4.mdm.zip",
             "Other.mp4.part",
         ];

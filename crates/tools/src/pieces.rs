@@ -854,6 +854,13 @@ async fn fetch_piece(run: &Run, c: usize, i: usize, piece: &Piece) -> Result<(),
         s.push(".mdm.part");
         PathBuf::from(s)
     };
+    // A gallery's file may be listed in a subfolder of its own (`<folder>/sub/a.jpg`): made
+    // first, as gallery-dl makes it.
+    if let Some(parent) = part.parent() {
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| PieceError::Dead(format!("{} can't be saved: {e}", run.one())))?;
+    }
     // Each chunk goes to the part file as it comes: what is in memory is the chunk under way,
     // whatever the piece's size and however many come at once.
     let mut out = tokio::fs::File::create(&part)
@@ -944,8 +951,15 @@ async fn fetch_piece(run: &Run, c: usize, i: usize, piece: &Piece) -> Result<(),
     }
     set_conn(run, c, |v| v.speed = 0);
     // AES-128: the whole piece decrypted once it is in (a piece at a time on this connection).
+    // A key that can't be had takes back what the piece counted, as every failure above.
     let key = match &piece.key {
-        Some(k) => Some((key_of(run, &k.uri).await?, k.iv)),
+        Some(k) => match key_of(run, &k.uri).await {
+            Ok(key) => Some((key, k.iv)),
+            Err(e) => {
+                undo(kept);
+                return Err(e);
+            }
+        },
         None => None,
     };
     let (from, to) = (part.clone(), file.clone());
@@ -1271,5 +1285,99 @@ mod tests {
                 .collect();
             assert!(left.is_empty(), "{faults}: {left:?}");
         }
+    }
+
+    /// A gallery's files in subfolders of their own (gallery-dl may list `<folder>/sub/a.jpg`):
+    /// each folder is made, not only the first file's, and every file comes whole.
+    #[test]
+    fn files_in_subfolders_get_their_folders() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let lab = rt
+            .block_on(mdm_labserver::LabServer::start(Default::default()))
+            .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let paths = [
+            dir.path().join("a.jpg"),
+            dir.path().join("set 1").join("b.jpg"),
+            dir.path().join("set 2").join("deep").join("c.jpg"),
+        ];
+        let pieces: Vec<Piece> = (0..paths.len())
+            .map(|i| Piece {
+                url: Url::parse(&lab.url(&format!("/gen/16K/s{i}.jpg?seed={}", 60 + i))).unwrap(),
+                range: None,
+                key: None,
+            })
+            .collect();
+        let ended = rt.block_on(download(
+            pieces,
+            Target::Files(paths.to_vec()),
+            HeaderMap::new(),
+            mdm_engine::Options::default(),
+            Arc::new(Limiter::new(None)),
+            CancellationToken::new(),
+            Arc::new(Shared::default()),
+            Arc::new(|| Err("listed once".into())),
+        ));
+        assert!(matches!(ended, Ended::Done(_)), "{ended:?}");
+        for (i, p) in paths.iter().enumerate() {
+            let mut want = vec![0; 16 * 1024];
+            mdm_labserver::content::fill(60 + i as u64, 0, &mut want);
+            assert!(std::fs::read(p).unwrap() == want, "{}", p.display());
+        }
+    }
+
+    /// An AES-128 piece whose key can't be had: the bytes it counted are taken back and its part
+    /// file goes, as with any other failure; nothing is left looking downloaded.
+    #[test]
+    fn a_key_that_cant_be_had_takes_its_piece_back() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let lab = rt
+            .block_on(mdm_labserver::LabServer::start(Default::default()))
+            .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let out = dir.path().join("stream.ts");
+        let piece = Piece {
+            url: Url::parse(&lab.url("/gen/64K/p.ts?seed=3")).unwrap(),
+            range: None,
+            key: Some(Key {
+                uri: Url::parse(&lab.url("/no-such-key.bin")).unwrap(),
+                iv: [0; 16],
+            }),
+        };
+        let shared = Arc::new(Shared::default());
+        let ended = rt.block_on(download(
+            vec![piece],
+            Target::Join(out.clone()),
+            HeaderMap::new(),
+            mdm_engine::Options {
+                retry_delay: Duration::from_millis(20),
+                ..Default::default()
+            },
+            Arc::new(Limiter::new(None)),
+            CancellationToken::new(),
+            shared.clone(),
+            Arc::new(|| Err("listed once".into())),
+        ));
+        assert!(matches!(ended, Ended::Failed(_)), "{ended:?}");
+        assert_eq!(shared.downloaded(), 0, "nothing counted as downloaded");
+        let parts: Vec<_> = walk(dir.path())
+            .into_iter()
+            .filter(|p| p.to_string_lossy().ends_with(".mdm.part"))
+            .collect();
+        assert!(parts.is_empty(), "{parts:?}");
+    }
+
+    /// Every file under `dir`.
+    fn walk(dir: &Path) -> Vec<PathBuf> {
+        let mut out = Vec::new();
+        for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                out.extend(walk(&p));
+            } else {
+                out.push(p);
+            }
+        }
+        out
     }
 }
