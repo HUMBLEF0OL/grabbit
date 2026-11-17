@@ -1036,6 +1036,57 @@ fn remove_files_of(dest: &std::path::Path, complete: bool) {
     }
 }
 
+/// What yt-dlp and the engine left beside video download `id`'s file
+/// (`mdm_tools::video::own_files`, without the finished file): the streams of an unfinished run
+/// or a failed merge, their part files, the merge's file. Never a file another download in that
+/// folder may own: one named after its name or stem and a dot, letter case aside. Nothing for a
+/// download that isn't a video. Ported from upstream `6196f9ad`.
+fn video_leftovers(items: &[Item], id: u64) -> Vec<PathBuf> {
+    let low = |p: &std::path::Path| p.to_string_lossy().to_lowercase();
+    let Some(item) = items.iter().find(|i| i.id == id && i.video.is_some()) else {
+        return Vec::new();
+    };
+    let (Some(dir), Some(stem)) = (item.dest.parent(), item.dest.file_stem()) else {
+        return Vec::new();
+    };
+    let folder = low(dir);
+    let others: Vec<&Item> = items.iter().filter(|i| i.id != id).collect();
+    let named: Vec<String> = others
+        .iter()
+        .filter(|o| o.dest.parent().is_some_and(|p| low(p) == folder))
+        .flat_map(|o| [o.dest.file_name(), o.dest.file_stem()])
+        .flatten()
+        .map(|n| format!("{}.", n.to_string_lossy().to_lowercase()))
+        .collect();
+    // The parts its failed merge kept, by name (yt-dlp names some, `Talk.faud-English.mp4`, as
+    // no other leftover is named), while still beside its file.
+    let kept = item.video.iter().flat_map(|v| &v.parts).filter(|p| {
+        p.parent().is_some_and(|p| low(p) == folder)
+            && p.file_name().is_some_and(|n| {
+                n.to_string_lossy()
+                    .to_lowercase()
+                    .starts_with(&format!("{}.", stem.to_string_lossy().to_lowercase()))
+            })
+    });
+    let mut found = mdm_tools::video::own_files(dir, &stem.to_string_lossy(), false);
+    for p in kept {
+        if p.is_file() && !found.iter().any(|f| low(f) == low(p)) {
+            found.push(p.clone());
+        }
+    }
+    found
+        .into_iter()
+        .filter(|f| {
+            let name = f
+                .file_name()
+                .map(|n| n.to_string_lossy().to_lowercase())
+                .unwrap_or_default();
+            !named.iter().any(|n| name.starts_with(n))
+                && !others.iter().any(|o| low(&o.dest) == low(f))
+        })
+        .collect()
+}
+
 /// The icon for a file name's extension (empty: none).
 fn file_icon(name: &str) -> IconKey {
     match name.rsplit_once('.') {
@@ -1683,7 +1734,8 @@ impl App {
                 it.size.map_or(String::new(), model::size_list),
                 status,
                 it.time_left(),
-                if it.live.is_some() {
+                // Every byte in (upstream issue 736): no rate, as once it is complete.
+                if it.live.is_some() && !it.past_last_byte() {
                     model::rate(it.rate())
                 } else {
                     String::new()
@@ -3311,6 +3363,16 @@ impl App {
                 }
                 let _ = std::fs::remove_file(mdm_engine::naming::part_path(&i.dest));
                 let _ = std::fs::remove_file(state_path(&i.dest));
+                // A video's streams and their parts, kept for Resume (an unfinished run, a
+                // failed merge, the engine's pieces): they go with it (upstream 6196f9ad).
+                for f in video_leftovers(&self.items, id) {
+                    // The engine's pieces wait in a folder of their own.
+                    let _ = if f.is_dir() {
+                        std::fs::remove_dir_all(f)
+                    } else {
+                        std::fs::remove_file(f)
+                    };
+                }
             }
             self.items.retain(|i| i.id != id);
             for q in &mut self.queues {
@@ -3976,6 +4038,7 @@ impl App {
             item.video = Some(model::VideoSpec {
                 selector: add.selector,
                 subs: add.subs,
+                parts: Vec::new(),
             });
         }
         // The Subtitles choice is offered again for the next video (#68).
@@ -4026,6 +4089,7 @@ impl App {
                 item.video = Some(model::VideoSpec {
                     selector: add.selector.clone(),
                     subs: Default::default(),
+                    parts: Vec::new(),
                 });
             }
             ids.push(id);
@@ -4062,7 +4126,8 @@ impl App {
         rate
     }
 
-    /// Start a video item: yt-dlp (installed and verified) downloads it.
+    /// Start a video item: yt-dlp (installed and verified) finds it, the engine downloads its
+    /// streams (upstream issue 769).
     fn start_video(&mut self, id: u64, show: bool) {
         self.claim_place(id);
         let tools = mdm_tools::tools_dir();
@@ -4075,6 +4140,20 @@ impl App {
             .iter()
             .find(|i| i.id == id)
             .map_or(1, |i| self.settings.connections_for(&i.url));
+        // The engine downloads the streams with what a file from the page gets (upstream issue
+        // 769): Options' connections, proxy, network adapter and DNS, the limit for all
+        // downloads (shared with every download, not a helper's share), the hosts' learned
+        // limits; the video's own speed limit, else the Speed Limiter's for one file. `rate` is
+        // yt-dlp's when it downloads the video itself.
+        let one_file = self.helper_limits(id).0;
+        let engine = self.items.iter().find(|i| i.id == id).map(|i| {
+            let mut opts = self.request_parts(&i.url, None, &i.context, true).opts;
+            opts.speed_limit = one_file;
+            mdm_tools::streams::Engine {
+                handle: self.rt.clone(),
+                opts,
+            }
+        });
         let Some(item) = self.item(id) else { return };
         let Some(spec) = item.video.clone() else {
             return;
@@ -4109,6 +4188,7 @@ impl App {
             item.size,
             &crate::videodlg::from_browser(&item.context),
             &spec.subs,
+            engine,
         );
         match started {
             Ok(job) => {
@@ -4167,6 +4247,18 @@ impl App {
             .as_deref()
             .and_then(mdm_tools::gallery::installed);
         let rate = self.helper_starts(id);
+        // The engine downloads the files gallery-dl lists (#769), as a file from the page would
+        // be (Options' connections, proxy, network adapter, DNS, the limit for all downloads),
+        // under the gallery's own limit, else the Speed Limiter's for one file.
+        let one_file = self.helper_limits(id).0;
+        let engine = self.items.iter().find(|i| i.id == id).map(|i| {
+            let mut opts = self.request_parts(&i.url, None, &i.context, true).opts;
+            opts.speed_limit = one_file;
+            mdm_tools::streams::Engine {
+                handle: self.rt.clone(),
+                opts,
+            }
+        });
         let Some(item) = self.item(id) else { return };
         let Some(spec) = item.gallery.clone() else {
             return;
@@ -4193,6 +4285,7 @@ impl App {
             &item.dest,
             &ask,
             &crate::videodlg::from_browser(&item.context),
+            engine,
         );
         match started {
             Ok(job) => {
@@ -10020,6 +10113,7 @@ mod same_name_tests {
         video.video = Some(crate::model::VideoSpec {
             selector: "b".into(),
             subs: Default::default(),
+            parts: Vec::new(),
         });
         let items = [row(1, &d.join("Master.webm"), Status::Stopped, 9), video];
         assert_eq!(
@@ -11557,5 +11651,53 @@ mod access_key_tests {
         found.sort();
         found.dedup();
         assert!(found.is_empty(), "{}", found.join(", "));
+    }
+}
+
+#[cfg(test)]
+mod video_leftover_tests {
+    use super::{Item, video_leftovers};
+    use crate::model::{Category, VideoSpec};
+
+    /// Deleting a video of one stream (saved straight as `Clip.mp4`) takes what yt-dlp and the
+    /// engine left for it: its `.mdm` files and its pieces' folder; never a file another row in
+    /// that folder is named after.
+    #[test]
+    fn a_single_stream_videos_leftovers_go_and_no_others() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        let url: url::Url = "https://videos.test/watch?v=1".parse().unwrap();
+        let mut video = Item::new(1, url.clone(), d.join("Clip.mp4"), Category::Video);
+        video.video = Some(VideoSpec {
+            selector: "18".into(),
+            subs: Default::default(),
+            parts: Vec::new(),
+        });
+        // Another row: a plain download named alike, with its own part file.
+        let other = Item::new(2, url, d.join("Clip.v2.zip"), Category::General);
+        for f in [
+            "Clip.mp4.mdm.part",
+            "Clip.mp4.mdm.json",
+            "Clip.mp4.part",
+            "Clip.v2.zip.mdm.part",
+            "Clip.notes.txt",
+        ] {
+            std::fs::write(d.join(f), b"x").unwrap();
+        }
+        std::fs::create_dir(d.join("Clip.ts.mdm.pieces")).unwrap();
+        let mut names: Vec<String> = video_leftovers(&[video, other], 1)
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            [
+                "Clip.mp4.mdm.json",
+                "Clip.mp4.mdm.part",
+                "Clip.mp4.part",
+                "Clip.ts.mdm.pieces"
+            ]
+        );
     }
 }

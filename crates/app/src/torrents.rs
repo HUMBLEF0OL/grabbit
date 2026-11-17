@@ -882,6 +882,7 @@ impl Run {
             events: Vec::new(),
             // A torrent has peers, not one server (#140).
             server: None,
+            finishing: None,
         };
         if *self.stopped.lock().unwrap() {
             s.state = State::Cancelled;

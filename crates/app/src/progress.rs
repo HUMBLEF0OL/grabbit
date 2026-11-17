@@ -84,15 +84,44 @@ impl Progress {
     /// Open on a tab by its English name in lower case: a top tab ("status", "limit", "done") or
     /// a torrent's details tab ("peers"; /show progress:peers, for the docs' screenshots and the
     /// fit audit); any other name leaves it as it is. A top tab hidden with "Hide tab" comes back.
-    /// Two states for the screenshots, each a look only (plan 09a): "error" shows Download
+    /// States for the screenshots, each a look only (plan 09a): "error" shows Download
     /// status as for a failed download (a sample reason; the download itself is left as it
-    /// is), "menu" opens the tab row's right-click menu.
+    /// is), "menu" opens the tab row's right-click menu; for a video (upstream issues 769, 736)
+    /// "merging" shows its picture and sound being joined (45 %), "helper" the line saying why
+    /// yt-dlp downloads it itself (an RTMP stream), "mergefail" a failed join's reason.
     pub fn show_tab(&mut self, name: &str) {
+        // One sample state at a time: each one asked for replaces the one before.
+        if matches!(name, "error" | "mergefail" | "merging" | "helper") {
+            self.sample_error = None;
+            self.sample_merging = None;
+            self.sample_helper = None;
+        }
         match name {
             "error" => {
                 self.sample_error = Some(crate::errors::describe(&mdm_engine::Error::Status(
                     reqwest::StatusCode::NOT_FOUND,
                 )));
+                self.tab = Tab::Status;
+                return;
+            }
+            "mergefail" => {
+                self.sample_error = Some(crate::model::merge_failure(
+                    "Postprocessing: Conversion failed!",
+                    &[
+                        std::path::PathBuf::from("open-movie-trailer.f137.mp4"),
+                        std::path::PathBuf::from("open-movie-trailer.f140.m4a"),
+                    ],
+                ));
+                self.tab = Tab::Status;
+                return;
+            }
+            "merging" => {
+                self.sample_merging = Some(0.45);
+                self.tab = Tab::Status;
+                return;
+            }
+            "helper" => {
+                self.sample_helper = Some(mdm_tools::streams::Helper::Protocol("rtmp".into()));
                 self.tab = Tab::Status;
                 return;
             }
@@ -111,6 +140,8 @@ impl Progress {
         if let Some(t) = top {
             // A tab asked for by name shows the download as it is again.
             self.sample_error = None;
+            self.sample_merging = None;
+            self.sample_helper = None;
             self.hidden_tabs.retain(|h| *h != t);
             self.tab = t;
             return;
@@ -182,6 +213,12 @@ pub struct Progress {
     /// `/show progress:error`: Download status painted as failed with this reason, the
     /// download left as it is (a screenshot's state).
     sample_error: Option<String>,
+    /// `/show progress:merging`: Download status and the bar as while a video's streams are
+    /// joined, this far (a screenshot's state).
+    sample_merging: Option<f64>,
+    /// `/show progress:helper`: the Server row as for a video yt-dlp downloads itself, for this
+    /// reason (a screenshot's state).
+    sample_helper: Option<mdm_tools::streams::Helper>,
     /// `/show progress:menu`: the tab row's menu opens at the next frame.
     menu_asked: bool,
 }
@@ -240,6 +277,8 @@ impl Progress {
             turn_off: 0,
             force: false,
             sample_error: None,
+            sample_merging: None,
+            sample_helper: None,
             menu_asked: false,
         }
     }
@@ -411,7 +450,18 @@ impl Progress {
         };
         let hide_tab = match self.tab {
             Tab::Status => {
-                status_page(ui, o, item, snap, frac, self.sample_error.as_deref());
+                status_page(
+                    ui,
+                    o,
+                    item,
+                    snap,
+                    frac,
+                    Samples {
+                        failed_with: self.sample_error.as_deref(),
+                        merging: self.sample_merging,
+                        helper: self.sample_helper.as_ref(),
+                    },
+                );
                 false
             }
             Tab::Limiter => self.limiter_page(ui, o, item),
@@ -426,12 +476,14 @@ impl Progress {
             ui.ctx().request_repaint();
         }
 
-        // The progress bar: IDM's green on the shared, themed track.
-        winui::meter(
-            &p,
-            r(o, 17.0, 180.0, 513.0, 16.0),
-            frac.unwrap_or(0.0) as f32,
-        );
+        // The progress bar on the shared, themed track. After the last byte, while the file is
+        // checked or a video joined (upstream issue 736), it starts again in the accent colour
+        // and shows how far that is.
+        let bar = r(o, 17.0, 180.0, 513.0, 16.0);
+        match self.sample_merging.or(finishing_fraction(snap)) {
+            Some(f) => winui::meter_in(&p, bar, f as f32, crate::theme::colors().accent),
+            None => winui::meter(&p, bar, frac.unwrap_or(0.0) as f32),
+        }
 
         let mut action = Action::None;
         let details_label = if self.details {
@@ -706,7 +758,9 @@ impl Progress {
             crate::i18n::t("Transfer rate"),
             winui::TEXT(),
         );
-        let rate = if item.status == Status::Downloading {
+        // Every byte in (upstream issue 736): nothing comes in while the file is checked or
+        // joined.
+        let rate = if item.status == Status::Downloading && !item.past_last_byte() {
             model::rate(item.rate())
         } else {
             String::new()
@@ -1046,17 +1100,28 @@ fn status_icon(status: Status) -> &'static str {
     }
 }
 
+/// A screenshot's states for Download status (`/show progress:<state>`, looks only): failed for
+/// this reason, a video's streams joined this far, a video yt-dlp downloads itself for this
+/// reason.
+#[derive(Clone, Copy, Default)]
+struct Samples<'a> {
+    failed_with: Option<&'a str>,
+    merging: Option<f64>,
+    helper: Option<&'a mdm_tools::streams::Helper>,
+}
+
 // The rows sit 7 px inside the page's frame at the top and at the bottom (the Server row's
 // descent included), with a slightly wider break after Status, as before.
-/// `failed_with`: paint it as failed for this reason (a screenshot's state), whatever its status.
+/// `samples`: a screenshot's state painted instead of the download's own.
 fn status_page(
     ui: &Ui,
     o: Pos2,
     item: &Item,
     snap: Option<&Snapshot>,
     frac: Option<f64>,
-    failed_with: Option<&str>,
+    samples: Samples,
 ) {
+    let failed_with = samples.failed_with;
     let p = &ui.painter().clone();
     let state = if failed_with.is_some() {
         Status::Error
@@ -1073,6 +1138,18 @@ fn status_page(
         _ if let Some(checking) = item.torrent_checking().filter(|_| failed_with.is_none()) => {
             checking
         }
+        // After the last byte: the file checked, a video's streams joined (upstream issue 736),
+        // as the list says, not "Connecting...".
+        _ if let Some(f) = samples.merging.filter(|_| failed_with.is_none()) => {
+            crate::i18n::fmt(
+                // i18n: a video's status while its picture and sound are joined into one file (ffmpeg); {percent} how far, e.g. "45%"
+                crate::i18n::t("Merging... ({percent})"),
+                &[("percent", &crate::i18n::percent(f, 0))],
+            )
+        }
+        _ if let Some(finishing) = item.finishing(false).filter(|_| failed_with.is_none()) => {
+            finishing
+        }
         // A torrent its debrid service is downloading (#44).
         Status::Downloading if item.at_service().is_some() => item.at_service().unwrap_or_default(),
         Status::Downloading => {
@@ -1083,7 +1160,21 @@ fn status_page(
                     .any(|c| matches!(c.status, ConnStatus::Receiving))
             }) || ((item.video.is_some() || item.torrent.is_some())
                 && item.rate() > 0.0);
-            if receiving {
+            // Every byte in and none on its way (upstream issue 736): the last of it written
+            // out, the file named; nothing is connecting.
+            let completing = item.torrent.is_none()
+                && snap.is_some_and(|s| {
+                    s.state == mdm_engine::download::State::Completing
+                        || (s.size.is_some_and(|t| t > 0 && s.downloaded >= t)
+                            && !s
+                                .connections
+                                .iter()
+                                .any(|c| matches!(c.status, ConnStatus::Connecting)))
+                });
+            if completing {
+                // i18n: a download's status: every byte is in, the file is being written out and given its name
+                crate::i18n::t("Finishing...")
+            } else if receiving {
                 crate::i18n::t("Receiving data...")
             } else {
                 crate::i18n::t("Connecting...")
@@ -1155,7 +1246,9 @@ fn status_page(
             crate::i18n::mark("Transfer rate"),
             112.0,
             135.0,
-            if state == Status::Downloading {
+            // Every byte in (upstream issue 736): nothing comes in while the file is checked or
+            // joined.
+            if state == Status::Downloading && !item.past_last_byte() {
                 model::rate(item.rate())
             } else {
                 String::new()
@@ -1229,16 +1322,29 @@ fn status_page(
             fit(label, vx, base, &value, winui::TEXT());
         }
     }
-    // Where its server is (#140): a file download's (a torrent, a video or a gallery has no
-    // single server of MDM's own). As the running download sees it, else as its last run did.
-    if item.torrent.is_none() && item.video.is_none() && item.gallery.is_none() {
+    // Where its server is (#140): a file download's, and a video's whose streams the engine
+    // downloads (upstream issue 769; a torrent or a gallery has no single server of our own). As
+    // the running download sees it, else as its last run did.
+    let seen = snap
+        .and_then(|s| s.server.as_ref())
+        .map(crate::whereis::Seen::from)
+        .or_else(|| item.server.clone());
+    // A video yt-dlp downloads itself (upstream issue 769): why, in that row.
+    if let Some(why) = samples.helper.cloned().or_else(|| item.video_helper()) {
+        fit(
+            "helper",
+            33.0,
+            server_base,
+            &helper_line(&why),
+            winui::TEXT(),
+        );
+    } else if item.torrent.is_none()
+        && item.gallery.is_none()
+        && (item.video.is_none() || seen.is_some())
+    {
         // i18n: label before where a download's server is (its country and round trip)
         let label = crate::i18n::t("Server");
         text(p, o.x + 33.0, o.y + server_base, label, winui::TEXT());
-        let seen = snap
-            .and_then(|s| s.server.as_ref())
-            .map(crate::whereis::Seen::from)
-            .or_else(|| item.server.clone());
         crate::whereis::line(
             ui,
             o.x + column.max(33.0 + winui::text_width(p, label).ceil() + 6.0),
@@ -1884,9 +1990,8 @@ fn segment_bar(p: &egui::Painter, o: Pos2, item: &Item, snap: Option<&Snapshot>)
     let ppp = p.pixels_per_point();
     for (start, done) in segments {
         let sx = ix + col(start);
-        let n = col(done);
-        if n > 1.0 {
-            run(sx + 1.0, (sx + n - 1.0).min(ix + 510.0), 1);
+        if let Some((a, b)) = segment_columns(start, done as f64, total, 511.0) {
+            run(ix + a, ix + b, 1);
         }
         // The start's tick, as wide in whole pixels wherever it falls (a 1-point column at
         // 150 % came out 2 pixels or 1 by its place, the 1-pixel ones all but gone).
@@ -1903,11 +2008,81 @@ fn segment_bar(p: &egui::Painter, o: Pos2, item: &Item, snap: Option<&Snapshot>)
     }
 }
 
+/// How far the check or the merge after the last byte has come (upstream issue 736), when it
+/// is under way and that is known.
+fn finishing_fraction(snap: Option<&Snapshot>) -> Option<f64> {
+    use mdm_engine::download::State;
+    let s = snap.filter(|s| matches!(s.state, State::Verifying | State::Merging))?;
+    s.finishing.map(|f| f.clamp(0.0, 1.0))
+}
+
+/// The columns a segment fills in the segment bar, from its start column's right to its end's
+/// left, `total` bytes across `width` columns: a finished segment reaches the next one's start
+/// column, so a finished download leaves no gap (upstream issue 736). None when it fills none.
+fn segment_columns(start: u64, done: f64, total: u64, width: f64) -> Option<(f32, f32)> {
+    let col = |v: f64| (v / total as f64 * width).floor();
+    let first = col(start as f64);
+    let end = col((start as f64 + done).min(total as f64));
+    let last = (end - 1.0).min(width - 1.0);
+    (last > first).then_some(((first + 1.0) as f32, last as f32))
+}
+
+#[cfg(test)]
+mod segment_tests {
+    use super::segment_columns;
+
+    /// Upstream issue 736: two finished halves fill every column up to the next one's start, and
+    /// the last one to the bar's end: no gap at 100 %.
+    #[test]
+    fn finished_segments_leave_no_gap() {
+        let (total, width) = (1000, 511.0);
+        assert_eq!(segment_columns(0, 500.0, total, width), Some((1.0, 254.0)));
+        // The second one's start column is 255 (drawn red), its fill runs to the end.
+        assert_eq!(
+            segment_columns(500, 500.0, total, width),
+            Some((256.0, 510.0))
+        );
+        // Under way: up to where it has come.
+        assert_eq!(segment_columns(0, 100.0, total, width), Some((1.0, 50.0)));
+        // Nothing yet, or less than a column: no fill.
+        assert_eq!(segment_columns(0, 0.0, total, width), None);
+        assert_eq!(segment_columns(500, 1.0, total, width), None);
+    }
+}
+
 /// The start tick's columns from point `x` at `ppp` pixels a point: from `x`'s nearest pixel,
 /// one point rounded to whole pixels (at least one) wide, so every tick is the same width.
 fn tick_span(x: f32, ppp: f32) -> (f32, f32) {
     let a = (x * ppp).round() / ppp;
     (a, a + ppp.round().max(1.0) / ppp)
+}
+
+/// Why yt-dlp downloads a video itself rather than the engine (upstream issue 769), as one
+/// short line.
+fn helper_line(why: &mdm_tools::streams::Helper) -> String {
+    use mdm_tools::streams::Helper;
+    match why {
+        // i18n: progress window, a video's line: the engine can't take a live broadcast, so the helper program yt-dlp records it
+        Helper::Live => crate::i18n::t("yt-dlp downloads it itself: a live stream").to_owned(),
+        Helper::Pieces(_) => {
+            // i18n: progress window, a video's line: a stream sent in many small pieces of a rare kind (Adobe HDS, Smooth Streaming), which the helper program yt-dlp downloads itself
+            crate::i18n::t("yt-dlp downloads it itself: a stream in pieces").to_owned()
+        }
+        Helper::Protocol(protocol) => crate::i18n::fmt(
+            // i18n: progress window, a video's line: {protocol} = a streaming protocol's short name (rtmp, rtsp, mms); the engine doesn't speak it, so the helper program yt-dlp downloads it
+            crate::i18n::t("yt-dlp downloads it itself: {protocol}"),
+            &[(
+                "protocol",
+                &crate::i18n::ltr(&protocol.to_ascii_uppercase()),
+            )],
+        ),
+        Helper::Protected => {
+            // i18n: progress window, a video's line: the stream is copy-protected (DRM), left to the helper program yt-dlp, which refuses it
+            crate::i18n::t("yt-dlp downloads it itself: protected (DRM)").to_owned()
+        }
+        // i18n: progress window, a video's line: the helper program yt-dlp gave no address the engine could use
+        Helper::NoAddress => crate::i18n::t("yt-dlp downloads it itself").to_owned(),
+    }
 }
 
 /// The connections table (spec "Connections table"): N. · Downloaded · Info.
@@ -2164,5 +2339,26 @@ mod tests {
             p.sample_error.is_none(),
             "a tab by name shows the download again"
         );
+        // A video's states (upstream issues 769, 736): looks only, gone with a tab by name.
+        p.tab = Tab::Limiter;
+        p.show_tab("merging");
+        assert_eq!(p.tab, Tab::Status);
+        assert_eq!(p.sample_merging, Some(0.45));
+        // Each one replaces the one before.
+        p.show_tab("helper");
+        assert!(p.sample_helper.is_some() && p.sample_merging.is_none());
+        p.show_tab("mergefail");
+        assert!(p.sample_helper.is_none());
+        assert!(
+            p.sample_error
+                .as_deref()
+                .is_some_and(|e| e.contains("Conversion failed!") && e.contains("Resume")),
+            "{:?}",
+            p.sample_error
+        );
+        p.show_tab("merging");
+        p.show_tab("status");
+        assert!(p.sample_error.is_none() && p.sample_merging.is_none());
+        assert!(p.sample_helper.is_none());
     }
 }

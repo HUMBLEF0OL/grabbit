@@ -184,6 +184,12 @@ pub struct Options {
     /// 800). A download the engine names ([`Destination::Dir`]) whose address names nothing (a
     /// script, a bare id, `videoplayback`) is named by it ([`naming::answer_name`]).
     pub page_title: Option<String>,
+    /// The most one request asks for (bytes): every request, the first one too, is a range of
+    /// at most this many, the next one following on the same connection. For servers that slow
+    /// a long answer down (YouTube's media servers serve 10 MB ranges at full speed and a whole
+    /// file at a fraction of it: yt-dlp's `http_chunk_size`, upstream issue 769). None: each
+    /// connection asks for its whole part at once. HTTP only, never with a POST.
+    pub request_cap: Option<u64>,
     /// Tests and measurements: a disk slower than the network, behind a write cache, whose
     /// flush holds every write to the file (as NTFS's does, #361, upstream issue 782). None: the
     /// real disk.
@@ -268,6 +274,7 @@ impl Default for Options {
             expected_type: None,
             expected_size: None,
             page_title: None,
+            request_cap: None,
             slow_disk: None,
         }
     }
@@ -290,6 +297,11 @@ impl Options {
     /// `1..=MAX_CONNECTIONS_UNLOCKED` (a hand-edited setting can hold anything).
     pub fn connections(&self) -> u32 {
         self.max_connections.clamp(1, MAX_CONNECTIONS_UNLOCKED)
+    }
+
+    /// `request_cap`, when it applies: some bytes, without a form's POST.
+    fn cap(&self) -> Option<u64> {
+        self.request_cap.filter(|c| *c > 0 && self.post.is_none())
     }
 }
 
@@ -715,6 +727,9 @@ pub enum State {
     Downloading,
     /// Checking the finished file against its checksum.
     Verifying,
+    /// A video's streams joined into its file (ffmpeg, run by yt-dlp; #736): the app's view of a
+    /// video download, never an engine download's.
+    Merging,
     Completing,
     Done,
     Failed,
@@ -745,6 +760,21 @@ pub struct ConnView {
     pub speed: u64,
 }
 
+impl ConnView {
+    /// Done: nothing left for it, or every byte of the download is in (#736). One still
+    /// connecting, receiving or about to retry is finished; a failed or retired one keeps saying
+    /// why. None receives any more.
+    pub fn finish(&mut self) {
+        if matches!(
+            self.status,
+            ConnStatus::Connecting | ConnStatus::Receiving | ConnStatus::Retrying(_)
+        ) {
+            self.status = ConnStatus::Finished;
+        }
+        self.speed = 0;
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SegmentView {
     pub start: u64,
@@ -772,6 +802,9 @@ pub struct Snapshot {
     pub events: Vec<Event>,
     /// Where its server is, as its connections saw it (#140).
     pub server: Option<crate::Server>,
+    /// How far `Verifying` (the bytes checked) or `Merging` has come, 0 to 1, when that is
+    /// known (#736).
+    pub finishing: Option<f64>,
 }
 
 /// One entry of a download's event log; `seq` counts up within one `Download`.
@@ -993,7 +1026,7 @@ async fn unlock_origin(
     };
     match u.unlock(url, &note, cancel).await {
         Ok(Some(x)) => {
-            note(crate::unlock::note_unlocked(u.name(), &x));
+            note(u.noted(&x));
             Ok(Some(x))
         }
         Ok(None) => Ok(None),
@@ -1082,6 +1115,7 @@ impl Download {
                 failure: None,
                 events: Vec::new(),
                 server: None,
+                finishing: None,
             }),
             seen: Default::default(),
             planner: Mutex::new(None),
@@ -1091,6 +1125,7 @@ impl Download {
             link: Default::default(),
             disk_held: Default::default(),
             held: Default::default(),
+            checked: Default::default(),
         });
         let task = tokio::spawn(f(shared.clone(), cancel.clone()));
         Download {
@@ -1183,6 +1218,8 @@ struct Shared {
     /// Bytes received and claimed but not yet written, in the connections' buffers: shown as
     /// downloaded (they are), but never saved as such.
     held: std::sync::atomic::AtomicU64,
+    /// While `Verifying`: the bytes of the finished file checked so far (#736).
+    checked: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl Shared {
@@ -1201,11 +1238,25 @@ impl Shared {
                 })
                 .collect();
         }
+        if s.state == State::Verifying
+            && let Some(size) = s.size.filter(|n| *n > 0)
+        {
+            let checked = self.checked.load(Ordering::Relaxed);
+            s.finishing = Some((checked as f64 / size as f64).min(1.0));
+        }
         s
     }
 
     fn set_state(&self, state: State) {
         self.view.lock().unwrap().state = state;
+    }
+
+    /// Every byte is in (#736): while the file is checked and named, no connection shows one
+    /// on its way (one stopped with the others still said "Receiving data...").
+    fn every_byte_in(&self) {
+        for c in &mut self.view.lock().unwrap().connections {
+            c.finish();
+        }
     }
 
     /// Add to the event log.
@@ -1390,6 +1441,7 @@ impl Ctx {
             self.size,
             &self.cancel,
             self.opts.unlocker.as_ref(),
+            &self.shared,
         )
         .await
         .filter(|(u, _)| *u != self.target.lock().unwrap().url) else {
@@ -1645,6 +1697,9 @@ async fn run_fresh(
     let mut unlocked = kept.as_ref().and_then(|k| k.unlocked.clone());
     // The body's first bytes the look read already (`KeptAnswer::first`).
     let mut first = Bytes::new();
+    // Where the first request went: a service's (or a helper's, upstream issue 769) direct link
+    // when one gave it, which isn't a redirect.
+    let mut first_at = req.url.clone();
     let (as_get, client0, (mut resp, headers), ttfb) = match kept {
         Some(k) => {
             shared.event(
@@ -1659,10 +1714,16 @@ async fn run_fresh(
             // or logins. The host's link stays the download's origin, asked again (through the
             // service) when the direct link dies.
             unlocked = unlock_origin(&opts, &req.url, Some(shared), cancel).await?;
-            let (target, asked) = match &unlocked {
-                Some(u) => (u.url.clone(), HeaderMap::new()),
+            let (target, mut asked) = match &unlocked {
+                Some(u) => (u.url.clone(), u.headers.clone()),
                 None => (req.url.clone(), req.headers.clone()),
             };
+            // A server that slows long answers down (`request_cap`): the first request is a
+            // range of that size too, its total the file's size.
+            if let Some(cap) = opts.cap() {
+                asked.insert(header::RANGE, range_value(0, cap));
+            }
+            first_at = target.clone();
             let as_get = AsGet::default();
             let seen = shared.seen.get_or_init(Default::default).clone();
             let as_given = opts.clone();
@@ -1740,7 +1801,7 @@ async fn run_fresh(
     shared.event(format!(
         "Connected to {}{}: {}, size {}",
         final_url.host_str().unwrap_or("?"),
-        if final_url != req.url {
+        if final_url != first_at {
             " (redirected)"
         } else {
             ""
@@ -1749,8 +1810,9 @@ async fn run_fresh(
         size.map_or("unknown".to_owned(), disk::human),
     ));
     // Credentials stay with the host they were given for, with the cookies pages set on the way
-    // (`get`).
+    // (`get`); the first request's own range (`request_cap`) isn't theirs.
     let mut headers = headers;
+    headers.remove(header::RANGE);
     // A POST stays one if its redirects kept it (307, 308); it is sent again only once the
     // server has answered a range (206): `Accept-Ranges` alone isn't proof, and a form may do
     // something each time it is posted (an export, an order).
@@ -2130,6 +2192,7 @@ async fn run_resume(
             saved.size,
             &cancel,
             opts.unlocker.as_ref(),
+            &shared,
         )
         .await
     } else {
@@ -2261,15 +2324,22 @@ async fn refresh_final_url(
     size: u64,
     cancel: &CancellationToken,
     unlocker: Option<&Arc<dyn crate::unlock::Unlocker>>,
+    shared: &Shared,
 ) -> Option<(Url, HeaderMap)> {
     // Through a service account (#44): the service gives today's direct link (the host's link
-    // itself leads to its web page); the host's cookies and logins stay with the host.
+    // itself leads to its web page); the host's cookies and logins stay with the host. What it
+    // says on the way (a helper asked again, upstream issue 769) goes to the event log.
     let unlocked = match unlocker.filter(|_| post.is_none()) {
-        Some(u) => u.unlock(origin, &|_| {}, cancel).await.ok().flatten(),
+        Some(u) => u
+            .unlock(origin, &|t| shared.event(t), cancel)
+            .await
+            .ok()
+            .flatten()
+            .inspect(|x| shared.event(u.noted(x))),
         None => None,
     };
     let (target, mut asked) = match &unlocked {
-        Some(u) => (u.url.clone(), HeaderMap::new()),
+        Some(u) => (u.url.clone(), u.headers.clone()),
         None => (origin.clone(), headers.clone()),
     };
     asked.insert(header::RANGE, HeaderValue::from_static("bytes=0-0"));
@@ -2292,6 +2362,7 @@ async fn verify_part(
     hash: Option<&crate::verify::Hash>,
 ) -> Result<(), Error> {
     static SLOTS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(2);
+    shared.every_byte_in();
     let Some(hash) = hash.cloned() else {
         return Ok(());
     };
@@ -2299,9 +2370,13 @@ async fn verify_part(
     let _slot = SLOTS.acquire().await.map_err(|_| Error::Cancelled)?;
     let part = naming::part_path(dest);
     let algo = hash.algo;
-    let ok = tokio::task::spawn_blocking(move || crate::verify::matches(&part, &hash))
-        .await
-        .expect("verifier panicked")?;
+    // Counted as it reads (#736): the progress window and the list show how far it is.
+    let checked = shared.checked.clone();
+    checked.store(0, Ordering::Relaxed);
+    let ok =
+        tokio::task::spawn_blocking(move || crate::verify::matches_counted(&part, &hash, &checked))
+            .await
+            .expect("verifier panicked")?;
     if ok {
         shared.event(format!("Checksum verified ({})", algo.name()));
         Ok(())
@@ -2318,6 +2393,7 @@ fn finish(
     size: u64,
     stamp: Option<std::time::SystemTime>,
 ) -> Result<Outcome, Error> {
+    shared.every_byte_in();
     shared.set_state(State::Completing);
     let file = Arc::try_unwrap(file).map_err(|_| io::Error::other("part file still in use"))?;
     file.set_len(size)?;
@@ -3067,7 +3143,7 @@ async fn worker(ctx: Arc<Ctx>, id: WorkerId, mut first: Option<Body>) -> Result<
             return Err(Error::Cancelled);
         }
         let Some(a) = ctx.shared.with_planner(|p| p.assign(id, after.take())) else {
-            ctx.shared.conn(id, |c| c.status = ConnStatus::Finished);
+            ctx.shared.conn(id, ConnView::finish);
             return Ok(());
         };
         ctx.shared.conn(id, |c| {
@@ -3082,7 +3158,7 @@ async fn worker(ctx: Arc<Ctx>, id: WorkerId, mut first: Option<Body>) -> Result<
         if first.is_none() && ctx.ranges.load(Ordering::SeqCst) == RANGES_NO {
             ctx.shared.with_planner(|p| p.release(id));
             return if ctx.shared.with_planner(|p| p.holds(0)) {
-                ctx.shared.conn(id, |c| c.status = ConnStatus::Finished);
+                ctx.shared.conn(id, ConnView::finish);
                 Ok(())
             } else {
                 Err(Error::NoRanges)
@@ -3096,15 +3172,17 @@ async fn worker(ctx: Arc<Ctx>, id: WorkerId, mut first: Option<Body>) -> Result<
             a.written.min(ctx.opts.verify_overlap)
         };
         let result = match first.take() {
-            Some(body) if a.from == 0 => Ok(body),
+            Some(body) if a.from == 0 => {
+                let to = request_end(&ctx, id, 0).unwrap_or(a.to);
+                receive_all(&ctx, id, &target, Some(body), 0, to, 0, whole).await
+            }
             Some(_) => Err(Error::BadRange(
                 "probe segment no longer starts at 0".into(),
             )),
-            None => request(&ctx, &target, a.from - overlap, a.to).await,
-        };
-        let result = match result {
-            Ok(body) => receive(&ctx, id, body, a.from, a.to, overlap, whole).await,
-            Err(e) => Err(e),
+            None => {
+                let to = request_end(&ctx, id, a.from).unwrap_or(a.to);
+                receive_all(&ctx, id, &target, None, a.from, to, overlap, false).await
+            }
         };
         match result {
             Ok(Some(end)) => {
@@ -3121,7 +3199,7 @@ async fn worker(ctx: Arc<Ctx>, id: WorkerId, mut first: Option<Body>) -> Result<
                 // split), it still takes each segment over as it reaches it, while it streams.
                 ctx.shared.with_planner(|p| p.release(id));
                 return if ctx.shared.with_planner(|p| p.make_single(0) || p.holds(0)) {
-                    ctx.shared.conn(id, |c| c.status = ConnStatus::Finished);
+                    ctx.shared.conn(id, ConnView::finish);
                     Ok(())
                 } else {
                     Err(Error::NoRanges)
@@ -3209,6 +3287,72 @@ async fn worker(ctx: Arc<Ctx>, id: WorkerId, mut first: Option<Body>) -> Result<
             }
         }
     }
+}
+
+/// `Range: bytes=<from>-<from + len - 1>`.
+fn range_value(from: u64, len: u64) -> HeaderValue {
+    HeaderValue::from_str(&format!("bytes={from}-{}", from + len - 1)).expect("ascii")
+}
+
+/// Where connection `id`'s next request starting at `from` ends: its segment's end, or sooner
+/// under `request_cap` (HTTP). None: the segment is no longer its own.
+fn request_end(ctx: &Ctx, id: WorkerId, from: u64) -> Option<u64> {
+    let end = from + ctx.shared.with_planner(|p| p.room(id, from))?;
+    Some(match ctx.opts.cap().filter(|_| ctx.ftp.is_none()) {
+        Some(cap) => end.min(from.saturating_add(cap)),
+        None => end,
+    })
+}
+
+/// Connection `id`'s part from `from`: `body` (the first answer) or a request for `[from, to)`;
+/// then, under `request_cap`, one request after another on the same connection until its
+/// segment is complete. As [`receive`]: the segment's end, or None when it was taken over.
+#[allow(clippy::too_many_arguments)]
+async fn receive_all(
+    ctx: &Ctx,
+    id: WorkerId,
+    target: &Target,
+    body: Option<Body>,
+    from: u64,
+    to: u64,
+    overlap: u64,
+    whole: bool,
+) -> Result<Option<u64>, Error> {
+    let (mut from, mut to, mut overlap, mut whole) = (from, to, overlap, whole);
+    let mut body = body;
+    loop {
+        let b = match body.take() {
+            Some(b) => b,
+            None => {
+                // The bytes re-read to check the resume (`overlap`) count in the cap too.
+                if let Some(cap) = ctx.opts.cap().filter(|c| overlap < *c && ctx.ftp.is_none()) {
+                    to = to.min(from - overlap + cap);
+                }
+                request(ctx, target, from - overlap, to).await?
+            }
+        };
+        match receive(ctx, id, b, from, to, overlap, whole).await? {
+            Received::Complete(end) => return Ok(Some(end)),
+            Received::Lost => return Ok(None),
+            // The capped request came whole, its segment goes on: the next piece of it.
+            Received::More(pos) => {
+                let Some(end) = request_end(ctx, id, pos) else {
+                    return Ok(None);
+                };
+                (from, to, overlap, whole) = (pos, end, 0, false);
+            }
+        }
+    }
+}
+
+/// How one answer's body ended in [`receive`].
+enum Received {
+    /// The segment is complete, at this end.
+    Complete(u64),
+    /// Another connection took the segment over.
+    Lost,
+    /// All of a capped request (`request_cap`) came, up to here; the segment goes on.
+    More(u64),
 }
 
 /// `GET` bytes `[from, to)`; checks the server returned exactly that range of the same file.
@@ -3743,8 +3887,9 @@ mod web_page_tests {
     }
 }
 
-/// Stream a response into the file at `from`. `Some(end)` when the segment is complete,
-/// `None` when the segment was taken over by another connection.
+/// Stream a response into the file at `from`. `Complete(end)` when the segment is complete,
+/// `Lost` when the segment was taken over by another connection, `More(pos)` when a capped
+/// request (`request_cap`) came whole and the segment goes on from `pos`.
 ///
 /// Every chunk is claimed from the planner as soon as it arrives (not when the buffer is
 /// written), so a split can never fall inside data this connection has already received.
@@ -3760,7 +3905,7 @@ async fn receive(
     to: u64,
     mut verify: u64,
     whole: bool,
-) -> Result<Option<u64>, Error> {
+) -> Result<Received, Error> {
     ctx.shared.conn(id, |c| c.status = ConnStatus::Receiving);
     let mut out = Writer::new(ctx, id, from);
     let mut pace = Pace::new();
@@ -3844,7 +3989,7 @@ async fn receive(
                 let Some((n, full)) = claimed else {
                     refund(want);
                     out.finish(&mut pace).await?;
-                    return Ok(None);
+                    return Ok(Received::Lost);
                 };
                 if n < want {
                     refund(want - n);
@@ -3898,7 +4043,11 @@ async fn receive(
                         () = body.done(ended) => {}
                     }
                 }
-                return Ok(Some(end));
+                return Ok(Received::Complete(end));
+            }
+            // A capped request (`request_cap`) answered in full: the next one goes on.
+            None if ended && err.is_none() && out.pos >= to && ctx.opts.cap().is_some() => {
+                return Ok(Received::More(out.pos));
             }
             None if ended => return Err(err.unwrap_or(Error::ShortBody)),
             None => {}
@@ -4187,11 +4336,13 @@ fn yardstick(received: u64, elapsed: Duration) -> Option<u64> {
 }
 
 /// Whether connection `id` should reconnect (`too_slow`), its next byte `at`. Never while a
-/// speed limit makes connections slow on purpose.
+/// speed limit makes connections slow on purpose, nor under `request_cap`: each request ends
+/// soon by itself, and the server's pace varies from one to the next (YouTube's, upstream issue
+/// 769: reconnecting cost more than it won).
 fn should_shed(ctx: &Ctx, id: WorkerId, pace: &Pace, at: u64) -> bool {
     let limited = ctx.shared.limiter.get().is_some()
         || ctx.opts.global.as_ref().is_some_and(|g| g.get().is_some());
-    if !ctx.opts.shed_slow || limited {
+    if !ctx.opts.shed_slow || limited || ctx.opts.cap().is_some() {
         return false;
     }
     let held = ctx.shared.disk_held.lock().unwrap().map(|t| t.elapsed());
@@ -4266,7 +4417,7 @@ async fn single_stream(
     if expected.is_some_and(|e| e != pos) {
         return Err(Error::ShortBody);
     }
-    shared.conn(0, |c| c.status = ConnStatus::Finished);
+    shared.conn(0, ConnView::finish);
     Ok(pos)
 }
 

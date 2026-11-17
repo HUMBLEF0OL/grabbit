@@ -57,6 +57,14 @@ Strike an item through (or remove it) in the PR that settles it.
   torrents' Zone.Identifier test) fail where Windows' "do not preserve zone information" policy
   is on: give them a policy override (PR 41).
 
+- **A failed merge's reason in the progress window.** Upstream (`6196f9ad`) lays the long reason
+  (what stays for Resume) out as a paragraph under Error; the fork's Graphite window shows it in
+  its one-line error banner, cut with "…" and whole on hover, as every long error. A banner that
+  wraps a long reason would show it without hovering (PR 54's screenshot `progress-video-mergefail`).
+- **Galleries behind a sign-in through the engine.** gallery-dl's listing carries each file's
+  address only, so a gallery whose cookies go with it stays gallery-dl's (`engine_may_fetch`).
+  Per-file headers and cookies in the listing would let the engine take those too.
+
 ## Tests to add (the fixes work; their proof is thinner than upstream's)
 
 - End-to-end cases upstream has and the ports left out: Firefox Alt+click with

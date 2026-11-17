@@ -515,32 +515,89 @@ pub struct GallerySpec {
     pub limit: Option<u64>,
 }
 
+/// Why a video failed when joining its picture and sound did (ffmpeg's `error`, in English),
+/// and what became of what was downloaded: `kept` beside its file, for Resume to join again
+/// without downloading it, until the download is deleted with its files (upstream `6196f9ad`).
+pub(crate) fn merge_failure(error: &str, kept: &[PathBuf]) -> String {
+    let error = crate::i18n::ltr(error);
+    if kept.is_empty() {
+        return crate::i18n::fmt(
+            // i18n: why a video download failed: ffmpeg couldn't join its picture and sound into one file; {error} = ffmpeg's reason, in English
+            crate::i18n::t("its picture and sound couldn't be joined into one file ({error})"),
+            &[("error", &error)],
+        );
+    }
+    let files = kept
+        .iter()
+        .filter_map(|f| f.file_name())
+        .map(|n| crate::i18n::isolate(&n.to_string_lossy()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    crate::i18n::fmt(
+        // i18n: why a video download failed: ffmpeg couldn't join its picture and sound into one file; {error} = ffmpeg's reason, in English; {files} = the downloaded parts' file names, kept in the download folder; "Also delete the file from disk" is the Delete box's choice
+        crate::i18n::t(
+            "its picture and sound couldn't be joined into one file ({error}). What was downloaded stays in the folder for Resume to join again ({files}); deleting the download with \"Also delete the file from disk\" removes it",
+        ),
+        &[("error", &error), ("files", &files)],
+    )
+}
+
 /// A helper's progress (yt-dlp's, gallery-dl's) as the engine's view: one segment when its size
-/// is known, one connection while it runs (theirs: neither opens more), its notes as events.
+/// is known, one connection while it runs (theirs: neither opens more), its notes as events. A
+/// video whose streams the engine downloads (upstream issue 769) shows the engine's own: the
+/// streams' segments one after another, the connections of the one under way, its server.
 fn tool_snapshot(p: mdm_tools::video::Progress, url: &Url) -> mdm_engine::Snapshot {
     use mdm_engine::download::{ConnStatus, ConnView};
     use mdm_tools::video::State as V;
     let (state, file, error) = match p.state {
+        // Every stream in, their file being joined (#736).
+        V::Running if p.merging.is_some() => (State::Merging, None, None),
         V::Running => (State::Downloading, None, None),
         V::Done(f) => (State::Done, Some(f), None),
-        V::Failed(e) => (State::Failed, None, Some(e)),
+        V::Failed(e) => (
+            State::Failed,
+            None,
+            Some(match &p.merge_failed {
+                Some(kept) => merge_failure(&e, kept),
+                None => e,
+            }),
+        ),
         V::Stopped => (State::Cancelled, None, None),
     };
     let size = p.total;
-    // Its one connection while it looks the page up or downloads, not an empty table (#793).
-    let connections = matches!(state, State::Downloading)
-        .then(|| ConnView {
-            id: 0,
-            downloaded: p.downloaded,
-            status: if p.speed > 0.0 {
-                ConnStatus::Receiving
-            } else {
-                ConnStatus::Connecting
-            },
-            speed: p.speed as u64,
+    let by_engine = p.engine.is_some();
+    let engine = p.engine.unwrap_or_default();
+    // yt-dlp's one connection while it looks the page up or downloads, not an empty table
+    // (#793); the engine's own while it downloads the streams.
+    let connections = if by_engine {
+        engine.connections
+    } else {
+        matches!(state, State::Downloading)
+            .then(|| ConnView {
+                id: 0,
+                downloaded: p.downloaded,
+                status: if p.speed > 0.0 {
+                    ConnStatus::Receiving
+                } else {
+                    ConnStatus::Connecting
+                },
+                speed: p.speed as u64,
+            })
+            .into_iter()
+            .collect()
+    };
+    let segments = if engine.segments.is_empty() {
+        size.map(|t| {
+            vec![mdm_engine::download::SegmentView {
+                start: 0,
+                cursor: p.downloaded.min(t),
+                end: t,
+            }]
         })
-        .into_iter()
-        .collect();
+        .unwrap_or_default()
+    } else {
+        engine.segments
+    };
     mdm_engine::Snapshot {
         state,
         url: url.clone(),
@@ -548,15 +605,7 @@ fn tool_snapshot(p: mdm_tools::video::Progress, url: &Url) -> mdm_engine::Snapsh
         size,
         downloaded: p.downloaded,
         resumable: Some(true),
-        segments: size
-            .map(|t| {
-                vec![mdm_engine::download::SegmentView {
-                    start: 0,
-                    cursor: p.downloaded.min(t),
-                    end: t,
-                }]
-            })
-            .unwrap_or_default(),
+        segments,
         connections,
         error,
         failure: None,
@@ -570,8 +619,10 @@ fn tool_snapshot(p: mdm_tools::video::Progress, url: &Url) -> mdm_engine::Snapsh
                 text: text.clone(),
             })
             .collect(),
-        // yt-dlp's and gallery-dl's connections are theirs: not seen here (#140).
-        server: None,
+        // yt-dlp's and gallery-dl's connections are theirs: not seen here (#140); the engine's
+        // are (upstream issue 769).
+        server: engine.server,
+        finishing: p.merging.flatten(),
     }
 }
 
@@ -597,21 +648,27 @@ impl Job {
         }
     }
 
-    /// A helper program downloads it (yt-dlp, gallery-dl): it takes a speed limit only as it
-    /// starts, so a new limit starts it again (#708, `App::reapply_helper_limits`).
+    /// A helper program downloads it, and takes a speed limit only as it starts, so a new limit
+    /// starts it again (#708, `App::reapply_helper_limits`): gallery-dl, and yt-dlp for a video
+    /// MDM's engine doesn't download (#769: a live stream, RTMP…).
     pub fn is_helper(&self) -> bool {
-        matches!(self, Job::Video { .. } | Job::Gallery { .. })
+        match self {
+            Job::Video { job, .. } => job.helper().is_some(),
+            Job::Gallery { job, .. } => job.on_helper(),
+            _ => false,
+        }
     }
 
-    /// The speed limit can change while a file downloads; yt-dlp and gallery-dl take it at the
-    /// start (the app starts them again, `is_helper`); a torrent's applies to the whole torrent
-    /// session.
+    /// The speed limit can change while a file downloads, and while the engine downloads a
+    /// video's streams (#769); gallery-dl, and yt-dlp downloading by itself, take it at the start
+    /// (the app starts them again, `is_helper`); a torrent's applies to the whole torrent session.
     pub fn set_speed_limit(&self, rate: Option<u64>) {
         match self {
             Job::File(d) => d.set_speed_limit(rate),
             Job::Torrent(t) => t.set_speed_limit(rate),
             Job::Remote(r) => r.set_speed_limit(rate),
-            Job::Video { .. } | Job::Gallery { .. } => {}
+            Job::Video { job, .. } => job.set_speed_limit(rate),
+            Job::Gallery { job, .. } => job.set_speed_limit(rate),
         }
     }
 
@@ -619,7 +676,9 @@ impl Job {
         match self {
             Job::File(d) => d.speed_limit(),
             Job::Torrent(t) => t.speed_limit(),
-            Job::Remote(_) | Job::Video { .. } | Job::Gallery { .. } => None,
+            Job::Video { job, .. } => job.speed_limit(),
+            Job::Gallery { job, .. } => job.speed_limit(),
+            Job::Remote(_) => None,
         }
     }
 }
@@ -661,6 +720,11 @@ pub struct VideoSpec {
     /// The subtitles saved with it (#68; none in a list saved before them).
     #[serde(default)]
     pub subs: mdm_tools::video::Subs,
+    /// What its last run kept beside its file when joining its streams failed, for Resume
+    /// (`mdm_tools::video::Progress::merge_failed`): deleting it with its files removes them,
+    /// whatever yt-dlp named them (`Talk.faud-English.mp4`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parts: Vec<PathBuf>,
 }
 
 /// A running download and its speed measurement.
@@ -841,7 +905,12 @@ impl Item {
             }
         }
         let dt = live.sample.0.elapsed().as_secs_f64();
-        if dt >= 0.5 {
+        if self.torrent.is_none() && every_byte_in(&s) {
+            // Every byte in (#736): nothing comes in while the last of it is written out, the
+            // file checked, joined or named; the rate the download ended on isn't one any more.
+            live.rate = 0.0;
+            live.sample = (Instant::now(), s.downloaded);
+        } else if dt >= 0.5 {
             let inst = s.downloaded.saturating_sub(live.sample.1) as f64 / dt;
             live.rate = if live.rate == 0.0 {
                 inst
@@ -860,7 +929,11 @@ impl Item {
         }
         self.snap = Some(s.clone());
         let ended = match s.state {
-            State::Probing | State::Downloading | State::Verifying | State::Completing => None,
+            State::Probing
+            | State::Downloading
+            | State::Verifying
+            | State::Merging
+            | State::Completing => None,
             State::Done => Some(Status::Complete),
             State::Cancelled => Some(Status::Stopped),
             State::Failed => Some(Status::Error),
@@ -870,6 +943,15 @@ impl Item {
                 self.status = status;
                 // In the interface language; the engine's English when it gave no failure.
                 self.error = s.failure.as_ref().map(crate::errors::describe).or(s.error);
+                // A video's streams kept after its merge failed: its own, for Delete.
+                if let Some(Live {
+                    dl: Job::Video { job, .. },
+                    ..
+                }) = &self.live
+                    && let Some(v) = self.video.as_mut()
+                {
+                    v.parts = job.progress().merge_failed.unwrap_or_default();
+                }
                 if status == Status::Complete {
                     self.downloaded = self.size.unwrap_or(self.downloaded);
                 }
@@ -920,6 +1002,18 @@ impl Item {
                 true
             }
             None => false,
+        }
+    }
+
+    /// Why yt-dlp downloads this running video itself (#769), once it has found out: MDM's engine
+    /// downloads every other one.
+    pub fn video_helper(&self) -> Option<mdm_tools::streams::Helper> {
+        match &self.live {
+            Some(Live {
+                dl: Job::Video { job, .. },
+                ..
+            }) => job.helper(),
+            _ => None,
         }
     }
 
@@ -1005,11 +1099,58 @@ impl Item {
         } else {
             0.0
         };
-        Some(crate::i18n::fmt(
-            // i18n: a torrent's status while its files are read and checked; {percent} is how much is checked, e.g. "42%"
-            crate::i18n::t("Checking {percent}"),
-            &[("percent", &crate::i18n::percent(ratio.min(1.0), 0))],
-        ))
+        Some(checking(&crate::i18n::percent(ratio.min(1.0), 0)))
+    }
+
+    /// After the last byte, while the file is checked against its checksum or a video's
+    /// streams are joined (#736): "Verifying... (45%)", "Merging...", with how far it is when
+    /// that's known. `short`: the list's Status column, one short word and how far, "Checking
+    /// 45%" (as a torrent's check) and "Merging 45%" ("Merging ..." before that is known); the
+    /// column is wide enough for them in the interface language and font ([`crate::list::status_width`]). The
+    /// cell's tip and a screen reader say it whole ([`crate::list::Row::status_whole`]).
+    pub fn finishing(&self, short: bool) -> Option<String> {
+        let s = self.snap.as_ref()?;
+        if !matches!(s.state, State::Verifying | State::Merging) {
+            return None;
+        }
+        let percent = s
+            .finishing
+            .map(|f| crate::i18n::percent(f.clamp(0.0, 1.0), 0));
+        let verifying = s.state == State::Verifying;
+        Some(match (short, percent) {
+            // As "... at Real-Debrid" before its service says how far.
+            (true, percent) => {
+                let percent = percent.as_deref().unwrap_or("...");
+                if verifying {
+                    checking(percent)
+                } else {
+                    merging(percent)
+                }
+            }
+            (false, Some(percent)) => crate::i18n::fmt(
+                if verifying {
+                    // i18n: a download's status while the finished file is checked against its checksum; {percent} how much is checked, e.g. "45%"
+                    crate::i18n::t("Verifying... ({percent})")
+                } else {
+                    // i18n: a video's status while its picture and sound are joined into one file (ffmpeg); {percent} how far, e.g. "45%"
+                    crate::i18n::t("Merging... ({percent})")
+                },
+                &[("percent", &percent)],
+            ),
+            (false, None) if verifying => {
+                // i18n: a download's status while the finished file is checked against its checksum
+                crate::i18n::t("Verifying...").to_owned()
+            }
+            (false, None) => {
+                // i18n: a video's status while its picture and sound are joined into one file (ffmpeg)
+                crate::i18n::t("Merging...").to_owned()
+            }
+        })
+    }
+
+    /// Every byte is in (#736): no rate and no time left, as once it is complete.
+    pub fn past_last_byte(&self) -> bool {
+        self.torrent.is_none() && self.snap.as_ref().is_some_and(every_byte_in)
     }
 
     pub fn status_text(&self) -> String {
@@ -1019,12 +1160,8 @@ impl Item {
         if let Some(checking) = self.torrent_checking() {
             return checking;
         }
-        if self
-            .snap
-            .as_ref()
-            .is_some_and(|s| s.state == State::Verifying)
-        {
-            return crate::i18n::t("Verifying...").into();
+        if let Some(finishing) = self.finishing(true) {
+            return finishing;
         }
         match self.status {
             // i18n: a download's status (state it is in, not a command): finished
@@ -1055,12 +1192,49 @@ impl Item {
     /// blank unless it is downloading with a size and data coming.
     pub fn time_left_at(&self, rate: f64) -> String {
         match (self.status, self.size) {
-            (Status::Downloading, Some(t)) if rate > 1.0 => {
+            // Every byte in (upstream issue 736): no time left, as once it is complete.
+            (Status::Downloading, Some(t)) if rate > 1.0 && !self.past_last_byte() => {
                 time((t.saturating_sub(self.downloaded)) as f64 / rate)
             }
             _ => String::new(),
         }
     }
+}
+
+/// Every byte of a download is in (#736): the last of it is written out (its whole size
+/// received and no connection receiving or connecting, as the progress window's "Finishing..."),
+/// the file checked, a video's streams joined, or the file named. Nothing comes in any more.
+fn every_byte_in(s: &mdm_engine::Snapshot) -> bool {
+    use mdm_engine::download::ConnStatus;
+    matches!(
+        s.state,
+        State::Verifying | State::Merging | State::Completing
+    ) || (s.state == State::Downloading
+        && s.size.is_some_and(|t| t > 0 && s.downloaded >= t)
+        && !s
+            .connections
+            .iter()
+            .any(|c| matches!(c.status, ConnStatus::Receiving | ConnStatus::Connecting)))
+}
+
+/// The list's Status column while a torrent's files or a finished file are checked (against
+/// the torrent's hashes, against a checksum): one short word and how far (#736).
+pub fn checking(percent: &str) -> String {
+    crate::i18n::fmt(
+        // i18n: the list's Status column while a torrent's files or a finished file are checked (against the torrent's hashes or a checksum); {percent} how much is checked, e.g. "42%". One short word: the column is narrow
+        crate::i18n::t("Checking {percent}"),
+        &[("percent", percent)],
+    )
+}
+
+/// The list's Status column while a video's picture and sound are joined: one short word and
+/// how far (#736).
+pub fn merging(percent: &str) -> String {
+    crate::i18n::fmt(
+        // i18n: the list's Status column while a video's picture and sound are joined into one file (ffmpeg); {percent} how far, e.g. "45%". One short word: the column is narrow
+        crate::i18n::t("Merging {percent}"),
+        &[("percent", percent)],
+    )
 }
 
 /// The "Last Try Date" and "Added" columns as stored, e.g. `Oct 28 21:44:12 2026` (the list's
@@ -1188,6 +1362,38 @@ mod size_tests {
 mod tests {
     use super::*;
 
+    /// Joining a video's streams failed: why, and that what was downloaded stays for Resume,
+    /// by name; without anything kept, only why (upstream `6196f9ad`).
+    #[test]
+    fn a_failed_merge_says_what_stays() {
+        let url = Url::parse("https://example.org/a.mp4").unwrap();
+        let mut p = mdm_tools::video::Progress {
+            state: mdm_tools::video::State::Failed("Postprocessing: Conversion failed!".into()),
+            merge_failed: Some(vec![
+                PathBuf::from("/v/Talk.f640.mp4"),
+                PathBuf::from("/v/Talk.faud-English.mp4"),
+            ]),
+            ..Default::default()
+        };
+        let e = super::tool_snapshot(p.clone(), &url).error.unwrap();
+        assert!(e.contains("Conversion failed!"), "{e}");
+        assert!(e.contains("Resume"), "{e}");
+        assert!(
+            e.contains("Talk.f640.mp4") && e.contains("Talk.faud-English.mp4"),
+            "{e}"
+        );
+        p.merge_failed = Some(Vec::new());
+        let e = super::tool_snapshot(p.clone(), &url).error.unwrap();
+        assert!(
+            e.contains("Conversion failed!") && !e.contains("Resume"),
+            "{e}"
+        );
+        // Any other failure: yt-dlp's words as they are.
+        p.merge_failed = None;
+        let e = super::tool_snapshot(p, &url).error.unwrap();
+        assert_eq!(e, "Postprocessing: Conversion failed!");
+    }
+
     fn video_item(size: Option<u64>, downloaded: u64, status: Status) -> Item {
         let url = Url::parse("https://example.org/a.mp4").unwrap();
         let mut it = Item::new(1, url, PathBuf::from("a.mp4"), Category::Video);
@@ -1197,8 +1403,54 @@ mod tests {
         it.video = Some(VideoSpec {
             selector: "18".into(),
             subs: Default::default(),
+            parts: Vec::new(),
         });
         it
+    }
+
+    /// #736: after the last byte the Status column says what is happening and how far.
+    #[test]
+    fn verifying_and_merging_say_how_far() {
+        let m = 1 << 20;
+        let mut it = video_item(Some(100 * m), 100 * m, Status::Downloading);
+        let url = Url::parse("https://example.org/a.mp4").unwrap();
+        let mut p = mdm_tools::video::Progress {
+            total: Some(100 * m),
+            downloaded: 100 * m,
+            merging: Some(Some(0.45)),
+            ..Default::default()
+        };
+        it.snap = Some(super::tool_snapshot(p.clone(), &url));
+        // A short word and how far in the list; the progress window says it whole.
+        assert_eq!(it.status_text(), "Merging 45%");
+        assert_eq!(it.finishing(false).as_deref(), Some("Merging... (45%)"));
+        assert!(it.past_last_byte());
+        p.merging = Some(None);
+        it.snap = Some(super::tool_snapshot(p.clone(), &url));
+        assert_eq!(it.status_text(), "Merging ...");
+        assert_eq!(it.finishing(false).as_deref(), Some("Merging..."));
+        let mut s = super::tool_snapshot(p.clone(), &url);
+        s.state = State::Verifying;
+        s.finishing = Some(0.5);
+        it.snap = Some(s);
+        assert_eq!(it.status_text(), "Checking 50%");
+        assert_eq!(it.finishing(false).as_deref(), Some("Verifying... (50%)"));
+        assert!(it.past_last_byte());
+        // Still coming in (yt-dlp's own connection receiving): a rate and a time left as before.
+        p.merging = None;
+        p.speed = 1000.0;
+        it.snap = Some(super::tool_snapshot(p.clone(), &url));
+        assert!(!it.past_last_byte());
+        assert_eq!(it.finishing(true), None);
+        // Every byte in, the engine's connections done, before the merge: nothing comes in.
+        p.speed = 0.0;
+        p.engine = Some(Default::default());
+        it.snap = Some(super::tool_snapshot(p.clone(), &url));
+        assert!(it.past_last_byte());
+        // Short of the whole size: still coming.
+        p.downloaded = 99 * m;
+        it.snap = Some(super::tool_snapshot(p, &url));
+        assert!(!it.past_last_byte());
     }
 
     /// Without a size there's no share to show: no 0 % (from #384).
@@ -1368,6 +1620,10 @@ mod helper_connection_tests {
             events: Vec::new(),
             side_files: Vec::new(),
             sub_problems: Vec::new(),
+            engine: None,
+            helper: None,
+            merging: None,
+            merge_failed: None,
         };
         // Looking the page up: connecting.
         let s = tool_snapshot(p.clone(), &page);
