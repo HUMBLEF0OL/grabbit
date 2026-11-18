@@ -661,6 +661,8 @@ These ship in a later version, when they're ready.
   install manifest and search data carry Grabbit's name, mark and colours, the home page's walk
   through reads in full without JavaScript, and its stylesheet and script are never served stale
   after an update. The pages' own text says Grabbit too since the rename above (10d)
+- ✅ The website's tab icon is Grabbit's mark: its `favicon.ico` was still the old name's, and
+  the icon script now writes it with the other icons
 
 ### Bugs being looked into
 
