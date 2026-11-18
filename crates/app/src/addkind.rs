@@ -251,14 +251,16 @@ pub fn scan(text: &str, is_file: &dyn Fn(&Path) -> bool) -> Vec<Found> {
     };
     for line in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
         let whole = read_line(line, is_file);
-        if whole.is_ok() || !line.contains(char::is_whitespace) {
-            push(line, whole);
-            continue;
-        }
         let words: Vec<&str> = line
             .split_whitespace()
             .filter(|w| is_written_address(w))
             .collect();
+        // One address whole (a path with spaces too), unless the line holds several written
+        // ones (an address reads spaces after it as part of its path).
+        if !line.contains(char::is_whitespace) || (whole.is_ok() && words.len() < 2) {
+            push(line, whole);
+            continue;
+        }
         if words.is_empty() {
             push(line, whole);
         }

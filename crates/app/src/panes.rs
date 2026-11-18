@@ -1545,9 +1545,14 @@ mod tests {
             data: None,
         });
         // Typing in the focused field clears the error.
-        band(&ctx, &mut bar, vec![egui::Event::Text("x".into())]);
-        assert_eq!(bar.text, "x");
+        band(
+            &ctx,
+            &mut bar,
+            vec![egui::Event::Text("a.example/f.zip".into())],
+        );
+        assert_eq!(bar.text, "a.example/f.zip");
         assert_eq!(bar.error, None);
+        // An address: the button is pressable (greyed while the field holds none).
         let (_, event) = band(&ctx, &mut bar, vec![click]);
         assert_eq!(event, Some(PasteEvent::Submit));
     }

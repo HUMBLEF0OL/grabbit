@@ -59,6 +59,8 @@ pub struct AddWindow {
     clip: crate::clipboard::Prefill,
     /// The field had the keys in the last frame: Enter there adds (Shift+Enter a new line).
     field_focused: bool,
+    /// The box's id's number: a new box once the clipboard filled it.
+    field_gen: u32,
     focused: bool,
     /// The lines read, for the text they were read from (the disk is asked once per edit).
     found: Option<(String, Vec<Found>)>,
@@ -119,6 +121,12 @@ impl AddWindow {
             .map(|f| f.text.as_str())
             .collect();
         self.address = lines.join("\n");
+        if !self.address.is_empty() {
+            // A box of its own, focused again: its caret after the text, as in a window that
+            // opened with it (the old box's caret stayed at its start).
+            self.field_gen += 1;
+            self.focused = false;
+        }
     }
 
     /// The lines read, again only when the text changed.
@@ -220,12 +228,20 @@ impl AddWindow {
         let mut submit = false;
         if self.field_focused
             && valid > 0
-            && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter))
+            // Only a plain Enter: `consume_key` lets Shift through.
+            && ui.input_mut(|i| {
+                let plain = i.events.iter().any(|e| {
+                    matches!(e, egui::Event::Key { key: egui::Key::Enter, pressed: true, modifiers, .. }
+                        if modifiers.is_none())
+                });
+                plain && i.consume_key(egui::Modifiers::NONE, egui::Key::Enter)
+            })
         {
             submit = true;
         }
         let field_rc = r(o, winui::EDGE, FIELD_Y, W - 2.0 * winui::EDGE, FIELD_H);
-        let field = winui::multiline_light(ui, field_rc, &mut self.address, "add-field", true);
+        let field_id = format!("add-field-{}", self.field_gen);
+        let field = winui::multiline_light(ui, field_rc, &mut self.address, &field_id, true);
         winui::expose(&field, egui::Role::MultilineTextInput, label, true, None);
         if !std::mem::replace(&mut self.focused, true) {
             field.request_focus();
@@ -405,7 +421,11 @@ impl AddWindow {
             if value.is_empty() {
                 winui::text(
                     &p,
-                    winui::rect(r(o, x + 6.0, AUTH_Y, 1.0, 1.0)).left(),
+                    winui::rect(egui::Rect::from_min_size(
+                        o + vec2(x + 6.0, AUTH_Y),
+                        vec2(1.0, 1.0),
+                    ))
+                    .left(),
                     o.y + winui::baseline_in(AUTH_Y, winui::CONTROL_H),
                     crate::i18n::t(name),
                     winui::MUTED(),
@@ -588,8 +608,18 @@ mod tests {
         let ctx = egui::Context::default();
         let mut last = None;
         for ev in events {
+            // The keyboard's state as the key events say (Shift held for Shift+Enter).
+            let modifiers = ev
+                .iter()
+                .find_map(|e| match e {
+                    egui::Event::Key { modifiers, .. } => Some(*modifiers),
+                    _ => None,
+                })
+                .unwrap_or_default();
+            let mut events = vec![egui::Event::ModifiersChanged(modifiers)];
+            events.extend(ev);
             let input = egui::RawInput {
-                events: ev,
+                events,
                 ..Default::default()
             };
             let mut out = ctx.run_ui(input, |ui| {
@@ -791,9 +821,10 @@ mod tests {
         let mut dlg = AddWindow::with_text("https://a.example/f.zip");
         let mut names = Vec::new();
         for _ in 0..3 {
-            let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
                 let _ = dlg.show(ui.ctx(), |_| None);
             });
+            out.textures_delta.clear();
             if let Some(update) = out.platform_output.accesskit_update {
                 names = update
                     .nodes

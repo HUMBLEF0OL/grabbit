@@ -12092,7 +12092,12 @@ mod route_new_url_tests {
         app.route_new_url(new_url(VIDEO, None), &ctx);
         let dlg = app.video_dlg.as_ref().expect("Download video");
         assert_eq!(dlg.save_folder(), video);
+        // One page window at a time: the gallery waits for the video window.
         app.route_new_url(new_url(GALLERY, None), &ctx);
+        assert!(app.gallery_dlg.is_none() && app.pages_waiting.len() == 1);
+        app.video_dlg = None;
+        let next = app.pages_waiting.pop_front().unwrap();
+        app.route_new_url(next, &ctx);
         let dlg = app.gallery_dlg.as_ref().expect("Download a gallery");
         assert_eq!(dlg.folder(), general.display().to_string());
     }
@@ -12438,6 +12443,10 @@ mod old_keys_tests {
             let (cmd, left, text) = frame(mods, &events, Focus::Nothing, new_keys);
             assert_eq!(cmd, expected, "{name}, nothing focused");
             assert_eq!(text, "abc", "{name}: the unfocused field is untouched");
+            // Ctrl+O is new with the universal Add (Open a .torrent file): dev had none.
+            if name == "Ctrl+O" {
+                continue;
+            }
             for focus in [Focus::Nothing, Focus::PasteField, Focus::OtherBox] {
                 let now = frame(mods, &events, focus, new_keys);
                 let dev = frame(mods, &events, focus, dev_keys);
