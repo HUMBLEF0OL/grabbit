@@ -2674,7 +2674,7 @@ pub fn popup_window(title: &str, kind: Popup) -> bool {
     // the DWM attributes are read from locals during the calls.
     unsafe {
         // Done once (comctl32 5.8, which MDM links, has no GetWindowSubclass to ask by).
-        let done: Vec<u16> = "MDM.popup\0".encode_utf16().collect();
+        let done: Vec<u16> = "Grabbit.popup\0".encode_utf16().collect();
         if !GetPropW(hwnd, done.as_ptr()).is_null() {
             return false;
         }
@@ -4301,7 +4301,9 @@ pub fn set_torrent_handlers(on: bool) {
         HKEY_CURRENT_USER, REG_SZ, RRF_RT_REG_SZ, RegDeleteKeyValueW, RegDeleteTreeW, RegGetValueW,
         RegSetKeyValueW,
     };
-    const PROGID: &str = "MisterDownloadManager.Torrent";
+    const PROGID: &str = "Grabbit.Torrent";
+    // The original MDM's (plan 10c): removed, and `.torrent` taken from it.
+    const OLD_PROGID: &str = "MisterDownloadManager.Torrent";
     let w = |s: &str| -> Vec<u16> { s.encode_utf16().chain(Some(0)).collect() };
     let set = |key: &str, name: Option<&str>, value: &str| {
         let (key, value) = (w(key), w(value));
@@ -4340,6 +4342,11 @@ pub fn set_torrent_handlers(on: bool) {
     let Ok(exe) = std::env::current_exe() else {
         return;
     };
+    let tree = |k: &str| {
+        let k = w(k);
+        // SAFETY: NUL-terminated key under HKCU.
+        unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, k.as_ptr()) };
+    };
     let exe = exe.display().to_string();
     let open = format!("\"{exe}\" \"%1\"");
     let icon = format!("\"{exe}\",0");
@@ -4357,19 +4364,19 @@ pub fn set_torrent_handlers(on: bool) {
         set(&format!("{prog}\\DefaultIcon"), None, &icon);
         set(&format!("{prog}\\shell\\open\\command"), None, &open);
         set("Software\\Classes\\.torrent", None, PROGID);
+        tree(&format!("Software\\Classes\\{OLD_PROGID}"));
     } else {
         let ours = get("Software\\Classes\\magnet\\shell\\open\\command", None)
             .is_some_and(|c| c.contains(&exe));
-        let tree = |k: &str| {
-            let k = w(k);
-            // SAFETY: NUL-terminated key under HKCU.
-            unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, k.as_ptr()) };
-        };
         if ours {
             tree("Software\\Classes\\magnet");
         }
         tree(&format!("Software\\Classes\\{PROGID}"));
-        if get("Software\\Classes\\.torrent", None).as_deref() == Some(PROGID) {
+        tree(&format!("Software\\Classes\\{OLD_PROGID}"));
+        // Registry names ignore case (the installer writes `….torrent`).
+        if get("Software\\Classes\\.torrent", None)
+            .is_some_and(|v| v.eq_ignore_ascii_case(PROGID) || v.eq_ignore_ascii_case(OLD_PROGID))
+        {
             let (k, n) = (w("Software\\Classes\\.torrent"), w(""));
             // SAFETY: NUL-terminated key; an empty name is the default value.
             unsafe { RegDeleteKeyValueW(HKEY_CURRENT_USER, k.as_ptr(), n.as_ptr()) };
@@ -4394,9 +4401,68 @@ fn run_value() -> Option<String> {
     if crate::offscreen() {
         return std::env::var("MDM_TEST_RUN_VALUE")
             .ok()
-            .filter(|v| v.starts_with("MisterDownloadManagerTest"));
+            .filter(|v| v.starts_with("GrabbitTest"));
     }
-    Some("MisterDownloadManager".to_owned())
+    Some(RUN_VALUE.to_owned())
+}
+
+/// The startup entry's name in the Run key.
+const RUN_VALUE: &str = "Grabbit";
+
+/// The original MDM's name for it (plan 10c), moved by [`move_old_run_value`].
+const OLD_RUN_VALUE: &str = "MisterDownloadManager";
+
+/// Whether the startup entry `value` (a command line) starts a program in `exe`'s folder: the
+/// original MDM's entry for this install (the same folder, the exe's old name), not another
+/// copy's elsewhere.
+fn startup_in_folder(value: &str, exe: &std::path::Path) -> bool {
+    let norm = |s: &str| s.replace('/', "\\").to_lowercase();
+    let Some(dir) = exe.parent().map(|d| norm(&d.display().to_string())) else {
+        return false;
+    };
+    let value = value.trim();
+    let program = match value.strip_prefix('"') {
+        Some(rest) => rest.split_once('"').map_or(rest, |(p, _)| p),
+        // Unquoted (written by hand): up to the exe's end.
+        None => {
+            let lower = value.to_lowercase();
+            lower.find(".exe").map_or(value, |i| &value[..i + 4])
+        }
+    };
+    let program = norm(program);
+    program
+        .rsplit_once('\\')
+        .is_some_and(|(folder, name)| folder == dir && name.ends_with(".exe"))
+}
+
+/// The original MDM's startup entry for this install (plan 10c): written again under
+/// Grabbit's name, for this exe, and the old one deleted. One for a copy elsewhere is left
+/// alone. Never in a test copy (it has a Run value of its own, if any).
+pub fn move_old_run_value() {
+    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteKeyValueW};
+    if crate::offscreen() {
+        return;
+    }
+    let (Some(old), Ok(exe)) = (
+        reg_string_in(HKEY_CURRENT_USER, RUN_KEY, OLD_RUN_VALUE),
+        std::env::current_exe(),
+    ) else {
+        return;
+    };
+    if !startup_in_folder(&old, &exe) {
+        return;
+    }
+    set_run_at_startup(true);
+    if !run_at_startup() {
+        return;
+    }
+    let key: Vec<u16> = RUN_KEY.encode_utf16().chain(Some(0)).collect();
+    let name: Vec<u16> = OLD_RUN_VALUE.encode_utf16().chain(Some(0)).collect();
+    // SAFETY: NUL-terminated key and value name.
+    unsafe {
+        RegDeleteKeyValueW(HKEY_CURRENT_USER, key.as_ptr(), name.as_ptr());
+    }
+    tracing::info!("startup entry moved to Grabbit's name");
 }
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -4503,7 +4569,7 @@ pub fn set_run_at_startup(on: bool) {
 
 #[cfg(test)]
 mod startup_tests {
-    use super::{startup_command, startup_outdated};
+    use super::{startup_command, startup_in_folder, startup_outdated};
     use std::path::Path;
 
     const EXE: &str = r"C:\Program Files\Mister Download Manager\misterdownloadmanager.exe";
@@ -4554,9 +4620,36 @@ mod startup_tests {
     #[test]
     fn the_installer_writes_the_same_entry() {
         let iss = include_str!("../../../tools/installer/mdm.iss");
-        assert!(iss.contains(
-            r#"ValueName: "MisterDownloadManager"; ValueData: """{app}\{#AppExe}"" /startup""#
+        assert!(iss.contains(r#"ValueName: "Grabbit"; ValueData: """{app}\{#AppExe}"" /startup""#));
+        // And moves the original MDM's, as the app does (`move_old_run_value`).
+        assert!(iss.contains(r#"ValueName: "MisterDownloadManager"; Flags: deletevalue"#));
+    }
+
+    /// Plan 10c: the original MDM's entry for this install (same folder, the old exe) is moved;
+    /// another copy's, elsewhere, is not.
+    #[test]
+    fn only_this_installs_old_startup_entry_moves() {
+        let exe = Path::new(r"C:\Program Files\Mister Download Manager\grabbit.exe");
+        let old =
+            r#""C:\Program Files\Mister Download Manager\misterdownloadmanager.exe" /startup"#;
+        assert!(startup_in_folder(old, exe));
+        assert!(startup_in_folder(
+            &old.to_uppercase().replace('\\', "/"),
+            exe
         ));
+        assert!(startup_in_folder(
+            r"C:\Program Files\Mister Download Manager\misterdownloadmanager.exe /startup",
+            exe
+        ));
+        assert!(!startup_in_folder(
+            r#""D:\portable\mdm\misterdownloadmanager.exe" /startup"#,
+            exe
+        ));
+        assert!(!startup_in_folder(
+            r#""C:\Program Files\Mister Download Manager\sub\misterdownloadmanager.exe""#,
+            exe
+        ));
+        assert!(!startup_in_folder("", exe));
     }
 }
 
@@ -5068,7 +5161,7 @@ pub mod ole {
 /// with the process.
 pub fn mark_running() {
     use windows_sys::Win32::System::Threading::CreateMutexW;
-    let name: Vec<u16> = "MisterDownloadManager.Running\0".encode_utf16().collect();
+    let name: Vec<u16> = "Grabbit.Running\0".encode_utf16().collect();
     // SAFETY: NUL-terminated name; the handle is deliberately kept for the process's life.
     unsafe {
         CreateMutexW(std::ptr::null(), 0, name.as_ptr());

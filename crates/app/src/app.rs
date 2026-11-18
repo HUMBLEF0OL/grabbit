@@ -1299,6 +1299,10 @@ impl App {
         // with its window in front: written again, with the argument that starts it in the
         // notification area. Only an entry for this very program (not one a copy elsewhere
         // wrote), and never by a portable copy, which writes nothing outside its folder.
+        // The original MDM's entry for this install moves to Grabbit's name first (plan 10c).
+        if mdm_ipc::portable_dir().is_none() {
+            crate::win32::move_old_run_value();
+        }
         settings.launch_on_startup = crate::win32::run_at_startup();
         if settings.launch_on_startup && mdm_ipc::portable_dir().is_none() {
             crate::win32::update_run_at_startup();

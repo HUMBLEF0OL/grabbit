@@ -50,7 +50,8 @@ OutputBaseFilename=MisterDownloadManager-{#AppVersion}-setup
 Compression=lzma2/ultra64
 SolidCompression=yes
 ChangesAssociations=yes
-; A running MDM is asked to quit by [Code] (it holds the mutex MisterDownloadManager.Running);
+; A running copy is asked to quit by [Code] (it holds the mutex Grabbit.Running, the original
+; MDM MisterDownloadManager.Running);
 ; AppMutex isn't used because it would refuse to start before that. Restart Manager is the
 ; fallback for anything else holding the files (a browser running the host).
 CloseApplications=yes
@@ -108,13 +109,18 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 [Registry]
 ; Start with Windows: the same value Options -> "Launch on startup" writes and reads, with the
 ; argument that starts MDM in the notification area (#226; win32.rs startup_command).
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "MisterDownloadManager"; ValueData: """{app}\{#AppExe}"" /startup"; Flags: uninsdeletevalue; Tasks: startup
+; The original MDM's entry and .torrent class go first (plan 10c: the app moves them too,
+; win32.rs move_old_run_value and set_torrent_handlers).
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "MisterDownloadManager"; Flags: deletevalue
+Root: HKA; Subkey: "Software\Classes\MisterDownloadManager.torrent"; Flags: deletekey
+Root: HKA; Subkey: "Software\Classes\.torrent\OpenWithProgids"; ValueName: "MisterDownloadManager.torrent"; Flags: deletevalue
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Grabbit"; ValueData: """{app}\{#AppExe}"" /startup"; Flags: uninsdeletevalue; Tasks: startup
 ; .torrent files and magnet links (HKA: the user's or everyone's classes, as installed).
-Root: HKA; Subkey: "Software\Classes\MisterDownloadManager.torrent"; ValueType: string; ValueName: ""; ValueData: "Torrent file"; Flags: uninsdeletekey; Tasks: torrents
-Root: HKA; Subkey: "Software\Classes\MisterDownloadManager.torrent\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExe},0"; Tasks: torrents
-Root: HKA; Subkey: "Software\Classes\MisterDownloadManager.torrent\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: torrents
-Root: HKA; Subkey: "Software\Classes\.torrent"; ValueType: string; ValueName: ""; ValueData: "MisterDownloadManager.torrent"; Flags: uninsdeletekeyifempty; Tasks: torrents
-Root: HKA; Subkey: "Software\Classes\.torrent\OpenWithProgids"; ValueType: string; ValueName: "MisterDownloadManager.torrent"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: torrents
+Root: HKA; Subkey: "Software\Classes\Grabbit.torrent"; ValueType: string; ValueName: ""; ValueData: "Torrent file"; Flags: uninsdeletekey; Tasks: torrents
+Root: HKA; Subkey: "Software\Classes\Grabbit.torrent\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExe},0"; Tasks: torrents
+Root: HKA; Subkey: "Software\Classes\Grabbit.torrent\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: torrents
+Root: HKA; Subkey: "Software\Classes\.torrent"; ValueType: string; ValueName: ""; ValueData: "Grabbit.torrent"; Flags: uninsdeletekeyifempty; Tasks: torrents
+Root: HKA; Subkey: "Software\Classes\.torrent\OpenWithProgids"; ValueType: string; ValueName: "Grabbit.torrent"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: torrents
 Root: HKA; Subkey: "Software\Classes\magnet"; ValueType: string; ValueName: ""; ValueData: "URL:Magnet link"; Tasks: torrents
 Root: HKA; Subkey: "Software\Classes\magnet"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Tasks: torrents
 Root: HKA; Subkey: "Software\Classes\magnet\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExe},0"; Tasks: torrents
@@ -137,7 +143,8 @@ Type: files; Name: "{app}\com.misterdownloadmanager.host*.json"
 
 [Code]
 const
-  RunningMutex = 'MisterDownloadManager.Running';
+  { Grabbit's, and the original MDM's (plan 10c): either is a running copy to ask to quit. }
+  RunningMutex = 'Grabbit.Running,MisterDownloadManager.Running';
 
 { /relaunch=1 on the command line (MDM's Update now): start MDM again after installing. }
 function Relaunch: Boolean;
@@ -201,7 +208,7 @@ begin
   if CurUninstallStep = usUninstall then
   begin
     ForgetIfOurs('Software\Classes\magnet', ExpandConstant('{app}\{#AppExe}'));
-    if RegQueryStringValue(HKA, 'Software\Classes\.torrent', '', Value) and (Value = 'MisterDownloadManager.torrent') then
+    if RegQueryStringValue(HKA, 'Software\Classes\.torrent', '', Value) and ((CompareText(Value, 'Grabbit.torrent') = 0) or (CompareText(Value, 'MisterDownloadManager.torrent') = 0)) then
       RegDeleteValue(HKA, 'Software\Classes\.torrent', '');
     RemoveData := False;
     if DirExists(Data) and not UninstallSilent() then
