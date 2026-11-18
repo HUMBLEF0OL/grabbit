@@ -178,7 +178,7 @@ pub fn init(data: &Path, name: &'static str) -> bool {
     let filter = std::env::var("MDM_LOG")
         .ok()
         .and_then(|f| EnvFilter::try_new(f).ok())
-        .unwrap_or_else(|| EnvFilter::new("warn,minidump=error,minidump_processor=error,minidump_unwind=error,breakpad_symbols=error,mdm=info,mdm_app=info,misterdownloadmanager=info,mdm_engine=info,mdm_torrent=info,mdm_crash=info,mdm_tools=info,mdm_ipc=info"));
+        .unwrap_or_else(|| EnvFilter::new("warn,minidump=error,minidump_processor=error,minidump_unwind=error,breakpad_symbols=error,mdm=info,mdm_app=info,grabbit=info,mdm_engine=info,mdm_torrent=info,mdm_crash=info,mdm_tools=info,mdm_ipc=info"));
     tracing_subscriber::fmt()
         .with_writer(writer)
         .with_ansi(false)

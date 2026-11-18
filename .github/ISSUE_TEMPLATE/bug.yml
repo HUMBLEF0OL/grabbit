@@ -96,7 +96,7 @@ body:
     attributes:
       label: Log or screenshots
       description: |
-        A download's recent events: hover over its **Status** in the list. A crash: crash.log in Grabbit's data folder (Windows: %APPDATA%\misterdownloadmanager). Drag screenshots in here.
+        A download's recent events: hover over its **Status** in the list. A crash: crash.log in Grabbit's data folder (Windows: %APPDATA%\grabbit). Drag screenshots in here.
   - type: checkboxes
     id: searched
     attributes:

@@ -270,8 +270,8 @@
     "description": "button: pair this browser with the other Grabbit using the code"
   },
   "popup_remote_help": {
-    "message": "Open its address once and accept its certificate, then enter a code from its Options, Remote, Pair a device (or misterdownloadmanager-cli pair).",
-    "description": "help under the pairing boxes; Options, Remote and Pair a device are the app's window, tab and button; keep misterdownloadmanager-cli pair as it is"
+    "message": "Open its address once and accept its certificate, then enter a code from its Options, Remote, Pair a device (or grabbit-cli pair).",
+    "description": "help under the pairing boxes; Options, Remote and Pair a device are the app's window, tab and button; keep grabbit-cli pair as it is"
   },
   "status_remote": {
     "message": "Downloads go to $address$",

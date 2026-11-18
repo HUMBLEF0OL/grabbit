@@ -1,5 +1,5 @@
-//! `misterdownloadmanager-cli`: a launcher. The commands are in the app's program (lib.rs, #25:
-//! one download engine shipped, not two); this runs `misterdownloadmanager --cli <arguments>`
+//! `grabbit-cli`: a launcher. The commands are in the app's program (lib.rs, #25:
+//! one download engine shipped, not two); this runs `grabbit --cli <arguments>`
 //! from its own folder, on the same terminal, input and output (a file, a pipe), and ends with
 //! its exit code. It links nothing of lib.rs but [`mdm_cli::FLAG`], so it stays small.
 
@@ -13,7 +13,7 @@ fn main() {
     let Some(program) = program() else {
         fail(
             json,
-            "the app's program (misterdownloadmanager) isn't next to misterdownloadmanager-cli",
+            "the app's program (grabbit) isn't next to grabbit-cli",
         )
     };
     let e = run(&program, args);
@@ -24,7 +24,7 @@ fn main() {
 /// link, in the folder it points into.
 fn program() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
-    let name = format!("misterdownloadmanager{}", std::env::consts::EXE_SUFFIX);
+    let name = format!("grabbit{}", std::env::consts::EXE_SUFFIX);
     [Some(exe.clone()), std::fs::canonicalize(&exe).ok()]
         .into_iter()
         .flatten()

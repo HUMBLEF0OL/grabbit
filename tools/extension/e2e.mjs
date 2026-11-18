@@ -590,7 +590,7 @@ let data = "";
 let downloads = "";
 // The yt-dlp the test instance uses (the streams case), or "" (none found).
 let ytdlp = "";
-const appExe = exe("misterdownloadmanager");
+const appExe = exe("grabbit");
 
 // One command to the instance over its channel (ipc.json), its one-line answer.
 function ipc(cmd, dir = data) {
@@ -626,7 +626,7 @@ function appProcesses() {
     [
       "-NoProfile",
       "-Command",
-      `Get-CimInstance Win32_Process -Filter "Name='misterdownloadmanager.exe'" | Where-Object { $_.ExecutablePath -eq '${p}' -and $_.CommandLine -notlike '*--headless*' } | ForEach-Object { "$($_.ProcessId) $($_.CommandLine -like '*--crash-monitor*')" }`,
+      `Get-CimInstance Win32_Process -Filter "Name='grabbit.exe'" | Where-Object { $_.ExecutablePath -eq '${p}' -and $_.CommandLine -notlike '*--headless*' } | ForEach-Object { "$($_.ProcessId) $($_.CommandLine -like '*--crash-monitor*')" }`,
     ],
     { encoding: "utf8" },
   ).stdout;
@@ -695,7 +695,7 @@ const brief = (e) => `${e.method} ${e.status} ${e.outcome} ${e.range || "-"}`;
 // ---- another Mister Download Manager (the remote case, #157) -------------------------------------
 
 // The server the remote case sends downloads to: E2E_REMOTE_URL names one already running
-// (E2E_REMOTE_PAIR is a command printing a pairing code, such as `misterdownloadmanager-cli
+// (E2E_REMOTE_PAIR is a command printing a pairing code, such as `grabbit-cli
 // pair` run there, and E2E_REMOTE_DOWNLOADS the folder its downloads land in, as
 // seen from here); else target/release's app runs headless here, on 127.0.0.1, with its own data
 // and download folders under target/e2e.
@@ -2269,7 +2269,7 @@ async function run() {
   const idm = spawnSync("tasklist", ["/FI", "IMAGENAME eq IDMan.exe", "/NH"], { encoding: "utf8" }).stdout;
   idmRunning = /IDMan\.exe/i.test(idm);
   if (idmRunning && process.env.E2E_IDM_OK !== "1") throw new Error("Internet Download Manager is running: quit it first (it takes the browsers' downloads), or set E2E_IDM_OK=1 if it leaves 127.0.0.1 alone");
-  for (const p of [appExe, exe("misterdownloadmanager-nmhost"), exe("labserver")]) {
+  for (const p of [appExe, exe("grabbit-nmhost"), exe("labserver")]) {
     if (!fs.existsSync(p)) throw new Error(`build it first: ${p}`);
   }
   const t0 = Date.now();
@@ -2317,7 +2317,7 @@ async function run() {
   before = new Set(appProcesses().map(([pid]) => pid));
   const server = spawn(exe("labserver"), ["--bind", `127.0.0.1:${PORT}`], { stdio: "ignore", windowsHide: true });
   const proxy = startProxy();
-  const nmhost = exe("misterdownloadmanager-nmhost");
+  const nmhost = exe("grabbit-nmhost");
   const results = [];
   let regBefore = null;
   let regCheck = null;

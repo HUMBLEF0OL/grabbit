@@ -18,7 +18,7 @@ pub struct Frame {
     pub function: Option<String>,
     pub file: Option<String>,
     pub line: Option<u32>,
-    /// The module's file name ("misterdownloadmanager.exe", "ntdll.dll").
+    /// The module's file name ("grabbit.exe", "ntdll.dll").
     pub module: Option<String>,
     /// The address within the module (what maps it back to the symbols later).
     pub offset: u64,

@@ -9,7 +9,7 @@ Set-Location $root
 $work = Join-Path $root ".study\showcase"
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force "$work\data", "$work\dl" | Out-Null
-$exe = Join-Path $root "target\release\misterdownloadmanager.exe"
+$exe = Join-Path $root "target\release\grabbit.exe"
 Add-Type @"
 using System; using System.Text; using System.Runtime.InteropServices;
 public static class SC {
@@ -27,8 +27,8 @@ function Close-Titled([string]$like) {
     return $true }, [IntPtr]::Zero) | Out-Null
 }
 
-$hadUserInstance = [bool](Get-Process misterdownloadmanager -ErrorAction SilentlyContinue)
-Get-Process misterdownloadmanager -ErrorAction SilentlyContinue | Stop-Process
+$hadUserInstance = [bool](Get-Process grabbit -ErrorAction SilentlyContinue)
+Get-Process grabbit -ErrorAction SilentlyContinue | Stop-Process
 Get-Process labserver -ErrorAction SilentlyContinue | Stop-Process
 $srv = Start-Process -PassThru -WindowStyle Hidden "$root\target\release\labserver.exe" -ArgumentList "--bind 127.0.0.1:$Port"
 $env:MDM_DATA_DIR = "$work\data"
@@ -65,7 +65,7 @@ try {
   Start-Sleep 2
   & "$PSScriptRoot\capwin.ps1" -Pid $app.Id -Title "*ubuntu-26.04*" -Out "$root\$OutDir\progress-light.png"
 } finally {
-  Get-Process misterdownloadmanager -ErrorAction SilentlyContinue | Stop-Process
+  Get-Process grabbit -ErrorAction SilentlyContinue | Stop-Process
   Stop-Process $srv.Id -ErrorAction SilentlyContinue
   Remove-Item Env:MDM_DATA_DIR
   if ($hadUserInstance) { Start-Process $exe; Start-Sleep 2; & "$PSScriptRoot\to-vscode-monitor.ps1" -Title "Grabbit" -DX 185 -DY 570 -Width 929 -Height 465 | Out-Null }

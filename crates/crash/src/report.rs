@@ -380,7 +380,7 @@ pub fn description(kind: Kind, notes: &Notes) -> &'static str {
 
 /// A short, stable name for the problem, the same for every report of it (it finds the issue
 /// already filed for it): the kind and the first of MDM's own functions on the stack that
-/// matters ("freeze in misterdownloadmanager::winui::combo_edit").
+/// matters ("freeze in grabbit::winui::combo_edit").
 pub fn signature(kind: Kind, input: &Input) -> String {
     let main_module = main_module(input);
     // The freeze ended before the snapshot: its stack says nothing about it, and without this
@@ -589,12 +589,12 @@ fn in_sleep_after_a_frame(frames: &[Frame]) -> bool {
 
 /// The first frame in the program's own code, past the system, Rust's standard library, locks,
 /// panics and the crash reporter itself: a function of the program's own crates first (named as
-/// its main module, the dump's first: "misterdownloadmanager", or MDM's `mdm_*` crates), else
+/// its main module, the dump's first: "grabbit", or MDM's `mdm_*` crates), else
 /// of any crate linked into it (egui, winit…).
 fn first_own_frame(frames: &[Frame], main_module: Option<&str>) -> Option<String> {
     let own_crate = main_module
         .map(|m| m.split('.').next().unwrap_or(m).replace('-', "_"))
-        .unwrap_or_else(|| "misterdownloadmanager".to_owned());
+        .unwrap_or_else(|| "grabbit".to_owned());
     let paths: Vec<String> = frames
         .iter()
         .filter(|f| main_module.is_none_or(|m| f.module.as_deref() == Some(m)))
@@ -745,7 +745,7 @@ mod tests {
             function: Some(f.to_owned()),
             file: Some(r"D:\build\mdm\crates\app\src\winui.rs".to_owned()),
             line: Some(2088),
-            module: Some("misterdownloadmanager.exe".to_owned()),
+            module: Some("grabbit.exe".to_owned()),
             offset: 0x1234,
         }
     }
@@ -760,8 +760,8 @@ mod tests {
                     frames: vec![
                         frame("parking_lot::raw_rwlock::RawRwLock::lock_exclusive_slow"),
                         frame("egui::context::Context::write<egui::memory::Memory>"),
-                        frame("misterdownloadmanager::winui::combo_edit::{{closure}}"),
-                        frame("misterdownloadmanager::dialogs::AddUrl::show"),
+                        frame("grabbit::winui::combo_edit::{{closure}}"),
+                        frame("grabbit::dialogs::AddUrl::show"),
                     ],
                 },
                 Thread {
@@ -801,7 +801,7 @@ mod tests {
         };
         assert_eq!(
             signature(Kind::Freeze, &input),
-            "freeze in misterdownloadmanager::winui::combo_edit"
+            "freeze in grabbit::winui::combo_edit"
         );
         let t = text(&input, Some(Path::new(r"C:\Users\Someone")));
         assert!(t.contains("-- Window thread (frozen): main (1) --"));
@@ -870,8 +870,8 @@ mod tests {
     fn stopped_in_own_code() -> Analysis {
         let mut a = frozen();
         a.threads[0].frames = vec![
-            frame("misterdownloadmanager::app::App::dialogs"),
-            frame("misterdownloadmanager::app::impl$2::ui"),
+            frame("grabbit::app::App::dialogs"),
+            frame("grabbit::app::impl$2::ui"),
         ];
         a
     }
@@ -891,12 +891,12 @@ mod tests {
         // Without symbols, MDM's own module counts as ordinary code, a system one as a wait.
         let mut bare = stopped_in_own_code();
         bare.modules = vec![crate::analyze::ModuleInfo {
-            name: "misterdownloadmanager.exe".into(),
+            name: "grabbit.exe".into(),
             ..Default::default()
         }];
         bare.threads[0].frames[0].function = None;
         let f = freeze_with(&bare, 400).notes.freeze.unwrap();
-        let main = Some("misterdownloadmanager.exe");
+        let main = Some("grabbit.exe");
         assert_eq!(
             stuck(&f, bare.threads[0].frames.first(), main),
             Some(Stuck::Starved)
@@ -919,7 +919,7 @@ mod tests {
     }
 
     /// #355, as reported: the dump was written 7 s after it was asked for, when the window thread
-    /// was back in the event loop. Not a deadlock, not "in misterdownloadmanager::app".
+    /// was back in the event loop. Not a deadlock, not "in grabbit::app".
     #[test]
     fn a_freeze_over_before_the_snapshot_says_so() {
         let mut a = frozen();
@@ -935,8 +935,8 @@ mod tests {
                 "winit::platform_impl::windows::event_loop::EventLoop::wait_for_messages<enum2$<eframe::native::winit_integration::UserEvent> >",
             ),
             frame("eframe::run_native"),
-            frame("misterdownloadmanager::app"),
-            frame("misterdownloadmanager::main"),
+            frame("grabbit::app"),
+            frame("grabbit::main"),
         ];
         let input = freeze_with(&a, 0);
         assert_eq!(
@@ -956,7 +956,7 @@ mod tests {
     /// Upstream issues 574 and 613, as reported (the window hidden in the notification area,
     /// just after the computer woke): the dump came when the window answered again, and found its
     /// thread in eframe's 10 ms pause after the frame. Not "a deadlock in
-    /// misterdownloadmanager::app" nor "in ntdll.dll".
+    /// grabbit::app" nor "in ntdll.dll".
     #[test]
     fn a_freeze_whose_snapshot_found_the_pause_after_a_frame_says_so() {
         let system = |module: &str, offset: u64| Frame {
@@ -979,8 +979,8 @@ mod tests {
                 "eframe::native::run::impl$1::new_events<eframe::native::wgpu_integration::WgpuWinitApp>()",
             ),
             frame("eframe::run_native()"),
-            frame("misterdownloadmanager::app()"),
-            frame("misterdownloadmanager::main()"),
+            frame("grabbit::app()"),
+            frame("grabbit::main()"),
         ];
         let mut input = freeze_with(&a, 0);
         input.notes.freeze.as_mut().unwrap().step = "the tray icon".into();
@@ -1010,12 +1010,12 @@ mod tests {
         // A sleep of MDM's own, inside a frame, is the frame's: still a freeze in MDM.
         a.threads[0].frames = vec![
             frame("std::thread::functions::sleep()"),
-            frame("misterdownloadmanager::app::App::tick()"),
+            frame("grabbit::app::App::tick()"),
             frame("eframe::native::wgpu_integration::impl$3::run_ui_and_paint()"),
         ];
         assert_eq!(
             signature(Kind::Freeze, &freeze_with(&a, 0)),
-            "freeze in misterdownloadmanager::app::App::tick"
+            "freeze in grabbit::app::App::tick"
         );
     }
 
@@ -1025,7 +1025,7 @@ mod tests {
         let input = freeze_with(&a, 10);
         assert_eq!(
             signature(Kind::Freeze, &input),
-            "freeze in misterdownloadmanager::winui::combo_edit"
+            "freeze in grabbit::winui::combo_edit"
         );
         assert!(
             text(&input, None).contains("Its thread was waiting (it ran 0.0 of 7.5 s): a deadlock")
@@ -1038,7 +1038,7 @@ mod tests {
         let input = freeze_with(&a, 7_300);
         assert_eq!(
             signature(Kind::Freeze, &input),
-            "freeze in misterdownloadmanager::app::App::dialogs"
+            "freeze in grabbit::app::App::dialogs"
         );
         assert!(
             text(&input, None)
@@ -1081,8 +1081,8 @@ mod tests {
     #[test]
     fn function_names_lose_generics_and_closures() {
         assert_eq!(
-            trim_function("misterdownloadmanager::winui::combo_edit::{{closure}}"),
-            "misterdownloadmanager::winui::combo_edit"
+            trim_function("grabbit::winui::combo_edit::{{closure}}"),
+            "grabbit::winui::combo_edit"
         );
         assert_eq!(
             trim_function("mdm_engine::job::Job<alloc::string::String>::run"),

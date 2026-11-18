@@ -28,7 +28,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $PSScriptRoot))
 $lab = Join-Path $root "tools\lab"
 $Bin = (Resolve-Path $Bin).Path
-$exe = Join-Path $Bin "misterdownloadmanager.exe"
+$exe = Join-Path $Bin "grabbit.exe"
 if (-not (Test-Path $exe)) { throw "no $exe" }
 if (Test-Path $Work) { throw "$Work exists: give -Work a folder that doesn't (the run deletes it)" }
 $Themes = @($Themes | ForEach-Object { $_ -split ',' } | Where-Object { $_ })
@@ -67,7 +67,7 @@ public static class MS {
 [MS]::SetProcessDPIAware() | Out-Null
 function Titles([int]$procId) { [MS]::Of([uint32]$procId) | ForEach-Object { $_.Value } }
 function Close-Menus([int]$procId) {
-  [MS]::Of([uint32]$procId) | Where-Object { $_.Value -like "misterdownloadmanager menu*" } |
+  [MS]::Of([uint32]$procId) | Where-Object { $_.Value -like "grabbit menu*" } |
     ForEach-Object { [MS]::PostMessage($_.Key, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null }
 }
 
@@ -185,8 +185,8 @@ foreach ($m in $modes) {
           $cmds, $composed = $how[$s]
           foreach ($c in $cmds) { & $exe /show $c; Start-Sleep -Milliseconds 400 }
           if ($composed) {
-            for ($i = 0; $i -lt 50 -and -not (@(Titles $app.Id) -like "misterdownloadmanager menu*"); $i++) { Start-Sleep -Milliseconds 200 }
-            if (-not (@(Titles $app.Id) -like "misterdownloadmanager menu*")) { throw "${t} ${s}: no menu opened" }
+            for ($i = 0; $i -lt 50 -and -not (@(Titles $app.Id) -like "grabbit menu*"); $i++) { Start-Sleep -Milliseconds 200 }
+            if (-not (@(Titles $app.Id) -like "grabbit menu*")) { throw "${t} ${s}: no menu opened" }
           }
           Start-Sleep -Milliseconds 800
           $file = Join-Path $dir "$s$suffix.png"

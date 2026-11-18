@@ -6,7 +6,7 @@
 ; for Chrome, Edge, Brave and Firefox), .torrent files and magnet links, start with Windows, a
 ; desktop shortcut. A running MDM is asked to save and quit first (/exit). Uninstalling asks
 ; whether to keep the download list and settings; removing them also removes MDM's sign-ins from
-; Windows Credential Manager (misterdownloadmanager --forget-sign-ins).
+; Windows Credential Manager (grabbit --forget-sign-ins).
 
 #ifndef AppVersion
   #define AppVersion "0.5.2"
@@ -14,8 +14,11 @@
 #define AppName "Grabbit"
 ; The name before the rename (plan 10): its shortcuts are removed on upgrade.
 #define OldAppName "Mister Download Manager"
-#define AppExe "misterdownloadmanager.exe"
-#define HostExe "misterdownloadmanager-nmhost.exe"
+#define AppExe "grabbit.exe"
+#define HostExe "grabbit-nmhost.exe"
+; The original MDM's program name (plan 10c): now a small program that starts {#AppExe}, so
+; shortcuts and pins made for it keep working.
+#define OldAppExe "misterdownloadmanager.exe"
 #define Root "..\.."
 #define Bin Root + "\target\release"
 
@@ -88,8 +91,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "{#Bin}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
 Source: "{#Bin}\{#HostExe}"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
-Source: "{#Bin}\misterdownloadmanager-cli.exe"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
-Source: "{#Bin}\misterdownloadmanager-mcp.exe"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
+Source: "{#Bin}\grabbit-cli.exe"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
+Source: "{#Bin}\grabbit-mcp.exe"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
+Source: "{#Bin}\{#OldAppExe}"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
 ; The extension, for "Load unpacked" (Chromium) and about:debugging (Firefox) until it is in
 ; the stores.
 Source: "{#Root}\target\extension\chromium\*"; DestDir: "{app}\extension\chromium"; Flags: ignoreversion recursesubdirs
@@ -98,6 +102,11 @@ Source: "{#Root}\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ign
 Source: "{#Root}\ATTRIBUTION.md"; DestDir: "{app}"; DestName: "ATTRIBUTION.txt"; Flags: ignoreversion
 
 [InstallDelete]
+; The original MDM's helper programs (plan 10c): Grabbit's grabbit-*.exe replace them. Scripts
+; and AI assistants' settings that name them need the new names (the release notes say so).
+Type: files; Name: "{app}\misterdownloadmanager-cli.exe"
+Type: files; Name: "{app}\misterdownloadmanager-mcp.exe"
+Type: files; Name: "{app}\misterdownloadmanager-nmhost.exe"
 ; The shortcuts an install under the old name made (an upgrade keeps its folder, not these).
 Type: files; Name: "{autoprograms}\{#OldAppName}.lnk"
 Type: files; Name: "{autodesktop}\{#OldAppName}.lnk"
@@ -173,12 +182,15 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   ExitRunningApp(ExpandConstant('{app}\{#AppExe}'));
+  { An upgrade from the original MDM: its own program is the one to ask. }
+  ExitRunningApp(ExpandConstant('{app}\{#OldAppExe}'));
   Result := '';
 end;
 
 function InitializeUninstall(): Boolean;
 begin
   ExitRunningApp(ExpandConstant('{app}\{#AppExe}'));
+  ExitRunningApp(ExpandConstant('{app}\{#OldAppExe}'));
   Result := True;
 end;
 
@@ -209,6 +221,7 @@ begin
   if CurUninstallStep = usUninstall then
   begin
     ForgetIfOurs('Software\Classes\magnet', ExpandConstant('{app}\{#AppExe}'));
+    ForgetIfOurs('Software\Classes\magnet', ExpandConstant('{app}\{#OldAppExe}'));
     if RegQueryStringValue(HKA, 'Software\Classes\.torrent', '', Value) and ((CompareText(Value, 'Grabbit.torrent') = 0) or (CompareText(Value, 'MisterDownloadManager.torrent') = 0)) then
       RegDeleteValue(HKA, 'Software\Classes\.torrent', '');
     RemoveData := False;

@@ -4572,7 +4572,7 @@ mod startup_tests {
     use super::{startup_command, startup_in_folder, startup_outdated};
     use std::path::Path;
 
-    const EXE: &str = r"C:\Program Files\Mister Download Manager\misterdownloadmanager.exe";
+    const EXE: &str = r"C:\Program Files\Grabbit\grabbit.exe";
 
     /// The entry Options and the installer write (#226): the program, quoted, then `/startup`.
     #[test]
@@ -4597,7 +4597,7 @@ mod startup_tests {
         assert!(startup_outdated(&format!("\"{EXE}\""), exe));
         // Written by hand: unquoted, in another case, with other slashes.
         assert!(startup_outdated(
-            r"c:\program files\mister download manager\MISTERDOWNLOADMANAGER.EXE",
+            r"c:\program files\grabbit\GRABBIT.EXE",
             exe
         ));
         assert!(startup_outdated(
@@ -5308,7 +5308,7 @@ pub fn process_alive(pid: u32) -> bool {
     }
 }
 
-/// The command line in this windowed program (main.rs, `misterdownloadmanager-cli`'s
+/// The command line in this windowed program (main.rs, `grabbit-cli`'s
 /// launcher started it): the console it was started from, for what it prints and reads and for
 /// Ctrl+C. Input and output the launcher handed over stay as they are (a file, a pipe, the console
 /// itself); only those it didn't have get the console's. With the launcher's process id, this
@@ -5610,6 +5610,69 @@ pub fn host_registration() -> crate::extension::Registration {
         }
     }
     broken.map_or(Registration::Missing, Registration::HelperMissing)
+}
+
+/// Plan 10c: whether this user's registration of the native host (Chrome's key, which Chromium
+/// browsers read, and Firefox's; either host name) names the original MDM's helper in this
+/// program's folder, so that Grabbit's registers again.
+pub fn host_registered_old() -> bool {
+    use windows_sys::Win32::System::Registry::HKEY_CURRENT_USER;
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    ["com.grabbit.host", "com.misterdownloadmanager.host"]
+        .into_iter()
+        .flat_map(|name| {
+            [
+                format!(r"Software\Google\Chrome\NativeMessagingHosts\{name}"),
+                format!(r"Software\Mozilla\NativeMessagingHosts\{name}"),
+            ]
+        })
+        .filter_map(|key| reg_string_in(HKEY_CURRENT_USER, &key, ""))
+        .filter_map(|m| {
+            mdm_ipc::browsers::manifest_program(std::path::Path::new(m.trim().trim_matches('"')))
+        })
+        .any(|program| old_helper(&program, &exe))
+}
+
+/// Whether `program` is the original MDM's native host in `exe`'s folder.
+fn old_helper(program: &std::path::Path, exe: &std::path::Path) -> bool {
+    let norm = |p: Option<&std::path::Path>| {
+        p.map(|p| p.display().to_string().replace('/', "\\").to_lowercase())
+    };
+    norm(program.parent()) == norm(exe.parent())
+        && program
+            .file_name()
+            .is_some_and(|n| n.eq_ignore_ascii_case("misterdownloadmanager-nmhost.exe"))
+}
+
+#[cfg(test)]
+mod old_helper_tests {
+    use super::old_helper;
+    use std::path::Path;
+
+    /// Plan 10c: only the original MDM's helper beside this program is renewed; Grabbit's, or
+    /// another copy's elsewhere, is left as registered.
+    #[test]
+    fn only_the_old_helper_beside_this_program_is_renewed() {
+        let exe = Path::new(r"C:\Program Files\Mister Download Manager\grabbit.exe");
+        assert!(old_helper(
+            Path::new(r"C:\Program Files\Mister Download Manager\misterdownloadmanager-nmhost.exe"),
+            exe
+        ));
+        assert!(old_helper(
+            Path::new(r"c:/program files/mister download manager/MISTERDOWNLOADMANAGER-NMHOST.EXE"),
+            exe
+        ));
+        assert!(!old_helper(
+            Path::new(r"C:\Program Files\Mister Download Manager\grabbit-nmhost.exe"),
+            exe
+        ));
+        assert!(!old_helper(
+            Path::new(r"D:\mdm\misterdownloadmanager-nmhost.exe"),
+            exe
+        ));
+    }
 }
 
 /// Options → Sites Logins' passwords, encrypted for this Windows account (DPAPI) before the list

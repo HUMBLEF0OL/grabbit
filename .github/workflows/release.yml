@@ -104,7 +104,7 @@ jobs:
           GH_TOKEN: ${{ github.token }} # downloads the build's helpers signed in (fetch_release.py)
         run: |
           $v = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
-          $exes = "misterdownloadmanager", "misterdownloadmanager-nmhost", "misterdownloadmanager-cli", "misterdownloadmanager-mcp" |
+          $exes = "grabbit", "grabbit-nmhost", "grabbit-cli", "grabbit-mcp" |
             ForEach-Object { "target/release/$_.exe" }
           python tools/installer/symbols.py windows-x64 $v target/dist @exes
           if ($LASTEXITCODE) { throw "symbols failed" }

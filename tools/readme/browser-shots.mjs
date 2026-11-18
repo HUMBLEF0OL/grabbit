@@ -80,8 +80,8 @@ async function main() {
   process.env.MDM_DATA_DIR = data;
   process.env.MDM_OFFSCREEN = "1";
 
-  const app = spawn(exe("misterdownloadmanager"), [], { env: process.env, stdio: "ignore" });
-  const nmhost = exe("misterdownloadmanager-nmhost");
+  const app = spawn(exe("grabbit"), [], { env: process.env, stdio: "ignore" });
+  const nmhost = exe("grabbit-nmhost");
   let browser = null;
   cleanup = () => {
     cleanup = () => {};

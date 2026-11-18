@@ -42,8 +42,8 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $bin = (Resolve-Path (Join-Path $root $Bin)).Path
-$exe = Join-Path $bin "misterdownloadmanager.exe"
-$cli = Join-Path $bin "misterdownloadmanager-cli.exe"
+$exe = Join-Path $bin "grabbit.exe"
+$cli = Join-Path $bin "grabbit-cli.exe"
 $out = if ([IO.Path]::IsPathRooted($OutDir)) { $OutDir } else { Join-Path $root $OutDir }
 # Under the repository (ignored target/): the temp folder's path names the user.
 $work = if ($Work) { $Work } else { Join-Path $root "target\progress-shots" }

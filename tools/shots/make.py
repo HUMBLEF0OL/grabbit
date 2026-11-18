@@ -87,7 +87,7 @@ def raw_name(take: str) -> str:
 def shoot(shots: list[dict], bin_dir: Path, work: str | None, extra: list[str]) -> None:
     if os.name != "nt":
         sys.exit("shoot runs on Windows (tools/lab/docs-shots.ps1); `build` works anywhere")
-    exe = bin_dir / "misterdownloadmanager.exe"
+    exe = bin_dir / "grabbit.exe"
     server = bin_dir / "labserver.exe"
     for p in (exe, server):
         if not p.is_file():

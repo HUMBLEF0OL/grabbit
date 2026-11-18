@@ -7,7 +7,7 @@
 //! the code as a module of its own, based where the code starts instead of where the program
 //! starts. Every address in the code was then read 0xd96000 too low: the release's symbols named
 //! the wrong functions, unwinding found no unwind tables, and the report's own offsets
-//! (`misterdownloadmanager + 0x…`) couldn't be looked up either.
+//! (`grabbit + 0x…`) couldn't be looked up either.
 //!
 //! The dump also holds the process's `/proc/self/maps`, which says which part of the file each
 //! mapping holds. A module whose mapping doesn't start the file is joined here to the mapping of

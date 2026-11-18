@@ -1302,6 +1302,10 @@ impl App {
         // The original MDM's entry for this install moves to Grabbit's name first (plan 10c).
         if mdm_ipc::portable_dir().is_none() {
             crate::win32::move_old_run_value();
+            // Browser integration registered with the original MDM's helper beside this program
+            // (an upgrade from a zip, or setup's box unticked): registered again with Grabbit's,
+            // beside the window.
+            crate::extension::renew_old_registration(ctx);
         }
         settings.launch_on_startup = crate::win32::run_at_startup();
         if settings.launch_on_startup && mdm_ipc::portable_dir().is_none() {
@@ -5293,7 +5297,7 @@ impl App {
             return line(&ApiAnswer { api: on });
         } else if !self.settings.automation_api {
             return line(&ErrorAnswer {
-                error: "the automation API is off (misterdownloadmanager-cli api on)".into(),
+                error: "the automation API is off (grabbit-cli api on)".into(),
                 code: Some(ipc::api::API_OFF.into()),
             });
         }
@@ -5390,7 +5394,7 @@ impl App {
         }
     }
 
-    /// `{"pair": true}` (`misterdownloadmanager-cli pair`, #157): a new pairing code, the
+    /// `{"pair": true}` (`grabbit-cli pair`, #157): a new pairing code, the
     /// page's addresses and a QR code for a terminal; an error while the remote control is off
     /// or not listening.
     pub fn pair_answer(&mut self) -> String {

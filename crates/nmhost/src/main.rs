@@ -12,7 +12,7 @@
 //!   `explicit`, the toolbar button's list of the tab's media asked, wherever the button shows);
 //!   `{"hideSite": host}` keeps it off that site from now on;
 //!   `{"openOptions": true}` opens Options where it is set up.
-//! - `misterdownloadmanager-nmhost --register` / `--unregister`: writes / removes the host
+//! - `grabbit-nmhost --register` / `--unregister`: writes / removes the host
 //!   manifests (Chromium's names the extension's origin, Firefox's its add-on ID). Windows: beside
 //!   this exe, with the per-user (HKCU) registry entries the browsers look up; with `--all-users`
 //!   (the installer, installing for everyone, elevated) under HKLM instead.
@@ -636,7 +636,7 @@ fn deliver(cmd: &mdm_ipc::Command) -> Result<(), Undelivered> {
         Err(mdm_ipc::SendError::NotRunning(_)) => {}
     }
     let dir = exe_dir().map_err(Undelivered::NotRunning)?;
-    let app = dir.join("misterdownloadmanager.exe");
+    let app = dir.join("grabbit.exe");
     let mut child = start_detached(&app)
         .map_err(|e| Undelivered::NotRunning(format!("cannot start {}: {e}", app.display())))?;
     win32::allow_foreground(child.id());
@@ -889,7 +889,7 @@ fn main() {
         )),
     };
     if let Err(e) = result {
-        eprintln!("misterdownloadmanager-nmhost: {e}");
+        eprintln!("grabbit-nmhost: {e}");
         std::process::exit(1);
     }
 }

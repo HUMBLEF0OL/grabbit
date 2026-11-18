@@ -88,7 +88,7 @@ pub struct Command {
     /// The remote control: an uploaded .torrent file's bytes (never read from a request line).
     #[serde(skip)]
     pub torrent_file: Option<Vec<u8>>,
-    /// The remote control (#157, `misterdownloadmanager-cli pair`): show a new pairing code;
+    /// The remote control (#157, `grabbit-cli pair`): show a new pairing code;
     /// answered with it, the page's addresses and a QR code to scan ([`api::PairAnswer`]).
     pub pair: bool,
     /// `/exit` (beyond IDM): the running app saves and quits (the installer, before an upgrade

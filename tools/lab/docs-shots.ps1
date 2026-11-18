@@ -10,7 +10,7 @@
 # there (cap-own.ps1). Dialogs open through the app's
 # own command line (/show <window>), so nothing is clicked or typed on the screen.
 #
-#   tools\lab\docs-shots.ps1 -Exe target\release\misterdownloadmanager.exe -Server target\release\labserver.exe
+#   tools\lab\docs-shots.ps1 -Exe target\release\grabbit.exe -Server target\release\labserver.exe
 param(
   [Parameter(Mandatory)][string]$Exe,
   [Parameter(Mandatory)][string]$Server,
@@ -268,12 +268,12 @@ try {
     }
     if ($what -like "@menu:*") {
       & $Exe /show $what.Substring(6)
-      for ($i = 0; $i -lt 50 -and -not (@(Titles $app.Id) -like "misterdownloadmanager menu*"); $i++) { Start-Sleep -Milliseconds 200 }
+      for ($i = 0; $i -lt 50 -and -not (@(Titles $app.Id) -like "grabbit menu*"); $i++) { Start-Sleep -Milliseconds 200 }
       Start-Sleep -Milliseconds 1200
       Shot $app.Id "" $name -All
       # The menu's windows are ours: closed like any other, with the window it opened over when
       # that one came with it (progress:menu's progress window), so the next shot opens it anew.
-      Close-Ours $app.Id "misterdownloadmanager menu*"
+      Close-Ours $app.Id "grabbit menu*"
       @(Titles $app.Id | Where-Object { $before -notcontains $_ }) | ForEach-Object { Close-Ours $app.Id ([WildcardPattern]::Escape($_)) }
       Start-Sleep -Milliseconds 800
       continue

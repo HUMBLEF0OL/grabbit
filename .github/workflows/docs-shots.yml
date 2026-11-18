@@ -107,7 +107,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $out = "$env:RUNNER_TEMP\shots"
-          $exe = "target\debug\misterdownloadmanager.exe"; $srv = "target\debug\labserver.exe"
+          $exe = "target\debug\grabbit.exe"; $srv = "target\debug\labserver.exe"
           $torrent = "tools\lab\Open Movie Night.torrent"
           # A neutral folder and address, as they show in the shots (Properties, Add torrent): the
           # downloads come from downloads.example (a reserved name, pointed at the lab server
@@ -128,7 +128,7 @@ jobs:
           $net = @{ Port = $port; UrlHost = "downloads.example" }
           # Browser integration set up, as the installer does it, so the browser offer window shows
           # a computer where it works (this runner's own user only).
-          & target\debug\misterdownloadmanager-nmhost.exe --register
+          & target\debug\grabbit-nmhost.exe --register
           # On the screen, as nobody watches it: llvmpipe draws nothing off the screens.
           $at = "40,40"
           # Every window of docs-shots.ps1's own list, light (docs/images) and dark (the site's
