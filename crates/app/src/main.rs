@@ -12,6 +12,7 @@ mod crash;
 mod crashui;
 mod debrid;
 mod defaultbrowser;
+mod deleter;
 mod derive;
 mod dialogs;
 mod droptarget;
@@ -44,6 +45,7 @@ mod quota;
 mod regional;
 mod remote;
 mod renderer;
+mod resumeread;
 mod rss;
 mod rssdlg;
 mod scale;
@@ -325,6 +327,8 @@ fn app() -> eframe::Result {
     let window: std::sync::Arc<std::sync::OnceLock<egui::Context>> = Default::default();
     let wake = window.clone();
     let wake: std::sync::Arc<dyn Fn() + Send + Sync> = std::sync::Arc::new(move || {
+        // A command came in: someone waits for the window's answer, hidden or not (#1126).
+        crash::asked();
         if let Some(ctx) = wake.get() {
             ctx.request_repaint();
         }
