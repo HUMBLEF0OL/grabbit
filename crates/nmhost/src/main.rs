@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 mod win32;
 
 const HOST_NAME: &str = "com.grabbit.host";
-use mdm_ipc::extension::{FIREFOX_ID, STORE_ID, STORE_UPDATE_URL, chromium_ids, store_id};
+use mdm_ipc::extension::{FIREFOX_ID, STORE_UPDATE_URL, chromium_ids, store_id};
 /// Where each Chromium browser looks for native messaging hosts on Windows, under HKCU (one
 /// user) or HKLM (everyone). Chromium-branded builds (Chromium, Helium, Thorium, and Brave and
 /// Brave Origin with every channel) read Chromium's first, then Chrome's, as most other forks do
@@ -43,6 +43,41 @@ const FIREFOX_KEY: &str = r"Software\Mozilla\NativeMessagingHosts";
 /// its next start ("New extension added"), the user turning it on there. HKLM's is read from the
 /// 32-bit view on 64-bit Windows, hence /reg:32 (HKCU has one view).
 const CHROME_EXTERNAL_KEY: &str = r"Software\Google\Chrome\Extensions";
+/// The original project's Chrome Web Store extension, which Grabbit 1.0.0 named under
+/// CHROME_EXTERNAL_KEY by mistake: Chrome offered an extension that talks to the original's host,
+/// never to Grabbit's. Registering and unregistering remove that entry; nothing else names it.
+const ORIGINAL_STORE_ID: &str = "ejoleppdfgjdndddcjoehopknmlglojp";
+/// The original project's own native host, under Chrome's key: while it is registered under a
+/// root, the external entry there is the original app's own, and stays.
+const ORIGINAL_HOST_KEY: &str =
+    r"Software\Google\Chrome\NativeMessagingHosts\com.misterdownloadmanager.host";
+
+/// The roots whose entry for the original's extension is 1.0.0's leftover, to delete: HKCU, and
+/// HKLM too on an all-users run (an admin install runs only `--register --all-users`, and 1.0.0
+/// may have been installed for the user before);
+/// never a root where the original app's own host is registered (`original_at(root)`), which
+/// wrote the same entry and keeps its extension by it.
+fn leftover_roots(all_users: bool, original_at: impl Fn(&str) -> bool) -> Vec<&'static str> {
+    let roots: &[&'static str] = if all_users {
+        &["HKLM", "HKCU"]
+    } else {
+        &["HKCU"]
+    };
+    roots.iter().copied().filter(|r| !original_at(r)).collect()
+}
+
+/// Delete 1.0.0's entry for the original's extension where it is a leftover.
+fn drop_original_entry(all_users: bool) {
+    let original_at = |root: &str| reg(&["query", &format!(r"{root}\{ORIGINAL_HOST_KEY}")]).is_ok();
+    for root in leftover_roots(all_users, original_at) {
+        let _ = reg(&[
+            "delete",
+            &format!(r"{root}\{CHROME_EXTERNAL_KEY}\{ORIGINAL_STORE_ID}"),
+            "/f",
+            "/reg:32",
+        ]);
+    }
+}
 
 /// A message from the extension.
 #[derive(Debug, Default, Deserialize, PartialEq)]
@@ -811,6 +846,8 @@ fn register(all_users: bool) -> Result<(), String> {
         &ff_path.display().to_string(),
         "/f",
     ])?;
+    // 1.0.0's entry for the original project's extension goes (not the original app's own).
+    drop_original_entry(all_users);
     // Chrome offers the store's extension once it is listed (never a placeholder ID).
     if let Some(id) = store_id() {
         reg(&[
@@ -840,12 +877,15 @@ fn unregister(all_users: bool) -> Result<(), String> {
     for key in REGISTRY_KEYS.into_iter().chain([FIREFOX_KEY]) {
         let _ = reg(&["delete", &format!(r"{root}\{key}\{HOST_NAME}"), "/f"]);
     }
-    let _ = reg(&[
-        "delete",
-        &format!(r"{root}\{CHROME_EXTERNAL_KEY}\{STORE_ID}"),
-        "/f",
-        "/reg:32",
-    ]);
+    drop_original_entry(all_users);
+    if let Some(id) = store_id() {
+        let _ = reg(&[
+            "delete",
+            &format!(r"{root}\{CHROME_EXTERNAL_KEY}\{id}"),
+            "/f",
+            "/reg:32",
+        ]);
+    }
     let _ = std::fs::remove_file(exe_dir()?.join(format!("{HOST_NAME}.json")));
     let _ = std::fs::remove_file(exe_dir()?.join(format!("{HOST_NAME}.firefox.json")));
     println!("unregistered {HOST_NAME}");
@@ -896,28 +936,38 @@ fn downloadable(url: &str) -> bool {
 mod tests {
     use super::*;
 
-    /// The Chrome Web Store's copy and the app folder's (unpacked) both connect, and both are
-    /// served: the manifest's allowed_origins and the host's own caller check agree.
+    /// The app folder's (unpacked) copy connects; the original project's store extension, which
+    /// 1.0.0 named to Chrome, doesn't (Grabbit has no store listing yet): the manifest's
+    /// allowed_origins and the host's own caller check agree.
     #[test]
-    fn store_and_unpacked_extensions_both_allowed() {
+    fn unpacked_extension_allowed_not_the_originals() {
         let manifest = chromium_manifest(&this_program().unwrap());
-        for id in [
-            "ejoleppdfgjdndddcjoehopknmlglojp",
-            "oogbclbbninliongijffeeggalppliok",
-        ] {
-            let o = format!("chrome-extension://{id}/");
-            assert!(
-                manifest["allowed_origins"]
-                    .as_array()
-                    .unwrap()
-                    .contains(&serde_json::json!(o)),
-                "{manifest}"
-            );
-            assert!(our_caller(&[o]));
-        }
+        let allowed = manifest["allowed_origins"].as_array().unwrap();
+        let o = "chrome-extension://oogbclbbninliongijffeeggalppliok/".to_owned();
+        assert!(allowed.contains(&serde_json::json!(o)), "{manifest}");
+        assert!(our_caller(&[o]));
+        let original = format!("chrome-extension://{ORIGINAL_STORE_ID}/");
+        assert!(
+            !allowed.contains(&serde_json::json!(original)),
+            "{manifest}"
+        );
+        assert!(!our_caller(&[original]));
         assert!(!our_caller(&[
             "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/".into()
         ]));
+    }
+
+    /// Audit 69-1: 1.0.0's entry for the original's extension is deleted where it is a
+    /// leftover, never where the original app's own host is registered (it wrote the same
+    /// entry); an all-users run cleans HKCU too.
+    #[test]
+    fn only_the_leftover_entry_for_the_originals_extension_goes() {
+        assert_eq!(leftover_roots(false, |_| false), ["HKCU"]);
+        assert!(leftover_roots(false, |r| r == "HKCU").is_empty());
+        assert_eq!(leftover_roots(true, |_| false), ["HKLM", "HKCU"]);
+        assert_eq!(leftover_roots(true, |r| r == "HKLM"), ["HKCU"]);
+        assert_eq!(leftover_roots(true, |r| r == "HKCU"), ["HKLM"]);
+        assert!(leftover_roots(true, |_| true).is_empty());
     }
 
     #[test]

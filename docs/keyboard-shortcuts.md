@@ -17,8 +17,9 @@ not), and the menu bar and every right-click menu as menus whose items can be ru
 |---|---|
 | **Ctrl+N** | Add a download (**Add URL**) |
 | **Ctrl+V** | Paste an address into the paste bar (while nothing else has the keyboard; it doesn't add it, **Enter** does) |
-| **Ctrl+F** | Find a download |
-| **F3** | Find the next match |
+| **Ctrl+F** | Go to the **Find** field in the title bar, its text selected |
+| **F3** / **Shift+F3** | Next / previous match (in the field: **Enter** / **Shift+Enter**) |
+| **Esc** in the **Find** field | Clear it and go back to the list (or close its menu) |
 | Type a name | Jump to the download whose name starts with it |
 
 In the paste bar's address box, **Enter** adds the address, **Esc** leaves the box, **Up** /

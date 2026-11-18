@@ -144,10 +144,12 @@ it, and the extension says why.
 The host serves only Grabbit's own extension. Its IDs are in one place, `mdm_ipc::extension`
 (`crates/ipc/src/extension.rs`): the unpacked copy's (`UNPACKED_ID`, from the manifest's public
 key), the Chrome Web Store's (`STORE_ID`, signed with the store's own key: `pack.ps1` leaves the
-manifest's key out of the store's copy), the Firefox add-on's (`FIREFOX_ID`) and its
-addons.mozilla.org page; the Edge and Opera stores' are placeholders, never served, until the
-extension is listed there. The host writes each browser's manifest with those IDs, and the app
-offers the store's copy (Add to Chrome, Add to Firefox) before the unpacked one.
+manifest's key out of the store's copy) and the Firefox add-on's (`FIREFOX_ID`). Grabbit has no
+store listing yet: `STORE_ID`, like the Edge and Opera stores' IDs, is a placeholder, never served
+or named, until it is listed (1.0.0 named the original project's listing there, whose extension
+never reached Grabbit's host). The host writes each browser's manifest with those IDs, and the
+app's extension window opens the tutorial that loads the copy in Grabbit's folder, at each
+browser's section (the store's page first, once there is one).
 
 ## Remote control
 

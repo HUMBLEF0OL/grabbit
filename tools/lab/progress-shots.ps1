@@ -26,7 +26,8 @@ param(
   # The video's sample states too ("merging", "helper", "mergefail": upstream issues 769 and
   # 736), each as progress-video-<state>.png (/show progress:<state>, looks only).
   [string[]]$VideoTabs = @(),
-  # Dark mode (View → Always dark, whatever Windows' own mode); the same file names, or with
+  # Dark mode (always_dark, as the status bar's light/dark button sets it, whatever Windows' own
+  # mode); the same file names, or with
   # -Suffix ("-dark") after each.
   [switch]$Dark,
   [string]$Suffix = "",

@@ -133,6 +133,8 @@ pub const EXTRAS: &[(&str, &str)] = &[
     ("gx-user", "Options: Accounts"),
     ("gx-volume", "Options: Sounds"),
     ("gx-computer", "Server: this computer"),
+    ("gx-sun", "Title bar: switch to light mode"),
+    ("gx-moon", "Title bar: switch to dark mode"),
 ];
 
 /// Whether a set's file named for `need` is read: a need, or an extra.
@@ -368,7 +370,8 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "gx-info.svg", "gx-key.svg", "gx-keyboard.svg", "gx-link.svg", "gx-merge.svg",
             "gx-minus.svg", "gx-network.svg", "gx-plus.svg", "gx-pointer.svg", "gx-power.svg",
             "gx-refresh.svg", "gx-rss.svg", "gx-search.svg", "gx-send.svg", "gx-shield.svg",
-            "gx-sidebar.svg", "gx-upload.svg", "gx-user.svg", "gx-volume.svg", "gx-window.svg",
+            "gx-sidebar.svg", "gx-sun.svg", "gx-moon.svg", "gx-upload.svg", "gx-user.svg", "gx-volume.svg",
+            "gx-window.svg",
             "gx-world.svg",
             "misc-down.svg", "misc-emblem-ok.svg", "misc-remove.svg", "misc-up.svg",
             "st-complete.svg", "st-downloading.svg", "st-error.svg", "st-paused.svg",
@@ -391,7 +394,8 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "gx-info.svg", "gx-key.svg", "gx-keyboard.svg", "gx-link.svg", "gx-merge.svg",
             "gx-minus.svg", "gx-network.svg", "gx-plus.svg", "gx-pointer.svg", "gx-power.svg",
             "gx-refresh.svg", "gx-rss.svg", "gx-search.svg", "gx-send.svg", "gx-shield.svg",
-            "gx-sidebar.svg", "gx-upload.svg", "gx-user.svg", "gx-volume.svg", "gx-window.svg",
+            "gx-sidebar.svg", "gx-sun.svg", "gx-moon.svg", "gx-upload.svg", "gx-user.svg", "gx-volume.svg",
+            "gx-window.svg",
             "gx-world.svg",
             "misc-down.svg", "misc-emblem-ok.svg", "misc-remove.svg", "misc-up.svg",
             "st-complete.svg", "st-downloading.svg", "st-error.svg", "st-paused.svg",
@@ -799,7 +803,7 @@ mod tests {
         let n = ids.len();
         ids.dedup();
         assert_eq!(ids.len(), n, "an id twice");
-        assert_eq!(EXTRAS.len(), 37);
+        assert_eq!(EXTRAS.len(), 39);
         let graphite = set("graphite").unwrap();
         for (extra, _) in EXTRAS {
             assert!(extra.starts_with("gx-"), "{extra}");

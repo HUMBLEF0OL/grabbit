@@ -27,7 +27,7 @@ Every version is on the [Releases](https://github.com/HUMBLEF0OL/grabbit/release
 
 If Grabbit is already running, the setup asks it to save and close first. To update, use **Help → Check for updates → Update now**, or run the setup of the new version; your list and settings stay.
 
-Browser integration needs one more step in each browser: adding the extension. In Firefox, click **Add to Firefox** on [its page on addons.mozilla.org](https://addons.mozilla.org/firefox/addon/mister-download-manager/); in Chrome, Edge, Brave, Opera and Vivaldi, **Add to Chrome** on [its page in the Chrome Web Store](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp). [Browser integration](browser-integration.md) shows how.
+Browser integration needs one more step in each browser: adding the extension. It comes with Grabbit, in the `extension` folder where Grabbit is installed: in Chrome, Edge, Brave, Opera and Vivaldi, **Load unpacked** the `extension\chromium` folder; in Firefox, load `extension\mdm-firefox.xpi`. [The tutorial](guide-catch-browser-downloads.md) shows how.
 
 ### Uninstall
 
@@ -61,7 +61,7 @@ From top to bottom:
   - **Tasks** — add downloads, torrents, magnet links, batch downloads and videos from a page; **Torrent settings**; **Link grabber**; **RSS feeds**; show the drop target; import and export the list; exit.
   - **File** — the selected download: **Stop Download**, **Remove**, **Download Now**, **Redownload**.
   - **Downloads** — **Pause All**, **Stop All**, **Delete All Completed**, **Find**, the **Scheduler**, queues, the **Speed Limiter** and **Options**.
-  - **View** — show or hide the categories, sort the list (**Arrange files**), **Dark Mode support**, **Always dark**, **Theme**, **Interface size** (every window larger, 100 % to 200 %; **Ctrl +**, **Ctrl −** and **Ctrl 0** too), **Draw with** (OpenGL or Direct3D) and **Language**.
+  - **View** — show or hide the categories, sort the list (**Arrange files**), **Theme**, **Interface size** (every window larger, 100 % to 200 %; **Ctrl +**, **Ctrl −** and **Ctrl 0** too), **Draw with** (OpenGL or Direct3D) and **Language**.
   - **Help** — help pages and tutorials (on the website), **Keyboard shortcuts**, **Report a problem**, **Check for updates**, **About**, **Tell a friend** and **Support Grabbit** (Grabbit's page on GitHub, to star it: optional, nothing in Grabbit changes).
 - **Toolbar.** **Add URL**, **Add Torrent**, **Resume**, **Stop**, **Stop All**, **Delete**, **Delete Completed**, **Options**, **Scheduler**, **Start Queue**, **Stop Queue**. The small arrow next to **Add Torrent**, **Start Queue** and **Stop Queue** opens more choices.
 - **Categories** (left). Choose what the list shows: **All Downloads**, **Unfinished**, **Finished** and **Queues**, each with its categories. Drag the gap between the pane and the list to make it wider.
@@ -69,10 +69,10 @@ From top to bottom:
 
 ## Dark mode
 
-Grabbit follows your system: when Windows is set to dark mode, so is Grabbit. To keep Grabbit light whatever the system does, turn off **View → Dark Mode support**. To keep it dark whatever the system does, for example on a desktop that reports no preference, turn on **View → Always dark**.
+Grabbit follows your system at first: when Windows is set to dark mode, so is Grabbit. The small button at the right end of the status bar, under the list, switches between light and dark: a moon in light mode, a sun in dark mode. Once you click it, Grabbit keeps the mode you chose whatever Windows does.
 
-![The View menu open, with Dark Mode support and Always dark](images/help/view-dark-mode.webp)
-*1 Dark Mode support follows the system; 2 Always dark keeps Grabbit dark.*
+![The status bar under the list, with the light/dark button at its right end](images/help/view-dark-mode.webp)
+*The moon switches Grabbit to dark mode; in dark mode a sun switches it back.*
 
 ## Themes
 
@@ -88,8 +88,8 @@ keeping its layout.
 ![View → Theme open: Graphite, Add a theme file… and Open themes folder](images/help/view-theme.webp)
 *View → Theme switches at once, keeping the layout.*
 
-Graphite has a light and a dark side, and so does every theme file: **Dark Mode support** and
-**Always dark** choose between them. Theme files you put in the themes folder (**View → Theme →
+Graphite has a light and a dark side, and so does every theme file: the status bar's light/dark
+button chooses between them. Theme files you put in the themes folder (**View → Theme →
 Open themes folder**) build on Graphite, and so do Base16 and pywal colour schemes (**View →
 Theme → Add a theme file…**; **pywal** follows `wal` as it runs): [Themes](themes.md) says where
 that folder is, what a theme file holds (colours, sizes, control shapes, a font, icons), how a

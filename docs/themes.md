@@ -13,7 +13,7 @@ electric cyan, rounded corners, one-colour icons and its own typeface, Geist
 ([Getting started](getting-started.md#themes) describes it). A theme file that names a theme
 Grabbit doesn't have gets Graphite, and the log says so.
 
-**View → Dark Mode support** and **View → Always dark** choose its light or dark side
+The status bar's light/dark button chooses its light or dark side
 ([Dark mode](getting-started.md#dark-mode)). Theme files of your own build on Graphite: open
 **View → Theme** and click one, and the whole window changes at once, nothing to restart.
 
@@ -59,7 +59,7 @@ every two seconds, and only while pywal is the theme. A copy added with **Add a 
 keeps the colours it had.
 
 A scheme changes colours only, on Graphite: every window, button and menu stays where it
-was. A dark scheme makes Grabbit dark and a light one light, whatever **View → Always dark** says. The
+was. A dark scheme makes Grabbit dark and a light one light, whatever the light/dark button says (the button is greyed while such a scheme is chosen). The
 scheme's colours go where they mean the same:
 
 | Grabbit | Base16 | pywal |
@@ -167,7 +167,7 @@ Options pages, banners and tiles.
 
 1. **View → Theme → Open themes folder**, and make a new `.toml` file there (any text editor).
 2. Start from the example above: change the seeds' colours, then add roles and sizes as you go.
-3. Pick it in **View → Theme**, and look at both sides: **View → Always dark** on and off. Check
+3. Pick it in **View → Theme**, and look at both sides: click the status bar's light/dark button. Check
    that text is readable and the focus mark visible in both.
 
 The website's [Themes page](https://humblef0ol.github.io/grabbit/themes.html#ai-prompt) has a prompt

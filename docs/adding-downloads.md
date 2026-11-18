@@ -116,7 +116,7 @@ Then choose:
 - **Download Later** — add it to a queue without starting. See below.
 - **Cancel** (or **Esc**) — add nothing.
 
-By default Grabbit starts downloading while this window is open, so no time is lost while you decide. **Cancel** drops what it fetched. You can turn this off in **Options → Downloads → Start downloading immediately while displaying "Download File Info" dialog**.
+Nothing is downloaded until you choose **Start Download** or **Download Later**. To have Grabbit start while this window is still open, so no time is lost while you decide, turn on **Options → Downloads → Start downloading immediately while displaying "Download File Info" dialog**; **Cancel** then drops what it fetched.
 
 If the folder doesn't exist yet, Grabbit asks **Do you want to create it?** before it starts.
 

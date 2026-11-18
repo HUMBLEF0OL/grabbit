@@ -5,6 +5,18 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ## [Unreleased]
 
+### Changed
+
+- **Find is a field in the title bar.** Typing filters the download list as you type (the file name by default); **Enter** or **F3** selects the next match and **Shift+F3** (**Downloads → Find Previous**) the one before, **Esc** clears it, **Ctrl+F** goes to it. Its funnel opens a menu in the window: show only some statuses (Downloading, Stopped, Waiting, Complete, Error) or sources (Web, Torrent), the same filters as the column titles'; look in the file name, the description or the site and address; match case; match whole word only. The status bar says how many downloads are shown of how many ("3 of 250 downloads"). The **Find file** window is gone ([Find a download in a long list](docs/guide-find-in-long-list.md)).
+- **Light or dark from the status bar.** A small button at the status bar's right end (a moon in light mode, a sun in dark) switches between them and keeps the choice (greyed while a Base16 or pywal scheme, which has one side, is the theme); until it is first clicked Grabbit follows Windows as before. **View → Dark Mode support** and **View → Always dark** are gone.
+- **Fewer columns at first.** The list shows Source, File Name, Size, Status, Time left, Transfer rate and Added, which fit the window's first size without scrolling sideways; Q, Last Try Date, Description, Peers, Share ratio and Upload speed are a right-click on the column titles away. File Name, Size and Status are always shown. A list that showed every column, as 1.0.0 saved every list, gets the new columns once, at the upgrade; every column you show yourself afterwards stays shown.
+- **A download no longer starts behind Download File Info.** **Options → Downloads → Start downloading immediately while displaying "Download File Info" dialog** is off by default (and off once after the upgrade): nothing downloads until **Start Download** or **Download Later**. Turn it on to have it start while you choose.
+- **No glow.** The dark side no longer draws a glow under the default button or around the progress bars.
+
+### Fixed
+
+- **The browser extension connects in Brave, Chrome, Edge and Firefox.** The **Add Grabbit to your browser** window sent Chrome, Edge and Brave to the original Mister Download Manager's Chrome Web Store listing and Firefox to its addons.mozilla.org page, whose extension talks to the original's helper, never to Grabbit's; registering the helper also told Chrome to offer that extension. Grabbit has no store listing yet: each browser's **Show me how** now opens the steps that load the extension from Grabbit's own folder (Load unpacked in Chrome, Edge, Brave, Opera and Vivaldi; a temporary add-on, or Firefox Developer Edition or Nightly, in Firefox), and registering removes the entry 1.0.0 left for Chrome (kept when the original app, which writes the same entry, is installed too). The README, the help and the website no longer link the original's listings ([the tutorial](docs/guide-catch-browser-downloads.md)).
+
 ## [1.0.0] - 2026-11-18
 
 Grabbit's first release: Mister Download Manager's fork under its own name, with the Graphite look, its own website and its own signed updates.

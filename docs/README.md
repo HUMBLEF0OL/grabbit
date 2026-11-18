@@ -15,7 +15,7 @@ These pages explain each part of the program. The tutorials walk through the thi
 
 - **[Adding downloads](adding-downloads.md)** — Add URL, the clipboard, the drop target, batch downloads and lists of links, and Start Download versus Download Later.
 - **[Link grabber and archives](link-grabber.md)** — many links at once, in packages; zip, 7z and rar archives extracted when they are downloaded.
-- **[Browser integration](browser-integration.md)** — the extension for Firefox (from addons.mozilla.org), Chrome, Edge, Brave, Opera and Vivaldi (from the Chrome Web Store), which downloads it takes, and what happens when Grabbit isn't running.
+- **[Browser integration](browser-integration.md)** — the extension for Firefox, Chrome, Edge, Brave, Opera and Vivaldi (from Grabbit's own folder), which downloads it takes, and what happens when Grabbit isn't running.
 - **[Run Grabbit on a server](server.md)** — Grabbit without a window on a Windows PC that stays on, downloading into its folders; send it downloads from your phone or browser.
 - **[Control Grabbit from your phone](remote-control.md)** — add links, magnets and torrents from a phone or another computer at home, and watch and control the list.
 
@@ -54,7 +54,7 @@ These pages explain each part of the program. The tutorials walk through the thi
 - **[Keep some speed for everything else](guide-keep-speed-for-everything-else.md)** — cap Grabbit so browsing and calls stay smooth.
 - **[Download a video from a page](guide-video-from-page.md)** — pick a quality and save a video.
 - **[Carry Grabbit on a USB stick](guide-usb-stick.md)** — the portable copy, with downloads saved to the stick.
-- **[Find a download in a long list](guide-find-in-long-list.md)** — Find, Find Next and column filters.
+- **[Find a download in a long list](guide-find-in-long-list.md)** — the Find field, its filters and column filters.
 
 ## Help
 

@@ -114,10 +114,8 @@ enum Cmd {
     AddToQueue(usize),
     RemoveFromQueue,
     ToggleCategories,
-    /// View → Dark Mode support.
-    ToggleDarkMode,
-    /// View → Always dark (#60).
-    ToggleAlwaysDark,
+    /// The status bar's light/dark button (1.0.1; was View → Dark Mode support and Always dark).
+    ToggleMode,
     /// View → Paste bar (plan 06).
     TogglePasteBar,
     /// View → Details pane, and the toolbar's Details (plan 06).
@@ -182,6 +180,8 @@ enum Cmd {
     /// Downloads → Find (Ctrl-F) / Find Next (F3).
     Find,
     FindNext,
+    /// Shift+F3: the match before the selection.
+    FindPrevious,
     /// View → Arrange files: sort by a column (data slot), or by order of addition.
     Arrange(Option<usize>),
     /// Header right-click → Clear all filters.
@@ -372,7 +372,7 @@ impl Cmd {
             Cmd::Resume => "tb-resume",
             Cmd::Redownload => "gx-refresh",
             Cmd::DeleteCompleted => "tb-delete-completed",
-            Cmd::Find | Cmd::FindNext => "gx-search",
+            Cmd::Find | Cmd::FindNext | Cmd::FindPrevious => "gx-search",
             Cmd::Scheduler | Cmd::ScheduleQueue(_) => "tb-scheduler",
             Cmd::StartQueue(_) => "tb-start-queue",
             Cmd::StopQueue(_) => "tb-stop-queue",
@@ -403,6 +403,7 @@ impl Cmd {
             Cmd::AddUrl => "Ctrl+N",
             Cmd::Find => "Ctrl+F",
             Cmd::FindNext => "F3",
+            Cmd::FindPrevious => "Shift+F3",
             Cmd::MoveRename => "Ctrl+M",
             Cmd::Remove => "Delete",
             Cmd::RemoveWithFiles => "Shift+Delete",
@@ -701,9 +702,10 @@ pub struct App {
     helper_started: HashMap<u64, Option<u64>>,
     helper_own: HashMap<u64, Option<u64>>,
     limit_restarts: Vec<u64>,
-    find: Option<crate::find::Find>,
-    /// The last search, for Find Next.
-    last_find: Option<crate::find::Query>,
+    /// The title bar's search (1.0.1): what it filters the list by, kept for Find Next.
+    find: crate::find::Query,
+    /// The search field's dropdown and Ctrl+F's request.
+    find_bar: crate::find::Bar,
     /// A message with OK: its window title and message: "Cannot find …", an export that failed…
     notice: Option<(&'static str, String)>,
     /// The list files Import is reading, beside the window (upstream issue 805).
@@ -849,6 +851,15 @@ fn show_paste_arg(name: &str) -> Option<&str> {
     let address = name.strip_prefix("paste:")?.trim();
     (!address.is_empty()).then_some(address)
 }
+/// `/show mode[:light|:dark]`: does the light/dark button's switch run, the windows showing
+/// `dark` now? `mode` alone always (a click); `mode:light` / `mode:dark` only to reach that side.
+fn show_mode_switches(arg: &str, dark: bool) -> bool {
+    match arg {
+        "light" => dark,
+        "dark" => !dark,
+        _ => true,
+    }
+}
 /// Is this `/show details` (plan 06, requirement 21.1)? Only the bare name: it takes no
 /// argument (`details:x` is not it).
 fn is_show_details(name: &str) -> bool {
@@ -909,12 +920,16 @@ fn take_menu_text(ctx: &egui::Context, menu_open: bool) {
 ///   Shift+Delete as Cut (Ctrl+X is Cut too, without Shift).
 fn shortcut_cmd(i: &mut egui::InputState, focused: bool) -> Option<Cmd> {
     let find = i.consume_key(egui::Modifiers::COMMAND, egui::Key::F);
+    // Shift+F3 first: F3's pattern (no modifiers) matches Shift+F3 too.
+    let previous = i.consume_key(egui::Modifiers::SHIFT, egui::Key::F3);
     let next = i.consume_key(egui::Modifiers::NONE, egui::Key::F3);
     let add = i.consume_key(egui::Modifiers::COMMAND, egui::Key::N);
     let rename = i.consume_key(egui::Modifiers::COMMAND, egui::Key::M)
         || i.consume_key(egui::Modifiers::NONE, egui::Key::F2);
     if find {
         return Some(Cmd::Find);
+    } else if previous {
+        return Some(Cmd::FindPrevious);
     } else if next {
         return Some(Cmd::FindNext);
     } else if add {
@@ -1487,8 +1502,8 @@ impl App {
             helper_started: HashMap::new(),
             helper_own: HashMap::new(),
             limit_restarts: Vec::new(),
-            find: None,
-            last_find: None,
+            find: crate::find::Query::default(),
+            find_bar: crate::find::Bar::default(),
             notice: None,
             importing: Default::default(),
             save_failed: None,
@@ -1710,20 +1725,35 @@ impl App {
     }
 
     /// The strip under the list: how many downloads are shown and selected, how many run and
-    /// how fast in all (beyond IDM, which has no status bar).
+    /// how fast in all (beyond IDM, which has no status bar), and at its end the light/dark
+    /// button (1.0.1): true when it was clicked.
     fn status_strip(
         &self,
-        ui: &Ui,
+        ui: &mut Ui,
         layout: &chrome::Layout,
         o: Pos2,
         w: f32,
         h: f32,
         shown: usize,
-    ) {
-        let p = ui.painter();
+    ) -> bool {
+        let p = &ui.painter().clone();
         let top = o.y + layout.strip_top(h);
         let n = shown as u64;
-        let mut left = crate::i18n::tn(n, "{n} download", "{n} downloads");
+        // While the search or a filter narrows the list: how many of the view's it shows.
+        let mut left = if self.find.active() || list::any_filter(&self.list) {
+            let all = self
+                .items
+                .iter()
+                .filter(|i| self.in_view(self.view, i))
+                .count() as u64;
+            crate::i18n::fmt(
+                // i18n: the status strip while a search or a filter narrows the list: {shown} downloads shown of {n}
+                &crate::i18n::tn(all, "{shown} of {n} download", "{shown} of {n} downloads"),
+                &[("shown", &n.to_string())],
+            )
+        } else {
+            crate::i18n::tn(n, "{n} download", "{n} downloads")
+        };
         let selected = self.selection.ids().len() as u64;
         if selected > 1 {
             left += "   ";
@@ -1756,7 +1786,16 @@ impl App {
         let right_w = right
             .as_ref()
             .map_or(0.0, |r| winui::text_width_font(p, font.clone(), r).ceil());
-        let shown = winui::ellipsize(p, &font, &left, (w - 36.0 - right_w).max(0.0));
+        // The light/dark button at the trailing end, 4 in, centred in the strip.
+        let mode = egui::Rect::from_min_size(
+            pos2(
+                o.x + w - 4.0 - chrome::MODE_BUTTON.x,
+                (top + 1.0 + (layout.strip_h - 1.0 - chrome::MODE_BUTTON.y) / 2.0).round(),
+            ),
+            chrome::MODE_BUTTON,
+        );
+        let end = w - 8.0 - chrome::MODE_BUTTON.x;
+        let shown = winui::ellipsize(p, &font, &left, (end - 24.0 - right_w).max(0.0));
         // The mockup's secondary ink.
         let ink = c.text_secondary;
         let drawn = winui::text_font(p, font.clone(), o.x + 12.0, baseline, &shown, ink);
@@ -1764,9 +1803,16 @@ impl App {
             winui::full_on_hover(ui, drawn, "strip-left", &left);
         }
         if let Some(right) = right {
-            let x = o.x + w - 12.0 - right_w;
+            let x = o.x + end - right_w;
             winui::text_font(p, font, x, baseline, &right, ink);
         }
+        chrome::mode_button(
+            ui,
+            mode,
+            crate::theme::dark(),
+            ink,
+            !crate::theme::one_sided(),
+        )
     }
 
     /// "2 downloading, 1.25 MB/sec" while downloads run (the status strip, the tray's tip).
@@ -1792,7 +1838,7 @@ impl App {
     /// The list's rows as drawn: the view's downloads in the list's order that pass the column
     /// filters (Find, Select all and scrolling count these, so they match what is shown).
     fn shown_ids(&self) -> Vec<u64> {
-        if self.list.filters.iter().all(Option::is_none) {
+        if self.list.filters.iter().all(Option::is_none) && !self.find.active() {
             return self.view_ids();
         }
         self.list_rows().0
@@ -1805,8 +1851,12 @@ impl App {
             .iter()
             .flat_map(|q| q.items.iter().copied())
             .collect();
+        // The search first, on the downloads themselves (nothing allocated per download), so
+        // only its matches get rows built.
+        let search = self.find.active();
         self.view_items()
             .into_iter()
+            .filter(|it| !search || self.find.matches(it))
             .map(|it| (it.id, self.row(it, &queued)))
             .filter(|(_, r)| list::matches(&self.list, r))
             .unzip()
@@ -2516,7 +2566,24 @@ impl App {
             // MDM_CRASH_TEST=1 only (crash.rs): the crash reports' own check.
             "crash-test" => crate::crash::test(tab),
             "batch" => self.run(Cmd::Batch(false), None, ctx),
-            "find" => self.run(Cmd::Find, None, ctx),
+            // The title bar's search with text typed (find:<text>; empty clears it), and its
+            // dropdown open (find-options): screenshots. There is no Find window any more.
+            "find" => {
+                self.find.text = tab.to_owned();
+                self.list.set_keys(false);
+            }
+            // The status bar's light/dark button, as clicked (mode), or to one side whatever the
+            // mode shown (mode:light, mode:dark: tools/lab/showcase.ps1).
+            "mode" => {
+                if show_mode_switches(tab, crate::theme::dark()) {
+                    self.run(Cmd::ToggleMode, None, ctx);
+                }
+            }
+            "find-options" => {
+                self.open_menu = None;
+                self.popup = None;
+                self.find_bar.open = true;
+            }
             // scheduler:files, scheduler:limits and scheduler:name open it on its main queue's
             // Files in the queue, on Download limits, or asking a new queue's name (plan 07e's
             // screenshots).
@@ -4165,30 +4232,31 @@ impl App {
         }
     }
 
-    /// Select the next download matching `q` after the selection: in the list as shown, else
-    /// in all downloads (switching the view to All Downloads).
-    fn find_next(&mut self, q: &crate::find::Query) {
-        let shown = self.shown_ids();
+    /// Select the next download the search matches after the selection (the one before it when
+    /// `back`), wrapping round: in the list as shown (which the search filters), else in all
+    /// downloads (switching the view to All Downloads). None anywhere: the empty list and the
+    /// status strip's "0 of N" say so.
+    fn find_next(&mut self, back: bool) {
+        let q = self.find.clone();
         let found = q
-            .next(&shown, &self.items, self.selection.focus())
+            .step(&self.shown_ids(), &self.items, self.selection.focus(), back)
             .or_else(|| {
+                if !self.items.iter().any(|i| q.matches(i)) {
+                    return None;
+                }
+                // All Downloads, as it would show them (its column filters too): the view
+                // changes only when a match is there to select.
+                let was = self.view;
                 self.view = View::All;
-                q.next(&self.shown_ids(), &self.items, self.selection.focus())
+                let found = q.step(&self.shown_ids(), &self.items, self.selection.focus(), back);
+                if found.is_none() {
+                    self.view = was;
+                }
+                found
             });
-        match found {
-            Some(id) => {
-                self.selection.set(id);
-                self.list.scroll_to = self.shown_ids().iter().position(|x| *x == id);
-            }
-            None => {
-                self.notice = Some((
-                    crate::i18n::mark("Find file"),
-                    crate::i18n::fmt(
-                        crate::i18n::t("Cannot find \"{text}\""),
-                        &[("text", q.text.trim())],
-                    ),
-                ))
-            }
+        if let Some(id) = found {
+            self.selection.set(id);
+            self.list.scroll_to = self.shown_ids().iter().position(|x| *x == id);
         }
     }
 
@@ -6073,13 +6141,10 @@ impl App {
                 self.dirty = true;
             }
             Cmd::ToggleCategories => self.show_categories = !self.show_categories,
-            Cmd::ToggleDarkMode => {
-                self.settings.dark_mode_support = !self.settings.dark_mode_support;
-                self.theme_checked = None;
-                self.dirty = true;
-            }
-            Cmd::ToggleAlwaysDark => {
-                self.settings.always_dark = !self.settings.always_dark;
+            Cmd::ToggleMode => {
+                let (support, always) = crate::theme::toggled(crate::theme::dark());
+                self.settings.dark_mode_support = support;
+                self.settings.always_dark = always;
                 self.theme_checked = None;
                 self.dirty = true;
             }
@@ -6213,7 +6278,9 @@ impl App {
                     dialogs::show_download_in_folder(&d, moved_away);
                 }
             }
-            Cmd::ToggleColumn(i) => self.list.visible[i] = !self.list.visible[i],
+            Cmd::ToggleColumn(i) => {
+                self.list.visible[i] = list::always_shown(i) || !self.list.visible[i];
+            }
             Cmd::LimiterOn | Cmd::LimiterOff => {
                 self.settings.speed_limit_on = cmd == Cmd::LimiterOn;
                 self.apply_speed_limit();
@@ -6222,17 +6289,20 @@ impl App {
             Cmd::LimiterSettings => {
                 self.speed_settings = Some(dialogs::SpeedSettings::new(&self.settings));
             }
+            // The title bar's search field takes the keys, its text selected.
+            // Not while the title bar has no room for it: nothing to give the keys to.
             Cmd::Find => {
-                if self.find.is_none() {
-                    self.find = Some(crate::find::Find::new(self.last_find.as_ref()));
-                } else {
-                    dialogs::raise(ctx, dialogs::dialog_viewport("find"));
+                if self.find_bar.ask_focus() {
+                    self.list.set_keys(false);
                 }
             }
-            Cmd::FindNext => match self.last_find.clone() {
-                Some(q) => self.find_next(&q),
-                None => self.find = Some(crate::find::Find::new(None)),
-            },
+            Cmd::FindNext | Cmd::FindPrevious if !self.find.active() => {
+                if self.find_bar.ask_focus() {
+                    self.list.set_keys(false);
+                }
+            }
+            Cmd::FindNext => self.find_next(false),
+            Cmd::FindPrevious => self.find_next(true),
             Cmd::VideoPage => {
                 if self.video_dlg.is_none() {
                     self.video_dlg = Some(self.video_dialog(None));
@@ -6693,6 +6763,8 @@ impl App {
                 Sep,
                 I("Find (Ctrl-F)", Cmd::Find, true, false),
                 I("Find Next (F3)", Cmd::FindNext, true, false),
+                // i18n: Downloads menu: select the match before the selection (Shift+F3)
+                I("Find Previous (Shift+F3)", Cmd::FindPrevious, true, false),
                 I(
                     "Select &all",
                     Cmd::SelectAll,
@@ -6810,21 +6882,8 @@ impl App {
             Sub("Toolbar", false, vec![]),
             Sub("&Tray icon", false, vec![]),
             off("C&ustomize URL List..."),
-            I(
-                "Dark Mode support",
-                Cmd::ToggleDarkMode,
-                true,
-                settings.dark_mode_support,
-            ),
-            // MDM's (#60): dark whatever the system says (a desktop that reports nothing).
-            I(
-                // i18n: View menu: a check item; dark mode on, whatever the system's setting
-                "Always dark",
-                Cmd::ToggleAlwaysDark,
-                true,
-                settings.always_dark,
-            ),
-            // View → Theme (MDM's, #45), after Always dark; then Interface size (#262) and
+            // Light or dark: the status bar's button (1.0.1), no longer two View items.
+            // View → Theme (MDM's, #45); then Interface size (#262) and
             // Draw with (#89, renderer.rs).
             Self::theme_menu(&settings.theme, themes),
             Self::interface_size_menu(zoom),
@@ -7069,7 +7128,8 @@ impl App {
     /// The entries of the popup menu `kind`, and the download it acts on.
     fn popup_entries(&self, kind: Popup) -> (Vec<MenuEntry<Cmd>>, Option<u64>) {
         match kind {
-            // Column chooser (IDM: right-click on the header). File Name always stays.
+            // Column chooser (IDM: right-click on the header). File Name, Size and Status always
+            // stay (list::always_shown).
             Popup::Columns => {
                 let mut e: Vec<MenuEntry<Cmd>> = list::TITLES
                     .iter()
@@ -7083,7 +7143,12 @@ impl App {
                             crate::i18n::tc("column", t)
                         };
                         let name = crate::chrome::label(&name.replace('&', "&&"));
-                        MenuEntry::Item(name, Cmd::ToggleColumn(i), i != 0, self.list.visible[i])
+                        MenuEntry::Item(
+                            name,
+                            Cmd::ToggleColumn(i),
+                            !list::always_shown(i),
+                            self.list.visible[i],
+                        )
                     })
                     .collect();
                 e.push(MenuEntry::Sep);
@@ -7619,6 +7684,45 @@ impl App {
             },
         );
     }
+    /// The title bar's search field (`field`, English), where it fits: what it asks goes in
+    /// `chosen`, or happens here (Escape gives the list the keys).
+    fn find_field(
+        &mut self,
+        ui: &mut Ui,
+        field: Option<egui::Rect>,
+        key: &str,
+        chosen: &mut Option<(Cmd, Option<u64>)>,
+    ) {
+        if let Some(rc) = field {
+            match crate::find::field(
+                ui,
+                rc,
+                key,
+                &mut self.find_bar,
+                &mut self.find,
+                &mut self.list,
+            ) {
+                Some(crate::find::Event::Next) => *chosen = Some((Cmd::FindNext, None)),
+                Some(crate::find::Event::Previous) => *chosen = Some((Cmd::FindPrevious, None)),
+                Some(crate::find::Event::Leave) => {
+                    self.tree_keys = false;
+                    self.list.set_keys(true);
+                }
+                None => {}
+            }
+            // A click in the field takes the keys from the list (its selection goes grey).
+            if ui.ctx().memory(|m| m.has_focus(crate::find::field_id())) {
+                self.list.set_keys(false);
+            }
+        } else if self.find_bar.hidden(&mut self.find) {
+            // It had the keys: the list takes them back (arrows, Delete, Enter).
+            ui.ctx()
+                .memory_mut(|m| m.surrender_focus(crate::find::field_id()));
+            self.tree_keys = false;
+            self.list.set_keys(true);
+        }
+    }
+
     fn toggle(&mut self, b: Branch) {
         match b {
             Branch::All => self.all_open = !self.all_open,
@@ -7636,8 +7740,9 @@ impl App {
             tree: self.show_categories,
             tree_keys: self.tree_keys,
             menu_open: self.popup.is_some() || self.open_menu.is_some(),
-            filter_open: self.list.filter_is_open(),
-            filter_ends: self.list.filter_ends(),
+            // The search's dropdown goes round its controls as a header's filter box does.
+            filter_open: self.list.filter_is_open() || self.find_bar.open,
+            filter_ends: self.list.filter_ends().or(self.find_bar.ends),
         }
     }
 
@@ -7753,7 +7858,6 @@ impl App {
         let window_min = full.min;
         // Graphite's title bar keeps room after its title for the menus and Find (plan 05b).
         let find_key = chrome::key_label(Cmd::Find.hint().unwrap_or("Ctrl+F"));
-        let find_size = chrome::find_button_size(ui.painter(), &find_key);
         // The menu titles' places once a frame (measured at 0, 0; moved where they go).
         let rel_titles = if layout.menus_in_caption {
             chrome::caption_titles(ui.painter(), 0.0, 0.0)
@@ -7761,7 +7865,7 @@ impl App {
             Vec::new()
         };
         let reserve = if layout.menus_in_caption {
-            chrome::caption_menus_width(&rel_titles) + find_size.x + 32.0
+            chrome::caption_menus_width(&rel_titles) + crate::find::FIELD_MIN + 32.0
         } else {
             0.0
         };
@@ -7874,14 +7978,9 @@ impl App {
                 let end = titles.last().map_or(bar.title_end, |t| t.right());
                 let free = bar.buttons_start - end;
                 let mut more: Vec<egui::Rect> = titles.iter().map(|t| winui::rect(*t)).collect();
-                if free >= find_size.x + 16.0 {
-                    let x = (end + (free - find_size.x) / 2.0).round();
-                    let rc = egui::Rect::from_min_size(pos2(x, (mid - 13.0).round()), find_size);
-                    if chrome::find_button(ui, rc, &find_key) {
-                        chosen = Some((Cmd::Find, None));
-                    }
-                    more.push(winui::rect(rc));
-                }
+                let find_rc = crate::find::caption_place(end, free, mid);
+                more.extend(find_rc.map(winui::rect));
+                self.find_field(ui, find_rc, &find_key, &mut chosen);
                 self.publish_caption(ui, &layout, window_min, bar, &more);
                 (event, titles)
             }
@@ -7889,7 +7988,17 @@ impl App {
                 if let Some(bar) = bar {
                     self.publish_caption(ui, &layout, window_min, bar, &[]);
                 }
-                chrome::menu_bar(ui, &layout, o, w, self.open_menu)
+                let shown = chrome::menu_bar(ui, &layout, o, w, self.open_menu);
+                // The system's title bar: the search field at the menu row's end, as tall as it.
+                let h = layout.menu_h - 1.0;
+                let field = (w >= 640.0).then(|| {
+                    egui::Rect::from_min_size(
+                        pos2(o.x + w - 4.0 - crate::find::FIELD_MIN, o.y),
+                        egui::vec2(crate::find::FIELD_MIN, h),
+                    )
+                });
+                self.find_field(ui, field, &find_key, &mut chosen);
+                shown
             }
         };
         if let Some(event) = event {
@@ -8251,7 +8360,9 @@ impl App {
         {
             chosen = Some((cmd, None));
         }
-        self.status_strip(ui, &layout, o, w, h, ids.len());
+        if self.status_strip(ui, &layout, o, w, h, ids.len()) {
+            chosen = Some((Cmd::ToggleMode, None));
+        }
         if let Some((i, pos)) = r.context {
             self.open_popup(Popup::Item(i.map(|i| ids[i])), pos);
         }
@@ -9603,18 +9714,6 @@ impl App {
                 ));
                 item.checksum = Some(h);
                 self.dirty = true;
-            }
-        }
-        if let Some(f) = &mut self.find {
-            match f.show(ctx) {
-                Outcome::Open => {}
-                Outcome::Closed => self.find = None,
-                Outcome::Done(()) => {
-                    let q = f.query.clone();
-                    self.find = None;
-                    self.find_next(&q);
-                    self.last_find = Some(q);
-                }
             }
         }
         if let Some((title, text)) = &self.notice
@@ -11830,12 +11929,14 @@ mod old_keys_tests {
     }
 
     /// The end of `App::paint` on `dev` (85df4c43), copied as it was: the oracle. No menu or
-    /// popup open, no command chosen before it.
+    /// popup open, no command chosen before it. 1.0.1 adds Shift+F3 (Find previous), read
+    /// before F3 (whose pattern matches it too).
     fn dev_keys(ctx: &egui::Context) -> Option<Cmd> {
         let mut chosen = None;
-        let (find, next, add) = ctx.input_mut(|i| {
+        let (find, previous, next, add) = ctx.input_mut(|i| {
             (
                 i.consume_key(egui::Modifiers::COMMAND, egui::Key::F),
+                i.consume_key(egui::Modifiers::SHIFT, egui::Key::F3),
                 i.consume_key(egui::Modifiers::NONE, egui::Key::F3),
                 i.consume_key(egui::Modifiers::COMMAND, egui::Key::N),
             )
@@ -11848,6 +11949,8 @@ mod old_keys_tests {
         }
         if find {
             chosen = Some(Cmd::Find);
+        } else if previous {
+            chosen = Some(Cmd::FindPrevious);
         } else if next {
             chosen = Some(Cmd::FindNext);
         } else if add {
@@ -11946,6 +12049,12 @@ mod old_keys_tests {
         vec![
             ("Ctrl+F", ctrl, vec![key(Key::F, ctrl)], Some(Cmd::Find)),
             ("F3", none, vec![key(Key::F3, none)], Some(Cmd::FindNext)),
+            (
+                "Shift+F3",
+                shift,
+                vec![key(Key::F3, shift)],
+                Some(Cmd::FindPrevious),
+            ),
             ("Ctrl+N", ctrl, vec![key(Key::N, ctrl)], Some(Cmd::AddUrl)),
             (
                 "Ctrl+M",
@@ -12637,5 +12746,93 @@ mod start_disk_tests {
         std::thread::sleep(Duration::from_millis(200));
         app.apply_state_reads();
         assert_eq!(get(&app, 2).downloaded, 7, "the late read is dropped");
+    }
+}
+
+#[cfg(test)]
+mod find_and_columns_tests {
+    //! PR 69's audit: Find Next across views, and the columns that can't be hidden.
+    use super::*;
+
+    fn app(items: Vec<Item>) -> std::mem::ManuallyDrop<App> {
+        let rt = Box::leak(Box::new(
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
+        ));
+        let loaded = store::Loaded {
+            next_id: 100,
+            items,
+            columns: None,
+            settings: Settings::default(),
+            queues: Vec::new(),
+        };
+        let (_, commands) = std::sync::mpsc::channel();
+        // Never dropped: an App saves its list as it goes.
+        std::mem::ManuallyDrop::new(App::assemble(
+            &egui::Context::default(),
+            rt.handle().clone(),
+            commands,
+            loaded,
+            crate::Start::Shown,
+        ))
+    }
+
+    fn item(id: u64, name: &str, status: Status) -> Item {
+        let url = url::Url::parse(&format!("http://127.0.0.1:9/{name}")).unwrap();
+        let mut i = Item::new(id, url, PathBuf::from(name), Category::General);
+        i.status = status;
+        i
+    }
+
+    /// Audit 69-8: a match outside the view switches to All Downloads and is selected; a match
+    /// that All Downloads' column filters hide too leaves the view and the selection alone.
+    #[test]
+    fn find_next_switches_views_only_to_select_a_match() {
+        let mut a = app(vec![
+            item(1, "a.zip", Status::Complete),
+            item(2, "b.iso", Status::Stopped),
+        ]);
+        a.view = View::Finished(None);
+        a.find.text = "b.iso".into();
+        // The Status filter hides Stopped everywhere: nothing to select, nothing moves.
+        list::set_value(&mut a.list, 3, "Stopped", false);
+        a.find_next(false);
+        assert_eq!(a.view, View::Finished(None));
+        assert_eq!(a.selection.focus(), None);
+        // Without it: All Downloads, the match selected.
+        list::set_value(&mut a.list, 3, "Stopped", true);
+        a.find_next(false);
+        assert_eq!(a.view, View::All);
+        assert_eq!(a.selection.focus(), Some(2));
+        // Shift+F3 wraps round to it too.
+        a.find_next(true);
+        assert_eq!(a.selection.focus(), Some(2));
+    }
+
+    /// Audit 69-r2-2: `/show mode` switches; `mode:light` and `mode:dark` only to reach that side.
+    #[test]
+    fn show_mode_reaches_the_side_asked() {
+        for dark in [false, true] {
+            assert!(show_mode_switches("", dark));
+            assert_eq!(show_mode_switches("light", dark), dark);
+            assert_eq!(show_mode_switches("dark", dark), !dark);
+        }
+    }
+
+    /// Audit 69-9: the column menu's command never hides File Name, Size or Status; it
+    /// toggles the others.
+    #[test]
+    fn toggle_column_leaves_the_always_shown_ones() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        for c in [0, 2, 3] {
+            a.run(Cmd::ToggleColumn(c), None, &ctx);
+            assert!(a.list.visible[c], "column {c}");
+        }
+        let q = a.list.visible[1];
+        a.run(Cmd::ToggleColumn(1), None, &ctx);
+        assert_eq!(a.list.visible[1], !q);
     }
 }

@@ -196,10 +196,9 @@ Everything below ships together, in version 0.5.0.
 - ✅ Streams whose address doesn't end in .m3u8 or .mpd, served as plain text, are found too: by
   the button over the video, the right-click menu and the media list, read only when asked
   ([#171](https://github.com/anefzaoui/misterdownloadmanager/issues/171))
-- ✅ The extension in the [Chrome Web Store](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp): **Add to Chrome** beside **Add to Firefox**
-  on the website, in the help, the FAQ and the README; MDM's **Add Mister Download Manager to
-  your browser** window opens the store in Chrome, Edge, Brave, Opera and Vivaldi, with the
-  manual install as the fallback
+- ⛔ The extension in the Chrome Web Store: that listing is the original project's, whose
+  extension never reaches Grabbit; Grabbit isn't listed yet, and since 1.0.1 its window, help,
+  website and README offer the copy in Grabbit's folder instead (Load unpacked)
 - ✅ Themes, the groundwork: every colour and size the controls are drawn with comes from one
   theme, and theme files can change them; the classic look is unchanged
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
@@ -246,9 +245,9 @@ Everything below ships together, in version 0.5.0.
 - ✅ Linux: MDM's first window opens seconds sooner; the system's fonts are looked up all at once
   while it starts, not one by one in the window (on a busy computer that froze it, part of
   [#164](https://github.com/anefzaoui/misterdownloadmanager/issues/164))
-- ✅ Firefox's add-on offered from [addons.mozilla.org](https://addons.mozilla.org/firefox/addon/mister-download-manager/)
-  first: **Add to Firefox** on the website, in the help, the FAQ and the README, and in MDM's
-  **Add Mister Download Manager to your browser** window (for Zen and LibreWolf too)
+- ⛔ Firefox's add-on offered from addons.mozilla.org: that page is the original project's;
+  Grabbit's add-on isn't listed or signed yet, and since 1.0.1 the help says how to load it from
+  Grabbit's folder (a temporary add-on, or Firefox Developer Edition or Nightly)
 - ✅ Support MDM: a way to support its creator on [GitHub Sponsors](https://github.com/sponsors/anefzaoui),
   asked for only (**Help → Support MDM**, a line in About, the website, the README, the
   extension's popup and GitHub's Sponsor button); MDM stays free, nothing changes or unlocks
@@ -554,6 +553,27 @@ everything below ships in it.
   for Resume. Hardened after its review: a gallery's files in subfolders are saved, an
   encrypted piece whose key can't be had leaves nothing behind, and deleting a video takes its
   HLS audio stream's files too.
+
+## Version 1.0.1
+
+The maintainer's first findings with 1.0.0 (in `dev`, for the next release):
+
+- ✅ The browser extension connects in Brave, Chrome, Edge and Firefox: Grabbit has no store
+  listing yet, so the **Add Grabbit to your browser** window opens the tutorial that loads the
+  copy in Grabbit's folder (Load unpacked; a temporary add-on in Firefox) instead of the original
+  project's listings, whose extension never reached Grabbit, and Chrome is no longer told to
+  offer that extension.
+- ✅ Seven columns at first (Source, File Name, Size, Status, Time left, Transfer rate, Added),
+  which fit the window's first size without scrolling sideways; File Name, Size and Status are
+  always shown, the rest a right-click on the header away.
+- ✅ A pasted link waits for Download File Info's answer: **Start downloading immediately while
+  displaying "Download File Info" dialog** is off by default.
+- ✅ No glow under the default button or the progress bars, in dark mode either.
+- ✅ Light or dark from a small button at the status bar's end (a moon, a sun) instead of View →
+  Dark Mode support and Always dark; it follows Windows until first clicked.
+- ✅ Find in the main window: the title bar's field filters the list as you type, Enter, F3 and
+  Shift+F3 step through the matches, and its funnel's menu chooses where to look and shows only
+  some statuses or sources (the column filters themselves). The Find file window is gone.
 
 ## Being worked on
 

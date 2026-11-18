@@ -159,7 +159,7 @@ tile = "#f2f0f8"
 "banner.error" = "#fdeaea"
 "banner.info" = "#f0e9fe"
 "banner.warning" = "#fdf3e1"
-# Two-tone finish and glow (09a): the outlaw colour's lighter stop, a glow in dark only.
+# Two-tone finish (09a): the outlaw colour's lighter stop; no glow, in either mode (1.0.1).
 glow = "#00000000"
 "button.accent.top" = "#00829a"
 "progress.bar.end" = "#00829a"
@@ -256,7 +256,7 @@ tile = "#1c1828"
 "banner.error" = "#3a1b1b"
 "banner.info" = "#231a3a"
 "banner.warning" = "#3a2d14"
-# Two-tone finish and glow (09a): the outlaw colour's lighter stop, a glow in dark only.
-glow = "#1fe0f055"
+# Two-tone finish (09a): the outlaw colour's lighter stop; no glow, in either mode (1.0.1).
+glow = "#00000000"
 "button.accent.top" = "#7af3ff"
 "progress.bar.end" = "#7af3ff"

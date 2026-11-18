@@ -24,7 +24,7 @@ param(
   [string]$Torrent = "",
   # Only these shots (names without .png); all when empty.
   [string[]]$Only = @(),
-  # Dark mode for every window (View → Always dark: Windows' own mode doesn't matter).
+  # Dark mode for every window (always_dark, as the status bar's light/dark button sets it: Windows' own mode doesn't matter).
   [switch]$Dark,
   # Where the main window opens instead of far off the screens (MDM_OFFSCREEN_AT, "x,y"): on a
   # machine nobody watches whose OpenGL is software (GitHub's runner, docs-shots.yml), which
@@ -152,8 +152,8 @@ $srv = $null; $app = $null
 try {
   if (Test-Path $work) { Remove-Item $work -Recurse -Force }
   New-Item -ItemType Directory -Force "$work\data", "$work\Downloads" | Out-Null
-  # Nothing asked at the first start; light mode unless asked, dark with View →
-  # Always dark, whatever Windows' own mode. Every category's folder is under $work, so no shot
+  # Nothing asked at the first start; light mode unless asked, dark with always_dark (the light/dark button's setting)
+  # whatever Windows' own mode. Every category's folder is under $work, so no shot
   # shows the user's own folders (or name). Nothing reaches out: no update check, and the torrent
   # engine neither listens nor uses the DHT, UPnP or local discovery (no firewall prompt).
   $dark = $Dark -or ($Only -contains "main-dark")

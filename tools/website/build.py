@@ -45,12 +45,13 @@ SITE = "https://humblef0ol.github.io/grabbit"
 # paths ("/download.html") and rebase() puts BASE in front of them once everything is built.
 BASE = urllib.parse.urlsplit(SITE).path.rstrip("/")
 REPO = "https://github.com/HUMBLEF0OL/grabbit"
-# The Firefox add-on's listing (crates/ipc/src/extension.rs FIREFOX_PAGE): {{AMO}} in pages, and
-# <!--@amo--> for its Add to Firefox button.
-AMO = "https://addons.mozilla.org/firefox/addon/mister-download-manager/"
-# The extension's listing in the Chrome Web Store (crates/ipc/src/extension.rs STORE_ID), for
-# Chrome, Edge, Brave, Opera and Vivaldi: {{CWS}} in pages; <!--@cws--> for its Add to Chrome button.
-CWS = "https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp"
+# Where Add to Firefox ({{AMO}} in pages, <!--@amo--> for its button) and Add to Chrome ({{CWS}},
+# <!--@cws-->) go: Grabbit has no addons.mozilla.org or Chrome Web Store listing yet
+# (crates/ipc/src/extension.rs STORE_ID), so the tutorial's section that adds the copy in
+# Grabbit's folder. A listing named Mister Download Manager is the original project's: its
+# extension never connects to Grabbit.
+AMO = "/help/guide-catch-browser-downloads.html#firefox"
+CWS = "/help/guide-catch-browser-downloads.html#chromium"
 # The header's, the footer's and the home page's Support Grabbit: this fork's repository until its
 # owner's GitHub Sponsors page exists (see .github/FUNDING.yml; the app and the popup match).
 SPONSORS = REPO
@@ -336,7 +337,7 @@ def split_button(extra_class: str = "") -> str:
 
 
 def amo_button(extra_class: str = "") -> str:
-    """Add to Firefox: the add-on's listing on addons.mozilla.org, drawn in line (never green:
+    """Add to Firefox: the steps that add the add-on (AMO), drawn in line (never green:
     green is Download's), with Firefox's own logo; in words, so it's translated (Mozilla's badge
     is an English picture)."""
     return (f'<a class="btn btn-line store-btn{extra_class}" href="{AMO}">'
@@ -344,8 +345,8 @@ def amo_button(extra_class: str = "") -> str:
 
 
 def cws_button(extra_class: str = "") -> str:
-    """Add to Chrome: the extension's listing in the Chrome Web Store (Edge, Brave, Opera and
-    Vivaldi install from it too), drawn as Add to Firefox is."""
+    """Add to Chrome: the steps that load the extension (CWS) in Chrome, Edge, Brave, Opera and
+    Vivaldi, drawn as Add to Firefox is."""
     return (f'<a class="btn btn-line store-btn{extra_class}" href="{CWS}">'
             '<img src="/assets/browsers/chrome.svg" width="22" height="22" alt=""> Add to Chrome</a>')
 
@@ -1494,7 +1495,7 @@ def build_themes() -> None:
             <div><dt>Windows</dt><dd><code translate="no">%APPDATA%\\grabbit\\themes</code></dd></div>
             <div><dt>Portable copy</dt><dd><code translate="no">data\\themes</code> beside the program</dd></div>
           </dl>
-          <p>Within two seconds it shows in <b>View → Theme</b>, under Graphite, by the <code>name</code> it gives itself. Pick it and the whole window changes at once. After you edit the file, pick it again in <b>View → Theme</b> to see the change. <b>View → Dark Mode support</b> and <b>Always dark</b> switch between its light and dark side.</p>
+          <p>Within two seconds it shows in <b>View → Theme</b>, under Graphite, by the <code>name</code> it gives itself. Pick it and the whole window changes at once. After you edit the file, pick it again in <b>View → Theme</b> to see the change. The small sun or moon button at the right end of the status bar switches between its light and dark side.</p>
           <p><b>View → Theme → Add a theme file…</b> does it for you: pick the file anywhere, and Grabbit copies it into the themes folder and uses it at once.</p>
           <h4 id="schemes">Already have a Base16 or pywal scheme?</h4>
           <p>It's a theme already. A <a href="https://github.com/tinted-theming/schemes">Base16 or Base24 scheme</a> (<code>.yaml</code>) or pywal's <code>colors.json</code>, added the same way, changes Grabbit's colours and nothing else: the scheme's backgrounds behind the list and the windows, its text kept readable (4.5:1 or more), its blue on the focus, the selection and the progress bar. Once <code>wal</code> has run, <b>View → Theme</b> lists <b>pywal</b>, read from <code>~/.cache/wal/colors.json</code> (<code translate="no">%USERPROFILE%\\.cache\\wal\\colors.json</code> on Windows), and Grabbit follows each new wallpaper's colours within two seconds. <a href="{REPO}/blob/main/docs/themes.md#base16-and-pywal-colour-schemes">The guide</a> shows which colour goes where.</p>
