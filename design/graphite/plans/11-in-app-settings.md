@@ -9,6 +9,34 @@ Plan written on dev `da63b006`, 2026-11-18 (by a read-only planning agent; verif
 - Branches: `ui/11a-options-page`, `ui/11b1-scheduler-section`, `ui/11b2-small-sections`, `ui/11c-appearance` (optional). Origin only, per 00.
 - Needs: 08 (side list, `page_area`), 09, 10e. Before 11a: `sync.py status`, port anything waiting in `options.rs` / `scheduler.rs`.
 
+## Status (2026-11-18, dev `9a12944b`)
+
+Not started: no part of 11a–11c is built. The pre-step ports are done but not merged; each is a
+pushed branch with one commit and no pull request yet, 6 commits behind dev:
+
+| Branch | Upstream | State |
+| --- | --- | --- |
+| `upstream-sync/2026-11-18` | 81afcae2 (upstream issue 1041): Options → Downloads → Edit… opens the Download progress dialog; also `winui::enter_is_not_a_click` clears egui's `FAKE_PRIMARY_CLICKED`, so Enter on a focused check box no longer ticks it and presses OK in every dialog | built, tests green; its ledger also records c0be4d33 covered, e44dfc02 and 34cacf3a skipped |
+| `upstream-sync/2026-11-18-1058` | 868f3087 (upstream issues 1058, 1091): a `.torrent` downloaded in the browser stays with the browser while Torrent settings don't open torrents with Grabbit; Grabbit is listed in Default apps | not yet compiled; review its installer (`mdm.iss`) edits |
+| `upstream-sync/2026-11-18-818` | a70b2c17: browser integration from a copy run inside a zip no longer leaves browsers looking for a helper that is gone | not yet compiled |
+
+The 1058 and 818 ports change `extension.rs`, `nmhost` and `win32.rs`, which the 1.0.1 feedback
+PR (69) rewrote (no store listing, only the unpacked ID, `com.grabbit.host`): merge dev into each
+and resolve onto that model, then build, test and open each through `sync.py pr`.
+
+Since this plan was written, dev changed the main window it builds on (verify every line number
+by name): PR 69 put the Find field in the title bar (`find.rs` `Bar`, `/show find:<text>`,
+`/show find-options`), the light/dark button at the status strip's end (`Cmd::ToggleMode`,
+`/show mode[:light|:dark]`; View → Dark Mode support and Always dark are gone, so 11c has no
+dark-mode rows), made the first window 1080 × 560 and changed the browser extension window's
+rows to "Show me how"; PR 75 switched Graphite to the green palette. The universal Add (PR 76,
+draft) changes the toolbar's first item and the paste bar; take its icon-list additions in
+`gen3.py` / `themeicons.rs` alongside this plan's `gx-arrow-left` and `gx-puzzle`.
+
+Order: the three ports, then 11a, 11b1, 11b2 (11c only if wanted), each its own pull request
+with an external audit until approved. The help pictures are retaken once for the 1.0.1 release,
+not per part (PR screenshots per part as usual).
+
 ## Decisions (default if no answer)
 
 | # | Question | Default | Why |
