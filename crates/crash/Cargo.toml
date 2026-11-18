@@ -1,5 +1,5 @@
 [package]
-name = "mdm-crash"
+name = "grabbit-crash"
 description = "Crash and freeze reports: the monitor process, minidumps, symbolicated stacks, logs"
 version.workspace = true
 edition.workspace = true
@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+
+# The code's paths stay `mdm_crash::` (plan 10, decision 3).
+[lib]
+name = "mdm_crash"
 
 [dependencies]
 # Out-of-process minidumps (Embark Studios, as Firefox and Sentry do it): the crashed process only

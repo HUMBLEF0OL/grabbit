@@ -1,5 +1,5 @@
 [package]
-name = "mdm-app"
+name = "grabbit-app"
 description = "Grabbit, desktop app (egui)"
 version.workspace = true
 edition.workspace = true

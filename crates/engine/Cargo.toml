@@ -1,5 +1,5 @@
 [package]
-name = "mdm-engine"
+name = "grabbit-engine"
 description = "Grabbit download engine: dynamic segmentation, workers, resume"
 version.workspace = true
 edition.workspace = true
@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+
+# The code's paths stay `mdm_engine::` (plan 10, decision 3).
+[lib]
+name = "mdm_engine"
 
 [dependencies]
 bytes.workspace = true

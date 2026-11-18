@@ -1,5 +1,5 @@
 [package]
-name = "mdm-nmhost"
+name = "grabbit-nmhost"
 description = "Browser native messaging host: hands captured downloads to Grabbit"
 version.workspace = true
 edition.workspace = true

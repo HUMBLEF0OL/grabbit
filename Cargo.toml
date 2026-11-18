@@ -11,18 +11,18 @@ authors = ["Ahmed Nefzaoui"]
 publish = false
 
 [workspace.dependencies]
-mdm-cli = { path = "crates/cli" }
-mdm-crash = { path = "crates/crash", default-features = false }
-mdm-debrid = { path = "crates/debrid" }
-mdm-engine = { path = "crates/engine" }
-mdm-extract = { path = "crates/extract" }
-mdm-geo = { path = "crates/geo" }
-mdm-ipc = { path = "crates/ipc" }
-mdm-labserver = { path = "crates/labserver" }
-mdm-mcp = { path = "crates/mcp" }
-mdm-remote = { path = "crates/remote" }
-mdm-tools = { path = "crates/tools" }
-mdm-torrent = { path = "crates/torrent" }
+mdm-cli = { package = "grabbit-cli", path = "crates/cli" }
+mdm-crash = { package = "grabbit-crash", path = "crates/crash", default-features = false }
+mdm-debrid = { package = "grabbit-debrid", path = "crates/debrid" }
+mdm-engine = { package = "grabbit-engine", path = "crates/engine" }
+mdm-extract = { package = "grabbit-extract", path = "crates/extract" }
+mdm-geo = { package = "grabbit-geo", path = "crates/geo" }
+mdm-ipc = { package = "grabbit-ipc", path = "crates/ipc" }
+mdm-labserver = { package = "grabbit-labserver", path = "crates/labserver" }
+mdm-mcp = { package = "grabbit-mcp", path = "crates/mcp" }
+mdm-remote = { package = "grabbit-remote", path = "crates/remote" }
+mdm-tools = { package = "grabbit-tools", path = "crates/tools" }
+mdm-torrent = { package = "grabbit-torrent", path = "crates/torrent" }
 
 # storytold craft-libs (D-003), pinned by commit.
 craft-atomic = { git = "https://github.com/storytold/craft-libs", rev = "1a11a4897865f7410c40d25ca6e452ce399a1a2c" }
@@ -175,7 +175,7 @@ debug = "line-tables-only"
 # The crash reports' end-to-end tests read examples/crashy's own debug info to name the function
 # that froze, panicked or crashed: kept even when a build turns debug info off
 # (`--config profile.dev.debug=0`, which saves disk).
-[profile.dev.package.mdm-crash]
+[profile.dev.package.grabbit-crash]
 debug = "full"
 
 # storytold's egui fork (as storytold/craft-libs, D-003) plus MDM's commits on anefzaoui/egui

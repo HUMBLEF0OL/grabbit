@@ -1,5 +1,5 @@
 [package]
-name = "mdm-extract"
+name = "grabbit-extract"
 description = "Safe archive extraction: zip, tar (gz, xz), single gz/xz; 7z and RAR through an installed 7-Zip"
 version.workspace = true
 edition.workspace = true
@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+
+# The code's paths stay `mdm_extract::` (plan 10, decision 3).
+[lib]
+name = "mdm_extract"
 
 [dependencies]
 # zip's Deflate is already in the shipped app (mdm-crash, mdm-tools); Deflate64 (Explorer's zips

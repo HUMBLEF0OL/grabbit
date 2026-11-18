@@ -2830,6 +2830,313 @@ dependencies = [
 ]
 
 [[package]]
+name = "grabbit-app"
+version = "0.5.2"
+dependencies = [
+ "arboard",
+ "base64 0.23.1",
+ "chrono",
+ "craft-atomic",
+ "craft-i18n",
+ "dirs 7.0.0",
+ "eframe",
+ "egui",
+ "egui-winit",
+ "egui_extras",
+ "grabbit-cli",
+ "grabbit-crash",
+ "grabbit-debrid",
+ "grabbit-engine",
+ "grabbit-extract",
+ "grabbit-geo",
+ "grabbit-ipc",
+ "grabbit-labserver",
+ "grabbit-remote",
+ "grabbit-tools",
+ "grabbit-torrent",
+ "image",
+ "open",
+ "percent-encoding",
+ "proptest",
+ "qrcodegen",
+ "raw-window-handle",
+ "regex",
+ "reqwest 0.13.5",
+ "rfd",
+ "roxmltree",
+ "serde",
+ "serde_json",
+ "skrifa",
+ "tempfile",
+ "tokio",
+ "toml 1.1.8+spec-1.1.0",
+ "tracing",
+ "tracing-subscriber",
+ "tray-icon",
+ "unicode-bidi",
+ "unicode-segmentation",
+ "url",
+ "wgpu",
+ "windows 0.62.2",
+ "windows-sys 0.61.2",
+ "winresource",
+]
+
+[[package]]
+name = "grabbit-cli"
+version = "0.5.2"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ctrlc",
+ "grabbit-engine",
+ "grabbit-ipc",
+ "grabbit-tools",
+ "grabbit-torrent",
+ "reqwest 0.13.5",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "url",
+]
+
+[[package]]
+name = "grabbit-crash"
+version = "0.5.2"
+dependencies = [
+ "breakpad-symbols",
+ "chrono",
+ "crash-handler",
+ "grabbit-engine",
+ "minidump",
+ "minidump-processor",
+ "minidump-unwind",
+ "minidumper",
+ "reqwest 0.13.5",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "windows-sys 0.61.2",
+ "zip",
+]
+
+[[package]]
+name = "grabbit-debrid"
+version = "0.5.2"
+dependencies = [
+ "bytes",
+ "futures",
+ "grabbit-engine",
+ "grabbit-labserver",
+ "reqwest 0.13.5",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "grabbit-engine"
+version = "0.5.2"
+dependencies = [
+ "base64 0.23.1",
+ "bytes",
+ "cap",
+ "craft-atomic",
+ "crc32fast",
+ "futures",
+ "grabbit-labserver",
+ "hex",
+ "hickory-resolver",
+ "http",
+ "httpdate",
+ "hyper-util",
+ "md-5",
+ "network-interface",
+ "percent-encoding",
+ "proptest",
+ "reqwest 0.13.5",
+ "rquickjs",
+ "rustls",
+ "rustls-platform-verifier",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha2",
+ "socket2",
+ "suppaftp",
+ "sysinfo",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "tower-layer",
+ "tower-service",
+ "url",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "grabbit-extract"
+version = "0.5.2"
+dependencies = [
+ "flate2",
+ "grabbit-engine",
+ "lzma-rust2",
+ "tar",
+ "tempfile",
+ "tracing",
+ "zip",
+]
+
+[[package]]
+name = "grabbit-geo"
+version = "0.5.2"
+dependencies = [
+ "lzma-rust2",
+ "png 0.18.1",
+ "resvg",
+]
+
+[[package]]
+name = "grabbit-ipc"
+version = "0.5.2"
+dependencies = [
+ "craft-atomic",
+ "dirs 7.0.0",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "grabbit-labserver"
+version = "0.5.2"
+dependencies = [
+ "anyhow",
+ "aws-lc-rs",
+ "axum",
+ "bytes",
+ "clap",
+ "futures",
+ "hex",
+ "http-range-header",
+ "httpdate",
+ "percent-encoding",
+ "rcgen",
+ "reqwest 0.13.5",
+ "rustls",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tokio-rustls",
+ "url",
+]
+
+[[package]]
+name = "grabbit-mcp"
+version = "0.5.2"
+dependencies = [
+ "grabbit-ipc",
+ "rmcp",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "grabbit-nmhost"
+version = "0.5.2"
+dependencies = [
+ "chrono",
+ "grabbit-ipc",
+ "serde",
+ "serde_json",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "grabbit-remote"
+version = "0.5.2"
+dependencies = [
+ "aws-lc-rs",
+ "axum",
+ "grabbit-engine",
+ "grabbit-ipc",
+ "hex",
+ "rcgen",
+ "reqwest 0.13.5",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tokio-rustls",
+ "tracing",
+]
+
+[[package]]
+name = "grabbit-tools"
+version = "0.5.2"
+dependencies = [
+ "aws-lc-rs",
+ "base64 0.23.1",
+ "craft-atomic",
+ "futures",
+ "grabbit-engine",
+ "grabbit-ipc",
+ "grabbit-labserver",
+ "hex",
+ "percent-encoding",
+ "reqwest 0.13.5",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+ "win32job",
+ "zip",
+]
+
+[[package]]
+name = "grabbit-torrent"
+version = "0.5.2"
+dependencies = [
+ "flate2",
+ "grabbit-engine",
+ "librqbit",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "gtk"
 version = "0.18.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4283,313 +4590,6 @@ checksum = "69b6441f590336821bb897fb28fc622898ccceb1d6cea3fde5ea86b090c4de98"
 dependencies = [
  "cfg-if",
  "digest",
-]
-
-[[package]]
-name = "mdm-app"
-version = "0.5.2"
-dependencies = [
- "arboard",
- "base64 0.23.1",
- "chrono",
- "craft-atomic",
- "craft-i18n",
- "dirs 7.0.0",
- "eframe",
- "egui",
- "egui-winit",
- "egui_extras",
- "image",
- "mdm-cli",
- "mdm-crash",
- "mdm-debrid",
- "mdm-engine",
- "mdm-extract",
- "mdm-geo",
- "mdm-ipc",
- "mdm-labserver",
- "mdm-remote",
- "mdm-tools",
- "mdm-torrent",
- "open",
- "percent-encoding",
- "proptest",
- "qrcodegen",
- "raw-window-handle",
- "regex",
- "reqwest 0.13.5",
- "rfd",
- "roxmltree",
- "serde",
- "serde_json",
- "skrifa",
- "tempfile",
- "tokio",
- "toml 1.1.8+spec-1.1.0",
- "tracing",
- "tracing-subscriber",
- "tray-icon",
- "unicode-bidi",
- "unicode-segmentation",
- "url",
- "wgpu",
- "windows 0.62.2",
- "windows-sys 0.61.2",
- "winresource",
-]
-
-[[package]]
-name = "mdm-cli"
-version = "0.5.2"
-dependencies = [
- "anyhow",
- "clap",
- "ctrlc",
- "mdm-engine",
- "mdm-ipc",
- "mdm-tools",
- "mdm-torrent",
- "reqwest 0.13.5",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-util",
- "url",
-]
-
-[[package]]
-name = "mdm-crash"
-version = "0.5.2"
-dependencies = [
- "breakpad-symbols",
- "chrono",
- "crash-handler",
- "mdm-engine",
- "minidump",
- "minidump-processor",
- "minidump-unwind",
- "minidumper",
- "reqwest 0.13.5",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
- "windows-sys 0.61.2",
- "zip",
-]
-
-[[package]]
-name = "mdm-debrid"
-version = "0.5.2"
-dependencies = [
- "bytes",
- "futures",
- "mdm-engine",
- "mdm-labserver",
- "reqwest 0.13.5",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "url",
-]
-
-[[package]]
-name = "mdm-engine"
-version = "0.5.2"
-dependencies = [
- "base64 0.23.1",
- "bytes",
- "cap",
- "craft-atomic",
- "crc32fast",
- "futures",
- "hex",
- "hickory-resolver",
- "http",
- "httpdate",
- "hyper-util",
- "md-5",
- "mdm-labserver",
- "network-interface",
- "percent-encoding",
- "proptest",
- "reqwest 0.13.5",
- "rquickjs",
- "rustls",
- "rustls-platform-verifier",
- "serde",
- "serde_json",
- "sha1",
- "sha2",
- "socket2",
- "suppaftp",
- "sysinfo",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tokio-rustls",
- "tokio-util",
- "tower-layer",
- "tower-service",
- "url",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "mdm-extract"
-version = "0.5.2"
-dependencies = [
- "flate2",
- "lzma-rust2",
- "mdm-engine",
- "tar",
- "tempfile",
- "tracing",
- "zip",
-]
-
-[[package]]
-name = "mdm-geo"
-version = "0.5.2"
-dependencies = [
- "lzma-rust2",
- "png 0.18.1",
- "resvg",
-]
-
-[[package]]
-name = "mdm-ipc"
-version = "0.5.2"
-dependencies = [
- "craft-atomic",
- "dirs 7.0.0",
- "schemars 1.2.3",
- "serde",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "mdm-labserver"
-version = "0.5.2"
-dependencies = [
- "anyhow",
- "aws-lc-rs",
- "axum",
- "bytes",
- "clap",
- "futures",
- "hex",
- "http-range-header",
- "httpdate",
- "percent-encoding",
- "rcgen",
- "reqwest 0.13.5",
- "rustls",
- "serde",
- "serde_json",
- "serde_urlencoded",
- "sha2",
- "tempfile",
- "tokio",
- "tokio-rustls",
- "url",
-]
-
-[[package]]
-name = "mdm-mcp"
-version = "0.5.2"
-dependencies = [
- "mdm-ipc",
- "rmcp",
- "schemars 1.2.3",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "url",
-]
-
-[[package]]
-name = "mdm-nmhost"
-version = "0.5.2"
-dependencies = [
- "chrono",
- "mdm-ipc",
- "serde",
- "serde_json",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "mdm-remote"
-version = "0.5.2"
-dependencies = [
- "aws-lc-rs",
- "axum",
- "hex",
- "mdm-engine",
- "mdm-ipc",
- "rcgen",
- "reqwest 0.13.5",
- "rustls",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "tokio",
- "tokio-rustls",
- "tracing",
-]
-
-[[package]]
-name = "mdm-tools"
-version = "0.5.2"
-dependencies = [
- "aws-lc-rs",
- "base64 0.23.1",
- "craft-atomic",
- "futures",
- "hex",
- "mdm-engine",
- "mdm-ipc",
- "mdm-labserver",
- "percent-encoding",
- "reqwest 0.13.5",
- "serde",
- "serde_json",
- "sha2",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tokio-util",
- "tracing",
- "url",
- "win32job",
- "zip",
-]
-
-[[package]]
-name = "mdm-torrent"
-version = "0.5.2"
-dependencies = [
- "flate2",
- "librqbit",
- "mdm-engine",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "url",
 ]
 
 [[package]]
