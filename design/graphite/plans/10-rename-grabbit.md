@@ -159,9 +159,9 @@ Done on `rename/10c-migration` (2026-11-18), each row with a test from the old s
   its own updater can't change; shortcuts and pins to it keep working. The installer removes the
   old `-cli`, `-mcp` and `-nmhost`; at start the app registers its host again when this user's
   registration names the old helper beside it (`extension::renew_old_registration`).
-- Release asset names (`MisterDownloadManager-<version>-…`) are unchanged: 10d publishes the new
-  names beside them.
-- Left for a person: the upgrade test from the last MDM release on a clean VM ("Done when").
+- Release asset names (`MisterDownloadManager-<version>-…`) are unchanged here: they are 10d's.
+- No upgrade test from an MDM release: Grabbit was never published (see 10d). Each migration
+  is covered by its old-state test above; a fresh install is "Done when"'s check.
 
 | Identifier | Where | Migration |
 | --- | --- | --- |
@@ -186,6 +186,11 @@ both host names.
 
 ## 10d · Distribution
 
+**No support for the old name from here on (decided by the maintainer, 2026-11-18).** Grabbit
+has never been published (the fork has no releases or tags), so nobody upgrades from an MDM
+build: 10d and 10e carry no fallbacks, old asset names, redirects or upgrade tests. 10c was
+already under way with its migrations and keeps them.
+
 1. Done early (PR "Links: everything to the fork", 2026-11-14): the links to the original's
    repository and the 5 Sponsors links now point to the fork (Sponsors to its repository page and
    a commented-out `.github/FUNDING.yml` until the owner enables GitHub Sponsors). Left on
@@ -193,13 +198,12 @@ both host names.
    those projects), `tools/contributors.py` (whose people the README and website thank), the
    creator's name where it credits him, and the upstream-sync tooling. 390 links to the original in ROADMAP (206) and CHANGELOG (184) (history entries keep
    their URLs).
-2. Update feed: installed versions look for `MisterDownloadManager-{version}-{tail}` assets
+2. Update feed: rename the `MisterDownloadManager-{version}-{tail}` assets to Grabbit's
    (`crates/tools/src/update.rs:76`; extension assets `.github/workflows/release.yml:144-145`, the
-   store zip at 149; setup and zip names from `mdm.iss:45` and `tools/installer/build.ps1`). Publish
-   the new asset names **and** the old ones for at least two releases, or until the old builds can
-   no longer update.
+   store zip at 149; setup and zip names from `mdm.iss:45` and `tools/installer/build.ps1`). Only
+   the new names are published: no installed build looks for the old ones.
 3. Website and domain (`misterdownloadmanager.com`, 70 lines in 36 files, `help.rs:31 SITE`, the
-   schema `$id` in `crates/ipc/src/api.rs:166-173`): new domain with redirects from the old;
+   schema `$id` in `crates/ipc/src/api.rs:166-173`): the new domain, no redirects from the old;
    regenerate `docs/automation-api.schema.json`.
 4. Docs, README, CONTRIBUTING, PRODUCT, DESIGN, CLAUDE.md, `.impeccable/design.json`; CHANGELOG gets a
    rename entry and keeps old entries as written; ROADMAP gets its own item for the rename (added
@@ -234,7 +238,7 @@ both host names.
 
 - [ ] No user-visible "Mister Download Manager" or "MDM" left in the app, installer, extension, website,
       docs: `python tools/rename/check.py` exits 0
-- [ ] An upgrade from the last MDM release keeps downloads, settings, saved logins, autostart, `.torrent`
-      association and the browser extension working (tested on a clean VM with the old version installed first)
+- [ ] A fresh install of Grabbit sets up downloads, settings, saved logins, autostart, the `.torrent`
+      association and the browser extension under the new names (no upgrade test from MDM: never
+      published, see 10d)
 - [ ] The never-change list is untouched
-- [ ] Old update assets still published; old host name still registered
