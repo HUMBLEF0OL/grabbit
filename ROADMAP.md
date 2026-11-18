@@ -793,5 +793,9 @@ kept on the `archive/multiplatform-i18n` branch.
 
 ### Look and performance
 
+- 📋 Options in the main window: Options, the Scheduler, the Speed Limiter's and torrents'
+  settings and the browser extension open as a page in the main window, with a side list and a
+  Save bar, instead of their own windows; adding and watching downloads stay dialogs
+  (`design/graphite/plans/11-in-app-settings.md`)
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))
