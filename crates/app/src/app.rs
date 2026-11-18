@@ -11,11 +11,12 @@ use mdm_engine::state::state_path;
 use mdm_engine::{Destination, Download, Options, Request};
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 
+use crate::adddlg::AddWindow;
 use crate::chrome::{
     self, IconKey, MenuBarEvent, MenuEntry, MenuKind, PopupResult, ShellIcons, ToolbarEvent,
     TreeEvent, TreeRow,
 };
-use crate::dialogs::{self, AddUrl, Complete, FileInfo, Outcome, Start};
+use crate::dialogs::{self, Complete, FileInfo, Outcome, Start};
 use crate::icons::Icon;
 use crate::list;
 use crate::model::{self, Category, Item, Live, Status};
@@ -62,7 +63,11 @@ type GoneCheck = std::sync::Arc<dyn Fn(&std::path::Path) -> bool + Send + Sync>;
 /// Menu, toolbar and context-menu commands.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Cmd {
+    /// Add: the Add window, the clipboard's links in it (the toolbar's Add, Ctrl+N).
     AddUrl,
+    /// Add ▾ → Add from the clipboard (Ctrl+V with nothing focused): the copied text in the
+    /// paste bar, or in the Add window when it holds several links or the bar is hidden.
+    AddFromClipboard,
     /// Help → a page of the website (`""` = home).
     HelpPage(&'static str),
     Shortcuts,
@@ -353,12 +358,13 @@ impl Cmd {
             Cmd::None => return chrome::menu_icon(label),
             Cmd::AddUrl => "tb-add-url",
             Cmd::OpenTorrentFile => "tb-add-torrent",
+            Cmd::AddFromClipboard => "gx-clipboard",
             Cmd::AddMagnet | Cmd::LinkGrabber | Cmd::RefreshAddress | Cmd::TogglePasteBar => {
                 "gx-link"
             }
             Cmd::ToggleDetails => "gx-sidebar",
             Cmd::TorrentSettings | Cmd::Options => "tb-options",
-            Cmd::Batch(false) => "gx-hash",
+            Cmd::Batch(false) => "gx-list-numbers",
             Cmd::Batch(true) => "gx-copy",
             Cmd::VideoPage => "ft-video",
             Cmd::RssFeeds(_) => "gx-rss",
@@ -401,6 +407,8 @@ impl Cmd {
     fn hint(&self) -> Option<&'static str> {
         Some(match self {
             Cmd::AddUrl => "Ctrl+N",
+            Cmd::OpenTorrentFile => "Ctrl+O",
+            Cmd::AddFromClipboard => "Ctrl+V",
             Cmd::Find => "Ctrl+F",
             Cmd::FindNext => "F3",
             Cmd::FindPrevious => "Shift+F3",
@@ -425,8 +433,8 @@ enum Popup {
     Item(Option<u64>),
     /// The Start Queue (true) / Stop Queue drop-down arrows.
     QueueDrop(bool),
-    /// The Add Torrent button's drop-down arrow.
-    TorrentDrop,
+    /// The Add button's drop-down arrow.
+    AddDrop,
     /// Right-click on the drop target.
     DropTarget,
     /// Categories right-click: the node's view (None: the "Queues" root).
@@ -545,7 +553,14 @@ pub struct App {
     unfinished_open: bool,
     finished_open: bool,
     queues_open: bool,
-    add_url: Option<AddUrl>,
+    /// The Add window (the toolbar's Add, Ctrl+N, a drop, the paste bar's several links).
+    add_url: Option<AddWindow>,
+    /// Video and gallery pages added while their window was open, waiting their turn, and
+    /// whether that window closed this frame (the next opens a frame later, as Add torrent's).
+    pages_waiting: std::collections::VecDeque<dialogs::NewUrl>,
+    pages_closed: bool,
+    /// Add ▾ → Add from the clipboard: the clipboard, asked off the window's thread.
+    clip_paste: crate::clipboard::Prefill,
     file_info: Option<FileInfo>,
     /// Addresses (and their browser context) waiting for Download File Info to close.
     file_info_waiting: std::collections::VecDeque<(dialogs::NewUrl, ipc::Command)>,
@@ -813,36 +828,7 @@ pub struct App {
     commands: std::sync::mpsc::Receiver<ipc::Incoming>,
 }
 
-/// Where an accepted address goes, in Add URL's order (plan 06): `route_of` picks it,
-/// `App::route_new_url` opens it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Route {
-    /// A magnet link: Add torrent.
-    Magnet,
-    /// A .torrent's address (#39): Add torrent fetches it.
-    TorrentUrl,
-    /// A video's page (YouTube, Vimeo…): the video window.
-    VideoPage,
-    /// An image gallery's page (#58): gallery-dl.
-    GalleryPage,
-    /// Anything else: the duplicate check, then Download File Info.
-    File,
-}
-
-/// The route for an accepted address: the first check that holds wins, in this order.
-fn route_of(url: &url::Url) -> Route {
-    if url.scheme() == "magnet" {
-        Route::Magnet
-    } else if crate::torrents::is_torrent_url(url, None, None) {
-        Route::TorrentUrl
-    } else if mdm_tools::pages::is_video_page(url) {
-        Route::VideoPage
-    } else if mdm_tools::pages::is_gallery_page(url) {
-        Route::GalleryPage
-    } else {
-        Route::File
-    }
-}
+use crate::addkind::{Route, route_of};
 
 /// `/show paste:<address>`'s address (plan 06, requirement 21.2): what follows `paste:`,
 /// trimmed. None for another name or an empty address. The address comes in lower case
@@ -882,6 +868,42 @@ fn menu_keys_blocked(text_edit_focused: bool, is_paste_field: bool, paste_empty:
     text_edit_focused && !(is_paste_field && paste_empty)
 }
 
+/// A dropped file Import reads: a list of addresses (.txt, .ef2, .htm, .csv).
+fn is_list_file(s: &str) -> bool {
+    let p = std::path::Path::new(s);
+    p.extension().is_some_and(|e| {
+        ["txt", "ef2", "htm", "html", "csv"]
+            .contains(&e.to_string_lossy().to_ascii_lowercase().as_str())
+    }) && p.is_file()
+}
+
+/// The toolbar's Add ▾ menu: the Add window, a .torrent file, the clipboard, Batch download.
+/// RSS feeds and Torrent settings, on the old Add Torrent arrow, stay in the Tasks menu.
+fn add_drop_entries() -> Vec<MenuEntry<Cmd>> {
+    use MenuEntry::{Item as I, Sep};
+    vec![
+        // i18n: Add ▾: the Add window (links, magnets, video pages)
+        I("&Add links or a magnet...", Cmd::AddUrl, true, false),
+        // i18n: Add ▾: pick a .torrent file on this computer
+        I(
+            "Open a .&torrent file...",
+            Cmd::OpenTorrentFile,
+            true,
+            false,
+        ),
+        // i18n: Add ▾: what was copied, into the paste bar
+        I(
+            "Add from the &clipboard",
+            Cmd::AddFromClipboard,
+            true,
+            false,
+        ),
+        Sep,
+        // i18n: Add ▾: File → Add batch download
+        I("&Batch download...", Cmd::Batch(false), true, false),
+    ]
+}
+
 /// The command a details pane button runs on the shown download (Requirement 15.5, D10): Show
 /// progress window is Open, which brings an unfinished download's progress window up
 /// (`open_item`); the button is greyed for a finished one, which Open would open.
@@ -910,8 +932,9 @@ fn take_menu_text(ctx: &egui::Context, menu_open: bool) {
 /// The main window's shortcut keys at the end of `App::paint` (no menu or popup open, no command
 /// chosen yet), the command they run. The full list: Help → Keyboard shortcuts (`help.rs`).
 ///
-/// - Ctrl+F finds, F3 finds the next match (Downloads menu); Ctrl+N adds a download (not in
-///   IDM); Ctrl+M as IDM and F2 as renaming in Explorer move or rename. These are consumed
+/// - Ctrl+F finds, F3 finds the next match (Downloads menu); Ctrl+N opens Add and Ctrl+O
+///   Open a .torrent file (not in IDM); Ctrl+M as IDM and F2 as renaming in Explorer move or
+///   rename. These are consumed
 ///   whatever has the focus (no text box answers them); of several in one frame Find wins, then
 ///   Find next, Add, Move/rename (Ctrl+M first: F2 is then left in the input).
 /// - Else, while no widget is `focused` (a text box, Find, a filter or the paste field, has the
@@ -924,6 +947,7 @@ fn shortcut_cmd(i: &mut egui::InputState, focused: bool) -> Option<Cmd> {
     let previous = i.consume_key(egui::Modifiers::SHIFT, egui::Key::F3);
     let next = i.consume_key(egui::Modifiers::NONE, egui::Key::F3);
     let add = i.consume_key(egui::Modifiers::COMMAND, egui::Key::N);
+    let torrent = i.consume_key(egui::Modifiers::COMMAND, egui::Key::O);
     let rename = i.consume_key(egui::Modifiers::COMMAND, egui::Key::M)
         || i.consume_key(egui::Modifiers::NONE, egui::Key::F2);
     if find {
@@ -934,6 +958,8 @@ fn shortcut_cmd(i: &mut egui::InputState, focused: bool) -> Option<Cmd> {
         return Some(Cmd::FindNext);
     } else if add {
         return Some(Cmd::AddUrl);
+    } else if torrent {
+        return Some(Cmd::OpenTorrentFile);
     } else if rename {
         return Some(Cmd::MoveRename);
     }
@@ -1417,6 +1443,9 @@ impl App {
             move_many_for: Vec::new(),
             list_view: view,
             add_url: None,
+            pages_waiting: Default::default(),
+            pages_closed: false,
+            clip_paste: Default::default(),
             about: None,
             updates: None,
             shortcuts: None,
@@ -5304,8 +5333,26 @@ impl App {
     /// Batch download → OK: every address goes to the main download queue (IDM's default; its
     /// queue selection panel is not built yet).
     fn add_batch(&mut self, added: crate::batch::Added) {
+        self.add_many(
+            added.urls,
+            added.login,
+            crate::i18n::mark("by batch download"),
+            false,
+        );
+    }
+
+    /// Addresses added at once, without Download File Info (Batch download, Add's Later and
+    /// "Ask where to save each one" off): each in its category's folder under the address's
+    /// name, then started (`start`) or put in a queue, as Batch download's are.
+    fn add_many(
+        &mut self,
+        urls: Vec<url::Url>,
+        login: Option<(String, String)>,
+        source: &'static str,
+        start: bool,
+    ) {
         let mut ids = Vec::new();
-        for url in added.urls {
+        for url in urls {
             let name = mdm_engine::naming::file_name(None, &url);
             let category = Category::of(&name);
             let dir = self.settings.category_dir(category, &self.downloads);
@@ -5318,15 +5365,22 @@ impl App {
                 category,
                 String::new(),
                 None,
-                added.login.clone(),
+                login.clone(),
                 Default::default(),
-                crate::i18n::mark("by batch download"),
+                source,
             );
             self.name_guessed(id, true);
             self.number_at_start(id);
             ids.push(id);
         }
-        self.queue_later(ids, self.settings.queue_panel_batch);
+        if start {
+            let one = ids.len() == 1;
+            for id in ids {
+                self.start(id, one);
+            }
+        } else {
+            self.queue_later(ids, self.settings.queue_panel_batch);
+        }
         self.dirty = true;
     }
 
@@ -6074,7 +6128,12 @@ impl App {
             .and_then(|id| self.items.iter().find(|i| i.id == id))
             .is_some_and(|i| i.moved_away);
         match cmd {
-            Cmd::AddUrl => self.add_url = Some(AddUrl::from_clipboard(&self.settings.url_history)),
+            Cmd::AddUrl => {
+                if self.add_url.is_none() {
+                    self.add_url = Some(AddWindow::from_clipboard());
+                }
+            }
+            Cmd::AddFromClipboard => self.clip_paste = crate::clipboard::Prefill::ask(),
             Cmd::Exit => self.quit(ctx),
             Cmd::Stop => {
                 for id in many {
@@ -7170,16 +7229,7 @@ impl App {
             Popup::Item(None) => (self.blank_entries(), None),
             Popup::Item(id) => (self.item_entries(id), id),
             Popup::QueueDrop(start) => (self.queue_drop(start), None),
-            Popup::TorrentDrop => (
-                vec![
-                    MenuEntry::Item("Open &torrent file...", Cmd::OpenTorrentFile, true, false),
-                    MenuEntry::Item("Add &magnet link...", Cmd::AddMagnet, true, false),
-                    MenuEntry::Item("&RSS feeds...", Cmd::RssFeeds(false), true, false),
-                    MenuEntry::Sep,
-                    MenuEntry::Item("Torrent setti&ngs...", Cmd::TorrentSettings, true, false),
-                ],
-                None,
-            ),
+            Popup::AddDrop => (add_drop_entries(), None),
             Popup::Node(node) => (self.node_entries(node), None),
             Popup::DropTarget => (
                 vec![
@@ -8069,8 +8119,8 @@ impl App {
         let can_stop_all = self.can_stop_all();
         let any_complete = self.items.iter().any(|i| i.status == Status::Complete);
         let buttons = [
-            (Icon::AddUrl, "Add URL", true, Cmd::AddUrl),
-            (Icon::AddTorrent, "Add Torrent", true, Cmd::OpenTorrentFile),
+            // i18n: verb: the toolbar's Add (links, magnets, .torrent files, video pages)
+            (Icon::Add, "Add", true, Cmd::AddUrl),
             // i18n: verb: continue the selected downloads
             (Icon::Resume, "Resume", resumable, Cmd::Resume),
             // i18n: verb: stop the selected downloads
@@ -8114,7 +8164,7 @@ impl App {
             Some(ToolbarEvent::Toggle) => chosen = Some((Cmd::ToggleDetails, None)),
             Some(ToolbarEvent::Click(k)) => chosen = Some((buttons[k].3, None)),
             Some(ToolbarEvent::Drop(k, at)) => match buttons[k].0 {
-                Icon::AddTorrent => self.open_popup(Popup::TorrentDrop, at),
+                Icon::Add => self.open_popup(Popup::AddDrop, at),
                 icon => self.open_popup(Popup::QueueDrop(matches!(icon, Icon::StartQueue)), at),
             },
             None => {}
@@ -8122,15 +8172,14 @@ impl App {
 
         // The paste bar under the toolbar (plan 06a). An accepted address goes on as Add URL's
         // OK sends it, at the end of the frame as every other route.
-        let mut pasted: Option<dialogs::NewUrl> = None;
+        let mut pasted: Option<crate::addkind::Bar> = None;
         if self.settings.show_paste_bar {
             // An open menu's keys are the menu's (the list's rule).
             self.paste.menu_open = self.popup.is_some() || self.open_menu.is_some();
             let history = &self.settings.url_history;
             match crate::panes::paste_bar(ui, &layout, o, w, &mut self.paste, history) {
                 Some(crate::panes::PasteEvent::Submit) => {
-                    let accepted = dialogs::accept_address(&self.paste.text);
-                    pasted = crate::panes::submit(&mut self.paste, accepted);
+                    pasted = crate::panes::submit(&mut self.paste);
                     // Added: the field gives up the keys and the list takes them, as after
                     // Escape (the new download is there). Rejected, the field keeps them.
                     if pasted.is_some() {
@@ -8403,20 +8452,26 @@ impl App {
                 .input_mut(|i| shortcut_cmd(i, focused))
                 .map(|c| (c, None));
         }
-        // Ctrl+V with no widget focused puts the copied address in the paste bar and gives it
-        // the keys; Enter or Download adds it (D13).
+        // Ctrl+V with no widget focused (and Add ▾ → Add from the clipboard) puts the copied
+        // text in the paste bar and gives it the keys; Enter or its button adds it (D13).
+        // Several links, or the bar hidden: the Add window lists them.
         let focused = ctx.memory(|m| m.focused().is_some());
         let busy = chosen.is_some() || self.popup.is_some() || self.open_menu.is_some();
-        let shown = self.settings.show_paste_bar;
         if let Some(clip) =
-            ctx.input(|i| crate::panes::ctrl_v(shown, focused, busy, &i.events).map(str::to_owned))
+            ctx.input(|i| crate::panes::ctrl_v(true, focused, busy, &i.events).map(str::to_owned))
         {
-            self.paste.fill(&clip);
-            // The field takes the keys on the next frame: the list's selection goes grey.
-            self.list.set_keys(false);
+            self.take_pasted(&clip);
         }
-        if let Some(new) = pasted {
-            self.route_new_url(new, &ctx);
+        if let Some(clip) = self.clip_paste.take() {
+            self.take_pasted(&clip);
+        }
+        match pasted {
+            Some(crate::addkind::Bar::One(kind)) => self.add_kind(kind, None, &ctx),
+            Some(crate::addkind::Bar::Many(_)) => {
+                let text = std::mem::take(&mut self.paste.pending);
+                self.open_add_with(&text);
+            }
+            _ => {}
         }
         if let Some((c, target)) = chosen {
             self.run(c, target, &ctx);
@@ -8442,6 +8497,13 @@ impl App {
                 };
                 self.open_torrent_dialog_with(Some(new.url.to_string()), Some(remote), ctx);
             }
+            // One video or gallery window at a time: another page waits its turn (several
+            // added at once from the Add window).
+            Route::VideoPage | Route::GalleryPage
+                if self.video_dlg.is_some() || self.gallery_dlg.is_some() =>
+            {
+                self.pages_waiting.push_back(new);
+            }
             // A video's page, not a file (YouTube, Vimeo…): the video window looks it up.
             Route::VideoPage => {
                 self.video_dlg =
@@ -8466,6 +8528,82 @@ impl App {
                     self.open_file_info(new, Default::default(), ctx);
                 }
             }
+        }
+    }
+
+    /// Copied text (Ctrl+V with nothing focused, Add ▾ → Add from the clipboard): into the
+    /// Add window when it is open; else into the paste bar when it is shown and the text holds
+    /// at most one address; else the Add window opens with it.
+    fn take_pasted(&mut self, clip: &str) {
+        if let Some(w) = &mut self.add_url {
+            w.append(clip);
+            return;
+        }
+        let many = matches!(
+            crate::addkind::bar_kind(clip, &|_| true),
+            crate::addkind::Bar::Many(_)
+        );
+        if self.settings.show_paste_bar && !many {
+            self.paste.fill(clip);
+            // The field takes the keys on the next frame: the list's selection goes grey.
+            self.list.set_keys(false);
+        } else {
+            self.open_add_with(clip);
+        }
+    }
+
+    /// The Add window with `text` added to it (opened when it isn't).
+    fn open_add_with(&mut self, text: &str) {
+        match &mut self.add_url {
+            Some(w) => w.append(text),
+            None => self.add_url = Some(AddWindow::with_text(text)),
+        }
+    }
+
+    /// What the Add window's Add (or Later) hands on, each item into the flow it has always
+    /// had. Links go to Download File Info one after another while "Ask where to save each
+    /// one" is on; off, or with Later, they are added at once to their category's folder
+    /// (started, or waiting in a queue). Magnets, .torrent files, video and gallery pages and
+    /// batch patterns always go to their own window: they ask what to take.
+    fn add_items(&mut self, out: crate::adddlg::AddOut, ctx: &egui::Context) {
+        let direct = !out.ask || out.later;
+        let mut links = Vec::new();
+        for kind in out.items {
+            match kind {
+                crate::addkind::Kind::Link(url) if direct => {
+                    crate::settings::remember(&mut self.settings.url_history, url.as_str());
+                    links.push(url);
+                }
+                other => self.add_kind(other, out.login.clone(), ctx),
+            }
+        }
+        if !links.is_empty() {
+            self.add_many(links, out.login, crate::i18n::mark("by Add"), !out.later);
+        }
+        self.dirty = true;
+    }
+
+    /// One item of Add (or the paste bar) into its flow: an address as Add URL's OK sent it
+    /// (`route_new_url`), a .torrent file to Add torrent, a pattern to Batch download.
+    fn add_kind(
+        &mut self,
+        kind: crate::addkind::Kind,
+        login: Option<(String, String)>,
+        ctx: &egui::Context,
+    ) {
+        use crate::addkind::Kind;
+        match kind {
+            Kind::TorrentFile(path) => self.open_torrent_dialog(Some(path), ctx),
+            Kind::Batch(pattern) => {
+                if self.batch.is_none() {
+                    self.batch = Some(crate::batch::Batch::with_address(&pattern));
+                }
+            }
+            Kind::Link(url)
+            | Kind::Magnet(url)
+            | Kind::TorrentUrl(url)
+            | Kind::Video(url)
+            | Kind::Gallery(url) => self.route_new_url(dialogs::NewUrl { url, login }, ctx),
         }
     }
 
@@ -8889,7 +9027,21 @@ impl App {
     fn main_drops(&mut self, ctx: &egui::Context) {
         let got = self.drops.poll(ctx, crate::MAIN_TITLE);
         if !got.is_empty() {
-            self.dropped(got, ctx);
+            self.dropped_on_main(got);
+        }
+    }
+
+    /// Dropped on the main window: a list file (.txt, .ef2, .htm, .csv) shows in Import as
+    /// before; links, magnet links, .torrent files and anything else go to the Add window,
+    /// which says what each is (or why it isn't added) before anything is added.
+    fn dropped_on_main(&mut self, items: Vec<String>) {
+        let (lists, rest): (Vec<String>, Vec<String>) =
+            items.into_iter().partition(|s| is_list_file(s));
+        for file in lists {
+            self.import_file(std::path::Path::new(&file));
+        }
+        if !rest.is_empty() {
+            self.open_add_with(&rest.join("\n"));
         }
     }
 
@@ -8897,16 +9049,8 @@ impl App {
     /// link or a .torrent file goes the usual way (Download File Info, Add torrent); several
     /// addresses, or a list file (.txt, .ef2, .htm, .csv), show in Import to tick first.
     fn dropped(&mut self, items: Vec<String>, ctx: &egui::Context) {
-        let list_file = |s: &str| {
-            let p = std::path::Path::new(s);
-            p.is_file()
-                && p.extension().is_some_and(|e| {
-                    ["txt", "ef2", "htm", "html", "csv"]
-                        .contains(&e.to_string_lossy().to_ascii_lowercase().as_str())
-                })
-        };
         let (lists, items): (Vec<String>, Vec<String>) =
-            items.into_iter().partition(|s| list_file(s));
+            items.into_iter().partition(|s| is_list_file(s));
         for file in lists {
             self.import_file(std::path::Path::new(&file));
         }
@@ -9626,9 +9770,9 @@ impl App {
             match d.show(ctx, |url| self.settings.site_login(url)) {
                 Outcome::Open => {}
                 Outcome::Closed => self.add_url = None,
-                Outcome::Done(new) => {
+                Outcome::Done(out) => {
                     self.add_url = None;
-                    self.route_new_url(new, ctx);
+                    self.add_items(out, ctx);
                 }
             }
         }
@@ -9889,6 +10033,16 @@ impl App {
                 ctx.request_repaint();
             }
         }
+        // The next page added while the video or gallery window was open, a frame after it
+        // closed (as Add torrent's next, above).
+        let page_open = self.video_dlg.is_some() || self.gallery_dlg.is_some();
+        if !page_open && !self.pages_waiting.is_empty() {
+            if std::mem::take(&mut self.pages_closed) {
+                ctx.request_repaint();
+            } else if let Some(next) = self.pages_waiting.pop_front() {
+                self.route_new_url(next, ctx);
+            }
+        }
         if let Some(g) = &mut self.gallery_dlg {
             match g.show(ctx, &self.rt) {
                 Outcome::Open => {}
@@ -9923,6 +10077,10 @@ impl App {
                     }
                 }
             }
+        }
+        if page_open && self.video_dlg.is_none() && self.gallery_dlg.is_none() {
+            self.pages_closed = true;
+            ctx.request_repaint();
         }
         if let Some(b) = &mut self.batch {
             match b.show(ctx) {
@@ -11233,7 +11391,8 @@ mod mark_finished_tests {
 }
 #[cfg(test)]
 mod route_tests {
-    use super::{Route, route_of};
+    use super::route_new_url_tests::app;
+    use super::{Cmd, MenuEntry, Route, add_drop_entries, route_of};
     fn route(s: &str) -> Route {
         route_of(&url::Url::parse(s).unwrap())
     }
@@ -11339,13 +11498,13 @@ mod route_tests {
         }
     }
 
-    /// What Add URL's OK hands on for `typed`: the real dialog, its box holding `typed` and
-    /// Enter pressed in it (OK, the default button), drawn in its own window rendered
-    /// headlessly as dialogs.rs's tests do, and handled as `App` handles its outcome (the
-    /// dialog goes with the first `Done`). No Sites Logins entry and nothing typed under "Use
-    /// authorization".
-    fn add_url_ok(typed: &str) -> Vec<crate::dialogs::NewUrl> {
-        use crate::dialogs::{AddUrl, Outcome};
+    /// What the Add window's Add hands on for `typed`: the real window, its box holding
+    /// `typed` and Enter pressed in it (Add, the default button), drawn in its own window
+    /// rendered headlessly as dialogs.rs's tests do, and handled as `App` handles its outcome
+    /// (the window goes with the first `Done`). No Sites Logins entry and nothing typed under
+    /// "Use authorization".
+    fn add_url_ok(typed: &str) -> Vec<crate::adddlg::AddOut> {
+        use crate::dialogs::Outcome;
         thread_local! {
             static ENTER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
         }
@@ -11368,7 +11527,7 @@ mod route_tests {
                     .collect(),
                 screen_rect: Some(egui::Rect::from_min_size(
                     egui::Pos2::ZERO,
-                    egui::vec2(600.0, 160.0),
+                    egui::vec2(600.0, 480.0),
                 )),
                 ..Default::default()
             };
@@ -11378,12 +11537,10 @@ mod route_tests {
         });
         let ctx = egui::Context::default();
         ctx.set_embed_viewports(false);
-        let mut dlg = AddUrl::default();
-        dlg.address = typed.to_owned();
-        let mut dlg = Some(dlg);
+        let mut dlg = Some(crate::adddlg::AddWindow::with_text(typed));
         let mut handed = Vec::new();
-        // A frame (the box takes the focus), Enter, then two frames more.
-        for enter in [false, true, false, false] {
+        // Two frames (the box takes the focus), Enter, then two frames more.
+        for enter in [false, false, true, false, false] {
             ENTER.with(|e| e.set(enter));
             let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
                 if let Some(d) = &mut dlg {
@@ -11426,33 +11583,143 @@ mod route_tests {
                 Route::GalleryPage,
             ),
         ] {
-            // The paste bar: Enter or Download, as `App::paint` handles it.
+            // The paste bar: Enter or its button, as `App::paint` handles it.
             let mut bar = crate::panes::PasteBar {
                 text: typed.to_owned(),
                 ..Default::default()
             };
-            let accepted = crate::dialogs::accept_address(&bar.text);
-            let pasted = crate::panes::submit(&mut bar, accepted)
-                .unwrap_or_else(|| panic!("the paste bar takes {typed}"));
+            let Some(crate::addkind::Bar::One(pasted)) = crate::panes::submit(&mut bar) else {
+                panic!("the paste bar takes {typed}");
+            };
             // Once: the field emptied, so a second Enter hands nothing on.
-            let accepted = crate::dialogs::accept_address(&bar.text);
             assert!(
-                crate::panes::submit(&mut bar, accepted).is_none(),
+                crate::panes::submit(&mut bar).is_none(),
                 "{typed}: handed on once"
             );
 
             let ok = add_url_ok(typed);
-            assert_eq!(ok.len(), 1, "{typed}: Add URL's OK hands it on once");
+            assert_eq!(ok.len(), 1, "{typed}: Add hands it on once");
             let added = &ok[0];
-            assert_eq!(pasted.url, added.url, "{typed}: the same url");
-            assert!(
-                pasted.login.is_none(),
-                "{typed}: the paste bar sends no login"
-            );
-            assert!(added.login.is_none(), "{typed}: nothing typed in Add URL");
-            assert_eq!(route_of(&pasted.url), route, "{typed}");
-            assert_eq!(route_of(&added.url), route, "{typed}");
+            assert_eq!(added.items, vec![pasted.clone()], "{typed}: the same item");
+            assert!(added.ask && !added.later, "{typed}: into its flow, asking");
+            assert!(added.login.is_none(), "{typed}: nothing typed in Add");
+            let url = pasted.url().expect("an address");
+            assert_eq!(route_of(url), route, "{typed}");
         }
+    }
+
+    /// Add's routing: each kind goes into the flow it had (the App's dialogs, opened as
+    /// `add_items` hands them on), a link with "Ask where to save each one" to Download File
+    /// Info, without it straight into the list.
+    #[test]
+    fn add_sends_each_kind_into_its_flow() {
+        use crate::addkind::Kind;
+        let ctx = egui::Context::default();
+        let mut app = app(Vec::new());
+        let u = |s: &str| url::Url::parse(s).unwrap();
+        let out = |items, ask, later| crate::adddlg::AddOut {
+            items,
+            login: None,
+            ask,
+            later,
+        };
+        app.add_items(
+            out(
+                vec![Kind::Batch("https://a.example/p*.jpg".into())],
+                true,
+                false,
+            ),
+            &ctx,
+        );
+        assert!(app.batch.is_some(), "a pattern: Batch download");
+        app.add_items(
+            out(
+                vec![
+                    Kind::Video(u("https://www.youtube.com/watch?v=a")),
+                    Kind::Video(u("https://www.youtube.com/watch?v=b")),
+                ],
+                true,
+                false,
+            ),
+            &ctx,
+        );
+        assert!(app.video_dlg.is_some(), "a video page: the video window");
+        assert_eq!(app.pages_waiting.len(), 1, "the second waits its turn");
+        let before = app.items.len();
+        app.add_items(
+            out(
+                vec![
+                    Kind::Link(u("https://a.example/1.zip")),
+                    Kind::Link(u("https://a.example/2.zip")),
+                ],
+                true,
+                true,
+            ),
+            &ctx,
+        );
+        assert_eq!(app.items.len(), before + 2, "Later: both in the list");
+        assert!(app.items.iter().all(|i| i.live.is_none()), "none started");
+        assert!(app.file_info.is_none(), "Later asks nothing");
+        app.add_items(
+            out(vec![Kind::Link(u("https://a.example/3.zip"))], true, false),
+            &ctx,
+        );
+        assert!(app.file_info.is_some(), "asking: Download File Info");
+    }
+
+    /// The toolbar's Add ▾ menu: the Add window, a .torrent file, the clipboard, then Batch
+    /// download, with their keys.
+    #[test]
+    fn the_add_menu_holds_its_four_commands() {
+        let entries = add_drop_entries();
+        let cmds: Vec<Cmd> = entries
+            .iter()
+            .filter_map(|e| match e {
+                MenuEntry::Item(_, c, true, false) => Some(*c),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            cmds,
+            vec![
+                Cmd::AddUrl,
+                Cmd::OpenTorrentFile,
+                Cmd::AddFromClipboard,
+                Cmd::Batch(false)
+            ]
+        );
+        assert!(matches!(entries[3], MenuEntry::Sep));
+        assert_eq!(Cmd::AddUrl.hint(), Some("Ctrl+N"));
+        assert_eq!(Cmd::OpenTorrentFile.hint(), Some("Ctrl+O"));
+        assert_eq!(Cmd::AddFromClipboard.hint(), Some("Ctrl+V"));
+        assert_eq!(Cmd::AddFromClipboard.menu_icon(""), Some("gx-clipboard"));
+        assert_eq!(Cmd::Batch(false).menu_icon(""), Some("gx-list-numbers"));
+    }
+
+    /// A drop on the main window: links, magnets and .torrent files go to the Add window
+    /// (one opened, or the open one), nothing added before it is confirmed.
+    #[test]
+    fn a_drop_on_the_main_window_opens_add_with_it() {
+        let mut app = app(Vec::new());
+        let before = app.items.len();
+        app.dropped_on_main(vec![
+            "https://a.example/1.zip".into(),
+            "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567".into(),
+        ]);
+        let w = app.add_url.as_ref().expect("the Add window");
+        assert_eq!(
+            w.address,
+            "https://a.example/1.zip\nmagnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"
+        );
+        app.dropped_on_main(vec!["https://a.example/2.zip".into()]);
+        assert!(
+            app.add_url
+                .as_ref()
+                .unwrap()
+                .address
+                .ends_with("\nhttps://a.example/2.zip")
+        );
+        assert_eq!(app.items.len(), before, "nothing added yet");
     }
 }
 
@@ -11707,7 +11974,7 @@ mod route_new_url_tests {
     use super::*;
 
     /// The window's state with `items`, its downloads folder a test path.
-    fn app(items: Vec<Item>) -> std::mem::ManuallyDrop<App> {
+    pub(super) fn app(items: Vec<Item>) -> std::mem::ManuallyDrop<App> {
         let rt = Box::leak(Box::new(
             tokio::runtime::Builder::new_current_thread()
                 .build()
@@ -12056,6 +12323,12 @@ mod old_keys_tests {
                 Some(Cmd::FindPrevious),
             ),
             ("Ctrl+N", ctrl, vec![key(Key::N, ctrl)], Some(Cmd::AddUrl)),
+            (
+                "Ctrl+O",
+                ctrl,
+                vec![key(Key::O, ctrl)],
+                Some(Cmd::OpenTorrentFile),
+            ),
             (
                 "Ctrl+M",
                 ctrl,
@@ -12420,7 +12693,7 @@ mod access_key_tests {
             Popup::Columns,
             Popup::QueueDrop(true),
             Popup::QueueDrop(false),
-            Popup::TorrentDrop,
+            Popup::AddDrop,
             Popup::DropTarget,
             Popup::Item(None),
         ];

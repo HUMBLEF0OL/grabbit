@@ -4,7 +4,7 @@ Grabbit downloads the pictures of a gallery (a Wikimedia Commons category, a Fli
 
 ## Download a gallery
 
-1. Click **Add URL** and paste the gallery's address, for example `https://commons.wikimedia.org/wiki/Category:Featured_pictures_of_birds`.
+1. Click **Add** (or use the paste bar) and paste the gallery's address, for example `https://commons.wikimedia.org/wiki/Category:Featured_pictures_of_birds`.
 2. Grabbit opens **Download a gallery** instead of downloading the page as a file. The first time, click **Install gallery-dl**.
 3. gallery-dl checks the address on your computer, without going online. When the line reads **gallery-dl can download this gallery's files**, you're ready.
 4. Check **Save to** (the General category's folder by default). The pictures go into a folder of their own there, named after the gallery.
@@ -30,7 +30,7 @@ Start a finished gallery again (**Resume**) to fetch only the pictures that aren
 
 ## Which addresses open the gallery window
 
-Add URL sends these to the gallery window:
+**Add** and the paste bar send these to the gallery window:
 - Wikimedia Commons categories;
 - Flickr photographers and albums;
 - DeviantArt and ArtStation galleries;

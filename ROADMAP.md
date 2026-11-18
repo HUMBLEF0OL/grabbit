@@ -574,6 +574,11 @@ The maintainer's first findings with 1.0.0 (in `dev`, for the next release):
 - ✅ Find in the main window: the title bar's field filters the list as you type, Enter, F3 and
   Shift+F3 step through the matches, and its funnel's menu chooses where to look and shows only
   some statuses or sources (the column filters themselves). The Find file window is gone.
+- ✅ One **Add** for everything: Add URL and Add Torrent made one toolbar item whose window takes
+  addresses, magnet links, `.torrent` files and video pages (typed, pasted or dropped), says what
+  each is and sends it into its usual window; its arrow has Open a .torrent file (Ctrl+O), Add
+  from the clipboard and Batch download. The paste bar names what it found and its button says
+  what Enter does; links dropped on the main window open the Add window.
 
 ## Being worked on
 

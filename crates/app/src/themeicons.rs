@@ -25,8 +25,15 @@ use egui::{Color32, ImageSource};
 /// Every icon MDM can take from a theme, with what it stands for (the Themes help page lists
 /// them).
 pub const NEEDS: &[(&str, &str)] = &[
-    ("tb-add-url", "Toolbar: Add URL"),
-    ("tb-add-torrent", "Toolbar: Add torrent"),
+    (
+        "tb-add",
+        "Toolbar: Add (links, magnets, torrents, video pages)",
+    ),
+    ("tb-add-url", "Menus: Add links or a magnet"),
+    (
+        "tb-add-torrent",
+        "Menus: Open a .torrent file; a magnet link",
+    ),
     ("tb-resume", "Toolbar: Resume"),
     ("tb-stop", "Toolbar: Stop"),
     ("tb-stop-all", "Toolbar: Stop all"),
@@ -135,6 +142,12 @@ pub const EXTRAS: &[(&str, &str)] = &[
     ("gx-computer", "Server: this computer"),
     ("gx-sun", "Title bar: switch to light mode"),
     ("gx-moon", "Title bar: switch to dark mode"),
+    ("gx-clipboard", "Add from the clipboard"),
+    (
+        "gx-list-numbers",
+        "Batch download (the Add menu), a batch pattern",
+    ),
+    ("gx-drag-drop", "Add: the drop area"),
 ];
 
 /// Whether a set's file named for `need` is read: a need, or an extra.
@@ -364,7 +377,7 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "ft-presentation.svg", "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.svg",
             "ft-video.svg",
             "gx-adjust.svg", "gx-apps.svg", "gx-browser.svg", "gx-bug.svg", "gx-computer.svg",
-            "gx-copy.svg",
+            "gx-clipboard.svg", "gx-copy.svg", "gx-drag-drop.svg", "gx-list-numbers.svg",
             "gx-device.svg", "gx-dots.svg", "gx-download.svg", "gx-edit.svg", "gx-external.svg",
             "gx-filter.svg", "gx-gauge.svg", "gx-gift.svg", "gx-grip.svg", "gx-hash.svg",
             "gx-info.svg", "gx-key.svg", "gx-keyboard.svg", "gx-link.svg", "gx-merge.svg",
@@ -375,7 +388,7 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "gx-world.svg",
             "misc-down.svg", "misc-emblem-ok.svg", "misc-remove.svg", "misc-up.svg",
             "st-complete.svg", "st-downloading.svg", "st-error.svg", "st-paused.svg",
-            "st-queued.svg", "st-seeding.svg", "tb-add-torrent.svg", "tb-add-url.svg",
+            "st-queued.svg", "st-seeding.svg", "tb-add.svg", "tb-add-torrent.svg", "tb-add-url.svg",
             "tb-delete-completed.svg", "tb-delete.svg", "tb-options.svg", "tb-resume.svg",
             "tb-scheduler.svg", "tb-start-queue.svg", "tb-stop-all.svg", "tb-stop-queue.svg",
             "tb-stop.svg", "ui-close.svg", "ui-maximize.svg", "ui-minimize.svg", "ui-restore.svg",
@@ -388,7 +401,7 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "ft-presentation.svg", "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.svg",
             "ft-video.svg",
             "gx-adjust.svg", "gx-apps.svg", "gx-browser.svg", "gx-bug.svg", "gx-computer.svg",
-            "gx-copy.svg",
+            "gx-clipboard.svg", "gx-copy.svg", "gx-drag-drop.svg", "gx-list-numbers.svg",
             "gx-device.svg", "gx-dots.svg", "gx-download.svg", "gx-edit.svg", "gx-external.svg",
             "gx-filter.svg", "gx-gauge.svg", "gx-gift.svg", "gx-grip.svg", "gx-hash.svg",
             "gx-info.svg", "gx-key.svg", "gx-keyboard.svg", "gx-link.svg", "gx-merge.svg",
@@ -399,7 +412,7 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "gx-world.svg",
             "misc-down.svg", "misc-emblem-ok.svg", "misc-remove.svg", "misc-up.svg",
             "st-complete.svg", "st-downloading.svg", "st-error.svg", "st-paused.svg",
-            "st-queued.svg", "st-seeding.svg", "tb-add-torrent.svg", "tb-add-url.svg",
+            "st-queued.svg", "st-seeding.svg", "tb-add.svg", "tb-add-torrent.svg", "tb-add-url.svg",
             "tb-delete-completed.svg", "tb-delete.svg", "tb-options.svg", "tb-resume.svg",
             "tb-scheduler.svg", "tb-start-queue.svg", "tb-stop-all.svg", "tb-stop-queue.svg",
             "tb-stop.svg", "ui-close.svg", "ui-maximize.svg", "ui-minimize.svg", "ui-restore.svg",
@@ -803,7 +816,7 @@ mod tests {
         let n = ids.len();
         ids.dedup();
         assert_eq!(ids.len(), n, "an id twice");
-        assert_eq!(EXTRAS.len(), 39);
+        assert_eq!(EXTRAS.len(), 42);
         let graphite = set("graphite").unwrap();
         for (extra, _) in EXTRAS {
             assert!(extra.starts_with("gx-"), "{extra}");

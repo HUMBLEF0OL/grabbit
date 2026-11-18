@@ -7,8 +7,8 @@ From a copied link to an opened file in a minute or two.
 ## Steps
 
 1. In your browser, right-click the link to the file and choose **Copy link**.
-2. In Grabbit, click **Add URL** on the toolbar (or press **Ctrl+N**). The address is already filled in.
-3. Click **OK**.
+2. In Grabbit, click **Add** on the toolbar (or press **Ctrl+N**). The address is already filled in, and listed under **Found 1** as a **Link**.
+3. Click **Add 1** (or press **Enter**).
 4. **Download File Info** shows the file's name, its size and where it will be saved. The folder depends on the file's type: a ZIP goes to `Downloads\Compressed`, a video to `Downloads\Video`, and so on. Change the folder or the category if you like.
 5. Click **Start Download**.
 6. The progress window shows the download: its speed, the time left, and what each connection is doing.
@@ -16,8 +16,8 @@ From a copied link to an opened file in a minute or two.
 
 <!-- steps -->
 
-1. ![Enter new address to download, its OK button ringed](images/help/first-add-url.webp)
-   *Add URL: Grabbit puts the address you copied in the Address box (paste it there if it isn't). Click OK.*
+1. ![The Add window, its Add button ringed](images/help/first-add-url.webp)
+   *Add: Grabbit puts the address you copied in the box (paste it there if it isn't). Click Add 1.*
 2. ![Download File Info with the file's name, size and folder](images/help/first-file-info.webp)
    *Check the folder, then Start Download.*
 3. ![The progress window: speed, time left and each connection's share of the file](images/help/first-progress.webp)

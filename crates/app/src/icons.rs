@@ -6,9 +6,9 @@ use egui::Image;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Icon {
-    AddUrl,
-    /// Add Torrent (ours, M15).
-    AddTorrent,
+    /// Add: links, magnets, .torrent files, video pages (IDM's Add URL and our Add Torrent made
+    /// one).
+    Add,
     Resume,
     Stop,
     StopAll,
@@ -33,8 +33,7 @@ impl Icon {
     /// icon its place draws (plan 05.5a; the mockup names each).
     fn need(self) -> &'static str {
         match self {
-            Icon::AddUrl => "tb-add-url",
-            Icon::AddTorrent => "tb-add-torrent",
+            Icon::Add => "tb-add",
             Icon::Resume => "tb-resume",
             Icon::Stop => "tb-stop",
             Icon::StopAll => "tb-stop-all",
@@ -88,8 +87,7 @@ mod tests {
     fn every_icon_has_a_graphite_need() {
         use Icon::*;
         let all = [
-            AddUrl,
-            AddTorrent,
+            Add,
             Resume,
             Stop,
             StopAll,
@@ -107,9 +105,8 @@ mod tests {
         // A new Icon breaks this match: add it to `all` above too.
         for icon in all {
             match icon {
-                AddUrl | AddTorrent | Resume | Stop | StopAll | Delete | DeleteCompleted
-                | Options | Scheduler | StartQueue | StopQueue | HelperVideo | HelperMerge
-                | HelperChecked | Details => {}
+                Add | Resume | Stop | StopAll | Delete | DeleteCompleted | Options | Scheduler
+                | StartQueue | StopQueue | HelperVideo | HelperMerge | HelperChecked | Details => {}
             }
         }
         for icon in all {

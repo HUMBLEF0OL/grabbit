@@ -109,7 +109,7 @@ More in [Connections and speed](connections-and-speed.md).
 ![Options on its Sites Logins page, before any site is added: the list of sites with their user names](images/help/options-logins.webp)
 *Sites Logins: a user name and password per site.*
 
-User names and passwords for sites that ask for them. **New** adds a row: the site (with a path if the login is only for part of it), the user name and the password. **Edit** and **Remove** change or delete the selected row. Grabbit uses the login for every download from that site. A login typed in **Add URL** (**Use authorization**) takes priority for that one download.
+User names and passwords for sites that ask for them. **New** adds a row: the site (with a path if the login is only for part of it), the user name and the password. **Edit** and **Remove** change or delete the selected row. Grabbit uses the login for every download from that site. A login typed in **Add** (**Use authorization**) takes priority for that one download.
 
 The passwords (these, the proxy's and the debrid accounts') are kept in Windows Credential Manager; Grabbit's settings keep only a reference. Without it, they stay in Grabbit's settings, sealed for your Windows account. **Options → Accounts** says where they are. A [portable copy](portable.md) keeps them in its own folder.
 
