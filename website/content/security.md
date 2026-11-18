@@ -26,4 +26,14 @@ You'll get an answer as soon as possible. A fix is released before the details a
 - **Credentials stay with their site.** Logins and cookies are sent only to the host they belong to, even across redirects.
 - **No telemetry**: see the [privacy policy](/privacy.html).
 
+## Code signing policy
+
+Grabbit's Windows programs and installer are to be signed through the **[SignPath Foundation](https://signpath.org)**'s free code signing for open-source projects. Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- **What is signed:** only files built by GitHub Actions from this project's public repository: `grabbit.exe`, `grabbit-cli.exe`, `grabbit-mcp.exe`, `grabbit-nmhost.exe` and the setup program. Nothing from anyone else is signed under this certificate; the helpers Grabbit downloads (yt-dlp, ffmpeg) keep their own developers' signatures and checks.
+- **Who decides:** the project's maintainer, [HUMBLEF0OL](https://github.com/HUMBLEF0OL), is its committer, reviewer and approver. Changes from anyone else come in by pull request and are reviewed before they are merged; every signing request is approved by hand, release by release.
+- **Accounts:** the maintainer's GitHub and SignPath accounts use two-factor sign-in.
+- **Publisher name:** Windows shows the publisher as "SignPath Foundation", the holder of the certificate.
+- **Privacy:** Grabbit sends nothing about you to us or anyone else. Besides the servers you download from, it talks only to GitHub to check for updates (which you can turn off) and to the services you choose; the [privacy policy](/privacy.html) lists every connection.
+
 The technical policy, with the code each point refers to, is in [SECURITY.md]({{REPO}}/blob/main/SECURITY.md).

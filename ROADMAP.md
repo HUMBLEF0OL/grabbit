@@ -649,6 +649,10 @@ These ship in a later version, when they're ready.
   name are taken again and say Grabbit
 - ✅ Grabbit signs its own releases: Update now trusts Grabbit's release key, and each release's
   checksum list is signed with it
+- 🔄 Code-signed programs and installer, so Windows SmartScreen stops warning: free open-source
+  signing through the SignPath Foundation. Done: applied, and the code signing policy is on the
+  website's Security page. Still to do once approved: the release built and signed by GitHub
+  Actions
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a
   centred stage, then a walk through adding, downloading, torrents and video as you scroll), the
   benchmark's seven medians drawn from its results file, the Grabbit mark and Geist, light and
