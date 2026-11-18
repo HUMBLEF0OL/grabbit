@@ -147,7 +147,7 @@ components:
 
 **Creative North Star: "One Take"**
 
-The camera never cuts. A single centred stage holds the real Grabbit window doing its work. As the visitor scrolls, the stage stays put and the copy walks through the app's four jobs beside it. The site is Graphite, the app's own look, at page scale: a jet-black or near-white ground, one raised tray surface, hairlines lit along the top edge, and a single cyan that means "this is Grabbit acting". Proof comes from the app and its measured numbers. Nothing on the page is drawn to look like the app.
+The camera never cuts. A single centred stage holds the real Grabbit window doing its work. As the visitor scrolls, the stage stays put and the copy walks through the app's four jobs beside it. The site is Graphite's website palette at page scale (the app itself is now Graphite green; the site keeps its cyan for now): a jet-black or near-white ground, one raised tray surface, hairlines lit along the top edge, and a single cyan that means "this is Grabbit acting". Proof comes from the app and its measured numbers. Nothing on the page is drawn to look like the app.
 
 Density is calm and generous: a 1200px column, 160px between sections, big tight-tracked headings, muted ink for everything secondary. Colour is scarce on purpose. Cyan marks the Download action and Grabbit's own figures, amethyst marks links, focus and selection, and the gradient lives only inside the double-chevron mark. Light and dark are equal citizens and follow the visitor's system setting by default.
 

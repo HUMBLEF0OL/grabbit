@@ -577,7 +577,7 @@ The maintainer's first findings with 1.0.0 (in `dev`, for the next release):
 - ✅ Graphite green: Graphite's colours are now zinc greys and one emerald green (selection,
   ticked boxes, focus, links, the default button, progress) in place of amethyst and cyan, and
   the app icon's double chevron is the same emerald, light into deep: in the app, the installer,
-  the browser extension, the website's logos and favicon, the social preview and the pictures.
+  the browser extension, and the website's logos and favicon.
 
 ## Being worked on
 
