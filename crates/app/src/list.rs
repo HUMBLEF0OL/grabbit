@@ -276,7 +276,14 @@ pub struct Layout {
     /// whose they were while IDM's had its own (`widths`, read no more since plan 05.5c).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub graphite_widths: Vec<f32>,
+    /// What the layout has been brought up to ([`LAYOUT_VERSION`]); 0 for one saved before
+    /// 1.0.1, whose every column shown was the old default, not a choice.
+    #[serde(default)]
+    pub version: u32,
 }
+
+/// The layout's version: 1 since 1.0.1's default columns ([`DEFAULT_VISIBLE`]).
+pub const LAYOUT_VERSION: u32 = 1;
 
 impl ListState {
     /// Does the list have the keys? (A click elsewhere, or Tab to the Categories tree,
@@ -335,6 +342,7 @@ impl ListState {
             } else {
                 self.widths.to_vec()
             },
+            version: LAYOUT_VERSION,
         }
     }
 
@@ -391,9 +399,10 @@ impl ListState {
         let width = |saved: &[f32], c: usize, default: f32| {
             saved.get(c).copied().unwrap_or(default).max(MIN_WIDTH)
         };
-        // ponytail: someone who chose every column by hand gets the defaults once, as 1.0.0's
-        // untouched lists do; one right-click per column brings them back.
-        let all = l.visible.iter().all(|v| *v);
+        // A layout from before 1.0.1 showing every column had the old default, not a choice:
+        // it gets the new defaults, once (it is saved at LAYOUT_VERSION from then on). Someone
+        // who had shown every column by hand then gets them back with a right-click each.
+        let all = l.version < 1 && l.visible.iter().all(|v| *v);
         for (c, default) in GRAPHITE_WIDTHS.iter().enumerate() {
             self.widths[c] = width(&l.graphite_widths, c, *default);
             self.visible[c] = always_shown(c)
@@ -2062,6 +2071,7 @@ mod tests {
             graphite_widths: vec![200.0, 20.0, 75.0, 65.0, 75.0, 95.0, 65.0, 300.0],
             visible: vec![true; 8],
             sort: Some((2, false)),
+            version: 0,
         };
         let mut st = ListState::default();
         st.apply(old);
@@ -2093,6 +2103,7 @@ mod tests {
             ],
             visible: vec![true; 10],
             sort: None,
+            version: 0,
         };
         let mut st = ListState::default();
         st.apply(old);
@@ -2109,6 +2120,7 @@ mod tests {
             graphite_widths: vec![62.0; 12],
             visible: vec![true; 12],
             sort: None,
+            version: 0,
         };
         let mut st = ListState::default();
         st.apply(bad);
@@ -2127,6 +2139,7 @@ mod tests {
             ],
             visible: vec![true; 12],
             sort: Some((PEERS, true)),
+            version: 0,
         };
         let mut st = ListState::default();
         st.apply(old);
@@ -2281,10 +2294,34 @@ mod tests {
         let mut old = ListState::default().layout();
         old.visible = vec![true; COLS];
         old.graphite_widths = vec![99.0; COLS];
+        old.version = 0;
         let mut st = ListState::default();
-        st.apply(old);
+        st.apply(old.clone());
         assert_eq!(st.visible, DEFAULT_VISIBLE);
         assert_eq!(st.widths[0], 99.0);
+        // Saved again, it is brought up to date: the migration doesn't run twice.
+        assert_eq!(st.layout().version, LAYOUT_VERSION);
+        // Audit 69-3: every column shown by choice since 1.0.1 stays so at each start, through
+        // a save.
+        let chosen_all = ListState {
+            visible: [true; COLS],
+            ..ListState::default()
+        };
+        let json = serde_json::to_string(&chosen_all.layout()).unwrap();
+        let mut back = ListState::default();
+        back.apply(serde_json::from_str(&json).unwrap());
+        assert_eq!(back.visible, [true; COLS]);
+        // A layout saved without a version (1.0.0's file) reads as version 0.
+        let v0: Layout = serde_json::from_str(
+            r#"{"order":[9,0,1,2,3,4,5,12,10,11,6,8,7],"visible":[true,true,true,true,true,true,true,true,true,true,true,true,true],"sort":null}"#,
+        )
+        .unwrap();
+        assert_eq!(v0.version, 0);
+        let mut st = ListState::default();
+        st.apply(v0);
+        assert_eq!(st.visible, DEFAULT_VISIBLE);
+        let mut st = ListState::default();
+        st.apply(old);
         // Reset columns: the defaults again.
         st.visible = [true; COLS];
         st.reset_columns();

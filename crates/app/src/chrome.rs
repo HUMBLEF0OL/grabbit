@@ -494,7 +494,7 @@ mod a11y_tests {
         ctx.enable_accesskit();
         let rc = Rect::from_min_size(pos2(800.0, 5.0), MODE_BUTTON);
         let ink = egui::Color32::GRAY;
-        let (nodes, clicked) = frame(&ctx, vec![], |ui| mode_button(ui, rc, false, ink));
+        let (nodes, clicked) = frame(&ctx, vec![], |ui| mode_button(ui, rc, false, ink, true));
         assert!(!clicked);
         let (id, _) = nodes
             .iter()
@@ -506,8 +506,15 @@ mod a11y_tests {
             target_node: *id,
             data: None,
         });
-        let (_, clicked) = frame(&ctx, vec![click], |ui| mode_button(ui, rc, false, ink));
+        let (_, clicked) = frame(&ctx, vec![click.clone()], |ui| {
+            mode_button(ui, rc, false, ink, true)
+        });
         assert!(clicked);
+        // Audit 69-11: while a scheme decides the mode, it is greyed and a Click does nothing.
+        let (_, clicked) = frame(&ctx, vec![click], |ui| {
+            mode_button(ui, rc, false, ink, false)
+        });
+        assert!(!clicked);
         assert_eq!(mode_button_label(true), "Switch to light mode");
     }
 
@@ -869,14 +876,32 @@ pub fn mode_button_label(dark: bool) -> &'static str {
 
 /// Paint the light/dark button in English rect `rc` ([`MODE_BUTTON`]), icon only: the mode it
 /// switches to (a moon in light, a sun in dark, 16 px) in `ink`, the title bar's buttons' face
-/// under the pointer; its name as its tooltip and to screen readers. True when clicked.
-pub fn mode_button(ui: &mut Ui, rc: Rect, dark: bool, ink: egui::Color32) -> bool {
+/// under the pointer; its name as its tooltip and to screen readers. True when clicked. Greyed
+/// and inert while the theme has one side only (`!enabled`: a Base16 or pywal scheme decides
+/// light or dark), its tooltip saying so.
+pub fn mode_button(ui: &mut Ui, rc: Rect, dark: bool, ink: egui::Color32, enabled: bool) -> bool {
     let p = ui.painter().clone();
     let screen = winui::rect(rc);
-    let resp = ui.interact(screen, egui::Id::unique("strip-mode"), egui::Sense::click());
+    let sense = if enabled {
+        egui::Sense::click()
+    } else {
+        egui::Sense::hover()
+    };
+    let resp = ui.interact(screen, egui::Id::unique("strip-mode"), sense);
     let label = mode_button_label(dark);
-    winui::expose(&resp, egui::Role::Button, label, true, None);
+    winui::expose(&resp, egui::Role::Button, label, enabled, None);
     let radius = crate::theme::metrics().part_radius;
+    let icon = Rect::from_center_size(rc.center(), vec2(16.0, 16.0));
+    let need = if dark { "gx-sun" } else { "gx-moon" };
+    if !enabled {
+        let grey = crate::theme::colors().text_disabled;
+        crate::themeicons::paint_in(ui, &p, need, winui::rect(icon), grey, true);
+        // i18n: tooltip of the greyed light/dark button: the chosen colour scheme has one side
+        resp.on_hover_text(crate::i18n::t(
+            "This theme's colours decide light or dark: pick Graphite in View → Theme to switch",
+        ));
+        return false;
+    }
     if resp.is_pointer_button_down_on() {
         p.rect_filled(screen, radius, winui::caption::CAPTION_PRESSED());
     } else if resp.hovered() {
@@ -890,8 +915,6 @@ pub fn mode_button(ui: &mut Ui, rc: Rect, dark: bool, ink: egui::Color32) -> boo
             egui::StrokeKind::Inside,
         );
     }
-    let icon = Rect::from_center_size(rc.center(), vec2(16.0, 16.0));
-    let need = if dark { "gx-sun" } else { "gx-moon" };
     crate::themeicons::paint_in(ui, &p, need, winui::rect(icon), ink, true);
     resp.on_hover_text(label).clicked()
 }

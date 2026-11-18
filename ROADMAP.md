@@ -196,10 +196,9 @@ Everything below ships together, in version 0.5.0.
 - ✅ Streams whose address doesn't end in .m3u8 or .mpd, served as plain text, are found too: by
   the button over the video, the right-click menu and the media list, read only when asked
   ([#171](https://github.com/anefzaoui/misterdownloadmanager/issues/171))
-- ✅ The extension in the [Chrome Web Store](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp): **Add to Chrome** beside **Add to Firefox**
-  on the website, in the help, the FAQ and the README; MDM's **Add Mister Download Manager to
-  your browser** window opens the store in Chrome, Edge, Brave, Opera and Vivaldi, with the
-  manual install as the fallback
+- ⛔ The extension in the Chrome Web Store: that listing is the original project's, whose
+  extension never reaches Grabbit; Grabbit isn't listed yet, and since 1.0.1 its window, help,
+  website and README offer the copy in Grabbit's folder instead (Load unpacked)
 - ✅ Themes, the groundwork: every colour and size the controls are drawn with comes from one
   theme, and theme files can change them; the classic look is unchanged
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
@@ -246,9 +245,9 @@ Everything below ships together, in version 0.5.0.
 - ✅ Linux: MDM's first window opens seconds sooner; the system's fonts are looked up all at once
   while it starts, not one by one in the window (on a busy computer that froze it, part of
   [#164](https://github.com/anefzaoui/misterdownloadmanager/issues/164))
-- ✅ Firefox's add-on offered from [addons.mozilla.org](https://addons.mozilla.org/firefox/addon/mister-download-manager/)
-  first: **Add to Firefox** on the website, in the help, the FAQ and the README, and in MDM's
-  **Add Mister Download Manager to your browser** window (for Zen and LibreWolf too)
+- ⛔ Firefox's add-on offered from addons.mozilla.org: that page is the original project's;
+  Grabbit's add-on isn't listed or signed yet, and since 1.0.1 the help says how to load it from
+  Grabbit's folder (a temporary add-on, or Firefox Developer Edition or Nightly)
 - ✅ Support MDM: a way to support its creator on [GitHub Sponsors](https://github.com/sponsors/anefzaoui),
   asked for only (**Help → Support MDM**, a line in About, the website, the README, the
   extension's popup and GitHub's Sponsor button); MDM stays free, nothing changes or unlocks

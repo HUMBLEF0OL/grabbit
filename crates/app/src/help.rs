@@ -776,11 +776,21 @@ impl About {
 // Keyboard shortcuts
 
 /// Every shortcut the main window answers (keep in step with `app.rs` and `list.rs`).
-const SHORTCUTS: [(&str, &str); 26] = [
+const SHORTCUTS: [(&str, &str); 27] = [
     ("Ctrl+N", "Add a download (Add URL)"),
     ("Ctrl+V", "Paste an address into the paste bar"),
-    ("Ctrl+F", "Find a download"),
-    ("F3", "Find the next match"),
+    (
+        "Ctrl+F",
+        "Go to the Find field in the title bar, its text selected",
+    ),
+    (
+        "F3 / Shift+F3",
+        "Select the next / previous match (Enter in the field too)",
+    ),
+    (
+        "Esc in the Find field",
+        "Clear it and go back to the list (with its menu open: close the menu)",
+    ),
     ("Enter", "Open the selected download"),
     ("Alt+Enter", "Properties of the selected download"),
     ("Ctrl+M / F2", "Move or rename the selected download"),

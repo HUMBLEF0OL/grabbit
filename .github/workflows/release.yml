@@ -145,11 +145,12 @@ jobs:
           New-Item -ItemType Directory -Force target/store | Out-Null
           Copy-Item target/extension/mdm-chrome-store.zip "target/store/Grabbit-$v-chrome-web-store.zip"
 
-      # The Firefox add-on is listed on addons.mozilla.org: each release's version is sent there
-      # for review (not waited for); Firefox installs and updates it from its listing. The .xpi
-      # in the release stays the unsigned one (for about:debugging).
+      # Once Grabbit's add-on is listed on addons.mozilla.org (the repository variable
+      # AMO_LISTED set; it isn't yet, so this step is skipped), each release's version is sent
+      # there for review (not waited for). The .xpi in the release stays the unsigned one (for
+      # about:debugging).
       - name: Send the Firefox add-on to addons.mozilla.org
-        if: ${{ startsWith(github.ref, 'refs/tags/') && env.AMO_JWT_ISSUER != '' }}
+        if: ${{ startsWith(github.ref, 'refs/tags/') && env.AMO_JWT_ISSUER != '' && vars.AMO_LISTED != '' }}
         env:
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
         shell: pwsh

@@ -47,6 +47,37 @@ const CHROME_EXTERNAL_KEY: &str = r"Software\Google\Chrome\Extensions";
 /// CHROME_EXTERNAL_KEY by mistake: Chrome offered an extension that talks to the original's host,
 /// never to Grabbit's. Registering and unregistering remove that entry; nothing else names it.
 const ORIGINAL_STORE_ID: &str = "ejoleppdfgjdndddcjoehopknmlglojp";
+/// The original project's own native host, under Chrome's key: while it is registered under a
+/// root, the external entry there is the original app's own, and stays.
+const ORIGINAL_HOST_KEY: &str =
+    r"Software\Google\Chrome\NativeMessagingHosts\com.misterdownloadmanager.host";
+
+/// The roots whose entry for the original's extension is 1.0.0's leftover, to delete: HKCU, and
+/// HKLM too on an all-users run (an admin install runs only `--register --all-users`, and 1.0.0
+/// may have been installed for the user before);
+/// never a root where the original app's own host is registered (`original_at(root)`), which
+/// wrote the same entry and keeps its extension by it.
+fn leftover_roots(all_users: bool, original_at: impl Fn(&str) -> bool) -> Vec<&'static str> {
+    let roots: &[&'static str] = if all_users {
+        &["HKLM", "HKCU"]
+    } else {
+        &["HKCU"]
+    };
+    roots.iter().copied().filter(|r| !original_at(r)).collect()
+}
+
+/// Delete 1.0.0's entry for the original's extension where it is a leftover.
+fn drop_original_entry(all_users: bool) {
+    let original_at = |root: &str| reg(&["query", &format!(r"{root}\{ORIGINAL_HOST_KEY}")]).is_ok();
+    for root in leftover_roots(all_users, original_at) {
+        let _ = reg(&[
+            "delete",
+            &format!(r"{root}\{CHROME_EXTERNAL_KEY}\{ORIGINAL_STORE_ID}"),
+            "/f",
+            "/reg:32",
+        ]);
+    }
+}
 
 /// A message from the extension.
 #[derive(Debug, Default, Deserialize, PartialEq)]
@@ -815,13 +846,8 @@ fn register(all_users: bool) -> Result<(), String> {
         &ff_path.display().to_string(),
         "/f",
     ])?;
-    // 1.0.0's entry for the original project's extension goes.
-    let _ = reg(&[
-        "delete",
-        &format!(r"{root}\{CHROME_EXTERNAL_KEY}\{ORIGINAL_STORE_ID}"),
-        "/f",
-        "/reg:32",
-    ]);
+    // 1.0.0's entry for the original project's extension goes (not the original app's own).
+    drop_original_entry(all_users);
     // Chrome offers the store's extension once it is listed (never a placeholder ID).
     if let Some(id) = store_id() {
         reg(&[
@@ -851,7 +877,8 @@ fn unregister(all_users: bool) -> Result<(), String> {
     for key in REGISTRY_KEYS.into_iter().chain([FIREFOX_KEY]) {
         let _ = reg(&["delete", &format!(r"{root}\{key}\{HOST_NAME}"), "/f"]);
     }
-    for id in store_id().into_iter().chain([ORIGINAL_STORE_ID]) {
+    drop_original_entry(all_users);
+    if let Some(id) = store_id() {
         let _ = reg(&[
             "delete",
             &format!(r"{root}\{CHROME_EXTERNAL_KEY}\{id}"),
@@ -928,6 +955,19 @@ mod tests {
         assert!(!our_caller(&[
             "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/".into()
         ]));
+    }
+
+    /// Audit 69-1: 1.0.0's entry for the original's extension is deleted where it is a
+    /// leftover, never where the original app's own host is registered (it wrote the same
+    /// entry); an all-users run cleans HKCU too.
+    #[test]
+    fn only_the_leftover_entry_for_the_originals_extension_goes() {
+        assert_eq!(leftover_roots(false, |_| false), ["HKCU"]);
+        assert!(leftover_roots(false, |r| r == "HKCU").is_empty());
+        assert_eq!(leftover_roots(true, |_| false), ["HKLM", "HKCU"]);
+        assert_eq!(leftover_roots(true, |r| r == "HKLM"), ["HKCU"]);
+        assert_eq!(leftover_roots(true, |r| r == "HKCU"), ["HKLM"]);
+        assert!(leftover_roots(true, |_| true).is_empty());
     }
 
     #[test]

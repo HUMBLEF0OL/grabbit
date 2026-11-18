@@ -1349,6 +1349,19 @@ mod tests {
         }
     }
 
+    /// 1.0.1: a download no longer starts behind Download File Info by default, and 1.0.0's
+    /// saved "on" (every settings file had it) reads as off; the new key keeps a choice.
+    #[test]
+    fn start_while_asking_is_off_and_the_old_on_doesnt_count() {
+        assert!(!Settings::default().start_immediately);
+        let old: Settings = serde_json::from_str(r#"{"start_immediately":true}"#).unwrap();
+        assert!(!old.start_immediately);
+        let chosen: Settings = serde_json::from_str(r#"{"start_while_asking":true}"#).unwrap();
+        assert!(chosen.start_immediately);
+        let saved = serde_json::to_value(&chosen).unwrap();
+        assert_eq!(saved["start_while_asking"], true);
+    }
+
     #[test]
     fn site_logins_match_by_host_and_path() {
         let s = Settings {

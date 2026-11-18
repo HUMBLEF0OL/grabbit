@@ -1797,7 +1797,13 @@ impl App {
             let x = o.x + end - right_w;
             winui::text_font(p, font, x, baseline, &right, ink);
         }
-        chrome::mode_button(ui, mode, crate::theme::dark(), ink)
+        chrome::mode_button(
+            ui,
+            mode,
+            crate::theme::dark(),
+            ink,
+            !crate::theme::one_sided(),
+        )
     }
 
     /// "2 downloading, 1.25 MB/sec" while downloads run (the status strip, the tray's tip).
@@ -2557,6 +2563,8 @@ impl App {
                 self.find.text = tab.to_owned();
                 self.list.set_keys(false);
             }
+            // The status bar's light/dark button, as clicked (tools/lab/showcase.ps1).
+            "mode" => self.run(Cmd::ToggleMode, None, ctx),
             "find-options" => {
                 self.open_menu = None;
                 self.popup = None;
@@ -4219,10 +4227,18 @@ impl App {
         let found = q
             .step(&self.shown_ids(), &self.items, self.selection.focus(), back)
             .or_else(|| {
-                let all: Vec<u64> = self.items.iter().map(|i| i.id).collect();
-                q.step(&all, &self.items, None, back)?;
+                if !self.items.iter().any(|i| q.matches(i)) {
+                    return None;
+                }
+                // All Downloads, as it would show them (its column filters too): the view
+                // changes only when a match is there to select.
+                let was = self.view;
                 self.view = View::All;
-                q.step(&self.shown_ids(), &self.items, self.selection.focus(), back)
+                let found = q.step(&self.shown_ids(), &self.items, self.selection.focus(), back);
+                if found.is_none() {
+                    self.view = was;
+                }
+                found
             });
         if let Some(id) = found {
             self.selection.set(id);
@@ -6260,13 +6276,16 @@ impl App {
                 self.speed_settings = Some(dialogs::SpeedSettings::new(&self.settings));
             }
             // The title bar's search field takes the keys, its text selected.
+            // Not while the title bar has no room for it: nothing to give the keys to.
             Cmd::Find => {
-                self.find_bar.focus = true;
-                self.list.set_keys(false);
+                if self.find_bar.ask_focus() {
+                    self.list.set_keys(false);
+                }
             }
             Cmd::FindNext | Cmd::FindPrevious if !self.find.active() => {
-                self.find_bar.focus = true;
-                self.list.set_keys(false);
+                if self.find_bar.ask_focus() {
+                    self.list.set_keys(false);
+                }
             }
             Cmd::FindNext => self.find_next(false),
             Cmd::FindPrevious => self.find_next(true),
@@ -6730,6 +6749,8 @@ impl App {
                 Sep,
                 I("Find (Ctrl-F)", Cmd::Find, true, false),
                 I("Find Next (F3)", Cmd::FindNext, true, false),
+                // i18n: Downloads menu: select the match before the selection (Shift+F3)
+                I("Find Previous (Shift+F3)", Cmd::FindPrevious, true, false),
                 I(
                     "Select &all",
                     Cmd::SelectAll,
@@ -7679,7 +7700,7 @@ impl App {
                 self.list.set_keys(false);
             }
         } else {
-            self.find_bar.open = false;
+            self.find_bar.hidden(&mut self.find);
         }
     }
 
@@ -11889,12 +11910,14 @@ mod old_keys_tests {
     }
 
     /// The end of `App::paint` on `dev` (85df4c43), copied as it was: the oracle. No menu or
-    /// popup open, no command chosen before it.
+    /// popup open, no command chosen before it. 1.0.1 adds Shift+F3 (Find previous), read
+    /// before F3 (whose pattern matches it too).
     fn dev_keys(ctx: &egui::Context) -> Option<Cmd> {
         let mut chosen = None;
-        let (find, next, add) = ctx.input_mut(|i| {
+        let (find, previous, next, add) = ctx.input_mut(|i| {
             (
                 i.consume_key(egui::Modifiers::COMMAND, egui::Key::F),
+                i.consume_key(egui::Modifiers::SHIFT, egui::Key::F3),
                 i.consume_key(egui::Modifiers::NONE, egui::Key::F3),
                 i.consume_key(egui::Modifiers::COMMAND, egui::Key::N),
             )
@@ -11907,6 +11930,8 @@ mod old_keys_tests {
         }
         if find {
             chosen = Some(Cmd::Find);
+        } else if previous {
+            chosen = Some(Cmd::FindPrevious);
         } else if next {
             chosen = Some(Cmd::FindNext);
         } else if add {
@@ -12005,6 +12030,12 @@ mod old_keys_tests {
         vec![
             ("Ctrl+F", ctrl, vec![key(Key::F, ctrl)], Some(Cmd::Find)),
             ("F3", none, vec![key(Key::F3, none)], Some(Cmd::FindNext)),
+            (
+                "Shift+F3",
+                shift,
+                vec![key(Key::F3, shift)],
+                Some(Cmd::FindPrevious),
+            ),
             ("Ctrl+N", ctrl, vec![key(Key::N, ctrl)], Some(Cmd::AddUrl)),
             (
                 "Ctrl+M",
@@ -12696,5 +12727,83 @@ mod start_disk_tests {
         std::thread::sleep(Duration::from_millis(200));
         app.apply_state_reads();
         assert_eq!(get(&app, 2).downloaded, 7, "the late read is dropped");
+    }
+}
+
+#[cfg(test)]
+mod find_and_columns_tests {
+    //! PR 69's audit: Find Next across views, and the columns that can't be hidden.
+    use super::*;
+
+    fn app(items: Vec<Item>) -> std::mem::ManuallyDrop<App> {
+        let rt = Box::leak(Box::new(
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
+        ));
+        let loaded = store::Loaded {
+            next_id: 100,
+            items,
+            columns: None,
+            settings: Settings::default(),
+            queues: Vec::new(),
+        };
+        let (_, commands) = std::sync::mpsc::channel();
+        // Never dropped: an App saves its list as it goes.
+        std::mem::ManuallyDrop::new(App::assemble(
+            &egui::Context::default(),
+            rt.handle().clone(),
+            commands,
+            loaded,
+            crate::Start::Shown,
+        ))
+    }
+
+    fn item(id: u64, name: &str, status: Status) -> Item {
+        let url = url::Url::parse(&format!("http://127.0.0.1:9/{name}")).unwrap();
+        let mut i = Item::new(id, url, PathBuf::from(name), Category::General);
+        i.status = status;
+        i
+    }
+
+    /// Audit 69-8: a match outside the view switches to All Downloads and is selected; a match
+    /// that All Downloads' column filters hide too leaves the view and the selection alone.
+    #[test]
+    fn find_next_switches_views_only_to_select_a_match() {
+        let mut a = app(vec![
+            item(1, "a.zip", Status::Complete),
+            item(2, "b.iso", Status::Stopped),
+        ]);
+        a.view = View::Finished(None);
+        a.find.text = "b.iso".into();
+        // The Status filter hides Stopped everywhere: nothing to select, nothing moves.
+        list::set_value(&mut a.list, 3, "Stopped", false);
+        a.find_next(false);
+        assert_eq!(a.view, View::Finished(None));
+        assert_eq!(a.selection.focus(), None);
+        // Without it: All Downloads, the match selected.
+        list::set_value(&mut a.list, 3, "Stopped", true);
+        a.find_next(false);
+        assert_eq!(a.view, View::All);
+        assert_eq!(a.selection.focus(), Some(2));
+        // Shift+F3 wraps round to it too.
+        a.find_next(true);
+        assert_eq!(a.selection.focus(), Some(2));
+    }
+
+    /// Audit 69-9: the column menu's command never hides File Name, Size or Status; it
+    /// toggles the others.
+    #[test]
+    fn toggle_column_leaves_the_always_shown_ones() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        for c in [0, 2, 3] {
+            a.run(Cmd::ToggleColumn(c), None, &ctx);
+            assert!(a.list.visible[c], "column {c}");
+        }
+        let q = a.list.visible[1];
+        a.run(Cmd::ToggleColumn(1), None, &ctx);
+        assert_eq!(a.list.visible[1], !q);
     }
 }

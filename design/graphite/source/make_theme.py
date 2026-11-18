@@ -124,7 +124,7 @@ ROLES = [
         ("toolbar.checked", "sel"), ("button.danger", "dng"), ("button.danger.text", "ondng"),
         ("banner.error", "errSoft"), ("banner.info", "sel"), ("banner.warning", "warnSoft"),
     ]),
-    ("Two-tone finish and glow (09a): the outlaw colour's lighter stop, a glow in dark only", [
+    ("Two-tone finish (09a): the outlaw colour's lighter stop; no glow, in either mode (1.0.1)", [
         ("glow", "glow"), ("button.accent.top", "out2"), ("progress.bar.end", "out2"),
     ]),
 ]

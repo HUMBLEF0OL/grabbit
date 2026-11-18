@@ -57,8 +57,8 @@ try {
   Start-Sleep 2
   & "$PSScriptRoot\capwin.ps1" -Pid $app.Id -Title "*ubuntu-26.04*" -Out "$root\$OutDir\progress-dark.png"
   Close-Titled "*ubuntu-26.04*"
-  # Light mode: View → Dark Mode support.
-  & "$PSScriptRoot\probe-own.ps1" -X 190 -Y 40 -HoverX 210 -HoverY 174 -HoverClick -NoEscape
+  # Light mode: the status bar's light/dark button, through the app's own command line.
+  & $exe /show mode
   Start-Sleep 3
   & "$PSScriptRoot\cap-own.ps1" -Out "$root\$OutDir\main-light.png"
   & "$PSScriptRoot\probe-own.ps1" -X 300 -Y 259 -Double -NoEscape

@@ -67,7 +67,13 @@ impl Query {
             return None;
         }
         let at = after.and_then(|a| ids.iter().position(|id| *id == a));
-        let hit = |id: &u64| items.iter().any(|i| i.id == *id && self.matches(i));
+        // The matches once (one pass over the downloads), not a scan of them per id.
+        let hits: std::collections::HashSet<u64> = items
+            .iter()
+            .filter(|i| self.matches(i))
+            .map(|i| i.id)
+            .collect();
+        let hit = |id: &u64| hits.contains(id);
         if back {
             let start = at.unwrap_or(0);
             (1..=n).map(|k| ids[(start + n - k) % n]).find(hit)
@@ -140,6 +146,29 @@ pub struct Bar {
     /// The field had the keys at the end of the last frame (egui drops them as Escape comes in,
     /// before the field sees it).
     focused: bool,
+    /// The field was drawn last frame (the title bar had room for it).
+    shown: bool,
+}
+
+impl Bar {
+    /// Ctrl+F (or F3 with nothing to find): give the field the keys on the next frame, its text
+    /// selected. False, and nothing asked, while the field isn't drawn (a title bar too narrow).
+    pub fn ask_focus(&mut self) -> bool {
+        self.focus = self.shown;
+        self.shown
+    }
+
+    /// The field isn't drawn this frame: nothing stays asked or open, and the search, which
+    /// nothing would show or clear, ends (the list shows every download again).
+    pub fn hidden(&mut self, q: &mut Query) {
+        self.shown = false;
+        self.open = false;
+        self.focus = false;
+        self.ends = None;
+        if !q.text.is_empty() {
+            q.text.clear();
+        }
+    }
 }
 
 /// What the field asks of the window.
@@ -159,8 +188,8 @@ const FUNNEL_W: f32 = 26.0;
 const CLEAR_W: f32 = 20.0;
 const DROP_W: f32 = 268.0;
 
-/// Is anything narrowing the list beyond the view: the search, a column filter (the header's or
-/// the dropdown's), or the dropdown's choices other than their defaults (the funnel's look)?
+/// Are the dropdown's Match in / case / whole word choices other than their defaults? With a
+/// column filter on (`list::any_filter`), it lights the funnel.
 pub fn options_changed(q: &Query) -> bool {
     let d = Query::default();
     (q.name, q.description, q.site, q.case, q.whole)
@@ -183,6 +212,7 @@ pub fn field(
     let p = ui.painter().clone();
     let c = crate::theme::colors();
     let screen = winui::rect(rc);
+    bar.shown = true;
     let had = bar.focused;
     // Escape closes the dropdown first (and leaves the field as it was, with the keys); then it
     // clears the field and leaves it.
@@ -258,7 +288,9 @@ pub fn field(
     // i18n: the title bar's search field, to screen readers: it filters the list as you type
     let name = crate::i18n::t("Find downloads");
     ctx.accesskit_node_builder(id, |n| n.set_label(name));
-    if resp.lost_focus() && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+    // Enter in the field (it had the keys as the frame began; a one-line box may give them up
+    // on Enter): the next match, and the field keeps the keys for the one after.
+    if (had || resp.has_focus()) && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
         ctx.memory_mut(|m| m.request_focus(id));
         event = Some(Event::Next);
     }
@@ -732,6 +764,55 @@ mod tests {
             assert_ne!(on.ink, off.ink);
             assert!(on.edge_w > off.edge_w);
         }
+    }
+
+    /// Audit 69-2: Ctrl+F asks nothing while the field isn't drawn, and a search ends with it.
+    #[test]
+    fn no_field_no_focus_and_no_search() {
+        let mut bar = Bar::default();
+        let mut q = Query {
+            text: "setup".into(),
+            ..Query::default()
+        };
+        assert!(!bar.ask_focus() && !bar.focus, "never drawn: nothing asked");
+        bar.shown = true;
+        assert!(bar.ask_focus() && bar.focus);
+        bar.open = true;
+        bar.hidden(&mut q);
+        assert!(!bar.focus && !bar.open && q.text.is_empty());
+        assert!(!bar.ask_focus(), "hidden: nothing asked");
+    }
+
+    /// Enter in the field asks for the next match, and the field keeps the keys.
+    #[test]
+    fn enter_in_the_field_selects_the_next_match() {
+        let _fonts = crate::theme::font_tests();
+        let ctx = egui::Context::default();
+        let (mut bar, mut st) = (Bar::default(), ListState::default());
+        let mut q = Query {
+            text: "setup".into(),
+            ..Query::default()
+        };
+        bar.focus = true;
+        frame(&ctx, vec![], &mut bar, &mut q, &mut st);
+        frame(&ctx, vec![], &mut bar, &mut q, &mut st);
+        let enter = egui::Event::Key {
+            key: egui::Key::Enter,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        assert_eq!(
+            frame(&ctx, vec![enter], &mut bar, &mut q, &mut st),
+            Some(Event::Next)
+        );
+        frame(&ctx, vec![], &mut bar, &mut q, &mut st);
+        assert!(
+            ctx.memory(|m| m.has_focus(field_id())),
+            "the field keeps the keys"
+        );
+        assert_eq!(q.text, "setup");
     }
 
     #[test]

@@ -356,7 +356,16 @@ fn app() -> eframe::Result {
         tracing::info!("Grabbit {} ({}) starting", help::VERSION, help::COMMIT);
         crash::start(
             &data,
-            crash::session("en", loaded.settings.dark_mode_support),
+            // The mode the windows open in (Always dark, else Windows' while Dark Mode support
+            // is on), not the setting alone.
+            crash::session(
+                "en",
+                theme::wanted(
+                    loaded.settings.dark_mode_support,
+                    loaded.settings.always_dark,
+                    loaded.settings.dark_mode_support && win32::apps_use_dark(),
+                ),
+            ),
             start == Start::Session,
         );
     }

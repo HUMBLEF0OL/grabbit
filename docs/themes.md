@@ -59,7 +59,7 @@ every two seconds, and only while pywal is the theme. A copy added with **Add a 
 keeps the colours it had.
 
 A scheme changes colours only, on Graphite: every window, button and menu stays where it
-was. A dark scheme makes Grabbit dark and a light one light, whatever the light/dark button says. The
+was. A dark scheme makes Grabbit dark and a light one light, whatever the light/dark button says (the button is greyed while such a scheme is chosen). The
 scheme's colours go where they mean the same:
 
 | Grabbit | Base16 | pywal |

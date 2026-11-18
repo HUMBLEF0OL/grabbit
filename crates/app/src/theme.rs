@@ -66,6 +66,16 @@ pub fn dark_surface() -> bool {
     colors().dark
 }
 
+/// Has the active theme one side only (a Base16 or pywal scheme: its colours decide light or
+/// dark, whatever the light/dark button says)? The button is greyed then.
+pub fn one_sided() -> bool {
+    is_one_sided(current())
+}
+
+fn is_one_sided(t: &Theme) -> bool {
+    t.light == t.dark
+}
+
 /// Makes `theme` the active one.
 pub fn set(theme: Theme) {
     let theme: &'static Theme = match crate::palette::builtins()
@@ -238,7 +248,7 @@ pub fn system_changed() -> bool {
 
 /// Dark or not: Always dark, else the system's mode while Dark Mode support is on (the
 /// settings' defaults: following Windows until the status bar's light/dark button is clicked).
-fn wanted(dark_mode_support: bool, always_dark: bool, system_dark: bool) -> bool {
+pub(crate) fn wanted(dark_mode_support: bool, always_dark: bool, system_dark: bool) -> bool {
     always_dark || (dark_mode_support && system_dark)
 }
 
@@ -781,6 +791,44 @@ mod mode_tests {
             assert_eq!(wanted(true, false, system), system, "following the system");
             assert!(!wanted(false, false, system), "support off: light");
         }
+    }
+
+    /// Audit 69-11: Graphite has two sides (the button works); a Base16 scheme has one (it is
+    /// greyed).
+    #[test]
+    fn a_scheme_has_one_side_graphite_two() {
+        let graphite = crate::palette::builtins()
+            .into_iter()
+            .find(|t| t.id == "graphite")
+            .expect("Graphite");
+        assert!(!super::is_one_sided(graphite));
+        let text = "scheme: \"T\"
+base00: \"282828\"
+base01: \"3c3836\"
+base02: \"504945\"
+base03: \"665c54\"
+base04: \"bdae93\"
+base05: \"d5c4a1\"
+base06: \"ebdbb2\"
+base07: \"fbf1c7\"
+base08: \"fb4934\"
+base09: \"fe8019\"
+base0A: \"fabd2f\"
+base0B: \"b8bb26\"
+base0C: \"8ec07c\"
+base0D: \"83a598\"
+base0E: \"d3869b\"
+base0F: \"d65d0e\"
+";
+        let (v, _) = crate::schemes::base16_theme(text, "t").unwrap();
+        let l = crate::themefile::parse("t", &v, |_| {
+            Ok(crate::themefile::Loaded {
+                theme: crate::palette::BASE.clone(),
+                warnings: Vec::new(),
+            })
+        })
+        .unwrap();
+        assert!(super::is_one_sided(&l.theme));
     }
 
     /// 1.0.1: the title bar's button switches to the other mode whatever Windows says, and the
