@@ -18,7 +18,7 @@ fn main() {
         res.set_icon("assets/icons/app/mdm.ico")
             .set("ProductName", "Grabbit")
             .set("FileDescription", "Grabbit")
-            .set("CompanyName", "Ahmed Nefzaoui")
+            .set("CompanyName", "HUMBLEFOOL")
             .set(
                 "LegalCopyright",
                 "Copyright (C) 2026 Ahmed Nefzaoui. GPL-3.0-or-later.",

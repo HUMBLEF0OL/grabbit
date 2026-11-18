@@ -579,6 +579,10 @@ The maintainer's first findings with 1.0.0 (in `dev`, for the next release):
 - 🔄 The original MDM's fixes in the files the in-app Options page changes (plan 11), before it
   is built: of upstream's six waiting commits there, one already fixed here, two features
   skipped, three ported by hand (one done, two in progress)
+- ✅ Graphite green: Graphite's colours are now zinc greys and one emerald green (selection,
+  ticked boxes, focus, links, the default button, progress) in place of amethyst and cyan, and
+  the app icon's double chevron is the same emerald, light into deep: in the app, the installer,
+  the browser extension, and the website's logos and favicon.
 
 ## Being worked on
 

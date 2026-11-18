@@ -6907,7 +6907,7 @@ impl App {
         // Graphite, MDM's only built-in look: chosen too when the setting names a theme MDM no
         // longer has (plan 05.5c), which is Graphite now.
         let graphite = chosen == "graphite" || crate::theme::current().id == "graphite";
-        // i18n: View → Theme: MDM's own look (rounded, amethyst and cyan), a name: keep "Graphite" as written
+        // i18n: View → Theme: MDM's own look (rounded, grey and green), a name: keep "Graphite" as written
         items.push(Radio("Graphite", Cmd::Theme("graphite"), true, graphite));
         let wal = crate::themefile::PYWAL;
         for e in themes.iter().filter(|e| e.path.is_some()) {

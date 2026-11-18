@@ -23,7 +23,7 @@ AppId={{667DB4D8-32C2-4487-A0E5-5825BF29778C}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-AppPublisher=Ahmed Nefzaoui
+AppPublisher=HUMBLEFOOL
 AppPublisherURL=https://github.com/HUMBLEF0OL/grabbit
 AppSupportURL=https://github.com/HUMBLEF0OL/grabbit/issues
 AppUpdatesURL=https://github.com/HUMBLEF0OL/grabbit/releases
@@ -53,7 +53,7 @@ ChangesAssociations=yes
 ; fallback for anything else holding the files (a browser running the host).
 CloseApplications=yes
 VersionInfoVersion={#AppVersion}
-VersionInfoCompany=Ahmed Nefzaoui
+VersionInfoCompany=HUMBLEFOOL
 VersionInfoDescription={#AppName} setup
 VersionInfoProductName={#AppName}
 #ifdef Sign
