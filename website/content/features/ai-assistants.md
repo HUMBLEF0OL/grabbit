@@ -8,7 +8,7 @@ description: Mister Download Manager's MCP server lets Claude, Cursor, VS Code a
 group: app
 order: 370
 since: 0.2.0
-where: `misterdownloadmanager-mcp`, beside the app
+where: `grabbit-mcp`, beside the app
 help: ai-assistants.md
 ---
 
@@ -35,8 +35,8 @@ has to be running: the server can't start it for you.
 
 ## Set up once
 
-The server, `misterdownloadmanager-mcp`, sits next to the app. You turn on the
-automation API once with `misterdownloadmanager-cli api on`, then tell your assistant where the
+The server, `grabbit-mcp`, sits next to the app. You turn on the
+automation API once with `grabbit-cli api on`, then tell your assistant where the
 server is. The assistant starts it by itself from then on. The [set-up
 guide](ai-assistants.md#set-it-up) has the path for each kind of install and the exact entry for
 Claude Desktop, Claude Code, Cursor and VS Code.
@@ -49,5 +49,5 @@ line](/features/command-line.html) can.
 MDM itself still sends nothing anywhere: the server talks only to the MDM on this computer, over
 a token-protected local channel. But what the assistant reads, it passes on to its own AI
 service. When it lists your downloads, their file names, addresses and folders go to that
-service, under that service's privacy terms. Turn the API off with `misterdownloadmanager-cli
+service, under that service's privacy terms. Turn the API off with `grabbit-cli
 api off`, or remove the server from the assistant, when you don't want that.

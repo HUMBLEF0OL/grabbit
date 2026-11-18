@@ -143,6 +143,26 @@ when it exits 0.
 
 ## 10c · Identifiers with users' data (migration)
 
+Done on `rename/10c-migration` (2026-11-18), each row with a test from the old state:
+- Data folder `%APPDATA%\grabbit` (`mdm_ipc::profile_dir`; a move that fails keeps the old
+  folder for that run), `GRABBIT_DATA_DIR` with `MDM_DATA_DIR` still read (`DATA_DIR_VARS`).
+- Keychain `SERVICE = "Grabbit"`, `OLD_SERVICE` read, an old entry deleted only once its new copy
+  reads back; `--forget-sign-ins` removes both. `check.py`'s KEPT entry names the old service as
+  the migration's source.
+- Run value `Grabbit` (`move_old_run_value`: only this install's folder), ProgID
+  `Grabbit.Torrent`, mutex `Grabbit.Running` (the installer asks either), `Grabbit.popup`.
+- Host `com.grabbit.host` and `com.misterdownloadmanager.host`, both registered; the extension
+  tries the new one, then the old, and keeps the one that answered.
+- Exes `grabbit*.exe`. `misterdownloadmanager.exe` is kept as a small program that starts
+  `grabbit.exe` (`crates/cli/src/old_name.rs`), in the installer and the zips: an original MDM
+  unzipped updates by unpacking the new zip over its folder and starting that name again, which
+  its own updater can't change; shortcuts and pins to it keep working. The installer removes the
+  old `-cli`, `-mcp` and `-nmhost`; at start the app registers its host again when this user's
+  registration names the old helper beside it (`extension::renew_old_registration`).
+- Release asset names (`MisterDownloadManager-<version>-…`) are unchanged: 10d publishes the new
+  names beside them.
+- Left for a person: the upgrade test from the last MDM release on a clean VM ("Done when").
+
 | Identifier | Where | Migration |
 | --- | --- | --- |
 | Data folder `…/misterdownloadmanager` | `crates/ipc/src/lib.rs:228-249` (`data_dir`) | Reuse the existing one-time rename (the `idmnext` move at 242-245): if the new folder is missing and the old one exists, rename it once. Portable mode (a `data` folder next to the exe) unchanged |

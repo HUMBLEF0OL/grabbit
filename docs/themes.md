@@ -25,7 +25,7 @@ opens it (and makes it the first time). It is in MDM's data folder:
 
 | System | Folder |
 |---|---|
-| Installed or the plain zip | `%APPDATA%\misterdownloadmanager\themes` |
+| Installed or the plain zip | `%APPDATA%\grabbit\themes` |
 | [Portable copy](portable.md) | `data\themes` beside the program |
 
 Within two seconds a new file shows in **View → Theme**, under Graphite, by the `name`

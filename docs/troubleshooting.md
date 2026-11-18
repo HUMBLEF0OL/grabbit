@@ -110,8 +110,8 @@ If your antivirus quarantined MDM, restore it and add an exception for its folde
 
 ## Where your data is
 
-- Installed or the plain zip: `%APPDATA%\misterdownloadmanager`. The list and settings are in `downloads.json`.
-- Portable: the `data` folder next to `misterdownloadmanager.exe`.
+- Installed or the plain zip: `%APPDATA%\grabbit`. The list and settings are in `downloads.json`.
+- Portable: the `data` folder next to `grabbit.exe`.
 - Passwords (Sites Logins, the proxy, debrid accounts) are in Windows Credential Manager, not in `downloads.json`; see [Options → Sites Logins](options.md#sites-logins).
 
 To back up your list, quit MDM (**Tasks → Exit**) and copy `downloads.json`.

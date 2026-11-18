@@ -129,11 +129,11 @@ Not yet: MDM, its installer, the browser extension and this site are in English 
 
 ### Can other programs or scripts control MDM? {#automation}
 
-Yes. MDM accepts IDM's familiar command-line switches, comes with `misterdownloadmanager-cli` for downloads from a terminal, and has a local, token-protected automation API that can list, pause, start and remove downloads. The API is off until you turn it on. See [Command line and automation](/help/command-line.html).
+Yes. MDM accepts IDM's familiar command-line switches, comes with `grabbit-cli` for downloads from a terminal, and has a local, token-protected automation API that can list, pause, start and remove downloads. The API is off until you turn it on. See [Command line and automation](/help/command-line.html).
 
 ### Can my AI assistant use MDM? {#ai}
 
-Yes. MDM comes with an MCP server, `misterdownloadmanager-mcp`: add it to Claude Desktop, Claude Code, Cursor, VS Code or another assistant that supports MCP, and you can ask it in your own words to list, add, pause, resume or remove downloads. It works with the MDM on your computer only, and needs the automation API on. See [AI assistants](/help/ai-assistants.html).
+Yes. MDM comes with an MCP server, `grabbit-mcp`: add it to Claude Desktop, Claude Code, Cursor, VS Code or another assistant that supports MCP, and you can ask it in your own words to list, add, pause, resume or remove downloads. It works with the MDM on your computer only, and needs the automation API on. See [AI assistants](/help/ai-assistants.html).
 
 ### How do I report a bug or ask for a feature? {#report-bug}
 
