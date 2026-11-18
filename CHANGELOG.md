@@ -15,6 +15,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
   - The download list and settings move from `%APPDATA%\misterdownloadmanager` to `%APPDATA%\grabbit` at the first start (a portable copy keeps its `data` folder). `GRABBIT_DATA_DIR` gives a data folder of its own; `MDM_DATA_DIR` still works.
   - Saved sign-ins move to Grabbit's entries in Windows Credential Manager, labelled "Grabbit: …", each once its copy there reads back.
   - Start with Windows, the `.torrent` and magnet link association, and browser integration are written again under Grabbit's names for this install (the extension reaches an app of either name); an older copy's elsewhere is left alone.
+- **Grabbit's releases are signed with Grabbit's own release key** (fingerprint `7C8D 515A 5E85 9D47 3CBC 54C0 D9E8 9ED6 1BBE C99D`), and Update now installs only a release whose checksum list it signed.
 
 ### Removed
 

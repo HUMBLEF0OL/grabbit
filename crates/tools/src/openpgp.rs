@@ -461,7 +461,7 @@ fn left_pad(bytes: &[u8], len: usize) -> Option<Vec<u8>> {
 mod tests {
     use super::*;
 
-    const MDM_KEY: &[u8] = include_bytes!("../keys/mdm-release.asc");
+    const MDM_KEY: &[u8] = include_bytes!("../keys/grabbit-release.asc");
     const YTDLP_KEY: &[u8] = include_bytes!("../keys/yt-dlp.asc");
     const MDM_SUMS: &[u8] = include_bytes!("../tests/fixtures/mdm-SHA256SUMS.txt");
     const MDM_SIG: &[u8] = include_bytes!("../tests/fixtures/mdm-SHA256SUMS.txt.sig");
@@ -506,7 +506,7 @@ mod tests {
         };
         assert_eq!(
             fingerprint(MDM_KEY),
-            "5826D399249DE856EA087D802E293C28E8A69D74"
+            "7C8D515A5E859D473CBC54C0D9E89ED61BBEC99D"
         );
         assert_eq!(
             fingerprint(YTDLP_KEY),
