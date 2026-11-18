@@ -3999,12 +3999,6 @@ pub fn footer_button_width(p: &Painter, label: &str, icon: bool) -> f32 {
         .max(FOOTER_BUTTON_MIN)
 }
 
-/// Where a dialog's own line before a footer's trailing buttons (of the given widths) must end:
-/// one gap before the leftmost of them (English x).
-pub fn footer_trailing_left(client_w: f32, widths: &[f32]) -> f32 {
-    client_w - EDGE - widths.iter().sum::<f32>() - FOOTER_GAP * widths.len() as f32
-}
-
 /// What a [`footer`] holds: buttons, and leading check boxes (Add torrent's "Download in
 /// order", Confirm deletion's "Don't show this dialog again"): caption, value, and whether it
 /// can be ticked now (greyed otherwise, as Add torrent's until it has files).
@@ -6795,11 +6789,6 @@ mod tests {
         let start = FooterButton::new("Start Download", ButtonKind::Disabled).primary();
         assert!(start.primary && !FooterButton::new("Cancel", ButtonKind::Normal).primary);
         assert!(FooterButton::new("OK", ButtonKind::Default).primary);
-        // A line before two trailing buttons ends a gap before them.
-        assert_eq!(
-            footer_trailing_left(400.0, &[60.0, 70.0]),
-            400.0 - EDGE - 130.0 - 16.0
-        );
     }
 
     #[test]

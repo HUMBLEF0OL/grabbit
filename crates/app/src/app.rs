@@ -2556,9 +2556,13 @@ impl App {
                 if let Some(address) = show_paste_arg(name) {
                     self.settings.show_paste_bar = true;
                     self.paste.fill(address);
-                    let accepted = dialogs::accept_address(&self.paste.text);
-                    if let Some(new) = crate::panes::submit(&mut self.paste, accepted) {
-                        self.route_new_url(new, ctx);
+                    match crate::panes::submit(&mut self.paste) {
+                        Some(crate::addkind::Bar::One(kind)) => self.add_kind(kind, None, ctx),
+                        Some(crate::addkind::Bar::Many(_)) => {
+                            let text = std::mem::take(&mut self.paste.pending);
+                            self.open_add_with(&text);
+                        }
+                        _ => {}
                     }
                 }
             }

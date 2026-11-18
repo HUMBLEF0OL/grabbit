@@ -565,7 +565,7 @@ fn row(ui: &mut Ui, p: &egui::Painter, f: &Found, left: f32, right: f32, top: f3
     );
     let resp = ui.interact(
         egui::Rect::from_min_max(pos2(left, top), pos2(right, top + ROW_H)),
-        egui::Id::new(("add-row", k)),
+        egui::Id::unique(("add-row", k)),
         egui::Sense::hover(),
     );
     winui::expose(

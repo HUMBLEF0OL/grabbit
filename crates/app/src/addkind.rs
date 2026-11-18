@@ -72,6 +72,7 @@ pub struct Found {
 impl Kind {
     /// The address an item of this kind goes on with (None: a file on this computer, a
     /// pattern).
+    #[cfg(test)]
     pub fn url(&self) -> Option<&Url> {
         match self {
             Kind::Link(u)
