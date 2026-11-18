@@ -1,4 +1,4 @@
-# The crash report form. MDM's crash report window (crates/app/src/crashui.rs) opens it filled in:
+# The crash report form. Grabbit's crash report window (crates/app/src/crashui.rs) opens it filled in:
 # the ids below are the address's parameters (mdm_crash::github, crashui::fields), keep them in
 # step. Text fields only: GitHub's page put a dropdown's value from the address back to none.
 name: Crash report

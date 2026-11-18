@@ -1,12 +1,13 @@
-# Mister Download Manager (MDM) — agent guide
+# Grabbit — agent guide
 
-Mister Download Manager (MDM) is a download manager for Windows in Rust (egui + storytold
-craft-libs), laid out the way Internet Download Manager users expect. Start by reading
+Grabbit is a download manager for Windows in Rust (egui + storytold craft-libs), laid out the
+way Internet Download Manager users expect. It began as a fork of Mister Download Manager (MDM):
+the crates and code paths still say `mdm` (`mdm-app`, `mdm_engine::`). Start by reading
 [README.md](README.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Rules
 
-1. **Clean room.** MDM contains no code, binaries, artwork, icons, sounds or text from
+1. **Clean room.** Grabbit contains no code, binaries, artwork, icons, sounds or text from
    Internet Download Manager or any other download manager. Never disassemble, decompile,
    debug-attach or patch any IDM file, and never bypass its licensing or trial. Behaviour is
    learned only from public documentation, screenshots and black-box use of a licensed copy.
@@ -14,8 +15,8 @@ craft-libs), laid out the way Internet Download Manager users expect. Start by r
    managers' own logos (never IDM's), small, to identify them, with a notice that they belong to
    their owners and their sources in `website/assets/alts/SOURCES.txt`.
 2. Every user-visible text goes through `crate::i18n` (`t`, `tc`, `tn`, `fmt`; data inside a
-   sentence through `ltr`/`isolate`). MDM is English only: the helpers return the English text.
-3. MDM is Windows only. Windows-only calls live in `crates/app/src/win32.rs`; the rest of the
+   sentence through `ltr`/`isolate`). Grabbit is English only: the helpers return the English text.
+3. Grabbit is Windows only. Windows-only calls live in `crates/app/src/win32.rs`; the rest of the
    workspace is safe, portable Rust (`unsafe_code = "deny"`).
 4. Fix root causes, keep data contracts aligned between producers and consumers, and verify the
    whole system end to end after each change.
@@ -52,8 +53,10 @@ craft-libs), laid out the way Internet Download Manager users expect. Start by r
 - `python tools/upstream-sync/sync.py status --fetch` — the original MDM's new commits, sorted
   for this fork (`/upstream-sync`, `.claude/skills/upstream-sync`); fixes come one way, by PR
   to `dev`, never pushed to the original.
-- `python tools/website/build.py --serve` — the website (English only) on 127.0.0.1:8765; needs
-  Python 3.12 or newer (as CI uses), with `markdown` installed.
+- `python tools/website/build.py --serve` — the website (English only) on
+  http://127.0.0.1:8765/grabbit/, the path GitHub Pages serves it under
+  (https://humblef0ol.github.io/grabbit); needs Python 3.12 or newer (as CI uses), with
+  `markdown` installed.
 - Website design goes through the Impeccable skill (`/impeccable`, `.claude/skills/impeccable`):
   product truth in [PRODUCT.md](PRODUCT.md), the visual system in DESIGN.md, the site's
   direction contract in `.impeccable/surfaces/`; its hook checks every website edit.

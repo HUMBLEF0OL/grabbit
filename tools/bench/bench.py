@@ -272,7 +272,7 @@ def main():
         idm_pids = pid_of("IDMan.exe")
     clients = {
         "IDM": (IDM_EXE, dict(os.environ), open_process(idm_pids[0])),
-        "MDM": (MDM_EXE, mdm_env, open_process(mdm.pid)),
+        "Grabbit": (MDM_EXE, mdm_env, open_process(mdm.pid)),
     }
     tidy = Tidy([idm_pids[0], mdm.pid], vscode_area())
     tidy.start()
@@ -304,11 +304,11 @@ def main():
             mdm.wait()
             mdm = subprocess.Popen([str(MDM_EXE)], env=mdm_env)
             time.sleep(3)
-            clients["MDM"] = (MDM_EXE, mdm_env, open_process(mdm.pid))
+            clients["Grabbit"] = (MDM_EXE, mdm_env, open_process(mdm.pid))
             tidy.pids = {idm_pids[0], mdm.pid}
             print(f"== {sid}: {title} ({n} runs + warm-up)", flush=True)
             for i in range(-1, n):
-                order = ["IDM", "MDM"] if i % 2 == 0 else ["MDM", "IDM"]
+                order = ["IDM", "Grabbit"] if i % 2 == 0 else ["Grabbit", "IDM"]
                 for c in order:
                     exe, cenv, h = clients[c]
                     tag = "w" if i < 0 else f"{i:02d}"

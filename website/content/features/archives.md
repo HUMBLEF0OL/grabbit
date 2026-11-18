@@ -3,8 +3,8 @@ name: Archives extracted
 title: Extract ZIP, 7z and RAR archives automatically
 headline: Downloaded, then unpacked. No extra step.
 line: ZIP, TAR and more extracted as they arrive, 7z and RAR with 7-Zip, split archives once complete.
-lede: MDM can unpack an archive as soon as its download completes, or when you ask. A split archive waits for its last part, and nothing already on your disk is overwritten.
-description: Mister Download Manager extracts ZIP, TAR, GZ and XZ archives itself, and 7z and RAR with 7-Zip, as soon as they finish downloading.
+lede: Grabbit can unpack an archive as soon as its download completes, or when you ask. A split archive waits for its last part, and nothing already on your disk is overwritten.
+description: Grabbit extracts ZIP, TAR, GZ and XZ archives itself, and 7z and RAR with 7-Zip, as soon as they finish downloading.
 group: organising
 order: 140
 since: 0.5
@@ -23,13 +23,13 @@ extracted once, when its last volume arrives.
 
 ## The formats you meet
 
-MDM itself extracts ZIP files, AES-encrypted and Deflate64 ones too, TAR, TAR.GZ and TAR.XZ
+Grabbit itself extracts ZIP files, AES-encrypted and Deflate64 ones too, TAR, TAR.GZ and TAR.XZ
 archives, and single GZ and XZ files.
 
-7z and RAR archives need 7-Zip, a free program. MDM uses it when it is installed, for split and
+7z and RAR archives need 7-Zip, a free program. Grabbit uses it when it is installed, for split and
 encrypted archives too. **Options → Archives** says whether it was found; when it wasn't, the
 **7-Zip needed** window says so, with a **Get 7-Zip** button. RAR's own extraction code can't be
-part of a free program like MDM, which is why it asks 7-Zip.
+part of a free program like Grabbit, which is why it asks 7-Zip.
 
 ## Careful with your disk
 

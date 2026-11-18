@@ -1,4 +1,4 @@
-# The bug report form. MDM's Help -> Report a problem opens it with the text fields filled in
+# The bug report form. Grabbit's Help -> Report a problem opens it with the text fields filled in
 # (crates/app/src/help.rs: the ids below are the URL's parameters; keep them in step). System and
 # Installed with are text fields, not dropdowns: GitHub's page showed a dropdown's value from the
 # address for a moment, then put it back to none.
@@ -10,7 +10,7 @@ body:
     attributes:
       value: |
         Thanks for taking the time. **Help → Report a problem** in Grabbit opens this form with your version and system already filled in.
-        A security problem? Please don't report it here: see the [security page](https://misterdownloadmanager.com/security.html).
+        A security problem? Please don't report it here: see the [security page](https://humblef0ol.github.io/grabbit/security.html).
   - type: input
     id: os
     attributes:

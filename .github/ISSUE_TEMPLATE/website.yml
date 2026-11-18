@@ -1,14 +1,14 @@
-# Problems with misterdownloadmanager.com. Each page's "Report a problem with this page" opens it
+# Problems with humblef0ol.github.io/grabbit. Each page's "Report a problem with this page" opens it
 # with the page filled in (tools/website/build.py: the id `page` is the URL's parameter).
 name: Website problem
-description: A mistake, a broken link or something hard to read on misterdownloadmanager.com.
+description: A mistake, a broken link or something hard to read on humblef0ol.github.io/grabbit.
 labels: [website]
 body:
   - type: input
     id: page
     attributes:
       label: Page
-      placeholder: https://misterdownloadmanager.com/download.html
+      placeholder: https://humblef0ol.github.io/grabbit/download.html
     validations:
       required: true
   - type: textarea

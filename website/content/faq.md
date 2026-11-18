@@ -3,41 +3,41 @@
 Each question becomes its own page (faq/<id>.html) and an entry of faq/index.html; groups are the
 level-two headings. Answers link to the full help page. Built by tools/website/build.py.
 
-## About Mister Download Manager
+## About Grabbit
 
-### Is Mister Download Manager really free? {#is-it-free}
+### Is Grabbit really free? {#is-it-free}
 
-Yes, completely. Mister Download Manager (MDM) is free and open-source software under the GNU General Public License, version 3. There is no trial period, no paid edition, no registration key, no nag screen and no ads, and there never will be. You may use it at home or at work, copy it and give it to others.
+Yes, completely. Grabbit is free and open-source software under the GNU General Public License, version 3. There is no trial period, no paid edition, no registration key, no nag screen and no ads, and there never will be. You may use it at home or at work, copy it and give it to others.
 
 ### Is it a copy or a crack of Internet Download Manager? {#is-it-idm}
 
-No. MDM is an independent program written from scratch in Rust, with no connection to Tonec Inc., the makers of Internet Download Manager (IDM). It contains none of IDM's code or artwork. Its windows are laid out the way IDM users expect, so you can switch without learning anything new — and because MDM is free, there is nothing to crack. Please don't download "cracked" download managers: they are a common way to spread malware.
+No. Grabbit is an independent program written from scratch in Rust, with no connection to Tonec Inc., the makers of Internet Download Manager (IDM). It contains none of IDM's code or artwork. Its windows are laid out the way IDM users expect, so you can switch without learning anything new — and because Grabbit is free, there is nothing to crack. Please don't download "cracked" download managers: they are a common way to spread malware.
 
-### How is MDM different from IDM? {#mdm-vs-idm}
+### How is Grabbit different from IDM? {#mdm-vs-idm}
 
-The layout is familiar on purpose: the toolbar, the categories, the download list, the progress window with every connection, queues and the scheduler. The differences: MDM is free and open source, downloads BitTorrent and magnet links in the same list, and finished faster in [our benchmark](/benchmark.html). IDM is the more mature product, refined over many years. See the full [comparison](/idm-alternative.html).
+The layout is familiar on purpose: the toolbar, the categories, the download list, the progress window with every connection, queues and the scheduler. The differences: Grabbit is free and open source, downloads BitTorrent and magnet links in the same list, and finished faster in [our benchmark](/benchmark.html). IDM is the more mature product, refined over many years. See the full [comparison](/idm-alternative.html).
 
 ### Is it safe? Does it contain adware or spyware? {#is-it-safe}
 
-MDM contains no adware, spyware, bundled offers or tracking. Its whole source code is public, so anyone can check what it does, and every release is built from that code by GitHub's servers, where the build can be inspected. The helper programs it can fetch for videos are verified before they run: yt-dlp against its developers' signing key, ffmpeg against its published checksums. Download MDM only from [this site](/download.html) or the project's GitHub releases.
+Grabbit contains no adware, spyware, bundled offers or tracking. Its whole source code is public, so anyone can check what it does, and every release is built from that code by GitHub's servers, where the build can be inspected. The helper programs it can fetch for videos are verified before they run: yt-dlp against its developers' signing key, ffmpeg against its published checksums. Download Grabbit only from [this site](/download.html) or the project's GitHub releases.
 
-### Does MDM collect my data? {#privacy}
+### Does Grabbit collect my data? {#privacy}
 
-No. MDM has no accounts, no analytics and no telemetry. It connects to the servers you download from and, each time it starts and once a day while it runs, asks GitHub whether a newer version exists (you can turn that off in Help → Check for updates). The browser extension talks only to MDM on your own computer. The details are in the [privacy policy](/privacy.html).
+No. Grabbit has no accounts, no analytics and no telemetry. It connects to the servers you download from and, each time it starts and once a day while it runs, asks GitHub whether a newer version exists (you can turn that off in Help → Check for updates). The browser extension talks only to Grabbit on your own computer. The details are in the [privacy policy](/privacy.html).
 
-### Who makes Mister Download Manager? {#who-makes-it}
+### Who makes Grabbit? {#who-makes-it}
 
-MDM is made by Ahmed Nefzaoui, an independent developer, and is open to contributions from anyone on [GitHub]({{REPO}}). Bug reports and code are all welcome.
+Grabbit began as a fork of Mister Download Manager by Ahmed Nefzaoui, an independent developer, and is open to contributions from anyone on [GitHub]({{REPO}}). Bug reports and code are all welcome.
 
 ## Installing
 
 ### Which systems does it run on? {#systems}
 
-No: MDM is made for 64-bit Windows 10 and 11 only, as an installer, a portable copy or a plain zip. See [Windows 10 and 11](/features/systems.html) and [Download](/download.html).
+No: Grabbit is made for 64-bit Windows 10 and 11 only, as an installer, a portable copy or a plain zip. See [Windows 10 and 11](/features/systems.html) and [Download](/download.html).
 
 ### Does it run on Windows 7 or 8? {#windows-7}
 
-No. MDM needs Windows 10 or 11, 64-bit. The Rust toolchain it is built with no longer supports Windows 7 and 8, and neither does Microsoft.
+No. Grabbit needs Windows 10 or 11, 64-bit. The Rust toolchain it is built with no longer supports Windows 7 and 8, and neither does Microsoft.
 
 ### Can I use it without installing it? {#portable}
 
@@ -45,43 +45,43 @@ Yes. The portable download is a zip: unzip it anywhere, a USB stick included, an
 
 ### Can I bring my download list over from IDM? {#import-from-idm}
 
-Yes. In IDM, export your list with **Tasks → Export → To IDM export file**. In MDM, choose **Tasks → Import → From IDM export file** and pick that `.ef2` file: every download comes over with its address, referrer and cookies. A plain text file of links works too. See [Adding downloads](/help/adding-downloads.html).
+Yes. In IDM, export your list with **Tasks → Export → To IDM export file**. In Grabbit, choose **Tasks → Import → From IDM export file** and pick that `.ef2` file: every download comes over with its address, referrer and cookies. A plain text file of links works too. See [Adding downloads](/help/adding-downloads.html).
 
 ### How do I uninstall it? {#uninstall}
 
-Open Windows **Settings → Apps**, find Mister Download Manager and choose Uninstall. The uninstaller asks whether to delete your download list and settings as well. Files you downloaded are never touched. For the portable copy, delete its folder.
+Open Windows **Settings → Apps**, find Grabbit and choose Uninstall. The uninstaller asks whether to delete your download list and settings as well. Files you downloaded are never touched. For the portable copy, delete its folder.
 
 ## Browsers
 
 ### Which browsers does it work with? {#browsers}
 
-Firefox (from [addons.mozilla.org](https://addons.mozilla.org/firefox/addon/mister-download-manager/)), Google Chrome, Microsoft Edge, Brave, Opera and Vivaldi (from [the Chrome Web Store](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp)), through the MDM browser extension, and browsers built on them: Zen and LibreWolf, Helium. The extension hands downloads to MDM with their cookies and referrer, so files behind a sign-in still work, and it adds **Download with Mister Download Manager** to the right-click menu and a **Download video** button over videos. See [Browser integration](/help/browser-integration.html).
+Firefox (from [addons.mozilla.org](https://addons.mozilla.org/firefox/addon/mister-download-manager/)), Google Chrome, Microsoft Edge, Brave, Opera and Vivaldi (from [the Chrome Web Store](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp)), through the Grabbit browser extension, and browsers built on them: Zen and LibreWolf, Helium. The extension hands downloads to Grabbit with their cookies and referrer, so files behind a sign-in still work, and it adds **Download with Grabbit** to the right-click menu and a **Download video** button over videos. See [Browser integration](/help/browser-integration.html).
 
 ### How do I install the browser extension? {#install-extension}
 
-Install MDM with the setup and keep **Set up browser integration** ticked. In Firefox, then open [the add-on's page on addons.mozilla.org](https://addons.mozilla.org/firefox/addon/mister-download-manager/) and click **Add to Firefox**. In Chrome, Edge, Brave, Opera and Vivaldi, open [its page in the Chrome Web Store](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp) and click **Add to Chrome** (Edge shows **Get**, and first asks to allow extensions from other stores). Can't use a store? Open the browser's extensions page, turn on Developer mode, choose **Load unpacked** and pick the `extension\chromium` folder in MDM's folder. The [tutorial](/help/guide-catch-browser-downloads.html) walks through it.
+Install Grabbit with the setup and keep **Set up browser integration** ticked. In Firefox, then open [the add-on's page on addons.mozilla.org](https://addons.mozilla.org/firefox/addon/mister-download-manager/) and click **Add to Firefox**. In Chrome, Edge, Brave, Opera and Vivaldi, open [its page in the Chrome Web Store](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp) and click **Add to Chrome** (Edge shows **Get**, and first asks to allow extensions from other stores). Can't use a store? Open the browser's extensions page, turn on Developer mode, choose **Load unpacked** and pick the `extension\chromium` folder in Grabbit's folder. The [tutorial](/help/guide-catch-browser-downloads.html) walks through it.
 
-### Why doesn't MDM take over my download? {#not-catching}
+### Why doesn't Grabbit take over my download? {#not-catching}
 
-Check four things: the extension is installed and turned on; **Options → General → Use advanced browser integration** is on and your browser is ticked; the file's type is in **Options → File types**; and the site isn't in the list of sites MDM leaves alone. Right-click a link and choose **Download with Mister Download Manager** to send any file whatever its type. More in [Troubleshooting](/help/troubleshooting.html).
+Check four things: the extension is installed and turned on; **Options → General → Use advanced browser integration** is on and your browser is ticked; the file's type is in **Options → File types**; and the site isn't in the list of sites Grabbit leaves alone. Right-click a link and choose **Download with Grabbit** to send any file whatever its type. More in [Troubleshooting](/help/troubleshooting.html).
 
 ### Can I download without the browser extension? {#without-extension}
 
-Yes. Copy a link to a file and MDM offers to download it at once (**Options → General → Offer to download links copied to the clipboard**, on by default). You can also paste links into **Add URL**, drag them onto the drop target, add a whole batch, or use the command line. See [Adding downloads](/help/adding-downloads.html).
+Yes. Copy a link to a file and Grabbit offers to download it at once (**Options → General → Offer to download links copied to the clipboard**, on by default). You can also paste links into **Add URL**, drag them onto the drop target, add a whole batch, or use the command line. See [Adding downloads](/help/adding-downloads.html).
 
 ## Downloading
 
-### Why is MDM faster than a browser? {#why-faster}
+### Why is Grabbit faster than a browser? {#why-faster}
 
-A browser fetches a file over one connection. MDM asks the server for several parts of the file at once, up to 32 connections (128 if you allow it), and keeps re-splitting: when a connection finishes its part, it takes over half of the biggest part still left, so no slow connection holds up the end. It also remembers servers that refuse extra connections and stops asking them. See [Connections and speed](/help/connections-and-speed.html).
+A browser fetches a file over one connection. Grabbit asks the server for several parts of the file at once, up to 32 connections (128 if you allow it), and keeps re-splitting: when a connection finishes its part, it takes over half of the biggest part still left, so no slow connection holds up the end. It also remembers servers that refuse extra connections and stops asking them. See [Connections and speed](/help/connections-and-speed.html).
 
 ### How many connections does it use? {#connections}
 
-Eight per download by default, and up to 32 if you choose in **Options → Connection**, or 128 after ticking **Allow more than 32 connections** there. MDM uses fewer when a server allows fewer, and only one when a server can't send parts of a file at all.
+Eight per download by default, and up to 32 if you choose in **Options → Connection**, or 128 after ticking **Allow more than 32 connections** there. Grabbit uses fewer when a server allows fewer, and only one when a server can't send parts of a file at all.
 
 ### Can it resume broken downloads? {#resume}
 
-Yes. MDM writes its progress as it goes, so after a lost connection, a crash or a restart it carries on where it stopped. Before resuming it checks that the file on the server hasn't changed. When a download address has expired, **Refresh download address** lets you give it a fresh one and keep the data. See [Resume a broken download](/help/guide-resume-broken-download.html).
+Yes. Grabbit writes its progress as it goes, so after a lost connection, a crash or a restart it carries on where it stopped. Before resuming it checks that the file on the server hasn't changed. When a download address has expired, **Refresh download address** lets you give it a fresh one and keep the data. See [Resume a broken download](/help/guide-resume-broken-download.html).
 
 ### Can I limit the download speed? {#speed-limit}
 
@@ -103,7 +103,7 @@ Yes: HTTP and SOCKS proxies, and proxy auto-config (PAC) scripts, in **Options �
 
 ### How do I download a video from YouTube or another site? {#download-video}
 
-Point at the video in your browser and click the **Download video** button that appears over it, or paste the page's address into **Tasks → Download video from a page**. MDM lists every quality the site offers, with sizes; pick one and it downloads like any file. It uses yt-dlp, which supports thousands of sites. Download only videos you have the right to. See [Download a video from a page](/help/guide-video-from-page.html).
+Point at the video in your browser and click the **Download video** button that appears over it, or paste the page's address into **Tasks → Download video from a page**. Grabbit lists every quality the site offers, with sizes; pick one and it downloads like any file. It uses yt-dlp, which supports thousands of sites. Download only videos you have the right to. See [Download a video from a page](/help/guide-video-from-page.html).
 
 ### Can it download a video's subtitles? {#subtitles}
 
@@ -111,7 +111,7 @@ Yes. When a video has subtitles, the **Subtitles** list in the video window offe
 
 ### Can it download from Netflix or other paid streaming services? {#drm}
 
-No. MDM doesn't break copy protection (DRM), by design. Videos that are protected stay protected. See also [what MDM is made for](/intended-use.html).
+No. Grabbit doesn't break copy protection (DRM), by design. Videos that are protected stay protected. See also [what Grabbit is made for](/intended-use.html).
 
 ### Does it download torrents? {#torrents}
 
@@ -123,18 +123,18 @@ No, unless you want it to. While a torrent downloads it trades pieces with other
 
 ## Help and more
 
-### Is MDM available in my language? {#languages}
+### Is Grabbit available in my language? {#languages}
 
-Not yet: MDM, its installer, the browser extension and this site are in English only. File names in any language and script show as they are.
+Not yet: Grabbit, its installer, the browser extension and this site are in English only. File names in any language and script show as they are.
 
-### Can other programs or scripts control MDM? {#automation}
+### Can other programs or scripts control Grabbit? {#automation}
 
-Yes. MDM accepts IDM's familiar command-line switches, comes with `grabbit-cli` for downloads from a terminal, and has a local, token-protected automation API that can list, pause, start and remove downloads. The API is off until you turn it on. See [Command line and automation](/help/command-line.html).
+Yes. Grabbit accepts IDM's familiar command-line switches, comes with `grabbit-cli` for downloads from a terminal, and has a local, token-protected automation API that can list, pause, start and remove downloads. The API is off until you turn it on. See [Command line and automation](/help/command-line.html).
 
-### Can my AI assistant use MDM? {#ai}
+### Can my AI assistant use Grabbit? {#ai}
 
-Yes. MDM comes with an MCP server, `grabbit-mcp`: add it to Claude Desktop, Claude Code, Cursor, VS Code or another assistant that supports MCP, and you can ask it in your own words to list, add, pause, resume or remove downloads. It works with the MDM on your computer only, and needs the automation API on. See [AI assistants](/help/ai-assistants.html).
+Yes. Grabbit comes with an MCP server, `grabbit-mcp`: add it to Claude Desktop, Claude Code, Cursor, VS Code or another assistant that supports MCP, and you can ask it in your own words to list, add, pause, resume or remove downloads. It works with the Grabbit on your computer only, and needs the automation API on. See [AI assistants](/help/ai-assistants.html).
 
 ### How do I report a bug or ask for a feature? {#report-bug}
 
-Use **Help → Report a problem** in MDM: it opens the bug report form on GitHub with your version, system and language filled in. Or [open the form]({{REPO}}/issues/new?template=bug.yml) yourself. Security problems go privately through the [security page](/security.html).
+Use **Help → Report a problem** in Grabbit: it opens the bug report form on GitHub with your version, system and language filled in. Or [open the form]({{REPO}}/issues/new?template=bug.yml) yourself. Security problems go privately through the [security page](/security.html).

@@ -17,10 +17,10 @@ python tools/shots/make.py check
 `make.py` (no step named: `shoot`, then `build`) runs `tools/lab/docs-shots.ps1` twice, light
 then dark, with every window the list needs:
 
-- its own MDM (its own data folder and download folder, `MDM_DATA_DIR`), off the screens
+- its own Grabbit (its own data folder and download folder, `MDM_DATA_DIR`), off the screens
   (`MDM_OFFSCREEN=1`: no window, taskbar button, tray icon or sound on the screen) and its own lab
   server, whose neutral files fill the list;
-- each window opened by MDM's own command line (`/show <window>`), never by a click or a key;
+- each window opened by Grabbit's own command line (`/show <window>`), never by a click or a key;
 - each window's controls read from its accessibility tree (`tools/lab/ui-rects.ps1`), so the
   list rings and numbers controls by name and a moved button needs no new coordinates.
 

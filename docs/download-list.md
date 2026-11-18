@@ -9,7 +9,7 @@ downloads run, how many and how fast in all (the tray icon's tip says the same).
 is empty it says why: nothing in this category or queue, or the column filters hide everything
 (with **Clear all filters**).
 
-MDM opens where you left it: the window's place and size, the Categories pane, its open
+Grabbit opens where you left it: the window's place and size, the Categories pane, its open
 branches and the category or queue you were looking at.
 
 ## Columns
@@ -20,7 +20,7 @@ branches and the category or queue you were looking at.
 | Column | What it shows |
 |---|---|
 | **Source** | **Web** (a web server) or **Torrent**. |
-| **File Name** | The file's name, after its type's icon: Windows Explorer's, or MDM's where the system has none. |
+| **File Name** | The file's name, after its type's icon: Windows Explorer's, or Grabbit's where the system has none. |
 | **Q** | A queue icon when the download is in a queue. |
 | **Size** | The file's size, when the server told it. |
 | **Status** | How far it is, or **Complete**, **Error** and so on. |
@@ -40,7 +40,7 @@ branches and the category or queue you were looking at.
 - **Choose columns:** right-click any column title and tick the ones you want. **Reset columns**
   in the same menu puts them back as they first were.
 
-MDM remembers the columns, their widths and the sort order.
+Grabbit remembers the columns, their widths and the sort order.
 
 ## Filters
 
@@ -49,7 +49,7 @@ Each column title has a faint funnel. Click it to filter the list by that column
 - **Source**, **Q** and **Status** offer a few values to tick, such as only **Error** under **Status**, or only **Not in a queue** under **Q**.
 - The other columns take text: type a word, and only rows whose cell contains it stay.
 
-A filtered column's funnel turns blue. To remove every filter, right-click a column title and choose **Clear all filters**. Filters last until you close MDM.
+A filtered column's funnel turns blue. To remove every filter, right-click a column title and choose **Clear all filters**. Filters last until you close Grabbit.
 
 ## Categories
 
@@ -70,7 +70,7 @@ Right-click a category for:
 - **Browse** — open its folder in Explorer.
 - **Properties** — change its name, its file types and its folder. General and Torrents only change their folder. A renamed category keeps its folder; a built-in one keeps its name until you rename it.
 - **Add category** — make your own, for example **Books** for `EPUB MOBI`. Give it a name, the file types (separated by spaces, `*` allowed) and a folder.
-- **Delete** — remove a category, your own or a built-in one (not General or Torrents). MDM asks what happens to its downloads: **Move its downloads to General**, or **Remove its downloads from the list** (a download that is running moves to General instead). Their files stay where they are either way. From then on, files of its types go to another category that has them, or to General.
+- **Delete** — remove a category, your own or a built-in one (not General or Torrents). Grabbit asks what happens to its downloads: **Move its downloads to General**, or **Remove its downloads from the list** (a download that is running moves to General instead). Their files stay where they are either way. From then on, files of its types go to another category that has them, or to General.
 
 ![A category's properties: its name, file types and folder](images/help/category-properties.webp)
 *Right-click a category → Properties: its name, file types and folder.*
@@ -121,11 +121,11 @@ Its buttons are **Resume** or **Stop**, **Open folder** and **Show progress wind
 
 With nothing selected the pane says **Select a download to see its details**; with several, how many they are and their total size.
 
-Drag the pane's edge by the list to make it wider or narrower. It is never wider than half the window, keeps the list at least 200 points wide when the window has room, and MDM remembers the width. The list keeps all its columns and scrolls sideways when they don't fit.
+Drag the pane's edge by the list to make it wider or narrower. It is never wider than half the window, keeps the list at least 200 points wide when the window has room, and Grabbit remembers the width. The list keeps all its columns and scrolls sideways when they don't fit.
 
 ## Verify checksum
 
-Many sites publish a checksum next to the download. Right-click the download, choose **Verify checksum...** and paste it. MDM reads MD5, SHA-1, SHA-256, SHA-512 and CRC32. A finished file is checked at once; an unfinished one is checked when its download ends. MDM then says **The file matches** or **The file does NOT match**.
+Many sites publish a checksum next to the download. Right-click the download, choose **Verify checksum...** and paste it. Grabbit reads MD5, SHA-1, SHA-256, SHA-512 and CRC32. A finished file is checked at once; an unfinished one is checked when its download ends. Grabbit then says **The file matches** or **The file does NOT match**.
 
 ## Selecting several downloads
 
@@ -148,14 +148,14 @@ Typing the start of a name while the list has the focus jumps to the first downl
 
 ## Deleting downloads
 
-Select one or more downloads and press **Delete**, click **Delete** on the toolbar, or choose **File → Remove**. MDM asks first:
+Select one or more downloads and press **Delete**, click **Delete** on the toolbar, or choose **File → Remove**. Grabbit asks first:
 
 - **Also delete the file from disk** — tick it to delete the files too. For an unfinished download, this deletes the part downloaded so far. Leave it unticked to take the downloads off the list and keep the files.
-- **Don't show this dialog again** — MDM stops asking and does what you answered this time. To be asked again, tick **Options → General → Confirm before deleting downloads**.
+- **Don't show this dialog again** — Grabbit stops asking and does what you answered this time. To be asked again, tick **Options → General → Confirm before deleting downloads**.
 
 Click **Yes** to delete, or **No** to keep everything.
 
-**Shift+Delete** opens the same question with **Also delete the file from disk** already ticked, for that time only. After a plain **Delete**, MDM remembers your answer and ticks the box the same way next time.
+**Shift+Delete** opens the same question with **Also delete the file from disk** already ticked, for that time only. After a plain **Delete**, Grabbit remembers your answer and ticks the box the same way next time.
 
 After deleting, the next download in the list is selected, so you can press **Delete** again.
 

@@ -6,7 +6,7 @@ A **queue** is a list of downloads that run in order, a few at a time. The **Sch
 
 ## Queues
 
-MDM comes with two queues:
+Grabbit comes with two queues:
 
 - **Main download queue** — where **Download Later**, batch downloads and imported lists go. A download leaves it when it is finished.
 - **Synchronization queue** — finished downloads stay in it instead of leaving. It is the only queue that takes finished downloads.
@@ -44,26 +44,26 @@ The queues are on the left, with **Download limits** below them. The right side 
 
 ## Schedule: starting and stopping on time
 
-- **Start download on Mister Download Manager startup** — start the queue whenever MDM starts.
+- **Start download on Grabbit startup** — start the queue whenever Grabbit starts.
 - **Start download at** — a time, then either:
   - **Once at** a date, or
   - **Daily**, on the days you tick.
 - **Stop download at** — a time to stop the queue if it is still running.
-- **Number of retries for each file if downloading failed** — how often a failed download is tried again before the queue gives up on it. Without it, MDM keeps trying.
+- **Number of retries for each file if downloading failed** — how often a failed download is tried again before the queue gives up on it. Without it, Grabbit keeps trying.
 
 To set a time, click a part of it (hours, minutes, seconds) and use the arrows, the mouse wheel, **Up** / **Down** or the number keys. **Left** and **Right** move between the parts.
 
-MDM has to be running for a schedule to fire. It can sit in the tray: closing the main window doesn't quit it.
+Grabbit has to be running for a schedule to fire. It can sit in the tray: closing the main window doesn't quit it.
 
 ## Wake the computer to run a queue
 
 Tick **Wake the computer to run this queue**, under the start time, and a computer that is asleep at the start time is woken for it. It needs **Start download at**.
 
-- MDM wakes the computer a minute before the start time, so the network is back when the queue starts.
+- Grabbit wakes the computer a minute before the start time, so the network is back when the queue starts.
 - While the queue runs, the computer doesn't go to sleep. When the queue is done, the computer's own sleep settings apply again: a computer nobody is using goes back to sleep by itself. **Turn off computer when done → Sleep** sends it back to sleep at once.
 - The line under the option says when the computer will next be woken, or why it can't be.
-- MDM has to be running (it can sit in the notification area). The computer has to be asleep, not shut down.
-- The wake follows the schedule: change the start time or the days, untick the option or delete the queue, and the wake moves or goes away. MDM sets it again each time it starts. Nothing stays behind in the system when MDM quits or is uninstalled.
+- Grabbit has to be running (it can sit in the notification area). The computer has to be asleep, not shut down.
+- The wake follows the schedule: change the start time or the days, untick the option or delete the queue, and the wake moves or goes away. Grabbit sets it again each time it starts. Nothing stays behind in the system when Grabbit quits or is uninstalled.
 
 Windows wakes a computer only if its power plan allows wake timers. If it doesn't, the Scheduler says so, and **Change** opens the setting: **Power Options → Change plan settings → Change advanced power settings → Sleep → Allow wake timers**. Choose **Enable**: **Important Wake Timers Only** lets only Windows' own important timers wake the computer. On laptops the setting is often off on battery, so the computer is woken only while plugged in.
 
@@ -71,9 +71,9 @@ Windows wakes a computer only if its power plan allows wake timers. If it doesn'
 
 - **Open the following file when done** — for example a sound, a script or a program. **...** picks the file.
 - **Hang up modem when done** — ends a dial-up connection, if you use one.
-- **Exit Mister Download Manager when done**.
+- **Exit Grabbit when done**.
 - **Turn off computer when done** — choose **Shut down**, **Sleep** or **Hibernate**.
-  - MDM first shows a 30-second countdown. **Cancel** stops it; **Turn off now** goes ahead at once.
+  - Grabbit first shows a 30-second countdown. **Cancel** stops it; **Turn off now** goes ahead at once.
   - **Force processes to terminate** closes programs that would otherwise hold Windows up.
 
 ## Files in the queue
@@ -89,7 +89,7 @@ For an internet plan with a data cap, select **Download limits** on the left:
 2. Fill in **Download no more than [N] MBytes every [H] hours**. It starts at 200 MBytes every 5 hours.
 3. Click **Apply**.
 
-When the limit is reached, MDM stops downloading. New downloads show **Waiting: the download limit is reached (Scheduler)**. Everything resumes on its own when the period is over. **Show warning before stopping downloads** tells you when this happens and when downloads will go on.
+When the limit is reached, Grabbit stops downloading. New downloads show **Waiting: the download limit is reached (Scheduler)**. Everything resumes on its own when the period is over. **Show warning before stopping downloads** tells you when this happens and when downloads will go on.
 
 The same setting is in **Options → Connection**.
 

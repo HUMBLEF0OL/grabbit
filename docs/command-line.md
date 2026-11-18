@@ -2,13 +2,13 @@
 
 [← Back to docs index](README.md)
 
-MDM can be driven without its window in three ways:
+Grabbit can be driven without its window in three ways:
 
 - **The app's own command line**, the same switches as IDM's: hand a download to the running app from a script, a batch file or another program.
 - **`grabbit-cli`**, a separate command-line tool: download files, videos and torrents in a terminal, with progress, without the app.
-- **The automation API**: other programs list the running app's downloads (as JSON) and pause, start, remove or delete them, over a local, token-protected channel. AI assistants use it through MDM's MCP server: see [AI assistants](ai-assistants.md).
+- **The automation API**: other programs list the running app's downloads (as JSON) and pause, start, remove or delete them, over a local, token-protected channel. AI assistants use it through Grabbit's MCP server: see [AI assistants](ai-assistants.md).
 
-To run the whole app without a window, on a computer that stays on, see [Run MDM on a server](server.md) (`grabbit --headless`); to control it from a phone, [Control MDM from your phone](remote-control.md).
+To run the whole app without a window, on a computer that stays on, see [Run Grabbit on a server](server.md) (`grabbit --headless`); to control it from a phone, [Control Grabbit from your phone](remote-control.md).
 
 ## The app's command line
 
@@ -25,10 +25,10 @@ grabbit.exe /d URL [/p folder] [/f name] [/a] [/n] [/s]
 | `/n` | Silent: no **Download File Info** window, the download starts (or is queued, with `/a`) at once. |
 | `/s` | Start the main download queue. |
 | `/exit` | Save and close the running app (the installer uses it before an upgrade). |
-| `/startup` | Start in the notification area, the window hidden: what **Launch Mister Download Manager on startup** starts MDM with when you sign in. Where no notification area shows MDM's icon, MDM starts minimized. A running MDM stays as it is. |
-| *a `.torrent` file or `magnet:` link* | Open it in **Add torrent** (what Windows passes when MDM opens torrents). |
+| `/startup` | Start in the notification area, the window hidden: what **Launch Grabbit on startup** starts Grabbit with when you sign in. Where no notification area shows Grabbit's icon, Grabbit starts minimized. A running Grabbit stays as it is. |
+| *a `.torrent` file or `magnet:` link* | Open it in **Add torrent** (what Windows passes when Grabbit opens torrents). |
 
-Switches can start with `/` or `-`, in any case. If MDM is running, the command goes to it; if not, MDM starts and carries it out. For example:
+Switches can start with `/` or `-`, in any case. If Grabbit is running, the command goes to it; if not, Grabbit starts and carries it out. For example:
 
 ```
 grabbit.exe /d https://example.com/files/report.pdf /p D:\Reports /n
@@ -38,7 +38,7 @@ grabbit.exe /s
 
 ## grabbit-cli
 
-It comes with every download of MDM, next to the app (the installer puts it in MDM's folder). It works on its own: the app needn't run, except for `status` and `api`.
+It comes with every download of Grabbit, next to the app (the installer puts it in Grabbit's folder). It works on its own: the app needn't run, except for `status` and `api`.
 
 | Command | What it does |
 |---|---|
@@ -95,15 +95,15 @@ grabbit-cli --json get https://example.com/big.iso -o D:\Downloads
 
 Other programs can ask the running app what it is downloading, and pause, start, remove or delete downloads. The API is **off by default**; turn it on with `grabbit-cli api on` (and off with `api off`).
 
-### How a program talks to MDM
+### How a program talks to Grabbit
 
-1. While it runs, MDM listens on a port of `127.0.0.1` (this computer only) and writes the port and a secret token to `ipc.json` in its data folder:
+1. While it runs, Grabbit listens on a port of `127.0.0.1` (this computer only) and writes the port and a secret token to `ipc.json` in its data folder:
    - Windows: `%APPDATA%\grabbit\ipc.json`
    - A [portable copy](portable.md): `data\ipc.json` next to the program.
 
    The token changes at every start; only programs that can read your data folder (yours) can use it.
 2. Connect to that port and send one line of JSON: the token and the command's fields, e.g. `{"token": "<token>", "query": "list"}`.
-3. MDM answers with one line: `ok` for a command, or a JSON object for a question.
+3. Grabbit answers with one line: `ok` for a command, or a JSON object for a question.
 
 ### What it understands
 
@@ -118,7 +118,7 @@ Other programs can ask the running app what it is downloading, and pause, start,
 
 An unknown question or action is answered `{"error": "…"}`, as is a question while the API is off (then with `"code": "api-off"`, for programs to check: the error text may change). A wrong token is answered `denied`.
 
-Every request and answer is described, field by field, in a JSON Schema: [automation-api.schema.json](automation-api.schema.json) (also at `https://misterdownloadmanager.com/automation-api.schema.json`). It is made from the code the app answers with, so it stays exact; programs can check what they send and read against it, or generate their types from it.
+Every request and answer is described, field by field, in a JSON Schema: [automation-api.schema.json](automation-api.schema.json) (also at `https://humblef0ol.github.io/grabbit/automation-api.schema.json`). It is made from the code the app answers with, so it stays exact; programs can check what they send and read against it, or generate their types from it.
 
 ### Examples
 

@@ -3,8 +3,8 @@ name: Categories
 title: Download categories by file type
 headline: Every file in its folder, without asking.
 line: Downloads sorted by type into folders of their own, with Finished and Unfinished one click away.
-lede: MDM files each download by its type, music with music and programs with programs, each category with a folder of its own. The pane on the left shows them all, finished or not.
-description: Categories in Mister Download Manager: each file type in its own folder, Finished and Unfinished at a glance, and categories of your own.
+lede: Grabbit files each download by its type, music with music and programs with programs, each category with a folder of its own. The pane on the left shows them all, finished or not.
+description: Categories in Grabbit: each file type in its own folder, Finished and Unfinished at a glance, and categories of your own.
 group: organising
 order: 130
 since: 0.1.0
@@ -34,7 +34,7 @@ folder.
 ![The Categories pane: All Downloads with a category per file type, Unfinished, Finished and Queues](images/help/list-categories.webp)
 *All Downloads, Unfinished, Finished and Queues, each by category.*
 
-MDM opens where you left it, with the same branches open and the same category shown. **View →
+Grabbit opens where you left it, with the same branches open and the same category shown. **View →
 Hide categories** gives the list the whole window.
 
 ## Make your own

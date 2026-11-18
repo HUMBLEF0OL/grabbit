@@ -1,7 +1,7 @@
 ---
 title: License
-description: Mister Download Manager is free software under the GNU General Public License, version 3. What that means for you, and the licences of every component it is built from.
-lede: Mister Download Manager is free software under the GNU General Public License, version 3 (GPL-3.0). Here's what that means, and who else's work it is built on.
+description: Grabbit is free software under the GNU General Public License, version 3. What that means for you, and the licences of every component it is built from.
+lede: Grabbit is free software under the GNU General Public License, version 3 (GPL-3.0). Here's what that means, and who else's work it is built on.
 fine: Applies to version {{VERSION}}
 priority: 0.4
 ---
@@ -22,19 +22,18 @@ This summary is not the licence. The full text is in the [LICENSE file]({{REPO}}
 
 Copyright © 2026 Ahmed Nefzaoui and contributors.
 
-> Mister Download Manager is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+> Grabbit is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 >
-> Mister Download Manager is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+> Grabbit is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 ## Artwork and fonts
 
 | Component | By | Licence |
 |---|---|---|
-| The MDM logo and app icon | Ahmed Nefzaoui, made with ChatGPT image generation | Part of MDM |
-| Lucide icons 1.63 (toolbar, dialogs) | Lucide Icons and contributors | ISC |
-| Tango Icon Theme 0.8.90 (file icons where the system has none) | The Tango Desktop Project | Public domain |
-| flag-icons 7.6 (language flags, and the country flags where a download's server is) | Panayiotis Lipiridis and contributors | MIT |
-| Silk icons 1.3 (categories tree) | Mark James | CC BY 2.5 |
+| Grabbit's logo and app icon (the double chevron) | Grabbit's contributors | Part of Grabbit |
+| Tabler Icons 3.31 (every icon the app draws: toolbar, categories, file types, menus, dialogs) | Paweł Kuna | MIT |
+| Geist 1.900 (the app's typeface, built in) | Vercel and the Geist Project Authors | SIL Open Font License 1.1 |
+| flag-icons 7.6 (the country flags where a download's server is) | Panayiotis Lipiridis and contributors | MIT |
 | System fonts (Segoe UI and others) | The operating system | Used at run time, not included |
 
 ## Data
@@ -45,21 +44,21 @@ Copyright © 2026 Ahmed Nefzaoui and contributors.
 
 The full list, with the files each covers, is in [ATTRIBUTION.md]({{REPO}}/blob/main/ATTRIBUTION.md).
 
-## Tools MDM downloads when you ask
+## Tools Grabbit downloads when you ask
 
 | Tool | Used for | Licence |
 |---|---|---|
 | [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Finding and downloading videos on web pages | Unlicense |
 | [FFmpeg](https://ffmpeg.org) (BtbN's builds) | Merging video and sound | LGPL 2.1 or later |
 
-They aren't included in MDM's downloads. MDM fetches them from their official releases on first use and checks them before they run.
+They aren't included in Grabbit's downloads. Grabbit fetches them from their official releases on first use and checks them before they run.
 
 ## This website
 
-The site's charts use [Apache ECharts](https://echarts.apache.org) 5.6 (Apache License 2.0) and its text is set in [Geist](https://github.com/vercel/geist-font) by Vercel (SIL Open Font License 1.1), both served from this site. The language flags are the app's own, from [flag-icons](https://github.com/lipis/flag-icons) (MIT). The browser logos come from [browser-logos](https://github.com/alrra/browser-logos) (MIT); the logos themselves are trademarks of their owners and appear only to name the browsers MDM works with. Screenshots show freely available files, including the Blender Foundation's open movies (CC BY).
+The site's charts use [Apache ECharts](https://echarts.apache.org) 5.6 (Apache License 2.0) and its text is set in [Geist](https://github.com/vercel/geist-font) by Vercel (SIL Open Font License 1.1), both served from this site. The language flags are the app's own, from [flag-icons](https://github.com/lipis/flag-icons) (MIT). The browser logos come from [browser-logos](https://github.com/alrra/browser-logos) (MIT); the logos themselves are trademarks of their owners and appear only to name the browsers Grabbit works with. Screenshots show freely available files, including the Blender Foundation's open movies (CC BY).
 
-## Rust libraries built into MDM
+## Rust libraries built into Grabbit
 
-MDM is written in Rust and built on the work of hundreds of open-source libraries. These are the ones compiled into the app, the command-line tool and the browser helper, with their licences, all compatible with the GPL. Each library's licence text comes with its source code.
+Grabbit is written in Rust and built on the work of hundreds of open-source libraries. These are the ones compiled into the app, the command-line tool and the browser helper, with their licences, all compatible with the GPL. Each library's licence text comes with its source code.
 
 {{THIRD_PARTY}}

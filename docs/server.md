@@ -1,10 +1,10 @@
-# Run MDM on a server
+# Run Grabbit on a server
 
-Run Mister Download Manager without a window on a Windows computer that stays on (a home server,
+Run Grabbit without a window on a Windows computer that stays on (a home server,
 a spare PC), and send it downloads from your phone or your browser: it downloads them into its
 own folders, such as a network share.
 
-It is the same MDM as on a desktop: its list, categories, queues, Scheduler, speed limits and
+It is the same Grabbit as on a desktop: its list, categories, queues, Scheduler, speed limits and
 torrents. You control it with the [remote control's page](remote-control.md) (from any phone or
 computer on your network), the browser extension pointed at it, or its command line.
 
@@ -39,26 +39,26 @@ Its certificate's SHA-256 fingerprint: DE:26:7F:…
 No device is paired yet. Open the address (or scan this) and enter the code 1037 1606 …
 ```
 
-Then pair as [Control MDM from your phone](remote-control.md#pair-your-phone) says. For another
+Then pair as [Control Grabbit from your phone](remote-control.md#pair-your-phone) says. For another
 code, at any time, with the same data folder:
 
 ```powershell
 $env:GRABBIT_DATA_DIR = "C:\mdm-server"; grabbit-cli pair
 ```
 
-To open the page by the computer's name (`https://homeserver.local:8463/`), give MDM that name:
+To open the page by the computer's name (`https://homeserver.local:8463/`), give Grabbit that name:
 `--hosts homeserver.local` (several: separated by commas). Other names are refused, so that no
-web page can reach MDM through a name of its own.
+web page can reach Grabbit through a name of its own.
 
-The command line talks to it as to a desktop MDM, with the same data folder:
+The command line talks to it as to a desktop Grabbit, with the same data folder:
 `grabbit-cli status` (once `api on`), `pair`, and adding an address:
 `grabbit /d https://example.com/file.zip`.
 
 ## Send downloads from your browser
 
-In the browser extension's menu, **Send downloads to → Another Mister Download Manager (a server)**: type the server's address,
+In the browser extension's menu, **Send downloads to → Another Grabbit (a server)**: type the server's address,
 open it once in that browser to accept its certificate, then enter a pairing code (`pair`
-above). Downloads the extension catches, and **Download with Mister Download Manager** on a link,
+above). Downloads the extension catches, and **Download with Grabbit** on a link,
 then go to the server instead of this computer. The browser's cookies are not sent to the server:
 a download that needs you to be signed in to a site stays with this computer.
 

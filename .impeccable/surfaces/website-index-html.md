@@ -20,8 +20,8 @@ IDM is the benchmark's yardstick and a "moving from IDM" path, never the identit
 Memorable moment: the real app shown working on a centred stage, then pinned while the scroll
 walks its jobs.
 
-Unresolved: the app and its screenshots still say Mister Download Manager until the rename
-(design/graphite/plans/10) ships; a 10-15 s screen recording replaces the hero still when it
+Unresolved: the app says Grabbit, but its screenshots still show the old name in the title bar
+until they are taken again; a 10-15 s screen recording replaces the hero still when it
 exists; PRODUCT.md still carries the IDM-clone positioning.
 
 ## Direction contract

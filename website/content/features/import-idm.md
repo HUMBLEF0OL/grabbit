@@ -3,8 +3,8 @@ name: Moving from IDM
 title: Import your download list from IDM
 headline: Switching is easy. Bring your downloads with you.
 line: Your IDM list comes over in one file, each download with its address, referrer and cookies.
-lede: Moving from Internet Download Manager? Export your list there and import it in MDM. Every download comes over with its address, referrer and cookies, into a window laid out the way you know.
-description: Move from Internet Download Manager to Mister Download Manager: import an IDM export file (.ef2) or a text list of links, with referrers and cookies.
+lede: Moving from Internet Download Manager? Export your list there and import it in Grabbit. Every download comes over with its address, referrer and cookies, into a window laid out the way you know.
+description: Move from Internet Download Manager to Grabbit: import an IDM export file (.ef2) or a text list of links, with referrers and cookies.
 group: organising
 order: 160
 since: 0.1.0
@@ -16,7 +16,7 @@ help: adding-downloads.md#a-list-of-links
 
 ## Your list comes over in one file
 
-In IDM, choose **Tasks → Export → To IDM export file**. In MDM, choose **Tasks → Import → From
+In IDM, choose **Tasks → Export → To IDM export file**. In Grabbit, choose **Tasks → Import → From
 IDM export file** and pick that `.ef2` file. Each download comes over with its address, the page
 it came from (its referrer) and its cookies. The downloads join the **Main download queue**,
 ready to start.
@@ -32,11 +32,11 @@ line, and **To IDM export file** writes an `.ef2` file.
 
 ## Nothing new to learn
 
-MDM is a separate program, written from scratch, but its windows are laid out the way IDM users
+Grabbit is a separate program, written from scratch, but its windows are laid out the way IDM users
 expect: the toolbar, the categories, the download list, the progress window with every
 connection, queues and the Scheduler. It is free, with no trial and no sign-up.
 
-IDM is the more mature product, refined over many years. MDM finished faster in [our
+IDM is the more mature product, refined over many years. Grabbit finished faster in [our
 benchmark](/benchmark.html): a 1 GiB file in 1.0 s against IDM 6.42's 5.5 s, on the same PC and
 the same test server. The [FAQ](/faq/mdm-vs-idm.html) sums up the other differences.
 

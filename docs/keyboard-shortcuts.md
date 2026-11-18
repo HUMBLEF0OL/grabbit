@@ -2,10 +2,10 @@
 
 [← Back to docs index](README.md)
 
-The same list is in MDM under **Help → Keyboard shortcuts**, and the menus show each command's
+The same list is in Grabbit under **Help → Keyboard shortcuts**, and the menus show each command's
 keys beside it.
 
-Everything can be done from the keyboard, and MDM works with screen readers (such as
+Everything can be done from the keyboard, and Grabbit works with screen readers (such as
 Narrator and NVDA on Windows): its windows, dialogs and menus tell them what each control is
 and its state, and the download list reads each download's name, status and size. The
 **Categories** pane reads as a tree (each category with its count, open or shut, selected or

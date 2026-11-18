@@ -3,8 +3,8 @@ name: Video downloads
 title: Download videos from YouTube and other sites
 headline: Paste a video's page. Pick the quality.
 line: Videos from YouTube, Vimeo, TikTok and well over a thousand other sites, in the quality you choose.
-lede: MDM downloads videos from their web pages with yt-dlp, the open-source tool whose community keeps it working as sites change. You pick the quality; the video joins your other downloads.
-description: Download videos from YouTube, Vimeo, TikTok and over a thousand other sites with Mister Download Manager and yt-dlp, in the quality you choose.
+lede: Grabbit downloads videos from their web pages with yt-dlp, the open-source tool whose community keeps it working as sites change. You pick the quality; the video joins your other downloads.
+description: Download videos from YouTube, Vimeo, TikTok and over a thousand other sites with Grabbit and yt-dlp, in the quality you choose.
 group: downloading
 order: 30
 since: 0.1.0
@@ -16,7 +16,7 @@ help: video.md
 
 ## One window for any video page
 
-Give a video's page address to **Add URL** (**Ctrl+N**) and MDM sees that it is a video page:
+Give a video's page address to **Add URL** (**Ctrl+N**) and Grabbit sees that it is a video page:
 **Download video from a page** opens and looks it up. YouTube, Vimeo, Dailymotion, Twitch,
 TikTok, Instagram, Reddit and well over a thousand other sites work. With the
 [browser extension](/features/browser-extension.html), the button over a video opens the same
@@ -28,19 +28,19 @@ for later. The video gets its own row and progress window, like any other downlo
 
 ## Two helpers, checked before use
 
-MDM doesn't do this alone, and doesn't pretend to. **yt-dlp** reads the page and downloads the
+Grabbit doesn't do this alone, and doesn't pretend to. **yt-dlp** reads the page and downloads the
 video. **ffmpeg** joins the picture and the sound when a site keeps them apart, which most sites
-do for their higher qualities. MDM offers both on its first start and downloads them from their
+do for their higher qualities. Grabbit offers both on its first start and downloads them from their
 official releases, checked against what their publishers sign before it uses them.
 
 Without ffmpeg you still get the qualities that come with their sound.
 
 ## What it won't do
 
-Videos protected with DRM, as most paid streaming services use, can't be downloaded, and MDM
+Videos protected with DRM, as most paid streaming services use, can't be downloaded, and Grabbit
 doesn't try. Downloading may be against some sites' terms: checking that is up to you.
 
-Sites change often, and a newer yt-dlp usually fixes a video that stopped working. MDM doesn't
+Sites change often, and a newer yt-dlp usually fixes a video that stopped working. Grabbit doesn't
 update yt-dlp on its own yet; [the help](video.md#if-a-video-wont-download) shows how to get the
 newest one.
 
