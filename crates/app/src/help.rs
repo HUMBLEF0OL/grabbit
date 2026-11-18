@@ -29,7 +29,7 @@ pub const CHECK_AFTER_START: std::time::Duration = std::time::Duration::from_sec
 
 /// The official website: the home page and the user guide, docs/*.md made into pages by
 /// tools/website/build.py. GitHub (REPO) keeps what is GitHub's: issues, releases, the source.
-pub const SITE: &str = "https://misterdownloadmanager.com";
+pub const SITE: &str = "https://humblef0ol.github.io/grabbit";
 
 /// The website's address of a user guide page: `doc` is the page's file in docs/ with an optional section (`"video.md"`,
 /// `"README.md#tutorials"`; the guide's contents are README.md), `""` the home page. The mapping
@@ -154,7 +154,7 @@ fn settled(joined: Result<Result<Found, String>, tokio::task::JoinError>) -> Res
 
 async fn latest() -> Result<Found, String> {
     // MDM_UPDATE_FEED: another address for the latest release (tests of Update now, as
-    // MDM_DATA_DIR is for a separate list).
+    // GRABBIT_DATA_DIR is for a separate list).
     let feed = std::env::var("MDM_UPDATE_FEED").unwrap_or_else(|_| LATEST.to_owned());
     let net = crate::settings::own_net();
     // The chosen DNS and network adapter, as downloads have them (#36, #35).
@@ -1259,17 +1259,17 @@ mod tests {
     fn help_pages_are_the_websites() {
         assert_eq!(
             page_url("README.md"),
-            "https://misterdownloadmanager.com/help/"
+            "https://humblef0ol.github.io/grabbit/help/"
         );
         assert_eq!(
             page_url("README.md#tutorials"),
-            "https://misterdownloadmanager.com/help/#tutorials"
+            "https://humblef0ol.github.io/grabbit/help/#tutorials"
         );
         assert_eq!(
             page_url("video.md"),
-            "https://misterdownloadmanager.com/help/video.html"
+            "https://humblef0ol.github.io/grabbit/help/video.html"
         );
-        assert_eq!(page_url(""), "https://misterdownloadmanager.com/");
+        assert_eq!(page_url(""), "https://humblef0ol.github.io/grabbit/");
     }
 
     /// The repository's root.
@@ -1289,7 +1289,7 @@ mod tests {
         }
         let calls = regex::Regex::new(r#"(?:open_page|HelpPage)\(\s*"([^"]+)""#).unwrap();
         let site =
-            regex::Regex::new(r"https://misterdownloadmanager\.com/help/([\w.-]*)(#[\w-]+)?")
+            regex::Regex::new(r"https://humblef0ol\.github\.io/grabbit/help/([\w.-]*)(#[\w-]+)?")
                 .unwrap();
         let mut files = vec![];
         let mut dirs = vec![root().join("crates"), root().join("extension")];

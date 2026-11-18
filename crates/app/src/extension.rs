@@ -446,26 +446,6 @@ pub fn set_up(ctx: &egui::Context) {
     }
 }
 
-/// Plan 10c: when this user's browser registration names the original MDM's helper beside this
-/// program (`misterdownloadmanager-nmhost.exe`, which the installer removes and a zip leaves
-/// behind), Grabbit's own registers again ([`set_up`]: both host names, its own manifest paths).
-/// Looked at on a thread of its own (it reads the registry and the manifests). Never by a test
-/// copy off the screens, which leaves the user's registration alone.
-pub fn renew_old_registration(ctx: &egui::Context) {
-    if crate::offscreen() {
-        return;
-    }
-    let ctx = ctx.clone();
-    let _ = std::thread::Builder::new()
-        .name("old registration".into())
-        .spawn(move || {
-            if crate::win32::host_registered_old() {
-                tracing::info!("browser integration registered again with Grabbit's helper");
-                set_up(&ctx);
-            }
-        });
-}
-
 /// Whether a Set it up finished since `seen` was last given here (it is then brought up to
 /// date): the caller reads the checks again.
 pub fn set_up_finished(seen: &mut u64) -> bool {

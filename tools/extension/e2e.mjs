@@ -1,7 +1,7 @@
 // The whole browser integration in real browsers, with nothing on the screen: each browser runs
 // headless with its own new profile and loads the extension (target/extension, from pack.ps1);
 // the native messaging host (target/release) hands what it sends to a separate Mister Download
-// Manager instance (its own data folder, MDM_DATA_DIR; off the screens, MDM_OFFSCREEN). Each case
+// Manager instance (its own data folder, GRABBIT_DATA_DIR; off the screens, MDM_OFFSCREEN). Each case
 // checks what MDM received (the lab server's request log, the files in MDM's folders, its list
 // through the automation API, its Download video window through UI Automation) and that the
 // browser kept nothing.
@@ -64,7 +64,7 @@ const proxyLog = [];
 const PAC = `function FindProxyForURL(url, host) { return host === "${PROXY_HOST}" ? "PROXY 127.0.0.1:${PROXY_PORT}" : "DIRECT"; }`;
 // The extension's own address in Firefox (moz-extension://UUID/), fixed in the test profile so
 // its pages (the popup) can be opened in a tab.
-const FIREFOX_ID = "integration@misterdownloadmanager.com";
+const FIREFOX_ID = "grabbit@humblef0ol.github.io";
 // The extensions the browsers load: pack.ps1's, or their copies for E2E_HOST_NAME (testHost).
 let chromiumExtension = path.join(root, "target", "extension", "chromium");
 let firefoxExtension = { type: "archivePath", path: path.join(root, "target", "extension", "mdm-firefox.xpi") };
@@ -721,7 +721,7 @@ async function remoteServer() {
   const downloads = path.join(dir, "Downloads");
   fs.mkdirSync(rdata, { recursive: true });
   const args = ["--headless", "--data", rdata, "--downloads", downloads, "--listen", "127.0.0.1", "--port", String(REMOTE_PORT)];
-  const proc = spawn(appExe, args, { env: { ...process.env, MDM_DATA_DIR: rdata }, stdio: "ignore", windowsHide: true });
+  const proc = spawn(appExe, args, { env: { ...process.env, GRABBIT_DATA_DIR: rdata }, stdio: "ignore", windowsHide: true });
   const code = async () => {
     const a = JSON.parse(await ipc({ pair: true }, rdata));
     if (!a.code) throw new Error(`no pairing code: ${JSON.stringify(a)}`);
@@ -1223,7 +1223,7 @@ function firefoxVpnExtension() {
       version: "1.0",
       permissions: ["proxy", "<all_urls>"],
       background: { scripts: ["background.js"] },
-      browser_specific_settings: { gecko: { id: "vpn-e2e@misterdownloadmanager.com" } },
+      browser_specific_settings: { gecko: { id: "vpn-e2e@humblef0ol.github.io" } },
     }),
   );
   fs.writeFileSync(
@@ -2127,16 +2127,14 @@ const KNOWN_BUGS = {};
 // FIREFOX_KEY, CHROME_EXTERNAL_KEY): each browser's host entry and Chrome's external extension,
 // per user and for everyone (the latter only read: an installed copy's). [key, 32-bit view].
 const HOST = "com.grabbit.host";
-// The original MDM's name, which nmhost registers too (plan 10c).
-const OLD_HOST = "com.misterdownloadmanager.host";
 const REG_KEYS = ["HKCU", "HKLM"].flatMap((root) => [
-  ...[HOST, OLD_HOST].flatMap((host) => [
+  ...[
     "Software\\Google\\Chrome\\NativeMessagingHosts",
     "Software\\Chromium\\NativeMessagingHosts",
     "Software\\Microsoft\\Edge\\NativeMessagingHosts",
     "Software\\BraveSoftware\\Brave-Browser\\NativeMessagingHosts",
     "Software\\Mozilla\\NativeMessagingHosts",
-  ].map((k) => [`${root}\\${k}\\${host}`, false])),
+  ].map((k) => [`${root}\\${k}\\${HOST}`, false]),
   [`${root}\\Software\\Google\\Chrome\\Extensions`, true],
 ]);
 
@@ -2185,7 +2183,7 @@ const TEST_HOST_KEYS = {
   waterfox: "Software\\Mozilla\\NativeMessagingHosts",
 };
 function testHost(name, browsers, nmhost) {
-  if (!/^[a-z0-9_]+(\.[a-z0-9_]+)+$/.test(name) || name === HOST || name === OLD_HOST) throw new Error(`E2E_HOST_NAME: ${name} isn't a test host name`);
+  if (!/^[a-z0-9_]+(\.[a-z0-9_]+)+$/.test(name) || name === HOST) throw new Error(`E2E_HOST_NAME: ${name} isn't a test host name`);
   const other = browsers.filter((b) => !TEST_HOST_KEYS[b]);
   if (other.length) throw new Error(`E2E_HOST_NAME: not for ${other.join(", ")}`);
   // pack.ps1's folder for `kind`, copied with the test host's name in its background.js.
@@ -2194,13 +2192,8 @@ function testHost(name, browsers, nmhost) {
     fs.cpSync(path.join(root, "target", "extension", kind), dir, { recursive: true });
     const bg = path.join(dir, "background.js");
     const code = fs.readFileSync(bg, "utf8");
-    // Both of its names: the test's host is the only one it reaches.
-    const renamed = code
-      .replace(`const HOST = "${HOST}";`, `const HOST = ${JSON.stringify(name)};`)
-      .replace(`const OLD_HOST = "${OLD_HOST}";`, `const OLD_HOST = ${JSON.stringify(name)};`);
-    if (!renamed.includes(`const OLD_HOST = ${JSON.stringify(name)};`) || !renamed.includes(`const HOST = ${JSON.stringify(name)};`)) {
-      throw new Error("background.js: its host's names weren't found");
-    }
+    const renamed = code.replace(`const HOST = "${HOST}";`, `const HOST = ${JSON.stringify(name)};`);
+    if (renamed === code) throw new Error("background.js: its host's name wasn't found");
     fs.writeFileSync(bg, renamed);
     return dir;
   };
@@ -2311,7 +2304,7 @@ async function run() {
     fs.writeFileSync(path.join(data, "tools", "programs.json"), JSON.stringify({ "yt-dlp": { version, exe: found } }));
   }
   // The browsers pass these on to the host, and the host to an app it starts.
-  process.env.MDM_DATA_DIR = data;
+  process.env.GRABBIT_DATA_DIR = data;
   process.env.MDM_OFFSCREEN = "1";
 
   before = new Set(appProcesses().map(([pid]) => pid));
@@ -2326,10 +2319,9 @@ async function run() {
   let testLeft = [];
   try {
     await until("the lab server", 10000, () => fetch(`${LAB}/`).then((r) => r.ok, () => false));
-    // An installed copy's registration (Grabbit's or the original MDM's) is never replaced or removed.
-    const installed = [HOST, OLD_HOST].some(
-      (h) => spawnSync("reg", ["query", `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${h}`], { stdio: "ignore" }).status === 0,
-    );
+    // An installed Mister Download Manager's registration is never replaced or removed.
+    const key = "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.grabbit.host";
+    const installed = spawnSync("reg", ["query", key], { stdio: "ignore" }).status === 0;
     if (installed) {
       throw new Error("Mister Download Manager's host is already registered (an installed copy): not touching it");
     }

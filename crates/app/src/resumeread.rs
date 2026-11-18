@@ -32,10 +32,8 @@ pub struct Read {
 /// How a row's state is read: [`from_disk`], or a test's.
 pub type Loader = Arc<dyn Fn(&Path) -> Option<ResumeState> + Send + Sync>;
 
-/// The state at `dest` on the disk; files started under the former codename are renamed first,
-/// so that they resume.
+/// The state at `dest` on the disk.
 pub fn from_disk(dest: &Path) -> Option<ResumeState> {
-    mdm_engine::state::migrate_legacy(dest);
     ResumeState::load(&state_path(dest)).ok()
 }
 

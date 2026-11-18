@@ -58,7 +58,7 @@ fn failures_are_json_with_a_failing_exit_code() {
     let out = Command::new(APP)
         .arg(mdm_cli::FLAG)
         .args(["--json", "status"])
-        .env("MDM_DATA_DIR", dir.path())
+        .env("GRABBIT_DATA_DIR", dir.path())
         .output()
         .unwrap();
     assert!(!out.status.success());

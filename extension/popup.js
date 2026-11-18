@@ -3,7 +3,7 @@
 // site to the browser, opening the app or its Options, and the media the tab loaded (#38), each
 // to download. background.js does the work.
 const ext = globalThis.browser ?? globalThis.chrome;
-const HELP = "https://misterdownloadmanager.com/help/browser-help.html";
+const HELP = "https://humblef0ol.github.io/grabbit/help/browser-help.html";
 // The app's Help → Support MDM target: this fork's repository until its owner's GitHub Sponsors
 // page exists (see .github/FUNDING.yml). A plain link, in a new tab.
 const SPONSORS = "https://github.com/HUMBLEF0OL/grabbit";

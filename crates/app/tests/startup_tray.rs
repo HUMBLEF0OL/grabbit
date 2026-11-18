@@ -52,7 +52,7 @@ fn wait_for(app: &mut Child, data: &Path, line: &str, wait: Duration) {
 /// The app's environment: off the screens, its own data folder, its tray icon, and (Windows) a
 /// Run value or (Linux) an autostart folder of the test's own.
 fn env<'a>(cmd: &'a mut Command, data: &Path, startup: &Startup) -> &'a mut Command {
-    cmd.env("MDM_DATA_DIR", data)
+    cmd.env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .env("MDM_TEST_TRAY", "1")
         // A test's shell isn't asked where the icon is: say it is shown (app.rs tray_icon).

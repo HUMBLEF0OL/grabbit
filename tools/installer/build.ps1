@@ -1,8 +1,8 @@
 # Builds the Windows release into target/dist/:
-#   MisterDownloadManager-<version>-setup.exe     the installer (tools/installer/mdm.iss)
-#   MisterDownloadManager-<version>-portable.zip  the same programs with a `data` folder (portable
-#                                                 mode: settings beside the exe, no registry)
-#   MisterDownloadManager-<version>-x64.zip       the same programs, data in %APPDATA% as installed
+#   Grabbit-<version>-setup.exe     the installer (tools/installer/mdm.iss)
+#   Grabbit-<version>-portable.zip  the same programs with a `data` folder (portable
+#                                   mode: settings beside the exe, no registry)
+#   Grabbit-<version>-x64.zip       the same programs, data in %APPDATA% as installed
 #   SHA256SUMS.txt
 # Needs Inno Setup 6 (ISCC.exe on PATH, in $env:ISCC, or in its default folders).
 # Code signing: set $env:MDM_SIGN_COMMAND to a signtool command line with $f for the file, e.g.
@@ -53,10 +53,7 @@ function New-Zip([string]$name, [bool]$portable) {
   $stage = Join-Path $dist "stage\$name"
   if (Test-Path $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
   New-Item -ItemType Directory -Force $stage | Out-Null
-  # misterdownloadmanager.exe: the original MDM's program name, a small program that starts
-  # grabbit.exe (crates/cli/src/old_name.rs). An original MDM unpacks this zip over its folder
-  # and starts that name again (plan 10c).
-  foreach ($exe in "grabbit.exe", "grabbit-nmhost.exe", "grabbit-cli.exe", "grabbit-mcp.exe", "misterdownloadmanager.exe") {
+  foreach ($exe in "grabbit.exe", "grabbit-nmhost.exe", "grabbit-cli.exe", "grabbit-mcp.exe") {
     Copy-Item (Join-Path $bin $exe) $stage
   }
   New-Item -ItemType Directory -Force (Join-Path $stage "extension") | Out-Null
@@ -97,11 +94,11 @@ use the profile instead. Browser integration needs the installer.
   }
 }
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
-New-Zip "MisterDownloadManager-$version-portable" $true
-New-Zip "MisterDownloadManager-$version-x64" $false
+New-Zip "Grabbit-$version-portable" $true
+New-Zip "Grabbit-$version-x64" $false
 Remove-Item -LiteralPath (Join-Path $dist "stage") -Recurse -Force
 
-$files = Get-ChildItem $dist -File | Where-Object { $_.Name -like "MisterDownloadManager-$version-*" }
+$files = Get-ChildItem $dist -File | Where-Object { $_.Name -like "Grabbit-$version-*" }
 $files | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } |
   Set-Content -Encoding ascii (Join-Path $dist "SHA256SUMS.txt")
 $files | ForEach-Object { "{0}  {1:N1} MB" -f $_.Name, ($_.Length / 1MB) }

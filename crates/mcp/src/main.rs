@@ -16,7 +16,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "grabbit-mcp: Grabbit's MCP server, for AI \
                  assistants. The assistant starts it (no arguments) and talks to it on stdin and \
                  stdout. Setup: \
-                 https://misterdownloadmanager.com/help/ai-assistants.html"
+                 https://humblef0ol.github.io/grabbit/help/ai-assistants.html"
             ),
         }
         return Ok(());
