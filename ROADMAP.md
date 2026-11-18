@@ -579,6 +579,10 @@ The maintainer's first findings with 1.0.0 (in `dev`, for the next release):
   each is and sends it into its usual window; its arrow has Open a .torrent file (Ctrl+O), Add
   from the clipboard and Batch download. The paste bar names what it found and its button says
   what Enter does; links dropped on the main window open the Add window.
+- ✅ Graphite green: Graphite's colours are now zinc greys and one emerald green (selection,
+  ticked boxes, focus, links, the default button, progress) in place of amethyst and cyan, and
+  the app icon's double chevron is the same emerald, light into deep: in the app, the installer,
+  the browser extension, and the website's logos and favicon.
 
 ## Being worked on
 

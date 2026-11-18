@@ -76,8 +76,8 @@ Grabbit follows your system at first: when Windows is set to dark mode, so is Gr
 
 ## Themes
 
-Grabbit's look is **Graphite**: near-black or white with royal amethyst for what you chose (the
-selection, ticked boxes, the focus ring) and electric cyan for what moves (progress, the default
+Grabbit's look is **Graphite**: zinc greys, near-black or white, with one emerald green for what
+you chose (the selection, ticked boxes, the focus ring) and for what moves (progress, the default
 button), rounded corners, a focus ring, taller rows in the download list, a flat title bar in the
 panels' colour, thin outline icons in one colour (Tabler's) and its own typeface, Geist. It is
 the only built-in theme; [theme files](themes.md) of your own build on it.

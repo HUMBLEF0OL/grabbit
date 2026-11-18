@@ -8,8 +8,8 @@ a dark side.
 
 ## Graphite
 
-Grabbit's look is **Graphite**, its only built-in theme: near-black or white with royal amethyst and
-electric cyan, rounded corners, one-colour icons and its own typeface, Geist
+Grabbit's look is **Graphite**, its only built-in theme: zinc greys, near-black or white, with
+emerald green, rounded corners, one-colour icons and its own typeface, Geist
 ([Getting started](getting-started.md#themes) describes it). A theme file that names a theme
 Grabbit doesn't have gets Graphite, and the log says so.
 
