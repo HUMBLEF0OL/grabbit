@@ -86,8 +86,9 @@ pub struct Settings {
     /// The confirmation's "Also delete the files from disk", as last answered (IDM keeps it):
     /// its first state next time, and what happens when it no longer asks.
     pub delete_files_too: bool,
-    /// Categories pane frame width (IDM: 143, frame x 6..149); dragged with the splitter.
-    pub categories_width: u32,
+    /// The Categories pane's width (plan 05b: 224 by default, the mockup's), dragged with the
+    /// splitter. IDM's layout's own (`categories_width`) is read no more since plan 05.5c.
+    pub graphite_categories_width: u32,
     /// The main window as last left: position and size (x, y, width, height, in points at 100 %
     /// interface size: the system's own logical pixels), and maximized.
     pub window: Option<[i32; 4]>,
@@ -97,13 +98,23 @@ pub struct Settings {
     pub show_categories: bool,
     pub branches: [bool; 4],
     pub view: Option<crate::app::View>,
+    /// View → Paste bar (plan 06): the address band under the toolbar. On by default, for
+    /// existing lists too.
+    pub show_paste_bar: bool,
+    /// View → Details pane, and the toolbar's Details (plan 06): the selected download beside
+    /// the list. Off by default.
+    pub show_details: bool,
+    /// The details pane's width in points (plan 06: 276 by default, the mockup's), dragged with
+    /// its splitter.
+    pub details_width: u32,
     /// View → Dark Mode support (IDM 6.37): follow Windows' dark app mode; off = always light.
     pub dark_mode_support: bool,
     /// View → Always dark (#60): dark whatever the system says (a desktop that reports no
     /// preference, or a dark MDM on a light desktop).
     pub always_dark: bool,
-    /// The look (#45): a built-in theme's id ("classic", the default) or a theme file's name in
-    /// the data folder's `themes` folder (crate::themefile).
+    /// The look (#45): "graphite" (the default, MDM's only built-in look) or a theme file's name
+    /// in the data folder's `themes` folder (crate::themefile). An id MDM no longer has gives
+    /// Graphite, and "graphite" is written in its place (plan 05.5c).
     pub theme: String,
     /// View → Draw with (#89): OpenGL or Direct3D (Windows only), used from the next start.
     /// None: MDM's default (`renderer::DEFAULT`), which may change.
@@ -122,11 +133,6 @@ pub struct Settings {
     /// General: start with Windows. IDM's default is on; ours is off until the user asks
     /// (a download manager shouldn't register itself silently).
     pub launch_on_startup: bool,
-    /// View → Language: a catalog's code (`ar`, `pt-br`…); `None` follows Windows.
-    pub language: Option<String>,
-    /// The language has been chosen once (in the installer's wizard or the first start's
-    /// picker); until then the first start asks (langpick.rs).
-    pub language_asked: bool,
     /// The video helpers (yt-dlp, ffmpeg) have been offered once, at a start (helpers.rs).
     pub helpers_asked: bool,
     /// The browser extension is offered at each start until a browser has it, unless "Don't ask
@@ -172,6 +178,9 @@ pub struct Settings {
     pub url_history: Vec<String>,
     pub folder_history: Vec<String>,
     pub set_creation_date: bool,
+    /// Save to → "Mark downloaded files as coming from the internet" (upstream issue 813):
+    /// Windows' Mark of the Web (`webmark`).
+    pub mark_downloads: bool,
     /// Downloads.
     pub show_start_dialog: bool,
     pub only_add_to_queue: bool,
@@ -182,6 +191,11 @@ pub struct Settings {
     /// "If a duplicate download link is added": 0 ask, 1 numbered name, 2 overwrite,
     /// 3 complete → show the complete dialog, else resume.
     pub duplicate_action: u8,
+    /// "User-Agent for manually added downloads": the user's, or empty for the automatic one
+    /// (the default browser's, upstream issue 668: `mdm_engine::agent::automatic`). Saved before
+    /// as Internet Explorer 11's, the default then: read as empty (`own_user_agent`), which an
+    /// older MDM reads as its default again.
+    #[serde(deserialize_with = "automatic_agent")]
     pub user_agent: String,
     /// Connection: per-server connection limits (server, number).
     pub conn_exceptions: Vec<(String, u32)>,
@@ -235,7 +249,7 @@ pub struct Settings {
     /// Sounds: download complete, download failed, queue started, queue stopped/finished.
     pub sounds: [(bool, String); 4],
     /// The local automation API (beyond IDM): status queries over the command channel. Off by
-    /// default; `misterdownloadmanager-cli api on` turns it on.
+    /// default; `grabbit-cli api on` turns it on.
     pub automation_api: bool,
     /// Options → Remote (#141, beyond IDM): paired phones and computers on the local network
     /// add and control downloads (crates/remote). Off by default.
@@ -358,15 +372,18 @@ impl Default for Settings {
             double_click_open: false,
             confirm_delete: true,
             delete_files_too: false,
-            categories_width: 143,
+            graphite_categories_width: 224,
             window: None,
             window_maximized: false,
             show_categories: true,
             branches: [true, false, false, false],
             view: None,
+            show_paste_bar: true,
+            show_details: false,
+            details_width: 276,
             dark_mode_support: true,
             always_dark: false,
-            theme: "classic".into(),
+            theme: "graphite".into(),
             renderer: None,
             interface_size: 100,
             limits_on: false,
@@ -374,8 +391,6 @@ impl Default for Settings {
             limits_hours: 5,
             limits_warn: true,
             launch_on_startup: false,
-            language: None,
-            language_asked: false,
             helpers_asked: false,
             extension_never_ask: false,
             clipboard_autostart: true,
@@ -397,6 +412,7 @@ impl Default for Settings {
             url_history: Vec::new(),
             folder_history: Vec::new(),
             set_creation_date: false,
+            mark_downloads: true,
             show_start_dialog: true,
             only_add_to_queue: false,
             start_immediately: true,
@@ -404,7 +420,7 @@ impl Default for Settings {
             queue_panel_batch: true,
             ignore_mtime: false,
             duplicate_action: 0,
-            user_agent: mdm_engine::download::DEFAULT_USER_AGENT.into(),
+            user_agent: String::new(),
             conn_exceptions: Vec::new(),
             proxy_from_browser: true,
             proxy_mode: 0,
@@ -494,7 +510,7 @@ impl Settings {
             "proxy".into(),
             &|| {
                 format!(
-                    "Mister Download Manager: {} {}:{}",
+                    "Grabbit: {} {}:{}",
                     // i18n: the proxy's password in the system's keychain (Credential Manager, the keyring): its name there, followed by the proxy's address
                     crate::i18n::t("proxy server"),
                     self.proxy_host,
@@ -506,7 +522,7 @@ impl Settings {
         for (a, d) in self.debrid_accounts.iter().zip(&mut disk.debrid_accounts) {
             d.secret = kept(
                 format!("debrid/{}", a.id),
-                &|| format!("Mister Download Manager: {} ({})", a.service.name(), a.user),
+                &|| format!("Grabbit: {} ({})", a.service.name(), a.user),
                 &a.secret,
             );
         }
@@ -519,7 +535,7 @@ impl Settings {
 {user}"
                     ))
                 ),
-                &|| format!("Mister Download Manager: {site} ({user})"),
+                &|| format!("Grabbit: {site} ({user})"),
                 pw,
             );
         }
@@ -560,7 +576,25 @@ pub fn remember(list: &mut Vec<String>, value: &str) {
     list.truncate(HISTORY);
 }
 
+/// A saved "User-Agent for manually added downloads": MDM's former default (Internet Explorer
+/// 11's, before upstream issue 668) or nothing is the automatic one (empty).
+fn automatic_agent<'de, D: serde::Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    let saved = String::deserialize(d)?;
+    Ok(if saved.trim() == mdm_engine::agent::IE11_USER_AGENT {
+        String::new()
+    } else {
+        saved
+    })
+}
+
 impl Settings {
+    /// The User-Agent the user set for links added by hand; None: the automatic one (the
+    /// default browser's, upstream issue 668).
+    pub fn own_user_agent(&self) -> Option<&str> {
+        let ua = self.user_agent.trim();
+        (!ua.is_empty() && ua != mdm_engine::agent::IE11_USER_AGENT).then_some(ua)
+    }
+
     /// `live` with the settings a dialog changed (`from` → `to`) put in, field by field: what
     /// changed elsewhere while it was open (the toolbar's Speed Limiter, Torrent settings, the
     /// Categories pane) is kept, not reverted to the copy the dialog started from.
@@ -1017,6 +1051,38 @@ pub fn own_net() -> mdm_engine::Options {
 mod tests {
     use std::path::Path;
 
+    /// Upstream issue 668: the User-Agent for links added by hand is the default browser's unless
+    /// one is set. Saved before, MDM's former default (Internet Explorer 11's) or nothing reads as
+    /// automatic; automatic is saved empty, which an older MDM reads as its own default again.
+    #[test]
+    fn the_user_agent_is_automatic_unless_one_is_set() {
+        use super::Settings;
+        let ie11 = mdm_engine::agent::IE11_USER_AGENT;
+        assert_eq!(Settings::default().user_agent, "");
+        assert_eq!(Settings::default().own_user_agent(), None);
+        for saved in [
+            serde_json::json!({ "user_agent": ie11 }),
+            serde_json::json!({ "user_agent": format!(" {ie11} ") }),
+            serde_json::json!({ "user_agent": "" }),
+            serde_json::json!({ "user_agent": "   " }),
+            serde_json::json!({}),
+        ] {
+            let s: Settings = serde_json::from_value(saved.clone()).unwrap();
+            assert_eq!(s.own_user_agent(), None, "{saved}");
+            let again = serde_json::to_value(&s).unwrap();
+            assert_eq!(
+                again["user_agent"].as_str().map(str::trim),
+                Some(""),
+                "{saved}"
+            );
+        }
+        let own: Settings =
+            serde_json::from_value(serde_json::json!({ "user_agent": " MyAgent/1.0 " })).unwrap();
+        assert_eq!(own.own_user_agent(), Some("MyAgent/1.0"));
+        let again: Settings = serde_json::from_value(serde_json::to_value(&own).unwrap()).unwrap();
+        assert_eq!(again.own_user_agent(), Some("MyAgent/1.0"));
+    }
+
     /// #475: a folder chosen for a video is the Video category's next time; the category's own
     /// folder stays "the default", following Downloads, and other categories stay as they were.
     #[test]
@@ -1036,6 +1102,34 @@ mod tests {
         assert_eq!(s.category_dir(Category::Video, downloads), chosen);
         assert_ne!(s.category_dir(Category::Music, downloads), chosen);
         assert!(!s.keep_category_dir(Category::Video, chosen, downloads));
+    }
+
+    /// A settings file from a version with View → Language still loads: its language fields are
+    /// ignored (MDM is English only), the rest is read.
+    #[test]
+    fn an_old_settings_file_with_a_language_loads() {
+        let s: super::Settings = serde_json::from_str(
+            r#"{"language": "de", "language_asked": true, "max_connections": 3}"#,
+        )
+        .unwrap();
+        assert_eq!(s.max_connections, 3);
+        assert!(
+            !serde_json::to_string(&s)
+                .unwrap()
+                .contains("language_asked")
+        );
+    }
+
+    /// Plan 06: a settings file from before the paste bar and the details pane loads with the
+    /// paste bar on, the pane off and the pane 276 points wide (D1).
+    #[test]
+    fn an_old_settings_file_gets_the_paste_bar_and_details_defaults() {
+        let s: super::Settings =
+            serde_json::from_str(r#"{"max_connections": 3, "show_categories": false}"#).unwrap();
+        assert_eq!(s.max_connections, 3);
+        assert!(s.show_paste_bar);
+        assert!(!s.show_details);
+        assert_eq!(s.details_width, 276);
     }
 
     #[test]
@@ -1118,6 +1212,137 @@ mod tests {
         }
         assert_eq!(h.len(), HISTORY);
         assert_eq!(h[0], "29");
+    }
+
+    /// An address as `route_new_url` hands it to `remember`; two hosts × 20 paths give 40
+    /// values, enough to fill a history of `HISTORY` and to hit an entry already there.
+    fn address() -> impl proptest::strategy::Strategy<Value = String> {
+        "https://example\\.(org|com)/[a-d]{1,2}"
+    }
+
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+
+        // Feature: paste-bar-details-pane, Property 4: History
+        /// **Validates: Requirements 1.2**
+        ///
+        /// For any history `remember` can have built (distinct entries, at most `HISTORY`, in any
+        /// order) and any address, with or without spaces around it: afterwards the address is
+        /// first, no entry is there twice and there are at most `HISTORY`.
+        #[test]
+        fn remember_puts_the_address_first_once_within_the_limit(
+            history in proptest::strategy::Strategy::prop_shuffle(
+                proptest::strategy::Strategy::prop_map(
+                    proptest::collection::btree_set(address(), 0..=HISTORY),
+                    Vec::from_iter,
+                ),
+            ),
+            url in address(),
+            pad in "[ \t]{0,2}",
+        ) {
+            let mut h = history;
+            remember(&mut h, &format!("{pad}{url}{pad}"));
+            proptest::prop_assert_eq!(&h[0], &url);
+            let distinct: std::collections::HashSet<&String> = h.iter().collect();
+            proptest::prop_assert_eq!(distinct.len(), h.len(), "no duplicates: {:?}", h);
+            proptest::prop_assert!(h.len() <= HISTORY, "{} entries", h.len());
+        }
+    }
+
+    /// The settings' keys as the list file writes them, but the paste bar's and the details
+    /// pane's: what a file from before plan 06 can hold.
+    fn keys_before_plan_06() -> Vec<String> {
+        let all = serde_json::to_value(Settings::default()).unwrap();
+        all.as_object()
+            .unwrap()
+            .keys()
+            .filter(|k| !["show_paste_bar", "show_details", "details_width"].contains(&k.as_str()))
+            .cloned()
+            .collect()
+    }
+
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+
+        // Feature: paste-bar-details-pane, Property 13: Settings round trip
+        /// **Validates: Requirements 3.2, 3.3**
+        ///
+        /// Any paste bar and details pane state, and any width, read back as saved: through
+        /// serde_json as `store::encode` writes the list (pretty) and `store::parse_bytes` reads
+        /// it (from bytes).
+        #[test]
+        fn the_view_settings_read_back_as_saved(
+            paste in proptest::prelude::any::<bool>(),
+            details in proptest::prelude::any::<bool>(),
+            width in proptest::prelude::any::<u32>(),
+        ) {
+            let s = Settings {
+                show_paste_bar: paste,
+                show_details: details,
+                details_width: width,
+                ..Settings::default()
+            };
+            let json = serde_json::to_vec_pretty(&s).unwrap();
+            let back: Settings = serde_json::from_slice(&json).unwrap();
+            proptest::prop_assert_eq!(
+                (back.show_paste_bar, back.show_details, back.details_width),
+                (paste, details, width)
+            );
+        }
+
+        // Feature: paste-bar-details-pane, Property 13: Settings round trip
+        /// **Validates: Requirements 3.2, 3.3**
+        ///
+        /// A settings object with any of the other keys (with changed values) and a key MDM no
+        /// longer knows, but none of the three: they load as the defaults (on, off, 276) and the
+        /// other values are read.
+        #[test]
+        fn a_file_without_the_view_settings_loads_their_defaults(
+            keys in proptest::sample::subsequence(
+                keys_before_plan_06(),
+                0..=keys_before_plan_06().len(),
+            ),
+            max_connections in 1u32..=128,
+            show_categories in proptest::prelude::any::<bool>(),
+            categories_width in proptest::prelude::any::<u32>(),
+            theme in "[a-z]{0,8}",
+            unknown in proptest::prelude::any::<bool>(),
+        ) {
+            let source = Settings {
+                max_connections,
+                show_categories,
+                graphite_categories_width: categories_width,
+                theme,
+                ..Settings::default()
+            };
+            let all = serde_json::to_value(&source).unwrap();
+            let mut file = serde_json::Map::new();
+            for k in &keys {
+                file.insert(k.clone(), all[k.as_str()].clone());
+            }
+            if unknown {
+                file.insert("language".into(), serde_json::json!("de"));
+            }
+            let json = serde_json::to_vec_pretty(&file).unwrap();
+            let back: Settings = serde_json::from_slice(&json).unwrap();
+            proptest::prop_assert_eq!(
+                (back.show_paste_bar, back.show_details, back.details_width),
+                (true, false, 276)
+            );
+            let has = |k: &str| keys.iter().any(|x| x == k);
+            if has("max_connections") {
+                proptest::prop_assert_eq!(back.max_connections, max_connections);
+            }
+            if has("show_categories") {
+                proptest::prop_assert_eq!(back.show_categories, show_categories);
+            }
+            if has("graphite_categories_width") {
+                proptest::prop_assert_eq!(back.graphite_categories_width, categories_width);
+            }
+            if has("theme") {
+                proptest::prop_assert_eq!(&back.theme, &source.theme);
+            }
+        }
     }
 
     #[test]
@@ -1227,15 +1452,13 @@ mod sealed_logins {
 /// One secret on disk (the proxy's password, a debrid account's credential, #44). In the
 /// system's keychain once it holds it: the settings then keep its reference (secrets.rs,
 /// `keychain:…`, written by [`Settings::for_disk`]). Until then, and where no keychain is used:
-/// Windows seals it with DPAPI, for this account on this computer; Linux and macOS keep it as it
-/// is, in the data folder only its owner may read (mdm_ipc::private_dir). A secret that can't be
+/// it is sealed with DPAPI, for this account on this computer. A secret that can't be
 /// opened (the file copied to another account) reads as none: sign in again.
 pub(crate) mod sealed {
     use serde::{Deserialize, Deserializer, Serializer};
 
     use crate::secrets::REF;
 
-    #[cfg(windows)]
     const SEALED: &str = "dpapi:";
     /// Before a secret kept as it is that would read as a reference (`keychain:…`), or as one
     /// of these.
@@ -1253,7 +1476,6 @@ pub(crate) mod sealed {
     }
 
     pub(crate) fn seal(pw: &str) -> String {
-        #[cfg(windows)]
         if !pw.is_empty()
             && let Some(sealed) = crate::win32::protect(pw)
         {
@@ -1288,7 +1510,6 @@ pub(crate) mod sealed {
         if let Some(plain) = escaped(stored) {
             return plain.to_owned();
         }
-        #[cfg(windows)]
         if let Some(b64) = stored.strip_prefix(SEALED) {
             use base64::Engine as _;
             return base64::engine::general_purpose::STANDARD
@@ -1315,9 +1536,8 @@ pub(crate) mod sealed {
                 ..Default::default()
             };
             let json = serde_json::to_string(&s).unwrap();
-            if cfg!(windows) {
-                assert!(!json.contains("proxy-s3cret") && !json.contains("rd-s3cret"));
-            }
+            assert!(!json.contains("proxy-s3cret") && !json.contains("rd-s3cret"));
+
             let back: crate::settings::Settings = serde_json::from_str(&json).unwrap();
             assert_eq!(back.proxy_pass, "proxy-s3cret");
             assert!(back.debrid_accounts[0].account().is_some());
@@ -1328,12 +1548,10 @@ pub(crate) mod sealed {
             let old: crate::settings::Settings =
                 serde_json::from_value(serde_json::json!({ "proxy_pass": "plain" })).unwrap();
             assert_eq!(old.proxy_pass, "plain");
-            if cfg!(windows) {
-                let foreign =
-                    serde_json::json!({ "debrid_accounts": [{ "id": 2, "secret": "dpapi:AAAA" }] });
-                let s: crate::settings::Settings = serde_json::from_value(foreign).unwrap();
-                assert!(s.debrid_accounts[0].account().is_none());
-            }
+            let foreign =
+                serde_json::json!({ "debrid_accounts": [{ "id": 2, "secret": "dpapi:AAAA" }] });
+            let s: crate::settings::Settings = serde_json::from_value(foreign).unwrap();
+            assert!(s.debrid_accounts[0].account().is_none());
         }
 
         #[test]
@@ -1343,9 +1561,8 @@ pub(crate) mod sealed {
                 ..Default::default()
             };
             let json = serde_json::to_string(&s).unwrap();
-            if cfg!(windows) {
-                assert!(!json.contains("s3cret") && json.contains("dpapi:"));
-            }
+            assert!(!json.contains("s3cret") && json.contains("dpapi:"));
+
             let back: crate::settings::Settings = serde_json::from_str(&json).unwrap();
             assert_eq!(back.site_logins, s.site_logins);
             // A list from before (plain) still reads.

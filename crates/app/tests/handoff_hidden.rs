@@ -8,14 +8,14 @@
 //! host uses). Both dialogs must open and the app must keep running.
 //!
 //! It opens windows, which needs OpenGL or Direct3D, so it runs on request:
-//! `cargo test -p mdm-app --test handoff_hidden -- --ignored`. tools/lab/magnet-hidden.ps1 plays
+//! `cargo test -p grabbit-app --test handoff_hidden -- --ignored`. tools/lab/magnet-hidden.ps1 plays
 //! the same on a release build, through the browser's native host too, in more window states.
 
 use std::path::Path;
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
-const APP: &str = env!("CARGO_BIN_EXE_misterdownloadmanager");
+const APP: &str = env!("CARGO_BIN_EXE_grabbit");
 
 /// The app's log so far (every file of `logs/`).
 fn log(data: &Path) -> String {
@@ -52,7 +52,7 @@ fn wait_for(app: &mut Child, data: &Path, line: &str, wait: Duration) {
 fn second_launch(data: &Path, args: &[&str]) {
     let status = Command::new(APP)
         .args(args)
-        .env("MDM_DATA_DIR", data)
+        .env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .status()
         .unwrap();
@@ -82,7 +82,7 @@ fn hand_overs_while(away: &str) {
     )
     .unwrap();
     let mut app = Command::new(APP)
-        .env("MDM_DATA_DIR", data)
+        .env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .spawn()
         .unwrap();
@@ -108,7 +108,7 @@ fn hand_overs_while(away: &str) {
     }));
     let _ = Command::new(APP)
         .arg("/exit")
-        .env("MDM_DATA_DIR", data)
+        .env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .status();
     let until = Instant::now() + Duration::from_secs(15);

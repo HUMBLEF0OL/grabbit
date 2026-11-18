@@ -15,11 +15,17 @@ use url::Url;
 use crate::dialogs::{Outcome, window};
 use crate::model::{Category, category_folder};
 use crate::transfer::Imported;
-use crate::winui::{self, ButtonKind, LIGHT_BG, LIGHT_TEXT, fill_l as fill, r, text};
+use crate::winui::{
+    self, ButtonKind, FooterButton, FooterItem, LIGHT_BG, LIGHT_TEXT, fill_l as fill, r, text,
+};
 
 const ROW: f32 = 18.0;
-/// The top of the window's last row of buttons (Add to queue, Start, Cancel).
-const BUTTONS_Y: f32 = 446.0;
+/// Where the window's footer starts (Add to queue, Start, Cancel), and its width.
+const FOOTER_Y: f32 = 438.0;
+const GRABBER_W: f32 = 680.0;
+/// Where the content ends: the list's and the rows' right edge, and the package's boxes'.
+const RIGHT: f32 = GRABBER_W - 11.0;
+const BOX_RIGHT: f32 = GRABBER_W - 19.0;
 /// Links looked up at once, and at once from one host.
 const CHECKS: usize = 8;
 const CHECKS_PER_HOST: usize = 4;
@@ -48,7 +54,7 @@ pub enum LinkState {
 
 /// Which package a link goes in: a split archive's volumes together, else the links of one page,
 /// else "Various files".
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Origin {
     /// Volumes of one archive on one host (`movie.part1.rar`, `movie.part2.rar`).
     Volumes {
@@ -78,13 +84,15 @@ impl Origin {
         Origin::Various
     }
 
-    /// Volumes of one archive are one set whatever case their names are in.
-    fn same(&self, other: &Origin) -> bool {
-        match (self, other) {
-            (Origin::Volumes { host: a, base: x }, Origin::Volumes { host: b, base: y }) => {
-                a == b && x.to_lowercase() == y.to_lowercase()
-            }
-            _ => self == other,
+    /// What tells one package from another: volumes of one archive are one set whatever case
+    /// their names are in.
+    fn key(&self) -> Origin {
+        match self {
+            Origin::Volumes { host, base } => Origin::Volumes {
+                host: host.clone(),
+                base: base.to_lowercase(),
+            },
+            o => o.clone(),
         }
     }
 
@@ -111,7 +119,6 @@ pub fn web_page(name: &str) -> bool {
 }
 
 pub struct Package {
-    origin: Origin,
     pub name: String,
     /// Where its files go (as typed).
     pub folder: String,
@@ -150,14 +157,31 @@ pub struct Picked {
 }
 
 /// What a row of the list is.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum Row {
     Pkg(usize),
     Link(usize),
 }
 
+/// A package's links that show (not the hidden web pages): how many, how many ticked, and
+/// their sizes added up (`None` while one is unknown).
+#[derive(Clone, Copy)]
+struct Shown {
+    links: usize,
+    on: usize,
+    size: Option<u64>,
+}
+
+/// The list as a frame draws it: its rows, and each package's [`Shown`].
+struct View {
+    rows: Vec<Row>,
+    packages: Vec<Shown>,
+}
+
 pub struct Grabber {
     pub packages: Vec<Package>,
+    /// Each package's [`Origin::key`], to find a link's package at once.
+    origins: std::collections::HashMap<Origin, usize>,
     pub links: Vec<Link>,
     source: String,
     rows: winui::RowList,
@@ -182,6 +206,7 @@ impl Grabber {
     ) -> Self {
         Grabber {
             packages: Vec::new(),
+            origins: Default::default(),
             links: Vec::new(),
             source: String::new(),
             rows: Default::default(),
@@ -198,11 +223,16 @@ impl Grabber {
     /// package; one the download list has (`known`) comes unticked under "Already in the list";
     /// a link here already is not added again.
     pub fn add(&mut self, found: Vec<Imported>, source: String, known: impl Fn(&Url) -> bool) {
+        // The addresses already here, looked up once: a list of 10,000 compared each link with
+        // every other one, and its package was settled again for each (upstream issue 805).
+        let mut here: std::collections::HashSet<Url> =
+            self.links.iter().map(|l| address_key(&l.url)).collect();
+        let mut settle = Vec::new();
         for d in found {
             let Ok(url) = Url::parse(&d.url) else {
                 continue;
             };
-            if self.links.iter().any(|l| same_address(&l.url, &url)) {
+            if !here.insert(address_key(&url)) {
                 continue;
             }
             let name = mdm_engine::naming::sanitize(&mdm_engine::naming::file_name(None, &url));
@@ -224,8 +254,11 @@ impl Grabber {
                 known,
                 check: None,
             });
-            self.settle(pkg);
+            settle.push(pkg);
         }
+        settle.sort_unstable();
+        settle.dedup();
+        self.settle(&settle);
         if !source.is_empty() && !self.source.split(", ").any(|s| s == source) {
             self.source = if self.source.is_empty() {
                 source
@@ -275,13 +308,16 @@ impl Grabber {
         }
     }
 
+    /// The package for links from `origin`, found at once (upstream issue 1063: a page of
+    /// split archives has thousands, and each link was compared with every one).
     fn package_for(&mut self, origin: Origin) -> usize {
-        if let Some(k) = self.packages.iter().position(|p| p.origin.same(&origin)) {
+        let key = origin.key();
+        if let Some(&k) = self.origins.get(&key) {
             return k;
         }
+        self.origins.insert(key, self.packages.len());
         self.packages.push(Package {
             name: origin.name(),
-            origin,
             folder: String::new(),
             folder_set: false,
             password: String::new(),
@@ -293,27 +329,57 @@ impl Grabber {
         self.packages.len() - 1
     }
 
-    /// A package's defaults after its links changed: the folder of its files' category when
-    /// they have one; else none, each file going to its own category's folder (as Import always
-    /// did); "Extract when done" when it holds an archive.
-    fn settle(&mut self, k: usize) {
-        let links: Vec<&Link> = self.links.iter().filter(|l| l.pkg == k).collect();
-        let mut cats = links.iter().map(|l| Category::of(&l.name));
-        let first = cats.next().unwrap_or(Category::General);
-        let folder = if cats.all(|c| c == first) {
-            category_folder(first, &self.downloads, &self.dirs)
-                .display()
-                .to_string()
-        } else {
-            String::new()
-        };
-        let archives = links.iter().any(|l| crate::extractq::archive_name(&l.name));
-        let p = &mut self.packages[k];
-        if !p.folder_set {
-            p.folder = folder;
+    /// Packages' defaults after their links changed: each one's folder is its files' category's
+    /// when they have one; else none, each file going to its own category's folder (as Import
+    /// always did); "Extract when done" when it holds an archive. One pass over the links for
+    /// all of `ks` (upstream issue 1063: a package at a time went over every link for each).
+    fn settle(&mut self, ks: &[usize]) {
+        /// What a package's links have: the first one's category, whether all share it, an
+        /// archive.
+        #[derive(Clone, Copy)]
+        struct Seen {
+            first: Option<Category>,
+            one: bool,
+            archives: bool,
         }
-        if !p.extract_set {
-            p.extract = archives;
+        let mut seen: Vec<Option<Seen>> = vec![None; self.packages.len()];
+        for &k in ks {
+            if let Some(s) = seen.get_mut(k) {
+                *s = Some(Seen {
+                    first: None,
+                    one: true,
+                    archives: false,
+                });
+            }
+        }
+        for l in &self.links {
+            let Some(Some(s)) = seen.get_mut(l.pkg) else {
+                continue;
+            };
+            let c = Category::of(&l.name);
+            match s.first {
+                None => s.first = Some(c),
+                Some(first) => s.one &= first == c,
+            }
+            s.archives = s.archives || crate::extractq::archive_name(&l.name);
+        }
+        for (k, s) in seen.into_iter().enumerate() {
+            let Some(s) = s else { continue };
+            let first = s.first.unwrap_or(Category::General);
+            let folder = if s.one {
+                category_folder(first, &self.downloads, &self.dirs)
+                    .display()
+                    .to_string()
+            } else {
+                String::new()
+            };
+            let p = &mut self.packages[k];
+            if !p.folder_set {
+                p.folder = folder;
+            }
+            if !p.extract_set {
+                p.extract = s.archives;
+            }
         }
     }
 
@@ -322,24 +388,56 @@ impl Grabber {
         !(self.hide_pages && web_page(&l.name))
     }
 
-    fn visible_rows(&self) -> Vec<Row> {
-        let mut rows = Vec::new();
-        for (k, p) in self.packages.iter().enumerate() {
-            let mut links = self
-                .links
-                .iter()
-                .enumerate()
-                .filter(|(_, l)| l.pkg == k && self.shows(l))
-                .peekable();
-            if links.peek().is_none() {
+    /// Each package's links that show, counted in one pass over the links.
+    fn shown(&self) -> Vec<Shown> {
+        let mut out = vec![
+            Shown {
+                links: 0,
+                on: 0,
+                size: Some(0),
+            };
+            self.packages.len()
+        ];
+        for l in self.links.iter().filter(|l| self.shows(l)) {
+            let s = &mut out[l.pkg];
+            s.links += 1;
+            s.on += usize::from(l.on);
+            s.size = s.size.zip(l.size).map(|(a, b)| a.saturating_add(b));
+        }
+        out
+    }
+
+    /// The rows: each package with links that show, then (open) those links in their order.
+    /// Linear in the links (upstream issue 1063: each package went over every link at each
+    /// frame): the links are placed by package from the counts, as a counting sort does.
+    fn view(&self) -> View {
+        let packages = self.shown();
+        let mut start = Vec::with_capacity(packages.len());
+        let mut total = 0;
+        for s in &packages {
+            start.push(total);
+            total += s.links;
+        }
+        let mut grouped = vec![0; total];
+        let mut next = start.clone();
+        for (i, l) in self.links.iter().enumerate() {
+            if self.shows(l) {
+                grouped[next[l.pkg]] = i;
+                next[l.pkg] += 1;
+            }
+        }
+        let mut rows = Vec::with_capacity(packages.len() + total);
+        for (k, (p, s)) in self.packages.iter().zip(&packages).enumerate() {
+            if s.links == 0 {
                 continue;
             }
             rows.push(Row::Pkg(k));
             if p.open {
-                rows.extend(links.map(|(i, _)| Row::Link(i)));
+                let links = &grouped[start[k]..start[k] + s.links];
+                rows.extend(links.iter().map(|&i| Row::Link(i)));
             }
         }
-        rows
+        View { rows, packages }
     }
 
     /// Links to look up now (at most `CHECKS` at once, `CHECKS_PER_HOST` from one host): the
@@ -408,8 +506,10 @@ impl Grabber {
                 }
             }
         }
-        for k in moved {
-            self.settle(k);
+        moved.sort_unstable();
+        moved.dedup();
+        if !moved.is_empty() {
+            self.settle(&moved);
         }
     }
 
@@ -430,17 +530,17 @@ impl Grabber {
         }
     }
 
+    /// Each package's ticked links that show, in their order: one pass over the links.
     fn picked(&self) -> Vec<Picked> {
+        let mut by_package: Vec<Vec<(Imported, String, Option<u64>)>> =
+            vec![Vec::new(); self.packages.len()];
+        for l in self.links.iter().filter(|l| l.on && self.shows(l)) {
+            by_package[l.pkg].push((l.found.clone(), l.name.clone(), l.size));
+        }
         self.packages
             .iter()
-            .enumerate()
-            .filter_map(|(k, p)| {
-                let links: Vec<(Imported, String, Option<u64>)> = self
-                    .links
-                    .iter()
-                    .filter(|l| l.pkg == k && l.on && self.shows(l))
-                    .map(|l| (l.found.clone(), l.name.clone(), l.size))
-                    .collect();
+            .zip(by_package)
+            .filter_map(|(p, links)| {
                 (!links.is_empty()).then(|| Picked {
                     name: p.name.clone(),
                     folder: PathBuf::from(p.folder.trim()),
@@ -464,7 +564,7 @@ impl Grabber {
             ctx,
             "grabber",
             "Link grabber",
-            [640.0, BUTTONS_Y + 30.0],
+            [GRABBER_W, FOOTER_Y + winui::FOOTER_H],
             true,
             LIGHT_BG(),
             |ui, o| self.body(ui, o),
@@ -504,12 +604,12 @@ impl Grabber {
             o.y + 20.0,
             &line,
             LIGHT_TEXT(),
-            o.x + 629.0,
+            o.x + RIGHT,
             "grabber-source",
         );
         self.list(
             ui,
-            Rect::from_min_size(o + vec2(11.0, 30.0), vec2(618.0, 258.0)),
+            Rect::from_min_size(o + vec2(11.0, 30.0), vec2(RIGHT - 11.0, 258.0)),
         );
 
         // Under the list: Hide web pages, the count, Check all / Uncheck all.
@@ -532,7 +632,7 @@ impl Grabber {
         let picks = winui::buttons_light_right(
             ui,
             o,
-            629.0,
+            RIGHT,
             296.0,
             &[
                 // i18n: Link grabber button (IDM's): tick every link
@@ -559,28 +659,33 @@ impl Grabber {
             (true, true) => ButtonKind::Default,
             (true, false) => ButtonKind::Normal,
         };
-        let row = winui::buttons_light_right(
+        // The footer: Enter Start (while links are ticked), Escape Cancel, as before.
+        match winui::footer(
             ui,
             o,
-            629.0,
-            BUTTONS_Y,
-            &[
+            GRABBER_W,
+            FOOTER_Y,
+            &mut [
                 // i18n: Link grabber button: add the ticked links to the download queue without starting them (IDM's OK)
-                (crate::i18n::mark("Add to queue"), kind(false)),
+                FooterItem::Button(FooterButton::new(
+                    crate::i18n::mark("Add to queue"),
+                    kind(false),
+                )),
                 // i18n: Link grabber button: download the ticked links now
-                (crate::i18n::mark("Start"), kind(true)),
-                (crate::i18n::mark("Cancel"), ButtonKind::Normal),
+                FooterItem::Button(
+                    FooterButton::new(crate::i18n::mark("Start"), kind(true))
+                        .primary()
+                        .enter(any),
+                ),
+                FooterItem::Button(
+                    FooterButton::new(crate::i18n::mark("Cancel"), ButtonKind::Normal).escape(true),
+                ),
             ],
-        );
-        let (later, start, cancel) = (row[0].clicked(), row[1].clicked(), row[2].clicked());
-        if cancel || winui::escape_pressed(ui) {
-            Outcome::Closed
-        } else if any && (start || winui::enter_pressed(ui)) {
-            Outcome::Done(true)
-        } else if any && later {
-            Outcome::Done(false)
-        } else {
-            Outcome::Open
+        ) {
+            Some(2) => Outcome::Closed,
+            Some(1) if any => Outcome::Done(true),
+            Some(0) if any => Outcome::Done(false),
+            _ => Outcome::Open,
         }
     }
 
@@ -643,7 +748,11 @@ impl Grabber {
             );
             return;
         }
-        let rows = self.visible_rows();
+        // Once a frame, in one pass over the links (upstream issue 1063).
+        let View {
+            rows,
+            packages: shown,
+        } = self.view();
         // i18n: what a screen reader calls Link grabber's list
         self.rows.name = crate::i18n::t("Links");
         let mut toggle_link = None;
@@ -678,7 +787,11 @@ impl Grabber {
                                 flip = Some(n);
                             }
                             winui::tree_expander(clip, pos2(x + 4.0, top + 5.0), pk.open);
-                            let (on_n, all) = this.ticks(n);
+                            let Shown {
+                                links: all,
+                                on: on_n,
+                                size: total,
+                            } = shown[n];
                             let glyph = pos2(x + 16.0, top + 2.0);
                             let mut on = on_n == all;
                             // i18n: Link grabber: a package's row: {n} is its number of links
@@ -724,11 +837,6 @@ impl Grabber {
                             } else {
                                 winui::MUTED()
                             };
-                            let total: Option<u64> = links
-                                .iter()
-                                .filter(|l| l.pkg == n && this.shows(l))
-                                .map(|l| l.size)
-                                .sum();
                             let what = match total {
                                 Some(b) => format!("({files}, {})", crate::dialogs::dialog_size(b)),
                                 None => format!("({files})"),
@@ -861,8 +969,8 @@ impl Grabber {
     /// The selected package's name, folder, password and what happens to its archives.
     fn package_box(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        let shown = self.visible_rows();
-        let has = |k: usize| shown.contains(&Row::Pkg(k));
+        let shown = self.shown();
+        let has = |k: usize| shown.get(k).is_some_and(|s| s.links > 0);
         if !has(self.current) {
             self.current = (0..self.packages.len()).find(|k| has(*k)).unwrap_or(0);
         }
@@ -870,11 +978,9 @@ impl Grabber {
         // i18n: Link grabber: the box that edits the selected package
         let caption = crate::i18n::t("Package");
         let cw = winui::text_width(&p, caption);
-        winui::group_box(
-            &p,
-            r(o, 11.0, 330.0, 618.0, 106.0),
-            Some((o.x + 18.0, o.x + 22.0 + cw)),
-        );
+        // A hairline after the caption groups the package's rows (it was a group box).
+        let after = (28.0 + cw).ceil();
+        winui::rule(&p, o, after, 330.0, RIGHT - after);
         text(&p, o.x + 20.0, o.y + 334.0, caption, LIGHT_TEXT());
         let mut blank = (String::new(), String::new(), String::new(), false, false);
         let pk = self.packages.get_mut(self.current).filter(|_| enabled);
@@ -932,7 +1038,12 @@ impl Grabber {
             false,
         );
         label(ui, pw_x, 360.0, pw_label, pbx - 4.0);
-        let pw = winui::password_light(ui, r(o, pbx, 345.0, 621.0 - pbx, 23.0), password, enabled);
+        let pw = winui::password_light(
+            ui,
+            r(o, pbx, 345.0, BOX_RIGHT - pbx, 23.0),
+            password,
+            enabled,
+        );
         // i18n: what a screen reader calls Link grabber's password box
         let pw_name = crate::i18n::t("Archive password");
         ui.ctx().accesskit_node_builder(pw.id, |n| {
@@ -943,11 +1054,11 @@ impl Grabber {
         });
         // Row 2: the folder, and Browse.
         label(ui, 21.0, 391.0, folder_label, bx - 4.0);
-        // i18n: verb: choose a folder
-        let bw = winui::button_width(&p, "Browse", 73.0);
+        // The "..." browse button, square, at the row's end.
+        let bw = 23.0;
         let typed = winui::edit_light(
             ui,
-            r(o, bx, 376.0, 621.0 - bw - 8.0 - bx, 23.0),
+            r(o, bx, 376.0, BOX_RIGHT - bw - 8.0 - bx, 23.0),
             folder,
             enabled,
             false,
@@ -962,20 +1073,17 @@ impl Grabber {
                 o.y + 391.0,
                 each,
                 winui::MUTED(),
-                o.x + 621.0 - bw - 12.0,
+                o.x + BOX_RIGHT - bw - 12.0,
                 "grabber-each",
             );
         }
-        let browse = winui::button_light(
+        // i18n: verb: choose a folder (the "..." button's tooltip)
+        let browse = winui::icon_only_button(
             ui,
-            r(o, 621.0 - bw, 377.0, bw, 21.0),
+            r(o, BOX_RIGHT - bw, 376.0, bw, 23.0),
+            "gx-dots",
             "Browse",
-            if enabled {
-                ButtonKind::Normal
-            } else {
-                ButtonKind::Disabled
-            },
-            false,
+            enabled,
         )
         .clicked();
         if browse {
@@ -1013,15 +1121,12 @@ impl Grabber {
     }
 }
 
-/// Two addresses for one file: the same but for case in the host, a default port or a
-/// `#fragment`.
-fn same_address(a: &Url, b: &Url) -> bool {
-    let norm = |u: &Url| {
-        let mut u = u.clone();
-        u.set_fragment(None);
-        u
-    };
-    norm(a) == norm(b)
+/// A link's address as Link grabber tells links apart: two addresses for one file are the same
+/// but for case in the host, a default port or a `#fragment` (parsing evens out the first two).
+fn address_key(u: &Url) -> Url {
+    let mut u = u.clone();
+    u.set_fragment(None);
+    u
 }
 
 /// What looking a link up found, as its row says it.
@@ -1072,6 +1177,94 @@ mod tests {
 
     fn grabber() -> Grabber {
         Grabber::new(PathBuf::from("D:\\dl"), Vec::new(), true, false)
+    }
+
+    #[test]
+    fn a_long_list_is_added_at_once_each_link_once() {
+        // Upstream issue 805: 20,000 links, each compared with every other, held the window.
+        let many: Vec<Imported> = (0..20_000)
+            .map(|i| link(&format!("https://dl.example.com/f/{i}.zip"), None))
+            .collect();
+        let mut g = grabber();
+        let t = std::time::Instant::now();
+        g.add(many.clone(), "list.txt".into(), |_| false);
+        // Added again (and with a #fragment): nothing more.
+        let again: Vec<Imported> = many
+            .iter()
+            .map(|d| link(&format!("{}#again", d.url), None))
+            .collect();
+        g.add(again, "list.txt".into(), |_| false);
+        assert_eq!(g.links.len(), 20_000);
+        assert!(
+            t.elapsed() < std::time::Duration::from_secs(10),
+            "{:?}",
+            t.elapsed()
+        );
+        // Settled as before: one package of archives, to extract.
+        assert_eq!(g.packages.len(), 1);
+        assert!(g.packages[0].extract);
+    }
+
+    /// A big page's "Download all links" (upstream issue 1063): `n` links of one page, two in
+    /// five a split archive's volumes (two per archive: `n / 5` packages), the rest zips, videos
+    /// and documents, some names in capitals.
+    fn big_page(n: usize) -> Vec<Imported> {
+        let page = Some("https://example.com/big/");
+        (0..n)
+            .map(|i| match i % 5 {
+                0 | 1 => link(
+                    &format!("https://cdn.example.com/set{}.part{}.rar", i / 5, i % 5 + 1),
+                    page,
+                ),
+                2 => link(&format!("https://example.com/f/{i}.ZIP"), page),
+                3 => link(&format!("https://example.com/v/{i}.mp4"), page),
+                _ => link(&format!("https://example.com/d/{i}.pdf"), page),
+            })
+            .collect()
+    }
+
+    /// Upstream issue 1063: a big page's links, a package for each archive's volumes, are
+    /// added, shown and handed over each in one pass over the links (each package went over
+    /// every link, when added and at each frame for the list's rows: 20,000 links and 4,000
+    /// packages froze the window). The rows and counts are those of before.
+    #[test]
+    fn a_big_pages_links_are_listed_package_by_package() {
+        let mut g = grabber();
+        let t = std::time::Instant::now();
+        g.add(big_page(20_000), "bench".into(), |_| false);
+        for _ in 0..10 {
+            std::hint::black_box(g.view());
+        }
+        assert_eq!(g.picked().len(), 4_001);
+        assert!(
+            t.elapsed() < std::time::Duration::from_secs(10),
+            "{:?}",
+            t.elapsed()
+        );
+        let mut g = grabber();
+        g.add(big_page(1_000), "bench".into(), |_| false);
+        // 200 archives of two volumes each, and the page's other links.
+        assert_eq!(g.packages.len(), 201);
+        let view = g.view();
+        assert_eq!(view.rows.len(), 201 + 1_000);
+        assert_eq!(view.rows[0], Row::Pkg(0));
+        assert_eq!(&view.rows[1..3], [Row::Link(0), Row::Link(1)]);
+        let page = g.links[2].pkg;
+        assert_eq!(view.packages[page].links, 600);
+        assert_eq!(view.packages[page].on, 600);
+        // Each package's rows: its links in their order, as before.
+        for k in 0..g.packages.len() {
+            let at = view.rows.iter().position(|r| *r == Row::Pkg(k)).unwrap();
+            let rows: Vec<Row> = (0..g.links.len())
+                .filter(|i| g.links[*i].pkg == k)
+                .map(Row::Link)
+                .collect();
+            assert_eq!(view.rows[at + 1..at + 1 + rows.len()], rows[..]);
+        }
+        assert!(g.packages[0].extract, "an archive's volumes are extracted");
+        // A closed package shows its row alone.
+        g.packages[0].open = false;
+        assert_eq!(g.view().rows.len(), 201 + 998);
     }
 
     #[test]
@@ -1172,13 +1365,13 @@ mod tests {
             "x.part2.rar",
             None,
         );
-        assert!(!a.same(&b));
+        assert_ne!(a.key(), b.key());
         let c = Origin::of(
             &"https://A.org/X.part2.rar".parse().unwrap(),
             "X.part2.rar",
             None,
         );
-        assert!(a.same(&c));
+        assert_eq!(a.key(), c.key());
     }
 
     #[test]

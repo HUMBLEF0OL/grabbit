@@ -44,6 +44,18 @@
         ],
         "createdAt": "2026-11-04T21:48:23.120Z",
         "reason": "Maintainer approved 2026-11-04 after Claude's triage: the rendered scan of the served page finds no cramped padding; the static scan misses the inset styles.css gives .sheet, .sheet-band, .wrap, .qa and the closing band"
+      },
+      {
+        "rule": "overused-font",
+        "value": "geist",
+        "createdAt": "2026-11-16T02:31:16.604Z",
+        "reason": "user confirmed 2026-11-16: Geist is the Graphite typeface the owner chose for the app and website"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "geist",
+        "createdAt": "2026-11-16T02:31:25.729Z",
+        "reason": "user confirmed 2026-11-16: Geist is DESIGN.md's declared face; the detector's font check misreads it"
       }
     ]
   }

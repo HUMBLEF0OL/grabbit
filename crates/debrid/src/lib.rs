@@ -321,7 +321,7 @@ impl Http {
         let (status, body, retry_after) = self.send(ServiceKind::RealDebrid, req).await?;
         if (200..300).contains(&status) {
             return serde_json::from_slice(&body).map_err(|_| {
-                Fault::Service(ServiceFault::Other("an answer MDM can't read".into()))
+                Fault::Service(ServiceFault::Other("an answer Grabbit can't read".into()))
             });
         }
         let f = fault(status, &body, retry_after);
@@ -330,7 +330,7 @@ impl Http {
     }
 }
 
-const USER_AGENT: &str = concat!("MisterDownloadManager/", env!("CARGO_PKG_VERSION"));
+const USER_AGENT: &str = concat!("Grabbit/", env!("CARGO_PKG_VERSION"));
 
 /// One account, signed in: its access token in memory (Real-Debrid's device flow gives tokens
 /// that expire; a pasted token doesn't).
@@ -440,6 +440,7 @@ impl Session {
                     file_name: u.filename.filter(|n| !n.trim().is_empty()),
                     size: (u.filesize > 0).then_some(u.filesize as u64),
                     max_connections: None,
+                    headers: Default::default(),
                 }))
             }
             ServiceKind::Premiumize => {
@@ -460,6 +461,7 @@ impl Session {
                     file_name: Some(name).filter(|n| !n.trim().is_empty()),
                     size: (entry.size > 0).then_some(entry.size as u64),
                     max_connections: None,
+                    headers: Default::default(),
                 }))
             }
             ServiceKind::RealDebrid => {
@@ -484,6 +486,7 @@ impl Session {
                     file_name: u.filename.filter(|n| !n.trim().is_empty()),
                     size: (u.filesize > 0).then_some(u.filesize as u64),
                     max_connections: (u.chunks >= 1).then_some(u.chunks as u32),
+                    headers: Default::default(),
                 }))
             }
         }
@@ -501,7 +504,7 @@ pub(crate) fn plain_id(id: &str) -> Result<&str, Fault> {
         Ok(id)
     } else {
         Err(Fault::Service(ServiceFault::Other(
-            "the service gave an id MDM can't use".into(),
+            "the service gave an id Grabbit can't use".into(),
         )))
     }
 }
@@ -777,6 +780,7 @@ pub mod signin {
         match service {
             ServiceKind::RealDebrid => {
                 let c = realdebrid::device_code(http).await?;
+                own_page(service, &c.verification_url)?;
                 Ok(Code {
                     shown: c.user_code.clone(),
                     page: c.verification_url.clone(),
@@ -787,6 +791,7 @@ pub mod signin {
             }
             ServiceKind::AllDebrid => {
                 let p = alldebrid::pin(http).await?;
+                own_page(service, &p.user_url)?;
                 Ok(Code {
                     shown: p.pin.clone(),
                     page: p.user_url.clone(),
@@ -799,6 +804,30 @@ pub mod signin {
             ServiceKind::Premiumize => Err(Fault::Service(ServiceFault::Other(
                 "Premiumize signs in with its API key".into(),
             ))),
+        }
+    }
+
+    /// The page MDM opens in the browser for the user to type the code at comes from the
+    /// service's answer: it is opened only on the service's own site, over https. Anything else
+    /// is a service that isn't answering as it should.
+    fn own_page(service: ServiceKind, page: &str) -> Result<(), Fault> {
+        let site = match service {
+            ServiceKind::RealDebrid => "real-debrid.com",
+            ServiceKind::AllDebrid => "alldebrid.com",
+            ServiceKind::Premiumize => "premiumize.me",
+        };
+        let ok = url::Url::parse(page).is_ok_and(|u| {
+            u.scheme() == "https"
+                && u.username().is_empty()
+                && u.password().is_none()
+                && u.port().is_none()
+                && u.host_str()
+                    .is_some_and(|h| h == site || h.ends_with(&format!(".{site}")))
+        });
+        if ok {
+            Ok(())
+        } else {
+            Err(ServiceFault::ServiceDown.into())
         }
     }
 
@@ -820,6 +849,35 @@ pub mod signin {
             Inner::Ad(p) => Ok(alldebrid::pin_check(http, p)
                 .await?
                 .map(|token| Credential::Token { token })),
+        }
+    }
+
+    #[cfg(test)]
+    mod page_tests {
+        use super::{ServiceKind, own_page};
+
+        #[test]
+        fn only_the_services_own_site_over_https() {
+            let rd = ServiceKind::RealDebrid;
+            let ad = ServiceKind::AllDebrid;
+            assert!(own_page(rd, "https://real-debrid.com/device").is_ok());
+            assert!(own_page(rd, "https://www.real-debrid.com/device").is_ok());
+            assert!(own_page(ad, "https://alldebrid.com/pin/?pin=ABCD").is_ok());
+            for bad in [
+                "http://real-debrid.com/device",
+                "https://real-debrid.com.example.net/device",
+                "https://notreal-debrid.com/device",
+                "https://example.com/real-debrid.com",
+                "https://user@real-debrid.com/device",
+                "https://real-debrid.com:8443/device",
+                "file:///C:/Windows/system32/calc.exe",
+                "javascript:alert(1)",
+                "real-debrid.com/device",
+                "",
+            ] {
+                assert!(own_page(rd, bad).is_err(), "{bad}");
+            }
+            assert!(own_page(ad, "https://real-debrid.com/device").is_err());
         }
     }
 }

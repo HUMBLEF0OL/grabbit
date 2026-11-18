@@ -1,12 +1,16 @@
 [package]
-name = "mdm-remote"
-description = "Mister Download Manager's remote control: a paired phone or computer on the local network adds and controls downloads over HTTPS (#141)"
+name = "grabbit-remote"
+description = "Grabbit's remote control: a paired phone or computer on the local network adds and controls downloads over HTTPS (#141)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+
+# The code's paths stay `mdm_remote::` (plan 10, decision 3).
+[lib]
+name = "mdm_remote"
 
 [dependencies]
 # Random tokens and codes from the system's generator (the crypto library rustls brings).

@@ -6,7 +6,7 @@
 //! must open.
 //!
 //! It opens windows, which needs OpenGL or Direct3D, so it runs on request:
-//! `cargo test -p mdm-app --test magnet_while_open -- --ignored`.
+//! `cargo test -p grabbit-app --test magnet_while_open -- --ignored`.
 //!
 //! Windows only: the window is closed with `PostMessage(WM_CLOSE)` through PowerShell; the
 //! queue itself is the same code on every system (app.rs `torrent_waiting`).
@@ -16,7 +16,7 @@ use std::path::Path;
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
-const APP: &str = env!("CARGO_BIN_EXE_misterdownloadmanager");
+const APP: &str = env!("CARGO_BIN_EXE_grabbit");
 
 /// The app's log so far (every file of `logs/`).
 fn log(data: &Path) -> String {
@@ -53,7 +53,7 @@ fn wait_for(app: &mut Child, data: &Path, line: &str, times: usize, wait: Durati
 fn second_launch(data: &Path, args: &[&str]) {
     let status = Command::new(APP)
         .args(args)
-        .env("MDM_DATA_DIR", data)
+        .env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .status()
         .unwrap();
@@ -112,7 +112,7 @@ fn a_magnet_handed_over_while_add_torrent_is_open_opens_after_it() {
     )
     .unwrap();
     let mut app = Command::new(APP)
-        .env("MDM_DATA_DIR", data)
+        .env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .spawn()
         .unwrap();
@@ -150,7 +150,7 @@ fn a_magnet_handed_over_while_add_torrent_is_open_opens_after_it() {
     }));
     let _ = Command::new(APP)
         .arg("/exit")
-        .env("MDM_DATA_DIR", data)
+        .env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .status();
     let until = Instant::now() + Duration::from_secs(15);

@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use mdm_engine::verify::Hash;
 
 use crate::dialogs::{Outcome, window};
-use crate::winui::{self, ButtonKind, LIGHT_BG, LIGHT_TEXT, r, text};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, LIGHT_BG, LIGHT_TEXT, r, text};
 
 /// A check of the file: its digest once read, or why it couldn't be.
 type Check = Arc<Mutex<Option<Result<Vec<u8>, String>>>>;
@@ -55,26 +55,66 @@ impl ChecksumDialog {
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<Hash> {
         let id = format!("checksum-{}", self.id);
         let got = self.mismatch();
-        let extra = if got.is_some() { 30.0 } else { 0.0 };
+        // The mockup's layout: the file's card (a finished file), the box, the verdict in a
+        // banner (or a line while there is none), the file's own checksum under a mismatch.
+        const W: f32 = 520.0;
+        let e = winui::EDGE;
+        let y0 = if self.file.is_some() { 96.0 } else { 16.0 };
+        let verdict = self
+            .check
+            .as_ref()
+            .is_some_and(|c| c.lock().unwrap().is_some());
+        let body = y0
+            + 64.0
+            + if verdict {
+                winui::status_banner_height(0)
+            } else {
+                20.0
+            }
+            + if got.is_some() { 40.0 } else { 0.0 }
+            + 16.0;
         let out = window(
             ctx,
             &id,
             "Verify checksum",
-            [430.0, 118.0 + extra],
+            [W, body + winui::FOOTER_H],
             false,
             LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
+                if let Some(file) = &self.file {
+                    let name = file
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    let sub = Hash::parse(&self.text)
+                        .map(|h| {
+                            crate::i18n::fmt(
+                                // i18n: Verify checksum, the file card's line under its name: which checksum was given; {algorithm} = SHA-256, MD5…
+                                crate::i18n::t("{algorithm} checksum"),
+                                &[("algorithm", h.algo.name())],
+                            )
+                        })
+                        .unwrap_or_default();
+                    winui::file_card(
+                        ui,
+                        r(o, e, 16.0, W - 2.0 * e, 66.0),
+                        crate::fileicons::Kind::File(&name),
+                        &crate::i18n::isolate(&name),
+                        &sub,
+                        None,
+                    );
+                }
                 text(
                     &p,
-                    o.x + 11.0,
-                    o.y + 21.0,
+                    o.x + e,
+                    o.y + y0 + 13.0,
                     crate::i18n::t("Expected checksum (MD5, SHA-1, SHA-256, SHA-512 or CRC32):"),
                     LIGHT_TEXT(),
                 );
                 let edit = winui::edit_light(
                     ui,
-                    r(o, 11.0, 31.0, 408.0, 23.0),
+                    r(o, e, y0 + 20.0, W - 2.0 * e, winui::CONTROL_H),
                     &mut self.text,
                     true,
                     false,
@@ -87,39 +127,55 @@ impl ChecksumDialog {
                 if edit.changed() {
                     self.check = None;
                 }
+                // The verdict: in a banner (info: it matches; error: it doesn't, or can't be
+                // read), with its status icon.
+                let banner = match (&hash, &self.check) {
+                    (Some(h), Some(c)) => match &*c.lock().unwrap() {
+                        Some(Ok(v)) if *v == h.value => Some((
+                            winui::BannerKind::Info,
+                            "st-complete",
+                            crate::i18n::fmt(
+                                crate::i18n::t("The file matches ({algorithm})"),
+                                &[("algorithm", h.algo.name())],
+                            ),
+                        )),
+                        Some(Ok(_)) => Some((
+                            winui::BannerKind::Error,
+                            "st-error",
+                            crate::i18n::fmt(
+                                crate::i18n::t("The file does NOT match ({algorithm})"),
+                                &[("algorithm", h.algo.name())],
+                            ),
+                        )),
+                        Some(Err(err)) => Some((
+                            winui::BannerKind::Error,
+                            "st-error",
+                            crate::i18n::fmt(
+                                crate::i18n::t("Cannot read the file: {error}"),
+                                &[("error", &err.to_string())],
+                            ),
+                        )),
+                        None => None,
+                    },
+                    _ => None,
+                };
+                let status_y = y0 + 64.0;
+                if let Some((kind, icon, title)) = &banner {
+                    let rc = r(o, e, status_y, W - 2.0 * e, winui::status_banner_height(0));
+                    // A long reason is cut, and shown whole on hover by the banner itself.
+                    winui::status_banner(ui, rc, *kind, icon, title, "");
+                }
                 let (line, color) = match (&hash, &self.check) {
+                    _ if banner.is_some() => (String::new(), LIGHT_TEXT()),
                     (None, _) if !self.text.trim().is_empty() => (
                         crate::i18n::t("Not a checksum this can read").to_owned(),
                         winui::ERROR(),
                     ),
                     (None, _) => (String::new(), LIGHT_TEXT()),
-                    (Some(h), Some(c)) => match &*c.lock().unwrap() {
-                        None => (
-                            crate::i18n::t("Checking...").to_owned(),
-                            winui::LIGHT_DISABLED(),
-                        ),
-                        Some(Ok(v)) if *v == h.value => (
-                            crate::i18n::fmt(
-                                crate::i18n::t("The file matches ({algorithm})"),
-                                &[("algorithm", h.algo.name())],
-                            ),
-                            winui::SUCCESS(),
-                        ),
-                        Some(Ok(_)) => (
-                            crate::i18n::fmt(
-                                crate::i18n::t("The file does NOT match ({algorithm})"),
-                                &[("algorithm", h.algo.name())],
-                            ),
-                            winui::ERROR(),
-                        ),
-                        Some(Err(e)) => (
-                            crate::i18n::fmt(
-                                crate::i18n::t("Cannot read the file: {error}"),
-                                &[("error", &e.to_string())],
-                            ),
-                            winui::ERROR(),
-                        ),
-                    },
+                    (Some(_), Some(_)) => (
+                        crate::i18n::t("Checking...").to_owned(),
+                        winui::LIGHT_DISABLED(),
+                    ),
                     (Some(h), None) if self.file.is_none() => (
                         crate::i18n::fmt(
                             crate::i18n::t("{algorithm}: checked when the download finishes"),
@@ -135,20 +191,28 @@ impl ChecksumDialog {
                         LIGHT_TEXT(),
                     ),
                 };
-                winui::fit(
-                    ui,
-                    &p,
-                    o.x + 11.0,
-                    o.y + 72.0,
-                    &line,
-                    color,
-                    o.x + 419.0,
-                    "checksum-status",
-                );
+                if !line.is_empty() {
+                    winui::fit(
+                        ui,
+                        &p,
+                        o.x + e,
+                        o.y + status_y + 14.0,
+                        &line,
+                        color,
+                        o.x + W - e,
+                        "checksum-status",
+                    );
+                }
                 if let Some(got) = &got {
                     winui::readonly_field(
                         ui,
-                        r(o, 11.0, 80.0, 408.0, 23.0),
+                        r(
+                            o,
+                            e,
+                            status_y + winui::status_banner_height(0) + 10.0,
+                            W - 2.0 * e,
+                            winui::CONTROL_H,
+                        ),
                         &got.display(),
                         LIGHT_BG(),
                         true,
@@ -159,7 +223,6 @@ impl ChecksumDialog {
                         "The file's own checksum",
                     ));
                 }
-                let o = o + egui::vec2(0.0, extra);
                 // Verify waits while a check runs.
                 let checking = self
                     .check
@@ -177,51 +240,38 @@ impl ChecksumDialog {
                 } else {
                     (crate::i18n::mark("OK"), crate::i18n::mark("Cancel"))
                 };
-                // As wide as their labels in this language (#192).
-                let [go_at, close_at] = winui::buttons_to_right(
-                    &p,
-                    419.0,
-                    8.0,
-                    &[(primary, 73.0), (secondary, 73.0)],
-                    160.0,
-                )[..] else {
-                    unreachable!("two buttons")
-                };
-                let go = winui::button_light(
+                // Enter verifies (while it can), Escape closes, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, go_at.0, 87.0, go_at.1, 21.0),
-                    primary,
-                    kind,
-                    false,
+                    o,
+                    W,
+                    body,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new(primary, kind).primary().enter(true).tip(
+                                !valid,
+                                if checking {
+                                    // i18n: why Verify is greyed: the file is being checked
+                                    "Checking the file..."
+                                } else {
+                                    // i18n: why Verify / OK is greyed in Verify checksum
+                                    "Paste the checksum the download's page gives"
+                                },
+                            ),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new(secondary, ButtonKind::Normal).escape(true),
+                        ),
+                    ],
                 );
-                let go = winui::why_disabled(
-                    go,
-                    !valid,
-                    if checking {
-                        // i18n: why Verify is greyed: the file is being checked
-                        "Checking the file..."
-                    } else {
-                        // i18n: why Verify / OK is greyed in Verify checksum
-                        "Paste the checksum the download's page gives"
-                    },
-                )
-                .clicked();
-                let close = winui::button_light(
-                    ui,
-                    r(o, close_at.0, 87.0, close_at.1, 21.0),
-                    secondary,
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                let enter = winui::enter_pressed(ui);
-                if close || winui::escape_pressed(ui) {
+                let (go, close) = (pressed == Some(0), pressed == Some(1));
+                if close {
                     // A checked file keeps its hash with the download.
                     match (hash, &self.check) {
                         (Some(h), Some(_)) => Outcome::Done(h),
                         _ => Outcome::Closed,
                     }
-                } else if let (Some(h), true) = (hash, go || (enter && valid)) {
+                } else if let (Some(h), true) = (hash, go && valid) {
                     match &self.file {
                         None => Outcome::Done(h),
                         Some(file) => {

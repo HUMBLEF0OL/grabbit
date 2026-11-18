@@ -4,7 +4,7 @@
 //! fresh session in a temporary folder, as the app's first torrent does, with everything on
 //! (listening on every address: Windows Firewall asks about this program once).
 //!
-//!   cargo run --release -p mdm-torrent --example metadata_probe -- [options] SOURCE...
+//!   cargo run --release -p grabbit-torrent --example metadata_probe -- [options] SOURCE...
 //!
 //! SOURCE: a magnet link, or a .torrent file (looked up as its magnet link, with its trackers).
 //! Options: `--no-trackers` (the DHT alone), `--no-dht` (the trackers alone), `--runs N` (each

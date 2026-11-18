@@ -1,11 +1,11 @@
 # Roadmap
 
-What's done for version 0.5.2, what's being built, and what's planned. Each item links to its
-issue, where the details and the discussion are. Released changes are in
+What's done for version 1.0.0, Grabbit's first release, what's being built, and what's planned.
+Each item links to its issue, where the details and the discussion are. Released changes are in
 [CHANGELOG.md](CHANGELOG.md). Ideas and bug reports are welcome in
-[Issues](https://github.com/anefzaoui/misterdownloadmanager/issues).
+[Issues](https://github.com/HUMBLEF0OL/grabbit/issues).
 
-✅ done · 🔄 being built · 📋 planned · 🔍 looking into it
+✅ done · 🔄 being built · 📋 planned · 🔍 looking into it · ⛔ dropped
 
 ## Version 0.5.0
 
@@ -204,20 +204,22 @@ Everything below ships together, in version 0.5.0.
   theme, and theme files can change them; the classic look is unchanged
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
 - ✅ View → Theme: Classic (the default), Native (the system's accent colour and high contrast,
-  followed as they change) and High contrast
+  followed as they change) and High contrast (removed since: Graphite is the only look)
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
 - ✅ Themes: Metro, Windows 8's flat look (its controls, a drawn title bar on Windows, Fluent
-  icons); themes choose each control's style and bring their own icons
+  icons); themes choose each control's style and bring their own icons (Metro removed since:
+  Graphite is the only look)
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
 - ✅ Themes: Adwaita, GNOME's look (its controls, a header bar on Windows, GNOME's Adwaita icons
-  in colour and one colour)
+  in colour and one colour) (removed since: Graphite is the only look)
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
 - ✅ Themes: Breeze, KDE Plasma's look (its focus frame, check boxes, buttons and title bar on
-  Windows, KDE's Breeze icons)
+  Windows, KDE's Breeze icons) (removed since: Graphite is the only look)
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
 - ✅ Themes: Luna, Aero and Aqua, the looks of Windows XP, Windows 7 and Mac OS X (shaded and
   glossy buttons, their check boxes and progress bars, their title bars on Windows, icons drawn
-  for MDM); Metro, Adwaita and Breeze get MDM's own icons where theirs had none
+  for MDM); Metro, Adwaita and Breeze get MDM's own icons where theirs had none (removed since:
+  Graphite is the only look)
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
 - ✅ Themes: Base16 and pywal colour schemes imported as themes (View → Theme → Add a theme
   file…, or the themes folder); **pywal** follows `wal` as it writes new colours, text kept
@@ -271,6 +273,8 @@ Everything below ships together, in version 0.5.0.
   fallback to OpenGL as Direct3D on Windows; OpenGL stays their default for now, and the menu
   says why when one can't start here
   ([#206](https://github.com/anefzaoui/misterdownloadmanager/issues/206))
+- ⛔ Malay: a native speaker's check of the menus, toolbar and list columns (MDM is English
+  only now)
 - ✅ Screen readers see a window's contents the first time they read it, not only its title bar
   ([#131](https://github.com/anefzaoui/misterdownloadmanager/issues/131))
 - ✅ Magnet links get their file list in seconds again: the DHT keeps going after a computer it
@@ -419,7 +423,8 @@ Everything below ships together, in version 0.5.0.
   contrast; style themes with their own control shapes, a drawn title bar on Windows and their own
   icons: Metro, Adwaita, Breeze, Luna, Aero and Aqua; and theme files anyone can make, try and
   share, in TOML or JSON, built on any theme (`inherits`), with their own icons; Base16 and
-  pywal colour schemes read as themes ([the guide](docs/themes.md))
+  pywal colour schemes read as themes ([the guide](docs/themes.md)). The built-in themes but
+  Graphite were removed since: Graphite is the only look; theme files build on it
 - ✅ Linux, no longer experimental: every change is checked on Ubuntu (GNOME) as well as Windows,
   and on KDE Plasma, Cinnamon and Xfce; Wayland sessions (through XWayland, menus under their
   titles on sway too); the .deb and .rpm installed in clean Ubuntu, Debian and Fedora systems, the
@@ -485,6 +490,69 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   ([#311](https://github.com/anefzaoui/misterdownloadmanager/issues/311))
 - ✅ The Download video button on YouTube in Chrome, Edge, Brave, Opera and Vivaldi
 
+## Version 1.0.0
+
+Grabbit's first release (2026-11-18): everything below ships together in it.
+
+- ✅ English only: the other languages, the language picker (View → Language and the first
+  start's), the right-to-left interface, the installer's languages, the extension's translations, the
+  translated website and the translation tools are removed. File names in any script still show
+  as they are. The earlier state is kept on the `archive/multiplatform-i18n` branch.
+- ✅ Problem reports, crash reports, update checks, the security contact and the installer's
+  links go to this fork's repository, not the original's; so do the README's, the help pages'
+  and the website's links, and **Help → Support MDM** (the fork's page on GitHub, until it has a
+  GitHub Sponsors page).
+- ✅ Windows only: the Linux and macOS builds (AppImage, .deb, .rpm, tar.gz, .dmg), the Safari
+  extension and the Docker image are no longer made, and their code, packaging, CI jobs and help
+  pages are removed. MDM on Windows works as before. The multi-platform state is kept on the
+  `archive/multiplatform-i18n` branch.
+- ✅ The original MDM's fixes, brought in one at a time: `tools/upstream-sync/sync.py` sorts
+  upstream's new commits (applies, applies without the removed parts, needs a port by hand,
+  nothing to take), picks the ones that apply onto a sync branch and records every decision;
+  each run reaches `dev` by a pull request, and a weekly report (from the first release on)
+  lists what waits. Looked at up to upstream `9d1fc9248239` (2026-11-16), before plan 10c:
+  37 fixes taken and 75 ported by hand (the video engine's among them, and this run's freeze,
+  crash and quit fixes, which reach `dev` in a pull request of their own), 79 skipped, 4 already
+  fixed here, 9 deferred: a connection that copies a browser's TLS (and the fixes built on it),
+  the video button's quality menu, the tray menu's look, release tooling, an egui pin and a
+  clipboard fix, each waiting for a decision. 41 of upstream's commits from 2026-11-14 to
+  2026-11-16 still wait for a port by hand
+  (`sync.py status` lists them: the window-thread disk waits of Delete, Redownload and new
+  names, the hidden-window freeze grace, accessibility and menu keys among them; the new names'
+  part of upstream 1232 is ported and recorded, its other four waits left out); what the
+  ports' reviews left to do is in `tools/upstream-sync/follow-ups.md`. Ready for Graphite only: an old
+  theme's licence never counts as moved to Graphite's, and a commit with a theme other than
+  Graphite says to skip it.
+- ✅ No crash at start on a damaged or unreadable system font (ported from upstream issue 931):
+  the font is passed over for the next one in line, and the log names it.
+- ✅ No false "window stopped responding" report in the minute after the computer wakes, and
+  every freeze report names what the window was doing (ported from upstream issues 574 and 613).
+- ✅ Fewer freezes, crashes and lost progress, ported from upstream (2026-11-16 sync, part 2):
+  shutting down or signing out saves like Exit; the window doesn't wait for its crash monitor,
+  which is still reached when slow; no freeze report in the first minutes after a start with
+  Windows; no crash at the first secure connection on some PCs; Link grabber and the browser
+  extension's window no longer freeze; Exit when done quits; Stop All stops the queues; the
+  computer stays awake while anything downloads (upstream issues 1156, 476, 1238, 1126, 1123,
+  1063, 1218, 1145, 1164 and 939).
+- ✅ GitHub Actions run for `main` only: the build and tests on pull requests into `main` (a
+  release or a hotfix), none on `dev`, where the same checks run locally before a merge; the
+  website builds on its own changes or by hand, with no daily run.
+- ✅ Graphite's buttons: the line along a button's bottom no longer shows past its rounded
+  corners, and buttons, boxes and drop-downs share rounder-than-Windows corners in proportion to
+  their height, so a dialog's short buttons no longer look like pills.
+- ✅ A new app icon, Grabbit's double chevron in Graphite's cyan and amethyst, with no tile behind
+  it: in the title bar, the taskbar, the tray, the installer, About and the browser extension,
+  and on the website (logo, favicon, home-screen icon) and the repository's social preview.
+- ✅ Videos in one file (most of YouTube's) come down through the app's own downloader, ported
+  from upstream issue 769: yt-dlp finds the video and its sound, the downloader brings them in
+  over several connections, under the speed limits, paused and resumed like a file, with a fresh
+  address when one expires; yt-dlp joins them as before. Streams in pieces (HLS, DASH) come down
+  the same way, several pieces at once (AES-128 too), and so do image galleries' files; after
+  the last byte, checking and joining say how far they are, and a failed join keeps its parts
+  for Resume. Hardened after its review: a gallery's files in subfolders are saved, an
+  encrypted piece whose key can't be had leaves nothing behind, and deleting a video takes its
+  HLS audio stream's files too.
+
 ## Being worked on
 
 These ship in a later version, when they're ready.
@@ -494,31 +562,99 @@ These ship in a later version, when they're ready.
 - 🔄 Videos sent in pieces (HLS, DASH) downloading several pieces at once, as many as a file's
   connections ([#531](https://github.com/anefzaoui/misterdownloadmanager/issues/531)): in review;
   a video in one file (most of YouTube's) still comes over one connection
-- 🔄 Linux and macOS: the system's yt-dlp used when MDM has none of its own, with Helpers able\n  to switch to MDM's copy ([#452](https://github.com/anefzaoui/misterdownloadmanager/issues/452)): in review
-- 🔄 macOS: video look-ups in a copy of MDM a browser downloaded, without the Terminal command
-  ([#330](https://github.com/anefzaoui/misterdownloadmanager/issues/330),
-  [#339](https://github.com/anefzaoui/misterdownloadmanager/issues/339)): yt-dlp's folder build,
-  unpacked once and checked against its signed list; built and checked on macOS, still to
-  confirm on a person's Mac
 - 🔄 In English, the list's dates on the system's 12- or 24-hour clock
   ([#392](https://github.com/anefzaoui/misterdownloadmanager/issues/392)): in review
 - 🔄 Help: when an antivirus or VirusTotal flags MDM
-- 🔄 Linux, what's left ([#164](https://github.com/anefzaoui/misterdownloadmanager/issues/164)):
-  screen readers (Orca) reading MDM's windows; browsers installed as a Flatpak (Firefox from
-  Flathub may reach MDM through the desktop, as the Snap does: to check); native Wayland windows
-  (`MDM_WAYLAND=1`) placing their menus, which needs popup windows the window library doesn't
-  have yet, so XWayland stays the default; Vulkan as the default renderer (below)
-
-- 🔄 The Safari extension (macOS), part of the app: a click on a link to a listed file type, the
-  right-click items, the button over videos, Media on this page and the toolbar button, from one
-  source with the other browsers' extension. Safari gives extensions no way to see its downloads,
-  so a download a page starts by itself stays with Safari. Built and its relay to the helper
-  checked in the sandbox Safari uses; still to check in Safari itself, signed with a Developer ID
-
 - 🔄 A torrent's upload speed, peers and share ratio as columns in the download list
   ([#357](https://github.com/anefzaoui/misterdownloadmanager/issues/357)): the last one in review
 - 🔄 The browser extension's media list naming a file after its page, as an option: in review
-- 🔄 Malay: a native speaker's check of the menus, toolbar and list columns: in review
+- ✅ A new look, "Graphite": a theme with its own colours, icons and typeface, the main window
+  and every dialog restyled, with an optional paste bar and details pane; the plan and mockups are
+  in `design/graphite/`. Done: the Graphite theme in **View → Theme** (its colours, rounded
+  corners and controls, light and dark, in today's layout) and its icons (Tabler's outline
+  icons, in one colour), its typeface (Geist, built in, a theme's choice), and the theme switch,
+  colours and extra icons its new layout will use, and the main window's new layout under Graphite
+  (menus and a Find button in the title bar, icons and shortcuts in the menus, a grouped toolbar,
+  a flatter Categories tree, progress in the Status column, a quieter status bar), and
+  Graphite's own icons in the Options pages, the helpers window, the drag handle, the
+  Scheduler's queues and the Server row, and Graphite as the only look (the Classic layout and
+  the old themes removed, with the theme-file keys only they used; Windows' high contrast is
+  followed again once a high-contrast Graphite comes back), and the paste bar and details pane
+  (an address box under the toolbar that adds a download as Add URL's OK does, and a pane beside
+  the list with the selected download, its progress and its buttons; both shown or hidden in
+  **View**, the pane also with the toolbar's **Details**), and the dialogs' common parts (a
+  footer with the default button last, a label column, a file card, status banners) with the
+  first dialogs laid out on them: Add URL, Download File Info, Download later and Duplicate
+  download link, their keys unchanged, and the progress window's buttons (Pause or Resume last
+  and filled), its status with an icon and a failed download's reason in an error banner,
+  Download complete (a card with the file's icon and size, a drag strip), Speed Limiter settings
+  and File Properties on them too, with the Hide tab button at the page's top right, the torrent
+  window's General-tab banner while it is shared, and the screenshot script's way to open a
+  failed download's window and the tab row's menu, and the torrent, video and list dialogs on
+  them: Add torrent (its looking-up ring in the progress bar's colours), Torrent settings, Add
+  trackers, Files already there, Download video and its playlist, Download a gallery
+  (gallery-dl's answer in a banner), the video helpers' offer and Helpers, Batch download, Link
+  grabber and RSS feeds, and the organising and short-question dialogs on them
+  (the Scheduler and Enter queue name, the queue's turn-off countdown, Find file, Add, edit and
+  Delete category, Confirm deletion, Redownload and the other yes-or-no questions, Check for
+  updates, About, Keyboard shortcuts, Tell a friend, Verify checksum, the crash report, Archive
+  password, 7-Zip needed, Create folder, Download limits, the notices, the browser extension's
+  offer and the drop target; "Add many downloads" is that Confirm), their keys unchanged, the
+  Scheduler at the mockup's 800 wide and short enough for a 1080p screen at 200 %, and the help
+  pages, the website's Themes page, its theme prompt and
+  llms.txt describing Graphite as the only look (its picture there comes with the new
+  screenshots), and the Options window's pages listed down the side (each with its icon and
+  title at the top, OK and Help in a footer; Up and Down added to its keys, and Ctrl+Shift+Tab
+  going back a page), at the mock's 820 x 520, and the windows its pages open on the dialogs'
+  common parts (DNS settings, Add an account, Addresses left to the browser, Keys, Test browser
+  integration, Download panels, Pair a device, New and Edit login and exception), their keys
+  unchanged, and the General, File types, Save to, Downloads and Connection pages on them (a
+  label column, hairlines in place of group boxes, Connection's number in a spin box), and the
+  other seven on them too (Remote's state and Accounts' warning in banners), and, with plan 09's
+  polish, Options short enough for a 1080p screen at 200 % (its page scrolls), banners that wrap
+  their title and that screen readers read, the side list as a list for screen readers, Pair a
+  device centred, Add an account's hint box sized to its text.
+  And the finish: filled buttons shaded from a lighter cyan at their top and progress bars
+  shaded along their fill, glowing in dark mode.
+  And About's mark drawn sharp, the two first-start offers without their logo band.
+  And the contrast checks extended to every colour that carries text or meaning (the filled
+  buttons' lighter top included) and to greyed text, screenshot entries for Create folder,
+  Archive password, Add category and the drop target, and the review of the paste bar and the
+  details pane: a long file name without spaces on the pane's two lines, and the screenshot
+  script's details pane keeping the list's column filters.
+  And the help's, the README's and the website's pictures taken again in Graphite, its tile on
+  the Themes page with its picture, and a keyboard and screen-reader pass at 100, 150 and
+  200 % (Options at 200 % on a 1080p screen included): the title bar's buttons, four Options
+  lists, Speed Limiter's box and the offers' repeated buttons named for screen readers.
+  Left (plan 09's follow-ups): a faint square behind images in light mode on Intel Iris Xe
+  graphics with Direct3D (a driver workaround in the graphics library).
+- ✅ The rename to Grabbit, after the new look: the name in the app, installer, extension, website
+  and docs, settings, saved logins, autostart, the `.torrent` link and the browser extension
+  (Grabbit was never published: no upgrade from the old name). Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:
+  a checker that lists every place the old name is still shown (`tools/rename/check.py`) and the
+  plan refreshed against today's code. Done: the name the app, the command line, the AI
+  assistants' server, the remote page, the installer and the extension show (10a); the upstream
+  sync's picks and pull requests (and CI on releases) stop the old name coming back with
+  upstream's fixes. Done: the data folder (`%APPDATA%\grabbit`, `GRABBIT_DATA_DIR`), saved
+  logins, autostart, the `.torrent` link, the browser host and the programs (`grabbit*.exe`)
+  take Grabbit's names (10c; its migrations from the old names removed, never published).
+  Done: the release files (`Grabbit-<version>-…`), the website address in the app, the Firefox
+  add-on's ID, and the website, help, README and other docs say Grabbit, describe only the
+  Graphite look, and the site moves to https://humblef0ol.github.io/grabbit (10d). Done: the
+  Rust packages are `grabbit-*` (the code keeps its `mdm_*::` paths, so upstream's fixes still
+  apply) and the removed themes' control styles are gone: a theme file naming one gets
+  Graphite's (10e). Done: the pictures in the README, help, docs and website that showed the old
+  name are taken again and say Grabbit
+- ✅ Grabbit signs its own releases: Update now trusts Grabbit's release key, and each release's
+  checksum list is signed with it
+- ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a
+  centred stage, then a walk through adding, downloading, torrents and video as you scroll), the
+  benchmark's seven medians drawn from its results file, the Grabbit mark and Geist, light and
+  dark; every other page in the same colours, type and buttons, the Grabbit name and mark in
+  the header and footer, and the video window's picture taken again in Graphite; the site's
+  install manifest and search data carry Grabbit's name, mark and colours, the home page's walk
+  through reads in full without JavaScript, and its stylesheet and script are never served stale
+  after an update. The pages' own text says Grabbit too since the rename above (10d)
 
 ### Bugs being looked into
 
@@ -526,17 +662,8 @@ These ship in a later version, when they're ready.
   ([#540](https://github.com/anefzaoui/misterdownloadmanager/issues/540)): a window with a title of
   256 characters or more got the system's title bar above MDM's own; that part is fixed, in review.
   Still to find: whether the reporter's window was one of them
-- 🔄 macOS 15 and later: PingFang moved into the system's font assets, so Chinese text lost its
-  font ([#541](https://github.com/anefzaoui/misterdownloadmanager/issues/541)): fix in review
 - 🔄 The video button still showing after it was switched off, or its site listed, in Options
   ([#532](https://github.com/anefzaoui/misterdownloadmanager/issues/532)): fix in review
-- 🔄 macOS: Persian and other Arabic-script file names drawn as boxes in the download list
-  ([#533](https://github.com/anefzaoui/misterdownloadmanager/issues/533)): fix in review, to
-  confirm on a Mac
-- 🔄 macOS: Download File Info opening behind the browser that asked for it\n  ([#484](https://github.com/anefzaoui/misterdownloadmanager/issues/484)): fix in review
-- 🔄 macOS: no icon in the menu bar, so closing the window quit MDM
-  ([#529](https://github.com/anefzaoui/misterdownloadmanager/issues/529)): fix in review, still to
-  confirm on a Mac
 - 🔄 The browser tests: the video button's focus case ran after the one that turns the button
   off for the test site, and timed out in a full run ([#480](https://github.com/anefzaoui/misterdownloadmanager/issues/480)): fix in review
 - 🔄 The video button vanishing over a hover-to-play preview (YouTube's thumbnails) before it
@@ -544,11 +671,12 @@ These ship in a later version, when they're ready.
 - 🔄 Add URL's **Use authorization** empty for an address with a login in Options → Sites
   Logins, though the download used it
   ([#511](https://github.com/anefzaoui/misterdownloadmanager/issues/511)): fix in review
-- 🔄 Windows: closing the window left MDM in the taskbar instead of the notification area
-  when its icon was among the hidden icons behind ^
-  ([#545](https://github.com/anefzaoui/misterdownloadmanager/issues/545),
-  [#534](https://github.com/anefzaoui/misterdownloadmanager/issues/534),
-  [#527](https://github.com/anefzaoui/misterdownloadmanager/issues/527)): fix in review
+- 🔄 Windows: closing the window left MDM minimized in the taskbar instead of the notification
+  area while its icon was there, among the hidden icons behind ^ (upstream issues 750, 718, 754,
+  545, 534 and 527): MDM now keeps the window in the taskbar only when Windows says it has no
+  icon of MDM's; fix in review, to confirm on Windows 10
+- 🔄 The window freezing while Explorer was slow to answer about MDM's notification-area icon
+  (upstream issue 747): asked beside the window now; fix in review
 - 🔄 Two tests that fail now and then on busy CI runners
   ([#518](https://github.com/anefzaoui/misterdownloadmanager/issues/518)): the slow-flush one fixed;
   the crash-and-resume one found a real delay in saving a new download's progress, fix in review
@@ -569,10 +697,9 @@ These ship in a later version, when they're ready.
   ([#507](https://github.com/anefzaoui/misterdownloadmanager/issues/507)): fix in review
 - 🔄 A freeze when a video finishes, while its file is marked as downloaded from the web
   ([#510](https://github.com/anefzaoui/misterdownloadmanager/issues/510)): fix in review
-- 🔄 Linux: Dark Mode support on window managers such as Hyprland and sway, which often have no
-  desktop portal to say dark or light ([#324](https://github.com/anefzaoui/misterdownloadmanager/issues/324)): fix in review
-- 🔄 A bright white line under the menu bar in dark mode
-  ([#379](https://github.com/anefzaoui/misterdownloadmanager/issues/379)): fix in review
+- ✅ A bright white line under the menu bar in dark mode
+  ([#379](https://github.com/anefzaoui/misterdownloadmanager/issues/379)): gone with the old looks
+  (Graphite, the only one, never drew it)
 - 🔄 Closing the main window follows a setting (on by default, MDM keeps running), and with no
   tray icon the window goes to the taskbar instead of vanishing: fix in review
   ([#457](https://github.com/anefzaoui/misterdownloadmanager/pull/457))
@@ -629,12 +756,34 @@ These ship in a later version, when they're ready.
   cleaned up instead of staying beside MDM: fix in review
   ([#458](https://github.com/anefzaoui/misterdownloadmanager/pull/458))
 
+## Dropped
+
+MDM is Windows only now. These were being built or planned for Linux and macOS; their work is
+kept on the `archive/multiplatform-i18n` branch.
+
+- ⛔ Linux and macOS: the system's yt-dlp used when MDM has none of its own
+  ([#452](https://github.com/anefzaoui/misterdownloadmanager/issues/452))
+- ⛔ macOS: video look-ups in a copy of MDM a browser downloaded
+  ([#330](https://github.com/anefzaoui/misterdownloadmanager/issues/330),
+  [#339](https://github.com/anefzaoui/misterdownloadmanager/issues/339))
+- ⛔ Linux, what was left: screen readers (Orca), Flatpak browsers, native Wayland windows
+  ([#164](https://github.com/anefzaoui/misterdownloadmanager/issues/164))
+- ⛔ The Safari extension (macOS)
+- ⛔ macOS 15 and later: Chinese text's font (PingFang)
+  ([#541](https://github.com/anefzaoui/misterdownloadmanager/issues/541))
+- ⛔ macOS: Persian and other Arabic-script file names drawn as boxes
+  ([#533](https://github.com/anefzaoui/misterdownloadmanager/issues/533))
+- ⛔ macOS: Download File Info opening behind the browser
+  ([#484](https://github.com/anefzaoui/misterdownloadmanager/issues/484))
+- ⛔ macOS: no icon in the menu bar ([#529](https://github.com/anefzaoui/misterdownloadmanager/issues/529))
+- ⛔ Linux: Dark Mode support on Hyprland and sway
+  ([#324](https://github.com/anefzaoui/misterdownloadmanager/issues/324))
+- ⛔ Vulkan the default on Linux and Metal on macOS
+  ([#206](https://github.com/anefzaoui/misterdownloadmanager/issues/206))
+
 ## Planned
 
 ### Look and performance
 
-- 📋 Vulkan the default on Linux and Metal on macOS, once real graphics cards have tried them (AMD,
-  Intel and NVIDIA, X11 and Wayland, older cards without Vulkan)
-  ([#206](https://github.com/anefzaoui/misterdownloadmanager/issues/206))
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))

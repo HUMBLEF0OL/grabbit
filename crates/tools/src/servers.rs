@@ -416,7 +416,7 @@ mod tests {
 mod live {
     use super::*;
 
-    /// `MDM_LIVE_INFO=<yt-dlp -J output> cargo test -p mdm-tools live_serves -- --ignored
+    /// `MDM_LIVE_INFO=<yt-dlp -J output> cargo test -p grabbit-tools live_serves -- --ignored
     /// --nocapture`: each direct stream on its first alternative, one by one.
     #[test]
     #[ignore]

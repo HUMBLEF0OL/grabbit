@@ -669,7 +669,7 @@ mod tests {
         }
         .upgraded();
         for name in [
-            "MDM.dmg",
+            "Grabbit.dmg",
             "mdm_0.3.0_amd64.deb",
             "a.AppImage",
             "clip.webm",

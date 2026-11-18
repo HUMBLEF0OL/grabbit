@@ -25,6 +25,7 @@ use librqbit::{
 pub mod blocklist;
 mod names;
 pub mod trackers;
+mod watch;
 pub use names::UnsafeName;
 
 #[derive(Debug, thiserror::Error)]
@@ -316,6 +317,16 @@ pub struct Peer {
     pub kind: Option<String>,
 }
 
+/// A torrent's peers, trackers and pieces (the progress window's tabs), as last read
+/// ([`Torrents::seen_swarm`]).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Swarm {
+    pub peers: Vec<Peer>,
+    pub trackers: Vec<String>,
+    /// Which pieces are there (empty while it isn't checked yet).
+    pub pieces: Vec<bool>,
+}
+
 /// How the session runs (#40: each of these is the person's to choose, Torrent settings).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
@@ -325,7 +336,7 @@ pub struct Config {
     pub listen: bool,
     /// Ask the router (UPnP) to forward the listening port.
     pub upnp: bool,
-    /// The port to listen on; None: one picked at each start.
+    /// The port to listen on; None: one picked the first time and kept (`PORT_FILE`).
     pub port: Option<u16>,
     /// The address to listen on; None: every address of the computer (IPv4 and IPv6), as
     /// BitTorrent clients do. Tests and test tools set 127.0.0.1: a listener on every address
@@ -344,8 +355,8 @@ pub struct Config {
     /// Tests: no trackers, local peers only, everything on loopback; no DHT unless
     /// `dht_bootstrap` names its nodes.
     pub offline: bool,
-    /// The DHT's first nodes (`host:port`); None: librqbit's own (public routers). Tests and test
-    /// tools name nodes on loopback.
+    /// The DHT's first nodes (`host:port`); None: MDM's public routers (`DHT_BOOTSTRAP`). Tests
+    /// and test tools name nodes on loopback.
     pub dht_bootstrap: Option<Vec<String>>,
     /// Options → Proxy / Socks → Network adapter (#35, #143): what holds every socket of the
     /// session to the adapter. UPnP and local peer discovery are off then: they speak to the
@@ -356,10 +367,7 @@ pub struct Config {
 /// How a session is held to the chosen network adapter (`Config::bind`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Bind {
-    /// Linux and macOS: its device (librqbit's `bind_device_name`: SO_BINDTODEVICE,
-    /// IP_BOUND_IF), and whether it has IPv4 only.
-    Device { name: String, v4_only: bool },
-    /// Windows: its address (librqbit's `bind_ip`). Windows sends a packet only through the
+    /// Its address (librqbit's `bind_ip`). Windows sends a packet only through the
     /// adapter that has its source address (strong host model), so a socket bound to it can't
     /// leave another way; when the address is gone, nothing is sent. One family: IPv4 when the
     /// adapter has it (IPv6 peers are then skipped), else IPv6.
@@ -368,10 +376,8 @@ pub enum Bind {
 
 impl Bind {
     fn v4_only(&self) -> bool {
-        match self {
-            Bind::Device { v4_only, .. } => *v4_only,
-            Bind::Address(ip) => ip.is_ipv4(),
-        }
+        let Bind::Address(ip) = self;
+        ip.is_ipv4()
     }
 }
 
@@ -460,11 +466,19 @@ pub struct Torrents {
     session_dir: PathBuf,
     /// Each checking torrent's bytes checked and when they last moved: librqbit leaves a check
     /// it was asked to pause in Initializing, its count frozen, which isn't checking any more.
-    checks: std::sync::Mutex<std::collections::HashMap<String, (u64, std::time::Instant)>>,
+    /// Shared with the thread that reads every torrent (`watch`).
+    checks: Arc<Checks>,
+    /// Every torrent as last read, on a thread of its own (#693): what the window's thread
+    /// asks ([`Torrents::seen`] and the rest that never wait).
+    watch: watch::Watch,
     /// Torrents waiting for their check to end before they pause ([`Torrents::pause`]); a Start
     /// meanwhile takes the pause back ([`Torrents::resume`]).
     pause_after_check: Arc<std::sync::Mutex<std::collections::HashSet<String>>>,
 }
+
+pub(crate) type Handle = Arc<librqbit::ManagedTorrent>;
+
+type Checks = std::sync::Mutex<std::collections::HashMap<String, (u64, std::time::Instant)>>;
 
 /// A paused torrent whose checked bytes haven't moved for this long has stopped checking.
 const CHECK_HALTED_AFTER: Duration = Duration::from_secs(5);
@@ -485,36 +499,101 @@ fn id(hash: &str) -> Result<TorrentIdOrHash, TorrentError> {
     TorrentIdOrHash::parse(hash).map_err(|_| TorrentError::Unknown)
 }
 
+/// The DHT's first nodes on the internet (upstream issue 650): the public routers BitTorrent
+/// clients use. Any one that answers is enough; they are asked together, and the rest no more
+/// once one has answered. librqbit's own two alone left the DHT empty where neither answered (a
+/// name resolving to an old address, a network blocking one), and magnet links without trackers
+/// then found no peer. Later starts begin with the nodes saved in `dht.json`.
+pub const DHT_BOOTSTRAP: &[&str] = &[
+    "dht.libtorrent.org:25401",
+    "dht.transmissionbt.com:6881",
+    "router.bittorrent.com:6881",
+    "router.utorrent.com:6881",
+];
+
+/// The DHT's first nodes: the ones a test names, else [`DHT_BOOTSTRAP`].
+fn bootstrap_nodes(cfg: &Config) -> Vec<String> {
+    cfg.dht_bootstrap
+        .clone()
+        .unwrap_or_else(|| DHT_BOOTSTRAP.iter().map(|a| (*a).to_owned()).collect())
+}
+
+/// The file in the state folder that keeps the port picked when Torrent settings name none
+/// (upstream issue 650): the next session listens on it again, so peers that learned it, and a
+/// router's or firewall's rule for it, still reach MDM.
+const PORT_FILE: &str = "listen-port";
+
+fn saved_port(state_dir: &Path) -> Option<u16> {
+    std::fs::read_to_string(state_dir.join(PORT_FILE))
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
+        .filter(|p| *p != 0)
+}
+
+/// Where the session listens, in MDM's log (upstream issue 650): a listener on every address is
+/// one IPv6 socket that takes IPv4 too, which Windows' `netstat -p tcp` (IPv4 only) doesn't list.
+/// `saved_nodes`: the DHT started from the nodes the last session saved (`dht.json`).
+fn log_network(session: &Session, saved_nodes: bool) {
+    match session.listen_addr() {
+        Some(a) if a.ip().is_unspecified() && a.is_ipv6() => tracing::info!(
+            "torrents: listening for peers on TCP port {} (every address, IPv4 and IPv6: {a})",
+            a.port()
+        ),
+        Some(a) => tracing::info!("torrents: listening for peers on TCP {a}"),
+        None => tracing::info!("torrents: not listening for peers (Torrent settings or a proxy)"),
+    }
+    if let Some(dht) = session.get_dht() {
+        tracing::info!(
+            "torrents: DHT on UDP {}, starting from {}",
+            dht.listen_addr(),
+            if saved_nodes {
+                "the nodes the last session saved, and the bootstrap nodes"
+            } else {
+                "the bootstrap nodes"
+            }
+        );
+    }
+}
+
 impl Torrents {
     pub async fn start(cfg: Config) -> Result<Torrents, TorrentError> {
         std::fs::create_dir_all(&cfg.state_dir).map_err(engine)?;
         let proxied = cfg.proxy.is_some();
         let v4_only = cfg.bind.as_ref().is_some_and(Bind::v4_only);
-        let bind_ip = match &cfg.bind {
-            Some(Bind::Address(ip)) => Some(*ip),
-            _ => None,
-        };
+        let bind_ip = cfg.bind.as_ref().map(|Bind::Address(ip)| *ip);
         // Offline only without one named: a test's DHT on loopback is still on.
         let dht_on = cfg.dht && !proxied && (!cfg.offline || cfg.dht_bootstrap.is_some());
-        let dht = dht_on.then(|| librqbit::DhtSessionConfig {
-            bootstrap_addrs: cfg.dht_bootstrap.clone(),
-            persistence: Some(librqbit::dht::DhtPersistenceConfig {
-                dump_interval: None,
-                config_filename: Some(cfg.state_dir.join("dht.json")),
-            }),
-            ..Default::default()
-        });
+        // A closure: a session that can't take the saved port is built again (below).
+        let dht = || {
+            dht_on.then(|| librqbit::DhtSessionConfig {
+                bootstrap_addrs: Some(bootstrap_nodes(&cfg)),
+                persistence: Some(librqbit::dht::DhtPersistenceConfig {
+                    dump_interval: None,
+                    config_filename: Some(cfg.state_dir.join("dht.json")),
+                }),
+                ..Default::default()
+            })
+        };
         // Offline (tests): loopback only. A set address: that one (with the port asked for).
         // Bound to an address: on it.
         let ip = cfg.listen_ip.or(bind_ip).or(cfg
             .offline
             .then_some(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST)));
-        let listen = (cfg.listen && !proxied).then(|| ListenerOptions {
+        let listening = cfg.listen && !proxied;
+        // No port in Torrent settings: the one the last session listened on, when there was one.
+        let saved = if listening && cfg.port.is_none() {
+            saved_port(&cfg.state_dir)
+        } else {
+            None
+        };
+        let listen = |port: u16| ListenerOptions {
             listen_addr: match ip {
-                Some(ip) => (ip, cfg.port.unwrap_or(0)).into(),
+                Some(ip) => (ip, port).into(),
                 None => {
                     let mut any = ListenerOptions::default().listen_addr;
-                    any.set_port(cfg.port.unwrap_or(0));
+                    any.set_port(port);
                     any
                 }
             },
@@ -526,7 +605,7 @@ impl Torrents {
                 && ip.is_none_or(|i| !i.is_loopback()),
             ipv4_only: cfg.offline || v4_only || ip.is_some_and(|i| i.is_ipv4()),
             ..Default::default()
-        });
+        };
         // A list librqbit can't read would stop the session from starting: only a file there.
         let blocklist_url = cfg
             .blocklist
@@ -534,14 +613,14 @@ impl Torrents {
             .filter(|p| p.is_file())
             .and_then(|p| url::Url::from_file_path(p).ok())
             .map(|u| u.to_string());
-        let opts = SessionOptions {
-            dht,
-            listen,
+        let opts = |port: u16| SessionOptions {
+            dht: dht(),
+            listen: listening.then(|| listen(port)),
             connect: cfg.proxy.clone().map(|proxy| ConnectionOptions {
                 proxy_url: Some(proxy),
                 ..Default::default()
             }),
-            blocklist_url,
+            blocklist_url: blocklist_url.clone(),
             disable_trackers: cfg.offline,
             // Behind a proxy, UDP trackers are dropped (they would go around it): their client
             // sends from loopback, so no UDP can leave. A set listen address: that one (tests,
@@ -557,10 +636,7 @@ impl Torrents {
                 || cfg.bind.is_some(),
             ipv4_only: cfg.offline || v4_only,
             // Every socket of the session held to the chosen adapter (#35, #143).
-            bind_device_name: match &cfg.bind {
-                Some(Bind::Device { name, .. }) => Some(name.clone()),
-                _ => None,
-            },
+            bind_device_name: None,
             bind_ip,
             fastresume: true,
             persistence: Some(SessionPersistenceConfig::Json {
@@ -568,7 +644,7 @@ impl Torrents {
             }),
             // Major and minor only: the exact build would help someone aiming at one (#40).
             client_name_and_version: Some(format!(
-                "MisterDownloadManager/{}.{}",
+                "Grabbit/{}.{}",
                 env!("CARGO_PKG_VERSION_MAJOR"),
                 env!("CARGO_PKG_VERSION_MINOR")
             )),
@@ -576,22 +652,58 @@ impl Torrents {
             // certificates librqbit's own can't be built and the session wouldn't start; with
             // it, plain HTTP trackers work and HTTPS ones fail saying why (mdm_engine::tls).
             configure_http_client: Some(Arc::new(mdm_engine::tls::configure)),
+            // The peers others name (trackers, the DHT, other peers), only at addresses on the
+            // internet: one on this computer or the local network would let a torrent make MDM
+            // connect into the network it sits in, as a tracker there would (`trackers`). The
+            // local network's peers come from local peer discovery, which isn't asked. A test's
+            // session has its peers on loopback.
+            peer_filter: (!cfg.offline).then(|| {
+                Arc::new(|peer: SocketAddr| trackers::public(peer.ip())) as librqbit::PeerFilter
+            }),
             ..Default::default()
         };
         prepare_saved(&cfg.state_dir.join("session"), proxied);
+        let saved_nodes = dht_on && cfg.state_dir.join("dht.json").is_file();
+        let output = cfg.state_dir.join("unsorted");
+        let port = cfg.port.or(saved).unwrap_or(0);
+        let session = match Session::new_with_opts(output.clone(), opts(port)).await {
+            // The saved port taken (another program has it now): any other one. A port set in
+            // Torrent settings is kept, and its error says why.
+            Err(e) if saved.is_some() => {
+                tracing::warn!(
+                    "torrents: can't listen on port {port} again ({e:#}); taking another one"
+                );
+                Session::new_with_opts(output, opts(0)).await
+            }
+            started => started,
+        }
         // With its causes: "error starting listeners: error binding: …" says why (an adapter's
         // address gone, #143).
-        let session = Session::new_with_opts(cfg.state_dir.join("unsorted"), opts)
-            .await
-            .map_err(|e| engine(format!("{e:#}")))?;
+        .map_err(|e| engine(format!("{e:#}")))?;
+        log_network(&session, saved_nodes);
+        if let (true, None, Some(addr)) = (listening, cfg.port, session.listen_addr())
+            && saved != Some(addr.port())
+        {
+            let _ = std::fs::write(cfg.state_dir.join(PORT_FILE), addr.port().to_string());
+        }
         let api = Api::new(session.clone(), None);
+        let checks: Arc<Checks> = Default::default();
+        // The first reading here, so the torrents restored are known from the start.
+        let first = read_all(&session, &api, &checks, &HashSet::new());
+        let watch = {
+            let (session, api, checks) = (session.clone(), api.clone(), checks.clone());
+            watch::Watch::start(first, watch::EVERY, move |wanted| {
+                read_all(&session, &api, &checks, wanted)
+            })
+        };
         Ok(Torrents {
             session,
             api,
             proxied,
             adding: tokio::sync::Mutex::new(()),
             session_dir: cfg.state_dir.join("session"),
-            checks: Default::default(),
+            checks,
+            watch,
             pause_after_check: Default::default(),
         })
     }
@@ -712,6 +824,7 @@ impl Torrents {
                 "the session answered with another torrent ({got}) for {wanted}"
             )));
         }
+        self.refresh(&got);
         Ok(got)
     }
 
@@ -720,104 +833,93 @@ impl Torrents {
         id(hash).is_ok_and(|i| self.session.get(i).is_some())
     }
 
+    /// Its numbers now, from librqbit: this waits while the torrent's state is held (a pause
+    /// waits for the writes under way, #693), so never on the window's thread, which takes
+    /// [`Self::seen`].
     pub fn stats(&self, hash: &str) -> Result<Stats, TorrentError> {
         let h = self.session.get(id(hash)?).ok_or(TorrentError::Unknown)?;
-        let s = h.stats();
-        let live = s.live.as_ref();
-        let mib = |m: f64| m * 1024.0 * 1024.0;
-        let phase = match s.state {
-            // Paused while checking: librqbit stopped the check (it stays Initializing).
-            TorrentStatsState::Initializing { paused } => {
-                if paused && self.check_halted(hash, s.progress_bytes) {
-                    Phase::Paused
-                } else {
-                    Phase::Checking
-                }
-            }
-            TorrentStatsState::Paused => Phase::Paused,
-            TorrentStatsState::Error => Phase::Error,
-            TorrentStatsState::Live if s.finished => Phase::Finished,
-            TorrentStatsState::Live => Phase::Downloading,
-        };
-        if !matches!(s.state, TorrentStatsState::Initializing { .. }) {
-            self.checks.lock().unwrap().remove(hash);
-        }
-        Ok(Stats {
-            phase,
-            checked: (phase == Phase::Checking).then_some(s.progress_bytes),
-            done: s.progress_bytes,
-            total: s.total_bytes,
-            uploaded: s.uploaded_bytes,
-            fetched: live.map_or(0, |l| l.snapshot.fetched_bytes),
-            down_speed: live.map_or(0.0, |l| mib(l.download_speed.mbps)),
-            up_speed: live.map_or(0.0, |l| mib(l.upload_speed.mbps)),
-            file_done: s.file_progress.clone(),
-            peers_live: live.map_or(0, |l| l.snapshot.peer_stats.live as usize),
-            peers_seen: live.map_or(0, |l| l.snapshot.peer_stats.seen as usize),
-            error: s.error.clone(),
-        })
+        Ok(stats_of(&h, hash, &self.checks))
+    }
+
+    /// Read it again now, after a change made here: what the window takes ([`Self::seen`])
+    /// says so at once, not at the next reading. Waits as [`Self::stats`] does.
+    fn refresh(&self, hash: &str) {
+        let seen = id(hash)
+            .ok()
+            .and_then(|i| self.session.get(i))
+            .map(|h| read_one(&h, hash, &self.checks));
+        self.watch.put(hash, seen);
+    }
+
+    /// Its numbers as last read (None: not in the session). They are read every 200 ms on a
+    /// thread of their own, and at once after each change made here (#693). Never waits on
+    /// librqbit: the window's thread asks this.
+    pub fn seen(&self, hash: &str) -> Option<Stats> {
+        self.watch.get(hash).map(|s| s.stats.clone())
+    }
+
+    /// Its files (as in `Meta::files`), which are chosen (None: all), and the piece size, as
+    /// last read. Never waits, as [`Self::seen`].
+    pub fn seen_files(&self, hash: &str) -> Option<(Vec<FileEntry>, Option<Vec<usize>>, u32)> {
+        let seen = self.watch.get(hash)?;
+        let (files, piece) = files_of(seen.handle.as_ref()?)?;
+        Some((files, seen.chosen.clone(), piece))
+    }
+
+    /// Its peers, trackers and pieces as last read; asking keeps them read for 2 s more (the
+    /// first time, they come with the next reading: empty until then). Never waits, as
+    /// [`Self::seen`].
+    pub fn seen_swarm(&self, hash: &str) -> Swarm {
+        self.watch.want(hash);
+        self.watch
+            .get(hash)
+            .and_then(|s| s.swarm.clone())
+            .unwrap_or_default()
+    }
+
+    /// Its librqbit handle as last read: for what doesn't wait on its state (its limits, its
+    /// piece order, its metadata). librqbit's own list waits while an add opens the files.
+    fn handle(&self, hash: &str) -> Option<Handle> {
+        self.watch.get(hash)?.handle.clone()
     }
 
     /// The peers it is talking to.
     pub fn peers(&self, hash: &str) -> Vec<Peer> {
-        let Ok(i) = id(hash) else { return Vec::new() };
-        let Ok(snap) = self.api.api_peer_stats(i, Default::default()) else {
-            return Vec::new();
-        };
-        let mut out: Vec<Peer> = snap
-            .peers
-            .into_iter()
-            .map(|(addr, p)| Peer {
-                addr,
-                client: p.client_name,
-                fetched: p.counters.fetched_bytes,
-                uploaded: p.counters.uploaded_bytes,
-                kind: p.conn_kind.map(|k| format!("{k:?}").to_lowercase()),
-            })
-            .collect();
-        out.sort_by(|a, b| b.fetched.cmp(&a.fetched).then(a.addr.cmp(&b.addr)));
-        out
+        match id(hash) {
+            Ok(i) => peers_of(&self.api, i),
+            Err(_) => Vec::new(),
+        }
     }
 
     /// Its files (as in `Meta::files`), which are chosen (None: all), and the piece size.
     pub fn files(&self, hash: &str) -> Option<(Vec<FileEntry>, Option<Vec<usize>>, u32)> {
         let h = self.session.get(id(hash).ok()?)?;
-        let (files, piece) = h
-            .with_metadata(|m| {
-                let files = m
-                    .info
-                    .iter_file_details()
-                    .map(|f| FileEntry {
-                        path: f.filename.to_pathbuf(),
-                        size: f.len,
-                        padding: f.attrs().padding,
-                    })
-                    .collect::<Vec<_>>();
-                (files, m.info.lengths().default_piece_length())
-            })
-            .ok()?;
+        let (files, piece) = files_of(&h)?;
         Some((files, h.only_files(), piece))
     }
 
     pub fn trackers(&self, hash: &str) -> Vec<String> {
-        let Some(h) = id(hash).ok().and_then(|i| self.session.get(i)) else {
-            return Vec::new();
-        };
-        let mut t: Vec<String> = h.shared().trackers.iter().map(|u| u.to_string()).collect();
-        t.sort();
-        t
+        match id(hash).ok().and_then(|i| self.session.get(i)) {
+            Some(h) => trackers_of(&h),
+            None => Vec::new(),
+        }
     }
 
     /// Which pieces are there (empty while it isn't checked yet).
     pub fn pieces(&self, hash: &str) -> Vec<bool> {
-        let Ok(i) = id(hash) else { return Vec::new() };
-        match self.api.api_dump_haves(i) {
-            Ok((bits, len)) => bits.iter().by_vals().take(len as usize).collect(),
+        match id(hash) {
+            Ok(i) => pieces_of(&self.api, i),
             Err(_) => Vec::new(),
         }
     }
 
     pub async fn pause(&self, hash: &str) -> Result<(), TorrentError> {
+        let res = self.pause_now(hash).await;
+        self.refresh(hash);
+        res
+    }
+
+    async fn pause_now(&self, hash: &str) -> Result<(), TorrentError> {
         let h = self.session.get(id(hash)?).ok_or(TorrentError::Unknown)?;
         match h.stats().state {
             TorrentStatsState::Paused => Ok(()),
@@ -843,22 +945,16 @@ impl Torrents {
         }
     }
 
-    /// Whether a paused torrent's check has stopped: its bytes checked haven't moved for
-    /// [`CHECK_HALTED_AFTER`].
-    fn check_halted(&self, hash: &str, checked: u64) -> bool {
-        let now = std::time::Instant::now();
-        let mut checks = self.checks.lock().unwrap();
-        let seen = checks.entry(hash.to_owned()).or_insert((checked, now));
-        if seen.0 != checked {
-            *seen = (checked, now);
-        }
-        now.duration_since(seen.1) >= CHECK_HALTED_AFTER
-    }
-
     /// Start it again. One still checking its files (added paused, or restored at start) is
     /// waited for: it is Paused only once checked, and unpausing it before did nothing, so it
     /// stayed paused (seen on Linux, where the check took longer than the call).
     pub async fn resume(&self, hash: &str) -> Result<(), TorrentError> {
+        let res = self.resume_now(hash).await;
+        self.refresh(hash);
+        res
+    }
+
+    async fn resume_now(&self, hash: &str) -> Result<(), TorrentError> {
         let h = self.session.get(id(hash)?).ok_or(TorrentError::Unknown)?;
         // A pause waiting for the check to end is taken back: the last click wins.
         self.pause_after_check.lock().unwrap().remove(hash);
@@ -866,7 +962,7 @@ impl Torrents {
         // A check librqbit stopped (paused while checking) never ends by itself: starting the
         // torrent starts the check again. One still checking is waited for, as above.
         let halted = matches!(st.state, TorrentStatsState::Initializing { paused: true })
-            && self.check_halted(hash, st.progress_bytes);
+            && check_halted(&self.checks, hash, st.progress_bytes);
         if matches!(st.state, TorrentStatsState::Initializing { .. }) && !halted {
             h.wait_until_initialized().await.map_err(engine)?;
         }
@@ -876,16 +972,15 @@ impl Torrents {
         self.session.unpause(&h).await.map_err(engine)
     }
 
-    /// The order its pieces are downloaded in (#39).
+    /// The order its pieces are downloaded in (#39). Never waits, as [`Self::seen`].
     pub fn order(&self, hash: &str) -> Option<PieceOrder> {
-        let h = self.session.get(id(hash).ok()?)?;
-        Some(h.piece_order())
+        Some(self.handle(hash)?.piece_order())
     }
 
     /// Change the order its pieces are downloaded in, running or not: the next piece each peer
-    /// is asked for follows it (#39).
+    /// is asked for follows it (#39). Never waits, as [`Self::seen`].
     pub fn set_order(&self, hash: &str, order: PieceOrder) -> Result<(), TorrentError> {
-        let h = self.session.get(id(hash)?).ok_or(TorrentError::Unknown)?;
+        let h = self.handle(hash).ok_or(TorrentError::Unknown)?;
         h.set_piece_order(order);
         Ok(())
     }
@@ -893,10 +988,13 @@ impl Torrents {
     /// Change which files are downloaded.
     pub async fn choose(&self, hash: &str, files: &HashSet<usize>) -> Result<(), TorrentError> {
         let h = self.session.get(id(hash)?).ok_or(TorrentError::Unknown)?;
-        self.session
+        let res = self
+            .session
             .update_only_files(&h, files)
             .await
-            .map_err(engine)
+            .map_err(engine);
+        self.refresh(hash);
+        res
     }
 
     /// Take it out of the session and add it again from `torrent` (its .torrent, perhaps with
@@ -906,6 +1004,17 @@ impl Torrents {
     /// are kept (librqbit's saved piece map, which it checks on a sample) and only the .torrent
     /// changes (Add trackers).
     pub async fn readd(
+        &self,
+        hash: &str,
+        torrent: &[u8],
+        recheck: bool,
+    ) -> Result<(), TorrentError> {
+        let res = self.readd_now(hash, torrent, recheck).await;
+        self.refresh(hash);
+        res
+    }
+
+    async fn readd_now(
         &self,
         hash: &str,
         torrent: &[u8],
@@ -964,16 +1073,23 @@ impl Torrents {
         if !matches!(h.stats().state, TorrentStatsState::Live) {
             return Ok(());
         }
-        self.session.pause(&h).await.map_err(engine)?;
-        self.session.unpause(&h).await.map_err(engine)
+        let res = match self.session.pause(&h).await {
+            Ok(()) => self.session.unpause(&h).await,
+            Err(e) => Err(e),
+        };
+        self.refresh(hash);
+        res.map_err(engine)
     }
 
     /// Take it out of the session; the files stay unless `delete_files`.
     pub async fn remove(&self, hash: &str, delete_files: bool) -> Result<(), TorrentError> {
-        self.session
+        let res = self
+            .session
             .delete(id(hash)?, delete_files)
             .await
-            .map_err(engine)
+            .map_err(engine);
+        self.refresh(hash);
+        res
     }
 
     /// Every torrent the session holds (to forget ones the app no longer lists).
@@ -1015,13 +1131,14 @@ impl Torrents {
 
     /// One torrent's own limits, bytes/s (None: unlimited), on top of the session's. They apply
     /// at once, running or paused, and last while the session runs (librqbit doesn't save them).
+    /// Never waits, as [`Self::seen`].
     pub fn set_torrent_limits(
         &self,
         hash: &str,
         down: Option<u64>,
         up: Option<u64>,
     ) -> Result<(), TorrentError> {
-        let h = self.session.get(id(hash)?).ok_or(TorrentError::Unknown)?;
+        let h = self.handle(hash).ok_or(TorrentError::Unknown)?;
         let want = librqbit::limits::LimitsConfig {
             download_bps: rate(down),
             upload_bps: rate(up),
@@ -1034,9 +1151,9 @@ impl Torrents {
         Ok(())
     }
 
-    /// One torrent's own limits (down, up), as `set_torrent_limits` stored them.
+    /// One torrent's own limits (down, up), as `set_torrent_limits` stored them. Never waits.
     pub fn torrent_limits(&self, hash: &str) -> Option<(Option<u64>, Option<u64>)> {
-        let h = self.session.get(id(hash).ok()?)?;
+        let h = self.handle(hash)?;
         let c = h.ratelimits();
         let get = |v: Option<NonZeroU32>| v.map(|b| u64::from(b.get()));
         Some((get(c.download_bps), get(c.upload_bps)))
@@ -1048,8 +1165,148 @@ impl Torrents {
     }
 
     pub async fn stop(&self) {
+        self.watch.close();
         self.session.stop().await;
     }
+}
+
+/// Whether a paused torrent's check has stopped: its bytes checked haven't moved for
+/// [`CHECK_HALTED_AFTER`].
+fn check_halted(checks: &Checks, hash: &str, checked: u64) -> bool {
+    let now = std::time::Instant::now();
+    let mut checks = checks.lock().unwrap();
+    let seen = checks.entry(hash.to_owned()).or_insert((checked, now));
+    if seen.0 != checked {
+        *seen = (checked, now);
+    }
+    now.duration_since(seen.1) >= CHECK_HALTED_AFTER
+}
+
+/// A torrent's numbers now: waits while librqbit holds its state (#693).
+fn stats_of(h: &librqbit::ManagedTorrent, hash: &str, checks: &Checks) -> Stats {
+    let s = h.stats();
+    let live = s.live.as_ref();
+    let mib = |m: f64| m * 1024.0 * 1024.0;
+    let phase = match s.state {
+        // Paused while checking: librqbit stopped the check (it stays Initializing).
+        TorrentStatsState::Initializing { paused } => {
+            if paused && check_halted(checks, hash, s.progress_bytes) {
+                Phase::Paused
+            } else {
+                Phase::Checking
+            }
+        }
+        TorrentStatsState::Paused => Phase::Paused,
+        TorrentStatsState::Error => Phase::Error,
+        TorrentStatsState::Live if s.finished => Phase::Finished,
+        TorrentStatsState::Live => Phase::Downloading,
+    };
+    if !matches!(s.state, TorrentStatsState::Initializing { .. }) {
+        checks.lock().unwrap().remove(hash);
+    }
+    Stats {
+        phase,
+        checked: (phase == Phase::Checking).then_some(s.progress_bytes),
+        done: s.progress_bytes,
+        total: s.total_bytes,
+        uploaded: s.uploaded_bytes,
+        fetched: live.map_or(0, |l| l.snapshot.fetched_bytes),
+        down_speed: live.map_or(0.0, |l| mib(l.download_speed.mbps)),
+        up_speed: live.map_or(0.0, |l| mib(l.upload_speed.mbps)),
+        file_done: s.file_progress.clone(),
+        peers_live: live.map_or(0, |l| l.snapshot.peer_stats.live as usize),
+        peers_seen: live.map_or(0, |l| l.snapshot.peer_stats.seen as usize),
+        error: s.error.clone(),
+    }
+}
+
+/// A torrent's files and piece size, from its metadata (which doesn't wait on its state).
+fn files_of(h: &librqbit::ManagedTorrent) -> Option<(Vec<FileEntry>, u32)> {
+    h.with_metadata(|m| {
+        let files = m
+            .info
+            .iter_file_details()
+            .map(|f| FileEntry {
+                path: f.filename.to_pathbuf(),
+                size: f.len,
+                padding: f.attrs().padding,
+            })
+            .collect::<Vec<_>>();
+        (files, m.info.lengths().default_piece_length())
+    })
+    .ok()
+}
+
+fn trackers_of(h: &librqbit::ManagedTorrent) -> Vec<String> {
+    let mut t: Vec<String> = h.shared().trackers.iter().map(|u| u.to_string()).collect();
+    t.sort();
+    t
+}
+
+fn peers_of(api: &Api, i: TorrentIdOrHash) -> Vec<Peer> {
+    let Ok(snap) = api.api_peer_stats(i, Default::default()) else {
+        return Vec::new();
+    };
+    let mut out: Vec<Peer> = snap
+        .peers
+        .into_iter()
+        .map(|(addr, p)| Peer {
+            addr,
+            client: p.client_name,
+            fetched: p.counters.fetched_bytes,
+            uploaded: p.counters.uploaded_bytes,
+            kind: p.conn_kind.map(|k| format!("{k:?}").to_lowercase()),
+        })
+        .collect();
+    out.sort_by(|a, b| b.fetched.cmp(&a.fetched).then(a.addr.cmp(&b.addr)));
+    out
+}
+
+fn pieces_of(api: &Api, i: TorrentIdOrHash) -> Vec<bool> {
+    match api.api_dump_haves(i) {
+        Ok((bits, len)) => bits.iter().by_vals().take(len as usize).collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// One torrent read now, for the window's [`Torrents::seen`] (its details only when wanted, by
+/// [`read_all`]). Waits as [`stats_of`] does.
+fn read_one(h: &Handle, hash: &str, checks: &Checks) -> watch::Seen {
+    watch::Seen {
+        stats: stats_of(h, hash, checks),
+        chosen: h.only_files(),
+        handle: Some(h.clone()),
+        swarm: None,
+    }
+}
+
+/// Every torrent of the session read now, by info hash; with its peers, trackers and pieces
+/// when `wanted`. On the watch's thread (and once as the session starts): it waits as
+/// [`stats_of`] does.
+fn read_all(
+    session: &Session,
+    api: &Api,
+    checks: &Checks,
+    wanted: &HashSet<String>,
+) -> std::collections::HashMap<String, Arc<watch::Seen>> {
+    let all: Vec<(String, Handle)> = session.with_torrents(|all| {
+        all.map(|(_, h)| (h.info_hash().as_string(), h.clone()))
+            .collect()
+    });
+    all.into_iter()
+        .map(|(hash, h)| {
+            let mut seen = read_one(&h, &hash, checks);
+            if wanted.contains(&hash) {
+                let i = TorrentIdOrHash::Hash(h.info_hash());
+                seen.swarm = Some(Swarm {
+                    peers: peers_of(api, i),
+                    trackers: trackers_of(&h),
+                    pieces: pieces_of(api, i),
+                });
+            }
+            (hash, Arc::new(seen))
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -1081,8 +1338,6 @@ mod tests {
             Recorder { addr, from }
         }
 
-        // Its tests bind 127.0.0.2, which macOS hasn't.
-        #[cfg(not(target_os = "macos"))]
         async fn tcp(reply: &'static [u8]) -> Recorder {
             let l = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
                 .await
@@ -1110,9 +1365,8 @@ mod tests {
 
     /// #143: a session bound to an address (Windows' way of holding it to a network adapter)
     /// sends everything from that address: its listener, outgoing peer connections, the DHT, UDP
-    /// and HTTP trackers. 127.0.0.2 stands for the adapter's address: Windows and Linux route
-    /// all of 127.0.0.0/8 to loopback (macOS only 127.0.0.1, so not there).
-    #[cfg(not(target_os = "macos"))]
+    /// and HTTP trackers. 127.0.0.2 stands for the adapter's address: Windows routes all of
+    /// 127.0.0.0/8 to loopback.
     #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
     async fn a_bound_session_sends_only_from_its_address() {
         let bound: std::net::IpAddr = Ipv4Addr::new(127, 0, 0, 2).into();
@@ -1222,7 +1476,6 @@ mod tests {
 
     /// #143: through a SOCKS5 proxy (Torrent settings), the proxy is reached from the bound
     /// address too, for peers and HTTP trackers alike.
-    #[cfg(not(target_os = "macos"))]
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn a_bound_session_reaches_its_proxy_from_its_address() {
         let bound: std::net::IpAddr = Ipv4Addr::new(127, 0, 0, 2).into();
@@ -1310,6 +1563,77 @@ mod tests {
         assert!(Source::magnet("magnet").is_none());
     }
 
+    /// Upstream issue 650: with no port in Torrent settings, the one picked is kept: the next
+    /// session listens on it again. When another program has it by then, another one is taken,
+    /// and kept from then on. A port set in Torrent settings isn't saved.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn the_picked_port_is_kept() {
+        let tmp = tempfile::tempdir().unwrap();
+        // On loopback: a listener on every address makes Windows Firewall ask about each new
+        // test build.
+        let cfg = |dir: &str| Config {
+            upnp: false,
+            dht: false,
+            lsd: false,
+            listen_ip: Some(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST)),
+            ..Config::new(tmp.path().join(dir))
+        };
+        let port = |t: &Torrents| t.listen_addr().expect("listens").port();
+        let saved = || saved_port(&tmp.path().join("auto"));
+
+        let t = Torrents::start(cfg("auto")).await.unwrap();
+        let first = port(&t);
+        assert_eq!(saved(), Some(first));
+        t.stop().await;
+        let t = Torrents::start(cfg("auto")).await.unwrap();
+        assert_eq!(port(&t), first, "the same port again");
+        t.stop().await;
+
+        let other = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, first)).unwrap();
+        let t = Torrents::start(cfg("auto")).await.unwrap();
+        let second = port(&t);
+        assert_ne!(second, first, "another program has it");
+        assert_eq!(saved(), Some(second));
+        t.stop().await;
+        drop(other);
+
+        let free = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        let t = Torrents::start(Config {
+            port: Some(free),
+            ..cfg("fixed")
+        })
+        .await
+        .unwrap();
+        assert_eq!(port(&t), free);
+        assert_eq!(saved_port(&tmp.path().join("fixed")), None);
+        t.stop().await;
+    }
+
+    /// Upstream issue 650: the DHT starts from several public routers, not librqbit's two
+    /// alone; a test's own nodes replace them.
+    #[test]
+    fn the_dht_has_fallback_routers() {
+        let cfg = Config::new(PathBuf::from("state"));
+        let nodes = bootstrap_nodes(&cfg);
+        for router in [
+            "dht.libtorrent.org:25401",
+            "dht.transmissionbt.com:6881",
+            "router.bittorrent.com:6881",
+            "router.utorrent.com:6881",
+        ] {
+            assert!(nodes.iter().any(|n| n == router), "{router} in {nodes:?}");
+        }
+        let own = Config {
+            dht_bootstrap: Some(vec!["127.0.0.1:6881".into()]),
+            ..cfg
+        };
+        assert_eq!(bootstrap_nodes(&own), ["127.0.0.1:6881"]);
+    }
+
     /// A torrent of `dir`'s files, made by librqbit.
     async fn make_torrent(dir: &Path) -> Vec<u8> {
         let spawner = librqbit::spawn_utils::BlockingSpawner::new(1);
@@ -1355,11 +1679,7 @@ mod tests {
             .await
             .unwrap();
         let out = tmp.path().join("out");
-        let bad = if cfg!(windows) {
-            ["Q:mdm-test.bin", "x.bin:hidden", "NUL.txt"].as_slice()
-        } else {
-            ["tab\there.bin"].as_slice()
-        };
+        let bad = ["Q:mdm-test.bin", "x.bin:hidden", "NUL.txt"];
         for name in bad {
             let bytes = torrent_naming(name);
             let listed = t
@@ -1412,11 +1732,7 @@ mod tests {
         let entry = saved.values().next().unwrap().clone();
         assert_eq!(entry["info_hash"], good.as_str(), "librqbit's format");
         // Names librqbit itself would write (inside `out`), so the check is what refuses them.
-        let bad = torrent_naming(if cfg!(windows) {
-            "x.bin:hidden"
-        } else {
-            "tab\there.bin"
-        });
+        let bad = torrent_naming("x.bin:hidden");
         let bad_hash = librqbit::torrent_from_bytes(&bad)
             .unwrap()
             .info_hash
@@ -1789,6 +2105,77 @@ mod tests {
         session.stop().await;
     }
 
+    /// #693: what the window reads (`seen` and the rest) follows the session without asking
+    /// librqbit: known from the add on, moving by itself, and changed at once by a pause or a
+    /// removal made here.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn the_window_s_numbers_follow_the_session() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("seed");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("a.bin"), vec![7u8; 96 * 1024]).unwrap();
+        std::fs::write(src.join("b.bin"), vec![9u8; 32 * 1024]).unwrap();
+        let torrent = make_torrent(&src).await;
+        let session = Torrents::start(offline(&tmp.path().join("session")))
+            .await
+            .unwrap();
+        let hash = session
+            .add(&torrent, &src, None, Vec::new(), false)
+            .await
+            .unwrap();
+        assert!(session.seen(&hash).is_some(), "known as soon as added");
+        assert!(
+            session.seen(&hash.to_ascii_uppercase()).is_some(),
+            "by its hash in either case"
+        );
+        assert!(
+            session
+                .set_torrent_limits(&hash, Some(1 << 20), None)
+                .is_ok(),
+            "its limits can be set at once"
+        );
+        assert_eq!(session.torrent_limits(&hash), Some((Some(1 << 20), None)));
+        assert_eq!(session.seen_files(&hash), session.files(&hash));
+        // Checked and finished by the watch's own readings.
+        let deadline = std::time::Instant::now() + Duration::from_secs(20);
+        while session.seen(&hash).unwrap().phase != Phase::Finished {
+            assert!(std::time::Instant::now() < deadline, "never seen finished");
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+        let st = session.seen(&hash).unwrap();
+        assert_eq!((st.done, st.total), (128 * 1024, 128 * 1024));
+        // Per file, in the torrent's order (the folder's listing order, which differs by system).
+        let sizes: Vec<u64> = session
+            .seen_files(&hash)
+            .unwrap()
+            .0
+            .iter()
+            .map(|f| f.size)
+            .collect();
+        assert_eq!(st.file_done, sizes);
+        // Its details come with the next reading once asked for.
+        session.seen_swarm(&hash);
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let swarm = loop {
+            let s = session.seen_swarm(&hash);
+            if !s.pieces.is_empty() {
+                break s;
+            }
+            assert!(std::time::Instant::now() < deadline, "details never read");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        };
+        assert_eq!(swarm.pieces, session.pieces(&hash));
+        assert_eq!(swarm.trackers, session.trackers(&hash));
+        // A pause and a removal show at once, not at the next reading.
+        session.pause(&hash).await.unwrap();
+        assert_eq!(session.seen(&hash).unwrap().phase, Phase::Paused);
+        session.remove(&hash, false).await.unwrap();
+        assert!(session.seen(&hash).is_none());
+        tokio::time::sleep(watch::EVERY * 3).await;
+        assert!(session.seen(&hash).is_none(), "still gone after readings");
+        session.stop().await;
+    }
+
     /// #39: a torrent's piece order is librqbit's in-order one until set; set, it is kept when
     /// the torrent is added again (Add trackers, Recheck).
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -2075,6 +2462,15 @@ mod tests {
     /// as the nodes it knows (their ids next to the target, so they get asked), and a
     /// `get_peers` with `peer` (BEP 5, enough for librqbit).
     async fn dht_node_with(peer: SocketAddr, gone: Vec<SocketAddr>) -> SocketAddr {
+        dht_node_counting(peer, gone, Default::default()).await
+    }
+
+    /// [`dht_node_with`], counting in `named` the times it answered with `peer`.
+    async fn dht_node_counting(
+        peer: SocketAddr,
+        gone: Vec<SocketAddr>,
+        named: Arc<AtomicUsize>,
+    ) -> SocketAddr {
         let sock = tokio::net::UdpSocket::bind((Ipv4Addr::LOCALHOST, 0))
             .await
             .unwrap();
@@ -2128,6 +2524,7 @@ mod tests {
                     r.extend(b"5:token2:tk6:valuesl6:");
                     r.extend(compact(peer));
                     r.extend(b"e");
+                    named.fetch_add(1, Ordering::Relaxed);
                 }
                 r.extend(format!("e1:t{len}:").as_bytes());
                 r.extend(&rest[colon + 1..colon + 1 + len]);
@@ -2208,6 +2605,74 @@ mod tests {
         eprintln!("#92: the file list through the DHT in {took:?}");
         seeder.stop().await;
         leecher.stop().await;
+    }
+
+    /// A peer on this computer that the DHT names is left alone: like a tracker there
+    /// (`trackers`), it would let a torrent make MDM connect into the network it sits in. A
+    /// test's session (`offline`) is given the same peer by the same node, and asks it.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn a_peer_on_this_computer_that_the_dht_names_is_not_asked() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("seed").join("set");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("a.bin"), vec![7u8; 100_000]).unwrap();
+        let torrent = make_torrent(&src).await;
+        let seeder = Torrents::start(offline(&tmp.path().join("s1")))
+            .await
+            .unwrap();
+        let hash = seeder
+            .add(&torrent, &src, None, Vec::new(), false)
+            .await
+            .unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(20);
+        while seeder.stats(&hash).unwrap().phase != Phase::Finished {
+            assert!(std::time::Instant::now() < deadline, "seeder never checked");
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+        let named = Arc::new(AtomicUsize::new(0));
+        let node = dht_node_counting(
+            seeder.listen_addr().expect("seeder listens"),
+            Vec::new(),
+            named.clone(),
+        )
+        .await;
+        // A session that listens and asks on this computer only, as a test's or as the app's.
+        let session = |offline: bool, dir: &str| {
+            Torrents::start(Config {
+                offline,
+                listen_ip: Some(Ipv4Addr::LOCALHOST.into()),
+                upnp: false,
+                lsd: false,
+                dht_bootstrap: Some(vec![node.to_string()]),
+                ..Config::new(tmp.path().join(dir))
+            })
+        };
+        let magnet = Source::Magnet(format!("magnet:?xt=urn:btih:{hash}"));
+
+        let test = session(true, "s2").await.unwrap();
+        let meta = test
+            .metadata(&magnet, Duration::from_secs(20), None)
+            .await
+            .expect("a test's session asks the peer the DHT names");
+        assert_eq!(meta.info_hash, hash);
+        test.stop().await;
+
+        let before = named.load(Ordering::Relaxed);
+        let app = session(false, "s3").await.unwrap();
+        let lookup = Lookup::default();
+        // A test's session has the file list in well under a second.
+        let got = app
+            .metadata(&magnet, Duration::from_secs(3), Some(&lookup))
+            .await;
+        let s = lookup.status();
+        assert!(
+            named.load(Ordering::Relaxed) > before,
+            "the DHT named the peer to the app's session: {s:?}"
+        );
+        assert!(got.is_err(), "the peer was asked for the file list: {s:?}");
+        assert_eq!((s.from_dht, s.peers), (0, 0), "{s:?}");
+        seeder.stop().await;
+        app.stop().await;
     }
 
     #[tokio::test]

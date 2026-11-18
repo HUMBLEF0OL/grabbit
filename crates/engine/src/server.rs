@@ -7,6 +7,15 @@
 //! one more (TLS 1.3). The time a connection took to open, its name lookup left out (the
 //! resolver reports it, `dns_spent`), divided by those round trips, is the round trip's
 //! estimate; the quickest of the download's connections is kept.
+//!
+//! All of it is told once the first answer came (upstream issue 933): the answer says which
+//! address sent it and whether over https. Before then a connection's time alone would be half a
+//! record, with no address, and twice the real round trip over https; a server slow to answer
+//! kept it so for seconds, and a download stopped meanwhile kept it for good.
+//!
+//! The answer is told whichever request it came through (upstream issue 954): the first
+//! request's, and when no first request came before the connections, as with a resumed
+//! download, the first connection's.
 
 use std::future::Future;
 use std::net::IpAddr;
@@ -41,11 +50,16 @@ struct Seen {
     /// The quickest connection's opening, and whether the answer came over https.
     quickest: Option<Duration>,
     tls: bool,
+    /// An answer came: `server` and `tls` are its.
+    answered: bool,
 }
 
 impl ServerSeen {
     pub fn get(&self) -> Option<Server> {
         let s = self.inner.lock().unwrap();
+        if !s.answered {
+            return None;
+        }
         let mut server = s.server.clone();
         server.rtt = s.quickest.map(|d| d / if s.tls { 2 } else { 1 });
         (server.ip.is_some() || server.rtt.is_some()).then_some(server)
@@ -62,15 +76,47 @@ impl ServerSeen {
         }
     }
 
-    /// An answer: who sent it, over what, and the CDN its headers name.
+    /// The first request's answer: who sent it, over what, and the CDN its headers name.
     pub(crate) fn answered(&self, resp: &reqwest::Response) {
+        let (ip, tls, cdn) = answer_of(resp);
+        self.inner.lock().unwrap().answer(ip, tls, cdn);
+    }
+
+    /// A connection's answer (`download::request`): told when none was yet, as with a resumed
+    /// download, whose connections ask first (upstream issue 954). Once one is, it stands.
+    pub(crate) fn connection_answered(&self, resp: &reqwest::Response) {
+        let (ip, tls, cdn) = answer_of(resp);
+        self.first_answer(ip, tls, cdn);
+    }
+
+    /// An answer told only when none was yet.
+    fn first_answer(&self, ip: Option<IpAddr>, tls: bool, cdn: Option<&'static str>) {
         let mut s = self.inner.lock().unwrap();
-        if let Some(a) = resp.remote_addr() {
-            s.server.ip = Some(a.ip());
+        if !s.answered {
+            s.answer(ip, tls, cdn);
         }
-        s.tls = resp.url().scheme() == "https";
-        if let Some(cdn) = cdn_of(resp.headers()) {
-            s.server.cdn = Some(cdn);
+    }
+}
+
+/// What an answer says of its server: the address that sent it, whether over https, and the CDN
+/// its headers name.
+fn answer_of(resp: &reqwest::Response) -> (Option<IpAddr>, bool, Option<&'static str>) {
+    (
+        resp.remote_addr().map(|a| a.ip()),
+        resp.url().scheme() == "https",
+        cdn_of(resp.headers()),
+    )
+}
+
+impl Seen {
+    fn answer(&mut self, ip: Option<IpAddr>, tls: bool, cdn: Option<&'static str>) {
+        if ip.is_some() {
+            self.server.ip = ip;
+        }
+        self.tls = tls;
+        self.answered = true;
+        if cdn.is_some() {
+            self.server.cdn = cdn;
         }
     }
 }
@@ -194,10 +240,30 @@ mod tests {
         let seen = ServerSeen::default();
         assert_eq!(seen.get(), None);
         seen.connected_in(Duration::from_millis(80));
+        // Upstream issue 933: a connection open, no answer yet: nothing told (not a round trip
+        // without its address, perhaps twice too long).
+        assert_eq!(seen.get(), None);
+        seen.inner.lock().unwrap().answered = true;
         seen.connected_in(Duration::from_millis(60));
         seen.connected_in(Duration::from_millis(90));
         assert_eq!(seen.get().unwrap().rtt, Some(Duration::from_millis(60)));
         seen.inner.lock().unwrap().tls = true;
         assert_eq!(seen.get().unwrap().rtt, Some(Duration::from_millis(30)));
+    }
+
+    /// Upstream issue 954: a connection's answer is told when none was yet (a resumed
+    /// download's), and leaves one already told as it is.
+    #[test]
+    fn a_connections_answer_is_told_when_none_was() {
+        let seen = ServerSeen::default();
+        seen.connected_in(Duration::from_millis(80));
+        let first = IpAddr::from([192, 0, 2, 1]);
+        seen.first_answer(Some(first), true, Some("Cloudflare"));
+        let told = seen.get().unwrap();
+        assert_eq!(told.ip, Some(first));
+        assert_eq!(told.rtt, Some(Duration::from_millis(40)));
+        assert_eq!(told.cdn, Some("Cloudflare"));
+        seen.first_answer(Some(IpAddr::from([192, 0, 2, 2])), false, None);
+        assert_eq!(seen.get(), Some(told));
     }
 }

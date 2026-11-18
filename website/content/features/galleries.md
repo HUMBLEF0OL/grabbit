@@ -2,9 +2,9 @@
 name: Image galleries
 title: Download image galleries with gallery-dl
 headline: A whole gallery at once. Only new pictures next time.
-line: Paste a gallery's address and MDM saves all its pictures into a folder of their own.
-lede: MDM downloads the pictures of a gallery, a Flickr album, a DeviantArt gallery, a Wikimedia Commons category and many more, with gallery-dl, a free program that reads several hundred sites.
-description: Download whole image galleries from Flickr, DeviantArt, Imgur, Wikimedia Commons and more with Mister Download Manager and gallery-dl.
+line: Paste a gallery's address and Grabbit saves all its pictures into a folder of their own.
+lede: Grabbit downloads the pictures of a gallery, a Flickr album, a DeviantArt gallery, a Wikimedia Commons category and many more, with gallery-dl, a free program that reads several hundred sites.
+description: Download whole image galleries from Flickr, DeviantArt, Imgur, Wikimedia Commons and more with Grabbit and gallery-dl.
 group: downloading
 order: 40
 since: 0.5
@@ -16,7 +16,7 @@ help: galleries.md
 
 ## Paste the address, get the pictures
 
-Click **Add URL** and paste a gallery's address. Instead of saving the page as a file, MDM opens
+Click **Add URL** and paste a gallery's address. Instead of saving the page as a file, Grabbit opens
 **Download a gallery**. When its line reads **gallery-dl can download this gallery's files**,
 check **Save to** and click **Download Now**, or **Later** to add it without starting.
 
@@ -28,7 +28,7 @@ log says how many were saved.
 
 ## Next time, only what is new
 
-Start a finished gallery again with **Resume** and MDM fetches only the pictures that aren't in
+Start a finished gallery again with **Resume** and Grabbit fetches only the pictures that aren't in
 its folder yet. The ones you already have are skipped, so following an artist or an album costs
 nothing but the new pictures.
 
@@ -41,13 +41,11 @@ own address, one ending in `.jpg` or `.png`, still downloads as a single file.
 
 ## A helper you can check
 
-gallery-dl is an optional helper, like yt-dlp for [videos](/features/video.html). On Windows and
-Linux, MDM installs it the first time you need it, from its releases on Codeberg, and only when
-the release is signed by its author's key. On macOS, install it with Homebrew or pip and choose
-it in **Helpers...**, which also takes your own copy on any system, such as the gallery-dl your
-Linux distribution ships (version 1.20 or later).
+gallery-dl is an optional helper, like yt-dlp for [videos](/features/video.html). Grabbit installs it
+the first time you need it, from its releases on Codeberg, and only when the release is signed
+by its author's key. **Helpers...** also takes your own copy (version 1.20 or later).
 
-It asks sites for one picture a second at most, and names itself as MDM, because some servers,
+It asks sites for one picture a second at most, and names itself as Grabbit, because some servers,
 Wikimedia's among them, refuse tools that ask faster or without a name. It uses no
 configuration file of yours.
 

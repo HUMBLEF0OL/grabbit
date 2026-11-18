@@ -31,7 +31,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 IDM_EXE = Path(r"C:\Program Files (x86)\Internet Download Manager\IDMan.exe")
-MDM_EXE = ROOT / "target" / "release" / "misterdownloadmanager.exe"
+MDM_EXE = ROOT / "target" / "release" / "grabbit.exe"
 LAB_EXE = ROOT / "target" / "release" / "labserver.exe"
 PORT = 8097
 
@@ -260,7 +260,7 @@ def main():
     lab = subprocess.Popen([str(LAB_EXE), "--bind", f"127.0.0.1:{PORT}", "--log-file", str(log)],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # MDM: its own instance, own data folder (the user's copy is untouched).
-    mdm_env = dict(os.environ, MDM_DATA_DIR=str(out / "mdm-data"))
+    mdm_env = dict(os.environ, GRABBIT_DATA_DIR=str(out / "mdm-data"))
     mdm = subprocess.Popen([str(MDM_EXE)], env=mdm_env)
     time.sleep(3)
     # (MDM is restarted for every scenario, below: what it learns about a server in one scenario
@@ -272,7 +272,7 @@ def main():
         idm_pids = pid_of("IDMan.exe")
     clients = {
         "IDM": (IDM_EXE, dict(os.environ), open_process(idm_pids[0])),
-        "MDM": (MDM_EXE, mdm_env, open_process(mdm.pid)),
+        "Grabbit": (MDM_EXE, mdm_env, open_process(mdm.pid)),
     }
     tidy = Tidy([idm_pids[0], mdm.pid], vscode_area())
     tidy.start()
@@ -304,11 +304,11 @@ def main():
             mdm.wait()
             mdm = subprocess.Popen([str(MDM_EXE)], env=mdm_env)
             time.sleep(3)
-            clients["MDM"] = (MDM_EXE, mdm_env, open_process(mdm.pid))
+            clients["Grabbit"] = (MDM_EXE, mdm_env, open_process(mdm.pid))
             tidy.pids = {idm_pids[0], mdm.pid}
             print(f"== {sid}: {title} ({n} runs + warm-up)", flush=True)
             for i in range(-1, n):
-                order = ["IDM", "MDM"] if i % 2 == 0 else ["MDM", "IDM"]
+                order = ["IDM", "Grabbit"] if i % 2 == 0 else ["Grabbit", "IDM"]
                 for c in order:
                     exe, cenv, h = clients[c]
                     tag = "w" if i < 0 else f"{i:02d}"

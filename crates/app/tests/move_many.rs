@@ -5,13 +5,13 @@
 //! download stays where its pieces are.
 //!
 //! It opens windows, which needs OpenGL or Direct3D, so it runs on request:
-//! `cargo test -p mdm-app --test move_many -- --ignored`.
+//! `cargo test -p grabbit-app --test move_many -- --ignored`.
 
 use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, Instant};
 
-const APP: &str = env!("CARGO_BIN_EXE_misterdownloadmanager");
+const APP: &str = env!("CARGO_BIN_EXE_grabbit");
 
 fn item(id: u64, name: &str, status: &str, downloaded: u64, dir: &Path) -> serde_json::Value {
     serde_json::json!({
@@ -29,7 +29,7 @@ fn log(data: &Path) -> String {
 fn second_launch(data: &Path, downloads: &Path, what: &str) {
     let status = Command::new(APP)
         .args(["/show", what])
-        .env("MDM_DATA_DIR", data)
+        .env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .env("MDM_DOWNLOADS", downloads)
         .status()
@@ -91,7 +91,7 @@ fn a_selection_moves_to_one_folder() {
     )
     .unwrap();
     let mut app = Command::new(APP)
-        .env("MDM_DATA_DIR", &data)
+        .env("GRABBIT_DATA_DIR", &data)
         .env("MDM_OFFSCREEN", "1")
         .env("MDM_DOWNLOADS", &dl)
         .env("MDM_TEST_MOVE_TO", &to)

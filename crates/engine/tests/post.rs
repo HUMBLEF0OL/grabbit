@@ -421,7 +421,6 @@ async fn the_hook_sees_the_part_file_before_any_data() {
         on_file_created: Some(FileHook::new(move |p| {
             c.lock().unwrap().push(p.to_owned());
             // What the app does on Windows: Mark of the Web in an alternate data stream.
-            #[cfg(windows)]
             {
                 let mut ads = p.as_os_str().to_owned();
                 ads.push(":Zone.Identifier");
@@ -445,7 +444,6 @@ async fn the_hook_sees_the_part_file_before_any_data() {
     );
     assert!(std::fs::read(&out.path).unwrap() == all);
     // The stream moved with the part file to the final name.
-    #[cfg(windows)]
     {
         let mut ads = out.path.as_os_str().to_owned();
         ads.push(":Zone.Identifier");

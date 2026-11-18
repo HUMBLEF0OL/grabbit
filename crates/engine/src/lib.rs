@@ -1,8 +1,10 @@
 //! Mister Download Manager download engine. See notes/ENGINE.md.
 
+pub mod agent;
 pub mod disk;
 pub mod dns;
 pub mod download;
+pub mod fault;
 pub mod ftp;
 pub mod hosts;
 mod html;
@@ -13,6 +15,8 @@ pub mod pac;
 pub mod planner;
 pub mod server;
 pub mod sites;
+#[doc(hidden)]
+pub mod slowdisk;
 mod sparse;
 pub mod state;
 pub mod tls;

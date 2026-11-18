@@ -96,10 +96,6 @@ pub fn keys(ctx: &egui::Context) {
 /// What a window's frame adds around its client, in screen pixels at 100 % display scale: the
 /// title bar and borders (Windows draws them at the display's scale, never the interface's).
 const FRAME: Vec2 = vec2(16.0, 40.0);
-/// Linux and macOS, where the work area isn't known here: the frame and the desktop's panels
-/// (a top bar, a dock or a taskbar) together, an estimate.
-#[cfg(not(windows))]
-const FRAME_AND_PANELS: Vec2 = vec2(32.0, 120.0);
 
 /// MDM_TEST_SCREEN=1366x768, for off-screen test runs: windows are sized for a screen that size
 /// (at 100 %, with a 40 px taskbar) instead of this computer's, to check them on a small one.
@@ -113,13 +109,11 @@ fn test_screen() -> Option<Vec2> {
 }
 
 /// The monitor's work area around `at` (the screen without the taskbar), in points of the
-/// window being drawn; where the window manager doesn't say (Linux, macOS), and in an off-screen
-/// test run (its windows are far off the screens, and must stay there), none.
+/// window being drawn; in an off-screen test run (its windows are far off the screens, and must stay there), none.
 pub fn work_area(ctx: &egui::Context, at: Pos2) -> Option<Rect> {
     if crate::offscreen() {
         return None;
     }
-    #[cfg(windows)]
     {
         let ppp = ctx.pixels_per_point();
         let [l, t, r, b] =
@@ -129,11 +123,6 @@ pub fn work_area(ctx: &egui::Context, at: Pos2) -> Option<Rect> {
             pos2(r as f32, b as f32) / ppp,
         ))
     }
-    #[cfg(not(windows))]
-    {
-        let _ = (ctx, at);
-        None
-    }
 }
 
 /// The largest client a window can have on the screen around `at`, in points: the work area
@@ -142,24 +131,20 @@ pub fn work_area(ctx: &egui::Context, at: Pos2) -> Option<Rect> {
 pub fn room(ctx: &egui::Context, at: Pos2) -> Option<Vec2> {
     let zoom = ctx.zoom_factor();
     if let Some(screen) = test_screen() {
-        let ppp = ctx.pixels_per_point();
-        return Some(vec2(screen.x, screen.y - 40.0) / ppp - FRAME / zoom);
+        return Some(room_on(screen, ctx.pixels_per_point(), zoom));
     }
-    #[cfg(windows)]
     {
         let ppp = ctx.pixels_per_point();
         let [l, t, r, b] =
             crate::win32::work_area((at.x * ppp).round() as i32, (at.y * ppp).round() as i32)?;
         Some(vec2((r - l) as f32, (b - t) as f32) / ppp - FRAME / zoom)
     }
-    #[cfg(not(windows))]
-    {
-        let _ = at;
-        let monitor = ctx
-            .input_for(egui::ViewportId::ROOT, |i| i.viewport().monitor_size)
-            .filter(|m| m.x > 0.0 && m.y > 0.0)?;
-        Some(monitor - FRAME_AND_PANELS / zoom)
-    }
+}
+
+/// [`room`] on a `screen` of that many pixels with a 40 px taskbar, at `ppp` pixels per point
+/// and interface size `zoom` (the rule windows are sized to fit, e.g. 1920 x 1080 at 200 %).
+pub fn room_on(screen: Vec2, ppp: f32, zoom: f32) -> Vec2 {
+    vec2(screen.x, screen.y - 40.0) / ppp - FRAME / zoom
 }
 
 /// `size` made no larger than `room` (each side at least 120 points, a usable window).
@@ -198,6 +183,83 @@ pub fn keep_inside(p: Pos2, outer: Vec2, area: Rect) -> Pos2 {
         p.x.min(area.max.x - outer.x).max(area.min.x),
         p.y.min(area.max.y - outer.y).max(area.min.y),
     )
+}
+
+/// A monitor in screen pixels: the whole screen and its work area (without the taskbar). Used by
+/// Windows' dialogs::keep_placed only: elsewhere a new window's place is the window manager's or
+/// in points that mean the same on every screen (see there).
+#[cfg_attr(not(windows), allow(dead_code))]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Screen {
+    pub rect: Rect,
+    pub work: Rect,
+}
+
+/// The screen a window at `r` (screen pixels) is on, as Windows picks one: the one with most of
+/// it, else the nearest (the first of equals: the primary comes first). None without screens.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn screen_of(r: Rect, screens: &[Screen]) -> Option<&Screen> {
+    let overlap = |s: &Screen| {
+        let i = s.rect.intersect(r);
+        if i.is_positive() { i.area() } else { 0.0 }
+    };
+    let mut most: Option<(&Screen, f32)> = None;
+    for s in screens {
+        let a = overlap(s);
+        if a > most.map_or(0.0, |(_, m)| m) {
+            most = Some((s, a));
+        }
+    }
+    if let Some((s, _)) = most {
+        return Some(s);
+    }
+    let far = |s: &Screen| s.rect.distance_sq_to_pos(r.center());
+    let mut nearest: Option<&Screen> = None;
+    for s in screens {
+        if nearest.is_none_or(|n| far(s) < far(n)) {
+            nearest = Some(s);
+        }
+    }
+    nearest
+}
+
+/// Whether enough of a window at `r` (screen pixels) is on one screen to be seen and taken by
+/// its title bar: 50 pixels each way (all of a smaller one).
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn seen(r: Rect, screens: &[Screen]) -> bool {
+    const SEEN: f32 = 50.0;
+    let need = r.size().min(vec2(SEEN, SEEN));
+    screens.iter().any(|s| {
+        let i = s.rect.intersect(r);
+        i.width() >= need.x && i.height() >= need.y
+    })
+}
+
+/// Where a window of `size` screen pixels opens centred on the main window at `main` (screen
+/// pixels): on the main window's screen, inside its work area (the title bar first, for one
+/// larger). In pixels, whatever each screen's scale: a place in points is a place on one screen
+/// only, at its own scale (#1311).
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn centred_on(main: Rect, size: Vec2, screens: &[Screen]) -> Pos2 {
+    let p = (main.center() - size / 2.0).round();
+    match screen_of(main, screens) {
+        Some(s) => keep_inside(p, size, s.work).round(),
+        None => p,
+    }
+}
+
+/// The safety net: a window at `r` (screen pixels) that isn't [`seen`] on any screen, its top
+/// left corner to have it inside the work area of the screen `home` is on (the main window's),
+/// else of the first screen (the primary); None when it is seen (#1311).
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn onto_screens(r: Rect, home: Option<Rect>, screens: &[Screen]) -> Option<Pos2> {
+    if seen(r, screens) {
+        return None;
+    }
+    let s = home
+        .and_then(|h| screen_of(h, screens))
+        .or(screens.first())?;
+    Some(keep_inside(s.work.center() - r.size() / 2.0, r.size(), s.work).round())
 }
 
 /// A window's frame in points (`outer` = client + this), for [`keep_inside`].
@@ -253,15 +315,13 @@ pub fn pane<R>(
 ) -> R {
     use crate::scrollbar::THICK;
     let view = ui.max_rect();
-    let (need_v, need_h) = bars(content, view.size());
+    let (need_v, need_h) = bars(content, view.size(), ui.ctx().pixels_per_point());
     if !need_v && !need_h {
         return body(ui, view.min);
     }
-    let rtl = crate::i18n::rtl();
-    let lead_bar = if need_v && rtl { THICK } else { 0.0 };
-    let trail_bar = if need_v && !rtl { THICK } else { 0.0 };
+    let trail_bar = if need_v { THICK } else { 0.0 };
     let port = Rect::from_min_max(
-        pos2(view.min.x + lead_bar, view.min.y),
+        pos2(view.min.x, view.min.y),
         pos2(
             view.max.x - trail_bar,
             view.max.y - if need_h { THICK } else { 0.0 },
@@ -274,18 +334,18 @@ pub fn pane<R>(
         .data(|d| d.get_temp::<Vec2>(key))
         .unwrap_or_default()
         .clamp(Vec2::ZERO, max);
-    let origin = |off: Vec2| {
-        let x = if rtl {
-            port.max.x - content.x + off.x
-        } else {
-            port.min.x - off.x
-        };
-        pos2(x.round(), (port.min.y - off.y).round())
-    };
+    let origin = |off: Vec2| pos2((port.min.x - off.x).round(), (port.min.y - off.y).round());
     let at = origin(off);
     let mut inner = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_size(at, content)));
     inner.set_clip_rect(port.intersect(ui.clip_rect()));
+    let layer = ui.layer_id();
+    let count = || {
+        ui.ctx()
+            .viewport(|v| v.this_pass.widgets.get_layer(layer).count())
+    };
+    let first = count();
     let out = body(&mut inner, at);
+    let drawn = first..count();
 
     // The control the keyboard just focused (Tab), into view.
     let focus_key = id.with("pane-focus");
@@ -296,12 +356,29 @@ pub fn pane<R>(
             .data(|d| d.get_temp::<Option<egui::Id>>(focus_key))
             .flatten()
     {
-        ui.ctx().data_mut(|d| d.insert_temp(focus_key, focused));
-        if let Some(r) = focused
-            .and_then(|f| ui.ctx().read_response(f))
-            .map(|r| r.rect)
-        {
-            off += into_view(r, port, rtl);
+        // A pane inside this one (Options' page in a window that scrolls too) ran first and
+        // followed the control this pass: this one follows it next pass, from where that one
+        // moved it.
+        let followed_key = egui::Id::unique("scale-pane-followed");
+        let pass = ui.ctx().cumulative_pass_nr();
+        let inner_followed = focused.is_some()
+            && ui
+                .ctx()
+                .data(|d| d.get_temp::<(Option<egui::Id>, u64)>(followed_key))
+                == Some((focused, pass));
+        if inner_followed {
+            ui.ctx().request_repaint();
+        } else {
+            ui.ctx().data_mut(|d| d.insert_temp(focus_key, focused));
+            let order = focused.and_then(|f| ui.ctx().viewport(|v| v.this_pass.widgets.order(f)));
+            if let Some(r) = focused
+                .filter(|_| drawn_in(order, layer, &drawn))
+                .and_then(|f| ui.ctx().read_response(f))
+            {
+                ui.ctx()
+                    .data_mut(|d| d.insert_temp(followed_key, (focused, pass)));
+                off += into_view(r.rect, port);
+            }
         }
     }
     // The wheel, unless a list inside took it.
@@ -311,10 +388,10 @@ pub fn pane<R>(
     if hovered && need_v && !crate::winui::wheel_taken(ui) {
         off.y += crate::winui::wheel_rows(ui, 16.0, (port.height() / 16.0).floor().max(1.0)) * 16.0;
     }
-    // The bars, in the window's direction.
+    // The bars.
     let _surface = crate::winui::Surface::enter(view.min.x, view.max.x);
     if need_v {
-        let x = if rtl { view.min.x } else { port.max.x };
+        let x = port.max.x;
         let track = Rect::from_min_max(pos2(x, view.min.y), pos2(x + THICK, port.max.y));
         crate::scrollbar::bar(
             ui,
@@ -341,7 +418,7 @@ pub fn pane<R>(
         );
     }
     if need_v && need_h {
-        let x = if rtl { view.min.x } else { port.max.x };
+        let x = port.max.x;
         crate::winui::fill(
             ui.painter(),
             x,
@@ -359,19 +436,41 @@ pub fn pane<R>(
     out
 }
 
-/// Which scroll bars a `content` needs in `view`: (vertical, horizontal). A bar takes room
-/// from the other direction, which can make that one needed too.
-fn bars(content: Vec2, view: Vec2) -> (bool, bool) {
+/// Which scroll bars a `content` needs in `view`: (vertical, horizontal), both in points, with
+/// `ppp` device pixels to a point. A bar takes room from the other direction, which can make
+/// that one needed too.
+fn bars(content: Vec2, view: Vec2, ppp: f32) -> (bool, bool) {
     use crate::scrollbar::THICK;
-    let mut v = content.y > view.y + 0.5;
-    let h = content.x > view.x - if v { THICK } else { 0.0 } + 0.5;
-    v = v || (h && content.y > view.y - THICK + 0.5);
+    // One device pixel over is the window's client rounded down at the interface size (520
+    // points at 125 % is 650 px, and the client came back 649), not content left out: both bars
+    // showed over a window whose content was wholly visible (#672). Counted in whole device
+    // pixels, so the conversion's float noise can't tip it either way.
+    let over = |content: f32, view: f32| ((content - view) * ppp).round() > 1.0;
+    let mut v = over(content.y, view.y);
+    let h = over(content.x, view.x - if v { THICK } else { 0.0 });
+    v = v || (h && over(content.y, view.y - THICK));
     (v, h)
 }
 
-/// How far to scroll (offset change) to bring `r` inside `port`, with a little margin; along x
-/// from the trailing side in a right-to-left window (its offset runs leftwards).
-fn into_view(r: Rect, port: Rect, rtl: bool) -> Vec2 {
+/// A [`pane`] `id` shown from its top again (Options: a page chosen, the window reopened).
+pub fn to_top(ctx: &egui::Context, id: egui::Id) {
+    ctx.data_mut(|d| d.remove_temp::<Vec2>(id.with("pane")));
+}
+
+/// Whether a widget at `order` (its layer and place there, this pass) was drawn by a [`pane`]'s
+/// body: on the pane's `layer`, among the `drawn` it added. A widget beside the pane (a
+/// footer's button, a side list) is not, and focusing it must not scroll the pane, wherever an
+/// enclosing pane's clip left its rect (wholly cut, it is empty).
+fn drawn_in(
+    order: Option<(egui::LayerId, usize)>,
+    layer: egui::LayerId,
+    drawn: &std::ops::Range<usize>,
+) -> bool {
+    order.is_some_and(|(l, i)| l == layer && drawn.contains(&i))
+}
+
+/// How far to scroll (offset change) to bring `r` inside `port`, with a little margin.
+fn into_view(r: Rect, port: Rect) -> Vec2 {
     const MARGIN: f32 = 4.0;
     let along = |lo: f32, hi: f32, plo: f32, phi: f32| {
         if lo < plo {
@@ -384,7 +483,7 @@ fn into_view(r: Rect, port: Rect, rtl: bool) -> Vec2 {
     };
     let dx = along(r.min.x, r.max.x, port.min.x, port.max.x);
     let dy = along(r.min.y, r.max.y, port.min.y, port.max.y);
-    vec2(if rtl { -dx } else { dx }, dy)
+    vec2(dx, dy)
 }
 
 #[cfg(test)]
@@ -406,6 +505,117 @@ mod tests {
         assert_eq!(next(200, true), 200);
         assert_eq!(next(125, false), 100);
         assert_eq!(next(100, false), 100);
+    }
+
+    /// #1311's screens, in pixels: a laptop at 125 % (the primary, 2560 × 1600) and a monitor at
+    /// 100 % on its right (1920 × 1080), each with a 48 px taskbar.
+    fn mixed_screens() -> [Screen; 2] {
+        let screen = |l: f32, r: f32, b: f32| Screen {
+            rect: Rect::from_min_max(pos2(l, 0.0), pos2(r, b)),
+            work: Rect::from_min_max(pos2(l, 0.0), pos2(r, b - 48.0)),
+        };
+        [screen(0.0, 2560.0, 1600.0), screen(2560.0, 4480.0, 1080.0)]
+    }
+
+    fn inside(r: Rect, area: Rect) -> bool {
+        area.contains_rect(r)
+    }
+
+    /// The main window on the 100 % monitor (#1311). Before: the dialog was placed in the main
+    /// window's points (pixels there, at 100 %), and winit read that place at the scale of the
+    /// screen the new window opens on, the primary's 125 %: the dialog went past the monitor's
+    /// right edge, on no screen. Now: centred on the main window in pixels, on its monitor.
+    #[test]
+    fn a_dialog_opens_on_the_main_windows_screen_whatever_its_scale() {
+        let screens = mixed_screens();
+        let main = Rect::from_min_max(pos2(3400.0, 100.0), pos2(4400.0, 800.0));
+        // A dialog of 600 × 450 points and its frame, at 100 %.
+        let client = vec2(600.0, 450.0);
+        let size = client + FRAME;
+
+        // Before: the place in the main window's points (1 px each), read at 125 %.
+        let main_ppp = 1.0;
+        let main_pt = Rect::from_min_max(main.min / main_ppp, main.max / main_ppp);
+        let outer = client + vec2(6.0, 29.0);
+        let work_pt = Rect::from_min_max(
+            screens[1].work.min / main_ppp,
+            screens[1].work.max / main_ppp,
+        );
+        let p = keep_inside((main_pt.center() - outer / 2.0).round(), size, work_pt).round();
+        let primary_scale = 1.25;
+        let before = Rect::from_min_size(
+            (p.to_vec2() * primary_scale).to_pos2(),
+            size * primary_scale,
+        );
+        assert_eq!(before.min, pos2(4496.25, 263.75), "{before:?}");
+        assert!(!seen(before, &screens), "before: on no screen: {before:?}");
+        // The safety net alone brings such a window onto the main window's screen.
+        let net = onto_screens(before, Some(main), &screens).expect("on no screen");
+        assert!(inside(
+            Rect::from_min_size(net, before.size()),
+            screens[1].work
+        ));
+
+        // Now: centred on the main window, in pixels, wholly on its screen.
+        let now = Rect::from_min_size(centred_on(main, size, &screens), size);
+        assert_eq!(now.min, pos2(3592.0, 205.0), "{now:?}");
+        assert!(inside(now, screens[1].work), "now: {now:?}");
+        assert_eq!(onto_screens(now, Some(main), &screens), None);
+
+        // The main window on the 125 % laptop: there too (it was right there already).
+        let main = Rect::from_min_max(pos2(300.0, 200.0), pos2(1550.0, 1075.0));
+        let size = (client + FRAME) * 1.25;
+        let now = Rect::from_min_size(centred_on(main, size, &screens), size);
+        assert!(inside(now, screens[0].work), "now: {now:?}");
+    }
+
+    /// A dialog larger than the main window's screen, or a main window half on each screen: the
+    /// screen with most of the main window, the dialog's title bar inside its work area.
+    #[test]
+    fn a_dialog_stays_on_one_screen() {
+        let screens = mixed_screens();
+        // Mostly on the monitor, partly on the laptop.
+        let main = Rect::from_min_max(pos2(2400.0, 100.0), pos2(3600.0, 900.0));
+        assert_eq!(screen_of(main, &screens), Some(&screens[1]));
+        let size = vec2(700.0, 500.0);
+        let now = Rect::from_min_size(centred_on(main, size, &screens), size);
+        assert!(inside(now, screens[1].work), "{now:?}");
+        // Taller than the monitor's work area: its top on the screen.
+        let tall = vec2(700.0, 1400.0);
+        let p = centred_on(main, tall, &screens);
+        assert_eq!(p.y, 0.0);
+        assert!(p.x >= 2560.0 && p.x + 700.0 <= 4480.0, "{p:?}");
+    }
+
+    /// The safety net: a window on no screen (or showing a sliver) comes onto the main window's
+    /// screen, else the primary; a minimized main window (at -32000) counts as the nearest one's.
+    #[test]
+    fn a_window_on_no_screen_is_brought_onto_one() {
+        let screens = mixed_screens();
+        let size = vec2(600.0, 400.0);
+        let lost = Rect::from_min_size(pos2(5000.0, 300.0), size);
+        let main = Rect::from_min_max(pos2(3000.0, 100.0), pos2(4000.0, 800.0));
+        let p = onto_screens(lost, Some(main), &screens).expect("lost");
+        assert!(
+            inside(Rect::from_min_size(p, size), screens[1].work),
+            "{p:?}"
+        );
+        let p = onto_screens(lost, None, &screens).expect("lost");
+        assert!(
+            inside(Rect::from_min_size(p, size), screens[0].work),
+            "{p:?}"
+        );
+        // 20 pixels of it on the monitor: not enough to take it.
+        let sliver = Rect::from_min_size(pos2(4460.0, 300.0), size);
+        assert!(!seen(sliver, &screens));
+        assert!(onto_screens(sliver, Some(main), &screens).is_some());
+        // 100 pixels: the user's place, kept.
+        let edge = Rect::from_min_size(pos2(4380.0, 300.0), size);
+        assert_eq!(onto_screens(edge, Some(main), &screens), None);
+        let minimized = Rect::from_min_size(pos2(-32000.0, -32000.0), vec2(160.0, 28.0));
+        assert_eq!(screen_of(minimized, &screens), Some(&screens[0]));
+        // No screens known: nothing to go by.
+        assert_eq!(onto_screens(lost, Some(main), &[]), None);
     }
 
     /// Ctrl + / Ctrl = / Ctrl − / Ctrl 0 through egui as a window gets them: a step each, the
@@ -491,11 +701,23 @@ mod tests {
     /// A bar only where the content is larger; one bar's room can make the other needed.
     #[test]
     fn scroll_bars_only_where_needed() {
-        assert_eq!(bars(vec2(430.0, 506.0), vec2(430.0, 506.0)), (false, false));
-        assert_eq!(bars(vec2(430.0, 506.0), vec2(600.0, 400.0)), (true, false));
-        assert_eq!(bars(vec2(760.0, 300.0), vec2(700.0, 400.0)), (false, true));
+        assert_eq!(
+            bars(vec2(430.0, 506.0), vec2(430.0, 506.0), 1.0),
+            (false, false)
+        );
+        assert_eq!(
+            bars(vec2(430.0, 506.0), vec2(600.0, 400.0), 1.0),
+            (true, false)
+        );
+        assert_eq!(
+            bars(vec2(760.0, 300.0), vec2(700.0, 400.0), 1.0),
+            (false, true)
+        );
         // Only taller, but the vertical bar leaves too little width.
-        assert_eq!(bars(vec2(440.0, 506.0), vec2(450.0, 400.0)), (true, true));
+        assert_eq!(
+            bars(vec2(440.0, 506.0), vec2(450.0, 400.0), 1.0),
+            (true, true)
+        );
     }
 
     /// The focused control brought into view: below the port scrolls down, above scrolls up,
@@ -504,13 +726,81 @@ mod tests {
     fn the_focused_control_is_scrolled_into_view() {
         let port = Rect::from_min_max(pos2(0.0, 0.0), pos2(400.0, 300.0));
         let below = Rect::from_min_max(pos2(10.0, 320.0), pos2(80.0, 341.0));
-        assert_eq!(into_view(below, port, false), vec2(0.0, 45.0));
+        assert_eq!(into_view(below, port), vec2(0.0, 45.0));
         let above = Rect::from_min_max(pos2(10.0, -30.0), pos2(80.0, -9.0));
-        assert_eq!(into_view(above, port, false), vec2(0.0, -34.0));
+        assert_eq!(into_view(above, port), vec2(0.0, -34.0));
         let inside = Rect::from_min_max(pos2(10.0, 10.0), pos2(80.0, 31.0));
-        assert_eq!(into_view(inside, port, false), Vec2::ZERO);
+        assert_eq!(into_view(inside, port), Vec2::ZERO);
         let right = Rect::from_min_max(pos2(420.0, 10.0), pos2(480.0, 31.0));
-        assert_eq!(into_view(right, port, false), vec2(84.0, 0.0));
-        assert_eq!(into_view(right, port, true), vec2(-84.0, 0.0));
+        assert_eq!(into_view(right, port), vec2(84.0, 0.0));
+    }
+
+    /// Only a control the pane's body drew is followed, shown or scrolled out; not a side list
+    /// row drawn before it or a footer button after it (Options' page pane), even when the
+    /// window's own pane cut that one wholly away, nor one on another layer (a popup).
+    #[test]
+    fn focus_beside_the_pane_does_not_scroll_it() {
+        let layer = egui::LayerId::background();
+        let popup = egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("popup"));
+        let drawn = 12..40;
+        assert!(drawn_in(Some((layer, 12)), layer, &drawn));
+        assert!(drawn_in(Some((layer, 39)), layer, &drawn));
+        let side_row = Some((layer, 5));
+        assert!(!drawn_in(side_row, layer, &drawn));
+        let footer_ok = Some((layer, 40));
+        assert!(!drawn_in(footer_ok, layer, &drawn));
+        assert!(!drawn_in(Some((popup, 20)), layer, &drawn));
+        assert!(!drawn_in(None, layer, &drawn));
+    }
+
+    /// #672: a client one device pixel short of the content is the window's size rounded down
+    /// at the interface size, not a line of the content left out; the old half-point allowance
+    /// put both bars up here.
+    #[test]
+    fn a_pixel_rounded_off_needs_no_bar() {
+        assert_eq!(
+            bars(vec2(650.0, 500.0), vec2(649.0, 500.0), 1.0),
+            (false, false)
+        );
+        assert_eq!(
+            bars(vec2(650.0, 500.0), vec2(650.0, 499.0), 1.0),
+            (false, false)
+        );
+    }
+
+    /// #672 at 125 %, where a device pixel is 0.8 points: the 649 px client of a 650 px
+    /// (520-point) window needs no bar, one two pixels short does.
+    #[test]
+    fn a_device_pixel_at_125_percent() {
+        let view = |px: f32| vec2(px / 1.25, 400.0);
+        assert_eq!(bars(vec2(520.0, 300.0), view(649.0), 1.25), (false, false));
+        assert_eq!(bars(vec2(520.0, 300.0), view(648.0), 1.25), (false, true));
+        // At 200 % a point is two pixels: a point short is content left out.
+        assert_eq!(
+            bars(vec2(520.0, 300.0), vec2(519.0, 400.0), 2.0),
+            (false, true)
+        );
+    }
+
+    /// Content two pixels over is content to scroll to, and the bar it puts up takes room from the
+    /// other direction, as Win32's do.
+    #[test]
+    fn content_left_out_needs_its_bar() {
+        // Two pixels wider, well short of the height: the horizontal bar only.
+        assert_eq!(
+            bars(vec2(651.0, 480.0), vec2(649.0, 500.0), 1.0),
+            (false, true)
+        );
+        // Two pixels taller, 20 narrower than the view: the vertical bar only.
+        assert_eq!(
+            bars(vec2(630.0, 502.0), vec2(650.0, 500.0), 1.0),
+            (true, false)
+        );
+        // Filling the width and two pixels wider: the horizontal bar's 17 px also leave it too
+        // tall, so both, as Win32 decides them.
+        assert_eq!(
+            bars(vec2(651.0, 500.0), vec2(649.0, 500.0), 1.0),
+            (true, true)
+        );
     }
 }

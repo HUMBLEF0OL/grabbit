@@ -2,26 +2,258 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Condvar, Mutex, OnceLock};
 
 use percent_encoding::percent_decode_str;
 use url::Url;
 
-/// File name from `Content-Disposition`, else the last URL path segment, else `download`.
-/// Always safe to use as a single path component on Windows and Unix.
+/// File name from `Content-Disposition`, else the address's ([`address_name`]), else
+/// `download`. Always safe to use as a single path component on Windows and Unix.
 pub fn file_name(content_disposition: Option<&str>, url: &Url) -> String {
-    let from_url = || {
-        url.path_segments()
-            .and_then(|mut s| s.next_back())
-            .map(|s| percent_decode_str(s).decode_utf8_lossy().into_owned())
+    answer_name(
+        url,
+        &Answer {
+            disposition: content_disposition,
+            ..Answer::default()
+        },
+    )
+}
+
+/// What is known of a file besides its address, for its name: the server's answer
+/// (`Content-Disposition`, `Content-Type`) and the title of the page it was played on, when the
+/// browser sent one with a page's media (upstream issues 695 and 800).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Answer<'a> {
+    pub disposition: Option<&'a str>,
+    pub content_type: Option<&'a str>,
+    pub title: Option<&'a str>,
+}
+
+/// The file's name from all that is known of it (upstream issues 695 and 800), safe as one path
+/// component:
+///
+/// 1. the server's `Content-Disposition` name, as it gives it: it wins over everything;
+/// 2. else the address's name ([`address_name`]: a script's `file=` value, else its last part);
+/// 3. a name whose extension doesn't say its type (a script's, `stream.php`; a page's; none, a
+///    bare id) takes the type the server's `Content-Type` names. Only the media, picture,
+///    document and archive types of [`TYPES`], never one that runs;
+/// 4. a name that means nothing ([`means_nothing`]: a script's, a bare id, `videoplayback`, a
+///    long hash) gives way to the page's `title` when there is one, with that extension.
+///
+/// A real file name (`clip.mp4`, `setup.zip`, a script's `file=` value) is never changed by the
+/// type or the title.
+pub fn answer_name(url: &Url, a: &Answer) -> String {
+    if let Some(name) = a.disposition.and_then(disposition_name) {
+        // A header may carry a path; keep only its last component.
+        return sanitize(last_component(&name));
+    }
+    let last = last_segment(url);
+    let given = query_file_name(url).filter(|_| names_nothing(&last));
+    let named = given.is_some();
+    let name = given.unwrap_or(last);
+    let typed = if untyped(&name) {
+        a.content_type.and_then(type_extension)
+    } else {
+        None
     };
-    let name = content_disposition
-        .and_then(disposition_name)
-        .or_else(from_url)
-        .unwrap_or_default();
-    // A header may carry a path; keep only its last component.
-    let name = name.rsplit(['/', '\\']).next().unwrap_or_default();
-    sanitize(name)
+    let title = a
+        .title
+        .map(clean_title)
+        .filter(|t| !t.is_empty() && !named && means_nothing(&name));
+    let (stem, ext) = split_extension(&name);
+    let stem = match title.as_deref() {
+        Some(t) => t,
+        None if stem.trim().is_empty() => "download",
+        None => stem,
+    };
+    let name = match typed.or(ext) {
+        Some(e) => format!("{stem}.{e}"),
+        None => stem.to_owned(),
+    };
+    sanitize(&name)
+}
+
+/// The address's last path part, percent-decoded (empty for a folder's address).
+fn last_segment(url: &Url) -> String {
+    url.path_segments()
+        .and_then(|mut s| s.next_back())
+        .map(|s| percent_decode_str(s).decode_utf8_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+/// A path's last component (`a/b\c.zip` → `c.zip`).
+fn last_component(name: &str) -> &str {
+    name.rsplit(['/', '\\']).next().unwrap_or_default()
+}
+
+/// The address's own name for its file, not sanitized: a script's `file=` or `filename=` value
+/// when it names a file of a known type (`stream.php?file=FL262-1E01-4.mp4` →
+/// `FL262-1E01-4.mp4`, upstream issue 695), else its last path part.
+pub fn address_name(url: &Url) -> String {
+    let last = last_segment(url);
+    query_file_name(url)
+        .filter(|_| names_nothing(&last))
+        .unwrap_or(last)
+}
+
+/// The address's `file=` / `filename=` value (its last component) when its extension is a known
+/// type's ([`TYPES`]): a value naming a program, or anything else, is never taken.
+fn query_file_name(url: &Url) -> Option<String> {
+    url.query_pairs()
+        .filter(|(k, _)| k.eq_ignore_ascii_case("file") || k.eq_ignore_ascii_case("filename"))
+        .map(|(_, v)| last_component(v.trim()).trim().to_owned())
+        .find(|v| match split_extension(v) {
+            (stem, Some(ext)) => {
+                !stem.trim().is_empty() && is_typed_extension(&ext.to_ascii_lowercase())
+            }
+            _ => false,
+        })
+}
+
+/// `name`'s stem and extension (`clip.mp4` → `clip`, `mp4`). `.profile`, `clip` and `Mr. Smith`
+/// have none.
+fn split_extension(name: &str) -> (&str, Option<&str>) {
+    match name.rsplit_once('.') {
+        Some((stem, ext))
+            if !stem.is_empty() && !ext.is_empty() && !ext.contains(char::is_whitespace) =>
+        {
+            (stem, Some(ext))
+        }
+        _ => (name, None),
+    }
+}
+
+/// The extensions of programs that answer on a web server: an address ending in one names the
+/// program, not the file it sends (`stream.php`, `remote_control.php`, `download.aspx`).
+pub const SCRIPT_EXTENSIONS: &[&str] = &[
+    "php", "php3", "php4", "php5", "phtml", "asp", "aspx", "ashx", "axd", "jsp", "jspx", "do",
+    "action", "cgi", "pl", "cfm", "py", "rb",
+];
+
+/// A web page's extensions: a file of another type served at such an address takes its type's.
+pub const PAGE_EXTENSIONS: &[&str] = &["htm", "html", "xhtml", "shtml", "dhtml"];
+
+/// Whether `name`'s extension is a web server's program's ([`SCRIPT_EXTENSIONS`]).
+pub fn is_script_name(name: &str) -> bool {
+    split_extension(name)
+        .1
+        .is_some_and(|e| SCRIPT_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
+}
+
+/// A name whose extension doesn't say what the file is: a script's, a page's, or none.
+fn untyped(name: &str) -> bool {
+    match split_extension(name).1 {
+        None => true,
+        Some(e) => {
+            let e = e.to_ascii_lowercase();
+            SCRIPT_EXTENSIONS.contains(&e.as_str()) || PAGE_EXTENSIONS.contains(&e.as_str())
+        }
+    }
+}
+
+/// An address's last part that names no file, so its `file=` value does: a script's, or one
+/// without an extension.
+fn names_nothing(last: &str) -> bool {
+    split_extension(last).1.is_none() || is_script_name(last)
+}
+
+/// A name that says nothing of what the file is, for a page's title to replace (upstream issues
+/// 345 and 800): a script's (`remote_control.php`), none, one without an extension (a bare id,
+/// `videoplayback`), or a long hash (`a3f9…e1.mp4`). The browser extension's `meansNothing` is
+/// the same test.
+pub fn means_nothing(name: &str) -> bool {
+    let (stem, ext) = split_extension(name);
+    let hash = stem.chars().count() >= 24
+        && stem
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '=' | '_' | '-'))
+        && stem.chars().filter(|c| matches!(c, '-' | '_')).count() <= 2;
+    ext.is_none() || is_script_name(name) || hash
+}
+
+/// A page's title as a file's stem: what a file name can't hold becomes a space, spaces are
+/// collapsed, at most 150 characters, no trailing dot (the browser extension's `cleanTitle`).
+pub fn clean_title(title: &str) -> String {
+    let spaced: String = title
+        .chars()
+        .filter(|c| !is_format(*c))
+        .map(|c| {
+            if c.is_control() || r#"<>:"/\|?*"#.contains(c) {
+                ' '
+            } else {
+                c
+            }
+        })
+        .collect();
+    let words = spaced.split_whitespace().collect::<Vec<_>>().join(" ");
+    let cut: String = words.chars().take(150).collect();
+    cut.trim_end_matches(['.', ' ']).to_owned()
+}
+
+/// The types a file's extension is taken from, with that extension (the browser extension's
+/// `TYPE_EXTENSIONS` holds the same, which `tools/extension/test.mjs` checks). Media, pictures,
+/// documents and archives only: a type that runs (a program, a script, a page) never names a
+/// file's extension.
+pub const TYPES: &[(&str, &str)] = &[
+    ("video/mp4", "mp4"),
+    ("video/x-m4v", "m4v"),
+    ("video/webm", "webm"),
+    ("video/x-matroska", "mkv"),
+    ("video/quicktime", "mov"),
+    ("video/x-msvideo", "avi"),
+    ("video/avi", "avi"),
+    ("video/x-ms-wmv", "wmv"),
+    ("video/x-flv", "flv"),
+    ("video/mpeg", "mpg"),
+    ("video/mp2t", "ts"),
+    ("video/3gpp", "3gp"),
+    ("video/3gpp2", "3g2"),
+    ("video/ogg", "ogv"),
+    ("audio/mpeg", "mp3"),
+    ("audio/mp3", "mp3"),
+    ("audio/mp4", "m4a"),
+    ("audio/x-m4a", "m4a"),
+    ("audio/aac", "aac"),
+    ("audio/aacp", "aac"),
+    ("audio/webm", "weba"),
+    ("audio/ogg", "ogg"),
+    ("audio/opus", "opus"),
+    ("audio/flac", "flac"),
+    ("audio/x-flac", "flac"),
+    ("audio/wav", "wav"),
+    ("audio/x-wav", "wav"),
+    ("audio/wave", "wav"),
+    ("audio/x-ms-wma", "wma"),
+    ("application/ogg", "ogg"),
+    ("image/jpeg", "jpg"),
+    ("image/png", "png"),
+    ("image/gif", "gif"),
+    ("image/webp", "webp"),
+    ("image/avif", "avif"),
+    ("application/pdf", "pdf"),
+    ("application/epub+zip", "epub"),
+    ("application/zip", "zip"),
+    ("application/x-zip-compressed", "zip"),
+    ("application/x-7z-compressed", "7z"),
+    ("application/vnd.rar", "rar"),
+    ("application/x-rar-compressed", "rar"),
+    ("application/gzip", "gz"),
+    ("application/x-gzip", "gz"),
+];
+
+/// The extension a `Content-Type` value names (`video/mp4; codecs=…` → `mp4`), if [`TYPES`] has
+/// it.
+pub fn type_extension(content_type: &str) -> Option<&'static str> {
+    let mime = content_type.split(';').next()?.trim();
+    TYPES
+        .iter()
+        .find(|(t, _)| t.eq_ignore_ascii_case(mime))
+        .map(|(_, e)| *e)
+}
+
+/// Whether `ext` is one of [`TYPES`]' extensions, in any case.
+pub fn is_typed_extension(ext: &str) -> bool {
+    TYPES.iter().any(|(_, e)| e.eq_ignore_ascii_case(ext))
 }
 
 /// The file name a `Content-Disposition` value suggests (RFC 6266), read as browsers do:
@@ -200,12 +432,9 @@ fn is_format(c: char) -> bool {
 /// ".mdm.part" (9) and a duplicate may add " (NNN)" (6). The extension is kept.
 const MAX_NAME: usize = 230;
 
-/// Longest full path we create, in UTF-16 units. On Windows: `MAX_PATH` (260) without the
-/// terminating NUL, so Explorer and other programs can still open the file.
-#[cfg(windows)]
+/// Longest full path we create, in UTF-16 units: `MAX_PATH` (260) without the terminating NUL,
+/// so Explorer and other programs can still open the file.
 const MAX_PATH_LEN: usize = 259;
-#[cfg(not(windows))]
-const MAX_PATH_LEN: usize = 4095;
 /// What our files add to a destination: ".mdm.part" / ".mdm.json".
 const SIDECAR: usize = 9;
 /// What a duplicate's number adds: " (NNN)".
@@ -234,17 +463,29 @@ pub fn fit_name(dir: &Path, name: &str) -> Option<String> {
 /// deep for any name keeps it whole, and the download says the path is too long. A name from a
 /// long address (a token hundreds of characters long, #28) no longer fails the download.
 pub fn destination(dir: &Path, name: &str) -> PathBuf {
-    let name = fit_name(dir, name).unwrap_or_else(|| name.to_owned());
-    unique_path(dir, &name)
+    unique_path(dir, &fitted(dir, name))
+}
+
+/// `destination` before the folder is looked at: the name fitted to the path limit, not yet
+/// numbered. What a window shows while the disk is asked (a sleeping drive or a network folder
+/// can take seconds to answer, #743); a download started there is numbered on if the name is
+/// taken by then ([`crate::Destination::Free`]). Never touches the disk.
+pub fn guess(dir: &Path, name: &str) -> PathBuf {
+    dir.join(fitted(dir, name))
+}
+
+/// `name` fitted to `dir` (`fit_name`), kept whole when `dir` leaves too little room.
+fn fitted(dir: &Path, name: &str) -> String {
+    fit_name(dir, name).unwrap_or_else(|| name.to_owned())
 }
 
 /// `destination` for a download whose helper picks the extension and takes any `<stem>.*` it
 /// finds as its own (a video: yt-dlp reuses a file of the stem already there, and after an
 /// MP3's conversion deletes it, #32). The stem is numbered on until no file in `dir` starts
-/// with it and a dot, letter case aside, and `in_use` (the other downloads' stems in `dir`)
-/// says no.
+/// with it and a dot, letter case aside, no name held in this process ([`reserve`]) does
+/// either, and `in_use` (the other downloads' stems in `dir`) says no.
 pub fn stem_destination(dir: &Path, name: &str, in_use: impl Fn(&str) -> bool) -> PathBuf {
-    let name = fit_name(dir, name).unwrap_or_else(|| name.to_owned());
+    let name = fitted(dir, name);
     let (stem, ext) = match name.rfind('.') {
         Some(i) if i > 0 => (&name[..i], &name[i..]),
         _ => (name.as_str(), ""),
@@ -263,6 +504,7 @@ pub fn stem_destination(dir: &Path, name: &str, in_use: impl Fn(&str) -> bool) -
             .iter()
             .any(|n| n.starts_with(&prefix) || *n == s.to_lowercase())
             && !is_reserved(&p)
+            && !stem_reserved(dir, s)
             && !in_use(s)
     };
     std::iter::once(stem.to_owned())
@@ -315,6 +557,7 @@ impl Stems {
             .find(|s| {
                 !self.taken.contains(&s.to_lowercase())
                     && !is_reserved(&self.dir.join(format!("{s}{ext}")))
+                    && !stem_reserved(&self.dir, s)
             })
             .expect("unbounded search finds a free name");
         self.taken.insert(s.to_lowercase());
@@ -380,6 +623,21 @@ fn is_reserved(p: &Path) -> bool {
     active().lock().unwrap().contains(p)
 }
 
+/// Whether a name held in this process ([`reserve`]) in `dir` is `stem` or starts with it and a
+/// dot, letter case aside: a stem a video must leave alone, as it leaves one a file there has
+/// (a file whose deletion is under way holds its name until it is gone, upstream issue 1170).
+fn stem_reserved(dir: &Path, stem: &str) -> bool {
+    let stem = stem.to_lowercase();
+    let prefix = format!("{stem}.");
+    active().lock().unwrap().iter().any(|p| {
+        p.parent() == Some(dir)
+            && p.file_name().is_some_and(|n| {
+                let n = n.to_string_lossy().to_lowercase();
+                n == stem || n.starts_with(&prefix)
+            })
+    })
+}
+
 /// Holds a destination for one download; released when dropped.
 #[derive(Debug)]
 pub struct Reservation(PathBuf);
@@ -399,9 +657,105 @@ pub fn reserve(dest: &Path) -> Option<Reservation> {
         .then(|| Reservation(dest.to_owned()))
 }
 
+/// Folders where a place's old files are being deleted so that a download starts there afresh
+/// (the app's Redownload, a duplicate overwritten, a restart under the same name): how many
+/// such deletes each has under way, by [`clearing_key`].
+fn clearings() -> &'static (Mutex<std::collections::HashMap<String, usize>>, Condvar) {
+    static CLEARING: OnceLock<(Mutex<std::collections::HashMap<String, usize>>, Condvar)> =
+        OnceLock::new();
+    CLEARING.get_or_init(Default::default)
+}
+
+/// A folder as [`clearings`] knows it: letter case aside (Windows' and macOS' folders; on Linux
+/// two folders that differ only in case wait for each other, which costs only a wait).
+fn clearing_key(dir: &Path) -> String {
+    dir.components()
+        .collect::<PathBuf>()
+        .to_string_lossy()
+        .to_lowercase()
+}
+
+/// A place whose old files are being deleted ([`clear`]): until it is dropped, a download that
+/// starts in its folder waits ([`wait_cleared`]) before it looks at the disk, so it finds none
+/// of them, and takes the name they leave.
+#[derive(Debug)]
+pub struct Clearing(String);
+
+impl Drop for Clearing {
+    fn drop(&mut self) {
+        let (map, done) = clearings();
+        let mut map = map.lock().unwrap();
+        if let Some(n) = map.get_mut(&self.0) {
+            *n -= 1;
+            if *n == 0 {
+                map.remove(&self.0);
+            }
+        }
+        done.notify_all();
+    }
+}
+
+/// `place`'s old files are about to be deleted beside the caller, and a download is to start
+/// there afresh: the downloads that start in its folder meanwhile (the engine's, and the looks
+/// that number a new name there) wait until the returned guard is dropped, after the delete.
+/// Unlike [`reserve`], the name stays free for the download that comes after: nothing is
+/// numbered past it.
+pub fn clear(place: &Path) -> Clearing {
+    let key = clearing_key(place.parent().unwrap_or(Path::new("")));
+    *clearings()
+        .0
+        .lock()
+        .unwrap()
+        .entry(key.clone())
+        .or_default() += 1;
+    Clearing(key)
+}
+
+/// Whether old files are being deleted in `dir` ([`clear`]). Never waits.
+pub fn being_cleared(dir: &Path) -> bool {
+    clearings()
+        .0
+        .lock()
+        .unwrap()
+        .contains_key(&clearing_key(dir))
+}
+
+/// Wait until no old files are being deleted in `dir` ([`clear`]): before looking at a name
+/// there. On a thread that may wait (never a window's): a delete can take as long as its disk.
+pub fn wait_cleared(dir: &Path) {
+    let key = clearing_key(dir);
+    let (map, done) = clearings();
+    let map = map.lock().unwrap();
+    let _unused = done.wait_while(map, |m| m.contains_key(&key)).unwrap();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Upstream issue 1170: a name held in this process (a deleted download's, until its files
+    /// are gone) takes its stem for every extension, as a file there would; only in its own
+    /// folder.
+    #[test]
+    fn a_held_name_takes_its_stem() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        let none = |_: &str| false;
+        let held = reserve(&d.join("Talk.MP4")).unwrap();
+        assert_eq!(
+            stem_destination(d, "talk.webm", none),
+            d.join("talk (1).webm")
+        );
+        let mut stems = Stems::new(d, []);
+        assert_eq!(stems.pick("Talk.mkv"), d.join("Talk (1).mkv"));
+        let elsewhere = tempfile::tempdir().unwrap();
+        assert_eq!(
+            stem_destination(elsewhere.path(), "Talk.webm", none),
+            elsewhere.path().join("Talk.webm")
+        );
+        drop(held);
+        assert_eq!(stem_destination(d, "Talk.webm", none), d.join("Talk.webm"));
+    }
 
     /// #32: a video's stem is free for every extension, on disk (any letter case) and among
     /// the other downloads.
@@ -434,6 +788,34 @@ mod tests {
             stem_destination(other.path(), "Song.mp3", none),
             other.path().join("Song.mp3")
         );
+    }
+
+    /// A place being cleared holds up the looks in its folder (letter case aside) until every
+    /// delete there is done, and only there; its name stays free (nothing is numbered past it).
+    #[test]
+    fn a_folder_being_cleared_is_waited_for() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path().join("Clear");
+        let one = clear(&d.join("a.bin"));
+        let two = clear(&d.join("b.bin"));
+        let upper = PathBuf::from(d.to_string_lossy().to_uppercase());
+        assert!(being_cleared(&d) && being_cleared(&upper));
+        assert!(!being_cleared(dir.path()));
+        assert!(!is_reserved(&d.join("a.bin")));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let waiting = d.clone();
+        std::thread::spawn(move || {
+            wait_cleared(&waiting);
+            let _ = tx.send(());
+        });
+        let wait = std::time::Duration::from_millis(200);
+        assert!(rx.recv_timeout(wait).is_err(), "waits");
+        drop(one);
+        assert!(rx.recv_timeout(wait).is_err(), "for every delete there");
+        drop(two);
+        rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
+        assert!(!being_cleared(&d));
+        wait_cleared(&d);
     }
 
     /// #69: a playlist's names, the folder read once: the same rule as `stem_destination`, each
@@ -490,7 +872,6 @@ mod tests {
         assert!(path_fits(&named) && named.extension().is_some_and(|e| e == "zip"));
     }
 
-    #[cfg(windows)]
     #[test]
     fn a_folder_too_deep_for_any_name_is_refused() {
         let deeper = PathBuf::from(format!(r"C:\{}", "d".repeat(240)));
@@ -656,6 +1037,206 @@ mod tests {
         assert_eq!(sanitize("تقرير-été-日本.zip"), "تقرير-été-日本.zip");
     }
 
+    fn named(u: &str, a: Answer) -> String {
+        answer_name(&url(u), &a)
+    }
+
+    fn typed(content_type: &str) -> Answer<'_> {
+        Answer {
+            content_type: Some(content_type),
+            ..Answer::default()
+        }
+    }
+
+    /// Upstream issues 695 and 800: a video a script sends is named by its type, not the
+    /// script's extension.
+    #[test]
+    fn a_scripts_answer_takes_its_types_extension() {
+        let mp4 = typed("video/mp4");
+        assert_eq!(named("http://x/stream.php?id=7", mp4), "stream.mp4");
+        assert_eq!(
+            named(
+                "http://x/v/remote_control.php?a=1",
+                typed("video/mp4; codecs=avc1")
+            ),
+            "remote_control.mp4"
+        );
+        assert_eq!(named("http://x/get.aspx", typed("audio/mpeg")), "get.mp3");
+        assert_eq!(named("http://x/dl.cgi", typed("application/pdf")), "dl.pdf");
+        assert_eq!(named("http://x/watch.html", mp4), "watch.mp4");
+        // A bare id and Google's `videoplayback` have no extension: the type gives one.
+        assert_eq!(named("http://x/media/123456", mp4), "123456.mp4");
+        assert_eq!(
+            named("http://x/videoplayback?itag=18", mp4),
+            "videoplayback.mp4"
+        );
+        assert_eq!(named("http://x/", mp4), "download.mp4");
+        // A type that isn't a file's (a page, nothing said) leaves the name as it is.
+        assert_eq!(
+            named("http://x/stream.php", typed("text/html")),
+            "stream.php"
+        );
+        assert_eq!(
+            named("http://x/stream.php", typed("application/octet-stream")),
+            "stream.php"
+        );
+        assert_eq!(
+            named("http://x/stream.php", Answer::default()),
+            "stream.php"
+        );
+    }
+
+    /// Upstream issue 695: the script's `file=` (or `filename=`) value names it, before and
+    /// after the answer.
+    #[test]
+    fn a_scripts_file_value_names_it() {
+        let u = "http://x/baigiang/stream.php?file=FL262-1E01-4.mp4&token=abc";
+        assert_eq!(file_name(None, &url(u)), "FL262-1E01-4.mp4");
+        assert_eq!(named(u, typed("video/mp4")), "FL262-1E01-4.mp4");
+        assert_eq!(
+            file_name(None, &url("http://x/get.php?filename=a%2Fb%2Fclip.webm")),
+            "clip.webm"
+        );
+        // No type known from the value: the script's name stays.
+        assert_eq!(
+            file_name(None, &url("http://x/get.php?file=notes")),
+            "get.php"
+        );
+        // A real name in the path is the file's: the query doesn't change it.
+        assert_eq!(
+            file_name(None, &url("http://x/files/movie.mkv?file=other.mp4")),
+            "movie.mkv"
+        );
+        // The page's title doesn't replace a real name.
+        let titled = Answer {
+            title: Some("Lecture one"),
+            ..typed("video/mp4")
+        };
+        assert_eq!(named(u, titled), "FL262-1E01-4.mp4");
+    }
+
+    /// Content-Disposition still wins over the type, the `file=` value and the title.
+    #[test]
+    fn the_servers_name_wins_over_type_and_title() {
+        let a = Answer {
+            disposition: Some("attachment; filename=\"Lecture 1.mp4\""),
+            content_type: Some("video/webm"),
+            title: Some("A page"),
+        };
+        assert_eq!(
+            named("http://x/stream.php?file=other.mp4", a),
+            "Lecture 1.mp4"
+        );
+    }
+
+    /// A real file name is never changed by the type or a title.
+    #[test]
+    fn real_names_are_left_alone() {
+        let a = Answer {
+            content_type: Some("video/webm"),
+            title: Some("A page"),
+            ..Answer::default()
+        };
+        assert_eq!(named("http://x/clip.mp4", a), "clip.mp4");
+        assert_eq!(named("http://x/setup.zip", typed("video/mp4")), "setup.zip");
+        assert_eq!(named("http://x/my%20file.iso", a), "my file.iso");
+    }
+
+    /// The type's extension is only ever a media, picture, document or archive one: a script
+    /// serving a program, a script or a page keeps its own name, and a `file=` naming a program
+    /// is not taken.
+    #[test]
+    fn a_dangerous_extension_is_never_introduced() {
+        for t in [
+            "application/x-msdownload",
+            "application/x-msdos-program",
+            "application/x-sh",
+            "application/javascript",
+            "application/hta",
+            "application/x-ms-shortcut",
+            "text/html",
+        ] {
+            assert_eq!(named("http://x/get.php", typed(t)), "get.php", "{t}");
+            assert_eq!(named("http://x/123", typed(t)), "123", "{t}");
+        }
+        for v in [
+            "setup.exe",
+            "run.bat",
+            "x.scr",
+            "a.lnk",
+            "b.ps1",
+            "c.js",
+            "d.hta",
+            "e.msi",
+        ] {
+            assert_eq!(
+                file_name(None, &url(&format!("http://x/get.php?file={v}"))),
+                "get.php"
+            );
+        }
+        let runs = [
+            "exe", "bat", "cmd", "com", "scr", "msi", "lnk", "ps1", "js", "vbs", "hta",
+        ];
+        for (_, e) in TYPES {
+            assert!(!runs.contains(e), "{e}");
+        }
+    }
+
+    /// Upstream issue 800: a page's media with a name that means nothing takes the page's title.
+    #[test]
+    fn a_meaningless_name_takes_the_pages_title() {
+        let t = |title| Answer {
+            title: Some(title),
+            ..typed("video/mp4")
+        };
+        assert_eq!(
+            named("http://x/remote_control.php?id=9", t("A clip: part 1/2")),
+            "A clip part 1 2.mp4"
+        );
+        assert_eq!(named("http://x/videoplayback", t("Talk")), "Talk.mp4");
+        assert_eq!(
+            named("http://x/v/aGVsbG8gd29ybGQgdGhpcyBpcyBh.mp4", t("Talk")),
+            "Talk.mp4"
+        );
+        // A real name keeps its own; a blank title is none.
+        assert_eq!(named("http://x/clip.mp4", t("Talk")), "clip.mp4");
+        assert_eq!(named("http://x/stream.php", t("  ")), "stream.mp4");
+        // Its type unknown: the title, and the script's extension (nothing says it is another).
+        let untyped = Answer {
+            title: Some("Talk"),
+            ..Answer::default()
+        };
+        assert_eq!(named("http://x/stream.php", untyped), "Talk.php");
+        assert_eq!(named("http://x/12345", untyped), "Talk");
+    }
+
+    /// The names the browser extension gives a page's media (background.js' `mediaName`) are
+    /// the engine's: both check the same cases (`tools/extension/test.mjs`).
+    #[test]
+    fn the_extension_names_media_as_the_engine_does() {
+        let cases: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/data/media-names.json")).unwrap();
+        for c in cases["cases"].as_array().unwrap() {
+            let text = |i: usize| c[i].as_str().unwrap();
+            let (mime, title) = (text(1).to_owned(), text(2).to_owned());
+            let a = Answer {
+                content_type: Some(mime.as_str()).filter(|s| !s.is_empty()),
+                title: Some(title.as_str()).filter(|s| !s.is_empty()),
+                ..Answer::default()
+            };
+            assert_eq!(named(text(0), a), text(3), "{c}");
+        }
+    }
+
+    #[test]
+    fn titles_are_cleaned() {
+        assert_eq!(clean_title("  a  b\t c  "), "a b c");
+        assert_eq!(clean_title("Who? Me: <yes>|no*"), "Who Me yes no");
+        assert_eq!(clean_title("End..."), "End");
+        assert_eq!(clean_title("x\u{202E}y"), "xy");
+        assert_eq!(clean_title(&"é".repeat(200)).chars().count(), 150);
+    }
+
     #[test]
     fn url_fallbacks() {
         assert_eq!(
@@ -680,6 +1261,25 @@ mod tests {
         assert_eq!(sanitize("compact.txt"), "compact.txt");
         assert_eq!(sanitize("name. . "), "name");
         assert_eq!(sanitize("..."), "download");
+    }
+
+    /// #743: the guess a window shows before the disk answers is `destination`'s name, fitted
+    /// the same way, never numbered (and never looked up).
+    #[test]
+    fn the_guess_is_the_destination_before_numbering() {
+        let d = tempfile::tempdir().unwrap();
+        assert_eq!(guess(d.path(), "a.zip"), destination(d.path(), "a.zip"));
+        std::fs::write(d.path().join("a.zip"), b"").unwrap();
+        assert_eq!(guess(d.path(), "a.zip"), d.path().join("a.zip"));
+        assert_eq!(destination(d.path(), "a.zip"), d.path().join("a (1).zip"));
+        let long = format!("{}.zip", "x".repeat(400));
+        assert_eq!(
+            guess(d.path(), &long),
+            d.path().join(fit_name(d.path(), &long).unwrap())
+        );
+        // A folder that isn't there: nothing to look up, the same name.
+        let gone = d.path().join("gone");
+        assert_eq!(guess(&gone, "a.zip"), gone.join("a.zip"));
     }
 
     #[test]

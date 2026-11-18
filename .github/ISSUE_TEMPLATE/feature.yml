@@ -1,12 +1,12 @@
 name: Feature idea
-description: Something MDM should do, or do differently.
+description: Something Grabbit should do, or do differently.
 labels: [enhancement]
 body:
   - type: textarea
     id: idea
     attributes:
       label: What you'd like
-      description: What MDM should do, in your own words.
+      description: What Grabbit should do, in your own words.
     validations:
       required: true
   - type: textarea
@@ -20,12 +20,10 @@ body:
     id: os
     attributes:
       label: System
-      description: Where you use MDM.
+      description: Where you use Grabbit.
       multiple: true
       options:
         - Windows
-        - macOS
-        - Linux
   - type: input
     id: elsewhere
     attributes:
@@ -36,5 +34,5 @@ body:
     attributes:
       label: Before you send it
       options:
-        - label: I looked through the [open issues](https://github.com/anefzaoui/misterdownloadmanager/issues) and this idea isn't there yet.
+        - label: I looked through the [open issues](https://github.com/HUMBLEF0OL/grabbit/issues) and this idea isn't there yet.
           required: true

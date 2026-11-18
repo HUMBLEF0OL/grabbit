@@ -9,7 +9,7 @@
 #            ("options:connection"), "@main", "@menu:<show argument>" (a menu, over the main
 #            window), "@download:<lab server path>" (Download File Info, as a browser hands a
 #            download over), "@complete:<path>" (Download complete), "@torrent" (Add torrent for
-#            tools/lab/Open Movie Night.torrent); "a+b" runs /show a first ("theme:breeze+@main").
+#            tools/lab/Open Movie Night.torrent); "a+b" runs /show a first ("theme:graphite+@main").
 #            Shots with the same take share one capture.
 #   from     instead of take: a picture already in the repository (the browser's, made by
 #            tools/readme/browser-shots.mjs), and from_dark its night version if there is one
@@ -24,18 +24,9 @@
 #            lossless for every window
 #   alt      what the picture shows, for whoever can't see it
 #   caption  the line under it (in a step strip: what to do)
-# The page carries alt and caption as Markdown (`make.py snippet <id>` prints it); the site's
-# translations (tools/website/translate_site.py) translate them with the page.
+# The page carries alt and caption as Markdown (`make.py snippet <id>` prints it).
 
 # ---- Getting started ----------------------------------------------------------------------------
-
-[[shot]]
-id = "first-language"
-page = "getting-started.md"
-under = "First start and the language"
-take = "language"
-alt = "The language list on first start: every language with its flag, its own name and its English name"
-caption = "Pick your language. View → Language changes it later."
 
 [[shot]]
 id = "first-helpers"
@@ -43,7 +34,7 @@ page = "getting-started.md"
 under = "The video helpers"
 take = "helpers"
 ring = ["Yes, download them (recommended)"]
-alt = "MDM offers yt-dlp and ffmpeg on its first start, with Yes, download them (recommended) and Not now"
+alt = "Grabbit offers yt-dlp and ffmpeg on its first start, with Yes, download them (recommended) and Not now"
 caption = "Yes downloads both helpers in the background, once."
 
 [[shot]]
@@ -51,9 +42,9 @@ id = "main-window"
 page = "getting-started.md"
 under = "The main window"
 take = "@main"
-# The toolbar has no accessible names: a rectangle at its end. 1 right of the menu bar's last
-# menu, 2 right of the toolbar, 3 and 4 in the empty part of the categories and the list.
-marks = [{ at = "MenuItem:Help", side = "right" }, { at = [810, 60, 10, 50], side = "right" }, { at = "Tree:Categories", side = "center" }, { at = "List:Downloads", side = "center" }]
+# 1 right of the menu bar's last menu, 2 on the toolbar's rule between its delete and its
+# settings groups, 3 and 4 in the empty space under the categories and the list's rows.
+marks = [{ at = "MenuItem:Help", side = "right" }, { at = [520, 70, 0, 0], side = "center" }, { at = [0, 446, 223, 22], side = "center" }, { at = [224, 408, 708, 44], side = "center" }]
 alt = "The main window: the menu bar, the toolbar, the categories on the left and the download list on the right"
 caption = "1 the menu bar, 2 the toolbar, 3 the categories, 4 the download list."
 
@@ -62,55 +53,19 @@ id = "view-dark-mode"
 page = "getting-started.md"
 under = "Dark mode"
 take = "@menu:menu:3"
-crop = [145, 28, 230, 300]
+crop = { around = ["MenuItem:View", "Font"], pad = 12 }
 marks = [{ at = "Dark Mode support", side = "right" }, { at = "Always dark", side = "right" }]
 alt = "The View menu open, with Dark Mode support and Always dark"
-caption = "1 Dark Mode support follows the system; 2 Always dark keeps MDM dark."
+caption = "1 Dark Mode support follows the system; 2 Always dark keeps Grabbit dark."
 
 [[shot]]
 id = "view-theme"
 page = "getting-started.md"
 under = "Themes"
 take = "@menu:menu:3:theme"
-crop = [145, 28, 366, 424]
-alt = "View → Theme open: Classic, Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero and Aqua, and Open themes folder"
+crop = { around = ["MenuItem:View", "Font", "Open themes folder"], pad = 12 }
+alt = "View → Theme open: Graphite, Add a theme file… and Open themes folder"
 caption = "View → Theme switches at once, keeping the layout."
-
-[[shot]]
-id = "theme-classic"
-page = "getting-started.md"
-under = "Themes"
-take = "theme:classic+@main"
-crop = [0, 0, 560, 260]
-alt = "The main window's toolbar and categories in the Classic theme"
-caption = "Classic"
-
-[[shot]]
-id = "theme-high-contrast"
-page = "getting-started.md"
-under = "Themes"
-take = "theme:high-contrast+@main"
-crop = [0, 0, 560, 260]
-alt = "The main window's toolbar and categories in the High contrast theme"
-caption = "High contrast"
-
-[[shot]]
-id = "theme-adwaita"
-page = "getting-started.md"
-under = "Themes"
-take = "theme:adwaita+@main"
-crop = [0, 0, 560, 260]
-alt = "The main window's toolbar and categories in the Adwaita theme"
-caption = "Adwaita"
-
-[[shot]]
-id = "theme-breeze"
-page = "getting-started.md"
-under = "Themes"
-take = "theme:breeze+@main"
-crop = [0, 0, 560, 260]
-alt = "The main window's toolbar and categories in the Breeze theme"
-caption = "Breeze"
 
 # ---- Adding downloads ---------------------------------------------------------------------------
 
@@ -119,7 +74,7 @@ id = "add-url"
 page = "adding-downloads.md"
 under = "Add URL"
 take = "addurl"
-marks = [{ at = "Address", n = 3, side = "corner" }, { at = "Use authorization", n = 4, side = "right" }, { at = "OK", n = 5 }]
+marks = [{ at = "Address", n = 3, side = "corner" }, { at = "Use authorization", n = 4, side = "right" }, { at = "OK", n = 5, side = "corner" }]
 alt = "Enter new address to download, with the Address box, Use authorization and OK"
 caption = "The numbers are the steps above: 3 the address, 4 a login if the server needs one, 5 OK."
 
@@ -128,8 +83,8 @@ id = "download-file-info"
 page = "adding-downloads.md"
 under = "Download File Info"
 take = "@download:gen/250M/project-files-2026.zip"
-# 1 and 2 in the margin before the labels.
-marks = [{ at = [30, 61, 0, 21], side = "center" }, { at = [30, 91, 0, 20], side = "center" }, { at = "Start Download", side = "corner" }, { at = "Download Later", side = "corner" }]
+# 1 and 2 between the labels and their boxes.
+marks = [{ at = "ComboBox:Category", side = "left" }, { at = "Edit:Save As", side = "left" }, { at = "Start Download", side = "corner" }, { at = "Download Later", side = "corner" }]
 alt = "Download File Info for a ZIP file: its address, the Compressed category, the folder it goes to, its size, and the Download Later, Start Download and Cancel buttons"
 caption = "1 the category, 2 where the file goes, 3 start now, 4 or put it in a queue."
 
@@ -156,8 +111,8 @@ id = "browser-offer"
 page = "browser-integration.md"
 under = "Set it up"
 take = "extension"
-alt = "Add Mister Download Manager to your browser: each browser found, with a button to its store page"
-caption = "MDM's own window opens each browser's store page for you."
+alt = "Add Grabbit to your browser: each browser found, with a button to its store page"
+caption = "Grabbit's own window opens each browser's store page for you."
 
 [[shot]]
 id = "catch-file-info"
@@ -165,8 +120,8 @@ page = "browser-integration.md"
 under = "What it takes"
 take = "@download:gen/250M/project-files-2026.zip"
 ring = ["Start Download"]
-alt = "Download File Info in MDM for a file clicked in the browser"
-caption = "Click a download link in the browser: Download File Info opens in MDM."
+alt = "Download File Info in Grabbit for a file clicked in the browser"
+caption = "Click a download link in the browser: Download File Info opens in Grabbit."
 
 [[shot]]
 id = "catch-progress"
@@ -190,9 +145,9 @@ id = "options-integration"
 page = "browser-integration.md"
 under = "What it takes"
 take = "options:general"
-crop = [18, 172, 380, 208]
-marks = ["Use advanced browser integration", "List:Capture downloads from the following browsers"]
-alt = "Options, General: Use advanced browser integration and the list of browsers MDM takes downloads from"
+crop = [195, 162, 618, 199]
+marks = [{ at = "Use advanced browser integration", side = "right" }, { at = [206, 266, 255, 16], side = "right" }]
+alt = "Options, General: Use advanced browser integration and the list of browsers Grabbit takes downloads from"
 caption = "1 must be on, and 2 your browser ticked."
 
 [[shot]]
@@ -246,17 +201,17 @@ id = "video-helpers"
 page = "video.md"
 under = "Use your own copies"
 take = "video-helpers"
-alt = "The video helpers window: yt-dlp and ffmpeg, each with its version and Use another program..."
-caption = "Helpers...: use your own yt-dlp or ffmpeg instead."
+alt = "The Helpers window: yt-dlp, ffmpeg and gallery-dl, each with Use another program... and Use Grabbit's own copy"
+caption = "Helpers...: use your own yt-dlp, ffmpeg or gallery-dl instead."
 
 [[shot]]
 id = "video-subtitles"
 page = "video.md"
 under = "Subtitles"
 take = "video-subs"
-# The Subtitles list has no accessible name of its own: its rectangle.
-crop = [0, 268, 0, 100]
-ring = [[71, 340, 199, 21]]
+# The Subtitles box has no accessible name of its own: its rectangle.
+crop = [0, 318, 0, 90]
+ring = [[139, 367, 201, 30]]
 alt = "The Subtitles list of the video window, with Put them into the video"
 caption = "Choose the subtitles; tick Put them into the video to keep them inside the file."
 
@@ -300,7 +255,7 @@ id = "rss-feeds"
 page = "torrents.md"
 under = "RSS feeds"
 take = "rss"
-alt = "RSS feeds: the feeds MDM follows and their items"
+alt = "RSS feeds before any is added: the list of feeds, their items, and the Download rules tab"
 caption = "RSS feeds, and the rules that pick what to download."
 
 [[shot]]
@@ -329,8 +284,8 @@ id = "list-columns"
 page = "download-list.md"
 under = "Columns"
 take = "@main"
-crop = [150, 120, 0, 345]
-alt = "The download list with its columns: Source, File Name, Q, Size, Status, Time left, Transfer rate and more"
+crop = [224, 148, 0, 310]
+alt = "The download list with its columns: Source, File Name, Q, Size and Status, and more to the right"
 caption = "Click a column title to sort; its funnel filters."
 
 [[shot]]
@@ -338,7 +293,7 @@ id = "list-categories"
 page = "download-list.md"
 under = "Categories"
 take = "@main"
-crop = [0, 118, 151, 190]
+crop = { around = ["Tree:Categories"], pad = 0 }
 alt = "The Categories pane: All Downloads with a category per file type, Unfinished, Finished and Queues"
 caption = "All Downloads, Unfinished, Finished and Queues, each by category."
 
@@ -383,7 +338,7 @@ page = "troubleshooting.md"
 under = "The window freezes or draws wrongly"
 take = "@menu:menu:3:draw"
 # Down to Font: a computer without Direct3D (GitHub's runner) adds why under the choices.
-crop = [145, 28, 306, 274]
+crop = { around = ["MenuItem:View", "Font", "Direct3D"], pad = 12 }
 alt = "View → Draw with open: OpenGL and Direct3D"
 caption = "View → Draw with: the other way of drawing."
 
@@ -392,7 +347,7 @@ id = "about-updates"
 page = "troubleshooting.md"
 under = "Updates"
 take = "about"
-alt = "About Mister Download Manager: its version, licence and links"
+alt = "About Grabbit: its version, licence and links"
 caption = "Help → About: the version you have."
 
 # ---- Options -------------------------------------------------------------------------------------
@@ -402,15 +357,15 @@ id = "options-general"
 page = "options.md"
 under = "General"
 take = "options:general"
-alt = "Options on its General page: start with the system, the clipboard, browser integration and the browsers MDM takes downloads from"
-caption = "General: how MDM starts, and what it takes from the clipboard and the browsers."
+alt = "Options on its General page: start with the system, the clipboard, browser integration and the browsers Grabbit takes downloads from"
+caption = "General: how Grabbit starts, and what it takes from the clipboard and the browsers."
 
 [[shot]]
 id = "options-file-types"
 page = "options.md"
 under = "File types"
 take = "options:types"
-alt = "Options on its File types page: the file types the browser hands to MDM and the sites it leaves alone"
+alt = "Options on its File types page: the file types the browser hands to Grabbit and the sites it leaves alone"
 caption = "File types: what the browser hands over, and the sites left alone."
 
 [[shot]]
@@ -434,8 +389,8 @@ id = "options-connection"
 page = "options.md"
 under = "Connection"
 take = "options:connection"
-alt = "Options on its Connection page: connections per download, the network adapter and per-server exceptions"
-caption = "Connection: how many connections, through which network adapter."
+alt = "Options on its Connection page: connections per download, per-server exceptions, download limits and DNS"
+caption = "Connection: how many connections, exceptions per server, download limits and DNS."
 
 [[shot]]
 id = "options-proxy"
@@ -450,7 +405,7 @@ id = "options-logins"
 page = "options.md"
 under = "Sites Logins"
 take = "options:logins"
-alt = "Options on its Sites Logins page: a list of sites with their user names"
+alt = "Options on its Sites Logins page, before any site is added: the list of sites with their user names"
 caption = "Sites Logins: a user name and password per site."
 
 [[shot]]
@@ -493,8 +448,8 @@ page = "guide-first-download.md"
 under = "Steps"
 take = "addurl"
 ring = ["OK"]
-alt = "Enter new address to download with the copied address filled in"
-caption = "Add URL: the copied address is already there. Click OK."
+alt = "Enter new address to download, its OK button ringed"
+caption = "Add URL: Grabbit puts the address you copied in the Address box (paste it there if it isn't). Click OK."
 
 [[shot]]
 id = "first-file-info"
@@ -525,19 +480,19 @@ caption = "Done: Open the file, or Open folder."
 [[shot]]
 id = "catch-file-types"
 page = "guide-catch-browser-downloads.md"
-under = "Choose what MDM takes"
+under = "Choose what Grabbit takes"
 take = "options:types"
-# The two lists have no accessible names: their rectangles.
-marks = [{ at = [22, 135, 378, 57], side = "right" }, { at = [22, 253, 378, 48], side = "right" }]
-alt = "Options, File types: the file types MDM takes from the browser, and the sites it leaves alone"
-caption = "1 the file types MDM takes, 2 the sites it leaves to the browser."
+# The two lists have no accessible names: above their right ends, beside their labels.
+marks = [{ at = [700, 122, 103, 72], side = "top" }, { at = [700, 258, 103, 44], side = "top" }]
+alt = "Options, File types: the file types Grabbit takes from the browser, and the sites it leaves alone"
+caption = "1 the file types Grabbit takes, 2 the sites it leaves to the browser."
 
 [[shot]]
 id = "overnight-later"
 page = "guide-download-overnight.md"
 under = "1. Put the downloads in a queue"
 take = "@download:gen/250M/project-files-2026.zip"
-crop = [0, 84, 0, 0]
+crop = [0, 30, 0, 0]
 ring = ["Download Later"]
 alt = "Download File Info with Download Later ringed"
 caption = "Download Later puts it in a queue instead of starting it."
@@ -547,7 +502,7 @@ id = "overnight-start"
 page = "guide-download-overnight.md"
 under = "2. Set the start time"
 take = "scheduler"
-crop = [220, 128, 412, 162]
+crop = [208, 130, 567, 192]
 marks = [{ at = "Start download at", side = "right" }, { at = "Daily", side = "right" }, { at = "Stop download at", side = "right" }]
 alt = "The Scheduler's Schedule tab: Start download at, Once at or Daily, and Stop download at"
 caption = "1 the start time, 2 once or daily, 3 a stop time if you want one."
@@ -557,18 +512,18 @@ id = "overnight-done"
 page = "guide-download-overnight.md"
 under = "4. Decide what happens at the end (optional)"
 take = "scheduler"
-crop = [218, 316, 420, 122]
+crop = [218, 342, 562, 90]
 ring = ["CheckBox:Turn off computer when done"]
 alt = "The Scheduler's choices for when the queue is done, Turn off computer when done among them"
-caption = "When the queue is done: open a file, quit MDM, or turn the computer off."
+caption = "When the queue is done: open a file, quit Grabbit, or turn the computer off."
 
 [[shot]]
 id = "speed-limiter"
 page = "guide-keep-speed-for-everything-else.md"
-under = "Cap MDM as a whole (recommended)"
+under = "Cap Grabbit as a whole (recommended)"
 take = "speedlimit"
-alt = "Speed Limiter settings: the maximum speed for all downloads"
-caption = "Downloads → Speed Limiter → Settings...: one speed for all of MDM."
+alt = "Speed Limiter settings: the maximum speed for one file, and a limit for all downloads together"
+caption = "Downloads → Speed Limiter → Settings...: a speed for each file, or one for all downloads together."
 
 [[shot]]
 id = "usb-save-to"
@@ -603,7 +558,7 @@ page = "guide-video-from-page.md"
 under = "Steps"
 take = "video-subs"
 alt = "The video window listing a video's qualities with their sizes"
-caption = "MDM lists the qualities: pick one."
+caption = "Grabbit lists the qualities: pick one."
 
 [[shot]]
 id = "vfp-progress"
@@ -616,97 +571,25 @@ caption = "It downloads like any other file."
 [[shot]]
 id = "test-integration"
 page = "browser-integration.md"
-under = "When MDM isn't running"
+under = "When Grabbit isn't running"
 take = "options:general"
-crop = [18, 172, 380, 208]
+crop = [195, 256, 618, 114]
 ring = ["Test browser integration..."]
 alt = "Options, General with Test browser integration..."
-caption = "Test browser integration... says whether the browser reaches MDM."
+caption = "Test browser integration... says whether the browser reaches Grabbit."
 
-# ---- The website (misterdownloadmanager.com) ------------------------------------------------------
+# ---- The website (humblef0ol.github.io/grabbit) ------------------------------------------------------
 # Pictures the site's own pages show (tools/website/build.py), not a help page: `page` names the
 # website file that lists them, where `make.py check` looks for "images/help/<id>.webp".
 
 [[shot]]
-id = "site-theme-classic"
+id = "site-theme-graphite"
 page = "website/content/themes.toml"
-take = "theme:classic+@main"
+take = "@main"
 # The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
 crop = [0, 0, 930, 300]
-alt = "The main window in the Classic theme"
-caption = "Classic"
-
-[[shot]]
-id = "site-theme-native"
-page = "website/content/themes.toml"
-take = "theme:native+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Native theme"
-caption = "Native"
-
-[[shot]]
-id = "site-theme-high-contrast"
-page = "website/content/themes.toml"
-take = "theme:high-contrast+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the High contrast theme"
-caption = "High contrast"
-
-[[shot]]
-id = "site-theme-metro"
-page = "website/content/themes.toml"
-take = "theme:metro+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Metro theme"
-caption = "Metro"
-
-[[shot]]
-id = "site-theme-adwaita"
-page = "website/content/themes.toml"
-take = "theme:adwaita+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Adwaita theme"
-caption = "Adwaita"
-
-[[shot]]
-id = "site-theme-breeze"
-page = "website/content/themes.toml"
-take = "theme:breeze+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Breeze theme"
-caption = "Breeze"
-
-[[shot]]
-id = "site-theme-luna"
-page = "website/content/themes.toml"
-take = "theme:luna+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Luna theme"
-caption = "Luna"
-
-[[shot]]
-id = "site-theme-aero"
-page = "website/content/themes.toml"
-take = "theme:aero+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Aero theme"
-caption = "Aero"
-
-[[shot]]
-id = "site-theme-aqua"
-page = "website/content/themes.toml"
-take = "theme:aqua+@main"
-# The title bar, the menus, the toolbar, the categories and the list's rows: the theme's look.
-crop = [0, 0, 930, 300]
-alt = "The main window in the Aqua theme"
-caption = "Aqua"
+alt = "The main window in the Graphite theme"
+caption = "Graphite"
 
 [[shot]]
 id = "site-gallery"

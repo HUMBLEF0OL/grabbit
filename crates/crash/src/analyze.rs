@@ -18,7 +18,7 @@ pub struct Frame {
     pub function: Option<String>,
     pub file: Option<String>,
     pub line: Option<u32>,
-    /// The module's file name ("misterdownloadmanager.exe", "ntdll.dll").
+    /// The module's file name ("grabbit.exe", "ntdll.dll").
     pub module: Option<String>,
     /// The address within the module (what maps it back to the symbols later).
     pub offset: u64,
@@ -74,7 +74,9 @@ impl Analysis {
 /// Read `dump` with the `.sym` folders in `symbols` and, failing them, each module's own debug
 /// info.
 pub fn analyze(dump: &Path, symbols: &[PathBuf]) -> Result<Analysis, String> {
-    let dump = minidump::Minidump::read_path(dump).map_err(|e| e.to_string())?;
+    let bytes = std::fs::read(dump).map_err(|e| e.to_string())?;
+    // A Linux program listed as two modules is one again first (#661, modules.rs).
+    let dump = minidump::Minidump::read(crate::modules::mend(bytes)).map_err(|e| e.to_string())?;
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -199,7 +201,10 @@ fn file_name(p: &str) -> String {
 mod tests {
     #[test]
     fn file_names_from_either_kind_of_path() {
-        assert_eq!(super::file_name(r"C:\Program Files\MDM\mdm.exe"), "mdm.exe");
+        assert_eq!(
+            super::file_name(r"C:\Program Files\Grabbit\mdm.exe"),
+            "mdm.exe"
+        );
         assert_eq!(super::file_name("/usr/lib/libc.so.6"), "libc.so.6");
         assert_eq!(super::file_name("plain"), "plain");
     }

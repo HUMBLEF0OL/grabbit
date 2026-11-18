@@ -10,7 +10,13 @@ use egui::{Pos2, Ui};
 
 use crate::dialogs::{Outcome, window};
 use crate::icons::Icon;
-use crate::winui::{self, ButtonKind, r};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r};
+
+/// The offer's footer: this far under its last rule, after the line of the way back later.
+const OFFER_FOOTER: f32 = 30.0;
+/// Helpers' width, and where its footer starts (under the error line).
+const PROGRAMS_W: f32 = 500.0;
+const PROGRAMS_BODY: f32 = 280.0;
 
 /// The helpers' download, one after the other (user decision 2026-11-01: one at a time, one
 /// progress bar for both).
@@ -20,8 +26,9 @@ struct State {
     current: Option<(&'static str, usize, usize)>,
     /// The helpers done: name and version.
     ready: Vec<(&'static str, String)>,
-    /// The helper that failed, and why (the ones after it are not tried).
-    error: Option<(&'static str, String)>,
+    /// The helper that failed, why, and what to do about it (upstream issue 816; the ones after
+    /// it are not tried).
+    error: Option<(&'static str, String, Option<String>)>,
     done: bool,
 }
 
@@ -37,14 +44,12 @@ pub struct Helpers {
     job: Option<Job>,
 }
 
-/// Whether to offer the helpers at this start: never asked, and one of them is missing (ffmpeg
-/// counts only where MDM installs it; elsewhere the system's is used).
+/// Whether to offer the helpers at this start: never asked, and one of them is missing.
 pub fn worth_asking() -> bool {
     let Some(dir) = mdm_tools::tools_dir() else {
         return false;
     };
-    mdm_tools::installed(&dir).is_none()
-        || (cfg!(windows) && mdm_tools::ffmpeg::installed(&dir).is_none())
+    mdm_tools::installed(&dir).is_none() || mdm_tools::ffmpeg::installed(&dir).is_none()
 }
 
 impl Helpers {
@@ -65,8 +70,7 @@ impl Helpers {
         if mdm_tools::installed(&dir).is_none() {
             list.push("yt-dlp");
         }
-        // ffmpeg: MDM's own on Windows; elsewhere the system's.
-        if cfg!(windows) && mdm_tools::ffmpeg::installed(&dir).is_none() {
+        if mdm_tools::ffmpeg::installed(&dir).is_none() {
             list.push("ffmpeg");
         }
         let job = Job {
@@ -94,7 +98,11 @@ impl Helpers {
                     Ok(installed) => s.ready.push((name, installed.version)),
                     Err(e) => {
                         tracing::warn!("helper download failed: {name}: {e}");
-                        s.error = Some((name, crate::errors::tools(&e)));
+                        s.error = Some((
+                            name,
+                            crate::errors::tools(&e),
+                            crate::errors::tools_advice(&e, name),
+                        ));
                         break;
                     }
                 }
@@ -123,7 +131,10 @@ impl Helpers {
         }
         let mut answer = None;
         // A long translation's subline makes the banner taller (winui::banner).
-        let extra = crate::dialogs::grow_extra(ctx, "helpers-banner");
+        // A failure and its advice, wrapped, make it taller too (upstream issue 816).
+        let extra = crate::dialogs::grow_extra(ctx, "helpers-banner")
+            + crate::dialogs::grow_extra(ctx, "helpers-error")
+            + crate::dialogs::grow_extra(ctx, "helpers-advice");
         window(
             ctx,
             "helpers",
@@ -132,7 +143,10 @@ impl Helpers {
             // Taller once Yes is pressed: the progress under the last section.
             [
                 520.0,
-                if self.job.is_some() { 418.0 } else { 382.0 } + extra,
+                if self.job.is_some() { 358.0 } else { 322.0 }
+                    + OFFER_FOOTER
+                    + winui::FOOTER_H
+                    + extra,
             ],
             false,
             winui::BG(),
@@ -162,7 +176,7 @@ impl Helpers {
         let p = ui.painter().clone();
         let (ink, muted) = (winui::TEXT(), winui::MUTED());
         let w = 520.0;
-        // The banner: MDM's own logo, what this is for, in one line, and why now.
+        // The banner: what this is for, in one line, and why now.
         let extra = winui::banner(
             ui,
             &p,
@@ -178,12 +192,6 @@ impl Helpers {
         // Everything below it moves down with a taller banner.
         let o = o + egui::vec2(0.0, extra);
 
-        let ffmpeg_here = !cfg!(windows)
-            && self
-                .dir
-                .as_deref()
-                .and_then(mdm_tools::ffmpeg::installed)
-                .is_some();
         let rows: [(Icon, &str, String); 3] = [
             (
                 Icon::HelperVideo,
@@ -198,24 +206,17 @@ impl Helpers {
                 Icon::HelperMerge,
                 // i18n: helper name and what it does (ffmpeg is a program's name)
                 "ffmpeg: joins picture and sound",
-                if cfg!(windows) || ffmpeg_here {
-                    crate::i18n::t(
-                        "Sites send their best quality as separate video and audio. ffmpeg puts them together into one file that plays anywhere.",
-                    )
-                    .to_owned()
-                } else {
-                    crate::i18n::t(
-                        "Sites send their best quality as separate video and audio, and ffmpeg joins them. On this system MDM uses yours: install ffmpeg with your package manager.",
-                    )
-                    .to_owned()
-                },
+                crate::i18n::t(
+                    "Sites send their best quality as separate video and audio. ffmpeg puts them together into one file that plays anywhere.",
+                )
+                .to_owned(),
             ),
             (
                 Icon::HelperChecked,
                 // i18n: a promise in the helpers window: the helpers are free, official and checked
                 "Free, official and checked",
                 crate::i18n::t(
-                    "Both are open source. MDM gets them from their official releases with its own downloader and checks each file's signature before it runs. About 100 MB, once.",
+                    "Both are open source. Grabbit gets them from their official releases with its own downloader and checks each file's signature before it runs. About 100 MB, once.",
                 )
                 .to_owned(),
             ),
@@ -248,7 +249,7 @@ impl Helpers {
         if let Some(job) = &self.job {
             let st = job.state.lock().unwrap();
             let f = job.progress.fraction().unwrap_or(0.0);
-            let (fraction, line, color) = if let Some((name, error)) = &st.error {
+            let (fraction, line, color) = if let Some((name, error, _)) = &st.error {
                 (
                     st.ready.len() as f32 / (st.ready.len() + 1) as f32,
                     crate::i18n::fmt(
@@ -311,32 +312,56 @@ impl Helpers {
             drop(st);
             let bar_w = 320.0;
             winui::meter(&p, r(o, (w - bar_w) / 2.0, 312.0, bar_w, 8.0), fraction);
-            // Centred on screen (the same place in both directions); cut to the window.
             let room = w - 40.0;
-            let shown = winui::ellipsize(&p, &winui::tahoma(), &line, room);
-            let tw = winui::text_width(&p, &shown);
-            let rc = winui::text_at(
-                &p,
-                winui::tahoma(),
-                (o.x + (w - tw) / 2.0).round(),
-                o.y + 340.0,
-                &shown,
-                color,
-            );
-            if shown != line {
-                winui::full_on_hover(ui, rc, "helpers-status", &line);
+            let mut more = 0.0;
+            if failed && winui::text_width(&p, &line) > room {
+                // A failure is read whole (upstream issue 816): wrapped, the window growing by
+                // its lines past the first.
+                let n = winui::paragraph(
+                    &p,
+                    o.x + 20.0,
+                    o.y + 340.0,
+                    &line,
+                    color,
+                    o.x + w - 20.0,
+                    16.0,
+                );
+                more = 16.0 * n.saturating_sub(1) as f32;
+            } else {
+                // Centred on screen (the same place in both directions); cut to the window.
+                let shown = winui::ellipsize(&p, &winui::tahoma(), &line, room);
+                let tw = winui::text_width(&p, &shown);
+                let rc = winui::text_at(
+                    &p,
+                    winui::tahoma(),
+                    (o.x + (w - tw) / 2.0).round(),
+                    o.y + 340.0,
+                    &shown,
+                    color,
+                );
+                if shown != line {
+                    winui::full_on_hover(ui, rc, "helpers-status", &line);
+                }
             }
-            y += 36.0;
+            crate::dialogs::grow_px(ui.ctx(), "helpers-error", more);
+            y += 36.0 + more;
         }
 
         // The way back later, then the answer.
-        winui::etched_h(&p, o.x + 16.0, o.y + y, w - 32.0);
+        winui::rule(&p, o, 16.0, y, w - 32.0);
+        // What to do about the failure (upstream issue 816), when it says.
+        let advice = self.job.as_ref().and_then(|job| {
+            let st = job.state.lock().unwrap();
+            st.error.as_ref().and_then(|(_, _, a)| a.clone())
+        });
         let later = if self.job.is_some() && running {
             crate::i18n::t("They keep downloading if you close this window.")
         } else if self.job.is_some() && !failed {
             crate::i18n::t(
                 "All set: on a page with a video, use Tasks → Download video from a page.",
             )
+        } else if let Some(advice) = &advice {
+            advice.as_str()
         } else if self.job.is_some() {
             crate::i18n::t(
                 "Check your connection, then try again, or get them later from the video window.",
@@ -344,78 +369,58 @@ impl Helpers {
         } else {
             crate::i18n::t("Not now? Get them later from Tasks → Download video from a page.")
         };
-        winui::text(&p, o.x + 16.0, o.y + y + 20.0, later, muted);
-        let y = y + 28.0;
+        // Wrapped: the window grows by the lines past the first.
+        let lines = winui::paragraph(
+            &p,
+            o.x + 16.0,
+            o.y + y + 20.0,
+            later,
+            muted,
+            o.x + w - 16.0,
+            16.0,
+        );
+        let more = 16.0 * lines.saturating_sub(1) as f32;
+        crate::dialogs::grow_px(ui.ctx(), "helpers-advice", more);
+        // The footer under it ([`OFFER_FOOTER`]); Escape is the window's (show).
+        let top = y + OFFER_FOOTER + more;
         if self.job.is_none() {
-            // As wide as their labels in this language (#192), the row ending where it ends in
-            // English.
-            let [not_now_at, yes_at] = winui::button_row(
-                &p,
-                &[
-                    ("Not now", 196.0, 90.0),
-                    ("Yes, download them (recommended)", 292.0, 212.0),
+            // Enter Yes, as before.
+            let pressed = winui::footer(
+                ui,
+                o,
+                w,
+                top,
+                &mut [
+                    FooterItem::Button(FooterButton::new("Not now", ButtonKind::Normal)),
+                    // i18n: the first start's helpers window: download yt-dlp and ffmpeg (the recommended answer)
+                    FooterItem::Button(
+                        FooterButton::new("Yes, download them (recommended)", ButtonKind::Accent)
+                            .enter(true),
+                    ),
                 ],
-                6.0,
-                16.0,
-                360.0,
-            )[..] else {
-                unreachable!("two buttons")
-            };
-            let not_now = winui::button(
-                ui,
-                r(o, not_now_at.0, y, not_now_at.1, 25.0),
-                "Not now",
-                ButtonKind::Normal,
-                false,
-                None,
             );
-            // i18n: the first start's helpers window: download yt-dlp and ffmpeg (the recommended answer)
-            let yes = winui::button(
-                ui,
-                r(o, yes_at.0, y, yes_at.1, 25.0),
-                "Yes, download them (recommended)",
-                ButtonKind::Accent,
-                false,
-                None,
-            );
-            if yes.clicked() || winui::enter_pressed(ui) {
-                *answer = Some(true);
-            } else if not_now.clicked() {
-                *answer = Some(false);
+            match pressed {
+                Some(1) => *answer = Some(true),
+                Some(0) => *answer = Some(false),
+                _ => {}
             }
         } else {
-            let [again_at, close_at] = winui::button_row(
-                &p,
-                &[("Try again", 318.0, 90.0), ("Close", 414.0, 90.0)],
-                6.0,
-                16.0,
-                200.0,
-            )[..] else {
-                unreachable!("two buttons")
-            };
-            if failed && !running {
-                let again = winui::button(
-                    ui,
-                    r(o, again_at.0, y, again_at.1, 25.0),
+            // Try again once it failed; Enter Close, as before.
+            let again = failed && !running;
+            let mut items = Vec::new();
+            if again {
+                items.push(FooterItem::Button(FooterButton::new(
                     "Try again",
                     ButtonKind::Normal,
-                    false,
-                    None,
-                );
-                if again.clicked() {
-                    *answer = Some(true);
-                }
+                )));
             }
-            let close = winui::button(
-                ui,
-                r(o, close_at.0, y, close_at.1, 25.0),
-                "Close",
-                ButtonKind::Default,
-                false,
-                None,
-            );
-            if close.clicked() || winui::enter_pressed(ui) {
-                *answer = Some(false);
+            items.push(FooterItem::Button(
+                FooterButton::new("Close", ButtonKind::Default).enter(true),
+            ));
+            match winui::footer(ui, o, w, top, &mut items) {
+                Some(0) if again => *answer = Some(true),
+                Some(_) => *answer = Some(false),
+                None => {}
             }
         }
     }
@@ -434,8 +439,6 @@ pub struct Programs {
     found: [Option<mdm_tools::Installed>; 3],
     /// A chosen program being checked (`--version`), and what it answered.
     checking: Option<(Helper, Answer)>,
-    /// MDM's own yt-dlp being downloaded in place of the system's (#452), and how that went.
-    installing: Option<Answer>,
     error: Option<String>,
 }
 
@@ -450,7 +453,6 @@ impl Programs {
             dir: mdm_tools::tools_dir(),
             found: [None, None, None],
             checking: None,
-            installing: None,
             error: None,
         };
         p.look();
@@ -468,31 +470,8 @@ impl Programs {
         ];
     }
 
-    /// MDM's own yt-dlp in place of the system's (#452): downloaded and checked as usual, from
-    /// then on the one used (`mdm_tools::installed`). It goes on if the window is closed.
-    fn install_own(
-        &mut self,
-        dir: std::path::PathBuf,
-        rt: &tokio::runtime::Handle,
-        ctx: &egui::Context,
-    ) {
-        let slot: Answer = Arc::new(Mutex::new(None));
-        let (out, wake) = (slot.clone(), ctx.clone());
-        let net = crate::settings::own_net();
-        rt.spawn(async move {
-            let res = mdm_tools::install_latest(&dir, &net, None)
-                .await
-                .map(|_| ())
-                .map_err(|e| crate::errors::tools(&e));
-            *out.lock().unwrap() = Some(res);
-            wake.request_repaint();
-        });
-        self.installing = Some(slot);
-        self.error = None;
-    }
-
     /// Open until Close.
-    pub fn show(&mut self, ctx: &egui::Context, rt: &tokio::runtime::Handle) -> Outcome<()> {
+    pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         let answered = self
             .checking
             .as_ref()
@@ -500,15 +479,6 @@ impl Programs {
         if let Some(res) = answered {
             self.error = res.err();
             self.checking = None;
-            self.look();
-        }
-        let installed = self
-            .installing
-            .as_ref()
-            .and_then(|slot| slot.lock().unwrap().take());
-        if let Some(res) = installed {
-            self.error = res.err();
-            self.installing = None;
             self.look();
         }
         for h in HELPERS {
@@ -533,21 +503,32 @@ impl Programs {
             "video-helpers",
             // i18n: window title: where MDM takes its helper programs (yt-dlp, ffmpeg, gallery-dl) from
             "Helpers",
-            [500.0, 292.0],
+            [PROGRAMS_W, PROGRAMS_BODY + winui::FOOTER_H],
             false,
             winui::BG(),
-            |ui, o| self.body(ui, o, rt),
+            |ui, o| self.body(ui, o),
         )
     }
 
-    fn body(&mut self, ui: &mut Ui, o: Pos2, rt: &tokio::runtime::Handle) -> Outcome<()> {
+    fn body(&mut self, ui: &mut Ui, o: Pos2) -> Outcome<()> {
         let p = ui.painter().clone();
+        let c = crate::theme::colors();
         for (k, h) in HELPERS.into_iter().enumerate() {
-            let y = o.y + 8.0 + k as f32 * 78.0;
+            let y = o.y + 8.0 + k as f32 * 84.0;
+            // Each helper in a box of its own (the mockup's), its parts 12 inside (its buttons
+            // end at 67 of its 79).
+            let card = r(o, 8.0, y - o.y, PROGRAMS_W - 16.0, 79.0);
+            p.rect_filled(card, 8.0, c.panel);
+            p.rect_stroke(
+                card,
+                8.0,
+                egui::Stroke::new(1.0, c.menubar_line),
+                egui::StrokeKind::Inside,
+            );
             winui::text_font(
                 &p,
                 winui::tahoma_bold(),
-                o.x + 14.0,
+                o.x + 20.0,
                 y + 16.0,
                 h.name(),
                 winui::TEXT(),
@@ -563,14 +544,7 @@ impl Programs {
                 .as_ref()
                 .filter(|c| h == Helper::GalleryDl && mdm_tools::gallery::too_old(&c.version));
             let checking = self.checking.as_ref().is_some_and(|(c, _)| *c == h);
-            let downloading = h == Helper::YtDlp && self.installing.is_some();
-            // The system's yt-dlp may be old: MDM's own copy can replace it (#452).
-            let system = h == Helper::YtDlp && found.is_some_and(mdm_tools::Installed::is_system);
             let status = match (too_old, found) {
-                _ if downloading => {
-                    // i18n: Video helpers: MDM's own yt-dlp is being downloaded
-                    crate::i18n::t("Downloading MDM's own copy...").to_owned()
-                }
                 _ if checking => {
                     // i18n: Video helpers: a program just chosen is being checked
                     crate::i18n::t("Checking the program...").to_owned()
@@ -578,7 +552,7 @@ impl Programs {
                 (Some(old), _) => crate::i18n::fmt(
                     // i18n: Video helpers: the person's own gallery-dl is too old and not used; {version} = its version, {oldest} = the oldest MDM can use
                     crate::i18n::t(
-                        "Your own program ({version}) is too old: MDM needs {oldest} or newer",
+                        "Your own program ({version}) is too old: Grabbit needs {oldest} or newer",
                     ),
                     &[
                         ("version", &old.version),
@@ -593,14 +567,9 @@ impl Programs {
                         ("version", &i.version),
                     ],
                 ),
-                (None, Some(i)) if i.is_system() => crate::i18n::fmt(
-                    // i18n: Video helpers (macOS, Linux): {path} = the system's ffmpeg
-                    crate::i18n::t("Your system's: {path}"),
-                    &[("path", &crate::i18n::ltr(&i.exe.display().to_string()))],
-                ),
                 (None, Some(i)) => crate::i18n::fmt(
                     // i18n: Video helpers: {version} = the version of MDM's own copy
-                    crate::i18n::t("Mister Download Manager's own copy, version {version}"),
+                    crate::i18n::t("Grabbit's own copy, version {version}"),
                     &[("version", &i.version)],
                 ),
                 // i18n: Video helpers: no copy of this helper yet
@@ -609,28 +578,41 @@ impl Programs {
             winui::fit(
                 ui,
                 &p,
-                o.x + 14.0,
+                o.x + 20.0,
                 y + 36.0,
                 &status,
                 winui::MUTED(),
-                o.x + 486.0,
+                o.x + PROGRAMS_W - 20.0,
                 ("helper", k),
             );
-            let busy = self.checking.is_some() || self.installing.is_some();
+            let busy = self.checking.is_some();
             // As wide as their labels in this language (#192), side by side from the left.
             let [other_at, own_at] = winui::button_row_from_left(
                 &p,
                 &[
-                    ("Use another program...", 14.0, 180.0),
-                    ("Use MDM's own copy", 202.0, 180.0),
+                    ("Use another program...", 20.0, 180.0),
+                    ("Use Grabbit's own copy", 208.0, 180.0),
                 ],
                 8.0,
-                486.0,
+                PROGRAMS_W - 20.0,
                 260.0,
             )[..] else {
                 unreachable!("two buttons")
             };
-            if winui::button(
+            // Every helper's buttons read the same: a screen reader hears which program they are for.
+            let spoken = |resp: &egui::Response, label: &str| {
+                let name = crate::i18n::fmt(
+                    // i18n: what a screen reader calls a button that one row of a window has for each thing it lists; {label} is the button's text, {what} the row's browser or program
+                    crate::i18n::t("{label} for {what}"),
+                    &[
+                        ("label", crate::i18n::t(label)),
+                        ("what", &crate::i18n::ltr(h.name())),
+                    ],
+                );
+                resp.ctx
+                    .accesskit_node_builder(resp.id, |n| n.set_label(name));
+            };
+            let other = winui::button(
                 ui,
                 r(o, other_at.0, y - o.y + 46.0, other_at.1, 21.0),
                 // i18n: Video helpers: button: pick a program (yt-dlp or ffmpeg) already on the computer
@@ -642,9 +624,9 @@ impl Programs {
                 },
                 false,
                 None,
-            )
-            .clicked()
-            {
+            );
+            spoken(&other, "Use another program...");
+            if other.clicked() {
                 // i18n: file picker title; {name} = yt-dlp or ffmpeg
                 let title =
                     crate::i18n::fmt(crate::i18n::t("Choose {name}"), &[("name", h.name())]);
@@ -652,59 +634,56 @@ impl Programs {
                     rfd::FileDialog::new().set_title(title).pick_file()
                 });
             }
-            if winui::button(
+            let own = winui::button(
                 ui,
                 r(o, own_at.0, y - o.y + 46.0, own_at.1, 21.0),
                 // i18n: Video helpers: button: go back to the copy MDM downloads and checks itself
-                "Use MDM's own copy",
-                if (mine || system) && !busy {
+                "Use Grabbit's own copy",
+                if mine && !busy {
                     ButtonKind::Normal
                 } else {
                     ButtonKind::Disabled
                 },
                 false,
                 None,
-            )
-            .clicked()
+            );
+            spoken(&own, "Use Grabbit's own copy");
+            if own.clicked()
                 && let Some(dir) = self.dir.clone()
             {
-                if mine {
-                    self.error = mdm_tools::chosen::forget(&dir, h)
-                        .err()
-                        .map(|e| crate::errors::tools(&e));
-                    self.look();
-                } else {
-                    self.install_own(dir, rt, ui.ctx());
-                }
-            }
-            if k + 1 < HELPERS.len() {
-                winui::etched_h(&p, o.x + 14.0, o.y + 82.0 + k as f32 * 78.0, 472.0);
+                self.error = mdm_tools::chosen::forget(&dir, h)
+                    .err()
+                    .map(|e| crate::errors::tools(&e));
+                self.look();
             }
         }
         if let Some(e) = &self.error {
             winui::fit(
                 ui,
                 &p,
-                o.x + 14.0,
-                o.y + 254.0,
+                // In the cards' text column, under the last card (it ends at 255).
+                o.x + 20.0,
+                o.y + 272.0,
                 e,
                 winui::ERROR(),
-                o.x + 400.0,
+                o.x + 486.0,
                 "helper-error",
             );
         }
-        let close = winui::button(
+        // Close on Enter and on Escape, as before.
+        match winui::footer(
             ui,
-            r(o, 413.0, 260.0, 77.0, 21.0),
-            "Close",
-            ButtonKind::Default,
-            false,
-            None,
-        );
-        if close.clicked() || winui::escape_pressed(ui) || winui::enter_pressed(ui) {
-            Outcome::Done(())
-        } else {
-            Outcome::Open
+            o,
+            PROGRAMS_W,
+            PROGRAMS_BODY,
+            &mut [FooterItem::Button(
+                FooterButton::new("Close", ButtonKind::Default)
+                    .enter(true)
+                    .escape(true),
+            )],
+        ) {
+            Some(_) => Outcome::Done(()),
+            None => Outcome::Open,
         }
     }
 }

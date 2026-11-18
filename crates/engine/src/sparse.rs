@@ -7,8 +7,7 @@
 //! (`ftruncate` already makes sparse files) this is a no-op.
 //!
 //! The engine's unsafe code: one `DeviceIoControl` call here (and, in its test, one
-//! `GetCompressedFileSizeW`), and the free-space probe's calls in `crate::disk`: two on Windows,
-//! one on macOS (with its CoreFoundation key, and the release of what it returns).
+//! `GetCompressedFileSizeW`), and the free-space probe's two calls in `crate::disk`.
 #![allow(unsafe_code)]
 
 use std::fs::File;
@@ -23,7 +22,6 @@ pub fn set(file: &File, sparse: bool) -> bool {
     imp::set(file, sparse)
 }
 
-#[cfg(windows)]
 mod imp {
     use std::os::windows::io::AsRawHandle;
 
@@ -52,14 +50,7 @@ mod imp {
     }
 }
 
-#[cfg(not(windows))]
-mod imp {
-    pub fn set(_: &std::fs::File, _: bool) -> bool {
-        false
-    }
-}
-
-#[cfg(all(test, windows))]
+#[cfg(test)]
 mod tests {
     use std::io::{Seek, SeekFrom, Write};
     use std::os::windows::fs::MetadataExt;

@@ -3,15 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Benchmark: Mister Download Manager vs IDM, timed to the millisecond</title>
-  <meta name="description" content="Seven downloads, each run at least seven times by IDM 6.42 and Mister Download Manager from the same test server: MDM was 5.4× faster on 1 GiB and 106× on small files. Charts, raw data and the method.">
+  <title>Benchmark: Grabbit vs IDM, timed to the millisecond</title>
+  <meta name="description" content="Seven downloads, each run at least seven times by IDM 6.42 and Grabbit from the same test server: Grabbit was 5.4× faster on 1 GiB and 106× on small files. Charts, raw data and the method.">
   <meta name="theme-color" content="#1f63d6" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0c1a33" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
   <link rel="canonical" href="{{SITE}}/benchmark.html">
   <meta property="og:type" content="article">
-  <meta property="og:site_name" content="Mister Download Manager">
-  <meta property="og:title" content="IDM vs Mister Download Manager, timed to the millisecond">
+  <meta property="og:site_name" content="Grabbit">
+  <meta property="og:title" content="IDM vs Grabbit, timed to the millisecond">
   <meta property="og:description" content="5.4× faster on 1 GiB, 106× on small files, 2 connections instead of 480. Every run, the raw data and the method.">
   <meta property="og:url" content="{{SITE}}/benchmark.html">
   <meta property="og:image" content="{{SITE}}/assets/social.png">
@@ -26,7 +26,7 @@
   <script src="/vendor/echarts.min.js" defer></script>
   <script src="/bench.js" defer></script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Home","item":"{{SITE}}/"},{"@type":"ListItem","position":2,"name":"Benchmark","item":"{{SITE}}/benchmark.html"}]}</script>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"IDM 6.42 vs Mister Download Manager download benchmark","description":"Seven download scenarios against a local fault-injecting test server, each run at least seven times per app in alternating order; end-to-end and server-side transfer times, connections, requests, CPU and memory.","url":"{{SITE}}/benchmark.html","license":"https://www.gnu.org/licenses/gpl-3.0.html","creator":{"@type":"Person","name":"Ahmed Nefzaoui"},"dateModified":"2026-10-29","distribution":[{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"{{SITE}}/bench/results.json"}]}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"Dataset","name":"IDM 6.42 vs Grabbit download benchmark","description":"Seven download scenarios against a local fault-injecting test server, each run at least seven times per app in alternating order; end-to-end and server-side transfer times, connections, requests, CPU and memory.","url":"{{SITE}}/benchmark.html","license":"https://www.gnu.org/licenses/gpl-3.0.html","creator":{"@type":"Person","name":"Ahmed Nefzaoui"},"dateModified":"2026-10-29","distribution":[{"@type":"DataDownload","encodingFormat":"application/json","contentUrl":"{{SITE}}/bench/results.json"}]}</script>
 </head>
 <body>
   <!--@header-->
@@ -34,7 +34,7 @@
     <section class="page-head">
       <div class="wrap">
         <ol class="crumbs" aria-label="Breadcrumb"><li><a href="/">Home</a></li><li aria-current="page">Benchmark</li></ol>
-        <h1>IDM vs MDM, timed to the millisecond.</h1>
+        <h1>IDM vs Grabbit, timed to the millisecond.</h1>
         <p class="lede small">Both apps on the same PC, downloading from the same test server, in alternating runs. The server's own log says when each request arrived and when the last byte left, so nothing relies on either app's word.</p>
       </div>
     </section>
@@ -48,7 +48,7 @@
             <button class="icon-btn race-replay" type="button" data-race-replay aria-label="Replay" title="Replay"><svg aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4"/></svg></button>
           </div>
           <div class="lane" data-lane="mdm">
-            <div class="lane-name"><img src="/assets/logo-64.png" width="28" height="28" alt=""><b>Mister Download Manager</b></div>
+            <div class="lane-name"><img src="/assets/logo-64.png" width="28" height="28" alt=""><b>Grabbit</b></div>
             <div class="lane-time"><span data-time>0.00 s</span><small data-state>Ready</small></div>
             <div class="lane-track" aria-hidden="true"><i class="seg wait"></i><i class="seg run"></i><i class="seg end"></i><span class="stamp lane-stamp">Delivered</span></div>
             <ol class="lane-events"><li></li><li></li><li></li></ol>
@@ -71,7 +71,7 @@
       <div class="wrap">
         <div class="sec-center">
           <h2 id="speedup-title">Faster in every scenario.</h2>
-          <p>How many times faster MDM finished, from command to finished file. The whisker is the 95% interval of the ratio; the scale is logarithmic.</p>
+          <p>How many times faster Grabbit finished, from command to finished file. The whisker is the 95% interval of the ratio; the scale is logarithmic.</p>
         </div>
         <div class="speedup" data-speedup></div>
       </div>
@@ -84,7 +84,7 @@
           <p>A server that allows two connections at a time. Every square is one connection it saw in a typical run.</p>
         </div>
         <div class="conn-race" data-conns>
-          <div class="conn-col"><div class="conn-head"><img src="/assets/logo-64.png" width="22" height="22" alt=""><b>MDM</b><span data-conn-count="mdm">0</span></div><div class="conn-grid" data-conn-grid="mdm"></div><p>Learns the limit from the server's answer, keeps to it, and remembers it for next time. Finished in 12.6 s.</p></div>
+          <div class="conn-col"><div class="conn-head"><img src="/assets/logo-64.png" width="22" height="22" alt=""><b>Grabbit</b><span data-conn-count="mdm">0</span></div><div class="conn-grid" data-conn-grid="mdm"></div><p>Learns the limit from the server's answer, keeps to it, and remembers it for next time. Finished in 12.6 s.</p></div>
           <div class="conn-col idm"><div class="conn-head"><span class="lane-dot"></span><b>IDM 6.42</b><span data-conn-count="idm">0</span></div><div class="conn-grid" data-conn-grid="idm"></div><p>Retried about 250 times a second against the refusals. Finished in 15.9 s.</p></div>
         </div>
       </div>
@@ -109,7 +109,7 @@
         <div class="bench-wide" data-bench-phases></div>
 
         <h3 class="bench-h">What it costs the computer</h3>
-        <p class="fine">Median CPU time each app used during a run, and its peak memory. MDM draws its window with the GPU, which takes more memory than IDM's classic Windows controls.</p>
+        <p class="fine">Median CPU time each app used during a run, and its peak memory. Grabbit draws its window with the GPU, which takes more memory than IDM's classic Windows controls.</p>
         <div class="bench-wide short" data-bench-res></div>
 
         <details class="bench-details">
@@ -142,9 +142,9 @@
         <div class="sec-head"><h2 id="method-title">How it was measured</h2></div>
         <ul class="method">
           <li><b>Server.</b> The lab server from this repository, on 127.0.0.1, serving generated content. It throttles, delays, refuses or cuts connections per scenario, and logs every request with millisecond start and end times.</li>
-          <li><b>Clients.</b> IDM and MDM, both at default settings (8 connections), each given the download through the same documented command line: <code>/d URL /p folder /f name /n</code>. Both save to the drive that holds IDM's temporary folder, so neither pays a cross-drive copy.</li>
-          <li><b>Timing.</b> End to end: from issuing the command to the finished file under its final name, polled every millisecond on a monotonic clock. MDM renames its finished file into place; IDM creates the final file early and fills it, so for IDM the moment it reaches full size counts. Transfer: the server's first request to its last byte, read on the same clock through a calibration request before each run.</li>
-          <li><b>Fairness.</b> The apps alternate, IDM first on even runs and MDM first on odd ones, so drift on the machine hits both. One warm-up run each is discarded. Failed runs are counted, not dropped. Before every run the harness waits until the loopback is quiet: against a server that refuses extra connections IDM retries about 250 times a second, leaving thousands of closed sockets for half a minute; without the wait, whichever app ran next was timed on that backlog.</li>
+          <li><b>Clients.</b> IDM and Grabbit, both at default settings (8 connections), each given the download through the same documented command line: <code>/d URL /p folder /f name /n</code>. Both save to the drive that holds IDM's temporary folder, so neither pays a cross-drive copy.</li>
+          <li><b>Timing.</b> End to end: from issuing the command to the finished file under its final name, polled every millisecond on a monotonic clock. Grabbit renames its finished file into place; IDM creates the final file early and fills it, so for IDM the moment it reaches full size counts. Transfer: the server's first request to its last byte, read on the same clock through a calibration request before each run.</li>
+          <li><b>Fairness.</b> The apps alternate, IDM first on even runs and Grabbit first on odd ones, so drift on the machine hits both. One warm-up run each is discarded. Failed runs are counted, not dropped. Before every run the harness waits until the loopback is quiet: against a server that refuses extra connections IDM retries about 250 times a second, leaving thousands of closed sockets for half a minute; without the wait, whichever app ran next was timed on that backlog.</li>
           <li><b>Statistics.</b> Medians with interquartile ranges, bootstrap 95% intervals (10,000 resamples) for each median and for the ratio of medians, and a two-sided Mann–Whitney U test.</li>
           <li><b>Limits.</b> A loopback link has no real distance or packet loss; the faults stand in for them. Results are from one machine. Run it yourself: <code>python tools/bench/bench.py</code>, then <code>python tools/bench/report.py</code>.</li>
         </ul>
@@ -152,9 +152,9 @@
           <a href="{{REPO}}/tree/main/docs/bench"><svg aria-hidden="true"><use href="#i-code"/></svg>Raw data and server logs</a>
           <a href="{{REPO}}/tree/main/tools/bench"><svg aria-hidden="true"><use href="#i-code"/></svg>The harness</a>
           <a href="/bench/results.json"><svg aria-hidden="true"><use href="#i-out"/></svg>results.json</a>
-          <a href="{{REPO}}/issues/new?template=website.yml&title=Benchmark%3A%20&page=https%3A%2F%2Fmisterdownloadmanager.com%2Fbenchmark.html"><svg aria-hidden="true"><use href="#i-issue"/></svg>Question a number</a>
+          <a href="{{REPO}}/issues/new?template=website.yml&title=Benchmark%3A%20&page=https%3A%2F%2Fhumblef0ol.github.io%2Fgrabbit%2Fbenchmark.html"><svg aria-hidden="true"><use href="#i-issue"/></svg>Question a number</a>
         </div>
-        <div class="cta-band"><p>See it for yourself: it's free.</p><a class="btn btn-go" href="/download.html">Download Mister Download Manager</a></div>
+        <div class="cta-band"><p>See it for yourself: it's free.</p><a class="btn btn-go" href="/download.html">Download Grabbit</a></div>
       </div>
     </section>
   </main>

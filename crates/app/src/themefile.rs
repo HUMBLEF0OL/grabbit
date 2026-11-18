@@ -1,11 +1,10 @@
 //! Theme files (#45): TOML or JSON in the data folder's `themes` folder, read into a
 //! [`Theme`](crate::palette::Theme). A file names only what it changes; the rest comes from the
-//! theme it `inherits` (a built-in's id or another file's name; the classic look by default).
+//! theme it `inherits` (`graphite`, by default, or another file's name).
 //!
 //! ```toml
 //! name = "My theme"
-//! inherits = "classic"
-//! icons = "mono"            # color | mono | accent
+//! inherits = "graphite"
 //!
 //! [sizes]
 //! radius = 4
@@ -25,14 +24,16 @@
 //! written for a newer MDM still loads; a file that isn't TOML or JSON is an error.
 //!
 //! A Base16 scheme (`.yaml`, `.yml`) and pywal's `colors.json` are themes too: `crate::schemes`
-//! reads them into the same value tree, on the classic look. pywal's own file, where `wal`
-//! writes it, is the theme `pywal`, read again when `wal` changes it ([`pywal_changed`]).
+//! reads them into the same value tree, on Graphite. pywal's own file, where `wal`
+//! writes it, is the theme `pywal`, read again when `wal` changes it ([`following_pywal`]).
+//!
+//! The folder and pywal's file are looked at by `lookwatch`'s thread, never the window's (#719).
 
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::palette::{self, IconStyle, Palette, Theme};
+use crate::palette::{self, Palette, Theme};
 
 /// A theme read from a file, with what in it was skipped.
 #[derive(Debug)]
@@ -42,7 +43,7 @@ pub struct Loaded {
 }
 
 /// Where theme files are: the data folder's `themes` (portable copies' next to the program,
-/// `MDM_DATA_DIR`'s in tests). None when there is no data folder (built-ins only).
+/// `GRABBIT_DATA_DIR`'s in tests). None when there is no data folder (built-ins only).
 pub fn dir() -> Option<PathBuf> {
     mdm_ipc::data_dir().map(|d| d.join("themes"))
 }
@@ -58,8 +59,14 @@ pub struct Entry {
 
 /// The built-in themes, then pywal's colours when `wal` has written them, then the theme files
 /// in [`dir`] (by name), each once: a file named as a built-in is skipped (the built-in keeps
-/// its id).
+/// its id). It reads every file of the folder: off the window's thread but for an action of the
+/// user's (View → Theme → Add a theme file).
 pub fn list() -> Vec<Entry> {
+    list_in(dir().as_deref(), pywal_file())
+}
+
+/// [`list`] of the theme files in `dir`, with pywal's colours from `wal` when it is a file.
+pub fn list_in(dir: Option<&Path>, wal: Option<PathBuf>) -> Vec<Entry> {
     let mut out: Vec<Entry> = palette::builtins()
         .iter()
         .map(|t| Entry {
@@ -68,7 +75,7 @@ pub fn list() -> Vec<Entry> {
             path: None,
         })
         .collect();
-    let mut files: Vec<(String, PathBuf)> = dir()
+    let mut files: Vec<(String, PathBuf)> = dir
         .and_then(|d| std::fs::read_dir(d).ok())
         .into_iter()
         .flatten()
@@ -86,7 +93,7 @@ pub fn list() -> Vec<Entry> {
         .collect();
     files.sort();
     // pywal's colours where `wal` keeps them, unless a file of the folder takes the name.
-    if let Some(wal) = pywal_file().filter(|p| p.is_file())
+    if let Some(wal) = wal.filter(|p| p.is_file())
         && !files.iter().any(|(id, _)| id == PYWAL)
     {
         out.push(Entry {
@@ -96,8 +103,8 @@ pub fn list() -> Vec<Entry> {
         });
     }
     for (id, path) in files {
-        // Built-ins keep their ids (Native too, which is made, not read).
-        if out.iter().any(|e| e.id == id) || id == "native" {
+        // Built-ins keep their ids.
+        if out.iter().any(|e| e.id == id) {
             continue;
         }
         // The name the file gives itself, else its file name.
@@ -115,9 +122,9 @@ pub fn list() -> Vec<Entry> {
     out
 }
 
-/// When the themes folder last changed (a file added, removed or renamed); None without one.
-pub fn changed() -> Option<std::time::SystemTime> {
-    std::fs::metadata(dir()?).ok()?.modified().ok()
+/// When a themes folder last changed (a file added, removed or renamed); None without one.
+pub fn folder_stamp(dir: &Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(dir).ok()?.modified().ok()
 }
 
 /// A theme folder's file: `theme.toml` or `theme.json`.
@@ -163,13 +170,17 @@ pub fn pywal_file() -> Option<PathBuf> {
 }
 
 /// The file's time and size: what says it was written again.
-type Stamp = (Option<std::time::SystemTime>, u64);
+pub type Stamp = (Option<std::time::SystemTime>, u64);
+
+/// pywal's file as a theme was read from it, and its stamp then: the file to follow.
+pub type Followed = (PathBuf, Stamp);
 
 /// pywal's file as last read for the active theme, with its stamp then: None when the active
 /// theme isn't made from it.
-static PYWAL_READ: std::sync::Mutex<Option<(PathBuf, Stamp)>> = std::sync::Mutex::new(None);
+static PYWAL_READ: std::sync::Mutex<Option<Followed>> = std::sync::Mutex::new(None);
 
-fn stamp(path: &Path) -> Stamp {
+/// A file's [`Stamp`] (a look at its details on the disk).
+pub fn stamp(path: &Path) -> Stamp {
     let meta = std::fs::metadata(path).ok();
     (
         meta.as_ref().and_then(|m| m.modified().ok()),
@@ -182,41 +193,60 @@ pub fn forget_pywal() {
     *PYWAL_READ.lock().unwrap_or_else(|e| e.into_inner()) = None;
 }
 
-/// pywal's file as it is now taken as seen: a file that didn't read is read again only once it
+/// pywal's file taken as seen at `written`: a file that didn't read is read again only once it
 /// is written again.
-pub fn pywal_seen() {
-    if let Some((path, seen)) = PYWAL_READ
+pub fn pywal_seen_as(written: Stamp) {
+    if let Some((_, seen)) = PYWAL_READ
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .as_mut()
     {
-        *seen = stamp(path);
+        *seen = written;
     }
 }
 
-/// True when the active theme is made from pywal's file and `wal` has written it since (its
-/// time or size changed): one look at the file's details, on the main loop's 2-second check.
-pub fn pywal_changed() -> bool {
-    let read = PYWAL_READ.lock().unwrap_or_else(|e| e.into_inner());
-    read.as_ref()
-        .is_some_and(|(path, seen)| stamp(path) != *seen)
+/// The pywal file the active theme is made from, with its stamp when it was read; None when the
+/// theme isn't made from it. `lookwatch`'s thread compares it with the file's stamp now, and
+/// reads the theme again when `wal` has written it since (its time or size changed).
+pub fn following_pywal() -> Option<Followed> {
+    PYWAL_READ.lock().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
-/// The theme with this id: a built-in, or the file of that name in [`dir`].
-pub fn load(id: &str) -> Result<Loaded, String> {
-    let folder = dir().unwrap_or_default();
-    load_in(&folder, id, 0)
+/// The active theme follows this pywal file from now on (None: none), as [`read`] found it.
+pub fn follow_pywal(followed: Option<Followed>) {
+    *PYWAL_READ.lock().unwrap_or_else(|e| e.into_inner()) = followed;
 }
 
-/// The theme in this file (the themes it inherits from beside it).
-pub fn load_file(path: &Path) -> Result<Loaded, String> {
-    let id =
-        theme_id(path).ok_or_else(|| format!("{}: not a .toml or .json file", path.display()))?;
-    load_in(path.parent().unwrap_or(Path::new(".")), &id, 0)
+/// The theme with this id (a built-in, or the file of that name in [`dir`]) or in the theme
+/// file at this path (the themes it inherits from beside it); with pywal's file when the theme
+/// is made from it, to follow ([`follow_pywal`]).
+pub fn read(id: &str) -> (Result<Loaded, String>, Option<Followed>) {
+    let mut followed = None;
+    let path = Path::new(id);
+    let loaded = if path.is_file() {
+        match theme_id(path) {
+            Some(id) => load_in(
+                path.parent().unwrap_or(Path::new(".")),
+                &id,
+                0,
+                &mut followed,
+            ),
+            None => Err(format!("{}: not a .toml or .json file", path.display())),
+        }
+    } else {
+        load_in(&dir().unwrap_or_default(), id, 0, &mut followed)
+    };
+    (loaded, followed)
 }
 
-/// [`load`] from `folder`, `depth` themes down an `inherits` chain.
-fn load_in(folder: &Path, id: &str, depth: usize) -> Result<Loaded, String> {
+/// The theme `id` from `folder`, `depth` themes down an `inherits` chain; pywal's file into
+/// `followed` when one of them is read from it.
+fn load_in(
+    folder: &Path,
+    id: &str,
+    depth: usize,
+    followed: &mut Option<Followed>,
+) -> Result<Loaded, String> {
     if let Some(t) = palette::builtins().into_iter().find(|t| t.id == id) {
         return Ok(Loaded {
             theme: t.clone(),
@@ -238,6 +268,14 @@ fn load_in(folder: &Path, id: &str, depth: usize) -> Result<Loaded, String> {
     } else {
         None
     };
+    if found.is_none() && wal.is_none() && palette::REMOVED.contains(&id) {
+        return Ok(Loaded {
+            theme: palette::graphite().clone(),
+            warnings: vec![format!(
+                "{id}: Grabbit no longer has this theme (Graphite is its only look); Graphite instead"
+            )],
+        });
+    }
     let path = found
         .or_else(|| wal.clone())
         .ok_or_else(|| format!("{id}: no such theme"))?;
@@ -245,12 +283,14 @@ fn load_in(folder: &Path, id: &str, depth: usize) -> Result<Loaded, String> {
     let before = wal.as_deref().map(stamp);
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let (value, mut warnings) = read_value(&path, &text)?;
-    let mut loaded = parse(id, &value, |base| load_in(folder, base, depth + 1))?;
+    let mut loaded = parse(id, &value, |base| {
+        load_in(folder, base, depth + 1, followed)
+    })?;
     warnings.append(&mut loaded.warnings);
     loaded.warnings = warnings;
     // Followed from now on: read again when `wal` writes it.
     if let (Some(wal), Some(seen)) = (wal, before) {
-        *PYWAL_READ.lock().unwrap_or_else(|e| e.into_inner()) = Some((wal, seen));
+        *followed = Some((wal, seen));
     }
     // A theme folder's own icons (`<id>/icons/16`, `24`), unless the file names a set.
     let icons = own.join("icons");
@@ -264,7 +304,7 @@ fn load_in(folder: &Path, id: &str, depth: usize) -> Result<Loaded, String> {
         } else {
             loaded
                 .warnings
-                .push("icons: no icon MDM knows in the folder".into());
+                .push("icons: no icon Grabbit knows in the folder".into());
         }
     }
     Ok(loaded)
@@ -304,7 +344,7 @@ fn read_value(path: &Path, text: &str) -> Result<(Value, Vec<String>), String> {
 /// has that name; the same file already there is used as it is. The copy must load (with the
 /// themes it inherits, beside it), or it is taken out again. Returns the theme's id.
 pub fn add(source: &Path) -> Result<String, String> {
-    let folder = dir().ok_or("MDM has no data folder")?;
+    let folder = dir().ok_or("Grabbit has no data folder")?;
     add_in(&folder, source)
 }
 
@@ -342,9 +382,8 @@ fn add_in(folder: &Path, source: &Path) -> Result<String, String> {
         stem
     };
     std::fs::create_dir_all(folder).map_err(|e| format!("{}: {e}", folder.display()))?;
-    // The built-ins' ids, Native's and pywal's are never a file's (the file would be passed over).
-    let reserved =
-        |id: &str| palette::builtins().iter().any(|t| t.id == id) || id == "native" || id == PYWAL;
+    // The built-ins' ids and pywal's are never a file's (the file would be passed over).
+    let reserved = |id: &str| palette::builtins().iter().any(|t| t.id == id) || id == PYWAL;
     let taken = |id: &str| {
         folder.join(id).exists()
             || EXTENSIONS
@@ -367,7 +406,7 @@ fn add_in(folder: &Path, source: &Path) -> Result<String, String> {
     }
     let target = folder.join(format!("{id}.{ext}"));
     std::fs::write(&target, &bytes).map_err(|e| format!("{}: {e}", target.display()))?;
-    if let Err(e) = load_in(folder, &id, 0) {
+    if let Err(e) = load_in(folder, &id, 0, &mut None) {
         let _ = std::fs::remove_file(&target);
         return Err(e);
     }
@@ -388,22 +427,20 @@ fn file_name_of(name: &str) -> String {
     out.trim_end_matches('-').to_owned()
 }
 
-/// A built-in theme shipped as a theme file (inheriting the classic look at most): a file that
-/// doesn't read is a bug, caught by the tests, and falls back to the classic look.
+/// A built-in theme shipped as a theme file (Graphite), on [`palette::BASE`]: a file that doesn't
+/// read is a bug, caught by the tests, and falls back to the base.
 pub fn builtin(id: &str, text: &str) -> Theme {
     let read = toml::from_str::<Value>(text)
         .map_err(|e| e.to_string())
         .and_then(|v| {
             parse(id, &v, |base| {
-                if base == "classic" {
+                if base == BUILTIN_BASE {
                     Ok(Loaded {
-                        theme: palette::CLASSIC.clone(),
+                        theme: palette::BASE.clone(),
                         warnings: Vec::new(),
                     })
                 } else {
-                    Err(format!(
-                        "{base}: a built-in theme inherits the classic look only"
-                    ))
+                    Err(format!("{base}: a built-in theme inherits the base only"))
                 }
             })
         });
@@ -414,12 +451,16 @@ pub fn builtin(id: &str, text: &str) -> Theme {
         }
         Err(e) => {
             debug_assert!(false, "{id}: {e}");
-            palette::CLASSIC.clone()
+            palette::BASE.clone()
         }
     }
 }
 
-/// A theme from a file's value tree; `base` loads the theme it inherits.
+/// What a built-in theme's file inherits ([`palette::BASE`]); never a user's.
+const BUILTIN_BASE: &str = "base";
+
+/// A theme from a file's value tree; `base` loads the theme it inherits (Graphite unless the
+/// file names another; a built-in, Graphite itself, the base).
 pub fn parse(
     id: &str,
     v: &Value,
@@ -430,7 +471,8 @@ pub fn parse(
         .ok_or_else(|| format!("{id}: a theme is a table of keys"))?;
     let mut warnings = Vec::new();
     let inherits = match top.get("inherits") {
-        None => "classic",
+        None if id == "graphite" => BUILTIN_BASE,
+        None => "graphite",
         Some(Value::String(s)) => s.as_str(),
         Some(_) => return Err(format!("{id}: inherits names a theme")),
     };
@@ -465,17 +507,46 @@ pub fn parse(
             "name" | "inherits" | "seeds" | "contrast" | "icon-mono" => {}
             // A built-in icon set by name (a theme folder's own icons are read by `load_in`).
             "icon-set" => match value.as_str() {
+                // A set MDM no longer carries (an old theme's): Graphite's.
+                Some(name) if palette::REMOVED.contains(&name) => {
+                    theme.icon_set = Some("graphite".into());
+                    warnings.push(format!(
+                        "icon-set: Grabbit no longer has {name}'s icons; Graphite's instead"
+                    ));
+                }
                 Some(name) => theme.icon_set = Some(name.to_owned().into()),
                 None => warnings.push("icon-set: a set's name".into()),
             },
-            "icons" => match value.as_str().and_then(IconStyle::from_key) {
-                Some(s) => theme.icons = s,
-                None => warnings.push(format!("icons: {value} is not color, mono or accent")),
+            // A font bundled with MDM; an unknown one keeps the system's.
+            "font" => match value.as_str() {
+                Some(name) if crate::theme::bundled_font(name).is_some() => {
+                    theme.font = Some(name.to_owned().into());
+                }
+                _ => {
+                    theme.font = None;
+                    warnings.push(format!(
+                        "font: {value} is not a font Grabbit carries (geist); the system's is used"
+                    ));
+                }
             },
+            // How the old outline icons were inked: MDM's icons are Graphite's, in one colour
+            // (plan 05.5); read and ignored.
+            "icons" => warnings.push(format!(
+                "icons: {value}: ignored (Grabbit's icons are drawn in one colour)"
+            )),
             "sizes" => sizes(value, &mut theme, &mut warnings),
             "controls" => match value.as_object() {
                 Some(table) => {
                     for (k, v) in table {
+                        // The layout: Graphite's, the only one (plan 05.5c); read and ignored.
+                        if k == "chrome" {
+                            if v.as_str() != Some("graphite") {
+                                warnings.push(format!(
+                                    "controls.chrome: {v}: Graphite's layout is the only one"
+                                ));
+                            }
+                            continue;
+                        }
                         let ok = v.as_str().is_some_and(|v| theme.controls.set(k, v));
                         if !ok {
                             warnings.push(format!("controls.{k}: {v} is not a style of it"));
@@ -582,7 +653,6 @@ fn colors(table_name: &str, v: &Value, pal: &mut Palette, warnings: &mut Vec<Str
             "dark" => Some(&mut pal.dark),
             "focus-line-straight" => Some(&mut pal.focus_line_straight),
             "access-keys-always" => Some(&mut pal.access_keys_always),
-            "tree-chevrons" => Some(&mut pal.tree_chevrons),
             _ => None,
         };
         if let Some(flag) = flag {
@@ -644,8 +714,18 @@ fn gradient(v: &Value, rows: &mut [egui::Color32; 13]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::palette::CLASSIC;
+    use crate::palette::graphite;
     use egui::Color32;
+
+    /// [`super::load_in`], pywal's file not followed.
+    fn load_in(folder: &Path, id: &str, depth: usize) -> Result<Loaded, String> {
+        super::load_in(folder, id, depth, &mut None)
+    }
+
+    /// The theme in this file, as [`read`] gives it.
+    fn load_file(path: &Path) -> Result<Loaded, String> {
+        read(path.to_str().unwrap()).0
+    }
 
     fn toml_theme(id: &str, text: &str) -> Result<Loaded, String> {
         let v: Value = toml::from_str(text).map_err(|e| e.to_string())?;
@@ -658,7 +738,6 @@ mod tests {
             "mine",
             r##"
             name = "Mine"
-            icons = "mono"
             [sizes]
             radius = 5
             "list.row" = 20
@@ -673,19 +752,34 @@ mod tests {
         assert!(l.warnings.is_empty(), "{:?}", l.warnings);
         let t = l.theme;
         assert_eq!((t.id.as_ref(), t.name.as_ref()), ("mine", "Mine"));
-        assert_eq!(t.icons, IconStyle::Mono);
         assert_eq!(t.metrics.control_radius, 5.0);
         assert_eq!(t.metrics.list_row, 20.0);
-        assert_eq!(t.metrics.font_dialog, CLASSIC.metrics.font_dialog);
+        assert_eq!(t.metrics.font_dialog, graphite().metrics.font_dialog);
         let green = Color32::from_rgb(0x2f, 0x7d, 0x32);
         assert_eq!((t.light.accent, t.dark.accent), (green, green));
         assert_eq!(t.dark.window, Color32::from_gray(0x20));
-        assert_eq!(t.light.window, CLASSIC.light.window);
+        assert_eq!(t.light.window, graphite().light.window);
         assert_eq!(
             t.dark.segments.done,
             [Color32::from_rgb(0x3f, 0xa8, 0x64); 13]
         );
-        assert_eq!(t.dark.text, CLASSIC.dark.text);
+        assert_eq!(t.dark.text, graphite().dark.text);
+    }
+
+    /// Plan 04: a theme names a bundled font; one MDM doesn't carry warns and keeps the system's.
+    #[test]
+    fn a_theme_names_a_bundled_font() {
+        let l = toml_theme("g", r#"font = "geist""#).unwrap();
+        assert!(l.warnings.is_empty(), "{:?}", l.warnings);
+        assert_eq!(l.theme.font.as_deref(), Some("geist"));
+        // Graphite's, inherited.
+        let l = toml_theme("c", "").unwrap();
+        assert_eq!(l.theme.font.as_deref(), Some("geist"));
+        for bad in [r#"font = "comic-sans""#, "font = 3"] {
+            let l = toml_theme("u", bad).unwrap();
+            assert_eq!(l.theme.font, None, "{bad}");
+            assert!(l.warnings.iter().any(|w| w.starts_with("font:")), "{bad}");
+        }
     }
 
     #[test]
@@ -718,8 +812,8 @@ mod tests {
         )
         .unwrap();
         assert_eq!(l.warnings.len(), 8, "{:?}", l.warnings);
-        assert_eq!(l.theme.light, CLASSIC.light);
-        assert_eq!(l.theme.metrics, CLASSIC.metrics);
+        assert_eq!(l.theme.light, graphite().light);
+        assert_eq!(l.theme.metrics, graphite().metrics);
     }
 
     #[test]
@@ -747,8 +841,53 @@ mod tests {
         assert_eq!(load_file(&dir.join("child.json")).unwrap().theme, t);
         assert!(load_file(&dir.join("child.txt")).is_err());
         assert!(load_in(&dir, "a", 0).is_err());
-        assert_eq!(load_in(&dir, "classic", 0).unwrap().theme, CLASSIC);
+        // A theme MDM no longer has: Graphite, with a warning (plan 05.5c).
+        let l = load_in(&dir, "classic", 0).unwrap();
+        assert_eq!(&l.theme, graphite());
+        assert_eq!(l.warnings.len(), 1, "{:?}", l.warnings);
+        // A file of the user's own with a removed theme's name is the user's.
+        std::fs::write(dir.join("metro.toml"), "name = \"My Metro\"\n").unwrap();
+        assert_eq!(load_in(&dir, "metro", 0).unwrap().theme.name, "My Metro");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Plan 05.5c: a file inheriting a removed theme, or naming its icon set, loads on
+    /// Graphite with a warning; a file naming no theme inherits Graphite.
+    #[test]
+    fn removed_themes_give_graphite() {
+        for old in crate::palette::REMOVED {
+            let l = toml_theme("mine", &format!("inherits = \"{old}\"")).unwrap();
+            assert_eq!(l.theme.light, graphite().light, "{old}");
+            assert_eq!(l.theme.controls, graphite().controls, "{old}");
+            assert_eq!(l.warnings.len(), 1, "{old}: {:?}", l.warnings);
+        }
+        let l = toml_theme("mine", "icon-set = \"luna\"").unwrap();
+        assert_eq!(l.theme.icon_set.as_deref(), Some("graphite"));
+        assert!(l.warnings[0].starts_with("icon-set: "), "{:?}", l.warnings);
+        let l = toml_theme("mine", "").unwrap();
+        assert!(l.warnings.is_empty());
+        assert_eq!(l.theme.light, graphite().light);
+        assert_eq!(l.theme.icon_set.as_deref(), Some("graphite"));
+        // Keys only the removed looks used: read and ignored, each with a word in the log.
+        let l = toml_theme(
+            "mine",
+            "icons = \"mono\"\n[light]\n\"tree.frame\" = \"#123456\"\n",
+        )
+        .unwrap();
+        assert_eq!(l.warnings.len(), 2, "{:?}", l.warnings);
+        assert!(
+            l.warnings.iter().any(|w| w.starts_with("icons: ")),
+            "{:?}",
+            l.warnings
+        );
+        assert!(
+            l.warnings.iter().any(|w| w.contains("tree.frame")),
+            "{:?}",
+            l.warnings
+        );
+        assert_eq!(l.theme.light, graphite().light);
+        // The built-in Graphite inherits the base, never itself.
+        assert_eq!(graphite().id, "graphite");
     }
 
     fn temp_dir(name: &str) -> PathBuf {
@@ -778,10 +917,15 @@ mod tests {
         // A theme file built on a scheme: its colours, the file's own changes on top.
         std::fs::write(
             dir.join("mine.toml"),
-            "inherits = \"gruvish\"\nicons = \"accent\"\n[sizes]\nradius = 6\n",
+            "inherits = \"gruvish\"\n[sizes]\nradius = 6\n",
         )
         .unwrap();
-        let t = load_in(&dir, "gruvish", 0).unwrap().theme;
+        // On Graphite, without a word (plan 05.5c: no removed theme inherited).
+        let l = load_in(&dir, "gruvish", 0).unwrap();
+        assert!(l.warnings.is_empty(), "{:?}", l.warnings);
+        let t = l.theme;
+        assert_eq!(t.controls, crate::palette::graphite().controls);
+        assert_eq!(t.metrics, crate::palette::graphite().metrics);
         assert_eq!(t.name, "Test Scheme");
         assert_eq!(t.dark.field, Color32::from_rgb(0x1d, 0x20, 0x21));
         assert_eq!(t.light, t.dark);
@@ -790,7 +934,6 @@ mod tests {
             (mine.dark.field, mine.light.accent),
             (t.dark.field, t.light.accent)
         );
-        assert_eq!(mine.icons, IconStyle::Accent);
         assert_eq!(mine.metrics.control_radius, 6.0);
         // pywal's file, here a light one: a light theme named after its wallpaper.
         let wal = load_in(&dir, "colors", 0).unwrap();
@@ -807,7 +950,12 @@ mod tests {
         let to = from.join("themes");
         std::fs::write(from.join("gruvish.yaml"), SCHEME).unwrap();
         std::fs::write(from.join("colors.json"), WAL).unwrap();
-        std::fs::write(from.join("metro.toml"), "[colors]\naccent = \"#123456\"\n").unwrap();
+        std::fs::write(
+            from.join("graphite.toml"),
+            "[colors]\naccent = \"#123456\"\n",
+        )
+        .unwrap();
+        std::fs::write(from.join("metro.toml"), "name = \"Mine\"\n").unwrap();
         std::fs::write(from.join("bad.yaml"), "just: words\n").unwrap();
         std::fs::write(from.join("lonely.toml"), "inherits = \"not-here\"\n").unwrap();
         std::fs::write(from.join("notes.txt"), "hi").unwrap();
@@ -823,9 +971,14 @@ mod tests {
             add_in(&to, &from.join("colors.json")).unwrap(),
             "pywal-dunes-png"
         );
-        assert_eq!(add_in(&to, &from.join("metro.toml")).unwrap(), "metro-2");
         assert_eq!(
-            load_in(&to, "metro-2", 0).unwrap().theme.light.accent,
+            add_in(&to, &from.join("graphite.toml")).unwrap(),
+            "graphite-2"
+        );
+        // A theme MDM no longer has keeps its name: the file is the user's own (plan 05.5c).
+        assert_eq!(add_in(&to, &from.join("metro.toml")).unwrap(), "metro");
+        assert_eq!(
+            load_in(&to, "graphite-2", 0).unwrap().theme.light.accent,
             Color32::from_rgb(0x12, 0x34, 0x56)
         );
         // Not themes, or not loading once copied: nothing left in the folder.
@@ -840,9 +993,10 @@ mod tests {
         assert_eq!(
             names,
             [
+                "graphite-2.toml",
                 "gruvish-2.yml",
                 "gruvish.yaml",
-                "metro-2.toml",
+                "metro.toml",
                 "pywal-dunes-png.json"
             ]
         );
@@ -854,17 +1008,21 @@ mod tests {
         let dir = temp_dir("wal-follow");
         let file = dir.join("colors.json");
         std::fs::write(&file, WAL).unwrap();
-        *PYWAL_READ.lock().unwrap() = Some((file.clone(), stamp(&file)));
-        assert!(!pywal_changed());
+        let changed = || following_pywal().is_some_and(|(path, seen)| stamp(&path) != seen);
+        follow_pywal(Some((file.clone(), stamp(&file))));
+        assert!(!changed());
         // `wal` run again: other colours, another size.
         std::fs::write(
             &file,
             WAL.replace("#3d6a9a", "#7b4d9e\", \"color5\": \"#000"),
         )
         .unwrap();
-        assert!(pywal_changed());
+        assert!(changed());
+        // Taken as seen (a file that didn't read): not again until it is written again.
+        pywal_seen_as(stamp(&file));
+        assert!(!changed());
         forget_pywal();
-        assert!(!pywal_changed());
+        assert_eq!(following_pywal(), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

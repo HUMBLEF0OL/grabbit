@@ -5,9 +5,6 @@
 //! tutorial that adds it by hand as the fallback. Chrome may ask by itself too: registering the
 //! host also names the store's extension to it (crates/nmhost). "Don't ask again" stops the
 //! offer; `/show extension` brings it back.
-//!
-//! Safari (macOS) has its extension in the app already (tools/safari): its row says "How to
-//! Add", which opens the steps that turn on an extension Apple hasn't notarized.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -16,13 +13,11 @@ use std::time::Duration;
 use egui::{Pos2, Ui};
 
 use crate::dialogs::{Outcome, window};
-use crate::winui::{self, ButtonKind, r};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r};
 
 const W: f32 = 520.0;
 const BANNER: f32 = 84.0;
 const ROW: f32 = 34.0;
-/// Safari's row (macOS), as Options and the native host name it.
-const SAFARI: &str = "Apple Safari";
 
 /// Whether to offer the extension at this start: browser integration on and registered (not a
 /// portable copy, which registers nothing), no browser's extension seen yet, not refused.
@@ -44,10 +39,62 @@ pub struct Extension {
     registered: bool,
     /// When the status files were read last (once a second, not every frame).
     looked: std::time::Instant,
+    /// The read under way beside the window, one at a time ([`Reading`]).
+    reading: Option<Reading<Looked>>,
     /// Set it up's runs seen finished ([`set_up_finished`]).
     set_up_seen: u64,
-    /// The steps that add Safari's extension, while that window is open.
-    steps: Option<SafariSteps>,
+}
+
+/// What the window shows of the extension's state, as read from the status files, the
+/// browsers' folders and the registry.
+struct Looked {
+    connected: bool,
+    seen: Vec<String>,
+    registered: bool,
+}
+
+impl Looked {
+    fn now() -> Looked {
+        Looked {
+            connected: mdm_ipc::extension::seen(),
+            seen: seen_names(),
+            registered: registered(),
+        }
+    }
+}
+
+/// A read made on a thread of its own, its answer taken once it came: a browser's folder slow
+/// to answer (a sleeping disk, a profile on the network) held the window's thread each second
+/// the window was open (upstream issue 1218).
+struct Reading<T> {
+    answer: std::sync::mpsc::Receiver<T>,
+}
+
+impl<T: Send + 'static> Reading<T> {
+    /// Start `read` beside the window; the window repaints when it's done. None when no thread
+    /// could be made (the window keeps what it showed).
+    fn start(ctx: &egui::Context, read: impl FnOnce() -> T + Send + 'static) -> Option<Self> {
+        let (tx, answer) = std::sync::mpsc::channel();
+        let ctx = ctx.clone();
+        std::thread::Builder::new()
+            .name("extension status".into())
+            .spawn(move || {
+                let _ = tx.send(read());
+                ctx.request_repaint();
+            })
+            .ok()?;
+        Some(Reading { answer })
+    }
+
+    /// The answer, once it came (`Some(None)` when the read ended without one); None while it
+    /// runs.
+    fn take(&self) -> Option<Option<T>> {
+        match self.answer.try_recv() {
+            Ok(v) => Some(Some(v)),
+            Err(std::sync::mpsc::TryRecvError::Empty) => None,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => Some(None),
+        }
+    }
 }
 
 /// Whether `row` (a browser as the window lists it) is among the browsers seen (as Options
@@ -71,10 +118,7 @@ fn is_gecko(row: &str) -> bool {
 
 impl Extension {
     pub fn new() -> Self {
-        #[cfg(windows)]
         let found = crate::win32::browsers();
-        #[cfg(unix)]
-        let found = crate::unix::browsers();
         let mut browsers: Vec<_> = found.into_iter().map(|(n, p)| (n, Some(p))).collect();
         // The table's order (Chrome first, its button the accent one), others after.
         browsers.sort_by_key(|(n, _)| {
@@ -83,10 +127,6 @@ impl Extension {
                 .position(|b| b.name == n.as_str())
                 .unwrap_or(usize::MAX)
         });
-        // Safari comes with the app (macOS only): a row of its own, after the others.
-        if safari_here() {
-            browsers.push((SAFARI.to_owned(), None));
-        }
         if browsers.is_empty() {
             browsers.push((String::new(), None));
         }
@@ -96,74 +136,60 @@ impl Extension {
             seen: seen_names(),
             registered: registered(),
             looked: std::time::Instant::now(),
+            reading: None,
             set_up_seen: 0,
-            steps: None,
         }
-    }
-
-    /// The Safari steps, open at once (`/show safari-steps`: screenshots).
-    pub fn open_safari_steps(&mut self) {
-        self.steps = Some(SafariSteps);
     }
 
     /// Open until closed; Done when "Don't ask again" was pressed.
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         // The host marks the extension seen when a browser starts it: look again now and then
-        // (each browser's own, as each adds it).
-        if self.looked.elapsed() >= Duration::from_secs(1) || set_up_finished(&mut self.set_up_seen)
+        // (each browser's own, as each adds it), beside the window, one read at a time; what
+        // was read last shows meanwhile.
+        if let Some(answer) = self.reading.as_ref().and_then(Reading::take) {
+            self.reading = None;
+            if let Some(l) = answer {
+                self.connected = l.connected;
+                self.seen = l.seen;
+                self.registered = l.registered;
+            }
+        }
+        if self.reading.is_none()
+            && (self.looked.elapsed() >= Duration::from_secs(1)
+                || set_up_finished(&mut self.set_up_seen))
         {
             self.looked = std::time::Instant::now();
-            self.connected = mdm_ipc::extension::seen();
-            self.seen = seen_names();
-            self.registered = registered();
+            self.reading = Reading::start(ctx, Looked::now);
         }
         ctx.request_repaint_after(Duration::from_secs(1));
         let h = BANNER + 16.0 + self.browsers.len() as f32 * ROW + 104.0;
         // A long translation's subline makes the banner taller (winui::banner).
         let extra = crate::dialogs::grow_extra(ctx, "extension-banner");
         let mut answer = None;
-        let mut open_steps = false;
-        let outcome = window(
+        window(
             ctx,
             "extension",
             // i18n: title of the window that offers the browser extension
-            "Add Mister Download Manager to your browser",
-            [W, h + extra],
+            "Add Grabbit to your browser",
+            [W, h - 32.0 + winui::FOOTER_H + extra],
             false,
             winui::BG(),
             |ui, o| {
-                self.body(ui, o, h, &mut answer, &mut open_steps);
+                self.body(ui, o, h, &mut answer);
                 match answer.take() {
                     Some(true) => Outcome::Done(()),
                     Some(false) => Outcome::Closed,
-                    // Escape closes the steps first, when they are open.
-                    None if self.steps.is_none() && winui::escape_pressed(ui) => Outcome::Closed,
+                    None if winui::escape_pressed(ui) => Outcome::Closed,
                     None => Outcome::Open,
                 }
             },
-        );
-        if open_steps && self.steps.is_none() {
-            self.steps = Some(SafariSteps);
-        }
-        if let Some(steps) = &mut self.steps
-            && !matches!(steps.show(ctx), Outcome::Open)
-        {
-            self.steps = None;
-        }
-        outcome
+        )
     }
 
-    fn body(
-        &mut self,
-        ui: &mut Ui,
-        o: Pos2,
-        h: f32,
-        answer: &mut Option<bool>,
-        open_steps: &mut bool,
-    ) {
+    fn body(&mut self, ui: &mut Ui, o: Pos2, h: f32, answer: &mut Option<bool>) {
         let p = ui.painter().clone();
         let (ink, muted) = (winui::TEXT(), winui::MUTED());
-        // The banner: the logo, what the extension does, in one line, and how.
+        // The banner: what the extension does, in one line, and how.
         let extra = winui::banner(
             ui,
             &p,
@@ -203,11 +229,7 @@ impl Extension {
                 },
                 ink,
             );
-            let safari = name == SAFARI;
-            let label = if safari {
-                // i18n: button in the browser extension's window, on Safari's row: open the steps that turn the extension on
-                "How to Add"
-            } else if page.is_none() {
+            let label = if page.is_none() {
                 // i18n: button in the browser extension's window: open the tutorial that adds the extension
                 "Show me how"
             } else {
@@ -243,19 +265,30 @@ impl Extension {
                 false,
                 None,
             );
-            if add.clicked() && safari {
-                *open_steps = true;
-            } else if add.clicked() {
+            // Every row's button reads the same: a screen reader hears which browser it is for.
+            let browser = if name.is_empty() {
+                crate::i18n::t("Your browser")
+            } else {
+                name.as_str()
+            };
+            let spoken = crate::i18n::fmt(
+                // i18n: what a screen reader calls a button that one row of a window has for each thing it lists; {label} is the button's text, {what} the row's browser or program
+                crate::i18n::t("{label} for {what}"),
+                &[
+                    ("label", crate::i18n::t(label)),
+                    ("what", &crate::i18n::ltr(browser)),
+                ],
+            );
+            ui.ctx()
+                .accesskit_node_builder(add.id, |n| n.set_label(spoken));
+            if add.clicked() {
                 // No store page: the tutorial on the website, in the interface language.
-                let url = page.clone().unwrap_or_else(|| {
-                    crate::help::page_url(mdm_ipc::extension::GUIDE_DOC, crate::i18n::code())
-                });
+                let url = page
+                    .clone()
+                    .unwrap_or_else(|| crate::help::page_url(mdm_ipc::extension::GUIDE_DOC));
                 let url = url.as_str();
                 match program {
-                    #[cfg(windows)]
                     Some(program) => crate::win32::open_in(program, url),
-                    #[cfg(unix)]
-                    Some(program) => crate::unix::open_in(program, url),
                     None => {
                         crate::launch::open(url);
                     }
@@ -275,7 +308,7 @@ impl Extension {
                 o.x + 18.0,
                 o.y + y,
                 crate::i18n::t(
-                    "Browser integration isn't set up on this computer, so no browser can reach Mister Download Manager yet.",
+                    "Browser integration isn't set up on this computer, so no browser can reach Grabbit yet.",
                 ),
                 winui::ERROR(),
                 o.x + fix_x - 10.0,
@@ -313,8 +346,6 @@ impl Extension {
         if !line.is_empty() {
             winui::paragraph(&p, o.x + 18.0, o.y + y, &line, color, o.x + W - 18.0, 14.0);
         }
-        winui::etched_h(&p, o.x + 16.0, o.y + h - 46.0, W - 32.0);
-        let y = h - 36.0;
         // The fallback, when a store can't be used (a managed browser, a store turned off): the
         // tutorial, which adds it by hand.
         if store.is_some()
@@ -322,7 +353,7 @@ impl Extension {
                 ui,
                 &p,
                 o.x + 18.0,
-                o.y + y + 17.0,
+                o.y + h - 48.0,
                 // i18n: link in the browser extension's window: the tutorial that adds it without the browser's store
                 "Install it by hand",
                 "by-hand",
@@ -330,173 +361,24 @@ impl Extension {
         {
             crate::help::open_page(mdm_ipc::extension::GUIDE_DOC);
         }
-        // As wide as their labels in this language (#192), Don't ask again only while no
-        // extension has reached MDM.
-        let row: Vec<(&str, f32)> = if self.connected {
-            vec![("Close", 90.0)]
-        } else {
-            vec![("Don't ask again", 130.0), ("Close", 90.0)]
-        };
-        let placed = winui::buttons_to_right(&p, W - 18.0, 8.0, &row, 200.0);
-        let close_at = placed[placed.len() - 1];
-        let close = winui::button(
-            ui,
-            r(o, close_at.0, y, close_at.1, 25.0),
-            "Close",
-            ButtonKind::Default,
-            false,
-            None,
-        );
-        if close.clicked() || winui::enter_pressed(ui) {
-            *answer = Some(false);
-        }
+        // The footer: Don't ask again (quiet, at its start) only while no extension has reached
+        // MDM, and Close, which Enter presses, as before (Escape closes it too, in `show`).
+        let mut items = vec![FooterItem::Button(
+            FooterButton::new("Close", ButtonKind::Default).enter(true),
+        )];
         if !self.connected {
             // i18n: button in the browser extension's window: stop offering it at each start
-            let never = winui::button(
-                ui,
-                r(o, placed[0].0, y, placed[0].1, 25.0),
-                "Don't ask again",
-                ButtonKind::Normal,
-                false,
-                None,
-            );
-            if never.clicked() {
-                *answer = Some(true);
-            }
+            items.push(FooterItem::Button(
+                FooterButton::new("Don't ask again", ButtonKind::Ghost).leading(),
+            ));
+        }
+        match winui::footer(ui, o, W, h - 32.0, &mut items) {
+            Some(0) => *answer = Some(false),
+            Some(_) => *answer = Some(true),
+            None => {}
         }
     }
 }
-
-/// Is Safari on this computer (macOS)? Its extension is in the app.
-fn safari_here() -> bool {
-    cfg!(target_os = "macos")
-        && [
-            "/Applications/Safari.app",
-            "/System/Cryptexes/App/System/Applications/Safari.app",
-        ]
-        .iter()
-        .any(|p| std::path::Path::new(p).exists())
-}
-
-/// The steps that turn Safari's extension on. It is in the app, but an app Apple has not
-/// notarized (a build of our own, the experimental downloads) has Safari list its extension only
-/// while it allows unsigned ones, which it forgets each time it quits.
-pub struct SafariSteps;
-
-impl SafariSteps {
-    pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
-        // The banner and the steps are taller than planned in a language that wraps them.
-        let extra = crate::dialogs::grow_extra(ctx, "safari-banner")
-            + crate::dialogs::grow_extra(ctx, "safari-steps");
-        let h = BANNER + 18.0 + STEPS.len() as f32 * STEP + 10.0 + NOTE + 54.0;
-        window(
-            ctx,
-            "safari-steps",
-            // i18n: title of the window that shows how to turn on the Safari extension
-            "Add the extension to Safari",
-            [W, h + extra],
-            false,
-            winui::BG(),
-            |ui, o| {
-                let h = h + extra;
-                let p = ui.painter().clone();
-                let banner_extra = winui::banner(
-                    ui,
-                    &p,
-                    o,
-                    W,
-                    "safari-banner",
-                    // i18n: the headline of the window that shows how to turn on the Safari extension
-                    crate::i18n::t("Turn on the extension in Safari"),
-                    crate::i18n::t(
-                        "The extension is already in this app. Apple hasn't notarized this build, so Safari needs these steps to allow it.",
-                    ),
-                );
-                let o = o + egui::vec2(0.0, banner_extra);
-                let (ink, muted) = (winui::TEXT(), winui::MUTED());
-                let mut y = BANNER + 18.0;
-                let mut lines_extra = 0.0;
-                for (k, step) in STEPS.iter().enumerate() {
-                    winui::text(
-                        &p,
-                        o.x + 22.0,
-                        o.y + y + 12.0,
-                        &format!("{}.", k + 1),
-                        muted,
-                    );
-                    let lines = winui::paragraph(
-                        &p,
-                        o.x + 48.0,
-                        o.y + y + 12.0,
-                        crate::i18n::t(step),
-                        ink,
-                        o.x + W - 18.0,
-                        14.0,
-                    );
-                    let more = 14.0 * (lines.max(1) as f32 - 1.0);
-                    y += STEP + more;
-                    lines_extra += more;
-                }
-                // Safari forgets the unsigned setting when it quits.
-                let note = winui::paragraph(
-                    &p,
-                    o.x + 22.0,
-                    o.y + y + 14.0,
-                    crate::i18n::t(
-                        "Safari turns \"Allow unsigned extensions\" off each time it quits: do steps 1 to 6 again after restarting it.",
-                    ),
-                    muted,
-                    o.x + W - 18.0,
-                    14.0,
-                );
-                // NOTE plans two lines for it; a language that wraps it more grows the window.
-                lines_extra += 14.0 * (note.max(2) as f32 - 2.0);
-                crate::dialogs::grow_px(ui.ctx(), "safari-steps", lines_extra);
-                // `o` moved down with the banner, which `h` already counts: the bottom row is
-                // placed from the window's own top.
-                winui::etched_h(&p, o.x + 16.0, o.y + h - 46.0 - banner_extra, W - 32.0);
-                let placed = winui::buttons_to_right(&p, W - 18.0, 8.0, &[("Close", 90.0)], 200.0);
-                let close = winui::button(
-                    ui,
-                    r(o, placed[0].0, h - 36.0 - banner_extra, placed[0].1, 25.0),
-                    "Close",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                );
-                if close.clicked() || winui::enter_pressed(ui) || winui::escape_pressed(ui) {
-                    Outcome::Closed
-                } else {
-                    Outcome::Open
-                }
-            },
-        )
-    }
-}
-
-/// A step's height when it fits one line, and the note's under them.
-const STEP: f32 = 24.0;
-const NOTE: f32 = 34.0;
-
-/// The steps, in Safari's own words for its tabs and switches.
-const STEPS: [&str; 8] = [
-    // i18n: step 1 of turning on the Safari extension
-    "Open Safari.",
-    // i18n: step 2 of turning on the Safari extension; Cmd is the Command key
-    "Open Safari's settings (Cmd+,).",
-    // i18n: step 3 of turning on the Safari extension; the quoted tab name is what Safari's settings show in this language: use Apple's own word for it, or keep the English name when unsure
-    "Switch to the \"Advanced\" tab (the cogwheels).",
-    // i18n: step 4 of turning on the Safari extension; the quoted switch name is what Safari's settings show in this language: use Apple's own words for it, or keep the English name when unsure
-    "Turn on \"Show features for web developers\".",
-    // i18n: step 5 of turning on the Safari extension; the quoted tab name is what Safari's settings show in this language: use Apple's own word for it, or keep the English name when unsure
-    "Switch to the \"Developer\" tab (the screwdriver and spanner).",
-    // i18n: step 6 of turning on the Safari extension; the quoted switch name is what Safari's settings show in this language: use Apple's own words for it, or keep the English name when unsure
-    "Turn on \"Allow unsigned extensions\".",
-    // i18n: step 7 of turning on the Safari extension; the quoted tab name is what Safari's settings show in this language: use Apple's own word for it, or keep the English name when unsure
-    "Switch to the \"Extensions\" tab (the puzzle piece).",
-    // i18n: step 8 of turning on the Safari extension
-    "Turn on \"Mister Download Manager\" and allow it on all websites.",
-];
 
 /// The browsers whose extension reached the app, by Options' names.
 fn seen_names() -> Vec<String> {
@@ -513,10 +395,6 @@ pub enum Registration {
     Ready,
     /// A browser's folder (or the registry) has no manifest.
     Missing,
-    /// No browser MDM knows was found to register with (Linux and macOS find them by their
-    /// folders; Windows registers for every browser at once).
-    #[cfg_attr(windows, allow(dead_code))]
-    NoBrowser,
     /// A manifest names a helper program that isn't there or can't be run (#253).
     HelperMissing(std::path::PathBuf),
 }
@@ -524,24 +402,12 @@ pub enum Registration {
 /// Where browser integration's registration stands: the native host's manifests where the
 /// browsers look, and the helper they name.
 pub fn registration() -> Registration {
-    #[cfg(windows)]
-    return crate::win32::host_registration();
-    #[cfg(unix)]
-    return crate::unix::host_registration();
+    crate::win32::host_registration()
 }
 
 /// Is browser integration registered on this computer, ready for the browsers?
 pub fn registered() -> bool {
     registration() == Registration::Ready
-}
-
-/// Why the last registration failed, in the system's words (Linux and macOS, where MDM
-/// registers itself at each start).
-fn register_error() -> Option<String> {
-    #[cfg(windows)]
-    return None;
-    #[cfg(unix)]
-    return crate::unix::register_error();
 }
 
 /// Set it up's runs finished so far: a window that shows the checks reads them again when this
@@ -564,15 +430,10 @@ pub fn set_up(ctx: &egui::Context) {
     let started = std::thread::Builder::new()
         .name("set-up".into())
         .spawn(move || {
-            #[cfg(unix)]
-            crate::unix::register_browsers_now(SET_UP_LIMIT);
-            #[cfg(windows)]
             if let Ok(exe) = std::env::current_exe() {
                 crate::launch::run_within(
-                    std::process::Command::new(
-                        exe.with_file_name("misterdownloadmanager-nmhost.exe"),
-                    )
-                    .arg("--register"),
+                    std::process::Command::new(exe.with_file_name("grabbit-nmhost.exe"))
+                        .arg("--register"),
                     SET_UP_LIMIT,
                 );
             }
@@ -626,38 +487,19 @@ pub fn checks(settings: &crate::settings::Settings) -> Vec<Check> {
         Registration::Ready | Registration::Missing => check(
             registration == Registration::Ready,
             // i18n: a check of Test browser integration: the browsers find MDM's helper program
-            "The browsers can find Mister Download Manager",
-            Some("not-installed"),
-        ),
-        Registration::NoBrowser => check(
-            false,
-            // i18n: a check of Test browser integration (Linux, macOS): MDM found no browser it can connect to (one installed as a Flatpak isn't found)
-            "No browser MDM can connect to was found",
+            "The browsers can find Grabbit",
             Some("not-installed"),
         ),
         Registration::HelperMissing(path) => {
             tracing::warn!("browser integration: {} is missing", path.display());
             check(
                 false,
-                // i18n: a check of Test browser integration: the browsers are set up, but the small helper program they start (misterdownloadmanager-nmhost) is gone
+                // i18n: a check of Test browser integration: the browsers are set up, but the small helper program they start (grabbit-nmhost) is gone
                 "The helper program the browsers start is missing",
                 Some("not-installed"),
             )
         }
     });
-    if registration != Registration::Ready
-        && let Some(error) = register_error()
-    {
-        out.push(Check {
-            ok: false,
-            text: crate::i18n::fmt(
-                // i18n: a check of Test browser integration: setting it up failed; {error} is the system's own message, in English
-                crate::i18n::t("Setting it up failed: {error}"),
-                &[("error", &error)],
-            ),
-            why: Some("not-installed"),
-        });
-    }
     let seen = mdm_ipc::extension::seen_browsers();
     if seen.is_empty() {
         out.push(check(
@@ -699,6 +541,40 @@ pub fn checks(settings: &crate::settings::Settings) -> Vec<Check> {
 mod tests {
     use super::*;
 
+    /// Upstream issue 1218: a read slow to answer (a browser's folder on a sleeping disk) doesn't
+    /// hold the caller: it starts at once, nothing is there while it runs, and its answer is
+    /// taken once it comes.
+    #[test]
+    fn a_slow_read_is_made_beside_the_window() {
+        let ctx = egui::Context::default();
+        let (go, wait) = std::sync::mpsc::channel::<()>();
+        let started = std::time::Instant::now();
+        let reading = Reading::start(&ctx, move || {
+            let _ = wait.recv_timeout(Duration::from_secs(10));
+            7
+        })
+        .expect("a thread");
+        assert!(started.elapsed() < Duration::from_secs(1));
+        assert_eq!(reading.take(), None, "nothing while it reads");
+        go.send(()).unwrap();
+        let until = std::time::Instant::now() + Duration::from_secs(10);
+        let answer = loop {
+            if let Some(a) = reading.take() {
+                break a;
+            }
+            assert!(std::time::Instant::now() < until, "the answer never came");
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        assert_eq!(answer, Some(7));
+        // A read that ends without an answer (its code panicked) is over too.
+        let gone = Reading::<u8>::start(&ctx, || panic!("a read's code panics")).unwrap();
+        let until = std::time::Instant::now() + Duration::from_secs(10);
+        while gone.take().is_none() {
+            assert!(std::time::Instant::now() < until);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
     /// #41: Helium says it is Chrome; Zen gives its own name; each row reads its own status.
     #[test]
     fn rows_match_the_names_browsers_report() {
@@ -707,21 +583,6 @@ mod tests {
         assert!(is_seen(&seen, "Zen Browser"));
         assert!(!is_seen(&seen, "Mozilla Firefox") && !is_seen(&seen, "Brave"));
         assert!(is_seen(&["Brave Browser".to_owned()], "Brave"));
-    }
-
-    /// Safari's steps: a sentence each, all there, and Safari is named as the native host and
-    /// Options name it (the row reads its status by that name).
-    #[test]
-    fn safari_steps_are_complete() {
-        assert_eq!(STEPS.len(), 8);
-        assert!(STEPS.iter().all(|s| s.ends_with('.')));
-        assert!(is_seen(&[SAFARI.to_owned()], SAFARI));
-        assert_eq!(SAFARI, "Apple Safari");
-        assert!(
-            mdm_ipc::capture::browser_of(
-                "Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15"
-            ) == SAFARI
-        );
     }
 
     /// Firefox's family gets the tutorial, whatever the store has.

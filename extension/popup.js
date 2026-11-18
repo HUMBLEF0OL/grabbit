@@ -3,16 +3,17 @@
 // site to the browser, opening the app or its Options, and the media the tab loaded (#38), each
 // to download. background.js does the work.
 const ext = globalThis.browser ?? globalThis.chrome;
-const HELP = "https://misterdownloadmanager.com/help/browser-help.html";
-// The creator's GitHub Sponsors page (the app's Help → Support MDM): a plain link, in a new tab.
-const SPONSORS = "https://github.com/sponsors/anefzaoui";
+const HELP = "https://humblef0ol.github.io/grabbit/help/browser-help.html";
+// The app's Help → Support MDM target: this fork's repository until its owner's GitHub Sponsors
+// page exists (see .github/FUNDING.yml). A plain link, in a new tab.
+const SPONSORS = "https://github.com/HUMBLEF0OL/grabbit";
 const t = (key, ...subs) => ext.i18n.getMessage(key, subs) || key;
 const $ = (id) => document.getElementById(id);
 const ask = (m) => ext.runtime.sendMessage(m).catch(() => ({ ok: false }));
 const lang = ext.i18n.getUILanguage();
 
-document.documentElement.lang = lang;
-document.documentElement.dir = t("@@bidi_dir") === "rtl" ? "rtl" : "ltr";
+// The texts are English only (_locales/en); sizes keep the browser's number format.
+document.documentElement.lang = "en";
 for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
 for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);
 $("help").href = HELP;
@@ -111,16 +112,19 @@ const TYPES = {
   "audio/wav": "WAV",
 };
 
-// Its type as a short tag: HLS, DASH, else the file's extension or its type's.
+// Its type as a short tag: HLS, DASH, else its file's extension as it will be saved (a script's
+// answer: its type's, upstream issue 800), else its type's.
 function tagOf(m) {
   if (m.kind === "hls") return "HLS";
   if (m.kind === "dash") return "DASH";
-  const ext = (/\.([a-z0-9]{2,4})$/i.exec(m.url.split(/[?#]/)[0]) || [])[1];
+  const ext = typeof m.name === "string" ? m.ext : (/\.([a-z0-9]{2,4})$/i.exec(m.url.split(/[?#]/)[0]) || [])[1];
   return (ext || TYPES[m.mime] || (m.kind === "audio" ? "AUDIO" : "VIDEO")).toUpperCase();
 }
 
-// The address's last part, readable.
-function nameOf(url) {
+// Its name: a file's as it will be saved (upstream issue 800), else the address's last part, readable.
+function nameOf(m) {
+  if (typeof m.name === "string" && m.name) return m.name;
+  const url = m.url;
   const last = url.split(/[?#]/)[0].split("/").filter(Boolean).pop() || url;
   try {
     return decodeURIComponent(last);
@@ -187,7 +191,7 @@ async function showMedia(tab, connected) {
     what.className = "what";
     const name = document.createElement("span");
     name.className = "name";
-    name.textContent = nameOf(m.url);
+    name.textContent = nameOf(m);
     name.title = m.url;
     const meta = document.createElement("span");
     meta.className = "meta";
@@ -223,8 +227,9 @@ const mediaTitleName = $("media-title-name");
 ext.storage.local.get({ mediaTitleName: false })
   .then((v) => (mediaTitleName.checked = Boolean(v.mediaTitleName)))
   .catch(() => {});
+// The list's names follow it at once.
 mediaTitleName.addEventListener("change", () =>
-  ext.storage.local.set({ mediaTitleName: mediaTitleName.checked }).catch(() => {}));
+  ext.storage.local.set({ mediaTitleName: mediaTitleName.checked }).then(show, () => {}));
 
 // #42: reading the browser's proxy (a VPN or proxy extension's) is an opt-in, this switch, off as
 // installed. Firefox: the optional "proxy" permission, asked for on it. Chromium can't make that

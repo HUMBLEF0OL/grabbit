@@ -1,4 +1,4 @@
-//! misterdownloadmanager-mcp: Mister Download Manager's MCP server. An AI assistant starts it and
+//! grabbit-mcp: Mister Download Manager's MCP server. An AI assistant starts it and
 //! speaks MCP with it on stdin and stdout; it hands what the assistant asks to the running app
 //! (docs/ai-assistants.md).
 
@@ -10,13 +10,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(arg) = std::env::args().nth(1) {
         match arg.as_str() {
             "--version" | "-V" => {
-                println!("misterdownloadmanager-mcp {}", env!("CARGO_PKG_VERSION"))
+                println!("grabbit-mcp {}", env!("CARGO_PKG_VERSION"))
             }
             _ => println!(
-                "misterdownloadmanager-mcp: Mister Download Manager's MCP server, for AI \
+                "grabbit-mcp: Grabbit's MCP server, for AI \
                  assistants. The assistant starts it (no arguments) and talks to it on stdin and \
                  stdout. Setup: \
-                 https://misterdownloadmanager.com/help/ai-assistants.html"
+                 https://humblef0ol.github.io/grabbit/help/ai-assistants.html"
             ),
         }
         return Ok(());

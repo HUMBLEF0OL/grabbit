@@ -6,9 +6,8 @@
 //!   which), by role. Each role has a stable key (`"button.hot"`), which theme files use.
 //! - [`Metrics`]: the sizes a control painter owns (corner radii, border and focus widths, font
 //!   sizes, row heights). Where a window puts its controls stays the window's layout.
-//! - [`IconStyle`]: how the toolbar's and Options' outline icons are inked.
 //!
-//! [`CLASSIC`] is MDM's own look (IDM's classic layout, Windows 11 controls, accent #0078D4),
+//! [`BASE`] is MDM's original look (IDM's classic layout, Windows 11 controls, accent #0078D4),
 //! written out with the exact values the painters had before themes: the default, unchanged.
 
 use std::borrow::Cow;
@@ -98,8 +97,6 @@ macro_rules! palette {
             /// Access letters are always underlined (IDM's dark look), not only once the keyboard
             /// is in use (Windows' rule).
             pub access_keys_always: bool,
-            /// The category tree's expanders: chevrons (dark look) or classic +/- boxes.
-            pub tree_chevrons: bool,
             /// The progress window's segment bar.
             pub segments: Segments,
             $(#[doc = $doc] pub $field: Color32,)*
@@ -134,7 +131,6 @@ macro_rules! palette {
                     dark,
                     focus_line_straight: dark,
                     access_keys_always: dark,
-                    tree_chevrons: dark,
                     segments: classic_segments(dark),
                     $($field: if dark { $dark } else { $light },)*
                 }
@@ -169,8 +165,7 @@ palette! {
     selection_muted: "selection.muted", "Secondary text on the selection" = grey(0xe0), grey(0xe0);
     selection_inactive: "selection.inactive", "A selected row in a list without the focus" = grey(0x4a), grey(0xd9);
     selection_focus: "selection.focus", "The focused row's dotted outline on a selected row" = rgb(0xff, 0x99, 0x33), rgb(0xff, 0x99, 0x33);
-    // ---- group boxes, separators, tabs ----
-    group_line: "group.line", "A group box's frame" = grey(0x50), grey(0xdc);
+    // ---- separators, tabs ----
     etch_shadow: "etch.shadow", "An etched separator's shadow line" = grey(0x22), grey(0xa0);
     etch_light: "etch.light", "An etched separator's highlight line" = grey(0x50), grey(0xff);
     tab_page: "tab.page", "A tab page's body" = grey(0x40), grey(0xf9);
@@ -213,8 +208,7 @@ palette! {
     button_accent_bottom: "button.accent.bottom", "An accent button's bottom edge" = rgb(0x4f, 0xb5, 0xe4), rgb(0x00, 0x5a, 0x9e);
     button_accent_text: "button.accent.text", "An accent button's text" = grey(0x00), grey(0xff);
     button_accent_text_pressed: "button.accent.text.pressed", "An accent button's text pressed" = grey(0x1a), rgb(0xe6, 0xf0, 0xfa);
-    button_glow: "button.glow", "The glow inside a button under the pointer, where the style draws one (Luna; transparent: none)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
-    gloss: "gloss", "The shine glossy parts blend toward at their top: buttons, boxes, bars and title bars (Luna, Aero, Aqua)" = grey(0xff), grey(0xff);
+    gloss: "gloss", "The shine a glossy or blocks progress bar blends toward" = grey(0xff), grey(0xff);
     // ---- check boxes and radios ----
     check: "check", "An unchecked box's or radio's inside" = grey(0x2b), grey(0xf3);
     check_hot: "check.hot", "Its inside under the pointer" = grey(0x3a), grey(0xea);
@@ -243,7 +237,6 @@ palette! {
     header_line: "header.line", "A header's bottom line in dialogs' lists" = grey(0x4e), grey(0xe5);
     header_sep: "header.sep", "The dividers between column headers" = grey(0x63), grey(0xe5);
     table_line: "table.line", "The dividers in the link grabber's and Add torrent's tables" = grey(0x4a), grey(0xe5);
-    sorted: "header.sorted", "The sorted column's header" = grey(0x26), grey(0xf0);
     sort_arrow: "header.sort-arrow", "The sort chevron" = grey(0xc8), grey(0x60);
     row_pressed: "row.pressed", "A list row pressed" = grey(0x4f), grey(0xe8);
     chip_web: "chip.web", "The download list's Web chip" = rgb(0x2e, 0x9d, 0x52), rgb(0x2e, 0x9d, 0x52);
@@ -273,24 +266,13 @@ palette! {
     menu_glyph: "menu.glyph", "Bullets, ticks and submenu arrows" = grey(0xff), grey(0x1a);
     menu_text_disabled: "menu.text.disabled", "A greyed menu item" = grey(0x6d), grey(0x9f);
     // ---- toolbar ----
-    toolbar_line: "toolbar.line", "The toolbar's top line" = grey(0x4a), grey(0xa0);
-    toolbar_line_light: "toolbar.line.light", "The highlight under it" = grey(0x39), grey(0xff);
     toolbar_hot: "toolbar.hot", "A toolbar button under the pointer" = rgb(0x33, 0x41, 0x4d), rgb(0xe5, 0xf3, 0xff);
     toolbar_hot_faint: "toolbar.hot.faint", "A split button's other part while one is under the pointer" = rgb(0x37, 0x3b, 0x3f), rgb(0xf3, 0xf9, 0xff);
     toolbar_pressed: "toolbar.pressed", "A toolbar button pressed" = rgb(0x2a, 0x36, 0x40), rgb(0xcc, 0xe8, 0xff);
-    toolbar_hot_edge: "toolbar.hot.edge", "A hot toolbar button's edge" = rgb(0x4d, 0x5f, 0x6e), rgb(0xcc, 0xe8, 0xff);
-    toolbar_hot_border: "toolbar.hot.border", "A hot toolbar button's border (transparent: none)" = Color32::TRANSPARENT, rgb(0xcc, 0xe8, 0xff);
-    toolbar_split_shadow: "toolbar.split.shadow", "A split button's divider at rest: its shadow" = grey(0x26), grey(0xc6);
-    toolbar_split_light: "toolbar.split.light", "The divider's highlight" = grey(0x4d), grey(0xff);
     toolbar_text_disabled: "toolbar.text.disabled", "A greyed toolbar label" = grey(0xa0), grey(0xa0);
-    toolbar_arrow: "toolbar.arrow", "A drop-down button's arrow" = grey(0xd0), grey(0x28);
     icon_disabled: "icon.disabled", "A greyed icon's ink (its start)" = grey(0x9f), grey(0x9f);
-    icon_disabled_end: "icon.disabled.end", "A greyed icon's ink (its end)" = grey(0x9a), grey(0x9a);
     // ---- categories tree ----
-    tree: "tree", "The categories tree's background" = grey(0x20), grey(0xff);
-    tree_lines: "tree.lines", "The tree's dotted connectors" = grey(0x6d), grey(0x6d);
     tree_expander: "tree.expander", "The tree's chevrons, where the variant draws them" = grey(0xff), grey(0x1a);
-    tree_frame: "tree.frame", "The categories pane's frame" = grey(0xdc), grey(0xdc);
     // ---- progress window ----
     status_value: "progress.status", "The progress window's Status value" = grey(0xff), rgb(0x00, 0x00, 0xff);
     progress_label_disabled: "progress.label.disabled", "A greyed label in the progress window" = grey(0x80), grey(0x80);
@@ -300,17 +282,31 @@ palette! {
     piece_partial: "pieces.partial", "A square standing for pieces partly here" = rgb(0x3a, 0x6e, 0x4b), rgb(0x9c, 0xd2, 0xae);
     piece_missing: "pieces.missing", "A piece not here yet" = grey(0x45), grey(0xd6);
     // ---- title bars we draw ----
-    caption: "caption", "A title bar MDM draws itself" = grey(0x20), grey(0xff);
+    caption: "caption", "A title bar Grabbit draws itself" = grey(0x20), grey(0xff);
     caption_text: "caption.text", "Its title and glyphs" = grey(0xff), grey(0x00);
     caption_text_inactive: "caption.text.inactive", "Its title and glyphs while the window isn't the active one, and a greyed button's" = grey(0x8a), grey(0x8a);
     caption_hot: "caption.hot", "A caption button under the pointer (a tint over the bar)" = rgba(0xff, 0xff, 0xff, 0x0f), rgba(0x00, 0x00, 0x00, 0x09);
     caption_pressed: "caption.pressed", "A caption button pressed (a tint over the bar)" = rgba(0xff, 0xff, 0xff, 0x0a), rgba(0x00, 0x00, 0x00, 0x06);
-    caption_button: "caption.button", "A caption button at rest, where the style shows one (a tint over the bar; transparent: none)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
     caption_close: "caption.close", "Close under the pointer" = rgb(0xc4, 0x2b, 0x1c), rgb(0xc4, 0x2b, 0x1c);
     caption_close_text: "caption.close.text", "Close's glyph under the pointer" = grey(0xff), grey(0xff);
-    caption_inactive: "caption.inactive", "A title bar MDM draws, while its window isn't the active one (transparent: as when active)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
+    caption_inactive: "caption.inactive", "A title bar Grabbit draws, while its window isn't the active one (transparent: as when active)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
     // ---- other ----
     drop_edge: "drop-target.edge", "The drop target's edge at rest" = grey(0x8d), grey(0x8d);
+    // ---- the Graphite layout's parts: drawn only where `[controls] chrome = "graphite"`. The
+    // classic look keeps today's colours, derived themes get theirs from derive.rs ----
+    panel: "panel", "A band behind the title bar, toolbar, status bar and dialog footers (Graphite layout)" = grey(0x39), grey(0xf0);
+    tile: "tile", "The square behind a dialog's or an empty list's icon (Graphite layout)" = grey(0x44), grey(0xe6);
+    text_secondary: "text.secondary", "Secondary text: toolbar labels, menu titles and icons, the Categories tree, the Status column, the status bar, the empty list's reason (Graphite layout)" = grey(0xd8), grey(0x40);
+    menu_shortcut: "menu.shortcut", "A menu item's keyboard shortcut, and Find's (Graphite layout)" = grey(0xab), grey(0x6d);
+    toolbar_checked: "toolbar.checked", "A toolbar toggle that is on (Graphite layout)" = rgb(0x2a, 0x36, 0x40), rgb(0xcc, 0xe8, 0xff);
+    button_danger: "button.danger", "A button that deletes: its face (Graphite layout)" = rgb(0xc4, 0x2b, 0x1c), rgb(0xc4, 0x2b, 0x1c);
+    button_danger_text: "button.danger.text", "A button that deletes: its text (Graphite layout)" = grey(0xff), grey(0xff);
+    banner_error: "banner.error", "A banner telling of an error, behind its text (Graphite layout)" = rgb(0x44, 0x27, 0x26), rgb(0xfd, 0xe7, 0xe9);
+    banner_info: "banner.info", "A banner telling of a state, behind its text (Graphite layout)" = rgb(0x2d, 0x4a, 0x60), rgb(0xe5, 0xf1, 0xfb);
+    banner_warning: "banner.warning", "A banner warning, behind its text (Graphite layout)" = rgb(0x43, 0x35, 0x19), rgb(0xff, 0xf4, 0xce);
+    glow: "glow", "The soft shadow under the default button and a progress bar's fill, where the style draws one (transparent: none)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
+    button_accent_top: "button.accent.top", "An accent button's face at its top, where the style shades it (transparent: flat, the face's colour)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
+    progress_bar_end: "progress.bar.end", "A progress bar's fill at its end, where the style shades it (transparent: flat, the fill's colour)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
     // ---- egui's own widgets (tooltips, multi-line boxes' scroll bars) ----
     egui_panel: "egui.panel", "egui's panel background" = grey(0x2b), grey(0xf0);
     egui_window: "egui.window", "Tooltips' background" = grey(0x2b), grey(0xf9);
@@ -362,7 +358,7 @@ macro_rules! metrics {
 
 metrics! {
     control_radius: "radius", "Corner radius of buttons, text boxes and drop-downs" = 3.0;
-    button_radius: "radius.button", "Corner radius of a glossy push button (Luna, Aero; Aqua's are round at the ends)" = 3.0;
+    button_radius: "radius.button", "Corner radius of a toolbar button and of a blocks progress bar" = 3.0;
     part_radius: "radius.part", "Corner radius of a tinted part (an arrow zone, a spin button)" = 2.0;
     check_radius: "radius.check", "Corner radius of a check box" = 2.0;
     flyout_radius: "radius.flyout", "Corner radius of a popup in a window (a calendar, a filter box)" = 6.0;
@@ -376,8 +372,7 @@ metrics! {
     font_dialog_bold: "font.dialog.bold", "Options pages' titles" = 13.0;
     font_title: "font.title", "A window's headline (Tahoma Bold): the browser extension's, the helpers'" = 16.0;
     font_code: "font.code", "A sign-in code to type at a service's page" = 22.0;
-    font_ui: "font.ui", "Menus and the main window's text (Segoe UI)" = 12.0;
-    font_ui_bold: "font.ui.bold", "Bold headings in the main window" = 13.0;
+    font_ui: "font.ui", "Menus and the main window's text (Segoe UI, or the theme's font)" = 12.0;
     font_small: "font.small", "egui's small text" = 11.0;
     font_body: "font.body", "egui's body text: tooltips, multi-line boxes" = 12.0;
     font_heading: "font.heading", "egui's headings" = 16.0;
@@ -389,31 +384,8 @@ metrics! {
     tooltip_margin_bottom: "tooltip.margin-bottom", "A tooltip's bottom padding" = 7.0;
 }
 
-/// How the outline icons (toolbar, Options pages, helpers) are inked.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
-pub enum IconStyle {
-    /// Each icon's own two-colour gradient (the classic toolbar).
-    #[default]
-    Color,
-    /// The text colour.
-    Mono,
-    /// The accent.
-    Accent,
-}
-
-impl IconStyle {
-    pub fn from_key(s: &str) -> Option<Self> {
-        match s {
-            "color" | "colour" => Some(IconStyle::Color),
-            "mono" => Some(IconStyle::Mono),
-            "accent" => Some(IconStyle::Accent),
-            _ => None,
-        }
-    }
-}
-
 /// How the shared painters draw each kind of control (#45): the classic look's are Windows 11's;
-/// the style themes pick their era's. Colours and sizes still come from the palette and metrics.
+/// Graphite picks its own. Colours and sizes still come from the palette and metrics.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Controls {
     /// A focused text box: an accent line along its bottom (Windows 11), or its whole border in
@@ -427,13 +399,12 @@ pub struct Controls {
     /// A scroll bar: Windows 11's (thin until hovered, arrows then), or arrows always shown and a
     /// square thumb the bar's width (Windows 8, the classic bars).
     pub scroll: ScrollLook,
-    /// The title bar: the system's, or drawn by MDM in the theme's style (Windows only).
+    /// The title bar: the system's, or drawn by Grabbit in Graphite's style.
     pub caption: CaptionLook,
     /// The keyboard focus around a control: Windows' dotted rectangle, GNOME's rounded ring or
     /// KDE's frame.
     pub focus: FocusLook,
-    /// A push button: Windows 11's, or KDE's (the edge in the accent under the pointer, the face
-    /// tinted with it pressed).
+    /// A push button: Windows 11's, or Graphite's (an accent button shaded, its glow under it).
     pub button: ButtonLook,
 }
 
@@ -449,19 +420,6 @@ pub enum FieldFocus {
 pub enum CheckLook {
     Fluent,
     Square,
-    /// GNOME: a 2-point border at rest, the accent filled with a light tick when checked.
-    Adwaita,
-    /// KDE: the edge in the accent under the pointer; checked, the accent's edge, its inside
-    /// tinted with it, a tick in the text's colour.
-    Breeze,
-    /// Windows XP: a box shaded from its top, a glow inside under the pointer, a thick tick in
-    /// the checked colour; round radios with a shaded dot.
-    Luna,
-    /// Windows 7: a quiet box with a shaded square inside, its edge in the accent under the
-    /// pointer, the tick in the check mark's colour.
-    Aero,
-    /// Mac OS X: a glossy box with round corners, filled with the accent's gel when checked.
-    Aqua,
 }
 
 /// How a push button shows the pointer and a press.
@@ -469,16 +427,9 @@ pub enum CheckLook {
 pub enum ButtonLook {
     /// Windows 11: its face lighter under the pointer, its bottom edge flattened pressed.
     Fluent,
-    /// KDE: its edge in the accent under the pointer and pressed, its face tinted pressed.
-    Breeze,
-    /// Windows XP: a face shaded from white at its top, a dark edge, a glow inside under the
-    /// pointer (`button.glow`) and on the default button (its border's colour).
-    Luna,
-    /// Windows 7: a glossy face, its top half lighter than the bottom, the edge in the accent
-    /// under the pointer and pressed.
-    Aero,
-    /// Mac OS X: a gel face, round at the ends, the default button in the accent's gel.
-    Aqua,
+    /// Graphite: Windows 11's, an accent button's face shaded from `button.accent.top` down to
+    /// `button.accent`, the `glow` role under it.
+    Graphite,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -491,33 +442,22 @@ pub enum ScrollLook {
 pub enum ProgressLook {
     Line,
     Bar,
-    /// Windows XP: blocks in the bar's colour, shaded across, on a bordered track.
+    /// Blocks in the bar's colour, shaded across, on a bordered track.
     Blocks,
-    /// Windows 7 and Mac OS X: a glossy fill on a shaded, bordered track.
+    /// A glossy fill on a shaded, bordered track.
     Gloss,
+    /// Graphite: `Line`, its fill shaded across from `progress.bar` to `progress.bar.end`, the
+    /// `glow` role under it.
+    Graphite,
 }
 
 /// A drawn title bar's look: its buttons and where the title sits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CaptionLook {
-    /// The system draws it (Windows' own frame, the window manager's elsewhere).
+    /// The system draws it (Windows' own frame).
     System,
-    /// Windows 8: a flat bar in the theme's caption colour, the title centred, flat buttons.
-    Metro,
-    /// GNOME's header bar: the title centred in bold, no icon, round buttons tinted at rest.
-    Adwaita,
-    /// KDE's title bar: the icon, the title centred, round buttons that fill with the title's
-    /// colour under the pointer (Close red), their glyph then the bar's.
-    Breeze,
-    /// Windows XP: a shaded bar, the title in bold with a shadow, square buttons with a light
-    /// edge (Close always red).
-    Luna,
-    /// Windows 7: a glassy bar, the title on a soft glow, glossy buttons hung from the bar's
-    /// top (Close wider and red).
-    Aero,
-    /// Mac OS X: a shaded grey bar, the title centred, small round gel buttons whose glyphs
-    /// show under the pointer.
-    Aqua,
+    /// Graphite: a flat bar in the theme's caption colour, the title centred, flat buttons.
+    Graphite,
 }
 
 /// How the keyboard focus is drawn around a control.
@@ -530,6 +470,10 @@ pub enum FocusLook {
     /// KDE: a 1-point frame in the focus ink, its corners the controls' radius.
     Frame,
 }
+
+/// The removed themes' control styles (plan 10, decision 4): a theme file naming one gets
+/// Graphite's control, without a word.
+const REMOVED_STYLES: [&str; 6] = ["luna", "aero", "aqua", "adwaita", "breeze", "metro"];
 
 impl Controls {
     pub const CLASSIC: Self = Self {
@@ -544,35 +488,32 @@ impl Controls {
 
     /// Sets the control with this key to the style named `value`; false when either is unknown.
     pub fn set(&mut self, key: &str, value: &str) -> bool {
+        if REMOVED_STYLES.contains(&value) {
+            // Graphite's own (assets/themes/graphite.toml; a test keeps them the same).
+            let graphite = match key {
+                "check" => "fluent",
+                "button" | "progress" | "caption" => "graphite",
+                _ => return false,
+            };
+            return self.set(key, graphite);
+        }
         match (key, value) {
             ("field-focus", "line") => self.field_focus = FieldFocus::Line,
             ("field-focus", "border") => self.field_focus = FieldFocus::Border,
             ("field-focus", "ring") => self.field_focus = FieldFocus::Ring,
             ("check", "fluent") => self.check = CheckLook::Fluent,
             ("check", "square") => self.check = CheckLook::Square,
-            ("check", "adwaita") => self.check = CheckLook::Adwaita,
-            ("check", "breeze") => self.check = CheckLook::Breeze,
-            ("check", "luna") => self.check = CheckLook::Luna,
-            ("check", "aero") => self.check = CheckLook::Aero,
-            ("check", "aqua") => self.check = CheckLook::Aqua,
             ("button", "fluent") => self.button = ButtonLook::Fluent,
-            ("button", "breeze") => self.button = ButtonLook::Breeze,
-            ("button", "luna") => self.button = ButtonLook::Luna,
-            ("button", "aero") => self.button = ButtonLook::Aero,
-            ("button", "aqua") => self.button = ButtonLook::Aqua,
+            ("button", "graphite") => self.button = ButtonLook::Graphite,
             ("progress", "line") => self.progress = ProgressLook::Line,
             ("progress", "bar") => self.progress = ProgressLook::Bar,
             ("progress", "blocks") => self.progress = ProgressLook::Blocks,
             ("progress", "gloss") => self.progress = ProgressLook::Gloss,
+            ("progress", "graphite") => self.progress = ProgressLook::Graphite,
             ("scroll", "overlay") => self.scroll = ScrollLook::Overlay,
             ("scroll", "classic") => self.scroll = ScrollLook::Classic,
             ("caption", "system") => self.caption = CaptionLook::System,
-            ("caption", "metro") => self.caption = CaptionLook::Metro,
-            ("caption", "adwaita") => self.caption = CaptionLook::Adwaita,
-            ("caption", "breeze") => self.caption = CaptionLook::Breeze,
-            ("caption", "luna") => self.caption = CaptionLook::Luna,
-            ("caption", "aero") => self.caption = CaptionLook::Aero,
-            ("caption", "aqua") => self.caption = CaptionLook::Aqua,
+            ("caption", "graphite") => self.caption = CaptionLook::Graphite,
             ("focus", "dotted") => self.focus = FocusLook::Dotted,
             ("focus", "ring") => self.focus = FocusLook::Ring,
             ("focus", "frame") => self.focus = FocusLook::Frame,
@@ -592,9 +533,10 @@ pub struct Theme {
     pub light: Palette,
     pub dark: Palette,
     pub metrics: Metrics,
-    pub icons: IconStyle,
     /// The theme's icon set (`crate::themeicons`), by name; None: the classic icons.
     pub icon_set: Option<Cow<'static, str>>,
+    /// A font bundled with MDM (`crate::theme::bundled_font`), by name; None: the system's.
+    pub font: Option<Cow<'static, str>>,
     /// How each kind of control is drawn.
     pub controls: Controls,
 }
@@ -606,59 +548,46 @@ impl Theme {
     }
 }
 
-/// The classic look, MDM's default.
-pub static CLASSIC: Theme = Theme {
-    id: Cow::Borrowed("classic"),
-    name: Cow::Borrowed("Classic"),
+/// The base every theme inherits (Graphite's own file included): MDM's original colours, sizes
+/// and controls, written out. Not a theme anyone chooses (plan 05.5c: Graphite is the only look).
+pub static BASE: Theme = Theme {
+    id: Cow::Borrowed("base"),
+    name: Cow::Borrowed("Base"),
     light: Palette::classic(false),
     dark: Palette::classic(true),
     metrics: Metrics::CLASSIC,
-    icons: IconStyle::Color,
     icon_set: None,
+    font: None,
     controls: Controls::CLASSIC,
 };
 
-/// The built-in themes that don't change by themselves, the default first: the classic look
-/// (written out above), then the ones shipped as theme files (`assets/themes/`, in the format
-/// users write, so they double as examples). Native follows the system and is made when chosen
-/// (`crate::native`).
-pub fn builtins() -> [&'static Theme; 8] {
-    static HIGH_CONTRAST: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
-        crate::themefile::builtin(
-            "high-contrast",
-            include_str!("../assets/themes/high-contrast.toml"),
-        )
-    });
-    // The style themes (#45): their era's look, the layout kept.
-    static METRO: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
-        crate::themefile::builtin("metro", include_str!("../assets/themes/metro.toml"))
-    });
-    static ADWAITA: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
-        crate::themefile::builtin("adwaita", include_str!("../assets/themes/adwaita.toml"))
-    });
-    static BREEZE: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
-        crate::themefile::builtin("breeze", include_str!("../assets/themes/breeze.toml"))
-    });
-    static LUNA: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
-        crate::themefile::builtin("luna", include_str!("../assets/themes/luna.toml"))
-    });
-    static AERO: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
-        crate::themefile::builtin("aero", include_str!("../assets/themes/aero.toml"))
-    });
-    static AQUA: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
-        crate::themefile::builtin("aqua", include_str!("../assets/themes/aqua.toml"))
-    });
-    [
-        &CLASSIC,
-        &HIGH_CONTRAST,
-        &METRO,
-        &ADWAITA,
-        &BREEZE,
-        &LUNA,
-        &AERO,
-        &AQUA,
-    ]
+/// The built-in themes: Graphite alone (design/graphite), shipped as a theme file
+/// (`assets/themes/graphite.toml`, in the format users write, so it doubles as an example).
+pub fn builtins() -> [&'static Theme; 1] {
+    [graphite()]
 }
+
+/// Graphite, MDM's look: the default, and what a theme that can't be had falls back to.
+pub fn graphite() -> &'static Theme {
+    static GRAPHITE: std::sync::LazyLock<Theme> = std::sync::LazyLock::new(|| {
+        crate::themefile::builtin("graphite", include_str!("../assets/themes/graphite.toml"))
+    });
+    &GRAPHITE
+}
+
+/// The themes MDM had before Graphite became its only look (plan 05.5c): a setting or a theme
+/// file naming one gets Graphite, with a warning.
+pub const REMOVED: &[&str] = &[
+    "classic",
+    "native",
+    "high-contrast",
+    "metro",
+    "adwaita",
+    "breeze",
+    "luna",
+    "aero",
+    "aqua",
+];
 
 /// `#rrggbb` or `#rrggbbaa` (the `#` optional, as Base16 writes them) as a colour.
 pub fn parse_hex(s: &str) -> Option<Color32> {
@@ -682,6 +611,21 @@ pub fn to_hex(c: Color32) -> String {
     }
 }
 
+/// How far apart two faces are to the eye, as the tests measure it: the largest difference of
+/// one channel. Issue #7's pressed and hot buttons were 1 apart (#f5f5f5, #f6f6f6); 6 is seen.
+#[cfg(test)]
+pub(crate) fn channel_step(a: Color32, b: Color32) -> u8 {
+    [(a.r(), b.r()), (a.g(), b.g()), (a.b(), b.b())]
+        .into_iter()
+        .map(|(x, y)| x.abs_diff(y))
+        .max()
+        .unwrap_or(0)
+}
+
+/// [`channel_step`] two faces must have between them to be told apart.
+#[cfg(test)]
+pub(crate) const SEEN_STEP: u8 = 6;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -699,8 +643,8 @@ mod tests {
         sizes.dedup();
         assert_eq!(sizes.len(), n, "a size key is used twice");
         for (k, _) in ROLES {
-            assert!(CLASSIC.light.role(k).is_some());
-            let mut p = CLASSIC.dark;
+            assert!(BASE.light.role(k).is_some());
+            let mut p = BASE.dark;
             assert!(p.set_role(k, Color32::RED));
             assert_eq!(p.role(k), Some(Color32::RED));
         }
@@ -721,7 +665,7 @@ mod tests {
     /// of each kind, so a slip in the table shows here as well as in the pixel comparison.
     #[test]
     fn classic_keeps_the_old_values() {
-        let (l, d) = (&CLASSIC.light, &CLASSIC.dark);
+        let (l, d) = (&BASE.light, &BASE.dark);
         assert_eq!(
             (l.accent, d.accent),
             (rgb(0x00, 0x78, 0xd4), rgb(0x60, 0xcd, 0xff))
@@ -738,41 +682,18 @@ mod tests {
         assert_eq!(l.segments.missing[0], hex(0xfafafc));
         assert_eq!(d.segments.missing[0], rgb(77, 77, 77));
         assert!(d.dark && !l.dark);
-        assert_eq!(CLASSIC.metrics.control_radius, 3.0);
-        assert_eq!(CLASSIC.metrics.list_row, 17.0);
+        assert_eq!(BASE.metrics.control_radius, 3.0);
+        assert_eq!(BASE.metrics.list_row, 17.0);
     }
 
-    /// Every built-in theme's text reads (WCAG 2.1 AA, 4.5:1), High contrast's at AAA (7:1),
-    /// and its accent stands out from the background (3:1).
+    /// Every built-in theme's text reads (WCAG 2.1 AA, 4.5:1), and its accent stands out from
+    /// the background (3:1).
     #[test]
     fn built_in_themes_meet_wcag_contrast() {
         use crate::derive::contrast;
-        let mut themes: Vec<Theme> = builtins().iter().map(|t| (*t).clone()).collect();
-        // Native with a few accents, and with Windows' high-contrast colours.
-        for accent in [
-            rgb(0x00, 0x78, 0xd4),
-            rgb(0xe7, 0x48, 0x56),
-            rgb(0xff, 0xb9, 0x00),
-        ] {
-            themes.push(crate::native::theme(&crate::native::System {
-                accent: Some(crate::native::Accent::from_color(accent)),
-                ..Default::default()
-            }));
-        }
-        themes.push(crate::native::theme(&crate::native::System {
-            high_contrast: Some([
-                grey(0x00),
-                grey(0xff),
-                rgb(0x1a, 0xeb, 0xff),
-                grey(0x00),
-                rgb(0xff, 0xff, 0x00),
-                rgb(0x3f, 0xf2, 0x3f),
-            ]),
-            ..Default::default()
-        }));
+        let themes: Vec<Theme> = builtins().iter().map(|t| (*t).clone()).collect();
         for t in &themes {
-            let high = t.id == "high-contrast" || t.light.focus_ring == t.light.accent;
-            let min = if high { 7.0 } else { 4.5 };
+            let min = 4.5;
             for p in [&t.light, &t.dark] {
                 let pairs = [
                     ("text / window", p.text, p.window),
@@ -785,12 +706,6 @@ mod tests {
                 ];
                 for (what, fg, bg) in pairs {
                     let r = contrast(fg, bg);
-                    // The classic look keeps today's pixels: its dark grey notes on the dark
-                    // window are 4.42:1 (#a0a0a0 on #393939), reported for its own fix.
-                    if t.id == "classic" && p.dark && what == "muted / window" {
-                        assert!(r >= 4.4, "{} {}: {what} {r:.2}", t.id, p.dark);
-                        continue;
-                    }
                     assert!(r >= min, "{} {}: {what} {r:.2}", t.id, p.dark);
                 }
                 let r = contrast(p.link, p.window);
@@ -799,15 +714,140 @@ mod tests {
                 assert!(r >= 3.0, "{} {}: accent {r:.2}", t.id, p.dark);
                 let r = contrast(p.button_accent_text, p.button_accent);
                 assert!(r >= 4.5, "{} {}: accent button {r:.2}", t.id, p.dark);
+                // The Graphite layout's roles (plan 02b), set in every theme.
+                for (what, fg, bg) in [
+                    ("danger button", p.button_danger_text, p.button_danger),
+                    ("menu shortcut / menu", p.menu_shortcut, p.menu),
+                    ("text / error banner", p.text, p.banner_error),
+                    ("text / info banner", p.text, p.banner_info),
+                    ("text / warning banner", p.text, p.banner_warning),
+                    ("text / panel", p.text, p.panel),
+                    ("text / tile", p.text, p.tile),
+                    ("toolbar text / checked", p.text, p.toolbar_checked),
+                ] {
+                    let r = contrast(fg, bg);
+                    assert!(r >= min, "{} {}: {what} {r:.2}", t.id, p.dark);
+                }
             }
         }
     }
 
-    /// The style themes' keyboard focus ring is seen (WCAG 2.1 non-text contrast, 3:1) on the
-    /// window and on the boxes, light and dark, its transparency included. Classic keeps IDM's
-    /// dotted grey rectangle.
+    /// Plan 09a's contrast pass: the rest of the roles that carry text or meaning, light and dark.
+    /// Text at 4.5:1 (WCAG 2.1 AA), including the accent button's label on both stops of its
+    /// two-tone face; parts that carry meaning without text at 3:1 (non-text contrast). Greyed
+    /// text is exempt from 1.4.3; it is held at 2:1 on every face it is drawn on, so it still
+    /// reads, and below the secondary text's ratio, so it still looks greyed. Graphite measures
+    /// 2.14 light (menu, on the pointer's face) to 2.97 dark (text, on the window).
     #[test]
-    fn style_themes_focus_rings_are_seen() {
+    fn built_in_themes_text_and_meaning_roles_read() {
+        use crate::derive::contrast;
+        const GREYED: f32 = 2.0;
+        for t in builtins() {
+            for p in [&t.light, &t.dark] {
+                let id = |what: &str, r: f32| format!("{} dark {}: {what} {r:.2}", t.id, p.dark);
+                let top = if p.button_accent_top.a() > 0 {
+                    p.button_accent_top
+                } else {
+                    p.button_accent
+                };
+                for (what, fg, bg) in [
+                    ("accent button text / top stop", p.button_accent_text, top),
+                    (
+                        "accent button text / hot",
+                        p.button_accent_text,
+                        p.button_accent_hot,
+                    ),
+                    (
+                        "accent button text pressed / pressed",
+                        p.button_accent_text_pressed,
+                        p.button_accent_pressed,
+                    ),
+                    (
+                        "button text pressed",
+                        p.button_text_pressed,
+                        p.button_pressed,
+                    ),
+                    ("secondary text / panel", p.text_secondary, p.panel),
+                    ("secondary text / window", p.text_secondary, p.window),
+                    ("muted / panel", p.muted, p.panel),
+                    ("muted / tile", p.muted, p.tile),
+                    ("text / menu hot", p.menu_text, p.menu_hot),
+                    ("text / inactive selection", p.text, p.selection_inactive),
+                    ("text / tab page", p.text, p.tab_page),
+                    ("chip text / web chip", p.chip_text, p.chip_web),
+                    ("chip text / torrent chip", p.chip_text, p.chip_torrent),
+                    ("caption text", p.caption_text, p.caption),
+                    ("caption text inactive", p.caption_text_inactive, p.caption),
+                    ("error / window", p.error, p.window),
+                    ("error / panel", p.error, p.panel),
+                    ("error / error banner", p.error, p.banner_error),
+                    ("warning / window", p.warning, p.window),
+                    ("success / window", p.success, p.window),
+                    ("progress status / window", p.status_value, p.window),
+                    ("link / panel", p.link, p.panel),
+                    ("tooltip text", p.egui_text, p.egui_window),
+                ] {
+                    let r = contrast(fg, bg);
+                    assert!(r >= 4.5, "{}", id(what, r));
+                }
+                let end = if p.progress_bar_end.a() > 0 {
+                    p.progress_bar_end
+                } else {
+                    p.progress_bar
+                };
+                for (what, fg, bg) in [
+                    ("check mark / checked", p.check_mark, p.check_on),
+                    ("check border / panel", p.check_border, p.panel),
+                    ("check border / field", p.check_border, p.field),
+                    ("progress fill / track", p.progress_bar, p.progress_track),
+                    ("progress fill end / track", end, p.progress_track),
+                ] {
+                    let r = contrast(fg, bg);
+                    assert!(r >= 3.0, "{}", id(what, r));
+                }
+                for (what, fg, bg) in [
+                    ("greyed text / window", p.text_disabled, p.window),
+                    ("greyed text / panel", p.text_disabled, p.panel),
+                    ("greyed text / tab page", p.text_disabled, p.tab_page),
+                    (
+                        "greyed text / greyed box",
+                        p.text_disabled,
+                        p.field_disabled,
+                    ),
+                    (
+                        "greyed text / greyed button",
+                        p.text_disabled,
+                        p.button_disabled,
+                    ),
+                    ("greyed menu item / menu", p.menu_text_disabled, p.menu),
+                    (
+                        "greyed menu item / menu hot",
+                        p.menu_text_disabled,
+                        p.menu_hot,
+                    ),
+                    (
+                        "greyed toolbar label / panel",
+                        p.toolbar_text_disabled,
+                        p.panel,
+                    ),
+                    ("greyed label / window", p.progress_label_disabled, p.window),
+                ] {
+                    let r = contrast(fg, bg);
+                    assert!(r >= GREYED, "{}", id(what, r));
+                }
+                let (greyed, muted) = (
+                    contrast(p.text_disabled, p.window),
+                    contrast(p.muted, p.window),
+                );
+                assert!(greyed < muted, "{}", id("greyed against muted", greyed));
+            }
+        }
+    }
+
+    /// The keyboard focus ring is seen (WCAG 2.1 non-text contrast, 3:1) on the window and on the
+    /// boxes, light and dark, its transparency included.
+    #[test]
+    fn focus_rings_are_seen() {
         use crate::derive::contrast;
         let over = |fg: Color32, bg: Color32| {
             let a = fg.a() as f32 / 255.0;
@@ -820,9 +860,6 @@ mod tests {
             )
         };
         for t in builtins() {
-            if t.id == "classic" || t.id == "high-contrast" {
-                continue;
-            }
             for p in [&t.light, &t.dark] {
                 for bg in [p.window, p.field] {
                     let r = contrast(over(p.focus_ring, bg), bg);
@@ -832,110 +869,163 @@ mod tests {
         }
     }
 
-    /// A theme shipped as a file reads without a warning.
+    /// The theme shipped as a file (Graphite's) reads without a warning.
     #[test]
     fn built_in_theme_files_read_cleanly() {
-        for (id, name, text) in [
-            (
-                "high-contrast",
-                "High contrast",
-                include_str!("../assets/themes/high-contrast.toml"),
-            ),
-            (
-                "metro",
-                "Metro",
-                include_str!("../assets/themes/metro.toml"),
-            ),
-            (
-                "adwaita",
-                "Adwaita",
-                include_str!("../assets/themes/adwaita.toml"),
-            ),
-            (
-                "breeze",
-                "Breeze",
-                include_str!("../assets/themes/breeze.toml"),
-            ),
-            ("luna", "Luna", include_str!("../assets/themes/luna.toml")),
-            ("aero", "Aero", include_str!("../assets/themes/aero.toml")),
-            ("aqua", "Aqua", include_str!("../assets/themes/aqua.toml")),
-        ] {
-            let v: serde_json::Value = toml::from_str(text).unwrap();
-            let l = crate::themefile::parse(id, &v, |_| {
+        let text = include_str!("../assets/themes/graphite.toml");
+        let v: serde_json::Value = toml::from_str(text).unwrap();
+        let l = crate::themefile::parse("graphite", &v, |_| {
+            Ok(crate::themefile::Loaded {
+                theme: BASE.clone(),
+                warnings: Vec::new(),
+            })
+        })
+        .unwrap();
+        assert!(l.warnings.is_empty(), "{:?}", l.warnings);
+        assert_eq!(l.theme.name, "Graphite");
+        assert!(l.theme.dark.dark && !l.theme.light.dark);
+    }
+
+    /// Plan 10, decision 4: the removed themes' styles give Graphite's control, as accepted.
+    #[test]
+    fn removed_styles_give_graphites_control() {
+        for old in REMOVED_STYLES {
+            let mut c = Controls::CLASSIC;
+            for key in ["check", "button", "progress", "caption"] {
+                assert!(c.set(key, old), "{key} = {old}");
+            }
+            let g = graphite().controls;
+            assert_eq!(
+                (c.check, c.button, c.progress, c.caption),
+                (g.check, g.button, g.progress, g.caption),
+                "{old}"
+            );
+            assert!(!c.set("focus", old), "focus never had {old}");
+        }
+    }
+
+    /// Graphite, MDM's look and its only built-in theme (plan 05.5c): rounded corners,
+    /// a focus ring, a flat drawn title bar, the mockup's taller rows, its own one-colour icon
+    /// set (Tabler's, themeicons.rs), and pressed faces told from the pointer over them (issue
+    /// #7) on its buttons and toolbar.
+    #[test]
+    fn graphite_is_built_in() {
+        assert_eq!(builtins().len(), 1);
+        let t = builtins()[0];
+        assert!(std::ptr::eq(t, graphite()));
+        assert_eq!((t.id.as_ref(), t.name.as_ref()), ("graphite", "Graphite"));
+        assert_eq!(t.metrics.control_radius, 6.0);
+        assert_eq!(t.metrics.list_row, 32.0);
+        assert_eq!(t.icon_set.as_deref(), Some("graphite"));
+        // Plan 04: Geist, bundled.
+        assert_eq!(t.font.as_deref(), Some("geist"));
+        let m = &t.metrics;
+        assert_eq!(
+            (m.font_ui, m.font_body, m.font_small, m.font_heading),
+            (12.0, 13.0, 11.5, 16.0)
+        );
+        assert_eq!(
+            t.controls,
+            Controls {
+                field_focus: FieldFocus::Ring,
+                check: CheckLook::Fluent,
+                progress: ProgressLook::Graphite,
+                scroll: ScrollLook::Overlay,
+                caption: CaptionLook::Graphite,
+                focus: FocusLook::Ring,
+                button: ButtonLook::Graphite,
+            }
+        );
+        // Plan 09a: the two-tone finish in both modes, the glow in dark only.
+        for p in [&t.light, &t.dark] {
+            assert!(p.button_accent_top.a() > 0 && p.button_accent_top != p.button_accent);
+            assert!(p.progress_bar_end.a() > 0 && p.progress_bar_end != p.progress_bar);
+        }
+        assert_eq!(t.light.glow.a(), 0);
+        assert!(t.dark.glow.a() > 0);
+        // Plan 02b's roles, as make_theme.py maps them from pal.py's tokens.
+        for p in [&t.light, &t.dark] {
+            assert_eq!(p.panel, p.caption, "panel and caption: both `surface`");
+            assert_eq!(p.toolbar_checked, p.selection, "toolbar.checked: `sel`");
+            assert_eq!(p.banner_info, p.selection, "banner.info: `sel`");
+            assert_eq!(p.menu_shortcut, p.muted, "menu.shortcut: `ink3`");
+            assert_eq!(
+                p.text_secondary, p.button_text_pressed,
+                "text.secondary: `ink2`"
+            );
+            assert!(p.text_secondary != p.text && p.text_secondary != p.muted);
+            assert_eq!(
+                p.button_accent_top, p.button_accent_hot,
+                "accent top: `out2`"
+            );
+            assert_eq!(p.progress_bar_end, p.button_accent_hot, "bar end: `out2`");
+        }
+        assert_eq!(t.light.glow, Color32::TRANSPARENT, "no glow in light");
+        assert_ne!(t.dark.glow, Color32::TRANSPARENT, "a glow in dark");
+        for p in [&t.light, &t.dark] {
+            for (what, pressed, hot) in [
+                ("button", p.button_pressed, p.button_hot),
+                ("toolbar", p.toolbar_pressed, p.toolbar_hot),
+                (
+                    "accent button",
+                    p.button_accent_pressed,
+                    p.button_accent_hot,
+                ),
+            ] {
+                assert!(
+                    channel_step(pressed, hot) >= SEEN_STEP,
+                    "dark {}: {what} pressed {pressed:?} against hot {hot:?}",
+                    p.dark
+                );
+            }
+            // The toolbar's band is a panel (chrome::toolbar_graphite, plan 05b): its hover and
+            // a split button's other half are seen on it.
+            for (what, face) in [("hot", p.toolbar_hot), ("hot faint", p.toolbar_hot_faint)] {
+                assert!(
+                    channel_step(face, p.panel) >= SEEN_STEP,
+                    "dark {}: toolbar {what} {face:?} on the panel {:?}",
+                    p.dark,
+                    p.panel
+                );
+            }
+            // The outlaw colour throughout: no accent-tinted edge on its buttons.
+            assert_eq!(p.button_default_bottom, p.button_default_border);
+            assert_eq!(p.button_accent_bottom, p.button_accent);
+        }
+    }
+
+    /// `[controls] chrome` is read and ignored (Graphite's layout is the only one, plan 05.5c):
+    /// a file saying `graphite` is quiet, one naming another layout is told so.
+    #[test]
+    fn chrome_is_read_and_ignored() {
+        let mut c = Controls::CLASSIC;
+        assert!(!c.set("chrome", "graphite") && !c.set("chrome", "classic"));
+        for (layout, warned) in [("graphite", false), ("classic", true), ("neon", true)] {
+            let text = format!("[controls]\nchrome = \"{layout}\"");
+            let v: serde_json::Value = toml::from_str(&text).unwrap();
+            let l = crate::themefile::parse("t", &v, |_| {
                 Ok(crate::themefile::Loaded {
-                    theme: CLASSIC.clone(),
+                    theme: BASE.clone(),
                     warnings: Vec::new(),
                 })
             })
             .unwrap();
-            assert!(l.warnings.is_empty(), "{id}: {:?}", l.warnings);
-            assert_eq!(l.theme.name, name);
-            assert!(l.theme.dark.dark && !l.theme.light.dark);
+            assert_eq!(
+                l.warnings.len(),
+                usize::from(warned),
+                "{layout}: {:?}",
+                l.warnings
+            );
+            assert!(
+                l.warnings
+                    .iter()
+                    .all(|w| w.starts_with("controls.chrome: "))
+            );
+            assert_eq!(l.theme.controls, BASE.controls);
         }
-        let metro = builtins()[2];
-        assert_eq!(metro.icon_set.as_deref(), Some("metro"));
-        assert_eq!(metro.controls.caption, CaptionLook::Metro);
-        assert_eq!(metro.metrics.control_radius, 0.0);
-        let adwaita = builtins()[3];
-        assert_eq!(adwaita.icon_set.as_deref(), Some("adwaita"));
-        assert_eq!(adwaita.controls.caption, CaptionLook::Adwaita);
-        assert_eq!(adwaita.controls.focus, FocusLook::Ring);
-        assert_eq!(adwaita.controls.check, CheckLook::Adwaita);
-        assert_eq!(adwaita.controls.field_focus, FieldFocus::Ring);
-        let breeze = builtins()[4];
-        assert_eq!(breeze.icon_set.as_deref(), Some("breeze"));
-        assert_eq!(breeze.controls.caption, CaptionLook::Breeze);
-        assert_eq!(breeze.controls.focus, FocusLook::Frame);
-        assert_eq!(breeze.controls.check, CheckLook::Breeze);
-        assert_eq!(breeze.controls.button, ButtonLook::Breeze);
-        assert_eq!(breeze.controls.field_focus, FieldFocus::Border);
-        // The era themes: their own buttons, boxes, bars and title bars, and icon sets.
-        for (i, id, button, check, progress, caption) in [
-            (
-                5,
-                "luna",
-                ButtonLook::Luna,
-                CheckLook::Luna,
-                ProgressLook::Blocks,
-                CaptionLook::Luna,
-            ),
-            (
-                6,
-                "aero",
-                ButtonLook::Aero,
-                CheckLook::Aero,
-                ProgressLook::Gloss,
-                CaptionLook::Aero,
-            ),
-            (
-                7,
-                "aqua",
-                ButtonLook::Aqua,
-                CheckLook::Aqua,
-                ProgressLook::Gloss,
-                CaptionLook::Aqua,
-            ),
-        ] {
-            let t = builtins()[i];
-            assert_eq!(t.id, id);
-            assert_eq!(t.icon_set.as_deref(), Some(id));
-            assert_eq!(t.controls.button, button, "{id}");
-            assert_eq!(t.controls.check, check, "{id}");
-            assert_eq!(t.controls.progress, progress, "{id}");
-            assert_eq!(t.controls.caption, caption, "{id}");
-            // Their buttons shine: the gloss isn't the face.
-            for p in [&t.light, &t.dark] {
-                assert_ne!(p.gloss, p.button, "{id} {}", p.dark);
-            }
-        }
-        // Aqua's keyboard focus is a ring, as Mac OS X draws it; Luna's and Aero's Windows'
-        // dotted rectangle.
-        assert_eq!(builtins()[7].controls.focus, FocusLook::Ring);
-        assert_eq!(builtins()[5].controls.focus, FocusLook::Dotted);
-        assert_eq!(builtins()[6].controls.focus, FocusLook::Dotted);
     }
 
-    /// The classic look's dark secondary and error texts read on every dark surface they sit on
+    /// The base's dark secondary and error texts read on every dark surface they sit on
     /// (WCAG 2.1 AA, 4.5:1): the window, a tab page, a text box.
     #[test]
     fn classic_dark_texts_read() {
@@ -954,7 +1044,7 @@ mod tests {
             let (x, y) = (lum(a), lum(b));
             (x.max(y) + 0.05) / (x.min(y) + 0.05)
         };
-        let d = &CLASSIC.dark;
+        let d = &BASE.dark;
         for fg in [d.muted, d.error, d.error_strong] {
             for bg in [d.window, d.tab_page, d.field] {
                 assert!(ratio(fg, bg) >= 4.5, "{fg:?} on {bg:?}: {}", ratio(fg, bg));
@@ -965,7 +1055,7 @@ mod tests {
     /// The rows between a dark variant's menu bar and its toolbar (#379): none of them stands out
     /// against the surfaces around them. The classic dark palette's were near-white (the dark
     /// look of IDM's era retired on 2026-11-01): a bright band across the window, under the menu
-    /// bar. High contrast's lines are meant to stand out.
+    /// bar.
     #[test]
     fn dark_variants_draw_no_bright_line_under_the_menu_bar() {
         let lum = |c: Color32| {
@@ -983,13 +1073,9 @@ mod tests {
             let (x, y) = (lum(a), lum(b));
             (x.max(y) + 0.05) / (x.min(y) + 0.05)
         };
-        for theme in builtins().iter().filter(|t| t.id != "high-contrast") {
+        for theme in builtins() {
             let d = &theme.dark;
-            for (what, line) in [
-                ("menubar.line", d.menubar_line),
-                ("toolbar.line", d.toolbar_line),
-                ("toolbar.line.light", d.toolbar_line_light),
-            ] {
+            for (what, line) in [("menubar.line", d.menubar_line)] {
                 for bg in [d.menubar, d.window] {
                     assert!(
                         ratio(line, bg) <= 2.5,

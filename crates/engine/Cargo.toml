@@ -1,12 +1,16 @@
 [package]
-name = "mdm-engine"
-description = "MDM download engine: dynamic segmentation, workers, resume"
+name = "grabbit-engine"
+description = "Grabbit download engine: dynamic segmentation, workers, resume"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+
+# The code's paths stay `mdm_engine::` (plan 10, decision 3).
+[lib]
+name = "mdm_engine"
 
 [dependencies]
 bytes.workspace = true
@@ -43,28 +47,21 @@ http = "1.5.0"
 rustls.workspace = true
 rustls-platform-verifier.workspace = true
 tokio-rustls.workspace = true
-
-[target.'cfg(windows)'.dependencies]
 # Sparse part files (src/sparse.rs, D-008 amendment) and the free-space probe (src/disk.rs).
 windows-sys.workspace = true
 
-[target.'cfg(unix)'.dependencies]
-# The free-space probe (src/disk.rs): statvfs and statfs, safely (already in the tree).
-rustix = { version = "1.1.6", features = ["fs"] }
-
-[target.'cfg(target_vendor = "apple")'.dependencies]
-# The free-space probe (src/disk.rs) asks for the space Finder shows, purgeable space included
-# (already in the tree through security-framework).
-core-foundation = "0.10.1"
-core-foundation-sys = "0.8.7"
-
 [dev-dependencies]
+# Counts every allocation of the memory test (tests/memory.rs): what the connections hold for
+# the disk, as allocated.
+cap = { version = "0.1.2", features = ["stats"] }
 # The free-space probe's test compares it with the volume list it replaced (#224).
 sysinfo.workspace = true
 mdm-labserver.workspace = true
 proptest.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
+# The limiter's tests run on Tokio's paused clock (src/limiter.rs, #621).
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true

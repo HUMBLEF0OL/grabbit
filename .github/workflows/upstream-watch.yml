@@ -1,0 +1,89 @@
+# Once a week (Actions minutes are counted; `/upstream-sync` runs `status` whenever it's needed):
+# the original MDM's commits not yet decided here (critical-looking ones first) and
+# its open PRs that look critical. The report is on each run's summary page, and in one issue on
+# this fork labelled upstream-watch when the fork has Issues turned on. It only reads the
+# original; nothing is picked here (that is /upstream-sync, by a person, through a PR).
+# Scheduled workflows run from the default branch (main): this starts with the first release
+# that carries it, and runs dev's sync.py, so the report follows the tool as it changes on dev.
+name: Upstream watch
+
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: upstream-watch
+  cancel-in-progress: false
+
+jobs:
+  report:
+    # Runs dev's code, so it holds no write permission of any kind.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read  # the open sync PRs, so their picks show as in-pr
+    outputs:
+      report: ${{ steps.report.outputs.report }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: dev
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: dev, the sync branches and the original (read only)
+        run: |
+          git fetch --no-tags --unshallow origin "+refs/heads/dev:refs/remotes/origin/dev" \
+            "+refs/heads/upstream-sync/*:refs/remotes/origin/upstream-sync/*"
+          git remote add upstream https://github.com/anefzaoui/misterdownloadmanager.git
+          git remote set-url --push upstream DISABLED
+          git fetch --no-tags upstream main
+      - name: Report
+        id: report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python tools/upstream-sync/sync.py report > "$RUNNER_TEMP/report.md"
+          cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "report<<UPSTREAM_REPORT_END"
+            cat "$RUNNER_TEMP/report.md"
+            echo "UPSTREAM_REPORT_END"
+          } >> "$GITHUB_OUTPUT"
+
+  issue:
+    # Writes the issue; runs no code from the repository.
+    needs: report
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: The tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REPORT: ${{ needs.report.outputs.report }}
+        # -R always: in a fork, gh's default repository is the original.
+        run: |
+          if [ "$(gh repo view "$REPO" --json hasIssuesEnabled --jq .hasIssuesEnabled)" != true ]; then
+            echo "::notice::Issues are off on $REPO: the report is in the report job's summary only"
+            exit 0
+          fi
+          printf '%s\n' "$REPORT" > "$RUNNER_TEMP/report.md"
+          gh label create upstream-watch -R "$REPO" --color BFD4F2 \
+            --description "The upstream watch's weekly report" 2>/dev/null || true
+          n=$(gh issue list -R "$REPO" --label upstream-watch --state open --json number \
+            --jq '.[0].number // empty')
+          if [ -n "$n" ]; then
+            gh issue edit "$n" -R "$REPO" --body-file "$RUNNER_TEMP/report.md"
+          else
+            gh issue create -R "$REPO" --title "Upstream fixes waiting" --label upstream-watch \
+              --body-file "$RUNNER_TEMP/report.md"
+          fi

@@ -6,7 +6,7 @@
 //! and that the wake is cancelled once there is no start left to wake for.
 //!
 //! It opens windows, which needs OpenGL or Direct3D, so it runs on request:
-//! `cargo test -p mdm-app --test wake_timer -- --ignored --nocapture`.
+//! `cargo test -p grabbit-app --test wake_timer -- --ignored --nocapture`.
 
 use std::path::Path;
 use std::process::{Child, Command};
@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use mdm_labserver::{Config, LabServer};
 
-const APP: &str = env!("CARGO_BIN_EXE_misterdownloadmanager");
+const APP: &str = env!("CARGO_BIN_EXE_grabbit");
 
 /// The app's log so far (every file of `logs/`).
 fn log(data: &Path) -> String {
@@ -91,7 +91,7 @@ async fn the_computer_is_woken_for_the_queue_and_kept_awake_while_it_runs() {
     std::fs::write(data.join("downloads.json"), list.to_string()).unwrap();
     let result = tokio::task::spawn_blocking(move || {
         let mut app = Command::new(APP)
-            .env("MDM_DATA_DIR", &data)
+            .env("GRABBIT_DATA_DIR", &data)
             .env("MDM_OFFSCREEN", "1")
             .spawn()
             .unwrap();
@@ -110,19 +110,12 @@ async fn the_computer_is_woken_for_the_queue_and_kept_awake_while_it_runs() {
             assert!(set.contains(&wake), "{set:?} is not for {wake} UTC");
             assert!(set.contains("Main download queue"), "{set}");
             // Windows: the timer itself goes off then (the computer, awake, just goes on).
-            #[cfg(windows)]
             wait_for(
                 &mut app,
                 &data,
                 "wake: the wake timer went off",
                 Duration::from_secs(40),
             );
-            // Linux, where users may set the wake alarm: the chip has it.
-            #[cfg(target_os = "linux")]
-            if std::fs::OpenOptions::new()
-                .write(true)
-                .open("/sys/class/rtc/rtc0/wakealarm")
-                .is_ok()
             {
                 let alarm = std::fs::read_to_string("/sys/class/rtc/rtc0/wakealarm").unwrap();
                 println!("wakealarm: {}", alarm.trim());
@@ -158,7 +151,7 @@ async fn the_computer_is_woken_for_the_queue_and_kept_awake_while_it_runs() {
         }));
         let _ = Command::new(APP)
             .arg("/exit")
-            .env("MDM_DATA_DIR", &data)
+            .env("GRABBIT_DATA_DIR", &data)
             .env("MDM_OFFSCREEN", "1")
             .status();
         let until = Instant::now() + Duration::from_secs(15);

@@ -7,19 +7,18 @@
 pub mod chosen;
 pub mod ffmpeg;
 pub mod gallery;
-mod macos;
 mod openpgp;
 pub mod pages;
+pub mod pieces;
 pub mod playlist;
 pub mod proc;
 pub mod relay;
 pub mod resolve;
 pub mod servers;
-// System helper discovery is for Linux and macOS; Windows keeps its verified managed copies.
-#[cfg(unix)]
-mod system;
+pub mod streams;
 pub mod update;
 pub mod video;
+pub mod workdir;
 
 use std::path::{Path, PathBuf};
 
@@ -28,10 +27,10 @@ use sha2::{Digest, Sha256};
 
 /// yt-dlp's release signing key, from its repository (`public.key`).
 const YTDLP_KEY: &str = include_str!("../keys/yt-dlp.asc");
-/// Mister Download Manager's release signing key (Ed25519, fingerprint
-/// 5826D399249DE856EA087D802E293C28E8A69D74): release.yml signs each release's SHA256SUMS.txt
-/// with it (the MDM_RELEASE_KEY secret), and MDM updates itself only from a list it signed.
-const MDM_KEY: &str = include_str!("../keys/mdm-release.asc");
+/// Grabbit's release signing key (Ed25519, fingerprint
+/// 7C8D515A5E859D473CBC54C0D9E89ED61BBEC99D): release.yml signs each release's SHA256SUMS.txt
+/// with it (the GRABBIT_RELEASE_KEY secret), and Grabbit updates itself only from a list it signed.
+const MDM_KEY: &str = include_str!("../keys/grabbit-release.asc");
 /// Where releases come from.
 const RELEASES: &str = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest";
 
@@ -59,12 +58,45 @@ pub enum Error {
         version: String,
         oldest: &'static str,
     },
-    /// MDM's engine could not download it (its own words).
-    #[error("{0}")]
-    Download(String),
+    /// MDM's engine could not download it from `host` (upstream issue 816: which server, and
+    /// why).
+    #[error("{host}: {error}")]
+    Download {
+        host: String,
+        error: mdm_engine::Error,
+    },
     /// The chosen network adapter is down or can't reach the server (#35).
     #[error(transparent)]
     Adapter(#[from] mdm_engine::NetError),
+}
+
+impl Error {
+    /// The server a network failure was with, and its kind (upstream issue 816); None for any
+    /// other error.
+    pub fn network(&self) -> Option<(String, mdm_engine::fault::Fault)> {
+        match self {
+            Error::Http(e) => {
+                let host = e.url()?.host_str()?.to_owned();
+                Some((host, mdm_engine::fault::of_http(e)))
+            }
+            Error::Download { host, error } => {
+                Some((host.clone(), mdm_engine::fault::of_engine(error)?))
+            }
+            _ => None,
+        }
+    }
+}
+
+/// A client for MDM's own requests to `url`'s server (a release list, its checksums): through
+/// `net`'s proxy (Options → Proxy / Socks), DNS and network adapter, as the engine's downloads
+/// go (upstream issue 816: the release list went past the proxy the download itself took).
+pub(crate) fn client(net: &mdm_engine::Options, url: &str) -> Result<reqwest::Client, Error> {
+    let parsed = url::Url::parse(url).map_err(|e| Error::BadRelease(e.to_string()))?;
+    let host = parsed.host_str().unwrap_or_default().to_owned();
+    mdm_engine::http_client(net, &parsed).map_err(|e| match e {
+        mdm_engine::Error::Adapter(a) => Error::Adapter(a),
+        error => Error::Download { host, error },
+    })
 }
 
 /// An installed tool.
@@ -74,31 +106,14 @@ pub struct Installed {
     pub exe: PathBuf,
 }
 
-/// `Installed::version` of a program found on the system: its package manager's, not asked (#452).
-const SYSTEM: &str = "system";
-
-impl Installed {
-    /// Whether this is the system's copy (Linux and macOS), kept current by its package manager.
-    pub fn is_system(&self) -> bool {
-        self.version == SYSTEM
-    }
-}
-
 /// `<data dir>/tools`.
 pub fn tools_dir() -> Option<PathBuf> {
     mdm_ipc::data_dir().map(|d| d.join("tools"))
 }
 
-/// yt-dlp's file name for this platform in its releases. On macOS, its folder build: why, in
-/// `macos`.
+/// yt-dlp's file name in its releases.
 pub fn ytdlp_asset() -> &'static str {
-    if cfg!(windows) {
-        "yt-dlp.exe"
-    } else if cfg!(target_os = "macos") {
-        "yt-dlp_macos.zip"
-    } else {
-        "yt-dlp_linux"
-    }
+    "yt-dlp.exe"
 }
 
 /// Whether `sums` carries a valid signature `sig` (binary OpenPGP) by yt-dlp's key or one of its
@@ -159,13 +174,14 @@ pub(crate) async fn signed_list(
 }
 
 /// MDM's own name, sent when it fetches its helpers and its updates.
-pub const USER_AGENT: &str = concat!("MisterDownloadManager/", env!("CARGO_PKG_VERSION"));
+pub const USER_AGENT: &str = concat!("Grabbit/", env!("CARGO_PKG_VERSION"));
 
 /// How MDM downloads its helpers and its updates: through its own engine (several connections,
 /// resumable), as MDM itself, through `proxy` (Options → Proxy / Socks).
 pub fn net(proxy: mdm_engine::Proxy) -> mdm_engine::Options {
     mdm_engine::Options {
         user_agent: USER_AGENT.to_owned(),
+        automatic_agent: false,
         proxy,
         ..Default::default()
     }
@@ -184,6 +200,7 @@ pub(crate) async fn fetch_verified(
 ) -> Result<(), Error> {
     use mdm_engine::verify::{Algo, Hash};
     let url = url::Url::parse(url).map_err(|e| Error::BadRelease(e.to_string()))?;
+    let host = url.host_str().unwrap_or_default().to_owned();
     let opts = mdm_engine::Options {
         checksum: Some(Hash {
             algo: Algo::Sha256,
@@ -211,7 +228,7 @@ pub(crate) async fn fetch_verified(
             forget();
             Err(Error::BadChecksum)
         }
-        Err(e) => Err(Error::Download(e.to_string())),
+        Err(error) => Err(Error::Download { host, error }),
     }
 }
 
@@ -242,22 +259,14 @@ pub fn sum_for(sums: &str, name: &str) -> Option<[u8; 32]> {
 }
 
 /// The yt-dlp to use: the person's own (`chosen`), else MDM's install in `dir`
-/// (`dir/yt-dlp/current.json`), if any and still there; on Linux and macOS, else the system's.
+/// (`dir/yt-dlp/current.json`), if any and still there.
 pub fn installed(dir: &Path) -> Option<Installed> {
-    let own = chosen::chosen(dir, chosen::Helper::YtDlp).or_else(|| own_ytdlp(dir));
-    #[cfg(unix)]
-    return own.or_else(|| system::installed("yt-dlp"));
-    #[cfg(not(unix))]
-    own
+    chosen::chosen(dir, chosen::Helper::YtDlp).or_else(|| own_ytdlp(dir))
 }
 
 fn own_ytdlp(dir: &Path) -> Option<Installed> {
     let text = std::fs::read(dir.join("yt-dlp").join("current.json")).ok()?;
     let i: Installed = serde_json::from_slice(&text).ok()?;
-    // macOS: the one-file build earlier versions installed can't run from a downloaded app (`macos`).
-    if cfg!(target_os = "macos") && macos::one_file_build(&i.exe) {
-        return None;
-    }
     i.exe.is_file().then_some(i)
 }
 
@@ -279,10 +288,9 @@ struct Asset {
     browser_download_url: String,
 }
 
-/// Whether the once-per-session update has a yt-dlp to refresh: not the system's, which is its
-/// package manager's to update (#452), and which only an explicit [`install_latest`] replaces.
+/// Whether the once-per-session update has a yt-dlp to refresh.
 pub fn refreshable(dir: &Path) -> bool {
-    installed(dir).is_some_and(|i| !i.is_system())
+    installed(dir).is_some()
 }
 
 /// Install the latest yt-dlp release into `dir` unless the installed one is as new, the program
@@ -298,9 +306,7 @@ pub async fn install_latest(
     if let Some(mine) = chosen::chosen(dir, chosen::Helper::YtDlp) {
         return Ok(mine);
     }
-    let client = mdm_engine::net::client_builder(&net.dns, &net.route, RELEASES)?
-        .user_agent(USER_AGENT)
-        .build()?;
+    let client = client(net, RELEASES)?;
     let body = client
         .get(RELEASES)
         .send()
@@ -344,9 +350,6 @@ pub async fn install_latest(
     if Sha256::digest(&program).as_slice() != expected {
         return Err(Error::BadChecksum);
     }
-    #[cfg(target_os = "macos")]
-    return macos::put_folder(dir, &release.tag_name, &program);
-    #[cfg(not(target_os = "macos"))]
     put(dir, "yt-dlp", &release.tag_name, asset, &program, &exe_url)
 }
 
@@ -369,11 +372,6 @@ pub(crate) fn put(
     let exe = folder.join(asset);
     craft_atomic::atomic_write(&exe, program)?;
     mark_downloaded(&exe, from);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755))?;
-    }
     make_current(
         &root,
         Installed {
@@ -410,17 +408,12 @@ pub(crate) fn make_current(root: &Path, now: Installed) -> Result<Installed, Err
 /// Mark-of-the-Web: the program came from the internet (Windows checks it like a browser
 /// download).
 pub(crate) fn mark_downloaded(path: &Path, from: &str) {
-    #[cfg(windows)]
-    {
-        let mut stream = path.as_os_str().to_owned();
-        stream.push(":Zone.Identifier");
-        let _ = std::fs::write(
-            stream,
-            format!("[ZoneTransfer]\r\nZoneId=3\r\nHostUrl={from}\r\n"),
-        );
-    }
-    #[cfg(not(windows))]
-    let _ = (path, from);
+    let mut stream = path.as_os_str().to_owned();
+    stream.push(":Zone.Identifier");
+    let _ = std::fs::write(
+        stream,
+        format!("[ZoneTransfer]\r\nZoneId=3\r\nHostUrl={from}\r\n"),
+    );
 }
 
 #[cfg(test)]
@@ -505,9 +498,6 @@ mod tests {
             "https://x/",
         )
         .unwrap();
-        // macOS installs the folder build (`macos`), with a folder beside the program.
-        #[cfg(target_os = "macos")]
-        std::fs::create_dir_all(now.exe.with_file_name("_internal")).unwrap();
         assert_eq!(installed(dir.path()).unwrap(), now);
         assert_eq!(std::fs::read(&now.exe).unwrap(), b"three");
         let root = dir.path().join("yt-dlp");

@@ -1,8 +1,8 @@
 //! For whoever reads a crash report: a `.dmp` attached to an issue, made readable with that
-//! release's symbols (the `MisterDownloadManager-<version>-symbols-<platform>.zip` beside its
+//! release's symbols (the `Grabbit-<version>-symbols-<platform>.zip` beside its
 //! downloads, or a folder it was unzipped to).
 //!
-//!     cargo run -p mdm-crash --bin mdm-symbolicate -- <file.dmp> [<symbols.zip | folder> ...]
+//!     cargo run -p grabbit-crash --bin mdm-symbolicate -- <file.dmp> [<symbols.zip | folder> ...]
 //!
 //! Prints the report: every thread with function, file and line.
 

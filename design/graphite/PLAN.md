@@ -1,0 +1,146 @@
+# Grabbit UI revamp: the plan
+
+As of 2026-11-11 (audited: code references checked against `ui/03-icons` c3541d0). The approved
+mockups are the spec: `grabbit-design.html` in this folder (open it in a browser; same page as the
+published artifact, version 10). The detailed plans are in `plans/`, one per phase, in the order they
+are built. Start with `plans/00-conventions.md`.
+
+## Decisions
+
+Rows marked "Decided in 01" took the recommendation in `plans/01-prepare.md` section 1 on
+2026-11-10; changing one means changing the phases it blocks before they start. Open rows name the
+phase that must decide them before it starts.
+
+| Decision | State | Note |
+| --- | --- | --- |
+| Layout direction: Graphite | Decided | IDM layout kept; paste bar and details pane added, both optional |
+| Icon set: Tabler outline, stroke 1.75 | Decided | 53 icon slots (03) plus 36 extra `gx-*` slots carried only by the Graphite set (03b) |
+| Default button last in every window | Decided | Filled (Graphite is the only look since 05.5c). Keys (Enter, Escape) never move (07a) |
+| App name: Grabbit | Decided in the mockups | Renaming code, installer, extension and website is phase 10 |
+| Colour direction: jet black, royal amethyst, electric cyan | Decided in 01 | `source/pal.py` `amethyst`; the theme `crates/app/assets/themes/graphite.toml` (02) |
+| Light or dark: follow the system | Decided in 01 | Today's behaviour; the palette is designed dark first (02) |
+| Graphite as the default theme | Decided in 01; done in 05.5c | Graphite is the only built-in look and the default since 05.5c: a setting naming a removed theme gets Graphite (no migration); 09b keeps only what is left of it |
+| Typeface: Geist | Decided in 01 | Bundled (SIL OFL), Regular, Medium, SemiBold, in the app since 04 (`crates/app/assets/fonts/geist/`); a theme names it (`font = "geist"`), DirectWrite draws it from memory |
+| Paste bar and details pane defaults | Decided in 01 | Paste bar on, details pane off, width 276, for new and existing users (06); both only under the Graphite look |
+| The two proposal dialogs | Decided in 01 | Not built; Advanced / Socks... and Virus checking settings stay greyed as today (08) |
+| When to rename to Grabbit | Decided in 01 | Last (10): it touches data paths and the extension |
+| Tray menu | Decided (audit) | Stays native (`tray_icon`): the mock's tray menu is not built (07e) |
+| Safari steps, Linux and macOS wake lines | Decided (audit) | Not built: `dev` is Windows only (07e) |
+| Options: a Cancel button under Graphite | Decided in 08a (2026-11-14) | None, as recommended: Escape and the close box already discard the changes (`options.rs:3`); the footer is Help (Ghost), OK* |
+| Tabular digits: Geist's own or Geist Mono | Decided in 04 | Geist's default figures are proportional (a 1 is 384 units wide, a 0 663), so the list's numeric cells (sizes, rates, time left, percent) keep Segoe UI's tabular figures; Geist Mono is not bundled. 05b draws those cells in the `numbers` family it adds (Segoe UI, falling back like the others) |
+| Which repository the app points at; exe and crate names; the old control styles | Decided 2026-11-14 | Everything (links, Sponsors) points to the fork only; exes renamed to `grabbit*.exe` in 10c; crates renamed to `grabbit-*` (code paths stay `mdm_*::`, for the upstream sync) and the old control styles removed in 10e, last. Details and costs: plan 10, "Decisions" |
+
+## Build order
+
+| # | Plan | What it delivers | Needs | Branch(es) |
+| --- | --- | --- | --- | --- |
+| 00 | [Conventions](plans/00-conventions.md) | How every phase is branched, checked, screenshotted and documented; pushes go to the fork only | none | none |
+| 01 | [Prepare](plans/01-prepare.md) | Decisions, the 106 icon files, the draft theme file, Geist files, DESIGN.md, baseline screenshots | none | `ui/01-prepare` |
+| 02 | [Theme](plans/02-theme.md) | Built-in "Graphite" theme: colours, corners, controls, light and dark | 01 | `ui/02-theme` |
+| 02b | [Chrome gate and roles](plans/02b-chrome-gate.md) | `[controls] chrome` (Classic / Graphite) and the new roles (panel, danger, banners, glow, two-tone stops…); nothing on screen changes | 02 | `ui/02b-chrome-gate` |
+| 03 | [Icons](plans/03-icons.md) | The Tabler icon set for all 53 slots | 01, 02 | `ui/03-icons` |
+| 03b | [Extra glyphs](plans/03b-extra-glyphs.md) | 36 `gx-*` slots (menu, button, Options page, queue icons) in the Graphite set | 03 | `ui/03b-extra-glyphs` |
+| 04 | [Typeface](plans/04-typeface.md) | Themes can choose a bundled font; Graphite uses Geist; digits decided | 01, 02 | `ui/04-typeface` |
+| 05 | [Main window](plans/05-main-window.md) | One layout model (05a); then title-bar menus and Find, menu icons and shortcuts, grouped toolbar, flatter categories, progress in the Status cell (05b) | 05a: 02. 05b: 02b, 03, 03b, 04, 05a | `ui/05a-layout-model`, `ui/05b-main-window` |
+| 05.5 | [Graphite only](plans/05.5-graphite-only.md) | Graphite icons everywhere (05.5a); upstream sync ready for the removal (05.5b); the Classic layout, old themes, Silk, Tango and Lucide removed (05.5c) | 05b | `ui/05.5a-graphite-icons`, `tools/upstream-sync-graphite-only`, `ui/05.5c-classic-removed`, `ui/05.5c2-icons-assets`, `ui/05.5d-unused-vocabulary` |
+| 06 | [Paste bar and details pane](plans/06-paste-bar-details-pane.md) | The two optional panes, toggled in View and the toolbar | 05a, 05b (and 02b, 03b through 05b) | `ui/06-panes`, `ui/06b-details-pane` |
+| 07 | [Dialogs](plans/07-dialogs.md) | The dialog kit (07a: footer, keys as today, danger/ghost/icon buttons, form, file card, icon tile, banners), then every dialog in four waves (07b to 07e) | 02b, 03, 03b; 04 before final sizes | `ui/07a-dialog-kit`, `ui/07b…07e` |
+| 08 | [Options](plans/08-options.md) | Side list with pages unchanged inside (08a), then pages on the form and sub-dialogs (08b) | 07a, 02b, 03b; 04 before final sizes | `ui/08a-options-list`, `ui/08b-options-pages` |
+| 09 | [Polish and default](plans/09-polish-and-default.md) | Two-tone hot colour, dark glow, app mark, full visual/keyboard/accessibility review (09a); what is left of 09b now that 05.5c made Graphite the default | 06, 07e, 08b | `ui/09a-finish`, `ui/09b-default` |
+| 10 | [Rename to Grabbit](plans/10-rename-grabbit.md) | Display text, assets, migrated identifiers (exes renamed), distribution, then crates and old styles (10e) | 09b; the logo (maintainer) before 10b | `rename/10a…10e` |
+
+Tracks:
+
+```
+Foundation   01 ─► 02 ─┬─► 02b
+                       ├─► 03 ─► 03b
+                       ├─► 04
+                       └─► 05a
+
+Main window  [02b 03 03b 04 05a] ─► 05b ─► 05.5 ─► 06 ───────────────┐
+                                                                     ├─► 09a ─► 09b ─► 10a ─► 10b ─► 10c ─► 10d
+Dialogs      [02b 03 03b] ─► 07a ─┬─► 07b ─► 07c ─► 07d ─► 07e ──────┤
+                                  └─► 08a ─► 08b ───────────────────┘
+```
+
+What can run side by side: once 02b, 03 and 03b are in, the main-window track (05b, 06) and the dialog
+track (07, 08) are independent; 04 must land before 05b and before the 07 waves and 08 take their final sizes.
+05a can start right after 02. The rename (10) touches everything, so it waits for 09b.
+
+## Progress
+
+A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
+
+- [x] 01 Prepare
+- [x] 02 Theme (complete, in origin's `dev` since 2026-11-11, pushed directly instead of a PR)
+- [x] 02b Chrome gate and roles (complete, in origin's `dev` since 2026-11-11, pushed directly
+      instead of a PR; nothing on screen changes, proof in its plan)
+- [x] 03 Icons (complete, in origin's `dev` since 2026-11-11, pushed directly instead of a PR;
+      checks in its plan)
+- [x] 03b Extra glyphs (complete, in origin's `dev` since 2026-11-11, pushed directly instead of
+      a PR; nothing on screen changes)
+- [x] 04 Typeface (complete, in origin's `dev` since 2026-11-11, pushed directly instead of a PR;
+      checks in its plan, shots in `pr-shots` `04-typeface/`)
+- [x] 05a Layout model (complete, in origin's `dev` since 2026-11-12, pushed directly with 05b)
+- [x] 05b Main window (complete, in origin's `dev` since 2026-11-12, pushed directly instead of
+      a PR)
+- [x] 05.5a Graphite icons everywhere (complete, PR 13 merged into `dev` 2026-11-13)
+- [x] 05.5b Upstream sync ready for the removal (complete, PR 12 merged 2026-11-13; post-merge check on PR 12)
+- [x] 05.5c Classic removed (complete, PRs 14 and 15 merged 2026-11-13)
+- [x] 05.5d The theme-file vocabulary nothing draws any more (05.5c's audit; complete, PR 16
+      merged 2026-11-13)
+- [x] 06a Paste bar (complete, PR 18 merged 2026-11-13)
+- [x] 06b Details pane (complete, in PR 18 with 06a, merged 2026-11-13; the on-screen
+      keyboard and Narrator pass is left to 09a, see its plan's "Left from 06")
+- [x] 07a Dialog kit (complete, PR 20 merged 2026-11-14 with 07b; step 8's "Escape in the
+      progress window leaves the download running" test came with 07c)
+- [x] 07b Adding (complete, PR 20 merged 2026-11-14)
+- [x] 07c Watching and finishing (complete, PR 21 merged 2026-11-14; what is left is plan 09's
+      "Left from 07")
+- [x] 07d Torrents, video and more (complete, PR 22 merged 2026-11-14; "Add many downloads" is
+      the shared Confirm, done with 07e)
+- [x] 07e Organising and the rest (complete, PR 23 merged 2026-11-14; what is left is plan 09's
+      "Left from 07")
+- [x] 08a Options side list (complete, PR 25; ticked here in 08b3's PR, which follows it)
+- [x] 08b Options pages (complete with its three PRs: 08b3 the window's size and sub-dialogs,
+      08b1 and 08b2 the pages)
+- [x] 09a Finish (complete: 09a1 PR 44, 09a2 PR 45, the review 09r2 PR 46, 09r3 PR 47, 09r1
+      PR 48, merged 2026-11-15; the passes at the screen are left, see its plan's "Done when")
+- [x] 09b Default (complete: 09b-text PR 29, 09b-shots in this PR)
+- [ ] 10a to 10e Rename
+
+## What is in this folder
+
+| Path | What it is |
+| --- | --- |
+| `PLAN.md` | This index |
+| `plans/` | One plan per phase. File and line references were checked against `ui/03-icons` c3541d0 on 2026-11-11; they drift as phases land, so each plan names the function too: re-find it before starting |
+| `grabbit-design.html` | The mockup page: 60 windows, 54 states, light, dark, right to left (not built: the app is English only), 4 palettes (only `amethyst` is built) |
+| `DESIGN.md` | The design rules the build phases follow: colour jobs, radii, sizes, type, icons |
+| `assets/icons/` | The 53 icons at 16 and 24 (106 SVGs), `SOURCES.txt`, Tabler's `LICENSE` (03); 03b adds the `gx-*` slots |
+| `assets/fonts/` | Geist Regular, Medium, SemiBold (TTF), `OFL.txt`, `SOURCES.txt` (for 04) |
+| `source/export_icons.py` | Writes `assets/icons/` from the Tabler package, `iconmap.py` and `gen3.py`'s `REFINE` (03b extends it with `EXTRA`) |
+| `source/make_theme.py` | Writes the app's theme file `crates/app/assets/themes/graphite.toml` from `pal.py` and checks its contrast (02b adds the chrome key and new roles) |
+| `baseline/` | Today's app in every mock state, light and dark (not committed; on origin's `pr-shots` as `baseline/`) |
+| `source/pal.py` | The 4 palettes, every token in light and dark, with the contrast check (`python pal.py`) |
+| `source/iconmap.py` | Each of the 53 icon slots to its Tabler icon name; `gen3.py` holds the review changes (`REFINE`) and the extras (`EXTRA`) |
+| `source/graphite.html`, `source/gen3.py` | The page template and the script that builds the mockup (update the `S` paths before reuse) |
+| `vendor/` | Tabler Icons 3.31.0 package and licence |
+
+## Risks across phases
+
+- **Code references drift.** `dev` is English only and Windows only (the old state is on
+  `archive/multiplatform-i18n`); each landed phase moves line numbers (01 and 02 moved `app.rs` by 85 to
+  120 lines). Re-find each reference by name before starting a phase.
+- **The main window's layout numbers are duplicated** (05a exists to fix that before anything moves).
+- **Dialogs are laid out in absolute pixels** with per-dialog key wiring (07a's kit exists so each
+  dialog changes once, in a small diff, and keeps its keys).
+- **Fonts**: Windows draws Latin text through DirectWrite (GDI-classic metrics); since 04 it reads a
+  bundled font from memory too (`win32.rs` `classic_face`), so Geist keeps the same text path.
+- **Graphite is the only layout** (since 05.5c): a phase changes Graphite's windows directly; its
+  pictures are Graphite light and dark (`plans/00-conventions.md`).
+- **The rename moves users' data and integrations** (saved logins, autostart, native messaging host,
+  update feed); 10c's migrations and the never-change list exist for that.
+- **Accessibility**: the toolbar and status strip are not exposed today; 05b adds the toolbar, and 09a
+  re-checks the whole accessibility tree.
+- **Pushes**: everything goes to origin, `HUMBLEF0OL/grabbit`, never to the upstream repository (00).

@@ -9,23 +9,12 @@ use crate::github::REPO;
 
 /// This build's system in the zip's name.
 pub fn platform() -> &'static str {
-    if cfg!(windows) {
-        "windows-x64"
-    } else if cfg!(target_os = "macos") {
-        // One zip per processor, as the .dmg (tools/installer/build-macos.sh).
-        if cfg!(target_arch = "aarch64") {
-            "macos-arm64"
-        } else {
-            "macos-x86_64"
-        }
-    } else {
-        "linux-x86_64"
-    }
+    "windows-x64"
 }
 
 /// The release asset holding `version`'s symbols for this system.
 pub fn asset_name(version: &str) -> String {
-    format!("MisterDownloadManager-{version}-symbols-{}.zip", platform())
+    format!("Grabbit-{version}-symbols-{}.zip", platform())
 }
 
 pub fn asset_url(version: &str) -> String {
@@ -117,7 +106,7 @@ mod tests {
 
     #[test]
     fn names_follow_the_release() {
-        assert!(asset_name("0.2.3").starts_with("MisterDownloadManager-0.2.3-symbols-"));
+        assert!(asset_name("0.2.3").starts_with("Grabbit-0.2.3-symbols-"));
         assert!(asset_url("0.2.3").contains("/releases/download/v0.2.3/"));
     }
 

@@ -19,9 +19,13 @@ use mdm_crash::monitor::{self, Event};
 use mdm_crash::protocol::{Kind, Notes};
 use mdm_crash::report::{self, Made};
 
-use crate::winui::{self, ButtonKind, r};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r};
 
-const CLIENT: [f32; 2] = [620.0, 540.0];
+const CLIENT: [f32; 2] = [680.0, BODY + winui::FOOTER_H];
+/// Where the footer starts (Graphite, plan 07e): its five buttons need the width above.
+const BODY: f32 = 490.0;
+/// The right edge of the window's contents.
+const RIGHT: f32 = CLIENT[0] - winui::EDGE;
 
 pub fn monitor_main(m: MonitorArgs) -> eframe::Result {
     mdm_crash::logs::init(&m.data, mdm_crash::logs::MONITOR);
@@ -69,7 +73,7 @@ pub fn monitor_main(m: MonitorArgs) -> eframe::Result {
                 if !clean && notes.session.is_some() {
                     // Kept for a later look, without a window (a shutdown can look the same).
                     let made = report::make(None, Kind::Exit, notes, &m.data, &[]);
-                    tracing::warn!("MDM ended unexpectedly: {}", made.path.display());
+                    tracing::warn!("Grabbit ended unexpectedly: {}", made.path.display());
                 }
                 return Ok(());
             }
@@ -83,17 +87,14 @@ pub fn monitor_main(m: MonitorArgs) -> eframe::Result {
     };
     tracing::warn!("crash monitor: {} report", kind.word());
 
-    // The window speaks MDM's language and follows its theme. The language first: the title
-    // below is translated before the window exists, and Windows' caption is found by it
-    // (`win32::caption_dark` in `update`).
+    // The window follows MDM's theme.
     let settings = crate::store::load().settings;
-    crate::i18n::set_lang(settings.language.as_deref());
     // And its interface size (#262): the window is made before the zoom applies, so its size is
     // given zoomed (brought inside the screen at its first frame).
     let zoom = crate::scale::startup(settings.interface_size);
     let builder = crate::quiet(
         ViewportBuilder::default()
-            .with_title(crate::i18n::t("Mister Download Manager crash report"))
+            .with_title(crate::i18n::t("Grabbit crash report"))
             .with_inner_size([CLIENT[0] * zoom, CLIENT[1] * zoom])
             .with_resizable(false)
             .with_maximize_button(false)
@@ -110,21 +111,22 @@ pub fn monitor_main(m: MonitorArgs) -> eframe::Result {
         viewport: builder.clone(),
         ..Default::default()
     };
-    // What the app draws with (renderer.rs, MDM_RENDERER too), the other way when it can't
-    // start. OpenGL when the app's Direct3D failed or is still starting (this report may be about
-    // it); only the app's own start is watched.
+    // What the app draws with (renderer.rs, MDM_RENDERER too), the next way when one can't
+    // start. A way the app failed with, or is still starting with (this report may be about it),
+    // is passed over: WARP when its Direct3D on the card did, OpenGL when WARP did too; only the
+    // app's own starts are watched.
     let mut plan = crate::renderer::plan(
         settings.renderer,
         crate::renderer::overridden(&[]).as_deref(),
-        crate::renderer::suspect(),
+        crate::renderer::Known::suspect(),
     );
-    plan.watched = false;
+    plan.watch.clear();
+    plan.gl_checked = false;
     let data = m.data.clone();
-    crate::renderer::run("misterdownloadmanager-crash", &plan, options, move |cc| {
+    crate::renderer::run("grabbit-crash", &plan, options, move |cc| {
         crate::scale::start(&cc.egui_ctx, zoom);
-        crate::theme::select(&crate::theme::startup_id(&settings.theme), &cc.egui_ctx);
+        crate::theme::select(&crate::theme::startup_id(&settings.theme));
         crate::theme::apply(&cc.egui_ctx);
-        crate::theme::language_fonts(&cc.egui_ctx);
         crate::theme::update(
             settings.dark_mode_support,
             settings.always_dark,
@@ -145,17 +147,11 @@ pub fn monitor_main(m: MonitorArgs) -> eframe::Result {
 }
 
 fn alive(pid: u32) -> bool {
-    #[cfg(windows)]
-    return crate::win32::process_alive(pid);
-    #[cfg(unix)]
-    return crate::unix::process_alive(pid);
+    crate::win32::process_alive(pid)
 }
 
 fn end(pid: u32) -> bool {
-    #[cfg(windows)]
-    return crate::win32::end_process(pid);
-    #[cfg(unix)]
-    return crate::unix::end_process(pid);
+    crate::win32::end_process(pid)
 }
 
 struct Job {
@@ -187,9 +183,11 @@ struct ReportWindow {
     recovered: bool,
     /// Something to tell under the report (copied, sent…).
     told: Option<String>,
-    icon: Option<egui::TextureHandle>,
     /// Windows' caption follows the window's theme (set once the window exists).
     caption_set: bool,
+    /// DWM gave the caption its light or dark (once: asked every second, it caught the window's
+    /// thread in a stalled system, #633).
+    caption_dwm: bool,
     /// Brought inside the screen once it exists (scale::fit_window, #262).
     fitted: bool,
 }
@@ -206,8 +204,8 @@ impl ReportWindow {
             what: String::new(),
             attach: false,
             told: None,
-            icon: None,
             caption_set: false,
+            caption_dwm: false,
             fitted: false,
         }
     }
@@ -237,6 +235,7 @@ fn prepare(job: &Job, shared: Arc<Mutex<Shared>>, ctx: egui::Context) {
             .map(|v| mdm_crash::symbols::store(&data, v));
         let stores: Vec<PathBuf> = store.iter().cloned().collect();
         let made = report::make(dump.as_deref(), kind, notes.clone(), &data, &stores);
+        note_gl_freeze(&made);
         let missing = made
             .analysis
             .as_ref()
@@ -250,7 +249,7 @@ fn prepare(job: &Job, shared: Arc<Mutex<Shared>>, ctx: egui::Context) {
             return;
         };
         let Ok(http) = reqwest::Client::builder()
-            .user_agent(concat!("MisterDownloadManager/", env!("CARGO_PKG_VERSION")))
+            .user_agent(concat!("Grabbit/", env!("CARGO_PKG_VERSION")))
             .timeout(Duration::from_secs(120))
             .build()
         else {
@@ -276,6 +275,7 @@ fn prepare(job: &Job, shared: Arc<Mutex<Shared>>, ctx: egui::Context) {
             match fetched {
                 Ok(()) => {
                     let made = report::make(dump.as_deref(), kind, notes, &data, &stores);
+                    note_gl_freeze(&made);
                     set(&shared, &ctx, |s| s.made = Some(made));
                 }
                 Err(e) => {
@@ -298,6 +298,28 @@ fn prepare(job: &Job, shared: Arc<Mutex<Shared>>, ctx: egui::Context) {
             });
         }
     });
+}
+
+/// A freeze while OpenGL drew, its window thread stuck inside OpenGL's driver (#847): remembered,
+/// so the app's next start draws another way (renderer.rs). Read from the stack's modules, which
+/// need no symbols.
+fn note_gl_freeze(made: &Made) {
+    let drew_gl = made
+        .notes
+        .session
+        .as_ref()
+        .is_some_and(|s| s.renderer.starts_with("OpenGL"));
+    let Some(thread) = made.frozen_window_thread().filter(|_| drew_gl) else {
+        return;
+    };
+    let modules = thread.frames.iter().map(|f| f.module.as_deref());
+    // MDM_TEST_GL_STALL=1 (off-screen test copies): the app's stall stands for a driver's.
+    let testing =
+        crate::offscreen() && std::env::var_os("MDM_TEST_GL_STALL").is_some_and(|v| v == "1");
+    if let Some(module) = crate::renderer::gl_driver_frame(modules, testing) {
+        let seconds = made.notes.freeze.as_ref().map_or(0, |f| f.seconds);
+        crate::renderer::remember_gl_froze(&module, seconds);
+    }
 }
 
 fn set(shared: &Mutex<Shared>, ctx: &egui::Context, f: impl FnOnce(&mut Shared)) {
@@ -325,12 +347,13 @@ impl eframe::App for ReportWindow {
             let layout = egui::vec2(CLIENT[0], CLIENT[1]);
             crate::scale::fit_window(ui.ctx(), egui::vec2(120.0, 120.0), Some(layout));
         }
-        // Re-asserted as the main window does (winit can set it back from Windows' own mode).
-        #[cfg(windows)]
-        crate::win32::caption_dark(
-            crate::i18n::t("Mister Download Manager crash report"),
-            crate::theme::dark_surface(),
-        );
+        // And through DWM, as the main window's, once the window is there.
+        if !self.caption_dwm {
+            self.caption_dwm = crate::win32::caption_dark(
+                crate::i18n::t("Grabbit crash report"),
+                crate::theme::dark_surface(),
+            );
+        }
         while let Ok(e) = self.events.try_recv() {
             if matches!(e, Event::Recovered) {
                 self.recovered = true;
@@ -355,14 +378,14 @@ impl ReportWindow {
         match self.job.kind {
             // i18n: crash report window heading: the window of MDM stopped answering, then answered again
             Kind::Freeze if self.recovered => {
-                crate::i18n::t("Mister Download Manager stopped responding for a while")
+                crate::i18n::t("Grabbit stopped responding for a while")
             }
             // i18n: crash report window heading: MDM's window doesn't answer (frozen)
-            Kind::Freeze => crate::i18n::t("Mister Download Manager stopped responding"),
+            Kind::Freeze => crate::i18n::t("Grabbit stopped responding"),
             // i18n: crash report window heading: an internal error, MDM still running
-            Kind::Panic if alive => crate::i18n::t("Mister Download Manager hit an internal error"),
+            Kind::Panic if alive => crate::i18n::t("Grabbit hit an internal error"),
             // i18n: crash report window heading: MDM crashed and is gone
-            _ => crate::i18n::t("Mister Download Manager closed unexpectedly"),
+            _ => crate::i18n::t("Grabbit closed unexpectedly"),
         }
     }
 
@@ -380,36 +403,32 @@ impl ReportWindow {
             )
         };
 
-        // The app's icon and the heading.
-        let icon = self.icon.get_or_insert_with(|| {
-            let i = crate::app_picture();
-            let img = egui::ColorImage::from_rgba_unmultiplied(
-                [i.width as usize, i.height as usize],
-                &i.rgba,
-            );
-            ui.ctx()
-                .load_texture("crash-icon", img, egui::TextureOptions::LINEAR)
-        });
-        egui::Image::new((icon.id(), egui::vec2(32.0, 32.0)))
-            .paint_at(ui, r(o, 16.0, 16.0, 32.0, 32.0));
+        // A bug on its tile (the mockup's), and the heading.
+        winui::icon_tile(
+            ui,
+            r(o, 16.0, 16.0, 40.0, 40.0),
+            "gx-bug",
+            crate::theme::colors().error,
+            8.0,
+        );
         winui::text_font(
             &p,
             winui::tahoma_bold(),
-            o.x + 60.0,
+            o.x + 68.0,
             o.y + 30.0,
             self.heading(alive),
             winui::TEXT(),
         );
         winui::paragraph(
             &p,
-            o.x + 60.0,
+            o.x + 68.0,
             o.y + 50.0,
             // i18n: crash report window: what the report is and what Send does
             crate::i18n::t(
                 "A report was saved. Sending it to the developers on GitHub helps them fix this; you can read everything it holds below first. Nothing is sent by itself: Send opens the report form in your browser, filled in, for you to check and submit.",
             ),
             winui::TEXT(),
-            o.x + 604.0,
+            o.x + RIGHT,
             15.0,
         );
 
@@ -424,7 +443,7 @@ impl ReportWindow {
         );
         winui::multiline_light(
             ui,
-            r(o, 16.0, 124.0, 588.0, 58.0),
+            r(o, 16.0, 124.0, RIGHT - 16.0, 58.0),
             &mut self.what,
             "crash-what",
             true,
@@ -441,7 +460,7 @@ impl ReportWindow {
         );
         winui::field_frame(
             &p,
-            r(o, 16.0, 208.0, 588.0, 226.0),
+            r(o, 16.0, 208.0, RIGHT - 16.0, 226.0),
             winui::FieldLook::ReadOnly,
         );
         match &made {
@@ -449,7 +468,7 @@ impl ReportWindow {
             Some(m) => winui::scroll_text(
                 ui,
                 egui::Id::unique("crash-report-text"),
-                Rect::from_min_size(o + egui::vec2(18.0, 210.0), egui::vec2(584.0, 222.0)),
+                Rect::from_min_size(o + egui::vec2(18.0, 210.0), egui::vec2(RIGHT - 20.0, 222.0)),
                 &m.text,
                 winui::TEXT(),
                 14.0,
@@ -500,7 +519,7 @@ impl ReportWindow {
             // translation, an issue's title) is cut at the window's right margin with "...",
             // and shown whole under the pointer (#164).
             let (rc, cut) =
-                winui::text_fit(&p, o.x + 16.0, o.y + 452.0, &s, winui::TEXT(), o.x + 604.0);
+                winui::text_fit(&p, o.x + 16.0, o.y + 452.0, &s, winui::TEXT(), o.x + RIGHT);
             if cut {
                 winui::full_on_hover(ui, rc, "crash-status", &s);
             }
@@ -518,9 +537,6 @@ impl ReportWindow {
             );
         }
 
-        // The buttons, each as wide as its label in this language (#204): the row fills the
-        // window's width, those wider than their label giving room to those that need it.
-        let y = 500.0;
         let send_label = if found.is_some() {
             // i18n: crash report window button: open the GitHub issue already filed (and copy the report to add it there)
             "Open the reported issue"
@@ -532,82 +548,42 @@ impl ReportWindow {
         let frozen = self.job.kind == Kind::Freeze && alive && !self.recovered;
         let restart_label = if frozen {
             // i18n: crash report window button: end the frozen MDM and start it again
-            "End and restart MDM"
+            "End and restart Grabbit"
         } else {
             // i18n: crash report window button: start MDM again
-            "Restart MDM"
+            "Restart Grabbit"
         };
-        let [send_at, copy_at, folder_at, restart_at, close_at] = winui::button_row(
-            &p,
-            &[
-                (send_label, 16.0, 170.0),
-                ("Copy report", 192.0, 110.0),
-                ("Open folder", 308.0, 110.0),
-                (restart_label, 424.0, 112.0),
-                ("Close", 542.0, 62.0),
-            ],
-            6.0,
-            16.0,
-            260.0,
-        )[..] else {
-            unreachable!("five buttons")
-        };
-        let send = winui::button(
-            ui,
-            r(o, send_at.0, y, send_at.1, 25.0),
-            send_label,
+        // The footer: Open folder (and Restart, when MDM is gone or frozen) at its start; Copy
+        // report, Close and Send last. No key presses any, as before; Tab keeps its order.
+        let ready = |kind: ButtonKind| {
             if made.is_some() {
-                ButtonKind::Default
+                kind
             } else {
                 ButtonKind::Disabled
-            },
-            false,
-            None,
-        )
-        .clicked();
-        let copy = winui::button(
-            ui,
-            r(o, copy_at.0, y, copy_at.1, 25.0),
+            }
+        };
+        let mut items = vec![
+            FooterItem::Button(FooterButton::new(send_label, ready(ButtonKind::Default)).primary()),
             // i18n: crash report window button: copy the report's text
-            "Copy report",
-            if made.is_some() {
-                ButtonKind::Normal
-            } else {
-                ButtonKind::Disabled
-            },
-            false,
-            None,
-        )
-        .clicked();
-        let folder = winui::button(
-            ui,
-            r(o, folder_at.0, y, folder_at.1, 25.0),
+            FooterItem::Button(FooterButton::new("Copy report", ready(ButtonKind::Normal))),
             // i18n: crash report window button: show the report's file in its folder
-            "Open folder",
-            ButtonKind::Normal,
-            false,
-            None,
-        )
-        .clicked();
-        let restart = (!alive || frozen)
-            && winui::button(
-                ui,
-                r(o, restart_at.0, y, restart_at.1, 25.0),
-                restart_label,
-                ButtonKind::Normal,
-                false,
-                None,
-            )
-            .clicked();
-        let close = winui::button(
-            ui,
-            r(o, close_at.0, y, close_at.1, 25.0),
+            FooterItem::Button(FooterButton::new("Open folder", ButtonKind::Normal).leading()),
+        ];
+        let can_restart = !alive || frozen;
+        if can_restart {
+            items.push(FooterItem::Button(
+                FooterButton::new(restart_label, ButtonKind::Normal).leading(),
+            ));
+        }
+        items.push(FooterItem::Button(FooterButton::new(
             "Close",
             ButtonKind::Normal,
-            false,
-            None,
-        )
-        .clicked();
+        )));
+        let last = items.len() - 1;
+        let pressed = winui::footer(ui, o, CLIENT[0], BODY, &mut items);
+        let (send, copy, folder) = (pressed == Some(0), pressed == Some(1), pressed == Some(2));
+        let restart = can_restart && pressed == Some(3);
+        let close = pressed == Some(last);
 
         let Some(made) = made else {
             if close {

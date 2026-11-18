@@ -5,7 +5,7 @@
 //! MDM_TEST_TRAY_VISIBLE decides, or no tray object; and a real icon, the shell asked for real,
 //! hides the window even when the shell gives it no place (an icon behind ^, #545). Windows only
 //! (WM_CLOSE), so it runs on request:
-//! `cargo test -p mdm-app --test close_without_tray -- --ignored`.
+//! `cargo test -p grabbit-app --test close_without_tray -- --ignored`.
 
 #![cfg(windows)]
 
@@ -13,9 +13,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus};
 use std::time::{Duration, Instant};
 
-const APP: &str = env!("CARGO_BIN_EXE_misterdownloadmanager");
+const APP: &str = env!("CARGO_BIN_EXE_grabbit");
 /// The main window's title (main.rs MAIN_TITLE).
-const MAIN: &str = concat!("Mister Download Manager ", env!("CARGO_PKG_VERSION"));
+const MAIN: &str = concat!("Grabbit ", env!("CARGO_PKG_VERSION"));
 
 /// The app, ended and reaped however the test leaves it (a failed assert too).
 struct Process(Child);
@@ -87,7 +87,7 @@ fn wait_exit(app: &mut Child, wait: Duration) -> ExitStatus {
 /// The app's environment: off the screens, its own data folder, its tray icon, and whether the
 /// test says that icon is visible (MDM_TEST_TRAY_VISIBLE).
 fn env<'a>(cmd: &'a mut Command, data: &Path, visible: bool) -> &'a mut Command {
-    cmd.env("MDM_DATA_DIR", data)
+    cmd.env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .env("MDM_TEST_TRAY", "1")
         .env("MDM_TEST_TRAY_VISIBLE", if visible { "1" } else { "0" })
@@ -95,7 +95,7 @@ fn env<'a>(cmd: &'a mut Command, data: &Path, visible: bool) -> &'a mut Command 
 
 /// The app's environment with no tray object at all (off-screen copies have none unless asked).
 fn env_no_tray<'a>(cmd: &'a mut Command, data: &Path) -> &'a mut Command {
-    cmd.env("MDM_DATA_DIR", data).env("MDM_OFFSCREEN", "1")
+    cmd.env("GRABBIT_DATA_DIR", data).env("MDM_OFFSCREEN", "1")
 }
 
 /// A data folder whose first start asks nothing and checks nothing, with the close-to-tray
@@ -121,6 +121,20 @@ fn data(dir: &Path, name: &str, close_to_tray: bool) -> PathBuf {
 
 /// Post WM_CLOSE to the app's main window. True when one was found.
 fn close_main(pid: u32) -> bool {
+    main_window(
+        pid,
+        "[CW]::PostMessage($h, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null",
+    ) == "True"
+}
+
+/// Whether the app's main window is visible ("True" or "False"; "" when there is none).
+fn main_visible(pid: u32) -> String {
+    main_window(pid, "$script:visible = [CW]::IsWindowVisible($h)")
+}
+
+/// Run `action` on the app's main window (`$h`); "True" when one was found, or what the action
+/// put in `$script:visible`.
+fn main_window(pid: u32, action: &str) -> String {
     let script = r#"
 Add-Type @'
 using System;
@@ -132,9 +146,11 @@ public static class CW {
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint p);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
 }
 '@
 $script:closed = $false
+$script:visible = $null
 [CW]::EnumWindows({
   param($h, $l)
   $p = 0
@@ -143,21 +159,39 @@ $script:closed = $false
     $t = New-Object System.Text.StringBuilder 512
     [CW]::GetWindowText($h, $t, 512) | Out-Null
     if ($t.ToString() -eq 'TITLE') {
-      [CW]::PostMessage($h, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+      ACTION
       $script:closed = $true
     }
   }
   $true
 }, [IntPtr]::Zero) | Out-Null
-$script:closed
+if ($script:visible -ne $null) { $script:visible } elseif ($script:closed) { $script:closed } else { '' }
 "#
     .replace("PID", &pid.to_string())
-    .replace("TITLE", MAIN);
+    .replace("TITLE", MAIN)
+    .replace("ACTION", action);
     let out = Command::new("powershell")
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .output()
         .unwrap();
-    String::from_utf8_lossy(&out.stdout).trim() == "True"
+    String::from_utf8_lossy(&out.stdout).trim().to_owned()
+}
+
+/// Wait until the app's main window is visible or not, failing after `wait`.
+fn wait_visible(pid: u32, visible: bool, wait: Duration) {
+    let until = Instant::now() + wait;
+    let want = if visible { "True" } else { "False" };
+    loop {
+        let now = main_visible(pid);
+        if now == want {
+            return;
+        }
+        assert!(
+            Instant::now() < until,
+            "the main window's visibility is '{now}', not {want}"
+        );
+        std::thread::sleep(Duration::from_millis(300));
+    }
 }
 
 #[test]
@@ -229,17 +263,18 @@ fn closing_follows_the_option_and_the_tray_icon() {
 
 /// The app's environment with its real tray icon, the shell asked for real; `placed` false says
 /// the shell gives the icon no place (MDM_TEST_TRAY_RECT=0), as the reporters' did for an icon
-/// behind ^ (#545, #534, #527).
+/// behind ^ (#750, #718, #754, #545).
 fn env_real<'a>(cmd: &'a mut Command, data: &Path, placed: bool) -> &'a mut Command {
-    cmd.env("MDM_DATA_DIR", data)
+    cmd.env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .env("MDM_TEST_TRAY", "1")
         .env("MDM_TEST_TRAY_RECT", if placed { "1" } else { "0" })
 }
 
 /// Closing with a real icon the shell holds: hidden there, whether or not the shell says where
-/// the icon is (a new icon goes behind ^, where the shell may give it none). The shell is this
-/// machine's: its icon is added for the test and removed when the app exits.
+/// the icon is (a new icon goes behind ^, where the shell may give it none), and a second start
+/// brings the window back. The shell is this machine's, asked by the app's tray thread (#747):
+/// its icon is added for the test and removed when the app exits.
 #[test]
 #[ignore = "opens the app's windows (off-screen) and a tray icon: run with --ignored"]
 fn closing_hides_to_an_icon_the_shell_holds() {
@@ -254,24 +289,27 @@ fn closing_hides_to_an_icon_the_shell_holds() {
         );
         wait_for(&mut app, &data, "first frame drawn", wait);
         wait_for(&mut app, &data, "tray icon shown", wait);
+        wait_for(
+            &mut app,
+            &data,
+            &format!("tray icon: placed {placed}, held by the shell true"),
+            Duration::from_secs(10),
+        );
         assert!(close_main(app.id()), "no main window to close");
         wait_for(
             &mut app,
             &data,
-            "close: hidden to the notification area",
+            "close: hidden to the notification area (tray icon: There)",
             Duration::from_secs(10),
         );
-        let text = log(&data);
-        assert!(
-            text.contains(&format!(
-                "tray icon: placed {placed}, held by the shell true"
-            )),
-            "{text}"
-        );
+        wait_visible(app.id(), false, Duration::from_secs(10));
         assert!(
             app.try_wait().unwrap().is_none(),
             "the app quit instead of hiding"
         );
+        // A second start brings the hidden window back, icon or not.
+        let _ = env_real(&mut Command::new(APP), &data, placed).status();
+        wait_visible(app.id(), true, Duration::from_secs(10));
         let _ = env_real(&mut Command::new(APP), &data, placed)
             .arg("/exit")
             .status();

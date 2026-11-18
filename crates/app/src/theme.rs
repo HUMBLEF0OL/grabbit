@@ -7,7 +7,7 @@ use std::cell::Cell;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
-use crate::palette::{CLASSIC, Metrics, Palette, Theme};
+use crate::palette::{BASE, Metrics, Palette, Theme};
 
 static DARK: AtomicBool = AtomicBool::new(true);
 
@@ -25,11 +25,11 @@ pub fn dark() -> bool {
 // (one atomic load per read, no lock, no allocation). A theme set from a file is leaked: it
 // lives as long as the program (a few KB per change), so a reference to it never dangles.
 
-static ACTIVE: RwLock<&'static Theme> = RwLock::new(&CLASSIC);
+static ACTIVE: RwLock<&'static Theme> = RwLock::new(&BASE);
 static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 thread_local! {
-    static SEEN: Cell<(u64, &'static Theme)> = const { Cell::new((0, &CLASSIC)) };
+    static SEEN: Cell<(u64, &'static Theme)> = const { Cell::new((0, &BASE)) };
 }
 
 /// The active theme.
@@ -56,7 +56,11 @@ pub fn metrics() -> &'static Metrics {
     &current().metrics
 }
 
-/// Is what is drawn now a dark surface (light text on dark)? The classic look's dark variant
+/// The font family of numbers that must line up as they change (the download list's sizes,
+/// rates, time left and percentages): Segoe UI, whatever the theme's font.
+pub const NUMBERS: &str = "numbers";
+
+/// Is what is drawn now a dark surface (light text on dark)? The base's dark variant
 /// is; a theme says for each of its variants. Glyph rendering and the window captions follow it.
 pub fn dark_surface() -> bool {
     colors().dark
@@ -75,73 +79,99 @@ pub fn set(theme: Theme) {
     GENERATION.fetch_add(1, Ordering::AcqRel);
 }
 
-/// Makes the theme with this id the active one: a built-in, or a file in the themes folder
-/// (`themefile`), or a theme file's path; Native is made from what the system says. A theme
-/// that can't be read leaves the classic look, logged. Returns what was skipped or went wrong.
-pub fn select(id: &str, ctx: &egui::Context) -> Vec<String> {
+/// Makes the theme with this id the active one: Graphite, or a file in the themes folder
+/// (`themefile`), or a theme file's path. An empty id, a theme MDM no longer has
+/// ([`crate::palette::REMOVED`]), an unknown one or one that can't be read gives Graphite, logged
+/// (plan 05.5c). Returns what was skipped or went wrong.
+pub fn select(id: &str) -> Vec<String> {
     let id = id.to_owned();
     // pywal's file is followed again only if this theme is made from it (`themefile::load_in`).
     crate::themefile::forget_pywal();
     *SELECTED.lock().unwrap_or_else(|e| e.into_inner()) = id.clone();
-    if id.is_empty() || id == CLASSIC.id {
-        set(CLASSIC.clone());
-        return Vec::new();
+    let (theme, warnings) = chosen(&id, load);
+    set(theme);
+    warnings
+}
+
+/// The theme [`select`] makes active for `id` (read by `load`), and what went wrong, logged.
+fn chosen(
+    id: &str,
+    load: impl Fn(&str) -> Result<crate::themefile::Loaded, String>,
+) -> (Theme, Vec<String>) {
+    if id.is_empty() {
+        return (crate::palette::graphite().clone(), Vec::new());
     }
-    if id == "native" {
-        let system = crate::native::system(ctx);
-        *NATIVE_SEEN.lock().unwrap_or_else(|e| e.into_inner()) = Some(system);
-        set(crate::native::theme(&system));
-        return Vec::new();
-    }
-    match load(&id) {
+    match load(id) {
         Ok(loaded) => {
             for w in &loaded.warnings {
                 tracing::warn!("theme {id}: {w}");
             }
-            set(loaded.theme);
-            loaded.warnings
+            (loaded.theme, loaded.warnings)
         }
         Err(e) => {
-            tracing::warn!("theme {id}: {e}; the classic look instead");
-            set(CLASSIC.clone());
-            vec![e]
+            tracing::warn!("theme {id}: {e}; Graphite instead");
+            (crate::palette::graphite().clone(), vec![e])
         }
     }
 }
 
-/// A theme file's theme, by its id or its path.
+/// A theme file's theme, by its id or its path; pywal's file followed from now on when the
+/// theme is made from it.
 fn load(id: &str) -> Result<crate::themefile::Loaded, String> {
-    let path = std::path::Path::new(id);
-    if path.is_file() {
-        crate::themefile::load_file(path)
-    } else {
-        crate::themefile::load(id)
+    let (loaded, followed) = crate::themefile::read(id);
+    if loaded.is_ok() {
+        crate::themefile::follow_pywal(followed);
     }
+    loaded
 }
 
 /// The id (or path) [`select`] was last given.
 static SELECTED: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
 
+/// The id (or path) of the theme chosen last.
+pub fn selected() -> String {
+    SELECTED.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
 /// While the theme is made from pywal's colours (#45): read again when `wal` wrote them anew,
-/// as it does for each new wallpaper. A file that doesn't read (half written as it was read)
-/// keeps the theme as it is, and is read again when it is next written. True when the theme
-/// changed (the caller applies it: `apply_theme`, `apply_mode`).
-pub fn follow_pywal() -> bool {
-    if !crate::themefile::pywal_changed() {
+/// as it does for each new wallpaper; `lookwatch`'s thread reads it (#719), this takes what it
+/// read while the theme and the file it follows are still those it was read for. A file that
+/// doesn't read (half written as it was read) keeps the theme as it is, and is read again when
+/// it is next written. True when the theme changed (the caller applies it: `apply_theme`,
+/// `apply_mode`).
+pub fn follow_pywal(files: Option<&crate::lookwatch::ThemeFiles>) -> bool {
+    let Some(r) = files.and_then(|f| f.pywal.as_ref()) else {
+        return false;
+    };
+    if selected() != r.id || crate::themefile::following_pywal().as_ref() != Some(&r.followed) {
         return false;
     }
-    let id = SELECTED.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    match load(&id) {
-        Ok(loaded) => {
+    let id = &r.id;
+    match &r.read {
+        Ok((theme, _)) => {
             tracing::info!("theme {id}: pywal's colours changed, read again");
-            set(loaded.theme);
+            set(theme.clone());
+            crate::themefile::follow_pywal(r.follow.clone());
             true
         }
         Err(e) => {
             tracing::warn!("theme {id}: {e}; the theme kept until pywal's file is written again");
-            crate::themefile::pywal_seen();
+            crate::themefile::pywal_seen_as(r.written);
             false
         }
+    }
+}
+
+/// The theme id to keep in the settings once [`select`] made `active` the theme for `setting`:
+/// "graphite" for none, or for a theme MDM no longer has ([`crate::palette::REMOVED`]) that
+/// fell back to Graphite; else the setting as it is (a user's own file named like a removed
+/// theme stays theirs, and a file away for a while comes back when it is there again).
+pub fn saved_id(setting: &str, active: &str) -> String {
+    let removed = setting.is_empty() || crate::palette::REMOVED.contains(&setting);
+    if removed && active == "graphite" {
+        "graphite".to_owned()
+    } else {
+        setting.to_owned()
     }
 }
 
@@ -152,26 +182,6 @@ pub fn startup_id(setting: &str) -> String {
         .ok()
         .filter(|s| !s.is_empty())
         .unwrap_or_else(|| setting.to_owned())
-}
-
-/// What the system said when Native was last made.
-static NATIVE_SEEN: std::sync::Mutex<Option<crate::native::System>> = std::sync::Mutex::new(None);
-
-/// While Native is the theme: made again when the system's accent or contrast changed. True
-/// when it was (the caller applies it: `apply_theme`, `apply_mode`).
-pub fn follow_system(ctx: &egui::Context) -> bool {
-    if current().id != "native" {
-        return false;
-    }
-    let system = crate::native::system(ctx);
-    let mut seen = NATIVE_SEEN.lock().unwrap_or_else(|e| e.into_inner());
-    if *seen == Some(system) {
-        return false;
-    }
-    *seen = Some(system);
-    drop(seen);
-    set(crate::native::theme(&system));
-    true
 }
 
 /// Match egui's glyph rendering to the surface: a dark one thickens light-on-dark text
@@ -185,9 +195,8 @@ pub fn apply_mode(ctx: &egui::Context) {
         egui::epaint::FontColorTransferFunction::LIGHT_MODE_DEFAULT
     };
     ctx.all_styles_mut(|s| s.visuals.text_options.color_transfer_function = tf);
-    // eframe applies egui's theme preference to every window's caption; keep it in step so it
-    // doesn't reset the captions to the system theme. egui's dark or light style is the mode's
-    // variant (`apply_theme` puts each variant into its egui theme).
+    // egui's dark or light style is the mode's variant (`apply_theme` puts each variant into its
+    // egui theme). It leaves the windows' captions alone (`apply`: `sync_window_theme`).
     ctx.set_theme(if dark() {
         egui::ThemePreference::Dark
     } else {
@@ -209,39 +218,22 @@ pub fn system_theme(dark: bool) -> egui::SystemTheme {
     }
 }
 
-/// Decide the mode from the setting and the system's: Windows' app mode; on Linux the desktop's
-/// preference (the freedesktop portal), else what the window system reports; on macOS the
-/// appearance the window system reports (light when nothing says). True if it changed.
-/// `always_dark` (View → Always dark, #60): dark whatever the system says, for desktops that
-/// report no preference.
+/// Decide the mode from the setting and the system's: Windows' app mode. True if it changed.
+/// `always_dark` (View → Always dark, #60): dark whatever the system says.
+/// The registry is read by `lookwatch`'s thread, never this one (upstream issue 719).
 pub fn update(dark_mode_support: bool, always_dark: bool, ctx: &egui::Context) -> bool {
-    #[cfg(windows)]
-    let system_dark = {
-        let _ = ctx;
-        crate::win32::apps_use_dark()
-    };
-    #[cfg(target_os = "linux")]
-    let system_dark = crate::unix::desktop_dark(ctx)
-        .unwrap_or_else(|| ctx.system_theme() == Some(egui::Theme::Dark));
-    #[cfg(not(any(windows, target_os = "linux")))]
-    let system_dark = ctx.system_theme() == Some(egui::Theme::Dark);
+    let system_dark = crate::lookwatch::system(ctx).dark;
     let want = wanted(dark_mode_support, always_dark, system_dark);
     DARK.swap(want, Ordering::Relaxed) != want
 }
 
-/// Did the desktop say its look changed since the last call? On Linux, the portal's and the theme
-/// settings' watchers count each change (`unix::desktop_generation`), and the app's theme check,
-/// otherwise every 2 s, then runs in the frame the change woke (#156). Elsewhere false: the check's
-/// 2 s are its only clock there.
+/// Did Windows say its look changed since the last call, or the theme files? `lookwatch` counts
+/// each change (Windows' registry, the themes folder, pywal's file). The app's theme check,
+/// otherwise every 2 s, then runs in the frame the change woke (upstream issue 719).
 pub fn system_changed() -> bool {
-    #[cfg(target_os = "linux")]
-    {
-        static SEEN: AtomicU64 = AtomicU64::new(0);
-        let now = crate::unix::desktop_generation();
-        SEEN.swap(now, Ordering::Relaxed) != now
-    }
-    #[cfg(not(target_os = "linux"))]
-    false
+    static WATCHED: AtomicU64 = AtomicU64::new(0);
+    let now = crate::lookwatch::generation();
+    WATCHED.swap(now, Ordering::Relaxed) != now
 }
 
 /// Dark or not: View → Always dark, else the system's mode while Dark Mode support is on.
@@ -262,176 +254,77 @@ macro_rules! themed {
 }
 pub(crate) use themed;
 
-/// The system's fonts for the scripts the UI font lacks (D-019; nothing bundled): a key, the
-/// files to try (in the fonts folder), the interface languages that need it. CJK fonts are large
-/// (13–20 MB), so only the interface language's are loaded, and all of them while the language
-/// picker shows every language by its own name ([`all_scripts`]). Windows: Segoe UI and Tahoma
-/// already cover Arabic, Hebrew, Armenian and Georgian.
-#[cfg(windows)]
-const SCRIPT_FONTS: &[(&str, &[&str], &[&str])] = &[
-    ("han-sc", &["msyh.ttc"], &["zh-hans"]),
-    ("han-tc", &["msjh.ttc"], &["zh-hant"]),
-    (
-        "japanese",
-        &["YuGothM.ttc", "meiryo.ttc", "msgothic.ttc"],
-        &["ja"],
-    ),
-    ("hangul", &["malgun.ttf"], &["ko"]),
-    (
-        "indic",
-        &["Nirmala.ttc", "Nirmala.ttf"],
-        &[
-            "as", "bn", "gu", "hi", "kn", "kok", "ml", "mr", "ne", "or", "pa", "ta", "te",
-        ],
-    ),
-    ("southeast-asian", &["LeelawUI.ttf"], &["km", "lo", "th"]),
-    ("ethiopic", &["ebrima.ttf"], &["am"]),
-    ("cherokee", &["gadugi.ttf"], &["chr"]),
-];
-
-/// macOS's fonts, in /System/Library/Fonts: the specific ones first, then Arial Unicode for
-/// every other script the system font lacks.
-#[cfg(target_os = "macos")]
-const SCRIPT_FONTS: &[(&str, &[&str], &[&str])] = &[
-    (
-        "han",
-        &[
-            "PingFang.ttc",
-            "Hiragino Sans GB.ttc",
-            "STHeiti Light.ttc",
-            "Supplemental/Songti.ttc",
-        ],
-        &["zh-hans", "zh-hant"],
-    ),
-    ("japanese", &["ヒラギノ角ゴシック W3.ttc"], &["ja"]),
-    ("hangul", &["AppleSDGothicNeo.ttc"], &["ko"]),
-    ("khmer", &["Supplemental/Khmer Sangam MN.ttf"], &["km"]),
-    ("lao", &["Supplemental/Lao Sangam MN.ttf"], &["lo"]),
-    ("ethiopic", &["Supplemental/Kefa.ttc", "Kefa.ttc"], &["am"]),
-    (
-        "cherokee",
-        &["Supplemental/Plantagenet Cherokee.ttf"],
-        &["chr"],
-    ),
-    (
-        "unicode",
-        &["Supplemental/Arial Unicode.ttf"],
-        &[
-            "ar", "fa", "ur", "ug", "he", "hy", "ka", "as", "bn", "gu", "hi", "kn", "kok", "ml",
-            "mr", "ne", "or", "pa", "ta", "te", "th", "ja", "ko", "zh-hans", "zh-hant",
-        ],
-    ),
-];
-
-/// Linux: fontconfig names the font for each language (`fc-match :lang=…`), whatever the
-/// distribution installs; these are the languages whose script needs one, as fontconfig names
-/// them (one per script is enough for the picker's list of all languages).
-#[cfg(not(any(windows, target_os = "macos")))]
-const SCRIPT_LANGS: &[(&str, &str)] = &[
-    ("ar", "ar"),
-    ("fa", "fa"),
-    ("ur", "ur"),
-    ("ug", "ug"),
-    ("he", "he"),
-    ("hy", "hy"),
-    ("ka", "ka"),
-    ("am", "am"),
-    ("chr", "chr"),
-    ("km", "km"),
-    ("lo", "lo"),
-    ("th", "th"),
-    ("ja", "ja"),
-    ("ko", "ko"),
-    ("zh-hans", "zh-cn"),
-    ("zh-hant", "zh-tw"),
-    ("hi", "hi"),
-    ("mr", "mr"),
-    ("ne", "ne"),
-    ("kok", "kok"),
-    ("as", "as"),
-    ("bn", "bn"),
-    ("gu", "gu"),
-    ("pa", "pa"),
-    ("or", "or"),
-    ("ta", "ta"),
-    ("te", "te"),
-    ("kn", "kn"),
-    ("ml", "ml"),
-];
-
-/// Marks that neither the interface font nor the script fonts have (✔ ✖ ↩ ⇧ ⌘ ⌥ ⌦, and → on
-/// Linux: #185): the system's symbol fonts, last in every family's chain, in every language,
-/// each one that is there. macOS keeps ✔ and ✖ in Zapf Dingbats, not in Apple Symbols.
-#[cfg(windows)]
+/// Marks that the interface font doesn't have (✔ ✖ ↩ ⇧ ⌘ ⌥ ⌦): the system's symbol fonts, last
+/// in every family's chain, in every language, each one that is there.
 const SYMBOL_FONTS: &[&str] = &["seguisym.ttf"];
-#[cfg(target_os = "macos")]
-const SYMBOL_FONTS: &[&str] = &["Apple Symbols.ttf", "ZapfDingbats.ttf"];
-/// Linux: the font fontconfig picks for those marks (glyph_tests lists every one the windows
-/// draw; a new one goes here too).
-#[cfg(not(any(windows, target_os = "macos")))]
-const SYMBOL_PATTERN: &str = ":charset=2024 2192 21a9 21e7 2318 2325 2326 2714 2716";
 
-/// The symbol fonts' bytes, in fallback order ([`SYMBOL_FONTS`], [`SYMBOL_PATTERN`]).
+/// The symbol fonts' bytes, in fallback order ([`SYMBOL_FONTS`]).
 fn symbol_fonts() -> Vec<Vec<u8>> {
-    #[cfg(any(windows, target_os = "macos"))]
-    return SYMBOL_FONTS
+    SYMBOL_FONTS
         .iter()
-        .filter_map(|f| std::fs::read(font_dir().join(f)).ok())
-        .collect();
-    #[cfg(not(any(windows, target_os = "macos")))]
-    return fc_match(SYMBOL_PATTERN)
-        .and_then(|f| std::fs::read(f).ok())
-        .into_iter()
-        .collect();
+        .filter_map(|f| read_font(&font_dir().join(f)))
+        .collect()
+}
+
+/// Whether egui can draw with `bytes`: a TrueType or OpenType font, or a collection of them (its
+/// first face), as the parser egui reads fonts with reads it. A damaged file, one cut short, a
+/// Type 1 or bitmap font or anything else is not one, and egui stops on a font it was given and
+/// can't read (upstream issue 931).
+fn loadable_font(bytes: &[u8]) -> bool {
+    use skrifa::raw::TableProvider as _;
+    let Ok(font) = skrifa::FontRef::from_index(bytes, 0) else {
+        return false;
+    };
+    // A font whose list of tables is whole but whose tables are cut short (a copy that stopped)
+    // passes the first look: every table it lists is in the file, and those every font has read.
+    font.table_directory
+        .table_records()
+        .iter()
+        .all(|table| font.table_data(table.tag()).is_some())
+        && font.head().is_ok()
+        && font.hhea().is_ok()
+        && font.maxp().is_ok()
+        && font.cmap().is_ok()
+}
+
+/// A font file's bytes, when egui can draw with them ([`loadable_font`]). Any other file is
+/// passed over, and the log says so (once a run: the fonts are loaded again with each theme
+/// change): the next font in line is used instead.
+pub(crate) fn read_font(path: &std::path::Path) -> Option<Vec<u8>> {
+    static SAID: std::sync::Mutex<Option<std::collections::HashSet<std::path::PathBuf>>> =
+        std::sync::Mutex::new(None);
+    let bytes = std::fs::read(path).ok()?;
+    if loadable_font(&bytes) {
+        return Some(bytes);
+    }
+    let mut said = SAID.lock().unwrap_or_else(|e| e.into_inner());
+    if said
+        .get_or_insert_with(Default::default)
+        .insert(path.to_owned())
+    {
+        tracing::warn!(
+            "fonts: {} is not a TrueType or OpenType font, passed over",
+            path.display()
+        );
+    }
+    None
 }
 
 /// The folder the font tables name files in.
-#[cfg(any(windows, target_os = "macos"))]
 fn font_dir() -> std::path::PathBuf {
-    #[cfg(windows)]
-    return std::env::var_os("WINDIR")
+    std::env::var_os("WINDIR")
         .map(|w| std::path::PathBuf::from(w).join("Fonts"))
-        .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows\Fonts"));
-    #[cfg(target_os = "macos")]
-    return std::path::PathBuf::from("/System/Library/Fonts");
+        .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows\Fonts"))
 }
 
-/// Resolves a font file path in `dir`. On macOS 15+ (Sequoia / Tahoe), `PingFang.ttc` moved out
-/// of `/System/Library/Fonts/PingFang.ttc` into `/System/Library/AssetsV2/com_apple_MobileAsset_Font*`.
-#[cfg(any(windows, target_os = "macos"))]
-fn font_path(dir: &std::path::Path, rel: &str) -> std::path::PathBuf {
-    let direct = dir.join(rel);
-    #[cfg(target_os = "macos")]
-    if rel == "PingFang.ttc" && !direct.exists() {
-        for base in [
-            "/System/Library/AssetsV2/com_apple_MobileAsset_Font8",
-            "/System/Library/AssetsV2/com_apple_MobileAsset_Font7",
-            "/System/Library/AssetsV2/com_apple_MobileAsset_Font6",
-        ] {
-            if let Ok(entries) = std::fs::read_dir(base) {
-                for entry in entries.flatten() {
-                    let p = entry.path().join("AssetData/PingFang.ttc");
-                    if p.is_file() {
-                        return p;
-                    }
-                }
-            }
-        }
-    }
-    direct
-}
-
-/// The fonts for scripts outside the interface language, loaded the first time a character
-/// needs one (#405): a file or video named in Bangla, Japanese, Thai... The interface language's
-/// own script fonts are loaded up front ([`SCRIPT_FONTS`], kept small for #72); anything else
-/// comes from the system on demand, only when text in that script is shown.
+/// The fonts for scripts the interface font lacks, loaded the first time a character needs one
+/// (#405): a file or video named in Bangla, Japanese, Thai... They come from the system on
+/// demand, only when text in that script is shown (CJK fonts are 13–20 MB each, #72).
 ///
-/// Windows and macOS: the blocks below name the system's font for each script. Linux: fontconfig
-/// is asked for a font that has the character (`:charset=`), one question per Unicode block.
+/// The blocks below name the system's font for each script.
 struct ScriptFallback;
 
 /// One script's fonts on demand: a key, its code points, the files to try (in order).
-#[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 struct FallbackFont {
     key: &'static str,
     ranges: &'static [(u32, u32)],
@@ -439,7 +332,6 @@ struct FallbackFont {
 }
 
 /// Windows' fonts for the scripts egui's fonts and Segoe UI don't cover.
-#[cfg(windows)]
 const FALLBACK_FONTS: &[FallbackFont] = &[
     FallbackFont {
         key: "indic",
@@ -506,78 +398,7 @@ const FALLBACK_FONTS: &[FallbackFont] = &[
     },
 ];
 
-/// macOS's fonts for the same scripts; Arial Unicode for what isn't listed. Compiled everywhere,
-/// so the tests check it on every system.
-#[cfg(target_os = "macos")]
-const FALLBACK_FONTS: &[FallbackFont] = MACOS_FALLBACK_FONTS;
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
-const MACOS_FALLBACK_FONTS: &[FallbackFont] = &[
-    FallbackFont {
-        key: "japanese",
-        ranges: &[(0x3040, 0x30FF), (0x31F0, 0x31FF), (0xFF66, 0xFF9F)],
-        files: &["ヒラギノ角ゴシック W3.ttc", "Hiragino Sans GB.ttc"],
-    },
-    FallbackFont {
-        key: "hangul",
-        ranges: &[
-            (0x1100, 0x11FF),
-            (0x3130, 0x318F),
-            (0xA960, 0xA97F),
-            (0xAC00, 0xD7FF),
-        ],
-        files: &["AppleSDGothicNeo.ttc"],
-    },
-    FallbackFont {
-        key: "han",
-        ranges: &[
-            (0x2E80, 0x303F),
-            (0x3100, 0x312F),
-            (0x3200, 0x4DBF),
-            (0x4E00, 0x9FFF),
-            (0xF900, 0xFAFF),
-            (0xFE30, 0xFE4F),
-            (0xFF00, 0xFFEF),
-            (0x20000, 0x3FFFF),
-        ],
-        files: &[
-            "PingFang.ttc",
-            "Hiragino Sans GB.ttc",
-            "STHeiti Light.ttc",
-            "Supplemental/Songti.ttc",
-        ],
-    },
-    FallbackFont {
-        key: "khmer",
-        ranges: &[(0x1780, 0x17FF), (0x19E0, 0x19FF)],
-        files: &["Supplemental/Khmer Sangam MN.ttf"],
-    },
-    FallbackFont {
-        key: "lao",
-        ranges: &[(0x0E80, 0x0EFF)],
-        files: &["Supplemental/Lao Sangam MN.ttf"],
-    },
-    FallbackFont {
-        key: "ethiopic",
-        ranges: &[(0x1200, 0x139F), (0x2D80, 0x2DDF), (0xAB00, 0xAB2F)],
-        files: &["Supplemental/Kefa.ttc", "Kefa.ttc"],
-    },
-    // Armenian, Hebrew and the Arabic script (Persian, Urdu: #533) too: the system font (SF)
-    // has none of them, and Windows' Segoe UI, which has them, isn't there. The same font an
-    // Arabic or Persian interface loads ([`SCRIPT_FONTS`]).
-    FallbackFont {
-        key: "unicode",
-        ranges: &[
-            (0x0530, 0x13FF),
-            (0x1800, 0x1FFF),
-            (0xFB1D, 0xFDFF),
-            (0xFE70, 0xFEFF),
-        ],
-        files: &["Supplemental/Arial Unicode.ttf"],
-    },
-];
-
 /// The font in `fonts` for `c`: the first that lists its code point.
-#[cfg_attr(not(any(windows, target_os = "macos")), allow(dead_code))]
 fn fallback_entry(fonts: &'static [FallbackFont], c: char) -> Option<&'static FallbackFont> {
     let cp = c as u32;
     fonts
@@ -591,24 +412,12 @@ fn fallback_font(c: char) -> Option<(String, egui::FontData)> {
     use std::sync::Mutex;
     static LOADED: Mutex<Option<HashMap<String, Option<egui::FontData>>>> = Mutex::new(None);
 
-    #[cfg(any(windows, target_os = "macos"))]
     let (key, files): (String, Vec<std::path::PathBuf>) = {
         let font = fallback_entry(FALLBACK_FONTS, c)?;
         let dir = font_dir();
         (
             format!("fallback:{}", font.key),
-            font.files.iter().map(|f| font_path(&dir, f)).collect(),
-        )
-    };
-    #[cfg(not(any(windows, target_os = "macos")))]
-    let (key, files): (String, Vec<std::path::PathBuf>) = {
-        // One question per Unicode block: a script's letters don't each need an fc-match.
-        let block = (c as u32) >> 8;
-        (
-            format!("fallback:{block:x}"),
-            fc_lookup(&format!(":charset={:x}", c as u32))
-                .into_iter()
-                .collect(),
+            font.files.iter().map(|f| dir.join(f)).collect(),
         )
     };
 
@@ -617,35 +426,20 @@ fn fallback_font(c: char) -> Option<(String, egui::FontData)> {
     let font = loaded
         .entry(key.clone())
         .or_insert_with(|| {
-            let bytes = files.iter().find_map(|f| std::fs::read(f).ok())?;
+            let bytes = files.iter().find_map(|f| read_font(f))?;
             let mut tweak = egui::FontTweak::default();
             tweak.set_baseline_fallback(true);
-            #[cfg(windows)]
-            {
-                tweak.hinting_target =
-                    egui::epaint::text::HintingTarget::Smooth(egui::epaint::text::SmoothHinting {
-                        light: false,
-                        symmetric_rendering: false,
-                        preserve_linear_metrics: false,
-                    });
-                tweak.subpixel_binning = Some(false);
-            }
+            tweak.hinting_target =
+                egui::epaint::text::HintingTarget::Smooth(egui::epaint::text::SmoothHinting {
+                    light: false,
+                    symmetric_rendering: false,
+                    preserve_linear_metrics: false,
+                });
+            tweak.subpixel_binning = Some(false);
             Some(egui::FontData::from_owned(bytes).tweak(tweak))
         })
         .clone()?;
     Some((key, font))
-}
-
-/// `fc-match` for one pattern, asked right now (Linux, a character no loaded font has).
-#[cfg(not(any(windows, target_os = "macos")))]
-fn fc_lookup(pattern: &str) -> Option<std::path::PathBuf> {
-    let out = std::process::Command::new("fc-match")
-        .args(["-f", "%{file}", pattern])
-        .output()
-        .ok()?;
-    let file = String::from_utf8(out.stdout).ok()?;
-    let file = file.trim();
-    (out.status.success() && !file.is_empty()).then(|| file.into())
 }
 
 impl egui::FontProvider for ScriptFallback {
@@ -656,171 +450,100 @@ impl egui::FontProvider for ScriptFallback {
     }
 }
 
-/// Tell the text system where the scripts outside the interface language come from, once.
+/// Tell the text system where the scripts the interface font lacks come from, once.
 fn add_script_fallback(ctx: &egui::Context) {
     static ADDED: std::sync::Once = std::sync::Once::new();
     ADDED.call_once(|| ctx.add_font_provider(std::sync::Arc::new(ScriptFallback)));
 }
 
-/// The interface font: Segoe UI as IDM has it on Windows, the system's own elsewhere.
+/// The interface font: Segoe UI as IDM has it.
 fn ui_font() -> Option<Vec<u8>> {
-    #[cfg(windows)]
-    return std::fs::read(font_dir().join("segoeui.ttf")).ok();
-    #[cfg(target_os = "macos")]
-    return ["SFNS.ttf", "Helvetica.ttc"]
-        .iter()
-        .find_map(|f| std::fs::read(font_dir().join(f)).ok());
-    #[cfg(not(any(windows, target_os = "macos")))]
-    return fc_match("sans-serif").and_then(|f| std::fs::read(f).ok());
+    read_font(&font_dir().join("segoeui.ttf"))
 }
 
-/// The script fonts for `code` (every language's with `all`): (key, bytes), in fallback order.
-fn script_fonts(code: &str, all: bool) -> Vec<(String, Vec<u8>)> {
-    #[cfg(any(windows, target_os = "macos"))]
-    {
-        let dir = font_dir();
-        SCRIPT_FONTS
-            .iter()
-            .filter(|(_, _, langs)| all || langs.contains(&code))
-            // The first file there is used (older systems name some differently); a .ttc's
-            // first face is the regular one.
-            .filter_map(|(key, files, _)| {
-                let bytes = files
-                    .iter()
-                    .find_map(|f| std::fs::read(font_path(&dir, f)).ok())?;
-                Some(((*key).to_owned(), bytes))
-            })
-            .collect()
-    }
-    #[cfg(not(any(windows, target_os = "macos")))]
-    {
-        let mut seen = std::collections::HashSet::new();
-        SCRIPT_LANGS
-            .iter()
-            .filter(|(ours, _)| all || *ours == code)
-            .filter_map(|(_, fc)| fc_match(&format!(":lang={fc}")))
-            // Several languages share a font (Devanagari, the CJK collection): loaded once.
-            .filter(|f| seen.insert(f.clone()))
-            .filter_map(|f| {
-                let bytes = std::fs::read(&f).ok()?;
-                Some((format!("fc:{}", f.display()), bytes))
-            })
-            .collect()
+/// A font MDM carries for a theme to name (`font = "geist"`): its Regular, Medium and SemiBold.
+/// Geist, by Vercel, under the SIL Open Font License 1.1 (`assets/fonts/geist/OFL.txt`).
+pub fn bundled_font(name: &str) -> Option<[&'static [u8]; 3]> {
+    match name {
+        "geist" => Some([
+            include_bytes!("../assets/fonts/geist/Geist-Regular.ttf"),
+            include_bytes!("../assets/fonts/geist/Geist-Medium.ttf"),
+            include_bytes!("../assets/fonts/geist/Geist-SemiBold.ttf"),
+        ]),
+        _ => None,
     }
 }
 
-/// The font file fontconfig picks for `pattern` (one of [`fc_files`]'s).
-#[cfg(not(any(windows, target_os = "macos")))]
-fn fc_match(pattern: &str) -> Option<std::path::PathBuf> {
-    fc_files().get(pattern).cloned()
+/// The bundled font leading the families now (set by [`fonts_for`]), which DirectWrite then
+/// draws from these bytes instead of a system font file (`crate::win32::text_rasterizer`).
+static BUNDLED: std::sync::Mutex<Option<[&'static [u8]; 3]>> = std::sync::Mutex::new(None);
+
+pub fn bundled_face() -> Option<[&'static [u8]; 3]> {
+    *BUNDLED.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Every font file the windows may need, as fontconfig picks it: the interface font
-/// (`sans-serif`) and each script's (`:lang=…`). Each answer is an `fc-match` program; asked one
-/// after the other on the window's thread, the thirty of them held up MDM's first frame for 2 s
-/// on an idle computer and past the freeze report's 8 s on a busy one (#164). So they are asked
-/// once, all together (a third of the time), and [`prepare_fonts`] starts that while the window
-/// opens; the fonts only wait for what is still running. A font installed while MDM runs is
-/// used from its next start.
-#[cfg(not(any(windows, target_os = "macos")))]
-fn fc_files() -> &'static std::collections::HashMap<String, std::path::PathBuf> {
-    use std::process::{Command, Stdio};
-    static FILES: std::sync::OnceLock<std::collections::HashMap<String, std::path::PathBuf>> =
-        std::sync::OnceLock::new();
-    FILES.get_or_init(|| {
-        let running: Vec<_> = ["sans-serif", SYMBOL_PATTERN]
-            .into_iter()
-            .map(str::to_owned)
-            .chain(SCRIPT_LANGS.iter().map(|(_, fc)| format!(":lang={fc}")))
-            .filter_map(|pattern| {
-                let child = Command::new("fc-match")
-                    .args(["-f", "%{file}", &pattern])
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::null())
-                    .spawn()
-                    .ok()?;
-                Some((pattern, child))
-            })
-            .collect();
-        running
-            .into_iter()
-            .filter_map(|(pattern, child)| {
-                let out = child.wait_with_output().ok()?;
-                let file = String::from_utf8(out.stdout).ok()?;
-                let file = file.trim();
-                (out.status.success() && !file.is_empty()).then(|| (pattern, file.into()))
-            })
-            .collect()
-    })
+/// Tests that draw text or make fonts share the process-wide [`BUNDLED`]: one at a time, each
+/// starting and ending with the system's fonts.
+#[cfg(test)]
+pub fn font_tests() -> impl Drop {
+    struct One(#[allow(dead_code)] std::sync::MutexGuard<'static, ()>);
+    impl Drop for One {
+        fn drop(&mut self) {
+            *BUNDLED.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        }
+    }
+    static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let one = One(LOCK.lock().unwrap_or_else(|e| e.into_inner()));
+    *BUNDLED.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    one
 }
 
-/// Start looking up the system's fonts while the window opens (Linux: [`fc_files`]); Windows and
-/// macOS read theirs from known files, quickly, when the fonts load.
-pub fn prepare_fonts() {
-    #[cfg(not(any(windows, target_os = "macos")))]
-    let _ = std::thread::Builder::new().name("fonts".into()).spawn(|| {
-        fc_files();
-    });
-}
+/// The font the families were last made with: a theme switch remakes them only when it differs.
+static LOADED_FONT: std::sync::Mutex<Option<Option<String>>> = std::sync::Mutex::new(None);
 
-/// The script fonts loaded now: the interface language's, or all of them.
-static LOADED: std::sync::Mutex<Option<(String, bool)>> = std::sync::Mutex::new(None);
-
-/// Load the fonts the interface language needs (after it changed).
-pub fn language_fonts(ctx: &egui::Context) {
-    let all = LOADED.lock().unwrap().as_ref().is_some_and(|l| l.1);
-    load_fonts(ctx, all);
-}
-
-/// Load every script font, for a list of all languages by their own names, until
-/// [`interface_fonts`] lets them go.
-pub fn all_scripts(ctx: &egui::Context) {
-    load_fonts(ctx, true);
-}
-
-/// Back to the interface language's script fonts only, once no list of every language shows
-/// (#72: CJK fonts alone are 13–20 MB each; the language picker had kept them all loaded).
-pub fn interface_fonts(ctx: &egui::Context) {
-    load_fonts(ctx, false);
-}
-
-fn load_fonts(ctx: &egui::Context, all: bool) {
-    #[cfg(windows)]
+/// The interface's fonts, set up for `ctx`.
+fn load_fonts(ctx: &egui::Context) {
     classic_text(ctx);
-    let code = crate::i18n::code().to_owned();
-    let mut loaded = LOADED.lock().unwrap();
-    // Only the script fonts depend on the language: rebuild when that set changes.
-    let needs = |code: &str| -> Vec<&str> {
-        #[cfg(any(windows, target_os = "macos"))]
-        return SCRIPT_FONTS
-            .iter()
-            .filter(|(_, _, langs)| all || langs.contains(&code))
-            .map(|(key, ..)| *key)
-            .collect();
-        #[cfg(not(any(windows, target_os = "macos")))]
-        return SCRIPT_LANGS
-            .iter()
-            .filter(|(ours, _)| all || *ours == code)
-            .map(|(ours, _)| *ours)
-            .collect();
-    };
-    if let Some((old, old_all)) = loaded.as_ref()
-        && *old_all == all
-        && needs(old) == needs(&code)
-    {
-        *loaded = Some((code, all));
-        return;
-    }
-    fonts(ctx, &code, all);
-    *loaded = Some((code, all));
+    fonts(ctx);
 }
 
-/// IDM draws with Segoe UI 9 pt (12 px at 100 %): the system's own copy, nothing bundled
-/// (elsewhere the system's interface font, [`ui_font`]; else egui's default font). Every family
-/// falls back to it (Tahoma has no Armenian or Georgian), then to the script fonts for `code`
-/// (all with `all`).
-fn fonts(ctx: &egui::Context, code: &str, all: bool) {
+/// The active theme's fonts.
+fn fonts(ctx: &egui::Context) {
+    load_font(ctx, current().font.as_deref());
+}
+
+/// The families made with `font`, which is remembered for [`fonts_if_changed`].
+fn load_font(ctx: &egui::Context, font: Option<&str>) {
+    *LOADED_FONT.lock().unwrap_or_else(|e| e.into_inner()) = Some(font.map(str::to_owned));
+    fonts_for(ctx, font);
+}
+
+/// A theme switch to a theme whose font is `font`: the fonts are made again only when it isn't
+/// theirs.
+fn fonts_if_changed(ctx: &egui::Context, font: Option<&str>) {
+    let loaded = LOADED_FONT
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    if needs_reload(loaded.as_ref(), font) {
+        load_font(ctx, font);
+    }
+}
+
+/// `loaded`: the font the families were made with (None: not made yet; Some(None): the system's).
+fn needs_reload(loaded: Option<&Option<String>>, wanted: Option<&str>) -> bool {
+    loaded.is_none_or(|l| l.as_deref() != wanted)
+}
+
+/// IDM draws with Segoe UI 9 pt (12 px at 100 %): the system's own copy (else egui's default
+/// font). Every family
+/// falls back to it (Tahoma has no Armenian or Georgian), then to the symbol fonts; other
+/// scripts (a file named in Japanese) come on demand ([`ScriptFallback`]).
+///
+/// A theme's bundled `font` ([`bundled_font`]) leads instead: Regular for the two built-in
+/// families and Tahoma's, SemiBold for the bold ones, and `geist-medium` (Medium) for buttons,
+/// column heads and chips; Segoe UI is then the first fallback, on the bundled font's baseline.
+fn fonts_for(ctx: &egui::Context, font: Option<&str>) {
     let mut defs = egui::FontDefinitions::default();
     let ui = ui_font();
     if let Some(bytes) = &ui {
@@ -835,10 +558,50 @@ fn fonts(ctx: &egui::Context, code: &str, all: bool) {
                 .insert(0, "segoe-ui".into());
         }
     }
-    #[cfg(windows)]
     crate::winui::install_fonts(&mut defs, Some(&font_dir()));
-    #[cfg(not(windows))]
-    crate::winui::install_fonts(&mut defs, None);
+    // Without a bundled font, Medium is the interface font itself.
+    let medium = egui::FontFamily::Name("geist-medium".into());
+    let ui_list = defs.families[&egui::FontFamily::Proportional].clone();
+    defs.families.insert(medium.clone(), ui_list.clone());
+    // The list's numbers (sizes, rates, time left, percentages; plan 05b) keep Segoe UI's
+    // tabular figures in every theme: a bundled font's may be proportional (Geist's are, 04).
+    defs.families
+        .insert(egui::FontFamily::Name(NUMBERS.into()), ui_list);
+    let faces = font.and_then(bundled_font);
+    if let Some([regular, medium_face, semibold]) = faces {
+        use egui::FontFamily::{Monospace, Name, Proportional};
+        for (key, bytes) in [
+            ("bundled", regular),
+            ("bundled-medium", medium_face),
+            ("bundled-semibold", semibold),
+        ] {
+            defs.font_data.insert(
+                key.into(),
+                std::sync::Arc::new(egui::FontData::from_static(bytes)),
+            );
+        }
+        // Segoe UI right after it, for the letters it lacks, before egui's own fonts.
+        let lead = |list: &mut Vec<String>, key: &str| {
+            list.retain(|f| f != "segoe-ui");
+            list.insert(0, key.into());
+            if ui.is_some() {
+                list.insert(1, "segoe-ui-fallback".into());
+            }
+        };
+        for (family, key) in [
+            (Proportional, "bundled"),
+            (Monospace, "bundled"),
+            (Name("tahoma".into()), "bundled"),
+            (Name("tahoma-bold".into()), "bundled-semibold"),
+            (medium, "bundled-medium"),
+        ] {
+            let list = defs.families.entry(family).or_default();
+            // Tahoma's own files give way too: the family is the bundled face's alone.
+            list.retain(|f| !matches!(f.as_str(), "tahoma" | "tahoma-bold"));
+            lead(list, key);
+        }
+    }
+    *BUNDLED.lock().unwrap_or_else(|e| e.into_inner()) = faces;
     // A fallback's glyphs sit on the baseline of the family's first font (Japanese next to
     // Latin digits, Georgian in a Tahoma line), not centred in its row.
     let on_baseline = |bytes: Vec<u8>| {
@@ -851,10 +614,6 @@ fn fonts(ctx: &egui::Context, code: &str, all: bool) {
         defs.font_data
             .insert("segoe-ui-fallback".into(), on_baseline(bytes));
         fallbacks.push("segoe-ui-fallback".into());
-    }
-    for (key, bytes) in script_fonts(code, all) {
-        defs.font_data.insert(key.clone(), on_baseline(bytes));
-        fallbacks.push(key);
     }
     for (k, bytes) in symbol_fonts().into_iter().enumerate() {
         let key = format!("symbols-{k}");
@@ -872,7 +631,6 @@ fn fonts(ctx: &egui::Context, code: &str, all: bool) {
             }
         }
     }
-    #[cfg(windows)]
     sharp_text(&mut defs);
     ctx.set_fonts(defs);
     text_styles(ctx);
@@ -881,20 +639,16 @@ fn fonts(ctx: &egui::Context, code: &str, all: bool) {
 /// Latin, Greek and Cyrillic text drawn the way Windows' classic controls draw it (#262, #323,
 /// #334), by DirectWrite ([`crate::win32::text_rasterizer`]): the fonts' shapes and, with them,
 /// whole-pixel widths, so a letter's width and the place it is drawn for finally agree. That
-/// disagreement is what glued some letters together and pushed others apart. Set again when the
-/// interface's direction changes: a right-to-left line needs its brackets mirrored by the shaper.
-#[cfg(windows)]
+/// disagreement is what glued some letters together and pushed others apart. Set once.
 fn classic_text(ctx: &egui::Context) {
-    use std::sync::atomic::{AtomicI8, Ordering};
-    static RTL: AtomicI8 = AtomicI8::new(-1);
-    let rtl = crate::i18n::rtl();
-    if RTL.swap(i8::from(rtl), Ordering::Relaxed) != i8::from(rtl) {
+    static SET: std::sync::Once = std::sync::Once::new();
+    SET.call_once(|| {
         ctx.set_glyph_rasterizers(
-            crate::win32::text_rasterizer(font_dir(), rtl)
+            crate::win32::text_rasterizer(font_dir())
                 .into_iter()
                 .collect(),
         );
-    }
+    });
 }
 
 /// The text [`classic_text`] leaves to egui (Arabic, Hebrew, Indic, Thai, CJK; marks clustered
@@ -902,9 +656,7 @@ fn classic_text(ctx: &egui::Context) {
 /// Mono hinting targets black-and-white bitmaps: at small sizes it can distort curves and make
 /// diagonals jagged. Smooth hinting keeps those outlines suited to coverage rendering, while
 /// allowing horizontal grid-fitting so upright strokes stay sharp. Keep whole-pixel glyph origins
-/// and the shaper's advances, so this changes neither layout nor the interface size. Linux and
-/// macOS keep egui's defaults.
-#[cfg(windows)]
+/// and the shaper's advances, so this changes neither layout nor the interface size.
 fn sharp_text(defs: &mut egui::FontDefinitions) {
     for data in defs.font_data.values_mut() {
         let data = std::sync::Arc::make_mut(data);
@@ -936,7 +688,7 @@ fn text_styles(ctx: &egui::Context) {
 
 pub fn apply(ctx: &egui::Context) {
     add_script_fallback(ctx);
-    load_fonts(ctx, false);
+    load_fonts(ctx);
     // A press held for a while is still a click when let go over the control, as in Windows
     // (egui gives it up after 0.8 s).
     ctx.options_mut(|o| {
@@ -944,6 +696,11 @@ pub fn apply(ctx: &egui::Context) {
         // Ctrl + / Ctrl − / Ctrl 0 step through View → Interface size and are saved (scale.rs),
         // not egui's own 10 % steps.
         o.zoom_with_keyboard = false;
+        // Every window's theme (its caption) is MDM's to give: the main window's in
+        // `apply_mode`, each dialog's in `dialogs::keep_theme`, the caption the theme's surface.
+        // egui's own would set the mode's instead, behind them, and the caption would have to
+        // be checked with DWM again and again (#633).
+        o.sync_window_theme = false;
     });
     egui_extras::install_image_loaders(ctx);
     apply_theme(ctx);
@@ -952,6 +709,8 @@ pub fn apply(ctx: &egui::Context) {
 /// egui's own visuals from the active theme: each variant into its egui theme (the mode
 /// switches between them), so tooltips and a multi-line box's scroll bar follow the theme too.
 pub fn apply_theme(ctx: &egui::Context) {
+    // Choosing Graphite or leaving it swaps the face live.
+    fonts_if_changed(ctx, current().font.as_deref());
     let theme = current();
     let m = &theme.metrics;
     let radius = |r: f32| CornerRadius::same(r.round().clamp(0.0, 255.0) as u8);
@@ -1018,15 +777,91 @@ mod mode_tests {
     }
 }
 
+/// Upstream issue 931: a system font egui can't read (a damaged or cut-short file, a Type 1 or
+/// bitmap font) is passed over for the next one, never given to egui, which stops on it.
+#[cfg(test)]
+mod font_file_tests {
+    use super::{loadable_font, read_font};
+
+    /// A real TrueType font, and another: egui's own (Ubuntu Light, Hack).
+    fn real_ttf(name: &str) -> Vec<u8> {
+        egui::FontDefinitions::default().font_data[name]
+            .bytes()
+            .to_vec()
+    }
+
+    #[test]
+    fn only_fonts_egui_can_read_are_taken() {
+        let ttf = real_ttf("Ubuntu-Light");
+        assert!(loadable_font(&ttf), "a real TrueType font");
+        assert!(loadable_font(&real_ttf("Hack")), "another");
+
+        // A gzipped file, an uncompressed PCF ("\x01fcp"), a BDF, a Type 1 (.pfb) font.
+        let mut gz = vec![0x1f, 0x8b, 0x08, 0x00, 0, 0, 0, 0, 0x02, 0x03];
+        gz.extend((0..4000u32).map(|i| (i * 31 % 251) as u8));
+        let mut pcf = b"\x01fcp".to_vec();
+        pcf.extend([8, 0, 0, 0].iter().chain(&[0u8; 200]));
+        let bdf =
+            b"STARTFONT 2.1\nFONT -misc-fixed-medium-r-normal--13-120-75-75-c-120-iso10646-1\n";
+        let mut pfb = vec![0x80, 0x01, 0x10, 0x00, 0x00, 0x00];
+        pfb.extend(b"%!PS-AdobeFont-1.0: Test 001.000\n");
+        // Random bytes (a fixed xorshift, so the test is the same every run).
+        let mut x = 0x9e37_79b9u32;
+        let random: Vec<u8> = (0..8192)
+            .map(|_| {
+                x ^= x << 13;
+                x ^= x >> 17;
+                x ^= x << 5;
+                x as u8
+            })
+            .collect();
+        for (what, bytes) in [
+            ("a gzipped file", gz.as_slice()),
+            ("a PCF font", &pcf),
+            ("a BDF font", bdf),
+            ("a Type 1 font", &pfb),
+            ("random bytes", &random),
+            ("an empty file", &[]),
+            ("a TrueType font cut in half", &ttf[..ttf.len() / 2]),
+            (
+                "a TrueType font cut after its table list",
+                &ttf[..ttf.len().min(400)],
+            ),
+        ] {
+            assert!(!loadable_font(bytes), "{what} was taken");
+        }
+    }
+
+    /// A damaged font file in the fonts folder is passed over: no bytes for egui, and the
+    /// families fall back to the next font (egui's own); a good file is read as before.
+    #[test]
+    fn a_damaged_font_file_is_passed_over() {
+        let dir = tempfile::tempdir().unwrap();
+        let ttf = real_ttf("Ubuntu-Light");
+        let damaged = dir.path().join("tahoma.ttf");
+        std::fs::write(&damaged, &ttf[..ttf.len() / 2]).unwrap();
+        let good = dir.path().join("tahomabd.ttf");
+        std::fs::write(&good, &ttf).unwrap();
+
+        assert!(read_font(&damaged).is_none());
+        assert_eq!(read_font(&good), Some(ttf));
+        assert!(read_font(&dir.path().join("gone.ttf")).is_none());
+
+        let mut defs = egui::FontDefinitions::default();
+        crate::winui::install_fonts(&mut defs, Some(dir.path()));
+        assert!(!defs.font_data.contains_key("tahoma"), "the damaged file");
+        assert!(defs.font_data.contains_key("tahoma-bold"), "the good one");
+    }
+}
+
 /// Every mark a window draws (punctuation, arrows, ✔, quotation marks…: what isn't a letter or a
-/// digit) has a glyph in every language's font chain, so none comes out as an empty box (#185:
-/// "✔ Connected" in the browser offer window; "→" on Linux).
+/// digit) has a glyph in the interface's font chain, so none comes out as an empty box (#185:
+/// "✔ Connected" in the browser offer window).
 #[cfg(test)]
 mod glyph_tests {
 
-    /// #405: a script the interface language doesn't use: Bangla in a file name, Japanese in a
+    /// #405: a script the interface font lacks: Bangla in a file name, Japanese in a
     /// playlist, under an English interface. Before: nothing loaded it, so boxes.
-    #[cfg(windows)]
     #[test]
     fn text_in_other_scripts_gets_its_font_on_demand() {
         use egui::epaint::text::{Fonts, TextOptions};
@@ -1045,50 +880,6 @@ mod glyph_tests {
         }
     }
 
-    /// Names in the Arabic script (a Persian file name, #533), Hebrew and Armenian, under an
-    /// English interface on macOS: its system font has none of them, so the fallback must name a
-    /// font for every letter. Before, macOS's list started at Devanagari, and they were boxes.
-    /// Checked on every system (the table is data); the font itself in the macOS test below.
-    const OTHER_SCRIPTS: [&str; 5] = [
-        "\u{0641}\u{0627}\u{06CC}\u{0644} \u{067E}\u{0698}\u{0648}\u{0647}\u{0634}\u{06CC} \u{06F1}\u{06F4}\u{06F0}\u{06F3}", // Persian, with Persian digits
-        "\u{06AF}\u{0632}\u{0627}\u{0631}\u{0634} \u{0686}\u{06A9}", // Persian
-        "\u{0645}\u{0644}\u{0641}",                                  // Arabic
-        "\u{05E7}\u{05D5}\u{05D1}\u{05E5}",                          // Hebrew
-        "\u{0586}\u{0561}\u{0575}\u{056C}",                          // Armenian
-    ];
-
-    #[test]
-    fn macos_names_a_font_for_the_arabic_script() {
-        for text in OTHER_SCRIPTS {
-            for c in text.chars().filter(|c| !c.is_whitespace()) {
-                let font = super::fallback_entry(super::MACOS_FALLBACK_FONTS, c)
-                    .unwrap_or_else(|| panic!("no macOS font for U+{:04X} in {text}", c as u32));
-                // The file macOS ships (/System/Library/Fonts/Supplemental), which an Arabic or
-                // Persian interface already loads.
-                assert!(
-                    font.files.contains(&"Supplemental/Arial Unicode.ttf"),
-                    "U+{:04X}: {:?}",
-                    c as u32,
-                    font.files
-                );
-            }
-        }
-    }
-
-    /// The same names drawn with macOS's own fonts: the fallback finds a file that is there and
-    /// has the letters.
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn persian_names_get_a_font_on_macos() {
-        use egui::epaint::text::{Fonts, TextOptions};
-        use egui::{FontFamily, FontId};
-        let mut fonts = Fonts::new(TextOptions::default(), egui::FontDefinitions::default())
-            .with_font_providers(vec![std::sync::Arc::new(super::ScriptFallback)]);
-        let id = FontId::new(13.0, FontFamily::Proportional);
-        for text in OTHER_SCRIPTS {
-            assert!(fonts.has_glyphs(&id, text), "no font for {text}");
-        }
-    }
     use std::collections::{BTreeMap, BTreeSet};
     use std::path::Path;
     use unicode_segmentation::UnicodeSegmentation;
@@ -1117,18 +908,7 @@ mod glyph_tests {
         }
     }
 
-    /// A catalog's texts: the translations (and the English sources, which a missing row shows).
-    fn catalog(code: &str) -> String {
-        let file = Path::new(ROOT).join("i18n").join(format!("{code}.tsv"));
-        let text = std::fs::read_to_string(&file).unwrap();
-        text.lines()
-            .filter(|l| !l.starts_with('#') && !l.starts_with('@'))
-            .flat_map(|l| l.split('\t').skip(1))
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    /// The marks the code draws itself, beside the catalogs' ("\u{2714} {}", "→"): every
+    /// The marks the code draws ("\u{2714} {}", "→"): every
     /// string literal in the app's sources, escapes read.
     fn literals() -> BTreeSet<char> {
         let mut out = BTreeSet::new();
@@ -1156,60 +936,36 @@ mod glyph_tests {
                     rest = &rest[(end + 1).min(rest.len())..];
                 }
                 s.push_str(rest);
-                // Only what isn't plain ASCII: every font has that.
+                // Only what isn't plain ASCII: every font has that. Nor CJK punctuation (the line
+                // breaker's table in winui.rs): it only ever shows inside CJK text, a file name
+                // whose font comes on demand (ScriptFallback).
                 let mut found = BTreeSet::new();
                 marks(&s, &mut found);
-                out.extend(found.into_iter().filter(|c| !c.is_ascii()));
+                out.extend(found.into_iter().filter(|c| {
+                    !c.is_ascii() && !matches!(*c as u32, 0x3000..=0x30FF | 0xFF00..=0xFFEF)
+                }));
             }
         }
         out
     }
 
-    fn languages() -> Vec<String> {
-        let file = Path::new(ROOT).join("i18n/languages.tsv");
-        std::fs::read_to_string(file)
-            .unwrap()
-            .lines()
-            .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
-            .filter_map(|l| l.split('\t').next().map(str::to_owned))
-            .collect()
-    }
-
     #[test]
-    fn every_language_draws_its_marks() {
-        let code_marks = literals();
+    fn every_mark_has_a_glyph() {
+        let needed = literals();
         let families = [
             egui::FontFamily::Name("tahoma".into()),
             egui::FontFamily::Name("tahoma-bold".into()),
             egui::FontFamily::Proportional,
+            egui::FontFamily::Name("geist-medium".into()),
         ];
+        let _one = super::font_tests();
+        let ctx = egui::Context::default();
         let mut missing: BTreeMap<String, BTreeSet<char>> = BTreeMap::new();
-        let mut skipped = Vec::new();
-        for code in languages() {
-            let text = catalog(&code);
-            let mut needed = code_marks.clone();
-            marks(&text, &mut needed);
-            let ctx = egui::Context::default();
-            super::fonts(&ctx, &code, false);
+        // The system's font and Graphite's bundled one (plan 04).
+        for font in [None, Some("geist")] {
+            super::fonts_for(&ctx, font);
             let mut out = ctx.run_ui(Default::default(), |_| {});
             out.textures_delta.clear();
-            // A computer without the language's script font draws none of it (a CI image without
-            // CJK fonts): nothing to check there.
-            let letters: Vec<char> = text
-                .chars()
-                .filter(|c| c.is_alphabetic() && !c.is_ascii())
-                .take(200)
-                .collect();
-            let has_script = ctx.fonts_mut(|f| {
-                let id = egui::FontId::new(11.0, families[0].clone());
-                letters.is_empty()
-                    || letters.iter().filter(|c| f.has_glyph(&id, **c)).count() * 10
-                        >= letters.len() * 9
-            });
-            if !has_script {
-                skipped.push(code);
-                continue;
-            }
             for family in &families {
                 let id = egui::FontId::new(11.0, family.clone());
                 let lacks: Vec<char> = ctx.fonts_mut(|f| {
@@ -1221,16 +977,11 @@ mod glyph_tests {
                 });
                 if !lacks.is_empty() {
                     missing
-                        .entry(format!("{code} ({family:?})"))
+                        .entry(format!("{font:?} {family:?}"))
                         .or_default()
                         .extend(lacks);
                 }
             }
-        }
-        if !skipped.is_empty() {
-            eprintln!(
-                "no font for these languages' script on this computer, not checked: {skipped:?}"
-            );
         }
         let report: Vec<String> = missing
             .iter()
@@ -1249,5 +1000,112 @@ mod glyph_tests {
             "marks without a glyph:\n{}",
             report.join("\n")
         );
+    }
+
+    /// Plan 04, step 4: DirectWrite draws Geist from MDM's own bytes, as it draws Segoe UI from
+    /// its file: whole-pixel advances (egui's own are fractional), and Geist's figures, unlike
+    /// Segoe UI's, are not all one width.
+    #[test]
+    fn directwrite_draws_the_bundled_face() {
+        let _one = super::font_tests();
+        let width = |font: Option<&str>, text: &str| {
+            let ctx = egui::Context::default();
+            ctx.set_glyph_rasterizers(
+                crate::win32::text_rasterizer(super::font_dir())
+                    .into_iter()
+                    .collect(),
+            );
+            super::fonts_for(&ctx, font);
+            let mut out = ctx.run_ui(Default::default(), |_| {});
+            out.textures_delta.clear();
+            let id = egui::FontId::proportional(12.0);
+            ctx.fonts_mut(|f| {
+                f.layout_no_wrap(text.into(), id, egui::Color32::WHITE)
+                    .rect
+                    .width()
+            })
+        };
+        let (zero, one) = (width(Some("geist"), "0"), width(Some("geist"), "1"));
+        assert_eq!((zero.fract(), one.fract()), (0.0, 0.0), "{zero} {one}");
+        assert!(one < zero, "Geist's 1 is narrower than its 0: {one} {zero}");
+        assert_eq!(width(None, "0"), width(None, "1"), "Segoe UI's figures");
+    }
+
+    /// Plan 04, step 5: a theme switch remakes the fonts only when the font changes.
+    #[test]
+    fn fonts_are_remade_only_when_the_font_changes() {
+        use super::needs_reload;
+        let (system, geist) = (None::<String>, Some("geist".to_owned()));
+        assert!(needs_reload(None, None), "not made yet");
+        assert!(!needs_reload(Some(&system), None), "Classic to Metro");
+        assert!(needs_reload(Some(&system), Some("geist")), "to Graphite");
+        assert!(!needs_reload(Some(&geist), Some("geist")), "Graphite again");
+        assert!(needs_reload(Some(&geist), None), "leaving Graphite");
+    }
+
+    /// Plan 04: from a theme without a font to Graphite and back, the first Proportional font is Geist, then the
+    /// system's again; DirectWrite draws Geist's bytes only while Geist leads.
+    #[test]
+    fn a_theme_switch_swaps_the_face() {
+        let first = |ctx: &egui::Context| {
+            let mut out = ctx.run_ui(Default::default(), |_| {});
+            out.textures_delta.clear();
+            ctx.fonts(|f| f.definitions().families[&egui::FontFamily::Proportional][0].clone())
+        };
+        let _one = super::font_tests();
+        // A theme of no font of its own (a file can be one): the base.
+        let (classic, graphite) = (&crate::palette::BASE, crate::palette::graphite());
+        let ctx = egui::Context::default();
+        // As `apply` at start, then `apply_theme` at each switch.
+        super::load_font(&ctx, classic.font.as_deref());
+        let system = first(&ctx);
+        assert!(super::bundled_face().is_none());
+        super::fonts_if_changed(&ctx, graphite.font.as_deref());
+        assert_eq!(first(&ctx), "bundled");
+        assert_eq!(super::bundled_face(), super::bundled_font("geist"));
+        super::fonts_if_changed(&ctx, classic.font.as_deref());
+        assert_eq!(first(&ctx), system);
+        assert_ne!(system, "bundled");
+        assert!(super::bundled_face().is_none());
+    }
+}
+
+#[cfg(test)]
+mod select_tests {
+    /// Plan 05.5c: a removed theme's id that fell back is saved as Graphite's; a user's file of
+    /// that name, an unknown name and Graphite stay as they are.
+    #[test]
+    fn a_removed_id_is_saved_as_graphite_only_when_it_fell_back() {
+        assert_eq!(super::saved_id("", "graphite"), "graphite");
+        assert_eq!(super::saved_id("metro", "graphite"), "graphite");
+        assert_eq!(super::saved_id("classic", "graphite"), "graphite");
+        assert_eq!(super::saved_id("metro", "metro"), "metro");
+        assert_eq!(super::saved_id("no-such", "graphite"), "no-such");
+        assert_eq!(super::saved_id("mine", "mine"), "mine");
+    }
+
+    /// Plan 05.5c: an empty id, a removed theme's, an unknown one: Graphite (the last two
+    /// say why).
+    #[test]
+    fn every_old_or_unknown_id_gives_graphite() {
+        let g = crate::palette::graphite();
+        // Read without following pywal's file (another test follows it).
+        let read = |id: &str| crate::themefile::read(id).0;
+        let (t, w) = super::chosen("", read);
+        assert!(t == *g && w.is_empty());
+        for id in [
+            "graphite",
+            "classic",
+            "native",
+            "high-contrast",
+            "metro",
+            "aqua",
+            "no-such",
+        ] {
+            let (t, w) = super::chosen(id, read);
+            assert_eq!(t.id, "graphite", "{id}");
+            assert_eq!(t.light, g.light, "{id}");
+            assert_eq!(w.is_empty(), id == "graphite", "{id}: {w:?}");
+        }
     }
 }

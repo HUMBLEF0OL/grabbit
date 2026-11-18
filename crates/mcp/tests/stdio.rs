@@ -55,8 +55,8 @@ struct Mcp {
 
 impl Mcp {
     fn start(data: &std::path::Path) -> Self {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_misterdownloadmanager-mcp"))
-            .env("MDM_DATA_DIR", data)
+        let mut child = Command::new(env!("CARGO_BIN_EXE_grabbit-mcp"))
+            .env("GRABBIT_DATA_DIR", data)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -77,7 +77,7 @@ impl Mcp {
                 "clientInfo": { "name": "test", "version": "1" },
             }),
         );
-        assert_eq!(init["serverInfo"]["name"], "misterdownloadmanager");
+        assert_eq!(init["serverInfo"]["name"], "grabbit");
         assert!(init["instructions"].as_str().unwrap().contains("api on"));
         mcp.send(json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }));
         mcp

@@ -8,6 +8,12 @@
 //! - run with `MDM_SUBS_RETRY_SECS` set (the retry's pause, shortened): it runs the checks;
 //! - run plainly (`cargo test`): it runs itself again with that variable, the way to set it
 //!   without touching its own environment.
+//!
+//! #769: with `page.json` beside it, the fake's page is that one (its formats' addresses on a lab
+//! server, `{EXPIRES}` replaced by a time a little ahead each look-up); asked for its choice
+//! (`-O "MDMJ %()j"`) it answers as yt-dlp does after choosing; and asked to download a choice
+//! whose streams are already there (MDM's engine downloaded them), it merges them as yt-dlp
+//! does ("has already been downloaded"), downloading only what isn't there.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
@@ -24,7 +30,9 @@ fn main() -> ExitCode {
     if std::env::var_os("MDM_SUBS_RETRY_SECS").is_some() {
         checks(&me);
         job_checks(&me);
+        merge_checks(&me);
         list_checks(&me);
+        engine_checks(&me);
         println!("fake_ytdlp: ok");
         return ExitCode::SUCCESS;
     }
@@ -101,11 +109,52 @@ fn fake_ytdlp() -> ExitCode {
         );
         return ExitCode::FAILURE;
     }
+    let home = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(Path::to_owned))
+        .expect("the fake's folder");
     if has("-J") {
         const PAGE: &str = r#"{"title": "Talk", "language": "ru", "formats": [
             {"format_id": "18", "ext": "mp4", "height": 360, "vcodec": "avc1", "acodec": "mp4a"}],
             "automatic_captions": {"en": [{"name": "English"}], "ru": [{"name": "Russian"}]}}"#;
-        println!("{PAGE}");
+        // Upstream issue 852: YouTube looked up without a JavaScript runtime, as yt-dlp says it.
+        if args
+            .last()
+            .is_some_and(|u| u == "https://nojs.example/watch")
+        {
+            eprint!(
+                "{}",
+                include_str!("fixtures/ytdlp-js-runtime/no-runtime.stderr")
+            );
+        }
+        // Each look-up counted beside the fake.
+        let file = home.join("looked.txt");
+        let n = std::fs::read_to_string(&file)
+            .ok()
+            .and_then(|t| t.trim().parse::<u32>().ok())
+            .unwrap_or(0);
+        let _ = std::fs::write(&file, (n + 1).to_string());
+        // Upstream issue 769: a page of the test's, its links signed for a little while from now.
+        match std::fs::read_to_string(home.join("page.json")) {
+            Ok(page) => {
+                let ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64;
+                println!("{}", page.replace("{EXPIRES}", &(ms + 1500).to_string()));
+            }
+            Err(_) => println!("{PAGE}"),
+        }
+        return ExitCode::SUCCESS;
+    }
+    // #769: the choice (`-O "MDMJ %()j"`), as yt-dlp prints it after choosing the formats.
+    if after("-O").is_some_and(|o| o.starts_with("MDMJ")) {
+        let info =
+            std::fs::read_to_string(after("--load-info-json").expect("a page")).expect("the page");
+        let info: serde_json::Value = serde_json::from_str(&info).expect("json");
+        let template = after("-o").expect("-o").replace("%%", "%");
+        let chosen = choice(&info, &after("-f").unwrap_or_default(), &template);
+        println!("MDMJ {chosen}");
         return ExitCode::SUCCESS;
     }
     let template = after("-o").expect("-o");
@@ -157,6 +206,25 @@ fn fake_ytdlp() -> ExitCode {
     if let Some(secs) = mode.strip_prefix("quiet:") {
         std::thread::sleep(Duration::from_secs(secs.trim().parse().unwrap_or(1)));
     }
+    // #736: a video and its sound, merged as yt-dlp's ffmpeg does: into `<stem>.temp.mp4`,
+    // growing for a while, then renamed. Said first when asked (`post_process:` print).
+    if mode == "merge" {
+        println!("MDMQ 137+140 1920x1080");
+        println!("MDMP 3000 3000 NA 1000 137");
+        println!("MDMP 1000 1000 NA 1000 140");
+        let video = template.replace("%(ext)s", "mp4").replace("%%", "%");
+        if args.iter().any(|a| a.starts_with("post_process:MDMM")) {
+            println!("MDMM {video}");
+        }
+        let temp = video.replace(".mp4", ".temp.mp4");
+        for k in 1..=10u64 {
+            std::fs::write(&temp, vec![0u8; (k * 400) as usize]).unwrap();
+            std::thread::sleep(Duration::from_millis(300));
+        }
+        std::fs::rename(&temp, &video).unwrap();
+        println!("MDMF {video}");
+        return ExitCode::SUCCESS;
+    }
     let langs = after("--sub-langs").unwrap_or_default();
     for lang in langs.split(',').filter(|l| !l.is_empty()) {
         let refused = lang == "en" && (mode == "refuse-always" || tried == 0);
@@ -172,6 +240,62 @@ fn fake_ytdlp() -> ExitCode {
         }
         let file = template.replace("%(ext)s", &format!("{lang}.srt"));
         std::fs::write(file, "1\n00:00:00,000 --> 00:00:01,000\nHello\n").unwrap();
+    }
+    // Upstream issue 769: a choice whose streams the engine downloaded: merged as yt-dlp merges
+    // them.
+    if let Some(info) = after("--load-info-json")
+        .and_then(|f| std::fs::read_to_string(f).ok())
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        .filter(|i| i["formats"][0]["url"].is_string())
+        && !has("--skip-download")
+    {
+        let template = template.replace("%%", "%");
+        let chosen = choice(&info, &format, &template);
+        let output = chosen["filename"].as_str().unwrap().to_owned();
+        let streams: Vec<String> = match chosen["requested_formats"].as_array() {
+            Some(fs) => fs
+                .iter()
+                .map(|f| {
+                    output.replace(
+                        ".mp4",
+                        &format!(
+                            ".f{}.{}",
+                            f["format_id"].as_str().unwrap(),
+                            f["ext"].as_str().unwrap()
+                        ),
+                    )
+                })
+                .collect(),
+            None => vec![output.clone()],
+        };
+        let mut merged = Vec::new();
+        for s in &streams {
+            match std::fs::read(s) {
+                // "has already been downloaded"
+                Ok(b) => merged.extend(b),
+                Err(_) => merged.extend(b"downloaded by yt-dlp"),
+            }
+        }
+        for s in streams.iter().filter(|s| **s != output) {
+            let _ = std::fs::remove_file(s);
+        }
+        // #736: several streams are merged as yt-dlp's ffmpeg does, said first when asked
+        // (`post_process:` print), into `<stem>.temp.mp4`, growing for a while, then renamed.
+        if streams.len() > 1 && args.iter().any(|a| a.starts_with("post_process:MDMM")) {
+            println!("MDMQ {} 1920x1080", chosen["format_id"].as_str().unwrap());
+            println!("MDMM {output}");
+            let temp = output.replace(".mp4", ".temp.mp4");
+            let step = merged.len().div_ceil(5);
+            for k in 1..=5 {
+                std::fs::write(&temp, &merged[..(k * step).min(merged.len())]).unwrap();
+                std::thread::sleep(Duration::from_millis(300));
+            }
+            std::fs::rename(&temp, &output).unwrap();
+        } else {
+            std::fs::write(&output, merged).unwrap();
+        }
+        println!("MDMF {output}");
+        return ExitCode::SUCCESS;
     }
     if !has("--skip-download") {
         let video = template.replace("%(ext)s", "mp4").replace("%%", "%");
@@ -191,6 +315,38 @@ fn fake_ytdlp() -> ExitCode {
         }
     }
     ExitCode::SUCCESS
+}
+
+/// yt-dlp's choice of formats on page `info` for `selector`: a format id the page has, that one;
+/// else every format of the page merged (two or more), or the only one. With `filename` from the
+/// output `template`.
+fn choice(info: &serde_json::Value, selector: &str, template: &str) -> serde_json::Value {
+    let formats = info["formats"].as_array().cloned().unwrap_or_default();
+    let mut chosen = info.clone();
+    let one = formats
+        .iter()
+        .find(|f| f["format_id"].as_str() == Some(selector))
+        .or((formats.len() == 1).then(|| &formats[0]));
+    match one {
+        Some(f) => {
+            for (k, v) in f.as_object().unwrap() {
+                chosen[k] = v.clone();
+            }
+        }
+        None => {
+            chosen["requested_formats"] = serde_json::Value::Array(formats.clone());
+            chosen["ext"] = "mp4".into();
+            chosen["format_id"] = formats
+                .iter()
+                .map(|f| f["format_id"].as_str().unwrap().to_owned())
+                .collect::<Vec<_>>()
+                .join("+")
+                .into();
+        }
+    }
+    let ext = chosen["ext"].as_str().unwrap_or("mp4").to_owned();
+    chosen["filename"] = template.replace("%(ext)s", &ext).into();
+    chosen
 }
 
 /// A list of `n` videos as yt-dlp lists them: `-J` (flat, one entry) says what it is; flat
@@ -279,6 +435,7 @@ fn download_as(
         None,
         &Default::default(),
         subs,
+        None,
     )
     .expect("started");
     let end = Instant::now() + Duration::from_secs(120);
@@ -304,6 +461,55 @@ fn log_of(p: &mdm_tools::video::Progress) -> Vec<String> {
     p.events.iter().map(|(_, t)| t.clone()).collect()
 }
 
+/// #736: while yt-dlp's ffmpeg joins a video and its sound, the job says so, and how far it is
+/// from the joined file's size; it says no more once the file is there.
+fn merge_checks(me: &Path) {
+    let tools = tempfile::tempdir().unwrap();
+    let out = tempfile::tempdir().unwrap();
+    std::fs::write(out.path().join("mode.txt"), "merge").unwrap();
+    let exe = fake_in(me, tools.path());
+    let job = VideoJob::start(
+        &exe,
+        "https://video.example/talk",
+        "bv*+ba",
+        out.path(),
+        "Talk",
+        None,
+        1,
+        None,
+        None,
+        &Default::default(),
+        &Subs::default(),
+        None,
+    )
+    .expect("started");
+    let end = Instant::now() + Duration::from_secs(60);
+    let mut seen = Vec::new();
+    let p = loop {
+        let p = job.progress();
+        if p.state != State::Running {
+            break p;
+        }
+        if let Some(m) = p.merging {
+            seen.push(m);
+        }
+        assert!(Instant::now() < end, "still running: {p:?}");
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    assert!(matches!(p.state, State::Done(_)), "merge: {:?}", p.state);
+    assert_eq!(p.merging, None, "done: no longer merging");
+    let known: Vec<f64> = seen.iter().filter_map(|m| *m).collect();
+    assert!(!seen.is_empty(), "merging was said");
+    assert!(
+        known.iter().any(|f| *f > 0.0 && *f < 1.0),
+        "a share done was said: {seen:?}"
+    );
+    assert!(
+        known.windows(2).all(|w| w[0] <= w[1]),
+        "it only goes forward: {known:?}"
+    );
+}
+
 /// #79 and #94: the job never gives up while yt-dlp works, never leaves it running when it does
 /// give up, and mends what a new look-up or a nearby quality can mend.
 fn job_checks(me: &Path) {
@@ -323,26 +529,21 @@ fn job_checks(me: &Path) {
     assert_eq!(files, ["Şirin ğüş.mp4"]);
 
     // It falls over mid-way: the failure is told, and what it left running is ended with it
-    // (Windows: the job; elsewhere yt-dlp is one process, so there's no child to leave).
+    // (the job).
     let (p, _files, out) = download_as(me, "crash", &none, "b", "Talk");
     match &p.state {
         State::Failed(e) => assert!(e.contains("HTTP Error 500"), "{e}"),
         other => panic!("crash: {other:?}"),
     }
-    #[cfg(windows)]
-    {
-        let size = || std::fs::metadata(out.path().join("linger.log")).map_or(0, |m| m.len());
-        std::thread::sleep(Duration::from_millis(800));
-        let after = size();
-        std::thread::sleep(Duration::from_millis(1500));
-        assert_eq!(
-            size(),
-            after,
-            "the helper it left was ended with the download"
-        );
-    }
-    #[cfg(not(windows))]
-    let _ = out;
+    let size = || std::fs::metadata(out.path().join("linger.log")).map_or(0, |m| m.len());
+    std::thread::sleep(Duration::from_millis(800));
+    let after = size();
+    std::thread::sleep(Duration::from_millis(1500));
+    assert_eq!(
+        size(),
+        after,
+        "the helper it left was ended with the download"
+    );
 
     // The chosen height isn't offered (a reroute left it out): the nearest below, said so.
     let (p, files, _o) = download_as(
@@ -405,10 +606,14 @@ fn list_checks(me: &Path) {
         Looked::List(l) => assert_eq!((l.title.as_str(), l.total), ("A fake playlist", Some(6000))),
         Looked::Video(_) => panic!("a playlist taken for a video"),
     }
-    assert!(matches!(
-        look_up(&exe, "https://video.example/talk", &none).unwrap(),
-        Looked::Video(_)
-    ));
+    // Upstream issue 852: yt-dlp's warnings reach the look-up. A video looked up without a
+    // JavaScript runtime says so (yt-dlp's own words, `fixtures/ytdlp-js-runtime`); another doesn't.
+    let runtime_said = |url: &str| match look_up(&exe, url, &none).unwrap() {
+        Looked::Video(v) => v.needs_js_runtime,
+        Looked::List(_) => panic!("a video taken for a list"),
+    };
+    assert!(!runtime_said("https://video.example/talk"));
+    assert!(runtime_said("https://nojs.example/watch"));
 
     // #352: cookies that leave yt-dlp nothing to offer: the same page without them.
     let page = "https://cookies.example/none";
@@ -528,4 +733,407 @@ fn checks(me: &Path) {
     assert!(matches!(p.state, State::Done(_)), "{:?}", p.state);
     assert_eq!(files, ["Talk.mp4"]);
     assert_eq!(p.sub_problems.len(), 1);
+}
+
+/// #769: MDM's engine downloads what yt-dlp chose, from a lab server: each stream over several
+/// connections, within yt-dlp's `http_chunk_size`, into the files yt-dlp then merges; a stopped
+/// one goes on from where it stopped; an address that expires is asked of yt-dlp again; a new
+/// speed limit applies at once; and a stream in pieces stays yt-dlp's to download, said so.
+fn engine_checks(me: &Path) {
+    use mdm_labserver::{Config, LabServer, content};
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let lab = rt.block_on(LabServer::start(Config::default())).unwrap();
+    let engine = |connections: u32| mdm_tools::streams::Engine {
+        handle: rt.handle().clone(),
+        opts: mdm_engine::Options {
+            max_connections: connections,
+            retry_delay: Duration::from_millis(50),
+            ..Default::default()
+        },
+    };
+    const V: u64 = 3 << 20;
+    const A: u64 = 1 << 20;
+    let page = |video: &str, audio: &str, protocol: &str| {
+        format!(
+            r#"{{"id": "talk", "title": "Talk", "ext": "mp4", "formats": [
+            {{"format_id": "137", "ext": "mp4", "protocol": "{protocol}", "filesize": {V},
+              "vcodec": "avc1", "acodec": "none", "url": "{}",
+              "http_headers": {{"User-Agent": "FakeTube/1"}},
+              "downloader_options": {{"http_chunk_size": 524288}}}},
+            {{"format_id": "140", "ext": "m4a", "protocol": "https", "filesize": {A},
+              "vcodec": "none", "acodec": "mp4a", "url": "{}"}}]}}"#,
+            lab.url(video),
+            lab.url(audio)
+        )
+    };
+    let expected = || {
+        let mut v = vec![0; V as usize];
+        content::fill(1, 0, &mut v);
+        let mut a = vec![0; A as usize];
+        content::fill(2, 0, &mut a);
+        v.extend(a);
+        v
+    };
+    let start = |tools: &Path, out: &Path, connections: u32| {
+        let exe = fake_in(me, tools);
+        VideoJob::start(
+            &exe,
+            "https://video.example/talk",
+            "bv*+ba/b",
+            out,
+            "Talk",
+            None,
+            1,
+            None,
+            None,
+            &Default::default(),
+            &Subs::default(),
+            Some(engine(connections)),
+        )
+        .expect("started")
+    };
+    // What each run said of its merge (#736), in order.
+    let merges = std::cell::RefCell::new(Vec::new());
+    let wait = |job: &VideoJob| {
+        let end = Instant::now() + Duration::from_secs(120);
+        let mut most_connections = 0;
+        merges.borrow_mut().clear();
+        loop {
+            let p = job.progress();
+            if let Some(e) = &p.engine {
+                most_connections = most_connections.max(e.connections.len());
+            }
+            if let Some(m) = p.merging {
+                merges.borrow_mut().push(m);
+            }
+            if p.state != State::Running {
+                return (p, most_connections);
+            }
+            assert!(Instant::now() < end, "still running: {:?}", log_of(&p));
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+
+    // Merged: two streams, each over several connections, in requests of 512 KB at most.
+    let (tools, out) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    std::fs::write(
+        tools.path().join("page.json"),
+        page(
+            "/gen/3M/v.mp4?seed=1&rate=8M",
+            "/gen/1M/a.m4a?seed=2",
+            "https",
+        ),
+    )
+    .unwrap();
+    let job = start(tools.path(), out.path(), 4);
+    let (p, most) = wait(&job);
+    let log = log_of(&p);
+    assert!(matches!(p.state, State::Done(_)), "{:?}: {log:?}", p.state);
+    assert!(p.helper.is_none());
+    let saved = out.path().join("Talk.mp4");
+    assert!(
+        std::fs::read(&saved).unwrap() == expected(),
+        "the streams merged"
+    );
+    assert!(most >= 2, "several connections: {most}");
+    // #736: the engine downloaded the streams, yt-dlp's ffmpeg merges them: said, with how far.
+    let known: Vec<f64> = merges.borrow().iter().filter_map(|m| *m).collect();
+    assert!(
+        known.iter().any(|f| *f > 0.0 && *f < 1.0),
+        "the merge and its share done were said: {:?}",
+        merges.borrow()
+    );
+    assert!(known.windows(2).all(|w| w[0] <= w[1]), "{known:?}");
+    assert_eq!(p.merging, None, "done: no longer merging");
+    assert!(
+        log.iter()
+            .any(|t| t == "yt-dlp's address for format 137: from 127.0.0.1"),
+        "{log:?}"
+    );
+    rt.block_on(lab.settled());
+    let video: Vec<_> = lab
+        .log()
+        .into_iter()
+        .filter(|e| e.path.starts_with("/gen/3M/v.mp4"))
+        .collect();
+    assert!(video.iter().all(|e| {
+        e.user_agent.as_deref() == Some("FakeTube/1")
+            && e.range.as_deref().is_some_and(|r| {
+                let (a, b) = r.trim_start_matches("bytes=").split_once('-').unwrap();
+                b.parse::<u64>().unwrap() - a.parse::<u64>().unwrap() < 524288
+            })
+    }));
+    assert!(
+        std::fs::read_dir(out.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .all(|e| !e.file_name().to_string_lossy().contains(".mdm.")),
+        "no part file or state left"
+    );
+
+    // Stopped half-way, then started again: it goes on from the bytes already there.
+    lab.clear_log();
+    let (tools, out) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    std::fs::write(
+        tools.path().join("page.json"),
+        page(
+            "/gen/3M/v.mp4?seed=1&rate=1M",
+            "/gen/1M/a.m4a?seed=2",
+            "https",
+        ),
+    )
+    .unwrap();
+    let job = start(tools.path(), out.path(), 2);
+    while job.progress().downloaded < 1 << 20 {
+        assert!(job.progress().state == State::Running);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // A new limit applies at once: 256 KB/s, where the server gives 2 MB/s over two.
+    job.set_speed_limit(Some(256 * 1024));
+    std::thread::sleep(Duration::from_millis(500));
+    let (a, t) = (job.progress().downloaded, Instant::now());
+    std::thread::sleep(Duration::from_secs(2));
+    let rate = (job.progress().downloaded - a) as f64 / t.elapsed().as_secs_f64();
+    assert!(rate < 512.0 * 1024.0, "the limit holds: {rate:.0} B/s");
+    job.stop();
+    let (p, _) = wait(&job);
+    assert_eq!(p.state, State::Stopped);
+    let state = mdm_engine::state::state_path(&out.path().join("Talk.f137.mp4"));
+    assert!(state.exists(), "the resume state is kept");
+    let job = start(tools.path(), out.path(), 2);
+    job.set_speed_limit(None);
+    let (p, _) = wait(&job);
+    let log = log_of(&p);
+    assert!(matches!(p.state, State::Done(_)), "{:?}: {log:?}", p.state);
+    assert!(
+        std::fs::read(out.path().join("Talk.mp4")).unwrap() == expected(),
+        "resumed whole"
+    );
+    assert!(log.iter().any(|t| t.starts_with("Resuming: ")), "{log:?}");
+
+    // Addresses that expire after 1.5 s, on connections dropped every 512 KB at 512 KB/s:
+    // yt-dlp is asked for today's, and the stream goes on.
+    let (tools, out) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    std::fs::write(
+        tools.path().join("page.json"),
+        page(
+            "/gen/3M/v.mp4?seed=1&rate=512K&drop_after=512K&expires={EXPIRES}",
+            "/gen/1M/a.m4a?seed=2",
+            "https",
+        ),
+    )
+    .unwrap();
+    let job = start(tools.path(), out.path(), 2);
+    let (p, _) = wait(&job);
+    let log = log_of(&p);
+    assert!(matches!(p.state, State::Done(_)), "{:?}: {log:?}", p.state);
+    assert!(
+        std::fs::read(out.path().join("Talk.mp4")).unwrap() == expected(),
+        "whole across new addresses"
+    );
+    assert!(
+        log.iter()
+            .any(|t| t == "Asking yt-dlp for a new address for format 137"),
+        "{log:?}"
+    );
+
+    // A protocol the engine doesn't speak: yt-dlp downloads the choice itself, and says why.
+    let (tools, out) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    std::fs::write(
+        tools.path().join("page.json"),
+        page("/gen/3M/v.mp4?seed=1", "/gen/1M/a.m4a?seed=2", "rtmp"),
+    )
+    .unwrap();
+    let job = start(tools.path(), out.path(), 2);
+    let (p, _) = wait(&job);
+    let log = log_of(&p);
+    assert!(matches!(p.state, State::Done(_)), "{:?}: {log:?}", p.state);
+    assert_eq!(
+        p.helper,
+        Some(mdm_tools::streams::Helper::Protocol("rtmp".into()))
+    );
+    assert!(
+        log.iter()
+            .any(|t| t == "yt-dlp downloads this video itself: its protocol (rtmp)"),
+        "{log:?}"
+    );
+    pieces_checks(me, &rt, &lab, &engine, &expected_audio());
+    println!("fake_ytdlp: the engine's checks ok");
+}
+
+/// The sound every page of the engine's checks has (format 140, the lab's `/gen/1M/a.m4a`).
+fn expected_audio() -> Vec<u8> {
+    let mut a = vec![0; 1 << 20];
+    mdm_labserver::content::fill(2, 0, &mut a);
+    a
+}
+
+/// Upstream issue 769: streams in pieces through the engine: an HLS playlist (plain, and
+/// AES-128 with the playlist's key), DASH's pieces as yt-dlp lists them, and pieces whose
+/// addresses expire, asked of yt-dlp again. Each comes whole, in order, joined as yt-dlp's own
+/// downloaders join them, then merged with the sound.
+fn pieces_checks(
+    me: &Path,
+    rt: &tokio::runtime::Runtime,
+    lab: &mdm_labserver::LabServer,
+    engine: &dyn Fn(u32) -> mdm_tools::streams::Engine,
+    audio: &[u8],
+) {
+    let get = |path: &str| -> Vec<u8> {
+        let url = lab.url(path);
+        rt.block_on(async {
+            reqwest::get(url)
+                .await
+                .unwrap()
+                .bytes()
+                .await
+                .unwrap()
+                .to_vec()
+        })
+    };
+    let audio_format = format!(
+        r#"{{"format_id": "140", "ext": "m4a", "protocol": "https", "filesize": {},
+          "vcodec": "none", "acodec": "mp4a", "url": "{}"}}"#,
+        1 << 20,
+        lab.url("/gen/1M/a.m4a?seed=2")
+    );
+    let run = |video: String, connections: u32| {
+        let (tools, out) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+        std::fs::write(
+            tools.path().join("page.json"),
+            format!(
+                r#"{{"id": "talk", "title": "Talk", "ext": "mp4", "formats": [{video}, {audio_format}]}}"#
+            ),
+        )
+        .unwrap();
+        let exe = fake_in(me, tools.path());
+        let job = VideoJob::start(
+            &exe,
+            "https://video.example/talk",
+            "bv*+ba/b",
+            out.path(),
+            "Talk",
+            None,
+            1,
+            None,
+            None,
+            &Default::default(),
+            &Subs::default(),
+            Some(engine(connections)),
+        )
+        .expect("started");
+        let end = Instant::now() + Duration::from_secs(120);
+        let mut most = 0;
+        let p = loop {
+            let p = job.progress();
+            if let Some(e) = &p.engine {
+                most = most.max(e.connections.len());
+            }
+            if p.state != State::Running {
+                break p;
+            }
+            assert!(Instant::now() < end, "still running: {:?}", log_of(&p));
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        let log = log_of(&p);
+        assert!(matches!(p.state, State::Done(_)), "{:?}: {log:?}", p.state);
+        assert!(p.helper.is_none(), "{:?}", p.helper);
+        let State::Done(file) = &p.state else {
+            unreachable!()
+        };
+        let saved = std::fs::read(file).unwrap();
+        let left: Vec<String> = std::fs::read_dir(out.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.contains(".mdm"))
+            .collect();
+        assert!(left.is_empty(), "left behind: {left:?}");
+        (saved, log, most)
+    };
+    let hls = |playlist: &str, extra: &str| {
+        format!(
+            r#"{{"format_id": "hls-720p", "ext": "mp4", "protocol": "m3u8_native",
+              "vcodec": "avc1", "acodec": "none", "url": "{}"{extra}}}"#,
+            lab.url(playlist)
+        )
+    };
+    let plain: Vec<u8> = (0..3)
+        .flat_map(|i| get(&format!("/hls/720p/seg{i}.ts")))
+        .chain(audio.iter().copied())
+        .collect();
+
+    // HLS: three pieces, two at once, joined in order.
+    let (saved, log, most) = run(hls("/hls/720p/index.m3u8", ""), 2);
+    assert!(saved == plain, "HLS pieces joined in order");
+    assert!(most >= 2, "pieces at once: {most}");
+    assert!(
+        log.iter()
+            .any(|t| t.starts_with("Format hls-720p: 3 pieces, 2 at once")),
+        "{log:?}"
+    );
+
+    // AES-128: the playlist's key, the first piece's own IV and the others' sequence numbers.
+    let (saved, log, _) = run(hls("/hls/720p/enc.m3u8", ""), 3);
+    assert!(saved == plain, "decrypted as the plain pieces: {log:?}");
+
+    // DASH: yt-dlp's list (an init section and three pieces, from its base address).
+    let dash = format!(
+        r#"{{"format_id": "dash-720p", "ext": "mp4", "protocol": "http_dash_segments",
+          "vcodec": "avc1", "acodec": "none", "url": "{}",
+          "fragment_base_url": "{}",
+          "fragments": [{{"path": "init.mp4"}}, {{"path": "seg1.m4s"}}, {{"path": "seg2.m4s"}},
+                        {{"url": "{}"}}]}}"#,
+        lab.url("/dash/manifest.mpd"),
+        lab.url("/dash/720p/"),
+        lab.url("/dash/720p/seg3.m4s")
+    );
+    let want: Vec<u8> = ["init.mp4", "seg1.m4s", "seg2.m4s", "seg3.m4s"]
+        .iter()
+        .flat_map(|f| get(&format!("/dash/720p/{f}")))
+        .chain(audio.iter().copied())
+        .collect();
+    let (saved, _, _) = run(dash, 4);
+    assert!(saved == want, "DASH pieces joined in order");
+
+    // Pieces whose addresses expire 1.5 s after each look-up, one at a time at 256 KB/s: yt-dlp
+    // is asked for the list again, and the pieces go on from the new one.
+    let pieces: Vec<String> = (1..=4)
+        .map(|i| {
+            format!(
+                r#"{{"url": "{}"}}"#,
+                lab.url(&format!(
+                    "/gen/256K/p{i}?seed={}&rate=256K&expires={{EXPIRES}}",
+                    20 + i
+                ))
+            )
+        })
+        .collect();
+    let expiring = format!(
+        r#"{{"format_id": "dash-exp", "ext": "mp4", "protocol": "http_dash_segments",
+          "vcodec": "avc1", "acodec": "none", "url": "{}", "fragments": [{}]}}"#,
+        lab.url("/dash/manifest.mpd"),
+        pieces.join(", ")
+    );
+    let want: Vec<u8> = (1..=4u64)
+        .flat_map(|i| {
+            let mut b = vec![0; 256 * 1024];
+            mdm_labserver::content::fill(20 + i, 0, &mut b);
+            b
+        })
+        .chain(audio.iter().copied())
+        .collect();
+    let (saved, log, _) = run(expiring, 1);
+    let first = saved.iter().zip(&want).position(|(a, b)| a != b);
+    assert!(
+        saved == want,
+        "whole across new lists: {} vs {} bytes, first difference at {first:?}: {log:?}",
+        saved.len(),
+        want.len()
+    );
+    assert!(
+        log.iter()
+            .any(|t| t == "Format dash-exp: Asking yt-dlp for the pieces' new addresses"),
+        "{log:?}"
+    );
 }

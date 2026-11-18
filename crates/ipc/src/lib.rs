@@ -1,6 +1,6 @@
 //! Mister Download Manager's command channel (shared by the app, its command line and the browser host).
 //! Single-instance command channel. The running app listens on a localhost port and writes
-//! `{port, token}` to `%APPDATA%\misterdownloadmanager\ipc.json`; a second launch (IDM-style command line)
+//! `{port, token}` to `%APPDATA%\grabbit\ipc.json`; a second launch (IDM-style command line)
 //! or the browser's native messaging host sends one JSON line per command, carrying the token.
 //! Only connections from 127.0.0.1 with the right token are accepted.
 
@@ -34,6 +34,11 @@ pub struct Command {
     pub start_queue: bool,
     /// From the browser: request context to reuse.
     pub referer: Option<String>,
+    /// From the browser (upstream issue 900): the `Origin` its page's player sent with a video's
+    /// stream or file (`video_page`), sent again with it, its playlists and each of its pieces,
+    /// as a site's video server may serve its own pages' players only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
     pub cookies: Option<String>,
     /// From the browser: the same cookies, each with the domain, path and flags the browser
     /// keeps for it, for yt-dlp's cookie file. yt-dlp may ask another host than the page's (a
@@ -83,7 +88,7 @@ pub struct Command {
     /// The remote control: an uploaded .torrent file's bytes (never read from a request line).
     #[serde(skip)]
     pub torrent_file: Option<Vec<u8>>,
-    /// The remote control (#157, `misterdownloadmanager-cli pair`): show a new pairing code;
+    /// The remote control (#157, `grabbit-cli pair`): show a new pairing code;
     /// answered with it, the page's addresses and a QR code to scan ([`api::PairAnswer`]).
     pub pair: bool,
     /// `/exit` (beyond IDM): the running app saves and quits (the installer, before an upgrade
@@ -211,49 +216,66 @@ struct Envelope {
 /// The data folder a headless run was given (`--data`, #157), before anything reads it.
 static DATA_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 
-/// Use `dir` as the data folder from now on (over `MDM_DATA_DIR`): `--headless --data <dir>`.
+/// Use `dir` as the data folder from now on (over `GRABBIT_DATA_DIR`): `--headless --data <dir>`.
 pub fn set_data_dir(dir: PathBuf) {
-    let _ = DATA_DIR.set(dir);
+    let _ = DATA_DIR.set(full(dir));
 }
 
-/// The app's data folder, `%APPDATA%\misterdownloadmanager` (list, settings, channel, crash
-/// log). The folder of the app's former codename, `idmnext`, is moved here once.
+/// `dir` as a full path (upstream issue 834): the helpers run in a folder of their own, and are
+/// given paths in the data folder (their programs, ffmpeg's place, the files MDM writes for them).
+fn full(dir: PathBuf) -> PathBuf {
+    std::path::absolute(&dir).unwrap_or(dir)
+}
+
+/// The data folder's name in the profile (`%APPDATA%\grabbit`).
+pub const DATA_FOLDER: &str = "grabbit";
+
+/// The variable that gives a data folder of its own (a separate instance with its own list and
+/// channel: tests, screenshots, a server).
+pub const DATA_DIR_VAR: &str = "GRABBIT_DATA_DIR";
+
+/// The data folder [`DATA_DIR_VAR`] gives; None when it isn't set.
+pub fn data_dir_var() -> Option<std::ffi::OsString> {
+    std::env::var_os(DATA_DIR_VAR).filter(|d| !d.is_empty())
+}
+
+/// The app's data folder, `%APPDATA%\grabbit` (list, settings, channel, crash log).
 ///
-/// `MDM_DATA_DIR` overrides it (a separate instance with its own list and channel: tests,
+/// `GRABBIT_DATA_DIR` overrides it (a separate instance with its own list and channel: tests,
 /// screenshots). Portable mode: a writable `data` folder next to the program holds it all.
+///
+/// Worked out once per run and kept (#565): the window asks for it on every tick (torrents'
+/// state, the list), and the portable check below reads and writes the disk, so a slow disk
+/// held the window up. A folder given on the command line is still taken first.
 pub fn data_dir() -> Option<PathBuf> {
     if let Some(dir) = DATA_DIR.get() {
         return Some(dir.clone());
     }
-    if let Some(dir) = std::env::var_os("MDM_DATA_DIR") {
-        return Some(PathBuf::from(dir));
-    }
-    if let Some(dir) = portable_dir() {
-        return Some(dir);
-    }
-    let base = dirs::data_dir()?;
-    let dir = base.join("misterdownloadmanager");
-    let legacy = base.join("idmnext");
-    if !dir.exists() && legacy.is_dir() {
-        let _ = std::fs::rename(&legacy, &dir);
-    }
-    Some(dir)
+    static RESOLVED: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+    once(&RESOLVED, || {
+        if let Some(dir) = data_dir_var() {
+            return Some(full(PathBuf::from(dir)));
+        }
+        if let Some(dir) = portable_dir() {
+            return Some(dir);
+        }
+        Some(dirs::data_dir()?.join(DATA_FOLDER))
+    })
 }
 
-/// Create the data folder `dir`, readable by its owner only on Linux and macOS (it holds the
-/// command channel's token and the saved logins; a home folder is often open to other users).
+/// `cell`'s value, worked out by `make` the first time only.
+fn once<T: Clone>(cell: &std::sync::OnceLock<T>, make: impl FnOnce() -> T) -> T {
+    cell.get_or_init(make).clone()
+}
+
+/// Create the data folder `dir` (it holds the command channel's token and the saved logins; the
+/// profile's own access rules keep it to its owner).
 pub fn private_dir(dir: &std::path::Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(dir)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
-    }
-    Ok(())
+    std::fs::create_dir_all(dir)
 }
 
-/// Write `bytes` to `path` atomically, readable by its owner only (Linux and macOS: mode 0600;
-/// Windows: the profile's own access rules).
+/// Write `bytes` to `path` atomically, readable by its owner only (the profile's own access
+/// rules).
 pub fn private_write(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     craft_atomic::WriteOptions::default()
         .with_new_file_permissions(craft_atomic::NewFilePermissions::Private)
@@ -262,7 +284,13 @@ pub fn private_write(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()
 
 /// Portable mode: the `data` folder next to the program, when it exists and can be written
 /// (else the profile folder is used). Nothing is written to the registry in this mode.
+/// Asked once per run and kept, like [`data_dir`] (#565).
 pub fn portable_dir() -> Option<PathBuf> {
+    static PORTABLE: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
+    once(&PORTABLE, portable_dir_now)
+}
+
+fn portable_dir_now() -> Option<PathBuf> {
     let dir = std::env::current_exe().ok()?.parent()?.join("data");
     if !dir.is_dir() {
         return None;
@@ -478,7 +506,7 @@ fn handle(conn: &TcpStream, token: &str, tx: &Sender<Incoming>, wake: &dyn Fn())
 
 /// Close after an answer given before the request was read to its end: no more writing, then
 /// what the client still sends is read and dropped (up to a limit, for a second at most).
-/// Closing with it unread makes the system reset the connection (macOS at once), and a reset can
+/// Closing with it unread makes the system reset the connection , and a reset can
 /// lose the answer before the client reads it.
 fn linger_close(conn: &TcpStream) {
     use std::io::Read;
@@ -583,8 +611,7 @@ fn random_token() -> String {
         .collect()
 }
 
-/// The argument every startup entry passes (the Run key, the XDG autostart entry, the
-/// LaunchAgent, the installer's): MDM starts in the notification area ([`Command::startup`]).
+/// The argument every startup entry passes (the Run key, the installer's): MDM starts in the notification area ([`Command::startup`]).
 pub const STARTUP: &str = "/startup";
 
 /// Parse IDM's command line: `/d URL [/p dir] [/f name] [/a] [/n] [/q] [/s]` (case-insensitive;
@@ -625,6 +652,23 @@ pub fn parse_args(args: &[String]) -> Option<Command> {
 mod tests {
     use super::*;
 
+    /// #565: the data folder is worked out once; later calls (every tick of the window) don't
+    /// look at the disk again.
+    #[test]
+    fn a_kept_value_is_worked_out_once() {
+        let cell = std::sync::OnceLock::new();
+        let calls = std::cell::Cell::new(0);
+        let make = || {
+            calls.set(calls.get() + 1);
+            Some(PathBuf::from("data"))
+        };
+        assert_eq!(once(&cell, make), Some(PathBuf::from("data")));
+        assert_eq!(once(&cell, make), Some(PathBuf::from("data")));
+        assert_eq!(once(&cell, make), Some(PathBuf::from("data")));
+        assert_eq!(calls.get(), 1);
+        assert_eq!(data_dir(), data_dir());
+    }
+
     #[test]
     fn bare_magnets_and_torrent_files() {
         let c = parse_args(&["magnet:?xt=urn:btih:abc".into()]).unwrap();
@@ -646,7 +690,7 @@ mod tests {
         assert!(c.later && c.silent && !c.start_queue);
         assert!(parse_args(&a("/s")).unwrap().start_queue);
         assert!(parse_args(&a("/exit")).unwrap().exit);
-        // The startup entries' argument (#226), as written and as a Linux user might.
+        // The startup entries' argument (#226), as written and with two dashes.
         assert!(parse_args(&[STARTUP.into()]).unwrap().startup);
         assert!(parse_args(&a("--startup")).unwrap().startup);
         assert!(!parse_args(&a("/s")).unwrap().startup);

@@ -1,6 +1,6 @@
 {
-  "name": "Mister Download Manager",
-  "short_name": "MDM",
+  "name": "Grabbit",
+  "short_name": "Grabbit",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

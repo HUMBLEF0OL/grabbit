@@ -16,13 +16,8 @@ pub const FAT32_MAX: u64 = (4 << 30) - 1;
 /// Free space and file system of the volume holding `path`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Volume {
-    /// The bytes a new file may take, as each system counts them for the user: on Windows the
-    /// space this user may use, disk quotas included (GetDiskFreeSpaceExW); on Linux and other
-    /// Unix systems the blocks left to programs that aren't root (statvfs's `f_bavail`); on
-    /// macOS the volume's capacity "for important usage", which includes the purgeable space
-    /// (caches, local snapshots) the system frees as soon as a program writes. Finder shows the
-    /// same number; statvfs leaves the purgeable space out, and would refuse a download that
-    /// fits.
+    /// The bytes a new file may take, as Windows counts them for the user: the space this user
+    /// may use, disk quotas included (GetDiskFreeSpaceExW).
     pub free: u64,
     /// As the system names it (`NTFS`, `FAT32`, `exFAT`; `ext4`, `vfat`; `apfs`, `msdos`), or
     /// empty when it can't tell: the space is still checked.
@@ -82,7 +77,6 @@ async fn bounded<T: Send + 'static>(
     }
 }
 
-#[cfg(windows)]
 #[allow(unsafe_code)] // Two calls; the engine's other unsafe code is in `crate::sparse`.
 mod imp {
     use std::os::windows::ffi::OsStrExt;
@@ -154,149 +148,11 @@ mod imp {
     }
 }
 
-#[cfg(unix)]
-mod imp {
-    use std::path::Path;
-
-    pub fn volume_of(dir: &Path) -> Option<super::Volume> {
-        let st = rustix::fs::statvfs(dir).ok()?;
-        let block = if st.f_frsize > 0 {
-            st.f_frsize
-        } else {
-            st.f_bsize
-        };
-        // The blocks a program may use (without the reserve kept for root).
-        let free = st.f_bavail.saturating_mul(block);
-        #[cfg(target_vendor = "apple")]
-        let free = apple::important_capacity(dir).unwrap_or(free);
-        Some(super::Volume {
-            free,
-            file_system: file_system(dir),
-        })
-    }
-
-    /// The capacity Apple's systems give "for important usage" (a download the user asked for
-    /// is one): the free space plus the purgeable space the system frees on demand, as Finder
-    /// shows it. Asked of the folder's volume only. `target_vendor` rather than `target_os =
-    /// "macos"`, as for the file system's name below: the key is on iOS (11+) too. It needs macOS
-    /// 10.13; the macOS build asks for 11.0 (build-macos.sh).
-    #[cfg(target_vendor = "apple")]
-    #[allow(unsafe_code)] // One call and its key; the engine's other unsafe code is in `crate::sparse`.
-    mod apple {
-        use std::path::Path;
-
-        use core_foundation::base::{CFType, TCFType};
-        use core_foundation::number::CFNumber;
-        use core_foundation::url::CFURL;
-        use core_foundation_sys::base::{Boolean, CFTypeRef};
-        use core_foundation_sys::error::CFErrorRef;
-        use core_foundation_sys::string::CFStringRef;
-        use core_foundation_sys::url::CFURLRef;
-
-        // Both are commented out in core-foundation-sys 0.8.
-        #[link(name = "CoreFoundation", kind = "framework")]
-        unsafe extern "C" {
-            static kCFURLVolumeAvailableCapacityForImportantUsageKey: CFStringRef;
-            fn CFURLCopyResourcePropertyForKey(
-                url: CFURLRef,
-                key: CFStringRef,
-                value: *mut CFTypeRef,
-                error: *mut CFErrorRef,
-            ) -> Boolean;
-        }
-
-        /// None when the system can't tell (the key unknown to the volume, a failed call): the
-        /// statvfs count is used then.
-        pub fn important_capacity(dir: &Path) -> Option<u64> {
-            let url = CFURL::from_path(dir, true)?;
-            let mut value: CFTypeRef = std::ptr::null();
-            // SAFETY: `url` is a live CFURL that outlives the call; the key is a constant
-            // CFString CoreFoundation exports (macOS 10.13+, iOS 11+); `value` is a writable
-            // pointer the call fills with a +1 reference or leaves null; the error output is
-            // optional and left null.
-            let ok = unsafe {
-                CFURLCopyResourcePropertyForKey(
-                    url.as_concrete_TypeRef(),
-                    kCFURLVolumeAvailableCapacityForImportantUsageKey,
-                    &mut value,
-                    std::ptr::null_mut(),
-                )
-            };
-            if ok == 0 || value.is_null() {
-                return None;
-            }
-            // SAFETY: a non-null `value` from a Copy function is ours to release: the CFType
-            // takes that reference and releases it when dropped.
-            let value = unsafe { CFType::wrap_under_create_rule(value) };
-            // A CFNumber (a 64-bit integer); anything else, or a negative count, is no answer.
-            let bytes = value.downcast::<CFNumber>()?.to_i64()?;
-            u64::try_from(bytes).ok()
-        }
-    }
-
-    /// Linux tells a file system by a number; the FAT check needs `vfat`'s, the others are
-    /// named for messages.
-    #[cfg(any(target_os = "linux", target_os = "android"))]
-    fn file_system(dir: &Path) -> String {
-        let Ok(st) = rustix::fs::statfs(dir) else {
-            return String::new();
-        };
-        let name = match i128::from(st.f_type) {
-            0x4d44 => "vfat",
-            0x2011_bab0 => "exfat",
-            0xef53 => "ext4",
-            0x9123_683e => "btrfs",
-            0x5846_5342 => "xfs",
-            0x2fc1_2fc1 => "zfs",
-            0xf2f5_2010 => "f2fs",
-            0x0102_1994 => "tmpfs",
-            0x794c_7630 => "overlay",
-            0x6969 => "nfs",
-            0xff53_4d42 => "cifs",
-            0xfe53_4d42 => "smb2",
-            0x5346_544e => "ntfs",
-            0x7366_746e => "ntfs3",
-            0x6573_5546 => "fuse",
-            _ => "",
-        };
-        name.to_owned()
-    }
-
-    /// macOS names it (`apfs`, `hfs`, `msdos`, `exfat`, `smbfs`).
-    #[cfg(target_vendor = "apple")]
-    fn file_system(dir: &Path) -> String {
-        let Ok(st) = rustix::fs::statfs(dir) else {
-            return String::new();
-        };
-        let bytes: Vec<u8> = st
-            .f_fstypename
-            .iter()
-            .take_while(|&&c| c != 0)
-            .map(|&c| c as u8)
-            .collect();
-        String::from_utf8_lossy(&bytes).into_owned()
-    }
-
-    /// Other Unix systems: the space only.
-    #[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
-    fn file_system(_: &Path) -> String {
-        String::new()
-    }
-}
-
-/// Neither Windows nor Unix: no probe, the check is skipped.
-#[cfg(not(any(windows, unix)))]
-mod imp {
-    pub fn volume_of(_: &std::path::Path) -> Option<super::Volume> {
-        None
-    }
-}
-
 /// Why a file of `size` bytes can't go on `volume`, if it can't.
 pub fn check(volume: &Volume, size: u64) -> Result<(), Refusal> {
     let fs = volume.file_system.to_ascii_uppercase();
-    // Windows names it FAT32 (or FAT), Linux vfat, macOS msdos.
-    if size > FAT32_MAX && matches!(fs.as_str(), "FAT32" | "FAT" | "VFAT" | "MSDOS") {
+    // Windows names it FAT32 (or FAT).
+    if size > FAT32_MAX && matches!(fs.as_str(), "FAT32" | "FAT") {
         return Err(Refusal::TooBigForFileSystem {
             size,
             file_system: volume.file_system.clone(),
@@ -362,7 +218,7 @@ mod tests {
 
     #[test]
     fn fat32_refuses_4_gib_files() {
-        for fs in ["FAT32", "vfat", "msdos"] {
+        for fs in ["FAT32", "FAT"] {
             assert!(check(&vol(64 << 30, fs), FAT32_MAX).is_ok());
             assert!(
                 matches!(
@@ -409,9 +265,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let v = volume_of(dir.path()).expect("the temp folder's volume");
         assert!(v.free > 0, "{v:?}");
-        // The volume sysinfo lists, give or take what other programs wrote meanwhile. On macOS
-        // sysinfo counts the important-usage capacity too (purgeable space included), so the
-        // two agree there as well: statvfs alone fell short of it by more than 1 GiB on CI.
+        // The volume sysinfo lists, give or take what other programs wrote meanwhile.
         if let Some((free, fs)) = listed(dir.path()) {
             assert!(
                 v.file_system.eq_ignore_ascii_case(&fs),
@@ -487,7 +341,6 @@ mod tests {
         );
     }
 
-    #[cfg(windows)]
     #[test]
     fn a_drive_that_isnt_there_has_no_volume() {
         let free = (b'D'..=b'Z')
@@ -498,7 +351,6 @@ mod tests {
         assert_eq!(volume_of(&Path::new(&free).join("Downloads")), None);
     }
 
-    #[cfg(windows)]
     #[test]
     fn a_share_is_probed_like_a_drive() {
         // `\\?\C:\…`, and C: as the administrative share `\\localhost\C$\…` when it is there.

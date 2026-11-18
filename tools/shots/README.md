@@ -9,7 +9,7 @@ command away.
 On Windows, from the repository's root:
 
 ```powershell
-cargo build --release -p mdm-app -p mdm-labserver
+cargo build --release -p grabbit-app -p grabbit-labserver
 python tools/shots/make.py
 python tools/shots/make.py check
 ```
@@ -17,10 +17,10 @@ python tools/shots/make.py check
 `make.py` (no step named: `shoot`, then `build`) runs `tools/lab/docs-shots.ps1` twice, light
 then dark, with every window the list needs:
 
-- its own MDM (its own data folder and download folder, `MDM_DATA_DIR`), off the screens
+- its own Grabbit (its own data folder and download folder, `GRABBIT_DATA_DIR`), off the screens
   (`MDM_OFFSCREEN=1`: no window, taskbar button, tray icon or sound on the screen) and its own lab
   server, whose neutral files fill the list;
-- each window opened by MDM's own command line (`/show <window>`), never by a click or a key;
+- each window opened by Grabbit's own command line (`/show <window>`), never by a click or a key;
 - each window's controls read from its accessibility tree (`tools/lab/ui-rects.ps1`), so the
   list rings and numbers controls by name and a moved button needs no new coordinates.
 
@@ -71,7 +71,6 @@ release's.
 2. `python tools/shots/make.py --only <id>`, then look at `docs/images/help/<id>.webp`.
 3. `python tools/shots/make.py snippet <id>` prints its Markdown; paste it into the page under
    its heading.
-4. `python tools/website/translate_site.py --all` translates its alt text and caption.
 
 ## In the Markdown
 
@@ -100,12 +99,3 @@ figure with its caption, with the picture's width and height (no layout shift), 
 after a page's first picture, and the night version beside it, shown with the site's dark theme
 (the visitor's system choice, or the header's switch). Clicking a picture opens it larger.
 
-## Linux
-
-The list's pictures are Windows'. Linux differs where the desktop takes part (the tray, the
-file chooser, the window frames), and those can't be taken on a virtual screen: the WSL2 lab's
-Xvfb has no tray host and no desktop portal (`tools/lab/wsl/README.md`). The Linux pictures
-(`docs/images/*-linux.webp`, the site's `website/assets/screens/*-linux-*.webp`) are taken on a
-real desktop in the lab's virtual machines instead: `tools/lab/linux-vm/docs-shots-host.ps1`
-(its header says how), GNOME for the whole list, KDE Plasma, Cinnamon and Xfce for their main
-window.

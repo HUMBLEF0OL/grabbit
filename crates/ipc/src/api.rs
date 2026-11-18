@@ -1,7 +1,7 @@
 //! The automation API's answers, shared by the app (which writes them) and the programs that
 //! read them (the command line, the MCP server), so both sides keep one shape.
 //! `docs/automation-api.schema.json` is made from these types and [`crate::Command`]
-//! (`MDM_WRITE_SCHEMA=1 cargo test -p mdm-ipc schema`); a test fails while it is out of date.
+//! (`MDM_WRITE_SCHEMA=1 cargo test -p grabbit-ipc schema`); a test fails while it is out of date.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -163,14 +163,14 @@ pub fn schema() -> serde_json::Value {
     let defs = generator.take_definitions(true);
     serde_json::json!({
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "https://misterdownloadmanager.com/automation-api.schema.json",
-        "title": "Mister Download Manager automation API",
+        "$id": "https://humblef0ol.github.io/grabbit/automation-api.schema.json",
+        "title": "Grabbit automation API",
         "description": "One JSON line to the port in ipc.json (on 127.0.0.1), one line back. \
             A request is `Request`. A command (an address to add, start_queue) is answered \
             `ok`; a question is answered with the JSON object for it (`ListAnswer`, \
             `ActAnswer`, `ApiAnswer`) or an `ErrorAnswer`. A wrong token is answered `denied`, \
             an app that doesn't answer within 2 seconds `timeout`. \
-            Guide: https://misterdownloadmanager.com/help/command-line.html#the-automation-api",
+            Guide: https://humblef0ol.github.io/grabbit/help/command-line.html#the-automation-api",
         "$ref": request.get("$ref").cloned().unwrap_or(serde_json::Value::Null),
         "$defs": defs,
     })
@@ -193,7 +193,7 @@ mod tests {
             .replace("\r\n", "\n");
         assert!(
             file == made,
-            "docs/automation-api.schema.json is out of date: MDM_WRITE_SCHEMA=1 cargo test -p mdm-ipc schema"
+            "docs/automation-api.schema.json is out of date: MDM_WRITE_SCHEMA=1 cargo test -p grabbit-ipc schema"
         );
     }
 

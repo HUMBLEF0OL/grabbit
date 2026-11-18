@@ -6,14 +6,14 @@
 ; for Chrome, Edge, Brave and Firefox), .torrent files and magnet links, start with Windows, a
 ; desktop shortcut. A running MDM is asked to save and quit first (/exit). Uninstalling asks
 ; whether to keep the download list and settings; removing them also removes MDM's sign-ins from
-; Windows Credential Manager (misterdownloadmanager --forget-sign-ins).
+; Windows Credential Manager (grabbit --forget-sign-ins).
 
 #ifndef AppVersion
-  #define AppVersion "0.5.2"
+  #define AppVersion "1.0.0"
 #endif
-#define AppName "Mister Download Manager"
-#define AppExe "misterdownloadmanager.exe"
-#define HostExe "misterdownloadmanager-nmhost.exe"
+#define AppName "Grabbit"
+#define AppExe "grabbit.exe"
+#define HostExe "grabbit-nmhost.exe"
 #define Root "..\.."
 #define Bin Root + "\target\release"
 
@@ -24,9 +24,9 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher=Ahmed Nefzaoui
-AppPublisherURL=https://github.com/anefzaoui/misterdownloadmanager
-AppSupportURL=https://github.com/anefzaoui/misterdownloadmanager/issues
-AppUpdatesURL=https://github.com/anefzaoui/misterdownloadmanager/releases
+AppPublisherURL=https://github.com/HUMBLEF0OL/grabbit
+AppSupportURL=https://github.com/HUMBLEF0OL/grabbit/issues
+AppUpdatesURL=https://github.com/HUMBLEF0OL/grabbit/releases
 AppCopyright=Copyright (C) 2026 Ahmed Nefzaoui
 DefaultDirName={autopf}\{#AppName}
 DisableProgramGroupPage=yes
@@ -42,13 +42,13 @@ SetupIconFile={#Root}\crates\app\assets\icons\app\mdm.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
 OutputDir={#Root}\target\dist
-OutputBaseFilename=MisterDownloadManager-{#AppVersion}-setup
+OutputBaseFilename=Grabbit-{#AppVersion}-setup
 ; A 64 MB dictionary (#25): an 8 MB one (lzma2/max) only finds what repeats close by in the
 ; solid archive. A few MB smaller; building needs about 750 MB of memory, installing 64 MB.
 Compression=lzma2/ultra64
 SolidCompression=yes
 ChangesAssociations=yes
-; A running MDM is asked to quit by [Code] (it holds the mutex MisterDownloadManager.Running);
+; A running copy is asked to quit by [Code] (it holds the mutex Grabbit.Running);
 ; AppMutex isn't used because it would refuse to start before that. Restart Manager is the
 ; fallback for anything else holding the files (a browser running the host).
 CloseApplications=yes
@@ -64,17 +64,17 @@ SignedUninstaller=yes
   #define SignFlag ""
 #endif
 
-; Every interface language (i18n/languages.tsv): tools/installer/languages.py writes the list and
-; the translations of the messages below. The wizard starts in Windows' display language.
-#include "languages.iss"
+; English only (the other languages live on the archive/multiplatform-i18n branch).
+[Languages]
+Name: "en"; MessagesFile: "compiler:Default.isl"
 
 [CustomMessages]
-lang_en.TaskBrowser=Set up &browser integration (Chrome, Edge, Brave, Firefox)
-lang_en.TaskTorrents=Open .&torrent files and magnet links with {#AppName}
-lang_en.TaskStartup=Start {#AppName} when &Windows starts
-lang_en.TaskGroupOther=Other:
-lang_en.Launch=Start {#AppName}
-lang_en.KeepData=Also delete your download list and settings?%n%nYour downloaded files are not touched either way.
+TaskBrowser=Set up &browser integration (Chrome, Edge, Brave, Firefox)
+TaskTorrents=Open .&torrent files and magnet links with {#AppName}
+TaskStartup=Start {#AppName} when &Windows starts
+TaskGroupOther=Other:
+Launch=Start {#AppName}
+KeepData=Also delete your download list and settings?%n%nYour downloaded files are not touched either way.
 
 [Tasks]
 Name: "browser"; Description: "{cm:TaskBrowser}"
@@ -85,8 +85,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "{#Bin}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
 Source: "{#Bin}\{#HostExe}"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
-Source: "{#Bin}\misterdownloadmanager-cli.exe"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
-Source: "{#Bin}\misterdownloadmanager-mcp.exe"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
+Source: "{#Bin}\grabbit-cli.exe"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
+Source: "{#Bin}\grabbit-mcp.exe"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
 ; The extension, for "Load unpacked" (Chromium) and about:debugging (Firefox) until it is in
 ; the stores.
 Source: "{#Root}\target\extension\chromium\*"; DestDir: "{app}\extension\chromium"; Flags: ignoreversion recursesubdirs
@@ -99,19 +99,15 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Registry]
-; The language chosen in the wizard ({language}: "lang_" + a languages.tsv code with "_" for "-",
-; see languages.py inno_name). The app
-; takes it on its first start, when it has no language setting yet (settings.rs), then deletes it.
-Root: HKCU; Subkey: "Software\MisterDownloadManager"; ValueType: string; ValueName: "InstallLanguage"; ValueData: "{language}"; Flags: uninsdeletevalue uninsdeletekeyifempty
 ; Start with Windows: the same value Options -> "Launch on startup" writes and reads, with the
 ; argument that starts MDM in the notification area (#226; win32.rs startup_command).
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "MisterDownloadManager"; ValueData: """{app}\{#AppExe}"" /startup"; Flags: uninsdeletevalue; Tasks: startup
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Grabbit"; ValueData: """{app}\{#AppExe}"" /startup"; Flags: uninsdeletevalue; Tasks: startup
 ; .torrent files and magnet links (HKA: the user's or everyone's classes, as installed).
-Root: HKA; Subkey: "Software\Classes\MisterDownloadManager.torrent"; ValueType: string; ValueName: ""; ValueData: "Torrent file"; Flags: uninsdeletekey; Tasks: torrents
-Root: HKA; Subkey: "Software\Classes\MisterDownloadManager.torrent\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExe},0"; Tasks: torrents
-Root: HKA; Subkey: "Software\Classes\MisterDownloadManager.torrent\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: torrents
-Root: HKA; Subkey: "Software\Classes\.torrent"; ValueType: string; ValueName: ""; ValueData: "MisterDownloadManager.torrent"; Flags: uninsdeletekeyifempty; Tasks: torrents
-Root: HKA; Subkey: "Software\Classes\.torrent\OpenWithProgids"; ValueType: string; ValueName: "MisterDownloadManager.torrent"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: torrents
+Root: HKA; Subkey: "Software\Classes\Grabbit.torrent"; ValueType: string; ValueName: ""; ValueData: "Torrent file"; Flags: uninsdeletekey; Tasks: torrents
+Root: HKA; Subkey: "Software\Classes\Grabbit.torrent\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExe},0"; Tasks: torrents
+Root: HKA; Subkey: "Software\Classes\Grabbit.torrent\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: torrents
+Root: HKA; Subkey: "Software\Classes\.torrent"; ValueType: string; ValueName: ""; ValueData: "Grabbit.torrent"; Flags: uninsdeletekeyifempty; Tasks: torrents
+Root: HKA; Subkey: "Software\Classes\.torrent\OpenWithProgids"; ValueType: string; ValueName: "Grabbit.torrent"; ValueData: ""; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: torrents
 Root: HKA; Subkey: "Software\Classes\magnet"; ValueType: string; ValueName: ""; ValueData: "URL:Magnet link"; Tasks: torrents
 Root: HKA; Subkey: "Software\Classes\magnet"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Tasks: torrents
 Root: HKA; Subkey: "Software\Classes\magnet\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExe},0"; Tasks: torrents
@@ -130,11 +126,11 @@ Filename: "{app}\{#HostExe}"; Parameters: "--unregister"; Flags: runhidden; RunO
 Filename: "{app}\{#HostExe}"; Parameters: "--unregister --all-users"; Flags: runhidden; RunOnceId: "UnregisterAll"; Check: IsAdminInstallMode
 
 [UninstallDelete]
-Type: files; Name: "{app}\com.misterdownloadmanager.host*.json"
+Type: files; Name: "{app}\com.grabbit.host*.json"
 
 [Code]
 const
-  RunningMutex = 'MisterDownloadManager.Running';
+  RunningMutex = 'Grabbit.Running';
 
 { /relaunch=1 on the command line (MDM's Update now): start MDM again after installing. }
 function Relaunch: Boolean;
@@ -191,11 +187,11 @@ var
   Value, Data: String;
   Code: Integer;
 begin
-  Data := ExpandConstant('{userappdata}\misterdownloadmanager');
+  Data := ExpandConstant('{userappdata}\grabbit');
   if CurUninstallStep = usUninstall then
   begin
     ForgetIfOurs('Software\Classes\magnet', ExpandConstant('{app}\{#AppExe}'));
-    if RegQueryStringValue(HKA, 'Software\Classes\.torrent', '', Value) and (Value = 'MisterDownloadManager.torrent') then
+    if RegQueryStringValue(HKA, 'Software\Classes\.torrent', '', Value) and (CompareText(Value, 'Grabbit.torrent') = 0) then
       RegDeleteValue(HKA, 'Software\Classes\.torrent', '');
     RemoveData := False;
     if DirExists(Data) and not UninstallSilent() then

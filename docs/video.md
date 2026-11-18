@@ -2,11 +2,11 @@
 
 [← Back to docs index](README.md)
 
-MDM downloads videos from their web pages: YouTube, Vimeo, Dailymotion, Twitch, TikTok, X, Instagram, Facebook, Reddit, SoundCloud and well over a thousand other sites. It does this with **yt-dlp**, an open-source program whose community keeps it working as sites change.
+Grabbit downloads videos from their web pages: YouTube, Vimeo, Dailymotion, Twitch, TikTok, X, Instagram, Facebook, Reddit, SoundCloud and well over a thousand other sites. It does this with **yt-dlp**, an open-source program whose community keeps it working as sites change.
 
 ## Start a video download
 
-- Give the video's page address to **Add URL** (**Ctrl+N**). MDM recognises video pages and opens the video window, already looking the page up.
+- Give the video's page address to **Add URL** (**Ctrl+N**). Grabbit recognises video pages and opens the video window, already looking the page up.
 - Or choose **Tasks → Download video from a page...**, paste the address into **Page address** and click **Look up**.
 
 Any other page address that turns out to be a web page, not a file, is offered to the video window too.
@@ -22,23 +22,31 @@ Any other page address that turns out to be a web page, not a file, is offered t
 
 ## yt-dlp and ffmpeg
 
-MDM offers its two helpers on its first start, and again the first time they are needed. It
+Grabbit offers its two helpers on its first start, and again the first time they are needed. It
 downloads them from their official releases with its own downloader, so a cut connection
 resumes, and uses your proxy settings:
 
-- **yt-dlp** (about 23 MB) looks the page up and downloads the video. The first time, click **Install yt-dlp**. MDM checks the download against the signature yt-dlp's developers publish before it uses it.
-- **ffmpeg** (about 80 MB) joins a video and its sound when a site keeps them apart, which most sites do for the higher qualities, and turns the sound into an MP3, Opus or FLAC file. Click **Install ffmpeg** when MDM offers it. MDM checks it against the checksums its release publishes.
+- **yt-dlp** (about 23 MB) looks the page up and finds where the video and its sound come from; Grabbit downloads them ([How a video comes down](#how-a-video-comes-down)). The first time, click **Install yt-dlp**. Grabbit checks the download against the signature yt-dlp's developers publish before it uses it.
+- **ffmpeg** (about 80 MB) joins a video and its sound when a site keeps them apart, which most sites do for the higher qualities, and turns the sound into an MP3, Opus or FLAC file. Click **Install ffmpeg** when Grabbit offers it. Grabbit checks it against the checksums its release publishes.
 
-Both are kept in a `tools` folder in MDM's data folder.
+Both are kept in a `tools` folder in Grabbit's data folder.
 
 ### Use your own copies
 
-On Linux and macOS, MDM finds yt-dlp and ffmpeg on your `PATH` and in the usual package-manager folders, including Homebrew's. A program you selected yourself takes priority, followed by MDM's own installed copy. The system copy is used when neither is present, and your package manager keeps it up to date: MDM never downloads over it on its own. If your distribution's yt-dlp is old, **Use MDM's own copy** in Helpers downloads MDM's, which keeps itself current and is used from then on.
+Already have yt-dlp or ffmpeg for another program? Use those instead of a second copy: in **Download video from a page**, click **Helpers...**, then **Use another program...** beside yt-dlp or ffmpeg, and choose the program. Grabbit runs it once to check that it is that program, and uses it from then on, the command line too. Grabbit doesn't update a program you chose: keep it up to date yourself (yt-dlp: `yt-dlp -U`, or your package manager). **Use Grabbit's own copy** goes back to the one Grabbit downloads and checks.
 
-Already have yt-dlp or ffmpeg for another program? Use those instead of a second copy: in **Download video from a page**, click **Helpers...**, then **Use another program...** beside yt-dlp or ffmpeg, and choose the program. MDM runs it once to check that it is that program, and uses it from then on, the command line too. MDM doesn't update a program you chose: keep it up to date yourself (yt-dlp: `yt-dlp -U`, or your package manager). **Use MDM's own copy** goes back to the one MDM downloads and checks.
+![The Helpers window: yt-dlp, ffmpeg and gallery-dl, each with Use another program... and Use Grabbit's own copy](images/help/video-helpers.webp)
+*Helpers...: use your own yt-dlp, ffmpeg or gallery-dl instead.*
 
-![The video helpers window: yt-dlp and ffmpeg, each with its version and Use another program...](images/help/video-helpers.webp)
-*Helpers...: use your own yt-dlp or ffmpeg instead.*
+### A JavaScript runtime for YouTube {#javascript-runtime}
+
+YouTube hides most of a video's qualities behind small puzzles that yt-dlp solves with a JavaScript runtime: **Deno**, **Node.js** or **Bun**. Without one, the list is short, sometimes only the sound and a low quality, and Grabbit says so: *YouTube needs a JavaScript runtime to list its video qualities*. Other sites don't need one.
+
+Install one of them, either works, then look the video up again. Grabbit finds Deno, Node.js (also one installed with nvm) and Bun by itself, and Deno or Node.js just installed with winget or Node.js's installer. If it still says so, the new program's folder isn't on the `PATH` Grabbit started with: quit Grabbit (**Tasks → Exit**) and start it again.
+
+- `winget install DenoLand.Deno`, or `winget install OpenJS.NodeJS.LTS`. The installers on [deno.com](https://deno.com) and [nodejs.org](https://nodejs.org) work too.
+
+If the list stays short, your own yt-dlp may be too old for YouTube: click **Use Grabbit's own copy** beside yt-dlp in **Helpers...**.
 
 ## Choose the quality
 
@@ -52,7 +60,29 @@ Already have yt-dlp or ffmpeg for another program? Use those instead of a second
 4. Choose **Subtitles** if you want them (see below).
 5. Click **Download Now**, or **Later** to add it to the list without starting.
 
-The video then downloads like any other file, with its own row in the list and its progress window. yt-dlp brings it in over one stream of its own, so the window's connections table stays empty.
+The video then downloads like any other file, with its own row in the list and its progress window.
+
+## How a video comes down
+
+yt-dlp looks the page up and picks the quality's video and sound. Grabbit's own downloader then brings each of them in, one after the other, the way it downloads any file:
+
+- **Over several connections**: as many as **Options → Connection** gives a file. The progress window's connections table shows each one, and the segment map shows the video and then its sound.
+- **A stream sent in many small pieces** (HLS, DASH, as most sites other than YouTube send theirs) comes down that many pieces at once, each kept on disk as it arrives, then joined in order into one file, as yt-dlp joins them. Pieces encrypted with AES-128 are decrypted with the key the stream's playlist names. When their addresses expire, Grabbit asks yt-dlp for the stream's new list and carries on with the pieces still missing.
+- **Under your speed limits**: the **Speed Limiter**'s, the video's own (its progress window's **Speed Limiter** tab), and the limit for all downloads together. A change applies at once.
+- **Paused and resumed** like a file, also after quitting Grabbit: it carries on from the bytes already saved.
+- **When an address stops working**: a video's addresses are signed and expire after a few hours (YouTube's after six). Grabbit asks yt-dlp for a fresh one for the same quality and carries on from where it stopped.
+
+Then yt-dlp does what it does after a download: it joins the video and its sound with ffmpeg into one MP4, saves or embeds the subtitles, and converts the sound for an MP3, Opus or FLAC choice.
+
+YouTube serves each connection's long requests slowly, so Grabbit asks for the video in pieces of 10 MB at most, as yt-dlp does, and several at once.
+
+Some videos yt-dlp still downloads by itself, over its own connection, and the progress window says so:
+
+- a live stream still being recorded;
+- a stream sent over RTMP, RTSP, MMS or FTP;
+- the rare streams in pieces of other kinds (Adobe's HDS, Microsoft's Smooth Streaming), and one whose key the site hands yt-dlp directly.
+
+For those, a new speed limit starts the download again with it, from where it was ([Speed limits](#speed-limits)).
 
 ## Subtitles
 
@@ -65,9 +95,9 @@ When the video has subtitles, the **Subtitles** list offers them: the uploader's
 - **Put them into the video** puts them inside the file instead, as tracks you switch on in the player. It needs ffmpeg, and an MP4 or MKV video.
 - A sound-only choice (**Audio only**, MP3, Opus, FLAC) has no subtitles.
 
-MDM offers the same choice again for the next video when it has that language.
+Grabbit offers the same choice again for the next video when it has that language.
 
-A site may refuse subtitles when it's asked too often: YouTube does, most of all for its translated captions. The video is saved all the same. MDM asks for the subtitles once more after 20 seconds, and if they still don't come, the **Download complete** window and the download's log say which ones are missing and why. Try them again later. When subtitles meant to go inside the video only come on that second try, they're saved beside it instead.
+A site may refuse subtitles when it's asked too often: YouTube does, most of all for its translated captions. The video is saved all the same. Grabbit asks for the subtitles once more after 20 seconds, and if they still don't come, the **Download complete** window and the download's log say which ones are missing and why. Try them again later. When subtitles meant to go inside the video only come on that second try, they're saved beside it instead.
 
 ## Playlists and channels
 
@@ -84,13 +114,19 @@ Paste the address of a playlist (`youtube.com/playlist?list=…`) or a channel's
 
 **Download Now** adds each video as its own download and starts the main queue, which runs as many at once as you set in the [Scheduler](queues-and-scheduler.md) (**Download N files at the same time**). **Later** adds them without starting. Adding more than 500 at once asks first.
 
-MDM lists at most 20,000 videos of one list.
+Grabbit lists at most 20,000 videos of one list.
 
 A page address that points at one video inside a playlist or a mix (for example `watch?v=…&list=…`) downloads that one video, never the whole list.
 
+## Speed limits
+
+Videos keep to the [Speed Limiter](connections-and-speed.md#speed-limiter): the limit for one file, a video's own limit (the **Speed Limiter** tab of its progress window), and the limit for all downloads together, which they share with every other download. Grabbit's own downloader brings them in, so a change applies at once, as for a file.
+
+A video yt-dlp downloads by itself ([How a video comes down](#how-a-video-comes-down)) takes a limit only as it starts: when you turn the limiter on or off, change its settings or the video's own limit, Grabbit stops it and starts it again with the new limit, and it goes on from where it was (the log says "Stopped: the speed limit changed; starting again with it"). Under the limit for all downloads, such videos share it evenly: when another starts, the ones running with more than their share start again with it; when one ends, the others keep theirs. A gallery's pictures that Grabbit brings in follow a change at once; what gallery-dl still fetches itself starts again with the new limit, skipping the files already saved. Other changes (torrents taking more or less of the limit for all downloads, **Only while I'm using the computer**) apply to the next one that starts.
+
 ## Through a VPN's adapter
 
-With **Options → Proxy / Socks → [Network adapter](options.md#proxy--socks)** set, video downloads go through that adapter too, with the same kill switch as other downloads: MDM hands yt-dlp (and the ffmpeg it starts) a proxy of its own on this computer, and opens every connection through the adapter, looking the names up with the DNS you chose in **Options → Connection** (without an adapter, yt-dlp uses the system's DNS). When the adapter disconnects, the video download stops, and it starts again when the adapter is back. Formats sent over RTMP, RTSP, MMS or FTP can't go through it and are refused.
+With **Options → Proxy / Socks → [Network adapter](options.md#proxy--socks)** set, video downloads go through that adapter too, with the same kill switch as other downloads: Grabbit hands yt-dlp (and the ffmpeg it starts) a proxy of its own on this computer, and opens every connection through the adapter, looking the names up with the DNS you chose in **Options → Connection** (without an adapter, yt-dlp uses the system's DNS). When the adapter disconnects, the video download stops, and it starts again when the adapter is back. Formats sent over RTMP, RTSP, MMS or FTP can't go through it and are refused.
 
 ## Sites that want you signed in
 
@@ -111,40 +147,38 @@ signed in.
 ![Options, Sites Logins: Cookies for video sites, From browser: Firefox](images/help/options-logins.webp)
 *Cookies for video sites: off, or a browser and its profile.*
 
-Sign in to the site in that browser first. MDM never logs or shows the cookies; the download's
+Sign in to the site in that browser first. Grabbit never logs or shows the cookies; the download's
 log names only the browser they came from.
 
 ### Which browsers
 
 **From browser** lists the browsers yt-dlp reads: Firefox, Chrome, Edge, Brave, Opera, Vivaldi,
-Chromium and Whale, and Safari on macOS. **Profile** is optional: a profile's name (`Profile 1`)
+Chromium and Whale. **Profile** is optional: a profile's name (`Profile 1`)
 or its folder; empty, the profile used last.
 
-- **Firefox** works on every system. If you signed in only moments ago with Firefox open, close
+- **Firefox** works. If you signed in only moments ago with Firefox open, close
   it once so it writes the sign-in to its files.
-- **Chrome, Edge and Brave on Windows** lock their cookies to themselves (Chrome 127 and later,
+- **Chrome, Edge and Brave** lock their cookies to themselves (Chrome 127 and later,
   "app-bound encryption"), and yt-dlp can't read them while the browser is open either. The
   window says so; choose Firefox, or use the button over the video, which works with any
   browser.
-- **On Linux**, Chrome-family browsers keep the key to their cookies in the system's keyring
-  (GNOME Keyring, KWallet); yt-dlp asks it, so it must be unlocked.
 - **Another browser built on Chromium** (Helium, Thorium, ungoogled-chromium...): choose
   **Chromium** and that browser's profile folder (its `Default` folder, or `Profile 1`...;
-  under `~/.config` on Linux, `%LOCALAPPDATA%` on Windows). yt-dlp reads the folder, but a browser that keeps its
-  key under its own name in the keyring, or locks its cookies as Chrome does, can't be read
+  under `%LOCALAPPDATA%`). yt-dlp reads the folder, but a browser that locks its cookies as
+  Chrome does can't be read
   this way: use its extension's button.
 
 ## When a video server can't be reached
 
-Some sites, YouTube among them, send each viewer to a nearby video server, sometimes one inside the internet provider's own network. If that server can't be reached from your connection, a browser quietly switches to another one, but yt-dlp on its own would give up. Before each video download MDM checks the servers in the video's links and, if one doesn't answer, switches to the next one the site lists. The download's log says when this happens.
+Some sites, YouTube among them, send each viewer to a nearby video server, sometimes one inside the internet provider's own network. If that server can't be reached from your connection, a browser quietly switches to another one, but yt-dlp on its own would give up. Before each video download Grabbit checks the servers in the video's links and, if one doesn't answer, switches to the next one the site lists. The download's log says when this happens.
 
 ## If a video won't download
 
 - Hover over the download's **Status**, or open its progress window, to read yt-dlp's message.
 - **No video this can download on that page** means yt-dlp found nothing on the page. Check that the address is the video's own page.
 - **This video needs you to be signed in**, or the site wants you signed in: see [Sites that want you signed in](#sites-that-want-you-signed-in).
-- Sites change often, and a newer yt-dlp usually fixes it. MDM doesn't update yt-dlp on its own yet. To get the newest one: quit MDM (**Tasks → Exit**), delete the `tools\yt-dlp` folder in MDM's data folder (`%APPDATA%\misterdownloadmanager`, or the `data` folder of a portable copy), start MDM, open the video window and click **Install yt-dlp**.
-- Videos protected with DRM (most paid streaming services) can't be downloaded, and MDM doesn't try. The browser extension's [Media on this page](browser-integration.md#media-on-this-page) shows such a stream as **Protected** and doesn't send it.
+- Sites change often, and a newer yt-dlp usually fixes it. Grabbit doesn't update yt-dlp on its own yet. To get the newest one: quit Grabbit (**Tasks → Exit**), delete the `tools\yt-dlp` folder in Grabbit's data folder (`%APPDATA%\grabbit`, or the `data` folder of a portable copy), start Grabbit, open the video window and click **Install yt-dlp**.
+- Videos protected with DRM (most paid streaming services) can't be downloaded, and Grabbit doesn't try. The browser extension's [Media on this page](browser-integration.md#media-on-this-page) shows such a stream as **Protected** and doesn't send it.
 - A page whose video the window can't find: play the video in your browser, then use the extension's [Media on this page](browser-integration.md#media-on-this-page) to send the stream the page loaded.
 - Downloading may be against some sites' terms. Checking that is up to you.
 - Still stuck? Use **Help → Report a problem** and include the page address.

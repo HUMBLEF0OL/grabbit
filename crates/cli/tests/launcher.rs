@@ -6,7 +6,7 @@
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 
-const LAUNCHER: &str = env!("CARGO_BIN_EXE_misterdownloadmanager-cli");
+const LAUNCHER: &str = env!("CARGO_BIN_EXE_grabbit-cli");
 
 fn main() {
     if let Some(launch) = mdm_cli::launched(std::env::args_os().collect()) {
@@ -21,8 +21,8 @@ fn main() {
 
     let dir = tempfile::tempdir().unwrap();
     let exe = std::env::consts::EXE_SUFFIX;
-    let launcher = dir.path().join(format!("misterdownloadmanager-cli{exe}"));
-    let program = dir.path().join(format!("misterdownloadmanager{exe}"));
+    let launcher = dir.path().join(format!("grabbit-cli{exe}"));
+    let program = dir.path().join(format!("grabbit{exe}"));
     std::fs::copy(LAUNCHER, &launcher).unwrap();
     std::fs::copy(std::env::current_exe().unwrap(), &program).unwrap();
 
@@ -43,7 +43,7 @@ fn main() {
         "{stdout}"
     );
     // Windows: the launcher waits for the program, which knows it; elsewhere it became it.
-    let expected = if cfg!(windows) { Some(pid) } else { None };
+    let expected = Some(pid);
     assert!(
         stdout.contains(&format!("launcher {expected:?}")),
         "{stdout}"

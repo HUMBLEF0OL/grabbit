@@ -5,7 +5,7 @@ use egui::vec2;
 
 use crate::dialogs::{Outcome, window};
 use crate::model::Item;
-use crate::winui::{self, ButtonKind, LIGHT_BG, LIGHT_TEXT, r, text};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, LIGHT_BG, r};
 
 /// What to look for, kept for Find Next.
 #[derive(Clone, Debug)]
@@ -92,96 +92,94 @@ impl Find {
 
     /// `Done` on Find.
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
+        // The mockup's layout: the Find row on the label column, the check boxes 27 apart, a
+        // hairline before the two matching rules, the footer.
+        const W: f32 = 480.0;
+        const BODY: f32 = 210.0;
         window(
             ctx,
             "find",
             "Find file",
-            [345.0, 241.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 let q = &mut self.query;
-                text(
-                    &p,
-                    o.x + 11.0,
-                    o.y + 21.0,
-                    crate::i18n::t("Find:"),
-                    LIGHT_TEXT(),
+                let e = winui::EDGE;
+                let fx = winui::form(&p, e, &["Find:"], false);
+                winui::form_label(&p, o, e, 16.0, winui::CONTROL_H, "Find:", true);
+                let edit = winui::edit_light(
+                    ui,
+                    r(o, fx, 16.0, W - e - fx, winui::CONTROL_H),
+                    &mut q.text,
+                    true,
+                    false,
                 );
-                let edit =
-                    winui::edit_light(ui, r(o, 11.0, 31.0, 324.0, 23.0), &mut q.text, true, false);
                 if !self.focused {
                     edit.request_focus();
                     self.focused = true;
                 }
+                let checks: [(&mut bool, &str, f32); 3] = [
+                    (&mut q.name, "File name or part of the name", 58.0),
+                    (
+                        &mut q.description,
+                        "Description or part of the description",
+                        85.0,
+                    ),
+                    (
+                        &mut q.site,
+                        "Site name/Download link/Parent web page/Referer",
+                        112.0,
+                    ),
+                ];
+                for (on, caption, y) in checks {
+                    winui::checkbox_light(ui, o + vec2(e, y), on, caption, true);
+                }
+                winui::rule(&p, o, e, 140.0, W - 2.0 * e);
+                winui::checkbox_light(ui, o + vec2(e, 152.0), &mut q.case, "Match case", true);
                 winui::checkbox_light(
                     ui,
-                    o + vec2(11.0, 60.0),
-                    &mut q.name,
-                    "File name or part of the name",
-                    true,
-                );
-                winui::checkbox_light(
-                    ui,
-                    o + vec2(11.0, 82.0),
-                    &mut q.description,
-                    "Description or part of the description",
-                    true,
-                );
-                winui::checkbox_light(
-                    ui,
-                    o + vec2(11.0, 104.0),
-                    &mut q.site,
-                    "Site name/Download link/Parent web page/Referer",
-                    true,
-                );
-                winui::etched_h(&p, o.x + 11.0, o.y + 143.0, 324.0);
-                winui::checkbox_light(ui, o + vec2(23.0, 159.0), &mut q.case, "Match case", true);
-                winui::checkbox_light(
-                    ui,
-                    o + vec2(23.0, 180.0),
+                    o + vec2(e, 179.0),
                     &mut q.whole,
                     "Match whole string only",
                     true,
                 );
                 let can = !q.text.trim().is_empty() && (q.name || q.description || q.site);
-                // As wide as its label in this language (#192), short of Cancel.
-                let (find_x, find_w) =
-                    winui::button_around(&ui.painter().clone(), "Find", 73.0, 73.0, 11.0, 190.0);
-                let find = winui::button_light(
+                // Enter finds (while it can), Escape cancels, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, find_x, 207.0, find_w, 21.0),
-                    // i18n: verb: button that starts the search
-                    "Find",
-                    if can {
-                        ButtonKind::Default
-                    } else {
-                        ButtonKind::Disabled
-                    },
-                    false,
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(
+                            // i18n: verb: button that starts the search
+                            FooterButton::new(
+                                "Find",
+                                if can {
+                                    ButtonKind::Default
+                                } else {
+                                    ButtonKind::Disabled
+                                },
+                            )
+                            .primary()
+                            .enter(true)
+                            .tip(
+                                !can,
+                                // i18n: tooltip of the greyed Find button
+                                "Type what to find, and tick at least one place to look",
+                            ),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
                 );
-                let find = winui::why_disabled(
-                    find,
-                    !can,
-                    // i18n: tooltip of the greyed Find button
-                    "Type what to find, and tick at least one place to look",
-                )
-                .clicked();
-                let cancel = winui::button_light(
-                    ui,
-                    r(o, 198.0, 207.0, 73.0, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                if cancel || winui::escape_pressed(ui) {
-                    Outcome::Closed
-                } else if can && (find || winui::enter_pressed(ui)) {
-                    Outcome::Done(())
-                } else {
-                    Outcome::Open
+                match pressed {
+                    Some(1) => Outcome::Closed,
+                    Some(0) if can => Outcome::Done(()),
+                    _ => Outcome::Open,
                 }
             },
         )

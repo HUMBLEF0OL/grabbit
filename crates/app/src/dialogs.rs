@@ -10,7 +10,7 @@ use mdm_engine::ProbeInfo;
 use url::Url;
 
 use crate::model::{self, Category};
-use crate::winui::{self, ButtonKind, r};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r};
 
 pub enum Outcome<T> {
     Open,
@@ -19,15 +19,26 @@ pub enum Outcome<T> {
 }
 
 const MAIN_RECT: &str = "mdm-main-rect";
+const MAIN_RECT_PX: &str = "mdm-main-rect-px";
 
 /// The main window publishes its outer rect each frame so dialogs can centre on it, with the
 /// zoom it is measured at (not in the frame the interface size changes: its rect is still
-/// measured at the old one then, scale::settled).
+/// measured at the old one then, scale::settled); and in screen pixels, which mean the same on
+/// every screen whatever its scale (#1311).
 pub fn publish_main_rect(ctx: &egui::Context) {
     if let Some(rc) = ctx.input(|i| i.viewport().outer_rect) {
         let zoom = ctx.zoom_factor();
-        ctx.data_mut(|d| d.insert_temp(egui::Id::unique(MAIN_RECT), (rc, zoom)));
+        let px = rc * ctx.pixels_per_point();
+        ctx.data_mut(|d| {
+            d.insert_temp(egui::Id::unique(MAIN_RECT), (rc, zoom));
+            d.insert_temp(egui::Id::unique(MAIN_RECT_PX), px);
+        });
     }
+}
+
+/// The main window's outer rect as last published, in screen pixels.
+fn main_rect_px(ctx: &egui::Context) -> Option<egui::Rect> {
+    ctx.data(|d| d.get_temp::<egui::Rect>(egui::Id::unique(MAIN_RECT_PX)))
 }
 
 /// The main window's outer rect as last published, in points at the zoom drawn now (#262: the
@@ -45,12 +56,21 @@ fn main_rect(ctx: &egui::Context) -> Option<egui::Rect> {
 /// area (its title bar first, for one larger than the screen), decided once when the dialog
 /// first shows and kept until `forget_place` — so the user can still move it. Placed again when
 /// the interface size changes (#262): the place is in points, which that changes.
+///
+/// The place in points goes to the new window's builder. On Windows the window is then put
+/// where it belongs in screen pixels (`keep_placed`): winit reads the points at the scale of the
+/// screen a new window opens on (the primary), not the main window's, which put a dialog of a
+/// main window on a screen of another scale out of sight (#1311).
 pub fn place(ctx: &egui::Context, key: egui::Id, client: [f32; 2]) -> Option<Pos2> {
     let zoom = ctx.zoom_factor();
     if let Some((p, z)) = ctx.data(|d| d.get_temp::<(Pos2, f32)>(key))
         && z == zoom
     {
         return Some(p);
+    }
+    // Where the main window is as the dialog opens, for keep_placed.
+    if let Some(px) = main_rect_px(ctx) {
+        ctx.data_mut(|d| d.insert_temp(key.with("main-px"), px));
     }
     let main = main_rect(ctx)?;
     // A fixed-frame dialog's outer size is client + (6, 29) (spec "Conventions").
@@ -65,7 +85,86 @@ pub fn place(ctx: &egui::Context, key: egui::Id, client: [f32; 2]) -> Option<Pos
 }
 
 pub fn forget_place(ctx: &egui::Context, key: egui::Id) {
-    ctx.data_mut(|d| d.remove::<(Pos2, f32)>(key));
+    ctx.data_mut(|d| {
+        d.remove::<(Pos2, f32)>(key);
+        d.remove::<egui::Rect>(key.with("main-px"));
+    });
+}
+
+/// How many passes after it is shown a window is still kept where [`place`] put it: its new
+/// screen's scale, given as it is shown, resizes it (follow_scale), and it is centred again.
+#[cfg(windows)]
+const PLACED_AFTER_SHOWN: u32 = 4;
+
+/// Windows: the window `title` (opened at `key`'s [`place`]) put there in screen pixels, centred
+/// on the main window at its actual size, on the main window's screen, whatever the scales of
+/// the screens (#1311): before it is shown, and in its first passes when a new scale resized it.
+/// The safety net under it: a window on no screen is brought onto the main window's.
+///
+/// Elsewhere the builder's place is kept: macOS has one coordinate space in points for every
+/// screen; a Wayland compositor places windows itself; X11 has mostly one scale for every screen
+/// (Xft.dpi).
+#[cfg(windows)]
+fn keep_placed(ctx: &egui::Context, key: egui::Id, title: &str, shown: bool) {
+    // Off-screen test runs keep their windows off the screens.
+    if crate::offscreen() {
+        return;
+    }
+    let after_key = key.with("placed-after");
+    let size_key = key.with("placed-size");
+    let after = ctx.data(|d| d.get_temp::<u32>(after_key).unwrap_or(0));
+    if after >= PLACED_AFTER_SHOWN {
+        return;
+    }
+    if shown {
+        ctx.data_mut(|d| d.insert_temp(after_key, after + 1));
+        ctx.request_repaint();
+    }
+    let Some(([l, t, r, b], visible)) = crate::win32::window_rect(title) else {
+        return;
+    };
+    let at = egui::Rect::from_min_max(
+        egui::pos2(l as f32, t as f32),
+        egui::pos2(r as f32, b as f32),
+    );
+    let placed = ctx.data(|d| d.get_temp::<egui::Vec2>(size_key));
+    // Not shown yet, the window found by the title is ours only while hidden (a progress window
+    // may share its title with one on the screen). Shown, it is moved again only when a new
+    // scale resized it; not when the user moved it.
+    if (!shown && visible) || (shown && placed.is_some_and(|s| s == at.size())) {
+        return;
+    }
+    let screens: Vec<crate::scale::Screen> = crate::win32::screens()
+        .into_iter()
+        .map(|(s, w)| crate::scale::Screen {
+            rect: egui::Rect::from_min_max(
+                egui::pos2(s[0] as f32, s[1] as f32),
+                egui::pos2(s[2] as f32, s[3] as f32),
+            ),
+            work: egui::Rect::from_min_max(
+                egui::pos2(w[0] as f32, w[1] as f32),
+                egui::pos2(w[2] as f32, w[3] as f32),
+            ),
+        })
+        .collect();
+    let main = ctx.data(|d| d.get_temp::<egui::Rect>(key.with("main-px")));
+    let want = main.map_or(at.min, |m| crate::scale::centred_on(m, at.size(), &screens));
+    let want =
+        crate::scale::onto_screens(egui::Rect::from_min_size(want, at.size()), main, &screens)
+            .unwrap_or(want);
+    ctx.data_mut(|d| d.insert_temp(size_key, at.size()));
+    if (want - at.min).length() < 1.0 {
+        return;
+    }
+    // Far from where the builder's place put it: what the screens were, for a report.
+    if (want - at.min).length() > 64.0 {
+        tracing::info!(
+            "window {title:?} at {:?} put at {want:?} (main window {main:?}, screens {:?})",
+            at.min,
+            screens.iter().map(|s| s.rect).collect::<Vec<_>>()
+        );
+    }
+    crate::win32::move_window(title, want.x as i32, want.y as i32);
 }
 
 /// A fixed-size window's client of `size` points as it can be shown on the screen around the
@@ -100,12 +199,7 @@ pub fn follow_scale(ctx: &egui::Context, vid: ViewportId, key: egui::Id, shown: 
     let seen = ctx.data(|d| d.get_temp::<f32>(k));
     ctx.data_mut(|d| d.insert_temp(k, scale));
     let changed = seen.is_some_and(|s| s != scale);
-    if changed && !cfg!(windows) {
-        ctx.send_viewport_cmd_to(
-            vid,
-            egui::ViewportCommand::InnerSize(vec2(shown[0], shown[1])),
-        );
-    }
+    let _ = shown;
     changed
 }
 
@@ -125,6 +219,7 @@ pub fn keep_theme(
     let theme_key = key.with("theme");
     let shown_key = key.with("shown");
     let front_key = key.with("front");
+    let caption_key = key.with("caption");
     // Not drawn in the last pass, the window is gone and this is a new one, hidden until it is
     // told otherwise, whatever the last one was told (#440).
     if !open || window_was_gone(ctx, key.with("theme-pass")) {
@@ -132,6 +227,9 @@ pub fn keep_theme(
             d.remove::<bool>(theme_key);
             d.remove::<bool>(shown_key);
             d.remove::<u32>(front_key);
+            d.remove::<bool>(caption_key);
+            d.remove::<u32>(key.with("placed-after"));
+            d.remove::<egui::Vec2>(key.with("placed-size"));
         });
     }
     if !open {
@@ -149,6 +247,9 @@ pub fn keep_theme(
     }
     // The theme went out in an earlier frame: show the window now.
     let shown = ctx.data(|d| d.get_temp::<bool>(shown_key).unwrap_or(false));
+    // Where it belongs on the screens before it is seen (#1311).
+    #[cfg(windows)]
+    keep_placed(ctx, key, title, shown);
     if sent.is_some() && !shown {
         ctx.send_viewport_cmd_to(vid, egui::ViewportCommand::Visible(true));
         ctx.data_mut(|d| d.insert_temp(shown_key, true));
@@ -160,7 +261,6 @@ pub fn keep_theme(
     // it). Not in off-screen test runs, whose windows stay out of the way. Elsewhere the window
     // manager places a new window and decides on its focus; an app has no say there.
     // Looked for in a few frames at most (its title may change meanwhile: a progress window's).
-    #[cfg(windows)]
     {
         const TRIES: u32 = 30;
         let tries = ctx.data(|d| d.get_temp::<u32>(front_key).unwrap_or(0));
@@ -180,13 +280,14 @@ pub fn keep_theme(
             ctx.data_mut(|d| d.insert_temp(front_key, tries));
         }
     }
-    #[cfg(not(windows))]
-    let _ = front_key;
-    // Belt and braces: a no-op when the caption is already right.
-    #[cfg(windows)]
-    crate::win32::caption_dark(title, dark);
-    #[cfg(not(windows))]
-    let _ = title;
+    // Belt and braces, once per window and theme (until the window is found): asked every frame,
+    // the window's thread waited on DWM, or on a busy window of this process while looking for
+    // its own, in a stalled system (upstream issues 633 and 583).
+    if ctx.data(|d| d.get_temp::<bool>(caption_key)) != Some(dark)
+        && crate::win32::caption_dark(title, dark)
+    {
+        ctx.data_mut(|d| d.insert_temp(caption_key, dark));
+    }
 }
 
 /// Whether the window `key` is drawn again after a pass that didn't draw it: egui destroys a
@@ -204,14 +305,12 @@ fn window_was_gone(ctx: &egui::Context, key: egui::Id) -> bool {
 /// The dialogs later downloads wait behind (`Download File Info`, the duplicate question): they
 /// must be on the screen, even while the main window is minimized (Windows hides a window's owned
 /// windows with it, leaving the downloads waiting behind one nobody can see, #440).
-#[cfg(windows)]
 const QUEUE_GATES: [&str; 2] = ["file-info", "duplicate"];
 
 /// A window that must be on the screen and isn't (hidden, not minimized): shown again after a
 /// moment, however it got that way, directly: winit believes it is still visible and ignores
 /// `Visible(true)`. The other platforms have nothing to ask: MDM's windows have no owner there,
 /// and the window manager doesn't say whether it shows a window.
-#[cfg(windows)]
 fn keep_on_screen(ctx: &egui::Context, key: egui::Id, title: &str) {
     const AFTER_SECONDS: f64 = 1.5;
     let since_key = key.with("hidden-since");
@@ -248,8 +347,7 @@ pub(crate) fn window<T>(
 
 /// A question that must be answered (Yes / No, a countdown): a `window` that stays above the
 /// app's other windows and takes the focus when it opens, so a click on the dialog that asked
-/// it, or on the main window, never hides it behind them (on Windows it is also owned by the
-/// main window; macOS and Linux have no owner to keep it in front).
+/// it, or on the main window, never hides it behind them (it is also owned by the main window).
 pub(crate) fn question<T>(
     ctx: &egui::Context,
     id: &str,
@@ -340,7 +438,7 @@ fn dialog_window<T>(
     // Hidden until `keep_theme` has given it its theme (see there).
     let mut builder = ViewportBuilder::default()
         .with_visible(false)
-        .with_title(title)
+        .with_title(crate::i18n::os_text(title))
         .with_inner_size(shown)
         // The thin frame trims the sizing borders and keeps the size fixed.
         .with_resizable(drawn)
@@ -386,10 +484,7 @@ fn dialog_window<T>(
                     let hwnd = ui.ctx().data(|d| d.get_temp::<isize>(key.with("hwnd")));
                     match drawn_title(ui, origin, shown[0], title, &buttons, hwnd) {
                         Some(CaptionButton::Close) => caption_close = true,
-                        Some(CaptionButton::Minimize) => {
-                            ui.ctx()
-                                .send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-                        }
+                        Some(CaptionButton::Minimize) => self::minimize(ui.ctx(), hwnd),
                         _ => {}
                     }
                 }
@@ -409,12 +504,8 @@ fn dialog_window<T>(
         if close { Outcome::Closed } else { out }
     });
     let rescaled = follow_scale(ctx, vid, key, shown);
-    // Elsewhere follow_scale asked the window manager itself.
-    #[cfg(not(windows))]
-    let _ = rescaled;
     // Give the window IDM's modal-dialog frame (3 px borders, 26 px caption) once it exists,
     // and again at a new size (a dialog that grows: the frame is sized from the client).
-    #[cfg(windows)]
     {
         let framed = key.with("framed");
         let scale = ctx.input_for(vid, |i| i.pixels_per_point);
@@ -444,19 +535,16 @@ fn dialog_window<T>(
         crate::theme::dark_surface(),
         matches!(out, Outcome::Open),
     );
-    // A question takes the focus once it is shown (not while hidden for its theme), and so does
-    // Download File Info outside Windows (#484): asked for from the browser, it opened behind
-    // it. Windows lifts it in keep_theme instead.
+    // A question takes the focus once it is shown (not while hidden for its theme). Download File
+    // Info is lifted in keep_theme instead.
     let focused = key.with("focus-sent");
-    let takes_focus = modal || (cfg!(not(windows)) && id == "file-info");
-    if takes_focus && matches!(out, Outcome::Open) && !crate::offscreen() {
+    if modal && matches!(out, Outcome::Open) && !crate::offscreen() {
         let shown = ctx.data(|d| d.get_temp::<bool>(key.with("shown")).unwrap_or(false));
         if shown && !ctx.data(|d| d.get_temp::<bool>(focused).unwrap_or(false)) {
             ctx.send_viewport_cmd_to(ViewportId::from_hash_of(id), egui::ViewportCommand::Focus);
             ctx.data_mut(|d| d.insert_temp(focused, true));
         }
     }
-    #[cfg(windows)]
     if matches!(out, Outcome::Open) && QUEUE_GATES.contains(&id) {
         keep_on_screen(ctx, key, title);
     }
@@ -476,17 +564,15 @@ fn forget_window(ctx: &egui::Context, vid: ViewportId, key: egui::Id) {
         d.remove::<bool>(key.with("focus-sent"));
     });
     forget_place(ctx, key);
-    #[cfg(windows)]
     ctx.data_mut(|d| {
         d.remove::<[f32; 2]>(key.with("framed"));
         d.remove::<isize>(key.with("hwnd"));
     });
 }
 
-/// Whether the windows' title bars are ours: a style theme's on Windows (#45). Elsewhere the
-/// window manager draws them, which takes no style of ours (Wayland places its own buttons).
+/// Whether the windows' title bars are ours: a style theme's (#45).
 pub fn drawn_captions() -> bool {
-    cfg!(windows) && crate::theme::current().controls.caption != crate::palette::CaptionLook::System
+    crate::theme::current().controls.caption != crate::palette::CaptionLook::System
 }
 
 /// A title bar we draw (where the window's frame is ours: win32::thin_frame), `width` points
@@ -504,7 +590,6 @@ pub fn drawn_title(
     use crate::winui::caption::CAPTION_H;
     let rect = egui::Rect::from_min_size(o, egui::vec2(width, CAPTION_H));
     let bar = crate::winui::caption::title_bar(ui, rect, title, buttons);
-    #[cfg(windows)]
     if let Some(hwnd) = hwnd {
         let ppp = ui.ctx().pixels_per_point();
         let px = |r: egui::Rect| {
@@ -526,16 +611,13 @@ pub fn drawn_title(
             },
         );
     }
-    #[cfg(not(windows))]
-    let _ = hwnd;
     bar.pressed
 }
 
 /// Whether the window manager asked this window to close (its title bar's ×, Alt+F4, a
 /// `WM_DELETE_WINDOW`). The window must still be painted in that pass, and the request honoured
 /// after it: egui clears a dialog's window to transparent black before each pass, so a pass that
-/// paints nothing leaves a black window on screen until the window is destroyed (#207: one to
-/// several seconds on Linux).
+/// paints nothing leaves a black window on screen until the window is destroyed (#207).
 pub(crate) fn close_requested(ui: &Ui) -> bool {
     ui.ctx().input(|i| i.viewport().close_requested())
 }
@@ -603,6 +685,8 @@ pub struct AddUrl {
     /// (#511): "Use authorization" shows it while the box is left as it was filled.
     looked_up: String,
     filled: Option<(String, String)>,
+    /// The clipboard's link, read off the window's thread (#661).
+    clip: crate::clipboard::Prefill,
 }
 
 pub struct NewUrl {
@@ -610,20 +694,37 @@ pub struct NewUrl {
     pub login: Option<(String, String)>,
 }
 
+/// An address Add URL's OK and the paste bar accept: as typed (`parse_address`: no scheme reads as
+/// https), and one MDM downloads or a magnet link. None: "Invalid address".
+pub fn accept_address(typed: &str) -> Option<Url> {
+    crate::model::parse_address(typed)
+        .ok()
+        .filter(|url| mdm_engine::supported(url) || url.scheme() == "magnet")
+}
+
 impl AddUrl {
     /// Opens like IDM's: pre-filled with the clipboard's text when it is an http(s) URL (or a
-    /// magnet link: OK then opens Add torrent).
+    /// magnet link: OK then opens Add torrent). The clipboard is read off the window's thread,
+    /// and the address put in the box on the frame it comes ([`AddUrl::fill_from_clipboard`]).
     pub fn from_clipboard(history: &[String]) -> Self {
-        let clip = crate::clipboard_text().unwrap_or_default();
-        let clip = clip.trim();
-        let address = match Url::parse(clip) {
-            Ok(u) if mdm_engine::supported(&u) || u.scheme() == "magnet" => clip.to_owned(),
-            _ => String::new(),
-        };
         AddUrl {
-            address,
             history: history.to_vec(),
+            clip: crate::clipboard::Prefill::ask(),
             ..AddUrl::default()
+        }
+    }
+
+    /// The clipboard's text in the box, when it is an address MDM downloads and the box is
+    /// still empty (nothing typed or picked meanwhile).
+    fn fill_from_clipboard(&mut self, clip: &str) {
+        let clip = clip.trim();
+        if !self.address.is_empty() {
+            return;
+        }
+        if let Ok(u) = Url::parse(clip)
+            && (mdm_engine::supported(&u) || u.scheme() == "magnet")
+        {
+            self.address = clip.to_owned();
         }
     }
 
@@ -664,25 +765,33 @@ impl AddUrl {
         ctx: &egui::Context,
         site_login: impl Fn(&Url) -> Option<(String, String)>,
     ) -> Outcome<NewUrl> {
+        if let Some(clip) = self.clip.take() {
+            self.fill_from_clipboard(&clip);
+        }
         self.follow_site_login(site_login);
+        // The mockup's layout: a label column, the rows 30 high and 10 apart, the footer.
+        const W: f32 = 480.0;
+        const BODY: f32 = 172.0;
         window(
             ctx,
             "add-url",
             "Enter new address to download",
-            [560.0, 93.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
                 let p = ui.painter().clone();
-                // i18n: noun: the web address (URL)
-                winui::text(
+                let fx = winui::form(
                     &p,
-                    o.x + 12.0,
-                    o.y + 25.0,
-                    crate::i18n::t("Address"),
-                    winui::TEXT(),
+                    winui::EDGE,
+                    // i18n: noun: the web address (URL)
+                    &["Address", "Login", "Password"],
+                    false,
                 );
-                let addr_rc = r(o, 68.0, 11.0, 396.0, 21.0);
+                let fw = W - winui::EDGE - fx;
+                let row = |y: f32| r(o, fx, y, fw, winui::CONTROL_H);
+                winui::form_label(&p, o, winui::EDGE, 16.0, winui::CONTROL_H, "Address", true);
+                let addr_rc = row(16.0);
                 let addr = winui::combo_edit(ui, addr_rc, &mut self.address);
                 // An error about the address goes once it is edited.
                 if addr.changed() {
@@ -705,8 +814,9 @@ impl AddUrl {
                     self.address = self.history[i].clone();
                     self.error = None;
                 }
-                // While its list is open, Escape closes the list and the box keeps the keys.
-                winui::keep_keys(ui, &addr, false, true, self.list_open);
+                // Left / Right move its caret (#812); while its list is open, Escape closes
+                // the list and the box keeps the keys.
+                winui::keep_edit_keys(ui, &addr, self.list_open);
                 let list_was_open = self.list_open;
                 if self.list_open
                     && let Some(i) = winui::drop_list(
@@ -721,113 +831,83 @@ impl AddUrl {
                     self.address = self.history[i].clone();
                     addr.request_focus();
                 }
-                // Enter presses the default button (OK), as in IDM, wherever the focus is.
-                let _ = &addr;
-                let enter = winui::enter_pressed(ui);
-
-                winui::group_box(
-                    &p,
-                    r(o, 11.0, 45.0, 453.0, 40.0),
-                    Some(winui::caption_gap(
-                        &p,
-                        o.x + 20.0,
-                        o.x + 124.0,
-                        "Use authorization",
-                        false,
-                    )),
-                );
+                // The check box under the address, its glyph at the fields' start.
                 winui::checkbox(
                     ui,
-                    o + vec2(20.0, 39.0),
+                    o + vec2(fx, 59.0),
                     &mut self.auth,
                     "Use authorization",
                     true,
                 );
-                let label = if self.auth {
-                    winui::TEXT()
-                } else {
-                    winui::TEXT_DISABLED()
-                };
                 // i18n: noun: the user name and password section
-                winui::text(&p, o.x + 84.0, o.y + 69.0, crate::i18n::t("Login"), label);
-                winui::edit(
-                    ui,
-                    r(o, 116.0, 55.0, 117.0, 23.0),
-                    &mut self.login,
-                    self.auth,
-                    false,
-                );
-                winui::text(
+                winui::form_label(
                     &p,
-                    o.x + 289.0,
-                    o.y + 69.0,
-                    crate::i18n::t("Password"),
-                    label,
-                );
-                winui::edit(
-                    ui,
-                    r(o, 342.0, 55.0, 113.0, 23.0),
-                    &mut self.password,
+                    o,
+                    winui::EDGE,
+                    86.0,
+                    winui::CONTROL_H,
+                    "Login",
                     self.auth,
-                    true,
                 );
+                winui::edit(ui, row(86.0), &mut self.login, self.auth, false);
+                winui::form_label(
+                    &p,
+                    o,
+                    winui::EDGE,
+                    126.0,
+                    winui::CONTROL_H,
+                    "Password",
+                    self.auth,
+                );
+                winui::edit(ui, row(126.0), &mut self.password, self.auth, true);
 
-                let ok = winui::button(
+                // Enter presses OK and Escape Cancel, as in IDM, wherever the focus is; while
+                // the address list is open both are the list's (it closes on Escape).
+                let pressed = winui::footer(
                     ui,
-                    r(o, 475.0, 12.0, 79.0, 19.0),
-                    "OK",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked();
-                let cancel = winui::button(
-                    ui,
-                    r(o, 475.0, 40.0, 79.0, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("OK", ButtonKind::Default).enter(!list_was_open),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal).escape(!list_was_open),
+                        ),
+                    ],
+                );
                 if let Some(e) = &self.error {
-                    let red = winui::ERROR();
-                    // Ends before the OK / Cancel buttons; whole on hover when cut.
-                    // On the group box's top line, over a strip of the dialog's colour (as a
-                    // caption sits on its line), not struck through by it.
-                    let w = winui::text_width(&p, e).min(465.0 - 140.0) + 6.0;
-                    winui::fill_l(
-                        &p,
-                        o.x + 137.0,
-                        o.y + 39.0,
-                        o.x + 137.0 + w,
-                        o.y + 52.0,
-                        winui::BG(),
-                    );
+                    // In the footer before its buttons; whole on hover when cut.
                     winui::fit(
                         ui,
                         &p,
-                        o.x + 140.0,
-                        o.y + 49.0,
+                        o.x + winui::EDGE,
+                        o.y + winui::baseline_in(BODY + 1.0, winui::FOOTER_H - 1.0),
                         e,
-                        red,
-                        o.x + 465.0,
+                        winui::ERROR(),
+                        o.x + winui::footer_trailing_left(
+                            W,
+                            &[
+                                winui::footer_button_width(&p, "OK", false),
+                                winui::footer_button_width(&p, "Cancel", false),
+                            ],
+                        ),
                         "add-url-error",
                     );
                 }
-                // Escape closes an open drop list first, then the dialog.
-                if cancel || (!list_was_open && winui::escape_pressed(ui)) {
+                if pressed == Some(1) {
                     return Outcome::Closed;
                 }
-                if ok || (enter && !list_was_open) {
-                    match crate::model::parse_address(&self.address) {
-                        Ok(url) if mdm_engine::supported(&url) || url.scheme() == "magnet" => {
+                if pressed == Some(0) {
+                    match accept_address(&self.address) {
+                        Some(url) => {
                             return Outcome::Done(NewUrl {
                                 url,
                                 login: self.typed_login(),
                             });
                         }
-                        _ => self.error = Some(crate::i18n::t("Invalid address").into()),
+                        None => self.error = Some(crate::i18n::t("Invalid address").into()),
                     }
                 }
                 Outcome::Open
@@ -837,6 +917,144 @@ impl AddUrl {
 }
 
 // ---- Download File Info (client 570 × 208) -------------------------------------------------
+
+/// What Download File Info asks the disk about Save As (#743).
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct PlaceAsk {
+    pub dir: PathBuf,
+    pub name: String,
+    /// A name MDM gave: numbered on when it is taken there (`naming::destination`). A typed one
+    /// only has its folder looked at (its download is numbered as it starts if it is taken).
+    pub number: bool,
+}
+
+/// The disk's answer: where the download goes, and whether its folder is there.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct Found {
+    pub dest: PathBuf,
+    pub folder: bool,
+}
+
+/// How the disk is looked at: [`look`], or a test's slow one.
+pub(crate) type Look = Arc<dyn Fn(&PlaceAsk) -> Found + Send + Sync>;
+
+/// The engine's naming rules on the disk as it is now; on a thread of its own (it may wait).
+/// Once the old files being deleted in that folder for a new start are gone (a duplicate
+/// overwritten: its new copy takes its name, `naming::clear`).
+fn look(ask: &PlaceAsk) -> Found {
+    mdm_engine::naming::wait_cleared(&ask.dir);
+    Found {
+        dest: if ask.number {
+            mdm_engine::naming::destination(&ask.dir, &ask.name)
+        } else {
+            ask.dir.join(&ask.name)
+        },
+        folder: ask.dir.is_dir(),
+    }
+}
+
+/// Save As's place, looked at off the window's thread (#743, #751): a sleeping hard disk, a USB
+/// drive or a network folder can take seconds to answer whether a name is taken, and the window
+/// waited for it (the freeze report caught 8 s). Save As shows the name as given meanwhile
+/// (fitted, without " (1)"), and takes the numbered one when the answer comes, unless it was
+/// typed over. A download started before the answer is numbered as it starts
+/// (`Destination::Free`, `Item::number_at_start`): nothing is overwritten either way.
+pub(crate) struct SaveAsPlace {
+    look: Look,
+    repaint: Option<egui::Context>,
+    /// The last question, Save As's text it is for (as the answer set it, once taken), and its
+    /// answer to come. A new question asks on a thread of its own: one that hangs on a dead
+    /// share holds up nothing else.
+    asking: Option<(PlaceAsk, String, crate::launch::Asked<PlaceAsk, Found>)>,
+}
+
+impl SaveAsPlace {
+    /// Looked at on the disk; `repaint` shows the answer when it comes.
+    pub fn new(repaint: Option<&egui::Context>) -> Self {
+        Self::with(Arc::new(look), repaint)
+    }
+
+    /// Looked at with `look` (a test's).
+    pub fn with(look: Look, repaint: Option<&egui::Context>) -> Self {
+        SaveAsPlace {
+            look,
+            repaint: repaint.cloned(),
+            asking: None,
+        }
+    }
+
+    /// `name` in `dir` as MDM names it: Save As's text for now (fitted, not numbered: no wait
+    /// for the disk), its free numbered name asked for.
+    pub fn name_in(&mut self, dir: &Path, name: &str) -> String {
+        let shown = display_path(&mdm_engine::naming::guess(dir, name));
+        let ask = PlaceAsk {
+            dir: dir.to_owned(),
+            name: name.to_owned(),
+            number: true,
+        };
+        self.ask(ask, &shown);
+        shown
+    }
+
+    fn ask(&mut self, ask: PlaceAsk, shown: &str) {
+        if self
+            .asking
+            .as_ref()
+            .is_some_and(|(a, s, _)| *a == ask && s == shown)
+        {
+            return;
+        }
+        let asked = crate::launch::Asked::default();
+        let look = self.look.clone();
+        // Never waits: the answer is taken on a later frame (`follow`).
+        let _ = asked.get(
+            &ask,
+            std::time::Duration::MAX,
+            std::time::Duration::ZERO,
+            self.repaint.as_ref(),
+            move |a| look(a),
+        );
+        self.asking = Some((ask, shown.to_owned(), asked));
+    }
+
+    /// Each frame, never waiting: once the answer has come for what Save As (`save_as`) still
+    /// shows, a name MDM gave takes its free numbered name; whether its folder is there. None
+    /// while it hasn't come, or when Save As was typed over since.
+    pub fn follow(&mut self, save_as: &mut String) -> Option<bool> {
+        let (ask, shown, asked) = self.asking.as_mut()?;
+        if shown != save_as {
+            return None;
+        }
+        let found = asked.answer(ask)?;
+        if ask.number {
+            *save_as = display_path(&found.dest);
+            shown.clone_from(save_as);
+        }
+        Some(found.folder)
+    }
+
+    /// Whether Save As's folder is there, as looked at for the text it shows (None: not known
+    /// yet). A path typed in Save As is asked about here, as it is (its folder only).
+    pub fn folder(&mut self, save_as: &mut String) -> Option<bool> {
+        if let Some(there) = self.follow(save_as) {
+            return Some(there);
+        }
+        if self.asking.as_ref().is_some_and(|(_, s, _)| s == save_as) {
+            return None; // asked: the answer is on its way
+        }
+        let dest = resolve_path(save_as);
+        let (Some(dir), Some(name)) = (dest.parent(), dest.file_name()) else {
+            return None;
+        };
+        let ask = PlaceAsk {
+            dir: dir.to_owned(),
+            name: name.to_string_lossy().into_owned(),
+            number: false,
+        };
+        self.ask(ask, &save_as.clone());
+        self.follow(save_as)
+    }
+}
 
 pub struct FileInfo {
     pub url: Url,
@@ -868,8 +1086,8 @@ pub struct FileInfo {
     category_open: bool,
     /// Browser request context for the download this dialog adds.
     pub context: mdm_ipc::Command,
-    /// Asking to create a missing folder, the dialog's choice held meanwhile.
-    asking: Option<(CreateFolder, Start)>,
+    /// Start or Later held while the folder is looked at, and asked to be created when missing.
+    asking: FolderGate<Start>,
     /// The download already running while the dialog shows (Options → Downloads → "Start
     /// downloading immediately while displaying Download File Info dialog").
     pub early: Option<u64>,
@@ -878,6 +1096,14 @@ pub struct FileInfo {
     folders_open: bool,
     /// "+" was clicked: the app opens the new-category window.
     pub new_category: bool,
+    /// The downloads waiting their turn behind this one (a browser selection's arrive one by
+    /// one): Cancel asks whether they are cancelled too (#394). The app sets it each frame.
+    pub waiting: usize,
+    /// Cancel was pressed while some waited: the question is up, this dialog waits for it.
+    cancel_ask: bool,
+    /// The question's answer was Yes: the waiting ones are cancelled with this one (`Closed`
+    /// comes with it; the app clears the waiting ones).
+    pub cancel_all: bool,
     /// The debrid accounts (#44): which one this address goes through, if any.
     route: crate::debrid::Route,
     /// The account that takes the address ("Real-Debrid (labuser)"), as last looked at: the
@@ -889,6 +1115,9 @@ pub struct FileInfo {
     /// Whether Save As names a folder, looked at off the window's thread: it is asked every
     /// frame, and a folder on a network share that doesn't answer would freeze the window.
     dest_dir: crate::launch::Asked<PathBuf, bool>,
+    /// Save As's name numbered in its folder, and whether the folder is there, looked at off the
+    /// window's thread (#743).
+    place: SaveAsPlace,
 }
 
 pub enum Start {
@@ -921,10 +1150,11 @@ impl FileInfo {
             .filter(|n| !n.is_empty());
         let name = from_browser
             .clone()
-            .unwrap_or_else(|| mdm_engine::naming::file_name(None, &new.url));
+            .unwrap_or_else(|| crate::model::browser_guess(&new.url, &context));
         let category = Category::of(&name);
         let folder = crate::model::category_folder(category, &downloads, &dirs);
-        let save_as = display_path(&mdm_engine::naming::destination(&folder, &name));
+        let mut place = SaveAsPlace::new(Some(ctx));
+        let save_as = place.name_in(&folder, &name);
         let (probe, info) = match from_browser {
             Some(file_name) => (
                 Arc::new(Mutex::new(None)),
@@ -944,6 +1174,7 @@ impl FileInfo {
         };
         FileInfo {
             dest_dir: Default::default(),
+            place,
             url_text: new.url.to_string(),
             url_bad: false,
             focused: false,
@@ -963,11 +1194,14 @@ impl FileInfo {
             dirs,
             category_open: false,
             context,
-            asking: None,
+            asking: FolderGate::default(),
             early: None,
             folders: Vec::new(),
             folders_open: false,
             new_category: false,
+            waiting: 0,
+            cancel_ask: false,
+            cancel_all: false,
             route,
             through,
             direct,
@@ -1017,7 +1251,7 @@ impl FileInfo {
                     self.category = Category::of(&name);
                     let dir =
                         crate::model::category_folder(self.category, &self.downloads, &self.dirs);
-                    self.save_as = display_path(&mdm_engine::naming::destination(&dir, &name));
+                    self.save_as = self.place.name_in(&dir, &name);
                 }
                 // Another address: the browser's name, size and form are not its own, and on
                 // another site neither are its cookies and page (never sent there).
@@ -1034,6 +1268,7 @@ impl FileInfo {
                 self.context.post = None;
                 self.context.post_type = None;
                 self.request.opts.post = None;
+                self.request.opts.browser_final = None;
                 self.request.headers.remove(reqwest::header::CONTENT_TYPE);
                 // Another address isn't the download the browser had started: it goes through
                 // the debrid account that takes its host (#44), unless the user unticked it.
@@ -1054,7 +1289,7 @@ impl FileInfo {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         // Fitted to the new folder too (#28): a deeper one leaves a long name less room.
-        self.save_as = display_path(&mdm_engine::naming::destination(folder, &name));
+        self.save_as = self.place.name_in(folder, &name);
         self.edited = true;
     }
 
@@ -1106,29 +1341,50 @@ impl FileInfo {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         let folder = crate::model::category_folder(c, &self.downloads, &self.dirs);
-        self.save_as = display_path(&mdm_engine::naming::destination(&folder, &name));
+        self.save_as = self.place.name_in(&folder, &name);
+    }
+
+    /// Whether Save As's folder is there, as looked at off the window's thread for the name it
+    /// shows now (None: not known yet). A name MDM gave has its free numbered name by then.
+    pub fn folder_found(&mut self) -> Option<bool> {
+        self.place.folder(&mut self.save_as)
     }
 
     /// The dialog; Start (or Download Later) waits for a missing folder to be created.
-    pub fn show(
-        &mut self,
-        ctx: &egui::Context,
-        icons: &mut crate::chrome::ShellIcons,
-    ) -> Outcome<Start> {
+    pub fn show(&mut self, ctx: &egui::Context) -> Outcome<Start> {
         let folder = self
             .dest()
             .parent()
             .map(Path::to_path_buf)
             .unwrap_or_default();
-        let out = self.dialog(ctx, icons);
-        ensure_folder(ctx, &mut self.asking, out, &folder)
+        let out = self.dialog(ctx);
+        let out = ensure_folder(ctx, &mut self.asking, out, &folder);
+        // #394: more downloads wait their turn behind this one (the browser's selected links):
+        // Cancel (the button, Escape, the window's ×) asks whether they are cancelled too.
+        if matches!(out, Outcome::Closed) && self.waiting > 0 && !self.cancel_ask {
+            self.cancel_ask = true;
+        }
+        if self.cancel_ask {
+            // The question answers for the dialog: a Start pressed meanwhile waits for it, as
+            // with the Create folder question.
+            return match cancel_waiting(ctx, self.waiting) {
+                Outcome::Done(all) => {
+                    self.cancel_ask = false;
+                    self.cancel_all = all;
+                    Outcome::Closed
+                }
+                // The question's own ×: as No, this one alone is skipped.
+                Outcome::Closed => {
+                    self.cancel_ask = false;
+                    Outcome::Closed
+                }
+                Outcome::Open => Outcome::Open,
+            };
+        }
+        out
     }
 
-    fn dialog(
-        &mut self,
-        ctx: &egui::Context,
-        icons: &mut crate::chrome::ShellIcons,
-    ) -> Outcome<Start> {
+    fn dialog(&mut self, ctx: &egui::Context) -> Outcome<Start> {
         if self.info.is_none()
             && let Some(res) = self.probe.lock().unwrap().take()
         {
@@ -1139,42 +1395,80 @@ impl FileInfo {
             if let (Ok(pi), false) = (&res, self.edited) {
                 self.category = Category::of(&pi.file_name);
                 let dir = crate::model::category_folder(self.category, &self.downloads, &self.dirs);
-                self.save_as = display_path(&mdm_engine::naming::destination(&dir, &pi.file_name));
+                self.save_as = self.place.name_in(&dir, &pi.file_name);
             }
             self.info = Some(res);
         }
+        // The name numbered in its folder, once the disk has answered (#743).
+        self.place.follow(&mut self.save_as);
         self.follow_route(ctx);
         // The "Download through" line (#44) takes a row of its own while an account takes the
         // address: the window grows by it.
-        let dy = if self.through.is_some() { 26.0 } else { 0.0 };
-        // Preview has 92 px for its label in this language (#192), from 8 px after the group box
-        // (it ends at 462) to the window's edge (562): where it needs more, the window grows by it
-        // and the right column (icon, size, Preview) widens, its centre moving by half of it.
-        let preview_w = winui::button_fit_width(
-            &ctx.layer_painter(egui::LayerId::background()),
-            "Preview",
-            73.0,
-            f32::INFINITY,
-        );
-        let wide = (preview_w - 92.0).max(0.0);
-        let cx = (wide / 2.0).floor();
+        let dy = if self.through.is_some() { 30.0 } else { 0.0 };
+        // The mockup's layout: the file's card, a label column, rows 30 high and 10 apart.
+        const W: f32 = 640.0;
+        let body = 362.0 + dy;
         window(
             ctx,
             "file-info",
             "Download File Info",
-            [570.0 + wide, 234.0 + dy],
+            [W, body + winui::FOOTER_H],
             true,
             winui::BG(),
             |ui, o| {
                 let p = ui.painter().clone();
-                winui::text_right(
+                let lx = winui::EDGE;
+                let fx = winui::form(
                     &p,
-                    o.x + 88.0,
-                    o.y + 18.0,
-                    crate::i18n::t("URL"),
-                    winui::TEXT(),
+                    lx,
+                    &["URL", "Category", "Save As", "Description", "Server"],
+                    false,
                 );
-                let url_rc = r(o, 96.0, 5.0, 366.0, 23.0);
+                let right = W - winui::EDGE;
+                let h = winui::CONTROL_H;
+                // A field from the label column to the edge, less `end` (a button after it).
+                let field = |y: f32, end: f32| r(o, fx, y, right - fx - end, h);
+                let side_button = |y: f32| r(o, right - h, y, h, h);
+
+                // The file's card: its kind's icon, its name, its size (or why there is none),
+                // and the greyed Preview.
+                let (size, reason) = match &self.info {
+                    None => ("...".to_owned(), None),
+                    Some(Ok(pi)) => (
+                        // i18n: a download's size is not known (the server didn't say)
+                        pi.size
+                            .map_or(crate::i18n::t("unknown").to_owned(), dialog_size),
+                        None,
+                    ),
+                    // i18n: in Download File Info, where the size goes: the address didn't answer
+                    Some(Err(e)) => (crate::i18n::t("Error").to_owned(), Some(e.clone())),
+                };
+                let name = Path::new(&self.save_as)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let (preview, size_at) = winui::file_card(
+                    ui,
+                    r(o, lx, 16.0, right - lx, 66.0),
+                    crate::fileicons::Kind::File(&name),
+                    &name,
+                    &size,
+                    // i18n: verb: open the part already downloaded
+                    Some(("Preview", ButtonKind::Disabled)),
+                );
+                if let Some(preview) = preview {
+                    preview.on_hover_text(crate::i18n::t(
+                        // i18n: tooltip of the greyed Preview button in Download File Info
+                        "Preview isn't available yet",
+                    ));
+                }
+                // Why the address didn't answer (not found, sign-in needed…): on hover, copyable.
+                if let Some(reason) = reason {
+                    winui::copyable(ui, size_at, "file-info-error", &reason, true);
+                }
+
+                winui::form_label(&p, o, lx, 96.0, h, "URL", true);
+                let url_rc = field(96.0, 0.0);
                 let url_box = winui::edit(ui, url_rc, &mut self.url_text, true, false);
                 // An edited address is the one downloaded (it was ignored before).
                 if url_box.changed() {
@@ -1185,14 +1479,8 @@ impl FileInfo {
                 }
 
                 // i18n: noun: label before the list of categories
-                winui::text_right(
-                    &p,
-                    o.x + 88.0,
-                    o.y + 46.0,
-                    crate::i18n::t("Category"),
-                    winui::TEXT(),
-                );
-                let cat_rect = r(o, 96.0, 36.0, 174.0, 21.0);
+                winui::form_label(&p, o, lx, 136.0, h, "Category", true);
+                let cat_rect = field(136.0, h + 8.0);
                 let shown = self.category.shown();
                 let cat = winui::combo(ui, cat_rect, &shown, "category");
                 if cat.clicked() || winui::combo_keys(ui, &cat) {
@@ -1200,18 +1488,15 @@ impl FileInfo {
                 }
                 let category_was_open = self.category_open;
                 // "+": a new category (the app's category window).
-                if winui::small_button(ui, r(o, 276.0, 35.0, 22.0, 21.0), "+").clicked() {
+                // i18n: tooltip of the "+" after the category in Download File Info
+                if winui::icon_only_button(ui, side_button(136.0), "gx-plus", "Add category", true)
+                    .clicked()
+                {
                     self.new_category = true;
                 }
 
-                winui::text_right(
-                    &p,
-                    o.x + 88.0,
-                    o.y + 77.0,
-                    crate::i18n::t("Save As"),
-                    winui::TEXT(),
-                );
-                let save_rc = r(o, 96.0, 63.0, 335.0, 21.0);
+                winui::form_label(&p, o, lx, 176.0, h, "Save As", true);
+                let save_rc = field(176.0, h + 8.0);
                 let save = winui::combo_edit(ui, save_rc, &mut self.save_as);
                 // Opened, the keys are in Save As (its name is what one changes here).
                 if !self.focused {
@@ -1240,7 +1525,8 @@ impl FileInfo {
                     self.set_folder(&folder);
                     self.edited = true;
                 }
-                winui::keep_keys(ui, &save, false, true, self.folders_open);
+                // Left / Right move its caret, not the focus to "..." beside it (#812).
+                winui::keep_edit_keys(ui, &save, self.folders_open);
                 let folders_were_open = self.folders_open;
                 if self.folders_open {
                     let shown: Vec<String> = self
@@ -1261,7 +1547,10 @@ impl FileInfo {
                     }
                 }
                 // "...": choose the folder.
-                if winui::small_button(ui, r(o, 439.0, 64.0, 22.0, 21.0), "...").clicked() {
+                // i18n: tooltip of the "..." after Save As: choose the folder
+                if winui::icon_only_button(ui, side_button(176.0), "gx-dots", "Browse", true)
+                    .clicked()
+                {
                     let now = self
                         .dest()
                         .parent()
@@ -1285,18 +1574,13 @@ impl FileInfo {
                     crate::i18n::t("Remember this path for \"{category}\" category"),
                     &[("category", &self.category.shown())],
                 );
-                let gap_end = o.x + 122.0 + winui::text_width(&p, &caption) + 5.0;
-                winui::group_box(
-                    &p,
-                    r(o, 96.0, 97.0, 366.0, 45.0),
-                    Some((o.x + 104.0, gap_end)),
-                );
-                winui::checkbox(
+                winui::checkbox_until(
                     ui,
-                    o + vec2(104.0, 90.0),
+                    o + vec2(fx, 219.0),
                     &mut self.remember,
                     &caption,
                     true,
+                    Some(o.x + right),
                 );
                 let mut folder = format!(
                     "{}\\",
@@ -1307,26 +1591,14 @@ impl FileInfo {
                     ))
                     .trim_end_matches('\\')
                 );
-                let folder_rc = r(o, 104.0, 112.0, 348.0, 23.0);
+                // The category's folder under its check box: greyed, and still copyable.
+                let folder_rc = field(246.0, 0.0);
                 winui::edit(ui, folder_rc, &mut folder, false, false);
-                // Greyed as IDM shows it, and still copyable.
                 winui::copyable(ui, folder_rc, "remembered-folder", &folder, false);
 
                 // i18n: noun: label before a free-text box describing the file
-                winui::text_right(
-                    &p,
-                    o.x + 87.0,
-                    o.y + 161.0,
-                    crate::i18n::t("Description"),
-                    winui::TEXT(),
-                );
-                winui::edit(
-                    ui,
-                    r(o, 96.0, 148.0, 366.0, 23.0),
-                    &mut self.description,
-                    true,
-                    false,
-                );
+                winui::form_label(&p, o, lx, 286.0, h, "Description", true);
+                winui::edit(ui, field(286.0, 0.0), &mut self.description, true, false);
 
                 // Through a debrid account (#44): ticked, the service unlocks the link; unticked,
                 // the address is downloaded directly. Either way it is looked up again.
@@ -1339,11 +1611,11 @@ impl FileInfo {
                     );
                     winui::checkbox_until(
                         ui,
-                        o + vec2(96.0, 186.0),
+                        o + vec2(fx, 329.0),
                         &mut on,
                         &caption,
                         true,
-                        Some(o.x + 462.0),
+                        Some(o.x + right),
                     );
                     if on == self.direct {
                         self.direct = !on;
@@ -1354,19 +1626,14 @@ impl FileInfo {
                 // Where the server is (#140), as the look saw it: "..." while it looks; blank when
                 // nothing was asked (the browser had the answer) or the look failed.
                 // i18n: label before where a download's server is (its country and round trip)
-                winui::text_right(
-                    &p,
-                    o.x + 88.0,
-                    o.y + 193.0 + dy,
-                    crate::i18n::t("Server"),
-                    winui::TEXT(),
-                );
+                winui::form_label(&p, o, lx, 326.0 + dy, 20.0, "Server", true);
+                let server_baseline = o.y + winui::baseline_in(326.0 + dy, 20.0);
                 match &self.info {
                     None => crate::whereis::line(
                         ui,
-                        o.x + 96.0,
-                        o.y + 193.0 + dy,
-                        o.x + 462.0,
+                        o.x + fx,
+                        server_baseline,
+                        o.x + right,
                         None,
                         "file-info",
                     ),
@@ -1375,9 +1642,9 @@ impl FileInfo {
                             let seen = crate::whereis::Seen::from(server);
                             crate::whereis::line(
                                 ui,
-                                o.x + 96.0,
-                                o.y + 193.0 + dy,
-                                o.x + 462.0,
+                                o.x + fx,
+                                server_baseline,
+                                o.x + right,
                                 Some(&seen),
                                 "file-info",
                             );
@@ -1417,104 +1684,46 @@ impl FileInfo {
                 } else {
                     None
                 };
-                let (later_kind, start_kind) = if blocked.is_some() {
-                    (ButtonKind::Disabled, ButtonKind::Disabled)
+                let later_kind = if blocked.is_some() {
+                    ButtonKind::Disabled
                 } else {
-                    (ButtonKind::Normal, ButtonKind::Default)
+                    ButtonKind::Normal
                 };
-                // The row as wide as its labels in this language need (#192), ending where it
-                // ends in English.
-                let [later_at, start_at, cancel_at] = winui::button_row(
-                    &p,
-                    &[
-                        ("Download Later", 97.0, 109.0),
-                        ("Start Download", 225.0, 109.0),
-                        ("Cancel", 352.0, 109.0),
+                let start_kind = if blocked.is_some() {
+                    ButtonKind::Disabled
+                } else {
+                    ButtonKind::Default
+                };
+                let why = blocked.unwrap_or("");
+                // Enter starts and Escape cancels, as in IDM, while no drop list is open (Escape
+                // closes an open list first); a greyed Start ignores Enter.
+                let lists_closed = !folders_were_open && !category_was_open;
+                let pressed = winui::footer(
+                    ui,
+                    o,
+                    W,
+                    body,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("Download Later", later_kind)
+                                .mnemonic(9)
+                                .tip(blocked.is_some(), why),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Start Download", start_kind)
+                                .primary()
+                                .ring(true)
+                                .mnemonic(0)
+                                .enter(lists_closed)
+                                .tip(blocked.is_some(), why),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal)
+                                .mnemonic(0)
+                                .escape(lists_closed),
+                        ),
                     ],
-                    19.0,
-                    11.0,
-                    200.0,
-                )[..] else {
-                    unreachable!("three buttons")
-                };
-                let later = winui::button(
-                    ui,
-                    r(o, later_at.0, 206.0 + dy, later_at.1, 21.0),
-                    "Download Later",
-                    later_kind,
-                    false,
-                    Some(9),
                 );
-                let later = winui::why_disabled(later, blocked.is_some(), blocked.unwrap_or(""));
-                let start = winui::button(
-                    ui,
-                    r(o, start_at.0, 206.0 + dy, start_at.1, 21.0),
-                    "Start Download",
-                    start_kind,
-                    true,
-                    Some(0),
-                );
-                let start = winui::why_disabled(start, blocked.is_some(), blocked.unwrap_or(""));
-                let cancel = winui::button(
-                    ui,
-                    r(o, cancel_at.0, 206.0 + dy, cancel_at.1, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                    Some(0),
-                );
-
-                // Right column, centred on x ≈ 516 (+ cx): file icon, size, Preview.
-                // The shell's own 32 px icon for this file type, as IDM shows.
-                let ext = Path::new(&self.save_as)
-                    .extension()
-                    .map(|e| e.to_string_lossy().to_ascii_lowercase())
-                    .unwrap_or_default();
-                icons.paint(
-                    ui,
-                    crate::chrome::IconKey::ExtLarge(ext),
-                    o + vec2(500.0 + cx, 45.0),
-                );
-                let (size, reason) = match &self.info {
-                    None => ("...".to_owned(), None),
-                    Some(Ok(pi)) => (
-                        // i18n: a download's size is not known (the server didn't say)
-                        pi.size
-                            .map_or(crate::i18n::t("unknown").to_owned(), dialog_size),
-                        None,
-                    ),
-                    // i18n: in Download File Info, where the size goes: the address didn't answer
-                    Some(Err(e)) => (crate::i18n::t("Error").to_owned(), Some(e.clone())),
-                };
-                let w = winui::text_width(&p, &size);
-                let at = winui::text(
-                    &p,
-                    o.x + 515.0 + cx - w / 2.0,
-                    o.y + 103.0,
-                    &size,
-                    winui::TEXT(),
-                );
-                // Why the address didn't answer (not found, sign-in needed…): on hover, copyable.
-                if let Some(reason) = reason {
-                    winui::copyable(ui, at, "file-info-error", &reason, true);
-                }
-                // As wide as its label in this language (#192), around the column's centre, from
-                // 8 px after the group box (it ends at 462) to the window's edge.
-                let (px, pw) =
-                    winui::button_around(&p, "Preview", 480.0 + cx, 73.0, 470.0, 562.0 + wide);
-                winui::button(
-                    ui,
-                    r(o, px, 128.0, pw, 21.0),
-                    // i18n: verb: open the part already downloaded
-                    "Preview",
-                    ButtonKind::Disabled,
-                    false,
-                    None,
-                )
-                .on_hover_text(crate::i18n::t(
-                    // i18n: tooltip of the greyed Preview button in Download File Info
-                    "Preview isn't available yet",
-                ));
 
                 // The categories in a list window of their own (the shared drop list: keys,
                 // Escape, never cut off by this short window).
@@ -1534,23 +1743,78 @@ impl FileInfo {
                     }
                 }
 
-                // Escape closes an open drop list first, then the dialog.
-                let key =
-                    |k| !folders_were_open && !category_was_open && ui.input(|i| i.key_pressed(k));
-                if cancel.clicked() || key(egui::Key::Escape) {
-                    Outcome::Closed
-                } else if blocked.is_some() {
-                    Outcome::Open
-                } else if start.clicked() || key(egui::Key::Enter) {
-                    Outcome::Done(Start::Now)
-                } else if later.clicked() {
-                    Outcome::Done(Start::Later)
-                } else {
-                    Outcome::Open
+                match pressed {
+                    Some(2) => Outcome::Closed,
+                    _ if blocked.is_some() => Outcome::Open,
+                    Some(1) => Outcome::Done(Start::Now),
+                    Some(0) => Outcome::Done(Start::Later),
+                    _ => Outcome::Open,
                 }
             },
         )
     }
+}
+
+/// Cancel in Download File Info while more downloads wait their turn behind it (#394): are
+/// those cancelled too? `Done(true)`: yes; `Done(false)`: this one alone is skipped.
+fn cancel_waiting(ctx: &egui::Context, n: usize) -> Outcome<bool> {
+    let extra = grow_extra(ctx, "cancel-waiting");
+    question(
+        ctx,
+        "cancel-waiting",
+        "Grabbit",
+        [374.0, 100.0 + extra],
+        false,
+        winui::BG(),
+        |ui, o| {
+            let p = ui.painter().clone();
+            let text = crate::i18n::fmt(
+                // i18n: Cancel in Download File Info with downloads waiting behind it
+                &crate::i18n::tn(
+                    n as u64,
+                    "There is {n} more download waiting. Cancel it too?",
+                    "There are {n} more downloads waiting. Cancel them too?",
+                ),
+                &[("n", &crate::i18n::integer(n as u64))],
+            );
+            let lines = winui::paragraph(
+                &p,
+                o.x + 11.0,
+                o.y + 21.0,
+                &text,
+                winui::TEXT(),
+                o.x + 362.0,
+                13.0,
+            );
+            grow_to(ui.ctx(), "cancel-waiting", lines, 2);
+            let o = o + vec2(0.0, extra);
+            let yes = winui::button(
+                ui,
+                r(o, 94.0, 63.0, 73.0, 21.0),
+                "Yes",
+                ButtonKind::Default,
+                false,
+                None,
+            )
+            .clicked();
+            let no = winui::button(
+                ui,
+                r(o, 207.0, 63.0, 73.0, 21.0),
+                "No",
+                ButtonKind::Normal,
+                false,
+                None,
+            )
+            .clicked();
+            if no || winui::escape_pressed(ui) {
+                Outcome::Done(false)
+            } else if yes || winui::enter_pressed(ui) {
+                Outcome::Done(true)
+            } else {
+                Outcome::Open
+            }
+        },
+    )
 }
 
 /// Look `url` up in the background (name, size) as the download will ask it (`request`), the
@@ -1578,7 +1842,7 @@ fn start_probe(
     probe
 }
 
-// ---- Download complete (client 455 × 215) --------------------------------------------------
+// ---- Download complete (client 540 × 317, 339 with a notice) -------------------------------
 
 pub struct Complete {
     pub id: u64,
@@ -1592,37 +1856,34 @@ pub struct Complete {
     /// Clicked (or activated) once: from then on a window like any other, no longer above every
     /// program's (it shows above them until then, as IDM's does: #77).
     pub seen: bool,
+    /// Open was pressed: the file is looked for and handed to its program off the window's
+    /// thread (#743); the box closes when it opened, and stays (for Open folder) when it didn't.
+    pub opening: Option<crate::launch::Asked<PathBuf, bool>>,
+    /// The file was dragged out of the box to a place MDM couldn't learn (upstream issue 869):
+    /// Open and Open folder say so.
+    pub moved_away: bool,
 }
 
 impl Complete {
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         let id = format!("complete-{}", self.id);
         self.seen |= notice_seen(ctx, &id);
+        // The mockup's layout: the file's card, a label column, the drag strip, the footer. A
+        // notice (a video's subtitles refused) takes a line of its own under the card.
+        const W: f32 = 540.0;
+        let dy = if self.notices.is_empty() { 0.0 } else { 22.0 };
+        let body = 262.0 + dy;
         notice(
             ctx,
             &id,
             "Download complete",
-            [455.0, 215.0],
+            [W, body + winui::FOOTER_H],
             true,
             winui::BG(),
             !self.seen,
             |ui, o| {
                 let p = ui.painter().clone();
-                // The system's open folder (IDM shows one here): the shared file icons'.
-                crate::fileicons::paint_at(
-                    ui,
-                    &p,
-                    crate::fileicons::Kind::FolderOpen,
-                    o + vec2(10.0, 11.0),
-                    32.0,
-                );
-                winui::text(
-                    &p,
-                    o.x + 51.0,
-                    o.y + 21.0,
-                    crate::i18n::t("Download complete"),
-                    winui::TEXT(),
-                );
+                let (lx, right, h) = (winui::EDGE, W - winui::EDGE, winui::CONTROL_H);
                 let line = crate::i18n::fmt(
                     crate::i18n::t("Downloaded {size} ({bytes} Bytes)"),
                     &[
@@ -1630,138 +1891,194 @@ impl Complete {
                         ("bytes", &crate::i18n::integer(self.size)),
                     ],
                 );
-                winui::text(&p, o.x + 51.0, o.y + 34.0, &line, winui::TEXT());
+                let name = self
+                    .path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                winui::file_card(
+                    ui,
+                    r(o, lx, 16.0, right - lx, 66.0),
+                    crate::fileicons::Kind::File(&name),
+                    crate::i18n::t("Download complete"),
+                    &line,
+                    None,
+                );
                 // What didn't come with it (a video's subtitles the site refused), shortened to
                 // the window and whole on hover.
                 if !self.notices.is_empty() {
                     winui::fit(
                         ui,
                         &p,
-                        o.x + 51.0,
-                        o.y + 52.0,
+                        o.x + lx,
+                        o.y + 100.0,
                         &self.notices.join(" "),
                         winui::ERROR(),
-                        o.x + 444.0,
+                        o.x + right,
                         ("complete-notice", self.id),
                     );
                 }
+                let fx = winui::form(&p, lx, &["Address", "The file saved as"], false);
                 // i18n: noun: the web address (URL)
-                winui::text(
-                    &p,
-                    o.x + 11.0,
-                    o.y + 72.0,
-                    crate::i18n::t("Address"),
-                    winui::TEXT(),
-                );
+                winui::form_label(&p, o, lx, 96.0 + dy, h, "Address", true);
                 // Read-only and copyable (an editable copy let typing seem to work, then reverted).
                 winui::readonly_field(
                     ui,
-                    r(o, 11.0, 78.0, 434.0, 23.0),
+                    r(o, fx, 96.0 + dy, right - fx, h),
                     &self.url,
                     winui::BG(),
                     true,
                     "complete-url",
                 );
-                winui::text(
-                    &p,
-                    o.x + 11.0,
-                    o.y + 117.0,
-                    crate::i18n::t("The file saved as"),
-                    winui::TEXT(),
-                );
+                winui::form_label(&p, o, lx, 136.0 + dy, h, "The file saved as", true);
                 winui::readonly_field(
                     ui,
-                    r(o, 11.0, 124.0, 434.0, 23.0),
+                    r(o, fx, 136.0 + dy, right - fx, h),
                     &display_path(&self.path),
                     winui::BG(),
                     true,
                     "complete-saved",
                 );
 
-                let btn = |ui: &mut Ui, (x, w): (f32, f32), label: &str, kind| {
-                    winui::button(ui, r(o, x, 157.0, w, 21.0), label, kind, false, None)
-                };
-                // As wide as their labels in this language (#192): a longer one pushes those
-                // after it right, Close last at the window's edge.
-                let [open_at, with_at, folder_at, close_at] = winui::button_row_from_left(
-                    &p,
-                    &[
-                        ("Open", 12.0, 90.0),
-                        ("Open with...", 115.0, 90.0),
-                        ("Open folder", 219.0, 90.0),
-                        ("Close", 354.0, 90.0),
+                // Enter: Open, the default button (as in the other dialogs); Escape: Close. The
+                // keys of a drag out of the grip are the drag's (Escape cancels it), not this
+                // window's (#561: the drag runs beside the window, which sees them too). The
+                // footer comes first so Tab keeps its order: the buttons, the check box, the grip.
+                let dragging = crate::win32::dragging_out();
+                let pressed = winui::footer(
+                    ui,
+                    o,
+                    W,
+                    body,
+                    &mut [
+                        // i18n: verb: opens the downloaded file
+                        FooterItem::Button(
+                            FooterButton::new("Open", ButtonKind::Default)
+                                .icon("gx-external")
+                                .enter(!dragging),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Open with...", ButtonKind::Normal).leading(),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Open folder", ButtonKind::Normal)
+                                .icon("cat-folder-open")
+                                .leading(),
+                        ),
+                        // i18n: verb: closes this window
+                        FooterItem::Button(
+                            FooterButton::new("Close", ButtonKind::Normal).escape(!dragging),
+                        ),
                     ],
-                    13.0,
-                    444.0,
-                    200.0,
-                )[..] else {
-                    unreachable!("four buttons")
-                };
-                // i18n: verb: opens the downloaded file
-                let open = btn(ui, open_at, "Open", ButtonKind::Default);
-                let with = btn(ui, with_at, "Open with...", ButtonKind::Normal);
-                let folder = btn(ui, folder_at, "Open folder", ButtonKind::Normal);
-                // i18n: verb: closes this window
-                let close = btn(ui, close_at, "Close", ButtonKind::Normal);
+                );
+                let (open, with, folder, close) = (
+                    pressed == Some(0),
+                    pressed == Some(1),
+                    pressed == Some(2),
+                    pressed == Some(3),
+                );
                 winui::checkbox(
                     ui,
-                    o + vec2(24.0, 191.0),
+                    o + vec2(lx, 229.0 + dy),
                     &mut self.dont_show,
                     "Don't show this dialog again",
                     true,
                 );
 
-                // Drag handle: white box with a 1 px #828790 border; drag it to drop the file into
-                // Explorer, a mail or a chat (IDM 5.05). Windows only: dragging a file out to
-                // another app goes through OLE there; Linux and macOS have no such drag built
-                // yet, so the handle isn't shown (Open folder is the way there).
-                #[cfg(windows)]
+                // The drag strip: drag it to drop the file into Explorer, a mail or a chat (IDM
+                // 5.05), through OLE. A dashed box with Graphite's grip and what it does. The drop
+                // target decides, as for a file dragged in Explorer: moved on the same drive (or
+                // with Shift), copied to another (or with Ctrl), and MDM's download follows a move
+                // (upstream issue 869).
                 {
-                    let handle = r(o, 414.0, 187.0, 27.0, 20.0);
-                    let grip = ui
-                        .interact(
-                            handle,
-                            egui::Id::unique(("drag-out", self.id)),
-                            winui::pointer_drag(),
-                        )
-                        // i18n: tooltip of the handle in Download complete: drag it to drop the downloaded file somewhere
-                        .on_hover_text(crate::i18n::t("Drag the file into a folder or an app"));
+                    let handle = r(o, lx, 176.0 + dy, right - lx, 40.0);
+                    // Its line says what it does (no tooltip repeating it).
+                    let grip = ui.interact(
+                        handle,
+                        egui::Id::unique(("drag-out", self.id)),
+                        winui::pointer_drag(),
+                    );
                     if grip.hovered() {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
                     }
-                    if grip.drag_started()
-                        && self.path.exists()
-                        && let Err(e) = crate::win32::drag_file_out(
+                    // The file is looked for beside the window, with the drag (#743); where a move
+                    // took it comes back to the app (`dragged_out`), however late.
+                    if grip.drag_started() {
+                        let (id, from, wake) = (self.id, self.path.clone(), ui.ctx().clone());
+                        let followed = move |out| {
+                            DRAGGED_OUT
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner())
+                                .push((id, from, out));
+                            wake.request_repaint();
+                        };
+                        if let Err(e) = crate::win32::drag_file_out(
                             crate::i18n::t("Download complete"),
                             &self.path,
-                        )
-                    {
-                        tracing::warn!("drag out: {e}");
+                            followed,
+                        ) {
+                            tracing::warn!("drag out: {e}");
+                        }
                     }
-                    p.rect_filled(handle, 0.0, winui::FIELD());
-                    p.rect_stroke(
-                        handle,
-                        0.0,
-                        egui::Stroke::new(1.0, winui::FIELD_EDGE()),
-                        egui::StrokeKind::Inside,
+                    let edge = handle.shrink(0.5);
+                    let corners = [
+                        edge.left_top(),
+                        edge.right_top(),
+                        edge.right_bottom(),
+                        edge.left_bottom(),
+                        edge.left_top(),
+                    ];
+                    p.extend(egui::Shape::dashed_line(
+                        &corners,
+                        egui::Stroke::new(1.0, crate::theme::colors().menubar_line),
+                        4.0,
+                        3.0,
+                    ));
+                    let ink = crate::theme::colors().text_secondary;
+                    let glyph = egui::Rect::from_min_size(
+                        egui::pos2(handle.left() + 12.0, handle.center().y - 9.0),
+                        vec2(18.0, 18.0),
                     );
-                    crate::icons::Icon::DragOut.image(true).paint_at(
-                        ui,
-                        egui::Rect::from_center_size(handle.center(), vec2(16.0, 16.0)),
+                    crate::themeicons::paint_graphite_in(ui, &p, "gx-grip", glyph, ink);
+                    winui::text_at(
+                        &p,
+                        winui::tahoma(),
+                        glyph.right() + 10.0,
+                        o.y + winui::baseline_in(176.0 + dy, 40.0),
+                        // i18n: Download complete: the drag strip's line: drag it to drop the downloaded file somewhere
+                        crate::i18n::t("Drag the file into a folder or an app"),
+                        ink,
                     );
                 }
 
-                // Enter: Open, the default button (as in the other dialogs).
-                // A file that can't open says why (the box stays for Open folder).
-                if (open.clicked() || winui::enter_pressed(ui)) && open_file(&self.path) {
+                // A file that can't open says why (the box stays for Open folder). Looked for and
+                // handed over off the window's thread (upstream issue 743): the box closes once it
+                // opened.
+                let opened = self.opening.as_ref().and_then(|a| a.answer(&self.path));
+                if opened.is_some() {
+                    self.opening = None;
+                }
+                if open && self.opening.is_none() {
+                    let opening = crate::launch::Asked::default();
+                    let moved_away = self.moved_away;
+                    let _ = opening.get(
+                        &self.path,
+                        std::time::Duration::MAX,
+                        std::time::Duration::ZERO,
+                        Some(ui.ctx()),
+                        move |p| open_download_now(p, moved_away),
+                    );
+                    self.opening = Some(opening);
+                }
+                if opened == Some(true) {
                     Outcome::Done(())
-                } else if with.clicked() {
-                    open_with(&self.path);
+                } else if with {
+                    open_download_with(&self.path, self.moved_away);
                     Outcome::Done(())
-                } else if folder.clicked() {
-                    show_in_folder(&self.path);
+                } else if folder {
+                    show_download_in_folder(&self.path, self.moved_away);
                     Outcome::Done(())
-                } else if close.clicked() || winui::escape_pressed(ui) {
+                } else if close {
                     Outcome::Done(())
                 } else {
                     Outcome::Open
@@ -1809,11 +2126,14 @@ impl SpeedSettings {
 
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<SpeedChoice> {
         let extra = self.note_extra;
+        // The mockup's width; the rows as they were, then the footer.
+        const W: f32 = 480.0;
+        let body = 172.0 + extra;
         window(
             ctx,
             "speed-settings",
             "Speed Limiter settings",
-            [453.0, 197.0 + extra],
+            [W, body + winui::FOOTER_H],
             false,
             winui::LIGHT_BG(),
             |ui, o| {
@@ -1837,7 +2157,7 @@ impl SpeedSettings {
                         winui::text(p, x, baseline, s, black);
                     },
                 );
-                winui::number_field(
+                let kb = winui::number_field(
                     ui,
                     kb_box[0],
                     &mut self.kb,
@@ -1846,24 +2166,37 @@ impl SpeedSettings {
                     true,
                     winui::LIGHT_BG(),
                 );
+                // Inside its sentence, so no caption names it: named here for screen readers.
+                // i18n: what a screen reader calls the Speed Limiter's box for one file's speed
+                let name = crate::i18n::t("Maximum download speed for one file");
+                ui.ctx()
+                    .accesskit_node_builder(kb.id, |n| n.set_label(name));
                 let note = crate::i18n::t(
                     "Note: Internet servers may break connection when the speed is too limited! Thus it's not\nrecommended to use Speed Limiter to download from servers that do not support\n\"resume\" feature.",
                 );
                 // Wrapped inside the window (IDM's English runs to x 440); a translation longer than three
                 // lines pushes the rest down and the window grows.
-                let lines =
-                    winui::paragraph(&p, o.x + 11.0, o.y + 47.0, note, black, o.x + 449.0, 13.0);
+                let lines = winui::paragraph(
+                    &p,
+                    o.x + 11.0,
+                    o.y + 47.0,
+                    note,
+                    black,
+                    o.x + W - winui::EDGE,
+                    13.0,
+                );
                 self.note_extra = lines.saturating_sub(3) as f32 * 13.0;
                 let o = o + vec2(0.0, self.note_extra);
                 winui::checkbox_light(
                     ui,
                     o + vec2(11.0, 86.0),
                     &mut self.on_startup,
-                    "Always turn on Speed Limiter on Mister Download Manager startup",
+                    "Always turn on Speed Limiter on Grabbit startup",
                     true,
                 );
                 // Beyond IDM: a limit for all downloads together.
-                winui::etched_h(&p, o.x + 11.0, o.y + 108.0, 431.0);
+                // Across to the window's text edge (464 of its 480).
+                winui::etched_h(&p, o.x + 11.0, o.y + 108.0, 453.0);
                 winui::checkbox_light_until(
                     ui,
                     o + vec2(11.0, 121.0),
@@ -1898,25 +2231,28 @@ impl SpeedSettings {
                     "Only while I'm using the computer",
                     on,
                 );
-                let ok = winui::button_light(
+                // Enter OK, Escape Cancel, as before. (`o` moved down by the note's extra lines:
+                // the footer is placed on the window's own top.)
+                let pressed = winui::footer(
                     ui,
-                    r(o, 285.0, 164.0, 73.0, 21.0),
-                    "OK",
-                    ButtonKind::Default,
-                    true,
-                )
-                .clicked();
-                let cancel = winui::button_light(
-                    ui,
-                    r(o, 369.0, 164.0, 73.0, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                if cancel || winui::escape_pressed(ui) {
+                    o - vec2(0.0, self.note_extra),
+                    W,
+                    body,
+                    &mut [
+                        FooterItem::Button(
+                            // Its ring shows while nothing has the keys, as before.
+                            FooterButton::new("OK", ButtonKind::Default)
+                                .enter(true)
+                                .ring(true),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                if pressed == Some(1) {
                     Outcome::Closed
-                } else if ok || winui::enter_pressed(ui) {
+                } else if pressed == Some(0) {
                     Outcome::Done(SpeedChoice {
                         kb: winui::number_in(&self.kb, 1, 9_999_999),
                         on_startup: self.on_startup,
@@ -1967,36 +2303,45 @@ pub fn grow_to(ctx: &egui::Context, key: &str, lines: usize, planned: usize) {
 /// A notice with OK, sized to its text (crate::i18n::t("Cannot find …")): one line when it
 /// fits, wrapped and taller when it doesn't (a long path or reason is never cut off).
 pub fn message(ctx: &egui::Context, id: &str, title: &str, text: &str) -> Outcome<()> {
-    // Tahoma −11 averages about 5.5 px a character; the box is kept between 260 and 480 px.
-    let width = (text.chars().count() as f32 * 5.6 + 40.0).clamp(260.0, 480.0);
+    // Tahoma −11 averages about 5.5 px a character; the box is kept between the mockup's 340 and
+    // 480 px.
+    let width = (text.chars().count() as f32 * 5.6 + 40.0).clamp(340.0, 480.0);
     let extra = grow_extra(ctx, id);
+    let body = 45.0 + extra;
     window(
         ctx,
         id,
         title,
-        [width, 80.0 + extra],
+        [width, body + winui::FOOTER_H],
         false,
         winui::LIGHT_BG(),
         |ui, o| {
             let p = ui.painter().clone();
             let lines = winui::paragraph(
                 &p,
-                o.x + 16.0,
-                o.y + 24.0,
+                o.x + winui::EDGE,
+                o.y + 29.0,
                 text,
                 winui::LIGHT_TEXT(),
-                o.x + width - 16.0,
+                o.x + width - winui::EDGE,
                 13.0,
             );
             grow_to(ui.ctx(), id, lines, 1);
-            let ok = winui::button_light(
+            // The one centred footer (the mockup's generic notice): the band, then OK in its
+            // middle, filled as the default.
+            winui::footer(ui, o, width, body, &mut []);
+            let w = winui::footer_button_width(&p, "OK", false);
+            let top = body + 1.0 + ((winui::FOOTER_H - 1.0 - winui::CONTROL_H) / 2.0).floor();
+            let ok = winui::button(
                 ui,
-                r(o, (width - 73.0) / 2.0, 47.0 + extra, 73.0, 21.0),
+                r(o, ((width - w) / 2.0).round(), top, w, winui::CONTROL_H),
                 "OK",
-                ButtonKind::Default,
+                ButtonKind::Accent,
                 false,
+                None,
             )
             .clicked();
+            // Enter and Escape close it (with a modifier held too), as before.
             let keys =
                 ui.input(|i| i.key_pressed(egui::Key::Enter) || i.key_pressed(egui::Key::Escape));
             if ok || keys {
@@ -2033,52 +2378,55 @@ impl LimitNotice {
                 ),
                 crate::i18n::fmt(
                     crate::i18n::t("Downloads stopped and will resume automatically at {time}."),
-                    &[(
-                        "time",
-                        &at.format(if crate::i18n::code() == "en" {
-                            "%-I:%M %p"
-                        } else {
-                            "%H:%M"
-                        })
-                        .to_string(),
-                    )],
+                    &[("time", &at.format("%-I:%M %p").to_string())],
                 ),
             ],
         }
     }
 
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
+        const W: f32 = 440.0;
+        const BODY: f32 = 66.0;
         window(
             ctx,
             "limit-notice",
             "Download limits",
-            [420.0, 90.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             winui::LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
+                // The limit, then (muted) when downloads go on.
                 for (i, line) in self.lines.iter().enumerate() {
                     winui::fit(
                         ui,
                         &p,
-                        o.x + 11.0,
-                        o.y + 21.0 + 13.0 * i as f32,
+                        o.x + winui::EDGE,
+                        o.y + 29.0 + 18.0 * i as f32,
                         line,
-                        winui::LIGHT_TEXT(),
-                        o.x + 409.0,
+                        if i == 0 {
+                            winui::LIGHT_TEXT()
+                        } else {
+                            winui::MUTED()
+                        },
+                        o.x + W - winui::EDGE,
                         ("notice-line", i),
                     );
                 }
-                let ok = winui::button_light(
-                    ui,
-                    r(o, 173.0, 57.0, 73.0, 21.0),
-                    "OK",
-                    ButtonKind::Default,
-                    false,
-                )
-                .clicked();
+                // Enter and Escape close it (with a modifier held too), as before.
                 let keys = ui
                     .input(|i| i.key_pressed(egui::Key::Enter) || i.key_pressed(egui::Key::Escape));
+                let ok = winui::footer(
+                    ui,
+                    o,
+                    W,
+                    BODY,
+                    &mut [FooterItem::Button(FooterButton::new(
+                        "OK",
+                        ButtonKind::Default,
+                    ))],
+                )
+                .is_some();
                 if ok || keys {
                     Outcome::Closed
                 } else {
@@ -2124,22 +2472,32 @@ impl TurnOffCountdown {
             TurnOff::Sleep => crate::i18n::t("The computer will go to sleep in {n} seconds."),
             TurnOff::Hibernate => crate::i18n::t("The computer will hibernate in {n} seconds."),
         };
+        // The mockup's layout: a power tile, the two lines beside it, the time left as a bar.
+        const W: f32 = 400.0;
+        const BODY: f32 = 92.0;
         question(
             ctx,
             "turn-off",
-            "Mister Download Manager",
-            [374.0, 100.0],
+            "Grabbit",
+            [W, BODY + winui::FOOTER_H],
             false,
             winui::LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
-                let black = winui::LIGHT_TEXT();
-                winui::text(
+                let e = winui::EDGE;
+                let c = crate::theme::colors();
+                winui::icon_tile(ui, r(o, e, 16.0, 40.0, 40.0), "gx-power", c.text, 8.0);
+                let tx = o.x + e + 40.0 + 12.0;
+                let right = o.x + W - e;
+                winui::fit(
+                    ui,
                     &p,
-                    o.x + 11.0,
-                    o.y + 21.0,
+                    tx,
+                    o.y + 31.0,
                     crate::i18n::t("The download queue is done."),
-                    black,
+                    winui::LIGHT_TEXT(),
+                    right,
+                    "turn-off-done",
                 );
                 let line = crate::i18n::fmt(
                     sentence,
@@ -2148,36 +2506,41 @@ impl TurnOffCountdown {
                         &crate::i18n::integer(left.as_secs() + u64::from(left.subsec_millis() > 0)),
                     )],
                 );
-                winui::text(&p, o.x + 11.0, o.y + 34.0, &line, black);
-                // As wide as their labels in this language (#192): a longer one pushes Cancel
-                // right.
-                let [now_at, cancel_at] = winui::button_row_from_left(
+                winui::fit(
+                    ui,
                     &p,
-                    &[("Turn off now", 94.0, 90.0), ("Cancel", 194.0, 73.0)],
-                    10.0,
-                    363.0,
-                    200.0,
-                )[..] else {
-                    unreachable!("two buttons")
-                };
-                let now = winui::button_light(
+                    tx,
+                    o.y + 49.0,
+                    &line,
+                    winui::MUTED(),
+                    right,
+                    "turn-off-left",
+                );
+                let gone = 1.0 - left.as_secs_f32() / Self::SECONDS as f32;
+                winui::progress_bar(
+                    &p,
+                    r(o, e, 70.0, W - 2.0 * e, 6.0),
+                    Some(gone.clamp(0.0, 1.0)),
+                    ui.input(|i| i.time),
+                );
+                // Cancel stays the default (Enter, Escape), as before: the mockup fills Turn
+                // off now, but Enter must not look like it turns the computer off.
+                let pressed = winui::footer(
                     ui,
-                    r(o, now_at.0, 63.0, now_at.1, 21.0),
-                    "Turn off now",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                let cancel = winui::button_light(
-                    ui,
-                    r(o, cancel_at.0, 63.0, cancel_at.1, 21.0),
-                    "Cancel",
-                    ButtonKind::Default,
-                    false,
-                )
-                .clicked();
-                // Enter: Cancel, the default button.
-                if cancel || winui::escape_pressed(ui) || winui::enter_pressed(ui) {
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(FooterButton::new("Turn off now", ButtonKind::Normal)),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Default)
+                                .enter(true)
+                                .escape(true),
+                        ),
+                    ],
+                );
+                let now = pressed == Some(0);
+                if pressed == Some(1) {
                     Outcome::Closed
                 } else if now || left.is_zero() {
                     Outcome::Done(())
@@ -2191,7 +2554,6 @@ impl TurnOffCountdown {
     /// Shut down, sleep or hibernate now.
     pub fn execute(&self) {
         use crate::queue::TurnOff;
-        #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
             let mut cmd = std::process::Command::new("shutdown");
@@ -2213,37 +2575,6 @@ impl TurnOffCountdown {
             // No console window flashing up (CREATE_NO_WINDOW).
             cmd.creation_flags(0x0800_0000);
             run_or_tell(cmd);
-        }
-        // Linux: systemd, as the desktop's own menu does; forcing ignores the programs that ask
-        // to delay it (inhibitors).
-        #[cfg(target_os = "linux")]
-        {
-            let verb = match self.mode {
-                TurnOff::ShutDown => "poweroff",
-                TurnOff::Hibernate => "hibernate",
-                TurnOff::Sleep => "suspend",
-            };
-            let mut cmd = std::process::Command::new("systemctl");
-            cmd.arg(verb);
-            if self.force {
-                cmd.arg("--ignore-inhibitors");
-            }
-            run_or_tell(cmd);
-        }
-        // macOS: through System Events, as the Apple menu does (macOS has no separate
-        // hibernate: its sleep writes memory to disk as set up); apps can still object.
-        #[cfg(target_os = "macos")]
-        {
-            let script = match self.mode {
-                TurnOff::ShutDown => "tell application \"System Events\" to shut down",
-                TurnOff::Hibernate | TurnOff::Sleep => {
-                    "tell application \"System Events\" to sleep"
-                }
-            };
-            let mut cmd = std::process::Command::new("osascript");
-            cmd.args(["-e", script]);
-            run_or_tell(cmd);
-            let _ = self.force;
         }
     }
 }
@@ -2281,20 +2612,32 @@ impl ConfirmDelete {
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<(bool, bool)> {
         let n = self.ids.len() as u64;
         let extra = grow_extra(ctx, "confirm-delete");
+        // The mockup's layout: a delete tile, the question beside it, the files box, the
+        // footer with "Don't show this dialog again" at its start.
+        const W: f32 = 480.0;
+        const BODY: f32 = 104.0;
         question(
             ctx,
             "confirm-delete",
             "Confirm deletion of downloads",
-            [374.0, 146.0 + extra],
+            [W, BODY + extra + winui::FOOTER_H],
             false,
             winui::LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 let black = winui::LIGHT_TEXT();
+                let e = winui::EDGE;
+                winui::icon_tile(
+                    ui,
+                    r(o, e, 16.0, 40.0, 40.0),
+                    "tb-delete",
+                    crate::theme::colors().error,
+                    8.0,
+                );
                 let text = if n == 1 && self.unfinished {
                     crate::i18n::t(
                         "The selected download is not complete. Are you sure you want to delete
-it from Mister Download Manager list of downloads?",
+it from Grabbit's list of downloads?",
                     )
                     .to_owned()
                 } else if n == 1 {
@@ -2302,7 +2645,7 @@ it from Mister Download Manager list of downloads?",
                     let name = self.name.clone();
                     crate::i18n::fmt(
                         crate::i18n::t(
-                            "Are you sure you want to delete \"{name}\" from Mister Download Manager list of downloads?",
+                            "Are you sure you want to delete \"{name}\" from Grabbit's list of downloads?",
                         ),
                         // A file name keeps its own direction (an Arabic one reads right to left).
                         &[("name", &crate::i18n::isolate(&name))],
@@ -2314,14 +2657,21 @@ it from Mister Download Manager list of downloads?",
                         // i18n: never shown for a single download
                         &crate::i18n::tn(
                             n,
-                            "Are you sure you want to delete {n} download from Mister Download Manager list of downloads?",
-                            "Are you sure you want to delete these {n} downloads from Mister Download Manager list of downloads?",
+                            "Are you sure you want to delete {n} download from Grabbit's list of downloads?",
+                            "Are you sure you want to delete these {n} downloads from Grabbit's list of downloads?",
                         ),
                         &[("n", &crate::i18n::integer(n))],
                     )
                 };
-                let lines =
-                    winui::paragraph(&p, o.x + 11.0, o.y + 21.0, &text, black, o.x + 362.0, 13.0);
+                let lines = winui::paragraph(
+                    &p,
+                    o.x + e + 52.0,
+                    o.y + 30.0,
+                    &text,
+                    black,
+                    o.x + W - e,
+                    13.0,
+                );
                 grow_to(ui.ctx(), "confirm-delete", lines, 3);
                 let o = o + vec2(0.0, extra);
                 let files = if n == 1 {
@@ -2337,33 +2687,31 @@ it from Mister Download Manager list of downloads?",
                         &[("n", &crate::i18n::integer(n))],
                     )
                 };
-                winui::checkbox_light(ui, o + vec2(24.0, 60.0), &mut self.files, &files, true);
-                let yes = winui::button_light(
+                winui::checkbox_light(ui, o + vec2(e, 74.0), &mut self.files, &files, true);
+                // Enter Yes, Escape No, as before; Tab: the files box, Yes, No, then "Don't
+                // show this dialog again".
+                let pressed = winui::footer(
                     ui,
-                    r(o, 94.0, 86.0, 73.0, 21.0),
-                    "Yes",
-                    ButtonKind::Default,
-                    false,
-                )
-                .clicked();
-                let no = winui::button_light(
-                    ui,
-                    r(o, 207.0, 86.0, 73.0, 21.0),
-                    "No",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                winui::checkbox_light(
-                    ui,
-                    o + vec2(24.0, 120.0),
-                    &mut self.dont_show,
-                    "Don't show this dialog again",
-                    true,
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("Yes", ButtonKind::Danger).enter(true),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("No", ButtonKind::Normal).escape(true),
+                        ),
+                        FooterItem::Check(
+                            "Don't show this dialog again",
+                            &mut self.dont_show,
+                            true,
+                        ),
+                    ],
                 );
-                if no || winui::escape_pressed(ui) {
+                if pressed == Some(1) {
                     Outcome::Closed
-                } else if yes || winui::enter_pressed(ui) {
+                } else if pressed == Some(0) {
                     Outcome::Done((self.files, self.dont_show))
                 } else {
                     Outcome::Open
@@ -2373,7 +2721,17 @@ it from Mister Download Manager list of downloads?",
     }
 }
 
-/// Select the file in Explorer (Finder, the Linux file manager). A file that is gone: its
+/// Minimize a window as its title bar's Minimize asks (`hwnd`: the window, once known): by the
+/// system's own command, as the system's title bar sends it, so a window whose title bar is ours
+/// animates down to the taskbar like any other (upstream issue 874). Not known yet: winit's.
+pub fn minimize(ctx: &egui::Context, hwnd: Option<isize>) {
+    match hwnd {
+        Some(h) => crate::win32::minimize(h),
+        None => ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true)),
+    }
+}
+
+/// Select the file in Explorer. A file that is gone: its
 /// folder, if that is still there.
 /// Bring an open window to the front (and back from the taskbar): asked for again, it came
 /// to nothing while it sat behind the main window.
@@ -2433,22 +2791,84 @@ pub fn told() -> Vec<(&'static str, String)> {
 }
 
 /// Open a downloaded file with its program, or say why not (moved or deleted since, no
-/// program for it): it did nothing at all. True when it was handed to the system. Waited for
-/// (the `open` crate's launcher, at most 250 ms each on Windows and Linux), unlike
-/// crate::launch's: whether it failed decides whether Download complete stays open.
-pub fn open_file(path: &Path) -> bool {
+/// program for it): on a thread of its own, as the file may be on a drive slow to answer
+/// (upstream issue 743). Returns at once.
+pub fn open_file(path: &Path) {
+    open_download(path, false);
+}
+
+/// [`open_file`] for a download: `moved_away`, its file was dragged out of Download complete to
+/// a place MDM couldn't learn (upstream issue 869), which is said when it isn't there.
+pub fn open_download(path: &Path, moved_away: bool) {
+    let path = path.to_owned();
+    crate::launch::spawn("open file", move || {
+        open_download_now(&path, moved_away);
+    });
+}
+
+/// What became of a file dragged out of Download complete (upstream issue 869), when the drop
+/// target moved it (a copy or a link leaves it where it was: nothing to say).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DraggedOut {
+    /// Moved there (the shell said where).
+    Moved(PathBuf),
+    /// Gone from its place, to somewhere MDM couldn't learn (a program that took it, the
+    /// Recycle Bin).
+    MovedAway,
+}
+
+/// Files dragged out and moved: (download, the path it was dragged from, what became of it).
+static DRAGGED_OUT: Mutex<Vec<(u64, PathBuf, DraggedOut)>> = Mutex::new(Vec::new());
+
+/// What [`DRAGGED_OUT`] was given since the last call (the app updates its downloads).
+pub fn dragged_out() -> Vec<(u64, PathBuf, DraggedOut)> {
+    std::mem::take(&mut *DRAGGED_OUT.lock().unwrap_or_else(|e| e.into_inner()))
+}
+
+/// Why a download's file isn't where MDM saved it, when it was dragged out of Download complete
+/// to a place MDM couldn't learn (upstream issue 869).
+fn moved_away_text(path: &Path) -> String {
     let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
-    let failed = if !path.exists() {
+    crate::i18n::fmt(
+        crate::i18n::t(
+            "{file} was moved elsewhere by dragging it out of Download complete, and Grabbit couldn't learn where. Look for it where you dropped it.",
+        ),
+        &[("file", &name)],
+    )
+}
+
+/// [`open_download`], waited for: true when the file was handed to the system. For a thread
+/// other than the window's (Download complete asks it through `launch::Asked`: whether it
+/// failed decides whether the box stays open).
+pub fn open_download_now(path: &Path, moved_away: bool) -> bool {
+    hand_over(path, moved_away, |p| {
+        crate::win32::open_file_shell(p).map_err(|e| e.to_string())
+    })
+}
+
+/// Hand the downloaded file `path` to `hand` (which opens it, or shows a chooser for it), or say
+/// why not: moved or deleted since (dragged out of Download complete, when `moved_away`), or
+/// `hand`'s error. True when it was handed over. Waits for `hand`, so it runs on a thread other
+/// than the window's.
+fn hand_over(
+    path: &Path,
+    moved_away: bool,
+    hand: impl FnOnce(&Path) -> Result<(), String>,
+) -> bool {
+    let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
+    let failed = if !path.exists() && moved_away {
+        moved_away_text(path)
+    } else if !path.exists() {
         crate::i18n::fmt(
             crate::i18n::t(
                 "{file} is no longer where it was saved (moved or deleted). Redownload, in its right-click menu, gets it again.",
             ),
             &[("file", &name)],
         )
-    } else if let Err(e) = open::that_detached(path) {
+    } else if let Err(e) = hand(path) {
         crate::i18n::fmt(
             crate::i18n::t("{file} could not be opened: {error}"),
-            &[("file", &name), ("error", &e.to_string())],
+            &[("file", &name), ("error", &e)],
         )
     } else {
         return true;
@@ -2458,8 +2878,31 @@ pub fn open_file(path: &Path) -> bool {
     false
 }
 
+/// Show the file selected in the file manager (its folder, when the file is gone). Returns at
+/// once: whether the file and its folder are there is looked at on a thread of its own, as a
+/// sleeping hard disk, a USB drive or a network folder can take seconds to answer (#751: 8 s,
+/// on the window's thread, froze it).
 pub fn show_in_folder(path: &Path) {
-    #[cfg(windows)]
+    show_download_in_folder(path, false);
+}
+
+/// [`show_in_folder`] for a download: `moved_away`, its file was dragged out of Download
+/// complete to a place MDM couldn't learn (upstream issue 869): when it isn't there, that is
+/// said instead of opening the folder it left.
+pub fn show_download_in_folder(path: &Path, moved_away: bool) {
+    let path = path.to_owned();
+    crate::launch::spawn("show in folder", move || {
+        if moved_away && !path.exists() {
+            // i18n: title of the message when the folder of a downloaded file can't be shown
+            tell(crate::i18n::mark("Open folder"), moved_away_text(&path));
+            return;
+        }
+        show_in_folder_now(&path)
+    });
+}
+
+/// [`show_in_folder`], on the thread it runs on.
+fn show_in_folder_now(path: &Path) {
     {
         use std::os::windows::process::CommandExt;
         if !path.exists() {
@@ -2487,22 +2930,23 @@ pub fn show_in_folder(path: &Path) {
             .raw_arg(format!("/select,\"{}\"", path.display()))
             .spawn();
     }
-    #[cfg(unix)]
-    crate::unix::show_in_folder(path);
 }
 
-pub fn open_with(path: &Path) {
-    #[cfg(windows)]
-    {
-        let _ = std::process::Command::new("rundll32")
-            .arg("shell32.dll,OpenAs_RunDLL")
-            .arg(path)
-            .spawn();
-    }
-    #[cfg(not(windows))]
-    {
-        crate::launch::open(path);
-    }
+/// "Open with": Windows' own chooser of programs for the downloaded file `path` ("How do you
+/// want to open this file?", as Explorer shows it), or a message saying why not (moved or
+/// deleted since; dragged out of Download complete to a place MDM couldn't learn, when
+/// `moved_away`, upstream issue 869). Returns at once: the chooser is shown, and waited for, on a
+/// thread of its own, as is the look at the file (upstream issues 720, 743).
+pub fn open_download_with(path: &Path, moved_away: bool) {
+    let path = path.to_owned();
+    crate::launch::spawn("open with", move || {
+        hand_over(&path, moved_away, |p| {
+            crate::win32::open_with_dialog(p).map_err(|hr| {
+                tracing::warn!("open with: SHOpenWithDialog failed, {hr:#010x}");
+                std::io::Error::from_raw_os_error(hr).to_string()
+            })
+        });
+    });
 }
 
 /// "Duplicate download link": the address is already in the list (Options → Downloads → "If a
@@ -2519,34 +2963,45 @@ impl Duplicate {
     }
 
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<usize> {
+        // The mockup's layout: the text, the name in bold, the choices 27 apart, the footer.
+        const DUP_W: f32 = 560.0;
+        const DUP_BODY: f32 = 157.0;
         question(
             ctx,
             "duplicate",
             "Duplicate download link",
-            [460.0, 156.0],
+            [DUP_W, DUP_BODY + winui::FOOTER_H],
             false,
             winui::LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 let ink = winui::LIGHT_TEXT();
+                let right = DUP_W - winui::EDGE;
                 winui::text(
                     &p,
-                    o.x + 11.0,
-                    o.y + 21.0,
+                    o.x + winui::EDGE,
+                    o.y + 29.0,
                     crate::i18n::t("This address is already in the list of downloads:"),
                     ink,
                 );
+                // The name in bold under it, cut with "..." (whole on hover).
                 let name = crate::i18n::isolate(&self.name);
-                let (rect, cut) =
-                    winui::text_fit(&p, o.x + 11.0, o.y + 39.0, &name, ink, o.x + 449.0);
-                if cut {
+                let bold = winui::tahoma_bold();
+                let shown = winui::ellipsize(&p, &bold, &name, right - winui::EDGE);
+                let rect = winui::text_font(&p, bold, o.x + winui::EDGE, o.y + 49.0, &shown, ink);
+                if shown != name {
                     winui::full_on_hover(ui, rect, "duplicate-name", &self.name);
                 }
                 let mut group = Vec::new();
                 for (k, label) in crate::options::DUPLICATE.iter().enumerate().skip(1) {
-                    let y = 52.0 + 20.0 * (k - 1) as f32;
-                    let resp =
-                        winui::radio_light(ui, o + vec2(14.0, y), self.choice == k, label, true);
+                    let y = 70.0 + 27.0 * (k - 1) as f32;
+                    let resp = winui::radio_light(
+                        ui,
+                        o + vec2(winui::EDGE, y),
+                        self.choice == k,
+                        label,
+                        true,
+                    );
                     if resp.clicked() {
                         self.choice = k;
                     }
@@ -2555,28 +3010,24 @@ impl Duplicate {
                 if let Some(j) = winui::radio_keys(ui, &group) {
                     self.choice = j + 1;
                 }
-                let ok = winui::button_light(
+                // Enter OK, Escape Cancel, as before.
+                match winui::footer(
                     ui,
-                    r(o, 295.0, 124.0, 73.0, 21.0),
-                    "OK",
-                    ButtonKind::Default,
-                    false,
-                )
-                .clicked();
-                let cancel = winui::button_light(
-                    ui,
-                    r(o, 376.0, 124.0, 73.0, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                if cancel || winui::escape_pressed(ui) {
-                    Outcome::Closed
-                } else if ok || winui::enter_pressed(ui) {
-                    Outcome::Done(self.choice)
-                } else {
-                    Outcome::Open
+                    o,
+                    DUP_W,
+                    DUP_BODY,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("OK", ButtonKind::Default).enter(true),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                ) {
+                    Some(1) => Outcome::Closed,
+                    Some(_) => Outcome::Done(self.choice),
+                    None => Outcome::Open,
                 }
             },
         )
@@ -2602,26 +3053,32 @@ impl QueuePick {
     }
 
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<(usize, bool)> {
+        // The mockup's layout: a label column, the footer.
+        const W: f32 = 380.0;
+        const BODY: f32 = 92.0;
         window(
             ctx,
             "queue-pick",
             "Download later",
-            [340.0, 110.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             winui::LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
-                winui::text_right(
+                let fx = winui::form(&p, winui::EDGE, &["Add to queue:"], false);
+                winui::form_label(
                     &p,
-                    o.x + 92.0,
-                    o.y + 26.0,
-                    crate::i18n::t("Add to queue:"),
-                    winui::LIGHT_TEXT(),
+                    o,
+                    winui::EDGE,
+                    16.0,
+                    winui::CONTROL_H,
+                    "Add to queue:",
+                    true,
                 );
                 let names: Vec<&str> = self.names.iter().map(String::as_str).collect();
                 if let Some(i) = winui::combo_light(
                     ui,
-                    r(o, 100.0, 12.0, 228.0, 21.0),
+                    r(o, fx, 16.0, W - winui::EDGE - fx, winui::CONTROL_H),
                     &names,
                     self.chosen,
                     true,
@@ -2631,33 +3088,29 @@ impl QueuePick {
                 }
                 winui::checkbox_light(
                     ui,
-                    o + vec2(100.0, 44.0),
+                    o + vec2(fx, 59.0),
                     &mut self.start,
                     "Start the queue now",
                     true,
                 );
-                let ok = winui::button_light(
+                // Enter OK, Escape Cancel, as before.
+                match winui::footer(
                     ui,
-                    r(o, 174.0, 78.0, 73.0, 21.0),
-                    "OK",
-                    ButtonKind::Default,
-                    false,
-                )
-                .clicked();
-                let cancel = winui::button_light(
-                    ui,
-                    r(o, 255.0, 78.0, 73.0, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                if cancel || winui::escape_pressed(ui) {
-                    Outcome::Closed
-                } else if ok || winui::enter_pressed(ui) {
-                    Outcome::Done((self.chosen, self.start))
-                } else {
-                    Outcome::Open
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("OK", ButtonKind::Default).enter(true),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                ) {
+                    Some(1) => Outcome::Closed,
+                    Some(_) => Outcome::Done((self.chosen, self.start)),
+                    None => Outcome::Open,
                 }
             },
         )
@@ -2668,58 +3121,87 @@ impl QueuePick {
 pub struct Confirm {
     title: &'static str,
     text: String,
+    /// The icon tile before the question (Redownload's `gx-refresh`), where the mockup has one.
+    icon: Option<&'static str>,
 }
 
 impl Confirm {
     pub fn new(title: &'static str, text: String) -> Self {
-        Confirm { title, text }
+        Confirm {
+            title,
+            text,
+            icon: None,
+        }
+    }
+
+    /// With Graphite's `need` on a 40-point tile before the question.
+    pub fn icon(self, need: &'static str) -> Self {
+        Confirm {
+            icon: Some(need),
+            ..self
+        }
     }
 
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         let text = self.text.clone();
         let key = format!("confirm-{}", self.title);
         let extra = grow_extra(ctx, &key);
+        // The mockup's layout: the tile (if any), the question beside it, the footer.
+        const W: f32 = 480.0;
+        const BODY: f32 = 72.0;
+        let icon = self.icon;
         question(
             ctx,
             &key,
             self.title,
-            [400.0, 96.0 + extra],
+            [W, BODY + extra + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
                 let p = ui.painter().clone();
+                let e = winui::EDGE;
+                let x = match icon {
+                    Some(need) => {
+                        winui::icon_tile(
+                            ui,
+                            r(o, e, 16.0, 40.0, 40.0),
+                            need,
+                            crate::theme::colors().text,
+                            8.0,
+                        );
+                        e + 52.0
+                    }
+                    None => e,
+                };
                 let lines = winui::paragraph(
                     &p,
-                    o.x + 11.0,
-                    o.y + 22.0,
+                    o.x + x,
+                    o.y + 30.0,
                     &text,
                     winui::TEXT(),
-                    o.x + 389.0,
+                    o.x + W - e,
                     13.0,
                 );
                 grow_to(ui.ctx(), &key, lines, 3);
                 let o = o + vec2(0.0, extra);
-                let yes = winui::button(
+                // Enter Yes, Escape No, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, 234.0, 64.0, 73.0, 21.0),
-                    "Yes",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked();
-                let no = winui::button(
-                    ui,
-                    r(o, 316.0, 64.0, 73.0, 21.0),
-                    "No",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
-                if no || winui::escape_pressed(ui) {
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("Yes", ButtonKind::Default).enter(true),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("No", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                if pressed == Some(1) {
                     Outcome::Closed
-                } else if yes || winui::enter_pressed(ui) {
+                } else if pressed == Some(0) {
                     Outcome::Done(())
                 } else {
                     Outcome::Open
@@ -2760,22 +3242,26 @@ impl DeleteCategory {
             crate::i18n::t("Delete the category \"{category}\"? Its files stay where they are."),
             &[("category", &crate::i18n::isolate(&self.category.shown()))],
         );
+        // The mockup's layout: the question, the two choices 27 apart, the footer.
+        const W: f32 = 520.0;
+        const BODY: f32 = 119.0;
         question(
             ctx,
             key,
             "Delete category",
-            [500.0, 150.0 + extra],
+            [W, BODY + extra + winui::FOOTER_H],
             false,
             winui::LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
+                let e = winui::EDGE;
                 let lines = winui::paragraph(
                     &p,
-                    o.x + 11.0,
-                    o.y + 22.0,
+                    o.x + e,
+                    o.y + 30.0,
                     &text,
                     winui::LIGHT_TEXT(),
-                    o.x + 489.0,
+                    o.x + W - e,
                     13.0,
                 );
                 grow_to(ui.ctx(), key, lines, 2);
@@ -2786,46 +3272,34 @@ impl DeleteCategory {
                     // i18n: choice in Delete category: its downloads leave the list (not their files; running ones move to General)
                     "Remove its downloads from the list (running ones move to General)",
                 );
-                if winui::radio_light(ui, o + vec2(14.0, 52.0), !self.remove, to_general, true)
+                if winui::radio_light(ui, o + vec2(e, 58.0), !self.remove, to_general, true)
                     .clicked()
                 {
                     self.remove = false;
                 }
-                if winui::radio_light(ui, o + vec2(14.0, 75.0), self.remove, off_list, true)
-                    .clicked()
+                if winui::radio_light(ui, o + vec2(e, 85.0), self.remove, off_list, true).clicked()
                 {
                     self.remove = true;
                 }
-                // As wide as their labels in this language (#192).
-                let [delete_at, cancel_at] = winui::buttons_to_right(
-                    &p,
-                    488.0,
-                    8.0,
-                    &[("Delete", 73.0), ("Cancel", 73.0)],
-                    140.0,
-                )[..] else {
-                    unreachable!("two buttons")
-                };
-                // i18n: button: deletes the category
-                let delete = winui::button_light(
+                // Enter deletes, Escape cancels, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, delete_at.0, 118.0, delete_at.1, 21.0),
-                    "Delete",
-                    ButtonKind::Default,
-                    false,
-                )
-                .clicked();
-                let cancel = winui::button_light(
-                    ui,
-                    r(o, cancel_at.0, 118.0, cancel_at.1, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                if cancel || winui::escape_pressed(ui) {
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        // i18n: button: deletes the category
+                        FooterItem::Button(
+                            FooterButton::new("Delete", ButtonKind::Danger).enter(true),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                if pressed == Some(1) {
                     Outcome::Closed
-                } else if delete || winui::enter_pressed(ui) {
+                } else if pressed == Some(0) {
                     Outcome::Done(self.remove)
                 } else {
                     Outcome::Open
@@ -2840,6 +3314,10 @@ impl DeleteCategory {
 pub struct CreateFolder {
     folder: PathBuf,
     error: Option<String>,
+    /// Yes was pressed: the folder is made off the window's thread (#743), its answer to come.
+    making: Option<crate::launch::Asked<PathBuf, Result<(), String>>>,
+    /// Opened alone for a screenshot (`/show create-folder`): Yes makes nothing, it closes.
+    look_only: bool,
 }
 
 impl CreateFolder {
@@ -2847,80 +3325,106 @@ impl CreateFolder {
         CreateFolder {
             folder,
             error: None,
+            making: None,
+            look_only: false,
+        }
+    }
+
+    /// The question about `folder` with no folder made by Yes (`/show create-folder`).
+    pub fn sample(folder: PathBuf) -> Self {
+        CreateFolder {
+            look_only: true,
+            ..Self::new(folder)
         }
     }
 
     /// `Done` once the folder exists (created on Yes); `Closed` on No, Escape or the close box.
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         let folder = self.folder.display().to_string();
+        // The mockup's layout: the folder in bold between the two lines, the footer.
+        const W: f32 = 420.0;
+        const BODY: f32 = 99.0;
         question(
             ctx,
             "create-folder",
             "Create folder",
-            [420.0, 128.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 let ink = winui::TEXT();
+                let (x, right) = (o.x + winui::EDGE, o.x + W - winui::EDGE);
                 winui::text(
                     &p,
-                    o.x + 11.0,
-                    o.y + 21.0,
+                    x,
+                    o.y + 29.0,
                     crate::i18n::t("This folder does not exist:"),
                     ink,
                 );
-                let (rect, cut) =
-                    winui::text_fit(&p, o.x + 11.0, o.y + 39.0, &folder, ink, o.x + 409.0);
-                if cut {
+                let bold = winui::tahoma_bold();
+                // Cut in its middle: its end is the folder this makes.
+                let shown = winui::ellipsize_middle(&p, &bold, &folder, right - x);
+                let rect = winui::text_font(&p, bold, x, o.y + 47.0, &shown, ink);
+                if shown != folder {
                     winui::full_on_hover(ui, rect, "create-folder-path", &folder);
                 }
                 winui::text(
                     &p,
-                    o.x + 11.0,
-                    o.y + 57.0,
+                    x,
+                    o.y + 65.0,
                     crate::i18n::t("Do you want to create it?"),
                     ink,
                 );
                 if let Some(e) = &self.error {
-                    let (rect, cut) =
-                        winui::text_fit(&p, o.x + 11.0, o.y + 75.0, e, winui::ERROR(), o.x + 409.0);
+                    let (rect, cut) = winui::text_fit(&p, x, o.y + 83.0, e, winui::ERROR(), right);
                     if cut {
                         winui::full_on_hover(ui, rect, "create-folder-error", e);
                     }
                 }
-                let yes = winui::button(
+                // Enter Yes, Escape No, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, 254.0, 94.0, 73.0, 21.0),
-                    "Yes",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked();
-                let no = winui::button(
-                    ui,
-                    r(o, 336.0, 94.0, 73.0, 21.0),
-                    "No",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
-                if no || winui::escape_pressed(ui) {
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("Yes", ButtonKind::Default).enter(true),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("No", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                let (yes, no) = (pressed == Some(0), pressed == Some(1));
+                // Made beside the window (#743): a drive slow to answer doesn't hold it.
+                let made = self.making.as_ref().and_then(|m| m.answer(&self.folder));
+                if made.is_some() {
+                    self.making = None;
+                }
+                if let Some(Err(e)) = &made {
+                    self.error = Some(crate::i18n::fmt(
+                        crate::i18n::t("The folder could not be created: {error}"),
+                        &[("error", e)],
+                    ));
+                }
+                if no || (yes && self.look_only) {
                     Outcome::Closed
-                } else if yes || winui::enter_pressed(ui) {
-                    match std::fs::create_dir_all(&self.folder) {
-                        Ok(()) => Outcome::Done(()),
-                        Err(e) => {
-                            self.error = Some(crate::i18n::fmt(
-                                crate::i18n::t("The folder could not be created: {error}"),
-                                &[("error", &e.to_string())],
-                            ));
-                            Outcome::Open
-                        }
-                    }
+                } else if made == Some(Ok(())) {
+                    Outcome::Done(())
                 } else {
+                    if yes && self.making.is_none() {
+                        let making = crate::launch::Asked::default();
+                        let _ = making.get(
+                            &self.folder,
+                            std::time::Duration::MAX,
+                            std::time::Duration::ZERO,
+                            Some(ui.ctx()),
+                            |f| std::fs::create_dir_all(f).map_err(|e| e.to_string()),
+                        );
+                        self.making = Some(making);
+                    }
                     Outcome::Open
                 }
             },
@@ -2961,17 +3465,20 @@ impl ExistingFiles {
                 "and {n} other files",
             )
         });
+        // The mockup's width; the footer where the old button row was.
+        const W: f32 = 520.0;
+        const BODY: f32 = 166.0;
         question(
             ctx,
             "existing-files",
             "Files already there",
-            [460.0, 206.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 let ink = winui::TEXT();
-                let (left, right) = (o.x + 11.0, o.x + 449.0);
+                let (left, right) = (o.x + winui::EDGE, o.x + W - winui::EDGE);
                 let lines = winui::paragraph(
                     &p,
                     left,
@@ -3026,111 +3533,176 @@ impl ExistingFiles {
                     right,
                     18.0,
                 );
-                let yes = winui::button(
-                    ui,
-                    r(o, 294.0, 172.0, 73.0, 21.0),
-                    "Yes",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
                 // No is the default: a file the user didn't mean to give up stays as it is.
-                let no = winui::button(
+                // Enter and Escape both answer No, as before.
+                match winui::footer(
                     ui,
-                    r(o, 376.0, 172.0, 73.0, 21.0),
-                    "No",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked();
-                if yes {
-                    Outcome::Done(())
-                } else if no || winui::escape_pressed(ui) || winui::enter_pressed(ui) {
-                    Outcome::Closed
-                } else {
-                    Outcome::Open
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(FooterButton::new("Yes", ButtonKind::Normal)),
+                        FooterItem::Button(
+                            FooterButton::new("No", ButtonKind::Default)
+                                .enter(true)
+                                .escape(true),
+                        ),
+                    ],
+                ) {
+                    Some(0) => Outcome::Done(()),
+                    Some(_) => Outcome::Closed,
+                    None => Outcome::Open,
                 }
             },
         )
     }
 }
 
-/// Holds a dialog's "start" (`out`) while files the torrent would write into already exist
-/// (`found`, looked for once, when the dialog says start): asks [`ExistingFiles`] and keeps the
-/// result meanwhile; No goes back to the dialog. `asking` lives in the dialog, across frames.
-pub fn ensure_files_free<T>(
-    ctx: &egui::Context,
-    asking: &mut Option<(ExistingFiles, T)>,
-    out: Outcome<T>,
-    found: impl FnOnce() -> Vec<PathBuf>,
-) -> Outcome<T> {
-    match out {
-        Outcome::Closed => {
-            *asking = None;
-            return Outcome::Closed;
+/// A dialog's "start" (`T`) held while what it would start into is looked at on the disk, off
+/// the window's thread (#743: a sleeping hard disk, a USB drive or a network folder can take
+/// seconds to answer, and the window waited for it; the dialog stays as it is meanwhile), then
+/// while a question about it (`Q`) is up. Lives in the dialog, across frames.
+pub struct Gate<T, A, Q> {
+    held: Option<T>,
+    /// Where it was looked at, and the answer (`A`) to come.
+    look: Option<(PathBuf, crate::launch::Asked<PathBuf, A>)>,
+    question: Option<Q>,
+}
+
+/// [`ensure_folder`]'s: whether the folder is there; Create folder.
+pub type FolderGate<T> = Gate<T, bool, CreateFolder>;
+
+/// [`ensure_files_free`]'s: the torrent's files found there; Existing files.
+pub type FilesGate<T> = Gate<T, Vec<PathBuf>, ExistingFiles>;
+
+impl<T, A, Q> Default for Gate<T, A, Q> {
+    fn default() -> Self {
+        Gate {
+            held: None,
+            look: None,
+            question: None,
         }
-        Outcome::Done(v) if asking.is_none() => {
-            let found = found();
-            if found.is_empty() {
-                return Outcome::Done(v);
-            }
-            *asking = Some((ExistingFiles::new(&found), v));
-        }
-        _ => {}
-    }
-    let Some((ask, _)) = asking.as_mut() else {
-        return Outcome::Open;
-    };
-    match ask.show(ctx) {
-        Outcome::Open => Outcome::Open,
-        Outcome::Closed => {
-            *asking = None;
-            Outcome::Open
-        }
-        Outcome::Done(()) => asking
-            .take()
-            .map_or(Outcome::Open, |(_, v)| Outcome::Done(v)),
     }
 }
 
-/// Holds a dialog's "start" (`out`) until `folder` exists: when it is missing, asks to create
-/// it ([`CreateFolder`]) and keeps the dialog's result meanwhile; No goes back to the dialog.
-/// `asking` lives in the dialog, across frames.
+impl<T, A: Clone + PartialEq + Send + 'static, Q> Gate<T, A, Q> {
+    /// The dialog's "start", let go: the gate starts over.
+    fn release(&mut self) -> Outcome<T> {
+        let held = self.held.take();
+        *self = Gate::default();
+        held.map_or(Outcome::Open, Outcome::Done)
+    }
+
+    /// `out` held until `at` has been looked at with `look` (made only when asked; it runs on
+    /// a thread of its own) and the question `ask` makes of the answer (None: nothing to ask)
+    /// was answered Yes by `show`. No goes back to the dialog.
+    fn pass<L: FnOnce(&PathBuf) -> A + Send + 'static>(
+        &mut self,
+        ctx: &egui::Context,
+        out: Outcome<T>,
+        at: &Path,
+        look: impl FnOnce() -> L,
+        ask: impl FnOnce(A) -> Option<Q>,
+        show: impl FnOnce(&mut Q, &egui::Context) -> Outcome<()>,
+    ) -> Outcome<T> {
+        match out {
+            Outcome::Closed => {
+                *self = Gate::default();
+                return Outcome::Closed;
+            }
+            Outcome::Done(v) if self.held.is_none() => self.held = Some(v),
+            // While it is looked at, or the question is up, the dialog's own "start" waits.
+            _ => {}
+        }
+        if self.held.is_none() {
+            return Outcome::Open;
+        }
+        if self.question.is_none() {
+            // Asked once for each place (the dialog's folder may change meanwhile); never waited.
+            if self.look.as_ref().is_none_or(|(p, _)| p != at) {
+                let asked = crate::launch::Asked::default();
+                let _ = asked.get(
+                    &at.to_owned(),
+                    std::time::Duration::MAX,
+                    std::time::Duration::ZERO,
+                    Some(ctx),
+                    look(),
+                );
+                self.look = Some((at.to_owned(), asked));
+            }
+            let found = self.look.as_ref().and_then(|(p, a)| a.answer(p));
+            match found.map(ask) {
+                None => return Outcome::Open,
+                Some(None) => return self.release(),
+                Some(question) => self.question = question,
+            }
+        }
+        let Some(question) = self.question.as_mut() else {
+            return Outcome::Open;
+        };
+        match show(question, ctx) {
+            Outcome::Open => Outcome::Open,
+            Outcome::Closed => {
+                *self = Gate::default();
+                Outcome::Open
+            }
+            Outcome::Done(()) => self.release(),
+        }
+    }
+}
+
+/// Holds a dialog's "start" (`out`) while files the torrent would write into already exist in
+/// `folder` (looked for when the dialog says start, off the window's thread, by what `found`
+/// makes): asks [`ExistingFiles`] and keeps the result meanwhile; No goes back to the dialog.
+/// `gate` lives in the dialog, across frames.
+pub fn ensure_files_free<T, F: FnOnce() -> Vec<PathBuf> + Send + 'static>(
+    ctx: &egui::Context,
+    gate: &mut FilesGate<T>,
+    out: Outcome<T>,
+    folder: &Path,
+    found: impl FnOnce() -> F,
+) -> Outcome<T> {
+    gate.pass(
+        ctx,
+        out,
+        folder,
+        || {
+            let found = found();
+            move |_: &PathBuf| found()
+        },
+        |found| (!found.is_empty()).then(|| ExistingFiles::new(&found)),
+        ExistingFiles::show,
+    )
+}
+
+/// Holds a dialog's "start" (`out`) until `folder` exists: looked at off the window's thread,
+/// and when it is missing, asks to create it ([`CreateFolder`]); No goes back to the dialog.
+/// `gate` lives in the dialog, across frames.
 pub fn ensure_folder<T>(
     ctx: &egui::Context,
-    asking: &mut Option<(CreateFolder, T)>,
+    gate: &mut FolderGate<T>,
     out: Outcome<T>,
     folder: &Path,
 ) -> Outcome<T> {
-    match out {
-        Outcome::Closed => {
-            *asking = None;
-            return Outcome::Closed;
-        }
-        Outcome::Done(v) if asking.is_none() => {
-            if folder.as_os_str().is_empty() || folder.is_dir() {
-                return Outcome::Done(v);
-            }
-            *asking = Some((CreateFolder::new(folder.to_owned()), v));
-        }
-        // While the question is up the dialog's own "start" waits for the answer.
-        _ => {}
-    }
-    let Some((ask, _)) = asking.as_mut() else {
-        return Outcome::Open;
-    };
-    match ask.show(ctx) {
-        Outcome::Open => Outcome::Open,
-        Outcome::Closed => {
-            *asking = None;
-            Outcome::Open
-        }
-        Outcome::Done(()) => asking
-            .take()
-            .map_or(Outcome::Open, |(_, v)| Outcome::Done(v)),
-    }
+    ensure_folder_with(ctx, gate, out, folder, |f| f.is_dir())
+}
+
+/// [`ensure_folder`], the folder looked at with `is_dir` (a test's).
+fn ensure_folder_with<T>(
+    ctx: &egui::Context,
+    gate: &mut FolderGate<T>,
+    out: Outcome<T>,
+    folder: &Path,
+    is_dir: impl FnOnce(&Path) -> bool + Send + 'static,
+) -> Outcome<T> {
+    gate.pass(
+        ctx,
+        out,
+        folder,
+        || move |f: &PathBuf| f.as_os_str().is_empty() || is_dir(f.as_path()),
+        |there| (!there).then(|| CreateFolder::new(folder.to_owned())),
+        CreateFolder::show,
+    )
 }
 
 #[cfg(test)]
@@ -3154,7 +3726,7 @@ mod tests {
             let mut out = ctx.run_ui(input, |ui| ui_cb(ui));
             out.textures_delta.clear();
         });
-        // A test-only title, kept out of the catalog (extract.py reads literal titles).
+        // A test-only title.
         let title = String::from("test window 440");
         let title = title.as_str();
         let id = "test-440";
@@ -3199,6 +3771,64 @@ mod tests {
         assert!(!pass(true));
     }
 
+    /// #394: the question's answers: Enter ("Yes", the default) cancels the waiting ones too,
+    /// Escape ("No") skips this one alone, and with no answer nothing is decided.
+    #[test]
+    fn cancel_waiting_answers_enter_escape_and_nothing() {
+        // The key a pass presses, delivered to the window that renders the question (a
+        // thread-local: the renderer is global, and another test's window must see no key).
+        thread_local! {
+            static KEY: std::cell::Cell<Option<egui::Key>> = const { std::cell::Cell::new(None) };
+        }
+        egui::Context::set_immediate_viewport_renderer(move |ctx, viewport| {
+            let events = KEY.with(|k| {
+                k.take().map(|key| {
+                    vec![egui::Event::Key {
+                        key,
+                        physical_key: None,
+                        pressed: true,
+                        repeat: false,
+                        modifiers: egui::Modifiers::default(),
+                    }]
+                })
+            });
+            let input = egui::RawInput {
+                viewport_id: viewport.ids.this,
+                events: events.unwrap_or_default(),
+                viewports: std::iter::once((viewport.ids.this, egui::ViewportInfo::default()))
+                    .collect(),
+                screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(400.0, 120.0))),
+                ..Default::default()
+            };
+            let mut ui_cb = viewport.viewport_ui_cb;
+            let mut out = ctx.run_ui(input, |ui| ui_cb(ui));
+            out.textures_delta.clear();
+        });
+        let ctx = egui::Context::default();
+        ctx.set_embed_viewports(false);
+        // A pass of the question, with a key pressed in it (or not); the answer it gave.
+        let pass = |key: Option<egui::Key>, answer: &std::cell::Cell<Option<Outcome<bool>>>| {
+            KEY.with(|k| k.set(key));
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                answer.set(Some(cancel_waiting(ui.ctx(), 2)));
+            });
+            out.textures_delta.clear();
+            answer.take()
+        };
+        let answer = std::cell::Cell::new(None);
+        assert!(matches!(pass(None, &answer), Some(Outcome::Open)));
+        assert!(matches!(
+            pass(Some(egui::Key::Enter), &answer),
+            Some(Outcome::Done(true))
+        ));
+        // Opened again: a new question.
+        assert!(matches!(pass(None, &answer), Some(Outcome::Open)));
+        assert!(matches!(
+            pass(Some(egui::Key::Escape), &answer),
+            Some(Outcome::Done(false))
+        ));
+    }
+
     /// Add URL opens and its address box takes the focus, frame after frame, without the app
     /// hanging (0.2.2 froze here: an editable drop-down asked egui's context inside its lock).
     #[test]
@@ -3230,6 +3860,232 @@ mod tests {
         });
         rx.recv_timeout(std::time::Duration::from_secs(20))
             .expect("Add URL hung");
+    }
+
+    /// #812: Left / Right in Add URL's Address box move its caret, and the focus stays in the
+    /// box, not on OK beside it (Save As in Download File Info keeps them the same way,
+    /// `winui::keep_edit_keys`). With addresses entered before, as Up / Down step through them.
+    #[test]
+    fn add_url_left_and_right_stay_in_the_address_box() {
+        let ctx = egui::Context::default();
+        let mut dlg = AddUrl {
+            address: "https://example.com/file.zip".to_owned(),
+            history: vec!["https://a.example/x.zip".to_owned()],
+            ..AddUrl::default()
+        };
+        let mut frame = |key: Option<egui::Key>| {
+            let events = key
+                .map(|key| egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::default(),
+                })
+                .into_iter()
+                .collect();
+            let input = egui::RawInput {
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                let _ = dlg.show(ui.ctx(), |_| None);
+            });
+            out.textures_delta.clear();
+        };
+        for _ in 0..4 {
+            frame(None);
+        }
+        let in_box = ctx.memory(|m| m.focused());
+        assert!(in_box.is_some(), "the Address box has the focus");
+        for key in [
+            egui::Key::ArrowRight,
+            egui::Key::ArrowLeft,
+            egui::Key::ArrowRight,
+        ] {
+            frame(Some(key));
+            frame(None);
+            assert_eq!(
+                ctx.memory(|m| m.focused()),
+                in_box,
+                "{key:?} keeps the focus in the box"
+            );
+        }
+    }
+
+    /// #661: Add URL asks for the clipboard as it opens and draws its frames without waiting for
+    /// the answer, even from a clipboard owner that never answers; the link fills the box on the
+    /// frame it comes, the caret after it as when it opens with it, and never a box typed in.
+    #[test]
+    fn add_url_never_waits_for_the_clipboard() {
+        use std::time::{Duration, Instant};
+        let (release, stuck) = std::sync::mpsc::channel::<()>();
+        let stuck = std::sync::Mutex::new(stuck);
+        let reader: &'static crate::clipboard::Reader =
+            Box::leak(Box::new(crate::clipboard::Reader::new(
+                move || {
+                    let _ = stuck.lock().unwrap().recv();
+                    Some(
+                        " https://late.example/a.zip
+"
+                        .to_owned(),
+                    )
+                },
+                || {},
+            )));
+        let ctx = egui::Context::default();
+        let frame = |dlg: &mut AddUrl, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                events,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(input, |ui| {
+                let _ = dlg.show(ui.ctx(), |_| None);
+            });
+            out.textures_delta.clear();
+        };
+        let mut dlg = AddUrl {
+            clip: crate::clipboard::Prefill::ask_of(reader),
+            ..AddUrl::default()
+        };
+        let mut typed = AddUrl {
+            clip: crate::clipboard::Prefill::ask_of(reader),
+            ..AddUrl::default()
+        };
+        let started = Instant::now();
+        for _ in 0..10 {
+            frame(&mut dlg, vec![]);
+        }
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "10 frames took {:?}",
+            started.elapsed()
+        );
+        assert!(dlg.address.is_empty(), "nothing yet");
+        typed.address = "https://typed.example/b.zip".into();
+        drop(release);
+        let until = Instant::now() + Duration::from_secs(5);
+        while dlg.address.is_empty() && Instant::now() < until {
+            frame(&mut dlg, vec![]);
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert_eq!(dlg.address, "https://late.example/a.zip");
+        // The caret is at its end, as in a box that opened with it: typing goes after it.
+        frame(&mut dlg, vec![]);
+        frame(&mut dlg, vec![egui::Event::Text("x".into())]);
+        assert_eq!(dlg.address, "https://late.example/a.zipx");
+        while typed.clip.pending() && Instant::now() < until {
+            frame(&mut typed, vec![]);
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(!typed.clip.pending(), "answered");
+        assert_eq!(typed.address, "https://typed.example/b.zip", "typed: kept");
+    }
+
+    #[test]
+    fn add_url_takes_only_an_address_it_downloads_from_the_clipboard() {
+        let fill = |clip: &str| {
+            let mut d = AddUrl::default();
+            d.fill_from_clipboard(clip);
+            d.address
+        };
+        assert_eq!(
+            fill(
+                " https://a.example/f.zip 
+"
+            ),
+            "https://a.example/f.zip"
+        );
+        assert_eq!(fill("magnet:?xt=urn:btih:ab"), "magnet:?xt=urn:btih:ab");
+        assert_eq!(fill("some words"), "");
+        assert_eq!(fill("mailto:a@b.example"), "");
+    }
+
+    /// Plan 06: Add URL's OK and the paste bar share one rule: as typed (no scheme reads as
+    /// https), then an address MDM downloads or a magnet link.
+    #[test]
+    fn accept_address_takes_what_add_url_takes() {
+        let ok = |t: &str| accept_address(t).map(|u| u.to_string());
+        assert_eq!(
+            ok("www.example.org/a.zip").as_deref(),
+            Some("https://www.example.org/a.zip")
+        );
+        assert_eq!(
+            accept_address("magnet:?xt=urn:btih:ab").map(|u| u.scheme().to_owned()),
+            Some("magnet".to_owned())
+        );
+        assert_eq!(
+            accept_address("ftp://ftp.example.org/f.iso").map(|u| u.scheme().to_owned()),
+            Some("ftp".to_owned())
+        );
+        assert_eq!(ok("not an address"), None);
+        assert_eq!(ok("file:///x"), None);
+        assert_eq!(ok(""), None);
+        assert_eq!(ok("   \t "), None);
+    }
+
+    /// Addresses from a small grammar (scheme × host × path, with stray spaces), so the
+    /// accepted and the rejected sides both come up often; free text alongside.
+    fn typed_address() -> impl proptest::strategy::Strategy<Value = String> {
+        use proptest::prelude::*;
+        let scheme = prop::sample::select(vec![
+            "",
+            "http://",
+            "https://",
+            "HTTPS://",
+            "ftp://",
+            "ftps://",
+            "file:///",
+            "mailto:",
+            "javascript:",
+            "data:",
+            "magnet:?xt=urn:btih:",
+            "magnet:",
+            "ws://",
+            "http:/",
+        ]);
+        let host = prop::sample::select(vec![
+            "example.org",
+            "www.example.org",
+            "files.example.com:8080",
+            "localhost",
+            "127.0.0.1",
+            "[::1]",
+            "a",
+            "",
+            "exa mple.org",
+            "user:pw@example.org",
+            "ab12",
+        ]);
+        let path = prop::sample::select(vec![
+            "",
+            "/",
+            "/a.zip",
+            "/dir/f.iso?x=1&y=2",
+            "#frag",
+            " /x",
+            "/a b.zip",
+            "\\f.zip",
+        ]);
+        let pad = prop::sample::select(vec!["", " ", "\t", "\n"]);
+        let grammar = (pad.clone(), scheme, host, path, pad)
+            .prop_map(|(a, s, h, p, b)| format!("{a}{s}{h}{p}{b}"));
+        prop_oneof![grammar, any::<String>(), "[ -~]{0,40}"]
+    }
+
+    // Feature: paste-bar-details-pane, Property 2: Same validity rule.
+    // **Validates: Requirements 2.1, 2.2, 2.4, 2.5**
+    proptest::proptest! {
+        #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
+        #[test]
+        fn accept_address_is_the_one_validity_rule(t in typed_address()) {
+            let model = crate::model::parse_address(&t)
+                .ok()
+                .filter(|u| mdm_engine::supported(u) || u.scheme() == "magnet");
+            proptest::prop_assert_eq!(accept_address(&t).is_some(), model.is_some());
+            // An accepted text gives the address `parse_address` read (2.1).
+            proptest::prop_assert_eq!(accept_address(&t), model);
+        }
     }
 
     /// #511: an address with an Options → Sites Logins entry shows that login in "Use
@@ -3284,7 +4140,7 @@ mod tests {
     /// #207: a dialog closed by the window manager (its title bar's ×) is painted in the pass
     /// that closes it. The dialog's window is rendered as eframe renders it: its own pass, after
     /// the window was cleared to transparent black. A pass that painted nothing left the window
-    /// black on screen until it was destroyed (seconds, on Linux).
+    /// black on screen until it was destroyed.
     #[test]
     fn a_dialog_closed_by_the_window_manager_is_painted_in_its_last_pass() {
         use std::cell::{Cell, RefCell};
@@ -3312,7 +4168,7 @@ mod tests {
                 painted.borrow_mut().push(out.shapes.len());
             });
         }
-        // A test-only title, kept out of the catalog (extract.py reads literal titles).
+        // A test-only title.
         let title = String::from("test window");
         let title = title.as_str();
         let ctx = egui::Context::default();
@@ -3332,7 +4188,7 @@ mod tests {
                         ui.painter().text(
                             origin + vec2(10.0, 10.0),
                             egui::Align2::LEFT_TOP,
-                            "Mister Download Manager",
+                            "Grabbit",
                             egui::FontId::proportional(12.0),
                             egui::Color32::BLACK,
                         );
@@ -3356,5 +4212,182 @@ mod tests {
             painted[1], painted[0],
             "the pass that closes the dialog paints it as the one before"
         );
+    }
+
+    /// A look at the disk that waits until the test lets it go (a sleeping drive, a network
+    /// folder that answers late); then answers as the engine would on `taken` names.
+    fn slow_look(taken: &'static [&'static str]) -> (Look, std::sync::mpsc::Sender<()>) {
+        let (release, stuck) = std::sync::mpsc::channel::<()>();
+        let stuck = Mutex::new(stuck);
+        let look: Look = Arc::new(move |ask: &PlaceAsk| {
+            // Released once: every look after it answers at once.
+            let _ = stuck.lock().unwrap().recv();
+            let mut name = ask.name.clone();
+            if ask.number {
+                let (stem, ext) = ask.name.rsplit_once('.').unwrap_or((ask.name.as_str(), ""));
+                let ext = if ext.is_empty() {
+                    String::new()
+                } else {
+                    format!(".{ext}")
+                };
+                let mut n = 0;
+                while taken.contains(&name.as_str()) {
+                    n += 1;
+                    name = format!("{stem} ({n}){ext}");
+                }
+            }
+            Found {
+                dest: ask.dir.join(name),
+                folder: true,
+            }
+        });
+        (look, release)
+    }
+
+    /// Wait (at most 5 s) until `place` answers for `save_as`.
+    fn answered(place: &mut SaveAsPlace, save_as: &mut String) -> Option<bool> {
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while std::time::Instant::now() < until {
+            if let Some(there) = place.follow(save_as) {
+                return Some(there);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        None
+    }
+
+    /// #743: a disk that doesn't answer holds up no frame of Download File Info. Save As shows
+    /// the name as given (no " (1)": not known yet), and takes the free numbered one when the
+    /// answer comes at last.
+    #[test]
+    fn a_disk_that_never_answers_holds_up_no_frame() {
+        let dir = std::env::temp_dir().join("mdm-743-slow");
+        let (look, release) = slow_look(&["a.zip"]);
+        let mut place = SaveAsPlace::with(look, None);
+        let started = std::time::Instant::now();
+        let mut save_as = place.name_in(&dir, "a.zip");
+        assert_eq!(save_as, display_path(&dir.join("a.zip")), "the guess");
+        for _ in 0..1000 {
+            assert_eq!(place.follow(&mut save_as), None);
+            assert_eq!(place.folder(&mut save_as), None, "not known yet");
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_millis(500),
+            "{:?} for 1000 frames",
+            started.elapsed()
+        );
+        assert_eq!(save_as, display_path(&dir.join("a.zip")), "still the guess");
+        // The disk answers: the name is taken there.
+        drop(release);
+        assert_eq!(answered(&mut place, &mut save_as), Some(true));
+        assert_eq!(save_as, display_path(&dir.join("a (1).zip")));
+        // Asked once: the next frames keep it.
+        assert_eq!(place.folder(&mut save_as), Some(true));
+        assert_eq!(save_as, display_path(&dir.join("a (1).zip")));
+    }
+
+    /// An answer comes for the text it was asked for only: Save As typed over meanwhile keeps
+    /// what was typed, and a new name asked for (another folder) drops the old question's.
+    #[test]
+    fn a_late_answer_never_replaces_what_was_typed_or_picked_since() {
+        let dir = std::env::temp_dir().join("mdm-743-typed");
+        let (look, release) = slow_look(&["a.zip", "b.zip"]);
+        let mut place = SaveAsPlace::with(look, None);
+        let _guess = place.name_in(&dir, "a.zip");
+        // Typed over before the disk answered.
+        let mut save_as = display_path(&dir.join("mine.zip"));
+        drop(release);
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert_eq!(place.follow(&mut save_as), None);
+        assert_eq!(save_as, display_path(&dir.join("mine.zip")), "typed: kept");
+        // Typed text has its folder looked at, as typed (never numbered here).
+        let mut there = None;
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while there.is_none() && std::time::Instant::now() < until {
+            there = place.folder(&mut save_as);
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert_eq!(there, Some(true));
+        assert_eq!(save_as, display_path(&dir.join("mine.zip")));
+        // Another name: its own answer, not the last one's.
+        let other = dir.join("elsewhere");
+        save_as = place.name_in(&other, "b.zip");
+        assert_eq!(answered(&mut place, &mut save_as), Some(true));
+        assert_eq!(save_as, display_path(&other.join("b (1).zip")));
+    }
+
+    /// The real look follows the engine's rules: a name taken on the disk (a file, another
+    /// download's part file) is numbered on, the folder said there or not.
+    #[test]
+    fn the_look_numbers_as_the_engine_does() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("a.zip"), b"x").unwrap();
+        std::fs::write(
+            mdm_engine::naming::part_path(&d.path().join("a (1).zip")),
+            b"x",
+        )
+        .unwrap();
+        let mut place = SaveAsPlace::new(None);
+        let mut save_as = place.name_in(d.path(), "a.zip");
+        assert_eq!(answered(&mut place, &mut save_as), Some(true));
+        assert_eq!(save_as, display_path(&d.path().join("a (2).zip")));
+        assert_eq!(
+            resolve_path(&save_as),
+            mdm_engine::naming::destination(d.path(), "a.zip")
+        );
+        let gone = d.path().join("not-there");
+        let mut save_as = place.name_in(&gone, "a.zip");
+        assert_eq!(answered(&mut place, &mut save_as), Some(false));
+        assert_eq!(save_as, display_path(&gone.join("a.zip")));
+    }
+
+    /// #743: Start in a dialog whose folder is on a disk slow to answer holds up no frame: the
+    /// dialog stays as it is until the answer comes, then goes on with what Start said.
+    #[test]
+    fn start_waits_for_the_folder_without_holding_up_a_frame() {
+        let ctx = egui::Context::default();
+        let (release, stuck) = std::sync::mpsc::channel::<()>();
+        let mut gate = FolderGate::<u32>::default();
+        let folder = std::env::temp_dir().join("mdm-743-gate");
+        let started = std::time::Instant::now();
+        let is_dir = move |_: &Path| {
+            let _ = stuck.recv();
+            true
+        };
+        let first = ensure_folder_with(&ctx, &mut gate, Outcome::Done(7), &folder, is_dir);
+        assert!(matches!(first, Outcome::Open));
+        for _ in 0..1000 {
+            // A second Start meanwhile changes nothing; nor does a frame without one.
+            let again = ensure_folder_with(&ctx, &mut gate, Outcome::Done(8), &folder, |_| {
+                unreachable!("looked at once")
+            });
+            assert!(matches!(again, Outcome::Open));
+        }
+        assert!(
+            started.elapsed() < std::time::Duration::from_millis(500),
+            "{:?}",
+            started.elapsed()
+        );
+        drop(release);
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let done = loop {
+            match ensure_folder_with(&ctx, &mut gate, Outcome::Open, &folder, |_| {
+                unreachable!("looked at once")
+            }) {
+                Outcome::Done(v) => break Some(v),
+                _ if std::time::Instant::now() > until => break None,
+                _ => std::thread::sleep(std::time::Duration::from_millis(2)),
+            }
+        };
+        assert_eq!(done, Some(7), "the first Start's");
+        // Let go: the next Start is looked at afresh.
+        let next = ensure_folder_with(&ctx, &mut gate, Outcome::Done(9), &folder, |_| true);
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let mut next = next;
+        while !matches!(next, Outcome::Done(_)) && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(2));
+            next = ensure_folder_with(&ctx, &mut gate, Outcome::Open, &folder, |_| true);
+        }
+        assert!(matches!(next, Outcome::Done(9)));
     }
 }

@@ -86,7 +86,7 @@ impl RuntimeProvider for Through {
     ) -> Pin<Box<dyn Send + Future<Output = Result<Self::Udp, io::Error>>>> {
         // Never asked for: every server is configured for TCP, TLS or HTTPS. Refused all the same:
         // a UDP socket would be a listening socket to Windows' firewall.
-        Box::pin(async { Err(io::Error::other("MDM asks DNS over TCP only")) })
+        Box::pin(async { Err(io::Error::other("Grabbit asks DNS over TCP only")) })
     }
 }
 
@@ -851,7 +851,7 @@ mod tests {
     }
 
     /// Every preset in every mode it offers, against the real services, plus fallback and an
-    /// IP-literal DoH address (`cargo test -p mdm-engine dns::tests::real -- --ignored`).
+    /// IP-literal DoH address (`cargo test -p grabbit-engine dns::tests::real -- --ignored`).
     #[tokio::test]
     #[ignore = "asks the real public DNS services"]
     async fn real_providers_answer_in_every_mode() {
@@ -913,10 +913,12 @@ mod tests {
         assert!(failed.is_empty(), "failed: {failed:?}");
     }
 
-    #[tokio::test]
+    /// On Tokio's paused clock: a race would wait for its connection's time limit, which the
+    /// clock skips to; asked nothing, no time passes, however busy the machine.
+    #[tokio::test(start_paused = true)]
     async fn one_address_is_not_raced() {
         let ip: IpAddr = "192.0.2.1".parse().unwrap();
-        let started = Instant::now();
+        let started = tokio::time::Instant::now();
         assert_eq!(
             reachable_first("single.test", vec![ip], 9, &Route::Any).await,
             vec![ip]

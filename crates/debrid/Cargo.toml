@@ -1,12 +1,16 @@
 [package]
-name = "mdm-debrid"
-description = "Debrid service accounts for Mister Download Manager (#44): file-host links unlocked through the user's own account"
+name = "grabbit-debrid"
+description = "Debrid service accounts for Grabbit (#44): file-host links unlocked through the user's own account"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+
+# The code's paths stay `mdm_debrid::` (plan 10, decision 3).
+[lib]
+name = "mdm_debrid"
 
 [dependencies]
 bytes.workspace = true

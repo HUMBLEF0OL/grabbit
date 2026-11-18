@@ -1,4 +1,4 @@
-//! The download list on disk: `%APPDATA%\misterdownloadmanager\downloads.json`, written with craft-atomic.
+//! The download list on disk: `%APPDATA%\grabbit\downloads.json`, written with craft-atomic.
 //! Also holds the list's column layout (order, widths, visibility, sort).
 //!
 //! Generations: `downloads.json.bak` is the list before the last save; `.1.bak` and `.2.bak`
@@ -11,7 +11,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use mdm_engine::state::{ResumeState, state_path};
 use serde::{Deserialize, Serialize};
 
 use crate::list::Layout;
@@ -120,26 +119,17 @@ fn load_from(p: &Path, empty: Loaded) -> Loaded {
     match parsed {
         Some(mut f) => {
             for i in &mut f.items {
+                // The page it came from is sent again (upstream issue 795): the browser's other
+                // context (cookies, User-Agent) is memory only.
+                i.context.referer = i.referer.clone();
                 // Downloads that were running when the app closed are now stopped (resumable).
                 if i.status == Status::Downloading {
                     i.status = Status::Stopped;
                 }
-                // Live progress isn't written to this file; the engine's resume state is the
-                // record of what is on disk. A video's download is yt-dlp's, which keeps no such
-                // state: not looked for (a playlist's thousands cost a second at start, #69).
-                if i.status != Status::Complete && i.video.is_none() {
-                    // Started under the former codename: rename its files so it resumes.
-                    mdm_engine::state::migrate_legacy(&i.dest);
-                }
-                if i.status != Status::Complete
-                    && i.video.is_none()
-                    && let Ok(st) = ResumeState::load(&state_path(&i.dest))
-                    // A state under this name for another address is another row's (#442).
-                    && st.url == i.url
-                {
-                    i.downloaded = st.downloaded();
-                    i.size = Some(st.size);
-                }
+                // Each row as saved: the downloads' own folders aren't touched here. Their resume
+                // states (the record of what is on disk) are read beside the window once it is
+                // open (resumeread.rs, `App::read_resume_states`): a folder that doesn't answer
+                // held the window for 21 s before its first frame.
             }
             if f.version < 2 {
                 // Before version 2 nothing could set "files at the same time" (no Scheduler),
@@ -224,17 +214,8 @@ fn keep_generations(p: &Path) {
     }
 }
 
-pub fn save(
-    next_id: u64,
-    items: &[Item],
-    columns: &Layout,
-    settings: &Settings,
-    queues: &[Queue],
-) -> std::io::Result<()> {
-    let Some(p) = path() else { return Ok(()) };
-    save_to(&p, next_id, items, columns, settings, queues)
-}
-
+/// The list written here and now (tests; the app hands it to its [`Saver`]).
+#[cfg(test)]
 fn save_to(
     p: &Path,
     next_id: u64,
@@ -387,19 +368,34 @@ impl Saver {
             .take()
     }
 
-    /// Wait until nothing is waiting or being written (MDM closing).
-    pub fn flush(&self) {
+    /// Wait until nothing is waiting or being written (MDM closing), or until `deadline` (the
+    /// session ending, which can't wait for a disk that holds its writes). True when all of it
+    /// was written.
+    pub fn flush_until(&self, deadline: Option<std::time::Instant>) -> bool {
         let (lock, cv) = &*self.shared;
         let mut s = lock.lock().unwrap_or_else(|e| e.into_inner());
         while s.waiting.is_some() || s.writing {
-            s = cv.wait(s).unwrap_or_else(|e| e.into_inner());
+            s = match deadline {
+                None => cv.wait(s).unwrap_or_else(|e| e.into_inner()),
+                Some(d) => {
+                    let left = d.saturating_duration_since(std::time::Instant::now());
+                    if left.is_zero() {
+                        return false;
+                    }
+                    cv.wait_timeout(s, left)
+                        .unwrap_or_else(|e| e.into_inner())
+                        .0
+                }
+            };
         }
+        true
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mdm_engine::state::{ResumeState, state_path};
 
     fn empty() -> Loaded {
         Loaded {
@@ -421,7 +417,7 @@ mod tests {
             let json = encode(&p, id, &[], &layout, &Settings::default(), &[]).unwrap();
             saver.queue(p.clone(), json);
         }
-        saver.flush();
+        assert!(saver.flush_until(None));
         assert_eq!(saver.outcome(), Some(Ok(())));
         assert_eq!(load_from(&p, empty()).next_id, 5);
     }
@@ -453,11 +449,38 @@ mod tests {
             !p.exists() && saver.outcome().is_none(),
             "the disk holds it"
         );
+        // The session's end waits for it only until its deadline.
+        let waited = std::time::Instant::now();
+        assert!(!saver.flush_until(Some(waited + Duration::from_millis(100))));
+        assert!(waited.elapsed() < Duration::from_secs(5));
         *HELD.0.lock().unwrap() = false;
         HELD.1.notify_all();
-        saver.flush();
+        assert!(saver.flush_until(Some(std::time::Instant::now() + Duration::from_secs(30))));
         assert_eq!(saver.outcome(), Some(Ok(())));
         assert_eq!(std::fs::read(&p).unwrap(), b"9");
+    }
+
+    /// Upstream issue 795: a download's Referer is kept with the list and sent again after a
+    /// restart; the browser's other context (its cookies) is not written to disk.
+    #[test]
+    fn a_downloads_referer_is_kept_across_a_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("downloads.json");
+        let layout = crate::list::ListState::default().layout();
+        let url = url::Url::parse("https://files.example.net/a.zip").unwrap();
+        let mut a = Item::new(1, url, "a.zip".into(), crate::model::Category::Compressed);
+        a.set_referer(Some("https://www.example.com/get".into()));
+        a.context.cookies = Some("sid=1".into());
+        save_to(&p, 2, &[a], &layout, &Settings::default(), &[]).unwrap();
+        assert!(!std::fs::read_to_string(&p).unwrap().contains("sid=1"));
+        let back = load_from(&p, empty());
+        let b = &back.items[0];
+        assert_eq!(b.referer.as_deref(), Some("https://www.example.com/get"));
+        assert_eq!(
+            b.context.referer.as_deref(),
+            Some("https://www.example.com/get")
+        );
+        assert_eq!(b.context.cookies, None);
     }
 
     #[test]
@@ -502,6 +525,7 @@ mod tests {
                 i.video = Some(crate::model::VideoSpec {
                     selector: "bv*[height<=1080]+ba/b[height<=1080]".into(),
                     subs: Default::default(),
+                    parts: Vec::new(),
                 });
                 i
             })
@@ -584,7 +608,7 @@ mod tests {
         let s = load_from(&p, empty()).settings;
         assert_eq!(s.auto_types, mdm_ipc::capture::DEFAULT_AUTO_TYPES);
         assert!(
-            mdm_ipc::capture::type_listed(&s.auto_types, "MDM-0.3.0.dmg")
+            mdm_ipc::capture::type_listed(&s.auto_types, "Grabbit-0.3.0.dmg")
                 && mdm_ipc::capture::type_listed(&s.auto_types, "mdm_0.3.0_amd64.deb")
         );
         let edited = format!("{old} NZB");
@@ -592,10 +616,11 @@ mod tests {
         assert_eq!(load_from(&p, empty()).settings.auto_types, edited);
     }
 
-    /// #442: two rows of one name, a resume state on the disk: only the row of its address
-    /// takes the progress (the other would take the data for its own and resume it).
+    /// Loading the list reads nothing in the downloads' folders (their resume states are read
+    /// beside the window, `App::read_resume_states`): each row comes as saved, a state on the
+    /// disk notwithstanding.
     #[test]
-    fn a_resume_state_is_read_by_the_row_it_belongs_to() {
+    fn loading_the_list_leaves_the_downloads_folders_alone() {
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("downloads.json");
         let dest = dir.path().join("master.mp4");
@@ -617,7 +642,7 @@ mod tests {
             .write(&state_path(&dest))
             .unwrap();
         let loaded = load_from(&p, empty());
-        assert_eq!(loaded.items[0].size, Some(777));
+        assert_eq!(loaded.items[0].size, Some(100));
         assert_eq!(loaded.items[1].size, Some(100));
     }
 

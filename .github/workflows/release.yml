@@ -1,17 +1,11 @@
 # Builds the downloads: Windows (tools/installer/build.ps1: installer, portable zip, plain zip),
-# the browser extensions (tools/extension/pack.ps1: Chromium zip, Firefox .xpi),
-# Linux (build-linux.sh: AppImage, tar.gz, .deb, .rpm) and, experimental and not yet tested by
-# us, macOS (build-macos.sh: a .dmg for Apple Silicon, one for Intel; named "-experimental").
-# - A pushed tag vX.Y.Z (matching Cargo.toml's version) publishes a GitHub release with them and
-#   SHA256SUMS.txt, its notes from CHANGELOG.md (Help -> Check for updates sees it at once). The
-#   release waits for Windows and the extensions: a failed Linux or macOS build leaves those out.
-# - Run by hand (Actions -> Release -> Run workflow) it only builds and keeps them as artifacts:
-#   nothing is published, and nothing is sent to addons.mozilla.org or the Chrome Web Store.
+# and the browser extensions (tools/extension/pack.ps1: Chromium zip, Firefox .xpi).
+# Releases are built and published from the maintainer's computer (tools/installer/publish.ps1,
+# the same steps), so a tag starts nothing here. Run by hand (Actions -> Release -> Run workflow)
+# this only builds the downloads and keeps them as artifacts: nothing is published.
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -39,6 +33,8 @@ jobs:
 
   windows:
     needs: geo
+    # Secrets (signing) live in the `release` environment: a run waits for the owner's approval.
+    environment: release
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -105,7 +101,7 @@ jobs:
           GH_TOKEN: ${{ github.token }} # downloads the build's helpers signed in (fetch_release.py)
         run: |
           $v = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
-          $exes = "misterdownloadmanager", "misterdownloadmanager-nmhost", "misterdownloadmanager-cli", "misterdownloadmanager-mcp" |
+          $exes = "grabbit", "grabbit-nmhost", "grabbit-cli", "grabbit-mcp" |
             ForEach-Object { "target/release/$_.exe" }
           python tools/installer/symbols.py windows-x64 $v target/dist @exes
           if ($LASTEXITCODE) { throw "symbols failed" }
@@ -118,6 +114,7 @@ jobs:
   extension:
     # Every browser's extension as its own download: Chrome, Edge, Brave, Opera and Vivaldi
     # (unzip, then load the folder unpacked) and Firefox (.xpi).
+    environment: release # the store keys: see the windows job
     runs-on: ubuntu-latest
     # The store steps below run only for a pushed tag, and only when their key is there (a step's
     # `if` sees the job's env): a run by hand never sends anything to a store.
@@ -141,12 +138,12 @@ jobs:
           node tools/extension/check-pack.mjs
           $v = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
           New-Item -ItemType Directory -Force target/dist | Out-Null
-          Copy-Item target/extension/mdm-chromium.zip "target/dist/MisterDownloadManager-$v-extension-chromium.zip"
-          Copy-Item target/extension/mdm-firefox.xpi "target/dist/MisterDownloadManager-$v-extension-firefox.xpi"
+          Copy-Item target/extension/mdm-chromium.zip "target/dist/Grabbit-$v-extension-chromium.zip"
+          Copy-Item target/extension/mdm-firefox.xpi "target/dist/Grabbit-$v-extension-firefox.xpi"
           # For the Chrome Web Store (the next step, or its dashboard by hand): kept with the
           # build, not the release.
           New-Item -ItemType Directory -Force target/store | Out-Null
-          Copy-Item target/extension/mdm-chrome-store.zip "target/store/MisterDownloadManager-$v-chrome-web-store.zip"
+          Copy-Item target/extension/mdm-chrome-store.zip "target/store/Grabbit-$v-chrome-web-store.zip"
 
       # The Firefox add-on is listed on addons.mozilla.org: each release's version is sent there
       # for review (not waited for); Firefox installs and updates it from its listing. The .xpi
@@ -194,89 +191,15 @@ jobs:
           name: extension
           path: target/dist/*
 
-  linux:
-    # The oldest supported Ubuntu: the programs run on its glibc (2.35) and newer.
-    needs: geo
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: geo-data
-          path: crates/geo/data
-
-      - name: Toolchain
-        run: rustup show active-toolchain || rustup toolchain install
-
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: release-${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
-          restore-keys: release-${{ runner.os }}-cargo-
-
-      - name: Libraries and packaging tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev \
-            libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev rpm python3-pil zsync
-
-      - name: AppImage, tar.gz, .deb, .rpm
-        env:
-          GH_TOKEN: ${{ github.token }} # downloads the build's helpers signed in (fetch_release.py)
-        run: bash tools/installer/build-linux.sh
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux
-          path: target/dist/*
-
-  macos:
-    needs: geo
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: geo-data
-          path: crates/geo/data
-
-      - name: Toolchain
-        run: rustup show active-toolchain || rustup toolchain install
-
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: release-${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
-          restore-keys: release-${{ runner.os }}-cargo-
-
-      - name: Apple Silicon and Intel .dmg
-        env:
-          GH_TOKEN: ${{ github.token }} # downloads the build's helpers signed in (fetch_release.py)
-        run: bash tools/installer/build-macos.sh
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos
-          path: target/dist/*
-
   publish:
     permissions:
       contents: write # the release
       actions: write # rebuilding the website
       issues: read # the release notes' Thanks to (tools/contributors.py)
       pull-requests: read
-    if: >-
-      always() && startsWith(github.ref, 'refs/tags/') && needs.windows.result == 'success' &&
-      needs.extension.result == 'success'
-    needs: [windows, extension, linux, macos]
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [windows, extension]
+    environment: release # the release key: see the windows job
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -289,7 +212,7 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
-          MDM_RELEASE_KEY: ${{ secrets.MDM_RELEASE_KEY }}
+          GRABBIT_RELEASE_KEY: ${{ secrets.GRABBIT_RELEASE_KEY }}
         shell: pwsh
         run: |
           # One SHA256SUMS.txt for every file (each build wrote its own).
@@ -297,43 +220,35 @@ jobs:
           $files = Get-ChildItem dist -File | Sort-Object Name
           $sums = $files | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" }
           Set-Content -Encoding ascii dist/SHA256SUMS.txt $sums
-          # Signed with MDM's release key (fingerprint 5826D399249DE856EA087D802E293C28E8A69D74):
-          # MDM updates itself only from a list it signed
-          # (crates/tools/src/update.rs; the public key is crates/tools/keys/mdm-release.asc).
-          if ($env:MDM_RELEASE_KEY) {
-            $key = Join-Path $env:RUNNER_TEMP "mdm-release.asc"
-            Set-Content -Encoding ascii $key $env:MDM_RELEASE_KEY
+          # Signed with Grabbit's release key (fingerprint 7C8D515A5E859D473CBC54C0D9E89ED61BBEC99D):
+          # Grabbit updates itself only from a list it signed
+          # (crates/tools/src/update.rs; the public key is crates/tools/keys/grabbit-release.asc).
+          if ($env:GRABBIT_RELEASE_KEY) {
+            $key = Join-Path $env:RUNNER_TEMP "grabbit-release.asc"
+            Set-Content -Encoding ascii $key $env:GRABBIT_RELEASE_KEY
             gpg --batch --quiet --import $key
             Remove-Item $key
-            gpg --batch --yes --detach-sign --local-user 5826D399249DE856EA087D802E293C28E8A69D74 `
+            gpg --batch --yes --detach-sign --local-user 7C8D515A5E859D473CBC54C0D9E89ED61BBEC99D `
               --output dist/SHA256SUMS.txt.sig dist/SHA256SUMS.txt
             if ($LASTEXITCODE) { throw "signing SHA256SUMS.txt failed" }
             gpg --batch --verify dist/SHA256SUMS.txt.sig dist/SHA256SUMS.txt
             if ($LASTEXITCODE) { throw "the signature of SHA256SUMS.txt doesn't verify" }
           } else {
-            Write-Warning "MDM_RELEASE_KEY isn't set: this release is unsigned, and MDM won't update to it by itself."
+            Write-Warning "GRABBIT_RELEASE_KEY isn't set: this release is unsigned, and Grabbit won't update to it by itself."
           }
           # Notes: the version's section of CHANGELOG.md ("## [X.Y.Z]" up to the next "## "),
-          # else GitHub's list of changes since the last tag; first, the invitation to try the
-          # macOS builds when they are there (Linux's files are no longer "-experimental").
+          # else GitHub's list of changes since the last tag.
           $v = "${{ github.ref_name }}".TrimStart("v")
           $log = Get-Content CHANGELOG.md -Raw -ErrorAction SilentlyContinue
           $m = [regex]::Match("$log", "(?ms)^## \[$([regex]::Escape($v))\][^\n]*\n(.*?)(?=^## |\z)")
-          $title = "Mister Download Manager ${{ github.ref_name }}"
-          $invite = ""
-          if ($files.Name -like "*-experimental*") {
-            $invite = "**On a Mac?** The ``-experimental`` files are fresh builds for Mac " +
-              "(Apple Silicon and Intel) that we haven't tried ourselves yet. Want to be among " +
-              "the first? Give them a go and tell us how it went in an " +
-              "[issue](https://github.com/${{ github.repository }}/issues).`n`n"
-          }
+          $title = "Grabbit ${{ github.ref_name }}"
           # Last, "Thanks to": everyone who opened a pull request or an issue, or commented, on
           # GitHub since the previous release (by version) was published, with their avatars and
           # @-mentions (tools/contributors.py thanks; the maintainer, Claude and bots aren't
           # counted). Nobody, or GitHub not answering, leaves it out; it never stops the release.
           $thanks = ""
           try {
-            $thanks = (python3 tools/contributors.py thanks "${{ github.ref_name }}" | Out-String).Trim()
+            $thanks = (python3 tools/contributors.py thanks "${{ github.ref_name }}" --repo "${{ github.repository }}" | Out-String).Trim()
           } catch {
             Write-Warning "The contributors couldn't be listed: $_"
           }
@@ -343,10 +258,10 @@ jobs:
             # Links into the repository (docs/x.md) would resolve against the release's page:
             # point them at the tagged files.
             $notes = $m.Groups[1].Value.Trim() -replace '\]\((?![a-z]+:|#)([^)\s]+)\)', '](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/$1)'
-            Set-Content -Encoding utf8 notes.md ($invite + $notes + $thanks)
+            Set-Content -Encoding utf8 notes.md ($notes + $thanks)
             gh release create "${{ github.ref_name }}" --latest --title $title --notes-file notes.md $all
           } else {
-            Set-Content -Encoding utf8 notes.md ($invite + $thanks.Trim())
+            Set-Content -Encoding utf8 notes.md $thanks.Trim()
             gh release create "${{ github.ref_name }}" --latest --title $title --notes-file notes.md --generate-notes $all
           }
           # The website links to the latest published release: rebuild it now that the files are

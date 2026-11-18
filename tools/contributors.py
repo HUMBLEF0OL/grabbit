@@ -6,7 +6,7 @@ News page), the README (`readme` below) and each release's notes on GitHub (`tha
 .github/workflows/release.yml).
 
 Who counts, and in what order (the maintainer's decision, 2026-11-08):
-- Not counted: the maintainer (MAINTAINER), Claude (any account whose login contains "claude" or
+- Not counted: the maintainers (MAINTAINER, and FORK_MAINTAINER, Grabbit's), Claude (any account whose login contains "claude" or
   "anthropic"), bots (a login ending in "[bot]", an account of type Bot, dependabot,
   github-actions) and deleted accounts ("ghost").
 - People with pull requests first, then those who opened issues, then those who commented; each
@@ -45,6 +45,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REPO = "anefzaoui/misterdownloadmanager"
 MAINTAINER = "anefzaoui"
+# Grabbit's maintainer (this fork's owner): not thanked in its own releases either.
+FORK_MAINTAINER = "HUMBLEF0OL"
 API = "https://api.github.com"
 # The README's round avatars (`readme`), committed: GitHub can't round an image in a README.
 README_AVATARS = ROOT / "art" / "contributors"
@@ -112,7 +114,7 @@ def excluded(user: dict | None) -> bool:
     if not user or not user.get("login"):
         return True
     login = user["login"].lower()
-    return (login == MAINTAINER.lower() or "claude" in login or "anthropic" in login
+    return (login in (MAINTAINER.lower(), FORK_MAINTAINER.lower()) or "claude" in login or "anthropic" in login
             or login.endswith("[bot]") or user.get("type") == "Bot"
             or login in ("dependabot", "github-actions", "ghost"))
 
@@ -208,13 +210,13 @@ def everyone() -> list[dict] | None:
     return None if ev is None else tally(ev)
 
 
-def for_release(tag: str, rels: list[dict] | None = None) -> list[dict] | None:
-    """The people a release thanks (see window())."""
-    rels = releases() if rels is None else rels
+def for_release(tag: str, rels: list[dict] | None = None, repo: str = REPO) -> list[dict] | None:
+    """The people a release thanks (see window()), from `repo`'s releases and activity."""
+    rels = releases(repo) if rels is None else rels
     if rels is None:
         return None
     since, until = window(rels, tag)
-    ev = activity()
+    ev = activity(repo)
     return None if ev is None else tally(ev, since, until)
 
 
@@ -304,13 +306,15 @@ def main() -> int:
     ls.add_argument("--json", action="store_true")
     th = sub.add_parser("thanks", help="the release notes' Thanks to section for a tag")
     th.add_argument("tag")
+    th.add_argument("--repo", default=REPO,
+                    help="whose releases and activity (the release workflow passes its own repository)")
     sub.add_parser("readme", help="refresh README.md's contributors and their avatars")
     a = ap.parse_args()
     if a.cmd == "readme":
         return refresh_readme()
     if a.cmd == "thanks":
         # Never fails the release: no people (or no GitHub) is simply no section.
-        people = for_release(a.tag)
+        people = for_release(a.tag, repo=a.repo)
         sys.stdout.write(thanks_markdown(people or []))
         return 0
     ev = activity()

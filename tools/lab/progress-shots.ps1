@@ -1,13 +1,13 @@
 # The progress window of a video and of a torrent, for the docs (progress-video.png,
 # progress-torrent.png: docs/images/*.webp through `tools/shots/make.py docs`), at 1x and off the screens, as docs-shots.ps1 takes the others. Each
-# runs in a Mister Download Manager instance of its own (MDM_DATA_DIR, MDM_OFFSCREEN) whose list
+# runs in a Mister Download Manager instance of its own (GRABBIT_DATA_DIR, MDM_OFFSCREEN) whose list
 # holds that one download; the automation API starts it and /show progress opens its window,
 # so nothing is clicked or typed. The video comes from the labserver through yt-dlp (copied
 # from your own MDM's tools folder: Tasks → Download video from a page installs it); the
 # torrent from the swarm example (seeders and a tracker on this computer):
 #
-#   cargo build --release -p mdm-app -p mdm-cli -p mdm-labserver
-#   cargo build --release -p mdm-torrent --example swarm
+#   cargo build --release -p grabbit-app -p grabbit-cli -p grabbit-labserver
+#   cargo build --release -p grabbit-torrent --example swarm
 #   tools\lab\progress-shots.ps1 -Bin target\release
 #
 # On a machine without MDM (GitHub's runner, docs-shots.yml), yt-dlp comes from -YtDlp:
@@ -23,6 +23,9 @@ param(
   # The torrent's other details tabs too ("peers", "trackers", "pieces", "general"), each
   # as progress-torrent-<tab>.png (/show progress:<tab>).
   [string[]]$TorrentTabs = @(),
+  # The video's sample states too ("merging", "helper", "mergefail": upstream issues 769 and
+  # 736), each as progress-video-<state>.png (/show progress:<state>, looks only).
+  [string[]]$VideoTabs = @(),
   # Dark mode (View → Always dark, whatever Windows' own mode); the same file names, or with
   # -Suffix ("-dark") after each.
   [switch]$Dark,
@@ -39,8 +42,8 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $bin = (Resolve-Path (Join-Path $root $Bin)).Path
-$exe = Join-Path $bin "misterdownloadmanager.exe"
-$cli = Join-Path $bin "misterdownloadmanager-cli.exe"
+$exe = Join-Path $bin "grabbit.exe"
+$cli = Join-Path $bin "grabbit-cli.exe"
 $out = if ([IO.Path]::IsPathRooted($OutDir)) { $OutDir } else { Join-Path $root $OutDir }
 # Under the repository (ignored target/): the temp folder's path names the user.
 $work = if ($Work) { $Work } else { Join-Path $root "target\progress-shots" }
@@ -97,7 +100,7 @@ function Scenario([string]$name, [hashtable]$item, [int]$wait, [scriptblock]$pre
   }
   if ($prepare) { & $prepare $dir }
   [IO.File]::WriteAllText("$dir\data\downloads.json", ($list | ConvertTo-Json -Depth 8))
-  $env:MDM_DATA_DIR = "$dir\data"
+  $env:GRABBIT_DATA_DIR = "$dir\data"
   $env:MDM_OFFSCREEN = "1"
   if ($At) { $env:MDM_OFFSCREEN_AT = $At }
   $app = Start-Process -PassThru $exe
@@ -134,7 +137,7 @@ function Scenario([string]$name, [hashtable]$item, [int]$wait, [scriptblock]$pre
     }
   } finally {
     Stop-Process -Id $app.Id -ErrorAction SilentlyContinue
-    Remove-Item Env:MDM_DATA_DIR, Env:MDM_OFFSCREEN, Env:MDM_OFFSCREEN_AT, Env:MDM_LAB_PEERS -ErrorAction SilentlyContinue
+    Remove-Item Env:GRABBIT_DATA_DIR, Env:MDM_OFFSCREEN, Env:MDM_OFFSCREEN_AT, Env:MDM_LAB_PEERS -ErrorAction SilentlyContinue
   }
 }
 
@@ -144,7 +147,7 @@ try {
   New-Item -ItemType Directory -Force $work, $out | Out-Null
 
   if (Want "video") {
-    $tools = Join-Path ([Environment]::GetFolderPath("ApplicationData")) "misterdownloadmanager\tools"
+    $tools = Join-Path ([Environment]::GetFolderPath("ApplicationData")) "grabbit\tools"
     if ($YtDlp) {
       # A tools folder of the run's own, holding the given yt-dlp as MDM installs it.
       $tools = Join-Path $work "tools"
@@ -174,7 +177,7 @@ try {
         [IO.File]::WriteAllText("$dir\data\tools\$t\current.json", ($cur | ConvertTo-Json))
       }
     }
-    Scenario "video" $item 12 $copyTools
+    Scenario "video" $item 12 $copyTools $VideoTabs
   }
 
   if (Want "torrent") {

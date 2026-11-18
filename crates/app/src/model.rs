@@ -312,18 +312,48 @@ fn upper_list(exts: &[String]) -> String {
         .join(" ")
 }
 
+/// The base folder that categories without their own folder live under (#556): General's
+/// folder when one was chosen in Options → Save to, else `downloads`.
+pub fn default_downloads<'a>(
+    downloads: &'a Path,
+    dirs: &'a [(String, String)],
+) -> std::borrow::Cow<'a, Path> {
+    let general = Category::General.key();
+    dirs.iter()
+        .find(|(c, _)| *c == *general)
+        .map(|(_, d)| std::borrow::Cow::Owned(crate::dialogs::resolve_path(d)))
+        .unwrap_or(std::borrow::Cow::Borrowed(downloads))
+}
+
+/// The name a download from `context` has before its server answers, when nobody named it: the
+/// address's ([`mdm_engine::naming::answer_name`]), typed by the browser's own type for it and,
+/// for a page's media whose address names nothing (a script, a bare id), its page's title
+/// (upstream issues 695 and 800). The engine names it again from the server's answer as it
+/// starts.
+pub fn browser_guess(url: &Url, context: &mdm_ipc::Command) -> String {
+    mdm_engine::naming::answer_name(
+        url,
+        &mdm_engine::naming::Answer {
+            content_type: context.mime.as_deref(),
+            title: context.video_title.as_deref(),
+            ..Default::default()
+        },
+    )
+}
+
 /// The category's folder: the one chosen in Options → Save to (or remembered from Download
-/// File Info), else the default.
+/// File Info), else the default under [`default_downloads`] (#556).
 pub fn category_folder(cat: Category, downloads: &Path, dirs: &[(String, String)]) -> PathBuf {
+    let base = default_downloads(downloads, dirs);
     if cat.is_custom() {
-        return cat.folder(downloads);
+        return cat.folder(&base);
     }
     let key = cat.key();
     dirs.iter()
         .find(|(c, _)| *c == *key)
         // A folder may be saved as shown, relative to the user's home.
         .map(|(_, d)| crate::dialogs::resolve_path(d))
-        .unwrap_or_else(|| cat.folder(downloads))
+        .unwrap_or_else(|| cat.folder(&base))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -381,6 +411,12 @@ pub struct Item {
     /// Content-Disposition), as a browser does (#28). Cleared once the file is made.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub name_from_url: bool,
+    /// Its name was given without waiting for its folder to be looked at (Download File Info:
+    /// a sleeping drive or a network folder can take seconds to answer, #743): nothing of its
+    /// own is on the disk yet, and it starts under that name or the next free numbered one, as
+    /// the engine finds as it starts (`Destination::Free`). Cleared once the file is made.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub number_at_start: bool,
     /// The Link grabber package it came in (#37): its archives are extracted together once
     /// every volume is there.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -397,6 +433,16 @@ pub struct Item {
     /// (or its one file, once known).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote: Option<RemoteSpec>,
+    /// The page it was found on, as the browser sent it (its Referer): kept with the list, so
+    /// File Properties shows it and a start after a restart sends it again (upstream issue
+    /// 795). The request's own copy is `context.referer`; this one follows it (`set_referer`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub referer: Option<String>,
+    /// Its file was dragged out of Download complete and moved to a place MDM couldn't learn
+    /// (upstream issue 869): Open and Open folder say so while it isn't at `dest`. Cleared when
+    /// it is placed again (a move MDM follows, Move/Rename) or downloaded again.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub moved_away: bool,
     #[serde(skip)]
     pub live: Option<Live>,
     /// The session's temporary view while a torrent is being checked; never saved.
@@ -415,6 +461,12 @@ pub struct Item {
     /// #68), in the interface language; memory only.
     #[serde(skip)]
     pub notices: Vec<String>,
+    /// Whether its resume state is at its place, as read beside the window at start
+    /// (resumeread.rs): the place read and the answer. Until that read comes it is taken as there
+    /// (the safe side: the row keeps its place, and no other row takes it), and it is forgotten as
+    /// the row starts (its run makes or removes the state). Memory only.
+    #[serde(skip)]
+    pub(crate) state_here: Option<(PathBuf, bool)>,
 }
 
 /// A Link grabber package, as each of its downloads keeps it (#37).
@@ -469,17 +521,119 @@ pub struct GallerySpec {
     pub limit: Option<u64>,
 }
 
+/// Why a video failed when joining its picture and sound did (ffmpeg's `error`, in English),
+/// and what became of what was downloaded: `kept` beside its file, for Resume to join again
+/// without downloading it, until the download is deleted with its files (upstream `6196f9ad`).
+pub(crate) fn merge_failure(error: &str, kept: &[PathBuf]) -> String {
+    let error = crate::i18n::ltr(error);
+    if kept.is_empty() {
+        return crate::i18n::fmt(
+            // i18n: why a video download failed: ffmpeg couldn't join its picture and sound into one file; {error} = ffmpeg's reason, in English
+            crate::i18n::t("its picture and sound couldn't be joined into one file ({error})"),
+            &[("error", &error)],
+        );
+    }
+    let files = kept
+        .iter()
+        .filter_map(|f| f.file_name())
+        .map(|n| crate::i18n::isolate(&n.to_string_lossy()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    crate::i18n::fmt(
+        // i18n: why a video download failed: ffmpeg couldn't join its picture and sound into one file; {error} = ffmpeg's reason, in English; {files} = the downloaded parts' file names, kept in the download folder; "Also delete the file from disk" is the Delete box's choice
+        crate::i18n::t(
+            "its picture and sound couldn't be joined into one file ({error}). What was downloaded stays in the folder for Resume to join again ({files}); deleting the download with \"Also delete the file from disk\" removes it",
+        ),
+        &[("error", &error), ("files", &files)],
+    )
+}
+
+/// `text` with every web address in it cut before its query and fragment (`?…`, `#…`): what a
+/// log may keep of a download's failure (#1262), since a log is attached to reports and an
+/// address's query often carries a token.
+fn without_queries(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = ["https://", "http://"]
+        .iter()
+        .filter_map(|p| rest.find(p))
+        .min()
+    {
+        out.push_str(&rest[..at]);
+        let addr = &rest[at..];
+        let end = addr
+            .find(|c: char| c.is_whitespace() || matches!(c, ')' | '"' | '\'' | '>' | ']'))
+            .unwrap_or(addr.len());
+        let (url, after) = addr.split_at(end);
+        match url.find(['?', '#']) {
+            Some(q) => {
+                out.push_str(&url[..q]);
+                out.push_str("?…");
+            }
+            None => out.push_str(url),
+        }
+        rest = after;
+    }
+    out.push_str(rest);
+    out
+}
+
 /// A helper's progress (yt-dlp's, gallery-dl's) as the engine's view: one segment when its size
-/// is known, no connections, its notes as events.
+/// is known, one connection while it runs (theirs: neither opens more), its notes as events. A
+/// video whose streams the engine downloads (upstream issue 769) shows the engine's own: the
+/// streams' segments one after another, the connections of the one under way, its server.
 fn tool_snapshot(p: mdm_tools::video::Progress, url: &Url) -> mdm_engine::Snapshot {
+    use mdm_engine::download::{ConnStatus, ConnView};
     use mdm_tools::video::State as V;
     let (state, file, error) = match p.state {
+        // Every stream in, their file being joined (#736).
+        V::Running if p.merging.is_some() => (State::Merging, None, None),
         V::Running => (State::Downloading, None, None),
         V::Done(f) => (State::Done, Some(f), None),
-        V::Failed(e) => (State::Failed, None, Some(e)),
+        V::Failed(e) => (
+            State::Failed,
+            None,
+            Some(match &p.merge_failed {
+                Some(kept) => merge_failure(&e, kept),
+                None => e,
+            }),
+        ),
         V::Stopped => (State::Cancelled, None, None),
     };
     let size = p.total;
+    let by_engine = p.engine.is_some();
+    let engine = p.engine.unwrap_or_default();
+    // yt-dlp's one connection while it looks the page up or downloads, not an empty table
+    // (#793); the engine's own while it downloads the streams.
+    let connections = if by_engine {
+        engine.connections
+    } else {
+        matches!(state, State::Downloading)
+            .then(|| ConnView {
+                id: 0,
+                downloaded: p.downloaded,
+                status: if p.speed > 0.0 {
+                    ConnStatus::Receiving
+                } else {
+                    ConnStatus::Connecting
+                },
+                speed: p.speed as u64,
+            })
+            .into_iter()
+            .collect()
+    };
+    let segments = if engine.segments.is_empty() {
+        size.map(|t| {
+            vec![mdm_engine::download::SegmentView {
+                start: 0,
+                cursor: p.downloaded.min(t),
+                end: t,
+            }]
+        })
+        .unwrap_or_default()
+    } else {
+        engine.segments
+    };
     mdm_engine::Snapshot {
         state,
         url: url.clone(),
@@ -487,16 +641,8 @@ fn tool_snapshot(p: mdm_tools::video::Progress, url: &Url) -> mdm_engine::Snapsh
         size,
         downloaded: p.downloaded,
         resumable: Some(true),
-        segments: size
-            .map(|t| {
-                vec![mdm_engine::download::SegmentView {
-                    start: 0,
-                    cursor: p.downloaded.min(t),
-                    end: t,
-                }]
-            })
-            .unwrap_or_default(),
-        connections: Vec::new(),
+        segments,
+        connections,
         error,
         failure: None,
         events: p
@@ -509,13 +655,15 @@ fn tool_snapshot(p: mdm_tools::video::Progress, url: &Url) -> mdm_engine::Snapsh
                 text: text.clone(),
             })
             .collect(),
-        // yt-dlp's and gallery-dl's connections are theirs: not seen here (#140).
-        server: None,
+        // yt-dlp's and gallery-dl's connections are theirs: not seen here (#140); the engine's
+        // are (upstream issue 769).
+        server: engine.server,
+        finishing: p.merging.flatten(),
     }
 }
 
 impl Job {
-    /// The engine's view, or one made from yt-dlp's progress (one segment, no connections).
+    /// The engine's view, or one made from yt-dlp's progress (one segment, one connection).
     pub fn snapshot(&self) -> mdm_engine::Snapshot {
         match self {
             Job::File(d) => d.snapshot(),
@@ -536,14 +684,27 @@ impl Job {
         }
     }
 
-    /// The speed limit can change while a file downloads; yt-dlp takes it at the start; a
-    /// torrent's applies to the whole torrent session.
+    /// A helper program downloads it, and takes a speed limit only as it starts, so a new limit
+    /// starts it again (#708, `App::reapply_helper_limits`): gallery-dl, and yt-dlp for a video
+    /// MDM's engine doesn't download (#769: a live stream, RTMP…).
+    pub fn is_helper(&self) -> bool {
+        match self {
+            Job::Video { job, .. } => job.helper().is_some(),
+            Job::Gallery { job, .. } => job.on_helper(),
+            _ => false,
+        }
+    }
+
+    /// The speed limit can change while a file downloads, and while the engine downloads a
+    /// video's streams (#769); gallery-dl, and yt-dlp downloading by itself, take it at the start
+    /// (the app starts them again, `is_helper`); a torrent's applies to the whole torrent session.
     pub fn set_speed_limit(&self, rate: Option<u64>) {
         match self {
             Job::File(d) => d.set_speed_limit(rate),
             Job::Torrent(t) => t.set_speed_limit(rate),
             Job::Remote(r) => r.set_speed_limit(rate),
-            Job::Video { .. } | Job::Gallery { .. } => {}
+            Job::Video { job, .. } => job.set_speed_limit(rate),
+            Job::Gallery { job, .. } => job.set_speed_limit(rate),
         }
     }
 
@@ -551,7 +712,9 @@ impl Job {
         match self {
             Job::File(d) => d.speed_limit(),
             Job::Torrent(t) => t.speed_limit(),
-            Job::Remote(_) | Job::Video { .. } | Job::Gallery { .. } => None,
+            Job::Video { job, .. } => job.speed_limit(),
+            Job::Gallery { job, .. } => job.speed_limit(),
+            Job::Remote(_) => None,
         }
     }
 }
@@ -593,6 +756,11 @@ pub struct VideoSpec {
     /// The subtitles saved with it (#68; none in a list saved before them).
     #[serde(default)]
     pub subs: mdm_tools::video::Subs,
+    /// What its last run kept beside its file when joining its streams failed, for Resume
+    /// (`mdm_tools::video::Progress::merge_failed`): deleting it with its files removes them,
+    /// whatever yt-dlp named them (`Talk.faud-English.mp4`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parts: Vec<PathBuf>,
 }
 
 /// A running download and its speed measurement.
@@ -694,21 +862,39 @@ impl Item {
             gallery: None,
             log: Vec::new(),
             name_from_url: false,
+            number_at_start: false,
             package: None,
             server: None,
             direct: false,
             remote: None,
+            referer: None,
+            moved_away: false,
             live: None,
             torrent_check: None,
             snap: None,
             login: None,
             context: Default::default(),
             notices: Vec::new(),
+            state_here: None,
         }
     }
+
+    /// The referer sent with it from now on (the browser's, File Properties'): the request's
+    /// copy and the list's together (upstream issue 795).
+    pub fn set_referer(&mut self, referer: Option<String>) {
+        self.referer = referer.clone().filter(|r| !r.is_empty());
+        self.context.referer = referer;
+    }
+
     /// This row's resume state is at its place. `downloaded` can't say: after a crash the list
-    /// holds what it held at its last save, often nothing.
+    /// holds what it held at its last save, often nothing. As read beside the window at start
+    /// while that holds (`state_here`), else from the disk.
     pub fn owns_resume_state(&self) -> bool {
+        if let Some((at, here)) = &self.state_here
+            && *at == self.dest
+        {
+            return *here;
+        }
         let state = mdm_engine::state::state_path(&self.dest);
         mdm_engine::state::ResumeState::load(&state).is_ok_and(|s| s.url == self.url)
     }
@@ -744,8 +930,9 @@ impl Item {
         self.size = size_after(s.state, s.size, s.downloaded, self.size);
         self.resumable = s.resumable.or(self.resumable);
         if let Some(f) = &s.file {
-            // Named now: a later start from scratch keeps this name.
+            // Named now: a later start from scratch keeps this name, and its file is its own.
             let guessed = std::mem::take(&mut self.name_from_url);
+            self.number_at_start = false;
             if *f != self.dest {
                 // The file as saved (a video's real extension, a numbered duplicate, the name
                 // the server gave).
@@ -761,7 +948,12 @@ impl Item {
             }
         }
         let dt = live.sample.0.elapsed().as_secs_f64();
-        if dt >= 0.5 {
+        if self.torrent.is_none() && every_byte_in(&s) {
+            // Every byte in (#736): nothing comes in while the last of it is written out, the
+            // file checked, joined or named; the rate the download ended on isn't one any more.
+            live.rate = 0.0;
+            live.sample = (Instant::now(), s.downloaded);
+        } else if dt >= 0.5 {
             let inst = s.downloaded.saturating_sub(live.sample.1) as f64 / dt;
             live.rate = if live.rate == 0.0 {
                 inst
@@ -780,16 +972,54 @@ impl Item {
         }
         self.snap = Some(s.clone());
         let ended = match s.state {
-            State::Probing | State::Downloading | State::Verifying | State::Completing => None,
+            State::Probing
+            | State::Downloading
+            | State::Verifying
+            | State::Merging
+            | State::Completing => None,
             State::Done => Some(Status::Complete),
             State::Cancelled => Some(Status::Stopped),
             State::Failed => Some(Status::Error),
         };
         match ended {
             Some(status) => {
+                let failed_now = status == Status::Error && self.status != Status::Error;
+                // The reason in English, for the log: the engine's failure, else the helper's.
+                let reason = failed_now.then(|| {
+                    s.failure
+                        .as_ref()
+                        .map(ToString::to_string)
+                        .or_else(|| s.error.clone())
+                        .map_or_else(|| "no reason given".to_owned(), |r| without_queries(&r))
+                });
                 self.status = status;
                 // In the interface language; the engine's English when it gave no failure.
                 self.error = s.failure.as_ref().map(crate::errors::describe).or(s.error);
+                // Why it failed, in the log too, once (#1262: 0.5.2's log said nothing of a
+                // video yt-dlp couldn't download, only the progress window did). The site's
+                // name, not its address: a log is attached to reports, and addresses carry
+                // tokens.
+                if let Some(reason) = reason {
+                    tracing::warn!(
+                        "download {} failed ({}{}): {reason}",
+                        self.id,
+                        if self.video.is_some() {
+                            "a video, "
+                        } else {
+                            ""
+                        },
+                        self.url.host_str().unwrap_or("no host"),
+                    );
+                }
+                // A video's streams kept after its merge failed: its own, for Delete.
+                if let Some(Live {
+                    dl: Job::Video { job, .. },
+                    ..
+                }) = &self.live
+                    && let Some(v) = self.video.as_mut()
+                {
+                    v.parts = job.progress().merge_failed.unwrap_or_default();
+                }
                 if status == Status::Complete {
                     self.downloaded = self.size.unwrap_or(self.downloaded);
                 }
@@ -843,6 +1073,18 @@ impl Item {
         }
     }
 
+    /// Why yt-dlp downloads this running video itself (#769), once it has found out: MDM's engine
+    /// downloads every other one.
+    pub fn video_helper(&self) -> Option<mdm_tools::streams::Helper> {
+        match &self.live {
+            Some(Live {
+                dl: Job::Video { job, .. },
+                ..
+            }) => job.helper(),
+            _ => None,
+        }
+    }
+
     /// Resume / Download Now may start it: not running, and not finished (a gallery finished
     /// may start again: it fetches the files not there yet, #58).
     pub fn can_start(&self) -> bool {
@@ -851,6 +1093,18 @@ impl Item {
                 self.status,
                 Status::Queued | Status::Stopped | Status::Error
             ) || (self.status == Status::Complete && self.gallery.is_some()))
+    }
+
+    /// It failed because the site sent a web page where its file was expected (a file host's
+    /// countdown or captcha, upstream issue 701): the browser gets past it, so the progress
+    /// window offers to open the link there. As its last run ended (the engine's failure, this
+    /// session only).
+    pub fn got_web_page(&self) -> bool {
+        self.status == Status::Error
+            && self.live.is_none()
+            && self.snap.as_ref().is_some_and(|s| {
+                s.state == State::Failed && matches!(s.failure, Some(mdm_engine::Error::GotWebPage))
+            })
     }
 
     pub fn rate(&self) -> f64 {
@@ -913,11 +1167,58 @@ impl Item {
         } else {
             0.0
         };
-        Some(crate::i18n::fmt(
-            // i18n: a torrent's status while its files are read and checked; {percent} is how much is checked, e.g. "42%"
-            crate::i18n::t("Checking {percent}"),
-            &[("percent", &crate::i18n::percent(ratio.min(1.0), 0))],
-        ))
+        Some(checking(&crate::i18n::percent(ratio.min(1.0), 0)))
+    }
+
+    /// After the last byte, while the file is checked against its checksum or a video's
+    /// streams are joined (#736): "Verifying... (45%)", "Merging...", with how far it is when
+    /// that's known. `short`: the list's Status column, one short word and how far, "Checking
+    /// 45%" (as a torrent's check) and "Merging 45%" ("Merging ..." before that is known); the
+    /// column is wide enough for them in the interface language and font ([`crate::list::status_width`]). The
+    /// cell's tip and a screen reader say it whole ([`crate::list::Row::status_whole`]).
+    pub fn finishing(&self, short: bool) -> Option<String> {
+        let s = self.snap.as_ref()?;
+        if !matches!(s.state, State::Verifying | State::Merging) {
+            return None;
+        }
+        let percent = s
+            .finishing
+            .map(|f| crate::i18n::percent(f.clamp(0.0, 1.0), 0));
+        let verifying = s.state == State::Verifying;
+        Some(match (short, percent) {
+            // As "... at Real-Debrid" before its service says how far.
+            (true, percent) => {
+                let percent = percent.as_deref().unwrap_or("...");
+                if verifying {
+                    checking(percent)
+                } else {
+                    merging(percent)
+                }
+            }
+            (false, Some(percent)) => crate::i18n::fmt(
+                if verifying {
+                    // i18n: a download's status while the finished file is checked against its checksum; {percent} how much is checked, e.g. "45%"
+                    crate::i18n::t("Verifying... ({percent})")
+                } else {
+                    // i18n: a video's status while its picture and sound are joined into one file (ffmpeg); {percent} how far, e.g. "45%"
+                    crate::i18n::t("Merging... ({percent})")
+                },
+                &[("percent", &percent)],
+            ),
+            (false, None) if verifying => {
+                // i18n: a download's status while the finished file is checked against its checksum
+                crate::i18n::t("Verifying...").to_owned()
+            }
+            (false, None) => {
+                // i18n: a video's status while its picture and sound are joined into one file (ffmpeg)
+                crate::i18n::t("Merging...").to_owned()
+            }
+        })
+    }
+
+    /// Every byte is in (#736): no rate and no time left, as once it is complete.
+    pub fn past_last_byte(&self) -> bool {
+        self.torrent.is_none() && self.snap.as_ref().is_some_and(every_byte_in)
     }
 
     pub fn status_text(&self) -> String {
@@ -927,12 +1228,8 @@ impl Item {
         if let Some(checking) = self.torrent_checking() {
             return checking;
         }
-        if self
-            .snap
-            .as_ref()
-            .is_some_and(|s| s.state == State::Verifying)
-        {
-            return crate::i18n::t("Verifying...").into();
+        if let Some(finishing) = self.finishing(true) {
+            return finishing;
         }
         match self.status {
             // i18n: a download's status (state it is in, not a command): finished
@@ -956,13 +1253,56 @@ impl Item {
     }
 
     pub fn time_left(&self) -> String {
+        self.time_left_at(self.rate())
+    }
+
+    /// The Time left column at a transfer rate of `rate` bytes/s (its live one: `time_left`):
+    /// blank unless it is downloading with a size and data coming.
+    pub fn time_left_at(&self, rate: f64) -> String {
         match (self.status, self.size) {
-            (Status::Downloading, Some(t)) if self.rate() > 1.0 => {
-                time((t.saturating_sub(self.downloaded)) as f64 / self.rate())
+            // Every byte in (upstream issue 736): no time left, as once it is complete.
+            (Status::Downloading, Some(t)) if rate > 1.0 && !self.past_last_byte() => {
+                time((t.saturating_sub(self.downloaded)) as f64 / rate)
             }
             _ => String::new(),
         }
     }
+}
+
+/// Every byte of a download is in (#736): the last of it is written out (its whole size
+/// received and no connection receiving or connecting, as the progress window's "Finishing..."),
+/// the file checked, a video's streams joined, or the file named. Nothing comes in any more.
+fn every_byte_in(s: &mdm_engine::Snapshot) -> bool {
+    use mdm_engine::download::ConnStatus;
+    matches!(
+        s.state,
+        State::Verifying | State::Merging | State::Completing
+    ) || (s.state == State::Downloading
+        && s.size.is_some_and(|t| t > 0 && s.downloaded >= t)
+        && !s
+            .connections
+            .iter()
+            .any(|c| matches!(c.status, ConnStatus::Receiving | ConnStatus::Connecting)))
+}
+
+/// The list's Status column while a torrent's files or a finished file are checked (against
+/// the torrent's hashes, against a checksum): one short word and how far (#736).
+pub fn checking(percent: &str) -> String {
+    crate::i18n::fmt(
+        // i18n: the list's Status column while a torrent's files or a finished file are checked (against the torrent's hashes or a checksum); {percent} how much is checked, e.g. "42%". One short word: the column is narrow
+        crate::i18n::t("Checking {percent}"),
+        &[("percent", percent)],
+    )
+}
+
+/// The list's Status column while a video's picture and sound are joined: one short word and
+/// how far (#736).
+pub fn merging(percent: &str) -> String {
+    crate::i18n::fmt(
+        // i18n: the list's Status column while a video's picture and sound are joined into one file (ffmpeg); {percent} how far, e.g. "45%". One short word: the column is narrow
+        crate::i18n::t("Merging {percent}"),
+        &[("percent", percent)],
+    )
 }
 
 /// The "Last Try Date" and "Added" columns as stored, e.g. `Oct 28 21:44:12 2026` (the list's
@@ -989,21 +1329,14 @@ pub fn date_text(stored: &str) -> String {
     when_text(t)
 }
 
-/// A local time as the interface writes dates and times (Options → Regional; IDM's text in
-/// English, on the system's clock; the Windows region's elsewhere).
+/// A local time as the interface writes dates and times (Options → Regional; else IDM's text,
+/// on the system's clock).
 pub fn when_text(t: chrono::NaiveDateTime) -> String {
     let formats = crate::regional::current();
     if formats.custom {
         return crate::i18n::ltr(&crate::regional::short_date_time(t));
     }
-    if english() {
-        return stamp_text(t, formats.clock24);
-    }
-    #[cfg(windows)]
-    if let Some(s) = crate::win32::local_date_time(t) {
-        return crate::i18n::ltr(&s);
-    }
-    crate::i18n::ltr(&crate::regional::short_date_time(t))
+    stamp_text(t, formats.clock24)
 }
 
 /// IDM's text for a time, as stored (`Oct 28 21:44:12 2026`) on a 24-hour clock, and with the
@@ -1018,46 +1351,22 @@ fn stamp_text(t: chrono::NaiveDateTime, clock24: bool) -> String {
     )
 }
 
-/// Whether numbers are written IDM's way (English): `7.05 MB`, `13.38%`, `1 min 22 sec`.
-/// Every other language writes them as its region does (digits, decimal mark, unit names; D-019).
-fn english() -> bool {
-    crate::i18n::code() == "en"
-}
-
-/// `13.38%` (IDM), or the interface language's percentage (`13,38 %`).
+/// `13.38%` (IDM).
 pub fn percent(ratio: f64) -> String {
     crate::i18n::percent(ratio, 2)
 }
 
-/// `{n} MB`-style unit text in the interface language (catalog context `unit`).
-fn unit(n: f64, decimals: usize, template: &str) -> String {
-    crate::i18n::i18n().measure(crate::i18n::lang(), n, decimals, template)
-}
-
 /// `7.05 MB`, `412.20 KB`, `1.97 GB` — IDM shows two decimals.
 pub fn size(b: u64) -> String {
-    if !english() {
-        let v = b as f64;
-        let k = 1024.0;
-        return if v >= k * k * k {
-            unit(v / (k * k * k), 2, "{n} GB")
-        } else if v >= k * k {
-            unit(v / (k * k), 2, "{n} MB")
-        } else if v >= k {
-            unit(v / k, 2, "{n} KB")
-        } else {
-            crate::i18n::tn(b, "{n} byte", "{n} bytes")
-        };
-    }
     let b = b as f64;
     if b >= 1024.0 * 1024.0 * 1024.0 {
-        format!("{:.2} GB", b / (1024.0 * 1024.0 * 1024.0)) // not translated: English path
+        format!("{:.2} GB", b / (1024.0 * 1024.0 * 1024.0)) // not translated: IDM's text
     } else if b >= 1024.0 * 1024.0 {
-        format!("{:.2} MB", b / (1024.0 * 1024.0)) // not translated: English path
+        format!("{:.2} MB", b / (1024.0 * 1024.0)) // not translated: IDM's text
     } else if b >= 1024.0 {
-        format!("{:.2} KB", b / 1024.0) // not translated: English path
+        format!("{:.2} KB", b / 1024.0) // not translated: IDM's text
     } else {
-        format!("{b} Bytes") // not translated: English path
+        format!("{b} Bytes") // not translated: IDM's text
     }
 }
 
@@ -1065,66 +1374,36 @@ pub fn size(b: u64) -> String {
 pub fn size3(b: u64) -> String {
     let v = b as f64;
     let k = 1024.0;
-    if !english() {
-        return if v >= k * k * k {
-            unit(v / (k * k * k), 3, "{n} GB")
-        } else if v >= k * k {
-            unit(v / (k * k), 3, "{n} MB")
-        } else {
-            unit(v / k, 3, "{n} KB")
-        };
-    }
     if v >= k * k * k {
-        format!("{:.3} GB", v / (k * k * k)) // not translated: English path
+        format!("{:.3} GB", v / (k * k * k)) // not translated: IDM's text
     } else if v >= k * k {
-        format!("{:.3} MB", v / (k * k)) // not translated: English path
+        format!("{:.3} MB", v / (k * k)) // not translated: IDM's text
     } else {
-        format!("{:.3} KB", v / k) // not translated: English path
+        format!("{:.3} KB", v / k) // not translated: IDM's text
     }
 }
 
 /// `11.623 MB/sec`, `512.000 KB/sec` (IDM's progress dialog uses three decimals).
 pub fn rate(bps: f64) -> String {
-    if !english() {
-        return if bps >= 1024.0 * 1024.0 {
-            unit(bps / (1024.0 * 1024.0), 3, "{n} MB/sec")
-        } else {
-            unit(bps / 1024.0, 3, "{n} KB/sec")
-        };
-    }
     if bps >= 1024.0 * 1024.0 {
-        format!("{:.3} MB/sec", bps / (1024.0 * 1024.0)) // not translated: English path
+        format!("{:.3} MB/sec", bps / (1024.0 * 1024.0)) // not translated: IDM's text
     } else {
-        format!("{:.3} KB/sec", bps / 1024.0) // not translated: English path
+        format!("{:.3} KB/sec", bps / 1024.0) // not translated: IDM's text
     }
 }
 
 /// The list's Size column: IDM puts two spaces before the unit (`200.00  MB`).
 pub fn size_list(b: u64) -> String {
-    if english() {
-        size(b).replacen(' ', "  ", 1)
-    } else {
-        size(b)
-    }
+    size(b).replacen(' ', "  ", 1)
 }
 
 /// `14 sec`, `1 min 22 sec`, `2 hour(s) 5 min`.
 pub fn time(secs: f64) -> String {
     let s = secs.round() as u64;
-    if !english() {
-        let n = crate::i18n::integer;
-        let (h, m, sec) = (n(s / 3600), n((s % 3600) / 60), n(s % 60));
-        let t = crate::i18n::t;
-        return match s {
-            0..60 => crate::i18n::fmt(t("{s} sec"), &[("s", &sec)]),
-            60..3600 => crate::i18n::fmt(t("{m} min {s} sec"), &[("m", &m), ("s", &sec)]),
-            _ => crate::i18n::fmt(t("{h} hour(s) {m} min"), &[("h", &h), ("m", &m)]),
-        };
-    }
     match s {
-        0..60 => format!("{s} sec"), // not translated: English path
-        60..3600 => format!("{} min {} sec", s / 60, s % 60), // not translated: English path
-        _ => format!("{} hour(s) {} min", s / 3600, (s % 3600) / 60), // not translated: English path
+        0..60 => format!("{s} sec"), // not translated: IDM's text
+        60..3600 => format!("{} min {} sec", s / 60, s % 60), // not translated: IDM's text
+        _ => format!("{} hour(s) {} min", s / 3600, (s % 3600) / 60), // not translated: IDM's text
     }
 }
 
@@ -1149,7 +1428,58 @@ mod size_tests {
 
 #[cfg(test)]
 mod tests {
+    /// #1262: a failure's reason goes to the log without the queries of the addresses in it.
+    #[test]
+    fn a_failure_is_logged_without_tokens() {
+        assert_eq!(
+            super::without_queries(
+                "error sending request for url (https://cdn.example/v/1.m3u8?vid=9&dt=abc): 414"
+            ),
+            "error sending request for url (https://cdn.example/v/1.m3u8?…): 414"
+        );
+        assert_eq!(
+            super::without_queries("http://a.example/x#frag and https://b.example/y"),
+            "http://a.example/x?… and https://b.example/y"
+        );
+        assert_eq!(
+            super::without_queries("HTTP Error 414: URI Too Long"),
+            "HTTP Error 414: URI Too Long"
+        );
+    }
+
     use super::*;
+
+    /// Joining a video's streams failed: why, and that what was downloaded stays for Resume,
+    /// by name; without anything kept, only why (upstream `6196f9ad`).
+    #[test]
+    fn a_failed_merge_says_what_stays() {
+        let url = Url::parse("https://example.org/a.mp4").unwrap();
+        let mut p = mdm_tools::video::Progress {
+            state: mdm_tools::video::State::Failed("Postprocessing: Conversion failed!".into()),
+            merge_failed: Some(vec![
+                PathBuf::from("/v/Talk.f640.mp4"),
+                PathBuf::from("/v/Talk.faud-English.mp4"),
+            ]),
+            ..Default::default()
+        };
+        let e = super::tool_snapshot(p.clone(), &url).error.unwrap();
+        assert!(e.contains("Conversion failed!"), "{e}");
+        assert!(e.contains("Resume"), "{e}");
+        assert!(
+            e.contains("Talk.f640.mp4") && e.contains("Talk.faud-English.mp4"),
+            "{e}"
+        );
+        p.merge_failed = Some(Vec::new());
+        let e = super::tool_snapshot(p.clone(), &url).error.unwrap();
+        assert!(
+            e.contains("Conversion failed!") && !e.contains("Resume"),
+            "{e}"
+        );
+        // Any other failure: yt-dlp's words as they are.
+        p.merge_failed = None;
+        let e = super::tool_snapshot(p, &url).error.unwrap();
+        assert_eq!(e, "Postprocessing: Conversion failed!");
+    }
 
     fn video_item(size: Option<u64>, downloaded: u64, status: Status) -> Item {
         let url = Url::parse("https://example.org/a.mp4").unwrap();
@@ -1160,8 +1490,54 @@ mod tests {
         it.video = Some(VideoSpec {
             selector: "18".into(),
             subs: Default::default(),
+            parts: Vec::new(),
         });
         it
+    }
+
+    /// #736: after the last byte the Status column says what is happening and how far.
+    #[test]
+    fn verifying_and_merging_say_how_far() {
+        let m = 1 << 20;
+        let mut it = video_item(Some(100 * m), 100 * m, Status::Downloading);
+        let url = Url::parse("https://example.org/a.mp4").unwrap();
+        let mut p = mdm_tools::video::Progress {
+            total: Some(100 * m),
+            downloaded: 100 * m,
+            merging: Some(Some(0.45)),
+            ..Default::default()
+        };
+        it.snap = Some(super::tool_snapshot(p.clone(), &url));
+        // A short word and how far in the list; the progress window says it whole.
+        assert_eq!(it.status_text(), "Merging 45%");
+        assert_eq!(it.finishing(false).as_deref(), Some("Merging... (45%)"));
+        assert!(it.past_last_byte());
+        p.merging = Some(None);
+        it.snap = Some(super::tool_snapshot(p.clone(), &url));
+        assert_eq!(it.status_text(), "Merging ...");
+        assert_eq!(it.finishing(false).as_deref(), Some("Merging..."));
+        let mut s = super::tool_snapshot(p.clone(), &url);
+        s.state = State::Verifying;
+        s.finishing = Some(0.5);
+        it.snap = Some(s);
+        assert_eq!(it.status_text(), "Checking 50%");
+        assert_eq!(it.finishing(false).as_deref(), Some("Verifying... (50%)"));
+        assert!(it.past_last_byte());
+        // Still coming in (yt-dlp's own connection receiving): a rate and a time left as before.
+        p.merging = None;
+        p.speed = 1000.0;
+        it.snap = Some(super::tool_snapshot(p.clone(), &url));
+        assert!(!it.past_last_byte());
+        assert_eq!(it.finishing(true), None);
+        // Every byte in, the engine's connections done, before the merge: nothing comes in.
+        p.speed = 0.0;
+        p.engine = Some(Default::default());
+        it.snap = Some(super::tool_snapshot(p.clone(), &url));
+        assert!(it.past_last_byte());
+        // Short of the whole size: still coming.
+        p.downloaded = 99 * m;
+        it.snap = Some(super::tool_snapshot(p, &url));
+        assert!(!it.past_last_byte());
     }
 
     /// Without a size there's no share to show: no 0 % (from #384).
@@ -1310,5 +1686,53 @@ mod finished_file_gone_tests {
             &dir.join("no").join("gone.bin")
         ));
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod helper_connection_tests {
+    use super::*;
+    use mdm_engine::download::ConnStatus;
+
+    /// #793: a video yt-dlp downloads shows its one connection while it runs, not an empty
+    /// list; none once it is done.
+    #[test]
+    fn a_running_video_shows_its_one_connection() {
+        let page: Url = "https://www.example.com/watch?v=abc".parse().unwrap();
+        let mut p = mdm_tools::video::Progress {
+            state: mdm_tools::video::State::Running,
+            downloaded: 0,
+            total: None,
+            speed: 0.0,
+            events: Vec::new(),
+            side_files: Vec::new(),
+            sub_problems: Vec::new(),
+            engine: None,
+            helper: None,
+            merging: None,
+            merge_failed: None,
+        };
+        // Looking the page up: connecting.
+        let s = tool_snapshot(p.clone(), &page);
+        assert_eq!(s.connections.len(), 1);
+        assert!(matches!(s.connections[0].status, ConnStatus::Connecting));
+
+        p.downloaded = 5_000;
+        p.speed = 1_000.0;
+        let s = tool_snapshot(p.clone(), &page);
+        assert_eq!(s.connections.len(), 1);
+        assert_eq!(
+            (
+                s.connections[0].id,
+                s.connections[0].downloaded,
+                s.connections[0].speed
+            ),
+            (0, 5_000, 1_000)
+        );
+        assert!(matches!(s.connections[0].status, ConnStatus::Receiving));
+
+        // Done: no connection left.
+        p.state = mdm_tools::video::State::Done("Clip.mp4".into());
+        assert!(tool_snapshot(p, &page).connections.is_empty());
     }
 }

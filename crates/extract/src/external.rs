@@ -10,22 +10,15 @@ use std::process::{Command, Stdio};
 use crate::Error;
 use crate::safe::{self, Writer};
 
-/// 7-Zip's program: in its usual install folders on Windows, else `7zz`, `7z` or `7za` on the
-/// PATH (Linux and macOS packages name it so).
+/// 7-Zip's program: in its usual install folders, else `7z.exe` or `7za.exe` on the PATH.
 pub fn find_7zip() -> Option<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
-    if cfg!(windows) {
-        for var in ["ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"] {
-            if let Some(dir) = std::env::var_os(var) {
-                candidates.push(PathBuf::from(dir).join("7-Zip").join("7z.exe"));
-            }
+    for var in ["ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"] {
+        if let Some(dir) = std::env::var_os(var) {
+            candidates.push(PathBuf::from(dir).join("7-Zip").join("7z.exe"));
         }
     }
-    let names: &[&str] = if cfg!(windows) {
-        &["7z.exe", "7za.exe"]
-    } else {
-        &["7zz", "7z", "7za"]
-    };
+    let names: &[&str] = &["7z.exe", "7za.exe"];
     if let Some(path) = std::env::var_os("PATH") {
         for dir in std::env::split_paths(&path) {
             for n in names {
@@ -42,6 +35,10 @@ pub fn extract(
     w: &mut Writer,
     password: Option<&str>,
 ) -> Result<(), Error> {
+    // Full paths: 7-Zip runs in the staging folder, MDM's own and writable, never in the folder
+    // MDM was started in (its install folder from the Start menu, upstream issue 834).
+    let full = |p: &Path| std::path::absolute(p).unwrap_or_else(|_| p.to_owned());
+    let (root, archive) = (full(w.root()), full(archive));
     let mut cmd = Command::new(tool);
     cmd.arg("x")
         .arg("-y")
@@ -50,14 +47,14 @@ pub fn extract(
         // An empty password when none is given: 7-Zip then fails at once on an encrypted
         // archive instead of asking on a console nobody sees.
         .arg(format!("-p{}", password.unwrap_or("")))
-        .arg(format!("-o{}", w.root().display()))
+        .arg(format!("-o{}", root.display()))
         .arg("--")
-        .arg(archive)
+        .arg(&archive)
+        .current_dir(&root)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped());
     // No console window flashing up for it.
-    #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;

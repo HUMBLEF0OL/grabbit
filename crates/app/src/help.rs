@@ -9,14 +9,17 @@ use std::time::Duration;
 use egui::{pos2, vec2};
 
 use crate::dialogs::{Outcome, window};
-use crate::winui::{self, ButtonKind, r};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r};
 
-/// The repository: problem reports, releases, source, licences.
-pub const REPO: &str = "https://github.com/anefzaoui/misterdownloadmanager";
-/// The creator's GitHub Sponsors page: Help → Support MDM, About's last line. The website, the
-/// extension's popup and the repository's Sponsor button (.github/FUNDING.yml) point there too.
-pub const SPONSORS: &str = "https://github.com/sponsors/anefzaoui";
-const LATEST: &str = "https://api.github.com/repos/anefzaoui/misterdownloadmanager/releases/latest";
+/// The repository: problem reports, releases, source, licences. This fork's own: its users'
+/// reports and its builds' updates come here, not to the original (anefzaoui/misterdownloadmanager).
+pub const REPO: &str = "https://github.com/HUMBLEF0OL/grabbit";
+/// Where Help → Support MDM and About's last line go: this fork's repository until its owner's
+/// GitHub Sponsors page exists (then https://github.com/sponsors/HUMBLEF0OL, with the website's,
+/// the extension popup's and .github/FUNDING.yml's).
+pub const SPONSORS: &str = REPO;
+/// This fork's releases (none yet: GitHub's 404 reads as up to date).
+const LATEST: &str = "https://api.github.com/repos/HUMBLEF0OL/grabbit/releases/latest";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const COMMIT: &str = env!("MDM_COMMIT");
 /// While MDM runs, the automatic check comes again this often (it also checks at every start).
@@ -26,33 +29,12 @@ pub const CHECK_AFTER_START: std::time::Duration = std::time::Duration::from_sec
 
 /// The official website: the home page and the user guide, docs/*.md made into pages by
 /// tools/website/build.py. GitHub (REPO) keeps what is GitHub's: issues, releases, the source.
-pub const SITE: &str = "https://misterdownloadmanager.com";
+pub const SITE: &str = "https://humblef0ol.github.io/grabbit";
 
-/// The website's languages besides English, its folders (`/de/help/`): tools/website/sitei18n.py's
-/// LANGS, which a test keeps this list equal to. English is at the root.
-const SITE_LANGS: &[&str] = &[
-    "es", "pt-br", "pt", "fr", "de", "ru", "ar", "zh-hans", "ja", "ko", "tr", "it", "id", "vi",
-    "hi", "fa", "pl", "uk", "nl", "th", "bn",
-];
-
-/// The website's folder for the interface language `code` (a catalog's code: `de`, `pt-br`,
-/// `es-mx`…): the language itself, else its base language (`es-mx` reads `/es/`, `fr-ca`
-/// `/fr/`), else none, English. `zh-hant` stays English: the site has Simplified Chinese only.
-fn site_lang(code: &str) -> Option<&'static str> {
-    let code = code.to_ascii_lowercase();
-    let base = code.split(['-', '_']).next().unwrap_or_default();
-    SITE_LANGS
-        .iter()
-        .find(|l| **l == code)
-        .or_else(|| SITE_LANGS.iter().find(|l| **l == base))
-        .copied()
-}
-
-/// The website's address of a user guide page in the language `lang` (an interface language
-/// code): `doc` is the page's file in docs/ with an optional section (`"video.md"`,
+/// The website's address of a user guide page: `doc` is the page's file in docs/ with an optional section (`"video.md"`,
 /// `"README.md#tutorials"`; the guide's contents are README.md), `""` the home page. The mapping
 /// is build.py's: docs/README.md is /help/, docs/<page>.md /help/<page>.html.
-pub fn page_url(doc: &str, lang: &str) -> String {
+pub fn page_url(doc: &str) -> String {
     let (file, anchor) = match doc.split_once('#') {
         Some((file, anchor)) => (file, format!("#{anchor}")),
         None => (doc, String::new()),
@@ -62,17 +44,15 @@ pub fn page_url(doc: &str, lang: &str) -> String {
         "README.md" => "/help/".to_owned(),
         page => format!("/help/{}.html", page.strip_suffix(".md").unwrap_or(page)),
     };
-    let folder = site_lang(lang).map(|l| format!("/{l}")).unwrap_or_default();
-    format!("{SITE}{folder}{path}{anchor}")
+    format!("{SITE}{path}{anchor}")
 }
 
-/// Open a page of the user guide on the website, in the interface language when the site has
-/// it (`doc` as page_url takes it: `"video.md"`, `"README.md#tutorials"`, `""` the home page).
+/// Open a page of the user guide on the website (`doc` as page_url takes it: `"video.md"`, `"README.md#tutorials"`, `""` the home page).
 /// Never in an off-screen test run (MDM_OFFSCREEN), whose clicks come from scripts, not from a
 /// person at the browser.
 pub fn open_page(doc: &str) {
     if !crate::offscreen() {
-        crate::launch::open(page_url(doc, crate::i18n::code()));
+        crate::launch::open(page_url(doc));
     }
 }
 
@@ -90,8 +70,8 @@ pub fn support() {
 /// language. The parameters are the form's field ids (all text fields: GitHub's page drops a
 /// dropdown's value from the address).
 pub fn report_problem() {
-    // On a thread of its own: the fields ask the system (macOS: `sw_vers`), which the window's
-    // thread doesn't wait for (#222).
+    // On a thread of its own: the fields ask the system, which the window's thread doesn't wait
+    // for (#222).
     let _ = std::thread::Builder::new()
         .name("report-problem".into())
         .spawn(|| {
@@ -107,32 +87,16 @@ pub fn report_problem() {
 
 /// The Bug report form's fields MDM fills in: (field id, value).
 fn report_fields() -> Vec<(&'static str, String)> {
-    #[cfg(windows)]
     let os_version = crate::win32::windows_version();
-    #[cfg(unix)]
-    let os_version = crate::unix::os_version();
-    let os = if cfg!(windows) {
-        if os_version.contains("Windows 10") {
-            "Windows 10"
-        } else {
-            "Windows 11"
-        }
-    } else if cfg!(target_os = "macos") {
-        if cfg!(target_arch = "aarch64") {
-            "macOS (Apple Silicon)"
-        } else {
-            "macOS (Intel)"
-        }
-    } else if cfg!(target_os = "linux") {
-        "Linux"
+    let os = if os_version.contains("Windows 10") {
+        "Windows 10"
     } else {
-        "Other"
+        "Windows 11"
     };
     let mut fields = vec![
         ("os", os.to_owned()),
         ("os-version", os_version),
         ("version", format!("{VERSION} ({COMMIT})")),
-        ("language", crate::i18n::code().to_owned()),
     ];
     fields.push((
         "install",
@@ -164,30 +128,47 @@ pub enum Found {
 
 pub type Slot = Arc<Mutex<Option<Result<Found, String>>>>;
 
-/// Ask GitHub for the latest release in the background; the answer lands in the slot.
+/// Ask GitHub for the latest release in the background; the answer lands in the slot. Whatever
+/// goes wrong, even a panic in the check, lands there as a failed check (#1123): the slot never
+/// stays empty, which would leave Check for updates waiting for good.
 pub fn check(rt: &tokio::runtime::Handle, ctx: &egui::Context) -> Slot {
     let slot: Slot = Arc::new(Mutex::new(None));
     let (out, ctx) = (slot.clone(), ctx.clone());
+    let task = rt.spawn(latest());
     rt.spawn(async move {
-        let res = latest().await;
-        *out.lock().unwrap() = Some(res);
+        let res = settled(task.await);
+        *out.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(res);
         ctx.request_repaint();
     });
     slot
 }
 
+/// The check's task ended: its answer, or a failed check when it panicked (or was cancelled).
+fn settled(joined: Result<Result<Found, String>, tokio::task::JoinError>) -> Result<Found, String> {
+    joined.unwrap_or_else(|e| {
+        tracing::warn!("the update check stopped: {e}");
+        Err(crate::i18n::t("Grabbit hit an internal error").to_owned())
+    })
+}
+
 async fn latest() -> Result<Found, String> {
     // MDM_UPDATE_FEED: another address for the latest release (tests of Update now, as
-    // MDM_DATA_DIR is for a separate list).
+    // GRABBIT_DATA_DIR is for a separate list).
     let feed = std::env::var("MDM_UPDATE_FEED").unwrap_or_else(|_| LATEST.to_owned());
     let net = crate::settings::own_net();
     // The chosen DNS and network adapter, as downloads have them (#36, #35).
     let client = mdm_engine::net::client_builder(&net.dns, &net.route, &feed)
         .map_err(|e| e.to_string())?
-        .user_agent(concat!("MisterDownloadManager/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("Grabbit/", env!("CARGO_PKG_VERSION")))
         .timeout(Duration::from_secs(20))
         .build()
         .map_err(|e| e.to_string())?;
+    fetch(&client, &feed, VERSION).await
+}
+
+/// The latest release at `feed` against the running `current` version.
+async fn fetch(client: &reqwest::Client, feed: &str, current: &str) -> Result<Found, String> {
     let resp = client
         .get(feed)
         .header("Accept", "application/vnd.github+json")
@@ -204,7 +185,7 @@ async fn latest() -> Result<Found, String> {
         .text()
         .await
         .map_err(|e| e.to_string())?;
-    parse_release(&text, VERSION)
+    parse_release(&text, current)
 }
 
 /// GitHub's latest-release JSON against the running `current` version.
@@ -212,7 +193,14 @@ fn parse_release(json: &str, current: &str) -> Result<Found, String> {
     let v: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
     let tag = v["tag_name"].as_str().unwrap_or("").trim();
     let version = tag.trim_start_matches(['v', 'V']);
-    if version.is_empty() {
+    // A number MDM can't read ("next", "1.x") would compare as 0 and pass for older: no answer
+    // is better than a wrong one.
+    let numeric = version
+        .split_once('-')
+        .map_or(version, |(main, _)| main)
+        .split('.')
+        .all(|p| p.parse::<u64>().is_ok());
+    if version.is_empty() || !numeric {
         // i18n: why updates could not be checked: the newest release on the site has no number
         return Err(crate::i18n::t("the release has no version").to_owned());
     }
@@ -275,8 +263,6 @@ pub struct Updates {
 #[derive(Clone, Debug)]
 enum UpdateStatus {
     Failed(String),
-    /// A .deb or .rpm, opened in the system's package installer.
-    Opened,
 }
 
 impl Updates {
@@ -324,16 +310,8 @@ impl Updates {
         // once the new copy (or the installer) has started.
         if let Some(res) = self.job.as_ref().and_then(crate::update::Job::result) {
             self.job = None;
-            let started = res.and_then(|next| match next {
-                crate::update::Next::Restart(mut cmd) => cmd
-                    .spawn()
-                    .map(|_| crate::update::Next::Restart(cmd))
-                    .map_err(|e| e.to_string()),
-                opened => Ok(opened),
-            });
-            match started {
-                Ok(crate::update::Next::Restart(_)) => return Outcome::Done(true),
-                Ok(crate::update::Next::Opened) => self.status = Some(UpdateStatus::Opened),
+            match res {
+                Ok(crate::update::Next::Restart) => return Outcome::Done(true),
                 Err(e) => self.status = Some(UpdateStatus::Failed(e)),
             }
         }
@@ -344,102 +322,83 @@ impl Updates {
         // Compact unless there are release notes to show (then a window of its own size).
         let notes = matches!(result, Some(Ok(Found::Newer(_))));
         // One window that grows when notes arrive (a second id made a new window flash up).
-        let (id, h) = ("updates", if notes { 250.0 } else { 96.0 });
-        let bottom = h - 32.0;
+        // The mockup's layout: an icon tile, the answer beside it, the notes, the status row, the
+        // footer.
+        const W: f32 = 480.0;
+        let (id, body) = ("updates", if notes { 277.0 } else { 105.0 });
+        let bottom = body - 16.0 - 21.0;
         window(
             ctx,
             id,
             "Check for updates",
-            [440.0, h],
+            [W, body + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 let ink = winui::TEXT();
-                let right = o.x + 429.0;
+                let e = winui::EDGE;
+                let right = o.x + W - e;
+                let tx = o.x + e + 40.0 + 12.0;
+                winui::icon_tile(
+                    ui,
+                    r(o, e, 16.0, 40.0, 40.0),
+                    "gx-download",
+                    crate::theme::colors().accent,
+                    8.0,
+                );
                 let mut download = None;
                 match &result {
                     None => {
                         winui::text(
                             &p,
-                            o.x + 11.0,
-                            o.y + 24.0,
+                            tx,
+                            o.y + 31.0,
                             crate::i18n::t("Checking for updates..."),
                             ink,
                         );
                     }
                     Some(Ok(Found::Latest)) => {
                         let line = crate::i18n::fmt(
-                            crate::i18n::t(
-                                "You have the latest version of Mister Download Manager ({version}).",
-                            ),
+                            crate::i18n::t("You have the latest version of Grabbit ({version})."),
                             &[("version", VERSION)],
                         );
-                        winui::paragraph(&p, o.x + 11.0, o.y + 24.0, &line, ink, right, 13.0);
+                        winui::paragraph(&p, tx, o.y + 31.0, &line, ink, right, 13.0);
                     }
                     Some(Err(e)) => {
                         let line = crate::i18n::fmt(
                             crate::i18n::t("Updates could not be checked: {error}"),
                             &[("error", e)],
                         );
-                        let (rect, cut) =
-                            winui::text_fit(&p, o.x + 11.0, o.y + 24.0, &line, ink, right);
+                        let (rect, cut) = winui::text_fit(&p, tx, o.y + 31.0, &line, ink, right);
                         if cut {
                             winui::full_on_hover(ui, rect, "update-error", &line);
                         }
                     }
                     Some(Ok(Found::Newer(rel))) => {
                         let line = crate::i18n::fmt(
-                            crate::i18n::t(
-                                "Mister Download Manager {version} is available (released {date}).",
-                            ),
+                            crate::i18n::t("Grabbit {version} is available (released {date})."),
                             &[("version", &rel.version), ("date", &rel.date)],
                         );
-                        winui::fit(
-                            ui,
-                            &p,
-                            o.x + 11.0,
-                            o.y + 24.0,
-                            &line,
-                            ink,
-                            right,
-                            "update-line",
+                        winui::fit(ui, &p, tx, o.y + 31.0, &line, ink, right, "update-line");
+                        let have = crate::i18n::fmt(
+                            crate::i18n::t("You have version {version}."),
+                            &[("version", VERSION)],
                         );
-                        // A package of another package manager (pacman, …): that one updates it.
-                        let have = if install == mdm_tools::update::Install::System {
-                            crate::i18n::fmt(
-                                // i18n: Check for updates, under the new version's line, when MDM was installed by the Linux system's package manager (pacman, ...), which MDM can't update itself
-                                crate::i18n::t(
-                                    "You have version {version}, from your system's package manager: update it there.",
-                                ),
-                                &[("version", VERSION)],
-                            )
-                        } else {
-                            crate::i18n::fmt(
-                                crate::i18n::t("You have version {version}."),
-                                &[("version", VERSION)],
-                            )
-                        };
                         winui::fit(
                             ui,
                             &p,
-                            o.x + 11.0,
-                            o.y + 42.0,
+                            tx,
+                            o.y + 49.0,
                             &have,
                             winui::MUTED(),
                             right,
                             "update-have",
                         );
-                        winui::text(
-                            &p,
-                            o.x + 11.0,
-                            o.y + 66.0,
-                            crate::i18n::t("What's new:"),
-                            ink,
-                        );
+                        winui::text(&p, o.x + e, o.y + 80.0, crate::i18n::t("What's new:"), ink);
                         let notes = egui::Rect::from_min_max(
-                            pos2(o.x + 11.0, o.y + 74.0),
-                            pos2(right, o.y + 206.0),
+                            pos2(o.x + e, o.y + 88.0),
+                            pos2(right, o.y + 228.0),
                         );
                         // English, as the paragraph is laid out; made where it is on screen.
                         // Read-only text: the read-only field's look (it drew a square box of its own).
@@ -463,12 +422,10 @@ impl Updates {
                     crate::update::asset_for(install, &rel.version, &rel.assets)
                         .filter(|_| !matches!(self.status, Some(UpdateStatus::Failed(_))))
                 });
-                // Another package manager's copy: no Update now nor Download, the notes only.
-                let managed = install == mdm_tools::update::Install::System;
                 let close_label = if self.job.is_some() {
                     // i18n: button: stop downloading the update
                     crate::i18n::mark("Cancel")
-                } else if download.is_some() && !managed {
+                } else if download.is_some() {
                     // i18n: button: not now (download the update later)
                     crate::i18n::mark("Later")
                 } else {
@@ -477,9 +434,11 @@ impl Updates {
                 // The first button: Retry after a failed check, Update now or Download for a new
                 // version.
                 let first = if matches!(result, Some(Err(_))) {
+                    // i18n: button: check for updates again
                     Some("Retry")
-                } else if download.is_some() && !managed {
+                } else if download.is_some() {
                     Some(if asset.is_some() {
+                        // i18n: button: download and install the new version, then restart
                         "Update now"
                     } else {
                         "Download"
@@ -487,24 +446,11 @@ impl Updates {
                 } else {
                     None
                 };
-                // The buttons as wide as their labels in this language (#192), the row ending
-                // where it ends in English.
-                let row: Vec<(&str, f32)> = first
-                    .into_iter()
-                    .chain([close_label])
-                    .map(|l| (l, 73.0))
-                    .collect();
-                let placed = winui::buttons_to_right(&p, 429.0, 9.0, &row, 150.0);
-                let (first_at, close_at) = (placed[0], placed[placed.len() - 1]);
                 // Under the answer: how Update now is going, else the automatic check's switch,
-                // up to 8 px before the buttons (as in English with two). In English, as the text
-                // pens take it (a right-to-left window placed the status over its buttons when
-                // given the mirrored rect).
-                let status_right = (first_at.0 - 8.0).min(266.0);
-                let status_rc = egui::Rect::from_min_size(
-                    o + vec2(11.0, bottom),
-                    vec2(status_right - 11.0, 21.0),
-                );
+                // across the window (the buttons are in the footer). In English, as the text pens
+                // take it.
+                let status_rc =
+                    egui::Rect::from_min_size(o + vec2(e, bottom), vec2(W - 2.0 * e, 21.0));
                 if let Some(job) = &self.job {
                     let installing = job.installing();
                     // Put in place: a bar that moves, no percent.
@@ -540,10 +486,6 @@ impl Updates {
                             crate::i18n::t("The update couldn't be installed: {error}"),
                             &[("error", e)],
                         ),
-                        UpdateStatus::Opened => {
-                            crate::i18n::t("The update is open in your system's package installer.")
-                                .to_owned()
-                        }
                     };
                     let (rect, cut) = winui::text_fit(
                         &p,
@@ -560,41 +502,60 @@ impl Updates {
                     // Its caption stops before the buttons (a longer translation ends in "...").
                     winui::checkbox_until(
                         ui,
-                        o + vec2(11.0, bottom + 4.0),
+                        o + vec2(e, bottom + 4.0),
                         weekly,
                         // i18n: check box in the update window: look for a new version every time MDM starts
                         "Check for updates at every start",
                         true,
-                        Some(o.x + status_right),
+                        Some(right),
                     );
                 }
-                // Enter presses the default button, as in the other dialogs.
-                let mut enter = winui::enter_pressed(ui);
+                let idle = self.job.is_none();
+                // Being put in place: nothing can stop that, so no Cancel (nor Esc) meanwhile.
+                let installing = self
+                    .job
+                    .as_ref()
+                    .is_some_and(crate::update::Job::installing);
+                // The first button is the default (Enter); without one, Close is. Escape is
+                // Close's while nothing downloads (Cancel then stops the download on a click
+                // only; Escape closes the window, as before).
+                let first_kind = if first == Some("Update now") && !idle {
+                    ButtonKind::Disabled
+                } else {
+                    ButtonKind::Default
+                };
+                let close_kind = if installing {
+                    ButtonKind::Disabled
+                } else if first.is_some() {
+                    ButtonKind::Normal
+                } else {
+                    ButtonKind::Default
+                };
+                let mut items: Vec<FooterItem> = first
+                    .map(|label| {
+                        FooterItem::Button(
+                            FooterButton::new(label, first_kind).primary().enter(true),
+                        )
+                    })
+                    .into_iter()
+                    .collect();
+                items.push(FooterItem::Button(
+                    FooterButton::new(close_label, close_kind)
+                        .enter(first.is_none())
+                        .escape(idle),
+                ));
+                let last = items.len() - 1;
+                let pressed = winui::footer(ui, o, W, body, &mut items);
+                let first_hit = first.is_some() && pressed == Some(0);
+                let close = pressed == Some(last);
                 // A check that failed can be tried again.
-                let at = r(o, first_at.0, bottom, first_at.1, 21.0);
-                if matches!(result, Some(Err(_))) {
-                    // i18n: button: check for updates again
-                    let retry = winui::button(ui, at, "Retry", ButtonKind::Default, false, None);
-                    if retry.clicked() || enter {
-                        self.slot = Some(check(rt, ui.ctx()));
-                        self.result = None;
-                        enter = false;
-                    }
+                if matches!(result, Some(Err(_))) && first_hit {
+                    self.slot = Some(check(rt, ui.ctx()));
+                    self.result = None;
                 }
-                if let Some(rel) = download.as_ref().filter(|_| !managed) {
+                if let Some(rel) = download.as_ref() {
                     if let Some(asset) = asset {
-                        let idle = self.job.is_none();
-                        let kind = if idle {
-                            ButtonKind::Default
-                        } else {
-                            ButtonKind::Disabled
-                        };
-                        // i18n: button: download and install the new version, then restart
-                        let update = winui::button(ui, at, "Update now", kind, false, None);
-                        if update.clicked()
-                            || (enter && idle)
-                            || (idle && std::mem::take(&mut self.press))
-                        {
+                        if (first_hit && idle) || (idle && std::mem::take(&mut self.press)) {
                             self.status = None;
                             self.job = Some(crate::update::Job::start(
                                 rt,
@@ -604,42 +565,18 @@ impl Updates {
                                 asset,
                             ));
                         }
-                    } else if winui::button(ui, at, "Download", ButtonKind::Default, false, None)
-                        .clicked()
-                        || enter
-                    {
+                    } else if first_hit {
                         crate::launch::open(&rel.page);
                         return Outcome::Done(false);
                     }
                 }
-                // Being put in place: nothing can stop that, so no Cancel (nor Esc) meanwhile.
-                let installing = self
-                    .job
-                    .as_ref()
-                    .is_some_and(crate::update::Job::installing);
-                let kind = if installing {
-                    ButtonKind::Disabled
-                } else if download.is_some() || matches!(result, Some(Err(_))) {
-                    ButtonKind::Normal
-                } else {
-                    ButtonKind::Default
-                };
-                let close = winui::button(
-                    ui,
-                    r(o, close_at.0, bottom, close_at.1, 21.0),
-                    close_label,
-                    kind,
-                    false,
-                    None,
-                )
-                .clicked();
                 if installing {
                     Outcome::Open
                 } else if close && self.job.is_some() {
                     // Cancel: the download stops, the window stays (Update now again, Later).
                     self.job = None;
                     Outcome::Open
-                } else if close || winui::escape_pressed(ui) || (enter && download.is_none()) {
+                } else if close || (!idle && winui::escape_pressed(ui)) {
                     Outcome::Closed
                 } else {
                     Outcome::Open
@@ -710,26 +647,43 @@ impl About {
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         // A long translation pushes the links and OK down; the window grows with them.
         let extra = crate::dialogs::grow_extra(ctx, "about");
+        const W: f32 = 420.0;
+        const BODY: f32 = 248.0;
+        let body = BODY + extra;
         window(
             ctx,
             "about",
-            "About Mister Download Manager",
-            [420.0, 236.0 + extra],
+            "About Grabbit",
+            [W, body + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 let ink = winui::TEXT();
-                egui::Image::from_bytes(
-                    "bytes://mdm-48.png",
-                    include_bytes!("../assets/icons/app/mdm-48.png"),
-                )
-                .paint_at(ui, winui::r(o, 16.0, 16.0, 48.0, 48.0));
-                winui::text(
-                    &p,
-                    o.x + 80.0,
-                    o.y + 28.0,
-                    crate::i18n::t("Mister Download Manager"),
+                // The mockup's About: everything centred under the app's mark at 56, from the
+                // icon's PNG just above that size on screen (the 48 one stretched blurred at 150
+                // and 200 %; Direct3D has no mipmaps, so a far larger one would shimmer at 100).
+                let cx = o.x + W / 2.0;
+                let mark = if 56.0 * ui.ctx().pixels_per_point() <= 64.0 {
+                    egui::Image::from_bytes(
+                        "bytes://mdm-64.png",
+                        include_bytes!("../assets/icons/app/mdm-64.png"),
+                    )
+                } else {
+                    egui::Image::from_bytes(
+                        "bytes://mdm-128.png",
+                        include_bytes!("../assets/icons/app/mdm-128.png"),
+                    )
+                };
+                mark.paint_at(ui, winui::r(o, W / 2.0 - 28.0, 24.0, 56.0, 56.0));
+                let centred = |font: egui::FontId, baseline: f32, s: &str, color| {
+                    let w = winui::text_width_font(&p, font.clone(), s);
+                    winui::text_at(&p, font, (cx - w / 2.0).round(), baseline, s, color)
+                };
+                centred(
+                    winui::tahoma_title(),
+                    o.y + 104.0,
+                    crate::i18n::t("Grabbit"),
                     ink,
                 );
                 let version = crate::i18n::fmt(
@@ -737,76 +691,78 @@ impl About {
                     &[("version", VERSION), ("commit", COMMIT)],
                 );
                 // Copyable: bug reports ask for it.
-                let rect = winui::text(&p, o.x + 80.0, o.y + 46.0, &version, winui::MUTED());
+                let rect = centred(winui::tahoma(), o.y + 124.0, &version, winui::MUTED());
                 winui::copyable(ui, rect, "about-version", &version, false);
-                let lines = winui::paragraph(
+                let about = winui::wrap_lines(
                     &p,
-                    o.x + 80.0,
-                    o.y + 72.0,
                     crate::i18n::t(
                         "The download manager you already know, rebuilt to be faster. Free and open source under the GNU GPL, version 3 or later. Videos are found by yt-dlp; torrents run on librqbit.",
                     ),
-                    ink,
-                    o.x + 404.0,
-                    13.0,
+                    W - 2.0 * 32.0,
                 );
-                // The links in a row, 18 px apart; one that would pass the paragraph's right
-                // edge (a long translation) starts the next row.
-                let (mut x, mut y) = (o.x + 80.0, o.y + 72.0 + 13.0 * lines as f32 + 14.0);
-                let mut place = |label: &str| {
-                    let w = winui::text_width(&p, crate::i18n::t(label));
-                    if x > o.x + 80.0 && x + w > o.x + 404.0 {
-                        (x, y) = (o.x + 80.0, y + 16.0);
+                let mut y = o.y + 150.0;
+                for line in &about {
+                    centred(winui::tahoma(), y, line, ink);
+                    y += 16.0;
+                }
+                // The links in centred rows, 18 px apart: one that would pass the room (a long
+                // translation) starts the next row.
+                let links = ["Home page", "Source code", "Licenses and credits"];
+                let width = |l: &str| winui::text_width(&p, crate::i18n::t(l));
+                let mut rows: Vec<Vec<&str>> = vec![Vec::new()];
+                let mut row_w = 0.0;
+                for l in links {
+                    let w = width(l);
+                    let last = rows.last_mut().expect("a row");
+                    if !last.is_empty() && row_w + 18.0 + w > W - 2.0 * 32.0 {
+                        rows.push(vec![l]);
+                        row_w = w;
+                    } else {
+                        row_w += if last.is_empty() { w } else { 18.0 + w };
+                        last.push(l);
                     }
-                    let at = (x, y);
-                    x += w + 18.0;
-                    at
-                };
-                let (home, source, credits) = (
-                    place("Home page"),
-                    place("Source code"),
-                    place("Licenses and credits"),
-                );
-                if winui::link(ui, &p, home.0, home.1, "Home page", "home") {
-                    open_page("");
                 }
-                if winui::link(ui, &p, source.0, source.1, "Source code", "source") {
-                    crate::launch::open(REPO);
+                y += 8.0;
+                for row in &rows {
+                    let total: f32 =
+                        row.iter().map(|l| width(l)).sum::<f32>() + 18.0 * (row.len() - 1) as f32;
+                    let mut x = (cx - total / 2.0).round();
+                    for l in row {
+                        if winui::link(ui, &p, x, y, l, l) {
+                            match *l {
+                                "Home page" => open_page(""),
+                                "Source code" => crate::launch::open(REPO),
+                                _ => {
+                                    crate::launch::open(format!("{REPO}/blob/main/ATTRIBUTION.md"))
+                                }
+                            }
+                        }
+                        x += width(l) + 18.0;
+                    }
+                    y += 16.0;
                 }
-                if winui::link(
-                    ui,
-                    &p,
-                    credits.0,
-                    credits.1,
-                    "Licenses and credits",
-                    "credits",
-                ) {
-                    crate::launch::open(format!("{REPO}/blob/main/ATTRIBUTION.md"));
-                }
-                // Its own row under them: the creator's Sponsors page (Help → Support MDM).
-                y += 22.0;
-                if winui::link(
-                    ui,
-                    &p,
-                    o.x + 80.0,
-                    y,
-                    "Support MDM on GitHub Sponsors",
-                    "support",
-                ) {
+                // Its own row under them: SPONSORS (Help → Support MDM).
+                y += 6.0;
+                let support_label = "Support Grabbit on GitHub";
+                let sw = width(support_label);
+                if winui::link(ui, &p, (cx - sw / 2.0).round(), y, support_label, "support") {
                     support();
                 }
-                // The last row ends above OK (at 204 when it fits as planned).
-                crate::dialogs::grow_px(ui.ctx(), "about", y + 12.0 - (o.y + 194.0));
-                let ok = winui::button(
+                // The last row ends 16 above the footer; the window grows with a long text.
+                crate::dialogs::grow_px(ui.ctx(), "about", y + 20.0 - (o.y + BODY));
+                // Enter and Escape both close it, as before.
+                let ok = winui::footer(
                     ui,
-                    r(o, 336.0, 204.0 + extra, 73.0, 21.0),
-                    "OK",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked();
-                if ok || winui::escape_pressed(ui) || winui::enter_pressed(ui) {
+                    o,
+                    W,
+                    body,
+                    &mut [FooterItem::Button(
+                        FooterButton::new("OK", ButtonKind::Default)
+                            .enter(true)
+                            .escape(true),
+                    )],
+                );
+                if ok.is_some() {
                     Outcome::Closed
                 } else {
                     Outcome::Open
@@ -820,8 +776,9 @@ impl About {
 // Keyboard shortcuts
 
 /// Every shortcut the main window answers (keep in step with `app.rs` and `list.rs`).
-const SHORTCUTS: [(&str, &str); 25] = [
+const SHORTCUTS: [(&str, &str); 26] = [
     ("Ctrl+N", "Add a download (Add URL)"),
+    ("Ctrl+V", "Paste an address into the paste bar"),
     ("Ctrl+F", "Find a download"),
     ("F3", "Find the next match"),
     ("Enter", "Open the selected download"),
@@ -853,7 +810,10 @@ const SHORTCUTS: [(&str, &str); 25] = [
         "Jump to the download whose name starts with it",
     ),
     ("Shift+F10", "Open the selected download's menu"),
-    ("Tab", "Move between the categories and the download list"),
+    (
+        "Tab",
+        "Move between the paste bar, the categories and the download list",
+    ),
     (
         "Shift+F10 / Menu",
         "In the categories: the selected category's menu",
@@ -872,11 +832,13 @@ pub struct Shortcuts;
 impl Shortcuts {
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         let rows = SHORTCUTS.len() as f32;
+        const W: f32 = 520.0;
+        let body = 24.0 + 18.0 * rows + 8.0;
         window(
             ctx,
             "shortcuts",
             "Keyboard shortcuts",
-            [520.0, 52.0 + 18.0 * rows + 20.0],
+            [W, body + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
@@ -884,7 +846,7 @@ impl Shortcuts {
                 let ink = winui::TEXT();
                 for (i, (keys, what)) in SHORTCUTS.iter().enumerate() {
                     let y = o.y + 24.0 + 18.0 * i as f32;
-                    // As this system writes it: ⌘N on macOS, the translated key names elsewhere.
+                    // The translated key names.
                     let keys = crate::chrome::key_label(keys);
                     winui::fit(
                         ui,
@@ -908,21 +870,20 @@ impl Shortcuts {
                         ("what", y as i32),
                     );
                 }
-                let y = 24.0 + 18.0 * rows + 6.0;
-                let ok = winui::button(
+                // Enter and Escape both close it (with a modifier held too, as before).
+                let any_key = ui
+                    .input(|i| i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::Enter));
+                let ok = winui::footer(
                     ui,
-                    r(o, 436.0, y, 73.0, 21.0),
-                    "OK",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked();
-                if ok
-                    || ui.input(|i| {
-                        i.key_pressed(egui::Key::Escape) || i.key_pressed(egui::Key::Enter)
-                    })
-                {
+                    o,
+                    W,
+                    body,
+                    &mut [FooterItem::Button(FooterButton::new(
+                        "OK",
+                        ButtonKind::Default,
+                    ))],
+                );
+                if ok.is_some() || any_key {
                     Outcome::Closed
                 } else {
                     Outcome::Open
@@ -948,7 +909,7 @@ impl TellFriend {
     fn message() -> String {
         crate::i18n::fmt(
             crate::i18n::t(
-                "I download with Mister Download Manager: fast, free, and it looks like the download manager you already know. {link}",
+                "I download with Grabbit: fast, free, and it looks like the download manager you already know. {link}",
             ),
             &[("link", SITE)],
         )
@@ -958,26 +919,29 @@ impl TellFriend {
         let message = Self::message();
         // The message's box grows with a long translation, the window with it.
         let extra = crate::dialogs::grow_extra(ctx, "tell-a-friend");
+        const W: f32 = 440.0;
+        let body = 154.0 + extra;
         window(
             ctx,
             "tell-a-friend",
             "Tell a friend",
-            [420.0, 168.0 + extra],
+            [W, body + winui::FOOTER_H],
             false,
             winui::BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 let ink = winui::TEXT();
+                let e = winui::EDGE;
                 winui::text(
                     &p,
-                    o.x + 11.0,
-                    o.y + 21.0,
+                    o.x + e,
+                    o.y + 29.0,
                     crate::i18n::t("Send this to a friend:"),
                     ink,
                 );
                 let rect = egui::Rect::from_min_max(
-                    pos2(o.x + 11.0, o.y + 30.0),
-                    pos2(o.x + 409.0, o.y + 106.0 + extra),
+                    pos2(o.x + e, o.y + 40.0),
+                    pos2(o.x + W - e, o.y + 116.0 + extra),
                 );
                 // English, as the paragraph is laid out; made where it is on screen.
                 // Read-only text: the read-only field's look (it drew a square box of its own).
@@ -992,20 +956,8 @@ impl TellFriend {
                     13.0,
                 );
                 crate::dialogs::grow_to(ui.ctx(), "tell-a-friend", lines, 5);
-                let o = o + vec2(0.0, extra);
-                // The buttons as wide as their labels in this language (#192), the row ending
-                // where it ends in English.
-                let [copy_at, email_at, close_at] = winui::buttons_to_right(
-                    &p,
-                    409.0,
-                    9.0,
-                    &[("Copy", 73.0), ("Email", 73.0), ("Close", 73.0)],
-                    130.0,
-                )[..] else {
-                    unreachable!("three buttons")
-                };
                 if let Some((said, failed)) = self.said {
-                    // Short of the buttons beside it (a long translation: "...", whole on hover).
+                    // Under the message (a long translation: "...", whole on hover).
                     let c = if failed {
                         winui::ERROR()
                     } else {
@@ -1014,42 +966,32 @@ impl TellFriend {
                     winui::fit(
                         ui,
                         &p,
-                        o.x + 11.0,
-                        o.y + 150.0,
+                        o.x + e,
+                        o.y + 136.0 + extra,
                         crate::i18n::t(said),
                         c,
-                        o.x + copy_at.0 - 6.0,
+                        o.x + W - e,
                         "copied",
                     );
                 }
-                let copy = winui::button(
+                // Enter copies, Escape closes, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, copy_at.0, 136.0, copy_at.1, 21.0),
-                    "Copy",
-                    ButtonKind::Default,
-                    false,
-                    None,
-                )
-                .clicked()
-                    || winui::enter_pressed(ui);
-                let email = winui::button(
-                    ui,
-                    r(o, email_at.0, 136.0, email_at.1, 21.0),
-                    "Email",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
-                let close = winui::button(
-                    ui,
-                    r(o, close_at.0, 136.0, close_at.1, 21.0),
-                    "Close",
-                    ButtonKind::Normal,
-                    false,
-                    None,
-                )
-                .clicked();
+                    o,
+                    W,
+                    body,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new("Copy", ButtonKind::Default).enter(true),
+                        ),
+                        FooterItem::Button(FooterButton::new("Email", ButtonKind::Normal)),
+                        FooterItem::Button(
+                            FooterButton::new("Close", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                let (copy, email, close) =
+                    (pressed == Some(0), pressed == Some(1), pressed == Some(2));
                 // The user asked for it: the message goes to the clipboard (a busy clipboard
                 // says so; it showed nothing).
                 let to_clipboard = crate::set_clipboard;
@@ -1067,7 +1009,7 @@ impl TellFriend {
                             .collect::<String>()
                             .replace('+', "%20")
                     };
-                    let subject = crate::i18n::t("Mister Download Manager");
+                    let subject = crate::i18n::t("Grabbit");
                     let opened = open::that_detached(format!(
                         "mailto:?subject={}&body={}",
                         enc(subject),
@@ -1089,7 +1031,7 @@ impl TellFriend {
                         });
                     }
                 }
-                if close || winui::escape_pressed(ui) {
+                if close {
                     Outcome::Closed
                 } else {
                     Outcome::Open
@@ -1134,6 +1076,126 @@ mod tests {
         );
         assert_eq!(parse_release(json, "0.2.0").unwrap(), Found::Latest);
         assert!(parse_release("{}", "0.1.0").is_err());
+    }
+
+    // #1123: whatever GitHub (or a proxy, or a captive portal) answers, the check fails with a
+    // reason and never panics.
+    #[test]
+    fn a_bad_answer_is_a_failed_check() {
+        let bad = [
+            // Malformed or cut-off JSON, or not JSON at all.
+            r#"{"tag_name":"v0.6.0","assets":["#,
+            "",
+            "<html><body>Sign in to the Wi-Fi</body></html>",
+            // An empty release list, or no release at all.
+            "[]",
+            "null",
+            r#"{"tag_name":""}"#,
+            r#"{"tag_name":"v"}"#,
+            // Version strings that don't parse.
+            r#"{"tag_name":"next"}"#,
+            r#"{"tag_name":"v1.x"}"#,
+            r#"{"tag_name":"v١.٢"}"#,
+            r#"{"tag_name":"v0..6"}"#,
+            r#"{"tag_name":"v99999999999999999999999.0"}"#,
+            r#"{"tag_name":"v0.6.-rc"}"#,
+            r#"{"tag_name":42}"#,
+        ];
+        for json in bad {
+            assert!(parse_release(json, VERSION).is_err(), "{json:?} was taken");
+        }
+        // Odd but readable answers still work: a pre-release, missing fields, a short date,
+        // and text that isn't ASCII where the date is cut.
+        let odd = r#"{"tag_name":"V9.0.0-rc.1","published_at":"2026-ü","assets":{"x":1}}"#;
+        match parse_release(odd, "0.1.0").unwrap() {
+            Found::Newer(r) => {
+                assert_eq!(r.version, "9.0.0-rc.1");
+                assert_eq!(r.date, "2026-ü");
+                assert!(r.assets.is_empty() && r.notes.is_empty() && r.page.is_empty());
+            }
+            f => panic!("{f:?}"),
+        }
+    }
+
+    #[test]
+    fn a_check_that_panics_is_a_failed_check() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let joined = rt.block_on(async {
+            tokio::spawn(async { panic!("a test panic in the update check") }).await
+        });
+        assert!(settled(joined).is_err());
+        let fine = rt.block_on(async { tokio::spawn(async { Ok(Found::Latest) }).await });
+        assert_eq!(settled(fine), Ok(Found::Latest));
+    }
+
+    /// A local server that answers every request with `status` and `body` (a fixture: the
+    /// tests never ask GitHub).
+    async fn feed(status: &'static str, body: &'static str) -> String {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            while let Ok((mut s, _)) = listener.accept().await {
+                let mut buf = [0u8; 4096];
+                let _ = s.read(&mut buf).await;
+                let reply = format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = s.write_all(reply.as_bytes()).await;
+                let _ = s.shutdown().await;
+            }
+        });
+        format!("http://{addr}/repos/x/y/releases/latest")
+    }
+
+    #[test]
+    fn the_check_reads_the_feed_and_fails_softly() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let client = reqwest::Client::builder()
+                .no_proxy()
+                .timeout(Duration::from_secs(10))
+                .build()
+                .unwrap();
+            let newer = feed(
+                "200 OK",
+                r#"{"tag_name":"v9.0.0","published_at":"2026-12-01T00:00:00Z"}"#,
+            )
+            .await;
+            assert!(matches!(
+                fetch(&client, &newer, "0.5.2").await,
+                Ok(Found::Newer(r)) if r.version == "9.0.0" && r.date == "2026-12-01"
+            ));
+            let none = feed("404 Not Found", r#"{"message":"Not Found"}"#).await;
+            assert_eq!(fetch(&client, &none, "0.5.2").await, Ok(Found::Latest));
+            for (status, body) in [
+                // GitHub's rate limit.
+                ("403 Forbidden", r#"{"message":"API rate limit exceeded"}"#),
+                ("500 Internal Server Error", ""),
+                ("200 OK", r#"{"tag_name":"v9.0.0","#),
+                ("200 OK", "[]"),
+                ("200 OK", r#"{"tag_name":"latest"}"#),
+            ] {
+                let url = feed(status, body).await;
+                assert!(
+                    fetch(&client, &url, "0.5.2").await.is_err(),
+                    "{status} {body}"
+                );
+            }
+            // Nothing listening: a network error.
+            let closed = {
+                let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+                l.local_addr().unwrap()
+            };
+            let url = format!("http://{closed}/latest");
+            assert!(fetch(&client, &url, "0.5.2").await.is_err());
+        });
     }
 
     #[test]
@@ -1188,78 +1250,31 @@ mod tests {
         for install in mdm_tools::update::Install::ALL {
             assert!(named(install.label()), "{}", install.label());
         }
-        for option in [
-            "Windows 11",
-            "Windows 10",
-            "macOS (Apple Silicon)",
-            "macOS (Intel)",
-            "Linux",
-            "Other",
-        ] {
+        for option in ["Windows 11", "Windows 10", "Other"] {
             assert!(named(option), "{option}");
         }
     }
 
     #[test]
-    fn help_pages_are_the_websites_in_the_interface_language() {
-        let at = |doc, lang| page_url(doc, lang);
+    fn help_pages_are_the_websites() {
         assert_eq!(
-            at("README.md", "en"),
-            "https://misterdownloadmanager.com/help/"
+            page_url("README.md"),
+            "https://humblef0ol.github.io/grabbit/help/"
         );
         assert_eq!(
-            at("README.md#tutorials", "en"),
-            "https://misterdownloadmanager.com/help/#tutorials"
+            page_url("README.md#tutorials"),
+            "https://humblef0ol.github.io/grabbit/help/#tutorials"
         );
         assert_eq!(
-            at("video.md", "de"),
-            "https://misterdownloadmanager.com/de/help/video.html"
+            page_url("video.md"),
+            "https://humblef0ol.github.io/grabbit/help/video.html"
         );
-        assert_eq!(
-            at("queues-and-scheduler.md#the-scheduler-window", "ar"),
-            "https://misterdownloadmanager.com/ar/help/queues-and-scheduler.html#the-scheduler-window"
-        );
-        assert_eq!(at("", "fr"), "https://misterdownloadmanager.com/fr/");
-        assert_eq!(at("", "en"), "https://misterdownloadmanager.com/");
-        // The site's folders: its own codes, a region read as its language, else English.
-        for (lang, folder) in [
-            ("pt-br", "/pt-br"),
-            ("pt", "/pt"),
-            ("zh-hans", "/zh-hans"),
-            ("es-mx", "/es"),
-            ("fr-ca", "/fr"),
-            ("zh-hant", ""),
-            ("sv", ""),
-            ("ca-es-valencia", ""),
-            ("he", ""),
-            ("", ""),
-        ] {
-            assert_eq!(
-                at("options.md", lang),
-                format!("https://misterdownloadmanager.com{folder}/help/options.html"),
-                "{lang}"
-            );
-        }
+        assert_eq!(page_url(""), "https://humblef0ol.github.io/grabbit/");
     }
 
     /// The repository's root.
     fn root() -> std::path::PathBuf {
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-    }
-
-    #[test]
-    fn the_site_languages_are_the_websites() {
-        // tools/website/sitei18n.py: `LANGS = [` then one `("code", …),` per language.
-        let py = std::fs::read_to_string(root().join("tools/website/sitei18n.py")).unwrap();
-        let list = py.split("\nLANGS = [").nth(1).unwrap();
-        let codes: Vec<&str> = list
-            .split("\n]")
-            .next()
-            .unwrap()
-            .lines()
-            .filter_map(|l| l.trim().strip_prefix("(\"")?.split('"').next())
-            .collect();
-        assert_eq!(codes, SITE_LANGS);
     }
 
     /// Every user guide page the program links to (`doc` as page_url takes it): the literal
@@ -1274,7 +1289,7 @@ mod tests {
         }
         let calls = regex::Regex::new(r#"(?:open_page|HelpPage)\(\s*"([^"]+)""#).unwrap();
         let site =
-            regex::Regex::new(r"https://misterdownloadmanager\.com/help/([\w.-]*)(#[\w-]+)?")
+            regex::Regex::new(r"https://humblef0ol\.github\.io/grabbit/help/([\w.-]*)(#[\w-]+)?")
                 .unwrap();
         let mut files = vec![];
         let mut dirs = vec![root().join("crates"), root().join("extension")];
@@ -1349,7 +1364,7 @@ mod tests {
     }
 
     /// The same pages on a built website: `python tools/website/build.py` (MDM_SITE_PREVIEW=1
-    /// is enough, English), then `MDM_SITE_DIR=target/site cargo test -p mdm-app --
+    /// is enough, English), then `MDM_SITE_DIR=target/site cargo test -p grabbit-app --
     /// --ignored linked_help_pages_are_on_the_built_site`: each page is a file there, with its
     /// section's id.
     #[test]
@@ -1357,7 +1372,7 @@ mod tests {
     fn linked_help_pages_are_on_the_built_site() {
         let out = std::path::PathBuf::from(std::env::var("MDM_SITE_DIR").expect("MDM_SITE_DIR"));
         for doc in linked_docs() {
-            let url = page_url(&doc, "en");
+            let url = page_url(&doc);
             let path = url.strip_prefix(SITE).unwrap();
             let (path, anchor) = path.split_once('#').unwrap_or((path, ""));
             let mut file = out.join(path.trim_start_matches('/'));

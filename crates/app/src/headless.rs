@@ -1,4 +1,4 @@
-//! `misterdownloadmanager --headless` (#157): MDM on a server (a NAS, Docker, Unraid), without a
+//! `grabbit --headless` (#157): MDM on a server (a NAS, Docker, Unraid), without a
 //! window. The same app runs (its list, queues, Scheduler, limits, torrents, the automation API
 //! and the remote control), driven by a loop instead of the window's frames; downloads come from
 //! the remote control's page, the browser extension pointed at it, or the command line.
@@ -8,7 +8,7 @@
 //!
 //! | Flag | Environment | |
 //! |---|---|---|
-//! | `--data <dir>` | `MDM_DATA_DIR` | the data folder (list, settings, certificate, devices) |
+//! | `--data <dir>` | `GRABBIT_DATA_DIR` | the data folder (list, settings, certificate, devices) |
 //! | `--downloads <dir>` | `MDM_DOWNLOADS` | where downloads go (each category's folder inside) |
 //! | `--port <n>` | `MDM_REMOTE_PORT` | the remote control's port (8463) |
 //! | `--listen <addr>` | `MDM_REMOTE_LISTEN` | where it listens: "" every local network address |
@@ -16,7 +16,7 @@
 //! | | `MDM_REMOTE_URL` | the page's address as people open it (a container's isn't) |
 //!
 //! The remote control is on (that is the point); `MDM_REMOTE=off` turns it off. With no device
-//! paired yet, a pairing code is printed at start; `misterdownloadmanager-cli pair` prints
+//! paired yet, a pairing code is printed at start; `grabbit-cli pair` prints
 //! another.
 
 use std::path::PathBuf;
@@ -47,9 +47,8 @@ fn setting(args: &[String], name: &str, var: &str) -> Option<String> {
 
 pub fn main(args: Vec<String>) -> ExitCode {
     // A Windows server has no console for a windowed program: the one it was started from.
-    #[cfg(windows)]
     crate::win32::cli_console(None);
-    if let Some(dir) = setting(&args, "data", "MDM_DATA_DIR") {
+    if let Some(dir) = setting(&args, "data", mdm_ipc::DATA_DIR_VAR) {
         mdm_ipc::set_data_dir(PathBuf::from(dir));
     }
     let Some(data) = mdm_ipc::data_dir() else {
@@ -66,14 +65,17 @@ pub fn main(args: Vec<String>) -> ExitCode {
     }
     let Some(_instance) = mdm_ipc::instance_lock() else {
         eprintln!(
-            "Another Mister Download Manager uses the data folder {}.",
+            "Another copy of Grabbit uses the data folder {}.",
             data.display()
         );
         return ExitCode::FAILURE;
     };
     mdm_crash::logs::init(&data, mdm_crash::logs::APP);
+    // The default browser, looked for once on a thread of its own (logged): its User-Agent is
+    // the one links added by hand go with (upstream issue 668).
+    crate::defaultbrowser::start();
     tracing::info!(
-        "Mister Download Manager {} ({}) starting without a window",
+        "Grabbit {} ({}) starting without a window",
         crate::help::VERSION,
         crate::help::COMMIT
     );
@@ -107,8 +109,7 @@ pub fn main(args: Vec<String>) -> ExitCode {
     if let Some(l) = setting(&args, "listen", "MDM_REMOTE_LISTEN") {
         s.remote_listen = l.trim().to_owned();
     }
-    // No one to ask: the language is the system's, and nothing opens a window.
-    s.language_asked = true;
+    // No one to ask: nothing opens a window.
     s.show_start_dialog = false;
     s.show_complete = false;
     let hosts = setting(&args, "hosts", "MDM_REMOTE_HOSTS");
@@ -125,14 +126,11 @@ pub fn main(args: Vec<String>) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    // Stopped by the system (docker stop, systemctl stop, Ctrl+C): the list is saved first.
+    // Stopped by Ctrl+C: the list is saved first.
     let stop = Arc::new(AtomicBool::new(false));
     {
         let (stop, wake) = (stop.clone(), wake.clone());
         rt.spawn(async move {
-            #[cfg(unix)]
-            crate::unix::terminated().await;
-            #[cfg(not(unix))]
             let _ = tokio::signal::ctrl_c().await;
             stop.store(true, Ordering::SeqCst);
             wake();
@@ -187,7 +185,7 @@ fn writable(dir: &std::path::Path) -> std::io::Result<()> {
 /// there yet (`-v /srv/mdm-config:/config`) as root's, and MDM runs as another user.
 fn not_ours(e: &std::io::Error) -> &'static str {
     if e.kind() == std::io::ErrorKind::PermissionDenied {
-        "\nIt belongs to another user: make it before the first start, owned by the user MDM runs \
+        "\nIt belongs to another user: make it before the first start, owned by the user Grabbit runs \
          as (`mkdir`, then `chown` it or give Docker that user with `--user`)."
     } else {
         ""
@@ -220,7 +218,7 @@ fn tell(app: &mut crate::app::App) -> bool {
                     serde_json::from_str(&app.pair_answer());
                 if let Ok(a) = answer {
                     println!(
-                        "No device is paired yet. Open the address (or scan this) and enter the code {} {} (it works for {} minutes; `misterdownloadmanager-cli pair` shows a new one):\n{}",
+                        "No device is paired yet. Open the address (or scan this) and enter the code {} {} (it works for {} minutes; `grabbit-cli pair` shows a new one):\n{}",
                         &a.code[..4],
                         &a.code[4..],
                         a.minutes,

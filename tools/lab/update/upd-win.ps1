@@ -3,7 +3,7 @@
 # made for this run (mkrel.py), served by the lab server on 127.0.0.1. Needs a release-mode build
 # with the `test-update` feature (Install::detect says "built from source" in debug builds).
 #
-#   tools\lab\update\upd-win.ps1 -Exe target\release\misterdownloadmanager.exe -Server target\release\labserver.exe
+#   tools\lab\update\upd-win.ps1 -Exe target\release\grabbit.exe -Server target\release\labserver.exe
 #   ... -Only good,bad-hash         some scenarios
 #   ... -Shots -ShotDir <folder>    also Download complete and "Installing the update..." in
 #                                   en, de, ar, light and dark (the scenarios still run first)
@@ -68,11 +68,11 @@ $WM_CLOSE = 0x10
 # --- The releases: one folder each, signed with this run's throwaway keys.
 $keys = "$Work\keys"
 $base = "http://127.0.0.1:$Port/files"
-$asset = "MisterDownloadManager-9.9.9-portable.zip"
+$asset = "Grabbit-9.9.9-portable.zip"
 function Release([string]$name, [string[]]$more) {
   $out = "$Work\rel-$name"
-  & python "$PSScriptRoot\mkrel.py" --keys $keys --out $out --base $base --asset $asset --kind zip `
-    --program $Exe --program-name misterdownloadmanager.exe @more | ForEach-Object { Log "  $_" }
+  & python "$PSScriptRoot\mkrel.py" --keys $keys --out $out --base $base --asset $asset `
+    --program $Exe --program-name grabbit.exe @more | ForEach-Object { Log "  $_" }
   if ($LASTEXITCODE) { throw "mkrel.py failed" }
   $out
 }
@@ -90,7 +90,7 @@ function Run([string]$name, [string]$relDir, [int]$hold = 0, [string]$close = ""
              [bool]$dark = $false, [bool]$shots = $false) {
   $w = "$Work\$name"; $copy = "$w\copy"
   New-Item -ItemType Directory -Force "$copy\data", "$w\Downloads" | Out-Null
-  Copy-Item $Exe "$copy\misterdownloadmanager.exe"
+  Copy-Item $Exe "$copy\grabbit.exe"
   # The settings every run starts from (docs-shots.ps1's), written by Python: exact JSON, no BOM.
   @'
 import json, sys
@@ -114,7 +114,7 @@ json.dump({"next_id": 1, "items": [], "version": 2, "settings": s}, open(path, "
   if ($hold) { $env:MDM_TEST_UPDATE_HOLD = "$hold" } else { Remove-Item Env:MDM_TEST_UPDATE_HOLD -ErrorAction SilentlyContinue }
   $r = @{ started = $false; oldEnded = $false; marker = $false }
   try {
-    $app = Start-Process -PassThru "$copy\misterdownloadmanager.exe"
+    $app = Start-Process -PassThru "$copy\grabbit.exe"
     $main = $null
     for ($i = 0; $i -lt 200 -and -not $main; $i++) { Start-Sleep -Milliseconds 100; $main = [UW]::Of([uint32]$app.Id) | Select-Object -First 1 }
     if (-not $main) { throw "$name`: MDM showed no window" }
@@ -122,7 +122,7 @@ json.dump({"next_id": 1, "items": [], "version": 2, "settings": s}, open(path, "
     $suffix = "$lang-" + $(if ($dark) { "dark" } else { "light" })
     if ($shots) {
       $before = [UW]::Of([uint32]$app.Id) | ForEach-Object { $_.Key }
-      & "$copy\misterdownloadmanager.exe" /d "http://127.0.0.1:$Port/gen/2M/holiday-photos.zip" /p "$w\Downloads" /n | Out-Null
+      & "$copy\grabbit.exe" /d "http://127.0.0.1:$Port/gen/2M/holiday-photos.zip" /p "$w\Downloads" /n | Out-Null
       Start-Sleep 4
       $dc = [UW]::Of([uint32]$app.Id) | Where-Object { $before -notcontains $_.Key } | Select-Object -Last 1
       & "$root\tools\lab\cap-own.ps1" -ProcessId $app.Id -Title $dc.Value -Out "$ShotDir\download-complete-$suffix.png" | Out-Null
@@ -131,12 +131,12 @@ json.dump({"next_id": 1, "items": [], "version": 2, "settings": s}, open(path, "
       Start-Sleep 1
     }
     $before = [UW]::Of([uint32]$app.Id) | ForEach-Object { $_.Key }
-    & "$copy\misterdownloadmanager.exe" /show updates | Out-Null
+    & "$copy\grabbit.exe" /show updates | Out-Null
     $upd = $null
     for ($i = 0; $i -lt 150 -and -not $upd; $i++) { Start-Sleep -Milliseconds 100; $upd = [UW]::Of([uint32]$app.Id) | Where-Object { $before -notcontains $_.Key } | Select-Object -First 1 }
     if (-not $upd) { throw "$name`: no update window" }
     Start-Sleep 2
-    & "$copy\misterdownloadmanager.exe" /show update-now | Out-Null
+    & "$copy\grabbit.exe" /show update-now | Out-Null
     Log "  Update now pressed ($($upd.Value))"
     if ($close -eq "download") {
       Start-Sleep -Milliseconds 1500
@@ -159,7 +159,7 @@ json.dump({"next_id": 1, "items": [], "version": 2, "settings": s}, open(path, "
     while ((Get-Date) -lt $deadline) {
       if (-not $r.oldEnded -and $app.HasExited) { $r.oldEnded = $true; Log "  the old copy ended" }
       if (-not $r.started) {
-        $new = Get-CimInstance Win32_Process -Filter "Name='misterdownloadmanager.exe'" | Where-Object { $_.CommandLine -like "*$copy*" -and $_.CommandLine -like "*/updated*" }
+        $new = Get-CimInstance Win32_Process -Filter "Name='grabbit.exe'" | Where-Object { $_.CommandLine -like "*$copy*" -and $_.CommandLine -like "*/updated*" }
         if ($new) { $r.started = $true; Log "  a new copy started: $($new.CommandLine)" }
       }
       if ($r.oldEnded -and $r.started) { break }
@@ -173,7 +173,7 @@ json.dump({"next_id": 1, "items": [], "version": 2, "settings": s}, open(path, "
     Log "  folder: $((Get-ChildItem $copy -Name) -join ', ')"
     return $r
   } finally {
-    Get-CimInstance Win32_Process -Filter "Name='misterdownloadmanager.exe'" | Where-Object { $_.CommandLine -like "*$copy*" } |
+    Get-CimInstance Win32_Process -Filter "Name='grabbit.exe'" | Where-Object { $_.CommandLine -like "*$copy*" } |
       ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
     if ($app -and -not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
     Stop-Process -Id $srv.Id -Force -ErrorAction SilentlyContinue

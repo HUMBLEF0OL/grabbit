@@ -338,6 +338,7 @@ impl LabServer {
             .route("/cookie", get(pages::cookie))
             .route("/assets/{file}", get(pages::asset))
             .route("/hls/master.m3u8", get(streams::hls_master))
+            .route("/hls/broken-audio.m3u8", get(streams::hls_broken_master))
             .route("/hls/{track}/{file}", get(streams::hls_file))
             .route("/dash/manifest.mpd", get(streams::dash_manifest))
             .route("/dash/protected.mpd", get(streams::dash_protected))
@@ -534,13 +535,23 @@ GET|HEAD /gen/{size}[/{name}]?seed=N&<file params>&<faults>   size: 12345, 64K, 
   faults (also server-wide with --faults; per-URL values override):
     rate=SIZE slow_every=N slow_rate=SIZE max_conns=N drop_after=SIZE drop_every=N
     fail_every=N fail_first=N no_range=1 no_range_every=N html=1 etag_change_every=N
+    html=1         a small web page (a sign-in wall, a file host's waiting page) instead of the
+                   file, text/html; with html_type=TYPE|none the page comes as TYPE (none: no
+                   Content-Type), with html_cd=1 under the file's name (Content-Disposition)
+    html_after=N   the first N requests for this path and query get the file, every later one
+                   the page (as html=1 with html_type and html_cd): a link that leads to a
+                   waiting page once the download is resumed; vary seed= for a fresh link
     etag=weak|per-request|none latency_ms=N range_latency_ms=N (only requests with a Range)
     range_rate=SIZE  the rate of answers to requests with a Range (instead of rate)
+    burst=SIZE     with a rate, a link: a response the client stopped reading catches up with
+                   at most SIZE at once (by default all it fell behind by)
     stall_at=SIZE  never send the file's byte at that offset: a response stops there and waits
                    (until the server's faults change, from a test; a URL's own value stays)
     require_cookie=NAME=VALUE|NAME   403 unless the Cookie header has it
     require_referer=PREFIX           403 unless the Referer starts with PREFIX (%-encode ? & =)
     refuse_agent=TEXT                403 when the User-Agent contains TEXT
+    refuse=STATUS  every request answered with that 4xx or 5xx status, before any byte (a site
+                   that turns away whatever isn't a browser: FileHippo's 412, #630)
     once=1         a one-time link: the first request for this path and query is served, every
                    later one (HEAD and ranges too) gets 410 Gone; vary seed= for a fresh link
   "every Nth" counts file requests (/gen and /form) only.
@@ -591,11 +602,13 @@ GET /cookie?set=NAME=VALUE&httponly=NAME=VALUE&clear=NAME   (each repeatable) a 
     Set-Cookie: NAME=VALUE; Path=/ (; HttpOnly), or NAME=; Path=/; Max-Age=0
 GET /assets/page.css  /assets/stream.js
 
-STREAMS  3 segments of 4 s per track. HLS: real MPEG-TS, AAC silence on every track (ffmpeg
-    remuxes them); DASH: fake bytes
+STREAMS  3 segments of 4 s per track. HLS: real MPEG-TS, a grey H.264 picture (25 fps) on the
+    video tracks, AAC silence on the audio track (ffmpeg remuxes and merges them); DASH: fake bytes
 GET /hls/master.m3u8   two variants (720p: 1280x720, 1280000 b/s; 360p: 640x360, 640000 b/s)
     and an audio rendition (GROUP-ID="aud"): /hls/{720p,360p,audio}/index.m3u8 -> seg0..2.ts
     of 48128, 24064, 6016 bytes (application/vnd.apple.mpegurl, video/mp2t)
+GET /hls/broken-audio.m3u8  the same, its sound /hls/audio/broken.m3u8 -> broken0..2.ts: seeded
+    bytes, no MPEG-TS, so ffmpeg can't join it with a picture (a video's failed merge)
 GET /dash/manifest.mpd  (application/dash+xml) the same tracks as Representations with a
     SegmentTemplate: /dash/{720p,360p,audio}/init.mp4 and seg1..3.m4s (video/mp4, audio/mp4)
 GET /dash/protected.mpd  the same, each AdaptationSet marked encrypted (CENC, Widevine's
@@ -1081,6 +1094,14 @@ pub(crate) async fn serve(
         shared.record(entry, 403, "fault:refuse_agent");
         return (StatusCode::FORBIDDEN, format!("agent {want} refused\n")).into_response();
     }
+    if let Some(status) = f
+        .refuse
+        .and_then(|c| StatusCode::from_u16(c).ok())
+        .filter(|s| s.is_client_error() || s.is_server_error())
+    {
+        shared.record(entry, status.as_u16(), "fault:refuse");
+        return status.into_response();
+    }
     if let Some(ms) = f.latency_ms {
         tokio::time::sleep(Duration::from_millis(ms)).await;
     }
@@ -1095,13 +1116,16 @@ pub(crate) async fn serve(
         shared.record(entry, 503, "fault:fail_first");
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     }
-    if f.html == Some(true) {
+    let page_now = f.html_after.is_some_and(|after| {
+        let key = format!("html_after:{}?{query}", entry.path);
+        let mut served = shared.link_uses.lock().unwrap();
+        let n = served.entry(key).or_insert(0);
+        *n += 1;
+        *n > after
+    });
+    if f.html == Some(true) || page_now {
         shared.record(entry, 200, "fault:html");
-        return (
-            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            "<!doctype html><title>Sign in</title><form>Please sign in</form>\n",
-        )
-            .into_response();
+        return web_page(&f, name, size);
     }
     let slot = {
         let mut active = shared.active.lock().unwrap();
@@ -1222,6 +1246,7 @@ pub(crate) async fn serve(
         pos: start,
         end,
         rate,
+        burst: f.burst,
         drop_at,
         // A URL's own stall stays; the server's is lifted with `set_faults`.
         stall_at: f.stall_at.filter(|at| (start..end).contains(at)),
@@ -1250,6 +1275,45 @@ const ATTR_CHAR: &AsciiSet = &NON_ALPHANUMERIC
     .remove(b'`')
     .remove(b'|')
     .remove(b'~');
+
+/// `html=1`'s page: a sign-in wall, or (with `html_type` or `html_cd`) a file host's waiting page
+/// as it comes, its blank lines first (upstream issue 701).
+fn web_page(f: &Faults, name: Option<&str>, size: u64) -> Response {
+    if f.html_type.is_none() && f.html_cd != Some(true) {
+        return (
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            "<!doctype html><title>Sign in</title><form>Please sign in</form>\n",
+        )
+            .into_response();
+    }
+    let mut builder = Response::builder().status(StatusCode::OK);
+    match f.html_type.as_deref() {
+        Some("none") => {}
+        Some(t) => builder = builder.header(header::CONTENT_TYPE, t),
+        None => builder = builder.header(header::CONTENT_TYPE, "text/html; charset=utf-8"),
+    }
+    if f.html_cd == Some(true) {
+        let name = name.unwrap_or("file.zip").replace(['"', '\\'], "_");
+        builder = builder.header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{name}\""),
+        );
+    }
+    let mut page = String::from(
+        "\r\n\r\n<!DOCTYPE html>\n<html><head><title>Your file is almost ready</title></head>\
+         <body><p>Please wait 30 seconds, then prove you are not a robot.</p>\
+         <form method=post><input type=submit value=\"Create download link\"></form>\
+         </body></html>\n",
+    );
+    // As long as the path's size says, up to 64 KiB (a real host's waiting page: some 37 KB).
+    let want = size.min(64 << 10) as usize;
+    if want > page.len() + 8 {
+        page.push_str("<!--");
+        page.push_str(&" ".repeat(want - page.len() - 8));
+        page.push_str("-->\n");
+    }
+    builder.body(Body::from(page)).unwrap()
+}
 
 /// The `Content-Disposition` of a generated file; `path_name` is the name in its path.
 fn content_disposition(q: &FileQuery, path_name: Option<&str>) -> Option<String> {
@@ -1358,6 +1422,7 @@ struct Transfer {
     pos: u64,
     end: u64,
     rate: Option<u64>,
+    burst: Option<u64>,
     drop_at: Option<u64>,
     /// The file offset this response stops at (`stall_at`), and whether `set_faults` can lift it.
     stall_at: Option<u64>,
@@ -1396,6 +1461,15 @@ impl Transfer {
             }
             if let Some(r) = t.rate.filter(|r| *r > 0) {
                 n = n.min((r / 20).max(1024));
+                if let Some(b) = t.burst {
+                    // A link doesn't bank what the client didn't take: catch up with `b` at most.
+                    let paced = t.started + Duration::from_secs_f64(t.sent as f64 / r as f64);
+                    let ahead = Duration::from_secs_f64(b as f64 / r as f64);
+                    let behind = Instant::now().saturating_duration_since(paced);
+                    if behind > ahead {
+                        t.started += behind - ahead;
+                    }
+                }
                 let due = Duration::from_secs_f64((t.sent + n) as f64 / r as f64);
                 tokio::time::sleep_until((t.started + due).into()).await;
             }

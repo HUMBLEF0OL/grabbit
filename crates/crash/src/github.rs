@@ -3,7 +3,7 @@
 
 use serde::Deserialize;
 
-pub const REPO: &str = "anefzaoui/misterdownloadmanager";
+pub const REPO: &str = "HUMBLEF0OL/grabbit";
 
 /// GitHub turns away very long addresses: the form's address is kept under this, the report cut
 /// to fit (the full one goes in as the attached file).
@@ -73,7 +73,7 @@ pub async fn find(http: &reqwest::Client, signature: &str) -> Option<Found> {
     let r = http
         .get(url)
         .header("Accept", "application/vnd.github+json")
-        .header("User-Agent", "MisterDownloadManager crash reporter")
+        .header("User-Agent", "Grabbit crash reporter")
         .send()
         .await
         .ok()?

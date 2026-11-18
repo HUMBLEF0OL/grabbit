@@ -13,8 +13,6 @@ crate::theme::themed! {
     /// Dialog background (light: light-dialogs.md).
     pub BG => window;
     pub TEXT => text;
-    /// A group box's frame (it was #dcdcdc in dark too: brighter than the separators in it).
-    pub GROUP_LINE => group_line;
     /// A list's column headers (the main list's): every list and table has the same (they had
     /// four: none, #f3f3f3, white).
     pub LIST_HEADER => header;
@@ -52,20 +50,16 @@ pub fn tahoma_title() -> FontId {
     )
 }
 
-/// Tahoma (IDM's dialogs), Tahoma Bold and Arial Bold from Windows' fonts folder. A family
-/// whose file isn't there (macOS, Linux) is the interface font's, so drawing with it never fails.
+/// Tahoma (IDM's dialogs) and Tahoma Bold from Windows' fonts folder. A family
+/// whose file isn't there is the interface font's, so drawing with it never fails.
 pub fn install_fonts(defs: &mut egui::FontDefinitions, font_dir: Option<&std::path::Path>) {
     let ui = defs
         .families
         .get(&FontFamily::Proportional)
         .cloned()
         .unwrap_or_default();
-    for (family, file) in [
-        ("tahoma", "tahoma.ttf"),
-        ("tahoma-bold", "tahomabd.ttf"),
-        ("arial-bold", "arialbd.ttf"),
-    ] {
-        let fonts = match font_dir.and_then(|d| std::fs::read(d.join(file)).ok()) {
+    for (family, file) in [("tahoma", "tahoma.ttf"), ("tahoma-bold", "tahomabd.ttf")] {
+        let fonts = match font_dir.and_then(|d| crate::theme::read_font(&d.join(file))) {
             Some(bytes) => {
                 defs.font_data.insert(
                     family.into(),
@@ -110,7 +104,8 @@ pub struct Surface(());
 
 impl Surface {
     pub fn enter(left: f32, right: f32) -> Self {
-        Self::enter_if(crate::i18n::rtl(), left, right)
+        // ponytail: the interface is English, never mirrored; the mirroring stays for enter_if.
+        Self::enter_if(false, left, right)
     }
 
     /// [`Surface::enter`] with the direction given (tests; a surface that is never mirrored).
@@ -209,25 +204,16 @@ pub fn r(origin: Pos2, x: f32, y: f32, w: f32, h: f32) -> Rect {
     rect(Rect::from_min_size(origin + vec2(x, y), vec2(w, h)))
 }
 
-/// The paragraph direction of interface text: the interface's.
-pub fn direction() -> egui::epaint::text::TextDirection {
-    use egui::epaint::text::TextDirection;
-    if crate::i18n::rtl() {
-        TextDirection::RightToLeft
-    } else {
-        TextDirection::LeftToRight
-    }
-}
-
-/// `s` laid out on one line in the interface's direction.
+/// `s` laid out on one line, left to right as the interface reads.
 pub fn galley(p: &Painter, font: FontId, s: &str, color: Color32) -> std::sync::Arc<egui::Galley> {
     let mut job = egui::text::LayoutJob::simple(s.to_owned(), font, color, f32::INFINITY);
-    job.direction = direction();
+    job.direction = egui::epaint::text::TextDirection::LeftToRight;
     p.layout_job(job)
 }
 
-/// The banner atop a first-start window (the browser extension's offer, the video helpers):
-/// MDM's logo at the start side, a bold headline, and a muted subline that wraps. 84 px tall, and
+/// The banner atop a first-start window (the browser extension's offer, the video helpers): a
+/// bold headline and a muted subline that wraps, on the window's own background (the mock draws
+/// no logo band, plan 09a2). 84 px tall, and
 /// taller by what a long translation's extra lines need: that extra is returned, for the window
 /// to add to its height and to move what is below the banner down by (it is known from the frame
 /// before: [`crate::dialogs::grow_extra`] under `key`).
@@ -243,29 +229,17 @@ pub fn banner(
 ) -> f32 {
     const PLANNED: f32 = 84.0;
     let extra = crate::dialogs::grow_extra(ui.ctx(), key);
-    let h = PLANNED + extra;
-    // `r` gives the rect where it is on screen (mirrored in RTL): the logo at the start side.
-    p.rect_filled(r(o, 0.0, 0.0, w, h), 0.0, FIELD());
-    fill_l(p, o.x, o.y + h, o.x + w - 1.0, o.y + h, FIELD_EDGE());
-    egui::Image::new(egui::include_image!("../assets/icons/app/mdm-48.png"))
-        .paint_at(ui, r(o, 18.0, 18.0, 48.0, 48.0));
+    // The window's 22 px side margin, as the rows under it.
+    const X: f32 = 22.0;
     // The headline on one line: cut with "..." at the far edge (a long translation), whole on
     // hover.
     let bold = tahoma_title();
-    let shown = ellipsize(p, &bold, headline, w - 18.0 - 80.0);
-    let drawn = text_font(p, bold, o.x + 80.0, o.y + 36.0, &shown, TEXT());
+    let shown = ellipsize(p, &bold, headline, w - 2.0 * X);
+    let drawn = text_font(p, bold, o.x + X, o.y + 36.0, &shown, TEXT());
     if shown != headline {
         full_on_hover(ui, drawn, (key, "headline"), headline);
     }
-    let lines = paragraph(
-        p,
-        o.x + 80.0,
-        o.y + 57.0,
-        subline,
-        MUTED(),
-        o.x + w - 18.0,
-        14.0,
-    );
+    let lines = paragraph(p, o.x + X, o.y + 57.0, subline, MUTED(), o.x + w - X, 14.0);
     // As planned, two lines: the second one's baseline at 71, then 13 px of descent and margin.
     let need = 57.0 + 14.0 * (lines.max(2) as f32 - 1.0) + 13.0;
     crate::dialogs::grow_px(ui.ctx(), key, need - PLANNED);
@@ -339,14 +313,6 @@ fn name_from_caption(resp: &Response) {
 /// Segoe UI −12: menu bar, toolbar labels.
 pub fn segoe() -> FontId {
     FontId::proportional(crate::theme::metrics().font_ui)
-}
-
-/// Arial Bold −13: the Categories close "x".
-pub fn arial_bold() -> FontId {
-    FontId::new(
-        crate::theme::metrics().font_ui_bold,
-        FontFamily::Name("arial-bold".into()),
-    )
 }
 
 /// Like [`text`] in any font.
@@ -448,7 +414,7 @@ fn fit_audit(p: &Painter, drawn: Rect, text: &str) {
     };
     let mut audit = audit.lock().unwrap();
     let (file, seen, passes) = &mut *audit;
-    let lang = crate::i18n::code();
+    let lang = "en";
     let clip = p.clip_rect();
     if (drawn.left() < clip.left() - 1.0 || drawn.right() > clip.right() + 1.0)
         && seen.insert(text.to_owned())
@@ -499,31 +465,13 @@ fn fit_audit(p: &Painter, drawn: Rect, text: &str) {
 }
 
 /// The screen x range of the `n`-th character of `s` drawn in `drawn` (a mnemonic's underline):
-/// by the width of what comes before it in a left-to-right interface (as Windows does), by the
-/// glyph itself in RTL, where the letters before it are to its right.
+/// by the width of what comes before it, as Windows does.
 pub fn char_span(p: &Painter, font: &FontId, s: &str, n: usize, drawn: Rect) -> (f32, f32) {
     let before: String = s.chars().take(n).collect();
     let ch: String = s.chars().skip(n).take(1).collect();
     let cw = text_width_font(p, font.clone(), &ch);
-    if !crate::i18n::rtl() {
-        let x0 = drawn.left() + text_width_font(p, font.clone(), &before);
-        return (x0, x0 + cw - 1.0);
-    }
-    // The glyph itself, in the form it takes in the word (a joined Arabic letter is narrower
-    // than alone); the row keeps its glyphs in reading order.
-    let g = galley(p, font.clone(), s, TEXT());
-    let c = ch.chars().next();
-    let glyph = g.rows.first().and_then(|r| {
-        let k = before.chars().filter(|b| Some(*b) == c).count();
-        r.row.glyphs.iter().filter(|gl| Some(gl.chr) == c).nth(k)
-    });
-    match glyph {
-        Some(gl) => {
-            let x0 = drawn.left() + gl.pos.x;
-            (x0, x0 + gl.advance_width.round().max(1.0) - 1.0)
-        }
-        None => (drawn.left(), drawn.left() + cw - 1.0),
-    }
+    let x0 = drawn.left() + text_width_font(p, font.clone(), &before);
+    (x0, x0 + cw - 1.0)
 }
 
 pub fn text_width(p: &Painter, s: &str) -> f32 {
@@ -592,8 +540,9 @@ pub fn ellipsize_middle(p: &Painter, font: &FontId, s: &str, max: f32) -> String
     cut(lo)
 }
 
-/// [`text`] that never runs past `right`: cut with "..." when too long. Returns the drawn
-/// rect and whether the text was cut (then show it whole with [`full_on_hover`]).
+/// [`text`] on one line that never runs past `right`: cut with "..." when too long, line breaks
+/// shown as spaces. Returns the drawn rect and whether the text was cut (then show it whole with
+/// [`full_on_hover`]).
 pub fn text_fit(
     p: &Painter,
     x: f32,
@@ -602,7 +551,17 @@ pub fn text_fit(
     color: Color32,
     right: f32,
 ) -> (Rect, bool) {
-    let shown = ellipsize(p, &tahoma(), s, (right - x).max(0.0));
+    // A one-line label, though the text may come from elsewhere (a site's title, an error): a
+    // line break is a space here, not another row drawn down over the window. Cut means the
+    // whole original, line breaks and all, is shown on hover.
+    let flat;
+    let line = if s.contains(['\n', '\r']) {
+        flat = s.replace("\r\n", " ").replace(['\n', '\r'], " ");
+        flat.as_str()
+    } else {
+        s
+    };
+    let shown = ellipsize(p, &tahoma(), line, (right - x).max(0.0));
     let cut = shown != s;
     (text(p, x, baseline, &shown, color), cut)
 }
@@ -644,49 +603,6 @@ pub fn label_into(
     text_fit(p, start, baseline, s, color, end)
 }
 
-/// `s` with its single line breaks joined (a space, or nothing between letters of scripts
-/// written without spaces: Chinese, Japanese, Thai…), blank lines kept as paragraph breaks.
-fn reflow(s: &str) -> String {
-    let spaceless = |c: char| {
-        matches!(c as u32,
-            0x0E00..=0x0EFF   // Thai, Lao
-            | 0x1780..=0x17FF // Khmer
-            | 0x3040..=0x30FF // Hiragana, Katakana
-            | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF // Han
-            | 0x3000..=0x303F | 0xFF00..=0xFFEF) // CJK punctuation, full-width forms
-    };
-    s.split("\n\n")
-        .map(|para| {
-            let mut out = String::new();
-            for (k, line) in para.split('\n').enumerate() {
-                let line = line.trim();
-                if k > 0 && !out.is_empty() && !line.is_empty() {
-                    let before = out.chars().last().is_some_and(spaceless);
-                    let after = line.chars().next().is_some_and(spaceless);
-                    if !(before && after) {
-                        out.push(' ');
-                    }
-                }
-                out.push_str(line);
-            }
-            out
-        })
-        .collect::<Vec<_>>()
-        .join("\n\n")
-}
-
-#[cfg(test)]
-mod reflow_tests {
-    #[test]
-    fn hard_breaks_flow_again() {
-        assert_eq!(
-            super::reflow("one two\nthree\n\nnew"),
-            "one two three\n\nnew"
-        );
-        assert_eq!(super::reflow("日本語の\n文章"), "日本語の文章");
-    }
-}
-
 /// Chinese and Japanese (Han, kana, their punctuation and full-width forms): broken between any
 /// two characters.
 fn cjk(c: char) -> bool {
@@ -697,7 +613,7 @@ fn cjk(c: char) -> bool {
 }
 
 /// Closing punctuation that a line broken between characters must not start with.
-fn no_line_start(c: char) -> bool {
+pub(crate) fn no_line_start(c: char) -> bool {
     "、。，．・：；？！ー）」』】〕｝〉》々ゝゞぁぃぅぇぉっゃゅょァィゥェォッャュョ,.:;?!)]}%"
         .contains(c)
 }
@@ -707,7 +623,7 @@ fn no_line_start(c: char) -> bool {
 /// for its place).
 pub fn progress_bar(p: &Painter, rc: Rect, fraction: Option<f32>, time: f64) {
     let c = crate::theme::colors();
-    // The era themes: XP's blocks, the glossy bars of Windows 7 and Mac OS X.
+    // The blocks and glossy bars.
     let (from, to) = match fraction {
         Some(f) => (0.0, f.clamp(0.0, 1.0)),
         None => {
@@ -756,13 +672,15 @@ pub fn progress_bar(p: &Painter, rc: Rect, fraction: Option<f32>, time: f64) {
     );
     if to > from {
         let w = rc.width();
-        p.rect_filled(
+        bar_fill(
+            p,
             rect(Rect::from_min_max(
                 pos2(rc.left() + from * w, rc.top()),
                 pos2(rc.left() + to * w, rc.bottom()),
             )),
             r,
             accent,
+            rtl(),
         );
     }
 }
@@ -878,20 +796,38 @@ pub fn paragraph(
     right: f32,
     line_h: f32,
 ) -> usize {
-    // IDM's English is hard-wrapped; a translation's copy of those breaks is flowed again (a
-    // blank line still starts a new paragraph). English keeps its own lines.
-    let flowed;
-    let s = if crate::i18n::code() == "en" {
-        s
-    } else {
-        flowed = reflow(s);
-        flowed.as_str()
-    };
+    // IDM's English is hard-wrapped: its own lines are kept.
     let lines = wrap_lines(p, s, (right - x).max(1.0));
     for (i, l) in lines.iter().enumerate() {
         text(p, x, baseline + line_h * i as f32, l, color);
     }
     lines.len()
+}
+
+/// [`paragraph`] with each line centred between `x` and `right` (a centred column, as Pair a
+/// device's); returns the lines drawn.
+pub fn paragraph_centred(
+    p: &Painter,
+    x: f32,
+    baseline: f32,
+    s: &str,
+    color: Color32,
+    right: f32,
+    line_h: f32,
+) -> usize {
+    let lines = centred_lines(p, s, x, right);
+    for (i, (left, l)) in lines.iter().enumerate() {
+        text(p, *left, baseline + line_h * i as f32, l, color);
+    }
+    lines.len()
+}
+
+/// `s` wrapped between `x` and `right`, each line with the left that centres it there.
+fn centred_lines(p: &Painter, s: &str, x: f32, right: f32) -> Vec<(f32, String)> {
+    wrap_lines(p, s, (right - x).max(1.0))
+        .into_iter()
+        .map(|l| (((x + right - text_width(p, &l)) / 2.0).round(), l))
+        .collect()
 }
 
 /// Data shown as it is (a crash report, release notes), from English `x` to `right`, first
@@ -934,7 +870,13 @@ fn data_left(x: f32, right: f32) -> f32 {
 
 /// `s` broken into the lines it shows in `room` px: at its own line breaks, and where a line is
 /// too long, at spaces, or between any two characters in scripts written without spaces.
-fn wrap_lines(p: &Painter, s: &str, room: f32) -> Vec<String> {
+pub fn wrap_lines(p: &Painter, s: &str, room: f32) -> Vec<String> {
+    wrap_lines_font(p, tahoma(), s, room)
+}
+
+/// [`wrap_lines`] measured in `font` (a bold title).
+pub fn wrap_lines_font(p: &Painter, font: FontId, s: &str, room: f32) -> Vec<String> {
+    let text_width = |p: &Painter, s: &str| text_width_font(p, font.clone(), s);
     let mut lines: Vec<String> = Vec::new();
     for given in s.split('\n') {
         // A Windows line end (a report written there) breaks the line too.
@@ -1538,7 +1480,21 @@ pub fn row_list(
 /// Text that opens or does something when clicked: link colour, underlined under the pointer.
 /// `label` is English (translated here).
 pub fn link(ui: &Ui, p: &Painter, x: f32, baseline: f32, label: &str, salt: &str) -> bool {
-    let rect = text(p, x, baseline, crate::i18n::t(label), LINK());
+    link_font(ui, p, tahoma(), x, baseline, label, salt)
+}
+
+/// [link] in `font`.
+pub fn link_font(
+    ui: &Ui,
+    p: &Painter,
+    font: FontId,
+    x: f32,
+    baseline: f32,
+    label: &str,
+    salt: &str,
+) -> bool {
+    let rect = text_font(p, font, x, baseline, crate::i18n::t(label), LINK());
+    note_caption(p, crate::i18n::t(label), rect);
     let resp = ui
         .interact(rect, ui.scope_id().with(("link", salt)), Sense::click())
         .on_hover_cursor(egui::CursorIcon::PointingHand);
@@ -1553,6 +1509,43 @@ pub fn link(ui: &Ui, p: &Painter, x: f32, baseline: f32, label: &str, salt: &str
         );
     }
     resp.clicked()
+}
+
+/// A note (`s`, translated already) from `x` to `right` on at most two lines `line_h` apart,
+/// first baseline `baseline`, with a [`link`] after it (`label`, English, translated here): on
+/// the note's line when they fit together, else the note wraps and the link ends its second
+/// line. A note longer than that is cut, and shown whole on hover. True when the link is
+/// clicked; `salt` tells notes apart.
+#[allow(clippy::too_many_arguments)]
+pub fn note_with_link(
+    ui: &Ui,
+    p: &Painter,
+    x: f32,
+    baseline: f32,
+    line_h: f32,
+    s: &str,
+    color: Color32,
+    right: f32,
+    label: &str,
+    salt: &str,
+) -> bool {
+    const GAP: f32 = 8.0;
+    let link_w = text_width(p, crate::i18n::t(label));
+    if text_width(p, s) + GAP + link_w <= right - x {
+        text(p, x, baseline, s, color);
+        return link(ui, p, x + text_width(p, s) + GAP, baseline, label, salt);
+    }
+    let lines = wrap_lines(p, s, (right - x).max(1.0));
+    let first = lines.first().map_or("", String::as_str);
+    let first_rect = text(p, x, baseline, first, color);
+    let rest = lines.get(1..).unwrap_or_default().join(" ");
+    let second = baseline + line_h;
+    let (rest_rect, cut) = text_fit(p, x, second, &rest, color, right - GAP - link_w);
+    if cut {
+        full_on_hover(ui, first_rect.union(rest_rect), (salt, "note"), s);
+    }
+    let rest_w = text_width(p, &rest).min(right - GAP - link_w - x);
+    link(ui, p, x + rest_w + GAP, second, label, salt)
 }
 
 /// A disabled control says why on hover: `reason` (English, translated here) while `disabled`.
@@ -1656,8 +1649,8 @@ pub fn solid(p: &Painter, rc: Rect, c: Color32) {
 
 /// Fills `rc`, its corners rounded by `radius`, shading from top to bottom through `stops`
 /// (each a place in the height, 0 at the top and 1 at the bottom, and its colour, in order).
-/// Two stops at one place make a sharp change (Windows 7's glossy halves). The era themes'
-/// buttons, boxes, bars and title bars are drawn with it (#45).
+/// Two stops at one place make a sharp change (a glossy bar's halves). Graphite's accent
+/// buttons and the blocks and glossy progress bars are drawn with it (#45).
 pub fn fill_shaded(p: &Painter, rc: Rect, radius: f32, stops: &[(f32, Color32)]) {
     fill_shaded_corners(p, rc, radius, radius, stops);
 }
@@ -1665,11 +1658,34 @@ pub fn fill_shaded(p: &Painter, rc: Rect, radius: f32, stops: &[(f32, Color32)])
 /// [`fill_shaded`] with the top corners rounded by `top` and the bottom ones by `bottom` (a
 /// button hung from a title bar's edge).
 pub fn fill_shaded_corners(p: &Painter, rc: Rect, top: f32, bottom: f32, stops: &[(f32, Color32)]) {
+    p.add(egui::Shape::mesh(shaded_mesh(rc, top, bottom, stops)));
+}
+
+/// [`fill_shaded`] across: `stops` run from `rc`'s left (0) to its right (1). Graphite's
+/// progress fill.
+pub fn fill_shaded_across(p: &Painter, rc: Rect, radius: f32, stops: &[(f32, Color32)]) {
+    p.add(egui::Shape::mesh(across_mesh(rc, radius, stops)));
+}
+
+/// The mesh [`fill_shaded_across`] paints: the vertical one of `rc` turned on its diagonal,
+/// then turned back.
+fn across_mesh(rc: Rect, radius: f32, stops: &[(f32, Color32)]) -> egui::Mesh {
+    let flip = |r: Rect| Rect::from_min_max(pos2(r.min.y, r.min.x), pos2(r.max.y, r.max.x));
+    let mut mesh = shaded_mesh(flip(rc), radius, radius, stops);
+    for v in &mut mesh.vertices {
+        v.pos = pos2(v.pos.y, v.pos.x);
+    }
+    mesh
+}
+
+/// The mesh [`fill_shaded_corners`] paints.
+fn shaded_mesh(rc: Rect, top: f32, bottom: f32, stops: &[(f32, Color32)]) -> egui::Mesh {
+    let mut mesh = egui::Mesh::default();
     let (Some(first), Some(last)) = (stops.first(), stops.last()) else {
-        return;
+        return mesh;
     };
     if rc.width() <= 0.0 || rc.height() <= 0.0 {
-        return;
+        return mesh;
     }
     let most = rc.width().min(rc.height()) / 2.0;
     let (rt, rb) = (top.clamp(0.0, most), bottom.clamp(0.0, most));
@@ -1698,7 +1714,6 @@ pub fn fill_shaded_corners(p: &Painter, rc: Rect, top: f32, bottom: f32, stops: 
     all.extend(stops.iter().map(|&(t, c)| (t.clamp(0.0, 1.0), c)));
     all.push((1.0, last.1));
     let h = rc.height();
-    let mut mesh = egui::Mesh::default();
     for w in all.windows(2) {
         let ((t0, c0), (t1, c1)) = (w[0], w[1]);
         if t1 <= t0 {
@@ -1736,59 +1751,73 @@ pub fn fill_shaded_corners(p: &Painter, rc: Rect, top: f32, bottom: f32, stops: 
             mesh.add_triangle(i + 1, i + 3, i + 2);
         }
     }
-    p.add(egui::Shape::mesh(mesh));
+    mesh
 }
 
-/// How an era theme's glossy parts shade (#45): Windows XP's soft fall from white, Windows 7's
-/// two halves, Mac OS X's gel (a bright top, a dark middle, light coming back at the bottom).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Shine {
-    Luna,
-    Aero,
-    Aqua,
+/// Graphite's glow: a soft shadow in the `glow` role from `rc` (on screen), `dy` below it,
+/// grown by `spread` and blurred by `blur` (egui caps the blur at the grown rect's smaller
+/// side). Nothing where the role is transparent (Graphite light).
+fn glow(p: &Painter, rc: Rect, radius: f32, dy: i8, spread: u8, blur: u8) {
+    let color = crate::theme::colors().glow;
+    if color.a() > 0 {
+        let shadow = egui::epaint::Shadow {
+            offset: [0, dy],
+            blur,
+            spread,
+            color,
+        };
+        p.add(shadow.as_shape(rc, radius));
+    }
 }
 
-impl Shine {
-    /// The theme's shine, from its button style; None for the flat looks.
-    pub fn of_theme() -> Option<Self> {
-        Self::of_button(crate::theme::current().controls.button)
+/// How [`bar_fill`] fills: Graphite's progress style shades a fill in the bar's colour (not an
+/// error's or a stopped download's) from `bar` at its start to `end` (the colours at its left
+/// and right: reversed when the bar runs `from_right`); None draws it flat.
+fn bar_shade(
+    graphite: bool,
+    fill: Color32,
+    bar: Color32,
+    end: Color32,
+    from_right: bool,
+) -> Option<(Color32, Color32)> {
+    if !graphite || fill != bar || end.a() == 0 {
+        return None;
     }
+    Some(if from_right { (end, fill) } else { (fill, end) })
+}
 
-    fn of_button(look: crate::palette::ButtonLook) -> Option<Self> {
-        use crate::palette::ButtonLook as B;
-        match look {
-            B::Fluent | B::Breeze => None,
-            B::Luna => Some(Shine::Luna),
-            B::Aero => Some(Shine::Aero),
-            B::Aqua => Some(Shine::Aqua),
-        }
-    }
+/// A progress bar's done part in `rc` (on screen) in `fill`, filled from its right when
+/// `from_right` (a bar mirrored in a right-to-left interface): shaded with its glow around it in
+/// Graphite's progress style (the mock's `.meter i`, [`bar_shade`]), else flat.
+pub fn bar_fill(p: &Painter, rc: Rect, radius: f32, fill: Color32, from_right: bool) {
+    let c = crate::theme::colors();
+    let graphite =
+        crate::theme::current().controls.progress == crate::palette::ProgressLook::Graphite;
+    let Some((left, right)) = bar_shade(
+        graphite,
+        fill,
+        c.progress_bar,
+        c.progress_bar_end,
+        from_right,
+    ) else {
+        p.rect_filled(rc, radius, fill);
+        return;
+    };
+    // The mock's 10 px glow all round: grown by 4 first, the bars being too thin for the blur.
+    glow(p, rc, radius, 0, 4, 10);
+    fill_shaded_across(p, rc, radius, &[(0.0, left), (1.0, right)]);
+}
 
-    /// A face of colour `f` shaded toward the theme's shine `g` (`gloss`), top to bottom, for
-    /// [`fill_shaded`].
-    pub fn stops(self, f: Color32, g: Color32) -> [(f32, Color32); 4] {
-        use crate::derive::mix;
-        match self {
-            Shine::Luna => [
-                (0.0, mix(f, g, 0.85)),
-                (0.4, mix(f, g, 0.6)),
-                (0.85, mix(f, g, 0.2)),
-                (1.0, f),
-            ],
-            Shine::Aero => [
-                (0.0, mix(f, g, 0.75)),
-                (0.5, mix(f, g, 0.5)),
-                (0.5, mix(f, g, 0.25)),
-                (1.0, f),
-            ],
-            Shine::Aqua => [
-                (0.0, mix(f, g, 0.85)),
-                (0.5, mix(f, g, 0.4)),
-                (0.5, f),
-                (1.0, mix(f, g, 0.45)),
-            ],
-        }
-    }
+/// A glossy progress bar's fill of colour `f` shaded toward the theme's `gloss` `g`, top to
+/// bottom, for [`fill_shaded`]: two halves, the top one lighter.
+fn gloss_stops(f: Color32, g: Color32) -> [(f32, Color32); 4] {
+    use crate::derive::mix;
+    [
+        (0.0, mix(f, g, 0.75)),
+        (0.5, mix(f, g, 0.5)),
+        (0.5, mix(f, g, 0.25)),
+        (1.0, f),
+    ]
 }
 
 /// `rc` on whole screen pixels at `ppp` pixels a point (125 %, 150 % scaling put a 1 pt line
@@ -1876,9 +1905,14 @@ pub fn field_frame(p: &Painter, rc: Rect, look: FieldLook) {
 /// How far along something is, as IDM shows a download: its green fill on a track (themed: the
 /// track was light in dark mode too), the controls' rounded corners. `fraction` in 0..=1.
 pub fn meter(p: &Painter, rc: Rect, fraction: f32) {
+    meter_in(p, rc, fraction, crate::theme::colors().meter_fill);
+}
+
+/// [`meter`] filled in `fill` (the progress window's check or merge after the last byte, #736).
+pub fn meter_in(p: &Painter, rc: Rect, fraction: f32, fill: Color32) {
     let radius = control_radius().min(rc.height() / 4.0).floor();
     let c = crate::theme::colors();
-    if era_bar(p, rc, 0.0, fraction.clamp(0.0, 1.0), c.meter_fill, false) {
+    if era_bar(p, rc, 0.0, fraction.clamp(0.0, 1.0), fill, false) {
         return;
     }
     let border = crate::theme::metrics().border;
@@ -1887,7 +1921,7 @@ pub fn meter(p: &Painter, rc: Rect, fraction: f32) {
     let w = (fraction.clamp(0.0, 1.0) * inner.width()).floor();
     if w > 0.0 {
         let done = Rect::from_min_size(inner.min, vec2(w, inner.height()));
-        p.rect_filled(done, (radius - border).max(0.0), c.meter_fill);
+        bar_fill(p, done, (radius - border).max(0.0), fill, false);
     }
     p.rect_stroke(
         rc,
@@ -1897,10 +1931,10 @@ pub fn meter(p: &Painter, rc: Rect, fraction: f32) {
     );
 }
 
-/// An era theme's bar (`palette::ProgressLook::Blocks` or `Gloss`) in `rc` (on screen): a
+/// A blocks or glossy bar (`palette::ProgressLook::Blocks` or `Gloss`) in `rc` (on screen): a
 /// shaded track inside its edge, filled from `from` to `to` (fractions of its inside, from its
-/// left, or from its right when `mirrored`) in `fill`: in blocks (Windows XP), or glossy as
-/// the theme's buttons (Windows 7, Mac OS X). False, drawing nothing, for the other looks.
+/// left, or from its right when `mirrored`) in `fill`: in blocks, or glossy in two halves.
+/// False, drawing nothing, for the other looks.
 fn era_bar(p: &Painter, rc: Rect, from: f32, to: f32, fill: Color32, mirrored: bool) -> bool {
     use crate::derive::mix;
     use crate::palette::ProgressLook;
@@ -1959,12 +1993,11 @@ fn era_bar(p: &Painter, rc: Rect, from: f32, to: f32, fill: Color32, mirrored: b
                 x += bw + 2.0;
             }
         } else {
-            let shine = Shine::of_theme().unwrap_or(Shine::Aero);
             fill_shaded(
                 p,
                 span(a, b),
                 (radius - m.border).max(0.0),
-                &shine.stops(fill, c.gloss),
+                &gloss_stops(fill, c.gloss),
             );
         }
     }
@@ -2096,6 +2129,7 @@ fn edit_text(
         inset,
         color,
         start_align(),
+        None,
     )
 }
 
@@ -2127,6 +2161,7 @@ fn edit_text_with(
     inset: f32,
     color: Color32,
     align: egui::Align,
+    id: Option<egui::Id>,
 ) -> Response {
     // Tahoma −11: ascent 11, so the text cell top is baseline − 10 (top + 3 in a 21 px box),
     // the line centred in the box at any height (baseline_in).
@@ -2140,9 +2175,11 @@ fn edit_text_with(
     // Keyed by its window's opening too: a box shown again for another record (New login after
     // Edit login) starts without the last one's text in its undo.
     // (The key first: asking the context inside its own lock deadlocks.)
+    // `id`: a box others find by its id (the paste bar's field) keeps the one it is given.
     let opening = crate::dialogs::opening_key(ui.ctx());
     let opened = ui.data(|d| d.get_temp::<u64>(opening)).unwrap_or(0);
-    let edit_id = widget_id(ui, ("edit-box", rc.min.x as i32, rc.min.y as i32, opened));
+    let edit_id =
+        id.unwrap_or_else(|| widget_id(ui, ("edit-box", rc.min.x as i32, rc.min.y as i32, opened)));
     if enabled {
         let frame = ui.interact(rc, edit_id.with("frame"), pointer_only());
         if frame.hovered() {
@@ -2150,6 +2187,18 @@ fn edit_text_with(
         }
         if frame.clicked() {
             ui.memory_mut(|m| m.request_focus(edit_id));
+        }
+    }
+    // A box that was empty and is then filled by its window, not typed in (a link from the
+    // clipboard, read off the window's thread, comes a frame or two after the window opens:
+    // #661), has its caret where it would be had it opened with the text (at its end), not left
+    // at its start.
+    let was_empty = edit_id.with("was-empty");
+    if !value.is_empty() && ui.data(|d| d.get_temp::<bool>(was_empty)).is_some() {
+        ui.data_mut(|d| d.remove::<bool>(was_empty));
+        if let Some(mut state) = egui::text_edit::TextEditState::load(ui.ctx(), edit_id) {
+            state.cursor.set_char_range(None);
+            state.store(ui.ctx(), edit_id);
         }
     }
     let te = egui::TextEdit::singleline(value)
@@ -2241,6 +2290,9 @@ fn edit_text_with(
                 egui::text::CCursor::new(n),
             )));
         state.store(ui.ctx(), edit_id);
+    }
+    if value.is_empty() && ui.data(|d| d.get_temp::<bool>(was_empty)).is_none() {
+        ui.data_mut(|d| d.insert_temp(was_empty, true));
     }
     if enabled {
         edit_menu(&resp, value, password, false);
@@ -2371,22 +2423,67 @@ fn readonly_with_icon(
     if cut { resp.on_hover_text(value) } else { resp }
 }
 
+/// A text box's right-click menu, each item enabled or not.
+fn edit_entries(
+    undo: bool,
+    copy: bool,
+    paste: bool,
+    delete: bool,
+    select_all: bool,
+) -> Vec<crate::chrome::MenuEntry<EditCmd>> {
+    use crate::chrome::MenuEntry;
+    vec![
+        MenuEntry::Item("&Undo", EditCmd::Undo, undo, false),
+        MenuEntry::Sep,
+        MenuEntry::Item("Cu&t", EditCmd::Cut, copy, false),
+        MenuEntry::Item("&Copy", EditCmd::Copy, copy, false),
+        MenuEntry::Item("&Paste", EditCmd::Paste, paste, false),
+        MenuEntry::Item("&Delete", EditCmd::Delete, delete, false),
+        MenuEntry::Sep,
+        MenuEntry::Item("Select &all", EditCmd::SelectAll, select_all, false),
+    ]
+}
+
+/// A text box's right-click menu, for the access keys' test (app.rs).
+#[cfg(test)]
+pub fn text_box_menu() -> Vec<crate::chrome::MenuEntry<()>> {
+    use crate::chrome::MenuEntry;
+    edit_entries(true, true, true, true, true)
+        .into_iter()
+        .map(|e| match e {
+            MenuEntry::Item(l, _, en, on) => MenuEntry::Item(l, (), en, on),
+            _ => MenuEntry::Sep,
+        })
+        .collect()
+}
+
 pub fn edit_menu(resp: &Response, value: &mut String, password: bool, multiline: bool) {
-    use crate::chrome::{MenuEntry, PopupResult};
+    use crate::chrome::PopupResult;
     use egui::text::{CCursor, CCursorRange};
     use egui::text_edit::TextEditState;
     let ctx = resp.ctx.clone();
     let id = resp.id;
     let key = id.with("edit-menu");
+    // Paste is offered when the clipboard has text: asked as the menu opens, read off the
+    // window's thread (clipboard.rs; read here at every frame, a clipboard owner that hung froze
+    // the window, #661).
+    let clip_key = key.with("clipboard");
+    let open_at = |p: Pos2| {
+        let ask = crate::clipboard::ask();
+        ctx.data_mut(|d| {
+            d.insert_temp(key, p);
+            d.insert_temp(clip_key, ask);
+        });
+    };
     if resp.secondary_clicked()
         && let Some(p) = resp.interact_pointer_pos()
     {
-        ctx.data_mut(|d| d.insert_temp(key, p));
+        open_at(p);
     }
     // Shift+F10 (the keyboard's way to a right-click menu) opens it under the box.
     if resp.has_focus() && ctx.input_mut(|i| i.consume_key(egui::Modifiers::SHIFT, egui::Key::F10))
     {
-        ctx.data_mut(|d| d.insert_temp(key, resp.rect.left_bottom()));
+        open_at(resp.rect.left_bottom());
     }
     let Some(at) = ctx.data(|d| d.get_temp::<Pos2>(key)) else {
         return;
@@ -2402,20 +2499,23 @@ pub fn edit_menu(resp: &Response, value: &mut String, password: bool, multiline:
         })
         .unwrap_or((n, n));
     let has = a < b;
-    let clip = crate::clipboard_text().filter(|t| !t.is_empty());
+    // Until the answer comes (a frame or two; never, from an owner that hung), what the
+    // clipboard last held.
+    let clip = ctx
+        .data(|d| d.get_temp::<crate::clipboard::Ask>(clip_key))
+        .and_then(crate::clipboard::answer)
+        .unwrap_or_else(crate::clipboard::latest)
+        .filter(|t| !t.is_empty());
     // egui's own undo history (Ctrl+Z uses it too).
     let mut undoer = state.undoer();
     let now = (state.cursor.char_range().unwrap_or_default(), value.clone());
-    let entries = vec![
-        MenuEntry::Item("&Undo", EditCmd::Undo, undoer.has_undo(&now), false),
-        MenuEntry::Sep,
-        MenuEntry::Item("Cu&t", EditCmd::Cut, has && !password, false),
-        MenuEntry::Item("&Copy", EditCmd::Copy, has && !password, false),
-        MenuEntry::Item("&Paste", EditCmd::Paste, clip.is_some(), false),
-        MenuEntry::Item("&Delete", EditCmd::Delete, has, false),
-        MenuEntry::Sep,
-        MenuEntry::Item("Select &all", EditCmd::SelectAll, n > 0, false),
-    ];
+    let entries = edit_entries(
+        undoer.has_undo(&now),
+        has && !password,
+        clip.is_some(),
+        has,
+        n > 0,
+    );
     let cmd = match crate::chrome::popup(
         &ctx,
         crate::chrome::MenuKind::Context,
@@ -2428,7 +2528,10 @@ pub fn edit_menu(resp: &Response, value: &mut String, password: bool, multiline:
         PopupResult::Dismissed => None,
         PopupResult::Chosen(c) => Some(c),
     };
-    ctx.data_mut(|d| d.remove::<Pos2>(key));
+    ctx.data_mut(|d| {
+        d.remove::<Pos2>(key);
+        d.remove::<crate::clipboard::Ask>(clip_key);
+    });
     let Some(cmd) = cmd else { return };
     let byte = |c: usize| value.char_indices().nth(c).map_or(value.len(), |(i, _)| i);
     let (ba, bb) = (byte(a), byte(b));
@@ -2492,7 +2595,7 @@ pub fn edit_right(ui: &mut Ui, rc: Rect, value: &mut String, enabled: bool) -> R
     } else {
         EDIT_TEXT_DISABLED()
     };
-    let resp = edit_text_with(ui, rc, value, enabled, false, 5.0, color, end_align());
+    let resp = edit_text_with(ui, rc, value, enabled, false, 5.0, color, end_align(), None);
     // Its focus shows as every text box's does.
     edit_focus_line(ui, &resp, rc);
     resp
@@ -2583,14 +2686,18 @@ fn combo_zone(rc: Rect) -> Rect {
     }
 }
 
-/// A combo's chevron: 8 × 6 "v" at the arrow zone's left + 6, top + 8.
+/// A combo's chevron: 8 × 6 "v" at the arrow zone's left + 6, centred down the combo (top + 8
+/// in a 21-point one; the paste bar's field is 32 high).
 fn combo_chevron(p: &Painter, rc: Rect) {
     let arrow_left = if rtl() {
         rc.left() + 1.0
     } else {
         rc.right() - 1.0 - 19.0
     };
-    let (cx, cy) = (arrow_left + 6.0, rc.top() + 8.0);
+    let (cx, cy) = (
+        arrow_left + 6.0,
+        rc.top() + ((rc.height() - 5.0) / 2.0).floor(),
+    );
     p.line(
         vec![
             pos2(cx, cy + 0.5),
@@ -2627,11 +2734,13 @@ pub fn combo(ui: &mut Ui, rc: Rect, value: &str, id: &str) -> Response {
     show_focus(ui, &resp, rc.shrink(2.0));
     // Short of the arrow zone: a longer value ends in "..." and shows whole on hover.
     let shown = ellipsize(ui.painter(), &tahoma(), value, rc.width() - 5.0 - 22.0);
+    // On a button's baseline: IDM's 13 in a 21-point box, centred in a taller one (the kit's
+    // 30-point rows).
     text_start(
         ui.painter(),
         tahoma(),
         lead(rc) + 5.0 * fwd(),
-        rc.top() + 13.0,
+        rc.top() + button_baseline(rc.height()),
         &shown,
         TEXT(),
     );
@@ -2670,6 +2779,89 @@ pub fn combo_edit(ui: &mut Ui, rc: Rect, value: &mut String) -> Response {
     resp
 }
 
+/// The room an [`icon_combo_edit`]'s icon takes at the box's start: the text starts this far in.
+const COMBO_ICON_ROOM: f32 = 32.0;
+
+/// [`combo_edit`] with a Graphite icon (its `need`, as `gx-link`) 16 at 10 inside the box's
+/// start, the text from 34, `placeholder` in the muted ink while the box is empty, and the box's
+/// own egui `id` (the paste bar's address field: its Tab stop and the typing gate find it by
+/// it). The same frame, focus and arrow zone at the trailing edge ([`combo_arrow`]); a click on
+/// the icon focuses the box.
+pub fn icon_combo_edit(
+    ui: &mut Ui,
+    rc: Rect,
+    value: &mut String,
+    id: egui::Id,
+    need: &str,
+    placeholder: &str,
+) -> Response {
+    // The frame goes under the box, so it is drawn first, with the focus as egui has it now.
+    let was = ui.memory(|m| m.has_focus(id));
+    combo_frame(ui.painter(), rc, was);
+    let (icon_zone, child) = if rtl() {
+        (
+            Rect::from_min_max(pos2(rc.right() - COMBO_ICON_ROOM, rc.top()), rc.max),
+            Rect::from_min_max(
+                pos2(rc.left() + 20.0, rc.top()),
+                pos2(rc.right() - COMBO_ICON_ROOM, rc.bottom()),
+            ),
+        )
+    } else {
+        (
+            Rect::from_min_max(rc.min, pos2(rc.left() + COMBO_ICON_ROOM, rc.bottom())),
+            Rect::from_min_max(
+                pos2(rc.left() + COMBO_ICON_ROOM, rc.top()),
+                pos2(rc.right() - 20.0, rc.bottom()),
+            ),
+        )
+    };
+    let icon = Rect::from_min_size(
+        pos2(
+            lead(rc) + 10.0 * fwd() - if rtl() { 16.0 } else { 0.0 },
+            (rc.center().y - 8.0).round(),
+        ),
+        vec2(16.0, 16.0),
+    );
+    crate::themeicons::paint_in(ui, ui.painter(), need, icon, TEXT(), true);
+    if ui
+        .interact(icon_zone, id.with("icon"), pointer_only())
+        .clicked()
+    {
+        ui.memory_mut(|m| m.request_focus(id));
+    }
+    // The placeholder under the text box (which draws nothing while empty), where its text
+    // starts; cut with "..." short of the arrow zone.
+    if value.is_empty() {
+        let p = ui.painter();
+        let room = (child.width() - 4.0).max(0.0);
+        let shown = ellipsize(p, &tahoma(), placeholder, room);
+        text_start(
+            p,
+            tahoma(),
+            lead(rc) + (COMBO_ICON_ROOM + 2.0) * fwd(),
+            baseline_in(rc.top(), rc.height()),
+            &shown,
+            MUTED(),
+        );
+    }
+    let resp = edit_text_with(
+        ui,
+        child,
+        value,
+        true,
+        false,
+        2.0,
+        TEXT(),
+        start_align(),
+        Some(id),
+    );
+    // Focus taken or lost this frame: the frame shows it from the next.
+    if resp.has_focus() != was {
+        ui.ctx().request_repaint();
+    }
+    resp
+}
+
 /// The arrow zone of an editable combo (`combo_edit`, at the trailing edge): a click on it
 /// opens the combo's drop list (`drop_list`); it shows hot, pressed, and pressed while `open`.
 pub fn combo_arrow(ui: &mut Ui, rc: Rect, id: &str, open: bool) -> Response {
@@ -2685,6 +2877,15 @@ pub fn combo_arrow(ui: &mut Ui, rc: Rect, id: &str, open: bool) -> Response {
     };
     tint_part(ui.painter(), zone, tint, |p| combo_chevron(p, rc));
     resp
+}
+
+/// [`keep_keys`] for a box that is typed in (an editable combo's, as Save As and Address): Left
+/// and Right are its caret's and Up / Down its history's, `escape` closes its drop list. A box
+/// is drawn first and `keep_keys` called after it, which *replaces* the keys the box asked
+/// egui to leave it: with `horizontal` false, Left / Right in Save As moved the focus to the
+/// control beside it ("..." and the like) instead of the caret to the next character.
+pub fn keep_edit_keys(ui: &Ui, resp: &Response, escape: bool) {
+    keep_keys(ui, resp, true, true, escape);
 }
 
 /// The keys that open an editable combo's drop list while its box has the focus: Alt+Down or
@@ -2787,7 +2988,7 @@ pub fn drop_list(
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ButtonKind {
     Normal,
     Default,
@@ -2795,6 +2996,10 @@ pub enum ButtonKind {
     /// The one answer a window recommends (the default too), filled with the accent as Windows
     /// 11's accent buttons: the first start's "Yes, download them".
     Accent,
+    /// An answer that deletes (Confirm deletion's Yes): filled with `button.danger`.
+    Danger,
+    /// A quiet button (a footer's Help): no face or border until the pointer is on it.
+    Ghost,
 }
 
 /// Push button: #333333 fill, 1 px rounded (r 4) border by state, text centred with its
@@ -2807,24 +3012,91 @@ pub fn button(
     focus_rect: bool,
     mnemonic: Option<usize>,
 ) -> Response {
-    // The label is translated here (M16); a mnemonic index points into the English text only,
-    // and becomes the "&" form every button uses.
+    button_icon(ui, rc, None, label, kind, focus_rect, mnemonic)
+}
+
+/// [`button`] with Graphite's `icon` (a need, as `gx-dots`) before its label, the pair centred.
+pub fn button_icon(
+    ui: &mut Ui,
+    rc: Rect,
+    icon: Option<&str>,
+    label: &str,
+    kind: ButtonKind,
+    focus_rect: bool,
+    mnemonic: Option<usize>,
+) -> Response {
+    let label = with_mnemonic(label, mnemonic);
+    button_face(ui, rc, &label, kind, focus_rect, icon, PressFocus::Take)
+}
+
+/// `label` translated (M16), with "&" before the access letter at char index `mnemonic`: the
+/// index points into the English text only, so a translation keeps its own (or none).
+fn with_mnemonic(label: &str, mnemonic: Option<usize>) -> String {
     let translated = crate::i18n::t(label);
-    let label = match mnemonic.filter(|_| translated == label) {
+    match mnemonic.filter(|_| translated == label) {
         Some(i) => {
             let at = label.char_indices().nth(i).map_or(label.len(), |(b, _)| b);
             format!("{}&{}", &label[..at], &label[at..])
         }
         None => translated.to_owned(),
-    };
-    button_face(ui, rc, &label, kind, focus_rect)
+    }
+}
+
+/// Whether a pointer press gives a [`button_face`] the keys.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PressFocus {
+    /// A dialog's button: a press gives it the keys, as every control in Windows
+    /// ([`focus_on_press`]).
+    Take,
+    /// A main-window button (the paste bar's Download, the details pane's): a press leaves the
+    /// keys where they were, and a pointer click gives up a focus Tab gave it, so the next
+    /// Enter or Space is the list's, not a second press of the button. A screen reader's Focus,
+    /// or egui's Tab order from another focused widget, still focuses it, and Enter, Space, its
+    /// access letter and a screen reader's Click still press it.
+    Leave,
+}
+
+/// A push button with a 16-point Graphite icon (its `need`, as `gx-download`) before its
+/// (translated) `label`, the pair centred: the paste bar's Download, the details pane's buttons.
+/// [`button`]'s face, Enter, access letter, hover text and accessibility; the icon in the
+/// label's colour (white on the accent). A main-window button: a pointer click leaves no
+/// widget focused ([`PressFocus::Leave`]), so the list's keys, Delete, Ctrl+V and the Tab
+/// rotation work right after it.
+pub fn icon_label_button(
+    ui: &mut Ui,
+    rc: Rect,
+    need: &str,
+    label: &str,
+    kind: ButtonKind,
+) -> Response {
+    // Its focus ring shows while it has the keys only: in the main window no button is a
+    // dialog's default whose ring shows while nothing has them.
+    button_face(
+        ui,
+        rc,
+        crate::i18n::t(label),
+        kind,
+        false,
+        Some(need),
+        PressFocus::Leave,
+    )
+}
+
+/// An [`icon_label_button`]'s icon: its side, and the room between it and the label.
+const BUTTON_ICON: f32 = 16.0;
+const BUTTON_ICON_GAP: f32 = 6.0;
+
+/// How wide an [`icon_label_button`] is with its (translated) `label` whole: the icon, the gap,
+/// the label and the mockup's 14 at either end (`.btn`). Narrower, the label ends in "...".
+pub fn icon_label_button_width(p: &Painter, label: &str) -> f32 {
+    (BUTTON_ICON + BUTTON_ICON_GAP + text_width(p, crate::i18n::t(label)) + 2.0 * 14.0).ceil()
 }
 
 /// A button's rect `rc` widened to the left (its right edge stays: a button against the right
 /// side, with room before it) to fit its translated `label` whole, with the room [`button`]
 /// keeps inside the border, at most to `max_width`. English labels fit IDM's buttons, so
 /// English never changes; a label that would still not fit ends in "..." and shows whole on
-/// hover, as on every button. (A row of buttons: [`buttons_from_left`], [`buttons_to_right`].)
+/// hover, as on every button. (A row of buttons: [`buttons_to_right`].)
 pub fn button_rect_for(p: &Painter, rc: Rect, label: &str, max_width: f32) -> Rect {
     let w = button_fit_width(p, label, rc.width(), max_width);
     // Widened in English, where its right edge stays; on screen in RTL its left edge stays and
@@ -2921,31 +3193,10 @@ fn label_width(p: &Painter, label: &str, english: f32) -> f32 {
     }
 }
 
-/// A row of [`button`]s laid out for their translated labels, `gap` apart, the first starting
-/// at English x `left`: each `(label, English width)` as wide as [`button_fit_width`] says (at
-/// most `max`). Their English (x, width) in the order given, for [`r`]; in English every button
-/// keeps its place.
-pub fn buttons_from_left(
-    p: &Painter,
-    left: f32,
-    gap: f32,
-    buttons: &[(&str, f32)],
-    max: f32,
-) -> Vec<(f32, f32)> {
-    let mut x = left;
-    buttons
-        .iter()
-        .map(|(label, min)| {
-            let w = button_fit_width(p, label, *min, max);
-            let at = (x, w);
-            x += w + gap;
-            at
-        })
-        .collect()
-}
-
-/// [`buttons_from_left`] for a row that ends at English x `right` (the last button's right
-/// edge): it grows to the left.
+/// A row of [`button`]s laid out for their translated labels, `gap` apart, ending at English x
+/// `right` (the last button's right edge) and growing to the left: each `(label, English
+/// width)` as wide as [`button_fit_width`] says (at most `max`). Their English (x, width) in the
+/// order given, for [`r`]; in English every button keeps its place.
 pub fn buttons_to_right(
     p: &Painter,
     right: f32,
@@ -3176,51 +3427,6 @@ pub fn checkbox_until(
     )
 }
 
-/// The gap a check box at English `x` leaves in a group box's top line for its caption (English
-/// pixels): IDM's measured end (`english_end`) in English, else 2 px past the translated caption
-/// (`light`: a [`checkbox_light`], caption at +16; else a [`checkbox`], at +18).
-pub fn caption_gap(
-    p: &Painter,
-    x: f32,
-    english_end: f32,
-    caption: &str,
-    light: bool,
-) -> (f32, f32) {
-    let shown = crate::i18n::t(caption);
-    if shown == caption {
-        return (x, english_end);
-    }
-    // Every check box's caption starts 16 px after it (`light`: kept for its callers).
-    let _ = light;
-    let lead = 16.0;
-    (x, x + lead + text_width(p, shown) + 2.0)
-}
-
-/// Group box frame (`rc` on screen) with a gap in its top line for a checkbox caption (`gap` =
-/// English x range, inclusive pixels).
-pub fn group_box(p: &Painter, rc: Rect, gap: Option<(f32, f32)>) {
-    let (l, t, rr, b) = (rc.left(), rc.top(), rc.right() - 1.0, rc.bottom() - 1.0);
-    let gap = gap.map(|(g0, g1)| {
-        let (a, b) = (mcol(g0), mcol(g1));
-        (a.min(b), a.max(b))
-    });
-    match gap {
-        Some((g0, g1)) => {
-            hline(p, l, g0 - 1.0, t, GROUP_LINE());
-            hline(p, g1 + 1.0, rr, t, GROUP_LINE());
-        }
-        None => hline(p, l, rr, t, GROUP_LINE()),
-    }
-    vline(p, l, t, b, GROUP_LINE());
-    vline(p, rr, t, b, GROUP_LINE());
-    hline(p, l, rr, b, GROUP_LINE());
-}
-
-/// The 22 × 21 "+" / "..." buttons.
-pub fn small_button(ui: &mut Ui, rc: Rect, glyph: &str) -> Response {
-    button(ui, rc, glyph, ButtonKind::Normal, false, None)
-}
-
 // ---- light dialogs (Speed Limiter, Scheduler, Options) ------------------------------------
 // notes/ui-spec/scheduler-and-misc.md "Light dialog control styles".
 
@@ -3365,7 +3571,17 @@ pub fn field_text(ui: &mut Ui, rc: Rect, value: &mut String, enabled: bool) -> R
     } else {
         LIGHT_DISABLED()
     };
-    edit_text_with(ui, rc, value, enabled, false, 5.0, color, start_align())
+    edit_text_with(
+        ui,
+        rc,
+        value,
+        enabled,
+        false,
+        5.0,
+        color,
+        start_align(),
+        None,
+    )
 }
 
 /// A number box's text and keys: digits only, no longer than `max` has; Up / Down step it by 1,
@@ -3445,7 +3661,7 @@ fn edit_light_with(
     } else {
         start_align()
     };
-    let resp = edit_text_with(ui, rc, value, enabled, password, 5.0, color, align);
+    let resp = edit_text_with(ui, rc, value, enabled, password, 5.0, color, align, None);
     edit_focus_line(ui, &resp, rc);
     resp
 }
@@ -3586,7 +3802,15 @@ pub fn button_light(
     kind: ButtonKind,
     focus_rect: bool,
 ) -> Response {
-    button_face(ui, rc, crate::i18n::t(label), kind, focus_rect)
+    button_face(
+        ui,
+        rc,
+        crate::i18n::t(label),
+        kind,
+        focus_rect,
+        None,
+        PressFocus::Take,
+    )
 }
 
 /// How wide a light button must be for its (translated) `label`: at least `min` (Windows'
@@ -3621,18 +3845,567 @@ pub fn buttons_light_right(
     out
 }
 
+// ---- the dialog kit (Graphite, plan 07a) ---------------------------------------------------
+//
+// Every dialog's footer, label column, file card and banner, as the mockup draws them. Keys
+// stay each dialog's own: a footer presses a button on Enter or Escape only where the dialog
+// marks it ([`FooterButton::enter`], [`FooterButton::escape`]); a `Default` look adds none.
+
+/// A footer's height: its top rule, 12 above and below a 30-point button (the mockup's `.foot`).
+pub const FOOTER_H: f32 = 55.0;
+/// A kit control's height: a footer's buttons, a form's rows, a file card's action.
+pub const CONTROL_H: f32 = 30.0;
+/// The room at a footer's ends, and a form's edges (the mockup's `.pad`).
+pub const EDGE: f32 = 16.0;
+const FOOTER_GAP: f32 = 8.0;
+/// A footer button's room either side of its label (the mockup's `.btn` padding).
+const FOOTER_BUTTON_PAD: f32 = 14.0;
+const FOOTER_BUTTON_MIN: f32 = 56.0;
+
+/// Which end of a [`footer`] a button sits at.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Side {
+    Leading,
+    Trailing,
+}
+
+/// A button in a [`footer`]: trailing, no icon, no keys until the dialog says so.
+#[derive(Clone, Copy, Debug)]
+pub struct FooterButton<'a> {
+    pub label: &'a str,
+    pub kind: ButtonKind,
+    pub side: Side,
+    /// Graphite's icon before the label (a need, as `gx-dots`).
+    pub icon: Option<&'a str>,
+    /// The access letter's char index in the English label ([`button`]).
+    pub mnemonic: Option<usize>,
+    /// Enter presses it (no control took Enter first). A greyed button ignores it.
+    pub enter: bool,
+    /// Escape presses it (no control took Escape first). A greyed button ignores it.
+    pub escape: bool,
+    /// Its hover text (English, translated here): why it is greyed, …
+    pub tip: Option<&'a str>,
+    /// The dialog's answer, put last: set by a `Default`, `Accent` or `Danger` kind, and kept by
+    /// [`FooterButton::primary`] for one greyed for now, so the footer never reshuffles.
+    pub primary: bool,
+    /// Its focus ring shows while no control has the keys ([`button`]'s `focus_rect`).
+    pub ring: bool,
+}
+
+impl<'a> FooterButton<'a> {
+    pub fn new(label: &'a str, kind: ButtonKind) -> Self {
+        Self {
+            label,
+            kind,
+            side: Side::Trailing,
+            icon: None,
+            mnemonic: None,
+            enter: false,
+            escape: false,
+            tip: None,
+            primary: matches!(
+                kind,
+                ButtonKind::Default | ButtonKind::Accent | ButtonKind::Danger
+            ),
+            ring: false,
+        }
+    }
+    /// The dialog's answer while `kind` greys it (Download File Info's Start): it keeps the last
+    /// place.
+    pub fn primary(self) -> Self {
+        Self {
+            primary: true,
+            ..self
+        }
+    }
+    /// Its focus ring shows while no control has the keys, as the dialog's default did.
+    pub fn ring(self, on: bool) -> Self {
+        Self { ring: on, ..self }
+    }
+    /// `tip` on hover while `on` ([`why_disabled`]'s reason for a greyed button).
+    pub fn tip(self, on: bool, tip: &'a str) -> Self {
+        Self {
+            tip: on.then_some(tip),
+            ..self
+        }
+    }
+    pub fn leading(self) -> Self {
+        Self {
+            side: Side::Leading,
+            ..self
+        }
+    }
+    pub fn icon(self, need: &'a str) -> Self {
+        Self {
+            icon: Some(need),
+            ..self
+        }
+    }
+    pub fn mnemonic(self, at: usize) -> Self {
+        Self {
+            mnemonic: Some(at),
+            ..self
+        }
+    }
+    /// Enter presses it while `on` (a dialog's own condition: no drop list open, …).
+    pub fn enter(self, on: bool) -> Self {
+        Self { enter: on, ..self }
+    }
+    /// Escape presses it while `on`.
+    pub fn escape(self, on: bool) -> Self {
+        Self { escape: on, ..self }
+    }
+}
+
+/// A [`footer`] button's width for its (translated) `label`, with an icon or not: what a
+/// dialog needs to keep its own line (an error) clear of the footer's buttons.
+pub fn footer_button_width(p: &Painter, label: &str, icon: bool) -> f32 {
+    let shown = with_mnemonic(label, None);
+    let icon = if icon {
+        BUTTON_ICON + BUTTON_ICON_GAP
+    } else {
+        0.0
+    };
+    (text_width(p, &shown) + icon + 2.0 * FOOTER_BUTTON_PAD)
+        .ceil()
+        .max(FOOTER_BUTTON_MIN)
+}
+
+/// Where a dialog's own line before a footer's trailing buttons (of the given widths) must end:
+/// one gap before the leftmost of them (English x).
+pub fn footer_trailing_left(client_w: f32, widths: &[f32]) -> f32 {
+    client_w - EDGE - widths.iter().sum::<f32>() - FOOTER_GAP * widths.len() as f32
+}
+
+/// What a [`footer`] holds: buttons, and leading check boxes (Add torrent's "Download in
+/// order", Confirm deletion's "Don't show this dialog again"): caption, value, and whether it
+/// can be ticked now (greyed otherwise, as Add torrent's until it has files).
+pub enum FooterItem<'a> {
+    Button(FooterButton<'a>),
+    Check(&'a str, &'a mut bool, bool),
+}
+
+/// Where a footer's items go, each `(width, side, primary)` in the order given (the dialog's Tab
+/// order, kept): the English x of each. Leading ones from the left edge in order; trailing ones
+/// against the right edge in order, the primary ones moved last (rightmost).
+pub fn footer_slots(items: &[(f32, Side, bool)], client_w: f32) -> Vec<f32> {
+    let mut x = vec![0.0; items.len()];
+    let mut left = EDGE;
+    for (i, (w, side, _)) in items.iter().enumerate() {
+        if *side == Side::Leading {
+            x[i] = left;
+            left += w + FOOTER_GAP;
+        }
+    }
+    let trailing = || {
+        items
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, side, _))| *side == Side::Trailing)
+    };
+    let shown: Vec<usize> = trailing()
+        .filter(|(_, (_, _, primary))| !primary)
+        .chain(trailing().filter(|(_, (_, _, primary))| *primary))
+        .map(|(i, _)| i)
+        .collect();
+    let mut right = client_w - EDGE;
+    for &i in shown.iter().rev() {
+        right -= items[i].0;
+        x[i] = right;
+        right -= FOOTER_GAP;
+    }
+    x
+}
+
+/// The button a key presses, of `buttons` given as `(enabled, enter, escape)`: the first
+/// enabled one marked for Escape when `escape` was pressed, else for Enter when `enter` was.
+/// Escape first, as the dialogs tested it before the kit: Enter and Escape in one frame answer
+/// No, never Yes (Confirm deletion).
+pub fn footer_key(buttons: &[(bool, bool, bool)], enter: bool, escape: bool) -> Option<usize> {
+    let marked =
+        |pick: fn(&(bool, bool, bool)) -> bool| buttons.iter().position(|b| b.0 && pick(b));
+    (escape.then(|| marked(|b| b.2)).flatten()).or_else(|| enter.then(|| marked(|b| b.1)).flatten())
+}
+
+/// A dialog's footer band at English `y` across `client_w` (window-relative to `o`): the
+/// `panel` colour under a top rule, its leading items from the left, its trailing buttons at the
+/// right with the default (or accent, or danger) one last and filled. Items are made in the
+/// order given, so Tab keeps the dialog's order. The index in `items` of the button clicked,
+/// pressed by its access letter, or by a key it is marked for.
+pub fn footer(
+    ui: &mut Ui,
+    o: Pos2,
+    client_w: f32,
+    y: f32,
+    items: &mut [FooterItem],
+) -> Option<usize> {
+    footer_band(ui, o, client_w, y);
+    footer_items(ui, o, client_w, y, items)
+}
+
+/// A [`footer`]'s band alone (its `panel` fill and top rule): for a dialog with a control of
+/// its own in the band (RSS feeds' "Check feeds every"), drawn first and before that control,
+/// so the control keeps its Tab place; [`footer_items`] then adds the buttons.
+pub fn footer_band(ui: &Ui, o: Pos2, client_w: f32, y: f32) {
+    let c = crate::theme::colors();
+    let p = ui.painter();
+    p.rect_filled(r(o, 0.0, y, client_w, FOOTER_H), 0.0, c.panel);
+    fill_l(
+        p,
+        o.x,
+        o.y + y,
+        o.x + client_w - 1.0,
+        o.y + y,
+        c.menubar_line,
+    );
+}
+
+/// A [`footer`]'s items, without its band ([`footer_band`]).
+pub fn footer_items(
+    ui: &mut Ui,
+    o: Pos2,
+    client_w: f32,
+    y: f32,
+    items: &mut [FooterItem],
+) -> Option<usize> {
+    let p = ui.painter().clone();
+    let widths: Vec<(f32, Side, bool)> = items
+        .iter()
+        .map(|item| match item {
+            FooterItem::Button(b) => (
+                footer_button_width(&p, b.label, b.icon.is_some()),
+                b.side,
+                b.primary,
+            ),
+            FooterItem::Check(caption, _, _) => (
+                checkbox_caption_end(&p, 0.0, caption).ceil(),
+                Side::Leading,
+                false,
+            ),
+        })
+        .collect();
+    let xs = footer_slots(&widths, client_w);
+    let top = y + 1.0 + ((FOOTER_H - 1.0 - CONTROL_H) / 2.0).floor();
+    // Read before the buttons: a focused button takes Enter for itself (button_face).
+    let (enter, escape) = (enter_pressed(ui), escape_pressed(ui));
+    let mut clicked = None;
+    let mut keys = Vec::new();
+    let mut at_key = Vec::new();
+    for (i, item) in items.iter_mut().enumerate() {
+        let (w, x) = (widths[i].0, xs[i]);
+        match item {
+            FooterItem::Button(b) => {
+                // The default is filled like an accent one in a footer.
+                let kind = if b.kind == ButtonKind::Default {
+                    ButtonKind::Accent
+                } else {
+                    b.kind
+                };
+                let label = with_mnemonic(b.label, b.mnemonic);
+                let resp = button_face(
+                    ui,
+                    r(o, x, top, w, CONTROL_H),
+                    &label,
+                    kind,
+                    b.ring,
+                    b.icon,
+                    PressFocus::Take,
+                );
+                let resp = match b.tip {
+                    Some(tip) => resp.on_hover_text(crate::i18n::t(tip)),
+                    None => resp,
+                };
+                if resp.clicked() && clicked.is_none() {
+                    clicked = Some(i);
+                }
+                keys.push((b.kind != ButtonKind::Disabled, b.enter, b.escape));
+                at_key.push(i);
+            }
+            FooterItem::Check(caption, on, enabled) => {
+                let box_top = top + ((CONTROL_H - 13.0) / 2.0).round();
+                checkbox(ui, o + vec2(x, box_top), on, caption, *enabled);
+            }
+        }
+    }
+    clicked.or_else(|| footer_key(&keys, enter, escape).map(|k| at_key[k]))
+}
+
+/// A form's label column, plan 07a: the English x its fields start at for labels drawn at
+/// English `x`: 112 points of labels (240 for sentence labels, `wide`) and a 12-point gap, or
+/// further right where a (translated) label is longer.
+pub fn form(p: &Painter, x: f32, labels: &[&str], wide: bool) -> f32 {
+    let column = if wide { 240.0 } else { 112.0 };
+    let labels: Vec<&str> = labels.iter().map(|l| crate::i18n::t(l)).collect();
+    // label_column keeps 6 after the widest label; a form keeps its 12.
+    label_column(p, x, &labels, x + column + 12.0 - 6.0) + 6.0
+}
+
+/// A form's label (English, translated here) at English `x`, centred on the row `top`..`top + h`
+/// (window-relative to `o`), in the secondary text colour, or greyed.
+pub fn form_label(p: &Painter, o: Pos2, x: f32, top: f32, h: f32, label: &str, enabled: bool) {
+    let color = if enabled {
+        crate::theme::colors().text_secondary
+    } else {
+        TEXT_DISABLED()
+    };
+    text(
+        p,
+        o.x + x,
+        o.y + baseline_in(top, h),
+        crate::i18n::t(label),
+        color,
+    );
+}
+
+/// A hairline across English `x`..`x + w` at `y` (window-relative to `o`): what groups a
+/// form's rows where a group box was.
+pub fn rule(p: &Painter, o: Pos2, x: f32, y: f32, w: f32) {
+    let line = crate::theme::colors().menubar_line;
+    fill_l(p, o.x + x, o.y + y, o.x + x + w - 1.0, o.y + y, line);
+}
+
+/// A file's header (Download File Info, Download complete, File Properties, Verify checksum):
+/// a bordered card (`rc` on screen) with the file's icon on a 40-point tile, its `name` in bold
+/// (cut with "...", whole on hover) over its `sub` line (a size), and an optional `action`
+/// button at the end. The action's response.
+pub fn file_card(
+    ui: &mut Ui,
+    rc: Rect,
+    icon: crate::fileicons::Kind,
+    name: &str,
+    sub: &str,
+    action: Option<(&str, ButtonKind)>,
+) -> (Option<Response>, Rect) {
+    let c = crate::theme::colors();
+    let p = ui.painter().clone();
+    p.rect_filled(rc, 8.0, c.panel);
+    p.rect_stroke(
+        rc,
+        8.0,
+        Stroke::new(1.0, c.menubar_line),
+        StrokeKind::Inside,
+    );
+    let tile = Rect::from_min_size(
+        pos2(rc.left() + 12.0, (rc.center().y - 20.0).round()),
+        vec2(40.0, 40.0),
+    );
+    p.rect_filled(tile, 8.0, c.tile);
+    crate::fileicons::paint(
+        ui,
+        &p,
+        icon,
+        Rect::from_center_size(tile.center(), vec2(20.0, 20.0)),
+    );
+    let mut end = rc.right() - 12.0;
+    let resp = action.map(|(label, kind)| {
+        let w = (text_width(&p, crate::i18n::t(label)) + 2.0 * FOOTER_BUTTON_PAD)
+            .ceil()
+            .max(FOOTER_BUTTON_MIN);
+        end -= w;
+        let at = Rect::from_min_size(
+            pos2(end, (rc.center().y - CONTROL_H / 2.0).round()),
+            vec2(w, CONTROL_H),
+        );
+        end -= 12.0;
+        button_face(
+            ui,
+            at,
+            crate::i18n::t(label),
+            kind,
+            false,
+            None,
+            PressFocus::Take,
+        )
+    });
+    let x = tile.right() + 12.0;
+    let bold = tahoma_bold();
+    let shown = ellipsize(&p, &bold, name, (end - x).max(0.0));
+    let drawn = text_at(&p, bold, x, rc.center().y - 3.0, &shown, c.text);
+    if shown != name {
+        full_on_hover(ui, drawn, ("file-card", rc.min.x as i32), name);
+    }
+    let sub_at = text_at(&p, tahoma(), x, rc.center().y + 14.0, sub, c.muted);
+    (resp, sub_at)
+}
+
+/// A square button showing only Graphite's `icon` (a need, as `gx-dots`), its `tip` (English,
+/// translated here) its name for screen readers and its hover text: a form's browse and add
+/// buttons.
+pub fn icon_only_button(ui: &mut Ui, rc: Rect, need: &str, tip: &str, enabled: bool) -> Response {
+    let kind = if enabled {
+        ButtonKind::Normal
+    } else {
+        ButtonKind::Disabled
+    };
+    let resp = button_face(ui, rc, "", kind, false, Some(need), PressFocus::Take);
+    let tip = crate::i18n::t(tip);
+    expose(&resp, egui::Role::Button, tip, enabled, None);
+    resp.on_hover_text(tip)
+}
+
+/// What a [`status_banner`] tells of.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BannerKind {
+    Error,
+    Info,
+    Warning,
+}
+
+/// A status banner (`rc` on screen; not the first-start [`banner`]): the kind's soft colour
+/// (`banner.error`, `banner.info`, `banner.warning`), Graphite's `icon` in the kind's ink, a bold
+/// `title` and a `sub` line that wrap. The title takes the lines it needs as far as `rc`'s height
+/// leaves room above the sub ([`status_banner_lines`], [`status_banner_height_for`]); past
+/// that its last line is cut with "...", whole on hover. No title: the sub in its place. Screen
+/// readers read it as a status, its title then its sub. The lines its `sub` took.
+pub fn status_banner(
+    ui: &Ui,
+    rc: Rect,
+    kind: BannerKind,
+    icon: &str,
+    title: &str,
+    sub: &str,
+) -> usize {
+    let c = crate::theme::colors();
+    let p = ui.painter();
+    let (fill, ink) = match kind {
+        BannerKind::Error => (c.banner_error, c.error),
+        BannerKind::Info => (c.banner_info, c.accent),
+        BannerKind::Warning => (c.banner_warning, c.warning),
+    };
+    p.rect_filled(rc, 8.0, fill);
+    // For screen readers: one status, its title and its sub.
+    let said = [title.trim(), sub.trim()]
+        .iter()
+        .filter(|s| !s.is_empty())
+        .copied()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if !said.is_empty() {
+        let resp = ui.interact(
+            rc,
+            widget_id(ui, ("status-banner", rc.min.x as i32, rc.min.y as i32)),
+            Sense::hover(),
+        );
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Status, true, &said));
+    }
+    let glyph = Rect::from_min_size(pos2(rc.left() + 12.0, rc.top() + 10.0), vec2(17.0, 17.0));
+    crate::themeicons::paint_graphite_in(ui, p, icon, glyph, ink);
+    let x = rc.left() + BANNER_TEXT_X;
+    let right = rc.right() - BANNER_TEXT_END;
+    // No title: the sub (a plain sentence, Accounts' warning) in its place.
+    if title.trim().is_empty() {
+        if sub.is_empty() {
+            return 0;
+        }
+        return paragraph(p, x, rc.top() + 23.0, sub, c.text, right, BANNER_LINE);
+    }
+    let sub_lines = if sub.is_empty() {
+        0
+    } else {
+        wrap_lines(p, sub, (right - x).max(1.0)).len()
+    };
+    let bold = tahoma_bold();
+    let room = banner_title_room(rc.height(), sub_lines);
+    let mut lines = wrap_lines_font(p, bold.clone(), title, (right - x).max(1.0));
+    let cut = lines.len() > room;
+    if cut {
+        // The lines past the room join the last one, cut with "...".
+        let rest = lines.split_off(room - 1).join(" ");
+        lines.push(ellipsize(p, &bold, &rest, (right - x).max(0.0)));
+    }
+    let mut last = Rect::NOTHING;
+    for (i, line) in lines.iter().enumerate() {
+        last = text_at(
+            p,
+            bold.clone(),
+            x,
+            rc.top() + 23.0 + BANNER_LINE * i as f32,
+            line,
+            c.text,
+        );
+    }
+    // Cut with "...": whole on hover, as every cut text.
+    if cut {
+        full_on_hover(ui, last, ("status-banner", rc.min.y as i32), title);
+    }
+    if sub.is_empty() {
+        return 0;
+    }
+    let extra = BANNER_LINE * (lines.len().max(1) - 1) as f32;
+    paragraph(
+        p,
+        x,
+        rc.top() + 41.0 + extra,
+        sub,
+        c.text,
+        right,
+        BANNER_LINE,
+    )
+}
+
+/// A [`status_banner`]'s text: its line height, where it starts from the banner's leading edge
+/// (after the 12 + 17 + 10 of the icon) and its room before the trailing edge.
+pub const BANNER_LINE: f32 = 17.0;
+pub const BANNER_TEXT_X: f32 = 39.0;
+pub const BANNER_TEXT_END: f32 = 12.0;
+
+/// How many title lines a banner `height` tall has room for above a sub of `sub_lines` lines
+/// (at least one).
+fn banner_title_room(height: f32, sub_lines: usize) -> usize {
+    let spare = height - status_banner_height(sub_lines);
+    1 + (spare / BANNER_LINE + 0.01).floor().max(0.0) as usize
+}
+
+/// The lines a [`status_banner`] `width` wide wraps its `title` and its `sub` into (none for an
+/// empty one), for [`status_banner_height_for`].
+pub fn status_banner_lines(p: &Painter, width: f32, title: &str, sub: &str) -> (usize, usize) {
+    let room = (width - BANNER_TEXT_X - BANNER_TEXT_END).max(1.0);
+    let title_lines = if title.trim().is_empty() {
+        0
+    } else {
+        wrap_lines_font(p, tahoma_bold(), title, room).len()
+    };
+    let sub_lines = if sub.is_empty() {
+        0
+    } else {
+        wrap_lines(p, sub, room).len()
+    };
+    (title_lines, sub_lines)
+}
+
+/// How tall a [`status_banner`] is whose `sub` takes `lines` lines (none: a title alone).
+pub fn status_banner_height(lines: usize) -> f32 {
+    if lines == 0 {
+        37.0
+    } else {
+        37.0 + BANNER_LINE * lines as f32 + 2.0
+    }
+}
+
+/// [`status_banner_height`] for a title of `title_lines` lines; no title (0): the sub's lines in
+/// the title's place.
+pub fn status_banner_height_for(title_lines: usize, sub_lines: usize) -> f32 {
+    if title_lines == 0 {
+        return status_banner_height_for(sub_lines.max(1), 0);
+    }
+    status_banner_height(sub_lines) + BANNER_LINE * (title_lines - 1) as f32
+}
+
 /// A push button in the current theme (dark: IDM's dark buttons; light: Windows 11's), its
 /// (translated) `label` with "&" before the access letter: the letter is underlined and
 /// Alt+letter presses it. Hot and pressed as Windows 11 draws them: a pressed button's label
 /// dims and its darker bottom edge flattens. `default_focus`: the dialog's default button, whose
 /// focus rectangle shows while no other control has the keyboard focus; any control with the
-/// focus shows it.
+/// focus shows it. `icon`: Graphite's icon for that need before the label ([`icon_label_button`]).
+/// `press`: whether a pointer press gives it the keys ([`PressFocus`]).
 fn button_face(
     ui: &mut Ui,
     rc: Rect,
     label: &str,
     kind: ButtonKind,
     default_focus: bool,
+    icon: Option<&str>,
+    press: PressFocus,
 ) -> Response {
     let enabled = kind != ButtonKind::Disabled;
     let sense = if enabled {
@@ -3654,7 +4427,16 @@ fn button_face(
         enabled,
         None,
     );
-    focus_on_press(&resp);
+    match press {
+        PressFocus::Take => focus_on_press(&resp),
+        // A pointer's click (not Enter, Space or a screen reader's, egui's fake click) gives
+        // up a focus Tab gave it.
+        PressFocus::Leave => {
+            if resp.flags.contains(egui::response::Flags::CLICKED) && resp.has_focus() {
+                resp.surrender_focus();
+            }
+        }
+    }
     // A focused button answers Enter itself (egui clicks it): the dialog's default button,
     // read after it, doesn't run as well.
     if resp.has_focus() {
@@ -3669,11 +4451,45 @@ fn button_face(
         Some((before, after)) if !after.is_empty() => (format!("{before}{after}"), Some(before)),
         _ => (label.to_owned(), None),
     };
+    // An icon takes its side and a gap of the label's room; the pair is centred.
+    let icon_room = match icon {
+        // An icon alone ([`icon_only_button`]) is centred without a gap after it.
+        Some(_) if label.is_empty() => BUTTON_ICON,
+        Some(_) => BUTTON_ICON + BUTTON_ICON_GAP,
+        None => 0.0,
+    };
+    let label_room = Rect::from_min_max(pos2(rc.left() + icon_room, rc.top()), rc.max);
     // A translation wider than the button ends in "..." and shows whole on hover (UI rule).
-    let (shown, cut) = fit_label(p, &shown, rc);
+    let (shown, cut) = fit_label(p, &shown, label_room);
     let mnemonic = mnemonic.filter(|_| !cut);
     let w = text_width(p, &shown);
-    let x = (rc.center().x - w / 2.0).round();
+    let pair = (rc.center().x - (w + icon_room) / 2.0).round();
+    // The icon before the label: at its left, at its right in a right-to-left interface.
+    let (x, icon_x) = if rtl() {
+        (pair, pair + w + BUTTON_ICON_GAP)
+    } else {
+        (pair + icon_room, pair)
+    };
+    if let Some(need) = icon {
+        let glyph = Rect::from_min_size(
+            pos2(icon_x, (rc.center().y - BUTTON_ICON / 2.0).round()),
+            vec2(BUTTON_ICON, BUTTON_ICON),
+        );
+        let px = BUTTON_ICON * ui.ctx().pixels_per_point();
+        if let Some((src, tint)) = crate::themeicons::graphite(need, px, face.text, enabled) {
+            let img = egui::Image::new(src);
+            if let Ok(egui::load::TexturePoll::Ready { texture }) =
+                img.load_for_size(ui.ctx(), glyph.size())
+            {
+                p.image(
+                    texture.id,
+                    glyph,
+                    Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)),
+                    tint,
+                );
+            }
+        }
+    }
     // "..." sits on the baseline (no capitals above it): the dots themselves centred.
     let baseline = if shown.trim() == "..." {
         rc.top() + (rc.height() / 2.0).round() + 1.0
@@ -3712,7 +4528,7 @@ fn button_face(
 }
 
 /// A push button's face, edge and bottom line in the theme's button style (`palette::ButtonLook`):
-/// flat (Windows 11, KDE), or shaded toward the theme's `gloss` (Luna, Aero, Aqua), as `shape`
+/// flat (Windows 11), or Graphite's (an accent button shaded, its glow under it), as `shape`
 /// says it is used. Every button and every part drawn as one comes here. Its corners' radius.
 fn paint_button(
     p: &Painter,
@@ -3726,67 +4542,53 @@ fn paint_button(
     let c = crate::theme::colors();
     let m = crate::theme::metrics();
     let look = crate::theme::current().controls.button;
-    let part = shape != Shape::Push;
-    let radius = match look {
-        _ if shape == Shape::DropDown => control_radius(),
-        _ if part => control_radius().min((rc.height() / 3.0).floor()),
-        ButtonLook::Fluent | ButtonLook::Breeze => control_radius(),
-        ButtonLook::Luna | ButtonLook::Aero => m.button_radius,
-        // Mac OS X's push buttons are round at the ends.
-        ButtonLook::Aqua => (rc.height() / 2.0).floor(),
+    let radius = match shape {
+        Shape::Small => control_radius().min((rc.height() / 3.0).floor()),
+        Shape::Push | Shape::DropDown => control_radius(),
     };
-    let Some(shine) = Shine::of_button(look) else {
+    // Graphite: an accent (filled) button's glow under it, its face at rest shaded from
+    // `button.accent.top` down (the mock's `.btn.primary`); flat under the pointer, pressed.
+    let accent = look == ButtonLook::Graphite && kind == ButtonKind::Accent;
+    if accent && state != State::Disabled {
+        // The mock's `0 6px 18px -8px`: narrower than the face and 6 lower, so it shows
+        // only under the button.
+        glow(p, rc.shrink2(vec2(8.0, 0.0)), radius, 6, 0, 12);
+    }
+    let top = c.button_accent_top;
+    if accent && state == State::Normal && top.a() > 0 {
+        fill_shaded(p, rc, radius, &[(0.0, top), (1.0, face.fill)]);
+    } else {
         p.rect_filled(rc, radius, face.fill);
-        p.rect_stroke(
-            rc,
-            radius,
-            Stroke::new(m.border, face.border),
-            StrokeKind::Inside,
-        );
-        // The bottom edge: a push button's and a drop-down's 3 points in from its ends, a small
-        // part's from its corners (none on one too low for it).
-        if shape != Shape::Small || rc.height() >= 14.0 {
-            let inset = if shape == Shape::Small { radius } else { 3.0 };
-            hline(
-                p,
-                rc.left() + inset,
-                rc.right() - inset - 1.0,
-                rc.bottom() - 1.0,
-                face.bottom,
-            );
-        }
-        return radius;
-    };
-    fill_shaded(p, rc, radius, &shine.stops(face.fill, c.gloss));
-    // Windows XP: a glow inside the edge, orange under the pointer, blue on the default button
-    // (its own border's colour; the edge itself stays dark).
-    let mut border = face.border;
-    if look == ButtonLook::Luna && state != State::Disabled {
-        let glow = match (state, kind) {
-            (State::Hot, _) => Some(c.button_glow),
-            (State::Pressed, _) => None,
-            (_, ButtonKind::Default) => {
-                border = c.button_border;
-                Some(face.border)
-            }
-            _ => None,
-        };
-        if let Some(glow) = glow.filter(|g| g.a() > 0) {
-            p.rect_stroke(
-                rc.shrink(m.border),
-                (radius - m.border).max(0.0),
-                Stroke::new(2.0, glow),
-                StrokeKind::Inside,
-            );
-        }
     }
     p.rect_stroke(
         rc,
         radius,
-        Stroke::new(m.border, border),
+        Stroke::new(m.border, face.border),
         StrokeKind::Inside,
     );
+    // The bottom edge, on the straight part between the corners (none on a small part too
+    // low for it).
+    if shape != Shape::Small || rc.height() >= 14.0 {
+        let inset = bottom_inset(shape, radius);
+        hline(
+            p,
+            rc.left() + inset,
+            rc.right() - inset - 1.0,
+            rc.bottom() - 1.0,
+            face.bottom,
+        );
+    }
     radius
+}
+
+/// Where a flat button's bottom line starts and ends, in from its sides: past the corners'
+/// curve (a fixed 3 stuck out of Graphite's 8-point corners), never nearer than 3 (Windows 11).
+fn bottom_inset(shape: Shape, radius: f32) -> f32 {
+    if shape == Shape::Small {
+        radius
+    } else {
+        radius.max(3.0)
+    }
 }
 
 /// What a face drawn by [`paint_button`] is: a push button, a small button-like part (a spin
@@ -3812,23 +4614,37 @@ struct Face {
 /// A button's colours for `kind` in `state`, from `c` (a theme's variant). The states are
 /// decided here, once for every button: the pressed one flattens its bottom edge.
 fn button_colors(kind: ButtonKind, state: State, c: &crate::palette::Palette) -> Face {
-    button_colors_in(kind, state, c, crate::theme::current().controls.button)
-}
-
-/// [`button_colors`] in the button style `look`.
-fn button_colors_in(
-    kind: ButtonKind,
-    state: State,
-    c: &crate::palette::Palette,
-    look: crate::palette::ButtonLook,
-) -> Face {
     let pressed = state == State::Pressed;
-    // Mac OS X: the default button is the accent's gel, its edge a shade darker.
-    if look == crate::palette::ButtonLook::Aqua && kind == ButtonKind::Default {
-        let face = button_colors_in(ButtonKind::Accent, state, c, look);
+    if kind == ButtonKind::Danger {
+        // `button.danger` filled, a shade lighter under the pointer and darker pressed.
+        let fill = match state {
+            State::Pressed => crate::derive::shade(c.button_danger, -0.12),
+            State::Hot => crate::derive::shade(c.button_danger, 0.08),
+            _ => c.button_danger,
+        };
         return Face {
-            border: crate::derive::shade(face.fill, -0.12),
-            ..face
+            fill,
+            border: fill,
+            bottom: fill,
+            text: c.button_danger_text,
+        };
+    }
+    if kind == ButtonKind::Ghost {
+        // No face at rest: the window shows through; a normal button's face under the pointer.
+        let (fill, border) = match state {
+            State::Pressed => (c.button_pressed, c.button_border),
+            State::Hot => (c.button_hot, c.button_border),
+            _ => (Color32::TRANSPARENT, Color32::TRANSPARENT),
+        };
+        return Face {
+            fill,
+            border,
+            bottom: border,
+            text: match state {
+                State::Disabled => c.text_disabled,
+                State::Pressed => c.button_text_pressed,
+                _ => c.button_text,
+            },
         };
     }
     if kind == ButtonKind::Accent {
@@ -3853,21 +4669,12 @@ fn button_colors_in(
     // the default button outlined in the accent.
     let (border, bottom) = match kind {
         ButtonKind::Normal => (c.button_border, c.button_bottom),
-        ButtonKind::Default | ButtonKind::Accent => {
+        ButtonKind::Default | ButtonKind::Accent | ButtonKind::Danger => {
             (c.button_default_border, c.button_default_bottom)
         }
-        ButtonKind::Disabled => (c.button_disabled_border, c.button_disabled_border),
-    };
-    // KDE and Windows 7: the edge in the accent under the pointer and pressed (its face tinted,
-    // by the theme's colours).
-    let breeze = matches!(
-        look,
-        crate::palette::ButtonLook::Breeze | crate::palette::ButtonLook::Aero
-    );
-    let (border, bottom) = if breeze && matches!(state, State::Hot | State::Pressed) {
-        (c.accent, c.accent)
-    } else {
-        (border, bottom)
+        ButtonKind::Disabled | ButtonKind::Ghost => {
+            (c.button_disabled_border, c.button_disabled_border)
+        }
     };
     let face = Face {
         fill: match state {
@@ -4140,181 +4947,7 @@ pub fn row_check(
     resp.clicked()
 }
 
-/// An era theme's check box (or, `round`, radio button) in `rc` (13 × 13), `on` when checked:
-/// Windows XP's, Windows 7's or Mac OS X's (`palette::CheckLook`). False, drawing nothing, for
-/// the other looks.
-fn era_check(p: &Painter, rc: Rect, on: bool, state: State, round: bool) -> bool {
-    use crate::derive::mix;
-    use crate::palette::CheckLook;
-    let look = crate::theme::current().controls.check;
-    if !matches!(look, CheckLook::Luna | CheckLook::Aero | CheckLook::Aqua) {
-        return false;
-    }
-    let c = crate::theme::colors();
-    let m = crate::theme::metrics();
-    let radius = if round { 6.5 } else { m.check_radius };
-    let disabled = state == State::Disabled;
-    let (fill_c, edge) = fluent_box(state);
-    let fill_c = fill_c.unwrap_or(c.field_disabled);
-    let stroke = |rc: Rect, r: f32, ink: Color32| {
-        p.rect_stroke(rc, r, Stroke::new(m.border, ink), StrokeKind::Inside);
-    };
-    // The mark: a tick, or a radio's dot (shaded as the theme's gloss shades).
-    let mark = |ink: Color32, width: f32| {
-        if round {
-            let dot = Rect::from_center_size(rc.center(), vec2(5.0, 5.0));
-            fill_shaded(p, dot, 2.5, &[(0.0, mix(ink, c.gloss, 0.45)), (1.0, ink)]);
-        } else {
-            p.line(
-                vec![
-                    pos2(rc.left() + 3.0, rc.top() + 6.0),
-                    pos2(rc.left() + 5.5, rc.top() + 8.5),
-                    pos2(rc.left() + 10.0, rc.top() + 3.5),
-                ],
-                Stroke::new(width, ink),
-            );
-        }
-    };
-    match look {
-        // Windows XP: a dark edge, the inside shaded from its top, an orange glow inside under
-        // the pointer; a thick tick (a dot) in the checked colour.
-        CheckLook::Luna => {
-            let inner = rc.shrink(m.border);
-            fill_shaded(
-                p,
-                inner,
-                (radius - m.border).max(0.0),
-                &[(0.0, mix(fill_c, edge, 0.18)), (1.0, fill_c)],
-            );
-            if state == State::Hot && c.button_glow.a() > 0 {
-                stroke(inner, (radius - 1.0).max(0.0), c.button_glow);
-                stroke(inner.shrink(1.0), (radius - 2.0).max(0.0), c.button_glow);
-            }
-            stroke(rc, radius, edge);
-            if on {
-                let ink = if disabled {
-                    c.check_on_disabled
-                } else {
-                    fluent_accent(state)
-                };
-                mark(ink, 2.5);
-            }
-        }
-        // Windows 7: a quiet edge (the accent's under the pointer), a white margin and a
-        // shaded square inside; the tick in the mark's colour.
-        CheckLook::Aero => {
-            p.rect_filled(rc, radius, c.field);
-            stroke(rc, radius, edge);
-            if !round || !on {
-                let inner = rc.shrink(3.0);
-                fill_shaded(
-                    p,
-                    inner,
-                    if round { 3.5 } else { 0.0 },
-                    &[(0.0, mix(fill_c, edge, 0.35)), (1.0, fill_c)],
-                );
-            }
-            if on {
-                let ink = if disabled {
-                    c.check_on_disabled
-                } else if round {
-                    fluent_accent(state)
-                } else {
-                    c.check_mark
-                };
-                mark(ink, 2.0);
-            }
-        }
-        // Mac OS X: a glossy box, round corners; checked, the accent's gel and a dark mark.
-        CheckLook::Aqua => {
-            let face = if on && !disabled {
-                fluent_accent(state)
-            } else {
-                fill_c
-            };
-            fill_shaded(p, rc, radius, &Shine::Aqua.stops(face, c.gloss));
-            let edge = if on && !disabled {
-                crate::derive::shade(face, -0.15)
-            } else {
-                edge
-            };
-            stroke(rc, radius, edge);
-            if on {
-                let ink = if disabled {
-                    c.check_on_disabled
-                } else {
-                    c.check_mark
-                };
-                if round {
-                    p.circle_filled(rc.center(), 2.5, ink);
-                } else {
-                    mark(ink, 2.0);
-                }
-            }
-        }
-        _ => {}
-    }
-    true
-}
-
 pub fn check_box_glyph(p: &Painter, rc: Rect, checked: bool, state: State) {
-    if era_check(p, rc, checked, state, false) {
-        return;
-    }
-    // KDE: the box's edge in the accent under the pointer; checked, the accent's edge around
-    // its inside tinted with it, a tick in the text's colour.
-    if crate::theme::current().controls.check == crate::palette::CheckLook::Breeze {
-        let m = crate::theme::metrics();
-        let (fill_c, border) = breeze_box(state, checked);
-        if let Some(f) = fill_c {
-            p.rect_filled(rc, m.check_radius, f);
-        }
-        p.rect_stroke(
-            rc,
-            m.check_radius,
-            Stroke::new(m.border, border),
-            StrokeKind::Inside,
-        );
-        if checked {
-            p.line(
-                vec![
-                    pos2(rc.left() + 3.0, rc.top() + 6.5),
-                    pos2(rc.left() + 5.5, rc.top() + 9.0),
-                    pos2(rc.left() + 10.0, rc.top() + 4.0),
-                ],
-                Stroke::new(2.0, breeze_mark(state)),
-            );
-        }
-        return;
-    }
-    // GNOME: a 2-point border at rest (its inside tinted under the pointer), the accent filled
-    // with a light tick, 2 points wide, when checked.
-    if crate::theme::current().controls.check == crate::palette::CheckLook::Adwaita {
-        let m = crate::theme::metrics();
-        if checked {
-            p.rect_filled(rc, m.check_radius, fluent_accent(state));
-            p.line(
-                vec![
-                    pos2(rc.left() + 3.0, rc.top() + 6.5),
-                    pos2(rc.left() + 5.5, rc.top() + 9.0),
-                    pos2(rc.left() + 10.0, rc.top() + 4.0),
-                ],
-                Stroke::new(2.0, fluent_mark()),
-            );
-        } else {
-            let (fill_c, border) = fluent_box(state);
-            if let Some(f) = fill_c {
-                p.rect_filled(rc, m.check_radius, f);
-            }
-            p.rect_stroke(
-                rc,
-                m.check_radius,
-                Stroke::new(2.0, border),
-                StrokeKind::Inside,
-            );
-        }
-        return;
-    }
     // Windows 8: the box keeps its inside and border (the border in the accent under the
     // pointer), a tick in the accent.
     if crate::theme::current().controls.check == crate::palette::CheckLook::Square {
@@ -4439,35 +5072,6 @@ fn fluent_mark() -> Color32 {
     crate::theme::colors().check_mark
 }
 
-/// A KDE check box's or radio's inside (none when disabled) and edge: the accent's edge under
-/// the pointer or pressed, and when checked, around an inside tinted with the accent.
-fn breeze_box(state: State, checked: bool) -> (Option<Color32>, Color32) {
-    let c = crate::theme::colors();
-    let (fill_c, border) = fluent_box(state);
-    let edge = match state {
-        State::Disabled if checked => c.check_on_disabled,
-        State::Disabled => border,
-        _ if checked => fluent_accent(state),
-        State::Hot | State::Pressed => c.check_on_hot,
-        _ => border,
-    };
-    let inside = match (checked, fill_c) {
-        (true, Some(f)) => Some(crate::derive::mix(f, fluent_accent(state), 0.3)),
-        (_, f) => f,
-    };
-    (inside, edge)
-}
-
-/// The tick or dot on a checked KDE box or radio: the text's colour, greyed when disabled.
-fn breeze_mark(state: State) -> Color32 {
-    let c = crate::theme::colors();
-    if state == State::Disabled {
-        c.check_on_disabled
-    } else {
-        c.check_mark
-    }
-}
-
 /// An unchecked Windows 11 check box's or radio's fill (none when disabled) and border in
 /// `state`: darker fill under the pointer, darker still and a fainter border while pressed.
 fn fluent_box(state: State) -> (Option<Color32>, Color32) {
@@ -4536,26 +5140,7 @@ pub fn radio_light_until(
     );
     let c = glyph + vec2(6.5, 6.5);
     let state = State::of(&resp, enabled);
-    // The era themes: their own round radios.
-    if era_check(
-        &p,
-        Rect::from_center_size(c, vec2(13.0, 13.0)),
-        selected,
-        state,
-        true,
-    ) {
-        // Drawn.
-    } else if crate::theme::current().controls.check == crate::palette::CheckLook::Breeze {
-        // KDE: as its check box, round; the dot in the text's colour.
-        let (fill_c, edge) = breeze_box(state, selected);
-        if let Some(f) = fill_c {
-            p.circle_filled(c, 6.0, f);
-        }
-        p.circle_stroke(c, 6.0, Stroke::new(1.0, edge));
-        if selected {
-            p.circle_filled(c, 2.5, breeze_mark(state));
-        }
-    } else if selected {
+    if selected {
         p.circle_filled(c, 6.5, fluent_accent(state));
         // Windows 11's dot grows under the pointer and shrinks while pressed.
         let dot = match state {
@@ -4569,15 +5154,9 @@ pub fn radio_light_until(
         if let Some(f) = fill_c {
             p.circle_filled(c, 6.0, f);
         }
-        // GNOME's ring is two points wide, as its check boxes' edge.
-        let adwaita = crate::theme::current().controls.check == crate::palette::CheckLook::Adwaita;
-        if adwaita {
-            p.circle_stroke(c, 5.5, Stroke::new(2.0, ring));
-        } else {
-            p.circle_stroke(c, 6.0, Stroke::new(1.0, ring));
-        }
+        p.circle_stroke(c, 6.0, Stroke::new(1.0, ring));
         // Pressed, Windows 11 shows the dot to come.
-        if state == State::Pressed && !adwaita {
+        if state == State::Pressed {
             p.circle_filled(c, 2.1, ring);
         }
     }
@@ -4730,10 +5309,7 @@ pub fn opener_click(ui: &Ui, mut resp: Response) -> Response {
 /// `page` rows, a trackpad its own travel. A Ctrl wheel (zoom) or a Shift wheel (sideways)
 /// isn't counted.
 pub fn wheel_rows(ui: &Ui, row_h: f32, page: f32) -> f32 {
-    #[cfg(windows)]
     let lines = crate::win32::wheel_lines();
-    #[cfg(unix)]
-    let lines = crate::unix::wheel_lines();
     let notch = lines.unwrap_or(page);
     let rows = ui.input(|i| {
         i.events
@@ -4856,15 +5432,25 @@ pub fn enter_is_not_a_click(ui: &Ui, mut resp: Response) -> Response {
 /// moves the focus to the next control on an arrow and drops it on Escape. Call each frame
 /// with the control's response.
 pub fn keep_keys(ui: &Ui, resp: &Response, horizontal: bool, vertical: bool, escape: bool) {
+    lock_keys(ui, resp, false, horizontal, vertical, escape);
+}
+
+/// [`keep_keys`] that keeps Tab too: a control in a window that moves the keys on Tab itself
+/// (the main window's Tab rotation), so egui's own focus move never runs as well.
+pub fn keep_keys_and_tab(ui: &Ui, resp: &Response, horizontal: bool, vertical: bool, escape: bool) {
+    lock_keys(ui, resp, true, horizontal, vertical, escape);
+}
+
+fn lock_keys(ui: &Ui, resp: &Response, tab: bool, horizontal: bool, vertical: bool, escape: bool) {
     if resp.has_focus() {
         ui.memory_mut(|m| {
             m.set_focus_lock_filter(
                 resp.id,
                 egui::EventFilter {
+                    tab,
                     horizontal_arrows: horizontal,
                     vertical_arrows: vertical,
                     escape,
-                    ..Default::default()
                 },
             )
         });
@@ -4931,10 +5517,11 @@ pub fn tab_keys(ui: &Ui, n: usize, current: usize) -> Option<usize> {
     let (next, prev) = ui.input_mut(|i| {
         let ctrl = egui::Modifiers::COMMAND;
         let ctrl_shift = egui::Modifiers::COMMAND | egui::Modifiers::SHIFT;
-        (
-            i.consume_key(ctrl, egui::Key::Tab) || i.consume_key(ctrl, egui::Key::PageDown),
-            i.consume_key(ctrl_shift, egui::Key::Tab) || i.consume_key(ctrl, egui::Key::PageUp),
-        )
+        // Ctrl+Shift+Tab first: `consume_key` ignores Shift, so Ctrl+Tab's would take it too.
+        let prev =
+            i.consume_key(ctrl_shift, egui::Key::Tab) || i.consume_key(ctrl, egui::Key::PageUp);
+        let next = i.consume_key(ctrl, egui::Key::Tab) || i.consume_key(ctrl, egui::Key::PageDown);
+        (next, prev)
     });
     match (next, prev) {
         (true, _) => Some((current + 1) % n),
@@ -4993,7 +5580,8 @@ pub fn px_l(p: &Painter, x: f32, y: f32, c: Color32) {
 }
 
 /// One tab of a light tab control: its x range (inclusive, from the client origin) when
-/// selected and when not (Windows draws the selected tab wider).
+/// selected and when not (Windows draws the selected tab wider). [`tabs_light`] sizes the tabs
+/// to their labels from the first one's place: only the first tab's start is read.
 pub struct LightTab {
     pub label: &'static str,
     pub sel: (f32, f32),
@@ -5086,13 +5674,11 @@ pub fn tabs_light(
     hline(&p, l, rr + 2.0, b + 1.0, shadow);
     // (selected range, unselected range, label x, label shown), from the client origin.
     type Placed = ((f32, f32), (f32, f32), f32, String);
-    let placed: Vec<Placed> = if tabs.iter().all(|t| crate::i18n::t(t.label) == t.label) {
-        tabs.iter()
-            .map(|t| (t.sel, t.unsel, t.sel.0 + 8.0, t.label.to_owned()))
-            .collect()
-    } else {
-        // A translation: tabs sized to their labels from the first tab's place, within the pane
-        // (the selected one 2 px wider each side).
+    // Tabs sized to their labels in the font they are drawn in, from the first tab's place,
+    // within the pane (the selected one 2 px wider each side). IDM's fixed places, kept for
+    // English, fitted Tahoma: Graphite's wider labels ran past their tabs' ends (Scheduler's
+    // "Schedule" touching the next tab).
+    let placed: Vec<Placed> = {
         let labels: Vec<&str> = tabs.iter().map(|t| crate::i18n::t(t.label)).collect();
         let (start, left) = tabs.first().map_or((0.0, 0.0), |t| (t.unsel.0, t.sel.0));
         tab_row(&p, &labels, start, left + rc.width() - 3.0 - 2.0, 2.0, 8.0)
@@ -5336,7 +5922,8 @@ pub fn combo_light(
         &p,
         tahoma(),
         lead(rc) + 5.0 * fwd(),
-        rc.top() + 13.0,
+        // Centred at any height (the kit's 30-px fields); `top + 13` at 21 px, as before.
+        baseline_in(rc.top(), rc.height()),
         &label,
         color,
     );
@@ -5349,7 +5936,9 @@ pub fn combo_light(
     } else {
         rc.right() - 13.0
     };
-    chevron_light(&p, pos2(chevron_x, rc.top() + 8.0), enabled);
+    // Centred too: `top + 8` at 21 px.
+    let chevron_y = rc.top() + ((rc.height() - 5.0) / 2.0).floor();
+    chevron_light(&p, pos2(chevron_x, chevron_y), enabled);
     // Over the face (drawn before it, the face hid it).
     show_focus(ui, &resp, rc.shrink(3.0));
     if open {
@@ -5456,6 +6045,17 @@ pub fn spin_arrows(ui: &mut Ui, rc: Rect, enabled: bool, id: &str) -> i32 {
     step
 }
 
+/// A square in the theme's `tile` colour holding the icon set's `need` in `tint`, half the
+/// tile's size: a dialog's icon (40, radius 8), an empty list's or About's (56, radius 14).
+/// The tint applies to one-colour sets; a colour set draws its own colours. False when the
+/// theme has no icon set or its set lacks `need` (the tile is drawn, empty).
+pub fn icon_tile(ui: &Ui, rc: Rect, need: &str, tint: Color32, radius: f32) -> bool {
+    let painter = ui.painter();
+    painter.rect_filled(rc, radius, crate::theme::colors().tile);
+    let glyph = Rect::from_center_size(rc.center(), rc.size() * 0.5);
+    crate::themeicons::paint_in(ui, painter, need, glyph, tint, true)
+}
+
 /// A flat 19 × 21 button with a 16 × 16 icon (the Scheduler's move up / down / remove), its
 /// `tip` (English, translated here) on hover.
 pub fn icon_button_light(ui: &mut Ui, rc: Rect, id: &str, enabled: bool, tip: &str) -> Response {
@@ -5480,34 +6080,13 @@ pub fn icon_button_light(ui: &mut Ui, rc: Rect, id: &str, enabled: bool, tip: &s
     resp.on_hover_text(crate::i18n::t(tip))
 }
 
-/// The flat icon button with our "to the notification area" glyph, drawn in the text ink: hides
-/// a window to the tray (#63) where the system draws the title bar (Linux, macOS). `tip` is
-/// English, translated here.
-#[cfg_attr(windows, allow(dead_code))]
-pub fn to_tray_button(ui: &mut Ui, rc: Rect, id: &str, tip: &str) -> Response {
-    let resp = icon_button_light(ui, rc, id, true, tip);
-    to_tray_glyph(
-        ui.painter(),
-        rc.center().round(),
-        Stroke::new(1.0, LIGHT_TEXT()),
-        rtl(),
-    );
-    resp
-}
-
 /// Our "minimize it away to the notification area" glyph (#63; our own drawing): Minimize's dash
 /// at its height, shortened to 6 of its 10 px on the start side, and from its end a 45° arrow
 /// (shaft about 5.7 px, open head) down towards the screen's corner where the tray is. No
 /// vertical arrow and no tray box, so it reads neither as "download" nor as "restore". Right to
 /// left it is mirrored, pointing down to the left: Windows in a right-to-left language mirrors its
 /// taskbar, the notification area at the bottom left, and our caption mirrors with it. Centred on
-/// `c` in `ink`. The title bar's hide button, and the tab-row button where the system draws the
-/// title bar.
-fn to_tray_glyph(p: &Painter, c: Pos2, ink: Stroke, rtl: bool) {
-    to_tray_glyph_sized(p, c, ink, rtl, 1.0);
-}
-
-/// [`to_tray_glyph`] `size` times as large.
+/// `c` in `ink`, `size` times as large. The title bar's hide button.
 fn to_tray_glyph_sized(p: &Painter, c: Pos2, ink: Stroke, rtl: bool, size: f32) {
     let s = if rtl { -size } else { size };
     let at = |x: f32, y: f32| c + vec2(s * x, size * y);
@@ -5522,12 +6101,9 @@ fn to_tray_glyph_sized(p: &Painter, c: Pos2, ink: Stroke, rtl: bool, size: f32) 
     ));
 }
 
-/// A title bar we draw ourselves, with Windows 11's caption buttons (#63). Used on Windows,
-/// where the progress window's frame is ours (win32::progress_frame); Linux and macOS keep the
-/// system's decorations, whose title bars take no buttons of ours (and Wayland places them
-/// itself), so the hide button sits in the tab row there.
+/// A title bar we draw ourselves, with Windows 11's caption buttons (#63), where the progress
+/// window's frame is ours (win32::progress_frame).
 pub mod caption {
-    #![cfg_attr(not(windows), allow(dead_code))]
     use super::*;
 
     crate::theme::themed! {
@@ -5538,8 +6114,6 @@ pub mod caption {
         /// Windows Terminal ships them (#0FFFFFFF / #09000000, #0AFFFFFF / #06000000).
         pub CAPTION_HOVER => caption_hot;
         pub CAPTION_PRESSED => caption_pressed;
-        /// A button at rest, where the style shows one (GNOME's round buttons).
-        CAPTION_BUTTON => caption_button;
         /// Close's hover red, and its glyph on it.
         CLOSE_HOVER => caption_close;
         CLOSE_INK => caption_close_text;
@@ -5561,108 +6135,10 @@ pub mod caption {
     /// Where the window's icon ends: the system menu's place in the title bar.
     pub const CAPTION_ICON_W: f32 = 32.0;
 
-    /// How the theme's title bar is laid out (`palette::CaptionLook`).
-    #[derive(Clone, Copy)]
-    struct Style {
-        /// One button's width (Close's its own: Windows 7's is wider), and the room after the
-        /// last one at the window's end.
-        button_w: f32,
-        close_w: f32,
-        end: f32,
-        /// GNOME's round buttons (a circle this wide, tinted at rest), else Windows' tiles the
-        /// bar's height.
-        circle: Option<f32>,
-        /// The window's icon at the start (the system menu's place).
-        icon: bool,
-        /// The title centred in the bar (else after the icon), and in bold.
-        centred: bool,
-        bold: bool,
-        /// A button under the pointer or pressed draws its glyph in the bar's colour (KDE).
-        invert: bool,
-        /// The era themes (#45): the bar and its buttons shaded in the era's way, each button
-        /// a tile of this size (a zero width: its place's) with a face of its own at rest, hung
-        /// from the bar's top (`hang`, Windows 7) or centred in it.
-        era: Option<Shine>,
-        tile: egui::Vec2,
-        hang: bool,
-    }
-
-    fn style() -> Style {
-        use crate::palette::CaptionLook;
-        let windows = Style {
-            button_w: CAPTION_BUTTON_W,
-            close_w: CAPTION_BUTTON_W,
-            end: 0.0,
-            circle: None,
-            icon: true,
-            centred: false,
-            bold: false,
-            invert: false,
-            era: None,
-            tile: egui::Vec2::ZERO,
-            hang: false,
-        };
-        match crate::theme::current().controls.caption {
-            CaptionLook::System => windows,
-            CaptionLook::Metro => Style {
-                centred: true,
-                ..windows
-            },
-            // libadwaita's header bar: 24-point round buttons 6 apart, no icon, a bold title.
-            CaptionLook::Adwaita => Style {
-                button_w: 30.0,
-                close_w: 30.0,
-                end: 4.0,
-                circle: Some(24.0),
-                icon: false,
-                centred: true,
-                bold: true,
-                ..windows
-            },
-            // KDE's Breeze: the icon, the title centred, 18-point round buttons shown only
-            // under the pointer, in the title's colour with the glyph in the bar's.
-            CaptionLook::Breeze => Style {
-                button_w: 26.0,
-                close_w: 26.0,
-                end: 4.0,
-                circle: Some(18.0),
-                centred: true,
-                invert: true,
-                ..windows
-            },
-            // Windows XP: the icon and a bold title, 21-point square buttons with a light edge.
-            CaptionLook::Luna => Style {
-                button_w: 23.0,
-                close_w: 23.0,
-                end: 5.0,
-                bold: true,
-                era: Some(Shine::Luna),
-                tile: vec2(21.0, 21.0),
-                ..windows
-            },
-            // Windows 7: the icon and the title, buttons 20 points high hung from the bar's
-            // top, side by side, Close wider.
-            CaptionLook::Aero => Style {
-                button_w: 27.0,
-                close_w: 46.0,
-                end: 6.0,
-                era: Some(Shine::Aero),
-                tile: vec2(0.0, 20.0),
-                hang: true,
-                ..windows
-            },
-            // Mac OS X: no icon, the title centred, round 15-point buttons.
-            CaptionLook::Aqua => Style {
-                button_w: 23.0,
-                close_w: 23.0,
-                end: 8.0,
-                icon: false,
-                centred: true,
-                era: Some(Shine::Aqua),
-                tile: vec2(15.0, 15.0),
-                ..windows
-            },
-        }
+    /// The title centred in the bar (Graphite's, `palette::CaptionLook::Graphite`), else after
+    /// the icon (the system's look).
+    fn centred() -> bool {
+        crate::theme::current().controls.caption == crate::palette::CaptionLook::Graphite
     }
 
     /// The bar's colour: the active one, or the theme's inactive one while the window isn't
@@ -5673,27 +6149,6 @@ pub mod caption {
             inactive
         } else {
             CAPTION_BG()
-        }
-    }
-
-    /// An era's bar, shaded from its top: XP's light edge on a deep colour, Windows 7's glassy
-    /// halves, Mac OS X's light grey falling to the bar's colour.
-    fn bar_stops(era: Shine, bar: Color32, g: Color32) -> Vec<(f32, Color32)> {
-        use crate::derive::{mix, shade};
-        match era {
-            Shine::Luna => vec![
-                (0.0, mix(bar, g, 0.45)),
-                (0.12, mix(bar, g, 0.12)),
-                (0.5, bar),
-                (1.0, shade(bar, -0.06)),
-            ],
-            Shine::Aero => vec![
-                (0.0, mix(bar, g, 0.45)),
-                (0.5, mix(bar, g, 0.2)),
-                (0.5, bar),
-                (1.0, mix(bar, g, 0.1)),
-            ],
-            Shine::Aqua => vec![(0.0, mix(bar, g, 0.6)), (1.0, bar)],
         }
     }
 
@@ -5814,7 +6269,7 @@ pub mod caption {
     /// accessibility tree there; only our own button (Hide) is exposed. Brave and VS Code have no
     /// such TitleBar only because Chromium's own provider replaces the window's; AccessKit's
     /// doesn't, and the system menu, Alt+Space and taskbar minimize need the styles kept.
-    const SYSTEM_SPEAKS: bool = cfg!(windows);
+    const SYSTEM_SPEAKS: bool = true;
 
     thread_local! {
         /// The next title bar's Maximize as the window's frame sees it (hot, pressed): where the
@@ -5851,7 +6306,9 @@ pub mod caption {
         };
         let resp = ui.interact(rc, widget_id(ui, ("caption-button", b.name())), sense);
         let name = crate::i18n::t(b.name());
-        if b == CaptionButton::ToTray || !SYSTEM_SPEAKS {
+        // Tab reaches it too (plan 09's keyboard pass): while it has the keys it is ours to
+        // speak, or a screen reader would say nothing there.
+        if b == CaptionButton::ToTray || !SYSTEM_SPEAKS || resp.has_focus() {
             expose(&resp, egui::Role::Button, name, enabled, None);
         } else {
             unspoken(ui, &resp);
@@ -5865,47 +6322,18 @@ pub mod caption {
         let hover = enabled && (resp.hovered() || frame_hot);
         let pressed = enabled && (resp.is_pointer_button_down_on() || frame_pressed);
         let close = b == CaptionButton::Close;
-        let st = style();
         let maximized = ui.ctx().input(|i| i.viewport().maximized) == Some(true);
-        if let Some(era) = st.era {
-            era_button(
-                ui,
-                &resp,
-                rc,
-                b,
-                era,
-                (hover, pressed, enabled, active),
-                maximized,
-            );
-            let clicked = resp.clicked();
-            if b == CaptionButton::ToTray {
-                resp.on_hover_text(name);
-            }
-            return clicked;
-        }
-        let circle = st.circle;
         let fill = match (pressed, hover, close) {
             (true, _, true) => Some(close_pressed()),
             (false, true, true) => Some(CLOSE_HOVER()),
             (true, _, false) => Some(CAPTION_PRESSED()),
             (false, true, false) => Some(CAPTION_HOVER()),
-            // GNOME's round buttons show at rest too.
-            _ if circle.is_some() && enabled => Some(CAPTION_BUTTON()),
             _ => None,
         };
         if let Some(f) = fill {
-            match circle {
-                Some(d) => {
-                    p.circle_filled(rc.center(), d / 2.0, f);
-                }
-                None => {
-                    p.rect_filled(rc, 0.0, f);
-                }
-            }
+            p.rect_filled(rc, 0.0, f);
         }
-        let ink = if st.invert && (hover || pressed) {
-            CAPTION_BG()
-        } else if close && pressed {
+        let ink = if close && pressed {
             CLOSE_INK().gamma_multiply(0.7)
         } else if close && hover {
             CLOSE_INK()
@@ -5915,11 +6343,7 @@ pub mod caption {
             CAPTION_INK()
         };
         b.glyph(ui, p, rc.center().round(), ink, maximized, 1.0, 1.0);
-        let ring = match circle {
-            Some(d) => Rect::from_center_size(rc.center(), vec2(d, d)),
-            None => rc.shrink(3.0),
-        };
-        show_focus(ui, &resp, ring);
+        show_focus(ui, &resp, rc.shrink(3.0));
         let clicked = resp.clicked();
         if b == CaptionButton::ToTray {
             resp.on_hover_text(name);
@@ -5927,117 +6351,29 @@ pub mod caption {
         clicked
     }
 
-    /// An era theme's caption button (#45) in its place `rc`: a shaded tile with an edge, its
-    /// own face at rest (Close red; Mac OS X's graphite until the pointer is on it), lighter
-    /// under the pointer and darker pressed, faded while greyed or the window inactive; the
-    /// glyph light on it (Windows 7's with a shadow), or Mac OS X's dark one shown only under
-    /// the pointer. There, our Hide button is a plain picture in the bar, as a toolbar's.
-    fn era_button(
-        ui: &Ui,
-        resp: &Response,
-        rc: Rect,
-        b: CaptionButton,
-        era: Shine,
-        (hover, pressed, enabled, active): (bool, bool, bool, bool),
-        maximized: bool,
-    ) {
-        use crate::derive::{mix, shade};
-        let p = ui.painter();
-        let c = crate::theme::colors();
-        let st = style();
-        let close = b == CaptionButton::Close;
-        let bar = bar_colour(active);
-        let at = rc.center().round();
-        if era == Shine::Aqua && b == CaptionButton::ToTray {
-            if hover || pressed {
-                let tint = if pressed {
-                    CAPTION_PRESSED()
-                } else {
-                    CAPTION_HOVER()
-                };
-                p.rect_filled(Rect::from_center_size(at, vec2(22.0, 22.0)), 4.0, tint);
+    /// A title bar's caption buttons from the window's end inwards, `from_end` after the last
+    /// one: `place` puts each (by its kind and how far from the end the row has come so far) on
+    /// screen. The button pressed, their rects, and how far the row reaches from the end. The
+    /// frame's word on Maximize ([`frame_maximize`]) holds for this bar only.
+    fn caption_row(
+        ui: &mut Ui,
+        buttons: &[(CaptionButton, bool)],
+        active: bool,
+        mut from_end: f32,
+        place: impl Fn(CaptionButton, f32) -> Rect,
+    ) -> (Option<CaptionButton>, Vec<Rect>, f32) {
+        let mut pressed = None;
+        let mut rects = Vec::with_capacity(buttons.len());
+        for (b, enabled) in buttons {
+            let rc = place(*b, from_end);
+            from_end += rc.width();
+            if caption_button(ui, rc, *b, *enabled, active) {
+                pressed = Some(*b);
             }
-            let ink = if enabled && active {
-                CAPTION_INK()
-            } else {
-                caption_ink_inactive()
-            };
-            b.glyph(ui, p, at, ink, maximized, 1.0, 1.0);
-            show_focus(ui, resp, Rect::from_center_size(at, vec2(22.0, 22.0)));
-            return;
+            rects.push(rc);
         }
-        let size = vec2(
-            if st.tile.x > 0.0 {
-                st.tile.x
-            } else {
-                rc.width()
-            },
-            st.tile.y,
-        );
-        let tile = if st.hang {
-            Rect::from_min_size(pos2(at.x - size.x / 2.0, rc.top()), size)
-        } else {
-            Rect::from_center_size(at, size)
-        };
-        let base = if close && (era != Shine::Aqua || hover || pressed) {
-            CLOSE_HOVER()
-        } else {
-            CAPTION_BUTTON()
-        };
-        let base = if pressed {
-            shade(base, -0.1)
-        } else if hover {
-            mix(base, c.gloss, 0.3)
-        } else {
-            base
-        };
-        let base = if enabled && active {
-            base
-        } else {
-            mix(base, bar, 0.55)
-        };
-        let (top, bottom) = match era {
-            Shine::Luna => (3.0, 3.0),
-            Shine::Aero => (0.0, 4.0),
-            Shine::Aqua => (size.y / 2.0, size.y / 2.0),
-        };
-        fill_shaded_corners(p, tile, top, bottom, &era.stops(base, c.gloss));
-        let edge = match era {
-            Shine::Luna => c.gloss.gamma_multiply(0.9),
-            Shine::Aero => shade(bar, -0.35),
-            Shine::Aqua => shade(base, -0.2),
-        };
-        let corners = egui::CornerRadius {
-            nw: top as u8,
-            ne: top as u8,
-            sw: bottom as u8,
-            se: bottom as u8,
-        };
-        p.rect_stroke(tile, corners, Stroke::new(1.0, edge), StrokeKind::Inside);
-        let (size, width) = match era {
-            Shine::Luna => (0.8, 2.0),
-            Shine::Aero => (0.9, 1.5),
-            Shine::Aqua => (0.55, 1.4),
-        };
-        let at = tile.center().round();
-        if era == Shine::Aqua {
-            // Mac OS X shows its buttons' glyphs only under the pointer.
-            if hover || pressed {
-                b.glyph(ui, p, at, CAPTION_INK(), maximized, size, width);
-            }
-        } else {
-            let ink = if enabled && active {
-                CLOSE_INK()
-            } else {
-                CLOSE_INK().gamma_multiply(0.7)
-            };
-            if era == Shine::Aero {
-                let shadow = Color32::from_black_alpha(110);
-                b.glyph(ui, p, at + vec2(1.0, 1.0), shadow, maximized, size, width);
-            }
-            b.glyph(ui, p, at, ink, maximized, size, width);
-        }
-        show_focus(ui, resp, tile);
+        FRAME_MAX.with(|c| c.set((false, false)));
+        (pressed, rects, from_end)
     }
 
     /// What a drawn title bar did: the button pressed, and where its buttons and its icon are (in
@@ -6047,9 +6383,94 @@ pub mod caption {
         pub buttons: Vec<Rect>,
         pub icon: Rect,
         /// The colour along the bar's top edge (the sizing frame above the main window's bar
-        /// takes it: win32::caption_colour). Only Windows draws title bars (elsewhere unread).
-        #[cfg_attr(not(windows), allow(dead_code))]
+        /// takes it: win32::caption_colour).
         pub top: Color32,
+        /// Where the title ends (English x, the leading edge's side): what the bar holds after
+        /// it starts there ([`main_bar`]'s menus).
+        pub title_end: f32,
+        /// Where the caption buttons start (English x).
+        pub buttons_start: f32,
+    }
+
+    /// Graphite's main-window title bar (plan 05b, DESIGN.md): `rect` 36 high with a rule
+    /// along its bottom, the window's icon 12 from the start, the title after it at its start
+    /// (not centred: the menus follow it), `reserve` kept free after the title for them, the
+    /// caption buttons 42 × 35 from the window's end. The rest as [`title_bar`].
+    pub fn main_bar(
+        ui: &mut Ui,
+        rect: Rect,
+        title: &str,
+        buttons: &[(CaptionButton, bool)],
+        reserve: f32,
+    ) -> TitleBar {
+        static ALWAYS_ACTIVE: std::sync::LazyLock<bool> =
+            std::sync::LazyLock::new(|| std::env::var_os("MDM_TEST_ACTIVE").is_some());
+        let active = *ALWAYS_ACTIVE || ui.ctx().input(|i| i.viewport().focused) != Some(false);
+        let p = ui.painter().clone();
+        let bar = bar_colour(active);
+        p.rect_filled(rect, 0.0, bar);
+        let c = crate::theme::colors();
+        // The rule under the bar (the mockup's `line`).
+        p.rect_filled(
+            Rect::from_min_max(pos2(rect.left(), rect.bottom() - 1.0), rect.max),
+            0.0,
+            c.menubar_line,
+        );
+        const BUTTON: egui::Vec2 = vec2(42.0, 35.0);
+        let (pressed, rects, from_end) = caption_row(ui, buttons, active, 0.0, |_, from_end| {
+            super::rect(Rect::from_min_size(
+                pos2(rect.right() - from_end - BUTTON.x, rect.top()),
+                BUTTON,
+            ))
+        });
+        let buttons_start = rect.right() - from_end;
+        // The icon: 16, 12 from the start, centred on the bar above its rule.
+        let mid = rect.top() + (rect.height() - 1.0) / 2.0;
+        let icon = Rect::from_min_size(
+            pos2(rect.left() + 12.0, (mid - 8.0).round()),
+            vec2(16.0, 16.0),
+        );
+        egui::Image::new(egui::include_image!("../assets/icons/app/mdm-32.png"))
+            .paint_at(ui, super::rect(icon));
+        let font = FontId::new(segoe().size, egui::FontFamily::Name("geist-medium".into()));
+        let x = icon.right() + 10.0;
+        let room = (buttons_start - x - reserve).max(0.0);
+        let shown = ellipsize(&p, &font, title, room);
+        let ink = if active {
+            CAPTION_INK()
+        } else {
+            caption_ink_inactive()
+        };
+        let galley = p.layout_no_wrap(shown.clone(), font.clone(), ink);
+        let w = galley.size().x;
+        let english = Rect::from_min_size(
+            pos2(x, (mid - galley.size().y / 2.0).round()),
+            galley.size(),
+        );
+        let drawn = super::rect(english);
+        p.galley(drawn.min, galley, ink);
+        let label = ui.interact(drawn, widget_id(ui, "caption-title"), Sense::hover());
+        if SYSTEM_SPEAKS {
+            unspoken(ui, &label);
+        } else {
+            expose(&label, egui::Role::Label, title, true, None);
+        }
+        if shown != title {
+            label.on_hover_text(title);
+        }
+        // The system menu's place: the bar's start to just past the icon.
+        let icon_hit = super::rect(Rect::from_min_max(
+            rect.min,
+            pos2(icon.right() + 5.0, rect.bottom()),
+        ));
+        TitleBar {
+            pressed,
+            buttons: rects,
+            icon: icon_hit,
+            top: bar,
+            title_end: x + w,
+            buttons_start,
+        }
     }
 
     /// A title bar we draw ourselves (where the window's frame is ours: win32::thin_frame): the
@@ -6070,60 +6491,27 @@ pub mod caption {
         let active = *ALWAYS_ACTIVE || ui.ctx().input(|i| i.viewport().focused) != Some(false);
         let rtl = rtl();
         let p = ui.painter().clone();
-        let st = style();
         let bar = bar_colour(active);
-        let top = match st.era {
-            Some(era) => {
-                let stops = bar_stops(era, bar, crate::theme::colors().gloss);
-                fill_shaded(&p, rect, 0.0, &stops);
-                stops.first().map_or(bar, |s| s.1)
-            }
-            None => {
-                p.rect_filled(rect, 0.0, bar);
-                bar
-            }
-        };
-        let mut pressed = None;
-        let mut rects = Vec::with_capacity(buttons.len());
-        // From the window's end inwards, each as wide as its kind is.
-        let mut from_end = st.end;
-        for (b, enabled) in buttons {
-            let bw = if *b == CaptionButton::Close {
-                st.close_w
-            } else {
-                st.button_w
-            };
+        p.rect_filled(rect, 0.0, bar);
+        // From the window's end inwards, each Windows 11's width.
+        let (pressed, rects, from_end) = caption_row(ui, buttons, active, 0.0, |_, from_end| {
             let x0 = if rtl {
                 rect.left() + from_end
             } else {
-                rect.right() - from_end - bw
+                rect.right() - from_end - CAPTION_BUTTON_W
             };
-            from_end += bw;
-            let rc = Rect::from_min_size(pos2(x0, rect.top()), vec2(bw, rect.height()));
-            if caption_button(ui, rc, *b, *enabled, active) {
-                pressed = Some(*b);
-            }
-            rects.push(rc);
-        }
-        // The frame's word on Maximize holds for this bar only.
-        FRAME_MAX.with(|c| c.set((false, false)));
+            Rect::from_min_size(pos2(x0, rect.top()), vec2(CAPTION_BUTTON_W, rect.height()))
+        });
         let buttons_w = from_end;
-        // Without an icon, the title keeps a little room from the bar's start.
-        let icon_w = if st.icon { CAPTION_ICON_W } else { 12.0 };
-        if st.icon {
-            let icon_c = if rtl {
-                pos2(rect.right() - 16.0, rect.center().y)
-            } else {
-                pos2(rect.left() + 16.0, rect.center().y)
-            };
-            egui::Image::new(egui::include_image!("../assets/icons/app/mdm-32.png"))
-                .paint_at(ui, Rect::from_center_size(icon_c.round(), vec2(16.0, 16.0)));
-        }
-        let font = if st.bold {
-            FontId::new(segoe().size, egui::FontFamily::Name("tahoma-bold".into()))
+        let icon_w = CAPTION_ICON_W;
+        let icon_c = if rtl {
+            pos2(rect.right() - 16.0, rect.center().y)
         } else {
-            segoe()
+            pos2(rect.left() + 16.0, rect.center().y)
         };
+        egui::Image::new(egui::include_image!("../assets/icons/app/mdm-32.png"))
+            .paint_at(ui, Rect::from_center_size(icon_c.round(), vec2(16.0, 16.0)));
+        let font = segoe();
         let room = rect.width() - icon_w - buttons_w - 12.0;
         let shown = ellipsize(&p, &font, title, room.max(0.0));
         let ink = if active {
@@ -6136,9 +6524,8 @@ pub mod caption {
         } else {
             (egui::Align2::LEFT_CENTER, rect.left() + icon_w)
         };
-        // Windows 8 and GNOME centre the title in the bar (kept clear of the icon and the
-        // buttons).
-        let (anchor, x) = if st.centred {
+        // Graphite centres the title in the bar (kept clear of the icon and the buttons).
+        let (anchor, x) = if centred() {
             let half = text_width_font(&p, font.clone(), &shown) / 2.0;
             let (lo, hi) = if rtl {
                 (rect.left() + buttons_w + half, rect.right() - icon_w - half)
@@ -6154,32 +6541,6 @@ pub mod caption {
         };
         let galley = p.layout_no_wrap(shown.clone(), font.clone(), ink);
         let drawn = anchor.anchor_size(pos2(x, rect.center().y), galley.size());
-        let c = crate::theme::colors();
-        match st.era {
-            // Windows XP: a dark shadow under the title.
-            Some(Shine::Luna) => {
-                let shadow = crate::derive::shade(bar, -0.25);
-                let g = p.layout_no_wrap(shown.clone(), font.clone(), shadow);
-                p.galley(drawn.min + vec2(1.0, 1.0), g, shadow);
-            }
-            // Windows 7: the title on a soft glow (the light variant's dark title).
-            Some(Shine::Aero) if !c.dark => {
-                let glow = egui::epaint::Shadow {
-                    offset: [0, 0],
-                    blur: 14,
-                    spread: 1,
-                    color: c.gloss.gamma_multiply(0.75),
-                };
-                p.add(glow.as_shape(drawn.expand2(vec2(6.0, 0.0)), 8));
-            }
-            // Mac OS X: a light line under the title, as if pressed into the bar.
-            Some(Shine::Aqua) if !c.dark => {
-                let light = c.gloss.gamma_multiply(0.7);
-                let g = p.layout_no_wrap(shown.clone(), font.clone(), light);
-                p.galley(drawn.min + vec2(0.0, 1.0), g, light);
-            }
-            _ => {}
-        }
         p.galley(drawn.min, galley, ink);
         let label = ui.interact(drawn, widget_id(ui, "caption-title"), Sense::hover());
         // The window's own name says the title to screen readers (where the system speaks for
@@ -6192,11 +6553,7 @@ pub mod caption {
         if shown != title {
             label.on_hover_text(title);
         }
-        // Without an icon, no system-menu place (Alt+Space and a right-click on the bar still
-        // open the system menu).
-        let icon = if !st.icon {
-            Rect::from_min_size(rect.min, egui::Vec2::ZERO)
-        } else if rtl {
+        let icon = if rtl {
             Rect::from_min_max(pos2(rect.right() - CAPTION_ICON_W, rect.top()), rect.max)
         } else {
             Rect::from_min_size(rect.min, vec2(CAPTION_ICON_W, rect.height()))
@@ -6205,7 +6562,9 @@ pub mod caption {
             pressed,
             buttons: rects,
             icon,
-            top,
+            top: bar,
+            title_end: super::rect(drawn).right(),
+            buttons_start: rect.right() - buttons_w,
         }
     }
 }
@@ -6213,6 +6572,57 @@ pub mod caption {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Graphite's progress fill (plan 09a) shades left to right, its rounded ends inside `rc`:
+    /// the vertical mesh turned on its side.
+    #[test]
+    fn shaded_across_runs_left_to_right() {
+        let rc = Rect::from_min_max(pos2(10.0, 20.0), pos2(110.0, 26.0));
+        let (a, b) = (Color32::from_rgb(0, 0, 0), Color32::from_rgb(200, 100, 50));
+        let mesh = across_mesh(rc, 3.0, &[(0.0, a), (1.0, b)]);
+        assert!(!mesh.vertices.is_empty());
+        for v in &mesh.vertices {
+            assert!(rc.expand(0.01).contains(v.pos), "{:?} outside", v.pos);
+            // The colour follows x alone: a at the left, b at the right.
+            let t = (v.pos.x - rc.left()) / rc.width();
+            assert!(
+                (v.color.r() as f32 - 200.0 * t).abs() <= 1.0,
+                "{:?} at {t}",
+                v.color
+            );
+        }
+    }
+
+    /// Graphite's progress style shades only a fill in the bar's colour, from its start (plan
+    /// 09a): an error's or a stopped download's fill, another style or a theme without the end
+    /// colour stays flat; a bar running from the right shades the other way.
+    #[test]
+    fn only_a_moving_bar_is_shaded_from_its_start() {
+        let (bar, end) = (
+            Color32::from_rgb(0, 120, 142),
+            Color32::from_rgb(0, 130, 154),
+        );
+        let error = Color32::from_rgb(198, 40, 40);
+        assert_eq!(bar_shade(true, bar, bar, end, false), Some((bar, end)));
+        assert_eq!(bar_shade(true, bar, bar, end, true), Some((end, bar)));
+        assert_eq!(bar_shade(true, error, bar, end, false), None);
+        assert_eq!(bar_shade(false, bar, bar, end, false), None);
+        assert_eq!(bar_shade(true, bar, bar, Color32::TRANSPARENT, false), None);
+    }
+
+    /// A flat button's bottom line stays on the straight part between its corners: past how
+    /// far the curve reaches into the bottom row (Windows 11's 3 unchanged).
+    #[test]
+    fn button_bottom_line_stays_inside_its_corners() {
+        assert_eq!(bottom_inset(Shape::Push, 3.0), 3.0);
+        for r in [0.0f32, 2.0, 3.0, 5.0, 8.0, 12.0] {
+            for shape in [Shape::Push, Shape::DropDown] {
+                // The curve covers the row under its last full one this far in from the side.
+                let reach = r - (r * r - (r - 1.0).max(0.0).powi(2)).sqrt();
+                assert!(bottom_inset(shape, r) >= reach, "{shape:?} at radius {r}");
+            }
+        }
+    }
 
     /// `r` already gives the screen rect (mirrored in RTL); `rect` around it mirrors it back,
     /// so the thing stays at its English place in Arabic (#170: the browser offer window's logo
@@ -6237,7 +6647,7 @@ mod tests {
         assert!(found.is_empty(), "rect(r(...)) mirrors twice: {found:?}");
     }
 
-    /// `f` with a painter whose Tahoma is the interface font (as on macOS and Linux).
+    /// `f` with a painter whose Tahoma is the interface font (as where Tahoma is missing).
     fn with_painter(f: impl FnOnce(&Painter)) {
         let ctx = egui::Context::default();
         let mut defs = egui::FontDefinitions::default();
@@ -6252,6 +6662,225 @@ mod tests {
         out.textures_delta.clear();
     }
 
+    /// The light tabs, English too, are sized to their labels in the font they are drawn in: 8
+    /// either side of each label, 2 apart (Scheduler's "Schedule" ran past IDM's fixed end).
+    #[test]
+    fn light_tabs_pad_their_labels() {
+        with_painter(|p| {
+            let labels = ["Schedule", "Files in the queue"];
+            let row = tab_row(p, &labels, 215.0, 640.0, 2.0, 8.0);
+            assert_eq!(row[0].0, 215.0);
+            for ((x0, x1, shown), label) in row.iter().zip(labels) {
+                assert_eq!(shown, label);
+                assert_eq!(x1 - x0, text_width(p, label).ceil() + 16.0);
+            }
+            assert_eq!(row[1].0, row[0].1 + 2.0);
+        });
+    }
+
+    /// 09r3: a status banner's title wraps as far as its height has room, the sub below it; no
+    /// title puts the sub in its place; screen readers read it as one status.
+    #[test]
+    fn a_status_banner_wraps_its_title_and_is_read_as_a_status() {
+        // One-line title: the heights as before.
+        assert_eq!(status_banner_height_for(1, 0), status_banner_height(0));
+        assert_eq!(status_banner_height_for(1, 2), status_banner_height(2));
+        assert_eq!(status_banner_height_for(3, 0), 37.0 + 2.0 * BANNER_LINE);
+        // No title: the sub's lines in the title's place.
+        assert_eq!(status_banner_height_for(0, 1), 37.0);
+        assert_eq!(status_banner_height_for(0, 2), 37.0 + BANNER_LINE);
+        // A banner a title's height tall (the progress window's 30, Verify checksum's 37) keeps
+        // one line, cut; a taller one has room for more.
+        assert_eq!(banner_title_room(30.0, 0), 1);
+        assert_eq!(banner_title_room(37.0, 0), 1);
+        assert_eq!(banner_title_room(status_banner_height_for(2, 0), 0), 2);
+        assert_eq!(banner_title_room(status_banner_height_for(2, 1), 1), 2);
+        with_painter(|p| {
+            let long = "Port 8765 is used by another program: choose another, then click OK.";
+            let (title, sub) = status_banner_lines(p, 300.0, long, "");
+            assert!(title > 1, "a long title wraps");
+            assert_eq!(sub, 0);
+            assert_eq!(status_banner_lines(p, 600.0, "", "A short note.").0, 0);
+        });
+        let ctx = egui::Context::default();
+        let mut defs = egui::FontDefinitions::default();
+        install_fonts(&mut defs, None);
+        ctx.set_fonts(defs);
+        ctx.enable_accesskit();
+        let pass = || {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                let rc = Rect::from_min_size(pos2(10.0, 10.0), vec2(400.0, 56.0));
+                status_banner(ui, rc, BannerKind::Warning, "st-error", "Title", "The sub.");
+            });
+            out.textures_delta.clear();
+            out.platform_output
+                .accesskit_update
+                .expect("AccessKit is on")
+        };
+        pass();
+        let tree = pass();
+        assert!(
+            tree.nodes.iter().any(|(_, n)| n.role() == egui::Role::Status
+                && n.label() == Some("Title The sub.")),
+            "a status node"
+        );
+    }
+
+    /// 09r3: a centred paragraph's lines are centred in their room.
+    #[test]
+    fn a_centred_paragraph_centres_each_line() {
+        with_painter(|p| {
+            let s = "On the phone, scan this code with the camera, or open the address and enter the code.";
+            let lines = centred_lines(p, s, 16.0, 364.0);
+            assert!(lines.len() > 1);
+            for (left, l) in &lines {
+                let mid = left + text_width(p, l) / 2.0;
+                assert!((mid - 190.0).abs() <= 1.0, "{l:?} centred at {mid}");
+            }
+        });
+    }
+
+    #[test]
+    fn a_footer_puts_the_default_last_and_keeps_leading_ones_left() {
+        // Download complete: Open*, Open with..., Open folder, Close (the old Tab order).
+        let items = [
+            (60.0, Side::Trailing, true),
+            (90.0, Side::Leading, false),
+            (95.0, Side::Leading, false),
+            (64.0, Side::Trailing, false),
+        ];
+        let x = footer_slots(&items, 500.0);
+        assert_eq!(x[1], EDGE);
+        assert_eq!(x[2], EDGE + 90.0 + 8.0);
+        // Close, then Open at the right edge.
+        assert_eq!(x[0], 500.0 - EDGE - 60.0);
+        assert_eq!(x[3], x[0] - 8.0 - 64.0);
+        // Two trailing primaries keep their own order, after the others.
+        let items = [
+            (50.0, Side::Trailing, true),
+            (50.0, Side::Trailing, false),
+            (50.0, Side::Trailing, true),
+        ];
+        let x = footer_slots(&items, 300.0);
+        assert!(x[1] < x[0] && x[0] < x[2]);
+        // A default greyed for now keeps its place (Download File Info's Start).
+        let start = FooterButton::new("Start Download", ButtonKind::Disabled).primary();
+        assert!(start.primary && !FooterButton::new("Cancel", ButtonKind::Normal).primary);
+        assert!(FooterButton::new("OK", ButtonKind::Default).primary);
+        // A line before two trailing buttons ends a gap before them.
+        assert_eq!(
+            footer_trailing_left(400.0, &[60.0, 70.0]),
+            400.0 - EDGE - 130.0 - 16.0
+        );
+    }
+
+    #[test]
+    fn footer_keys_fire_only_the_marked_enabled_buttons() {
+        // OK (Enter), Cancel (Escape).
+        let ok_cancel = [(true, true, false), (true, false, true)];
+        assert_eq!(footer_key(&ok_cancel, true, false), Some(0));
+        assert_eq!(footer_key(&ok_cancel, false, true), Some(1));
+        assert_eq!(footer_key(&ok_cancel, false, false), None);
+        // A greyed OK ignores Enter; nothing else answers it.
+        let greyed = [(false, true, false), (true, false, true)];
+        assert_eq!(footer_key(&greyed, true, false), None);
+        // Nothing marked: the keys do nothing (the progress window's Enter).
+        let none = [(true, false, false), (true, false, false)];
+        assert_eq!(footer_key(&none, true, true), None);
+        // Enter and Escape in one frame: Escape's (No), never Enter's (Yes).
+        assert_eq!(footer_key(&ok_cancel, true, true), Some(1));
+    }
+
+    #[test]
+    fn a_footer_answers_enter_and_escape_as_marked() {
+        let run = |key: egui::Key, ok_kind: ButtonKind| {
+            let ctx = egui::Context::default();
+            let mut defs = egui::FontDefinitions::default();
+            install_fonts(&mut defs, None);
+            ctx.set_fonts(defs);
+            let input = egui::RawInput {
+                events: vec![egui::Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed: true,
+                    repeat: false,
+                    modifiers: egui::Modifiers::NONE,
+                }],
+                ..Default::default()
+            };
+            let mut got = None;
+            let mut out = ctx.run_ui(input, |ui| {
+                let mut items = [
+                    FooterItem::Button(FooterButton::new("OK", ok_kind).enter(true)),
+                    FooterItem::Button(
+                        FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                    ),
+                    FooterItem::Button(FooterButton::new("Help", ButtonKind::Ghost).leading()),
+                ];
+                got = footer(ui, pos2(0.0, 0.0), 400.0, 100.0, &mut items);
+            });
+            out.textures_delta.clear();
+            got
+        };
+        assert_eq!(run(egui::Key::Enter, ButtonKind::Default), Some(0));
+        assert_eq!(run(egui::Key::Escape, ButtonKind::Default), Some(1));
+        assert_eq!(run(egui::Key::Enter, ButtonKind::Disabled), None);
+        assert_eq!(run(egui::Key::Space, ButtonKind::Default), None);
+    }
+
+    #[test]
+    fn a_form_puts_its_fields_after_the_label_column() {
+        with_painter(|p| {
+            assert_eq!(
+                form(p, 16.0, &["URL", "Save As"], false),
+                16.0 + 112.0 + 12.0
+            );
+            assert_eq!(form(p, 16.0, &["Add to queue:"], true), 16.0 + 240.0 + 12.0);
+            // A label longer than the column moves the fields, 12 after it.
+            let long = "A label much longer than the form's column";
+            let want = (16.0 + text_width(p, long) + 6.0).ceil() + 6.0;
+            assert_eq!(form(p, 16.0, &[long], false), want);
+        });
+    }
+
+    #[test]
+    fn a_single_line_label_never_grows_another_row() {
+        with_painter(|p| {
+            // A title that fits is drawn as it is, with nothing to hover.
+            let (rc, cut) = text_fit(p, 11.0, 70.0, "A short title", TEXT(), 489.0);
+            assert!(!cut);
+            assert!(rc.right() <= 489.0);
+            // An empty one draws nothing and is not a cut.
+            let (rc, cut) = text_fit(p, 11.0, 70.0, "", TEXT(), 489.0);
+            assert!(!cut);
+            assert_eq!(rc.width(), 0.0);
+            // A column with room for the "..." alone stays in its column.
+            let right = 11.0 + text_width(p, "...") + 1.0;
+            let (rc, cut) = text_fit(p, 11.0, 70.0, "A title", TEXT(), right);
+            assert!(cut);
+            assert!(rc.right() <= right);
+            // A long title stays one row, whatever it has in it: unbroken, wide Unicode, and
+            // line breaks (a site's title). A cut says the whole original is shown on hover.
+            let cases = [
+                "W".repeat(2000),
+                "日本語".repeat(500),
+                "مرحبا بالعالم ".repeat(100),
+                "🎬".repeat(500),
+                "Short\ntitle".to_owned(),
+                "Short\rtitle".to_owned(),
+                "Long title\r\nwith more than one line\nand a third".to_owned(),
+                "\n".to_owned(),
+                "a\n".repeat(100),
+            ];
+            for s in cases {
+                let (rc, cut) = text_fit(p, 11.0, 70.0, &s, TEXT(), 489.0);
+                assert!(cut, "not cut, so no whole text on hover: {s:?}");
+                assert!(rc.right() <= 489.0, "past its right edge: {s:?}");
+                assert!(rc.height() <= 20.0, "more than one row: {s:?}");
+            }
+        });
+    }
+
     #[test]
     fn a_row_of_buttons_widens_for_long_labels_only() {
         with_painter(|p| {
@@ -6261,10 +6890,6 @@ mod tests {
                 buttons_to_right(p, 489.0, 8.0, &row, 160.0),
                 vec![(335.0, 73.0), (416.0, 73.0)]
             );
-            assert_eq!(
-                buttons_from_left(p, 11.0, 8.0, &row, 160.0),
-                vec![(11.0, 73.0), (92.0, 73.0)]
-            );
             // A long one is as wide as its text and the room inside the border, up to the most
             // allowed; the row keeps its end and its gaps.
             let long = "A label much longer than its English button";
@@ -6273,8 +6898,6 @@ mod tests {
             let placed = buttons_to_right(p, 489.0, 8.0, &row, 400.0);
             assert_eq!(placed[0], (489.0 - 73.0 - 8.0 - want, want));
             assert_eq!(placed[1], (416.0, 73.0));
-            let placed = buttons_from_left(p, 11.0, 8.0, &row, 400.0);
-            assert_eq!(placed[1].0, 11.0 + want + 8.0);
             assert_eq!(buttons_to_right(p, 489.0, 8.0, &row, 120.0)[0].1, 120.0);
             // Its label then fits whole (no "...").
             let rc = Rect::from_min_size(pos2(0.0, 0.0), vec2(want, 21.0));
@@ -6773,6 +7396,116 @@ mod tests {
         );
     }
 
+    /// An icon and label button is a button to a screen reader, named by its label, and
+    /// AccessKit's click presses it.
+    #[test]
+    fn an_icon_label_button_is_a_named_button_a_screen_reader_presses() {
+        use egui::accesskit::{Action, Role};
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        // From a variable: the catalog's extractor takes literal labels as texts to translate.
+        let label = "Download";
+        let frame = |events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(300.0, 100.0))),
+                events,
+                ..Default::default()
+            };
+            let mut clicked = false;
+            let mut out = ctx.run_ui(input, |ui| {
+                let rc = Rect::from_min_size(pos2(10.0, 10.0), egui::vec2(120.0, 32.0));
+                clicked =
+                    icon_label_button(ui, rc, "gx-download", label, ButtonKind::Accent).clicked();
+            });
+            out.textures_delta.clear();
+            let update = out
+                .platform_output
+                .accesskit_update
+                .expect("AccessKit is on");
+            let buttons: Vec<_> = update
+                .nodes
+                .iter()
+                .filter(|(_, n)| n.role() == Role::Button)
+                .map(|(id, n)| (*id, n.label().unwrap_or_default().to_owned()))
+                .collect();
+            (buttons, clicked)
+        };
+        let (_, clicked) = frame(vec![]);
+        assert!(!clicked);
+        let (buttons, _) = frame(vec![]);
+        assert_eq!(buttons.len(), 1, "{buttons:?}");
+        assert_eq!(buttons[0].1, label);
+        let (_, clicked) = frame(vec![ask(buttons[0].0, Action::Click)]);
+        assert!(clicked, "AccessKit's click presses it");
+    }
+
+    /// A pointer click on a main-window button ([`icon_label_button`]) leaves no widget
+    /// focused, also when Tab had focused it, while Enter still presses it when it has the
+    /// keys; a dialog's [`button`] takes the keys on a press, as before.
+    #[test]
+    fn a_click_leaves_a_main_window_button_unfocused_and_a_dialog_button_focused() {
+        let ctx = egui::Context::default();
+        let rc = Rect::from_min_size(pos2(10.0, 10.0), egui::vec2(120.0, 32.0));
+        let at = rc.center();
+        // From a variable: the catalog's extractor takes literal labels as texts to translate.
+        let label = "Download";
+        let frame = |dialog: bool, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(300.0, 100.0))),
+                events,
+                ..Default::default()
+            };
+            let mut got = (egui::Id::NULL, false);
+            let mut out = ctx.run_ui(input, |ui| {
+                let r = if dialog {
+                    button(ui, rc, label, ButtonKind::Normal, false, None)
+                } else {
+                    icon_label_button(ui, rc, "gx-download", label, ButtonKind::Accent)
+                };
+                got = (r.id, r.clicked());
+            });
+            out.textures_delta.clear();
+            got
+        };
+        let pointer = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let click = |dialog| {
+            frame(dialog, vec![egui::Event::PointerMoved(at)]);
+            frame(dialog, vec![pointer(true)]);
+            frame(dialog, vec![pointer(false)])
+        };
+        let focused = || ctx.memory(|m| m.focused());
+        let (id, clicked) = click(false);
+        assert!(clicked);
+        assert_eq!(focused(), None, "a main-window button: nothing focused");
+        ctx.memory_mut(|m| m.request_focus(id));
+        frame(false, vec![]);
+        assert!(click(false).1);
+        assert_eq!(focused(), None, "a focus Tab gave goes on a click");
+        ctx.memory_mut(|m| m.request_focus(id));
+        frame(false, vec![]);
+        let enter = egui::Event::Key {
+            key: egui::Key::Enter,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::NONE,
+        };
+        assert!(
+            frame(false, vec![enter]).1,
+            "Enter presses it with the keys"
+        );
+        assert_eq!(focused(), Some(id), "and it keeps them");
+        ctx.memory_mut(|m| m.surrender_focus(id));
+        let (id, clicked) = click(true);
+        assert!(clicked);
+        assert_eq!(focused(), Some(id), "a dialog's button takes the keys");
+    }
+
     #[test]
     /// egui's context locks itself for `data`, `memory`, `input` and their `_mut`s: asking it
     /// again inside one (`ctx.viewport_id()` to build a key) deadlocks the app at once. The
@@ -6935,38 +7668,17 @@ mod tests {
         // Issue #7: pressed was #f5f5f5 against hot #f6f6f6, the same to the eye.
         for theme in crate::palette::builtins() {
             for c in [&theme.light, &theme.dark] {
-                button_states_differ(c, theme.controls.button);
+                button_states_differ(c);
             }
         }
     }
 
-    fn button_states_differ(c: &crate::palette::Palette, look: crate::palette::ButtonLook) {
-        let button_colors = |kind, state, c| button_colors_in(kind, state, c, look);
+    fn button_states_differ(c: &crate::palette::Palette) {
         {
             for kind in [ButtonKind::Normal, ButtonKind::Default] {
                 let rest = button_colors(kind, State::Normal, c);
                 let hot = button_colors(kind, State::Hot, c);
                 let pressed = button_colors(kind, State::Pressed, c);
-                // KDE: the edge takes the accent under the pointer, the face pressed; the label
-                // stays.
-                if look == crate::palette::ButtonLook::Breeze {
-                    assert_ne!(hot.border, rest.border, "hot takes the accent's edge");
-                    assert_ne!(pressed.fill, rest.fill, "pressed tints the face");
-                    assert_eq!(pressed.bottom, pressed.border, "one edge all round");
-                    continue;
-                }
-                // The era themes: pressed deepens the face; under the pointer the face lightens
-                // (Windows 7, Mac OS X) or Windows XP's glow shows inside the edge.
-                use crate::palette::ButtonLook as B;
-                if matches!(look, B::Luna | B::Aero | B::Aqua) {
-                    assert_ne!(pressed.fill, rest.fill, "pressed deepens the face");
-                    if look == B::Luna {
-                        assert!(c.button_glow.a() > 0, "XP glows under the pointer");
-                    } else {
-                        assert_ne!(hot.fill, rest.fill, "hot differs from rest");
-                    }
-                    continue;
-                }
                 assert_ne!(pressed.text, rest.text, "pressed dims the label");
                 assert_eq!(
                     pressed.bottom, pressed.border,
@@ -6984,11 +7696,23 @@ mod tests {
                         pressed.fill, rest.fill,
                         "a flat button's pressed face differs"
                     );
+                    // A flat button has only its face to show it is pressed (no bottom edge
+                    // to flatten), so that face is told by eye from the pointer over it too.
+                    use crate::palette::{SEEN_STEP, channel_step};
+                    assert!(
+                        channel_step(pressed.fill, hot.fill) >= SEEN_STEP,
+                        "a flat button's pressed face differs from hot: {:?} {:?}",
+                        pressed.fill,
+                        hot.fill
+                    );
                 }
                 assert_ne!(hot.fill, rest.fill, "hot differs from rest");
             }
             let disabled = button_colors(ButtonKind::Disabled, State::Disabled, c);
             let enabled = button_colors(ButtonKind::Normal, State::Normal, c);
+            // A greyed button's label and icon (`button_face` inks its icon with `face.text`)
+            // take `text.disabled` (plan 08's greyed `icon_only_button`).
+            assert_eq!(disabled.text, c.text_disabled, "greyed ink");
             let gap = |a: Color32, b: Color32| (a.r() as i32 - b.r() as i32).abs();
             assert!(
                 gap(disabled.text, enabled.text) >= 0x50,
@@ -7004,10 +7728,7 @@ mod tests {
         assert_eq!(State::Pressed.open_if(true), State::Pressed);
         assert_eq!(State::Disabled.open_if(true), State::Disabled);
         assert_eq!(State::Hot.open_if(false), State::Hot);
-        let (light, dark) = (
-            &crate::palette::CLASSIC.light,
-            &crate::palette::CLASSIC.dark,
-        );
+        let (light, dark) = (&crate::palette::BASE.light, &crate::palette::BASE.dark);
         for c in [light, dark] {
             assert_eq!(subtle_fill(State::Normal, c), None);
             assert_eq!(subtle_fill(State::Disabled, c), None);

@@ -330,7 +330,7 @@ impl RemoteTorrent {
         for f in &files {
             let link = Url::parse(&f.link).map_err(|_| {
                 Fault::Service(ServiceFault::Other(
-                    "the service gave a link MDM can't read".into(),
+                    "the service gave a link Grabbit can't read".into(),
                 ))
             })?;
             let dest = match safe_path(&within(&f.path)) {
@@ -346,12 +346,21 @@ impl RemoteTorrent {
                 None if f.path.trim().is_empty() => PathBuf::new(),
                 None => return Err(Fault::Service(ServiceFault::UnsafeName(f.path.clone()))),
             };
+            // Done in an earlier run: there, whole (no resume state beside it), and of the
+            // service's size when the service gives one. Another file of that name (another
+            // site's download, an earlier attempt whose state is gone) stays as it is: this one
+            // downloads beside it, under the engine's next numbered name.
             if !dest.as_os_str().is_empty()
                 && dest.is_file()
                 && !mdm_engine::state::state_path(&dest).exists()
+                && (f.size == 0 || std::fs::metadata(&dest).is_ok_and(|m| m.len() == f.size))
             {
-                // Done in an earlier run.
-                self.shared.lock().unwrap().done += f.size;
+                let mut sh = self.shared.lock().unwrap();
+                sh.done += f.size;
+                // One file: the download is that file, as when it comes down below.
+                if files.len() == 1 {
+                    sh.folder = Some(dest);
+                }
                 continue;
             }
             let opts = mdm_engine::Options {
@@ -516,6 +525,7 @@ impl RemoteTorrent {
             }),
             events,
             server,
+            finishing: None,
         }
     }
 }

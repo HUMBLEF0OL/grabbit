@@ -5,10 +5,13 @@ use std::path::{Path, PathBuf};
 
 use egui::{Pos2, Ui, vec2};
 
-use crate::chrome::{IconKey, ShellIcons};
 use crate::dialogs::{Outcome, window};
 use crate::model::{Item, Status};
 use crate::winui::{self, ButtonKind, LIGHT_BG, LIGHT_TEXT, r, text};
+
+/// The window's width, and its height above the footer (the Result line ends at 425).
+const WIDTH: f32 = 477.0;
+const BODY: f32 = 428.0;
 
 /// What OK changes.
 pub struct Changes {
@@ -62,26 +65,21 @@ impl Properties {
     }
 
     /// `item` is read every frame, so status and size stay live.
-    pub fn show(
-        &mut self,
-        ctx: &egui::Context,
-        icons: &mut ShellIcons,
-        item: &Item,
-    ) -> Outcome<Changes> {
+    pub fn show(&mut self, ctx: &egui::Context, item: &Item) -> Outcome<Changes> {
         let outcome = window(
             ctx,
             &format!("properties-{}", self.id),
             "File Properties",
-            [477.0, 420.0],
+            [WIDTH, BODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
-            |ui, o| self.body(ui, o, icons, item),
+            |ui, o| self.body(ui, o, item),
         );
         match outcome {
             Outcome::Done(()) => {
                 let address = url::Url::parse(self.address.trim())
                     .ok()
-                    .filter(|u| *u != item.url);
+                    .filter(|u| address_editable(item) && *u != item.url);
                 let referer = self.referer.trim();
                 Outcome::Done(Changes {
                     id: self.id,
@@ -99,24 +97,42 @@ impl Properties {
         }
     }
 
-    fn body(&mut self, ui: &mut Ui, o: Pos2, icons: &mut ShellIcons, item: &Item) -> Outcome<()> {
+    /// OK closes the window: the address, when it can be replaced, is one MDM downloads.
+    fn address_ok(&self, item: &Item) -> bool {
+        !address_editable(item)
+            || url::Url::parse(self.address.trim()).is_ok_and(|u| mdm_engine::supported(&u))
+    }
+
+    fn body(&mut self, ui: &mut Ui, o: Pos2, item: &Item) -> Outcome<()> {
         let p = ui.painter().clone();
         let complete = item.status == Status::Complete;
         let running = item.live.is_some();
-        // The address can be replaced while the download isn't finished or running.
+        // The login and referer can be changed while the download isn't finished or running.
         let editable = !complete && !running;
         let ext = Path::new(&item.file_name)
             .extension()
             .map(|e| e.to_string_lossy().to_ascii_lowercase())
             .unwrap_or_default();
-        icons.paint(ui, IconKey::ExtLarge(ext.clone()), o + vec2(11.0, 11.0));
         let fit = |ui: &mut Ui, x: f32, base: f32, s: &str| {
             let (rect, cut) =
                 winui::text_fit(&p, o.x + x, o.y + base, s, LIGHT_TEXT(), o.x + 466.0);
             winui::copyable(ui, rect, ("props", base as i32), s, cut);
         };
-        fit(ui, 87.0, 31.0, &item.file_name);
-        winui::etched_h(&p, o.x + 11.0, o.y + 50.0, 456.0);
+        // The file's card (plan 07): its kind's icon, its name (whole on hover) over its type,
+        // both copyable as before (right-click → Copy): the name from the card, the type from
+        // its line.
+        let card = r(o, 11.0, 8.0, 456.0, 62.0);
+        let kind = file_type(&item.file_name, &ext);
+        let (_, type_at) = winui::file_card(
+            ui,
+            card,
+            crate::fileicons::Kind::File(&item.file_name),
+            &item.file_name,
+            &kind,
+            None,
+        );
+        winui::copyable(ui, card, "props-name", &item.file_name, true);
+        winui::copyable(ui, type_at, "props-type", &kind, false);
         let size = item.size.map_or_else(String::new, |s| {
             crate::i18n::fmt(
                 crate::i18n::t("{size} ({bytes} Bytes)"),
@@ -129,7 +145,6 @@ impl Properties {
         // The values' column: IDM's 87, or after the widest label when a translation is longer
         // (the boxes keep their right edges).
         let col = [
-            "Type:",
             "Status:",
             "Size:",
             "Save To:",
@@ -141,13 +156,8 @@ impl Properties {
         .iter()
         .map(|l| 11.0 + winui::text_width(&p, crate::i18n::t(l)).ceil() + 6.0)
         .fold(87.0_f32, f32::max);
+        // The type is in the card.
         for (label, base, value) in [
-            // i18n: label before the kind of file ("ZIP File")
-            (
-                crate::i18n::mark("Type:"),
-                69.0,
-                file_type(&item.file_name, &ext),
-            ),
             // i18n: label before the download's state
             (crate::i18n::mark("Status:"), 88.0, item.status_text()),
             (crate::i18n::mark("Size:"), 108.0, size),
@@ -261,7 +271,7 @@ impl Properties {
             crate::i18n::t("Address:"),
             LIGHT_TEXT(),
         );
-        if editable {
+        if address_editable(item) {
             let edit = winui::edit_light(
                 ui,
                 r(o, col, 171.0, 467.0 - col, 23.0),
@@ -386,12 +396,14 @@ impl Properties {
                 o.y + 415.0,
                 e,
                 winui::ERROR(),
-                o.x + 250.0,
+                o.x + 466.0,
                 "props-error",
             );
         } else if !complete {
             let result = item.error.clone().unwrap_or_else(|| item.status_text());
-            let x1 = o.x + 250.0;
+            // To the window's text edge: the buttons that once ended it at 250 are in the
+            // footer now.
+            let x1 = o.x + 466.0;
             let (rect, cut) = winui::text_fit(
                 &p,
                 o.x + 11.0,
@@ -408,62 +420,46 @@ impl Properties {
                 winui::full_on_hover(ui, rect, "props-result", &result);
             }
         }
-        // As wide as its label in this language (#192), into the room before OK.
-        let (open_x, open_w) = winui::button_row_from_left(
-            &ui.painter().clone(),
-            &[("Open", 259.0, 73.0)],
-            8.0,
-            385.0,
-            120.0,
-        )[0];
-        let open = winui::button_light(
-            ui,
-            r(o, open_x, 390.0, open_w, 21.0),
+        // The footer (plan 07): Open and a torrent's Files... at the start, OK last; Enter
+        // presses OK, as before. Escape closes the window (it has no Cancel), as before. The
+        // leading buttons keep their Tab order (Open, then Files...), so Open comes first on
+        // screen too: the kit places them in Tab order (the plan's table notes it).
+        let mut items = vec![winui::FooterItem::Button(
             // i18n: verb: opens the file
-            "Open",
-            if complete {
-                ButtonKind::Normal
-            } else {
-                ButtonKind::Disabled
-            },
-            false,
-        );
-        let open = winui::why_disabled(
-            open,
-            !complete,
-            // i18n: tooltip of the greyed Open button in File Properties
-            "The download isn't complete yet",
-        )
-        .clicked();
-        if open && complete {
-            crate::dialogs::open_file(&item.dest);
-        }
-        if item.torrent.is_some()
-            && winui::button_light(
-                ui,
-                r(o, 170.0, 390.0, 78.0, 21.0),
-                // i18n: File Properties button that opens the selected torrent's file list
-                "Files...",
-                ButtonKind::Normal,
-                false,
+            winui::FooterButton::new(
+                "Open",
+                if complete {
+                    ButtonKind::Normal
+                } else {
+                    ButtonKind::Disabled
+                },
             )
-            .clicked()
-        {
+            .leading()
+            // i18n: tooltip of the greyed Open button in File Properties
+            .tip(!complete, "The download isn't complete yet"),
+        )];
+        if item.torrent.is_some() {
+            items.push(winui::FooterItem::Button(
+                // i18n: File Properties button that opens the selected torrent's file list
+                winui::FooterButton::new("Files...", ButtonKind::Normal).leading(),
+            ));
+        }
+        items.push(winui::FooterItem::Button(
+            winui::FooterButton::new("OK", ButtonKind::Default).enter(true),
+        ));
+        let ok_at = items.len() - 1;
+        let pressed = winui::footer(ui, o, WIDTH, BODY, &mut items);
+        if pressed == Some(0) && complete {
+            crate::dialogs::open_download(&item.dest, item.moved_away);
+        }
+        if item.torrent.is_some() && pressed == Some(1) {
             self.files_requested = true;
         }
-        let ok = winui::button_light(
-            ui,
-            r(o, 393.0, 390.0, 73.0, 21.0),
-            "OK",
-            ButtonKind::Default,
-            false,
-        )
-        .clicked();
-        let address_ok = !editable
-            || url::Url::parse(self.address.trim()).is_ok_and(|u| mdm_engine::supported(&u));
+        let ok = pressed == Some(ok_at);
+        let address_ok = self.address_ok(item);
         if winui::escape_pressed(ui) {
             Outcome::Closed
-        } else if ok || winui::enter_pressed(ui) {
+        } else if ok {
             if address_ok {
                 Outcome::Done(())
             } else {
@@ -477,9 +473,16 @@ impl Properties {
     }
 }
 
+/// The address can be replaced (Refresh download address) while the download isn't finished or
+/// running, unless it isn't a file's address: a torrent's magnet link or .torrent file (upstream
+/// issue 904) is shown read only. The same answer decides the field and OK's check, so a field
+/// that can't be edited never holds OK back.
+fn address_editable(item: &Item) -> bool {
+    item.status != Status::Complete && item.live.is_none() && item.torrent.is_none()
+}
+
 /// Windows' name for the file type ("BIN File", "Compressed (zipped) Folder").
 fn file_type(name: &str, ext: &str) -> String {
-    #[cfg(windows)]
     if let Some(t) = crate::win32::type_name(name) {
         return t;
     }
@@ -504,4 +507,61 @@ fn readonly(ui: &mut Ui, rc: egui::Rect, value: &str) {
 
 fn password(ui: &mut Ui, rc: egui::Rect, value: &mut String, enabled: bool) {
     winui::password_light_on(ui, rc, value, enabled, LIGHT_BG());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn item(url: &str) -> Item {
+        let mut item = Item::new(
+            1,
+            url::Url::parse(url).unwrap(),
+            PathBuf::from("file.iso"),
+            crate::model::Category::Programs,
+        );
+        item.status = Status::Stopped;
+        item
+    }
+
+    /// Upstream issue 904: a torrent's address is its magnet link (or .torrent), shown read
+    /// only; OK closes the window instead of asking for an http(s) or ftp(s) address.
+    #[test]
+    fn a_torrents_properties_close_with_ok() {
+        let mut torrent = item("magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567");
+        torrent.torrent = Some(crate::torrents::TorrentSpec {
+            hash: "0123456789abcdef0123456789abcdef01234567".into(),
+            files: None,
+            folder: PathBuf::from("f"),
+            uploaded: 0,
+            seeded_secs: 0,
+            peers: 0,
+            up_speed: 0.0,
+            upload_limit: None,
+            in_order: false,
+            ends_first: false,
+        });
+        let props = Properties::new(&torrent, crate::debrid::Route::default());
+        assert!(!address_editable(&torrent));
+        assert!(props.address_ok(&torrent));
+    }
+
+    /// A file's address that isn't finished stays editable, and a bad one still holds OK back.
+    #[test]
+    fn a_files_address_is_still_checked() {
+        let file = item("https://example.com/file.iso");
+        let mut props = Properties::new(&file, crate::debrid::Route::default());
+        assert!(address_editable(&file));
+        assert!(props.address_ok(&file));
+        "not an address".clone_into(&mut props.address);
+        assert!(!props.address_ok(&file));
+        "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"
+            .clone_into(&mut props.address);
+        assert!(!props.address_ok(&file));
+        "ftp://example.com/file.iso".clone_into(&mut props.address);
+        assert!(props.address_ok(&file));
+        let mut done = item("https://example.com/file.iso");
+        done.status = Status::Complete;
+        assert!(!address_editable(&done));
+    }
 }

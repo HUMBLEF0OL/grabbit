@@ -16,7 +16,7 @@ use mdm_extract::{Error, Report, volume_key};
 use crate::dialogs::{Outcome, window};
 use crate::model::{Item, Status};
 use crate::settings::Settings;
-use crate::winui::{self, ButtonKind, LIGHT_BG, LIGHT_TEXT, r};
+use crate::winui::{self, ButtonKind, FooterButton, FooterItem, LIGHT_BG, LIGHT_TEXT, r};
 
 /// One archive to extract: its downloads (a split one's every volume) and where it goes.
 #[derive(Clone)]
@@ -246,7 +246,7 @@ impl Extracts {
                 note(items, failed(&name, &e));
                 if matches!(e, Error::NoTool) && (job.by_hand || !self.told_7zip) {
                     self.told_7zip = true;
-                    self.needs_7zip = Some(ToolDialog { name });
+                    self.needs_7zip = Some(ToolDialog::new(name));
                 }
                 return;
             }
@@ -290,19 +290,12 @@ impl Extracts {
             );
         }
         if let Some(gone) = trashed {
-            let text = match (gone, cfg!(windows)) {
+            let text = if gone {
                 // i18n: in a download's log: the downloaded archive, after it was extracted
-                (true, true) => crate::i18n::t("The archive was moved to the Recycle Bin"),
-                // i18n: in a download's log (Linux and macOS): the downloaded archive, after it was extracted
-                (true, false) => crate::i18n::t("The archive was moved to the Trash"),
+                crate::i18n::t("The archive was moved to the Recycle Bin")
+            } else {
                 // i18n: in a download's log: the downloaded archive, after it was extracted
-                (false, true) => {
-                    crate::i18n::t("The archive could not be moved to the Recycle Bin: it was kept")
-                }
-                // i18n: in a download's log (Linux and macOS): the downloaded archive, after it was extracted
-                (false, false) => {
-                    crate::i18n::t("The archive could not be moved to the Trash: it was kept")
-                }
+                crate::i18n::t("The archive could not be moved to the Recycle Bin: it was kept")
             };
             note(items, text.to_owned());
         }
@@ -311,7 +304,7 @@ impl Extracts {
     /// The password window's answer: extract again with it, or leave the archive.
     pub fn answer(&mut self, password: Option<String>) {
         let Some(ask) = self.ask.take() else { return };
-        if let Some(pw) = password {
+        if let Some(pw) = password.filter(|_| !ask.look_only) {
             let mut job = ask.job;
             job.password = Some(pw);
             if self.seen.insert(job.archive.clone()) {
@@ -339,7 +332,7 @@ pub fn seven_zip() -> Option<PathBuf> {
 /// fills the real (per-user, shared) Recycle Bin or Trash. Never set for users.
 const TEST_TRASH: &str = "MDM_TEST_TRASH_DIR";
 
-/// Move `files` to the Recycle Bin (the Trash), or into `MDM_TEST_TRASH_DIR` when a test set it.
+/// Move `files` to the Recycle Bin, or into `MDM_TEST_TRASH_DIR` when a test set it.
 fn to_trash(files: &[PathBuf]) -> bool {
     if let Some(dir) = std::env::var_os(TEST_TRASH).filter(|d| !d.is_empty()) {
         let dir = PathBuf::from(dir);
@@ -349,10 +342,7 @@ fn to_trash(files: &[PathBuf]) -> bool {
                 std::fs::rename(f, dir.join(name)).is_ok()
             });
     }
-    #[cfg(windows)]
-    return crate::win32::to_recycle_bin(files);
-    #[cfg(unix)]
-    return crate::unix::to_trash(files);
+    crate::win32::to_recycle_bin(files)
 }
 
 /// Why `name` wasn't extracted, for its download's log.
@@ -391,7 +381,7 @@ fn failed(name: &str, e: &Error) -> String {
             crate::i18n::t("7z and RAR archives need 7-Zip, which isn't installed").to_owned()
         }
         // i18n: why an archive wasn't extracted (after "Couldn't extract {name}: ")
-        Error::Unsupported => crate::i18n::t("it is not an archive MDM extracts").to_owned(),
+        Error::Unsupported => crate::i18n::t("it is not an archive Grabbit extracts").to_owned(),
         // i18n: why an archive wasn't extracted (after "Couldn't extract {name}: ")
         Error::Cancelled => crate::i18n::t("it was stopped").to_owned(),
         Error::Io(e) => crate::errors::describe(&mdm_engine::Error::Io(Arc::new(
@@ -473,14 +463,23 @@ pub struct ToolDialog {
 }
 
 impl ToolDialog {
+    /// For the archive named `name` (`/show 7zip`, the screenshots').
+    pub fn new(name: String) -> Self {
+        ToolDialog { name }
+    }
+
     /// `Done(())` or Closed: the window goes.
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
+        // The mockup's layout: why, then (muted) what to do, the footer.
+        const W: f32 = 440.0;
+        const BODY: f32 = 96.0;
+        let e = winui::EDGE;
         window(
             ctx,
             "needs-7zip",
             // i18n: window title: 7-Zip (a program's name) must be installed
             "7-Zip needed",
-            [400.0, 118.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
             |ui, o| {
@@ -488,46 +487,51 @@ impl ToolDialog {
                 let line = crate::i18n::fmt(
                     // i18n: in the "7-Zip needed" window: {name} is the archive's file name; 7-Zip is a program's name
                     crate::i18n::t(
-                        "{name} is a 7z or RAR archive. MDM extracts those with 7-Zip, which isn't installed.",
+                        "{name} is a 7z or RAR archive. Grabbit extracts those with 7-Zip, which isn't installed.",
                     ),
                     &[("name", &crate::i18n::isolate(&self.name))],
                 );
                 winui::paragraph(
                     &p,
-                    o.x + 11.0,
-                    o.y + 21.0,
+                    o.x + e,
+                    o.y + 29.0,
                     &line,
                     LIGHT_TEXT(),
-                    o.x + 389.0,
+                    o.x + W - e,
                     14.0,
                 );
                 winui::paragraph(
                     &p,
-                    o.x + 11.0,
-                    o.y + 56.0,
+                    o.x + e,
+                    o.y + 66.0,
                     // i18n: in the "7-Zip needed" window, under why
                     crate::i18n::t(
                         "Install 7-Zip (free), then right-click the download and choose Extract.",
                     ),
                     winui::MUTED(),
-                    o.x + 389.0,
+                    o.x + W - e,
                     14.0,
                 );
-                let row = winui::buttons_light_right(
+                // Enter and Escape both mean OK, as before.
+                let pressed = winui::footer(
                     ui,
                     o,
-                    389.0,
-                    86.0,
-                    &[
+                    W,
+                    BODY,
+                    &mut [
                         // i18n: button: opens 7-Zip's website (7-Zip is a program's name)
-                        (crate::i18n::mark("Get 7-Zip"), ButtonKind::Normal),
-                        (crate::i18n::mark("OK"), ButtonKind::Default),
+                        FooterItem::Button(FooterButton::new("Get 7-Zip", ButtonKind::Normal)),
+                        FooterItem::Button(
+                            FooterButton::new("OK", ButtonKind::Default)
+                                .enter(true)
+                                .escape(true),
+                        ),
                     ],
                 );
-                if row[0].clicked() {
+                if pressed == Some(0) {
                     crate::launch::open("https://www.7-zip.org/");
                 }
-                if row[1].clicked() || winui::escape_pressed(ui) || winui::enter_pressed(ui) {
+                if pressed == Some(1) {
                     Outcome::Done(())
                 } else {
                     Outcome::Open
@@ -543,6 +547,8 @@ pub struct PasswordDialog {
     wrong: bool,
     password: String,
     focused: bool,
+    /// Opened alone for a screenshot (`/show archive-password`): its answer extracts nothing.
+    look_only: bool,
 }
 
 impl PasswordDialog {
@@ -557,6 +563,27 @@ impl PasswordDialog {
             wrong,
             password,
             focused: false,
+            look_only: false,
+        }
+    }
+
+    /// The question for an archive named `name` that is nowhere (`/show archive-password`, the
+    /// screenshots'): Extract and Cancel only close it.
+    pub fn sample(name: &str) -> Self {
+        let job = Job {
+            ids: Vec::new(),
+            archive: PathBuf::from(name),
+            files: Vec::new(),
+            password: None,
+            delete: false,
+            by_hand: true,
+            subfolder: mdm_extract::Subfolder::default(),
+            url: url::Url::parse("https://example.org/").expect("a valid address"),
+            referer: None,
+        };
+        PasswordDialog {
+            look_only: true,
+            ..Self::new(job, false)
         }
     }
 
@@ -568,11 +595,15 @@ impl PasswordDialog {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
+        // The mockup's layout: the line, the password's box, the footer.
+        const W: f32 = 400.0;
+        const BODY: f32 = 86.0;
+        let e = winui::EDGE;
         window(
             ctx,
             "archive-password",
             "Archive password",
-            [380.0, 112.0],
+            [W, BODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
             |ui, o| {
@@ -590,20 +621,20 @@ impl PasswordDialog {
                 winui::fit(
                     ui,
                     &p,
-                    o.x + 11.0,
-                    o.y + 21.0,
+                    o.x + e,
+                    o.y + 29.0,
                     &line,
                     if self.wrong {
                         winui::ERROR()
                     } else {
                         LIGHT_TEXT()
                     },
-                    o.x + 369.0,
+                    o.x + W - e,
                     "archive-password-line",
                 );
                 let edit = winui::password_light(
                     ui,
-                    r(o, 11.0, 31.0, 358.0, 23.0),
+                    r(o, e, 40.0, W - 2.0 * e, winui::CONTROL_H),
                     &mut self.password,
                     true,
                 );
@@ -619,40 +650,34 @@ impl PasswordDialog {
                     self.focused = true;
                 }
                 let has = !self.password.is_empty();
-                // As wide as their labels in this language (#192).
-                let [ok_at, skip_at] = winui::buttons_to_right(
-                    &ui.painter().clone(),
-                    369.0,
-                    8.0,
-                    &[("Extract", 73.0), ("Cancel", 73.0)],
-                    160.0,
-                )[..] else {
-                    unreachable!("two buttons")
-                };
-                let ok = winui::button_light(
+                // Enter extracts (with a password typed), Escape cancels, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, ok_at.0, 80.0, ok_at.1, 21.0),
-                    // i18n: button: extract the archive with the password typed
-                    "Extract",
-                    if has {
-                        ButtonKind::Default
-                    } else {
-                        ButtonKind::Disabled
-                    },
-                    false,
-                )
-                .clicked();
-                let skip = winui::button_light(
-                    ui,
-                    r(o, skip_at.0, 80.0, skip_at.1, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                if skip || winui::escape_pressed(ui) {
+                    o,
+                    W,
+                    BODY,
+                    &mut [
+                        FooterItem::Button(
+                            // i18n: button: extract the archive with the password typed
+                            FooterButton::new(
+                                "Extract",
+                                if has {
+                                    ButtonKind::Default
+                                } else {
+                                    ButtonKind::Disabled
+                                },
+                            )
+                            .primary()
+                            .enter(true),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                if pressed == Some(1) {
                     Outcome::Done(None)
-                } else if (ok || winui::enter_pressed(ui)) && has {
+                } else if pressed == Some(0) && has {
                     Outcome::Done(Some(std::mem::take(&mut self.password)))
                 } else {
                     Outcome::Open
@@ -767,5 +792,16 @@ mod tests {
         q.offer(&items[0], &items, &off, true);
         assert_eq!(q.queue.len(), 2);
         assert!(!q.queue[0].delete, "Options' default keeps the archive");
+    }
+
+    /// `/show archive-password` (plan 09a's screenshots): its answer extracts nothing.
+    #[test]
+    fn a_sample_password_question_extracts_nothing() {
+        let mut q = Extracts {
+            ask: Some(PasswordDialog::sample("photos-2026.zip")),
+            ..Default::default()
+        };
+        q.answer(Some("secret".into()));
+        assert!(q.ask.is_none() && q.queue.is_empty() && q.seen.is_empty());
     }
 }

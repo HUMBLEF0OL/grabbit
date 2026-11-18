@@ -1,12 +1,16 @@
 [package]
-name = "mdm-torrent"
-description = "BitTorrent and magnet downloads for Mister Download Manager (librqbit, D-014)"
+name = "grabbit-torrent"
+description = "BitTorrent and magnet downloads for Grabbit (librqbit, D-014)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+
+# The code's paths stay `mdm_torrent::` (plan 10, decision 3).
+[lib]
+name = "mdm_torrent"
 
 [dependencies]
 # 9.1.0 and later: upstream's robustness fixes for what peers send.
@@ -19,6 +23,8 @@ flate2.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+# A warning when the thread that reads the torrents' numbers can't start (watch.rs).
+tracing.workspace = true
 # The blocklist file's URL, and trackers' hosts (lib.rs, trackers.rs).
 url.workspace = true
 

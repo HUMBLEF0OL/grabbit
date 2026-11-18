@@ -3,8 +3,8 @@ name: Torrents
 title: Download torrents and magnet links
 headline: Torrents and magnet links, in the list you already use.
 line: Magnet links and .torrent files beside your other downloads, queued and scheduled like any of them.
-lede: MDM downloads torrents itself, with no second program to install. Pick the files you want, watch the peers and the pieces come in, and keep sharing if you like.
-description: Mister Download Manager downloads torrents and magnet links: choose the files, see peers, trackers and pieces, and queue them with your other downloads.
+lede: Grabbit downloads torrents itself, with no second program to install. Pick the files you want, watch the peers and the pieces come in, and keep sharing if you like.
+description: Grabbit downloads torrents and magnet links: choose the files, see peers, trackers and pieces, and queue them with your other downloads.
 group: downloading
 order: 50
 since: 0.1.0
@@ -57,7 +57,7 @@ and no setting changes it. To hide it, use a VPN for the whole computer.
   all together or one by one.
 - **The network is yours to choose**: incoming connections, UPnP, a fixed port, the DHT, local
   peers, a SOCKS5 proxy, an IP blocklist, and one network adapter (a VPN's) with a kill switch.
-- **Safer files**: MDM asks before writing into files already in the folder, refuses names the
+- **Safer files**: Grabbit asks before writing into files already in the folder, refuses names the
   system can't write safely, and marks the files as downloaded from the internet.
 - [RSS feeds](/features/rss.html) that add new torrents by rule, and torrents sent to a
   [debrid account](/features/debrid.html) instead of to peers.

@@ -40,7 +40,7 @@ const SORRY: &[&str] = &[
 pub fn text(input: &Input, home: Option<&Path>) -> String {
     let kind = input.kind.unwrap_or(Kind::Crash);
     let mut s = String::new();
-    let _ = writeln!(s, "---- Mister Download Manager crash report ----");
+    let _ = writeln!(s, "---- Grabbit crash report ----");
     let n = input.time.bytes().map(usize::from).sum::<usize>();
     let _ = writeln!(s, "// {}", SORRY[n % SORRY.len()]);
     let _ = writeln!(s);
@@ -81,9 +81,16 @@ pub fn text(input: &Input, home: Option<&Path>) -> String {
                             )
                         })
                         .unwrap_or_default();
+                    let back = if key_thread(kind, input)
+                        .is_some_and(|t| in_sleep_after_a_frame(&t.frames))
+                    {
+                        "done with that frame"
+                    } else {
+                        "back to waiting for events"
+                    };
                     let _ = writeln!(
                         s,
-                        "The window did not answer for {} s, but it was back to waiting for events when this snapshot was taken, so the stacks below don't show what held it.{ran}",
+                        "The window did not answer for {} s, but it was {back} when this snapshot was taken, so the stacks below don't show what held it.{ran}",
                         f.seconds
                     );
                 }
@@ -102,7 +109,7 @@ pub fn text(input: &Input, home: Option<&Path>) -> String {
                             secs(b.wall_ms)
                         ),
                         (Some(Stuck::Starved), Some(b)) => format!(
-                            ". Its thread ran only {} of {} s, and not in a wait: the computer was too busy to run MDM, or slow to load it from disk{}. Most likely not a bug in MDM.",
+                            ". Its thread ran only {} of {} s, and not in a wait: the computer was too busy to run Grabbit, or slow to load it from disk{}. Most likely not a bug in Grabbit.",
                             secs(b.cpu_ms),
                             secs(b.wall_ms),
                             b.faults
@@ -125,9 +132,18 @@ pub fn text(input: &Input, home: Option<&Path>) -> String {
                 _ => {
                     let _ = writeln!(
                         s,
-                        "A dump asked for while MDM was running (a freeze or a panic): the window thread first."
+                        "A dump asked for while Grabbit was running (a freeze or a panic): the window thread first."
                     );
                 }
+            }
+            // Where the frame was when the watchdog saw the freeze: what held it, when the
+            // snapshot came too late to show it (upstream issue 574).
+            if let Some(f) = input.notes.freeze.as_ref().filter(|f| !f.step.is_empty()) {
+                let _ = writeln!(
+                    s,
+                    "When it stopped answering, the window was at: {}.",
+                    f.step
+                );
             }
             if input.notes.recovered {
                 let _ = writeln!(s, "It answered again later.");
@@ -146,7 +162,7 @@ pub fn text(input: &Input, home: Option<&Path>) -> String {
         Kind::Exit => {
             let _ = writeln!(
                 s,
-                "MDM ended without closing normally, and no crash was caught (it may have been ended from outside, or the system stopped it)."
+                "Grabbit ended without closing normally, and no crash was caught (it may have been ended from outside, or the system stopped it)."
             );
         }
     }
@@ -179,7 +195,7 @@ pub fn text(input: &Input, home: Option<&Path>) -> String {
 
     // What MDM was doing.
     if !input.log_tail.is_empty() {
-        let _ = writeln!(s, "-- What MDM was doing (its log) --");
+        let _ = writeln!(s, "-- What Grabbit was doing (its log) --");
         for l in &input.log_tail {
             let _ = writeln!(s, "{l}");
         }
@@ -189,7 +205,7 @@ pub fn text(input: &Input, home: Option<&Path>) -> String {
     // The system.
     let _ = writeln!(s, "-- System details --");
     if let Some(ss) = &input.notes.session {
-        let _ = writeln!(s, "MDM: {} ({})", ss.version, ss.commit);
+        let _ = writeln!(s, "Grabbit: {} ({})", ss.version, ss.commit);
         let _ = writeln!(s, "Installed with: {}", ss.install);
         let _ = writeln!(s, "System: {} ({})", ss.os_version, ss.arch);
         let _ = writeln!(s, "Language: {}", ss.language);
@@ -291,6 +307,16 @@ pub struct Made {
     pub notes: Notes,
 }
 
+impl Made {
+    /// A freeze's window thread, as its dump has it (the app reads where it was stuck: #847).
+    pub fn frozen_window_thread(&self) -> Option<&Thread> {
+        if self.kind != Kind::Freeze {
+            return None;
+        }
+        window_thread(self.analysis.as_ref()?, self.notes.freeze.as_ref()?)
+    }
+}
+
 /// Read `dump` (none for an exit nothing caught), write the report beside it in `data`'s crashes
 /// folder, and return it. `symbols`: Breakpad symbol stores to try (the release's, once fetched).
 pub fn make(
@@ -317,8 +343,7 @@ pub fn make(
             .and_then(|d| d.file_name())
             .map(|n| n.to_string_lossy().into_owned()),
     };
-    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
-        .map(std::path::PathBuf::from);
+    let home = std::env::var_os("USERPROFILE").map(std::path::PathBuf::from);
     let text = text(&input, home.as_deref());
     let signature = signature(kind, &input);
     let path = match dump {
@@ -345,17 +370,17 @@ pub fn make(
 /// The kind in a sentence.
 pub fn description(kind: Kind, notes: &Notes) -> &'static str {
     match kind {
-        Kind::Crash => "MDM crashed",
-        Kind::Panic => "MDM hit an internal error and closed",
+        Kind::Crash => "Grabbit crashed",
+        Kind::Panic => "Grabbit hit an internal error and closed",
         Kind::Freeze if notes.recovered => "The window stopped responding (it recovered)",
         Kind::Freeze => "The window stopped responding",
-        Kind::Exit => "MDM closed unexpectedly",
+        Kind::Exit => "Grabbit closed unexpectedly",
     }
 }
 
 /// A short, stable name for the problem, the same for every report of it (it finds the issue
 /// already filed for it): the kind and the first of MDM's own functions on the stack that
-/// matters ("freeze in misterdownloadmanager::winui::combo_edit").
+/// matters ("freeze in grabbit::winui::combo_edit").
 pub fn signature(kind: Kind, input: &Input) -> String {
     let main_module = main_module(input);
     // The freeze ended before the snapshot: its stack says nothing about it, and without this
@@ -447,8 +472,18 @@ pub fn stuck(
         // thread hardly ran is almost always a wait (the system's waits live there).
         None if share > STARVED_SHARE => None,
         None if main.is_some() && top.module.as_deref() == main => Some(Stuck::Starved),
+        // The C runtime's copies and compares (memcmp of an icon's first bytes, #663): never a
+        // wait, so a thread that hardly ran there waited for its memory, loaded from disk.
+        None if top.module.as_deref().is_some_and(is_memory_routines) => Some(Stuck::Starved),
         None => top.module.is_some().then_some(Stuck::Waiting),
     }
+}
+
+/// A module of the C runtime's memory and string routines only (memcpy, memcmp, memset): no
+/// wait lives there. Windows' VCRUNTIME140.dll and VCRUNTIME140_1.dll; not ucrtbase.dll, nor
+/// Linux's libc, which hold the waits as well.
+fn is_memory_routines(module: &str) -> bool {
+    module.to_ascii_lowercase().starts_with("vcruntime")
 }
 
 /// A function a thread waits in: the system's waits and sleeps, locks, I/O.
@@ -498,19 +533,22 @@ fn panic_entry(frames: &[Frame]) -> usize {
 fn key_thread<'a>(kind: Kind, input: &Input<'a>) -> Option<&'a Thread> {
     let a = input.analysis?;
     if kind == Kind::Freeze {
-        let f = input.notes.freeze.as_ref()?;
-        return a
-            .thread(f.ui_thread)
-            .filter(|_| f.ui_thread != 0)
-            .or_else(|| f.main.then(|| a.threads.first()).flatten());
+        return window_thread(a, input.notes.freeze.as_ref()?);
     }
     a.thread(a.requesting?)
 }
 
-/// A freeze whose window thread was already back in the event loop's wait when the dump was taken:
-/// a frame in progress never has that on its stack, so the frame had ended. The dump follows the
-/// watchdog's request, and came 7 s after it on a stalled computer (#355). winit's wait, on Windows;
-/// other systems' stacks keep the verdicts below.
+/// A freeze's window thread in its dump: by its id, or the first when it is the main thread.
+fn window_thread<'a>(a: &'a Analysis, f: &crate::protocol::Freeze) -> Option<&'a Thread> {
+    a.thread(f.ui_thread)
+        .filter(|_| f.ui_thread != 0)
+        .or_else(|| f.main.then(|| a.threads.first()).flatten())
+}
+
+/// A freeze whose window thread was already back in the event loop's wait (or in eframe's pause
+/// after a frame) when the dump was taken: a frame in progress never has that on its stack, so the
+/// frame had ended. The dump follows the watchdog's request, and came 7 s after it on a stalled
+/// computer (#355). winit's wait, on Windows.
 fn over_before_snapshot(kind: Kind, input: &Input) -> bool {
     kind == Kind::Freeze
         && input.notes.freeze.is_some()
@@ -519,18 +557,44 @@ fn over_before_snapshot(kind: Kind, input: &Input) -> bool {
                 f.function
                     .as_deref()
                     .is_some_and(|n| n.contains("wait_for_messages"))
-            })
+            }) || in_sleep_after_a_frame(&t.frames)
         })
+}
+
+/// The window thread in eframe's pause after a frame of a hidden or minimized window
+/// (`sleep_if_invisible_or_minimized`, 10 ms, which release builds fold into eframe's
+/// `run_ui_and_paint`): it comes after the app's logic and UI have returned, so the frame had
+/// ended. A window hidden in the notification area passes there after each of its ticks; two
+/// freezes reported just after the computer woke had their dump taken there, 8 and 15 s after
+/// they were seen (upstream issues 574 and 613), and their stacks said nothing of what held it.
+fn in_sleep_after_a_frame(frames: &[Frame]) -> bool {
+    // Rust's own frames: the system's below them (ntdll, KERNELBASE) carry no path.
+    let mut named = frames
+        .iter()
+        .filter_map(|f| f.function.as_deref())
+        .map(trim_function)
+        .filter(|n| n.contains("::"));
+    let Some(sleep) = named.next() else {
+        return false;
+    };
+    if !(sleep.starts_with("std::thread") && sleep.ends_with("sleep")) {
+        return false;
+    }
+    named.next().is_some_and(|caller| {
+        caller.starts_with("eframe::native::")
+            && (caller.ends_with("sleep_if_invisible_or_minimized")
+                || caller.ends_with("run_ui_and_paint"))
+    })
 }
 
 /// The first frame in the program's own code, past the system, Rust's standard library, locks,
 /// panics and the crash reporter itself: a function of the program's own crates first (named as
-/// its main module, the dump's first: "misterdownloadmanager", or MDM's `mdm_*` crates), else
+/// its main module, the dump's first: "grabbit", or MDM's `mdm_*` crates), else
 /// of any crate linked into it (egui, winit…).
 fn first_own_frame(frames: &[Frame], main_module: Option<&str>) -> Option<String> {
     let own_crate = main_module
         .map(|m| m.split('.').next().unwrap_or(m).replace('-', "_"))
-        .unwrap_or_else(|| "misterdownloadmanager".to_owned());
+        .unwrap_or_else(|| "grabbit".to_owned());
     let paths: Vec<String> = frames
         .iter()
         .filter(|f| main_module.is_none_or(|m| f.module.as_deref() == Some(m)))
@@ -681,7 +745,7 @@ mod tests {
             function: Some(f.to_owned()),
             file: Some(r"D:\build\mdm\crates\app\src\winui.rs".to_owned()),
             line: Some(2088),
-            module: Some("misterdownloadmanager.exe".to_owned()),
+            module: Some("grabbit.exe".to_owned()),
             offset: 0x1234,
         }
     }
@@ -696,8 +760,8 @@ mod tests {
                     frames: vec![
                         frame("parking_lot::raw_rwlock::RawRwLock::lock_exclusive_slow"),
                         frame("egui::context::Context::write<egui::memory::Memory>"),
-                        frame("misterdownloadmanager::winui::combo_edit::{{closure}}"),
-                        frame("misterdownloadmanager::dialogs::AddUrl::show"),
+                        frame("grabbit::winui::combo_edit::{{closure}}"),
+                        frame("grabbit::dialogs::AddUrl::show"),
                     ],
                 },
                 Thread {
@@ -722,10 +786,11 @@ mod tests {
                     main: false,
                     seconds: 9,
                     busy: None,
+                    step: String::new(),
                 }),
                 session: Some(Session {
                     version: "0.2.3".into(),
-                    exe: r"C:\Users\Someone\AppData\Local\MDM\mdm.exe".into(),
+                    exe: r"C:\Users\Someone\AppData\Local\Grabbit\mdm.exe".into(),
                     started: 1_793_505_000,
                     ..Default::default()
                 }),
@@ -736,12 +801,12 @@ mod tests {
         };
         assert_eq!(
             signature(Kind::Freeze, &input),
-            "freeze in misterdownloadmanager::winui::combo_edit"
+            "freeze in grabbit::winui::combo_edit"
         );
         let t = text(&input, Some(Path::new(r"C:\Users\Someone")));
         assert!(t.contains("-- Window thread (frozen): main (1) --"));
         assert!(t.contains("at crates/app/src/winui.rs:2088"));
-        assert!(t.contains(r"Program: ~\AppData\Local\MDM\mdm.exe"));
+        assert!(t.contains(r"Program: ~\AppData\Local\Grabbit\mdm.exe"));
         assert!(!t.contains("Someone"));
         // The watchdog's thread is listed among the others.
         assert!(t.contains("-- Thread watchdog (2) --"));
@@ -792,6 +857,7 @@ mod tests {
                         cpu_ms,
                         faults: Some(12_000),
                     }),
+                    step: String::new(),
                 }),
                 ..Default::default()
             },
@@ -804,8 +870,8 @@ mod tests {
     fn stopped_in_own_code() -> Analysis {
         let mut a = frozen();
         a.threads[0].frames = vec![
-            frame("misterdownloadmanager::app::App::dialogs"),
-            frame("misterdownloadmanager::app::impl$2::ui"),
+            frame("grabbit::app::App::dialogs"),
+            frame("grabbit::app::impl$2::ui"),
         ];
         a
     }
@@ -821,16 +887,16 @@ mod tests {
         let t = text(&input, None);
         assert!(t.contains("Its thread ran only 0.4 of 7.5 s, and not in a wait"));
         assert!(t.contains("(12000 page faults meanwhile)"));
-        assert!(t.contains("Most likely not a bug in MDM."));
+        assert!(t.contains("Most likely not a bug in Grabbit."));
         // Without symbols, MDM's own module counts as ordinary code, a system one as a wait.
         let mut bare = stopped_in_own_code();
         bare.modules = vec![crate::analyze::ModuleInfo {
-            name: "misterdownloadmanager.exe".into(),
+            name: "grabbit.exe".into(),
             ..Default::default()
         }];
         bare.threads[0].frames[0].function = None;
         let f = freeze_with(&bare, 400).notes.freeze.unwrap();
-        let main = Some("misterdownloadmanager.exe");
+        let main = Some("grabbit.exe");
         assert_eq!(
             stuck(&f, bare.threads[0].frames.first(), main),
             Some(Stuck::Starved)
@@ -840,10 +906,20 @@ mod tests {
             stuck(&f, bare.threads[0].frames.first(), main),
             Some(Stuck::Waiting)
         );
+        // #663: in the C runtime's memcmp, under MDM's own code: no wait there, so starved.
+        bare.threads[0].frames[0].module = Some("VCRUNTIME140.dll".into());
+        assert_eq!(
+            stuck(&f, bare.threads[0].frames.first(), main),
+            Some(Stuck::Starved)
+        );
+        assert_eq!(
+            signature(Kind::Freeze, &freeze_with(&bare, 100)),
+            "freeze while the computer was busy"
+        );
     }
 
     /// #355, as reported: the dump was written 7 s after it was asked for, when the window thread
-    /// was back in the event loop. Not a deadlock, not "in misterdownloadmanager::app".
+    /// was back in the event loop. Not a deadlock, not "in grabbit::app".
     #[test]
     fn a_freeze_over_before_the_snapshot_says_so() {
         let mut a = frozen();
@@ -859,8 +935,8 @@ mod tests {
                 "winit::platform_impl::windows::event_loop::EventLoop::wait_for_messages<enum2$<eframe::native::winit_integration::UserEvent> >",
             ),
             frame("eframe::run_native"),
-            frame("misterdownloadmanager::app"),
-            frame("misterdownloadmanager::main"),
+            frame("grabbit::app"),
+            frame("grabbit::main"),
         ];
         let input = freeze_with(&a, 0);
         assert_eq!(
@@ -877,13 +953,79 @@ mod tests {
         assert!(!t.contains("one frame never finished"), "{t}");
     }
 
+    /// Upstream issues 574 and 613, as reported (the window hidden in the notification area,
+    /// just after the computer woke): the dump came when the window answered again, and found its
+    /// thread in eframe's 10 ms pause after the frame. Not "a deadlock in
+    /// grabbit::app" nor "in ntdll.dll".
+    #[test]
+    fn a_freeze_whose_snapshot_found_the_pause_after_a_frame_says_so() {
+        let system = |module: &str, offset: u64| Frame {
+            function: None,
+            file: None,
+            line: None,
+            module: Some(module.into()),
+            offset,
+        };
+        let mut a = frozen();
+        a.threads[0].frames = vec![
+            system("ntdll.dll", 0x166464),
+            system("KERNELBASE.dll", 0x1427e),
+            frame("std::thread::functions::sleep()"),
+            frame("eframe::native::wgpu_integration::impl$3::run_ui_and_paint()"),
+            frame(
+                "eframe::native::run::WinitAppWrapper::check_redraw_requests<eframe::native::wgpu_integration::WgpuWinitApp>()",
+            ),
+            frame(
+                "eframe::native::run::impl$1::new_events<eframe::native::wgpu_integration::WgpuWinitApp>()",
+            ),
+            frame("eframe::run_native()"),
+            frame("grabbit::app()"),
+            frame("grabbit::main()"),
+        ];
+        let mut input = freeze_with(&a, 0);
+        input.notes.freeze.as_mut().unwrap().step = "the tray icon".into();
+        assert_eq!(
+            signature(Kind::Freeze, &input),
+            "freeze over before the snapshot"
+        );
+        let t = text(&input, None);
+        assert!(
+            t.contains("done with that frame when this snapshot was taken"),
+            "{t}"
+        );
+        assert!(t.contains("the window was at: the tray icon."), "{t}");
+        assert!(!t.contains("deadlock"), "{t}");
+
+        // Debug builds keep eframe's helper.
+        a.threads[0].frames = vec![
+            frame("std::thread::sleep"),
+            frame("eframe::native::winit_integration::sleep_if_invisible_or_minimized"),
+            frame("eframe::native::wgpu_integration::WgpuWinitRunning::run_ui_and_paint"),
+        ];
+        assert_eq!(
+            signature(Kind::Freeze, &freeze_with(&a, 0)),
+            "freeze over before the snapshot"
+        );
+
+        // A sleep of MDM's own, inside a frame, is the frame's: still a freeze in MDM.
+        a.threads[0].frames = vec![
+            frame("std::thread::functions::sleep()"),
+            frame("grabbit::app::App::tick()"),
+            frame("eframe::native::wgpu_integration::impl$3::run_ui_and_paint()"),
+        ];
+        assert_eq!(
+            signature(Kind::Freeze, &freeze_with(&a, 0)),
+            "freeze in grabbit::app::App::tick"
+        );
+    }
+
     #[test]
     fn a_freeze_in_a_lock_is_a_wait_and_keeps_its_place() {
         let a = frozen();
         let input = freeze_with(&a, 10);
         assert_eq!(
             signature(Kind::Freeze, &input),
-            "freeze in misterdownloadmanager::winui::combo_edit"
+            "freeze in grabbit::winui::combo_edit"
         );
         assert!(
             text(&input, None).contains("Its thread was waiting (it ran 0.0 of 7.5 s): a deadlock")
@@ -896,7 +1038,7 @@ mod tests {
         let input = freeze_with(&a, 7_300);
         assert_eq!(
             signature(Kind::Freeze, &input),
-            "freeze in misterdownloadmanager::app::App::dialogs"
+            "freeze in grabbit::app::App::dialogs"
         );
         assert!(
             text(&input, None)
@@ -939,8 +1081,8 @@ mod tests {
     #[test]
     fn function_names_lose_generics_and_closures() {
         assert_eq!(
-            trim_function("misterdownloadmanager::winui::combo_edit::{{closure}}"),
-            "misterdownloadmanager::winui::combo_edit"
+            trim_function("grabbit::winui::combo_edit::{{closure}}"),
+            "grabbit::winui::combo_edit"
         );
         assert_eq!(
             trim_function("mdm_engine::job::Job<alloc::string::String>::run"),

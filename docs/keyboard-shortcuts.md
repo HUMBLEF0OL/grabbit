@@ -2,25 +2,28 @@
 
 [← Back to docs index](README.md)
 
-The same list is in MDM under **Help → Keyboard shortcuts**, and the menus show each command's
-keys beside it. On a Mac, **⌘** (Command) takes the place of **Ctrl**: **⌘N** adds a download.
+The same list is in Grabbit under **Help → Keyboard shortcuts**, and the menus show each command's
+keys beside it.
 
-Everything can be done from the keyboard, and MDM works with screen readers (such as
+Everything can be done from the keyboard, and Grabbit works with screen readers (such as
 Narrator and NVDA on Windows): its windows, dialogs and menus tell them what each control is
 and its state, and the download list reads each download's name, status and size. The
 **Categories** pane reads as a tree (each category with its count, open or shut, selected or
 not), and the menu bar and every right-click menu as menus whose items can be run from there.
-On Linux, screen readers (Orca) don't read MDM's windows yet; the keyboard works there as
-everywhere.
 
 ## Adding and finding
 
 | Keys | What they do |
 |---|---|
 | **Ctrl+N** | Add a download (**Add URL**) |
+| **Ctrl+V** | Paste an address into the paste bar (while nothing else has the keyboard; it doesn't add it, **Enter** does) |
 | **Ctrl+F** | Find a download |
 | **F3** | Find the next match |
 | Type a name | Jump to the download whose name starts with it |
+
+In the paste bar's address box, **Enter** adds the address, **Esc** leaves the box, **Up** /
+**Down** step through the last addresses (the same list as **Add URL**'s), and **Alt+Down** or
+**F4** opens that list.
 
 ## The selected download
 
@@ -47,7 +50,9 @@ everywhere.
 | **Ctrl+Space** | Select or unselect the download with the dotted outline |
 | **Page Up** / **Page Down** | Move a page up / down |
 | **Home** / **End** | Select the first / last download |
-| **Tab** / **Shift+Tab** | Move between the download list and the Categories tree |
+| **Tab** / **Shift+Tab** | Move between the paste bar, the categories and the download list (**Shift+Tab** goes back) |
+
+When the paste bar is hidden, **Tab** moves between the categories and the download list.
 
 In the **Categories** tree, **Up** / **Down** choose a node, **Left** / **Right** close and open
 a branch, and **Home** / **End** go to the first / last node.
@@ -56,15 +61,15 @@ a branch, and **Home** / **End** go to the first / last node.
 
 | Keys | What they do |
 |---|---|
-| **F10**, or **Alt** pressed alone | Open the first menu (**Tasks**); on a Mac **Ctrl+F2** |
-| **Alt** + a menu's underlined letter | Open that menu (Windows and Linux) |
+| **F10**, or **Alt** pressed alone | Open the first menu (**Tasks**) |
+| **Alt** + a menu's underlined letter | Open that menu |
 | **Up** / **Down** | Move through an open menu |
 | **Home** / **End** | The first / last item of an open menu |
 | **Left** / **Right** | The menu before / after; in a submenu, **Left** closes it |
 | **Enter**, or an item's underlined letter | Run the highlighted item |
 | **Esc** | Close a menu or dialog (an open drop-down list first) |
 | **Enter** | In **Download File Info**: **Start Download** |
-| **Tab** | Move between the **Categories** pane and the download list |
+| **Tab** | Move between the paste bar, the categories and the download list |
 | **Up** / **Down**, **Left** / **Right** | In the **Categories** pane: the next category; close or open a branch |
 | **Shift+F10** or the **Menu** key | In the **Categories** pane: the selected category's menu (**Properties**, **Add category**, **Delete**) |
 | **Ctrl++** / **Ctrl+−** | Make everything larger / smaller, in every window (**View → Interface size**, 100 % to 200 %) |
@@ -81,9 +86,9 @@ A window larger than the screen at a big interface size scrolls.
 | **Space** | Press a focused button, tick a check box, tick the selected row of a list |
 | **Esc** | Close the dialog (an open drop-down list first) |
 | **Alt** + an underlined letter | That button or control |
-| **Ctrl+Tab** / **Ctrl+Shift+Tab** | The next / previous tab (also **Ctrl+Page Down** / **Page Up**) |
-| **Left** / **Right** | The next tab of a focused tab strip; the next choice of a radio group |
-| **Up** / **Down** | The next choice of a drop-down list or radio group; a number up or down |
+| **Ctrl+Tab** / **Ctrl+Shift+Tab** | The next / previous tab, or Options page (also **Ctrl+Page Down** / **Page Up**) |
+| **Left** / **Right** | The next tab of a focused tab strip, or Options page of its focused side list; the next choice of a radio group |
+| **Up** / **Down** | The next Options page of its focused side list; the next choice of a drop-down list or radio group; a number up or down |
 | **Alt+Down** or **F4** | Open a drop-down list |
 | Type a name | Jump to the item that starts with it, in a list or a drop-down |
 | **Delete** | Remove the selected item of a list (a login, an exception, a queue: asks first) |

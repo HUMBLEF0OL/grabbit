@@ -3,20 +3,18 @@
 # GitHub's Windows runner (.github/workflows/docs-shots.yml), a stock Windows whose file icons are
 # Windows' own; a run here shows this PC's. At 1x: MDM_ZOOM=2 draws the content
 # twice as large but Windows keeps the title bar at the display's scale, out of proportion. Runs its
-# own Mister Download Manager instance (its own data folder, MDM_DATA_DIR) and its own labserver,
+# own Mister Download Manager instance (its own data folder, GRABBIT_DATA_DIR) and its own labserver,
 # both addressed by process id: the user's own instance and anything else running are never
 # touched. Nothing shows on the screen: with MDM_OFFSCREEN=1 the app opens every window far off
 # the screens, without focus, taskbar button, tray icon or sound, and PrintWindow captures them
 # there (cap-own.ps1). Dialogs open through the app's
 # own command line (/show <window>), so nothing is clicked or typed on the screen.
 #
-#   tools\lab\docs-shots.ps1 -Exe target\release\misterdownloadmanager.exe -Server target\release\labserver.exe
-#   tools\lab\docs-shots.ps1 ... -Lang ar -Only arabic-main
+#   tools\lab\docs-shots.ps1 -Exe target\release\grabbit.exe -Server target\release\labserver.exe
 param(
   [Parameter(Mandatory)][string]$Exe,
   [Parameter(Mandatory)][string]$Server,
   [string]$OutDir = "docs\images",
-  [string]$Lang = "en",
   [int]$Port = 8099,
   # The name the downloads' addresses use for the lab server (it listens on 127.0.0.1): one the
   # hosts file points there gives the shots a neutral address (docs-shots.yml: downloads.example).
@@ -41,7 +39,7 @@ param(
   # "@download:<path>" (Download File Info for the lab server's <path>, as a browser hands it),
   # or "@complete:<path>" (the Download complete window once that small file is in).
   # With -Torrent, "@torrent" is its Add torrent window. "a+b" runs /show a first, then shoots b
-  # ("theme:metro+@main").
+  # ("theme:graphite+@main").
   [string[]]$Show = @(),
   # Beside each picture, <name>.ui.json: its controls' names and places (ui-rects.ps1).
   [switch]$Ui,
@@ -148,13 +146,13 @@ function Follow {
   Write-Warning "MDM started again (pid $($n.ProcessId)); the shots go on there"
   $script:app = Get-Process -Id $n.ProcessId
   Start-Sleep 4
-  $script:main = @(Titles $script:app.Id | Where-Object { $_ -like "Mister Download Manager*" })[0]
+  $script:main = @(Titles $script:app.Id | Where-Object { $_ -like "Grabbit*" })[0]
 }
 $srv = $null; $app = $null
 try {
   if (Test-Path $work) { Remove-Item $work -Recurse -Force }
   New-Item -ItemType Directory -Force "$work\data", "$work\Downloads" | Out-Null
-  # The language is chosen (no first-start picker); light mode unless asked, dark with View →
+  # Nothing asked at the first start; light mode unless asked, dark with View →
   # Always dark, whatever Windows' own mode. Every category's folder is under $work, so no shot
   # shows the user's own folders (or name). Nothing reaches out: no update check, and the torrent
   # engine neither listens nor uses the DHT, UPnP or local discovery (no firewall prompt).
@@ -166,8 +164,8 @@ try {
       "[" + (& $q $_) + "," + (& $q $d) + "]"
     }
   Set-Content -Encoding utf8 "$work\data\downloads.json" (
-    '{"next_id":1,"items":[],"version":2,"settings":{"language":' + (& $q $Lang) +
-    ',"language_asked":true,"helpers_asked":true,"extension_never_ask":true,"dark_mode_support":' + $dark.ToString().ToLower() +
+    '{"next_id":1,"items":[],"version":2,"settings":{' +
+    '"helpers_asked":true,"extension_never_ask":true,"dark_mode_support":' + $dark.ToString().ToLower() +
     ',"always_dark":' + $dark.ToString().ToLower() +
     ',"update_check":false,"torrent_incoming":false,"torrent_upnp":false,"torrent_dht":false,"torrent_lsd":false,"torrent_stop_idle":true' +
     ',"category_dirs":[' + ($dirs -join ",") + ']' + $(if ($Settings) { ",$Settings" } else { "" }) + '}}')
@@ -176,14 +174,14 @@ try {
   $base = if ($Port -eq 80) { "http://$UrlHost" } else { "http://${UrlHost}:$Port" }
   # /show crash-test:freeze for the crash report window's shot.
   $env:MDM_CRASH_TEST = "1"
-  $env:MDM_DATA_DIR = "$work\data"
+  $env:GRABBIT_DATA_DIR = "$work\data"
   # Only when asked: MDM_ZOOM overrides View → Interface size (-Settings '"interface_size":150').
   if ($Zoom -ne 1) { $env:MDM_ZOOM = "$Zoom" } else { Remove-Item Env:MDM_ZOOM -ErrorAction SilentlyContinue }
   $env:MDM_OFFSCREEN = "1"
   if ($At) { $env:MDM_OFFSCREEN_AT = $At }
   $app = Start-Process -PassThru $Exe
   Start-Sleep 3
-  $main = @(Titles $app.Id | Where-Object { $_ -like "Mister Download Manager*" })[0]
+  $main = @(Titles $app.Id | Where-Object { $_ -like "Grabbit*" })[0]
 
   # A list that looks used: finished files, one still coming in (rate-limited: the rate is per
   # connection, so 256K over its 8 connections is about 2 MB/sec).
@@ -201,11 +199,11 @@ try {
   # the main window.
   for ($i = 0; $i -lt 25; $i++) {
     Start-Sleep 1
-    [DS]::Of([uint32]$app.Id) | Where-Object { $_.Value -notlike "Mister Download Manager*" } |
+    [DS]::Of([uint32]$app.Id) | Where-Object { $_.Value -notlike "Grabbit*" } |
       ForEach-Object { [DS]::PostMessage($_.Key, 0x10, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null }
   }
   Start-Sleep 2
-  $main = @(Titles $app.Id | Where-Object { $_ -like "Mister Download Manager*" })[0]
+  $main = @(Titles $app.Id | Where-Object { $_ -like "Grabbit*" })[0]
 
   # Each window opened by name through the app's own command line (/show, mdm_ipc), so no
   # click or key ever goes to the screen. name = /show argument. These are the README's and the
@@ -214,7 +212,7 @@ try {
   $windows = [ordered]@{
     "add-url" = "addurl"; "speed-limiter" = "speedlimit"; "scheduler" = "scheduler"
     "options-connection" = "options:connection"; "options-remote" = "options:remote"; "grabber" = "grabber"
-    "language-picker" = "language"; "progress" = "progress"
+    "progress" = "progress"
   }
   if ($Torrent -and (Want "add-torrent")) {
     $before = @(Titles $app.Id)
@@ -254,7 +252,7 @@ try {
   foreach ($entry in $Show) {
     Follow
     $name, $what = $entry -split "=", 2
-    # "theme:metro+@main": /show theme:metro first (no window of its own), then the shot.
+    # "theme:graphite+@main": /show theme:graphite first (no window of its own), then the shot.
     $parts = @($what -split "\+")
     $what = $parts[-1]
     foreach ($p in $parts[0..($parts.Count - 2)]) {
@@ -270,11 +268,13 @@ try {
     }
     if ($what -like "@menu:*") {
       & $Exe /show $what.Substring(6)
-      for ($i = 0; $i -lt 50 -and -not (@(Titles $app.Id) -like "misterdownloadmanager menu*"); $i++) { Start-Sleep -Milliseconds 200 }
+      for ($i = 0; $i -lt 50 -and -not (@(Titles $app.Id) -like "grabbit menu*"); $i++) { Start-Sleep -Milliseconds 200 }
       Start-Sleep -Milliseconds 1200
       Shot $app.Id "" $name -All
-      # The menu's windows are ours: closed like any other.
-      Close-Ours $app.Id "misterdownloadmanager menu*"
+      # The menu's windows are ours: closed like any other, with the window it opened over when
+      # that one came with it (progress:menu's progress window), so the next shot opens it anew.
+      Close-Ours $app.Id "grabbit menu*"
+      @(Titles $app.Id | Where-Object { $before -notcontains $_ }) | ForEach-Object { Close-Ours $app.Id ([WildcardPattern]::Escape($_)) }
       Start-Sleep -Milliseconds 800
       continue
     }
@@ -304,16 +304,18 @@ try {
       & $Exe /show $what
     }
     try { $t = New-Window $app.Id $before } catch { Write-Warning "${name}: no window"; continue }
-    # Options → Download panels opens a dialog over Options: that dialog is the shot.
+    # Options → Download panels opens a dialog over Options, and video-helpers Helpers over the
+    # video window: that dialog is the shot.
     $also = @()
-    if ($what -eq "options:panels") {
+    if ($what -in "options:panels", "video-helpers") {
       for ($i = 0; $i -lt 50; $i++) {
         $new = @(Titles $app.Id | Where-Object { $before -notcontains $_ })
         if ($new.Count -ge 2) { break }
         Start-Sleep -Milliseconds 200
       }
       $also = @($t)
-      $t = @($new | Where-Object { $_ -ne $also[0] })[0]
+      # By its title where it has a known one (Helpers), else the new window that isn't the first.
+      $t = @($new | Where-Object { $_ -ne $also[0] -and ($what -ne "video-helpers" -or $_ -eq "Helpers") })[0]
       if (-not $t) { Write-Warning "${name}: no dialog"; Close-Ours $app.Id $also[0]; continue }
     }
     Start-Sleep -Milliseconds 1500
@@ -324,8 +326,8 @@ try {
   }
   # The main window last: by now every small file has finished (a fresh .zip can sit at 100%
   # for a moment while an antivirus scan holds it).
-  if ((Want "main-light") -or (Want "main-dark") -or (Want "arabic-main")) {
-    $name = if ($Lang -eq "ar") { "arabic-main" } elseif ($dark) { "main-dark" } else { "main-light" }
+  if ((Want "main-light") -or (Want "main-dark")) {
+    $name = if ($dark) { "main-dark" } else { "main-light" }
     # Shot alone (no windows before it): give the last small files their moment too.
     if ($Only.Count -eq 1) { Start-Sleep 10 }
     if (Want $name) { Shot $app.Id $main $name }
@@ -335,7 +337,7 @@ try {
   $crashShot = if ($dark) { "crash-report-dark" } else { "crash-report" }
   if (Want $crashShot) {
     & $Exe /show "crash-test:freeze" | Out-Null
-    $title = "Mister Download Manager crash report"
+    $title = "Grabbit crash report"
     $mon = 0
     for ($i = 0; $i -lt 60 -and -not $mon; $i++) {
       Start-Sleep -Milliseconds 500
@@ -355,7 +357,7 @@ try {
   # A copy started again by itself, and its crash monitor: ours as well.
   Ours | ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
   if ($srv) { Stop-Process -Id $srv.Id -ErrorAction SilentlyContinue }
-  Remove-Item Env:MDM_DATA_DIR, Env:MDM_ZOOM, Env:MDM_OFFSCREEN, Env:MDM_OFFSCREEN_AT, Env:MDM_CRASH_TEST -ErrorAction SilentlyContinue
+  Remove-Item Env:GRABBIT_DATA_DIR, Env:MDM_ZOOM, Env:MDM_OFFSCREEN, Env:MDM_OFFSCREEN_AT, Env:MDM_CRASH_TEST -ErrorAction SilentlyContinue
   # The downloads (a 6 GB file partly fetched) don't stay behind.
   Start-Sleep 1
   Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue

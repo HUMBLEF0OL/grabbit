@@ -15,7 +15,7 @@ command takes them all again, light and dark:
     python tools/shots/make.py docs <run>      # docs/images/*.webp from a Docs screenshots run
 
 `shoot` runs tools/lab/docs-shots.ps1 twice (light, then dark) with the list's windows: the
-app's own instance with its own data folder and download folder (MDM_DATA_DIR), off the screens
+app's own instance with its own data folder and download folder (GRABBIT_DATA_DIR), off the screens
 (MDM_OFFSCREEN=1), the lab server's neutral files, nothing clicked or typed. Each window's
 controls come with it (tools/lab/ui-rects.ps1, the app's accessibility tree), so the list names
 controls ("Start Download") instead of pixels, and a moved button needs no edit here. The raw
@@ -87,11 +87,11 @@ def raw_name(take: str) -> str:
 def shoot(shots: list[dict], bin_dir: Path, work: str | None, extra: list[str]) -> None:
     if os.name != "nt":
         sys.exit("shoot runs on Windows (tools/lab/docs-shots.ps1); `build` works anywhere")
-    exe = bin_dir / "misterdownloadmanager.exe"
+    exe = bin_dir / "grabbit.exe"
     server = bin_dir / "labserver.exe"
     for p in (exe, server):
         if not p.is_file():
-            sys.exit(f"{p} missing: cargo build --release -p mdm-app -p mdm-labserver")
+            sys.exit(f"{p} missing: cargo build --release -p grabbit-app -p grabbit-labserver")
     takes = []
     for s in shots:
         if s.get("take") and s["take"] not in takes:
@@ -291,7 +291,7 @@ def build(shots: list[dict]) -> None:
 IMAGES = ROOT / "docs" / "images"
 # docs-shots.ps1's and progress-shots.ps1's pictures that docs/images keeps (as <name>.webp),
 # from a Docs screenshots run's docs/ folder; main-dark from its site-dark/ folder.
-DOCS_SHOTS = ["add-torrent", "add-url", "arabic-main", "crash-report", "grabber", "language-picker",
+DOCS_SHOTS = ["add-torrent", "add-url", "crash-report", "grabber",
               "main-light", "options-connection", "options-remote", "progress", "progress-torrent",
               "progress-torrent-pieces", "progress-video", "scheduler", "speed-limiter"]
 DOCS_DARK = ["main-dark"]
@@ -324,7 +324,7 @@ def docs(run: Path | None, extra: list[Path]) -> None:
 
 # Pictures that stay PNG: the social card (og:image: some sites don't read WebP), the logo and
 # the icons the README shows.
-PNG_OK = {"docs/images/social-preview.png", "docs/images/logo.png"}
+PNG_OK = {"docs/images/social-preview.png"}
 PNG_DIRS = ("docs/images/icons/", "docs/images/browsers/")
 SCREEN_DIRS = ("website/assets/screens/", "website/assets/browser/", "website/assets/win/")
 TEXT = (".md", ".html", ".py", ".ps1", ".mjs", ".js", ".css", ".toml", ".yml", ".json", ".sh", ".rs", ".txt")

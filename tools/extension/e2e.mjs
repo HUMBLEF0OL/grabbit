@@ -1,12 +1,12 @@
 // The whole browser integration in real browsers, with nothing on the screen: each browser runs
 // headless with its own new profile and loads the extension (target/extension, from pack.ps1);
 // the native messaging host (target/release) hands what it sends to a separate Mister Download
-// Manager instance (its own data folder, MDM_DATA_DIR; off the screens, MDM_OFFSCREEN). Each case
+// Manager instance (its own data folder, GRABBIT_DATA_DIR; off the screens, MDM_OFFSCREEN). Each case
 // checks what MDM received (the lab server's request log, the files in MDM's folders, its list
 // through the automation API, its Download video window through UI Automation) and that the
 // browser kept nothing.
 //
-//   cargo build --release -p mdm-app -p mdm-nmhost -p mdm-labserver; tools\extension\pack.ps1
+//   cargo build --release -p grabbit-app -p grabbit-nmhost -p grabbit-labserver; tools\extension\pack.ps1
 //   node tools/extension/e2e.mjs [chrome] [brave] [edge] [firefox] [waterfox] [--only=case,case]
 //
 // Waterfox runs with Firefox's driver (E2E_WATERFOX: its program, when not installed in the usual
@@ -18,7 +18,8 @@
 // forwarded), names (Content-Disposition), redirect, leadon (a page going to the file by script, #374), form (POST, 303), alt (Alt+click leaves it
 // to the browser), opened (a PDF or MP3 the browser would show or play), spot (the video button
 // clear of the page's controls, #421), preview (the video button kept over a hover-to-play
-// preview the page stopped as the pointer went to it, #503), csp (the video button
+// preview the page stopped as the pointer went to it, #503), steady (the video button keeping one place over
+// a preview that grows and shows its own buttons while hovered, #560), csp (the video button
 // under a strict CSP), hls (the stream a player loaded), streams (HLS and DASH players handed over
 // by the button, the right-click menu and the media list, and read by yt-dlp; #155; also with no
 // .m3u8 or .mpd, served as text/plain or octet-stream, #171), sniffed (#171 without yt-dlp: such
@@ -28,7 +29,7 @@
 // an open tab: off, on, the site listed; #532), videoFocus (mouse idle/fullscreen and keyboard
 // focus, #480), start (MDM not running: the host starts it),
 // remote (Send downloads to → Another MDM, #157: paired from the popup, a link downloaded by a
-// headless MDM; E2E_REMOTE_URL for one running elsewhere, such as the Docker image: remoteServer).
+// headless MDM; E2E_REMOTE_URL for one running elsewhere: remoteServer).
 //
 // Windows: the host is registered for the current user while it runs (nmhost --register, as the
 // installer does) and unregistered at the end. Every registry key that touches (the browsers'
@@ -37,10 +38,6 @@
 // copy's registration for everyone (HKLM) is only read. With E2E_HOST_NAME, the host is registered
 // under that test name instead, for the run's browsers only (testHost). Your own browser
 // profiles are never used, nor the clipboard. Every process started here is stopped at the end.
-//
-// Linux (the lab's VM, tools/lab/linux-vm): the host's manifests (files) are written instead, and
-// put back byte for byte at the end (E2E_REPLACE_HOST=1 lets it replace a copy already
-// registered there); the cases that read the app's windows (UI Automation) are skipped.
 //
 // The programs: target/release, or CARGO_TARGET_DIR's release folder when it is set.
 import { spawn, spawnSync } from "node:child_process";
@@ -53,7 +50,7 @@ import { fileURLToPath } from "node:url";
 
 export const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const release = path.join(process.env.CARGO_TARGET_DIR ? path.resolve(process.env.CARGO_TARGET_DIR) : path.join(root, "target"), "release");
-export const exe = (name) => path.join(release, process.platform === "win32" ? `${name}.exe` : name);
+export const exe = (name) => path.join(release, `${name}.exe`);
 // E2E_WORK: the run's own folder instead (its profiles, the instance's data and downloads).
 const work = process.env.E2E_WORK ? path.resolve(process.env.E2E_WORK) : path.join(root, "target", "e2e");
 const PORT = 8101;
@@ -67,7 +64,7 @@ const proxyLog = [];
 const PAC = `function FindProxyForURL(url, host) { return host === "${PROXY_HOST}" ? "PROXY 127.0.0.1:${PROXY_PORT}" : "DIRECT"; }`;
 // The extension's own address in Firefox (moz-extension://UUID/), fixed in the test profile so
 // its pages (the popup) can be opened in a tab.
-const FIREFOX_ID = "integration@misterdownloadmanager.com";
+const FIREFOX_ID = "grabbit@humblef0ol.github.io";
 // The extensions the browsers load: pack.ps1's, or their copies for E2E_HOST_NAME (testHost).
 let chromiumExtension = path.join(root, "target", "extension", "chromium");
 let firefoxExtension = { type: "archivePath", path: path.join(root, "target", "extension", "mdm-firefox.xpi") };
@@ -76,25 +73,14 @@ const FIREFOX_UUID = "5d0c3b8e-7a51-4c1e-9f0a-38e2c4a1d7b6";
 const pf = process.env.ProgramFiles || "C:\\Program Files";
 const pf86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
 const local = process.env.LOCALAPPDATA || "";
-const WIN = process.platform === "win32";
-const BROWSERS = WIN
-  ? {
-      chrome: ["chromium", [`${pf}\\Google\\Chrome\\Application\\chrome.exe`, `${local}\\Google\\Chrome\\Application\\chrome.exe`]],
-      brave: ["chromium", [`${pf}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`, `${local}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`]],
-      edge: ["chromium", [`${pf86}\\Microsoft\\Edge\\Application\\msedge.exe`, `${pf}\\Microsoft\\Edge\\Application\\msedge.exe`]],
-      firefox: ["firefox", [`${pf}\\Mozilla Firefox\\firefox.exe`, `${pf86}\\Mozilla Firefox\\firefox.exe`]],
-      // Firefox's family: the same driver (E2E_WATERFOX: a copy unpacked elsewhere).
-      waterfox: ["firefox", [process.env.E2E_WATERFOX || "", `${pf}\\Waterfox\\waterfox.exe`].filter(Boolean)],
-    }
-  : // Linux (the lab's VM: tools/lab/linux-vm).
-    {
-      chrome: ["chromium", ["/usr/bin/google-chrome", "/opt/google/chrome/chrome"]],
-      brave: ["chromium", ["/usr/bin/brave-browser"]],
-      edge: ["chromium", ["/usr/bin/microsoft-edge"]],
-      // A .deb or tarball Firefox; else Ubuntu's Snap.
-      firefox: ["firefox", ["/usr/lib/firefox/firefox", "/opt/firefox/firefox", "/snap/bin/firefox"]],
-      waterfox: ["firefox", [process.env.E2E_WATERFOX || "", "/usr/lib/waterfox/waterfox", "/opt/waterfox/waterfox"].filter(Boolean)],
-    };
+const BROWSERS = {
+  chrome: ["chromium", [`${pf}\\Google\\Chrome\\Application\\chrome.exe`, `${local}\\Google\\Chrome\\Application\\chrome.exe`]],
+  brave: ["chromium", [`${pf}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`, `${local}\\BraveSoftware\\Brave-Browser\\Application\\brave.exe`]],
+  edge: ["chromium", [`${pf86}\\Microsoft\\Edge\\Application\\msedge.exe`, `${pf}\\Microsoft\\Edge\\Application\\msedge.exe`]],
+  firefox: ["firefox", [`${pf}\\Mozilla Firefox\\firefox.exe`, `${pf86}\\Mozilla Firefox\\firefox.exe`]],
+  // Firefox's family: the same driver (E2E_WATERFOX: a copy unpacked elsewhere).
+  waterfox: ["firefox", [process.env.E2E_WATERFOX || "", `${pf}\\Waterfox\\waterfox.exe`].filter(Boolean)],
+};
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function until(what, ms, test) {
@@ -108,19 +94,12 @@ export async function until(what, ms, test) {
 }
 // A process and its children, stopped.
 export function killPid(pid) {
-  if (WIN) return spawnSync("taskkill", ["/T", "/F", "/PID", String(pid)]);
-  spawnSync("pkill", ["-KILL", "-P", String(pid)]);
-  try {
-    process.kill(pid, "SIGKILL");
-  } catch {
-    // Gone already.
-  }
+  return spawnSync("taskkill", ["/T", "/F", "/PID", String(pid)]);
 }
 export const killTree = (p) => p && p.exitCode === null && killPid(p.pid);
 // Every process using a test profile: a browser's launcher may exit and leave the browser (Firefox),
 // so its tree is not enough. Only processes naming that folder are stopped.
 export function killProfile(profile) {
-  if (!WIN) return spawnSync("pkill", ["-KILL", "-f", profile]);
   const folder = profile.replace(/'/g, "''");
   spawnSync("powershell", [
     "-NoProfile",
@@ -223,8 +202,6 @@ async function chromium(bin, profile, dl, page, ready) {
       // The remote case's server has its own certificate (in real use the popup's "Open it" lets
       // the person accept it once); the lab's pages are plain http.
       "--ignore-certificate-errors",
-      // Linux: no keyring prompt for the test profile.
-      ...(WIN ? [] : ["--password-store=basic"]),
       // E2E_CHROMIUM_ARGS: more switches, space separated (screenshots: --lang=de, --force-dark-mode).
       ...(process.env.E2E_CHROMIUM_ARGS || "").split(" ").filter(Boolean),
       "about:blank",
@@ -613,7 +590,7 @@ let data = "";
 let downloads = "";
 // The yt-dlp the test instance uses (the streams case), or "" (none found).
 let ytdlp = "";
-const appExe = exe("misterdownloadmanager");
+const appExe = exe("grabbit");
 
 // One command to the instance over its channel (ipc.json), its one-line answer.
 function ipc(cmd, dir = data) {
@@ -643,27 +620,13 @@ async function mdmList() {
 // The running copies of target/release's app (each with its crash monitor, the same program with
 // --crash-monitor): [pid, is the monitor]. A headless one (the remote case's server) isn't one.
 function appProcesses() {
-  if (!WIN) {
-    // /proc: each process's program and arguments.
-    const found = [];
-    for (const pid of fs.readdirSync("/proc").filter((d) => /^\d+$/.test(d))) {
-      try {
-        if (fs.readlinkSync(`/proc/${pid}/exe`).replace(/ \(deleted\)$/, "") !== appExe) continue;
-        const args = fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0");
-        if (!args.includes("--headless")) found.push([Number(pid), args.includes("--crash-monitor")]);
-      } catch {
-        // Gone, or another user's.
-      }
-    }
-    return found;
-  }
   const p = appExe.replace(/'/g, "''");
   const out = spawnSync(
     "powershell",
     [
       "-NoProfile",
       "-Command",
-      `Get-CimInstance Win32_Process -Filter "Name='misterdownloadmanager.exe'" | Where-Object { $_.ExecutablePath -eq '${p}' -and $_.CommandLine -notlike '*--headless*' } | ForEach-Object { "$($_.ProcessId) $($_.CommandLine -like '*--crash-monitor*')" }`,
+      `Get-CimInstance Win32_Process -Filter "Name='grabbit.exe'" | Where-Object { $_.ExecutablePath -eq '${p}' -and $_.CommandLine -notlike '*--headless*' } | ForEach-Object { "$($_.ProcessId) $($_.CommandLine -like '*--crash-monitor*')" }`,
     ],
     { encoding: "utf8" },
   ).stdout;
@@ -731,9 +694,9 @@ const brief = (e) => `${e.method} ${e.status} ${e.outcome} ${e.range || "-"}`;
 
 // ---- another Mister Download Manager (the remote case, #157) -------------------------------------
 
-// The server the remote case sends downloads to: E2E_REMOTE_URL names one already running (the
-// Docker image: E2E_REMOTE_PAIR is a command printing a pairing code, `docker exec mdm
-// misterdownloadmanager-cli pair`, and E2E_REMOTE_DOWNLOADS the folder its downloads land in, as
+// The server the remote case sends downloads to: E2E_REMOTE_URL names one already running
+// (E2E_REMOTE_PAIR is a command printing a pairing code, such as `grabbit-cli
+// pair` run there, and E2E_REMOTE_DOWNLOADS the folder its downloads land in, as
 // seen from here); else target/release's app runs headless here, on 127.0.0.1, with its own data
 // and download folders under target/e2e.
 const REMOTE_PORT = 18463;
@@ -758,7 +721,7 @@ async function remoteServer() {
   const downloads = path.join(dir, "Downloads");
   fs.mkdirSync(rdata, { recursive: true });
   const args = ["--headless", "--data", rdata, "--downloads", downloads, "--listen", "127.0.0.1", "--port", String(REMOTE_PORT)];
-  const proc = spawn(appExe, args, { env: { ...process.env, MDM_DATA_DIR: rdata }, stdio: "ignore", windowsHide: true });
+  const proc = spawn(appExe, args, { env: { ...process.env, GRABBIT_DATA_DIR: rdata }, stdio: "ignore", windowsHide: true });
   const code = async () => {
     const a = JSON.parse(await ipc({ pair: true }, rdata));
     if (!a.code) throw new Error(`no pairing code: ${JSON.stringify(a)}`);
@@ -803,15 +766,11 @@ async function keptNothing(dl) {
   if (left.length) throw new Error(`the browser kept: ${left.join(", ")}`);
 }
 
-// ---- the test instance's windows (Windows) ----------------------------------------------------
-
-// Elsewhere they are not read (Win32 and UI Automation): the cases that need them are skipped.
-const NO_UIA = "the app's windows are read through UI Automation (Windows only)";
+// ---- the test instance's windows ------------------------------------------------------------
 
 // Its windows: titles, closing the one titled `close`, and those that show on a screen. Collected
 // in C#: what a PowerShell callback prints is lost.
 function appWindows(pid, close = "", onScreen = false) {
-  if (!WIN) throw new Skip(NO_UIA);
   const script = `
 Add-Type @"
 using System; using System.Text; using System.Collections.Generic; using System.Runtime.InteropServices;
@@ -845,7 +804,6 @@ public static class W {
 // The address in the Download video window's "Page address" box, read through UI Automation
 // (the app's windows have AccessKit adapters, also off the screens); null while it isn't open.
 function videoAddress(pid) {
-  if (!WIN) throw new Skip(NO_UIA);
   const script = `
 Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes
 $A = [System.Windows.Automation.AutomationElement]
@@ -867,7 +825,6 @@ const VIDEO_WINDOW = "Download video from a page";
 // Whether the Download video window's "Download Now" is enabled: yt-dlp looked the address up
 // and offered something to download (#155). null while the window isn't open.
 function videoReady(pid) {
-  if (!WIN) throw new Skip(NO_UIA);
   const script = `
 Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes
 $A = [System.Windows.Automation.AutomationElement]
@@ -1266,7 +1223,7 @@ function firefoxVpnExtension() {
       version: "1.0",
       permissions: ["proxy", "<all_urls>"],
       background: { scripts: ["background.js"] },
-      browser_specific_settings: { gecko: { id: "vpn-e2e@misterdownloadmanager.com" } },
+      browser_specific_settings: { gecko: { id: "vpn-e2e@humblef0ol.github.io" } },
     }),
   );
   fs.writeFileSync(
@@ -1772,6 +1729,81 @@ const CASES = {
     return done.join("; ");
   },
 
+  // #560: YouTube's thumbnail previews grow while the pointer is over them and show their own
+  // sound button at the top right, and shrink back and hide it once the pointer leaves for the
+  // button. The button keeps one place as the pointer goes to it and rests on it, and a click
+  // sends the video.
+  async steady(t) {
+    await t.session.navigate(`${LAB}/page?video=${encodeURIComponent("/gen/1M/clip.mp4")}`);
+    await t.session.evaluate(`(() => {
+      const v = document.querySelector("#video");
+      v.style.transition = "transform 150ms linear";
+      let timer = 0;
+      v.addEventListener("mouseenter", () => {
+        v.style.transform = "scale(1.08)";
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          const r = v.getBoundingClientRect();
+          const c = document.createElement("button");
+          c.id = "preview-sound";
+          c.textContent = "sound";
+          c.style.cssText = "position:fixed;left:" + (r.right - 48) + "px;top:" + (r.top + 6) + "px;width:40px;height:40px;z-index:9";
+          document.body.appendChild(c);
+        }, 300);
+      });
+      v.addEventListener("mouseleave", () => {
+        clearTimeout(timer);
+        v.style.transform = "";
+        document.getElementById("preview-sound")?.remove();
+        document.body.dataset.left = String(Number(document.body.dataset.left || 0) + 1);
+      });
+      return true;
+    })()`);
+    const v0 = await rect(t.session, "#video");
+    const first = await hover(t.session, v0);
+    if (!first) throw new Error("no button over the preview");
+    // The preview grown, its sound button shown: the button takes a free corner.
+    await until("the preview's sound button", 3000, () => t.session.evaluate(`Boolean(document.getElementById("preview-sound"))`));
+    await sleep(900);
+    const c = await rect(t.session, "#preview-sound");
+    const b = await rect(t.session, "mdm-video-button");
+    if (!b) throw new Error("the button went as the preview started");
+    if (b.l < c.r && b.r > c.l && b.t < c.b && b.b > c.t) throw new Error(`the button covers the preview's sound button: ${JSON.stringify({ b, c })}`);
+    // The pointer goes to it in steps, then rests on it: the page shrinks the preview and hides
+    // its sound button. Where the button is, every step and every 100 ms while it rests.
+    const v = await rect(t.session, "#video");
+    const from = [(v.l + v.r) / 2, (v.t + v.b) / 2];
+    const to = [b.l + 14, (b.t + b.b) / 2];
+    const seen = [];
+    const at = async (what) => {
+      const r = await rect(t.session, "mdm-video-button");
+      seen.push(r ? `${what} ${Math.round(r.l)},${Math.round(r.t)}` : `${what} gone`);
+      return r;
+    };
+    for (let i = 1; i <= 8; i++) {
+      await t.session.mouse(from[0] + ((to[0] - from[0]) * i) / 8, from[1] + ((to[1] - from[1]) * i) / 8);
+      await sleep(60);
+      await at(`step ${i}`);
+    }
+    await until("the page saw the pointer leave the preview", 3000, () => t.session.evaluate(`Number(document.body.dataset.left || 0) > 0`));
+    const landed = await at("on it");
+    for (let i = 0; i < 25; i++) {
+      await sleep(100);
+      await at(`rest ${i}`);
+    }
+    // E2E_STEADY_SHOT: a screenshot after the pointer rested on it, for a PR's body.
+    if (process.env.E2E_STEADY_SHOT && t.session.screenshot) await t.session.screenshot(process.env.E2E_STEADY_SHOT);
+    const moved = seen.filter((x) => {
+      const m = /(-?\d+),(-?\d+)$/.exec(x);
+      return !m || !landed || Math.abs(m[1] - landed.l) > 2 || Math.abs(m[2] - landed.t) > 2;
+    });
+    if (!landed || moved.length) throw new Error(`the button moved: ${seen.join("; ")} (landed at ${landed ? `${Math.round(landed.l)},${Math.round(landed.t)}` : "none"})`);
+    const address = await clickButton(t.session, landed);
+    if (address !== `${LAB}/gen/1M/clip.mp4`) throw new Error(`the video window got ${address}`);
+    await t.session.mouse(5, 5);
+    return `${Math.abs(first.l - b.l) > 2 || Math.abs(first.t - b.t) > 2 ? "moved" : "stayed"} off the preview's sound button, at ${Math.round(b.l - v.l)},${Math.round(b.t - v.t)}; then still for ${seen.length} looks (8 steps there, 2.5 s on it while the preview shrank and hid its button), sent ${address.replace(LAB, "")}`;
+  },
+
   // A player playing a stream (a blob: in the page): the button sends the manifest it loaded.
   async hls(t) {
     await t.session.navigate(`${LAB}/page?hls=1`);
@@ -1827,7 +1859,7 @@ const CASES = {
       // The right-click menu on the player (Firefox: its menu can be driven headless).
       if (t.session.menu) {
         done.push(await named(`${kind} menu`, () => streamLookedUp(async () => {
-          const r = await t.session.menu((v.l + v.r) / 2, (v.t + v.b) / 2, "Download with Mister Download Manager");
+          const r = await t.session.menu((v.l + v.r) / 2, (v.t + v.b) / 2, "Download with Grabbit");
           if (!String(r).startsWith("chosen")) throw new Error(`the right-click menu: ${r}`);
           if (process.env.E2E_DEBUG) console.error("menu:", r);
         }, manifest, page, cookie)));
@@ -1960,7 +1992,7 @@ const CASES = {
       if (theirs.length) throw new Error(`refused: ${theirs.map(brief).join("; ")}`);
       if (!mdm.length) throw new Error("no request for the file");
       const said = await until("the popup's word", 5000, () => popup.evaluate(`document.getElementById("media-said").textContent`));
-      if (!/Sent to Mister Download Manager/.test(said)) throw new Error(`the popup said "${said}"`);
+      if (!/Sent to Grabbit/.test(said)) throw new Error(`the popup said "${said}"`);
       // Each stream: the Download video window, for its manifest.
       const pid = appPid();
       const opened = [];
@@ -2022,12 +2054,12 @@ const CASES = {
     await arrived(file, 1 << 20, "Compressed", 60000);
     const pids = ourApps();
     if (pids.length !== 1) throw new Error(`${pids.length} instances run after the download`);
-    // Off the screens: read on Windows only (NO_UIA).
-    const shown = WIN ? pids.flatMap((p) => appWindows(p, "", true)) : [];
+    // Off the screens.
+    const shown = pids.flatMap((p) => appWindows(p, "", true));
     await keptNothing(t.dl);
     await stopApp();
     if (shown.length) throw new Error(`the instance the host started shows on the screen: ${shown.join(", ")}`);
-    return `started by the host (pid ${pids[0]})${WIN ? ", off the screens" : ""}, stopped`;
+    return `started by the host (pid ${pids[0]}), off the screens, stopped`;
   },
 
   // #157: Send downloads to → Another Mister Download Manager. The popup pairs with a server (its
@@ -2094,7 +2126,7 @@ const KNOWN_BUGS = {};
 // The registry keys `nmhost --register` and `--unregister` touch (crates/nmhost REGISTRY_KEYS,
 // FIREFOX_KEY, CHROME_EXTERNAL_KEY): each browser's host entry and Chrome's external extension,
 // per user and for everyone (the latter only read: an installed copy's). [key, 32-bit view].
-const HOST = "com.misterdownloadmanager.host";
+const HOST = "com.grabbit.host";
 const REG_KEYS = ["HKCU", "HKLM"].flatMap((root) => [
   ...[
     "Software\\Google\\Chrome\\NativeMessagingHosts",
@@ -2106,54 +2138,8 @@ const REG_KEYS = ["HKCU", "HKLM"].flatMap((root) => [
   [`${root}\\Software\\Google\\Chrome\\Extensions`, true],
 ]);
 
-// Linux and macOS: the host's manifests (`<HOST>.json`) in the home folder's browser folders,
-// found by a walk (each browser family has its own places: crates/ipc browsers.rs host_dirs),
-// as {key: path, bytes}. The walk skips build and package folders.
-function manifestFiles() {
-  const home = process.env.HOME || "";
-  const skip = new Set(["target", "node_modules", ".cargo", ".rustup", ".git", ".cache"]);
-  const found = [];
-  const walk = (dir, depth) => {
-    let entries = [];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const e of entries) {
-      const p = path.join(dir, e.name);
-      if (e.isDirectory() && !e.isSymbolicLink() && depth < 6 && !skip.has(e.name)) walk(p, depth + 1);
-      else if (e.name === `${HOST}.json`) found.push(p);
-    }
-  };
-  walk(home, 0);
-  return found;
-}
-function unixSnapshot(extra = []) {
-  return [...new Set([...manifestFiles(), ...extra])].map((key) => ({ key, bytes: fs.existsSync(key) ? fs.readFileSync(key) : null }));
-}
-// The manifests as they were before the run: each one written since is put back or removed.
-function unixRestore(before, written) {
-  const was = new Map(before.map((b) => [b.key, b.bytes]));
-  const changed = [];
-  for (const a of unixSnapshot(written)) {
-    const b = was.get(a.key) ?? null;
-    if ((a.bytes === null && b === null) || (a.bytes && b && a.bytes.equals(b))) continue;
-    changed.push(a.key);
-    if (b) fs.writeFileSync(a.key, b);
-    else fs.rmSync(a.key, { force: true });
-  }
-  const again = new Map(unixSnapshot(written).map((a) => [a.key, a.bytes]));
-  const differ = [...new Set([...was.keys(), ...again.keys()])].filter((k) => {
-    const [x, y] = [was.get(k) ?? null, again.get(k) ?? null];
-    return !((x === null && y === null) || (x && y && x.equals(y)));
-  });
-  return { changed, differ };
-}
-
 // Each key's export (reg export: its values, byte for byte), or null when it isn't there.
 export function regSnapshot(dir) {
-  if (!WIN) return unixSnapshot();
   fs.mkdirSync(dir, { recursive: true });
   return REG_KEYS.map(([key, wow32], i) => {
     const file = path.join(dir, `key${i}.reg`);
@@ -2166,8 +2152,7 @@ export function regSnapshot(dir) {
 
 // The keys as they were before the run: compared byte for byte; one that differs (per user only,
 // never HKLM) is removed and imported again from its copy. What was found, for the summary.
-export function regRestore(before, dir, written = []) {
-  if (!WIN) return unixRestore(before, written);
+export function regRestore(before, dir) {
   const after = regSnapshot(dir);
   const changed = [];
   for (const [i, b] of before.entries()) {
@@ -2198,7 +2183,6 @@ const TEST_HOST_KEYS = {
   waterfox: "Software\\Mozilla\\NativeMessagingHosts",
 };
 function testHost(name, browsers, nmhost) {
-  if (!WIN) throw new Error("E2E_HOST_NAME: Windows only");
   if (!/^[a-z0-9_]+(\.[a-z0-9_]+)+$/.test(name) || name === HOST) throw new Error(`E2E_HOST_NAME: ${name} isn't a test host name`);
   const other = browsers.filter((b) => !TEST_HOST_KEYS[b]);
   if (other.length) throw new Error(`E2E_HOST_NAME: not for ${other.join(", ")}`);
@@ -2275,12 +2259,10 @@ async function run() {
   // IDM's browser integration takes browsers' downloads at the network level (the browser gets
   // "204 No Content"): it would take the test's files and show its own windows. E2E_IDM_OK=1 when
   // IDM leaves 127.0.0.1 alone (an exception for it in its options).
-  if (process.platform === "win32") {
-    const idm = spawnSync("tasklist", ["/FI", "IMAGENAME eq IDMan.exe", "/NH"], { encoding: "utf8" }).stdout;
-    idmRunning = /IDMan\.exe/i.test(idm);
-    if (idmRunning && process.env.E2E_IDM_OK !== "1") throw new Error("Internet Download Manager is running: quit it first (it takes the browsers' downloads), or set E2E_IDM_OK=1 if it leaves 127.0.0.1 alone");
-  }
-  for (const p of [appExe, exe("misterdownloadmanager-nmhost"), exe("labserver")]) {
+  const idm = spawnSync("tasklist", ["/FI", "IMAGENAME eq IDMan.exe", "/NH"], { encoding: "utf8" }).stdout;
+  idmRunning = /IDMan\.exe/i.test(idm);
+  if (idmRunning && process.env.E2E_IDM_OK !== "1") throw new Error("Internet Download Manager is running: quit it first (it takes the browsers' downloads), or set E2E_IDM_OK=1 if it leaves 127.0.0.1 alone");
+  for (const p of [appExe, exe("grabbit-nmhost"), exe("labserver")]) {
     if (!fs.existsSync(p)) throw new Error(`build it first: ${p}`);
   }
   const t0 = Date.now();
@@ -2314,7 +2296,7 @@ async function run() {
   );
   // A yt-dlp for the streams case (#155): E2E_YTDLP, else one on PATH, chosen as the person's
   // own copy (Helpers: <data>/tools/programs.json), so nothing is downloaded.
-  const found = process.env.E2E_YTDLP || spawnSync(process.platform === "win32" ? "where" : "which", ["yt-dlp"], { encoding: "utf8" }).stdout.split(/\r?\n/)[0];
+  const found = process.env.E2E_YTDLP || spawnSync("where", ["yt-dlp"], { encoding: "utf8" }).stdout.split(/\r?\n/)[0];
   const version = found && fs.existsSync(found) ? spawnSync(found, ["--version"], { encoding: "utf8" }).stdout.trim() : "";
   if (version) {
     ytdlp = found;
@@ -2322,27 +2304,24 @@ async function run() {
     fs.writeFileSync(path.join(data, "tools", "programs.json"), JSON.stringify({ "yt-dlp": { version, exe: found } }));
   }
   // The browsers pass these on to the host, and the host to an app it starts.
-  process.env.MDM_DATA_DIR = data;
+  process.env.GRABBIT_DATA_DIR = data;
   process.env.MDM_OFFSCREEN = "1";
 
   before = new Set(appProcesses().map(([pid]) => pid));
   const server = spawn(exe("labserver"), ["--bind", `127.0.0.1:${PORT}`], { stdio: "ignore", windowsHide: true });
   const proxy = startProxy();
-  const nmhost = exe("misterdownloadmanager-nmhost");
+  const nmhost = exe("grabbit-nmhost");
   const results = [];
   let regBefore = null;
   let regCheck = null;
-  let written = [];
   // E2E_HOST_NAME's registration (testHost), and what was left of it at the end.
   let test = null;
   let testLeft = [];
   try {
     await until("the lab server", 10000, () => fetch(`${LAB}/`).then((r) => r.ok, () => false));
     // An installed Mister Download Manager's registration is never replaced or removed.
-    // Linux and macOS: its manifests (files) are put back byte for byte at the end, so a lab
-    // machine's (E2E_REPLACE_HOST=1) may be replaced while the run lasts.
-    const key = "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.misterdownloadmanager.host";
-    const installed = WIN ? spawnSync("reg", ["query", key], { stdio: "ignore" }).status === 0 : regSnapshot().some((m) => m.bytes) && process.env.E2E_REPLACE_HOST !== "1";
+    const key = "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.grabbit.host";
+    const installed = spawnSync("reg", ["query", key], { stdio: "ignore" }).status === 0;
     if (installed) {
       throw new Error("Mister Download Manager's host is already registered (an installed copy): not touching it");
     }
@@ -2351,28 +2330,16 @@ async function run() {
       test = testHost(process.env.E2E_HOST_NAME, names, nmhost);
     } else {
       const reg = spawnSync(nmhost, ["--register"], { encoding: "utf8" });
-      // Where it wrote (Linux, macOS), for the restore.
-      written = [...(reg.stdout || "").matchAll(/^registered \S+ in (.+)$/gm)].map((m) => path.join(m[1].trim(), `${HOST}.json`));
       if (reg.status !== 0) throw new Error(`nmhost --register: ${reg.stderr || reg.stdout}`);
     }
     for (const name of names) {
       const [kind, candidates] = BROWSERS[name];
       const bin = candidates.find((p) => fs.existsSync(p));
-      // A Snap (Ubuntu's Firefox) reads its profile only from its own folder, and starts the host
-      // through the desktop portal, without the browser's environment (MDM_DATA_DIR): the host
-      // would reach this computer's own MDM, not the test instance, so only the remote case runs.
-      const snap = Boolean(bin) && bin.startsWith("/snap/");
-      const profile = snap ? path.join(process.env.HOME, "snap", name, "common", "mdm-e2e-profile") : path.join(work, `profile-${name}`);
+      const profile = path.join(work, `profile-${name}`);
       const dl = path.join(work, `browser-${name}`);
       fs.rmSync(profile, { recursive: true, force: true });
       fs.mkdirSync(profile, { recursive: true });
       fs.mkdirSync(dl, { recursive: true });
-      // Linux: with --user-data-dir, Chromium reads the host's manifest from that folder.
-      const chromiumManifest = written.find((w) => !/mozilla/i.test(w));
-      if (!WIN && kind === "chromium" && chromiumManifest) {
-        fs.mkdirSync(path.join(profile, "NativeMessagingHosts"), { recursive: true });
-        fs.copyFileSync(chromiumManifest, path.join(profile, "NativeMessagingHosts", `${HOST}.json`));
-      }
       const started = Date.now();
       let session;
       try {
@@ -2386,9 +2353,7 @@ async function run() {
         // E2E_OLD_APP=1: an app older than extension-seen (0.2.4, for the compatibility runs:
         // a new extension with a released app): the extension is given time to reach it instead.
         const ready = () =>
-          snap
-            ? sleep(3000).then(() => (seenAs = "(a Snap: not this test's instance; only the remote case runs)"))
-            : process.env.E2E_OLD_APP
+          process.env.E2E_OLD_APP
             ? sleep(8000).then(() => (seenAs = "(an older app: not reported)"))
             : until(`${name}'s extension reaching the host`, 20000, () => {
             try {
@@ -2399,7 +2364,7 @@ async function run() {
             }
           }).then(() => sleep(300)); // its answer stored
         session = await (kind === "firefox" ? firefox : chromium)(bin, profile, dl, `${LAB}/page?link=none`, ready);
-        const t = { name, kind, session, dl, snap, last: name === names[names.length - 1], ua: await session.evaluate("navigator.userAgent") };
+        const t = { name, kind, session, dl, last: name === names[names.length - 1], ua: await session.evaluate("navigator.userAgent") };
         // Firefox's family: whether it asks what to do with each new type (E2E_FIREFOX_ASK).
         const asks = session.inBrowser
           ? `, asks for new types: ${await session.inBrowser(`Services.prefs.getBoolPref("browser.download.always_ask_before_handling_new_types", false)`)}`
@@ -2409,7 +2374,6 @@ async function run() {
           if (only.length && !only.includes(label)) continue;
           const at = Date.now();
           try {
-            if (snap && label !== "remote") throw new Skip("a Snap browser starts the host without the test's environment");
             await startApp();
             await clearLog();
             const detail = await fn(t);
@@ -2429,13 +2393,12 @@ async function run() {
         results.push([name, "browser", "FAILED", e.message, Date.now() - started]);
       } finally {
         if (session) session.close();
-        if (snap) fs.rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
       }
     }
   } finally {
     if (test) testLeft = test.remove();
     else spawnSync(nmhost, ["--unregister"]);
-    if (regBefore) regCheck = regRestore(regBefore, path.join(work, "registry", "after"), written);
+    if (regBefore) regCheck = regRestore(regBefore, path.join(work, "registry", "after"));
     await stopApp().catch(() => {});
     await stopRemote().catch(() => {});
     for (const pid of ourPids()) killPid(pid);
@@ -2449,8 +2412,8 @@ async function run() {
     const kept = regBefore.filter((b) => b.bytes).map((b) => b.key);
     console.log(
       regCheck.differ.length
-        ? `${WIN ? "registry" : "host manifests"}: DIFFERS after the run: ${regCheck.differ.join(", ")}`
-        : `${WIN ? "registry" : "host manifests"}: ${regBefore.length} ${WIN ? "keys" : "files"} byte-identical to before the run${regCheck.changed.length ? ` (put back: ${regCheck.changed.join(", ")})` : ""}; present before: ${kept.join(", ") || "none"}`,
+        ? `registry: DIFFERS after the run: ${regCheck.differ.join(", ")}`
+        : `registry: ${regBefore.length} keys byte-identical to before the run${regCheck.changed.length ? ` (put back: ${regCheck.changed.join(", ")})` : ""}; present before: ${kept.join(", ") || "none"}`,
     );
   }
   if (test) console.log(testLeft.length ? `test host: STILL REGISTERED: ${testLeft.join(", ")}` : `test host: ${test.keys.join(", ")} registered for the run, removed`);

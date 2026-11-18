@@ -3,26 +3,25 @@ name: Crash reports
 title: Crash and freeze reports you read before you send
 headline: When something breaks, you see why.
 line: A crash or freeze opens a report you read first, then send on GitHub yourself if you want.
-lede: If MDM closes unexpectedly or stops responding, a window opens with a report of what happened. You can read all of it, and send it to the developers on GitHub if you want to.
-description: Mister Download Manager's crash and freeze reports: readable, free of your addresses and file names, and sent only by you, through your browser and GitHub.
+lede: If Grabbit closes unexpectedly or stops responding, a window opens with a report of what happened. You can read all of it, and send it to the developers on GitHub if you want to.
+description: Grabbit's crash and freeze reports: readable, free of your addresses and file names, and sent only by you, through your browser and GitHub.
 group: app
 order: 320
 since: 0.2.3
 shot: images/crash-report.webp
-shot_alt: The crash report window after MDM stopped responding
-where: Opens by itself when MDM crashes or stops responding
+shot_alt: The crash report window after Grabbit stopped responding
+where: Opens by itself when Grabbit crashes or stops responding
 help: crash-reports.md
 ---
 
 ## A crash or a freeze doesn't go unnoticed
 
-A second copy of MDM watches the first. When MDM crashes, the report window says **Mister
+A second copy of Grabbit watches the first. When Grabbit crashes, the report window says **Mister
 Download Manager closed unexpectedly**. When its window hasn't answered for 8 seconds, it says
-**Mister Download Manager stopped responding**, and **End and restart MDM** closes the frozen
-copy and starts a fresh one. If MDM comes back by itself, the window says so.
+**Grabbit stopped responding**, and **End and restart Grabbit** closes the frozen
+copy and starts a fresh one. If Grabbit comes back by itself, the window says so.
 
-The report names what happened and where in MDM's code, so the problem can be found and fixed.
-It works on Windows, Linux and macOS.
+The report names what happened and where in Grabbit's code, so the problem can be found and fixed.
 
 ## You read it first, and you send it
 
@@ -39,7 +38,7 @@ takes you there, with your report on the clipboard to add as a comment.
 
 ## What it leaves out
 
-A report holds the error, where it happened, MDM's recent log, and your system: MDM's version,
+A report holds the error, where it happened, Grabbit's recent log, and your system: Grabbit's version,
 how it was installed, your operating system, the processor, the language and theme, and how many
 downloads and queues you have, as counts only.
 
@@ -47,7 +46,7 @@ It does not hold your download addresses or file names, and your user name shows
 folder paths. If an error message quotes something you typed, that text is in it, which is why
 you read it first.
 
-The crash data file (`.dmp`) helps the developers most, but it can hold pieces of what MDM had in
+The crash data file (`.dmp`) helps the developers most, but it can hold pieces of what Grabbit had in
 memory, such as addresses, cookies and saved passwords. It is attached only when you tick **Also
 attach the crash data**.
 
@@ -55,9 +54,9 @@ attach the crash data**.
 
 <!--@coming 0.5-->
 
-A freeze report will say whether MDM's window ran all along (a loop), waited (on a lock, the disk
+A freeze report will say whether Grabbit's window ran all along (a loop), waited (on a lock, the disk
 or the network), or hardly ran at all. That last kind usually means a computer too busy to run
-MDM, most likely not a bug in MDM, and those reports share one signature so they find one issue
-instead of many. macOS doesn't measure this yet. The window's title will be in MDM's language
+Grabbit, most likely not a bug in Grabbit, and those reports share one signature so they find one issue
+instead of many. The window's title will be in Grabbit's language
 too, and the report will keep its own lines in every language, left to right in Arabic and
 Persian.

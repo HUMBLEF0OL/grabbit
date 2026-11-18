@@ -1,6 +1,6 @@
-//! `misterdownloadmanager-cli`'s commands. The app's program carries them (#25: one download
-//! engine shipped, not two): `misterdownloadmanager-cli` (main.rs) is a small launcher that runs
-//! `misterdownloadmanager --cli <arguments>`, and the app's `main` hands those to [`main`].
+//! `grabbit-cli`'s commands. The app's program carries them (#25: one download
+//! engine shipped, not two): `grabbit-cli` (main.rs) is a small launcher that runs
+//! `grabbit --cli <arguments>`, and the app's `main` hands those to [`main`].
 
 use std::ffi::OsString;
 use std::io::Write;
@@ -18,10 +18,10 @@ use serde_json::json;
 #[derive(Parser)]
 #[command(
     version,
-    about = "Mister Download Manager command line",
-    long_about = "Mister Download Manager command line: downloads, videos and torrents without the \
+    about = "Grabbit command line",
+    long_about = "Grabbit command line: downloads, videos and torrents without the \
                   window, and the running app's automation API. Guide: \
-                  https://misterdownloadmanager.com/help/command-line.html"
+                  https://humblef0ol.github.io/grabbit/help/command-line.html"
 )]
 struct Cli {
     /// Print JSON for programs: one object per line (`progress` events, then `done`, `paused`
@@ -78,7 +78,7 @@ enum Cmd {
     /// LGPL build, checked against its release's SHA-256 list (Windows; elsewhere the system's).
     InstallFfmpeg,
     /// Install (or update) gallery-dl for image galleries: its checksum list is verified against
-    /// its author's signing key, the program against that list (Windows and Linux x86-64).
+    /// its author's signing key, the program against that list.
     InstallGalleryDl,
     /// Download an image gallery's files with gallery-dl (needs `install-gallery-dl`).
     GalleryGet {
@@ -123,13 +123,14 @@ enum Cmd {
         /// Put the subtitles into the video file instead of beside it (needs ffmpeg; MP4/MKV).
         #[arg(long)]
         embed_subs: bool,
-        /// A stream in pieces (HLS, DASH): this many pieces at once (1 to 128), as `get`'s
-        /// connections; a plain file is one connection whatever this says.
+        /// Connections per stream (1 to 128), as `get`'s: MDM's engine downloads the streams
+        /// yt-dlp finds (#769); a stream yt-dlp downloads itself in pieces (HLS, DASH) takes
+        /// this many pieces at once.
         #[arg(short, long, default_value_t = Options::default().max_connections,
               value_parser = clap::value_parser!(u32).range(1..=MAX_CONNECTIONS_UNLOCKED as i64))]
         connections: u32,
-        /// The network adapter yt-dlp (and the ffmpeg it starts) goes through (#35), as
-        /// `get --adapter`.
+        /// The network adapter the downloads go through (#35), as `get --adapter`: the
+        /// engine's connections, and yt-dlp's (and the ffmpeg it starts).
         #[arg(long)]
         adapter: Option<String>,
     },
@@ -155,8 +156,7 @@ enum Cmd {
         /// Folder to save into: a folder named after the list is made there.
         #[arg(short, long, default_value = ".")]
         output: PathBuf,
-        /// A stream in pieces (HLS, DASH): this many pieces at once (1 to 128), as `get`'s
-        /// connections; a plain file is one connection whatever this says.
+        /// Connections per stream (1 to 128), as for `video-get`.
         #[arg(short, long, default_value_t = Options::default().max_connections,
               value_parser = clap::value_parser!(u32).range(1..=MAX_CONNECTIONS_UNLOCKED as i64))]
         connections: u32,
@@ -320,8 +320,8 @@ impl std::error::Error for Reported {}
 /// Ask the running app (automation API) and print its answer, which is JSON already; an
 /// `{"error"}` answer fails the command.
 fn ask(cmd: mdm_ipc::Command) -> anyhow::Result<()> {
-    let answer = mdm_ipc::request(&cmd)
-        .map_err(|e| anyhow::anyhow!("Mister Download Manager isn't running ({e})"))?;
+    let answer =
+        mdm_ipc::request(&cmd).map_err(|e| anyhow::anyhow!("Grabbit isn't running ({e})"))?;
     println!("{answer}");
     if serde_json::from_str::<mdm_ipc::api::ErrorAnswer>(&answer).is_ok() {
         return Err(Reported.into());
@@ -335,7 +335,7 @@ fn pair() -> anyhow::Result<()> {
         pair: true,
         ..Default::default()
     })
-    .map_err(|e| anyhow::anyhow!("Mister Download Manager isn't running ({e})"))?;
+    .map_err(|e| anyhow::anyhow!("Grabbit isn't running ({e})"))?;
     match mdm_ipc::api::parse::<mdm_ipc::api::PairAnswer>(&answer).map_err(anyhow::Error::msg)? {
         Ok(a) => {
             println!("{}", a.qr);
@@ -371,8 +371,17 @@ fn act(action: &str, ids: Vec<u64>) -> anyhow::Result<()> {
 /// window. On Windows the launcher adds its process id (`--cli=1234`), see [`Launch`].
 pub const FLAG: &str = "--cli";
 
+/// Upstream issue 852: what a YouTube look-up yt-dlp made without a JavaScript runtime says (its
+/// list is short, on some days only the sound), as the Download video window says it, with the
+/// help page's section on installing one.
+fn js_runtime_note() -> String {
+    "YouTube needs a JavaScript runtime to list its video qualities: install Node.js or Deno, \
+     then look it up again (https://humblef0ol.github.io/grabbit/help/video.html#javascript-runtime)"
+        .into()
+}
+
 /// The launcher's name, which the commands' help and messages show.
-pub const NAME: &str = "misterdownloadmanager-cli";
+pub const NAME: &str = "grabbit-cli";
 
 /// The app's program, started for the command line.
 pub struct Launch {
@@ -385,12 +394,11 @@ pub struct Launch {
 }
 
 /// Was the app's program started for the command line? `args` are its own (`std::env::args_os`):
-/// [`FLAG`] first, or on Linux and macOS a program named [`NAME`] (a link to the app's program
-/// works as the launcher there; on Windows the app is a windowed program, which a console
-/// doesn't wait for, so it needs the launcher).
+/// [`FLAG`] first (the app is a windowed program, which a console doesn't wait for, so it needs
+/// the launcher).
 pub fn launched(args: Vec<OsString>) -> Option<Launch> {
     let mut args = args.into_iter();
-    let program = args.next()?;
+    args.next()?;
     let rest: Vec<OsString> = args.collect();
     if let Some(first) = rest.first().and_then(|a| a.to_str()) {
         let launcher = if first == FLAG {
@@ -409,19 +417,21 @@ pub fn launched(args: Vec<OsString>) -> Option<Launch> {
             });
         }
     }
-    let by_name = std::path::Path::new(&program)
-        .file_name()
-        .is_some_and(|n| n == NAME);
-    (cfg!(unix) && by_name).then_some(Launch {
-        launcher: None,
-        args: rest,
-    })
+    None
 }
 
-/// Run the command line `args` (without the program's name): what `misterdownloadmanager-cli`
+/// Run the command line `args` (without the program's name): what `grabbit-cli`
 /// does, its output, and its exit code (1 when a command fails).
 pub fn main(args: Vec<OsString>) -> ExitCode {
     main_with(args, None)
+}
+
+/// Does the command line `args` (as [`main_with`] takes them) download a link with MDM's own
+/// User-Agent (`get`, `resume`)? The app waits for the default browser's (upstream issue 668)
+/// only for these.
+pub fn downloads(args: &[OsString]) -> bool {
+    Cli::try_parse_from(std::iter::once(OsString::from(NAME)).chain(args.iter().cloned()))
+        .is_ok_and(|cli| matches!(cli.cmd, Cmd::Get { .. } | Cmd::Resume { .. }))
 }
 
 /// [`main`], downloading through the app's debrid `accounts` (#44).
@@ -525,28 +535,29 @@ async fn run(cmd: Cmd, json: bool, accounts: Option<&dyn Accounts>) -> anyhow::R
             adapter,
         } => {
             use mdm_tools::video::State;
-            if let Some(a) = adapter {
-                mdm_tools::proc::set_route(mdm_engine::net::route_for(
-                    &a,
-                    &mdm_engine::net::adapters(),
-                ));
+            let route =
+                adapter.map(|a| mdm_engine::net::route_for(&a, &mdm_engine::net::adapters()));
+            if let Some(r) = &route {
+                mdm_tools::proc::set_route(r.clone());
             }
             let dir = mdm_tools::tools_dir().ok_or_else(|| anyhow::anyhow!("no data folder"))?;
             // A gallery-dl of the person's too old for MDM is passed over (#236), said plainly.
             let old = mdm_tools::gallery::chosen_too_old(&dir).map(|old| {
                 format!(
-                    "your gallery-dl {} ({}) is too old: MDM needs {} or newer",
+                    "your gallery-dl {} ({}) is too old: Grabbit needs {} or newer",
                     old.version,
                     old.exe.display(),
                     mdm_tools::gallery::OLDEST
                 )
             });
             let tool = mdm_tools::gallery::installed(&dir).ok_or_else(|| match &old {
-                Some(why) => anyhow::anyhow!("{why}; run install-gallery-dl for MDM's own copy"),
+                Some(why) => {
+                    anyhow::anyhow!("{why}; run install-gallery-dl for Grabbit's own copy")
+                }
                 None => anyhow::anyhow!("gallery-dl is not installed: run install-gallery-dl"),
             })?;
             if let Some(why) = &old {
-                eprintln!("{why}: using MDM's own copy, {}", tool.version);
+                eprintln!("{why}: using Grabbit's own copy, {}", tool.version);
             }
             if !mdm_tools::gallery::handles(&tool, &url)? {
                 anyhow::bail!("gallery-dl can't read this address");
@@ -560,6 +571,7 @@ async fn run(cmd: Cmd, json: bool, accounts: Option<&dyn Accounts>) -> anyhow::R
                 &folder,
                 &ask,
                 &Default::default(),
+                Some(video_engine(8, route)),
             )?;
             let p = loop {
                 let p = job.progress();
@@ -620,8 +632,16 @@ async fn run(cmd: Cmd, json: bool, accounts: Option<&dyn Accounts>) -> anyhow::R
                     .iter()
                     .map(|s| json!({ "code": s.code, "name": s.name, "automatic": s.automatic }))
                     .collect();
-                emit(json!({ "title": v.title, "choices": choices, "subtitles": subs }));
+                emit(json!({
+                    "title": v.title,
+                    "choices": choices,
+                    "subtitles": subs,
+                    "needs_js_runtime": v.needs_js_runtime,
+                }));
                 return Ok(());
+            }
+            if v.needs_js_runtime {
+                eprintln!("{}", js_runtime_note());
             }
             println!("{}", v.title);
             for c in choices {
@@ -750,6 +770,7 @@ async fn run(cmd: Cmd, json: bool, accounts: Option<&dyn Accounts>) -> anyhow::R
                     None,
                     &Default::default(),
                     &Default::default(),
+                    Some(video_engine(connections, None)),
                 )?;
                 let state = loop {
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -916,17 +937,19 @@ async fn run(cmd: Cmd, json: bool, accounts: Option<&dyn Accounts>) -> anyhow::R
             connections,
             adapter,
         } => {
-            if let Some(a) = adapter {
-                mdm_tools::proc::set_route(mdm_engine::net::route_for(
-                    &a,
-                    &mdm_engine::net::adapters(),
-                ));
+            let route =
+                adapter.map(|a| mdm_engine::net::route_for(&a, &mdm_engine::net::adapters()));
+            if let Some(r) = &route {
+                mdm_tools::proc::set_route(r.clone());
             }
             let subs = subs_arg(&subs, auto_subs, embed_subs);
             let dir = mdm_tools::tools_dir().ok_or_else(|| anyhow::anyhow!("no data folder"))?;
             let tool = mdm_tools::installed(&dir)
                 .ok_or_else(|| anyhow::anyhow!("yt-dlp is not installed (install-ytdlp)"))?;
             let v = mdm_tools::resolve::resolve(&tool.exe, &url, &Default::default())?;
+            if v.needs_js_runtime {
+                eprintln!("{}", js_runtime_note());
+            }
             // A stem no file in the folder has, whatever the extension: yt-dlp takes any
             // `<stem>.*` there as its own (#32). The extension only sizes the name.
             let ext = mdm_tools::resolve::audio_conversion(&format).map_or("mp4", |a| a.format);
@@ -950,6 +973,7 @@ async fn run(cmd: Cmd, json: bool, accounts: Option<&dyn Accounts>) -> anyhow::R
                 None,
                 &Default::default(),
                 &subs,
+                Some(video_engine(connections, route)),
             )?;
             loop {
                 tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -1078,9 +1102,24 @@ fn subs_arg(langs: &str, automatic: bool, embed: bool) -> mdm_tools::video::Subs
     }
 }
 
+/// The engine for a video's streams (upstream issue 769): this many connections each, through
+/// `route`.
+fn video_engine(connections: u32, route: Option<mdm_engine::Route>) -> mdm_tools::streams::Engine {
+    mdm_tools::streams::Engine {
+        handle: tokio::runtime::Handle::current(),
+        opts: Options {
+            route: route.unwrap_or_default(),
+            ..opts(connections)
+        },
+    }
+}
+
+/// A download's options: the app's defaults (the default browser's User-Agent, upstream issue
+/// 668, and MDM's former one once if a site refuses it, #372).
 fn opts(connections: u32) -> Options {
     Options {
         max_connections: connections,
+        agent_fallback: Some(mdm_engine::agent::IE11_USER_AGENT.to_owned()),
         ..Options::default()
     }
 }
@@ -1266,6 +1305,29 @@ fn torrent_source(s: &str) -> anyhow::Result<mdm_torrent::Source> {
 mod tests {
     use super::*;
 
+    /// Upstream issue 668: only the commands that download a link wait for the default
+    /// browser's User-Agent.
+    #[test]
+    fn only_downloads_wait_for_the_default_browser() {
+        let args = |a: &[&str]| a.iter().map(OsString::from).collect::<Vec<_>>();
+        assert!(downloads(&args(&[
+            "get",
+            "https://example.test/a.zip",
+            "-o",
+            "."
+        ])));
+        assert!(downloads(&args(&[
+            "--json",
+            "get",
+            "https://example.test/a.zip"
+        ])));
+        assert!(downloads(&args(&["resume", "a.zip.mdm.json"])));
+        assert!(!downloads(&args(&["api", "on"])));
+        assert!(!downloads(&args(&["status"])));
+        assert!(!downloads(&args(&["--help"])));
+        assert!(!downloads(&args(&[])));
+    }
+
     /// A service that takes `hoster.test` only, or (`broken`) can't say which hosts it takes.
     #[derive(Debug)]
     struct Service;
@@ -1353,8 +1415,6 @@ mod tests {
         assert!(launched(args(&["mdm", "/d", "--cli"])).is_none());
         assert!(launched(args(&["mdm", "--cli=x"])).is_none());
         assert!(launched(args(&["mdm", "--client"])).is_none());
-        // A link named as the launcher (Linux and macOS).
-        let named = launched(args(&["/usr/bin/misterdownloadmanager-cli", "status"]));
-        assert_eq!(named.is_some(), cfg!(unix));
+        assert!(launched(args(&["/x/grabbit-cli", "status"])).is_none());
     }
 }

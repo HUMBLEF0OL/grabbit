@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Builds misterdownloadmanager.com into target/site (GitHub Pages publishes it, .github/workflows/
+"""Builds humblef0ol.github.io/grabbit into target/site (GitHub Pages publishes it, .github/workflows/
 pages.yml). No framework: website/ holds the hand-written home page, styles, scripts and assets;
 website/content/ the pages written as Markdown (FAQ, legal); the rest comes from the repository
 itself so the site never drifts from it: docs/*.md become the help pages, CHANGELOG.md the news
-page, i18n/languages.tsv the languages page. Every page gets the shared header and footer, its
+page. Every page gets the shared header and footer, its
 own title, description, canonical address, social card and structured data, and goes into
 sitemap.xml.
 
     python tools/website/build.py            # build target/site
-    python tools/website/build.py --serve    # build, then serve it on http://127.0.0.1:8765
+    python tools/website/build.py --serve    # build, then serve it on http://127.0.0.1:8765/grabbit/
 
 The repository's stars, forks and open issues are read from GitHub's API while building (with
 GITHUB_TOKEN when set), so visitors' browsers never call GitHub; offline, the numbers are left
@@ -34,31 +34,32 @@ import markdown
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import barcode  # noqa: E402
 import contributors  # noqa: E402  (tools/contributors.py: the people the site thanks)
-import sitei18n  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 WEB = ROOT / "website"
 CONTENT = WEB / "content"
 OUT = ROOT / "target" / "site"
-SITE = "https://misterdownloadmanager.com"
-REPO = "https://github.com/anefzaoui/misterdownloadmanager"
+SITE = "https://humblef0ol.github.io/grabbit"
+# The path GitHub Pages serves this project site under. Pages and assets are written with root
+# paths ("/download.html") and rebase() puts BASE in front of them once everything is built.
+BASE = urllib.parse.urlsplit(SITE).path.rstrip("/")
+REPO = "https://github.com/HUMBLEF0OL/grabbit"
 # The Firefox add-on's listing (crates/ipc/src/extension.rs FIREFOX_PAGE): {{AMO}} in pages, and
 # <!--@amo--> for its Add to Firefox button.
 AMO = "https://addons.mozilla.org/firefox/addon/mister-download-manager/"
 # The extension's listing in the Chrome Web Store (crates/ipc/src/extension.rs STORE_ID), for
-# Chrome, Edge, Brave, Opera and Vivaldi: {{CWS}} in pages; <!--@stores--> is both buttons.
+# Chrome, Edge, Brave, Opera and Vivaldi: {{CWS}} in pages; <!--@cws--> for its Add to Chrome button.
 CWS = "https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp"
-# The creator's GitHub Sponsors page: the header, the footer and the home page's Support MDM
-# (the app's Help menu and About, the extension's popup and .github/FUNDING.yml point there too).
-SPONSORS = "https://github.com/sponsors/anefzaoui"
-NAME = "Mister Download Manager"
+# The header's, the footer's and the home page's Support Grabbit: this fork's repository until its
+# owner's GitHub Sponsors page exists (see .github/FUNDING.yml; the app and the popup match).
+SPONSORS = REPO
+NAME = "Grabbit"
 # The next release, as the site announces it. What is in the source but not in a download yet
 # says "Coming with version <this>" (coming_banner(): the feature pages, the Themes page, the
 # features' tiles), shown for a feature whose `since` is this version or later. At that release
 # set it to "" and every banner goes at once; a published release at or past it hides them too.
-UPCOMING = "0.5.2"
+UPCOMING = ""
 CARGO_VERSION = re.search(r'(?m)^version\s*=\s*"([^"]+)"', (ROOT / "Cargo.toml").read_text("utf-8")).group(1)
 
 
@@ -110,39 +111,14 @@ def setup_size() -> str:
     return ""
 
 
-def mac_file(arch: str) -> str:
-    """The .dmg for a Mac with `arch` (arm64, x86_64): one per processor (#25), or the one
-    universal .dmg of a release from before."""
-    universal = f"MisterDownloadManager-{VERSION}-macos-universal-experimental.dmg"
-    if any(a.get("name") == universal for a in LATEST.get("assets", [])):
-        return f"{RELEASE}-macos-universal-experimental.dmg"
-    return f"{RELEASE}-macos-{arch}-experimental.dmg"
-
-
-def linux_file(ext: str) -> str:
-    """The Linux file ending in `ext` (.AppImage, .deb, .rpm, .tar.gz): named without
-    "-experimental" from the release after 0.2.4 (tools/installer/build-linux.sh), with it in a
-    release from before."""
-    old = f"MisterDownloadManager-{VERSION}-linux-x86_64-experimental{ext}"
-    if any(a.get("name") == old for a in LATEST.get("assets", [])):
-        return f"{RELEASE}-linux-x86_64-experimental{ext}"
-    return f"{RELEASE}-linux-x86_64{ext}"
-
-
 VERSION = published_version()
 SETUP_SIZE = setup_size()
 TODAY = datetime.date.today().isoformat()
-RELEASE = f"{REPO}/releases/download/v{VERSION}/MisterDownloadManager-{VERSION}"
+RELEASE = f"{REPO}/releases/download/v{VERSION}/Grabbit-{VERSION}"
 FILES = {
     "setup": f"{RELEASE}-setup.exe",
     "portable": f"{RELEASE}-portable.zip",
     "zip": f"{RELEASE}-x64.zip",
-    "dmg_arm64": mac_file("arm64"),
-    "dmg_intel": mac_file("x86_64"),
-    "appimage": linux_file(".AppImage"),
-    "deb": linux_file(".deb"),
-    "rpm": linux_file(".rpm"),
-    "tar": linux_file(".tar.gz"),
     "chromium": f"{RELEASE}-extension-chromium.zip",
     "firefox": f"{RELEASE}-extension-firefox.xpi",
     "sums": f"{REPO}/releases/download/v{VERSION}/SHA256SUMS.txt",
@@ -156,8 +132,8 @@ DOCS_MD: list[tuple[str, str, str, str]] = []
 FAQ_MD: list[tuple[str, str, str]] = []
 
 # The visit counter (privacy.md says what it records). Statcounter's own code, as given.
-STATCOUNTER = """<!-- Default Statcounter code for Mister Download Manager
-https://misterdownloadmanager.com/ -->
+STATCOUNTER = """<!-- Default Statcounter code for Grabbit
+https://humblef0ol.github.io/grabbit/ -->
 <script type="text/javascript">
 var sc_project=13364153;
 var sc_invisible=1;
@@ -202,7 +178,7 @@ def repo_stats() -> dict[str, str]:
 
 STATS: dict[str, str] = {}
 
-# The people who made MDM possible (tools/contributors.py), read once per build: everyone, and the
+# The people who made Grabbit possible (tools/contributors.py), read once per build: everyone, and the
 # releases for each one's own. None when GitHub can't be read: the home page then leaves its
 # section out, /contributors.html says so, and the News page thanks nobody (with a warning).
 CREW: list[dict] | None = None
@@ -236,31 +212,6 @@ def people_count(n: int) -> str:
     return f'<span translate="no">{n}</span> {"person" if n == 1 else "people"}'
 
 
-# How many photos the home page's row shows, by the screen's width (styles.css .pile, the same
-# breakpoints): (from this width up, photos). The rest are "+N", which opens /contributors.html.
-PILE_TIERS = [(0, 7), (561, 11), (1200, 15)]
-
-
-def crew_pile() -> str:
-    """The home page's thanks, on the board beside the hero's label (under the window; after the
-    label on a phone): "Made possible by these amazing humans", a row of round photos, overlapping,
-    and "+N" for the ones the row has no room for."""
-    if not CREW:
-        return ""
-    n = len(CREW)
-    shown = max(cap for _, cap in PILE_TIERS)
-    # "+N" for each width where the row is full: its count there, and only there.
-    more = "".join(f'<span class="pile-n pile-n-{cap}">+{n - cap}</span>' for _, cap in PILE_TIERS if n > cap)
-    more_li = (f'<li class="pile-more"><a href="/contributors.html"><span translate="no" dir="ltr">{more}</span> '
-               f'<span class="sr-only">Everyone who helped</span></a></li>' if more else "")
-    full = " ".join(f"pile-full-{cap}" for _, cap in PILE_TIERS if n > cap)
-    return f"""<div class="parcel-crew">
-          <p class="crew-title" id="crew-title">Made possible by these amazing humans</p>
-          <ul class="faces pile {full}" style="--face: 44px" role="list" aria-labelledby="crew-title">{"".join(face(p, 44) for p in CREW[:shown])}{more_li}</ul>
-          <p class="crew-fine">{people_count(n)} who sent a pull request, reported a problem or joined a conversation on GitHub. <a href="/contributors.html">Meet them all</a></p>
-        </div>"""
-
-
 def esc(s: str) -> str:
     return html.escape(s, quote=True)
 
@@ -284,8 +235,7 @@ def old_aliases(out: str) -> str:
         # A heading with an id of its own (`{#not-running}`) never had another.
         if not old or old == m.group(2) or not m.group(2).startswith(github_slug(text)):
             return m.group(0)
-        # Before the heading, not inside it: the heading's text stays one segment, translated
-        # as it was (sitei18n).
+        # Before the heading, not inside it: the heading's text stays one segment.
         return f'<span id="{esc(old)}" class="anchor-alias"></span>{m.group(0)}'
 
     return re.sub(r'(<h[1-6] id="([^"]*)">)(.*?)(</h[1-6]>)', alias, out, flags=re.S)
@@ -322,8 +272,6 @@ def clip(text: str, n: int = 158) -> str:
 
 ICONS = """<svg width="0" height="0" class="defs" aria-hidden="true">
   <symbol id="os-windows" viewBox="0 0 24 24"><path d="M2 4.6 10 3.5v7.9H2zM11 3.4 22 2v9.4H11zM2 12.4h8v7.9l-8-1.1zM11 12.4h11V22l-11-1.5z"/></symbol>
-  <symbol id="os-macos" viewBox="0 0 24 24"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></symbol>
-  <symbol id="os-linux" viewBox="0 0 24 24"><path d="M12 1.5c-2.6 0-4.3 2-4.3 4.6 0 1.4.3 2.3-.6 3.6C5.6 11.9 4.6 14 4.6 16.3c0 3.2 3.1 5.7 7.4 5.7s7.4-2.5 7.4-5.7c0-2.3-1-4.4-2.5-6.6-.9-1.3-.6-2.2-.6-3.6 0-2.6-1.7-4.6-4.3-4.6z"/><path d="M12 9.6c-2.4 0-4.1 2.9-4.1 6.2 0 2.6 1.8 4.4 4.1 4.4s4.1-1.8 4.1-4.4c0-3.3-1.7-6.2-4.1-6.2z" fill="var(--paper)"/><circle cx="10.5" cy="5.6" r=".95" fill="var(--paper)"/><circle cx="13.5" cy="5.6" r=".95" fill="var(--paper)"/><path d="M10.3 7.3h3.4L12 9.2z" fill="#f2b630"/><path d="M3.6 21.6c.4-2.2 2.6-3.3 4.6-2.3-.2 2-2.6 3.3-4.6 2.3zm16.8 0c-.4-2.2-2.6-3.3-4.6-2.3.2 2 2.6 3.3 4.6 2.3z" fill="#f2b630"/></symbol>
   <symbol id="i-github" viewBox="0 0 24 24"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></symbol>
   <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2.8l2.84 5.76 6.36.92-4.6 4.49 1.08 6.33L12 17.31l-5.68 2.99 1.08-6.33-4.6-4.49 6.36-.92z"/></symbol>
   <symbol id="i-fork" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M6 3v4a4 4 0 0 0 4 4h4a4 4 0 0 0 4-4V3M12 11v10"/><circle cx="6" cy="4" r="2"/><circle cx="18" cy="4" r="2"/><circle cx="12" cy="20" r="2"/></symbol>
@@ -360,24 +308,11 @@ NAV = [
 ]
 
 
-def gh_pill(cls: str = "gh-pill") -> str:
-    """The GitHub link with its star count (when known): header, hero, open-source card."""
-    stars = STATS.get("stars")
-    count = f'<span class="gh-count">{stars}</span>' if stars else ""
-    return (f'<a class="{cls}" href="{REPO}" aria-label="Mister Download Manager on GitHub'
-            f'{f", {stars} stars" if stars else ""}">'
-            f'<svg aria-hidden="true"><use href="#i-github"/></svg><span class="gh-label">GitHub</span>{count}</a>')
-
-
 def os_menu() -> str:
-    """The split download button's list: every system and file (hero, final call)."""
+    """The split download button's list: every file (hero, final call)."""
     rows = [
         ("windows", "Windows installer", "setup.exe · Windows 10 and 11", FILES["setup"]),
         ("windows", "Windows portable", "portable.zip · runs from a folder or USB stick", FILES["portable"]),
-        ("macos", "macOS Apple Silicon", ".dmg · M1 and later · experimental", FILES["dmg_arm64"]),
-        ("macos", "macOS Intel", ".dmg · Macs with an Intel processor · experimental", FILES["dmg_intel"]),
-        ("linux", "Linux AppImage", "any distribution · experimental", FILES["appimage"]),
-        ("linux", "Linux .deb / .rpm", "Debian, Ubuntu · Fedora, openSUSE", "/download.html#linux"),
     ]
     items = "".join(
         f'<li><a href="{href}"><svg class="os-ico" aria-hidden="true"><use href="#os-{os_}"/></svg>'
@@ -387,14 +322,14 @@ def os_menu() -> str:
 
 
 def split_button(extra_class: str = "") -> str:
-    """Download for <your system>, with the other systems under its arrow."""
+    """Download for Windows, with the other files under its arrow."""
     return f"""<div class="split{extra_class}">
           <a class="btn btn-go split-main" href="/download.html" data-os-cta>
             <svg class="os-ico" aria-hidden="true"><use href="#os-windows" data-os-cta-icon/></svg>
             <span data-os-label>Download for Windows</span>
           </a>
           <details class="split-more">
-            <summary class="btn btn-go" aria-label="Other systems and files"><svg aria-hidden="true"><use href="#i-chevron"/></svg></summary>
+            <summary class="btn btn-go" aria-label="Other files"><svg aria-hidden="true"><use href="#i-chevron"/></svg></summary>
             {os_menu()}
           </details>
         </div>"""
@@ -415,11 +350,6 @@ def cws_button(extra_class: str = "") -> str:
             '<img src="/assets/browsers/chrome.svg" width="22" height="22" alt=""> Add to Chrome</a>')
 
 
-def store_buttons() -> str:
-    """Both stores' buttons side by side: Firefox's, then the Chrome Web Store's."""
-    return f'<span class="store-btns">{amo_button()}{cws_button()}</span>'
-
-
 def header(section: str = "") -> str:
     links = "\n        ".join(
         f'<a href="{href}"{" aria-current=\"page\"" if key == section else ""}>{label}</a>'
@@ -430,28 +360,26 @@ def header(section: str = "") -> str:
   <header class="top">
     <div class="wrap top-inner">
       <a class="brand" href="/">
-        <img src="/assets/logo-64.png" width="34" height="34" alt="">
+        <img src="/assets/grabbit.svg" width="30" height="30" alt="">
         <span>{NAME}</span>
       </a>
       <nav class="nav" aria-label="Main">
         {links}
       </nav>
       <div class="top-actions">
-        <!--@langs-->
         <button class="icon-btn theme" type="button" aria-label="Switch between light and dark" title="Light / dark">
           <svg class="for-light-i" aria-hidden="true"><use href="#i-moon"/></svg><svg class="for-dark-i" aria-hidden="true"><use href="#i-sun"/></svg>
         </button>
-        <a class="icon-btn top-gh" href="{REPO}" aria-label="Mister Download Manager on GitHub" title="GitHub"><svg aria-hidden="true"><use href="#i-github"/></svg></a>
-        <a class="icon-btn top-sponsor" href="{SPONSORS}" aria-label="Sponsor the creator on GitHub" title="Sponsor"><svg aria-hidden="true"><use href="#i-heart"/></svg></a>
+        <a class="icon-btn top-gh" href="{REPO}" aria-label="Grabbit on GitHub" title="GitHub"><svg aria-hidden="true"><use href="#i-github"/></svg></a>
+        <a class="icon-btn top-sponsor" href="{SPONSORS}" aria-label="Support Grabbit on GitHub" title="Support"><svg aria-hidden="true"><use href="#i-heart"/></svg></a>
         <a class="btn btn-go top-dl" href="/download.html">Download</a>
         <details class="menu">
           <summary class="icon-btn" aria-label="Menu"><svg aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
           <nav class="menu-panel" aria-label="Main">
             {links}
-            <a href="/languages.html">Languages</a>
             <a href="/contributing.html">Contribute</a>
             <a href="{REPO}">GitHub</a>
-            <a href="{SPONSORS}">Sponsor</a>
+            <a href="{SPONSORS}">Support</a>
           </nav>
         </details>
       </div>
@@ -461,13 +389,12 @@ def header(section: str = "") -> str:
 
 
 # Right after the header, before the first paint: the header gives up, one step at a time, what
-# doesn't fit its row in this language at this width (the Sponsor heart, then some spacing, then
-# the links for the menu, then the language's name beside its flag), so no language runs past the
-# page (#168). The media queries in styles.css are the floor, and all there is without scripts.
+# doesn't fit its row at this width (the Sponsor heart, then some spacing, then the links for the
+# menu), so nothing runs past the page (#168). The media queries in styles.css are the floor, and all there is without scripts.
 HEADER_FIT = """<script>
     (function () {
       var top = document.currentScript.previousElementSibling, row = top.firstElementChild;
-      var steps = ['fit-sponsor', 'fit-tight', 'fit-menu', 'fit-flag'];
+      var steps = ['fit-sponsor', 'fit-tight', 'fit-menu'];
       // Its pieces, end to end, against the row's content box (overflow into the padding counts).
       function over() {
         var s = getComputedStyle(row), lo = Infinity, hi = -Infinity;
@@ -483,7 +410,7 @@ HEADER_FIT = """<script>
       }
       fit();
       if (window.ResizeObserver) new ResizeObserver(fit).observe(row);
-      // Archivo may arrive after this runs (or start loading only once laid out): fit again then.
+      // The font may arrive after this runs (or start loading only once laid out): fit again then.
       if (document.fonts) { document.fonts.ready.then(fit); document.fonts.addEventListener('loadingdone', fit); }
     })();
   </script>"""
@@ -495,18 +422,16 @@ def footer() -> str:
     <div class="wrap">
       <div class="foot-cols">
         <div class="foot-brand">
-          <a class="brand" href="/"><img src="/assets/logo-64.png" width="34" height="34" alt=""><span>{NAME}</span></a>
-          <p class="foot-tag">The download manager you already know, rebuilt to be faster. Free, open source and written from scratch in Rust.</p>
+          <a class="brand" href="/"><img src="/assets/grabbit.svg" width="30" height="30" alt=""><span>{NAME}</span></a>
+          <p class="foot-tag">A free, open-source download manager for Windows, written from scratch in Rust and measured faster than IDM.</p>
           <a class="text-link foot-star" href="{REPO}"><svg aria-hidden="true"><use href="#i-star"/></svg> Star it on GitHub</a>
-          <a class="text-link foot-star" href="{SPONSORS}"><svg aria-hidden="true"><use href="#i-heart"/></svg> Sponsor the creator</a>
+          <a class="text-link foot-star" href="{SPONSORS}"><svg aria-hidden="true"><use href="#i-heart"/></svg> Support Grabbit</a>
         </div>
         <div>
           <h2>Product</h2>
           <ul>
             <li><a href="/download.html">Download</a></li>
             <li><a href="/download.html#windows">Windows</a></li>
-            <li><a href="/download.html#macos">macOS</a></li>
-            <li><a href="/download.html#linux">Linux</a></li>
             <li><a href="/download.html#extension">Browser extension</a></li>
             <li><a href="/features/">Features</a></li>
             <li><a href="/themes.html">Themes</a></li>
@@ -522,7 +447,6 @@ def footer() -> str:
             <li><a href="/faq/">FAQ</a></li>
             <li><a href="/help/troubleshooting.html">Troubleshooting</a></li>
             <li><a href="/help/keyboard-shortcuts.html">Keyboard shortcuts</a></li>
-            <li><a href="/languages.html">Languages</a></li>
           </ul>
         </div>
         <div>
@@ -560,7 +484,7 @@ def footer() -> str:
 
 # In every head (templated pages get it through <!--@theme-->): the font, then the theme before
 # the first paint.
-THEME_SCRIPT = """<link rel="preload" href="/vendor/archivo/archivo-latin.woff2" as="font" type="font/woff2" crossorigin>
+THEME_SCRIPT = """<link rel="preload" href="/assets/fonts/geist/Geist-SemiBold.ttf" as="font" type="font/ttf" crossorigin>
   <script>
     (function () {
       var d = document.documentElement;
@@ -586,8 +510,8 @@ def head(path: str, title: str, desc: str, *, jsonld: list | None = None, og_typ
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{esc(title)}</title>
   <meta name="description" content="{esc(desc)}">{robots}
-  <meta name="theme-color" content="#1f63d6" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0c1a33" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f7f6fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#09080d" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
   <link rel="canonical" href="{url}">
   <meta property="og:type" content="{og_type}">
@@ -598,7 +522,7 @@ def head(path: str, title: str, desc: str, *, jsonld: list | None = None, og_typ
   <meta property="og:image" content="{SITE}/assets/social.png">
   <meta property="og:image:width" content="1280">
   <meta property="og:image:height" content="640">
-  <meta property="og:image:alt" content="{NAME}: the download manager you already know, rebuilt to be faster">
+  <meta property="og:image:alt" content="{NAME}: a free, open-source download manager for Windows">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48 64x64">
   <link rel="icon" href="/assets/favicon-32.png" type="image/png" sizes="32x32">
@@ -681,12 +605,12 @@ def cta_band(text: str = "Free, open source, no ads, no trial.") -> str:
 
 
 def waybill_fields() -> str:
-    """The release's facts in the label's field grammar (the home page's waybill and the
-    download page): what the visitor gets, for what, at what postage."""
+    """The release's facts as label/value rows (the IDM alternative page): its price, speed,
+    system and version."""
     size = f' <small>{SETUP_SIZE}</small>' if SETUP_SIZE else ""
     return (f'<dl class="fields">'
-            f'<div><dt>Postage</dt><dd>Free</dd></div>'
-            f'<div><dt>Delivery</dt><dd><a href="/benchmark.html">1 GiB in 1.0 s</a> <small>IDM: 5.5 s</small></dd></div>'
+            f'<div><dt>Price</dt><dd>Free</dd></div>'
+            f'<div><dt>Speed</dt><dd><a href="/benchmark.html">1 GiB in 1.0 s</a> <small>IDM: 5.5 s</small></dd></div>'
             f'<div><dt>System</dt><dd>Windows 10 and 11</dd></div>'
             f'<div><dt>Version</dt><dd><a href="/news.html">{VERSION}</a>{size}</dd></div></dl>')
 
@@ -695,10 +619,9 @@ SOFTWARE_LD = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": NAME,
-    "alternateName": "MDM",
     "applicationCategory": "UtilitiesApplication",
     "applicationSubCategory": "Download manager",
-    "operatingSystem": "Windows 10, Windows 11, macOS (experimental), Linux (experimental)",
+    "operatingSystem": "Windows 10, Windows 11",
     "softwareVersion": VERSION,
     "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
     "license": "https://www.gnu.org/licenses/gpl-3.0.html",
@@ -706,14 +629,14 @@ SOFTWARE_LD = {
     "downloadUrl": SITE + "/download.html",
     "installUrl": FILES["setup"],
     "screenshot": SITE + "/assets/screens/main-light.webp",
-    "image": SITE + "/assets/logo-640.png",
+    "image": SITE + "/assets/grabbit.svg",
     "author": {"@type": "Person", "name": "Ahmed Nefzaoui", "url": "https://github.com/anefzaoui"},
     "codeRepository": REPO,
     "featureList": [
         "Up to 128 connections per download with dynamic re-splitting",
         "Crash-safe resume", "HTTP, HTTPS, FTP and FTPS", "BitTorrent and magnet links",
         "Video downloads from web pages (yt-dlp)", "Browser extension for Chrome, Edge, Brave, Opera, Vivaldi and Firefox",
-        "Queues and scheduler", "Speed limiter", "86 interface languages", "Portable mode",
+        "Queues and scheduler", "Speed limiter", "Portable mode",
         "Command line and automation API", "MCP server for AI assistants",
     ],
     "inLanguage": "en",
@@ -990,7 +913,7 @@ def build_faq() -> None:
                         "acceptedAnswer": {"@type": "Answer", "text": md(a)}} for question, _, a in allq],
     }]
     write("/faq/", f"Questions and answers — {NAME}",
-          f"Answers about {NAME}: is it free, is it safe, how it compares with IDM, browsers, videos, torrents, speed, Mac and Linux, and more.",
+          f"Answers about {NAME}: is it free, is it safe, how it compares with IDM, browsers, videos, torrents, speed, and more.",
           f"""{page_head("Questions and answers", "Short answers to what people ask most, each with a link to the full guide.", trail)}
     <div class="wrap narrow prose page-body">
       {"".join(parts)}
@@ -1110,8 +1033,7 @@ def build_contributors() -> None:
             counts = "".join(
                 f'<li><b translate="no">{p[k]}</b> {w[0] if p[k] == 1 else w[1]}</li>'
                 for k, w in words.items() if p[k])
-            # The login in a block of its own marked translate="no": an inline one alone in its
-            # block would still go to the translators (sitei18n unwraps a lone element).
+            # The login in a block of its own marked translate="no" (browsers' page translators).
             # The photo links there too, for the pointer only (the login is the link to tab to).
             rows.append(f'<li><a class="roster-pic" href="{esc(p["profile"])}" tabindex="-1" aria-hidden="true"><img src="{esc(contributors.avatar(p["avatar"], 96))}" '
                         f'width="48" height="48" alt="" loading="lazy" decoding="async"></a>'
@@ -1141,42 +1063,6 @@ def build_contributors() -> None:
     </div>""", jsonld=[crumbs_ld(trail)], priority="0.5")
 
 
-# ---- Languages: i18n/languages.tsv ---------------------------------------------------------------
-
-def build_languages() -> None:
-    rows = [l.split("\t") for l in (ROOT / "i18n" / "languages.tsv").read_text("utf-8").splitlines()
-            if l and not l.startswith("#")]
-    flags = ROOT / "crates" / "app" / "assets" / "flags"
-    (OUT / "assets" / "flags").mkdir(parents=True, exist_ok=True)
-    items = []
-    for code, english, native, flag, *_ in sorted(rows, key=lambda r: r[1]):
-        src = flags / f"{flag}.svg"
-        img = ""
-        if src.is_file():
-            shutil.copy2(src, OUT / "assets" / "flags" / src.name)
-            img = f'<img src="/assets/flags/{flag}.svg" width="24" height="18" alt="" loading="lazy">'
-        tsv = f"{REPO}/blob/main/i18n/{code}.tsv"
-        items.append(f'<li>{img}<span><a href="{tsv}" lang="{esc(code)}">{esc(native)}</a><small>{esc(english)}</small></span></li>')
-    trail = [("Home", "/"), ("Languages", "/languages.html")]
-    body = f"""{page_head(f"{NAME} in {len(rows)} languages", "Every display language Windows 11 offers, chosen by flag on the first start or any time in View → Language. Arabic, Hebrew, Persian, Urdu and Uyghur are laid out right to left.", trail)}
-    <div class="wrap prose page-body" style="max-width:1180px">
-      <h2>Every language</h2>
-      <ul class="lang-grid" translate="no">{"".join(items)}</ul>
-      <h2>Help translate</h2>
-      <p>Most translations were made by machine and are waiting for a native speaker. If MDM speaks your language a little oddly, you can fix it in a few minutes, no programming needed:</p>
-      <ol>
-        <li>Click your language above: it opens its file on GitHub, one text per row.</li>
-        <li>Correct the translation in the third column and delete the row's <code>#, machine</code> line.</li>
-        <li>Propose the change with GitHub's pencil button. Your name goes into the release notes.</li>
-      </ol>
-      <p>The full guide is in the <a href="/contributing.html">contributing guide</a>, and <a href="/help/languages.html">Languages</a> in the help explains the picker and right-to-left layouts.</p>
-      {cta_band()}
-    </div>"""
-    write("/languages.html", f"{NAME} in {len(rows)} languages — translations",
-          f"{NAME} speaks {len(rows)} languages, every one Windows 11 offers, right to left included. See them all and help improve your own.",
-          body, jsonld=[crumbs_ld(trail)], priority="0.6")
-
-
 # ---- Repository documents shown as pages --------------------------------------------------------
 
 def build_repo_pages() -> None:
@@ -1189,13 +1075,12 @@ def build_repo_pages() -> None:
     rest = "\n".join(lines[1:]).strip().split("\n\n", 1)[1]
     path = "/contributing.html"
     trail = [("Home", "/"), ("Contributing", path)]
-    lede = ("Bug reports, ideas, translation fixes and pull requests are all welcome. "
+    lede = ("Bug reports, ideas and pull requests are all welcome. "
             f'Everything happens in the open on <a href="{REPO}">GitHub</a>.')
-    body = f"""{page_head("Contribute to Mister Download Manager", lede, trail)}
+    body = f"""{page_head("Contribute to Grabbit", lede, trail)}
     <div class="wrap narrow prose page-body">
       <div class="contrib-ways">
         <a href="{REPO}/issues/new?template=bug.yml"><b>Report a bug</b><span>Something broken or odd? Tell us what you saw.</span></a>
-        <a href="/languages.html"><b>Fix a translation</b><span>Five minutes on GitHub, no programming.</span></a>
         <a href="{REPO}/issues"><b>Pick an issue</b><span>See what's open and lend a hand.</span></a>
         <a href="{REPO}"><b>Star the project</b><span>It helps other people find it.</span></a>
       </div>
@@ -1203,7 +1088,7 @@ def build_repo_pages() -> None:
       {page_tools("CONTRIBUTING.md", path, "Contributing")}
     </div>"""
     write(path, f"Contribute — {NAME}",
-          "How to help Mister Download Manager: report bugs, fix translations, build it from source and send pull requests. The checks CI runs and the project's rules.",
+          "How to help Grabbit: report bugs, fix translations, build it from source and send pull requests. The checks CI runs and the project's rules.",
           body, jsonld=[crumbs_ld(trail)], priority="0.5")
 
 
@@ -1213,6 +1098,25 @@ def bench_report() -> str:
     table = "\n".join(l for l in text.splitlines() if l.startswith("|"))
     env = next((l for l in text.splitlines()[1:] if l.strip()), "")
     return md(table) + f'<p class="fine">{esc(env)}</p>'
+
+
+def bench_bars(axis: int = 16) -> str:
+    """The home page's chart: each scenario's end-to-end median from website/bench/results.json,
+    Grabbit's bar over IDM's on one shared time axis (seconds). Drawn here so the page and the data
+    can't disagree; home.css styles it and home.js only adds the grow-in."""
+    data = json.loads((WEB / "bench" / "results.json").read_text("utf-8"))
+    rows = []
+    for s in data["scenarios"]:
+        us = s["clients"]["Grabbit"]["stats"]["e2e_ms"]["median"] / 1000
+        them = s["clients"]["IDM"]["stats"]["e2e_ms"]["median"] / 1000
+        rows.append(
+            f'<li class="bench-row"><span class="bench-name">{esc(s["title"])}</span>'
+            f'<span class="bench-bars">'
+            f'<span class="bench-bar us" style="--w:{us / axis * 100:.2f}%"><i></i><b>{us:.2f} s</b></span>'
+            f'<span class="bench-bar them" style="--w:{them / axis * 100:.2f}%"><i></i><b>{them:.2f} s</b></span>'
+            f'</span></li>')
+    ticks = "".join(f'<span style="left:{t / axis * 100:g}%">{t} s</span>' for t in range(0, axis + 1, 4))
+    return f'<ul class="bench" data-bench>{"".join(rows)}<li class="bench-axis" aria-hidden="true">{ticks}</li></ul>'
 
 
 # ---- Pages written as Markdown (legal) -----------------------------------------------------------
@@ -1262,17 +1166,17 @@ def fill(text: str) -> str:
         text = text.replace("{{FILE_" + k.upper() + "}}", v)
     if "{{BENCH_REPORT}}" in text:
         text = text.replace("{{BENCH_REPORT}}", bench_report())
+    if "<!--@benchbars-->" in text:
+        text = text.replace("<!--@benchbars-->", bench_bars())
     for k in ("stars", "forks", "issues", "watchers"):
         text = text.replace("{{" + k.upper() + "}}", STATS.get(k, "–"))
-    text = text.replace("<!--@split-->", split_button()).replace("<!--@gh-->", gh_pill("btn btn-ghost btn-big gh-big"))
-    text = text.replace("<!--@stores-->", store_buttons()).replace("<!--@amo-->", amo_button())
+    text = text.replace("<!--@split-->", split_button()).replace("<!--@amo-->", amo_button())
     text = text.replace("<!--@cws-->", cws_button())
     text = text.replace("{{AMO}}", AMO).replace("{{CWS}}", CWS)
     if "<!--@features-->" in text:
         text = text.replace("<!--@features-->", manifest(feature_list()))
     text = coming_marks(text.replace("<!--@coming-->", coming_banner()))
-    text = text.replace("<!--@crew-->", crew_pile())
-    text = text.replace("<!--@fields-->", waybill_fields()).replace("<!--@barcode-->", barcode.svg(f"MDM {VERSION}"))
+    text = text.replace("<!--@fields-->", waybill_fields())
     return (text.replace("{{VERSION}}", VERSION).replace("{{REPO}}", REPO).replace("{{SITE}}", SITE)
             .replace("{{SPONSORS}}", SPONSORS).replace("{{SOFTWARE_LD}}", json.dumps(SOFTWARE_LD, ensure_ascii=False, separators=(",", ":"))))
 
@@ -1415,7 +1319,7 @@ def help_href(ref: str) -> str:
 
 
 def feature_label(m: dict) -> str:
-    """A feature's facts in the waybill's field grammar, stuck on its picture."""
+    """A feature's facts as label/value rows, in a card beside or under its picture."""
     if is_coming(m["since"]):
         since = f'<dd>Version {esc(upcoming())} <small>coming</small></dd>'
     else:
@@ -1425,12 +1329,12 @@ def feature_label(m: dict) -> str:
         where = re.sub(r"`([^`]+)`", r'<code translate="no">\1</code>', esc(m["where"]))
         rows.append(f'<div class="wide"><dt>In the app</dt><dd>{where}</dd></div>')
     rows.append(f"<div><dt>Since</dt>{since}</div>")
-    rows.append('<div class="pair"><dt>Postage</dt><dd>Free</dd></div>')
+    rows.append('<div class="pair"><dt>Price</dt><dd>Free</dd></div>')
     if m.get("help"):
         rows.append(f'<div class="wide"><dt>Full guide</dt><dd><a href="{help_href(m["help"])}">Step by step in the help</a></dd></div>')
     return (f'<aside class="waybill feature-label" aria-label="At a glance"><div class="wb-band">'
-            f'<img src="/assets/logo-64.png" width="32" height="32" alt=""><span class="wb-from"><b>{esc(m["name"])}</b>'
-            f'<small>Mister Download Manager</small></span></div><dl class="fields">{"".join(rows)}</dl></aside>')
+            f'<img src="/assets/grabbit.svg" width="32" height="32" alt=""><span class="wb-from"><b>{esc(m["name"])}</b>'
+            f'<small>{NAME}</small></span></div><dl class="fields">{"".join(rows)}</dl></aside>')
 
 
 def build_features() -> None:
@@ -1476,8 +1380,7 @@ def build_features() -> None:
 # ---- Themes: website/content/themes.toml, and the theme file format from the app's own code -----
 
 THEME_SAMPLE = '''name = "Harbour"
-inherits = "classic"
-icons = "color"
+inherits = "graphite"
 
 [seeds.light]
 background = "#eef3f6"
@@ -1529,8 +1432,12 @@ def build_themes() -> None:
     for i, th in enumerate(themes):
         tag = coming_banner("tag") if th.get("tag") and is_coming(since) else ""
         note = f'<p class="theme-note">{esc(th["note"])}</p>' if th.get("note") else ""
+        # A theme whose picture isn't taken yet shows its text only.
+        alt = f"The main window in the {th['name']} theme"
+        shot = (f'<figure class="theme-shot" data-lightbox>{picture(th["shot"], alt, lazy=i > 3)}{note}</figure>'
+                if th.get("shot") else "")
         tiles.append(f"""<li class="theme-tile">
-          <figure class="theme-shot" data-lightbox>{picture(th["shot"], f"The main window in the {th['name']} theme", lazy=i > 3)}{note}</figure>
+          {shot}
           <div class="theme-text"><h3>{esc(th["name"])}</h3><p>{esc(th["feel"])}</p>{tag}</div>
         </li>""")
     tiles.append("""<li class="theme-tile theme-own"><a href="#make-your-own">
@@ -1541,11 +1448,11 @@ def build_themes() -> None:
                         and (ROOT / "crates" / "app" / "assets" / "themes" / f"{t['id']}.toml").is_file())
     trail = [("Home", "/"), ("Themes", "/themes.html")]
     themes_dir = f"{REPO}/tree/main/crates/app/assets/themes"
-    body = f"""{page_head("The same window, your way", "View → Theme changes how MDM looks at once and keeps everything where it was. Pick one of the built-in looks, each with a light and a dark side, or make your own in a text file.", trail)}
+    body = f"""{page_head("The same window, your way", "Grabbit's look is Graphite, with a light and a dark side. Make your own in a text file, and View → Theme changes to it at once, keeping everything where it was.", trail)}
     <div class="wrap themes">
       {coming_banner()}
       <div class="themes-bar">
-        <p>{len(themes)} built-in themes · light and dark</p>
+        <p>{len(themes)} built-in theme{"" if len(themes) == 1 else "s"} · light and dark</p>
         <div class="variant-seg" role="group" aria-label="Show the themes" data-variant-switch hidden>
           <button type="button" aria-pressed="true" data-variant="light">Light</button><button type="button" aria-pressed="false" data-variant="dark">Dark</button>
         </div>
@@ -1556,20 +1463,21 @@ def build_themes() -> None:
     </div>
     <div class="wrap narrow page-body prose make-own" id="make-your-own">
       <h2>Make your own theme</h2>
-      <p>A theme is one small text file, in <a href="https://toml.io/">TOML</a> (or JSON). It names only what it changes; everything else comes from the theme it builds on. You don't need to build MDM or know how to program.</p>
+      <p>A theme is one small text file, in <a href="https://toml.io/">TOML</a> (or JSON). It names only what it changes; everything else comes from the theme it builds on. You don't need to build Grabbit or know how to program.</p>
       <ol class="make-steps">
         <li id="make-it"><h3>Make it</h3>
           <p>Start with a few colours, then add more as you go:</p>
           <pre><code translate="no">{esc(THEME_SAMPLE)}</code></pre>
           <ul>
-            <li><code>inherits</code> is the theme yours starts from: <code>classic</code> (the default), {builtin}, or another theme file in the same folder.</li>
-            <li><code>[seeds]</code> are a handful of colours (<code>background</code>, <code>surface</code>, <code>header</code>, <code>text</code>, <code>accent</code>, <code>selection</code>, <code>error</code>, <code>warning</code>, <code>success</code>) that MDM spreads over every control. <code>[seeds.light]</code> and <code>[seeds.dark]</code> give each side its own.</li>
+            <li><code>inherits</code> is the theme yours starts from: {builtin} (the default), or another theme file in the same folder.</li>
+            <li><code>[seeds]</code> are a handful of colours (<code>background</code>, <code>surface</code>, <code>header</code>, <code>text</code>, <code>accent</code>, <code>selection</code>, <code>error</code>, <code>warning</code>, <code>success</code>) that Grabbit spreads over every control. <code>[seeds.light]</code> and <code>[seeds.dark]</code> give each side its own.</li>
             <li><code>[colors]</code> sets single colour roles on both sides, <code>[light]</code> and <code>[dark]</code> on one side only: <code>#rrggbb</code>, or <code>#rrggbbaa</code> with transparency.</li>
             <li><code>[sizes]</code> are corner radii, border widths, font sizes and row heights, in pixels. <code>[controls]</code> chooses the shape of text boxes, check boxes, buttons, progress bars, scroll bars, the focus mark and the title bar.</li>
-            <li><code>icons</code> is <code>color</code>, <code>mono</code> or <code>accent</code>. A theme in a folder of its own (<code>my-theme/theme.toml</code>) can bring its icons in <code>icons/16</code> and <code>icons/24</code>, each named for what it shows (<code>tb-add-url.svg</code>, <code>cat-music.png</code>); <code>-symbolic</code> ones take the theme's text colour.</li>
+            <li><code>font = "geist"</code> uses Geist, the typeface Grabbit carries, for every text; without it the windows keep Windows' own fonts.</li>
+            <li>A theme in a folder of its own (<code>my-theme/theme.toml</code>) can bring its icons in <code>icons/16</code> and <code>icons/24</code>, each named for what it shows (<code>tb-add-url.svg</code>, <code>cat-music.png</code>); <code>-symbolic</code> ones take the theme's text colour. An icon it lacks is Graphite's.</li>
             <li><code>contrast = "high"</code> strengthens every edge and text colour on top.</li>
           </ul>
-          <p>A key MDM doesn't know, or a value it can't read, is skipped and written to MDM's log (the <code>logs</code> folder beside the themes folder), so a file made for a newer MDM still loads. The built-in themes are written the same way: <a href="{themes_dir}">read them on GitHub</a>.</p>
+          <p>A key Grabbit doesn't know, or a value it can't read, is skipped and written to Grabbit's log (the <code>logs</code> folder beside the themes folder), so a file made for a newer Grabbit still loads. Graphite is written the same way: <a href="{themes_dir}">read it on GitHub</a>.</p>
           <details class="keys-ref"><summary>Every colour role ({len(keys["colors"])})</summary>{keys_table(keys["colors"], "What it colours")}</details>
           <details class="keys-ref"><summary>Every size ({len(keys["sizes"])})</summary>{keys_table(keys["sizes"], "What it sets")}</details>
           <details class="keys-ref"><summary>Every control style ({len(keys["controls"])})</summary>{keys_table(keys["controls"], "Its styles")}</details>
@@ -1580,25 +1488,23 @@ def build_themes() -> None:
             <pre id="theme-prompt"><code translate="no">{esc(prompt)}</code></pre>
           </div>
         </li>
-        <li id="try-it"><h3>Try it, without building MDM</h3>
-          <p>Put the file in MDM's themes folder. <b>View → Theme → Open themes folder</b> opens it, and makes it the first time. It is in MDM's data folder:</p>
+        <li id="try-it"><h3>Try it, without building Grabbit</h3>
+          <p>Put the file in Grabbit's themes folder. <b>View → Theme → Open themes folder</b> opens it, and makes it the first time. It is in Grabbit's data folder:</p>
           <dl class="fields os-paths">
-            <div><dt>Windows</dt><dd><code translate="no">%APPDATA%\\misterdownloadmanager\\themes</code></dd></div>
-            <div><dt>Linux</dt><dd><code translate="no">~/.local/share/misterdownloadmanager/themes</code></dd></div>
-            <div><dt>macOS</dt><dd><code translate="no">~/Library/Application Support/misterdownloadmanager/themes</code></dd></div>
+            <div><dt>Windows</dt><dd><code translate="no">%APPDATA%\\grabbit\\themes</code></dd></div>
             <div><dt>Portable copy</dt><dd><code translate="no">data\\themes</code> beside the program</dd></div>
           </dl>
-          <p>Within two seconds it shows in <b>View → Theme</b>, under the built-in themes, by the <code>name</code> it gives itself. Pick it and the whole window changes at once. After you edit the file, pick it again in <b>View → Theme</b> to see the change. <b>View → Dark Mode support</b> and <b>Always dark</b> switch between its light and dark side.</p>
-          <p><b>View → Theme → Add a theme file…</b> does it for you: pick the file anywhere, and MDM copies it into the themes folder and uses it at once.</p>
+          <p>Within two seconds it shows in <b>View → Theme</b>, under Graphite, by the <code>name</code> it gives itself. Pick it and the whole window changes at once. After you edit the file, pick it again in <b>View → Theme</b> to see the change. <b>View → Dark Mode support</b> and <b>Always dark</b> switch between its light and dark side.</p>
+          <p><b>View → Theme → Add a theme file…</b> does it for you: pick the file anywhere, and Grabbit copies it into the themes folder and uses it at once.</p>
           <h4 id="schemes">Already have a Base16 or pywal scheme?</h4>
-          <p>It's a theme already. A <a href="https://github.com/tinted-theming/schemes">Base16 or Base24 scheme</a> (<code>.yaml</code>) or pywal's <code>colors.json</code>, added the same way, changes MDM's colours and nothing else: the scheme's backgrounds behind the list and the windows, its text kept readable (4.5:1 or more), its blue on the focus, the selection and the progress bar. Once <code>wal</code> has run, <b>View → Theme</b> lists <b>pywal</b>, read from <code>~/.cache/wal/colors.json</code> (<code translate="no">%USERPROFILE%\\.cache\\wal\\colors.json</code> on Windows), and MDM follows each new wallpaper's colours within two seconds. <a href="{REPO}/blob/main/docs/themes.md#base16-and-pywal-colour-schemes">The guide</a> shows which colour goes where.</p>
+          <p>It's a theme already. A <a href="https://github.com/tinted-theming/schemes">Base16 or Base24 scheme</a> (<code>.yaml</code>) or pywal's <code>colors.json</code>, added the same way, changes Grabbit's colours and nothing else: the scheme's backgrounds behind the list and the windows, its text kept readable (4.5:1 or more), its blue on the focus, the selection and the progress bar. Once <code>wal</code> has run, <b>View → Theme</b> lists <b>pywal</b>, read from <code>~/.cache/wal/colors.json</code> (<code translate="no">%USERPROFILE%\\.cache\\wal\\colors.json</code> on Windows), and Grabbit follows each new wallpaper's colours within two seconds. <a href="{REPO}/blob/main/docs/themes.md#base16-and-pywal-colour-schemes">The guide</a> shows which colour goes where.</p>
         </li>
         <li id="share-it"><h3>Share it</h3>
           <p>Made something others would like? Open a <a href="{REPO}/pulls">pull request on GitHub</a> that adds it to <a href="{themes_dir}"><code>crates/app/assets/themes</code></a>, with:</p>
           <ul>
             <li>the <code>.toml</code> file, and its folder of icons if it has one;</li>
             <li>screenshots of the main window in its light and its dark side;</li>
-            <li>a <code>SOURCES.txt</code> beside any icons, saying who drew them and under which licence. Icons must be your own or under a licence that lets MDM share them (GPL-3.0), never copied from another program.</li>
+            <li>a <code>SOURCES.txt</code> beside any icons, saying who drew them and under which licence. Icons must be your own or under a licence that lets Grabbit share them (GPL-3.0), never copied from another program.</li>
           </ul>
           <p>Not sure yet? <a href="{REPO}/discussions">Show it in the discussions</a> first. The <a href="/contributing.html">contributing guide</a> explains how pull requests work here.</p>
         </li>
@@ -1607,7 +1513,7 @@ def build_themes() -> None:
       {cta_band()}
     </div>"""
     write("/themes.html", f"Themes — {NAME}",
-          f"{len(themes)} built-in looks for {NAME}, each light and dark: "
+          f"The built-in look of {NAME}, light and dark: "
           + ", ".join(t["name"] for t in themes) + ". Or make your own in a text file.",
           body, section="themes", jsonld=[crumbs_ld(trail)], priority="0.7")
 
@@ -1624,7 +1530,7 @@ def copy_feature_images() -> None:
 # ---- For AI assistants and search: llms.txt, llms-full.txt (llmstxt.org) ----------------------
 
 def build_llms() -> None:
-    """llms.txt: website/llms.txt (what MDM is, the main pages) and, made here, every help page
+    """llms.txt: website/llms.txt (what Grabbit is, the main pages) and, made here, every help page
     (as Markdown) and question. llms-full.txt: all of it in one file. Built from the same
     sources as the pages, so it never drifts from them."""
     head_md = (WEB / "llms.txt").read_text("utf-8").strip()
@@ -1670,22 +1576,22 @@ def copy_static() -> None:
     schema = ROOT / "docs" / "automation-api.schema.json"
     if schema.is_file():
         shutil.copy2(schema, OUT / "automation-api.schema.json")
-    (OUT / "CNAME").write_text("misterdownloadmanager.com\n", "utf-8")
     (OUT / ".nojekyll").write_text("", "utf-8")
     (OUT / "site.webmanifest").write_text(json.dumps({
-        "name": NAME, "short_name": "MDM", "start_url": "/", "display": "browser",
-        "background_color": "#ffffff", "theme_color": "#0f7b0f",
-        "icons": [{"src": "/assets/logo-640.png", "sizes": "640x640", "type": "image/png"},
-                  {"src": "/assets/apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}],
+        "name": NAME, "short_name": NAME, "start_url": f"{BASE}/", "display": "browser",
+        "background_color": "#f7f6fb", "theme_color": "#f7f6fb",
+        "icons": [{"src": f"{BASE}/assets/grabbit.svg", "sizes": "any", "type": "image/svg+xml"},
+                  {"src": f"{BASE}/assets/logo-640.png", "sizes": "640x640", "type": "image/png"},
+                  {"src": f"{BASE}/assets/apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}],
     }, indent=2), "utf-8")
 
 
 def bust_caches() -> None:
-    """Every page asks for /styles.css, /main.js and /bench.js by their content hash, so a
-    browser never pairs a new page with an old cached stylesheet."""
+    """Every page asks for /styles.css, /main.js, /bench.js and the home page's /home.css and
+    /home.js by their content hash, so a browser never pairs a new page with an old cached file."""
     import hashlib
     tags = {}
-    for name in ("styles.css", "main.js", "bench.js"):
+    for name in ("styles.css", "main.js", "bench.js", "home.css", "home.js"):
         tags[name] = hashlib.sha256((OUT / name).read_bytes()).hexdigest()[:10]
     for page in OUT.rglob("*.html"):
         text = page.read_text("utf-8")
@@ -1696,11 +1602,32 @@ def bust_caches() -> None:
             page.write_text(new, "utf-8", newline="\n")
 
 
-def finish(available: dict[str, list[str]]) -> None:
+def rebase() -> None:
+    """BASE in front of every root path ("/x", not "//host") the pages and styles link to: in
+    href, src and action (also inside JSON-LD, quoted \\"), and in url(). Absolute addresses are
+    SITE's already."""
+    if not BASE:
+        return
+    root_path = re.compile(r"""(\s(?:href|src|action)=\\?["']|url\(["']?)/(?!/)""")
+    for f in OUT.rglob("*"):
+        if f.suffix in (".html", ".css"):
+            text = f.read_text("utf-8")
+            new = root_path.sub(lambda m: m.group(1) + BASE + "/", text)
+            if new != text:
+                f.write_text(new, "utf-8", newline="\n")
+
+
+def finish() -> None:
     bust_caches()
-    # One sitemap per language under an index, each page with its languages (sitei18n).
-    sitei18n.sitemaps(OUT, SITE, PAGES, available, TODAY)
-    (OUT / "robots.txt").write_text(f"User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n", "utf-8")
+    rebase()
+    urls = "\n".join(f"  <url>\n    <loc>{SITE}{path}</loc>\n    <lastmod>{TODAY}</lastmod>\n"
+                     f"    <priority>{pr}</priority>\n  </url>"
+                     for path, pr in sorted(PAGES, key=lambda x: (-float(x[1]), x[0])))
+    (OUT / "sitemap.xml").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{urls}\n</urlset>\n',
+        "utf-8", newline="\n")
+    (OUT / "robots.txt").write_text(f"User-agent: *\nAllow: {BASE}/\n\nSitemap: {SITE}/sitemap.xml\n", "utf-8")
 
 
 def main() -> None:
@@ -1715,7 +1642,6 @@ def main() -> None:
     build_help()
     build_faq()
     build_news()
-    build_languages()
     build_repo_pages()
     build_contributors()
     build_content_pages()
@@ -1723,19 +1649,31 @@ def main() -> None:
     build_themes()
     copy_feature_images()
     build_llms()
-    # The same pages in every language with a catalog (i18n/site/<lang>.json), under /<lang>/.
-    # MDM_SITE_ENGLISH_ONLY=1 (translate_site.py's own build): English pages only.
-    only = ["none"] if os.environ.get("MDM_SITE_ENGLISH_ONLY") == "1" else None
-    # MDM_SITE_PREVIEW=1: the English pages with their language picker, nothing translated (fast).
-    available = sitei18n.localize(OUT, SITE, only, translated=os.environ.get("MDM_SITE_PREVIEW") != "1")
-    finish(available)
-    langs = len({c for v in available.values() for c in v})
-    print(f"{len(PAGES)} pages in {langs} language(s) -> {OUT}")
+    finish()
+    print(f"{len(PAGES)} pages -> {OUT}")
     if "--serve" in sys.argv:
         import functools
         import http.server
-        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(OUT))
-        print("http://127.0.0.1:8765/")
+        class AtBase(http.server.SimpleHTTPRequestHandler):
+            """Serves the site under BASE, as GitHub Pages does; anything else is 404."""
+            def translate_path(self, path):
+                if not path.startswith(BASE + "/"):
+                    return str(OUT / "-")  # outside the site: no such file
+                return super().translate_path(path[len(BASE):])
+
+            def send_error(self, code, message=None, explain=None):
+                if code == 404 and (OUT / "404.html").is_file():
+                    body = (OUT / "404.html").read_bytes()
+                    self.send_response(404)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                super().send_error(code, message, explain)
+
+        handler = functools.partial(AtBase, directory=str(OUT))
+        print(f"http://127.0.0.1:8765{BASE}/")
         http.server.ThreadingHTTPServer(("127.0.0.1", 8765), handler).serve_forever()
 
 

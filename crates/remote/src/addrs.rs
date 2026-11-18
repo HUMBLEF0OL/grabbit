@@ -80,12 +80,8 @@ pub fn url(ip: IpAddr, port: u16) -> String {
 
 /// The computer's name, for the certificate and the names a request may use (`Host`).
 pub fn host_name() -> Option<String> {
-    // Windows sets COMPUTERNAME for every process; Linux keeps the name in /proc and
-    // /etc/hostname; macOS has neither (its own call isn't used: the addresses are enough).
-    let name = std::env::var("COMPUTERNAME")
-        .ok()
-        .or_else(|| std::fs::read_to_string("/proc/sys/kernel/hostname").ok())
-        .or_else(|| std::fs::read_to_string("/etc/hostname").ok())?;
+    // Windows sets COMPUTERNAME for every process.
+    let name = std::env::var("COMPUTERNAME").ok()?;
     let name = name.trim().to_ascii_lowercase();
     (!name.is_empty() && name.len() <= 63).then_some(name)
 }

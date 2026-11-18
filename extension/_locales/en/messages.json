@@ -1,15 +1,15 @@
 {
   "name": {
-    "message": "Mister Download Manager",
-    "description": "the extension's name in the browser's list of extensions and on its toolbar button; keep the name Mister Download Manager as it is"
+    "message": "Grabbit",
+    "description": "the extension's name in the browser's list of extensions and on its toolbar button; keep the name Grabbit as it is"
   },
   "description": {
-    "message": "Hands downloads from the browser to Mister Download Manager.",
-    "description": "the extension's description in the browser's list of extensions; keep the name Mister Download Manager as it is"
+    "message": "Hands downloads from the browser to Grabbit.",
+    "description": "the extension's description in the browser's list of extensions; keep the name Grabbit as it is"
   },
   "menu": {
-    "message": "Download with Mister Download Manager",
-    "description": "command in the browser's right-click menu on a link, picture, video or sound; keep the name Mister Download Manager as it is"
+    "message": "Download with Grabbit",
+    "description": "command in the browser's right-click menu on a link, picture, video or sound; keep the name Grabbit as it is"
   },
   "video_download": {
     "message": "Download video",
@@ -35,35 +35,35 @@
   },
   "video_settings": {
     "message": "Button settings...",
-    "description": "menu command of the download button over a video: opens its settings in Mister Download Manager"
+    "description": "menu command of the download button over a video: opens its settings in Grabbit"
   },
   "video_sent": {
-    "message": "Sent to Mister Download Manager",
-    "description": "shown briefly on the download button after it was clicked; keep the name Mister Download Manager as it is"
+    "message": "Sent to Grabbit",
+    "description": "shown briefly on the download button after it was clicked; keep the name Grabbit as it is"
   },
   "video_failed": {
-    "message": "Mister Download Manager isn't installed or didn't start",
-    "description": "shown briefly on the download button when the app could not be reached; keep the name Mister Download Manager as it is"
+    "message": "Grabbit isn't installed or didn't start",
+    "description": "shown briefly on the download button when the app could not be reached; keep the name Grabbit as it is"
   },
   "video_drag": {
     "message": "Drag to move it along the video's edge",
     "description": "tooltip of the download button over a video: it can be dragged to another place on the video's edge"
   },
   "menu_selected": {
-    "message": "Download selected links with Mister Download Manager",
-    "description": "command in the browser's right-click menu on selected text: download the links in the selection; keep the name Mister Download Manager as it is"
+    "message": "Download selected links with Grabbit",
+    "description": "command in the browser's right-click menu on selected text: download the links in the selection; keep the name Grabbit as it is"
   },
   "menu_all": {
-    "message": "Download all links with Mister Download Manager",
-    "description": "command in the browser's right-click menu on a page: download the links of the whole page; keep the name Mister Download Manager as it is"
+    "message": "Download all links with Grabbit",
+    "description": "command in the browser's right-click menu on a page: download the links of the whole page; keep the name Grabbit as it is"
   },
   "status_connected": {
-    "message": "Connected to Mister Download Manager",
-    "description": "the toolbar button's status when the browser reaches the app; keep the name Mister Download Manager as it is"
+    "message": "Connected to Grabbit",
+    "description": "the toolbar button's status when the browser reaches the app; keep the name Grabbit as it is"
   },
   "status_connected_version": {
-    "message": "Connected to Mister Download Manager $version$",
-    "description": "the toolbar button's status when the browser reaches the app, with the app's version number; keep the name Mister Download Manager as it is",
+    "message": "Connected to Grabbit $version$",
+    "description": "the toolbar button's status when the browser reaches the app, with the app's version number; keep the name Grabbit as it is",
     "placeholders": {
       "version": {
         "content": "$1",
@@ -76,28 +76,28 @@
     "description": "status when the user switched off taking downloads in the toolbar button's popup"
   },
   "status_not_installed": {
-    "message": "Mister Download Manager isn't installed, or its browser integration isn't set up",
-    "description": "status when the browser can't find the app's connection; keep the name Mister Download Manager as it is"
+    "message": "Grabbit isn't installed, or its browser integration isn't set up",
+    "description": "status when the browser can't find the app's connection; keep the name Grabbit as it is"
   },
   "status_forbidden": {
-    "message": "Mister Download Manager doesn't accept this copy of the extension",
-    "description": "status when the app refuses this copy of the extension (another copy is installed, or it came from another store); keep the name Mister Download Manager as it is"
+    "message": "Grabbit doesn't accept this copy of the extension",
+    "description": "status when the app refuses this copy of the extension (another copy is installed, or it came from another store); keep the name Grabbit as it is"
   },
   "status_not_running": {
-    "message": "Mister Download Manager didn't start in time",
-    "description": "status when the app was started for a download but didn't answer in time; keep the name Mister Download Manager as it is"
+    "message": "Grabbit didn't start in time",
+    "description": "status when the app was started for a download but didn't answer in time; keep the name Grabbit as it is"
   },
   "status_host_failed": {
-    "message": "The connection to Mister Download Manager failed",
-    "description": "status when the connection to the app broke off (often security software blocking it); keep the name Mister Download Manager as it is"
+    "message": "The connection to Grabbit failed",
+    "description": "status when the connection to the app broke off (often security software blocking it); keep the name Grabbit as it is"
   },
   "status_too_large": {
     "message": "This download's details were too large to hand over",
     "description": "status when a download carried too much data (very large cookies) to give to the app"
   },
   "status_update_app": {
-    "message": "Update Mister Download Manager to use everything this extension offers",
-    "description": "status when the app is older than the extension; keep the name Mister Download Manager as it is"
+    "message": "Update Grabbit to use everything this extension offers",
+    "description": "status when the app is older than the extension; keep the name Grabbit as it is"
   },
   "popup_take": {
     "message": "Take downloads from this browser",
@@ -108,12 +108,12 @@
     "description": "switch in the toolbar button's popup: on, the app downloads through the same proxy the browser uses (one a VPN or proxy extension sets); the browser then asks once to allow reading it"
   },
   "popup_proxy_title": {
-    "message": "Mister Download Manager then downloads through the same proxy as this browser. The browser asks you once to allow it; turning this off takes that back.",
-    "description": "tooltip of the switch Send downloads through this browser's proxy or VPN extension; keep the name Mister Download Manager as it is"
+    "message": "Grabbit then downloads through the same proxy as this browser. The browser asks you once to allow it; turning this off takes that back.",
+    "description": "tooltip of the switch Send downloads through this browser's proxy or VPN extension; keep the name Grabbit as it is"
   },
   "popup_proxy_title_chromium": {
-    "message": "Mister Download Manager then downloads through the same proxy as this browser. While this is off, the extension doesn't read the browser's proxy.",
-    "description": "tooltip of the switch Send downloads through this browser's proxy or VPN extension in Chrome, Edge and the other Chromium browsers (they ask for no permission at the switch); keep the name Mister Download Manager as it is"
+    "message": "Grabbit then downloads through the same proxy as this browser. While this is off, the extension doesn't read the browser's proxy.",
+    "description": "tooltip of the switch Send downloads through this browser's proxy or VPN extension in Chrome, Edge and the other Chromium browsers (they ask for no permission at the switch); keep the name Grabbit as it is"
   },
   "popup_exclude_site": {
     "message": "Never take downloads from $site$",
@@ -136,8 +136,8 @@
     }
   },
   "popup_open": {
-    "message": "Open Mister Download Manager",
-    "description": "button in the toolbar button's popup; keep the name Mister Download Manager as it is"
+    "message": "Open Grabbit",
+    "description": "button in the toolbar button's popup; keep the name Grabbit as it is"
   },
   "popup_options": {
     "message": "Options...",
@@ -148,8 +148,8 @@
     "description": "link in the toolbar button's popup to the help page"
   },
   "popup_support": {
-    "message": "Support MDM",
-    "description": "link at the foot of the toolbar button's popup to the creator's GitHub Sponsors page (MDM is free; this is an optional donation)"
+    "message": "Support Grabbit",
+    "description": "link at the foot of the toolbar button's popup to Grabbit's GitHub page (Grabbit is free; starring it is optional)"
   },
   "popup_fix": {
     "message": "How to fix it",
@@ -241,37 +241,41 @@
     "message": "Can't tell which video this is: open its own page and try there",
     "description": "shown briefly on the download button when nothing on the page says which video the player is playing, so nothing was sent"
   },
+  "video_open_post": {
+    "message": "Open the post, then use the button there",
+    "description": "shown briefly on the download button over a video in a feed (a social site's home page, a timeline) when nothing in the feed gives that video's own address, so nothing was sent: the user should open the post the video belongs to and click the button on that page; short"
+  },
   "popup_send_to": {
     "message": "Send downloads to",
     "description": "heading in the toolbar button's popup, above the choice of where downloads go"
   },
   "popup_send_here": {
     "message": "This computer",
-    "description": "choice under Send downloads to: the Mister Download Manager on this computer"
+    "description": "choice under Send downloads to: the Grabbit on this computer"
   },
   "popup_send_remote": {
-    "message": "Another Mister Download Manager (a server)",
-    "description": "choice under Send downloads to: an MDM running on another computer of the network, such as a home server; keep the name Mister Download Manager as it is"
+    "message": "Another Grabbit (a server)",
+    "description": "choice under Send downloads to: a Grabbit running on another computer of the network, such as a home server; keep the name Grabbit as it is"
   },
   "popup_remote_code": {
     "message": "Pairing code",
-    "description": "placeholder of the box for the 8-digit code the other MDM shows"
+    "description": "placeholder of the box for the 8-digit code the other Grabbit shows"
   },
   "popup_remote_open": {
     "message": "Open it",
-    "description": "button: open the other MDM's address in a tab (to accept its certificate once)"
+    "description": "button: open the other Grabbit's address in a tab (to accept its certificate once)"
   },
   "popup_remote_pair": {
     "message": "Pair",
-    "description": "button: pair this browser with the other MDM using the code"
+    "description": "button: pair this browser with the other Grabbit using the code"
   },
   "popup_remote_help": {
-    "message": "Open its address once and accept its certificate, then enter a code from its Options, Remote, Pair a device (or misterdownloadmanager-cli pair).",
-    "description": "help under the pairing boxes; Options, Remote and Pair a device are the app's window, tab and button; keep misterdownloadmanager-cli pair as it is"
+    "message": "Open its address once and accept its certificate, then enter a code from its Options, Remote, Pair a device (or grabbit-cli pair).",
+    "description": "help under the pairing boxes; Options, Remote and Pair a device are the app's window, tab and button; keep grabbit-cli pair as it is"
   },
   "status_remote": {
     "message": "Downloads go to $address$",
-    "description": "the toolbar button's status while downloads go to another MDM",
+    "description": "the toolbar button's status while downloads go to another Grabbit",
     "placeholders": {
       "address": {
         "content": "$1",
@@ -285,7 +289,7 @@
   },
   "remote_unreachable": {
     "message": "Not reached. Open its address once in this browser and accept its certificate, then try again.",
-    "description": "pairing failed: the other MDM didn't answer"
+    "description": "pairing failed: the other Grabbit didn't answer"
   },
   "remote_wrong_code": {
     "message": "Wrong code.",
@@ -293,7 +297,7 @@
   },
   "remote_no_code": {
     "message": "It shows no code now: click Pair a device there first.",
-    "description": "pairing failed: the other MDM shows no pairing code; Pair a device is its button"
+    "description": "pairing failed: the other Grabbit shows no pairing code; Pair a device is its button"
   },
   "remote_too_soon": {
     "message": "Wait a moment, then try again.",
@@ -305,7 +309,7 @@
   },
   "remote_device_name": {
     "message": "Browser extension",
-    "description": "the name this browser gets in the other MDM's list of paired devices"
+    "description": "the name this browser gets in the other Grabbit's list of paired devices"
   },
   "popup_media_title_name": {
     "message": "Prefix media file names with the page title",

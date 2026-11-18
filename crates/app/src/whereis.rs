@@ -8,6 +8,7 @@
 use std::net::IpAddr;
 use std::sync::OnceLock;
 
+use egui::emath::GuiRounding as _;
 use egui::{Color32, Rect, Sense, Ui, pos2, vec2};
 use serde::{Deserialize, Serialize};
 
@@ -106,8 +107,8 @@ fn is_local(ip: IpAddr) -> bool {
     }
 }
 
-/// Where a place's picture comes from: its country's flag, or a Tango icon for this computer
-/// and the local network, which have no country.
+/// Where a place's picture comes from: its country's flag, or a Graphite icon (its need) for
+/// this computer and the local network, which have no country.
 enum Mark {
     Flag(mdm_geo::Country),
     Icon(&'static str),
@@ -132,13 +133,14 @@ fn place(seen: &Seen) -> Option<(String, Option<Mark>)> {
             None,
         ),
         // i18n: where a download's server is: on this very computer (no country)
-        None if is_this_computer(ip) => {
-            (crate::i18n::t("this computer").to_owned(), Some("computer"))
-        }
+        None if is_this_computer(ip) => (
+            crate::i18n::t("this computer").to_owned(),
+            Some("gx-computer"),
+        ),
         // i18n: where a download's server is: another computer on the local network (no country)
         None if is_local(ip) => (
             crate::i18n::t("the local network").to_owned(),
-            Some("network-workgroup"),
+            Some("gx-network"),
         ),
         // i18n: where a download's server is: an address the location table doesn't place
         None => (crate::i18n::t("unknown").to_owned(), None),
@@ -229,7 +231,8 @@ pub fn line(ui: &Ui, x: f32, baseline: f32, right: f32, seen: Option<&Seen>, id:
             pos2(at, baseline - 11.0),
             vec2(16.0, 16.0),
         ));
-        crate::fileicons::paint_tango(ui, &p, name, rc);
+        let rc = rc.round_to_pixels(ui.ctx().pixels_per_point());
+        crate::themeicons::paint_graphite(ui, &p, name, rc, true);
         shown = Some(rc);
         at += 21.0;
     }

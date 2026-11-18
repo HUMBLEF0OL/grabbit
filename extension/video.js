@@ -9,10 +9,15 @@
 // the button on, the site not excluded).
 (() => {
   // One button per page: a copy cut off from the extension (after an update) gives way to the
-  // new one.
+  // new one. Chromium runs the new copy where the old one ran, so it stops the old one here
+  // (`teardown`). Firefox gives the new copy a world of its own: it can't reach the old copy,
+  // whose listeners died with it while its button stayed on the page, frozen where it was, shown
+  // if it was then: two buttons over the video (upstream issue 336, seen in full screen). Any
+  // button already on the page is such a copy's: it goes.
   const prev = globalThis.__mdmVideoButton;
   if (prev && typeof prev === "object" && prev.alive()) return;
   if (prev && typeof prev.teardown === "function") prev.teardown();
+  for (const old of document.querySelectorAll("mdm-video-button")) old.remove();
   const ext = globalThis.browser ?? globalThis.chrome;
 
   // A video worth a button: big enough to be content, not a short muted looping clip (an
@@ -26,7 +31,7 @@
   const INSET = 10;
   const DRAG_PX = 4;
   // Our app icon (extension/icons/icon-48.png, as data: no extension file is exposed to pages).
-  const LOGO = "data:image/png;base64,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";
+  const LOGO = "data:image/png;base64,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";
 
   const t = (key, ...subs) => ext.i18n.getMessage(key, subs) || FALLBACK[key] || key;
   const FALLBACK = {
@@ -34,11 +39,12 @@
     video_more: "More options",
     video_hide_here: "Hide on this video",
     video_settings: "Button settings...",
-    video_sent: "Sent to Mister Download Manager",
-    video_failed: "Mister Download Manager isn't installed or didn't start",
+    video_sent: "Sent to Grabbit",
+    video_failed: "Grabbit isn't installed or didn't start",
     video_off: "The download button is off on this site",
     video_drm: "Protected video: it can't be saved",
     video_unnamed: "Can't tell which video this is: open its own page and try there",
+    video_open_post: "Open the post, then use the button there",
     video_drag: "Drag to move it along the video's edge",
   };
   // To the background. After the extension was updated or removed, this page's copy of the script
@@ -65,6 +71,16 @@
   // itself never goes to the app then (a channel is a whole list to yt-dlp): the background asks
   // the player what it plays, in the page's own world (background.js playingVideo), and this
   // answer is only what it falls back on.
+  //
+  // Elsewhere the same, generalised (upstream issues 689, 643): a video in a feed (LinkedIn's,
+  // Facebook's, X's, Reddit's…) sits in the post it belongs to, and that post names its own
+  // address (its permalink, its timestamp link, the post id the page gives it); `ownAddress` finds
+  // it the way a person would. Null there too when nothing names it: a feed's address is never the
+  // video's.
+  //
+  // ---- the video's own address: from here to its end mark, run as is on saved pages by
+  // tools/extension/test.mjs (only `location`, `document` and the elements' parentElement,
+  // parentNode.host, localName, getAttribute, querySelector(All) with simple selectors).
   function videoPage(v) {
     const watch = (id) =>
       /^[\w-]+$/.test(id || "") ? `https://www.youtube.com/watch?v=${id}` : null;
@@ -114,11 +130,349 @@
         // A page that plays a video and names none: not the video's page, so not the app's.
         return null;
       }
+      return ownAddress(v, url);
     } catch {
       // Not an address this page can reason about: its own follows.
     }
     return location.href;
   }
+
+  // Up from a node: its parent, or the element whose shadow root holds it (Reddit's player keeps
+  // its <video> in one).
+  const upFrom = (n) => n.parentElement || (n.parentNode && n.parentNode.host) || null;
+
+  // `href` as an address (relative to the page), or null.
+  function linkTo(href) {
+    try {
+      return href ? new URL(href, location.href) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // The nearest container around the video that names its post: `read(node)` gives what a
+  // container names, { sure, maybe } (Maps of an id to the address it stands for), `sure` the
+  // post's or the video's own ids, `maybe` weaker ones (a link that may be the post's). The
+  // innermost container naming anything decides, and only when it names exactly one: one naming
+  // two has taken in the next post or the page's column, and a wrong video is worse than none.
+  // The walk ends at the page's column (a feed, role="feed") and at a container holding another
+  // video: from there up, what it names may be that one's (a post naming nothing next to one
+  // that names its own). A page that breaks a reader's expectations names nothing (never the
+  // page's own address instead).
+  function nearest(v, read) {
+    try {
+      for (let node = v, i = 0; node && i < 16; i += 1, node = upFrom(node)) {
+        if (node.localName === "body" || node.localName === "html") break;
+        if (node !== v && (node.getAttribute?.("role") === "feed" || manyVideos(node))) break;
+        const { sure, maybe } = read(node);
+        if (sure.size) return sure.size === 1 ? [...sure.values()][0] : null;
+        if (maybe.size) return maybe.size === 1 ? [...maybe.values()][0] : null;
+      }
+    } catch {
+      // Nothing named.
+    }
+    return null;
+  }
+
+  const decoded = (s) => {
+    try {
+      return decodeURIComponent(s);
+    } catch {
+      return s;
+    }
+  };
+
+  // The links in a container (the container itself when it is one), as addresses, with whether
+  // each holds a <time> (a timestamp link: a post's own permalink).
+  function linksIn(node, sel = "a[href]") {
+    const found = [];
+    const own = node.localName === "a" ? [node] : [];
+    for (const a of [...own, ...(node.querySelectorAll ? node.querySelectorAll(sel) : [])]) {
+      const u = linkTo(a.getAttribute && a.getAttribute("href"));
+      if (u && /^https?:$/.test(u.protocol)) found.push({ u, time: Boolean(a.querySelector && a.querySelector("time")) });
+    }
+    return found;
+  }
+
+  // The page's site without its www. or mobile host (old.reddit.com is reddit.com).
+  const siteName = (host) => host.replace(/^(www|m|mobile|web|touch|old|new|sh|music|geo|player)\./, "");
+
+  // A video's own address on this page, by site; the page's own when it is that one video's page;
+  // null when the page is a feed, a list or a search and nothing names the video.
+  function ownAddress(v, url) {
+    const site = SITES.find((s) => s.hosts.test(siteName(url.hostname)));
+    if (site) {
+      // A site's own player in another page (an embed) is its video's page: its address holds
+      // what the links around it may lack (a private video's key).
+      if (site.embed && site.embed(url)) return location.href;
+      const found = nearest(v, (node) => site.read(node, url));
+      if (found) return found;
+      return site.own(url) ? location.href : null;
+    }
+    // Any other site: a player embedded in another page (its own frame), or the one video of its
+    // page, is its video's own page, as before.
+    if (framed() || (!inFeed(v) && document.querySelectorAll?.("video").length <= 1)) return location.href;
+    // A page of many videos: the post around this one, when one names it; else the page in
+    // general (an article with two players is still theirs to yt-dlp), but never a feed's
+    // (role="feed") or a page whose address is a feed's, a home's or a search's.
+    const found = nearest(v, (node) => genericRead(node, url));
+    if (found) return found;
+    return inFeed(v) || FEED_PATH.test(url.pathname) ? null : location.href;
+  }
+
+  // A feed's, a home page's, a search's address: many videos, none of them the page's.
+  const FEED_PATH = /^\/(?:$|home\/?$|feed|explore|search|discover|trending|popular|latest|timeline|for-?you|following|watch\/?$)/i;
+  // The video sits in a feed (role="feed": Mastodon's, the accessible feeds).
+  function inFeed(v) {
+    for (let node = upFrom(v); node; node = upFrom(node)) if (node.getAttribute?.("role") === "feed") return true;
+    return false;
+  }
+
+  const framed = () => {
+    try {
+      return window.top !== window;
+    } catch {
+      return false;
+    }
+  };
+  const manyVideos = (node) => Boolean(node.querySelectorAll && node.querySelectorAll("video").length > 1);
+
+  // Any other site: a link of this site that has a post's or a video's shape, or that holds the
+  // post's timestamp (Mastodon's, a forum's), and isn't the page itself.
+  function genericRead(node, url) {
+    const sure = new Map();
+    const maybe = new Map();
+    const here = `${url.origin}${url.pathname}${url.search}`;
+    for (const { u, time } of linksIn(node)) {
+      if (siteName(u.hostname) !== siteName(url.hostname)) continue;
+      const address = `${u.origin}${u.pathname}${u.search}`;
+      if (address === here) continue;
+      if (time) sure.set(address, address);
+      else if (/\/(?:status|statuses|videos?|watch|posts?|p|reels?|comments|clips?|v)(?:\/|\?|$)/i.test(u.pathname + (u.search ? "?" : ""))) maybe.set(address, address);
+    }
+    const permalink = linkTo(node.getAttribute?.("data-permalink"));
+    if (permalink && siteName(permalink.hostname) === siteName(url.hostname)) sure.set(permalink.href, permalink.href);
+    return { sure, maybe };
+  }
+
+  // LinkedIn's comment tools' key: base64url of a protobuf naming the post (field 1 its
+  // activity, field 2 its ugcPost), whose one field is the id as a zigzag varint. [kind, id] or
+  // null.
+  function commentToolsUrn(key) {
+    try {
+      const bytes = [...atob(key.replace(/-/g, "+").replace(/_/g, "/"))].map((c) => c.charCodeAt(0));
+      const kind = { 10: "activity", 18: "ugcPost" }[bytes[0]];
+      if (!kind || bytes[1] !== bytes.length - 2 || bytes[2] !== 8) return null;
+      let n = 0n;
+      let shift = 0n;
+      for (let i = 3; i < bytes.length; i += 1) {
+        n |= BigInt(bytes[i] & 0x7f) << shift;
+        shift += 7n;
+        if (!(bytes[i] & 0x80)) {
+          if (i !== bytes.length - 1 || n & 1n) return null;
+          const id = String(n >> 1n);
+          return /^\d{15,20}$/.test(id) ? [kind, id] : null;
+        }
+      }
+    } catch {
+      // Not such a key.
+    }
+    return null;
+  }
+
+  // The big sites with feeds: what names a post in their pages, the address yt-dlp reads it by
+  // (its extractors' own address shapes), and their pages that are one video's own.
+  const SITES = [
+    {
+      // A post's container carries its URN (data-urn, data-id); its links name it too. yt-dlp's
+      // LinkedIn extractor reads /feed/update/urn:li:activity:<id>/ (and /posts/…); a post known
+      // only by its ugcPost URN goes as /feed/update/urn:li:ugcPost:<id>/, the same public page,
+      // where yt-dlp's generic reader finds the video.
+      //
+      // LinkedIn's feed since 2026 (its server-driven app: role="listitem" posts in a
+      // data-testid="mainFeed" list) names a post nowhere near its video, only in the keys of
+      // the post's parts (componentkey): its comments' URNs (urn:li:comment:(activity:<id>,…)),
+      // its text's translation key (…userGeneratedContentId=<id>…, its ugcPost), and its comment
+      // tools' key, <base64>-replaceableCommentTools, a protobuf of the post's URN (field 1 its
+      // activity, field 2 its ugcPost, the id zigzag-encoded).
+      hosts: /^linkedin\.com$/,
+      embed: (u) => /^\/embed\//.test(u.pathname),
+      read(node) {
+        const sure = new Map();
+        const maybe = new Map();
+        const post = (kind, id) =>
+          (kind === "activity" ? sure : maybe).set(`${kind}:${id}`, `https://www.linkedin.com/feed/update/urn:li:${kind}:${id}/`);
+        const add = (s) => {
+          s = String(s || "");
+          for (const m of s.matchAll(/urn:li:(?:comment:\()?(activity|ugcPost|share):(\d{6,})/g)) post(m[1], m[2]);
+          for (const m of s.matchAll(/\b(userGeneratedContent|share|activity)Id=(\d{6,})/g)) post(m[1] === "userGeneratedContent" ? "ugcPost" : m[1], m[2]);
+          // A post's public address: /posts/<who>_<words>-activity-<id>-<four>.
+          const p = /\/posts\/[^/?#]*-(activity|ugcPost)-(\d{6,})-\w{4}/.exec(s);
+          if (p) post(p[1], p[2]);
+          const k = /^([\w-]{12,40})-replaceableCommentTools/.exec(s);
+          const urn = k && commentToolsUrn(k[1]);
+          if (urn) post(urn[0], urn[1]);
+        };
+        // The container's own attributes, whatever their names (the page renames them), and its
+        // insides' known ones.
+        for (const a of node.attributes || []) add(a.value);
+        for (const el of node.querySelectorAll?.("[data-urn], [data-id], [data-activity-urn], [data-entity-urn], [componentkey]") || []) {
+          for (const a of ["data-urn", "data-id", "data-activity-urn", "data-entity-urn", "componentkey"]) add(el.getAttribute?.(a));
+        }
+        for (const { u } of linksIn(node)) if (/linkedin\.com$/.test(u.hostname)) add(decoded(u.pathname));
+        return { sure, maybe };
+      },
+      own: (u) => /^\/(?:feed\/update\/urn:li:|posts\/|embed\/feed\/update\/|events\/|learning\/)/.test(u.pathname),
+    },
+    {
+      // A video's own links (a reel, a watch page, a page's video, data-video-id) before a post's
+      // (its permalink); fb.watch short links as they are (they lead to the video's page).
+      hosts: /^(?:[\w-]+\.)?facebook\.com$/,
+      embed: (u) => /^\/plugins\/video\.php$/.test(u.pathname),
+      read(node) {
+        const sure = new Map();
+        const maybe = new Map();
+        const video = (id) => sure.set(`v:${id}`, `https://www.facebook.com/watch/?v=${id}`);
+        const id = node.getAttribute?.("data-video-id");
+        if (/^\d{6,}$/.test(id || "")) video(id);
+        for (const el of node.querySelectorAll?.("[data-video-id]") || []) {
+          const d = el.getAttribute("data-video-id");
+          if (/^\d{6,}$/.test(d || "")) video(d);
+        }
+        for (const { u } of linksIn(node)) {
+          if (u.hostname === "fb.watch") {
+            const code = u.pathname.split("/")[1];
+            if (/^\w+$/.test(code || "")) sure.set(`w:${code}`, `https://fb.watch/${code}/`);
+            continue;
+          }
+          if (!/(^|\.)facebook\.com$/.test(u.hostname)) continue;
+          const p = u.pathname;
+          let m;
+          if ((m = /^\/reel\/(\d+)/.exec(p))) sure.set(`v:${m[1]}`, `https://www.facebook.com/reel/${m[1]}/`);
+          else if (/^\/watch\/?$/.test(p) && /^\d+$/.test(u.searchParams.get("v") || "")) video(u.searchParams.get("v"));
+          else if (/^\/video\.php$/.test(p) && /^\d+$/.test(u.searchParams.get("v") || "")) video(u.searchParams.get("v"));
+          else if ((m = /^\/[^/]+\/videos\/(?:[^/]+\/)?(\d+)/.exec(p))) video(m[1]);
+          else if ((m = /^\/([^/]+)\/posts\/(pfbid\w+|\d+)/.exec(p))) maybe.set(`p:${m[2]}`, `https://www.facebook.com/${m[1]}/posts/${m[2]}`);
+          else if ((m = /^\/groups\/([^/]+)\/(?:permalink|posts)\/(\d+)/.exec(p))) maybe.set(`p:${m[2]}`, `https://www.facebook.com/groups/${m[1]}/posts/${m[2]}/`);
+          else if (/^\/(?:permalink|story)\.php$/.test(p) && /^(?:pfbid\w+|\d+)$/.test(u.searchParams.get("story_fbid") || "")) {
+            const story = u.searchParams.get("story_fbid");
+            const owner = u.searchParams.get("id");
+            maybe.set(`p:${story}`, `https://www.facebook.com/permalink.php?story_fbid=${story}${/^\d+$/.test(owner || "") ? `&id=${owner}` : ""}`);
+          }
+        }
+        return { sure, maybe };
+      },
+      own: (u) =>
+        /^\/(?:reel\/\d|watch\/?$|video\.php$|[^/]+\/videos\/|[^/]+\/posts\/|permalink\.php$|story\.php$|groups\/[^/]+\/(?:permalink|posts)\/|plugins\/video\.php$|share\/[vrp]\/)/.test(u.pathname) &&
+        (!/^\/watch\/?$/.test(u.pathname) || /^\d+$/.test(u.searchParams.get("v") || "")),
+    },
+    {
+      // A post's timestamp links to it (/<user>/status/<id>); other status links (a quoted post,
+      // its photos and its analytics) count only when there is no timestamp.
+      hosts: /^(?:x|twitter)\.com$/,
+      read(node) {
+        const sure = new Map();
+        const maybe = new Map();
+        for (const { u, time } of linksIn(node, 'a[href*="/status/"]')) {
+          const m = /^\/(\w{1,15}|i\/web)\/status\/(\d+)/.exec(u.pathname);
+          if (!m || !/(^|\.)(?:x|twitter)\.com$/.test(u.hostname)) continue;
+          (time ? sure : maybe).set(m[2], `${location.origin}/${m[1]}/status/${m[2]}`);
+        }
+        return { sure, maybe };
+      },
+      own: (u) => /^\/(?:\w{1,15}|i\/web)\/status\/\d+|^\/i\/(?:broadcasts|spaces)\//.test(u.pathname),
+    },
+    {
+      // A post's links (/p/<code>/, a reel's /reel/<code>/): its timestamp, its comments.
+      hosts: /^instagram\.com$/,
+      embed: (u) => /\/embed\/?$/.test(u.pathname),
+      read(node) {
+        const sure = new Map();
+        for (const { u } of linksIn(node)) {
+          // Not a reel's sound (/reels/audio/<id>/, the other reels using it).
+          const m = /^(?:\/[\w.]+)?\/(p|tv|reels?)\/(?!audio\/)([\w-]{5,})/.exec(u.pathname);
+          if (!m || !/instagram\.com$/.test(u.hostname)) continue;
+          sure.set(m[2], `https://www.instagram.com/${m[1] === "tv" ? "p" : m[1].replace(/s$/, "")}/${m[2]}/`);
+        }
+        return { sure, maybe: new Map() };
+      },
+      own: (u) => /^(?:\/[\w.]+)?\/(?:p|tv|reels?)\/[\w-]{5,}|^\/stories\/[^/]+\/\d/.test(u.pathname),
+    },
+    {
+      // A post (shreddit-post, old Reddit's .thing) names its permalink in its attributes; its
+      // links (title, comments) name the same /comments/<id>/.
+      hosts: /^reddit\.com$/,
+      read(node) {
+        const sure = new Map();
+        const add = (s) => {
+          const m = /^(\/(?:r|u|user)\/[^/]+)?\/comments\/(\w+)/.exec(linkTo(s)?.pathname || "");
+          if (m) sure.set(m[2], `${location.origin}${m[1] || ""}/comments/${m[2]}/`);
+        };
+        add(node.getAttribute?.("permalink"));
+        add(node.getAttribute?.("data-permalink"));
+        for (const el of node.querySelectorAll?.("[permalink], [data-permalink]") || []) {
+          add(el.getAttribute("permalink"));
+          add(el.getAttribute("data-permalink"));
+        }
+        for (const { u } of linksIn(node, 'a[href*="/comments/"]')) if (/reddit\.com$/.test(u.hostname)) add(u.href);
+        return { sure, maybe: new Map() };
+      },
+      own: (u) => /\/comments\/\w+|^\/r\/[^/]+\/s\/\w+/.test(u.pathname),
+    },
+    {
+      // A video's link (/@<user>/video/<id>); else its player's id (xgwrapper-<n>-<id>), sent in
+      // yt-dlp's own form for a video whose author isn't known (/@_/video/<id>).
+      hosts: /^tiktok\.com$/,
+      embed: (u) => /^\/embed\//.test(u.pathname),
+      read(node) {
+        const sure = new Map();
+        for (const { u } of linksIn(node, 'a[href*="/video/"]')) {
+          const m = /^\/@([\w.-]+)\/video\/(\d+)/.exec(u.pathname);
+          if (m && /tiktok\.com$/.test(u.hostname)) sure.set(m[2], `https://www.tiktok.com/@${m[1]}/video/${m[2]}`);
+        }
+        if (!sure.size) {
+          for (const el of [node, ...(node.querySelectorAll?.('[id^="xgwrapper-"]') || [])]) {
+            const m = /^xgwrapper-\d+-(\d{15,})$/.exec(el.getAttribute?.("id") || "");
+            if (m) sure.set(m[1], `https://www.tiktok.com/@_/video/${m[1]}`);
+          }
+        }
+        return { sure, maybe: new Map() };
+      },
+      own: (u) => /^\/@[\w.-]+\/(?:video|photo)\/\d+|^\/embed\//.test(u.pathname),
+    },
+    {
+      // A clip's links: vimeo.com/<id> (with an unlisted video's hash), in a channel, a group, a
+      // showcase.
+      hosts: /^(?:player\.)?vimeo\.com$/,
+      embed: (u) => u.hostname.startsWith("player."),
+      read(node) {
+        const sure = new Map();
+        for (const { u } of linksIn(node)) {
+          if (!/(^|\.)vimeo\.com$/.test(u.hostname)) continue;
+          const m = /^(?:\/video|\/channels\/[^/]+|\/groups\/[^/]+\/videos|\/showcase\/[^/]+\/video)?\/(\d{4,})(\/[\da-f]{10})?\/?$/.exec(u.pathname);
+          if (m) sure.set(m[1], `https://vimeo.com/${m[1]}${m[2] || ""}`);
+        }
+        return { sure, maybe: new Map() };
+      },
+      own: (u) =>
+        u.hostname.startsWith("player.") ||
+        /^(?:\/channels\/[^/]+|\/groups\/[^/]+\/videos|\/showcase\/[^/]+\/video|\/[^/]+\/review)?\/\d{4,}|^\/ondemand\//.test(u.pathname),
+    },
+    {
+      hosts: /^(?:geo\.)?dailymotion\.com$/,
+      embed: (u) => u.hostname.startsWith("geo.") || /^\/(?:embed|player)\b/.test(u.pathname),
+      read(node) {
+        const sure = new Map();
+        for (const { u } of linksIn(node, 'a[href*="/video/"]')) {
+          const m = /^\/(?:embed\/)?video\/([a-z0-9]+)/i.exec(u.pathname);
+          if (m && /dailymotion\.com$/.test(u.hostname)) sure.set(m[1], `https://www.dailymotion.com/video/${m[1]}`);
+        }
+        return { sure, maybe: new Map() };
+      },
+      own: (u) => u.hostname.startsWith("geo.") || /^\/(?:embed\/)?video\/[a-z0-9]+|^\/player/i.test(u.pathname),
+    },
+  ];
+  // ---- the video's own address: end.
 
   // The address this page first loaded at (`download`: a page that moves in place keeps its first
   // page's og:title).
@@ -145,6 +499,8 @@
   let chosen = false; // the user put it where it is (dragged it, on this site): theirs, never moved for a page's control
   let auto = { v: null, at: null, t: 0 }; // the spot found for this video, kept for a moment
   const AUTO_MS = 400;
+  // Where it is on the screen, while the pointer is on it (#560): { v, left, top }.
+  let pinned = null;
   let video = null; // the video it is over
   // A video gone from under its button (#503): a hover-to-play preview (YouTube's thumbnails)
   // stops as soon as the pointer leaves it for the button, since the page sees the pointer go.
@@ -265,8 +621,8 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   const more = shadow.querySelector(".more");
   const menu = shadow.querySelector(".menu");
   const item = (act) => menu.querySelector(`[data-act="${act}"]`);
-  pill.dir = ext.i18n.getMessage("@@bidi_dir") || "ltr";
-  menu.dir = pill.dir;
+  pill.dir = "ltr";
+  menu.dir = "ltr";
   const idleLabel = t("video_download");
   label.textContent = idleLabel;
   go.title = `${idleLabel} — ${t("video_drag")}`;
@@ -368,12 +724,20 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
 
   // Where it goes now: the place the user gave it, else the default corner, or the next corner
   // free of the page's own controls (a thumbnail's watch-later button at the top right, #421).
+  // Over the same video it only ever goes on to the next corner, never back to one it left: a
+  // hover-to-play preview (YouTube's thumbnails, #560) shows its sound and captions buttons while
+  // the pointer is over the video and hides them as the pointer reaches the button, so going back
+  // when they hide, then away again when they show, kept the button jumping from under the pointer.
+  const CORNERS = [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }];
   function spot(r, w, h, roomX, roomY) {
     if (chosen) return place;
     const now = Date.now();
-    if (auto.v === video && now - auto.t < AUTO_MS) return auto.at;
-    let at = place;
-    for (const c of [place, { x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }]) {
+    const same = auto.v === video;
+    if (same && now - auto.t < AUTO_MS) return auto.at;
+    const order = [place, ...CORNERS];
+    const from = same ? Math.max(0, order.indexOf(auto.at)) : 0;
+    let at = same ? auto.at : place;
+    for (const c of order.slice(from)) {
       const left = r.left + INSET + c.x * roomX;
       const top = r.top + INSET + c.y * roomY;
       if (!onControl({ left, top, right: left + w, bottom: top + h }, video, r)) {
@@ -388,6 +752,13 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   function position() {
     if (!video) return;
     const { r, w, roomX, roomY } = rects();
+    // The pointer on it (or its menu open): it stays where it is, whatever the video does
+    // meanwhile. A preview that grows while the pointer is over it and shrinks back when the
+    // pointer goes (#560) would otherwise take the button from under the pointer.
+    if (!dragging && pinned && pinned.v === video && (menuOpen || root.matches(":hover"))) {
+      if (menuOpen) placeMenu(pinned.top, pinned.left, w);
+      return;
+    }
     // A narrow video gets the icon only.
     pill.classList.toggle("compact", r.width < 360);
     // Held for a video gone (#503): where it was, not a corner found anew over what the page
@@ -400,6 +771,7 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
     const visBottom = Math.min(r.bottom, innerHeight) - INSET - h;
     const top = Math.min(Math.max(r.top + INSET + at.y * roomY, visTop), Math.max(visTop, visBottom));
     root.style.setProperty("transform", `translate(${Math.round(left)}px, ${Math.round(top)}px)`, "important");
+    pinned = { v: video, left, top };
     if (menuOpen) placeMenu(top, left, w);
   }
 
@@ -438,6 +810,10 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   }
 
   function show(v) {
+    // Cut off from the extension (updated or removed) and still running (Firefox may leave such
+    // a copy going in its own world beside the new one): it goes instead of showing (upstream
+    // issue 336).
+    if (!ext.runtime?.id) return teardown();
     if (video !== v) {
       video = v;
       held = null;
@@ -453,6 +829,7 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   // `now`: at once and whatever has the focus (dismissed, the video gone).
   function hide(now) {
     if (!now && (menuOpen || dragging || keyboardOn())) return;
+    pinned = null;
     if (now) {
       held = null;
       closeMenu();
@@ -469,10 +846,16 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
 
   // What the button sends for `v` (its rectangle `r`): see `download`.
   function describe(v, r) {
+    const url = videoPage(v);
+    // Its own plain file (not a stream the page assembles, blob:). Not beside a post a big site's
+    // reader knows (upstream issue 689): the app would take the file over the post, its title and
+    // qualities.
+    const file = /^https?:/i.test(v.currentSrc || "") ? v.currentSrc : "";
+    const post = Boolean(url) && url !== location.href && SITES.some((s) => s.hosts.test(siteName(host)));
     return {
       drm: Boolean(v.mediaKeys),
-      src: /^https?:/i.test(v.currentSrc || "") ? v.currentSrc : "",
-      url: videoPage(v),
+      src: post ? "" : file,
+      url,
       // The middle of the video: where the background asks the page's own player what it plays.
       at: { x: r.left + r.width / 2, y: r.top + r.height / 2 },
     };
@@ -581,7 +964,8 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
       const title = (og || document.title || "").trim();
       const r = await send({ type: "video", src, title, url, at });
       if (r.gone) return;
-      flash(r.ok ? "ok" : "err", t(r.ok ? "video_sent" : r.why === "options" ? "video_off" : r.why === "unnamed" ? "video_unnamed" : "video_failed"));
+      const why = { options: "video_off", unnamed: "video_unnamed", feed: "video_open_post" }[r.why];
+      flash(r.ok ? "ok" : "err", t(r.ok ? "video_sent" : why || "video_failed"));
     } finally {
       busy = false;
     }
@@ -717,6 +1101,9 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
     }
     place = snap(d.at);
     chosen = true;
+    // It snaps to its corner although the pointer is still on it (#560's pin is for a video
+    // that changes under a still pointer, not for the user's own move).
+    pinned = null;
     position();
     lastMove = Date.now();
     // Remembered per site, not in a private window (it would keep the site's name), and the

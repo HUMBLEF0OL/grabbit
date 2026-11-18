@@ -425,9 +425,16 @@
             "null"
           ]
         },
+        "origin": {
+          "description": "From the browser (upstream issue 900): the `Origin` its page's player sent with a video's\nstream or file (`video_page`), sent again with it, its playlists and each of its pieces,\nas a site's video server may serve its own pages' players only.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "pair": {
           "default": false,
-          "description": "The remote control (#157, `misterdownloadmanager-cli pair`): show a new pairing code;\nanswered with it, the page's addresses and a QR code to scan ([`api::PairAnswer`]).",
+          "description": "The remote control (#157, `grabbit-cli pair`): show a new pairing code;\nanswered with it, the page's addresses and a QR code to scan ([`api::PairAnswer`]).",
           "type": "boolean"
         },
         "panel_hide_site": {
@@ -595,9 +602,9 @@
       "type": "object"
     }
   },
-  "$id": "https://misterdownloadmanager.com/automation-api.schema.json",
+  "$id": "https://humblef0ol.github.io/grabbit/automation-api.schema.json",
   "$ref": "#/$defs/Request",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "One JSON line to the port in ipc.json (on 127.0.0.1), one line back. A request is `Request`. A command (an address to add, start_queue) is answered `ok`; a question is answered with the JSON object for it (`ListAnswer`, `ActAnswer`, `ApiAnswer`) or an `ErrorAnswer`. A wrong token is answered `denied`, an app that doesn't answer within 2 seconds `timeout`. Guide: https://misterdownloadmanager.com/help/command-line.html#the-automation-api",
-  "title": "Mister Download Manager automation API"
+  "description": "One JSON line to the port in ipc.json (on 127.0.0.1), one line back. A request is `Request`. A command (an address to add, start_queue) is answered `ok`; a question is answered with the JSON object for it (`ListAnswer`, `ActAnswer`, `ApiAnswer`) or an `ErrorAnswer`. A wrong token is answered `denied`, an app that doesn't answer within 2 seconds `timeout`. Guide: https://humblef0ol.github.io/grabbit/help/command-line.html#the-automation-api",
+  "title": "Grabbit automation API"
 }

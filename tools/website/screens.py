@@ -9,7 +9,9 @@ versions from the same shots taken with -Dark (its site-dark/ folder):
     python -I tools/website/screens.py D:\\shots\\dark --light D:\\shots\\light --density 2
 
 A shot that isn't there is skipped and its WebP kept: the video quality window, for one, needs a
-real video page and can't be shot offline, so screens/video-*.webp stay as they are. Each WebP is
+real video page and can't be shot offline, so screens/video-*.webp are copies of the help's
+docs/images/help/video-qualities(-dark).webp (taken by the help's shots against the lab's fake
+video page) and stay as they are here. Each WebP is
 lossless (#186: text and one-pixel lines stay sharp), written only when its bytes change.
 
 Every <img> in website/*.html that shows a WebP written here gets its width and height set to the
@@ -41,8 +43,6 @@ SHOTS = [
     ("add-torrent", "screens/add-torrent-light.webp", "screens/add-torrent-dark.webp"),
     ("scheduler", "screens/scheduler-light.webp", "screens/scheduler-dark.webp"),
     ("options-connection", "screens/options-light.webp", "screens/options-dark.webp"),
-    ("arabic-main", "screens/arabic-main.webp", None),
-    ("language-picker", "win/language-picker.webp", None),
 ]
 # docs-shots.ps1 names the main window's night shot main-dark (in docs/images and in a -Dark run).
 NIGHT_MAIN = ("main-dark", "screens/main-dark.webp")

@@ -23,6 +23,9 @@ pub struct Video {
     /// A plain file at this address, not a page or a stream (yt-dlp's `direct`). yt-dlp says
     /// nothing of its size then: the server is asked (`needs_size`, #320).
     pub direct: bool,
+    /// yt-dlp said it had no JavaScript runtime for the site's qualities (upstream issue 852,
+    /// [`proc::missing_js_runtime`]): YouTube's list is short without one.
+    pub needs_js_runtime: bool,
 }
 
 impl Video {
@@ -126,9 +129,24 @@ struct RawFormat {
     fps: Option<f64>,
     vcodec: Option<String>,
     acodec: Option<String>,
+    #[serde(default, deserialize_with = "size")]
     filesize: Option<u64>,
+    #[serde(default, deserialize_with = "size")]
     filesize_approx: Option<u64>,
     tbr: Option<f64>,
+}
+
+/// A size as yt-dlp gives it: a count of bytes, or nothing known. Wikimedia Commons' transcodes
+/// come with a negative estimate (`filesize_approx: -79319`, its bitrate unknown), which made
+/// the whole page unreadable ("it gave no video information"): no size then, as for any other
+/// that isn't a positive number.
+fn size<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<u64>, D::Error> {
+    let v = Option::<serde_json::Value>::deserialize(d)?;
+    Ok(v.and_then(|v| {
+        v.as_u64()
+            .or_else(|| v.as_f64().filter(|f| *f > 0.0).map(|f| f as u64))
+    })
+    .filter(|n| *n > 0))
 }
 
 /// Whether `title` is only the last part of `page`'s address, which is what yt-dlp calls a video
@@ -143,6 +161,79 @@ pub fn named_after_address(title: &str, page: &str) -> bool {
     let last = percent_encoding::percent_decode_str(&last).decode_utf8_lossy();
     let stem = last.rsplit_once('.').map_or(last.as_ref(), |(s, _)| s);
     !stem.is_empty() && title.trim() == stem
+}
+
+/// yt-dlp's `-J` answer with the real type of a file a server's program sends (upstream issue
+/// 695): yt-dlp takes a plain file's extension from its address (`stream.php?file=x.mp4` →
+/// `php`), lists it so ("PHP") and then refuses to save it ("The extracted extension (php) is
+/// unusual and will be skipped for safety reasons"). Such a format's extension is the one MDM
+/// names the file with (`mdm_engine::naming`): its address's `file=` value's, else the server's
+/// type, which yt-dlp gives a plain file as its format id (`video/mp4` → `mp4`). The answer is
+/// given as it came when nothing in it is such a format, or it isn't JSON.
+pub fn typed_scripts(json: Vec<u8>) -> Vec<u8> {
+    let Ok(mut v) = serde_json::from_slice::<serde_json::Value>(&json) else {
+        return json;
+    };
+    let mut changed = retype(&mut v);
+    for list in ["formats", "requested_formats"] {
+        if let Some(fs) = v.get_mut(list).and_then(serde_json::Value::as_array_mut) {
+            for f in fs {
+                changed |= retype(f);
+            }
+        }
+    }
+    match changed {
+        true => serde_json::to_vec(&v).unwrap_or(json),
+        false => json,
+    }
+}
+
+/// [`typed_scripts`] for one format (or the chosen one's fields at the top): true when its
+/// extension, a program's or a page's, became its file's type's.
+fn retype(f: &mut serde_json::Value) -> bool {
+    use mdm_engine::naming;
+    let Some(ext) = f.get("ext").and_then(serde_json::Value::as_str) else {
+        return false;
+    };
+    let ext = ext.to_ascii_lowercase();
+    if !naming::SCRIPT_EXTENSIONS.contains(&ext.as_str())
+        && !naming::PAGE_EXTENSIONS.contains(&ext.as_str())
+    {
+        return false;
+    }
+    let text = |k: &str| f.get(k).and_then(serde_json::Value::as_str).unwrap_or("");
+    // The `file=` value's own extension, when the address has one.
+    let from_address = url::Url::parse(text("url")).ok().and_then(|u| {
+        let name = naming::address_name(&u);
+        let (_, e) = name.rsplit_once('.')?;
+        (!naming::is_script_name(&name) && naming::is_typed_extension(e))
+            .then(|| e.to_ascii_lowercase())
+    });
+    // A plain file's format id is its type's subtype, as is or after an `f` (yt-dlp 2026.10:
+    // `fmp4` for video/mp4; `webm`, `mpeg`): sound first when it has no picture.
+    let id = text("format_id").to_ascii_lowercase();
+    let families = match text("vcodec") {
+        "none" => ["audio", "video"],
+        _ => ["video", "audio"],
+    };
+    let from_type = || {
+        [Some(id.as_str()), id.strip_prefix('f')]
+            .into_iter()
+            .flatten()
+            .find_map(|subtype| {
+                families
+                    .iter()
+                    .find_map(|k| naming::type_extension(&format!("{k}/{subtype}")))
+            })
+            .map(str::to_owned)
+    };
+    match from_address.or_else(from_type) {
+        Some(e) => {
+            f["ext"] = serde_json::Value::String(e);
+            true
+        }
+        None => false,
+    }
 }
 
 /// Parse `yt-dlp -J` output.
@@ -172,6 +263,7 @@ pub fn parse(json: &[u8]) -> Option<Video> {
         automatic: tracks(raw.automatic_captions),
         language: raw.language,
         direct: raw.direct,
+        needs_js_runtime: false,
     })
 }
 
@@ -265,7 +357,8 @@ pub fn parse_looked(json: &[u8]) -> Option<Looked> {
 /// Look `url` up with yt-dlp: one video (`--no-playlist`: a video in a playlist is that video),
 /// or, for a page that is a list, only what it is and its first entry, flat (#69: never every
 /// video of a 6,000-long playlist at once; `--flat-playlist -I 1:1` doesn't change a video's
-/// look-up).
+/// look-up). yt-dlp's warnings stay on: the one saying it has no JavaScript runtime is how a
+/// short YouTube list explains itself (upstream issue 852, `Video::needs_js_runtime`).
 pub fn look_up(exe: &Path, url: &str, browser: &proc::FromBrowser) -> Result<Looked, ProcError> {
     let mut args: Vec<String> = [
         "-J",
@@ -273,7 +366,6 @@ pub fn look_up(exe: &Path, url: &str, browser: &proc::FromBrowser) -> Result<Loo
         "--flat-playlist",
         "--playlist-items",
         "1:1",
-        "--no-warnings",
     ]
     .map(String::from)
     .to_vec();
@@ -281,10 +373,14 @@ pub fn look_up(exe: &Path, url: &str, browser: &proc::FromBrowser) -> Result<Loo
     let (theirs, _cookies) = browser.args(url)?;
     args.extend(theirs);
     let out = proc::look_up(exe, &args, url, Duration::from_secs(90))?;
-    parse_looked(&out.json).ok_or_else(|| ProcError::Failed {
+    let mut looked = parse_looked(&out.json).ok_or_else(|| ProcError::Failed {
         tool: "yt-dlp".into(),
         message: "it gave no video information".into(),
-    })
+    })?;
+    if let Looked::Video(v) = &mut looked {
+        v.needs_js_runtime = proc::missing_js_runtime(&out.warnings, proc::js_runtime_here());
+    }
+    Ok(looked)
 }
 
 /// Look `url` up as one video (a list is an error here).
@@ -368,7 +464,13 @@ fn audio_container(ext: &str) -> bool {
 
 /// A choice that saves only the sound (no picture to show subtitles on, #68).
 pub fn is_audio(c: &Choice) -> bool {
-    c.selector == "ba" || audio_conversion(&c.selector).is_some() || audio_container(&c.ext)
+    sound_only(&c.selector, &c.ext)
+}
+
+/// A selector and file type that save only the sound: a choice ([`is_audio`]) or a playlist's
+/// quality (saved in the Music category's folder, upstream issue 611).
+pub fn sound_only(selector: &str, ext: &str) -> bool {
+    selector == "ba" || audio_conversion(selector).is_some() || audio_container(ext)
 }
 
 /// A choice whose file can hold subtitles put into it (yt-dlp's `--embed-subs` with SRT).
@@ -542,6 +644,20 @@ mod tests {
 
     use super::*;
 
+    /// Wikimedia Commons' transcodes say a negative size (#769's Commons check): read as none,
+    /// not as a page with no video.
+    #[test]
+    fn a_negative_size_is_no_size() {
+        let page = br#"{"title": "Clip", "duration": 10.0, "formats": [
+            {"format_id": "2", "ext": "webm", "height": 480, "vcodec": "vp9", "acodec": "opus",
+             "filesize_approx": -79319, "tbr": 1218},
+            {"format_id": "source", "ext": "webm", "filesize": 2964839055}]}"#;
+        let v = parse(page).expect("a video");
+        assert_eq!(v.formats.len(), 2);
+        assert_ne!(v.formats[0].size, Some(0));
+        assert_eq!(v.formats[1].size, Some(2964839055));
+    }
+
     #[test]
     fn a_streams_variants_by_bitrate() {
         let fmt = |id: &str, tbr: f64| Format {
@@ -566,6 +682,7 @@ mod tests {
             automatic: Vec::new(),
             language: None,
             direct: false,
+            needs_js_runtime: false,
         };
         let labels: Vec<String> = choices(&v, true)
             .into_iter()
@@ -630,7 +747,7 @@ mod tests {
         assert_eq!(plain[0].selector, "b[height=360]");
     }
 
-    /// Live (#352): `MDM_LIVE_YTDLP=<yt-dlp> MDM_LIVE_PAGE=<video page> cargo test -p mdm-tools
+    /// Live (#352): `MDM_LIVE_YTDLP=<yt-dlp> MDM_LIVE_PAGE=<video page> cargo test -p grabbit-tools
     /// live_look_up -- --ignored --nocapture`. A look-up given cookies; with a yt-dlp that fails
     /// the way a signed-in session does (a wrapper forcing `web_embedded,tv_samsung,web` when it
     /// sees `--cookies`), the second look-up, without them, lists the page's videos.
@@ -661,6 +778,65 @@ mod tests {
             v.formats.len()
         );
         assert!(!heights.is_empty(), "no video in {:?}", v.title);
+    }
+
+    /// Upstream issue 695: a plain file a server's program sends (`stream.php`), as yt-dlp's
+    /// generic reader answers for it: the format id is the type's subtype, the extension the
+    /// address's. It gets its file's type: the `file=` value's, else the type's; a real one stays.
+    #[test]
+    fn a_scripts_file_gets_its_real_type() {
+        let answer = |url: &str, id: &str, vcodec: &str| {
+            format!(
+                r#"{{"title": "stream", "direct": true, "ext": "php", "url": "{url}",
+                "format_id": "{id}", "vcodec": {vcodec}, "formats": [{{"format_id": "{id}",
+                "ext": "php", "url": "{url}", "vcodec": {vcodec}, "protocol": "https"}}]}}"#
+            )
+        };
+        let ext = |json: &[u8]| {
+            let v: serde_json::Value = serde_json::from_slice(json).unwrap();
+            (
+                v["ext"].as_str().unwrap().to_owned(),
+                v["formats"][0]["ext"].as_str().unwrap().to_owned(),
+            )
+        };
+        let fixed = typed_scripts(
+            answer(
+                "https://u.test/stream.php?file=FL262-1E01-4.mp4&t=1",
+                "mp4",
+                "null",
+            )
+            .into_bytes(),
+        );
+        assert_eq!(ext(&fixed), ("mp4".into(), "mp4".into()));
+        assert_eq!(parse(&fixed).unwrap().formats[0].ext, "mp4");
+        // No file name in the address: the server's type, read as a sound's when it has no
+        // picture (audio/mpeg is an MP3, video/mpeg an MPG).
+        let fixed = typed_scripts(
+            answer("https://u.test/remote_control.php?id=3", "webm", "null").into_bytes(),
+        );
+        assert_eq!(ext(&fixed), ("webm".into(), "webm".into()));
+        let fixed = typed_scripts(answer("https://u.test/a.php", "mpeg", r#""none""#).into_bytes());
+        assert_eq!(ext(&fixed).1, "mp3");
+        // yt-dlp 2026.10 names it `f` and the subtype.
+        let fixed =
+            typed_scripts(answer("https://u.test/stream.php?id=1", "fmp4", "null").into_bytes());
+        assert_eq!(ext(&fixed), ("mp4".into(), "mp4".into()));
+        let fixed = typed_scripts(answer("https://u.test/a.php", "flac", r#""none""#).into_bytes());
+        assert_eq!(ext(&fixed).1, "flac");
+        // Nothing says what it is: as it came. A real extension is never touched.
+        let unknown = answer("https://u.test/a.php", "x-unknown", "null").into_bytes();
+        assert_eq!(typed_scripts(unknown.clone()), unknown);
+        let real = br#"{"title": "t", "ext": "mp4", "formats": [{"format_id": "18", "ext": "mp4", "url": "https://u.test/v.php"}]}"#.to_vec();
+        assert_eq!(typed_scripts(real.clone()), real);
+        assert_eq!(typed_scripts(b"not json".to_vec()), b"not json".to_vec());
+        // A program's type is never one: application/x-msdownload stays as it came.
+        let program = answer(
+            "https://u.test/a.php?file=setup.exe",
+            "x-msdownload",
+            "null",
+        )
+        .into_bytes();
+        assert_eq!(typed_scripts(program.clone()), program);
     }
 
     /// #320: yt-dlp's answer for a plain file (real output, 2026.10.26) says `direct` and no size.

@@ -2,27 +2,97 @@
 //! monitor writes the minidump, reads it with the example's own debug info, and the report names
 //! the function where it happened.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
+/// crashy's program name.
+const CRASHY: &str = "crashy.exe";
+
+/// examples/crashy, which `cargo test -p grabbit-crash` builds with the tests, from `test`, this
+/// test's program. Cargo copies it to the profile's folder (target/debug/examples), which holds
+/// the test's program too: in deps/ up to Cargo 1.99, in build/grabbit-crash/<hash>/out/ from Cargo
+/// 1.100 (upstream issue 934). With a build folder of its own (Cargo's `build-dir`) that copy is
+/// in the target folder only; crashy's own program is then beside the test's, in
+/// build/grabbit-crash/<another hash>/out/ (the newest, if there are several).
+fn find_crashy(test: &Path) -> Option<PathBuf> {
+    let copied = test
+        .ancestors()
+        .map(|dir| dir.join("examples").join(CRASHY))
+        .find(|p| p.is_file());
+    copied.or_else(|| {
+        let built = test.parent()?.parent()?.parent()?;
+        std::fs::read_dir(built)
+            .ok()?
+            .flatten()
+            .map(|d| d.path().join("out").join(CRASHY))
+            .filter_map(|p| Some((p.metadata().ok()?.modified().ok()?, p)))
+            .max()
+            .map(|(_, p)| p)
+    })
+}
+
 fn crashy() -> PathBuf {
-    // target/<profile>/deps/e2e-… → target/<profile>/examples/crashy
-    let mut p = std::env::current_exe().unwrap();
-    p.pop();
-    p.pop();
-    p.push("examples");
-    p.push(if cfg!(windows) {
-        "crashy.exe"
-    } else {
-        "crashy"
-    });
-    p
+    let test = std::env::current_exe().unwrap();
+    find_crashy(&test).unwrap_or_else(|| {
+        panic!(
+            "examples/crashy is built with the tests (cargo test -p grabbit-crash); none found from {}",
+            test.display()
+        )
+    })
+}
+
+/// Upstream issue 934: crashy is found where each Cargo puts it, whichever Cargo runs this.
+#[test]
+fn crashy_is_found_in_each_layout() {
+    let root = tempfile::tempdir().unwrap();
+    let file = |rel: &str| {
+        let p = root.path().join(rel);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, b"").unwrap();
+        p
+    };
+    let crashy = |dir: &str| root.path().join(dir).join(CRASHY);
+    // Cargo 1.99 and before.
+    let test = file("old/debug/deps/e2e-1a2b.exe");
+    file(&format!("old/debug/examples/{CRASHY}"));
+    assert_eq!(find_crashy(&test), Some(crashy("old/debug/examples")));
+    // Cargo 1.100: the copy in examples/ first.
+    let test = file("new/debug/build/grabbit-crash/1a2b/out/e2e-1a2b.exe");
+    file(&format!("new/debug/build/grabbit-crash/3c4d/out/{CRASHY}"));
+    file(&format!("new/debug/examples/{CRASHY}"));
+    assert_eq!(find_crashy(&test), Some(crashy("new/debug/examples")));
+    // A build folder of its own: the newest beside the test.
+    let test = file("build/debug/build/grabbit-crash/1a2b/out/e2e-1a2b.exe");
+    let old = file(&format!(
+        "build/debug/build/grabbit-crash/5e6f/out/{CRASHY}"
+    ));
+    let earlier = std::time::SystemTime::now() - Duration::from_secs(3600);
+    std::fs::File::options()
+        .write(true)
+        .open(&old)
+        .unwrap()
+        .set_modified(earlier)
+        .unwrap();
+    file(&format!(
+        "build/debug/build/grabbit-crash/3c4d/out/{CRASHY}"
+    ));
+    assert_eq!(
+        find_crashy(&test),
+        Some(crashy("build/debug/build/grabbit-crash/3c4d/out"))
+    );
+    // None at all: said, not a wrong path.
+    assert_eq!(find_crashy(&file("none/debug/deps/e2e-1a2b.exe")), None);
 }
 
 /// Run crashy in `mode` and wait (up to 90 s: reading the dump's symbols takes a while in a
 /// debug build) for its report.
 fn report(mode: &str) -> String {
+    report_with(mode, None)
+}
+
+/// [`report`], its monitor listening `late` after it starts when given.
+fn report_with(mode: &str, late: Option<Duration>) -> String {
     let data = tempfile::tempdir().unwrap();
     /// The program, ended and reaped however the test leaves (a failed assert too).
     struct Running(std::process::Child);
@@ -32,11 +102,13 @@ fn report(mode: &str) -> String {
             let _ = self.0.wait();
         }
     }
+    let mut cmd = Command::new(crashy());
+    cmd.arg(mode).arg(data.path());
+    if let Some(late) = late {
+        cmd.env("CRASHY_MONITOR_LATE_MS", late.as_millis().to_string());
+    }
     let _child = Running(
-        Command::new(crashy())
-            .arg(mode)
-            .arg(data.path())
-            .spawn()
+        cmd.spawn()
             .expect("examples/crashy is built with the tests"),
     );
     let crashes = data.path().join("crashes");
@@ -83,9 +155,22 @@ fn a_panic_reports_its_message_and_function() {
 #[test]
 fn a_native_crash_reports_where_it_crashed() {
     let r = report("crash");
-    assert!(r.contains("Description: MDM crashed"), "{r}");
+    assert!(r.contains("Description: Grabbit crashed"), "{r}");
     assert!(
         r.contains("Signature: crash in crashy::crashy_crashes_here"),
+        "{r}"
+    );
+}
+
+/// A monitor that listens only after the window thread's first try (half a second) is still
+/// connected to, from beside the window, and the panic is reported. (The first try's end gave
+/// the monitor up, and the session went without crash reports.)
+#[test]
+fn a_panic_is_reported_when_the_monitor_is_slow_to_start() {
+    let r = report_with("panic", Some(Duration::from_millis(1500)));
+    assert!(r.contains("crashy: a test panic"), "{r}");
+    assert!(
+        r.contains("Signature: panic in crashy::crashy_panics_here"),
         "{r}"
     );
 }

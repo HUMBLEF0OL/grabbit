@@ -1,8 +1,8 @@
 // The README's figures, as SVG in a light and a dark version (GitHub picks one with <picture>),
-// and its row of language flags (from i18n/languages.tsv):
-//   docs/images/races-{light,dark}.svg       three everyday races, MDM vs IDM, in seconds
-//   docs/images/bench-time-{light,dark}.svg  time to finish, IDM vs MDM, every scenario
-// Every number comes from docs/bench/run5/results.json and i18n/languages.tsv; nothing is typed
+// and its comparison table:
+//   docs/images/races-{light,dark}.svg       three everyday races, Grabbit vs IDM, in seconds
+//   docs/images/bench-time-{light,dark}.svg  time to finish, IDM vs Grabbit, every scenario
+// Every number comes from docs/bench/run5/results.json; nothing is typed
 // in by hand. The races are sketched with rough.js (fixed seeds: the same drawing every build) and
 // their words are Patrick Hand (SIL OFL) turned into outlines by opentype.js, since GitHub's
 // image sandbox blocks fonts inside SVGs. The detailed chart is Vega-Lite. No browser needed.
@@ -24,10 +24,8 @@ const out = path.join(root, "docs/images");
 fs.mkdirSync(out, { recursive: true });
 
 const bench = JSON.parse(fs.readFileSync(path.join(root, "docs/bench/run5/results.json"), "utf8"));
-const languages = fs.readFileSync(path.join(root, "i18n/languages.tsv"), "utf8")
-  .split("\n").filter((l) => l.trim() && !l.startsWith("#")).length;
 
-// GitHub's page surfaces and text, and the categorical slots 1 (blue, MDM) and 2 (orange, IDM),
+// GitHub's page surfaces and text, and the categorical slots 1 (blue, Grabbit) and 2 (orange, IDM),
 // validated on these surfaces (dataviz validate_palette.js: all checks pass in both modes).
 const THEMES = {
   light: { surface: "#ffffff", tile: "#f6f8fa", border: "#d1d9e0", text: "#1f2328", muted: "#59636e",
@@ -51,7 +49,7 @@ const scenarios = bench.scenarios.map((s) => ({
   id: s.id,
   label: SHORT[s.id] ?? s.title,
   idm: med(s, "IDM", "e2e_ms"),
-  mdm: med(s, "MDM", "e2e_ms"),
+  mdm: med(s, "Grabbit", "e2e_ms"),
 }));
 const byId = Object.fromEntries(bench.scenarios.map((s) => [s.id, s]));
 
@@ -78,7 +76,7 @@ async function render(spec, file) {
 
 function timeChart(t) {
   const rows = scenarios.flatMap((s) => [
-    { scenario: s.label, client: "Mister Download Manager", seconds: s.mdm / 1000 },
+    { scenario: s.label, client: "Grabbit", seconds: s.mdm / 1000 },
     { scenario: s.label, client: "Internet Download Manager 6.42", seconds: s.idm / 1000 },
   ]);
   return {
@@ -92,7 +90,7 @@ function timeChart(t) {
       y: { field: "scenario", type: "nominal", sort: scenarios.map((s) => s.label), title: null,
            scale: { paddingInner: 0.35, paddingOuter: 0.2 },
            axis: { grid: false, labelFontSize: 13, labelColor: t.text, labelLimit: 400 } },
-      yOffset: { field: "client", sort: ["Mister Download Manager", "Internet Download Manager 6.42"],
+      yOffset: { field: "client", sort: ["Grabbit", "Internet Download Manager 6.42"],
                  scale: { paddingInner: 0 } },
       x: { field: "seconds", type: "quantitative", title: null,
            axis: { tickCount: 5, format: "~s", labelExpr: "datum.label + ' s'" } },
@@ -102,7 +100,7 @@ function timeChart(t) {
     layer: [
       { mark: { type: "bar", height: 16, cornerRadiusEnd: 4 },
         encoding: { color: { field: "client", type: "nominal",
-                             sort: ["Mister Download Manager", "Internet Download Manager 6.42"],
+                             sort: ["Grabbit", "Internet Download Manager 6.42"],
                              scale: { range: [t.mdm, t.idm] } } } },
       { mark: { type: "text", align: "left", dx: 6, fontSize: 12, color: t.muted },
         transform: [{ calculate: "format(datum.seconds, datum.seconds < 0.1 ? '.2f' : '.1f')", as: "value" }],
@@ -111,7 +109,7 @@ function timeChart(t) {
   };
 }
 
-// The races: three everyday cases, MDM's and IDM's times as bars in plain seconds, the verdict
+// The races: three everyday cases, Grabbit's and IDM's times as bars in plain seconds, the verdict
 // in words (rounded down: "5 times faster" for 5.4).
 function esc(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
@@ -144,7 +142,7 @@ function races(t) {
     ["fast-1g", "A big file (1 GB)"],
     ["small-256k", "A small file"],
     ["drops-50m", "A shaky connection"],
-  ].map(([id, title]) => ({ title, mdm: med(byId[id], "MDM", "e2e_ms"), idm: med(byId[id], "IDM", "e2e_ms") }));
+  ].map(([id, title]) => ({ title, mdm: med(byId[id], "Grabbit", "e2e_ms"), idm: med(byId[id], "IDM", "e2e_ms") }));
   const gen = rough.generator();
   const W = 880, cols = 3, gap = 18, cw = (W - gap * (cols - 1)) / cols, H = 214;
   const barX = 22, barW = cw - 44, pad = 4;
@@ -162,7 +160,7 @@ function races(t) {
   <rect x="${pad}" y="${pad}" width="${cw - 2 * pad}" height="${H - 2 * pad}" rx="12" fill="${t.tile}"/>
   ${sketch(gen.rectangle(pad, pad, cw - 2 * pad, H - 2 * pad, { seed, roughness: 1.4, bowing: 1.2, stroke: t.border, strokeWidth: 1.8 }))}
   ${write(c.title, 22, 40, 22, t.text, "start", true)}
-  ${write("Mister Download Manager", 22, 72, 17, t.text)}
+  ${write("Grabbit", 22, 72, 17, t.text)}
   ${write(seconds(c.mdm), cw - 22, 72, 17, t.text, "end", true)}
   ${bar(80, mdmW, t.mdm, -41, seed + 1)}
   ${write("IDM 6.42", 22, 122, 17, t.muted)}
@@ -172,7 +170,7 @@ function races(t) {
   ${sketch(gen.line(22, 194, 22 + vw, 194, { seed: seed + 3, roughness: 1.6, bowing: 2, stroke: t.mdm, strokeWidth: 2.4 }))}
 </g>`;
   });
-  const label = cases.map((c) => `${c.title}: Mister Download Manager ${seconds(c.mdm)}, IDM ${seconds(c.idm)}, ${verdict(c.idm / c.mdm).toLowerCase()}`).join("; ");
+  const label = cases.map((c) => `${c.title}: Grabbit ${seconds(c.mdm)}, IDM ${seconds(c.idm)}, ${verdict(c.idm / c.mdm).toLowerCase()}`).join("; ");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">
 <title>${esc(label)}</title>
 ${parts.join("\n")}
@@ -193,9 +191,9 @@ function fill(name, body) {
 // The README's comparison table: the measured times in plain words, then the facts.
 function compareTable() {
   const row = (label, id, key = "e2e_ms") =>
-    `| ${label} | **${seconds(med(byId[id], "MDM", key))}** | ${seconds(med(byId[id], "IDM", key))} |`;
+    `| ${label} | **${seconds(med(byId[id], "Grabbit", key))}** | ${seconds(med(byId[id], "IDM", key))} |`;
   return [
-    "| | Mister Download Manager | IDM 6.42 |",
+    "| | Grabbit | IDM 6.42 |",
     "| --- | --- | --- |",
     row("Download a big file (1 GB)", "fast-1g"),
     row("Download a small file", "small-256k"),
@@ -207,28 +205,9 @@ function compareTable() {
   ].join("\n");
 }
 
-// The README's row of languages, between its <!-- languages:start/end --> markers: every row of
-// i18n/languages.tsv as its flag, with the language's own and English names on hover.
-function languageRow() {
-  const lines = fs.readFileSync(path.join(root, "i18n/languages.tsv"), "utf8").split("\n");
-  const header = lines.find((l) => l.startsWith("# code\t")).slice(2).split("\t");
-  const rows = lines.filter((l) => l.trim() && !l.startsWith("#")).map((l) => {
-    const cols = l.split("\t");
-    return Object.fromEntries(header.map((h, i) => [h, cols[i]]));
-  });
-  rows.sort((a, b) => a.english.localeCompare(b.english));
-  const attr = (s) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-  const flags = rows.map((r) => {
-    const name = r.native === r.english ? r.english : `${r.native} (${r.english})`;
-    return `<img src="crates/app/assets/flags/${r.flag}.svg" width="28" height="21" alt="${attr(name)}" title="${attr(name)}">`;
-  });
-  fill("languages", `<p align="center">\n${flags.join("\n")}\n</p>`);
-}
-
 for (const [mode, t] of Object.entries(THEMES)) {
   fs.writeFileSync(path.join(out, `races-${mode}.svg`), races(t));
   await render(timeChart(t), `bench-time-${mode}.svg`);
 }
-languageRow();
 fill("compare", compareTable());
-console.log(`wrote README.md's comparison table, language row and docs/images/{races,bench-time}-{light,dark}.svg (${languages} languages)`);
+console.log("wrote README.md's comparison table and docs/images/{races,bench-time}-{light,dark}.svg");

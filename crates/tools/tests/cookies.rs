@@ -10,7 +10,7 @@
 //! Ignored: it needs yt-dlp's program, and for the browser part a Firefox profile folder whose
 //! `cookies.sqlite` has the cookie `ff=from-firefox` for 127.0.0.1:
 //!
-//!   MDM_TEST_YTDLP=…\yt-dlp.exe [MDM_TEST_FIREFOX_PROFILE=<folder>] cargo test -p mdm-tools --test cookies -- --ignored --nocapture
+//!   MDM_TEST_YTDLP=…\yt-dlp.exe [MDM_TEST_FIREFOX_PROFILE=<folder>] cargo test -p grabbit-tools --test cookies -- --ignored --nocapture
 
 use std::time::{Duration, Instant};
 
@@ -62,8 +62,15 @@ fn hosts_and_cookies(
         .collect()
 }
 
+/// A download as the app runs it: yt-dlp finds the clip, MDM's engine downloads it (#769) with
+/// the cookies yt-dlp would send.
 fn download(exe: &std::path::Path, url: &str, browser: &FromBrowser) -> (State, Vec<String>) {
     let dir = tempfile::tempdir().unwrap();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let engine = mdm_tools::streams::Engine {
+        handle: rt.handle().clone(),
+        opts: Default::default(),
+    };
     let job = VideoJob::start(
         exe,
         url,
@@ -76,6 +83,7 @@ fn download(exe: &std::path::Path, url: &str, browser: &FromBrowser) -> (State, 
         None,
         browser,
         &Subs::default(),
+        Some(engine),
     )
     .unwrap();
     let end = Instant::now() + Duration::from_secs(120);

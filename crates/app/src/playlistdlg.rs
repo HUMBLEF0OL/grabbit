@@ -14,7 +14,11 @@ use mdm_tools::playlist::{Entry, Listing, PAGE};
 use mdm_tools::resolve::ListPage;
 
 use crate::dialogs::{Confirm, Outcome};
+use crate::videodlg::{LX, RIGHT};
 use crate::winui::{self, ButtonKind, r};
+
+/// The top of the row under the checklist (Select all, Select none, Stop listing…).
+const BUTTONS_Y: f32 = 216.0;
 
 /// Adding more than this many downloads at once is asked first.
 pub const CONFIRM_ABOVE: usize = 500;
@@ -29,6 +33,8 @@ pub struct PlaylistAdd {
     pub ext: &'static str,
     /// Where they go: Save to, then a folder named after the list.
     pub folder: PathBuf,
+    /// The category each is listed under: Music for a sound-only quality, else Video.
+    pub category: crate::model::Category,
     pub start_now: bool,
     /// What the browser's request for the page carried, for each look-up.
     pub context: mdm_ipc::Command,
@@ -39,6 +45,12 @@ struct Pick {
     label: String,
     selector: String,
     ext: &'static str,
+}
+
+impl Pick {
+    fn sound_only(&self) -> bool {
+        mdm_tools::resolve::sound_only(&self.selector, self.ext)
+    }
 }
 
 /// The heights offered, as "Up to …p": each video at that height, or the best below it.
@@ -127,6 +139,8 @@ pub struct PlaylistView {
     pick: usize,
     /// The file type the chosen quality gives (each row shows its icon).
     ext: &'static str,
+    /// The chosen quality saves only the sound (Save to is then the Music category's).
+    sound: bool,
     error: Option<String>,
     confirm: Option<(Confirm, bool)>,
 }
@@ -155,6 +169,7 @@ impl PlaylistView {
             rows: Default::default(),
             pick: DEFAULT_PICK,
             ext: "mp4",
+            sound: false,
             error: None,
             confirm: None,
         };
@@ -210,6 +225,7 @@ impl PlaylistView {
             rows: Default::default(),
             pick,
             ext: picks[pick].ext,
+            sound: picks[pick].sound_only(),
             error: None,
             confirm: None,
         }
@@ -287,6 +303,11 @@ impl PlaylistView {
         self.chosen
     }
 
+    /// The quality chosen saves only the sound.
+    pub fn sound_only(&self) -> bool {
+        self.sound
+    }
+
     /// Fewer listed than the site says the list has.
     fn short(&self) -> bool {
         self.total.is_some_and(|t| (self.entries.len() as u64) < t)
@@ -315,7 +336,7 @@ impl PlaylistView {
         let line_y = o.y + 70.0;
         let n = self.entries.len();
         let status = if self.listing.is_some() {
-            crate::torrentdlg::spinner(ui, pos2(o.x + 18.0, line_y - 4.0), 6.0);
+            crate::torrentdlg::spinner(ui, pos2(o.x + LX + 7.0, line_y - 4.0), 6.0);
             match self.total {
                 Some(t) => crate::i18n::fmt(
                     // i18n: in Download video, while a playlist is listed: {n} videos listed so far, {total} in all
@@ -363,7 +384,11 @@ impl PlaylistView {
                 ],
             )
         };
-        let x = if self.listing.is_some() { 31.0 } else { 11.0 };
+        let x = if self.listing.is_some() {
+            LX + 20.0
+        } else {
+            LX
+        };
         let rc = winui::fit(
             ui,
             &p,
@@ -399,11 +424,11 @@ impl PlaylistView {
         let rc = winui::fit(
             ui,
             &p,
-            o.x + 11.0,
+            o.x + LX,
             o.y + 86.0,
             &text,
             color,
-            o.x + 489.0,
+            o.x + RIGHT,
             "playlist-note",
         );
         winui::readable(ui, rc, "playlist-note", &text);
@@ -421,7 +446,7 @@ impl PlaylistView {
         let ev = winui::row_list(
             ui,
             "playlist-rows",
-            r(o, 11.0, 94.0, 478.0, 120.0),
+            r(o, LX, 94.0, RIGHT - LX, 112.0),
             n,
             17.0,
             &mut self.rows,
@@ -496,19 +521,21 @@ impl PlaylistView {
         } else {
             list_rest
         };
-        // Each as wide as its label in this language (#172), side by side from the left.
-        let [all_at, none_at, third_at] = winui::buttons_from_left(
-            &p,
-            11.0,
-            8.0,
-            &[("Select all", 90.0), ("Select none", 90.0), (third, 100.0)],
-            150.0,
-        )[..] else {
-            unreachable!("three buttons")
-        };
+        // Each as wide as its label in this language (#172), side by side from the left; the
+        // third as wide as the widest of its three labels, so it keeps its size as they change.
+        let h = winui::CONTROL_H;
+        let all_w = winui::footer_button_width(&p, "Select all", false);
+        let none_w = winui::footer_button_width(&p, "Select none", false);
+        let third_w = [stop, load_more, list_rest]
+            .map(|l| winui::footer_button_width(&p, l, false))
+            .into_iter()
+            .fold(0.0, f32::max);
+        let all_at = (LX, all_w);
+        let none_at = (LX + all_w + 8.0, none_w);
+        let third_at = (none_at.0 + none_w + 8.0, third_w);
         let all = winui::button(
             ui,
-            r(o, all_at.0, 222.0, all_at.1, 21.0),
+            r(o, all_at.0, BUTTONS_Y, all_at.1, h),
             // i18n: button in Download video for a playlist: tick every video
             "Select all",
             ButtonKind::Normal,
@@ -518,7 +545,7 @@ impl PlaylistView {
         .clicked();
         let none = winui::button(
             ui,
-            r(o, none_at.0, 222.0, none_at.1, 21.0),
+            r(o, none_at.0, BUTTONS_Y, none_at.1, h),
             // i18n: button in Download video for a playlist: untick every video
             "Select none",
             ButtonKind::Normal,
@@ -536,7 +563,7 @@ impl PlaylistView {
         if self.listing.is_some() {
             if winui::button(
                 ui,
-                r(o, third_at.0, 222.0, third_at.1, 21.0),
+                r(o, third_at.0, BUTTONS_Y, third_at.1, h),
                 stop,
                 ButtonKind::Normal,
                 false,
@@ -553,7 +580,7 @@ impl PlaylistView {
         } else if self.more
             && winui::button(
                 ui,
-                r(o, third_at.0, 222.0, third_at.1, 21.0),
+                r(o, third_at.0, BUTTONS_Y, third_at.1, h),
                 third,
                 ButtonKind::Normal,
                 false,
@@ -573,7 +600,13 @@ impl PlaylistView {
                 ("total", &crate::i18n::integer(n as u64)),
             ],
         );
-        winui::text_right(&p, o.x + 489.0, o.y + 236.0, &chosen, winui::MUTED());
+        winui::text_right(
+            &p,
+            o.x + RIGHT,
+            o.y + winui::baseline_in(BUTTONS_Y, h),
+            &chosen,
+            winui::MUTED(),
+        );
     }
 
     /// The Quality drop-down (where a single video has its File name).
@@ -586,6 +619,7 @@ impl PlaylistView {
         }
         if let Some(p) = picks.get(self.pick.min(picks.len().saturating_sub(1))) {
             self.ext = p.ext;
+            self.sound = p.sound_only();
         }
     }
 
@@ -626,13 +660,15 @@ impl PlaylistView {
         }
     }
 
-    /// What Download adds: the ticked videos, the quality chosen, into Save to/<list title>.
+    /// What Download adds: the ticked videos, the quality chosen, into Save to/<list title>,
+    /// listed under `category`.
     pub fn add(
         &self,
         folder: &Path,
         merge: bool,
         start_now: bool,
         context: &mdm_ipc::Command,
+        category: crate::model::Category,
     ) -> PlaylistAdd {
         let picks = picks(merge);
         let pick = &picks[self.pick.min(picks.len() - 1)];
@@ -648,6 +684,7 @@ impl PlaylistView {
             selector: pick.selector.clone(),
             ext: pick.ext,
             folder: folder.join(mdm_engine::naming::sanitize(&self.title)),
+            category,
             start_now,
             context: context.clone(),
         }
@@ -684,5 +721,10 @@ mod tests {
         assert_eq!(plain[DEFAULT_PICK].selector, "b[height<=1080]");
         assert!(!plain.iter().any(|p| p.selector.starts_with("mp3:")));
         assert!(!plain.iter().any(|p| p.ext == "opus" || p.ext == "flac"));
+        // Upstream issue 611: the "Audio only" ones save only the sound, the heights don't.
+        for p in m.iter().chain(&plain) {
+            let audio = p.selector == "ba" || p.ext != "mp4";
+            assert_eq!(p.sound_only(), audio, "{}", p.selector);
+        }
     }
 }

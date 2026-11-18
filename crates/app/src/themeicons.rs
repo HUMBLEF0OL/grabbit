@@ -1,9 +1,8 @@
 //! A theme's icon set (#45): files named by what MDM needs them for (`tb-add-url`, `cat-music`,
 //! `ft-pdf`…, the list in [`NEEDS`]), at 16 pixels and at 24 (drawn at 24 and up), pictures at
-//! 32 and 48 too (a screen at 150 % to 300 %, [`SIZES`]). A theme that
-//! has a set draws its icons where the classic look draws its own (the toolbar's outlines, the
-//! categories' Silk icons, the file types' system icons); a need the set lacks keeps the classic
-//! icon.
+//! 32 and 48 too (a screen at 150 % to 300 %, [`SIZES`]). Graphite's set is built in and drawn
+//! by default; a theme file can bring a set of its own, and a need its set lacks is drawn from
+//! Graphite's.
 //!
 //! Each file is an SVG drawing or a PNG picture, and says by its name how it is inked:
 //! `<need>.png` and `<need>.svg` keep their colours, `<need>-symbolic.svg` and
@@ -11,7 +10,8 @@
 //! greys are drawn in the theme's text colour (greyed when disabled), their colours kept, as
 //! GNOME and KDE recolour theirs. A set of SVGs all one colour says so once (`icon-mono = true`).
 //!
-//! Built-in sets are carried in the program (`assets/themes/<set>/icons/{16,24,32,48}/`). A theme file
+//! Graphite's set is carried in the program (`assets/themes/graphite/icons/{16,24}/`), the only
+//! built-in one (plan 05.5c). A theme file
 //! in a folder of its own (`themes/<id>/theme.toml`) can bring one beside it
 //! (`themes/<id>/icons/16/…`), read when the theme is chosen.
 
@@ -86,6 +86,60 @@ pub const NEEDS: &[(&str, &str)] = &[
     ("ui-to-tray", "Title bar: Hide to the notification area"),
 ];
 
+/// Icons only the Graphite layout draws (`[controls] chrome = "graphite"`): its menu rows,
+/// buttons, Options pages, banners and tiles. No classic need stands for them, so a set that
+/// lacks one draws nothing there; only Graphite's set carries them.
+pub const EXTRAS: &[(&str, &str)] = &[
+    (
+        "gx-link",
+        "An address: the paste field, address boxes, Refresh download address",
+    ),
+    (
+        "gx-download",
+        "Download: the paste bar's button, updates, the drop target",
+    ),
+    ("gx-search", "Find, Find next, Look up"),
+    ("gx-sidebar", "Toolbar: the details pane"),
+    ("gx-refresh", "Synchronization queue, Redownload"),
+    ("gx-gauge", "Download limits, Speed limiter"),
+    ("gx-filter", "A filtered column, Clear all filters"),
+    ("gx-window", "Show progress window, Open Grabbit"),
+    ("gx-external", "Open"),
+    ("gx-apps", "Open with…"),
+    ("gx-edit", "Move/Rename, Edit queue"),
+    ("gx-shield", "Verify checksum, Options: Proxy / Socks"),
+    ("gx-info", "Properties, Help contents"),
+    ("gx-plus", "Add: a category, a queue"),
+    ("gx-minus", "Delete from queue"),
+    ("gx-dots", "Browse (…)"),
+    ("gx-grip", "Download complete: the drag handle"),
+    ("gx-pointer", "On double-click"),
+    ("gx-hash", "Add batch download"),
+    ("gx-copy", "Add batch download from clipboard"),
+    ("gx-rss", "RSS feeds"),
+    ("gx-upload", "Export"),
+    ("gx-merge", "Video helpers (joining streams)"),
+    ("gx-power", "When the queue is done: the countdown"),
+    ("gx-browser", "A browser extension"),
+    ("gx-bug", "Report a problem"),
+    ("gx-keyboard", "Keyboard shortcuts"),
+    ("gx-world", "Home page, Options: Regional"),
+    ("gx-send", "Tell a friend"),
+    ("gx-gift", "Support Grabbit"),
+    ("gx-adjust", "Options: General"),
+    ("gx-network", "Options: Connection"),
+    ("gx-device", "Options: Remote"),
+    ("gx-key", "Options: Sites logins"),
+    ("gx-user", "Options: Accounts"),
+    ("gx-volume", "Options: Sounds"),
+    ("gx-computer", "Server: this computer"),
+];
+
+/// Whether a set's file named for `need` is read: a need, or an extra.
+fn known(need: &str) -> bool {
+    NEEDS.iter().chain(EXTRAS).any(|(n, _)| *n == need)
+}
+
 /// One icon file of a set: its bytes, whether it is a picture (PNG) rather than a drawing (SVG),
 /// and whether it is drawn in one colour (white, tinted with the theme's text colour).
 #[derive(Clone)]
@@ -99,7 +153,7 @@ struct File {
 /// pictures, which don't scale cleanly, 32 and 48 (a screen at 150 % to 300 %).
 pub const SIZES: [u32; 4] = [16, 24, 32, 48];
 
-/// One set: each need's icon at the sizes it has ([`SIZES`]).
+/// One set: each need's (and extra's, [`EXTRAS`]) icon at the sizes it has ([`SIZES`]).
 #[derive(Default)]
 pub struct Set {
     files: HashMap<(String, u32), File>,
@@ -138,7 +192,7 @@ impl Set {
     /// icon themes' one-colour icons, GNOME's and KDE's): its greys take the theme's ink when
     /// drawn. A PNG keeps its colours, unless its name ends in `-symbolic`: its greys are made
     /// white, to be tinted with the ink.
-    /// Files of no known need are left out.
+    /// Files of no known need (nor extra, [`EXTRAS`]) are left out.
     fn from_files<'a>(
         files: impl IntoIterator<Item = (u32, &'a str, Arc<[u8]>)>,
         mono: bool,
@@ -152,7 +206,7 @@ impl Set {
                 Some(n) => (n, true),
                 None => (stem, false),
             };
-            if !NEEDS.iter().any(|(n, _)| *n == need) {
+            if !known(need) {
                 continue;
             }
             let file = match ext.to_ascii_lowercase().as_str() {
@@ -280,14 +334,13 @@ fn colour(s: &str) -> Option<(usize, bool)> {
 /// (`assets/themes/<set>/icons/<size>/<name>`).
 macro_rules! builtin_files {
     ($dir:literal; $($px:literal: [$($f:literal),* $(,)?]);* $(;)?) => {{
-        let mut files: Vec<(u32, &'static str, Arc<[u8]>)> = Vec::new();
-        $($(files.push((
+        let files: Vec<(u32, &'static str, Arc<[u8]>)> = vec![$($((
             $px,
             $f,
             Arc::from(&include_bytes!(concat!(
                 "../assets/themes/", $dir, "/icons/", stringify!($px), "/", $f
             ))[..]),
-        ));)*)*
+        ),)*)*];
         files
     }};
 }
@@ -296,285 +349,72 @@ macro_rules! builtin_files {
 /// are chosen.
 static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
     let mut sets = HashMap::new();
-    // Microsoft's Fluent UI System Icons (MIT, assets/themes/metro/icons/LICENSE), recoloured
-    // white to be tinted; the magnet and the torrent file are MDM's own at their weight, Hide
-    // to the notification area MDM's own one-colour picture.
-    let metro = builtin_files!("metro";
+    // Tabler Icons 3.31.0's outline icons (Paweł Kuna, MIT, assets/themes/graphite/icons/LICENSE),
+    // drawn white at stroke 1.75 to be tinted, every need and extra (EXTRAS) at 16 and 24
+    // pixels; SOURCES.txt says which icon each is. Written by
+    // design/graphite/source/export_icons.py.
+    let graphite = builtin_files!("graphite";
         16: ["cat-all.svg", "cat-compressed.svg", "cat-documents.svg", "cat-finished.svg",
             "cat-folder-open.svg", "cat-folder.svg", "cat-music.svg", "cat-programs.svg",
             "cat-queues.svg", "cat-torrents.svg", "cat-unfinished.svg", "cat-video.svg",
             "ft-archive.svg", "ft-audio.svg", "ft-code.svg", "ft-disk-image.svg", "ft-document.svg",
             "ft-executable.svg", "ft-font.svg", "ft-generic.svg", "ft-image.svg", "ft-pdf.svg",
             "ft-presentation.svg", "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.svg",
-            "ft-video.svg", "misc-down.svg", "misc-emblem-ok.svg", "misc-remove.svg", "misc-up.svg",
+            "ft-video.svg",
+            "gx-adjust.svg", "gx-apps.svg", "gx-browser.svg", "gx-bug.svg", "gx-computer.svg",
+            "gx-copy.svg",
+            "gx-device.svg", "gx-dots.svg", "gx-download.svg", "gx-edit.svg", "gx-external.svg",
+            "gx-filter.svg", "gx-gauge.svg", "gx-gift.svg", "gx-grip.svg", "gx-hash.svg",
+            "gx-info.svg", "gx-key.svg", "gx-keyboard.svg", "gx-link.svg", "gx-merge.svg",
+            "gx-minus.svg", "gx-network.svg", "gx-plus.svg", "gx-pointer.svg", "gx-power.svg",
+            "gx-refresh.svg", "gx-rss.svg", "gx-search.svg", "gx-send.svg", "gx-shield.svg",
+            "gx-sidebar.svg", "gx-upload.svg", "gx-user.svg", "gx-volume.svg", "gx-window.svg",
+            "gx-world.svg",
+            "misc-down.svg", "misc-emblem-ok.svg", "misc-remove.svg", "misc-up.svg",
             "st-complete.svg", "st-downloading.svg", "st-error.svg", "st-paused.svg",
             "st-queued.svg", "st-seeding.svg", "tb-add-torrent.svg", "tb-add-url.svg",
             "tb-delete-completed.svg", "tb-delete.svg", "tb-options.svg", "tb-resume.svg",
             "tb-scheduler.svg", "tb-start-queue.svg", "tb-stop-all.svg", "tb-stop-queue.svg",
             "tb-stop.svg", "ui-close.svg", "ui-maximize.svg", "ui-minimize.svg", "ui-restore.svg",
-            "ui-to-tray-symbolic.png"];
+            "ui-to-tray.svg"];
         24: ["cat-all.svg", "cat-compressed.svg", "cat-documents.svg", "cat-finished.svg",
             "cat-folder-open.svg", "cat-folder.svg", "cat-music.svg", "cat-programs.svg",
             "cat-queues.svg", "cat-torrents.svg", "cat-unfinished.svg", "cat-video.svg",
-            "ft-archive.svg", "ft-audio.svg", "ft-code.svg", "ft-document.svg", "ft-executable.svg",
-            "ft-font.svg", "ft-generic.svg", "ft-image.svg", "ft-pdf.svg", "ft-presentation.svg",
-            "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.svg", "ft-video.svg", "misc-down.svg",
-            "misc-emblem-ok.svg", "misc-remove.svg", "misc-up.svg", "st-complete.svg",
-            "st-downloading.svg", "st-error.svg", "st-paused.svg", "st-queued.svg",
-            "st-seeding.svg", "tb-add-torrent.svg", "tb-add-url.svg", "tb-delete-completed.svg",
-            "tb-delete.svg", "tb-options.svg", "tb-resume.svg", "tb-scheduler.svg",
-            "tb-stop-all.svg", "tb-stop-queue.svg", "tb-stop.svg", "ui-close.svg",
-            "ui-maximize.svg", "ui-minimize.svg", "ui-restore.svg", "ui-to-tray-symbolic.png"];
-        32: ["ui-to-tray-symbolic.png"];
-        48: ["ui-to-tray-symbolic.png"]);
-    sets.insert("metro".to_owned(), Arc::new(Set::from_files(metro, true)));
-    // GNOME's adwaita-icon-theme 51.0 (LGPL-3, assets/themes/adwaita/icons/LICENSE), its files
-    // as GNOME ships them: colour pictures at 16 pixels and drawings above, one-colour symbolic
-    // icons tinted. The PDF, torrent-file and Hide to the notification area icons are MDM's
-    // own, in its style.
-    let adwaita = builtin_files!("adwaita";
-        16: ["cat-all.png", "cat-compressed.png", "cat-documents.png", "cat-finished.png",
-            "cat-folder-open-symbolic.svg", "cat-folder.png", "cat-music.png", "cat-programs.png",
-            "cat-queues-symbolic.svg", "cat-torrents.png", "cat-unfinished.png", "cat-video.png",
-            "ft-archive.png", "ft-audio.png", "ft-code.png", "ft-disk-image-symbolic.svg",
-            "ft-document.png", "ft-executable.png", "ft-font.png", "ft-generic.png", "ft-image.png",
-            "ft-pdf.png", "ft-presentation.png", "ft-spreadsheet.png", "ft-text.png",
-            "ft-torrent.png", "ft-video.png", "misc-down-symbolic.svg",
-            "misc-emblem-ok-symbolic.svg", "misc-remove-symbolic.svg", "misc-up-symbolic.svg",
-            "st-complete-symbolic.svg", "st-downloading-symbolic.svg", "st-error-symbolic.svg",
-            "st-paused-symbolic.svg", "st-queued-symbolic.svg", "st-seeding-symbolic.svg",
-            "tb-add-torrent-symbolic.svg", "tb-add-url-symbolic.svg",
-            "tb-delete-completed-symbolic.svg", "tb-delete-symbolic.svg", "tb-options-symbolic.svg",
-            "tb-resume-symbolic.svg", "tb-scheduler-symbolic.svg", "tb-start-queue-symbolic.svg",
-            "tb-stop-all-symbolic.svg", "tb-stop-queue-symbolic.svg", "tb-stop-symbolic.svg",
-            "ui-close-symbolic.svg", "ui-maximize-symbolic.svg", "ui-minimize-symbolic.svg",
-            "ui-restore-symbolic.svg", "ui-to-tray-symbolic.png"];
-        24: ["cat-all.svg", "cat-compressed.svg", "cat-documents.svg", "cat-finished.svg",
-            "cat-folder-open-symbolic.svg", "cat-folder.svg", "cat-music.svg", "cat-programs.svg",
-            "cat-queues-symbolic.svg", "cat-torrents.svg", "cat-unfinished.svg", "cat-video.svg",
             "ft-archive.svg", "ft-audio.svg", "ft-code.svg", "ft-disk-image.svg", "ft-document.svg",
-            "ft-executable.svg", "ft-font.svg", "ft-generic.svg", "ft-image.svg", "ft-pdf.png",
-            "ft-presentation.svg", "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.png",
-            "ft-video.svg", "misc-down-symbolic.svg", "misc-emblem-ok-symbolic.svg",
-            "misc-remove-symbolic.svg", "misc-up-symbolic.svg", "st-complete-symbolic.svg",
-            "st-downloading-symbolic.svg", "st-error-symbolic.svg", "st-paused-symbolic.svg",
-            "st-queued-symbolic.svg", "st-seeding-symbolic.svg", "tb-add-torrent-symbolic.svg",
-            "tb-add-url-symbolic.svg", "tb-delete-completed-symbolic.svg", "tb-delete-symbolic.svg",
-            "tb-options-symbolic.svg", "tb-resume-symbolic.svg", "tb-scheduler-symbolic.svg",
-            "tb-start-queue-symbolic.svg", "tb-stop-all-symbolic.svg", "tb-stop-queue-symbolic.svg",
-            "tb-stop-symbolic.svg", "ui-close-symbolic.svg", "ui-maximize-symbolic.svg",
-            "ui-minimize-symbolic.svg", "ui-restore-symbolic.svg", "ui-to-tray-symbolic.png"];
-        32: ["ft-pdf.png", "ft-torrent.png", "ui-to-tray-symbolic.png"];
-        48: ["ft-pdf.png", "ft-torrent.png", "ui-to-tray-symbolic.png"]);
+            "ft-executable.svg", "ft-font.svg", "ft-generic.svg", "ft-image.svg", "ft-pdf.svg",
+            "ft-presentation.svg", "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.svg",
+            "ft-video.svg",
+            "gx-adjust.svg", "gx-apps.svg", "gx-browser.svg", "gx-bug.svg", "gx-computer.svg",
+            "gx-copy.svg",
+            "gx-device.svg", "gx-dots.svg", "gx-download.svg", "gx-edit.svg", "gx-external.svg",
+            "gx-filter.svg", "gx-gauge.svg", "gx-gift.svg", "gx-grip.svg", "gx-hash.svg",
+            "gx-info.svg", "gx-key.svg", "gx-keyboard.svg", "gx-link.svg", "gx-merge.svg",
+            "gx-minus.svg", "gx-network.svg", "gx-plus.svg", "gx-pointer.svg", "gx-power.svg",
+            "gx-refresh.svg", "gx-rss.svg", "gx-search.svg", "gx-send.svg", "gx-shield.svg",
+            "gx-sidebar.svg", "gx-upload.svg", "gx-user.svg", "gx-volume.svg", "gx-window.svg",
+            "gx-world.svg",
+            "misc-down.svg", "misc-emblem-ok.svg", "misc-remove.svg", "misc-up.svg",
+            "st-complete.svg", "st-downloading.svg", "st-error.svg", "st-paused.svg",
+            "st-queued.svg", "st-seeding.svg", "tb-add-torrent.svg", "tb-add-url.svg",
+            "tb-delete-completed.svg", "tb-delete.svg", "tb-options.svg", "tb-resume.svg",
+            "tb-scheduler.svg", "tb-start-queue.svg", "tb-stop-all.svg", "tb-stop-queue.svg",
+            "tb-stop.svg", "ui-close.svg", "ui-maximize.svg", "ui-minimize.svg", "ui-restore.svg",
+            "ui-to-tray.svg"]);
     sets.insert(
-        "adwaita".to_owned(),
-        Arc::new(Set::from_files(adwaita, false)),
+        "graphite".to_owned(),
+        Arc::new(Set::from_files(graphite, true)),
     );
-    // KDE's breeze-icons 6.31 (LGPL-3.0-or-later, assets/themes/breeze/icons/LICENSE), its files
-    // as KDE ships them: colour drawings for files and categories, one-colour icons (its
-    // ColorScheme-Text ones) in the theme's ink, their highlight and warning colours kept. The
-    // PDF and Hide to the notification area icons are MDM's own, in its style.
-    let breeze = builtin_files!("breeze";
-        16: ["cat-all-symbolic.svg", "cat-compressed.svg", "cat-documents.svg",
-            "cat-finished-symbolic.svg", "cat-folder-open-symbolic.svg", "cat-folder-symbolic.svg",
-            "cat-music.svg", "cat-programs-symbolic.svg", "cat-queues-symbolic.svg",
-            "cat-torrents.svg", "cat-unfinished-symbolic.svg", "cat-video.svg", "ft-archive.svg",
-            "ft-audio.svg", "ft-code.svg", "ft-disk-image-symbolic.svg", "ft-document.svg",
-            "ft-executable-symbolic.svg", "ft-font.svg", "ft-generic.svg", "ft-image.svg",
-            "ft-pdf.png", "ft-presentation.svg", "ft-spreadsheet.svg", "ft-text.svg",
-            "ft-torrent.svg", "ft-video.svg", "misc-down-symbolic.svg",
-            "misc-emblem-ok-symbolic.svg", "misc-remove.svg", "misc-up-symbolic.svg",
-            "st-complete-symbolic.svg", "st-downloading-symbolic.svg", "st-error-symbolic.svg",
-            "st-paused-symbolic.svg", "st-queued-symbolic.svg", "st-seeding-symbolic.svg",
-            "tb-add-url-symbolic.svg", "tb-delete-completed-symbolic.svg", "tb-delete.svg",
-            "tb-options-symbolic.svg", "tb-resume-symbolic.svg", "tb-scheduler-symbolic.svg",
-            "tb-stop-symbolic.svg", "ui-close-symbolic.svg", "ui-maximize-symbolic.svg",
-            "ui-minimize-symbolic.svg", "ui-restore-symbolic.svg", "ui-to-tray-symbolic.png"];
-        24: ["cat-all-symbolic.svg", "cat-compressed.svg", "cat-documents.svg",
-            "cat-finished-symbolic.svg", "cat-folder-open-symbolic.svg", "cat-folder-symbolic.svg",
-            "cat-music.svg", "cat-programs.svg", "cat-queues-symbolic.svg", "cat-torrents.svg",
-            "cat-unfinished-symbolic.svg", "cat-video.svg", "ft-archive.svg", "ft-audio.svg",
-            "ft-code.svg", "ft-disk-image.svg", "ft-document.svg", "ft-executable.svg",
-            "ft-font.svg", "ft-generic.svg", "ft-image.svg", "ft-pdf.png", "ft-presentation.svg",
-            "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.svg", "ft-video.svg",
-            "misc-down-symbolic.svg", "misc-emblem-ok-symbolic.svg", "misc-remove.svg",
-            "misc-up-symbolic.svg", "st-complete-symbolic.svg", "st-downloading-symbolic.svg",
-            "st-error-symbolic.svg", "st-paused-symbolic.svg", "st-queued-symbolic.svg",
-            "st-seeding-symbolic.svg", "tb-add-torrent-symbolic.svg", "tb-add-url-symbolic.svg",
-            "tb-delete-completed-symbolic.svg", "tb-delete.svg", "tb-options-symbolic.svg",
-            "tb-resume-symbolic.svg", "tb-scheduler-symbolic.svg", "tb-start-queue-symbolic.svg",
-            "tb-stop-all-symbolic.svg", "tb-stop-queue-symbolic.svg", "tb-stop-symbolic.svg",
-            "ui-close-symbolic.svg", "ui-maximize-symbolic.svg", "ui-minimize-symbolic.svg",
-            "ui-restore-symbolic.svg", "ui-to-tray-symbolic.png"];
-        32: ["ft-pdf.png", "ui-to-tray-symbolic.png"];
-        48: ["ft-pdf.png", "ui-to-tray-symbolic.png"]);
-    sets.insert(
-        "breeze".to_owned(),
-        Arc::new(Set::from_files(breeze, false)),
-    );
-    // The era themes' sets (#45): pictures drawn for MDM in the manner of Windows XP, Windows 7
-    // and Mac OS X, in colour, at 16, 24, 32 and 48 pixels. The title bar's buttons are MDM's own
-    // vector glyphs (drawn by `winui::caption`), but for Hide to the notification area.
-    let luna = builtin_files!("luna";
-        16: ["cat-all.png", "cat-compressed.png", "cat-documents.png", "cat-finished.png",
-            "cat-folder-open.png", "cat-folder.png", "cat-music.png", "cat-programs.png",
-            "cat-queues.png", "cat-torrents.png", "cat-unfinished.png", "cat-video.png",
-            "ft-archive.png", "ft-audio.png", "ft-code.png", "ft-disk-image.png", "ft-document.png",
-            "ft-executable.png", "ft-font.png", "ft-generic.png", "ft-image.png", "ft-pdf.png",
-            "ft-presentation.png", "ft-spreadsheet.png", "ft-text.png", "ft-torrent.png",
-            "ft-video.png", "misc-down.png", "misc-emblem-ok.png", "misc-remove.png", "misc-up.png",
-            "st-complete.png", "st-downloading.png", "st-error.png", "st-paused.png",
-            "st-queued.png", "st-seeding.png", "tb-add-torrent.png", "tb-add-url.png",
-            "tb-delete-completed.png", "tb-delete.png", "tb-options.png", "tb-resume.png",
-            "tb-scheduler.png", "tb-start-queue.png", "tb-stop-all.png", "tb-stop-queue.png",
-            "tb-stop.png", "ui-to-tray.png"];
-        24: ["cat-all.png", "cat-compressed.png", "cat-documents.png", "cat-finished.png",
-            "cat-folder-open.png", "cat-folder.png", "cat-music.png", "cat-programs.png",
-            "cat-queues.png", "cat-torrents.png", "cat-unfinished.png", "cat-video.png",
-            "ft-archive.png", "ft-audio.png", "ft-code.png", "ft-disk-image.png", "ft-document.png",
-            "ft-executable.png", "ft-font.png", "ft-generic.png", "ft-image.png", "ft-pdf.png",
-            "ft-presentation.png", "ft-spreadsheet.png", "ft-text.png", "ft-torrent.png",
-            "ft-video.png", "misc-down.png", "misc-emblem-ok.png", "misc-remove.png", "misc-up.png",
-            "st-complete.png", "st-downloading.png", "st-error.png", "st-paused.png",
-            "st-queued.png", "st-seeding.png", "tb-add-torrent.png", "tb-add-url.png",
-            "tb-delete-completed.png", "tb-delete.png", "tb-options.png", "tb-resume.png",
-            "tb-scheduler.png", "tb-start-queue.png", "tb-stop-all.png", "tb-stop-queue.png",
-            "tb-stop.png", "ui-to-tray.png"];
-        32: ["cat-all.png", "cat-compressed.png", "cat-documents.png", "cat-finished.png",
-            "cat-folder-open.png", "cat-folder.png", "cat-music.png", "cat-programs.png",
-            "cat-queues.png", "cat-torrents.png", "cat-unfinished.png", "cat-video.png",
-            "ft-archive.png", "ft-audio.png", "ft-code.png", "ft-disk-image.png", "ft-document.png",
-            "ft-executable.png", "ft-font.png", "ft-generic.png", "ft-image.png", "ft-pdf.png",
-            "ft-presentation.png", "ft-spreadsheet.png", "ft-text.png", "ft-torrent.png",
-            "ft-video.png", "misc-down.png", "misc-emblem-ok.png", "misc-remove.png", "misc-up.png",
-            "st-complete.png", "st-downloading.png", "st-error.png", "st-paused.png",
-            "st-queued.png", "st-seeding.png", "tb-add-torrent.png", "tb-add-url.png",
-            "tb-delete-completed.png", "tb-delete.png", "tb-options.png", "tb-resume.png",
-            "tb-scheduler.png", "tb-start-queue.png", "tb-stop-all.png", "tb-stop-queue.png",
-            "tb-stop.png", "ui-to-tray.png"];
-        48: ["cat-all.png", "cat-compressed.png", "cat-documents.png", "cat-finished.png",
-            "cat-folder-open.png", "cat-folder.png", "cat-music.png", "cat-programs.png",
-            "cat-queues.png", "cat-torrents.png", "cat-unfinished.png", "cat-video.png",
-            "ft-archive.png", "ft-audio.png", "ft-code.png", "ft-disk-image.png", "ft-document.png",
-            "ft-executable.png", "ft-font.png", "ft-generic.png", "ft-image.png", "ft-pdf.png",
-            "ft-presentation.png", "ft-spreadsheet.png", "ft-text.png", "ft-torrent.png",
-            "ft-video.png", "misc-down.png", "misc-emblem-ok.png", "misc-remove.png", "misc-up.png",
-            "st-complete.png", "st-downloading.png", "st-error.png", "st-paused.png",
-            "st-queued.png", "st-seeding.png", "tb-add-torrent.png", "tb-add-url.png",
-            "tb-delete-completed.png", "tb-delete.png", "tb-options.png", "tb-resume.png",
-            "tb-scheduler.png", "tb-start-queue.png", "tb-stop-all.png", "tb-stop-queue.png",
-            "tb-stop.png", "ui-to-tray.png"]);
-    sets.insert("luna".to_owned(), Arc::new(Set::from_files(luna, false)));
-    let aero = builtin_files!("aero";
-        16: ["cat-all.png", "cat-compressed.png", "cat-documents.png", "cat-finished.png",
-            "cat-folder-open.png", "cat-folder.png", "cat-music.png", "cat-programs.png",
-            "cat-queues.png", "cat-torrents.png", "cat-unfinished.png", "cat-video.png",
-            "ft-archive.png", "ft-audio.png", "ft-code.png", "ft-disk-image.png", "ft-document.png",
-            "ft-executable.png", "ft-font.png", "ft-generic.png", "ft-image.png", "ft-pdf.png",
-            "ft-presentation.png", "ft-spreadsheet.png", "ft-text.png", "ft-torrent.png",
-            "ft-video.png", "misc-down.png", "misc-emblem-ok.png", "misc-remove.png", "misc-up.png",
-            "st-complete.png", "st-downloading.png", "st-error.png", "st-paused.png",
-            "st-queued.png", "st-seeding.png", "tb-add-torrent.png", "tb-add-url.png",
-            "tb-delete-completed.png", "tb-delete.png", "tb-options.png", "tb-resume.png",
-            "tb-scheduler.png", "tb-start-queue.png", "tb-stop-all.png", "tb-stop-queue.png",
-            "tb-stop.png", "ui-to-tray.png"];
-        24: ["cat-all.png", "cat-compressed.png", "cat-documents.png", "cat-finished.png",
-            "cat-folder-open.png", "cat-folder.png", "cat-music.png", "cat-programs.png",
-            "cat-queues.png", "cat-torrents.png", "cat-unfinished.png", "cat-video.png",
-            "ft-archive.png", "ft-audio.png", "ft-code.png", "ft-disk-image.png", "ft-document.png",
-            "ft-executable.png", "ft-font.png", "ft-generic.png", "ft-image.png", "ft-pdf.png",
-            "ft-presentation.png", "ft-spreadsheet.png", "ft-text.png", "ft-torrent.png",
-            "ft-video.png", "misc-down.png", "misc-emblem-ok.png", "misc-remove.png", "misc-up.png",
-            "st-complete.png", "st-downloading.png", "st-error.png", "st-paused.png",
-            "st-queued.png", "st-seeding.png", "tb-add-torrent.png", "tb-add-url.png",
-            "tb-delete-completed.png", "tb-delete.png", "tb-options.png", "tb-resume.png",
-            "tb-scheduler.png", "tb-start-queue.png", "tb-stop-all.png", "tb-stop-queue.png",
-            "tb-stop.png", "ui-to-tray.png"];
-        32: ["cat-all.png", "cat-compressed.png", "cat-documents.png", "cat-finished.png",
-            "cat-folder-open.png", "cat-folder.png", "cat-music.png", "cat-programs.png",
-            "cat-queues.png", "cat-torrents.png", "cat-unfinished.png", "cat-video.png",
-            "ft-archive.png", "ft-audio.png", "ft-code.png", "ft-disk-image.png", "ft-document.png",
-            "ft-executable.png", "ft-font.png", "ft-generic.png", "ft-image.png", "ft-pdf.png",
-            "ft-presentation.png", "ft-spreadsheet.png", "ft-text.png", "ft-torrent.png",
-            "ft-video.png", "misc-down.png", "misc-emblem-ok.png", "misc-remove.png", "misc-up.png",
-            "st-complete.png", "st-downloading.png", "st-error.png", "st-paused.png",
-            "st-queued.png", "st-seeding.png", "tb-add-torrent.png", "tb-add-url.png",
-            "tb-delete-completed.png", "tb-delete.png", "tb-options.png", "tb-resume.png",
-            "tb-scheduler.png", "tb-start-queue.png", "tb-stop-all.png", "tb-stop-queue.png",
-            "tb-stop.png", "ui-to-tray.png"];
-        48: ["cat-all.png", "cat-compressed.png", "cat-documents.png", "cat-finished.png",
-            "cat-folder-open.png", "cat-folder.png", "cat-music.png", "cat-programs.png",
-            "cat-queues.png", "cat-torrents.png", "cat-unfinished.png", "cat-video.png",
-            "ft-archive.png", "ft-audio.png", "ft-code.png", "ft-disk-image.png", "ft-document.png",
-            "ft-executable.png", "ft-font.png", "ft-generic.png", "ft-image.png", "ft-pdf.png",
-            "ft-presentation.png", "ft-spreadsheet.png", "ft-text.png", "ft-torrent.png",
-            "ft-video.png", "misc-down.png", "misc-emblem-ok.png", "misc-remove.png", "misc-up.png",
-            "st-complete.png", "st-downloading.png", "st-error.png", "st-paused.png",
-            "st-queued.png", "st-seeding.png", "tb-add-torrent.png", "tb-add-url.png",
-            "tb-delete-completed.png", "tb-delete.png", "tb-options.png", "tb-resume.png",
-            "tb-scheduler.png", "tb-start-queue.png", "tb-stop-all.png", "tb-stop-queue.png",
-            "tb-stop.png", "ui-to-tray.png"]);
-    sets.insert("aero".to_owned(), Arc::new(Set::from_files(aero, false)));
-    let aqua = builtin_files!("aqua";
-        16: ["cat-all.png", "cat-compressed.png", "cat-documents.png", "cat-finished.png",
-            "cat-folder-open.png", "cat-folder.png", "cat-music.png", "cat-programs.png",
-            "cat-queues.png", "cat-torrents.png", "cat-unfinished.png", "cat-video.png",
-            "ft-archive.png", "ft-audio.png", "ft-code.png", "ft-disk-image.png", "ft-document.png",
-            "ft-executable.png", "ft-font.png", "ft-generic.png", "ft-image.png", "ft-pdf.png",
-            "ft-presentation.png", "ft-spreadsheet.png", "ft-text.png", "ft-torrent.png",
-            "ft-video.png", "misc-down.png", "misc-emblem-ok.png", "misc-remove.png", "misc-up.png",
-            "st-complete.png", "st-downloading.png", "st-error.png", "st-paused.png",
-            "st-queued.png", "st-seeding.png", "tb-add-torrent.png", "tb-add-url.png",
-            "tb-delete-completed.png", "tb-delete.png", "tb-options.png", "tb-resume.png",
-            "tb-scheduler.png", "tb-start-queue.png", "tb-stop-all.png", "tb-stop-queue.png",
-            "tb-stop.png", "ui-to-tray.png"];
-        24: ["cat-all.png", "cat-compressed.png", "cat-documents.png", "cat-finished.png",
-            "cat-folder-open.png", "cat-folder.png", "cat-music.png", "cat-programs.png",
-            "cat-queues.png", "cat-torrents.png", "cat-unfinished.png", "cat-video.png",
-            "ft-archive.png", "ft-audio.png", "ft-code.png", "ft-disk-image.png", "ft-document.png",
-            "ft-executable.png", "ft-font.png", "ft-generic.png", "ft-image.png", "ft-pdf.png",
-            "ft-presentation.png", "ft-spreadsheet.png", "ft-text.png", "ft-torrent.png",
-            "ft-video.png", "misc-down.png", "misc-emblem-ok.png", "misc-remove.png", "misc-up.png",
-            "st-complete.png", "st-downloading.png", "st-error.png", "st-paused.png",
-            "st-queued.png", "st-seeding.png", "tb-add-torrent.png", "tb-add-url.png",
-            "tb-delete-completed.png", "tb-delete.png", "tb-options.png", "tb-resume.png",
-            "tb-scheduler.png", "tb-start-queue.png", "tb-stop-all.png", "tb-stop-queue.png",
-            "tb-stop.png", "ui-to-tray.png"];
-        32: ["cat-all.png", "cat-compressed.png", "cat-documents.png", "cat-finished.png",
-            "cat-folder-open.png", "cat-folder.png", "cat-music.png", "cat-programs.png",
-            "cat-queues.png", "cat-torrents.png", "cat-unfinished.png", "cat-video.png",
-            "ft-archive.png", "ft-audio.png", "ft-code.png", "ft-disk-image.png", "ft-document.png",
-            "ft-executable.png", "ft-font.png", "ft-generic.png", "ft-image.png", "ft-pdf.png",
-            "ft-presentation.png", "ft-spreadsheet.png", "ft-text.png", "ft-torrent.png",
-            "ft-video.png", "misc-down.png", "misc-emblem-ok.png", "misc-remove.png", "misc-up.png",
-            "st-complete.png", "st-downloading.png", "st-error.png", "st-paused.png",
-            "st-queued.png", "st-seeding.png", "tb-add-torrent.png", "tb-add-url.png",
-            "tb-delete-completed.png", "tb-delete.png", "tb-options.png", "tb-resume.png",
-            "tb-scheduler.png", "tb-start-queue.png", "tb-stop-all.png", "tb-stop-queue.png",
-            "tb-stop.png", "ui-to-tray.png"];
-        48: ["cat-all.png", "cat-compressed.png", "cat-documents.png", "cat-finished.png",
-            "cat-folder-open.png", "cat-folder.png", "cat-music.png", "cat-programs.png",
-            "cat-queues.png", "cat-torrents.png", "cat-unfinished.png", "cat-video.png",
-            "ft-archive.png", "ft-audio.png", "ft-code.png", "ft-disk-image.png", "ft-document.png",
-            "ft-executable.png", "ft-font.png", "ft-generic.png", "ft-image.png", "ft-pdf.png",
-            "ft-presentation.png", "ft-spreadsheet.png", "ft-text.png", "ft-torrent.png",
-            "ft-video.png", "misc-down.png", "misc-emblem-ok.png", "misc-remove.png", "misc-up.png",
-            "st-complete.png", "st-downloading.png", "st-error.png", "st-paused.png",
-            "st-queued.png", "st-seeding.png", "tb-add-torrent.png", "tb-add-url.png",
-            "tb-delete-completed.png", "tb-delete.png", "tb-options.png", "tb-resume.png",
-            "tb-scheduler.png", "tb-start-queue.png", "tb-stop-all.png", "tb-stop-queue.png",
-            "tb-stop.png", "ui-to-tray.png"]);
-    sets.insert("aqua".to_owned(), Arc::new(Set::from_files(aqua, false)));
     Mutex::new(sets)
 });
 
 /// Reads the set in `dir` (`16/<need>.svg`, `.png`, `-symbolic.svg` or `-symbolic.png`, the
 /// same in `24`, and in `32` and `48` for pictures) under `name`, for a theme file's own folder.
-/// Only the known needs are read; other files are left alone. False when the folder holds none.
+/// Only the known needs and extras are read; other files are left alone. False when the folder
+/// holds none.
 pub fn load_folder(name: &str, dir: &Path, mono: bool) -> bool {
     let mut files = Vec::new();
     for px in SIZES {
-        for (need, _) in NEEDS {
+        for (need, _) in NEEDS.iter().chain(EXTRAS) {
             for f in [
                 format!("{need}-symbolic.svg"),
                 format!("{need}-symbolic.png"),
@@ -603,6 +443,12 @@ pub fn load_folder(name: &str, dir: &Path, mono: bool) -> bool {
         sets.insert(name.to_owned(), Arc::new(set));
     }
     true
+}
+
+/// Whether Graphite's set has `need` drawn at `px` (16 or 24).
+#[cfg(test)]
+pub fn graphite_has(need: &str, px: u32) -> bool {
+    set("graphite").is_some_and(|s| s.files.contains_key(&(need.to_owned(), px)))
 }
 
 fn set(name: &str) -> Option<Arc<Set>> {
@@ -634,12 +480,35 @@ pub fn source(
     ink: Color32,
     enabled: bool,
 ) -> Option<(ImageSource<'static>, Color32)> {
+    let name = crate::theme::current().icon_set.clone()?;
+    source_in(name, need, px, ink, enabled)
+}
+
+/// [`source`] from Graphite's own set, whatever the theme: the places Graphite's set alone
+/// draws (plan 05.5a: the Options pages' headers, the helpers window, the drag handle, the
+/// Scheduler's tree, the Server row).
+pub fn graphite(
+    need: &str,
+    px: f32,
+    ink: Color32,
+    enabled: bool,
+) -> Option<(ImageSource<'static>, Color32)> {
+    source_in(Cow::Borrowed("graphite"), need, px, ink, enabled)
+}
+
+/// [`source`] from the set called `name`.
+fn source_in(
+    name: Cow<'static, str>,
+    need: &str,
+    px: f32,
+    ink: Color32,
+    enabled: bool,
+) -> Option<(ImageSource<'static>, Color32)> {
     use std::cell::RefCell;
     type Key = (Cow<'static, str>, String, u32, [u8; 3]);
     thread_local! {
         static MADE: RefCell<HashMap<Key, Option<(ImageSource<'static>, Paint)>>> = RefCell::default();
     }
-    let name = crate::theme::current().icon_set.clone()?;
     let [r, g, b, a] = ink.to_srgba_unmultiplied();
     let (src, paint) = MADE.with(|made| {
         made.borrow_mut()
@@ -688,7 +557,7 @@ pub fn source(
 }
 
 /// Paints the active theme's icon for `need` into `rc` (enabled or greyed); false when the theme
-/// has none for it (the caller draws the classic icon).
+/// has none for it (the caller draws Graphite's, [`paint_graphite`]).
 pub fn paint(
     ui: &egui::Ui,
     painter: &egui::Painter,
@@ -696,8 +565,55 @@ pub fn paint(
     rc: egui::Rect,
     enabled: bool,
 ) -> bool {
+    paint_in(ui, painter, need, rc, ink(enabled), enabled)
+}
+
+/// [`paint`], a one-colour icon in `ink` rather than the text's colour (a colour icon keeps
+/// its own colours).
+pub fn paint_in(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    need: &str,
+    rc: egui::Rect,
+    ink: Color32,
+    enabled: bool,
+) -> bool {
     let px = rc.width() * ui.ctx().pixels_per_point();
-    let Some((src, tint)) = source(need, px, ink(enabled), enabled) else {
+    paint_source(ui, painter, source(need, px, ink, enabled), rc)
+}
+
+/// [`paint`] from Graphite's own set, whatever the theme ([`graphite`]).
+pub fn paint_graphite(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    need: &str,
+    rc: egui::Rect,
+    enabled: bool,
+) -> bool {
+    let px = rc.width() * ui.ctx().pixels_per_point();
+    paint_source(ui, painter, graphite(need, px, ink(enabled), enabled), rc)
+}
+
+/// [`paint_graphite`] in `ink` (a status banner's icon in its kind's colour).
+pub fn paint_graphite_in(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    need: &str,
+    rc: egui::Rect,
+    ink: Color32,
+) -> bool {
+    let px = rc.width() * ui.ctx().pixels_per_point();
+    paint_source(ui, painter, graphite(need, px, ink, true), rc)
+}
+
+/// Draws an icon made by [`source`] into `rc`; false when there is none.
+fn paint_source(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    made: Option<(ImageSource<'static>, Color32)>,
+    rc: egui::Rect,
+) -> bool {
+    let Some((src, tint)) = made else {
         return false;
     };
     let img = egui::Image::new(src);
@@ -712,29 +628,43 @@ pub fn paint(
     true
 }
 
-/// A file type's need, from the classic fallback icon's kind (fileicons.rs).
-pub fn file_need(tango: &str, ext: Option<&str>) -> &'static str {
+/// A file's need, by its extension (lowercase; None: a file without one): its kind, the plain
+/// page (`ft-text`) for one of no known kind.
+pub fn file_need(ext: Option<&str>) -> &'static str {
+    let Some(ext) = ext else { return "ft-text" };
     match ext {
-        Some("torrent") => return "ft-torrent",
-        Some("pdf") => return "ft-pdf",
-        _ => {}
-    }
-    match tango {
-        "folder" => "cat-folder",
-        "folder-open" => "cat-folder-open",
-        "video-x-generic" => "ft-video",
-        "audio-x-generic" => "ft-audio",
-        "image-x-generic" | "x-office-drawing" | "x-office-drawing-template" => "ft-image",
-        "package-x-generic" => "ft-archive",
-        "application-x-executable" => "ft-executable",
-        "media-optical" => "ft-disk-image",
-        "x-office-document" | "x-office-document-template" => "ft-document",
-        "x-office-spreadsheet" | "x-office-spreadsheet-template" => "ft-spreadsheet",
-        "x-office-presentation" | "x-office-presentation-template" => "ft-presentation",
-        "text-html" | "text-x-script" => "ft-code",
-        "font-x-generic" => "ft-font",
-        "text-x-generic" => "ft-text",
-        _ => "ft-generic",
+        "torrent" => "ft-torrent",
+        "pdf" => "ft-pdf",
+        "mp4" | "mkv" | "avi" | "mov" | "wmv" | "flv" | "webm" | "m4v" | "mpg" | "mpeg" | "ts"
+        | "m2ts" | "3gp" | "ogv" | "vob" | "rm" | "rmvb" | "asf" => "ft-video",
+        "mp3" | "flac" | "ogg" | "oga" | "opus" | "wav" | "m4a" | "aac" | "wma" | "ape"
+        | "alac" | "aif" | "aiff" | "mid" | "midi" => "ft-audio",
+        "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "tif" | "tiff" | "ico" | "heic"
+        | "heif" | "avif" | "psd" | "raw" | "cr2" | "nef" | "dng" | "svg" | "eps" | "ai"
+        | "odg" | "vsd" | "vsdx" | "otg" => "ft-image",
+        "zip" | "rar" | "7z" | "gz" | "tgz" | "bz2" | "tbz2" | "xz" | "txz" | "zst" | "tar"
+        | "cab" | "lz" | "lzma" | "z" | "arj" | "deb" | "rpm" | "pkg" | "apk" | "jar" | "whl"
+        | "nupkg" | "snap" | "flatpak" => "ft-archive",
+        "exe" | "msi" | "msix" | "appx" | "com" | "scr" | "appimage" | "run" | "bin" | "app"
+        | "dll" | "so" | "dylib" | "sys" => "ft-executable",
+        "iso" | "img" | "dmg" | "vhd" | "vhdx" | "vmdk" | "nrg" | "mdf" | "cue" | "toast" => {
+            "ft-disk-image"
+        }
+        "doc" | "docx" | "odt" | "rtf" | "wpd" | "pages" | "epub" | "mobi" | "azw" | "azw3"
+        | "djvu" | "xps" | "fb2" | "cbz" | "cbr" | "dot" | "dotx" | "ott" => "ft-document",
+        "xls" | "xlsx" | "xlsm" | "ods" | "csv" | "tsv" | "numbers" | "xlt" | "xltx" | "ots" => {
+            "ft-spreadsheet"
+        }
+        "ppt" | "pptx" | "odp" | "key" | "pps" | "ppsx" | "pot" | "potx" | "otp" => {
+            "ft-presentation"
+        }
+        "html" | "htm" | "xhtml" | "mht" | "mhtml" | "xml" | "sh" | "bash" | "py" | "js"
+        | "mjs" | "ps1" | "bat" | "cmd" | "pl" | "rb" | "php" | "lua" | "vbs" => "ft-code",
+        "ttf" | "otf" | "woff" | "woff2" | "fon" | "pfb" => "ft-font",
+        // Certificates and signatures, calendars, address cards: a file of its own kind.
+        "crt" | "cer" | "pem" | "der" | "p12" | "pfx" | "p7b" | "sig" | "asc" | "gpg" | "ics"
+        | "ical" | "vcs" | "vcf" | "vcard" => "ft-generic",
+        _ => "ft-text",
     }
 }
 
@@ -742,43 +672,71 @@ pub fn file_need(tango: &str, ext: Option<&str>) -> &'static str {
 mod tests {
     use super::*;
 
+    /// [`graphite`] inks a one-colour drawing with the ink it is given, greyed or not: its white
+    /// strokes take the ink and it is drawn untinted. (That a greyed button's ink is
+    /// `text.disabled` is held in `winui`'s `button_states_differ`.)
     #[test]
-    fn every_need_has_one_id_and_metro_has_them_all() {
-        let mut ids: Vec<&str> = NEEDS.iter().map(|(n, _)| *n).collect();
-        ids.sort_unstable();
-        let n = ids.len();
-        ids.dedup();
-        assert_eq!(ids.len(), n);
-        let metro = set("metro").unwrap();
-        for (need, _) in NEEDS {
-            assert!(metro.has(need), "metro lacks {need}");
-            let (_, f) = metro.file(need, 16.0).unwrap();
-            // One colour, to be tinted: Fluent's drawings recoloured white, MDM's own pictures
-            // made white where they are grey.
-            assert!(f.mono, "{need}");
-            if f.png {
-                assert_white(&f.bytes, need);
-                continue;
-            }
-            let text = std::str::from_utf8(&f.bytes).unwrap();
-            assert!(!text.contains("#212121"), "{need} keeps Fluent's ink");
-        }
-        // MDM's own Hide to the notification area, where Fluent has none of that meaning: a
-        // picture at every size; its torrent icons are drawings at Fluent's weight.
-        for px in [16.0, 24.0, 32.0, 48.0] {
-            assert!(metro.file("ui-to-tray", px).unwrap().1.png, "{px}");
-            assert!(!metro.file("tb-add-torrent", px).unwrap().1.png, "{px}");
-        }
+    fn graphite_inks_with_the_ink_given() {
+        let ink = Color32::from_rgb(0xa5, 0xa0, 0xb6);
+        let (src, tint) = graphite("gx-dots", 16.0, ink, false).expect("gx-dots");
+        let ImageSource::Bytes { bytes, .. } = src else {
+            panic!("bytes")
+        };
+        let svg = std::str::from_utf8(&bytes).expect("SVG text");
+        assert!(svg.contains("stroke=\"#a5a0b6\""), "{svg}");
+        assert!(!svg.contains("#ffffff"), "{svg}");
+        assert_eq!(tint, Color32::WHITE);
     }
 
-    /// A one-colour picture as the set holds it: its greys white, so the ink tints them.
-    fn assert_white(png: &[u8], need: &str) {
-        let img = image::load_from_memory(png).unwrap().to_rgba8();
-        assert!(img.pixels().any(|p| p.0[3] > 0), "{need}: empty");
-        for p in img.pixels().filter(|p| p.0[3] > 0) {
-            let [r, g, b, _] = p.0;
-            let grey = r.max(g).max(b) - r.min(g).min(b) <= 24;
-            assert!(!grey || [r, g, b] == [255, 255, 255], "{need}: {:?}", p.0);
+    /// Graphite has every need and every extra at 16 and 24 pixels: Tabler's outline drawings,
+    /// one colour. As carried, each is stroked white once (on its root) and fills nothing (no
+    /// part names a fill but `none`, which the ink would fill), and names no other colour;
+    /// inked, the stroke is the ink and no white is left. The 16-pixel one is drawn up to 20
+    /// pixels on screen, the 24-pixel one above.
+    #[test]
+    fn graphite_has_every_need_in_one_colour() {
+        let set = set("graphite").unwrap();
+        for (need, _) in NEEDS.iter().chain(EXTRAS) {
+            for px in [16u32, 24] {
+                let f = set.files.get(&((*need).to_owned(), px));
+                let f = f.unwrap_or_else(|| panic!("graphite lacks {need} at {px}"));
+                assert!(!f.png && f.mono, "{need} {px}");
+                let raw = std::str::from_utf8(&f.bytes).unwrap();
+                // The Graphite icon pattern (plan 05.5a): the root's attributes, exactly.
+                let root = &raw[..raw.find('>').unwrap()];
+                for want in [
+                    format!(r#"width="{px}""#),
+                    format!(r#"height="{px}""#),
+                    r#"viewBox="0 0 24 24""#.to_owned(),
+                    r#"fill="none""#.to_owned(),
+                    r##"stroke="#ffffff""##.to_owned(),
+                    r#"stroke-width="1.75""#.to_owned(),
+                    r#"stroke-linecap="round""#.to_owned(),
+                    r#"stroke-linejoin="round""#.to_owned(),
+                ] {
+                    assert!(root.contains(&want), "{need} {px}: the root lacks {want}");
+                }
+                assert!(!raw.contains("class="), "{need} {px}: a class");
+                let count = |s: &str| raw.matches(s).count();
+                assert_eq!(
+                    count("fill="),
+                    count(r#"fill="none""#),
+                    "{need} {px}: a fill"
+                );
+                assert_eq!(count("stroke="), 1, "{need} {px}: one stroke, the root's");
+                assert_eq!(count(r##"stroke="#ffffff""##), 1, "{need} {px}");
+                assert_eq!(count("#"), 1, "{need} {px}: another colour");
+                for no in ["currentColor", "style=", "color", "url("] {
+                    assert!(!raw.contains(no), "{need} {px}: {no}");
+                }
+                let out = inked(&f.bytes, "#123456");
+                let text = std::str::from_utf8(&out).unwrap();
+                assert!(text.contains(r##"stroke="#123456""##), "{need} {px}");
+                assert!(!text.to_ascii_lowercase().contains("#fff"), "{need} {px}");
+            }
+            for (px, size) in [(16.0, 16), (20.0, 16), (21.0, 24), (32.0, 24), (48.0, 24)] {
+                assert_eq!(set.file(need, px).unwrap().0, size, "{need} {px}");
+            }
         }
     }
 
@@ -802,43 +760,13 @@ mod tests {
         assert_eq!(&whitened(b"nope")[..], b"nope");
     }
 
-    /// Luna, Aero and Aqua have a colour picture for every need, at 16, 24, 32 and 48 pixels, but
-    /// the title bar's four, which their title bars draw themselves; Hide to the notification area
-    /// is a picture.
-    #[test]
-    fn era_sets_have_every_picture_but_the_title_bars_glyphs() {
-        for name in ["luna", "aero", "aqua"] {
-            let set = set(name).unwrap();
-            for (need, _) in NEEDS {
-                let bar = matches!(
-                    *need,
-                    "ui-minimize" | "ui-maximize" | "ui-restore" | "ui-close"
-                );
-                for px in SIZES {
-                    let f = set.files.get(&((*need).to_owned(), px));
-                    assert_eq!(f.is_none(), bar, "{name} {need} {px}");
-                    let Some(f) = f else { continue };
-                    assert!(f.png && !f.mono, "{name} {need} {px}");
-                    let img = image::load_from_memory(&f.bytes).unwrap();
-                    assert_eq!((img.width(), img.height()), (px, px), "{name} {need}");
-                }
-            }
-            // Each picture up to a pixel over its size on screen, the next one above.
-            for (px, size) in [(16.0, 16), (17.0, 16), (18.0, 24), (26.0, 32), (34.0, 32)] {
-                assert_eq!(set.file("tb-resume", px).unwrap().0, size, "{name} {px}");
-            }
-            assert_eq!(set.file("tb-resume", 40.0).unwrap().0, 48);
-            assert_eq!(set.file("tb-resume", 96.0).unwrap().0, 48);
-            assert!(set.file("ui-close", 16.0).is_none());
-        }
-    }
-
     /// Every file in a built-in set's folders is named for a need MDM asks for, and is in the
     /// program (the lists above match the folders).
     #[test]
     fn every_built_in_icon_file_is_a_need_and_carried() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/themes");
-        for name in ["metro", "adwaita", "breeze", "luna", "aero", "aqua"] {
+        {
+            let name = "graphite";
             let carried = set(name).unwrap();
             let mut n = 0;
             for px in SIZES {
@@ -850,10 +778,7 @@ mod tests {
                     let file = entry.unwrap().file_name().into_string().unwrap();
                     let stem = file.rsplit_once('.').unwrap().0;
                     let need = stem.strip_suffix("-symbolic").unwrap_or(stem);
-                    assert!(
-                        NEEDS.iter().any(|(id, _)| *id == need),
-                        "{name}/{px}/{file}: no such need"
-                    );
+                    assert!(known(need), "{name}/{px}/{file}: no such need or extra");
                     assert!(
                         carried.files.contains_key(&(need.to_owned(), px)),
                         "{name}/{px}/{file} isn't in the program"
@@ -865,12 +790,37 @@ mod tests {
         }
     }
 
-    /// Every built-in set carries the sizes the loader asks for up to a screen at 300 %: a need
+    /// The extras (plan 03b) have ids of their own, none a need's, and Graphite's set carries
+    /// them, at 16 and 24 pixels.
+    #[test]
+    fn only_graphite_carries_the_extras() {
+        let mut ids: Vec<&str> = NEEDS.iter().chain(EXTRAS).map(|(n, _)| *n).collect();
+        ids.sort_unstable();
+        let n = ids.len();
+        ids.dedup();
+        assert_eq!(ids.len(), n, "an id twice");
+        assert_eq!(EXTRAS.len(), 37);
+        let graphite = set("graphite").unwrap();
+        for (extra, _) in EXTRAS {
+            assert!(extra.starts_with("gx-"), "{extra}");
+            for px in [16u32, 24] {
+                assert!(
+                    graphite.files.contains_key(&((*extra).to_owned(), px)),
+                    "graphite lacks {extra} at {px}"
+                );
+            }
+        }
+    }
+
+    /// The built-in set carries the sizes the loader asks for up to a screen at 300 %: a need
     /// whose largest file is a picture has it at 48 pixels and at every size between (a
     /// drawing's largest scales cleanly), so no picture is stretched.
     #[test]
     fn pictures_come_in_every_size_the_loader_asks_for() {
-        for name in ["metro", "adwaita", "breeze", "luna", "aero", "aqua"] {
+        // Graphite's are all drawings today (graphite_has_every_need_in_one_colour checks its
+        // sizes); listed so a picture added to it later is held to the same rule.
+        {
+            let name = "graphite";
             let set = set(name).unwrap();
             for (need, _) in NEEDS {
                 let sizes: Vec<u32> = SIZES
@@ -899,81 +849,6 @@ mod tests {
                 }
             }
         }
-    }
-
-    /// Adwaita has every need at both sizes: colour pictures at 16 pixels and drawings above,
-    /// its one-colour (symbolic) icons made white to be tinted, the others keeping their colours.
-    #[test]
-    fn adwaita_mixes_pictures_and_symbolic_icons() {
-        let adw = set("adwaita").unwrap();
-        for (need, _) in NEEDS {
-            for px in [16u32, 24] {
-                let f = adw.files.get(&((*need).to_owned(), px));
-                assert!(f.is_some(), "adwaita lacks {need} at {px}");
-                let f = f.unwrap();
-                if f.png {
-                    assert!(f.bytes.starts_with(b"\x89PNG"), "{need} {px}");
-                    // MDM's own Hide to the notification area: one colour, as GNOME's toolbar.
-                    assert_eq!(f.mono, *need == "ui-to-tray", "{need} {px}");
-                    if f.mono {
-                        assert_white(&f.bytes, need);
-                    }
-                    continue;
-                }
-                let text = std::str::from_utf8(&f.bytes).unwrap();
-                assert!(text.contains("<svg"), "{need} {px}");
-                if f.mono {
-                    let inked = inked(&f.bytes, "#123456");
-                    let text = std::str::from_utf8(&inked).unwrap();
-                    assert!(!text.contains("#2e3436"), "{need} {px} keeps GNOME's ink");
-                    assert!(text.contains("#123456"), "{need} {px}");
-                }
-            }
-        }
-        let (_, f) = adw.file("tb-resume", 16.0).unwrap();
-        assert!(f.mono);
-        let (_, f) = adw.file("cat-music", 16.0).unwrap();
-        assert!(f.png && !f.mono);
-        // A 16-pixel picture at 16 pixels; at 32 (twice the size), the drawing.
-        let (_, f) = adw.file("cat-music", 32.0).unwrap();
-        assert!(!f.png && !f.mono);
-        // The scale between: at 18 pixels the drawing too, sharper than the picture stretched.
-        assert!(!adw.file("ft-audio", 18.0).unwrap().1.png);
-        // Our own PDF and torrent file keep their colours.
-        assert!(!adw.file("ft-pdf", 16.0).unwrap().1.mono);
-        assert!(!adw.file("ft-torrent", 32.0).unwrap().1.mono);
-    }
-
-    /// Breeze has every need: KDE's one-colour icons (ColorScheme-Text) take the ink and keep
-    /// their highlight and warning colours; its colour icons and our PDF keep theirs.
-    #[test]
-    fn breeze_has_every_need_and_keeps_its_colours() {
-        let set = set("breeze").unwrap();
-        for (need, _) in NEEDS {
-            assert!(set.has(need), "breeze lacks {need}");
-            for px in [16.0, 32.0] {
-                let (_, f) = set.file(need, px).unwrap();
-                // MDM's own: the PDF in colour, Hide to the notification area in one colour.
-                if f.png {
-                    assert!(matches!(*need, "ft-pdf" | "ui-to-tray"), "{need}");
-                    assert_eq!(f.mono, *need == "ui-to-tray", "{need}");
-                    continue;
-                }
-                let text = std::str::from_utf8(&f.bytes).unwrap();
-                assert!(text.contains("<svg"), "{need}");
-                assert_eq!(f.mono, text.contains("ColorScheme-Text"), "{need} {px}");
-                if f.mono {
-                    let inked = inked(&f.bytes, "#123456");
-                    let text = std::str::from_utf8(&inked).unwrap();
-                    assert!(!text.contains("#232629"), "{need} keeps KDE's ink");
-                }
-            }
-        }
-        // st-error's red stays red.
-        let (_, f) = set.file("st-error", 16.0).unwrap();
-        let text = String::from_utf8(inked(&f.bytes, "#123456").to_vec()).unwrap();
-        assert!(text.contains("#da4453"), "{text}");
-        assert!(!set.file("ft-pdf", 16.0).unwrap().1.mono);
     }
 
     /// A one-colour icon takes the ink in its greys (GNOME's #2e3436, KDE's ColorScheme-Text)
@@ -1023,9 +898,27 @@ mod tests {
 
     #[test]
     fn file_types_map_to_needs() {
-        assert_eq!(file_need("x-office-document", Some("pdf")), "ft-pdf");
-        assert_eq!(file_need("text-x-generic", Some("torrent")), "ft-torrent");
-        assert_eq!(file_need("package-x-generic", Some("zip")), "ft-archive");
-        assert_eq!(file_need("folder", None), "cat-folder");
+        for (ext, need) in [
+            (Some("pdf"), "ft-pdf"),
+            (Some("torrent"), "ft-torrent"),
+            (Some("zip"), "ft-archive"),
+            (Some("ts"), "ft-video"),
+            (Some("flac"), "ft-audio"),
+            (Some("svg"), "ft-image"),
+            (Some("otg"), "ft-image"),
+            (Some("exe"), "ft-executable"),
+            (Some("iso"), "ft-disk-image"),
+            (Some("dotx"), "ft-document"),
+            (Some("xltx"), "ft-spreadsheet"),
+            (Some("potx"), "ft-presentation"),
+            (Some("py"), "ft-code"),
+            (Some("ttf"), "ft-font"),
+            (Some("pem"), "ft-generic"),
+            (Some("ics"), "ft-generic"),
+            (Some("xyz"), "ft-text"),
+            (None, "ft-text"),
+        ] {
+            assert_eq!(file_need(ext), need, "{ext:?}");
+        }
     }
 }

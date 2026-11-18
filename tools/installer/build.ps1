@@ -1,8 +1,8 @@
 # Builds the Windows release into target/dist/:
-#   MisterDownloadManager-<version>-setup.exe     the installer (tools/installer/mdm.iss)
-#   MisterDownloadManager-<version>-portable.zip  the same programs with a `data` folder (portable
-#                                                 mode: settings beside the exe, no registry)
-#   MisterDownloadManager-<version>-x64.zip       the same programs, data in %APPDATA% as installed
+#   Grabbit-<version>-setup.exe     the installer (tools/installer/mdm.iss)
+#   Grabbit-<version>-portable.zip  the same programs with a `data` folder (portable
+#                                   mode: settings beside the exe, no registry)
+#   Grabbit-<version>-x64.zip       the same programs, data in %APPDATA% as installed
 #   SHA256SUMS.txt
 # Needs Inno Setup 6 (ISCC.exe on PATH, in $env:ISCC, or in its default folders).
 # Code signing: set $env:MDM_SIGN_COMMAND to a signtool command line with $f for the file, e.g.
@@ -22,20 +22,19 @@ if (-not $version) { throw "no version in Cargo.toml" }
 if (-not $NoBuild) {
   # The build machine's paths out of the programs (#25): panic locations and debug info say
   # "cargo\..." for cargo's folder and "mdm\..." for this checkout (shorter, and no user name).
-  # Encoded flags, as those paths may hold spaces.
+  # Encoded flags, as those paths may hold spaces. They replace .cargo/config.toml's, so its
+  # C runtime built into the programs (#785: no VCRUNTIME140.dll from Windows) is repeated here.
   $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE ".cargo" }
-  $env:CARGO_ENCODED_RUSTFLAGS = "--remap-path-prefix=$cargoHome=cargo" + [char]0x1f + "--remap-path-prefix=$root=mdm"
+  $env:CARGO_ENCODED_RUSTFLAGS = "--remap-path-prefix=$cargoHome=cargo" + [char]0x1f + "--remap-path-prefix=$root=mdm" + [char]0x1f + "-Ctarget-feature=+crt-static"
   try {
-    & cargo build --release -p mdm-app -p mdm-nmhost -p mdm-cli -p mdm-mcp
+    # This checkout's workspace, whatever the current folder.
+    & cargo build --release --manifest-path (Join-Path $root "Cargo.toml") -p grabbit-app -p grabbit-nmhost -p grabbit-cli -p grabbit-mcp
     if ($LASTEXITCODE) { throw "cargo build failed" }
   } finally {
     Remove-Item Env:CARGO_ENCODED_RUSTFLAGS
   }
 }
 & (Join-Path $root "tools\extension\pack.ps1") | Out-Null
-
-# The installer's languages (tools/installer/languages.py writes them; committed, so no key needed).
-if (-not (Test-Path (Join-Path $PSScriptRoot "languages.iss"))) { throw "run python tools/installer/languages.py first" }
 
 $iscc = @($env:ISCC, (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source,
   "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
@@ -55,7 +54,7 @@ function New-Zip([string]$name, [bool]$portable) {
   $stage = Join-Path $dist "stage\$name"
   if (Test-Path $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
   New-Item -ItemType Directory -Force $stage | Out-Null
-  foreach ($exe in "misterdownloadmanager.exe", "misterdownloadmanager-nmhost.exe", "misterdownloadmanager-cli.exe", "misterdownloadmanager-mcp.exe") {
+  foreach ($exe in "grabbit.exe", "grabbit-nmhost.exe", "grabbit-cli.exe", "grabbit-mcp.exe") {
     Copy-Item (Join-Path $bin $exe) $stage
   }
   New-Item -ItemType Directory -Force (Join-Path $stage "extension") | Out-Null
@@ -66,7 +65,7 @@ function New-Zip([string]$name, [bool]$portable) {
   if ($portable) {
     New-Item -ItemType Directory -Force (Join-Path $stage "data") | Out-Null
     Set-Content -Encoding utf8 (Join-Path $stage "data\README.txt") @"
-This folder makes Mister Download Manager portable: the download list and settings are kept
+This folder makes Grabbit portable: the download list and settings are kept
 here instead of in your profile, and nothing is written to the registry. Delete the folder to
 use the profile instead. Browser integration needs the installer.
 "@
@@ -96,11 +95,11 @@ use the profile instead. Browser integration needs the installer.
   }
 }
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
-New-Zip "MisterDownloadManager-$version-portable" $true
-New-Zip "MisterDownloadManager-$version-x64" $false
+New-Zip "Grabbit-$version-portable" $true
+New-Zip "Grabbit-$version-x64" $false
 Remove-Item -LiteralPath (Join-Path $dist "stage") -Recurse -Force
 
-$files = Get-ChildItem $dist -File | Where-Object { $_.Name -like "MisterDownloadManager-$version-*" }
+$files = Get-ChildItem $dist -File | Where-Object { $_.Name -like "Grabbit-$version-*" }
 $files | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name } |
   Set-Content -Encoding ascii (Join-Path $dist "SHA256SUMS.txt")
 $files | ForEach-Object { "{0}  {1:N1} MB" -f $_.Name, ($_.Length / 1MB) }

@@ -6,7 +6,7 @@ use chrono::{Datelike, Duration as Days, NaiveDate};
 use egui::{Color32, Pos2, Rect, Sense, Ui, pos2, vec2};
 
 use crate::chrome::{IconKey, ShellIcons};
-use crate::dialogs::{Outcome, window};
+use crate::dialogs::{Outcome, question, window};
 use crate::icons::Icon;
 use crate::model::{self, Item};
 use crate::queue::{Queue, TurnOff};
@@ -16,8 +16,8 @@ use crate::settings::Settings;
 // English pen, and a widget given a screen rect (from `r`) turns it back into its English rect
 // (`winui::rect` both ways) before laying out its inside.
 use crate::winui::{
-    self, ButtonKind, LIGHT_BG, LIGHT_DISABLED, LIGHT_PAGE, LIGHT_TEXT, LightTab, fill_l as fill,
-    r, text,
+    self, ButtonKind, FooterButton, FooterItem, LIGHT_BG, LIGHT_DISABLED, LIGHT_PAGE, LIGHT_TEXT,
+    LightTab, fill_l as fill, r, text,
 };
 
 /// What the app does for the Scheduler.
@@ -171,6 +171,27 @@ pub struct Scheduler {
 /// How much lower everything under "Start download at" sits than in IDM's window: the room for
 /// "Wake the computer to run this queue" and its note (#142).
 const DY: f32 = 40.0;
+/// The Scheduler's width, and where its footer starts (Graphite, plan 07e; the mock's 800 in
+/// plan 09): the queue list as before, New queue and Delete under it, the window's buttons in
+/// the footer. The right pane takes the width, which gives back the height of a weekday row
+/// (`DAYS_UP`), of a "when done" row (`DONE_UP`) and of the file-to-open's own row (`OPEN_UP`),
+/// so the window, with Graphite's drawn title bar, fits a 1080p screen at 200 %.
+const W: f32 = 800.0;
+/// The right edge of the pages' rows (627 at IDM's 651).
+const RIGHT: f32 = W - 24.0;
+/// How much wider the pages are than at IDM's 651.
+const DX: f32 = RIGHT - 627.0;
+/// The weekdays in two rows (four columns), not three.
+const DAYS_UP: f32 = 16.0;
+/// "Hang up modem" and "Exit … when done" on one row.
+const DONE_UP: f32 = 18.0;
+/// The file to open on its caption's row, not under it.
+const OPEN_UP: f32 = 25.0;
+const UP: f32 = DAYS_UP + DONE_UP + OPEN_UP;
+/// Under the pages' last rows, 4 less room than IDM's, so the window fits Windows 11's 48 px
+/// taskbar too (the rows don't move).
+const PAGE_UP: f32 = 4.0;
+const BODY: f32 = 432.0 + DY - UP - PAGE_UP;
 
 // i18n: checkbox in the Scheduler, under the start time: wake the computer from sleep shortly before the queue starts, and keep it awake while the queue runs
 const WAKE_LABEL: &str = crate::i18n::mark("Wake the computer to run this queue");
@@ -185,6 +206,25 @@ fn queue_name(n: usize) -> String {
         crate::i18n::t("Queue # {n}"),
         &[("n", &crate::i18n::integer(n as u64))],
     )
+}
+
+/// Whether `name` is in use: as a queue's stored name or as shown (a built-in queue's in the
+/// interface's language), whatever the case.
+fn name_taken(queues: &[Queue], name: &str) -> bool {
+    let name = name.trim().to_lowercase();
+    queues
+        .iter()
+        .any(|q| q.name.to_lowercase() == name || crate::i18n::t(&q.name).to_lowercase() == name)
+}
+
+/// The name proposed for a new queue: the next number, or the first one after it no queue has
+/// (#1237: with "Queue # 3" deleted and "Queue # 4" kept, the next was "Queue # 4" again, and OK
+/// stayed greyed until the name was changed).
+fn free_queue_name(queues: &[Queue]) -> String {
+    (queues.len() + 1..)
+        .map(queue_name)
+        .find(|n| !name_taken(queues, n))
+        .unwrap_or_default()
 }
 
 impl Scheduler {
@@ -226,9 +266,15 @@ impl Scheduler {
         self.files_rows.selected = None;
     }
 
+    /// Show the Download limits page (`/show scheduler:limits`, the screenshots').
+    pub fn show_limits(&mut self) {
+        self.selected = self.queues.len();
+        self.files_rows.selected = None;
+    }
+
     /// Ask for a new queue's name (Create new queue in a right-click menu).
     pub fn new_queue(&mut self) {
-        self.naming = Some(queue_name(self.queues.len() + 1));
+        self.naming = Some(free_queue_name(&self.queues));
         self.files_rows.selected = None;
     }
 
@@ -302,7 +348,7 @@ impl Scheduler {
             "scheduler",
             // i18n: noun: the tool that starts and stops queues on time
             "Scheduler",
-            [651.0, 465.0 + DY],
+            [W, BODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
             |ui, o| self.body(ui, o, icons, items, running, wake_error, actions, naming),
@@ -364,28 +410,21 @@ impl Scheduler {
             crate::i18n::t("Queues"),
             LIGHT_TEXT(),
         );
-        let tree = r(o, 11.0, 44.0, 173.0, 379.0 + DY);
+        // The queue list, and under it the queue's own buttons (New queue, Delete), as wide as
+        // their labels need, sharing the list's width.
+        let buttons_y = BODY - 12.0 - winui::CONTROL_H;
+        let tree = r(o, 11.0, 44.0, 173.0, buttons_y - 8.0 - 44.0);
         let delete_key = self.tree(ui, icons, tree);
-        // The bottom row (the queue's buttons under the tree, the window's beside it), each as
-        // wide as its label in this language (#192): a longer one moves its neighbours along.
-        let row = winui::button_row(
+        let row = winui::button_row_from_left(
             &ui.painter().clone(),
-            &[
-                ("&New queue", 21.0, 73.0),
-                ("&Delete", 102.0, 73.0),
-                ("&Start now", 216.0, 73.0),
-                ("S&top", 297.0, 73.0),
-                ("&Help", 390.0, 73.0),
-                ("&Apply", 484.0, 73.0),
-                ("&Close", 565.0, 73.0),
-            ],
+            &[("&New queue", 11.0, 84.0), ("&Delete", 103.0, 81.0)],
             8.0,
-            21.0,
-            200.0,
+            184.0,
+            173.0,
         );
         let new_queue = winui::button_light(
             ui,
-            r(o, row[0].0, 432.0 + DY, row[0].1, 21.0),
+            r(o, row[0].0, buttons_y, row[0].1, winui::CONTROL_H),
             "&New queue",
             ButtonKind::Normal,
             false,
@@ -394,7 +433,7 @@ impl Scheduler {
         let deletable = self.selected >= 2 && self.selected < self.queues.len();
         let delete = winui::button_light(
             ui,
-            r(o, row[1].0, 432.0 + DY, row[1].1, 21.0),
+            r(o, row[1].0, buttons_y, row[1].1, winui::CONTROL_H),
             // i18n: verb: delete the queue
             "&Delete",
             if deletable {
@@ -405,15 +444,8 @@ impl Scheduler {
             false,
         )
         .clicked();
-        // The line between the panes runs down beside the buttons; it stops above them where a
-        // longer label takes a button across it.
-        let across = row[1].0 + row[1].1 > 197.0 - 4.0 || row[2].0 < 197.0 + 4.0;
-        let line_h = if across {
-            432.0 + DY - 6.0 - 11.0
-        } else {
-            442.0 + DY
-        };
-        winui::etched_v(&p, o.x + 197.0, o.y + 11.0, line_h);
+        // The line between the panes runs down to the footer.
+        winui::etched_v(&p, o.x + 197.0, o.y + 11.0, BODY - 22.0);
 
         // ---- right pane ---------------------------------------------------------------
         let on_queue = self.selected < self.queues.len();
@@ -423,11 +455,11 @@ impl Scheduler {
             let w = winui::text_width(&p, &name);
             let (rect, cut) = winui::text_fit(
                 &p,
-                (o.x + 412.0 - w / 2.0).max(o.x + 203.0).round(),
+                (o.x + 412.0 + DX / 2.0 - w / 2.0).max(o.x + 203.0).round(),
                 o.y + 15.0,
                 &name,
                 LIGHT_TEXT(),
-                o.x + 640.0,
+                o.x + W - 11.0,
             );
             if cut {
                 winui::full_on_hover(ui, rect, "sched-header", &name);
@@ -446,9 +478,14 @@ impl Scheduler {
                 },
             ];
             let current = if self.tab == Tab::Schedule { 0 } else { 1 };
-            if let Some(t) =
-                winui::tabs_light(ui, o, r(o, 213.0, 23.0, 428.0, 403.0 + DY), &tabs, current)
-                    .or(winui::tab_keys(ui, 2, current))
+            if let Some(t) = winui::tabs_light(
+                ui,
+                o,
+                r(o, 213.0, 23.0, 428.0 + DX, 403.0 + DY - UP - PAGE_UP),
+                &tabs,
+                current,
+            )
+            .or(winui::tab_keys(ui, 2, current))
             {
                 self.tab = if t == 0 { Tab::Schedule } else { Tab::Files };
             }
@@ -462,43 +499,70 @@ impl Scheduler {
 
         // ---- bottom buttons -----------------------------------------------------------
         let is_running = on_queue && running.contains(&self.queues[self.selected].name);
-        let kind = |on: bool| {
-            if on {
-                ButtonKind::Normal
-            } else {
-                ButtonKind::Disabled
-            }
+        let kind = |on: bool, normal: ButtonKind| {
+            if on { normal } else { ButtonKind::Disabled }
         };
-        let btn = |ui: &mut Ui, (x, w): (f32, f32), label: &str, k: ButtonKind| {
-            winui::button_light(ui, r(o, x, 432.0 + DY, w, 21.0), label, k, false).clicked()
-        };
-        // i18n: verb: start the queue now
-        let start = btn(
-            ui,
-            row[2],
-            crate::i18n::mark("&Start now"),
-            kind(on_queue && !is_running),
-        );
-        // i18n: verb: stop the queue
-        let stop = btn(ui, row[3], crate::i18n::mark("S&top"), kind(is_running));
-        // i18n: noun: button that opens the help
-        if btn(ui, row[4], crate::i18n::mark("&Help"), ButtonKind::Normal) {
-            crate::help::open_page("queues-and-scheduler.md#the-scheduler-window");
-        }
         let dirty = {
             let (q, l) = self.state();
             (&q, &l) != (&self.applied.0, &self.applied.1)
         };
-        // i18n: verb: save the changes
-        let apply = btn(ui, row[5], crate::i18n::mark("&Apply"), kind(dirty));
-        // i18n: verb: close the window
-        let close = btn(ui, row[6], crate::i18n::mark("&Close"), ButtonKind::Normal);
+        // Escape first leaves a selected time or date field, then closes the window.
+        if !modal && self.focus.at.is_some() && winui::take_key(ui, egui::Key::Escape) {
+            self.focus.at = None;
+        }
+        // The footer: Stop at its start; Help (quiet), Apply, Close, and Start now last, the
+        // window's answer by look only: Enter presses nothing, as before. Tab and the access
+        // letters keep their order (Start now, Stop, Help, Apply, Close).
+        let pressed = winui::footer(
+            ui,
+            o,
+            W,
+            BODY,
+            &mut [
+                // i18n: verb: start the queue now
+                FooterItem::Button(
+                    FooterButton::new(
+                        "Start now",
+                        kind(on_queue && !is_running, ButtonKind::Default),
+                    )
+                    .primary()
+                    .mnemonic(0),
+                ),
+                // i18n: verb: stop the queue
+                FooterItem::Button(
+                    FooterButton::new("Stop", kind(is_running, ButtonKind::Normal))
+                        .leading()
+                        .mnemonic(1),
+                ),
+                // i18n: noun: button that opens the help
+                FooterItem::Button(FooterButton::new("Help", ButtonKind::Ghost).mnemonic(0)),
+                // i18n: verb: save the changes
+                FooterItem::Button(
+                    FooterButton::new("Apply", kind(dirty, ButtonKind::Normal)).mnemonic(0),
+                ),
+                // i18n: verb: close the window
+                FooterItem::Button(
+                    FooterButton::new("Close", ButtonKind::Normal)
+                        .mnemonic(0)
+                        .escape(true),
+                ),
+            ],
+        );
+        let (start, stop, apply, close) = (
+            pressed == Some(0),
+            pressed == Some(1),
+            pressed == Some(3),
+            pressed == Some(4),
+        );
+        if pressed == Some(2) {
+            crate::help::open_page("queues-and-scheduler.md#the-scheduler-window");
+        }
 
         if modal {
             return Outcome::Open;
         }
         if new_queue {
-            self.naming = Some(queue_name(self.queues.len() + 1));
+            self.new_queue();
         }
         if (delete || delete_key) && deletable {
             let name = crate::i18n::t(&self.queues[self.selected].name).to_owned();
@@ -522,12 +586,7 @@ impl Scheduler {
         if stop && on_queue {
             actions.push(Action::Stop(self.queues[self.selected].name.clone()));
         }
-        // Escape first leaves a selected time or date field, then closes the window.
-        if self.focus.at.is_some() && winui::take_key(ui, egui::Key::Escape) {
-            self.focus.at = None;
-        }
-        let escape = winui::escape_pressed(ui);
-        if close || escape {
+        if close {
             Outcome::Closed
         } else {
             Outcome::Open
@@ -553,15 +612,15 @@ impl Scheduler {
                 let (label, icon) = match queues.get(i) {
                     Some(q) => (
                         crate::i18n::t(q.name.as_str()),
-                        if q.sync { "folder_link" } else { "folder" },
+                        if q.sync { "gx-refresh" } else { "cat-queues" },
                     ),
-                    None => (crate::i18n::t(LIMITS_LABEL), "folder_delete"),
+                    None => (crate::i18n::t(LIMITS_LABEL), "gx-gauge"),
                 };
                 look.name = label.to_owned();
                 icons.paint_in(
                     ui,
                     clip,
-                    IconKey::Silk(icon),
+                    IconKey::Graphite(icon),
                     pos2(row.left() + 4.0, row.top()),
                 );
                 winui::fit(
@@ -606,15 +665,15 @@ impl Scheduler {
         let at = |x: f32, y: f32| o + vec2(x, y);
         winui::radio_light(ui, at(228.0, 51.0), !sync, "One-time downloading", !sync);
         winui::radio_light(ui, at(429.0, 51.0), sync, "Periodic synchronization", sync);
-        winui::etched_h(&p, o.x + 228.0, o.y + 71.0, 399.0);
+        winui::etched_h(&p, o.x + 228.0, o.y + 71.0, RIGHT - 228.0);
         winui::checkbox_light(
             ui,
             at(228.0, 79.0),
             &mut f.start_on_startup,
-            "Start download on Mister Download Manager startup",
+            "Start download on Grabbit startup",
             true,
         );
-        winui::etched_h(&p, o.x + 228.0, o.y + 99.0, 399.0);
+        winui::etched_h(&p, o.x + 228.0, o.y + 99.0, RIGHT - 228.0);
         // A box after a caption starts where IDM has it, or after a longer translated caption,
         // as far as the page allows (`last`: its rightmost start); the caption ends in "..."
         // before it when even that is not enough.
@@ -622,7 +681,7 @@ impl Scheduler {
             let end = glyph_x + 16.0 + winui::text_width(&p, crate::i18n::t(caption)).ceil() + 6.0;
             end.clamp(idm, last.max(idm))
         };
-        let start_x = after(228.0, "Start download at", 382.0, 627.0 - 89.0);
+        let start_x = after(228.0, "Start download at", 382.0, RIGHT - 89.0);
         winui::checkbox_light_until(
             ui,
             at(228.0, 114.0),
@@ -640,7 +699,7 @@ impl Scheduler {
             "start-at",
             &mut self.focus,
         );
-        let date_x = after(235.0, "Once at", 337.0, 627.0 - 188.0);
+        let date_x = after(235.0, "Once at", 337.0, RIGHT - 188.0);
         let once = winui::radio_light_until(
             ui,
             at(235.0, 144.0),
@@ -663,7 +722,7 @@ impl Scheduler {
         // The week's columns move right together after a longer "Daily", while the last one
         // still fits the page.
         let last_day = 16.0 + winui::text_width(&p, crate::i18n::t(WEEKDAYS[6])).ceil() + 4.0;
-        let shift = after(235.0, "Daily", 310.0, 627.0 - last_day - 221.0) - 310.0;
+        let shift = after(235.0, "Daily", 310.0, RIGHT - last_day - 332.0) - 310.0;
         // i18n: adverb: every day (the other choice is once, on a date)
         let daily = winui::radio_light_until(
             ui,
@@ -680,20 +739,22 @@ impl Scheduler {
         if let Some(i) = winui::radio_keys(ui, &[once, daily]) {
             f.once = i == 0;
         }
+        // Four columns of two rows at 800 (three of three at IDM's 651), in the same order.
         let days = [
             (WEEKDAYS[0], 310.0, 173.0),
             (WEEKDAYS[1], 310.0, 189.0),
-            (WEEKDAYS[2], 310.0, 205.0),
-            (WEEKDAYS[3], 420.0, 173.0),
-            (WEEKDAYS[4], 420.0, 189.0),
-            (WEEKDAYS[5], 420.0, 205.0),
-            (WEEKDAYS[6], 531.0, 173.0),
+            (WEEKDAYS[2], 420.0, 173.0),
+            (WEEKDAYS[3], 420.0, 189.0),
+            (WEEKDAYS[4], 531.0, 173.0),
+            (WEEKDAYS[5], 531.0, 189.0),
+            (WEEKDAYS[6], 642.0, 173.0),
         ];
         for (i, (day, x, y)) in days.iter().enumerate() {
             // A long day name stops before the next column.
             let next = match *x as i32 {
                 310 => Some(o.x + 420.0 + shift),
                 420 => Some(o.x + 531.0 + shift),
+                531 => Some(o.x + 642.0 + shift),
                 _ => None,
             };
             winui::checkbox_light_until(
@@ -718,7 +779,7 @@ impl Scheduler {
             } else {
                 (
                     !f.days.iter().any(|d| *d),
-                    r(o, 306.0 + shift, 169.0, 321.0 - shift, 54.0),
+                    r(o, 306.0 + shift, 169.0, RIGHT - 306.0 - shift, 38.0),
                     // i18n: tooltip on the Scheduler's weekdays when none is ticked
                     "No day is ticked: the queue will not start",
                 )
@@ -735,11 +796,14 @@ impl Scheduler {
         }
         self.wake_row(ui, o, wake_error);
         let f = &mut self.forms[self.selected];
-        winui::etched_h(&p, o.x + 229.0, o.y + 227.0 + DY, 398.0);
-        let stop_x = after(229.0, "Stop download at", 384.0, 627.0 - 89.0);
+        // Under the weekdays' two rows.
+        let dy = DY - DAYS_UP;
+        // The page's left column, as the rows above (IDM's 229 put these a point right of it).
+        winui::etched_h(&p, o.x + 228.0, o.y + 227.0 + dy, RIGHT - 228.0);
+        let stop_x = after(228.0, "Stop download at", 384.0, RIGHT - 89.0);
         winui::checkbox_light_until(
             ui,
-            at(229.0, 243.0 + DY),
+            at(228.0, 243.0 + dy),
             &mut f.stop_at_on,
             "Stop download at",
             true,
@@ -747,56 +811,64 @@ impl Scheduler {
         );
         time_picker(
             ui,
-            r(o, stop_x, 238.0 + DY, 89.0, 23.0),
+            r(o, stop_x, 238.0 + dy, 89.0, 23.0),
             &mut f.stop_at,
             f.stop_at_on,
             "stop-at",
             &mut self.focus,
         );
         // The caption stops before the box after it on the row (long translations are cut).
+        let retries_x = 541.0 + DX;
         winui::checkbox_light_until(
             ui,
-            at(229.0, 267.0 + DY),
+            at(228.0, 267.0 + dy),
             &mut f.retries_on,
             "Number of retries for each file if downloading failed :",
             true,
-            Some(o.x + 541.0),
+            Some(o.x + retries_x),
         );
+        // Centred on its check box's row, as the time box above is on Stop download at's.
         winui::number_field(
             ui,
-            r(o, 541.0, 260.0 + DY, 48.0, 23.0),
+            r(o, retries_x, 262.0 + dy, 48.0, 23.0),
             &mut f.retries,
             1,
             9999,
             f.retries_on,
             LIGHT_PAGE(),
         );
-        winui::etched_h(&p, o.x + 229.0, o.y + 290.0 + DY, 398.0);
-        winui::checkbox_light(
+        winui::etched_h(&p, o.x + 228.0, o.y + 288.0 + dy, RIGHT - 228.0);
+        // The box after its caption, on its row (under it at IDM's 651), ending where it did.
+        let open_x = after(
+            228.0,
+            "Open the following file when done:",
+            228.0,
+            RIGHT - 43.0 - 120.0,
+        );
+        winui::checkbox_light_until(
             ui,
-            at(228.0, 300.0 + DY),
+            at(228.0, 299.0 + dy),
             &mut f.open_on,
             "Open the following file when done:",
             true,
+            Some(o.x + open_x),
         );
         winui::edit_light_on(
             ui,
-            r(o, 228.0, 318.0 + DY, 356.0, 23.0),
+            r(o, open_x, 294.0 + dy, RIGHT - 43.0 - open_x, 23.0),
             &mut f.open_file,
             f.open_on,
             false,
             LIGHT_PAGE(),
         );
-        let browse = winui::button_light(
+        // Graphite's browse button (plan 07: `gx-dots` on every "..."), as tall as its box.
+        let browse = winui::icon_only_button(
             ui,
-            r(o, 592.0, 319.0 + DY, 21.0, 21.0),
-            "...",
-            if f.open_on {
-                ButtonKind::Normal
-            } else {
-                ButtonKind::Disabled
-            },
-            false,
+            r(o, RIGHT - 35.0, 294.0 + dy, 23.0, 23.0),
+            "gx-dots",
+            // i18n: tooltip of the "..." after the Scheduler's file to open: choose the file
+            "Browse",
+            f.open_on,
         )
         .clicked();
         if browse && f.open_on {
@@ -808,31 +880,36 @@ impl Scheduler {
         if let Some(path) = winui::picked(ui.ctx(), "sched-open-file") {
             f.open_file = path.display().to_string();
         }
-        // Dial-up is hung up through Windows' rasdial; macOS and Linux have no such command.
-        let hang_up = winui::checkbox_light(
+        // Dial-up is hung up through Windows' rasdial. Exit beside it, halfway across the page
+        // (one row at 800, two at IDM's 651).
+        let dy = dy - OPEN_UP;
+        let exit_x = ((228.0 + RIGHT) / 2.0_f32).round();
+        winui::checkbox_light_until(
             ui,
-            at(228.0, 348.0 + DY),
+            at(228.0, 348.0 + dy),
             &mut f.hang_up,
             "Hang up modem when done",
-            cfg!(windows),
-        );
-        winui::why_disabled(hang_up, !cfg!(windows), crate::progress::NO_DIAL_UP);
-        winui::checkbox_light(
-            ui,
-            at(228.0, 366.0 + DY),
-            &mut f.exit,
-            "Exit Mister Download Manager when done",
             true,
+            Some(o.x + exit_x),
         );
+        winui::checkbox_light_until(
+            ui,
+            at(exit_x, 348.0 + dy),
+            &mut f.exit,
+            "Exit Grabbit when done",
+            true,
+            Some(o.x + RIGHT),
+        );
+        let dy = DY - UP;
         // The drop-down as wide as its choices in this language need (#192), widening to the
         // left (its right end kept), up to 8 px after the caption, which stays whole.
         let caption_end = winui::checkbox_caption_end(&p, 228.0, "Turn off computer when done");
         let turn_off_w =
-            winui::combo_fit_width(&p, &TurnOff::LABELS, 119.0, 627.0 - (caption_end + 8.0));
-        let turn_off_x = 627.0 - turn_off_w;
+            winui::combo_fit_width(&p, &TurnOff::LABELS, 119.0, RIGHT - (caption_end + 8.0));
+        let turn_off_x = RIGHT - turn_off_w;
         winui::checkbox_light_until(
             ui,
-            at(228.0, 384.0 + DY),
+            at(228.0, 384.0 + dy),
             &mut f.turn_off_on,
             "Turn off computer when done",
             true,
@@ -840,7 +917,7 @@ impl Scheduler {
         );
         if let Some(i) = winui::combo_light(
             ui,
-            r(o, turn_off_x, 383.0 + DY, turn_off_w, 21.0),
+            r(o, turn_off_x, 383.0 + dy, turn_off_w, 21.0),
             &TurnOff::LABELS,
             f.turn_off,
             f.turn_off_on,
@@ -850,7 +927,7 @@ impl Scheduler {
         }
         winui::checkbox_light(
             ui,
-            at(246.0, 402.0 + DY),
+            at(246.0, 402.0 + dy),
             &mut f.force,
             "Force processes to terminate",
             f.turn_off_on,
@@ -870,8 +947,13 @@ impl Scheduler {
         // Where waking can't be, the box shows it off (the setting is kept, for a data folder
         // carried to a system that can).
         let mut shown = f.wake && can;
-        let resp =
-            winui::checkbox_light(ui, o + vec2(228.0, 229.0), &mut shown, WAKE_LABEL, enabled);
+        let resp = winui::checkbox_light(
+            ui,
+            o + vec2(228.0, 229.0 - DAYS_UP),
+            &mut shown,
+            WAKE_LABEL,
+            enabled,
+        );
         if enabled {
             f.wake = shown;
         }
@@ -885,18 +967,12 @@ impl Scheduler {
         if enabled {
             resp.on_hover_text(crate::i18n::t(
                 // i18n: tooltip on the Scheduler's "Wake the computer to run this queue"
-                "The computer is woken a minute before the start time and kept awake while the queue runs. Mister Download Manager has to be running (it can wait in the notification area).",
+                "The computer is woken a minute before the start time and kept awake while the queue runs. Grabbit has to be running (it can wait in the notification area).",
             ));
         }
         // The line under it: a problem (in the error colour when it stops the wake), else when
         // the computer wakes.
         let (note, link, error): (String, Option<&str>, bool) = match &support {
-            Support::NeedsAdmin | Support::NoAlarm | Support::MacAdmin => (
-                crate::i18n::t(support_reason(&support).unwrap_or("")).to_owned(),
-                // i18n: link after why the computer can't be woken (Linux, macOS): opens the guide's page that shows how an administrator can allow it
-                (support != Support::NoAlarm).then_some(crate::i18n::mark("How to allow it")),
-                false,
-            ),
             _ if !(f.wake && f.start_at_on) => (String::new(), None, false),
             Support::TimersOff { .. } | Support::NotOnBattery => (
                 crate::i18n::t(support_reason(&support).unwrap_or("")).to_owned(),
@@ -919,12 +995,18 @@ impl Scheduler {
         if note.is_empty() {
             return;
         }
-        let (x, right, baseline) = (244.0, 627.0, 257.0);
+        let (x, right, baseline) = (244.0, RIGHT, 257.0 - DAYS_UP);
         let lw = link.map_or(0.0, |l| {
             winui::text_width(&p, crate::i18n::t(l)).ceil() + 8.0
         });
         let room = (right - x - lw).max(0.0);
-        let color = if error { winui::ERROR() } else { LIGHT_TEXT() };
+        // A hint (muted), as the mockup's wake line; a problem that stops the wake in the error
+        // colour.
+        let color = if error {
+            winui::ERROR()
+        } else {
+            winui::MUTED()
+        };
         winui::fit(
             ui,
             &p,
@@ -940,17 +1022,7 @@ impl Scheduler {
         };
         let end = x + winui::text_width(&p, &note).ceil().min(room) + 8.0;
         if winui::link(ui, &p, o.x + end, o.y + baseline, l, "sched-wake-link") {
-            match support {
-                #[cfg(windows)]
-                Support::TimersOff { .. } | Support::NotOnBattery => {
-                    crate::win32::open_power_options()
-                }
-                // The guide's section on it (never from an off-screen test run).
-                _ if !crate::offscreen() => crate::help::open_page(
-                    "queues-and-scheduler.md#wake-the-computer-to-run-a-queue",
-                ),
-                _ => {}
-            }
+            crate::win32::open_power_options()
         }
     }
 
@@ -986,23 +1058,24 @@ impl Scheduler {
         );
 
         // The queue's files: File Name, Size, Status, Time left.
-        let list = r(o, 229.0, 82.0, 396.0, 294.0 + DY);
+        let list = r(o, 229.0, 82.0, 396.0 + DX, 294.0 + DY - UP);
         crate::options::list_frame(&p, list);
         fill(
             &p,
             o.x + 230.0,
             o.y + 83.0,
-            o.x + 624.0,
+            o.x + 624.0 + DX,
             o.y + 106.0,
             winui::LIST_HEADER(),
         );
+        // The name takes the width the pages gained.
         let cols = [
-            (crate::i18n::mark("File Name"), 230.0, 421.0),
+            (crate::i18n::mark("File Name"), 230.0, 421.0 + DX),
             // i18n: column title: the file's size
-            (crate::i18n::mark("Size"), 421.0, 488.0),
+            (crate::i18n::mark("Size"), 421.0 + DX, 488.0 + DX),
             // i18n: column title: the download's state
-            (crate::i18n::mark("Status"), 488.0, 540.0),
-            (crate::i18n::mark("Time left"), 540.0, 607.0),
+            (crate::i18n::mark("Status"), 488.0 + DX, 540.0 + DX),
+            (crate::i18n::mark("Time left"), 540.0 + DX, 607.0 + DX),
         ];
         let grid = winui::GRID();
         for (title, x0, x1) in cols {
@@ -1018,7 +1091,10 @@ impl Scheduler {
             );
         }
         // The rows: the shared row list under the header (its frame on the list's).
-        let body = Rect::from_min_max(o + vec2(230.0, 108.0), o + vec2(624.0, 375.0 + DY));
+        let body = Rect::from_min_max(
+            o + vec2(230.0, 108.0),
+            o + vec2(624.0 + DX, 375.0 + DY - UP),
+        );
         let ids = self.queues[self.selected].items.clone();
         // Looked up once a frame (a long queue in a long list was slow to draw).
         let by_id: std::collections::HashMap<u64, &Item> =
@@ -1121,7 +1197,7 @@ impl Scheduler {
             ),
         ];
         for (icon, x, enabled, tip) in buttons {
-            let rc = r(o, x, 387.0 + DY, 19.0, 21.0);
+            let rc = r(o, x, 387.0 + DY - UP, 19.0, 21.0);
             let clicked = winui::icon_button_light(ui, rc, icon, enabled, tip).clicked()
                 || (icon == "cross" && delete_key);
             // English, as the icon and its wash take it.
@@ -1132,7 +1208,7 @@ impl Scheduler {
                 "arrow_down" => "misc-down",
                 _ => "misc-remove",
             };
-            icons.paint(ui, IconKey::Themed(need, icon), img);
+            icons.paint(ui, IconKey::Themed(need), img);
             if !enabled {
                 // Disabled: wash the icon out.
                 fill(&p, img.x, img.y, img.x + 15.0, img.y + 15.0, {
@@ -1232,38 +1308,46 @@ impl Scheduler {
         let Some(mut name) = self.naming.take() else {
             return;
         };
-        // The names in use, as stored and as shown (a built-in queue's in the interface's
-        // language).
-        let names: Vec<String> = self
-            .queues
-            .iter()
-            .flat_map(|q| [q.name.clone(), crate::i18n::t(&q.name).to_owned()])
-            .collect();
-        let outcome = window(
+        let queues = &self.queues;
+        // The mockup's layout: the sentence, the name's box, the reason it can't be used, the
+        // footer.
+        const QW: f32 = 400.0;
+        const QBODY: f32 = 116.0;
+        let e = winui::EDGE;
+        // A question, as Delete's: above the Scheduler and taking the focus. A plain window
+        // opened with the Scheduler (Create new queue in a right-click menu) went behind it,
+        // where nobody saw it, and the Scheduler waits for it (upstream issue 1237); so did one
+        // the Scheduler was clicked over.
+        let outcome = question(
             ctx,
             "queue-name",
             "Enter queue name",
-            [279.0, 120.0],
+            [QW, QBODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
                 text(
                     &p,
-                    o.x + 11.0,
-                    o.y + 20.0,
+                    o.x + e,
+                    o.y + 29.0,
                     crate::i18n::t("Enter a name for the new queue that will be"),
                     LIGHT_TEXT(),
                 );
                 text(
                     &p,
-                    o.x + 11.0,
-                    o.y + 33.0,
+                    o.x + e,
+                    o.y + 45.0,
                     crate::i18n::t("displayed in the list of queues"),
                     LIGHT_TEXT(),
                 );
-                let edit =
-                    winui::edit_light(ui, r(o, 11.0, 46.0, 258.0, 23.0), &mut name, true, false);
+                let edit = winui::edit_light(
+                    ui,
+                    r(o, e, 56.0, QW - 2.0 * e, winui::CONTROL_H),
+                    &mut name,
+                    true,
+                    false,
+                );
                 if !ui.data(|d| {
                     d.get_temp::<bool>(egui::Id::unique("queue-name-focused"))
                         .unwrap_or(false)
@@ -1276,51 +1360,52 @@ impl Scheduler {
                 let why = if typed.is_empty() {
                     // i18n: why OK is greyed when naming a new queue
                     Some("Type the queue's name")
-                } else if names
-                    .iter()
-                    .any(|n| n.to_lowercase() == typed.to_lowercase())
-                {
+                } else if name_taken(queues, typed) {
                     // i18n: why OK is greyed when naming a new queue
                     Some("There is already a queue with this name")
                 } else {
                     None
                 };
-                let ok = winui::button_light(
-                    ui,
-                    r(o, 55.0, 87.0, 73.0, 21.0),
-                    "OK",
-                    if why.is_some() {
-                        ButtonKind::Disabled
-                    } else {
-                        ButtonKind::Default
-                    },
-                    false,
-                );
-                let ok = winui::why_disabled(ok, why.is_some(), why.unwrap_or("")).clicked()
-                    && why.is_none();
                 if let Some(w) = why.filter(|_| !typed.is_empty()) {
                     winui::fit(
                         ui,
                         &p,
-                        o.x + 11.0,
-                        o.y + 80.0,
+                        o.x + e,
+                        o.y + 104.0,
                         crate::i18n::t(w),
                         winui::ERROR(),
-                        o.x + 269.0,
+                        o.x + QW - e,
                         "queue-name-taken",
                     );
                 }
-                let cancel = winui::button_light(
+                // Enter OK (while the name can be used), Escape Cancel, as before.
+                let pressed = winui::footer(
                     ui,
-                    r(o, 148.0, 87.0, 73.0, 21.0),
-                    "Cancel",
-                    ButtonKind::Normal,
-                    false,
-                )
-                .clicked();
-                if cancel || winui::escape_pressed(ui) {
+                    o,
+                    QW,
+                    QBODY,
+                    &mut [
+                        FooterItem::Button(
+                            FooterButton::new(
+                                "OK",
+                                if why.is_some() {
+                                    ButtonKind::Disabled
+                                } else {
+                                    ButtonKind::Default
+                                },
+                            )
+                            .primary()
+                            .enter(true)
+                            .tip(why.is_some(), why.unwrap_or("")),
+                        ),
+                        FooterItem::Button(
+                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                        ),
+                    ],
+                );
+                if pressed == Some(1) {
                     Outcome::Closed
-                } else if ok || (why.is_none() && winui::enter_pressed(ui)) {
+                } else if pressed == Some(0) && why.is_none() {
                     Outcome::Done(())
                 } else {
                     Outcome::Open
@@ -1331,11 +1416,7 @@ impl Scheduler {
             Outcome::Open => self.naming = Some(name),
             Outcome::Done(()) => {
                 let name = name.trim();
-                let taken = self
-                    .queues
-                    .iter()
-                    .any(|q| q.name.to_lowercase() == name.to_lowercase());
-                if name.is_empty() || taken {
+                if name.is_empty() || name_taken(&self.queues, name) {
                     self.naming = Some(name.to_owned()); // keep asking
                 } else {
                     let q = Queue::new(name, false);
@@ -1369,18 +1450,6 @@ fn support_reason(s: &crate::wake::Support) -> Option<&'static str> {
         Support::NotOnBattery => {
             // i18n: the Scheduler, under "Wake the computer to run this queue" (Windows): "Allow wake timers" is on when plugged in, off on battery
             crate::i18n::mark("Windows allows wake timers only while plugged in")
-        }
-        Support::NeedsAdmin => {
-            // i18n: the Scheduler, under "Wake the computer to run this queue" (Linux): the computer's wake alarm can be set by an administrator only
-            crate::i18n::mark("Only an administrator can allow this")
-        }
-        Support::NoAlarm => {
-            // i18n: the Scheduler, under "Wake the computer to run this queue" (Linux): the computer has no clock chip with a wake alarm that Linux shows
-            crate::i18n::mark("This computer has no wake alarm that programs can set")
-        }
-        Support::MacAdmin => {
-            // i18n: the Scheduler, under "Wake the computer to run this queue" (macOS): scheduling a wake needs an administrator's password
-            crate::i18n::mark("On macOS, only an administrator can schedule a wake")
         }
     })
 }
@@ -2154,6 +2223,22 @@ fn merge_items(base: &[u64], draft: &[u64], live: &[u64]) -> Vec<u64> {
 mod tests {
     use super::*;
 
+    /// Plan 09: the mock's 800 wide, and on a 1080p screen at interface size 200 % shown whole,
+    /// without a scroll bar (the rule every fixed window is shown by: `dialogs::shown_size`),
+    /// with the title bar Graphite draws in the client (`dialog_window` adds it before sizing),
+    /// above Windows 11's 48 px taskbar (8 more than `room_on`'s 40).
+    #[test]
+    fn the_window_fits_a_1080p_screen_at_200_percent() {
+        let client = vec2(W, BODY + winui::FOOTER_H + winui::caption::CAPTION_H);
+        assert_eq!(W, 800.0);
+        let room = crate::scale::room_on(vec2(1920.0, 1080.0 - 8.0), 2.0, 2.0);
+        assert_eq!(
+            crate::scale::shown(client, Some(room)),
+            client,
+            "room {room:?}"
+        );
+    }
+
     #[test]
     fn the_draft_keeps_its_order_and_the_lists_changes() {
         // Opened with 1 2 3; the Scheduler moved 3 up and removed 1; meanwhile the main window
@@ -2161,6 +2246,32 @@ mod tests {
         assert_eq!(merge_items(&[1, 2, 3], &[3, 2], &[1, 3, 4]), vec![3, 4]);
         // Nothing changed elsewhere: the draft as it is.
         assert_eq!(merge_items(&[1, 2], &[2, 1], &[1, 2]), vec![2, 1]);
+    }
+
+    #[test]
+    fn a_new_queue_is_offered_a_name_no_queue_has() {
+        let mut queues = vec![
+            Queue::new("Main download queue", false),
+            Queue::new("Synchronization queue", true),
+        ];
+        assert_eq!(free_queue_name(&queues), "Queue # 3");
+        // "Queue # 3" deleted, "Queue # 4" kept: not "Queue # 4" again, which OK refuses (#1237).
+        queues.push(Queue::new("Queue # 4", false));
+        assert_eq!(free_queue_name(&queues), "Queue # 5");
+        // Whatever the case.
+        queues.push(Queue::new("queue # 5", false));
+        assert_eq!(free_queue_name(&queues), "Queue # 6");
+    }
+
+    #[test]
+    fn a_name_in_use_is_one_whatever_its_case_and_spaces() {
+        let queues = [
+            Queue::new("Main download queue", false),
+            Queue::new("Night", false),
+        ];
+        assert!(name_taken(&queues, " night "));
+        assert!(name_taken(&queues, "MAIN DOWNLOAD QUEUE"));
+        assert!(!name_taken(&queues, "Nightly"));
     }
 
     #[test]
