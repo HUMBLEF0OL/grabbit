@@ -14,6 +14,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
   - Saved sign-ins are kept in Windows Credential Manager under "Grabbit".
   - Start with Windows, the `.torrent` and magnet link association and the browser integration's helper (`com.grabbit.host`) are registered under Grabbit's names. The Firefox add-on's ID is `grabbit@humblef0ol.github.io`.
   - The release files are named `Grabbit-<version>-…` (`Grabbit-<version>-setup.exe`, `-portable.zip`, `-x64.zip`), and the help links go to Grabbit's website, https://humblef0ol.github.io/grabbit.
+- **Grabbit's releases are signed with Grabbit's own release key** (fingerprint `7C8D 515A 5E85 9D47 3CBC 54C0 D9E8 9ED6 1BBE C99D`), and Update now installs only a release whose checksum list it signed.
 
 ### Removed
 

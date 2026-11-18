@@ -637,6 +637,8 @@ These ship in a later version, when they're ready.
   take Grabbit's names (10c; its migrations from the old names removed, never published).
   Done: the release files (`Grabbit-<version>-…`), the website address in the app and the
   Firefox add-on's ID (10d's code). Next: the website, docs and README (10d)
+- ✅ Grabbit signs its own releases: Update now trusts Grabbit's release key, and each release's
+  checksum list is signed with it
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a
   centred stage, then a walk through adding, downloading, torrents and video as you scroll), the
   benchmark's seven medians drawn from its results file, the Grabbit mark and Geist, light and
