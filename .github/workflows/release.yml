@@ -1,14 +1,11 @@
 # Builds the downloads: Windows (tools/installer/build.ps1: installer, portable zip, plain zip),
 # and the browser extensions (tools/extension/pack.ps1: Chromium zip, Firefox .xpi).
-# - A pushed tag vX.Y.Z (matching Cargo.toml's version) publishes a GitHub release with them and
-#   SHA256SUMS.txt, its notes from CHANGELOG.md (Help -> Check for updates sees it at once).
-# - Run by hand (Actions -> Release -> Run workflow) it only builds and keeps them as artifacts:
-#   nothing is published, and nothing is sent to addons.mozilla.org or the Chrome Web Store.
+# Releases are built and published from the maintainer's computer (tools/installer/publish.ps1,
+# the same steps), so a tag starts nothing here. Run by hand (Actions -> Release -> Run workflow)
+# this only builds the downloads and keeps them as artifacts: nothing is published.
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
 
 permissions:

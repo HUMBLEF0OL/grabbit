@@ -1,9 +1,7 @@
-# Build, lint and test on Windows: pull requests into main only (a release from dev, or a hotfix),
-# to spend Actions minutes once per release. Changes reach main only by pull request (its ruleset),
-# so a push there was tested already, and a release tag's commit was tested on main. Work merged
-# into dev is checked locally before it merges (CONTRIBUTING.md, "Before you open a pull request").
-# A change to the website or the docs alone builds nothing here (the app embeds none of it; the
-# Website workflow builds the site), nor does one to the upstream-sync tool (its own workflow).
+# The quick checks, on Linux, for pull requests into main (a release from dev, or a hotfix): about
+# a minute. The Windows build, clippy and tests run on the maintainer's computer before each
+# pull request merges (CONTRIBUTING.md, "Before you open a pull request"), and the release is
+# built and published from there too (tools/installer/publish.ps1), so no runner builds Rust.
 on:
   pull_request:
     branches: [main]
@@ -28,41 +26,10 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  rust:
-    name: windows-latest
-    runs-on: windows-latest
-    # A cold build takes about 10 minutes; a hung runner is cut off
-    # instead of running to GitHub's 6 hours.
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
-
-      # rust-toolchain.toml picks stable with rustfmt and clippy.
-      - name: Toolchain
-        run: rustup show active-toolchain || rustup toolchain install
-
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
-
-      - name: Format
-        run: cargo fmt --all --check
-
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-      - name: Tests
-        run: cargo test --workspace
-
   extension:
     name: browser extension
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -84,11 +51,3 @@ jobs:
 
       - name: Check the packages
         run: node tools/extension/check-pack.mjs
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: extension
-          path: |
-            target/extension/mdm-chromium.zip
-            target/extension/mdm-firefox.xpi
-            target/extension/mdm-chrome-store.zip

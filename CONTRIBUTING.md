@@ -30,12 +30,17 @@ ranges; `GET /` lists them), so downloads can be tested without the internet.
   cut on it. It only moves by a pull request from `dev` (a release) or a hotfix.
 - **Hotfix:** branch from `main`, open the pull request against `main`, then merge `main` back
   into `dev`.
+- **Release:** merge the `dev` → `main` pull request, check out `main` at that commit, and run
+  `tools/installer/publish.ps1` (`-DryRun` first): it builds the installer, zips, symbols and
+  extensions here, signs `SHA256SUMS.txt` with Grabbit's release key from your gpg keyring,
+  publishes `vX.Y.Z` with its CHANGELOG section, and rebuilds the website. No runner builds Rust.
 
 ## Before you open a pull request
 
-These are the checks CI runs. CI runs only on pull requests into `main` (a release, or a
-hotfix), to spend GitHub Actions minutes once per release: **run them yourself before a pull
-request into `dev` merges**, or before you push to `dev`. Each works on a clean clone:
+**Run these yourself before a pull request merges**, or before you push to `dev`: GitHub's CI
+runs only the quick ones (the extension's tests and packages, the old-name check, the pictures'
+list and the upstream-sync tool's tests, about a minute, on pull requests into `main`), never the
+Rust build. Each works on a clean clone:
 
 ```
 cargo fmt --all --check
