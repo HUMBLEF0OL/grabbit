@@ -574,6 +574,11 @@ The maintainer's first findings with 1.0.0 (in `dev`, for the next release):
 - ✅ Find in the main window: the title bar's field filters the list as you type, Enter, F3 and
   Shift+F3 step through the matches, and its funnel's menu chooses where to look and shows only
   some statuses or sources (the column filters themselves). The Find file window is gone.
+- ✅ Options → Downloads → Customize "Download progress" dialog → Edit... opens its window, where
+  the progress window can be turned off for new downloads (upstream issue 1041; it was greyed).
+- 🔄 The original MDM's fixes in the files the in-app Options page changes (plan 11), before it
+  is built: of upstream's six waiting commits there, one already fixed here, two features
+  skipped, three ported by hand (one done, two in progress)
 
 ## Being worked on
 

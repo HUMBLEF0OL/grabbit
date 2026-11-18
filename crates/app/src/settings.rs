@@ -183,6 +183,9 @@ pub struct Settings {
     pub mark_downloads: bool,
     /// Downloads.
     pub show_start_dialog: bool,
+    /// Downloads → Customize "Download progress" dialog → Edit... (upstream 1041): a download's
+    /// progress window opens when it starts. Off, it runs in the list (double-click opens it).
+    pub show_progress: bool,
     pub only_add_to_queue: bool,
     /// Start downloading while Download File Info is open (app.rs `start_early`). Off by default
     /// since 1.0.1: nothing starts before the dialog's answer. Saved under a key of its own:
@@ -418,6 +421,7 @@ impl Default for Settings {
             set_creation_date: false,
             mark_downloads: true,
             show_start_dialog: true,
+            show_progress: true,
             only_add_to_queue: false,
             start_immediately: false,
             queue_panel_later: true,
