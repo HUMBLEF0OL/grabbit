@@ -559,6 +559,9 @@ pub struct App {
     /// whether that window closed this frame (the next opens a frame later, as Add torrent's).
     pages_waiting: std::collections::VecDeque<dialogs::NewUrl>,
     pages_closed: bool,
+    /// Batch patterns added while Batch download was open, waiting their turn (the same way).
+    batch_waiting: std::collections::VecDeque<String>,
+    batch_closed: bool,
     /// Add ▾ → Add from the clipboard: the clipboard, asked off the window's thread.
     clip_paste: crate::clipboard::Prefill,
     file_info: Option<FileInfo>,
@@ -1445,6 +1448,8 @@ impl App {
             add_url: None,
             pages_waiting: Default::default(),
             pages_closed: false,
+            batch_waiting: Default::default(),
+            batch_closed: false,
             clip_paste: Default::default(),
             about: None,
             updates: None,
@@ -6134,7 +6139,9 @@ impl App {
         match cmd {
             Cmd::AddUrl => {
                 if self.add_url.is_none() {
-                    self.add_url = Some(AddWindow::from_clipboard());
+                    let mut w = AddWindow::from_clipboard();
+                    w.ask = self.settings.add_ask_where;
+                    self.add_url = Some(w);
                 }
             }
             Cmd::AddFromClipboard => self.clip_paste = crate::clipboard::Prefill::ask(),
@@ -8560,7 +8567,11 @@ impl App {
     fn open_add_with(&mut self, text: &str) {
         match &mut self.add_url {
             Some(w) => w.append(text),
-            None => self.add_url = Some(AddWindow::with_text(text)),
+            None => {
+                let mut w = AddWindow::with_text(text);
+                w.ask = self.settings.add_ask_where;
+                self.add_url = Some(w);
+            }
         }
     }
 
@@ -8598,9 +8609,12 @@ impl App {
         use crate::addkind::Kind;
         match kind {
             Kind::TorrentFile(path) => self.open_torrent_dialog(Some(path), ctx),
+            // One Batch download at a time: the next pattern waits its turn.
             Kind::Batch(pattern) => {
                 if self.batch.is_none() {
                     self.batch = Some(crate::batch::Batch::with_address(&pattern));
+                } else {
+                    self.batch_waiting.push_back(pattern);
                 }
             }
             Kind::Link(url)
@@ -9771,7 +9785,13 @@ impl App {
             }
         }
         if let Some(d) = &mut self.add_url {
-            match d.show(ctx, |url| self.settings.site_login(url)) {
+            let shown = d.show(ctx, |url| self.settings.site_login(url));
+            // "Ask where to save each one" is kept as it was left, closed or added.
+            if !matches!(shown, Outcome::Open) && self.settings.add_ask_where != d.ask {
+                self.settings.add_ask_where = d.ask;
+                self.dirty = true;
+            }
+            match shown {
                 Outcome::Open => {}
                 Outcome::Closed => self.add_url = None,
                 Outcome::Done(out) => {
@@ -10086,6 +10106,15 @@ impl App {
             self.pages_closed = true;
             ctx.request_repaint();
         }
+        // The next pattern a frame after Batch download closed (as Add torrent's next).
+        if self.batch.is_none() && !self.batch_waiting.is_empty() {
+            if std::mem::take(&mut self.batch_closed) {
+                ctx.request_repaint();
+            } else if let Some(next) = self.batch_waiting.pop_front() {
+                self.batch = Some(crate::batch::Batch::with_address(&next));
+            }
+        }
+        let batch_open = self.batch.is_some();
         if let Some(b) = &mut self.batch {
             match b.show(ctx) {
                 Outcome::Open => {}
@@ -10095,6 +10124,10 @@ impl App {
                     self.add_batch(added);
                 }
             }
+        }
+        if batch_open && self.batch.is_none() {
+            self.batch_closed = true;
+            ctx.request_repaint();
         }
         if let Some(d) = &mut self.options {
             match d.show(ctx, &self.downloads) {
@@ -11629,13 +11662,21 @@ mod route_tests {
         };
         app.add_items(
             out(
-                vec![Kind::Batch("https://a.example/p*.jpg".into())],
+                vec![
+                    Kind::Batch("https://a.example/p*.jpg".into()),
+                    Kind::Batch("https://b.example/q*.jpg".into()),
+                ],
                 true,
                 false,
             ),
             &ctx,
         );
         assert!(app.batch.is_some(), "a pattern: Batch download");
+        assert_eq!(
+            app.batch_waiting,
+            ["https://b.example/q*.jpg".to_owned()],
+            "the next pattern waits its turn"
+        );
         app.add_items(
             out(
                 vec![

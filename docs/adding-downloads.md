@@ -20,7 +20,7 @@ There are several ways to give Grabbit something to download. Most of them end i
 
 Each item then goes where it always has: a file's address to **Download File Info**, a magnet link or a `.torrent` to **Add torrent** (to choose its files), a video's page to the video window (to choose its quality), a gallery's page to the gallery window, and a `*` address to **Add batch download**. Several of one kind open one after another.
 
-**Ask where to save each one** (ticked as the window opens) shows **Download File Info** for every file's address. Untick it to add the files at once to their category's folder and start them. **Later** adds the files without starting them: they wait in a queue, as **Download Later** does. Torrents, videos and galleries always open their own window, as they need your choice.
+**Ask where to save each one** (ticked at first; Grabbit remembers how you leave it) shows **Download File Info** for every file's address. Untick it to add the files at once to their category's folder and start them. **Later** adds the files without starting them: they wait in a queue, as **Download Later** does. Torrents, videos and galleries always open their own window, as they need your choice.
 
 Grabbit takes `http://`, `https://`, `ftp://`, `ftps://`, `ftpes://` and `magnet:` addresses, and `.torrent` files on this computer.
 
