@@ -785,7 +785,7 @@ const SHORTCUTS: [(&str, &str); 27] = [
     ),
     (
         "F3 / Shift+F3",
-        "Select the next / previous match (Enter / Shift+Enter in the field too)",
+        "Next / previous match (in the field: Enter / Shift+Enter)",
     ),
     (
         "Esc in the Find field",
