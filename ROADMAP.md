@@ -492,7 +492,9 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
 
 ## Version 1.0.0
 
-Grabbit's first release (2026-11-18): everything below ships together in it.
+Grabbit's first release, published 2026-11-18 (built, signed and published from the
+maintainer's computer with `tools/installer/publish.ps1`; GitHub's checks take about a minute):
+everything below ships in it.
 
 - ✅ English only: the other languages, the language picker (View → Language and the first
   start's), the right-to-left interface, the installer's languages, the extension's translations, the

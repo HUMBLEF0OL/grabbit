@@ -66,7 +66,7 @@ try {
 
   $notes = $m.Groups[1].Value.Trim() -replace '\]\((?![a-z]+:|#)([^)\s]+)\)', "](https://github.com/$repo/blob/$tag/`$1)"
   $notesFile = Join-Path $dist "notes.md"
-  Set-Content -Encoding utf8 $notesFile $notes
+  [IO.File]::WriteAllText($notesFile, $notes)  # UTF-8 without a BOM (Set-Content adds one, and GitHub shows it)
   $all = @($files.FullName) + $list + "$list.sig"
   Write-Host "== $tag : $($all.Count) files"
   $all | ForEach-Object { Write-Host "   $(Split-Path -Leaf $_)" }
