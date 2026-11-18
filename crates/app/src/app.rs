@@ -4658,6 +4658,44 @@ impl App {
             .collect()
     }
 
+    /// Torrent settings' switch just turned on (upstream issue 1091): when Windows still opens
+    /// magnet links or .torrent files with another program (a choice in Default apps, which no
+    /// program may change), say which and open Settings at Grabbit's Default apps page, where the
+    /// user picks it. An instance off the screens (a test's) never asks this computer: it takes
+    /// the names in MDM_TEST_TORRENT_DEFAULTS (`;` between them), and its log says what would
+    /// have opened.
+    fn tell_torrent_defaults(&mut self) {
+        let others: Vec<String> = if crate::offscreen() {
+            std::env::var("MDM_TEST_TORRENT_DEFAULTS")
+                .unwrap_or_default()
+                .split(';')
+                .map(str::trim)
+                .filter(|n| !n.is_empty())
+                .map(str::to_owned)
+                .collect()
+        } else {
+            crate::win32::torrent_defaults_elsewhere()
+        };
+        if others.is_empty() {
+            return;
+        }
+        tracing::info!(
+            "torrents: Windows opens magnet links or .torrent files with {}",
+            others.join(", ")
+        );
+        self.notice = Some((
+            crate::i18n::mark("Torrent settings"),
+            crate::i18n::fmt(
+                // i18n: after ticking "Open magnet links and .torrent files with Grabbit", when Windows' Default apps keeps another app; {apps}: their names. "MAGNET" as Windows' Default apps lists it
+                crate::i18n::t(
+                    "Windows still opens magnet links or .torrent files with {apps}, chosen in Windows' Default apps, where only you can change it. Settings opens there now: pick Grabbit for MAGNET and .torrent.",
+                ),
+                &[("apps", &crate::i18n::isolate(&others.join(", ")))],
+            ),
+        ));
+        crate::launch::open_page(&crate::win32::default_apps_page());
+    }
+
     /// The hashes librqbit should keep or restore in its session.
     fn session_hashes(&self) -> std::collections::HashSet<String> {
         let limits = self.settings.sharing_limits();
@@ -5980,9 +6018,18 @@ impl App {
                 share,
             );
         }
-        if assoc != self.settings.torrent_associations {
-            self.settings.torrent_associations = assoc;
-            crate::win32::set_torrent_handlers(assoc);
+        if Some(assoc) != self.settings.torrent_associations {
+            self.settings.torrent_associations = Some(assoc);
+            // Not from an instance off the screens (a test's), as at start.
+            if !crate::offscreen() {
+                crate::win32::set_torrent_handlers(assoc);
+            }
+            // A choice recorded in Windows' Default apps for another program stays first, and
+            // only the user can change it (upstream issue 1091): Grabbit says so and opens its
+            // page there.
+            if assoc {
+                self.tell_torrent_defaults();
+            }
         }
         self.dirty = true;
     }
@@ -10036,8 +10083,32 @@ impl App {
         }
         if !self.torrents_started {
             self.torrents_started = true;
-            // The handlers follow the exe (a portable copy may have moved).
-            if self.settings.torrent_associations {
+            // Torrent settings' switch never decided (a list 1.0.0 saved, a new one): settled
+            // once, as the user chose (the installer's task, an earlier tick, or what Windows
+            // opens .torrent files with now), and saved for the browser integration (upstream
+            // issue 1058). An instance off the screens (a test's, MDM_OFFSCREEN) never reads this
+            // computer's installer value or associations: off, unless its list ticked it before.
+            if self.settings.torrent_associations.is_none() {
+                let system = !crate::offscreen();
+                let installer = (system && mdm_ipc::portable_dir().is_none())
+                    .then(crate::win32::install_torrents)
+                    .flatten();
+                let registered = || system && crate::win32::torrent_handler_is_ours();
+                if self.settings.settle_torrent_handler(installer, registered) {
+                    tracing::info!(
+                        "torrents: Open magnet links and .torrent files with Grabbit settled {}",
+                        if self.settings.torrent_associations == Some(true) {
+                            "on"
+                        } else {
+                            "off"
+                        }
+                    );
+                    self.dirty = true;
+                }
+            }
+            // The handlers follow the exe (a portable copy may have moved). Never from an
+            // instance off the screens (a test's build would take this computer's associations).
+            if self.settings.torrent_associations == Some(true) && !crate::offscreen() {
                 crate::win32::set_torrent_handlers(true);
             }
             if self.settings.torrent_keep_sharing {
