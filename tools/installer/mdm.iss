@@ -9,7 +9,7 @@
 ; Windows Credential Manager (grabbit --forget-sign-ins).
 
 #ifndef AppVersion
-  #define AppVersion "0.5.2"
+  #define AppVersion "1.0.0"
 #endif
 #define AppName "Grabbit"
 #define AppExe "grabbit.exe"

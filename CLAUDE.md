@@ -50,6 +50,8 @@ its packages are `grabbit-*`; the code paths still say `mdm` (`mdm_engine::`). S
 - `tools/extension/pack.ps1` — build the extension for Chromium and Firefox into
   `target/extension/`; `node tools/extension/test.mjs` — its logic against fake browser APIs.
 - `tools/installer/build.ps1` — the Windows installer and portable zip into `target/dist/`.
+- `tools/installer/publish.ps1 [-DryRun]` — a release, built, signed and published from this
+  computer, on `main` at the release commit (GitHub's CI only runs the one-minute checks).
 - `python tools/upstream-sync/sync.py status --fetch` — the original MDM's new commits, sorted
   for this fork (`/upstream-sync`, `.claude/skills/upstream-sync`); fixes come one way, by PR
   to `dev`, never pushed to the original.
