@@ -11,7 +11,10 @@
 // (the rules, the status, the pause) is kept in storage, not in memory.
 
 const ext = globalThis.browser ?? globalThis.chrome;
-const HOST = "com.misterdownloadmanager.host";
+const HOST = "com.grabbit.host";
+// The original MDM's name for it (plan 10c): an app from before the rename registered only that
+// one, and Grabbit registers both for a while. Tried when the new one isn't there.
+const OLD_HOST = "com.misterdownloadmanager.host";
 const VERSION = ext.runtime.getManifest().version;
 const HELP = "https://misterdownloadmanager.com/help/browser-help.html";
 const action = ext.action ?? ext.browserAction;
@@ -52,6 +55,28 @@ function hostProblem(error) {
   return "host-failed";
 }
 
+// The host's name that answered last: tried first next time.
+let hostName = HOST;
+
+// `sent` to the native host under its name, else under the old one when the browser finds no
+// host by the first name it tried (an app from before the rename, or a newer one with an older
+// install's registration).
+async function sendNative(sent, ms) {
+  const names = hostName === HOST ? [HOST, OLD_HOST] : [OLD_HOST, HOST];
+  let failure;
+  for (const name of names) {
+    try {
+      const reply = await withTimeout(ext.runtime.sendNativeMessage(name, sent), ms);
+      hostName = name;
+      return reply;
+    } catch (e) {
+      if (hostProblem(e) !== "not-installed") throw e;
+      failure = failure || e;
+    }
+  }
+  throw failure;
+}
+
 // Every message says which browser and extension version it comes from (the app keeps each
 // browser's status, and the rules depend on the browser). Never throws: failures come back as
 // `{ok: false, why}`.
@@ -65,7 +90,7 @@ async function native(message, ms = HOST_WAIT) {
   const brands = app ? [...BRANDS, app] : BRANDS;
   const sent = { ...message, userAgent: navigator.userAgent, brands, v: VERSION };
   try {
-    const reply = (await withTimeout(ext.runtime.sendNativeMessage(HOST, sent), ms)) || {};
+    const reply = (await sendNative(sent, ms)) || {};
     if (reply.version) await noteStatus(older(reply.version, VERSION) ? "update-app" : null, reply.version);
     else if (reply.ok || reply.why === "options") await noteStatus(null);
     else if (reply.why && reply.why !== "refused") await noteStatus(reply.why);

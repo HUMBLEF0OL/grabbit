@@ -92,8 +92,10 @@ async function main() {
   };
   try {
     await until("Mister Download Manager", 20000, () => fs.existsSync(path.join(data, "ipc.json")));
-    const key = "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.misterdownloadmanager.host";
-    if (spawnSync("reg", ["query", key], { stdio: "ignore" }).status === 0) {
+    const installed = ["com.grabbit.host", "com.misterdownloadmanager.host"].some(
+      (h) => spawnSync("reg", ["query", `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${h}`], { stdio: "ignore" }).status === 0,
+    );
+    if (installed) {
       throw new Error("Mister Download Manager's host is already registered (an installed copy): not touching it");
     }
     spawnSync(nmhost, ["--register"]);

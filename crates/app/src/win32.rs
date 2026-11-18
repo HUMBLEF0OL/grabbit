@@ -5586,7 +5586,11 @@ pub fn host_registration() -> crate::extension::Registration {
     use crate::extension::Registration;
     use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
     let mut broken = None;
+    // Grabbit's host name, and the original MDM's (plan 10c: both are registered for a while,
+    // and the extension asks for either).
     for key in [
+        r"Software\Google\Chrome\NativeMessagingHosts\com.grabbit.host",
+        r"Software\Mozilla\NativeMessagingHosts\com.grabbit.host",
         r"Software\Google\Chrome\NativeMessagingHosts\com.misterdownloadmanager.host",
         r"Software\Mozilla\NativeMessagingHosts\com.misterdownloadmanager.host",
     ] {

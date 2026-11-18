@@ -139,6 +139,7 @@ Filename: "{app}\{#HostExe}"; Parameters: "--unregister"; Flags: runhidden; RunO
 Filename: "{app}\{#HostExe}"; Parameters: "--unregister --all-users"; Flags: runhidden; RunOnceId: "UnregisterAll"; Check: IsAdminInstallMode
 
 [UninstallDelete]
+Type: files; Name: "{app}\com.grabbit.host*.json"
 Type: files; Name: "{app}\com.misterdownloadmanager.host*.json"
 
 [Code]

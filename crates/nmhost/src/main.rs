@@ -25,7 +25,11 @@ use serde::{Deserialize, Serialize};
 
 mod win32;
 
-const HOST_NAME: &str = "com.misterdownloadmanager.host";
+const HOST_NAME: &str = "com.grabbit.host";
+/// The names the browsers find the host under: Grabbit's, and the original MDM's (plan 10c), which
+/// an extension from before the rename asks for. Both are registered for at least two releases;
+/// the extension tries the new one, then the old.
+const HOST_NAMES: [&str; 2] = [HOST_NAME, "com.misterdownloadmanager.host"];
 use mdm_ipc::extension::{FIREFOX_ID, STORE_ID, STORE_UPDATE_URL, chromium_ids, store_id};
 /// Where each Chromium browser looks for native messaging hosts on Windows, under HKCU (one
 /// user) or HKLM (everyone). Chromium-branded builds (Chromium, Helium, Thorium, and Brave and
@@ -727,9 +731,9 @@ fn this_program() -> Result<PathBuf, String> {
 
 /// The manifest Chromium browsers read: the host (`program`) may serve our extension's origin
 /// only.
-fn chromium_manifest(program: &std::path::Path) -> serde_json::Value {
+fn chromium_manifest(name: &str, program: &std::path::Path) -> serde_json::Value {
     serde_json::json!({
-        "name": HOST_NAME,
+        "name": name,
         "description": "Grabbit",
         "path": program,
         "type": "stdio",
@@ -738,9 +742,9 @@ fn chromium_manifest(program: &std::path::Path) -> serde_json::Value {
 }
 
 /// Firefox's manifest: the same host, allowed for our add-on ID instead of an origin.
-fn firefox_manifest(program: &std::path::Path) -> serde_json::Value {
+fn firefox_manifest(name: &str, program: &std::path::Path) -> serde_json::Value {
     serde_json::json!({
-        "name": HOST_NAME,
+        "name": name,
         "description": "Grabbit",
         "path": program,
         "type": "stdio",
@@ -785,32 +789,36 @@ fn our_caller(args: &[String]) -> bool {
 fn register(all_users: bool) -> Result<(), String> {
     portable_refused()?;
     let root = if all_users { "HKLM" } else { "HKCU" };
-    let path = exe_dir()?.join(format!("{HOST_NAME}.json"));
-    write_json(&path, &chromium_manifest(&this_program()?))?;
-    for key in REGISTRY_KEYS {
+    let program = this_program()?;
+    let (mut path, mut ff_path) = (PathBuf::new(), PathBuf::new());
+    for name in HOST_NAMES {
+        path = exe_dir()?.join(format!("{name}.json"));
+        write_json(&path, &chromium_manifest(name, &program))?;
+        for key in REGISTRY_KEYS {
+            reg(&[
+                "add",
+                &format!(r"{root}\{key}\{name}"),
+                "/ve",
+                "/t",
+                "REG_SZ",
+                "/d",
+                &path.display().to_string(),
+                "/f",
+            ])?;
+        }
+        ff_path = exe_dir()?.join(format!("{name}.firefox.json"));
+        write_json(&ff_path, &firefox_manifest(name, &program))?;
         reg(&[
             "add",
-            &format!(r"{root}\{key}\{HOST_NAME}"),
+            &format!(r"{root}\{FIREFOX_KEY}\{name}"),
             "/ve",
             "/t",
             "REG_SZ",
             "/d",
-            &path.display().to_string(),
+            &ff_path.display().to_string(),
             "/f",
         ])?;
     }
-    let ff_path = exe_dir()?.join(format!("{HOST_NAME}.firefox.json"));
-    write_json(&ff_path, &firefox_manifest(&this_program()?))?;
-    reg(&[
-        "add",
-        &format!(r"{root}\{FIREFOX_KEY}\{HOST_NAME}"),
-        "/ve",
-        "/t",
-        "REG_SZ",
-        "/d",
-        &ff_path.display().to_string(),
-        "/f",
-    ])?;
     // Chrome offers the store's extension once it is listed (never a placeholder ID).
     if let Some(id) = store_id() {
         reg(&[
@@ -827,8 +835,9 @@ fn register(all_users: bool) -> Result<(), String> {
         ])?;
     }
     println!(
-        "registered {HOST_NAME} for Chrome, Edge, Brave, Helium and the other Chromium browsers \
+        "registered {} for Chrome, Edge, Brave, Helium and the other Chromium browsers \
          ({}), and for Firefox, Zen and its other forks ({})",
+        HOST_NAMES.join(" and "),
         path.display(),
         ff_path.display()
     );
@@ -837,8 +846,12 @@ fn register(all_users: bool) -> Result<(), String> {
 
 fn unregister(all_users: bool) -> Result<(), String> {
     let root = if all_users { "HKLM" } else { "HKCU" };
-    for key in REGISTRY_KEYS.into_iter().chain([FIREFOX_KEY]) {
-        let _ = reg(&["delete", &format!(r"{root}\{key}\{HOST_NAME}"), "/f"]);
+    for name in HOST_NAMES {
+        for key in REGISTRY_KEYS.into_iter().chain([FIREFOX_KEY]) {
+            let _ = reg(&["delete", &format!(r"{root}\{key}\{name}"), "/f"]);
+        }
+        let _ = std::fs::remove_file(exe_dir()?.join(format!("{name}.json")));
+        let _ = std::fs::remove_file(exe_dir()?.join(format!("{name}.firefox.json")));
     }
     let _ = reg(&[
         "delete",
@@ -846,9 +859,7 @@ fn unregister(all_users: bool) -> Result<(), String> {
         "/f",
         "/reg:32",
     ]);
-    let _ = std::fs::remove_file(exe_dir()?.join(format!("{HOST_NAME}.json")));
-    let _ = std::fs::remove_file(exe_dir()?.join(format!("{HOST_NAME}.firefox.json")));
-    println!("unregistered {HOST_NAME}");
+    println!("unregistered {}", HOST_NAMES.join(" and "));
     Ok(())
 }
 
@@ -898,9 +909,28 @@ mod tests {
 
     /// The Chrome Web Store's copy and the app folder's (unpacked) both connect, and both are
     /// served: the manifest's allowed_origins and the host's own caller check agree.
+    /// Plan 10c: the host is found under Grabbit's name and the original MDM's, each manifest
+    /// naming its own (a browser refuses one whose name isn't the one it looked up).
+    #[test]
+    fn both_host_names_get_a_manifest_of_their_own() {
+        assert_eq!(
+            HOST_NAMES,
+            ["com.grabbit.host", "com.misterdownloadmanager.host"]
+        );
+        let program = this_program().unwrap();
+        for name in HOST_NAMES {
+            assert_eq!(chromium_manifest(name, &program)["name"], name);
+            assert_eq!(firefox_manifest(name, &program)["name"], name);
+        }
+        // The extension asks for the same two, the new one first.
+        let bg = include_str!("../../../extension/background.js");
+        assert!(bg.contains(r#"const HOST = "com.grabbit.host";"#));
+        assert!(bg.contains(r#"const OLD_HOST = "com.misterdownloadmanager.host";"#));
+    }
+
     #[test]
     fn store_and_unpacked_extensions_both_allowed() {
-        let manifest = chromium_manifest(&this_program().unwrap());
+        let manifest = chromium_manifest(HOST_NAME, &this_program().unwrap());
         for id in [
             "ejoleppdfgjdndddcjoehopknmlglojp",
             "oogbclbbninliongijffeeggalppliok",
