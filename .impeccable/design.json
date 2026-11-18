@@ -127,7 +127,7 @@
     "rules": [
       { "name": "The One Signal Rule", "body": "Cyan means Grabbit is acting: the Download action, or a number Grabbit measured. Never use it for decoration, a heading, a link or the comparison's bars.", "section": "colors" },
       { "name": "The Amethyst Points Rule", "body": "Amethyst only shows where you can go or where you are: links, focus, selection. It never fills a surface.", "section": "colors" },
-      { "name": "The Mark Owns The Gradient Rule", "body": "The cyan-to-amethyst gradient appears only inside the Grabbit mark (website/assets/grabbit.svg). There is no gradient text, gradient fill or glow anywhere else.", "section": "colors" },
+      { "name": "The Mark Owns The Gradient Rule", "body": "The mark's emerald gradient (Graphite green, the app's palette) appears only inside the Grabbit mark (website/assets/grabbit.svg). There is no gradient text, gradient fill or glow anywhere else.", "section": "colors" },
       { "name": "The Tighter As It Grows Rule", "body": "Tracking scales with size: -0.01em at 15-18px, -0.02em at titles, -0.035 to -0.045em at headlines and display. Body copy is never tracked.", "section": "typography" },
       { "name": "The Tabular Figures Rule", "body": "Tabular figures are set on the body, so every time, size and count lines up without extra work.", "section": "typography" },
       { "name": "The Only Windows Lift Rule", "body": "Drop shadows belong to the app's windows. Panels and cells rise through a hairline and a top light edge, never through a drop shadow or a glow.", "section": "elevation" }

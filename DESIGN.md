@@ -184,7 +184,7 @@ Graphite's palette: neutral grounds with a faint violet cast, one cyan that does
 
 **The Amethyst Points Rule.** Amethyst only shows where you can go or where you are: links, focus, selection. It never fills a surface.
 
-**The Mark Owns The Gradient Rule.** The cyan-to-amethyst gradient appears only inside the Grabbit mark (`website/assets/grabbit.svg`). There is no gradient text, gradient fill or glow anywhere else.
+**The Mark Owns The Gradient Rule.** The mark's emerald gradient (Graphite green, the app's palette) appears only inside the Grabbit mark (`website/assets/grabbit.svg`). There is no gradient text, gradient fill or glow anywhere else.
 
 ## Typography
 

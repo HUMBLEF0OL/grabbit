@@ -574,6 +574,10 @@ The maintainer's first findings with 1.0.0 (in `dev`, for the next release):
 - ✅ Find in the main window: the title bar's field filters the list as you type, Enter, F3 and
   Shift+F3 step through the matches, and its funnel's menu chooses where to look and shows only
   some statuses or sources (the column filters themselves). The Find file window is gone.
+- ✅ Graphite green: Graphite's colours are now zinc greys and one emerald green (selection,
+  ticked boxes, focus, links, the default button, progress) in place of amethyst and cyan, and
+  the app icon's double chevron is the same emerald, light into deep: in the app, the installer,
+  the browser extension, the website's logos and favicon, the social preview and the pictures.
 
 ## Being worked on
 
