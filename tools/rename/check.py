@@ -29,16 +29,11 @@ TERMS = {
 ALLOW = [
     (r"\{\{?667DB4D8-32C2-4487-A0E5-5825BF29778C\}", "installer AppId: upgrades find the install by it"),
     (r"\b[a-p]{32}\b", "Chromium extension IDs (unpacked, store): a new ID is a new extension"),
-    (r"integration@misterdownloadmanager\.com", "Firefox gecko ID: a new ID is a new add-on"),
-    (r"com\.misterdownloadmanager\.host", "native messaging host name (10c registers a second one)"),
-    (r"MisterDownloadManager\.(?:Torrent|torrent)", "torrent ProgID (10c migrates it)"),
-    (r"MisterDownloadManager\.Running", "single-instance mutex (10c migrates it)"),
-    (r"MisterDownloadManager(?:Test)?\b", "autostart Run value, User-Agent token, asset names (10c/10d)"),
-    (r"MisterDownloadManager-[\w${}.-]*", "release asset names old builds update from (10d)"),
-    (r"misterdownloadmanager[\w.-]*", "data folder, exe names, domain and historic URLs"),
+    (r"MisterDownloadManager[\w${}.-]*", "old identifiers named in history entries (CHANGELOG, ROADMAP)"),
+    (r"misterdownloadmanager[\w.-]*", "the original's repository and historic URLs"),
     (r"mister-download-manager", "Firefox add-ons page slug (store URL)"),
     (r"\bmdm-[a-z0-9-]+", "crate names (decision: keep)"),
-    (r"\bMDM_[A-Z0-9_]+", "environment variables (10c adds GRABBIT_ ones, keeps these)"),
+    (r"\bMDM_[A-Z0-9_]+", "environment variables (the data folder's is GRABBIT_DATA_DIR)"),
     (r"\bMDM\.popup\b", "internal window-property marker, never shown"),
     (r"\bMDM\.caption-less\.settled\b", "internal window-property marker, never shown"),
     (r"\bMDM-test-[\w{}:-]*", "keychain names of off-screen test copies, never shown"),
@@ -46,10 +41,8 @@ ALLOW = [
 ALLOW_RE = re.compile("|".join(f"(?:{p})" for p, _ in ALLOW))
 
 # Whole texts kept on purpose at one place: (file, the text as listed) -> why.
-KEPT = {
-    ("crates/app/src/secrets.rs", "Mister Download Manager"): "the original's keychain service: saved logins found under it move to Grabbit's (10c)",
-    ("tools/installer/mdm.iss", '#define OldAppName "Mister Download Manager"'): "the old shortcuts an upgrade removes",
-}
+# None since the old-name migrations went (2026-11-18: Grabbit was never published).
+KEPT: dict[tuple[str, str], str] = {}
 
 TEXT_EXT = {".md", ".html", ".json", ".txt", ".css", ".js", ".toml", ".yml", ".tsv", ".jsonl", ".webmanifest"}
 
@@ -209,10 +202,9 @@ const AFTER: &str = "MDM after";
     got = [(ln, test) for ln, text, test in rust_strings(src) if hits_in(text)]
     assert got == [(3, False), (4, False), (7, False), (8, False), (11, True), (13, False)], got
     for kept in [
-        "MDM_DATA_DIR=x", "misterdownloadmanager-cli api on", "MDM.popup",
-        "com.misterdownloadmanager.host", "MisterDownloadManager.Running", "mdm-app",
-        "https://misterdownloadmanager.com/help/", "integration@misterdownloadmanager.com",
-        "MisterDownloadManager-{version}-{tail}", "AppId={{667DB4D8-32C2-4487-A0E5-5825BF29778C}",
+        "MDM_OFFSCREEN=1", "misterdownloadmanager-nmhost.exe", "MDM.popup",
+        "MisterDownloadManager.Torrent", "MisterDownloadManager-{version}-{tail}", "mdm-app",
+        "https://misterdownloadmanager.com/help/", "AppId={{667DB4D8-32C2-4487-A0E5-5825BF29778C}",
         "keychain:MDM-test-unit/aaaa0001/", "MDM.caption-less.settled\\0",
     ]:
         assert hits_in(kept) == [], kept

@@ -202,48 +202,6 @@ pub fn state_path(dest: &Path) -> PathBuf {
     PathBuf::from(s)
 }
 
-/// Downloads started under the app's former codename keep `<dest>.idmnext.json` and
-/// `<dest>.idmnext.part`: rename them to today's names (only if those don't exist yet), so
-/// they resume. Returns true when something was renamed.
-pub fn migrate_legacy(dest: &Path) -> bool {
-    let legacy = |suffix: &str| {
-        let mut s = dest.as_os_str().to_owned();
-        s.push(suffix);
-        PathBuf::from(s)
-    };
-    let (old_state, old_part) = (legacy(".idmnext.json"), legacy(".idmnext.part"));
-    let (new_state, new_part) = (state_path(dest), crate::naming::part_path(dest));
-    if !old_state.exists() || new_state.exists() || new_part.exists() {
-        return false;
-    }
-    // Part first: a state file without its part would be rejected on resume anyway.
-    if old_part.exists() && std::fs::rename(&old_part, &new_part).is_err() {
-        return false;
-    }
-    std::fs::rename(&old_state, &new_state).is_ok()
-}
-
-#[cfg(test)]
-mod migrate_tests {
-    use super::*;
-
-    #[test]
-    fn legacy_files_are_renamed_once() {
-        let dir = tempfile::tempdir().unwrap();
-        let dest = dir.path().join("a.zip");
-        std::fs::write(dir.path().join("a.zip.idmnext.json"), b"{}").unwrap();
-        std::fs::write(dir.path().join("a.zip.idmnext.part"), b"data").unwrap();
-        assert!(migrate_legacy(&dest));
-        assert!(state_path(&dest).exists());
-        assert_eq!(
-            std::fs::read(crate::naming::part_path(&dest)).unwrap(),
-            b"data"
-        );
-        assert!(!dir.path().join("a.zip.idmnext.json").exists());
-        assert!(!migrate_legacy(&dest), "nothing left to migrate");
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

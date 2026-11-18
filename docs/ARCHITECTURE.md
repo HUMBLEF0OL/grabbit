@@ -118,7 +118,7 @@ scrolls.
 
 The download list and settings are saved atomically to the data folder (`downloads.json`):
 `%APPDATA%\grabbit\`, a `data` folder beside a portable
-copy, or `GRABBIT_DATA_DIR` (the original's `MDM_DATA_DIR` is still read; `mdm_ipc::data_dir`). The browser host reads the same file for the
+copy, or `GRABBIT_DATA_DIR` (`mdm_ipc::data_dir`). The browser host reads the same file for the
 capture rules, so a change in Options applies to the next captured download.
 
 Sign-in secrets (debrid accounts, Sites Logins' and the proxy's passwords) live in Windows

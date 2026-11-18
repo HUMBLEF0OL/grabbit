@@ -73,7 +73,7 @@ impl Install {
             Install::PlainZip => "x64.zip",
             Install::Source => return Vec::new(),
         };
-        vec![format!("MisterDownloadManager-{version}-{tail}")]
+        vec![format!("Grabbit-{version}-{tail}")]
     }
 }
 
@@ -260,6 +260,8 @@ Connection: close
 
     #[tokio::test]
     async fn a_release_file_is_taken_only_from_a_list_signed_by_mdm() {
+        // The names the signed fixture list was signed with (by the release key; it can't be
+        // signed again here): any name works, the list decides which file is which.
         let zip = "MisterDownloadManager-9.9.9-x64.zip";
         let setup = "MisterDownloadManager-9.9.9-setup.exe";
         let assets = |base: &str| -> Vec<(String, String)> {
@@ -324,16 +326,13 @@ Connection: close
     fn every_kind_has_its_release_file() {
         assert_eq!(
             Install::Installer.assets("0.2.2"),
-            ["MisterDownloadManager-0.2.2-setup.exe"]
+            ["Grabbit-0.2.2-setup.exe"]
         );
         assert_eq!(
             Install::PortableZip.assets("0.2.2"),
-            ["MisterDownloadManager-0.2.2-portable.zip"]
+            ["Grabbit-0.2.2-portable.zip"]
         );
-        assert_eq!(
-            Install::PlainZip.assets("0.2.2"),
-            ["MisterDownloadManager-0.2.2-x64.zip"]
-        );
+        assert_eq!(Install::PlainZip.assets("0.2.2"), ["Grabbit-0.2.2-x64.zip"]);
         assert!(Install::Source.assets("1.0.0").is_empty());
         let labels: std::collections::HashSet<_> = Install::ALL.iter().map(|i| i.label()).collect();
         assert_eq!(labels.len(), Install::ALL.len());
@@ -379,8 +378,7 @@ Connection: close
         let zip_path = root.path().join("r.zip");
         let mut w = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
         let opts = zip::write::SimpleFileOptions::default();
-        w.start_file("MisterDownloadManager-9.9.9-x64/mdm.exe", opts)
-            .unwrap();
+        w.start_file("Grabbit-9.9.9-x64/mdm.exe", opts).unwrap();
         w.write_all(b"exe").unwrap();
         w.start_file("../escape.txt", opts).unwrap();
         w.write_all(b"no").unwrap();

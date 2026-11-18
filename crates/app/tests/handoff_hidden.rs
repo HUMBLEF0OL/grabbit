@@ -52,7 +52,7 @@ fn wait_for(app: &mut Child, data: &Path, line: &str, wait: Duration) {
 fn second_launch(data: &Path, args: &[&str]) {
     let status = Command::new(APP)
         .args(args)
-        .env("MDM_DATA_DIR", data)
+        .env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .status()
         .unwrap();
@@ -82,7 +82,7 @@ fn hand_overs_while(away: &str) {
     )
     .unwrap();
     let mut app = Command::new(APP)
-        .env("MDM_DATA_DIR", data)
+        .env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .spawn()
         .unwrap();
@@ -108,7 +108,7 @@ fn hand_overs_while(away: &str) {
     }));
     let _ = Command::new(APP)
         .arg("/exit")
-        .env("MDM_DATA_DIR", data)
+        .env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .status();
     let until = Instant::now() + Duration::from_secs(15);

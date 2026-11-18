@@ -3,8 +3,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security problem
-    url: https://misterdownloadmanager.com/security.html
+    url: https://humblef0ol.github.io/grabbit/security.html
     about: Report it privately, not as an issue.
   - name: Help and questions
-    url: https://misterdownloadmanager.com/help/
-    about: The user guide, tutorials and troubleshooting; the FAQ is at misterdownloadmanager.com/faq/.
+    url: https://humblef0ol.github.io/grabbit/help/
+    about: The user guide, tutorials and troubleshooting; the FAQ is at humblef0ol.github.io/grabbit/faq/.

@@ -3,7 +3,7 @@
 # GitHub's Windows runner (.github/workflows/docs-shots.yml), a stock Windows whose file icons are
 # Windows' own; a run here shows this PC's. At 1x: MDM_ZOOM=2 draws the content
 # twice as large but Windows keeps the title bar at the display's scale, out of proportion. Runs its
-# own Mister Download Manager instance (its own data folder, MDM_DATA_DIR) and its own labserver,
+# own Mister Download Manager instance (its own data folder, GRABBIT_DATA_DIR) and its own labserver,
 # both addressed by process id: the user's own instance and anything else running are never
 # touched. Nothing shows on the screen: with MDM_OFFSCREEN=1 the app opens every window far off
 # the screens, without focus, taskbar button, tray icon or sound, and PrintWindow captures them
@@ -174,7 +174,7 @@ try {
   $base = if ($Port -eq 80) { "http://$UrlHost" } else { "http://${UrlHost}:$Port" }
   # /show crash-test:freeze for the crash report window's shot.
   $env:MDM_CRASH_TEST = "1"
-  $env:MDM_DATA_DIR = "$work\data"
+  $env:GRABBIT_DATA_DIR = "$work\data"
   # Only when asked: MDM_ZOOM overrides View → Interface size (-Settings '"interface_size":150').
   if ($Zoom -ne 1) { $env:MDM_ZOOM = "$Zoom" } else { Remove-Item Env:MDM_ZOOM -ErrorAction SilentlyContinue }
   $env:MDM_OFFSCREEN = "1"
@@ -357,7 +357,7 @@ try {
   # A copy started again by itself, and its crash monitor: ours as well.
   Ours | ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
   if ($srv) { Stop-Process -Id $srv.Id -ErrorAction SilentlyContinue }
-  Remove-Item Env:MDM_DATA_DIR, Env:MDM_ZOOM, Env:MDM_OFFSCREEN, Env:MDM_OFFSCREEN_AT, Env:MDM_CRASH_TEST -ErrorAction SilentlyContinue
+  Remove-Item Env:GRABBIT_DATA_DIR, Env:MDM_ZOOM, Env:MDM_OFFSCREEN, Env:MDM_OFFSCREEN_AT, Env:MDM_CRASH_TEST -ErrorAction SilentlyContinue
   # The downloads (a 6 GB file partly fetched) don't stay behind.
   Start-Sleep 1
   Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue

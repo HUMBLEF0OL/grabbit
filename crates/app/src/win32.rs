@@ -4302,8 +4302,6 @@ pub fn set_torrent_handlers(on: bool) {
         RegSetKeyValueW,
     };
     const PROGID: &str = "Grabbit.Torrent";
-    // The original MDM's (plan 10c): removed, and `.torrent` taken from it.
-    const OLD_PROGID: &str = "MisterDownloadManager.Torrent";
     let w = |s: &str| -> Vec<u16> { s.encode_utf16().chain(Some(0)).collect() };
     let set = |key: &str, name: Option<&str>, value: &str| {
         let (key, value) = (w(key), w(value));
@@ -4342,11 +4340,6 @@ pub fn set_torrent_handlers(on: bool) {
     let Ok(exe) = std::env::current_exe() else {
         return;
     };
-    let tree = |k: &str| {
-        let k = w(k);
-        // SAFETY: NUL-terminated key under HKCU.
-        unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, k.as_ptr()) };
-    };
     let exe = exe.display().to_string();
     let open = format!("\"{exe}\" \"%1\"");
     let icon = format!("\"{exe}\",0");
@@ -4364,18 +4357,20 @@ pub fn set_torrent_handlers(on: bool) {
         set(&format!("{prog}\\DefaultIcon"), None, &icon);
         set(&format!("{prog}\\shell\\open\\command"), None, &open);
         set("Software\\Classes\\.torrent", None, PROGID);
-        tree(&format!("Software\\Classes\\{OLD_PROGID}"));
     } else {
         let ours = get("Software\\Classes\\magnet\\shell\\open\\command", None)
             .is_some_and(|c| c.contains(&exe));
+        let tree = |k: &str| {
+            let k = w(k);
+            // SAFETY: NUL-terminated key under HKCU.
+            unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, k.as_ptr()) };
+        };
         if ours {
             tree("Software\\Classes\\magnet");
         }
         tree(&format!("Software\\Classes\\{PROGID}"));
-        tree(&format!("Software\\Classes\\{OLD_PROGID}"));
         // Registry names ignore case (the installer writes `….torrent`).
-        if get("Software\\Classes\\.torrent", None)
-            .is_some_and(|v| v.eq_ignore_ascii_case(PROGID) || v.eq_ignore_ascii_case(OLD_PROGID))
+        if get("Software\\Classes\\.torrent", None).is_some_and(|v| v.eq_ignore_ascii_case(PROGID))
         {
             let (k, n) = (w("Software\\Classes\\.torrent"), w(""));
             // SAFETY: NUL-terminated key; an empty name is the default value.
@@ -4408,62 +4403,6 @@ fn run_value() -> Option<String> {
 
 /// The startup entry's name in the Run key.
 const RUN_VALUE: &str = "Grabbit";
-
-/// The original MDM's name for it (plan 10c), moved by [`move_old_run_value`].
-const OLD_RUN_VALUE: &str = "MisterDownloadManager";
-
-/// Whether the startup entry `value` (a command line) starts a program in `exe`'s folder: the
-/// original MDM's entry for this install (the same folder, the exe's old name), not another
-/// copy's elsewhere.
-fn startup_in_folder(value: &str, exe: &std::path::Path) -> bool {
-    let norm = |s: &str| s.replace('/', "\\").to_lowercase();
-    let Some(dir) = exe.parent().map(|d| norm(&d.display().to_string())) else {
-        return false;
-    };
-    let value = value.trim();
-    let program = match value.strip_prefix('"') {
-        Some(rest) => rest.split_once('"').map_or(rest, |(p, _)| p),
-        // Unquoted (written by hand): up to the exe's end.
-        None => {
-            let lower = value.to_lowercase();
-            lower.find(".exe").map_or(value, |i| &value[..i + 4])
-        }
-    };
-    let program = norm(program);
-    program
-        .rsplit_once('\\')
-        .is_some_and(|(folder, name)| folder == dir && name.ends_with(".exe"))
-}
-
-/// The original MDM's startup entry for this install (plan 10c): written again under
-/// Grabbit's name, for this exe, and the old one deleted. One for a copy elsewhere is left
-/// alone. Never in a test copy (it has a Run value of its own, if any).
-pub fn move_old_run_value() {
-    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteKeyValueW};
-    if crate::offscreen() {
-        return;
-    }
-    let (Some(old), Ok(exe)) = (
-        reg_string_in(HKEY_CURRENT_USER, RUN_KEY, OLD_RUN_VALUE),
-        std::env::current_exe(),
-    ) else {
-        return;
-    };
-    if !startup_in_folder(&old, &exe) {
-        return;
-    }
-    set_run_at_startup(true);
-    if !run_at_startup() {
-        return;
-    }
-    let key: Vec<u16> = RUN_KEY.encode_utf16().chain(Some(0)).collect();
-    let name: Vec<u16> = OLD_RUN_VALUE.encode_utf16().chain(Some(0)).collect();
-    // SAFETY: NUL-terminated key and value name.
-    unsafe {
-        RegDeleteKeyValueW(HKEY_CURRENT_USER, key.as_ptr(), name.as_ptr());
-    }
-    tracing::info!("startup entry moved to Grabbit's name");
-}
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
@@ -4569,7 +4508,7 @@ pub fn set_run_at_startup(on: bool) {
 
 #[cfg(test)]
 mod startup_tests {
-    use super::{startup_command, startup_in_folder, startup_outdated};
+    use super::{startup_command, startup_outdated};
     use std::path::Path;
 
     const EXE: &str = r"C:\Program Files\Grabbit\grabbit.exe";
@@ -4609,10 +4548,7 @@ mod startup_tests {
         assert!(!startup_outdated(&format!("\"{EXE}\" /startup"), exe));
         assert!(!startup_outdated(&format!("\"{EXE}\" /STARTUP"), exe));
         // Another copy's (a portable one, a build elsewhere).
-        assert!(!startup_outdated(
-            r#""D:\mdm\misterdownloadmanager.exe""#,
-            exe
-        ));
+        assert!(!startup_outdated(r#""D:\portable\grabbit.exe""#, exe));
         assert!(!startup_outdated("", exe));
     }
 
@@ -4621,35 +4557,6 @@ mod startup_tests {
     fn the_installer_writes_the_same_entry() {
         let iss = include_str!("../../../tools/installer/mdm.iss");
         assert!(iss.contains(r#"ValueName: "Grabbit"; ValueData: """{app}\{#AppExe}"" /startup""#));
-        // And moves the original MDM's, as the app does (`move_old_run_value`).
-        assert!(iss.contains(r#"ValueName: "MisterDownloadManager"; Flags: deletevalue"#));
-    }
-
-    /// Plan 10c: the original MDM's entry for this install (same folder, the old exe) is moved;
-    /// another copy's, elsewhere, is not.
-    #[test]
-    fn only_this_installs_old_startup_entry_moves() {
-        let exe = Path::new(r"C:\Program Files\Mister Download Manager\grabbit.exe");
-        let old =
-            r#""C:\Program Files\Mister Download Manager\misterdownloadmanager.exe" /startup"#;
-        assert!(startup_in_folder(old, exe));
-        assert!(startup_in_folder(
-            &old.to_uppercase().replace('\\', "/"),
-            exe
-        ));
-        assert!(startup_in_folder(
-            r"C:\Program Files\Mister Download Manager\misterdownloadmanager.exe /startup",
-            exe
-        ));
-        assert!(!startup_in_folder(
-            r#""D:\portable\mdm\misterdownloadmanager.exe" /startup"#,
-            exe
-        ));
-        assert!(!startup_in_folder(
-            r#""C:\Program Files\Mister Download Manager\sub\misterdownloadmanager.exe""#,
-            exe
-        ));
-        assert!(!startup_in_folder("", exe));
     }
 }
 
@@ -5586,13 +5493,9 @@ pub fn host_registration() -> crate::extension::Registration {
     use crate::extension::Registration;
     use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
     let mut broken = None;
-    // Grabbit's host name, and the original MDM's (plan 10c: both are registered for a while,
-    // and the extension asks for either).
     for key in [
         r"Software\Google\Chrome\NativeMessagingHosts\com.grabbit.host",
         r"Software\Mozilla\NativeMessagingHosts\com.grabbit.host",
-        r"Software\Google\Chrome\NativeMessagingHosts\com.misterdownloadmanager.host",
-        r"Software\Mozilla\NativeMessagingHosts\com.misterdownloadmanager.host",
     ] {
         for root in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
             let Some(manifest) = reg_string_in(root, key, "") else {
@@ -5610,69 +5513,6 @@ pub fn host_registration() -> crate::extension::Registration {
         }
     }
     broken.map_or(Registration::Missing, Registration::HelperMissing)
-}
-
-/// Plan 10c: whether this user's registration of the native host (Chrome's key, which Chromium
-/// browsers read, and Firefox's; either host name) names the original MDM's helper in this
-/// program's folder, so that Grabbit's registers again.
-pub fn host_registered_old() -> bool {
-    use windows_sys::Win32::System::Registry::HKEY_CURRENT_USER;
-    let Ok(exe) = std::env::current_exe() else {
-        return false;
-    };
-    ["com.grabbit.host", "com.misterdownloadmanager.host"]
-        .into_iter()
-        .flat_map(|name| {
-            [
-                format!(r"Software\Google\Chrome\NativeMessagingHosts\{name}"),
-                format!(r"Software\Mozilla\NativeMessagingHosts\{name}"),
-            ]
-        })
-        .filter_map(|key| reg_string_in(HKEY_CURRENT_USER, &key, ""))
-        .filter_map(|m| {
-            mdm_ipc::browsers::manifest_program(std::path::Path::new(m.trim().trim_matches('"')))
-        })
-        .any(|program| old_helper(&program, &exe))
-}
-
-/// Whether `program` is the original MDM's native host in `exe`'s folder.
-fn old_helper(program: &std::path::Path, exe: &std::path::Path) -> bool {
-    let norm = |p: Option<&std::path::Path>| {
-        p.map(|p| p.display().to_string().replace('/', "\\").to_lowercase())
-    };
-    norm(program.parent()) == norm(exe.parent())
-        && program
-            .file_name()
-            .is_some_and(|n| n.eq_ignore_ascii_case("misterdownloadmanager-nmhost.exe"))
-}
-
-#[cfg(test)]
-mod old_helper_tests {
-    use super::old_helper;
-    use std::path::Path;
-
-    /// Plan 10c: only the original MDM's helper beside this program is renewed; Grabbit's, or
-    /// another copy's elsewhere, is left as registered.
-    #[test]
-    fn only_the_old_helper_beside_this_program_is_renewed() {
-        let exe = Path::new(r"C:\Program Files\Mister Download Manager\grabbit.exe");
-        assert!(old_helper(
-            Path::new(r"C:\Program Files\Mister Download Manager\misterdownloadmanager-nmhost.exe"),
-            exe
-        ));
-        assert!(old_helper(
-            Path::new(r"c:/program files/mister download manager/MISTERDOWNLOADMANAGER-NMHOST.EXE"),
-            exe
-        ));
-        assert!(!old_helper(
-            Path::new(r"C:\Program Files\Mister Download Manager\grabbit-nmhost.exe"),
-            exe
-        ));
-        assert!(!old_helper(
-            Path::new(r"D:\mdm\misterdownloadmanager-nmhost.exe"),
-            exe
-        ));
-    }
 }
 
 /// Options → Sites Logins' passwords, encrypted for this Windows account (DPAPI) before the list

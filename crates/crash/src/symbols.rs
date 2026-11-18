@@ -14,7 +14,7 @@ pub fn platform() -> &'static str {
 
 /// The release asset holding `version`'s symbols for this system.
 pub fn asset_name(version: &str) -> String {
-    format!("MisterDownloadManager-{version}-symbols-{}.zip", platform())
+    format!("Grabbit-{version}-symbols-{}.zip", platform())
 }
 
 pub fn asset_url(version: &str) -> String {
@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     fn names_follow_the_release() {
-        assert!(asset_name("0.2.3").starts_with("MisterDownloadManager-0.2.3-symbols-"));
+        assert!(asset_name("0.2.3").starts_with("Grabbit-0.2.3-symbols-"));
         assert!(asset_url("0.2.3").contains("/releases/download/v0.2.3/"));
     }
 

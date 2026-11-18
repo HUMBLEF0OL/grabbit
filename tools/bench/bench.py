@@ -260,7 +260,7 @@ def main():
     lab = subprocess.Popen([str(LAB_EXE), "--bind", f"127.0.0.1:{PORT}", "--log-file", str(log)],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # MDM: its own instance, own data folder (the user's copy is untouched).
-    mdm_env = dict(os.environ, MDM_DATA_DIR=str(out / "mdm-data"))
+    mdm_env = dict(os.environ, GRABBIT_DATA_DIR=str(out / "mdm-data"))
     mdm = subprocess.Popen([str(MDM_EXE)], env=mdm_env)
     time.sleep(3)
     # (MDM is restarted for every scenario, below: what it learns about a server in one scenario

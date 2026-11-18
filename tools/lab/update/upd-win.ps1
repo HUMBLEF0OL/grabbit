@@ -68,7 +68,7 @@ $WM_CLOSE = 0x10
 # --- The releases: one folder each, signed with this run's throwaway keys.
 $keys = "$Work\keys"
 $base = "http://127.0.0.1:$Port/files"
-$asset = "MisterDownloadManager-9.9.9-portable.zip"
+$asset = "Grabbit-9.9.9-portable.zip"
 function Release([string]$name, [string[]]$more) {
   $out = "$Work\rel-$name"
   & python "$PSScriptRoot\mkrel.py" --keys $keys --out $out --base $base --asset $asset `

@@ -19,7 +19,7 @@ grabbit --headless --data C:\mdm-server --downloads D:\Downloads
 
 | Flag | Or the variable | What it sets |
 |---|---|---|
-| `--data <folder>` | `GRABBIT_DATA_DIR` (or `MDM_DATA_DIR`) | the list, settings, certificate and paired devices |
+| `--data <folder>` | `GRABBIT_DATA_DIR` | the list, settings, certificate and paired devices |
 | `--downloads <folder>` | `MDM_DOWNLOADS` | where downloads go (each category's folder inside) |
 | `--port <number>` | `MDM_REMOTE_PORT` | the remote control's port (8463) |
 | `--listen <address>` | `MDM_REMOTE_LISTEN` | where it listens: every local network address unless given |

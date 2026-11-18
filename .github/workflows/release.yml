@@ -141,12 +141,12 @@ jobs:
           node tools/extension/check-pack.mjs
           $v = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version\s*=\s*"([^"]+)"').Groups[1].Value
           New-Item -ItemType Directory -Force target/dist | Out-Null
-          Copy-Item target/extension/mdm-chromium.zip "target/dist/MisterDownloadManager-$v-extension-chromium.zip"
-          Copy-Item target/extension/mdm-firefox.xpi "target/dist/MisterDownloadManager-$v-extension-firefox.xpi"
+          Copy-Item target/extension/mdm-chromium.zip "target/dist/Grabbit-$v-extension-chromium.zip"
+          Copy-Item target/extension/mdm-firefox.xpi "target/dist/Grabbit-$v-extension-firefox.xpi"
           # For the Chrome Web Store (the next step, or its dashboard by hand): kept with the
           # build, not the release.
           New-Item -ItemType Directory -Force target/store | Out-Null
-          Copy-Item target/extension/mdm-chrome-store.zip "target/store/MisterDownloadManager-$v-chrome-web-store.zip"
+          Copy-Item target/extension/mdm-chrome-store.zip "target/store/Grabbit-$v-chrome-web-store.zip"
 
       # The Firefox add-on is listed on addons.mozilla.org: each release's version is sent there
       # for review (not waited for); Firefox installs and updates it from its listing. The .xpi

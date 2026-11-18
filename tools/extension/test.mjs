@@ -126,8 +126,7 @@ function fakeApi({
     },
     runtime: {
       sendNativeMessage: async (name, m) => {
-        // `host`: a name alone is the only host registered (plan 10c's two names).
-        if (!host || (typeof host === "string" && name !== host)) throw new Error("Specified native messaging host not found.");
+        if (!host) throw new Error("Specified native messaging host not found.");
         if (m.rules) {
           calls.push(["rules", m]);
           // `rulesReply`: the whole answer, as an older app's host gives it.
@@ -294,22 +293,6 @@ const ok = (what) => {
   ok("Firefox: taken with its container's cookies, size and type");
 }
 
-// Plan 10c: an app from before the rename registered only the original MDM's host name: the
-// download goes there, and the next one goes straight to it.
-{
-  const { api, calls, listeners } = fakeApi({ firefox: true, host: "com.misterdownloadmanager.host" });
-  load(api, true);
-  listeners.created({ id: 9, url: "https://x/old.zip", filename: "C:\\dl\\old.zip", totalBytes: 10, mime: "application/zip" });
-  await settle();
-  listeners.created({ id: 10, url: "https://x/old2.zip", filename: "C:\\dl\\old2.zip", totalBytes: 10, mime: "application/zip" });
-  await settle();
-  const sent = calls.filter((c) => c[0] === "native" && c[2].url);
-  assert.deepEqual(sent.map((c) => [c[1], c[2].url]), [
-    ["com.misterdownloadmanager.host", "https://x/old.zip"],
-    ["com.misterdownloadmanager.host", "https://x/old2.zip"],
-  ]);
-  ok("an app with only the old host name still gets the downloads");
-}
 // Zen (Firefox's family) says its own name through runtime.getBrowserInfo: it goes with the
 // brands, so the app tells Zen from Firefox (#41).
 {

@@ -87,7 +87,7 @@ fn wait_exit(app: &mut Child, wait: Duration) -> ExitStatus {
 /// The app's environment: off the screens, its own data folder, its tray icon, and whether the
 /// test says that icon is visible (MDM_TEST_TRAY_VISIBLE).
 fn env<'a>(cmd: &'a mut Command, data: &Path, visible: bool) -> &'a mut Command {
-    cmd.env("MDM_DATA_DIR", data)
+    cmd.env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .env("MDM_TEST_TRAY", "1")
         .env("MDM_TEST_TRAY_VISIBLE", if visible { "1" } else { "0" })
@@ -95,7 +95,7 @@ fn env<'a>(cmd: &'a mut Command, data: &Path, visible: bool) -> &'a mut Command 
 
 /// The app's environment with no tray object at all (off-screen copies have none unless asked).
 fn env_no_tray<'a>(cmd: &'a mut Command, data: &Path) -> &'a mut Command {
-    cmd.env("MDM_DATA_DIR", data).env("MDM_OFFSCREEN", "1")
+    cmd.env("GRABBIT_DATA_DIR", data).env("MDM_OFFSCREEN", "1")
 }
 
 /// A data folder whose first start asks nothing and checks nothing, with the close-to-tray
@@ -265,7 +265,7 @@ fn closing_follows_the_option_and_the_tray_icon() {
 /// the shell gives the icon no place (MDM_TEST_TRAY_RECT=0), as the reporters' did for an icon
 /// behind ^ (#750, #718, #754, #545).
 fn env_real<'a>(cmd: &'a mut Command, data: &Path, placed: bool) -> &'a mut Command {
-    cmd.env("MDM_DATA_DIR", data)
+    cmd.env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .env("MDM_TEST_TRAY", "1")
         .env("MDM_TEST_TRAY_RECT", if placed { "1" } else { "0" })

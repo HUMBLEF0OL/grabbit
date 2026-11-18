@@ -17,7 +17,7 @@
 #   plain second launch, which shows the window again, right before), all (each in turn).
 # -Renderer: glow or direct3d (MDM_RENDERER; after 0.2.4).
 #
-# Each run has its own data folder (MDM_DATA_DIR, deleted after unless -Keep), so nothing touches
+# Each run has its own data folder (GRABBIT_DATA_DIR, deleted after unless -Keep), so nothing touches
 # an installed MDM, its registrations or the browsers. Nothing goes to the internet: the magnet
 # names no tracker, the update check is off, and the torrent engine's DHT, local discovery, UPnP
 # and incoming connections are off. A release that can't turn them off (0.2.4 and older) needs
@@ -109,7 +109,7 @@ function Native-Message([hashtable]$Message) {
   try {
     [IO.File]::WriteAllBytes($msg, [BitConverter]::GetBytes([uint32]$json.Length) + $json)
     $manifest = Join-Path (Split-Path $Exe) "firefox-host.json"
-    $p = Start-Process -FilePath "cmd.exe" -PassThru -WindowStyle Hidden -ArgumentList "/d /c `"`"$Host_`" `"$manifest`" integration@misterdownloadmanager.com < `"$msg`" > `"$out`"`""
+    $p = Start-Process -FilePath "cmd.exe" -PassThru -WindowStyle Hidden -ArgumentList "/d /c `"`"$Host_`" `"$manifest`" grabbit@humblef0ol.github.io < `"$msg`" > `"$out`"`""
     if (-not $p.WaitForExit(15000)) { throw "the native host didn't quit" }
     $bytes = [IO.File]::ReadAllBytes($out)
     if ($bytes.Length -lt 4) { return "(no reply)" }
@@ -143,7 +143,7 @@ function Run-State([string]$St) {
   if ($NoTorrentEngine) {
     Set-Content -Encoding Ascii (Join-Path $data "torrents") "not a folder (tools/lab/magnet-hidden.ps1)"
   }
-  $env:MDM_DATA_DIR = $data
+  $env:GRABBIT_DATA_DIR = $data
   $env:MDM_OFFSCREEN = "1"
   if ($Renderer) { $env:MDM_RENDERER = $Renderer } else { Remove-Item Env:MDM_RENDERER -ErrorAction SilentlyContinue }
   $app = Start-Process -FilePath $Exe -PassThru
@@ -214,7 +214,7 @@ function Run-State([string]$St) {
       }
     }
     if (-not $Keep) { Remove-Item -Recurse -Force $data -ErrorAction SilentlyContinue }
-    Remove-Item Env:MDM_DATA_DIR, Env:MDM_OFFSCREEN, Env:MDM_RENDERER -ErrorAction SilentlyContinue
+    Remove-Item Env:GRABBIT_DATA_DIR, Env:MDM_OFFSCREEN, Env:MDM_RENDERER -ErrorAction SilentlyContinue
   }
 }
 

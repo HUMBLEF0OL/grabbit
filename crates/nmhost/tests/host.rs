@@ -1,5 +1,5 @@
 //! The native host as the browser runs it: the real program, its standard streams framed as
-//! native messages, its own data folder (MDM_DATA_DIR) with a fake Mister Download Manager
+//! native messages, its own data folder (GRABBIT_DATA_DIR) with a fake Mister Download Manager
 //! listening where `ipc.json` says, answering as the test wants.
 
 use std::io::{BufRead, BufReader, Read, Write};
@@ -54,7 +54,7 @@ fn run(
 ) -> (Vec<serde_json::Value>, bool) {
     let mut child = Command::new(HOST)
         .arg(caller)
-        .env("MDM_DATA_DIR", dir)
+        .env("GRABBIT_DATA_DIR", dir)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

@@ -40,7 +40,7 @@ const RELEASES: &str = "https://codeberg.org/api/v1/repos/mikf/gallery-dl/releas
 pub const USER_AGENT: &str = concat!(
     "Grabbit/",
     env!("CARGO_PKG_VERSION"),
-    " (+https://misterdownloadmanager.com) gallery-dl"
+    " (+https://humblef0ol.github.io/grabbit) gallery-dl"
 );
 
 /// gallery-dl's program in its releases.
