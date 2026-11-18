@@ -6330,7 +6330,7 @@ mod open_file_shell_tests {
     /// Upstream issue 1216: the program a file opens with starts in the file's folder, not in
     /// Grabbit's own working folder. A batch file writes where it runs; Windows shows its
     /// console a moment, so it is run by hand:
-    /// `cargo test -p mdm-app a_file_is_opened_in_its_folder -- --ignored`.
+    /// `cargo test -p grabbit-app a_file_is_opened_in_its_folder -- --ignored`.
     #[test]
     #[ignore = "opens a console window for a moment"]
     fn a_file_is_opened_in_its_folder() {

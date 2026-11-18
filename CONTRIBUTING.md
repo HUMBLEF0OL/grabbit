@@ -9,17 +9,17 @@ You need Windows 10 or 11 and Rust stable 1.95 or later (the MSVC toolchain).
 
 ```
 cargo build
-cargo run -p mdm-app
+cargo run -p grabbit-app
 ```
 
 To try changes without touching your own downloads, give the app a separate data folder:
 
 ```
 set GRABBIT_DATA_DIR=C:\some\empty\folder
-cargo run -p mdm-app
+cargo run -p grabbit-app
 ```
 
-`cargo run -p mdm-labserver -- --faults "rate=2M"` starts a local test server that serves
+`cargo run -p grabbit-labserver -- --faults "rate=2M"` starts a local test server that serves
 generated files with whatever trouble you ask for (slow connections, cuts, busy answers, no
 ranges; `GET /` lists them), so downloads can be tested without the internet.
 

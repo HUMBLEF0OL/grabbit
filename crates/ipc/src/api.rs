@@ -1,7 +1,7 @@
 //! The automation API's answers, shared by the app (which writes them) and the programs that
 //! read them (the command line, the MCP server), so both sides keep one shape.
 //! `docs/automation-api.schema.json` is made from these types and [`crate::Command`]
-//! (`MDM_WRITE_SCHEMA=1 cargo test -p mdm-ipc schema`); a test fails while it is out of date.
+//! (`MDM_WRITE_SCHEMA=1 cargo test -p grabbit-ipc schema`); a test fails while it is out of date.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -193,7 +193,7 @@ mod tests {
             .replace("\r\n", "\n");
         assert!(
             file == made,
-            "docs/automation-api.schema.json is out of date: MDM_WRITE_SCHEMA=1 cargo test -p mdm-ipc schema"
+            "docs/automation-api.schema.json is out of date: MDM_WRITE_SCHEMA=1 cargo test -p grabbit-ipc schema"
         );
     }
 

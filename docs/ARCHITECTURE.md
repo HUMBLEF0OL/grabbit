@@ -6,20 +6,20 @@ How Grabbit's pieces fit together.
 
 | Path | Crate | Role |
 |---|---|---|
-| `crates/engine` | `mdm-engine` | Downloads one file over HTTP(S) or FTP(S): probe, segment planner, connection workers, resume state, per-host limits, speed limiter, checksums, proxy scripts |
-| `crates/app` | `mdm-app` | The desktop app (`grabbit.exe`, egui): list, categories, queues, scheduler, dialogs, tray, settings |
-| `crates/cli` | `mdm-cli` | Headless downloads with progress (`get`, `resume`), videos, torrents and the automation API's commands: a library the app's program runs (`grabbit --cli …`), and `grabbit-cli`, a small launcher that starts it with the same arguments, terminal and exit code |
-| `crates/mcp` | `mdm-mcp` | The MCP server (`grabbit-mcp`): AI assistants list, add and control the running app's downloads through the automation API |
-| `crates/remote` | `mdm-remote` | The remote control (#141): the HTTPS server a paired phone or computer on the local network uses (its page, pairing codes, device tokens, the self-signed certificate); every request becomes an automation API command the app answers |
-| `crates/nmhost` | `mdm-nmhost` | The browser's native messaging host: takes captured downloads from the extension and hands them to the app |
-| `crates/ipc` | `mdm-ipc` | The single-instance channel (a token-protected local socket), the data folder, and the capture rules shared by the app and the host |
-| `crates/debrid` | `mdm-debrid` | Debrid accounts (#44): the services' official APIs (Real-Debrid, AllDebrid, Premiumize) turn a file host's link into a direct one the engine downloads |
-| `crates/extract` | `mdm-extract` | Archive extraction (#37): zip, tar, gz and xz in process; 7z and RAR through an installed 7-Zip, run as its own program |
-| `crates/geo` | `mdm-geo` | Where a download's server is (#140): an IP-to-country range table built from DB-IP's Lite data (`tools/geo/build.py`), looked up on this computer only, and the countries' flags |
-| `crates/tools` | `mdm-tools` | Video pages through yt-dlp and ffmpeg, image galleries through gallery-dl (run as separate programs); while a network adapter is chosen, their connections go through a proxy of Grabbit's on 127.0.0.1 that binds them to it (`relay.rs`); each runs in a folder it can write, also its TEMP (`workdir.rs`) |
-| `crates/crash` | `mdm-crash` | Crash and freeze reports: the monitor process, out-of-process minidumps, symbolicated stacks, the report's text and the release logs ([crash-reports.md](crash-reports.md)) |
-| `crates/torrent` | `mdm-torrent` | BitTorrent and magnet links through librqbit |
-| `crates/labserver` | `mdm-labserver` | An HTTP Range server with a request log and fault injection, and an FTP/FTPS server with its own faults, for tests and benchmarks |
+| `crates/engine` | `grabbit-engine` | Downloads one file over HTTP(S) or FTP(S): probe, segment planner, connection workers, resume state, per-host limits, speed limiter, checksums, proxy scripts |
+| `crates/app` | `grabbit-app` | The desktop app (`grabbit.exe`, egui): list, categories, queues, scheduler, dialogs, tray, settings |
+| `crates/cli` | `grabbit-cli` | Headless downloads with progress (`get`, `resume`), videos, torrents and the automation API's commands: a library the app's program runs (`grabbit --cli …`), and `grabbit-cli`, a small launcher that starts it with the same arguments, terminal and exit code |
+| `crates/mcp` | `grabbit-mcp` | The MCP server (`grabbit-mcp`): AI assistants list, add and control the running app's downloads through the automation API |
+| `crates/remote` | `grabbit-remote` | The remote control (#141): the HTTPS server a paired phone or computer on the local network uses (its page, pairing codes, device tokens, the self-signed certificate); every request becomes an automation API command the app answers |
+| `crates/nmhost` | `grabbit-nmhost` | The browser's native messaging host: takes captured downloads from the extension and hands them to the app |
+| `crates/ipc` | `grabbit-ipc` | The single-instance channel (a token-protected local socket), the data folder, and the capture rules shared by the app and the host |
+| `crates/debrid` | `grabbit-debrid` | Debrid accounts (#44): the services' official APIs (Real-Debrid, AllDebrid, Premiumize) turn a file host's link into a direct one the engine downloads |
+| `crates/extract` | `grabbit-extract` | Archive extraction (#37): zip, tar, gz and xz in process; 7z and RAR through an installed 7-Zip, run as its own program |
+| `crates/geo` | `grabbit-geo` | Where a download's server is (#140): an IP-to-country range table built from DB-IP's Lite data (`tools/geo/build.py`), looked up on this computer only, and the countries' flags |
+| `crates/tools` | `grabbit-tools` | Video pages through yt-dlp and ffmpeg, image galleries through gallery-dl (run as separate programs); while a network adapter is chosen, their connections go through a proxy of Grabbit's on 127.0.0.1 that binds them to it (`relay.rs`); each runs in a folder it can write, also its TEMP (`workdir.rs`) |
+| `crates/crash` | `grabbit-crash` | Crash and freeze reports: the monitor process, out-of-process minidumps, symbolicated stacks, the report's text and the release logs ([crash-reports.md](crash-reports.md)) |
+| `crates/torrent` | `grabbit-torrent` | BitTorrent and magnet links through librqbit |
+| `crates/labserver` | `grabbit-labserver` | An HTTP Range server with a request log and fault injection, and an FTP/FTPS server with its own faults, for tests and benchmarks |
 | `extension/` | — | The Chromium (MV3) and Firefox extension |
 | `docs/` | — | The user guide and tutorials, this file, the benchmark data; the website makes the guide its help pages, which Help opens |
 | `website/` | — | humblef0ol.github.io/grabbit's own pages (home, download, features, themes, FAQ); `tools/website/build.py` adds the help from `docs/` and the news from the CHANGELOG, in English, and GitHub Pages publishes it |
@@ -128,13 +128,13 @@ it the secret stays in the settings as
 before.
 
 A download's server location (#140) is the country of the address it connected to, looked up in
-`mdm-geo`'s table on this computer (`countries.rs` names it); the
+`grabbit-geo`'s table on this computer (`countries.rs` names it); the
 release job builds the table again from the month's data (`tools/geo/build.py --release`).
 
 ## Browser integration
 
 ```
-page ──► extension ──native messaging──► mdm-nmhost ──ipc──► app
+page ──► extension ──native messaging──► grabbit-nmhost ──ipc──► app
 ```
 
 The extension asks the host which file types to take, checks each download against them, and
@@ -152,7 +152,7 @@ offers the store's copy (Add to Chrome, Add to Firefox) before the unpacked one.
 ## Remote control
 
 ```
-phone ──HTTPS (paired token)──► mdm-remote ──ipc::Sink──► app (answer, remote_add)
+phone ──HTTPS (paired token)──► grabbit-remote ──ipc::Sink──► app (answer, remote_add)
 ```
 
 `--headless` (`headless.rs`, #157) runs the same `App` without eframe: a loop calls its
@@ -194,6 +194,6 @@ photos are committed in `art/contributors/`, since GitHub can't round a picture 
 
 ## Tests and benchmarks
 
-`cargo test` runs unit tests and end-to-end downloads against `mdm-labserver` with injected
+`cargo test` runs unit tests and end-to-end downloads against `grabbit-labserver` with injected
 faults (slow, dropped and refused connections, servers without ranges, changing files).
 `tools/bench` runs the published speed comparison; its raw data is in `docs/bench/`.

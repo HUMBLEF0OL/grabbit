@@ -9,12 +9,12 @@ use std::time::{Duration, Instant};
 /// crashy's program name.
 const CRASHY: &str = "crashy.exe";
 
-/// examples/crashy, which `cargo test -p mdm-crash` builds with the tests, from `test`, this
+/// examples/crashy, which `cargo test -p grabbit-crash` builds with the tests, from `test`, this
 /// test's program. Cargo copies it to the profile's folder (target/debug/examples), which holds
-/// the test's program too: in deps/ up to Cargo 1.99, in build/mdm-crash/<hash>/out/ from Cargo
+/// the test's program too: in deps/ up to Cargo 1.99, in build/grabbit-crash/<hash>/out/ from Cargo
 /// 1.100 (upstream issue 934). With a build folder of its own (Cargo's `build-dir`) that copy is
 /// in the target folder only; crashy's own program is then beside the test's, in
-/// build/mdm-crash/<another hash>/out/ (the newest, if there are several).
+/// build/grabbit-crash/<another hash>/out/ (the newest, if there are several).
 fn find_crashy(test: &Path) -> Option<PathBuf> {
     let copied = test
         .ancestors()
@@ -36,7 +36,7 @@ fn crashy() -> PathBuf {
     let test = std::env::current_exe().unwrap();
     find_crashy(&test).unwrap_or_else(|| {
         panic!(
-            "examples/crashy is built with the tests (cargo test -p mdm-crash); none found from {}",
+            "examples/crashy is built with the tests (cargo test -p grabbit-crash); none found from {}",
             test.display()
         )
     })
@@ -58,13 +58,15 @@ fn crashy_is_found_in_each_layout() {
     file(&format!("old/debug/examples/{CRASHY}"));
     assert_eq!(find_crashy(&test), Some(crashy("old/debug/examples")));
     // Cargo 1.100: the copy in examples/ first.
-    let test = file("new/debug/build/mdm-crash/1a2b/out/e2e-1a2b.exe");
-    file(&format!("new/debug/build/mdm-crash/3c4d/out/{CRASHY}"));
+    let test = file("new/debug/build/grabbit-crash/1a2b/out/e2e-1a2b.exe");
+    file(&format!("new/debug/build/grabbit-crash/3c4d/out/{CRASHY}"));
     file(&format!("new/debug/examples/{CRASHY}"));
     assert_eq!(find_crashy(&test), Some(crashy("new/debug/examples")));
     // A build folder of its own: the newest beside the test.
-    let test = file("build/debug/build/mdm-crash/1a2b/out/e2e-1a2b.exe");
-    let old = file(&format!("build/debug/build/mdm-crash/5e6f/out/{CRASHY}"));
+    let test = file("build/debug/build/grabbit-crash/1a2b/out/e2e-1a2b.exe");
+    let old = file(&format!(
+        "build/debug/build/grabbit-crash/5e6f/out/{CRASHY}"
+    ));
     let earlier = std::time::SystemTime::now() - Duration::from_secs(3600);
     std::fs::File::options()
         .write(true)
@@ -72,10 +74,12 @@ fn crashy_is_found_in_each_layout() {
         .unwrap()
         .set_modified(earlier)
         .unwrap();
-    file(&format!("build/debug/build/mdm-crash/3c4d/out/{CRASHY}"));
+    file(&format!(
+        "build/debug/build/grabbit-crash/3c4d/out/{CRASHY}"
+    ));
     assert_eq!(
         find_crashy(&test),
-        Some(crashy("build/debug/build/mdm-crash/3c4d/out"))
+        Some(crashy("build/debug/build/grabbit-crash/3c4d/out"))
     );
     // None at all: said, not a wrong path.
     assert_eq!(find_crashy(&file("none/debug/deps/e2e-1a2b.exe")), None);

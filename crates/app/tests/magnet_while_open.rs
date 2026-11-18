@@ -6,7 +6,7 @@
 //! must open.
 //!
 //! It opens windows, which needs OpenGL or Direct3D, so it runs on request:
-//! `cargo test -p mdm-app --test magnet_while_open -- --ignored`.
+//! `cargo test -p grabbit-app --test magnet_while_open -- --ignored`.
 //!
 //! Windows only: the window is closed with `PostMessage(WM_CLOSE)` through PowerShell; the
 //! queue itself is the same code on every system (app.rs `torrent_waiting`).

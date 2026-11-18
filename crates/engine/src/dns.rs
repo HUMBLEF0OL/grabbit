@@ -851,7 +851,7 @@ mod tests {
     }
 
     /// Every preset in every mode it offers, against the real services, plus fallback and an
-    /// IP-literal DoH address (`cargo test -p mdm-engine dns::tests::real -- --ignored`).
+    /// IP-literal DoH address (`cargo test -p grabbit-engine dns::tests::real -- --ignored`).
     #[tokio::test]
     #[ignore = "asks the real public DNS services"]
     async fn real_providers_answer_in_every_mode() {

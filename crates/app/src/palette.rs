@@ -208,8 +208,7 @@ palette! {
     button_accent_bottom: "button.accent.bottom", "An accent button's bottom edge" = rgb(0x4f, 0xb5, 0xe4), rgb(0x00, 0x5a, 0x9e);
     button_accent_text: "button.accent.text", "An accent button's text" = grey(0x00), grey(0xff);
     button_accent_text_pressed: "button.accent.text.pressed", "An accent button's text pressed" = grey(0x1a), rgb(0xe6, 0xf0, 0xfa);
-    button_glow: "button.glow", "The glow inside a button under the pointer, where the style draws one (Luna; transparent: none)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
-    gloss: "gloss", "The shine glossy parts blend toward at their top: buttons, boxes, bars and title bars (Luna, Aero, Aqua)" = grey(0xff), grey(0xff);
+    gloss: "gloss", "The shine a glossy or blocks progress bar blends toward" = grey(0xff), grey(0xff);
     // ---- check boxes and radios ----
     check: "check", "An unchecked box's or radio's inside" = grey(0x2b), grey(0xf3);
     check_hot: "check.hot", "Its inside under the pointer" = grey(0x3a), grey(0xea);
@@ -288,7 +287,6 @@ palette! {
     caption_text_inactive: "caption.text.inactive", "Its title and glyphs while the window isn't the active one, and a greyed button's" = grey(0x8a), grey(0x8a);
     caption_hot: "caption.hot", "A caption button under the pointer (a tint over the bar)" = rgba(0xff, 0xff, 0xff, 0x0f), rgba(0x00, 0x00, 0x00, 0x09);
     caption_pressed: "caption.pressed", "A caption button pressed (a tint over the bar)" = rgba(0xff, 0xff, 0xff, 0x0a), rgba(0x00, 0x00, 0x00, 0x06);
-    caption_button: "caption.button", "A caption button at rest, where the style shows one (a tint over the bar; transparent: none)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
     caption_close: "caption.close", "Close under the pointer" = rgb(0xc4, 0x2b, 0x1c), rgb(0xc4, 0x2b, 0x1c);
     caption_close_text: "caption.close.text", "Close's glyph under the pointer" = grey(0xff), grey(0xff);
     caption_inactive: "caption.inactive", "A title bar Grabbit draws, while its window isn't the active one (transparent: as when active)" = Color32::TRANSPARENT, Color32::TRANSPARENT;
@@ -360,7 +358,7 @@ macro_rules! metrics {
 
 metrics! {
     control_radius: "radius", "Corner radius of buttons, text boxes and drop-downs" = 3.0;
-    button_radius: "radius.button", "Corner radius of a glossy push button (Luna, Aero; Aqua's are round at the ends)" = 3.0;
+    button_radius: "radius.button", "Corner radius of a toolbar button and of a blocks progress bar" = 3.0;
     part_radius: "radius.part", "Corner radius of a tinted part (an arrow zone, a spin button)" = 2.0;
     check_radius: "radius.check", "Corner radius of a check box" = 2.0;
     flyout_radius: "radius.flyout", "Corner radius of a popup in a window (a calendar, a filter box)" = 6.0;
@@ -387,7 +385,7 @@ metrics! {
 }
 
 /// How the shared painters draw each kind of control (#45): the classic look's are Windows 11's;
-/// the style themes pick their era's. Colours and sizes still come from the palette and metrics.
+/// Graphite picks its own. Colours and sizes still come from the palette and metrics.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Controls {
     /// A focused text box: an accent line along its bottom (Windows 11), or its whole border in
@@ -401,13 +399,12 @@ pub struct Controls {
     /// A scroll bar: Windows 11's (thin until hovered, arrows then), or arrows always shown and a
     /// square thumb the bar's width (Windows 8, the classic bars).
     pub scroll: ScrollLook,
-    /// The title bar: the system's, or drawn by MDM in the theme's style (Windows only).
+    /// The title bar: the system's, or drawn by Grabbit in Graphite's style.
     pub caption: CaptionLook,
     /// The keyboard focus around a control: Windows' dotted rectangle, GNOME's rounded ring or
     /// KDE's frame.
     pub focus: FocusLook,
-    /// A push button: Windows 11's, or KDE's (the edge in the accent under the pointer, the face
-    /// tinted with it pressed).
+    /// A push button: Windows 11's, or Graphite's (an accent button shaded, its glow under it).
     pub button: ButtonLook,
 }
 
@@ -423,19 +420,6 @@ pub enum FieldFocus {
 pub enum CheckLook {
     Fluent,
     Square,
-    /// GNOME: a 2-point border at rest, the accent filled with a light tick when checked.
-    Adwaita,
-    /// KDE: the edge in the accent under the pointer; checked, the accent's edge, its inside
-    /// tinted with it, a tick in the text's colour.
-    Breeze,
-    /// Windows XP: a box shaded from its top, a glow inside under the pointer, a thick tick in
-    /// the checked colour; round radios with a shaded dot.
-    Luna,
-    /// Windows 7: a quiet box with a shaded square inside, its edge in the accent under the
-    /// pointer, the tick in the check mark's colour.
-    Aero,
-    /// Mac OS X: a glossy box with round corners, filled with the accent's gel when checked.
-    Aqua,
 }
 
 /// How a push button shows the pointer and a press.
@@ -443,16 +427,6 @@ pub enum CheckLook {
 pub enum ButtonLook {
     /// Windows 11: its face lighter under the pointer, its bottom edge flattened pressed.
     Fluent,
-    /// KDE: its edge in the accent under the pointer and pressed, its face tinted pressed.
-    Breeze,
-    /// Windows XP: a face shaded from white at its top, a dark edge, a glow inside under the
-    /// pointer (`button.glow`) and on the default button (its border's colour).
-    Luna,
-    /// Windows 7: a glossy face, its top half lighter than the bottom, the edge in the accent
-    /// under the pointer and pressed.
-    Aero,
-    /// Mac OS X: a gel face, round at the ends, the default button in the accent's gel.
-    Aqua,
     /// Graphite: Windows 11's, an accent button's face shaded from `button.accent.top` down to
     /// `button.accent`, the `glow` role under it.
     Graphite,
@@ -468,9 +442,9 @@ pub enum ScrollLook {
 pub enum ProgressLook {
     Line,
     Bar,
-    /// Windows XP: blocks in the bar's colour, shaded across, on a bordered track.
+    /// Blocks in the bar's colour, shaded across, on a bordered track.
     Blocks,
-    /// Windows 7 and Mac OS X: a glossy fill on a shaded, bordered track.
+    /// A glossy fill on a shaded, bordered track.
     Gloss,
     /// Graphite: `Line`, its fill shaded across from `progress.bar` to `progress.bar.end`, the
     /// `glow` role under it.
@@ -480,24 +454,10 @@ pub enum ProgressLook {
 /// A drawn title bar's look: its buttons and where the title sits.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CaptionLook {
-    /// The system draws it (Windows' own frame, the window manager's elsewhere).
+    /// The system draws it (Windows' own frame).
     System,
-    /// Windows 8: a flat bar in the theme's caption colour, the title centred, flat buttons.
-    Metro,
-    /// GNOME's header bar: the title centred in bold, no icon, round buttons tinted at rest.
-    Adwaita,
-    /// KDE's title bar: the icon, the title centred, round buttons that fill with the title's
-    /// colour under the pointer (Close red), their glyph then the bar's.
-    Breeze,
-    /// Windows XP: a shaded bar, the title in bold with a shadow, square buttons with a light
-    /// edge (Close always red).
-    Luna,
-    /// Windows 7: a glassy bar, the title on a soft glow, glossy buttons hung from the bar's
-    /// top (Close wider and red).
-    Aero,
-    /// Mac OS X: a shaded grey bar, the title centred, small round gel buttons whose glyphs
-    /// show under the pointer.
-    Aqua,
+    /// Graphite: a flat bar in the theme's caption colour, the title centred, flat buttons.
+    Graphite,
 }
 
 /// How the keyboard focus is drawn around a control.
@@ -510,6 +470,10 @@ pub enum FocusLook {
     /// KDE: a 1-point frame in the focus ink, its corners the controls' radius.
     Frame,
 }
+
+/// The removed themes' control styles (plan 10, decision 4): a theme file naming one gets
+/// Graphite's control, without a word.
+const REMOVED_STYLES: [&str; 6] = ["luna", "aero", "aqua", "adwaita", "breeze", "metro"];
 
 impl Controls {
     pub const CLASSIC: Self = Self {
@@ -524,22 +488,22 @@ impl Controls {
 
     /// Sets the control with this key to the style named `value`; false when either is unknown.
     pub fn set(&mut self, key: &str, value: &str) -> bool {
+        if REMOVED_STYLES.contains(&value) {
+            // Graphite's own (assets/themes/graphite.toml; a test keeps them the same).
+            let graphite = match key {
+                "check" => "fluent",
+                "button" | "progress" | "caption" => "graphite",
+                _ => return false,
+            };
+            return self.set(key, graphite);
+        }
         match (key, value) {
             ("field-focus", "line") => self.field_focus = FieldFocus::Line,
             ("field-focus", "border") => self.field_focus = FieldFocus::Border,
             ("field-focus", "ring") => self.field_focus = FieldFocus::Ring,
             ("check", "fluent") => self.check = CheckLook::Fluent,
             ("check", "square") => self.check = CheckLook::Square,
-            ("check", "adwaita") => self.check = CheckLook::Adwaita,
-            ("check", "breeze") => self.check = CheckLook::Breeze,
-            ("check", "luna") => self.check = CheckLook::Luna,
-            ("check", "aero") => self.check = CheckLook::Aero,
-            ("check", "aqua") => self.check = CheckLook::Aqua,
             ("button", "fluent") => self.button = ButtonLook::Fluent,
-            ("button", "breeze") => self.button = ButtonLook::Breeze,
-            ("button", "luna") => self.button = ButtonLook::Luna,
-            ("button", "aero") => self.button = ButtonLook::Aero,
-            ("button", "aqua") => self.button = ButtonLook::Aqua,
             ("button", "graphite") => self.button = ButtonLook::Graphite,
             ("progress", "line") => self.progress = ProgressLook::Line,
             ("progress", "bar") => self.progress = ProgressLook::Bar,
@@ -549,12 +513,7 @@ impl Controls {
             ("scroll", "overlay") => self.scroll = ScrollLook::Overlay,
             ("scroll", "classic") => self.scroll = ScrollLook::Classic,
             ("caption", "system") => self.caption = CaptionLook::System,
-            ("caption", "metro") => self.caption = CaptionLook::Metro,
-            ("caption", "adwaita") => self.caption = CaptionLook::Adwaita,
-            ("caption", "breeze") => self.caption = CaptionLook::Breeze,
-            ("caption", "luna") => self.caption = CaptionLook::Luna,
-            ("caption", "aero") => self.caption = CaptionLook::Aero,
-            ("caption", "aqua") => self.caption = CaptionLook::Aqua,
+            ("caption", "graphite") => self.caption = CaptionLook::Graphite,
             ("focus", "dotted") => self.focus = FocusLook::Dotted,
             ("focus", "ring") => self.focus = FocusLook::Ring,
             ("focus", "frame") => self.focus = FocusLook::Frame,
@@ -927,6 +886,24 @@ mod tests {
         assert!(l.theme.dark.dark && !l.theme.light.dark);
     }
 
+    /// Plan 10, decision 4: the removed themes' styles give Graphite's control, as accepted.
+    #[test]
+    fn removed_styles_give_graphites_control() {
+        for old in REMOVED_STYLES {
+            let mut c = Controls::CLASSIC;
+            for key in ["check", "button", "progress", "caption"] {
+                assert!(c.set(key, old), "{key} = {old}");
+            }
+            let g = graphite().controls;
+            assert_eq!(
+                (c.check, c.button, c.progress, c.caption),
+                (g.check, g.button, g.progress, g.caption),
+                "{old}"
+            );
+            assert!(!c.set("focus", old), "focus never had {old}");
+        }
+    }
+
     /// Graphite, MDM's look and its only built-in theme (plan 05.5c): rounded corners,
     /// a focus ring, a flat drawn title bar, the mockup's taller rows, its own one-colour icon
     /// set (Tabler's, themeicons.rs), and pressed faces told from the pointer over them (issue
@@ -954,7 +931,7 @@ mod tests {
                 check: CheckLook::Fluent,
                 progress: ProgressLook::Graphite,
                 scroll: ScrollLook::Overlay,
-                caption: CaptionLook::Metro,
+                caption: CaptionLook::Graphite,
                 focus: FocusLook::Ring,
                 button: ButtonLook::Graphite,
             }

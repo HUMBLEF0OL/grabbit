@@ -222,6 +222,23 @@ migrations were removed too (see 10c).
    one entry for it, old entries as written; ROADMAP's rename item says so.
 ## 10e · Internal names and old styles (last, when no other branch is open)
 
+Done on `rename/10e-internal` (2026-11-18). The 14 packages are `grabbit-*`; each library keeps
+its crate name (`[lib] name = "mdm_engine"`), so the code's paths, the log filters and the crash
+reports' module names are unchanged, and every dependency keeps its old key (`mdm-engine = {
+package = "grabbit-engine", … }`, in `[workspace.dependencies]`). The binaries keep their names:
+`grabbit`, `grabbit-cli`, `grabbit-mcp`, `grabbit-nmhost` (10c's), `labserver` (no old name in
+it) and `mdm-symbolicate` (a maintainer's tool, never shipped; its file stays upstream's).
+`grabbit-cli --version` says `grabbit-cli` (clap reads the package's name). The upstream-sync
+check: `sync.py status` sorts upstream's 53 waiting commits the same on this branch as on `dev`
+(all ports); 4 of them gain a conflict in a `Cargo.toml` or `Cargo.lock` from the rename, the
+lock ones what `pick --lock` resolves; `pick --lock`'s lock step (`apply_lock`) was run for the
+three of them in a throwaway branch (none bumps a version) and resolved the renamed packages'
+lock without a change; none waiting is a pure `lock` pick, so no real pick; `test_sync.py`
+passes. The removed themes' control styles and their drawing are gone (`palette.rs`,
+`winui.rs`): a theme file naming one gets Graphite's control without a warning, Graphite's own
+title bar is `caption = "graphite"`, and `button.glow` and `caption.button`, used only by them,
+are no longer roles. The `blocks` and `gloss` progress bars stay (offered on the website).
+
 1. Packages `mdm-*` → `grabbit-*`, dependencies declared `mdm-x = { package = "grabbit-x", … }`
    so the code's `mdm_*::` paths stay (decision 3), in one mechanical commit with nothing else in
    it; then `CLAUDE.md`, the docs and the workflows' `cargo -p` commands. Then one upstream pick
@@ -237,10 +254,9 @@ migrations were removed too (see 10c).
   table leaves out the styles 10e removes) and licence page (Grabbit's mark, Tabler Icons and
   Geist instead of the old icon sets), README, PRODUCT.md and CLAUDE.md describe only Graphite.
   The layout "IDM users expect" stays: Graphite keeps it.
-- The control styles of the removed themes (`[controls]` `check`, `button`, `progress`,
-  `caption` = `luna`, `aero`, `aqua`, `adwaita`, `breeze`, `metro`) stay as theme-file vocabulary
-  with their drawing code: 05.5c kept them, to stay under its size limit. Decided: they go, in
-  10e (decision 4).
+- Done (10e): the control styles of the removed themes (`[controls]` `check`, `button`,
+  `progress`, `caption` = `luna`, `aero`, `aqua`, `adwaita`, `breeze`, `metro`) and their
+  drawing code are gone (05.5c had kept them, to stay under its size limit; decision 4).
 - Done (10d): the docs' theme guide (`docs/themes.md`), the website's theme sample
   (`inherits = "graphite"`, no `icons` key) and its AI prompt (`website/content/theme-prompt.txt`)
   name only what `themefile.rs` and `palette.rs` read today; the removed themes' control styles
@@ -251,7 +267,8 @@ migrations were removed too (see 10c).
 
 - [x] No user-visible "Mister Download Manager" or "MDM" left in the app, installer, extension, website,
       docs: `python tools/rename/check.py` exits 0 (10d, 2026-11-18; every area marked done)
-- [ ] A fresh install of Grabbit sets up downloads, settings, saved logins, autostart, the `.torrent`
+- [x] A fresh install of Grabbit sets up downloads, settings, saved logins, autostart, the `.torrent`
       association and the browser extension under the new names (no upgrade test from MDM: never
-      published, see 10d)
-- [ ] The never-change list is untouched
+      published, see 10d; tested on 2026-11-18 in PR 62's checks)
+- [x] The never-change list is untouched: the installer's `AppId` and the Chrome key as they were;
+      the Firefox ID changed once, on 2026-11-18, by decision (see "Never change")

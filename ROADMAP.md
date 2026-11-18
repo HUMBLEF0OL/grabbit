@@ -625,7 +625,7 @@ These ship in a later version, when they're ready.
   lists, Speed Limiter's box and the offers' repeated buttons named for screen readers.
   Left (plan 09's follow-ups): a faint square behind images in light mode on Intel Iris Xe
   graphics with Direct3D (a driver workaround in the graphics library).
-- 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
+- ✅ The rename to Grabbit, after the new look: the name in the app, installer, extension, website
   and docs, settings, saved logins, autostart, the `.torrent` link and the browser extension
   (Grabbit was never published: no upgrade from the old name). Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:
   a checker that lists every place the old name is still shown (`tools/rename/check.py`) and the
@@ -637,8 +637,10 @@ These ship in a later version, when they're ready.
   take Grabbit's names (10c; its migrations from the old names removed, never published).
   Done: the release files (`Grabbit-<version>-…`), the website address in the app, the Firefox
   add-on's ID, and the website, help, README and other docs say Grabbit, describe only the
-  Graphite look, and the site moves to https://humblef0ol.github.io/grabbit (10d). Next: the
-  internal names (10e)
+  Graphite look, and the site moves to https://humblef0ol.github.io/grabbit (10d). Done: the
+  Rust packages are `grabbit-*` (the code keeps its `mdm_*::` paths, so upstream's fixes still
+  apply) and the removed themes' control styles are gone: a theme file naming one gets
+  Graphite's (10e)
 - ✅ Grabbit signs its own releases: Update now trusts Grabbit's release key, and each release's
   checksum list is signed with it
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a

@@ -4,7 +4,7 @@ The palette is the one chosen in PLAN.md (Colour direction). The token -> theme 
 plans/01-prepare.md section 3 and plans/02-theme.md steps 1 to 3. After writing, it runs
 pal.py's own check and a contrast check on the mapped values (the pairs the app's palette tests
 look at, where the role is set here rather than derived). The app's tests check the file again
-(`cargo test -p mdm-app palette`).
+(`cargo test -p grabbit-app palette`).
 
     python design/graphite/source/make_theme.py
 """
@@ -154,7 +154,7 @@ button = "graphite"
 progress = "graphite"
 scroll = "overlay"
 # A drawn, flat title bar coloured by the caption roles.
-caption = "metro"
+caption = "graphite"
 
 [sizes]
 # The mock's 8 on its 30-point controls, in proportion on MDM's 23-point ones.

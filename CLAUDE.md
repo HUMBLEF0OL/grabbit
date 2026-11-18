@@ -2,7 +2,7 @@
 
 Grabbit is a download manager for Windows in Rust (egui + storytold craft-libs), laid out the
 way Internet Download Manager users expect. It began as a fork of Mister Download Manager (MDM):
-the crates and code paths still say `mdm` (`mdm-app`, `mdm_engine::`). Start by reading
+its packages are `grabbit-*`; the code paths still say `mdm` (`mdm_engine::`). Start by reading
 [README.md](README.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Rules
@@ -44,8 +44,8 @@ the crates and code paths still say `mdm` (`mdm-app`, `mdm_engine::`). Start by 
 
 - `cargo build` / `cargo test` / `cargo clippy --all-targets` / `cargo fmt --all` — workspace.
 - `node tools/extension/e2e.mjs` — the extension in real headless browsers.
-- `cargo run -p mdm-labserver -- --faults "rate=2M"` — test server (GET / lists the faults).
-- `cargo run -p mdm-app -- --cli get <url> -o <dir>` — headless download with progress (the
+- `cargo run -p grabbit-labserver -- --faults "rate=2M"` — test server (GET / lists the faults).
+- `cargo run -p grabbit-app -- --cli get <url> -o <dir>` — headless download with progress (the
   app's program runs the command line; `grabbit-cli` is only its launcher).
 - `tools/extension/pack.ps1` — build the extension for Chromium and Firefox into
   `target/extension/`; `node tools/extension/test.mjs` — its logic against fake browser APIs.

@@ -9,7 +9,7 @@ command away.
 On Windows, from the repository's root:
 
 ```powershell
-cargo build --release -p mdm-app -p mdm-labserver
+cargo build --release -p grabbit-app -p grabbit-labserver
 python tools/shots/make.py
 python tools/shots/make.py check
 ```

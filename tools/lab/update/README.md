@@ -27,7 +27,7 @@ These checks need the **`test-update`** cargo feature. It is off by default, and
 The build must be release mode. A debug build is "built from source", and those never update.
 
 ```powershell
-cargo build --release -p mdm-app --features test-update -p mdm-labserver
+cargo build --release -p grabbit-app --features test-update -p grabbit-labserver
 ```
 
 ## The portable zip

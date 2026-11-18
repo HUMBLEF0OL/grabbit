@@ -7,7 +7,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ### Changed
 
-- **Mister Download Manager is now Grabbit.** The app's windows, menus and messages, the notification area, the crash report, the command line, the AI assistants' server, the remote page, the installer and the browser extension say Grabbit. The bug, crash and idea forms on GitHub say Grabbit too. Sites and services now see Grabbit's name in its User-Agent (`Grabbit/<version>`).
+- **Mister Download Manager is now Grabbit.** The app's windows, menus and messages, the notification area, the crash report, the command line (`--version` says `grabbit-cli`), the AI assistants' server, the remote page, the installer and the browser extension say Grabbit. The bug, crash and idea forms on GitHub say Grabbit too. Sites and services now see Grabbit's name in its User-Agent (`Grabbit/<version>`).
 - **Grabbit's programs and what it keeps carry Grabbit's name:**
   - The programs are `grabbit.exe`, `grabbit-cli.exe`, `grabbit-mcp.exe` and `grabbit-nmhost.exe` ([command line](docs/command-line.md), [AI assistants](docs/ai-assistants.md)).
   - The download list and settings are in `%APPDATA%\grabbit` (a portable copy keeps its `data` folder); `GRABBIT_DATA_DIR` gives a data folder of its own.
@@ -21,6 +21,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 ### Removed
 
 - MDM is Windows only now: Linux, macOS, Safari and Docker builds are no longer made.
+- A theme file's `[controls]` styles `luna`, `aero`, `aqua`, `adwaita`, `breeze` and `metro` are gone with their drawing: a file naming one gets Graphite's control, and the colours only they used (`button.glow`, `caption.button`) are no longer read. Graphite's own title bar is `caption = "graphite"`.
 - The old looks are removed; **Graphite** is the only look, light and dark. The Classic, Native, High contrast, Metro, Adwaita, Breeze, Luna, Aero and Aqua themes are gone: after an upgrade MDM opens in Graphite whatever theme was chosen, and a theme file that names one gets Graphite. Theme files of your own still work, on top of Graphite (`inherits = "graphite"`, the default); their `icons` key, `[controls]`'s `chrome`, the old toolbar's and tree's colours (`toolbar.line`, `tree.frame` and the like) and the group boxes' frame (`group.line`: the Options pages have hairlines now) are no longer read, and a file naming them loads with a note in the log. The help pages and the website's Themes page describe Graphite alone. Windows' high contrast no longer changes MDM's colours until a high-contrast Graphite comes back.
 
 ### Added

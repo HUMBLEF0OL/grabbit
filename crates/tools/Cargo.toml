@@ -1,5 +1,5 @@
 [package]
-name = "mdm-tools"
+name = "grabbit-tools"
 description = "Verified, pinned installs of helper tools (yt-dlp) for Grabbit"
 version.workspace = true
 edition.workspace = true
@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+
+# The code's paths stay `mdm_tools::` (plan 10, decision 3).
+[lib]
+name = "mdm_tools"
 
 [dependencies]
 aws-lc-rs.workspace = true

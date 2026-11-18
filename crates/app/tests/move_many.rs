@@ -5,7 +5,7 @@
 //! download stays where its pieces are.
 //!
 //! It opens windows, which needs OpenGL or Direct3D, so it runs on request:
-//! `cargo test -p mdm-app --test move_many -- --ignored`.
+//! `cargo test -p grabbit-app --test move_many -- --ignored`.
 
 use std::path::Path;
 use std::process::Command;

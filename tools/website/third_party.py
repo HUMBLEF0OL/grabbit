@@ -9,10 +9,10 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-OURS = {"mdm-app", "mdm-cli", "mdm-nmhost", "mdm-engine", "mdm-ipc", "mdm-tools", "mdm-torrent"}
+OURS_PREFIX = "grabbit-"  # every workspace package
 
 rows = set()
-for package in ("mdm-app", "mdm-cli", "mdm-nmhost"):
+for package in ("grabbit-app", "grabbit-cli", "grabbit-nmhost"):
     out = subprocess.run(
         ["cargo", "tree", "-p", package, "-e", "normal,build", "--prefix", "none", "--target", "x86_64-pc-windows-msvc",
          "-f", "{p}\t{l}\t{r}"],
@@ -22,7 +22,7 @@ for package in ("mdm-app", "mdm-cli", "mdm-nmhost"):
         name_ver, licence, repo = (line.split("\t") + ["", ""])[:3]
         name, _, ver = name_ver.partition(" v")
         ver = ver.split(" ")[0]
-        if name in OURS or not name:
+        if name.startswith(OURS_PREFIX) or not name:
             continue
         rows.add((name, ver, licence.strip() or "see its source", repo.strip()))
 

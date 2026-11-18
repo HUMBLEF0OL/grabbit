@@ -1,5 +1,5 @@
 [package]
-name = "mdm-geo"
+name = "grabbit-geo"
 description = "Where a download's server is (#140): an IP address's country, from DB-IP's IP to Country Lite (CC BY 4.0) shipped with Grabbit, looked up on this computer only; and the countries' flags"
 version.workspace = true
 edition.workspace = true
@@ -8,8 +8,12 @@ license.workspace = true
 authors.workspace = true
 publish.workspace = true
 
+# The code's paths stay `mdm_geo::` (plan 10, decision 3).
+[lib]
+name = "mdm_geo"
+
 [dependencies]
-# The table's xz (already in the tree for archives, mdm-extract).
+# The table's xz (already in the tree for archives, grabbit-extract).
 lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "xz"] }
 
 [dev-dependencies]

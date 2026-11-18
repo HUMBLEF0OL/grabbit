@@ -1,5 +1,5 @@
 [package]
-name = "mdm-labserver"
+name = "grabbit-labserver"
 description = "HTTP Range test server with request log and fault injection (tests + behaviour lab)"
 version.workspace = true
 edition.workspace = true
@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+
+# The code's paths stay `mdm_labserver::` (plan 10, decision 3).
+[lib]
+name = "mdm_labserver"
 
 [[bin]]
 name = "labserver"

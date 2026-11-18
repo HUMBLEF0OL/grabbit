@@ -8,8 +8,8 @@
 # the app's own /show command, in a copy of its own (its own data folder, lab server and
 # downloads); tools/lab/progress-shots.ps1 takes the torrent window's tabs (with -Torrents).
 #
-#   cargo build --release -p mdm-app -p mdm-labserver -p mdm-cli
-#   cargo build --release -p mdm-torrent --example swarm        # for -Torrents
+#   cargo build --release -p grabbit-app -p grabbit-labserver -p grabbit-cli
+#   cargo build --release -p grabbit-torrent --example swarm        # for -Torrents
 #   powershell -ExecutionPolicy Bypass -File design\graphite\source\baseline.ps1 -Torrents
 #
 # A phase's after-shots come from the same script in its theme, for the states its plan names:
@@ -26,7 +26,7 @@ param(
   # The run's folder: its path shows in a few windows, so short and neutral. It must not exist
   # (the shot scripts delete it at the start and the end).
   [string]$Work = "D:\Demo",
-  # Also the torrent window's five tabs (needs the swarm example and mdm-cli built).
+  # Also the torrent window's five tabs (needs the swarm example and grabbit-cli built).
   [switch]$Torrents,
   # Also Help → Check for updates, which asks GitHub.
   [switch]$Updates,

@@ -1,5 +1,5 @@
 [package]
-name = "mdm-ipc"
+name = "grabbit-ipc"
 description = "Command channel between Grabbit, its command line and the browser host"
 version.workspace = true
 edition.workspace = true
@@ -7,6 +7,10 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+
+# The code's paths stay `mdm_ipc::` (plan 10, decision 3).
+[lib]
+name = "mdm_ipc"
 
 [dependencies]
 craft-atomic.workspace = true

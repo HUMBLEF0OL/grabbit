@@ -8,7 +8,7 @@
 //! copy), on Linux an autostart entry in a configuration folder of the test's own.
 //!
 //! It opens windows, which needs OpenGL or Direct3D, so it runs on request:
-//! `cargo test -p mdm-app --test startup_tray -- --ignored`.
+//! `cargo test -p grabbit-app --test startup_tray -- --ignored`.
 
 use std::path::Path;
 use std::process::{Child, Command};

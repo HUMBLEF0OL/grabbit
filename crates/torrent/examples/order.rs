@@ -5,7 +5,7 @@
 //! play), and for the scarce swarm when the scarce pieces arrived and when another peer had them
 //! from us (how soon they spread).
 //!
-//!   cargo run --release -p mdm-torrent --example order -- <out dir> [runs] [video.mp4]
+//!   cargo run --release -p grabbit-torrent --example order -- <out dir> [runs] [video.mp4]
 //!
 //! With a video (an MP4 whose index is at its end, as most are written), each in-order run also
 //! copies the partial file at 30% and 60% and asks ffprobe and ffmpeg (on PATH) whether its

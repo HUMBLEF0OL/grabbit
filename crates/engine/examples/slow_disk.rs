@@ -1,9 +1,9 @@
 //! Measure a download to a disk slower than the network (#782): per-second speed, stalls and
 //! the connections shed as "much slower than the others".
 //!
-//! cargo run --release -p mdm-engine --example slow_disk -- <url> <folder> [disk rate] [cache]
+//! cargo run --release -p grabbit-engine --example slow_disk -- <url> <folder> [disk rate] [cache]
 //!
-//! `url`: a big file on a fast server (the lab server: `cargo run -p mdm-labserver -- --faults
+//! `url`: a big file on a fast server (the lab server: `cargo run -p grabbit-labserver -- --faults
 //! rate=15M`, then `http://127.0.0.1:8080/gen/6G/a.bin`). `disk rate` and `cache` (bytes, with
 //! K, M or G) give the part file the slow disk of `mdm_engine::slowdisk`; without them it is
 //! written to the real disk. The file is deleted at the end.

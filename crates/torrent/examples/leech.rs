@@ -2,7 +2,7 @@
 //! ratio) without the internet: it downloads a .torrent from peers on the local network only
 //! (Local Service Discovery; no DHT, no UPnP, no trackers), printing what arrived each second.
 //!
-//!   cargo run -p mdm-torrent --example leech -- <file.torrent> <out folder> [seconds] [peer]
+//!   cargo run -p grabbit-torrent --example leech -- <file.torrent> <out folder> [seconds] [peer]
 //!
 //! Stops when done or after `seconds` (default 60); its own state stays in `<out>/.leech`.
 //! `peer` (e.g. 127.0.0.1:51413): dial that peer too. On loopback the firewall stays out of the

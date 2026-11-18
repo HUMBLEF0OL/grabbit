@@ -1,5 +1,5 @@
 {
-  "about": "A page's media file's name (upstream issues 345, 695 and 800): the address, the type its server said and the tab's title, and the name both the engine (naming.rs, answer_name) and the browser extension (background.js, mediaName with the switch off) give it. Checked by both: cargo test -p mdm-engine and node tools/extension/test.mjs.",
+  "about": "A page's media file's name (upstream issues 345, 695 and 800): the address, the type its server said and the tab's title, and the name both the engine (naming.rs, answer_name) and the browser extension (background.js, mediaName with the switch off) give it. Checked by both: cargo test -p grabbit-engine and node tools/extension/test.mjs.",
   "cases": [
     ["https://v.test/remote_control.php?id=7&t=1", "video/mp4", "Movie: the title", "Movie the title.mp4"],
     ["https://v.test/remote_control.php?id=7", "video/mp4", "", "remote_control.mp4"],

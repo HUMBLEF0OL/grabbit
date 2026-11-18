@@ -20,7 +20,7 @@ author, Ahmed Nefzaoui, with ChatGPT (OpenAI's image generation).
 The README's block icons (`docs/images/icons/`: arrow, globe, gift, magnet) were made for it
 with OpenAI's GPT-5 Image Mini by `tools/readme/icons.py`, given the app icon as the style to follow.
 
-## Archive extraction (mdm-extract)
+## Archive extraction (grabbit-extract)
 
 The libraries Link grabber's archive extraction is built on (all compatible with Grabbit's GPL-3.0):
 

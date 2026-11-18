@@ -6,7 +6,7 @@
 //! Ignored: it needs `MDM_TEST_GALLERYDLS`, the programs separated as in PATH (`:` or `;`):
 //!
 //!   MDM_TEST_GALLERYDLS=$HOME/gdl/1.20.0/bin/gallery-dl:/usr/bin/gallery-dl \
-//!     cargo test -p mdm-tools --test gallery_dl -- --ignored --nocapture
+//!     cargo test -p grabbit-tools --test gallery_dl -- --ignored --nocapture
 
 use std::time::{Duration, Instant};
 

@@ -5,7 +5,7 @@
 //! MDM_TEST_TRAY_VISIBLE decides, or no tray object; and a real icon, the shell asked for real,
 //! hides the window even when the shell gives it no place (an icon behind ^, #545). Windows only
 //! (WM_CLOSE), so it runs on request:
-//! `cargo test -p mdm-app --test close_without_tray -- --ignored`.
+//! `cargo test -p grabbit-app --test close_without_tray -- --ignored`.
 
 #![cfg(windows)]
 
