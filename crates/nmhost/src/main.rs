@@ -26,7 +26,7 @@ use serde::{Deserialize, Serialize};
 mod win32;
 
 const HOST_NAME: &str = "com.grabbit.host";
-use mdm_ipc::extension::{FIREFOX_ID, STORE_ID, STORE_UPDATE_URL, chromium_ids, store_id};
+use mdm_ipc::extension::{FIREFOX_ID, STORE_UPDATE_URL, chromium_ids, store_id};
 /// Where each Chromium browser looks for native messaging hosts on Windows, under HKCU (one
 /// user) or HKLM (everyone). Chromium-branded builds (Chromium, Helium, Thorium, and Brave and
 /// Brave Origin with every channel) read Chromium's first, then Chrome's, as most other forks do
@@ -43,6 +43,10 @@ const FIREFOX_KEY: &str = r"Software\Mozilla\NativeMessagingHosts";
 /// its next start ("New extension added"), the user turning it on there. HKLM's is read from the
 /// 32-bit view on 64-bit Windows, hence /reg:32 (HKCU has one view).
 const CHROME_EXTERNAL_KEY: &str = r"Software\Google\Chrome\Extensions";
+/// The original project's Chrome Web Store extension, which Grabbit 1.0.0 named under
+/// CHROME_EXTERNAL_KEY by mistake: Chrome offered an extension that talks to the original's host,
+/// never to Grabbit's. Registering and unregistering remove that entry; nothing else names it.
+const ORIGINAL_STORE_ID: &str = "ejoleppdfgjdndddcjoehopknmlglojp";
 
 /// A message from the extension.
 #[derive(Debug, Default, Deserialize, PartialEq)]
@@ -811,6 +815,13 @@ fn register(all_users: bool) -> Result<(), String> {
         &ff_path.display().to_string(),
         "/f",
     ])?;
+    // 1.0.0's entry for the original project's extension goes.
+    let _ = reg(&[
+        "delete",
+        &format!(r"{root}\{CHROME_EXTERNAL_KEY}\{ORIGINAL_STORE_ID}"),
+        "/f",
+        "/reg:32",
+    ]);
     // Chrome offers the store's extension once it is listed (never a placeholder ID).
     if let Some(id) = store_id() {
         reg(&[
@@ -840,12 +851,14 @@ fn unregister(all_users: bool) -> Result<(), String> {
     for key in REGISTRY_KEYS.into_iter().chain([FIREFOX_KEY]) {
         let _ = reg(&["delete", &format!(r"{root}\{key}\{HOST_NAME}"), "/f"]);
     }
-    let _ = reg(&[
-        "delete",
-        &format!(r"{root}\{CHROME_EXTERNAL_KEY}\{STORE_ID}"),
-        "/f",
-        "/reg:32",
-    ]);
+    for id in store_id().into_iter().chain([ORIGINAL_STORE_ID]) {
+        let _ = reg(&[
+            "delete",
+            &format!(r"{root}\{CHROME_EXTERNAL_KEY}\{id}"),
+            "/f",
+            "/reg:32",
+        ]);
+    }
     let _ = std::fs::remove_file(exe_dir()?.join(format!("{HOST_NAME}.json")));
     let _ = std::fs::remove_file(exe_dir()?.join(format!("{HOST_NAME}.firefox.json")));
     println!("unregistered {HOST_NAME}");
@@ -896,25 +909,22 @@ fn downloadable(url: &str) -> bool {
 mod tests {
     use super::*;
 
-    /// The Chrome Web Store's copy and the app folder's (unpacked) both connect, and both are
-    /// served: the manifest's allowed_origins and the host's own caller check agree.
+    /// The app folder's (unpacked) copy connects; the original project's store extension, which
+    /// 1.0.0 named to Chrome, doesn't (Grabbit has no store listing yet): the manifest's
+    /// allowed_origins and the host's own caller check agree.
     #[test]
-    fn store_and_unpacked_extensions_both_allowed() {
+    fn unpacked_extension_allowed_not_the_originals() {
         let manifest = chromium_manifest(&this_program().unwrap());
-        for id in [
-            "ejoleppdfgjdndddcjoehopknmlglojp",
-            "oogbclbbninliongijffeeggalppliok",
-        ] {
-            let o = format!("chrome-extension://{id}/");
-            assert!(
-                manifest["allowed_origins"]
-                    .as_array()
-                    .unwrap()
-                    .contains(&serde_json::json!(o)),
-                "{manifest}"
-            );
-            assert!(our_caller(&[o]));
-        }
+        let allowed = manifest["allowed_origins"].as_array().unwrap();
+        let o = "chrome-extension://oogbclbbninliongijffeeggalppliok/".to_owned();
+        assert!(allowed.contains(&serde_json::json!(o)), "{manifest}");
+        assert!(our_caller(&[o]));
+        let original = format!("chrome-extension://{ORIGINAL_STORE_ID}/");
+        assert!(
+            !allowed.contains(&serde_json::json!(original)),
+            "{manifest}"
+        );
+        assert!(!our_caller(&[original]));
         assert!(!our_caller(&[
             "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/".into()
         ]));

@@ -41,11 +41,12 @@ Point at a video and a small **Download video** button appears at its edge. It o
 [video downloads](/features/video.html)). You can hide it on one video or one site, or turn it
 off in **Options**.
 
-## Installed from the store, kept up to date
+## Added from Grabbit's folder
 
 Install Grabbit with its setup and keep **Set up browser integration** ticked. Then add the
-extension: Firefox 140 or later takes it from addons.mozilla.org, and Chrome, Edge, Brave, Opera
-and Vivaldi from the Chrome Web Store. The browser keeps it updated.
+extension from Grabbit's `extension` folder: Chrome, Edge, Brave, Opera and Vivaldi load it
+unpacked, Firefox 140 or later as a temporary add-on (it isn't in the stores or signed by Mozilla
+yet; the [tutorial](/help/guide-catch-browser-downloads.html) shows each browser).
 
 Some limits, plainly: the portable copy can't connect to a browser, since it writes nothing
 outside its folder.

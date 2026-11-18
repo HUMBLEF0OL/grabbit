@@ -36,11 +36,8 @@ The browser started Grabbit's helper, but it stopped before answering. Security 
 
 Grabbit's helper serves only its own extension. The browser says this copy isn't one it knows.
 
-- **Grabbit 0.2.x with the extension from the Chrome Web Store?** The store's copy needs a newer Grabbit:
-  0.2.x knows only the copy in its own folder. Update Grabbit with **Help → Check for updates...**.
-  Until then, remove the store's copy
-  and load the one in Grabbit's folder instead (`extension\chromium`, see
-  [Browser integration](browser-integration.md#chrome-edge-brave-opera-and-vivaldi)).
+- **An extension from the Chrome Web Store or addons.mozilla.org?** Grabbit isn't in the stores yet: the **Mister Download Manager** extension there belongs to another project. Remove it and load the copy in Grabbit's folder instead (`extension\chromium`, see
+  [the tutorial](guide-catch-browser-downloads.md#chromium)).
 - **Two copies installed?** Open the browser's extensions page (`chrome://extensions`, `edge://extensions`, `brave://extensions`) and keep only one **Grabbit**.
 - **A copy from elsewhere?** Remove it and add the extension as Grabbit's **Add Grabbit to your browser** window shows (see [Browser integration](browser-integration.md)).
 - **An older Grabbit?** Update Grabbit: a newer extension may have an ID an old helper doesn't know.
@@ -82,7 +79,7 @@ In Chrome, Edge and Brave you can limit an extension to some sites (right-click 
 
 ## Firefox forgets the extension after a restart {#firefox-temporary}
 
-An add-on loaded with **Load Temporary Add-on** (from `about:debugging`) is removed when Firefox closes. Remove it and install the add-on from [its page on addons.mozilla.org](https://addons.mozilla.org/firefox/addon/mister-download-manager/) instead: Firefox keeps that one, and updates it.
+An add-on loaded with **Load Temporary Add-on** (from `about:debugging`) is removed when Firefox closes. Grabbit's add-on isn't signed by Mozilla yet, so release Firefox can only load it that way: load it again after each restart, or install it for good in Firefox Developer Edition or Nightly with `xpinstall.signatures.required` set to `false` (see [the tutorial](guide-catch-browser-downloads.md#firefox)).
 
 ## Next steps
 

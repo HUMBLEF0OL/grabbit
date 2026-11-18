@@ -1,10 +1,9 @@
 //! The browser extension's offer: at each start, until a browser's extension has reached the
 //! app (the native host notes it: mdm_ipc::extension::seen), a window lists the browsers
-//! installed and opens the extension's page in the one picked (addons.mozilla.org for Firefox
-//! and its family, the Chrome Web Store for Chrome, Edge, Brave, Opera and Vivaldi), with the
-//! tutorial that adds it by hand as the fallback. Chrome may ask by itself too: registering the
-//! host also names the store's extension to it (crates/nmhost). "Don't ask again" stops the
-//! offer; `/show extension` brings it back.
+//! installed and, for the one picked, opens the tutorial's section that loads the copy in
+//! Grabbit's folder (Grabbit has no store listing yet; once the Chrome Web Store has it, Chrome,
+//! Edge, Brave, Opera and Vivaldi get its page, and registering the host names it to Chrome,
+//! crates/nmhost). "Don't ask again" stops the offer; `/show extension` brings it back.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -110,10 +109,21 @@ fn is_seen(seen: &[String], row: &str) -> bool {
     seen.iter().any(|b| b == named)
 }
 
-/// A row for a browser of Firefox's family (Firefox, Zen, LibreWolf …): it gets the add-on's
-/// page on addons.mozilla.org, not the Chrome Web Store.
+/// A row for a browser of Firefox's family (Firefox, Zen, LibreWolf …): it gets the tutorial's
+/// Firefox section, not the Chrome Web Store.
 fn is_gecko(row: &str) -> bool {
     mdm_ipc::browsers::named(row).is_some_and(|b| b.family == mdm_ipc::browsers::Family::Gecko)
+}
+
+/// Where a row's button goes: the store's page (`store`, None while Grabbit isn't listed), else
+/// the tutorial's section for that browser (a docs/ path, for help::page_url). Firefox's family
+/// has no listing: always its section.
+fn row_target<'a>(row: &str, store: Option<&'a str>) -> (Option<&'a str>, &'static str) {
+    if is_gecko(row) {
+        (None, mdm_ipc::extension::GUIDE_FIREFOX)
+    } else {
+        (store, mdm_ipc::extension::GUIDE_CHROMIUM)
+    }
 }
 
 impl Extension {
@@ -206,16 +216,12 @@ impl Extension {
         let o = o + egui::vec2(0.0, extra);
 
         // One row per browser: its name, and the button that opens the extension's page in it:
-        // Firefox's on addons.mozilla.org, the Chrome Web Store's for the others (the tutorial
-        // while STORE_ID is a placeholder, as in a build of its own).
+        // the Chrome Web Store's once Grabbit is listed there; until then (and always for
+        // Firefox's family, which has no listing) the tutorial's section for that browser.
         let store = mdm_ipc::extension::store_page();
         for (k, (name, program)) in self.browsers.iter().enumerate() {
             let y = BANNER + 16.0 + k as f32 * ROW;
-            let page = if is_gecko(name) {
-                Some(mdm_ipc::extension::FIREFOX_PAGE.to_owned())
-            } else {
-                store.clone()
-            };
+            let (page, guide) = row_target(name, store.as_deref());
             winui::text_font(
                 &p,
                 winui::tahoma_bold(),
@@ -282,10 +288,8 @@ impl Extension {
             ui.ctx()
                 .accesskit_node_builder(add.id, |n| n.set_label(spoken));
             if add.clicked() {
-                // No store page: the tutorial on the website, in the interface language.
-                let url = page
-                    .clone()
-                    .unwrap_or_else(|| crate::help::page_url(mdm_ipc::extension::GUIDE_DOC));
+                // No store page: the tutorial on the website, at this browser's section.
+                let url = page.map_or_else(|| crate::help::page_url(guide), str::to_owned);
                 let url = url.as_str();
                 match program {
                     Some(program) => crate::win32::open_in(program, url),
@@ -334,10 +338,19 @@ impl Extension {
                 crate::i18n::t("Connected: downloads from your browser now come here.").to_owned(),
                 winui::SUCCESS(),
             )
-        } else {
+        } else if store.is_some() {
             (
                 crate::i18n::t(
                     "Once it is added, this window says so. Chrome may also ask by itself at its next start.",
+                )
+                .to_owned(),
+                muted,
+            )
+        } else {
+            (
+                // i18n: in the browser extension's window, under the browsers, while it has no store listing
+                crate::i18n::t(
+                    "The extension comes with Grabbit: Show me how loads it from Grabbit's folder. Once it is added, this window says so.",
                 )
                 .to_owned(),
                 muted,
@@ -600,5 +613,32 @@ mod tests {
         for b in ["Google Chrome", "Helium", "Brave", "Your browser", ""] {
             assert!(!is_gecko(b), "{b}");
         }
+    }
+
+    /// Grabbit has no store listing: every row opens the tutorial at its browser's section
+    /// (never the original project's listings); a listing, once there, is Chromium's only.
+    #[test]
+    fn rows_open_the_tutorial_until_listed() {
+        let store = mdm_ipc::extension::store_page();
+        assert_eq!(store, None);
+        for b in ["Google Chrome", "Brave", "Microsoft Edge", ""] {
+            assert_eq!(
+                row_target(b, store.as_deref()),
+                (None, mdm_ipc::extension::GUIDE_CHROMIUM),
+                "{b}"
+            );
+        }
+        assert_eq!(
+            row_target("Mozilla Firefox", Some("https://store/x")),
+            (None, mdm_ipc::extension::GUIDE_FIREFOX)
+        );
+        assert_eq!(
+            row_target("Brave", Some("https://store/x")).0,
+            Some("https://store/x")
+        );
+        assert!(
+            crate::help::page_url(mdm_ipc::extension::GUIDE_CHROMIUM)
+                .ends_with("/help/guide-catch-browser-downloads.html#chromium")
+        );
     }
 }

@@ -38,6 +38,11 @@ ALLOW = [
     (r"\bMDM\.caption-less\.settled\b", "internal window-property marker, never shown"),
     (r"\bMDM-test-[\w{}:-]*", "keychain names of off-screen test copies, never shown"),
     (r"fork of Mister Download Manager", "lineage: where Grabbit comes from (README, FAQ)"),
+    (
+        r"named \*\*Mister Download Manager\*\*|(?:\*\*|\*|<i>)Mister Download Manager(?:\*\*|\*|</i>)"
+        r"(?= (?:extension|one) (?:there|in the stores))",
+        "the original's extension in the stores, named so users tell it from Grabbit's (1.0.1)",
+    ),
 ]
 ALLOW_RE = re.compile("|".join(f"(?:{p})" for p, _ in ALLOW))
 

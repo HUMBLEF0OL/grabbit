@@ -45,12 +45,13 @@ SITE = "https://humblef0ol.github.io/grabbit"
 # paths ("/download.html") and rebase() puts BASE in front of them once everything is built.
 BASE = urllib.parse.urlsplit(SITE).path.rstrip("/")
 REPO = "https://github.com/HUMBLEF0OL/grabbit"
-# The Firefox add-on's listing (crates/ipc/src/extension.rs FIREFOX_PAGE): {{AMO}} in pages, and
-# <!--@amo--> for its Add to Firefox button.
-AMO = "https://addons.mozilla.org/firefox/addon/mister-download-manager/"
-# The extension's listing in the Chrome Web Store (crates/ipc/src/extension.rs STORE_ID), for
-# Chrome, Edge, Brave, Opera and Vivaldi: {{CWS}} in pages; <!--@cws--> for its Add to Chrome button.
-CWS = "https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp"
+# Where Add to Firefox ({{AMO}} in pages, <!--@amo--> for its button) and Add to Chrome ({{CWS}},
+# <!--@cws-->) go: Grabbit has no addons.mozilla.org or Chrome Web Store listing yet
+# (crates/ipc/src/extension.rs STORE_ID), so the tutorial's section that adds the copy in
+# Grabbit's folder. A listing named Mister Download Manager is the original project's: its
+# extension never connects to Grabbit.
+AMO = "/help/guide-catch-browser-downloads.html#firefox"
+CWS = "/help/guide-catch-browser-downloads.html#chromium"
 # The header's, the footer's and the home page's Support Grabbit: this fork's repository until its
 # owner's GitHub Sponsors page exists (see .github/FUNDING.yml; the app and the popup match).
 SPONSORS = REPO
@@ -336,7 +337,7 @@ def split_button(extra_class: str = "") -> str:
 
 
 def amo_button(extra_class: str = "") -> str:
-    """Add to Firefox: the add-on's listing on addons.mozilla.org, drawn in line (never green:
+    """Add to Firefox: the steps that add the add-on (AMO), drawn in line (never green:
     green is Download's), with Firefox's own logo; in words, so it's translated (Mozilla's badge
     is an English picture)."""
     return (f'<a class="btn btn-line store-btn{extra_class}" href="{AMO}">'
@@ -344,8 +345,8 @@ def amo_button(extra_class: str = "") -> str:
 
 
 def cws_button(extra_class: str = "") -> str:
-    """Add to Chrome: the extension's listing in the Chrome Web Store (Edge, Brave, Opera and
-    Vivaldi install from it too), drawn as Add to Firefox is."""
+    """Add to Chrome: the steps that load the extension (CWS) in Chrome, Edge, Brave, Opera and
+    Vivaldi, drawn as Add to Firefox is."""
     return (f'<a class="btn btn-line store-btn{extra_class}" href="{CWS}">'
             '<img src="/assets/browsers/chrome.svg" width="22" height="22" alt=""> Add to Chrome</a>')
 

@@ -13,26 +13,22 @@ Browsers built on them work too: Chromium and Helium take the extension as Chrom
 Browser integration has two parts: a small helper program that the browser talks to, and the extension itself.
 
 1. Install Grabbit with the setup and keep **Set up browser integration (Chrome, Edge, Brave, Firefox)** ticked. This registers the helper. (The portable copy can't do this; see [Portable mode](portable.md).)
-2. Add the extension to each browser you use, as below: Firefox from its add-ons store, the others from the Chrome Web Store. Until a browser's extension has reached Grabbit, Grabbit's **Add Grabbit to your browser** window opens at each start: it lists the browsers it found, and **Add the extension** opens the store's page in that browser. **Install it by hand** opens the steps for loading it without the store; **Don't ask again** stops the window.
+2. Add the extension to each browser you use, as below. It isn't in the browsers' stores yet: it comes with Grabbit, in the `extension` folder where Grabbit is installed (`%LOCALAPPDATA%\Programs\Grabbit\extension` if you installed it for yourself, or `Program Files\Grabbit\extension` if you installed it for everyone). Every release also has it as its own download, `...-extension-chromium.zip` (unzip it first) and `...-extension-firefox.xpi`. An extension named **Mister Download Manager** in the stores belongs to another project and doesn't connect to Grabbit. Until a browser's extension has reached Grabbit, Grabbit's **Add Grabbit to your browser** window opens at each start: it lists the browsers it found, and **Show me how** opens the steps for that browser; **Don't ask again** stops the window.
 
-![Add Grabbit to your browser: each browser found, with a button to its store page](images/help/browser-offer.webp)
-*Grabbit's own window opens each browser's store page for you.*
-
-### Firefox
-
-Firefox 140 or later is needed. Install the add-on from its page on addons.mozilla.org, [Grabbit](https://addons.mozilla.org/firefox/addon/mister-download-manager/): click **Add to Firefox**. Firefox keeps it updated. Zen and LibreWolf install it from the same page. (Grabbit's **Add Grabbit to your browser** window opens that page for you.)
+![Add Grabbit to your browser: each browser found, with a button for it](images/help/browser-offer.webp)
+*Grabbit's own window lists each browser it found.*
 
 ### Chrome, Edge, Brave, Opera and Vivaldi
-
-Install the extension from its page in the Chrome Web Store, [Grabbit](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp): click **Add to Chrome**. In Edge the button is **Get**: Edge first asks to **Allow extensions from other stores** (click **Allow**), then **Add extension**. The browser keeps it updated. Grabbit's **Add Grabbit to your browser** window opens that page in each browser for you, and Chrome may offer it by itself at its next start once Grabbit is installed.
-
-To load it by hand instead (a browser that can't use the store, or a build of your own): its files are in the `extension` folder where Grabbit is installed: `%LOCALAPPDATA%\Programs\Grabbit\extension` if you installed it for yourself, or `Program Files\Grabbit\extension` if you installed it for everyone. Every release also has them as their own download, `...-extension-chromium.zip` (unzip it first).
 
 1. Open the extensions page: `chrome://extensions`, `edge://extensions` or `brave://extensions`.
 2. Turn on **Developer mode**.
 3. Click **Load unpacked** and choose the `extension\chromium` folder.
 
-**Grabbit** appears in the list. Leave it turned on. Pin its button to the toolbar to see at a glance whether the browser reaches Grabbit.
+**Grabbit** appears in the list. Leave it turned on. Pin its button to the toolbar to see at a glance whether the browser reaches Grabbit. [The tutorial](guide-catch-browser-downloads.md#chromium) shows each step.
+
+### Firefox
+
+Firefox 140 or later is needed. Firefox installs for good only add-ons Mozilla has signed, and Grabbit's isn't signed yet: load `extension\mdm-firefox.xpi` as a temporary add-on (`about:debugging` → **This Firefox** → **Load Temporary Add-on...**), which lasts until Firefox closes, or install it for good in Firefox Developer Edition or Nightly with `xpinstall.signatures.required` set to `false`. [The tutorial](guide-catch-browser-downloads.md#firefox) shows both.
 
 ### From the plain zip
 
