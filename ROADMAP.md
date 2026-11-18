@@ -555,6 +555,27 @@ everything below ships in it.
   encrypted piece whose key can't be had leaves nothing behind, and deleting a video takes its
   HLS audio stream's files too.
 
+## Version 1.0.1
+
+The maintainer's first findings with 1.0.0 (in `dev`, for the next release):
+
+- ✅ The browser extension connects in Brave, Chrome, Edge and Firefox: Grabbit has no store
+  listing yet, so the **Add Grabbit to your browser** window opens the tutorial that loads the
+  copy in Grabbit's folder (Load unpacked; a temporary add-on in Firefox) instead of the original
+  project's listings, whose extension never reached Grabbit, and Chrome is no longer told to
+  offer that extension.
+- ✅ Seven columns at first (Source, File Name, Size, Status, Time left, Transfer rate, Added),
+  which fit the window's first size without scrolling sideways; File Name, Size and Status are
+  always shown, the rest a right-click on the header away.
+- ✅ A pasted link waits for Download File Info's answer: **Start downloading immediately while
+  displaying "Download File Info" dialog** is off by default.
+- ✅ No glow under the default button or the progress bars, in dark mode either.
+- ✅ Light or dark from a button in the title bar (a moon, a sun) instead of View → Dark Mode
+  support and Always dark; it follows Windows until first clicked.
+- ✅ Find in the main window: the title bar's field filters the list as you type, Enter, F3 and
+  Shift+F3 step through the matches, and its funnel's menu chooses where to look and shows only
+  some statuses or sources (the column filters themselves). The Find file window is gone.
+
 ## Being worked on
 
 These ship in a later version, when they're ready.

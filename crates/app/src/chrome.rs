@@ -485,28 +485,29 @@ mod a11y_tests {
         );
     }
 
-    /// Graphite's Find button is a button named Find, and a screen reader's Click presses it
-    /// (Cmd::Find, as Ctrl+F).
+    /// The title bar's light/dark button is a button named for what it does, and a screen
+    /// reader's Click presses it.
     #[test]
-    fn the_find_button_is_a_button() {
+    fn the_mode_button_is_a_button() {
         let _fonts = crate::theme::font_tests();
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
-        let rc = Rect::from_min_size(pos2(800.0, 5.0), vec2(120.0, 26.0));
-        let (nodes, clicked) = frame(&ctx, vec![], |ui| find_button(ui, rc, "Ctrl+F"));
+        let rc = Rect::from_min_size(pos2(800.0, 5.0), MODE_BUTTON);
+        let (nodes, clicked) = frame(&ctx, vec![], |ui| mode_button(ui, rc, false));
         assert!(!clicked);
         let (id, _) = nodes
             .iter()
-            .find(|(_, n)| n.role() == Role::Button && n.label() == Some("Find"))
-            .expect("a Find button");
+            .find(|(_, n)| n.role() == Role::Button && n.label() == Some("Switch to dark mode"))
+            .expect("the light/dark button");
         let click = egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
             action: egui::accesskit::Action::Click,
             target_tree: egui::accesskit::TreeId::ROOT,
             target_node: *id,
             data: None,
         });
-        let (_, clicked) = frame(&ctx, vec![click], |ui| find_button(ui, rc, "Ctrl+F"));
+        let (_, clicked) = frame(&ctx, vec![click], |ui| mode_button(ui, rc, false));
         assert!(clicked);
+        assert_eq!(mode_button_label(true), "Switch to light mode");
     }
 
     /// Graphite's menus draw each item's icon by its command; a submenu's and a greyed
@@ -846,33 +847,37 @@ pub fn caption_menu_bar(
     (hit, titles)
 }
 
-/// Graphite's Find button, in the title bar between the menus and the window's buttons (plan
-/// 05b; 00's accepted exception: a new way to Downloads → Find): its size for the label and
-/// `key` ("Ctrl+F").
-pub fn find_button_size(p: &egui::Painter, key: &str) -> egui::Vec2 {
-    let label = text_width_font(p, winui::segoe(), crate::i18n::t("Find")).ceil();
-    let key = text_width_font(p, key_font(), key).ceil();
-    vec2(9.0 + 14.0 + 7.0 + label + 7.0 + key + 9.0, 26.0)
-}
-
 /// The font of a Graphite menu's shortcut column and of the Find button's key.
 fn key_font() -> egui::FontId {
     egui::FontId::proportional(crate::theme::metrics().font_small)
 }
 
-/// Paint the Find button in English rect `rc` ([`find_button_size`]): the window's face, the
-/// buttons' border, radius 6, a magnifier, "Find" and its key in the shortcuts' ink. Exposed as
-/// a button named Find. True when clicked (or invoked by a screen reader).
-pub fn find_button(ui: &mut Ui, rc: Rect, key: &str) -> bool {
+/// The light/dark button's size, beside Find in Graphite's title bar.
+pub const MODE_BUTTON: egui::Vec2 = vec2(26.0, 26.0);
+
+/// What the light/dark button says it does, `dark` being the mode shown now.
+pub fn mode_button_label(dark: bool) -> &'static str {
+    if dark {
+        // i18n: the title bar's button that switches the windows to their light side
+        crate::i18n::t("Switch to light mode")
+    } else {
+        // i18n: the title bar's button that switches the windows to their dark side
+        crate::i18n::t("Switch to dark mode")
+    }
+}
+
+/// Paint the light/dark button in English rect `rc` ([`MODE_BUTTON`]), as Find is drawn: the
+/// mode it switches to (a moon in light, a sun in dark), its name as its tooltip and to screen
+/// readers. True when clicked.
+pub fn mode_button(ui: &mut Ui, rc: Rect, dark: bool) -> bool {
     let p = ui.painter().clone();
     let screen = winui::rect(rc);
     let resp = ui.interact(
         screen,
-        egui::Id::unique("caption-find"),
+        egui::Id::unique("caption-mode"),
         winui::pointer_only(),
     );
-    // i18n: the title bar's button that opens Find file (Ctrl+F)
-    let label = crate::i18n::t("Find");
+    let label = mode_button_label(dark);
     winui::expose(&resp, egui::Role::Button, label, true, None);
     let c = crate::theme::colors();
     let face = if resp.is_pointer_button_down_on() {
@@ -890,22 +895,10 @@ pub fn find_button(ui: &mut Ui, rc: Rect, key: &str) -> bool {
         Stroke::new(1.0, c.button_border),
         egui::StrokeKind::Inside,
     );
-    let mid = rc.center().y;
-    let icon = Rect::from_min_size(pos2(rc.left() + 9.0, (mid - 7.0).round()), vec2(14.0, 14.0));
-    // The mockup's: the icon and the label in the secondary ink, the key in the shortcuts'.
-    let ink = c.text_secondary;
-    crate::themeicons::paint_in(ui, &p, "gx-search", winui::rect(icon), ink, true);
-    let baseline = rc.top() + 17.0;
-    let drawn = text_font(&p, winui::segoe(), icon.right() + 7.0, baseline, label, ink);
-    text_font(
-        &p,
-        key_font(),
-        winui::rect(drawn).right() + 7.0,
-        baseline,
-        key,
-        c.menu_shortcut,
-    );
-    resp.clicked()
+    let icon = Rect::from_center_size(rc.center(), vec2(14.0, 14.0));
+    let need = if dark { "gx-sun" } else { "gx-moon" };
+    crate::themeicons::paint_in(ui, &p, need, winui::rect(icon), c.text_secondary, true);
+    resp.on_hover_text(label).clicked()
 }
 
 /// The menu bar's titles in `titles` (English rects; `bar` around them all), drawn IDM's way

@@ -221,6 +221,10 @@ fn start_mode(at_login: bool) -> Start {
     }
 }
 
+/// The main window's first size at 100 % (1.0.1: 1080 × 560, was 930 × 470, so the list's
+/// default columns fit without scrolling sideways; list.rs checks it).
+pub const MAIN_SIZE: [f32; 2] = [1080.0, 560.0];
+
 fn main() -> std::process::ExitCode {
     renderer::mark_start();
     // PAC's myIpAddress from the routing table, not a UDP socket (a firewall prompt, #35).
@@ -368,7 +372,9 @@ fn app() -> eframe::Result {
         .window
         .filter(|_| scale::test_zoom().is_none() && !offscreen())
         .filter(|[x, y, w, h]| *w >= 600 && *h >= 300 && on_a_screen(x + 40, y + 10));
-    let size = saved.map_or([930.0 * z, 470.0 * z], |[_, _, w, h]| [w as f32, h as f32]);
+    let size = saved.map_or([MAIN_SIZE[0] * z, MAIN_SIZE[1] * z], |[_, _, w, h]| {
+        [w as f32, h as f32]
+    });
     let mut viewport = quiet(
         egui::ViewportBuilder::default()
             .with_title(MAIN_TITLE)

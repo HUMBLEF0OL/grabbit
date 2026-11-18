@@ -184,6 +184,10 @@ pub struct Settings {
     /// Downloads.
     pub show_start_dialog: bool,
     pub only_add_to_queue: bool,
+    /// Start downloading while Download File Info is open (app.rs `start_early`). Off by default
+    /// since 1.0.1: nothing starts before the dialog's answer. Saved under a key of its own:
+    /// 1.0.0 wrote `start_immediately` (on) into every settings file, which would keep it on.
+    #[serde(rename = "start_while_asking")]
     pub start_immediately: bool,
     pub queue_panel_later: bool,
     pub queue_panel_batch: bool,
@@ -415,7 +419,7 @@ impl Default for Settings {
             mark_downloads: true,
             show_start_dialog: true,
             only_add_to_queue: false,
-            start_immediately: true,
+            start_immediately: false,
             queue_panel_later: true,
             queue_panel_batch: true,
             ignore_mtime: false,

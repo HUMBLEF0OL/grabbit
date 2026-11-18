@@ -55,7 +55,7 @@ Grabbit doesn't use a temporary folder: every connection writes straight into th
 
 - **Show start download dialog** — show **Download File Info** for each new download. With it off, downloads start at once, or only join the queue if you tick **Do not start downloading, only add files to the queue**.
 - **Show download complete dialog** — show **Download complete** when a file finishes.
-- **Start downloading immediately while displaying "Download File Info" dialog** — on by default, so the download is already under way while you choose a folder.
+- **Start downloading immediately while displaying "Download File Info" dialog** — off by default: nothing starts until you answer the dialog. Turn it on to have the download already under way while you choose a folder.
 - **Show queue selection panel on pressing "Download Later" button** — ask which queue; off puts it in the **Main download queue**.
 - **Show queue selection panel on closing batch download dialogs** — the same for batch downloads.
 - **Ignore file modification time changes when resuming a download** — for servers that report a new date for the same file each time. Without it, such a server makes every resume start over.
@@ -177,7 +177,7 @@ A few settings live outside this window:
 
 - **Downloads → Speed Limiter → Settings...** — speed limits. See [Connections and speed](connections-and-speed.md#speed-limiter).
 - **Tasks → Torrent settings...** — sharing and file associations. See [Torrents](torrents.md#torrent-settings).
-- **View → Dark Mode support**, **Always dark**, **Theme**, **Draw with**, and **Interface size**. See [Getting started](getting-started.md#themes) and [Troubleshooting](troubleshooting.md).
+- The title bar's light/dark button, **View → Theme**, **Draw with**, and **Interface size**. See [Getting started](getting-started.md#themes) and [Troubleshooting](troubleshooting.md).
 - **Help → Check for updates...** — **Check for updates at every start** is in that window.
 
 ## Next steps

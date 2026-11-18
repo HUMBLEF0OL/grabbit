@@ -236,9 +236,16 @@ pub fn system_changed() -> bool {
     WATCHED.swap(now, Ordering::Relaxed) != now
 }
 
-/// Dark or not: View → Always dark, else the system's mode while Dark Mode support is on.
+/// Dark or not: Always dark, else the system's mode while Dark Mode support is on (the
+/// settings' defaults: following Windows until the title bar's light/dark button is clicked).
 fn wanted(dark_mode_support: bool, always_dark: bool, system_dark: bool) -> bool {
     always_dark || (dark_mode_support && system_dark)
+}
+
+/// The title bar's light/dark button (1.0.1): the settings (Dark Mode support, Always dark) that
+/// switch from the mode shown, `dark`, to the other one, kept whatever Windows says from then on.
+pub fn toggled(dark: bool) -> (bool, bool) {
+    if dark { (false, false) } else { (false, true) }
 }
 
 /// A module's names for the active theme's colours: `pub NAME => role;` becomes `NAME()`, the
@@ -773,6 +780,20 @@ mod mode_tests {
             }
             assert_eq!(wanted(true, false, system), system, "following the system");
             assert!(!wanted(false, false, system), "support off: light");
+        }
+    }
+
+    /// 1.0.1: the title bar's button switches to the other mode whatever Windows says, and the
+    /// defaults follow Windows until it is first clicked.
+    #[test]
+    fn the_button_switches_to_the_other_mode_for_good() {
+        let s = crate::settings::Settings::default();
+        for system in [false, true] {
+            assert_eq!(wanted(s.dark_mode_support, s.always_dark, system), system);
+            for dark in [false, true] {
+                let (support, always) = super::toggled(dark);
+                assert_eq!(wanted(support, always, system), !dark, "from dark={dark}");
+            }
         }
     }
 }

@@ -89,15 +89,26 @@ pub const RATIO: usize = 11;
 /// last slot, so a layout saved before it existed still means what it meant.
 pub const UPLOAD: usize = 12;
 
-/// Graphite's (plan 05b, the mockup's; Status 30 wider, for Geist's "Stopped" with its bar and
-/// percentage): its padded cells need more room. Kept apart from IDM's, as the Categories
+/// Graphite's (plan 05b, the mockup's), narrowed in 1.0.1 so the default columns
+/// ([`DEFAULT_VISIBLE`]) fit the window's first size (crate::MAIN_SIZE) without scrolling
+/// sideways: Status keeps room for Geist's "Stopped" with its percentage (its bar where it fits). Kept apart from IDM's, as the Categories
 /// pane's width is.
 pub const GRAPHITE_WIDTHS: [f32; COLS] = [
-    280.0, 34.0, 90.0, 200.0, 110.0, 110.0, 160.0, 160.0, 160.0, 70.0, 80.0, 100.0, 110.0,
+    216.0, 34.0, 84.0, 160.0, 84.0, 100.0, 160.0, 160.0, 140.0, 64.0, 80.0, 100.0, 110.0,
 ];
 /// Default display order: Source first, then IDM's, a torrent's three columns after its rate, and
 /// Added after Last Try Date.
 const DEFAULT_ORDER: [usize; COLS] = [SOURCE, 0, 1, 2, 3, 4, 5, UPLOAD, PEERS, RATIO, 6, ADDED, 7];
+/// The columns shown at first, by data slot (1.0.1: all thirteen made the list scroll sideways
+/// in the window's first size): Source, File Name, Size, Status, Time left, Transfer rate and
+/// Added. Q, Last Try Date, Description and a torrent's three are a right-click on the header away.
+pub const DEFAULT_VISIBLE: [bool; COLS] = [
+    true, false, true, true, true, true, false, false, true, true, false, false, false,
+];
+/// The columns that can't be hidden: File Name, Size and Status.
+pub fn always_shown(col: usize) -> bool {
+    matches!(col, 0 | 2 | 3)
+}
 
 const MIN_WIDTH: f32 = 16.0;
 /// How far from a separator a press grabs it for resizing.
@@ -135,11 +146,38 @@ fn row_value(row: &Row, col: usize) -> &str {
     }
 }
 
-/// Does the row pass every column filter? A hidden column's filter is kept but doesn't filter
-/// (nothing on screen would say why rows are missing).
+/// Is value `v` of value-list column `col` shown (its header's check box, the Find dropdown's
+/// chip)? Both read and write the one filter ([`set_value`]).
+pub fn value_on(st: &ListState, col: usize, v: &str) -> bool {
+    match &st.filters[col] {
+        Some(Filter::Values(keep)) => keep.contains(&v),
+        _ => true,
+    }
+}
+
+/// Show or hide value `v` of value-list column `col`: every value shown is no filter.
+pub fn set_value(st: &mut ListState, col: usize, v: &str, on: bool) {
+    let Some(vals) = filter_values(col) else {
+        return;
+    };
+    let keep: Vec<&'static str> = vals
+        .iter()
+        .copied()
+        .filter(|x| if *x == v { on } else { value_on(st, col, x) })
+        .collect();
+    st.filters[col] = (keep.len() < vals.len()).then_some(Filter::Values(keep));
+}
+
+/// Is any column filter on (the Find funnel's active look, the status strip's "N of M")?
+pub fn any_filter(st: &ListState) -> bool {
+    st.filters.iter().any(Option::is_some)
+}
+
+/// Does the row pass every column filter? A hidden column's filter filters too (1.0.1: the
+/// title bar's funnel and the status strip's "N of M" say one is on, and the Find dropdown sets
+/// Source's whether its column is shown or not).
 pub fn matches(st: &ListState, row: &Row) -> bool {
     st.filters.iter().enumerate().all(|(c, f)| match f {
-        _ if !st.visible[c] => true,
         None => true,
         Some(Filter::Values(keep)) => keep.contains(&row_value(row, c)),
         Some(Filter::Text(t)) => row.cells[c].to_lowercase().contains(&t.to_lowercase()),
@@ -206,7 +244,7 @@ impl Default for ListState {
         ListState {
             order: DEFAULT_ORDER.to_vec(),
             widths: GRAPHITE_WIDTHS,
-            visible: [true; COLS],
+            visible: DEFAULT_VISIBLE,
             sort: None,
             scroll: 0.0,
             hscroll: 0.0,
@@ -277,7 +315,7 @@ impl ListState {
         self.filter_pending = None;
     }
 
-    /// Columns as they first were: order, widths, every one shown.
+    /// Columns as they first were: order, widths, the default ones shown.
     pub fn reset_columns(&mut self) {
         let fresh = ListState::default();
         self.order = fresh.order;
@@ -303,7 +341,9 @@ impl ListState {
     /// Restore a saved layout. One saved before "Added" existed gets it after Last Try Date,
     /// one saved before "Source" gets it first, one saved before the torrent's columns gets them
     /// after Transfer rate, in this order: Upload speed, Peers, Share ratio. A layout that
-    /// doesn't name every column exactly once is ignored.
+    /// doesn't name every column exactly once is ignored. File Name, Size and Status are shown
+    /// whatever it says ([`always_shown`]); a column it doesn't name gets its default, and one
+    /// showing every column (1.0.0's default, which saved them all shown) gets the defaults.
     pub fn apply(&mut self, mut l: Layout) {
         if !l.order.contains(&SOURCE) {
             l.order.insert(0, SOURCE);
@@ -351,11 +391,17 @@ impl ListState {
         let width = |saved: &[f32], c: usize, default: f32| {
             saved.get(c).copied().unwrap_or(default).max(MIN_WIDTH)
         };
+        // ponytail: someone who chose every column by hand gets the defaults once, as 1.0.0's
+        // untouched lists do; one right-click per column brings them back.
+        let all = l.visible.iter().all(|v| *v);
         for (c, default) in GRAPHITE_WIDTHS.iter().enumerate() {
             self.widths[c] = width(&l.graphite_widths, c, *default);
-            self.visible[c] = l.visible.get(c).copied().unwrap_or(true);
+            self.visible[c] = always_shown(c)
+                || match l.visible.get(c) {
+                    Some(v) if !all => *v,
+                    _ => DEFAULT_VISIBLE[c],
+                };
         }
-        self.visible[0] = true;
         self.sort = l.sort.filter(|(c, _)| *c < COLS);
     }
 
@@ -1641,25 +1687,15 @@ fn filter_box(ui: &mut Ui, st: &mut ListState) {
                         crate::i18n::t("Show"),
                         winui::TEXT(),
                     );
-                    let mut keep: Vec<&'static str> = match &st.filters[col] {
-                        Some(Filter::Values(k)) => k.clone(),
-                        _ => vals.to_vec(),
-                    };
                     for (i, v) in vals.iter().enumerate() {
-                        let mut on = keep.contains(v);
+                        let mut on = value_on(st, col, v);
                         let y = o.y + 28.0 + 18.0 * i as f32;
                         let check = winui::checkbox(ui, pos2(o.x + 12.0, y), &mut on, v, true);
                         first = first.or(Some(check.id));
                         if check.clicked() {
-                            keep.retain(|k| k != v);
-                            if on {
-                                keep.push(v);
-                            }
+                            set_value(st, col, v, on);
                         }
                     }
-                    st.filters[col] = (keep.len() < vals.len()).then(|| {
-                        Filter::Values(vals.iter().copied().filter(|v| keep.contains(v)).collect())
-                    });
                     // As wide as its label in this language (#192), short of Close.
                     let w = winui::button_fit_width(
                         ui.painter(),
@@ -1931,10 +1967,15 @@ mod tests {
 
     #[test]
     fn moving_a_column_right_and_left() {
-        let mut st = ListState::default();
+        let mut st = ListState {
+            visible: [true; COLS],
+            ..ListState::default()
+        };
         let cols = spans(&st);
-        // Drop "File Name" (slot 0) at the boundary after "Size" (x = 70 + 280 + 34 + 90 = 474).
-        move_column(&mut st, &cols, 0, 475.0);
+        // Drop "File Name" (slot 0) at the boundary after "Size" (Source, File Name, Q, Size).
+        let x =
+            GRAPHITE_WIDTHS[SOURCE] + GRAPHITE_WIDTHS[0] + GRAPHITE_WIDTHS[1] + GRAPHITE_WIDTHS[2];
+        move_column(&mut st, &cols, 0, x + 1.0);
         assert_eq!(st.order[..5], [SOURCE, 1, 2, 0, 3]);
         let cols = spans(&st);
         // And to the very left.
@@ -2002,7 +2043,10 @@ mod tests {
 
     #[test]
     fn hidden_columns_keep_their_place() {
-        let mut st = ListState::default();
+        let mut st = ListState {
+            visible: [true; COLS],
+            ..ListState::default()
+        };
         st.visible[1] = false; // hide "Q"
         let cols = spans(&st);
         move_column(&mut st, &cols, 7, 0.0); // Description to the front
@@ -2030,11 +2074,11 @@ mod tests {
         assert_eq!(st.widths[ADDED], GRAPHITE_WIDTHS[ADDED]);
         assert!(st.visible[ADDED]);
         assert!(st.visible[SOURCE]);
-        // A layout saved before they existed gets their defaults, shown.
+        // A layout saved before they existed gets their defaults: hidden.
         assert_eq!(st.widths[UPLOAD], GRAPHITE_WIDTHS[UPLOAD]);
         assert_eq!(st.widths[PEERS], GRAPHITE_WIDTHS[PEERS]);
         assert_eq!(st.widths[RATIO], GRAPHITE_WIDTHS[RATIO]);
-        assert!(st.visible[UPLOAD] && st.visible[PEERS] && st.visible[RATIO]);
+        assert!(!st.visible[UPLOAD] && !st.visible[PEERS] && !st.visible[RATIO]);
         assert_eq!(st.sort, Some((2, false)));
     }
 
@@ -2136,6 +2180,7 @@ mod tests {
             let ctx = egui::Context::default();
             let mut st = ListState {
                 hscroll,
+                visible: [true; COLS],
                 ..ListState::default()
             };
             let outer = Rect::from_min_max(
@@ -2187,5 +2232,115 @@ mod tests {
         // Unscrolled, the pane's list starts at the first column, as the closed one does.
         let (_, start, _) = run(open, 0.0);
         assert_eq!(start, 0.0);
+    }
+
+    /// 1.0.1: seven columns at first, File Name, Size and Status always there; a layout that
+    /// hides them gets them back, one that chose its own columns keeps them, and 1.0.0's (every
+    /// column shown, as it saved them all) gets the defaults.
+    #[test]
+    fn the_default_columns_and_the_ones_always_shown() {
+        let st = ListState::default();
+        let names: Vec<&str> = st.shown().iter().map(|c| TITLES[*c]).collect();
+        assert_eq!(
+            names,
+            [
+                "Source",
+                "File Name",
+                "Size",
+                "Status",
+                "Time left",
+                "Transfer rate",
+                "Added"
+            ]
+        );
+        for c in 0..COLS {
+            assert_eq!(
+                always_shown(c),
+                matches!(TITLES[c], "File Name" | "Size" | "Status")
+            );
+            assert!(!always_shown(c) || DEFAULT_VISIBLE[c]);
+        }
+        // A layout hiding File Name, Size and Status, and showing Q: they come back, Q stays.
+        let mut chosen = ListState::default().layout();
+        chosen.visible = DEFAULT_VISIBLE.to_vec();
+        for c in [0, 2, 3] {
+            chosen.visible[c] = false;
+        }
+        chosen.visible[1] = true;
+        chosen.visible[PEERS] = true;
+        let mut st = ListState::default();
+        st.apply(chosen.clone());
+        assert!(st.visible[0] && st.visible[2] && st.visible[3]);
+        assert!(st.visible[1] && st.visible[PEERS] && !st.visible[7]);
+        // It goes through a save as it is.
+        let json = serde_json::to_string(&st.layout()).unwrap();
+        let mut back = ListState::default();
+        back.apply(serde_json::from_str(&json).unwrap());
+        assert_eq!(back.visible, st.visible);
+        // 1.0.0's list: every column shown, never chosen. The defaults; its order and widths stay.
+        let mut old = ListState::default().layout();
+        old.visible = vec![true; COLS];
+        old.graphite_widths = vec![99.0; COLS];
+        let mut st = ListState::default();
+        st.apply(old);
+        assert_eq!(st.visible, DEFAULT_VISIBLE);
+        assert_eq!(st.widths[0], 99.0);
+        // Reset columns: the defaults again.
+        st.visible = [true; COLS];
+        st.reset_columns();
+        assert_eq!(st.visible, DEFAULT_VISIBLE);
+    }
+
+    /// 1.0.1: the default columns fit the main window's first size (crate::MAIN_SIZE, at 100 %) beside
+    /// the Categories pane at its default width: the list doesn't scroll sideways.
+    #[test]
+    fn the_default_columns_fit_the_first_window() {
+        let _fonts = crate::theme::font_tests();
+        let [w, h] = crate::MAIN_SIZE;
+        let saved = crate::settings::Settings::default();
+        let list_left = crate::chrome::Layout::GRAPHITE.tree_left
+            + saved.graphite_categories_width as f32
+            + crate::chrome::Layout::GRAPHITE.splitter_w;
+        let layout = crate::chrome::Layout::GRAPHITE.with_panes(false, None);
+        let outer = Rect::from_min_max(
+            pos2(list_left, layout.panes_top()),
+            pos2(layout.list_end(w), layout.list_bottom(h)),
+        );
+        let rows = vec![row("Web", "Stopped", "a.zip", false)];
+        let ctx = egui::Context::default();
+        let mut st = ListState {
+            hscroll: f32::MAX,
+            ..ListState::default()
+        };
+        let mut body = Rect::NOTHING;
+        for _ in 0..2 {
+            let mut out = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(w, h))),
+                    ..Default::default()
+                },
+                |ui| {
+                    let r = show(
+                        ui,
+                        outer,
+                        &mut st,
+                        &rows,
+                        &[false],
+                        None,
+                        &mut ShellIcons,
+                        &|_| String::new(),
+                    );
+                    body = r.body.expect("the list has a body");
+                },
+            );
+            out.textures_delta.clear();
+        }
+        let content_w: f32 = st.shown().iter().map(|c| st.widths[*c]).sum();
+        assert!(
+            content_w <= body.width(),
+            "{content_w} wide in a {} wide list",
+            body.width()
+        );
+        assert_eq!(st.hscroll, 0.0, "nothing to scroll sideways");
     }
 }

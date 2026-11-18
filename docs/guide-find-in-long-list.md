@@ -6,23 +6,25 @@ After a few months the list can hold hundreds of downloads. Here are four ways t
 
 ## Find by name
 
-1. Press **Ctrl+F** (or **Downloads → Find**). **Find file** opens.
-2. Type part of the file's name.
-3. Click **Find**. The first match is selected.
-4. Press **F3** to jump to the next match. The search wraps round to the top.
+1. Click the **Find** field in the title bar, or press **Ctrl+F** (or **Downloads → Find**).
+2. Type part of the file's name. The list keeps only the downloads that match as you type, and the status bar says how many of them it shows (**3 of 250 downloads**).
+3. Press **Enter** or **F3** to select the next match, **Shift+F3** the one before. It wraps round.
+4. Press **Esc**, or click **×** in the field, to see every download again.
 
-![Find file: a name to look for](images/help/find-file.webp)
-*Ctrl+F, type part of the name, then Find.*
+![The Find field with part of a name typed, and the list of matches](images/help/find-file.webp)
+*Ctrl+F, then type part of the name.*
 
 ## Find by description or address
 
-In **Find file**, tick what to search:
+Click the funnel at the end of the **Find** field. Under **Match in**, tick where to look:
 
-- **File name or part of the name** — on by default.
-- **Description or part of the description** — your notes.
-- **Site name/Download link/Parent web page/Referer** — the address, the site's name and the page the download came from. Tick this to find everything from one site.
+- **File name** — on by default.
+- **Description** — your notes.
+- **Site and address** — the address, the site's name and the page the download came from. Tick this to find everything from one site.
 
-**Match case** tells capitals apart. **Match whole string only** finds only an exact, complete match.
+**Match case** tells capitals apart. **Match whole word only** skips matches inside a longer word (`setup` finds `my setup.exe`, not `setup2.exe`).
+
+The same menu shows only some downloads by **Status** (Downloading, Stopped, Waiting, Complete, Error) and **Source** (Web, Torrent): click a chip to hide or show those. They are the column filters below, so a filter set on a column title shows here too. A dot on the funnel means something narrows the list; **Clear all** shows everything again. **Esc** closes the menu.
 
 ## Filter the list
 
@@ -33,7 +35,7 @@ Each column title has a faint funnel. Click it to keep only some rows:
 - On **Q**, tick **In a queue** or **Not in a queue**.
 - On **File Name**, **Description** and the other columns, type a word.
 
-A filtered column's funnel turns blue. Right-click a column title and choose **Clear all filters** to see everything again.
+A filtered column's funnel turns blue. Right-click a column title and choose **Clear all filters**, or **Clear all** in the **Find** field's funnel menu, to see everything again.
 
 ## Narrow it down with categories and sorting
 

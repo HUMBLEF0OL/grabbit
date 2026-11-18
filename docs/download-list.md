@@ -139,12 +139,12 @@ Many sites publish a checksum next to the download. Right-click the download, ch
 
 ## Finding a download
 
-Press **Ctrl+F** (or **Downloads → Find**), type part of the name and click **Find**. **F3** jumps to the next match. You can also search descriptions and addresses. Step by step in [Find a download in a long list](guide-find-in-long-list.md).
+Type in the **Find** field in the title bar (**Ctrl+F** takes you there): the list keeps only the downloads whose name has what you typed, and the status bar says how many it shows. **Enter** or **F3** selects the next match, **Shift+F3** the one before; **Esc** clears the field. Its funnel searches descriptions and addresses too, and shows only some statuses or sources. Step by step in [Find a download in a long list](guide-find-in-long-list.md).
 
 Typing the start of a name while the list has the focus jumps to the first download whose name starts with it.
 
-![Find file: a name to look for, with where to look](images/help/find.webp)
-*Downloads → Find (Ctrl+F).*
+![The Find field in the title bar, the list narrowed to what it matches](images/help/find.webp)
+*Type in Find (Ctrl+F): the list keeps the matches.*
 
 ## Deleting downloads
 

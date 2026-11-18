@@ -936,13 +936,12 @@ mod tests {
                 button: ButtonLook::Graphite,
             }
         );
-        // Plan 09a: the two-tone finish in both modes, the glow in dark only.
+        // Plan 09a: the two-tone finish in both modes; no glow in either (1.0.1).
         for p in [&t.light, &t.dark] {
             assert!(p.button_accent_top.a() > 0 && p.button_accent_top != p.button_accent);
             assert!(p.progress_bar_end.a() > 0 && p.progress_bar_end != p.progress_bar);
+            assert_eq!(p.glow, Color32::TRANSPARENT, "no glow");
         }
-        assert_eq!(t.light.glow.a(), 0);
-        assert!(t.dark.glow.a() > 0);
         // Plan 02b's roles, as make_theme.py maps them from pal.py's tokens.
         for p in [&t.light, &t.dark] {
             assert_eq!(p.panel, p.caption, "panel and caption: both `surface`");
@@ -960,8 +959,6 @@ mod tests {
             );
             assert_eq!(p.progress_bar_end, p.button_accent_hot, "bar end: `out2`");
         }
-        assert_eq!(t.light.glow, Color32::TRANSPARENT, "no glow in light");
-        assert_ne!(t.dark.glow, Color32::TRANSPARENT, "a glow in dark");
         for p in [&t.light, &t.dark] {
             for (what, pressed, hot) in [
                 ("button", p.button_pressed, p.button_hot),
