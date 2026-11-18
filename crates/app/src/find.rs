@@ -343,6 +343,40 @@ pub fn field(
     event
 }
 
+/// Where a chip's word starts: after the check mark's room, so on and off are as wide.
+const CHIP_TEXT: f32 = 22.0;
+
+/// How a Status or Source chip is drawn.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct ChipLook {
+    face: egui::Color32,
+    edge: egui::Color32,
+    edge_w: f32,
+    ink: egui::Color32,
+}
+
+/// On: filled with the selection tint, the accent's border, the text's ink (and a check mark).
+/// Off: a plain outline, the field's face (the hover face under the pointer), the buttons'
+/// border, the secondary ink.
+fn chip_look(on: bool, hot: bool) -> ChipLook {
+    let c = crate::theme::colors();
+    if on {
+        ChipLook {
+            face: c.selection,
+            edge: c.accent,
+            edge_w: 1.5,
+            ink: c.text,
+        }
+    } else {
+        ChipLook {
+            face: if hot { c.button_hot } else { c.window },
+            edge: c.button_border,
+            edge_w: 1.0,
+            ink: c.text_secondary,
+        }
+    }
+}
+
 /// The funnel's dropdown under it (`funnel`, English), in the main window (an egui Area, no
 /// window of its own): Status and Source as toggle chips (the column filters themselves), where
 /// to look, match case, whole word, and Clear all. A press outside it closes it.
@@ -360,7 +394,9 @@ fn dropdown(ui: &mut Ui, funnel: Rect, bar: &mut Bar, q: &mut Query, list: &mut 
         y += 20.0;
         let mut x = pad;
         for v in list::filter_values(col).unwrap_or(&[]) {
-            let w = winui::text_width_font(&p, font.clone(), crate::i18n::t(v)).ceil() + 20.0;
+            let w = winui::text_width_font(&p, font.clone(), crate::i18n::t(v)).ceil()
+                + CHIP_TEXT
+                + 10.0;
             if x + w > DROP_W - pad && x > pad {
                 x = pad;
                 y += 28.0;
@@ -422,20 +458,26 @@ fn dropdown(ui: &mut Ui, funnel: Rect, bar: &mut Bar, q: &mut Query, list: &mut 
                 );
                 first = first.or(Some(resp.id));
                 let radius = r.height() / 2.0;
-                let (face, ink, edge) = if on {
-                    (c.selection, c.text, c.button_accent)
-                } else if resp.hovered() {
-                    (c.button_hot, c.text_secondary, c.button_border)
-                } else {
-                    (c.window, c.text_secondary, c.button_border)
-                };
-                p.rect_filled(at(*r), radius, face);
+                let look = chip_look(on, resp.hovered());
+                p.rect_filled(at(*r), radius, look.face);
                 p.rect_stroke(
                     at(*r),
                     radius,
-                    Stroke::new(1.0, edge),
+                    Stroke::new(look.edge_w, look.edge),
                     egui::StrokeKind::Inside,
                 );
+                if on {
+                    // A check mark before the word: on isn't told by colour alone.
+                    let m = at(*r).left_center() + vec2(12.0, 0.0);
+                    p.add(egui::Shape::line(
+                        vec![
+                            m + vec2(-3.5, 0.0),
+                            m + vec2(-1.0, 2.5),
+                            m + vec2(3.5, -2.5),
+                        ],
+                        Stroke::new(1.5, look.ink),
+                    ));
+                }
                 if resp.has_focus() {
                     p.rect_stroke(
                         at(r.expand(2.0)),
@@ -447,10 +489,10 @@ fn dropdown(ui: &mut Ui, funnel: Rect, bar: &mut Bar, q: &mut Query, list: &mut 
                 winui::text_font(
                     &p,
                     winui::segoe(),
-                    o.x + r.left() + 10.0,
+                    o.x + r.left() + CHIP_TEXT,
                     o.y + r.top() + 16.0,
                     crate::i18n::t(v),
-                    ink,
+                    look.ink,
                 );
                 if resp.clicked() {
                     list::set_value(list, *col, v, !on);
@@ -677,6 +719,19 @@ mod tests {
             Some(Event::Leave)
         );
         assert!(q.text.is_empty(), "the text cleared");
+    }
+
+    /// A chip that's on doesn't look like one that's off, hovered or not: another fill, border
+    /// and ink.
+    #[test]
+    fn chips_on_and_off_look_different() {
+        for hot in [false, true] {
+            let (on, off) = (chip_look(true, hot), chip_look(false, hot));
+            assert_ne!(on.face, off.face);
+            assert_ne!(on.edge, off.edge);
+            assert_ne!(on.ink, off.ink);
+            assert!(on.edge_w > off.edge_w);
+        }
     }
 
     #[test]
