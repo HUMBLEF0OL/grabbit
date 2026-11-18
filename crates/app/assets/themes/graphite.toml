@@ -98,7 +98,7 @@ button = "#ffffff"
 "button.accent" = "#0c704d"
 "button.accent.bottom" = "#0c704d"
 "button.accent.text" = "#ffffff"
-"button.accent.hot" = "#0c704d"
+"button.accent.hot" = "#047857"
 "button.accent.pressed" = "#0a5f41"
 "button.accent.text.pressed" = "#ffffff"
 # Check boxes and radios: the border kept under the pointer, fainter pressed.
@@ -161,8 +161,8 @@ tile = "#f1f1f3"
 "banner.warning" = "#fdf3e1"
 # Two-tone finish (09a): the outlaw colour's lighter stop; no glow, in either mode (1.0.1).
 glow = "#00000000"
-"button.accent.top" = "#0c704d"
-"progress.bar.end" = "#0c704d"
+"button.accent.top" = "#047857"
+"progress.bar.end" = "#047857"
 
 [dark]
 # Text.
@@ -195,7 +195,7 @@ button = "#18181b"
 "button.accent" = "#3ecf8e"
 "button.accent.bottom" = "#3ecf8e"
 "button.accent.text" = "#06281a"
-"button.accent.hot" = "#3ecf8e"
+"button.accent.hot" = "#6ee7b7"
 "button.accent.pressed" = "#35b77c"
 "button.accent.text.pressed" = "#06281a"
 # Check boxes and radios: the border kept under the pointer, fainter pressed.
@@ -258,5 +258,5 @@ tile = "#222227"
 "banner.warning" = "#3a2d14"
 # Two-tone finish (09a): the outlaw colour's lighter stop; no glow, in either mode (1.0.1).
 glow = "#00000000"
-"button.accent.top" = "#3ecf8e"
-"progress.bar.end" = "#3ecf8e"
+"button.accent.top" = "#6ee7b7"
+"progress.bar.end" = "#6ee7b7"
