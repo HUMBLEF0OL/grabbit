@@ -626,16 +626,17 @@ These ship in a later version, when they're ready.
   Left (plan 09's follow-ups): a faint square behind images in light mode on Intel Iris Xe
   graphics with Direct3D (a driver workaround in the graphics library).
 - 🔄 The rename to Grabbit, after the new look: the name in the app, installer, extension, website
-  and docs, with settings, saved logins, autostart, the `.torrent` link and the browser extension
-  carried over on upgrade. Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:
+  and docs, settings, saved logins, autostart, the `.torrent` link and the browser extension
+  (Grabbit was never published: no upgrade from the old name). Planned (`design/graphite/plans/10-rename-grabbit.md`); groundwork done:
   a checker that lists every place the old name is still shown (`tools/rename/check.py`) and the
   plan refreshed against today's code. Done: the name the app, the command line, the AI
   assistants' server, the remote page, the installer and the extension show (10a); the upstream
   sync's picks and pull requests (and CI on releases) stop the old name coming back with
   upstream's fixes. Done: the data folder (`%APPDATA%\grabbit`, `GRABBIT_DATA_DIR`), saved
   logins, autostart, the `.torrent` link, the browser host and the programs (`grabbit*.exe`)
-  take Grabbit's names, an original MDM's moved over once (10c). Next: the website, docs and
-  downloads (10d)
+  take Grabbit's names (10c; its migrations from the old names removed, never published).
+  Done: the release files (`Grabbit-<version>-…`), the website address in the app and the
+  Firefox add-on's ID (10d's code). Next: the website, docs and README (10d)
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a
   centred stage, then a walk through adding, downloading, torrents and video as you scroll), the
   benchmark's seven medians drawn from its results file, the Grabbit mark and Geist, light and

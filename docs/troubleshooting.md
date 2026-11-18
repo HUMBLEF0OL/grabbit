@@ -91,7 +91,7 @@ MDM draws its windows with Direct3D 12. A graphics driver can still misbehave: a
 
 ## The setup or MDM won't start
 
-- If Windows says **Windows protected your PC**, click **More info**, check that the file is `MisterDownloadManager-<version>-setup.exe` from the [Releases](https://github.com/HUMBLEF0OL/grabbit/releases) page, then click **Run anyway**.
+- If Windows says **Windows protected your PC**, click **More info**, check that the file is `Grabbit-<version>-setup.exe` from the [Releases](https://github.com/HUMBLEF0OL/grabbit/releases) page, then click **Run anyway**.
 - MDM runs only once. Starting it again brings the running copy's window to the front. If nothing appears, look for MDM's icon in the notification area.
 
 ## My antivirus or VirusTotal flags MDM {#antivirus}
@@ -101,7 +101,7 @@ A few antivirus programs flag new installers just because they have rarely seen 
 To check that your copy is the real one:
 
 1. Download MDM only from [the website](https://misterdownloadmanager.com) or [GitHub Releases](https://github.com/HUMBLEF0OL/grabbit/releases).
-2. Get your file's SHA-256: run `certutil -hashfile "MisterDownloadManager-0.5.0-setup.exe" SHA256`.
+2. Get your file's SHA-256: run `certutil -hashfile "Grabbit-0.5.0-setup.exe" SHA256`.
 3. Compare it with the same file's line in that release's `SHA256SUMS.txt`.
 
 If they match, it is the file we published. Every release is built on GitHub from the [public source code](https://github.com/HUMBLEF0OL/grabbit), so anyone can read what went into it.

@@ -7,14 +7,13 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ### Changed
 
-- **Mister Download Manager is now Grabbit.** The app's windows, menus and messages, the notification area, the crash report, the command line, the AI assistants' server, the remote page, the installer and the browser extension say Grabbit. Your downloads, settings and sign-ins are untouched. An upgrade replaces the old Start menu and desktop shortcuts with Grabbit's (pin it again to Start or the taskbar if you had pinned it). The bug, crash and idea forms on GitHub say Grabbit too. Sites and services now see Grabbit's name in its User-Agent (`Grabbit/<version>`).
-- **Grabbit's programs and what it keeps take Grabbit's name, and an upgrade moves yours over once.** Nothing is lost, and nothing needs doing in Grabbit itself:
-  - The programs are `grabbit.exe`, `grabbit-cli.exe`, `grabbit-mcp.exe` and `grabbit-nmhost.exe`. `misterdownloadmanager.exe` stays beside them as a small program that starts `grabbit.exe`, so shortcuts and pins to the old name still open Grabbit, and a copy unzipped from MDM updates itself to Grabbit. The installer removes the old `misterdownloadmanager-cli.exe`, `-mcp.exe` and `-nmhost.exe`.
-  - **Scripts and AI assistants that name the old programs need the new names**: `grabbit-cli` for `misterdownloadmanager-cli`, and `grabbit-mcp.exe` in your assistant's MCP settings for `misterdownloadmanager-mcp.exe` ([AI assistants](docs/ai-assistants.md), [command line](docs/command-line.md)).
-  - **Windows asks again whether Grabbit may use the network** the first time the remote control or the server mode listens: Windows Firewall knows the new program by its name.
-  - The download list and settings move from `%APPDATA%\misterdownloadmanager` to `%APPDATA%\grabbit` at the first start (a portable copy keeps its `data` folder). `GRABBIT_DATA_DIR` gives a data folder of its own; `MDM_DATA_DIR` still works.
-  - Saved sign-ins move to Grabbit's entries in Windows Credential Manager, labelled "Grabbit: …", each once its copy there reads back.
-  - Start with Windows, the `.torrent` and magnet link association, and browser integration are written again under Grabbit's names for this install (the extension reaches an app of either name); an older copy's elsewhere is left alone.
+- **Mister Download Manager is now Grabbit.** The app's windows, menus and messages, the notification area, the crash report, the command line, the AI assistants' server, the remote page, the installer and the browser extension say Grabbit. The bug, crash and idea forms on GitHub say Grabbit too. Sites and services now see Grabbit's name in its User-Agent (`Grabbit/<version>`).
+- **Grabbit's programs and what it keeps carry Grabbit's name:**
+  - The programs are `grabbit.exe`, `grabbit-cli.exe`, `grabbit-mcp.exe` and `grabbit-nmhost.exe` ([command line](docs/command-line.md), [AI assistants](docs/ai-assistants.md)).
+  - The download list and settings are in `%APPDATA%\grabbit` (a portable copy keeps its `data` folder); `GRABBIT_DATA_DIR` gives a data folder of its own.
+  - Saved sign-ins are kept in Windows Credential Manager under "Grabbit".
+  - Start with Windows, the `.torrent` and magnet link association and the browser integration's helper (`com.grabbit.host`) are registered under Grabbit's names. The Firefox add-on's ID is `grabbit@humblef0ol.github.io`.
+  - The release files are named `Grabbit-<version>-…` (`Grabbit-<version>-setup.exe`, `-portable.zip`, `-x64.zip`), and the help links go to Grabbit's website, https://humblef0ol.github.io/grabbit.
 
 ### Removed
 
