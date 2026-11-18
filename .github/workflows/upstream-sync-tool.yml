@@ -1,5 +1,6 @@
 # tools/upstream-sync/sync.py's self-check, on pull requests into main that change the tool
-# (Actions minutes are counted; on dev it runs locally): on Ubuntu, and on Windows, the tool's home (a case-blind file system, Git for Windows).
+# on Ubuntu, about 20 seconds. Its Windows run (the tool's home: a case-blind file system, Git for
+# Windows) is the maintainer's, locally, before each merge (CONTRIBUTING.md).
 name: Upstream sync tool
 
 on:
@@ -23,7 +24,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
