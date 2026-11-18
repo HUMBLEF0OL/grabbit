@@ -492,7 +492,9 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
 
 ## Version 1.0.0
 
-Grabbit's first release (2026-11-18): everything below ships together in it.
+Grabbit's first release, published 2026-11-18 (built, signed and published from the
+maintainer's computer with `tools/installer/publish.ps1`; GitHub's checks take about a minute):
+everything below ships in it.
 
 - ✅ English only: the other languages, the language picker (View → Language and the first
   start's), the right-to-left interface, the installer's languages, the extension's translations, the
@@ -647,6 +649,10 @@ These ship in a later version, when they're ready.
   name are taken again and say Grabbit
 - ✅ Grabbit signs its own releases: Update now trusts Grabbit's release key, and each release's
   checksum list is signed with it
+- 🔄 Code-signed programs and installer, so Windows SmartScreen stops warning: free open-source
+  signing through the SignPath Foundation. Done: applied, and the code signing policy is on the
+  website's Security page. Still to do once approved: the release built and signed by GitHub
+  Actions
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a
   centred stage, then a walk through adding, downloading, torrents and video as you scroll), the
   benchmark's seven medians drawn from its results file, the Grabbit mark and Geist, light and
