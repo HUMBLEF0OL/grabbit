@@ -640,7 +640,8 @@ These ship in a later version, when they're ready.
   Graphite look, and the site moves to https://humblef0ol.github.io/grabbit (10d). Done: the
   Rust packages are `grabbit-*` (the code keeps its `mdm_*::` paths, so upstream's fixes still
   apply) and the removed themes' control styles are gone: a theme file naming one gets
-  Graphite's (10e)
+  Graphite's (10e). Done: the pictures in the README, help, docs and website that showed the old
+  name are taken again and say Grabbit
 - ✅ Grabbit signs its own releases: Update now trusts Grabbit's release key, and each release's
   checksum list is signed with it
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a

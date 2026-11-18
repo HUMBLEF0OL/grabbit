@@ -40,7 +40,7 @@ def main():
     # The app icon, built from art/grabbit.svg by tools/icon/build_icon.py.
     icon = Image.open(ROOT / "crates/app/assets/icons/app/mdm-256.png").convert("RGBA").resize((112, 112), Image.LANCZOS)
     card.paste(icon, (64, 56), icon)
-    draw.text((196, 58), "Mister Download Manager", font=font("segoeuib.ttf", 56), fill=INK)
+    draw.text((196, 58), "Grabbit", font=font("segoeuib.ttf", 56), fill=INK)
     draw.text((198, 132), "Downloads faster than IDM. Free, forever.", font=font("segoeui.ttf", 34), fill=ACCENT)
     draw.text((66, 196), "For Windows  ·  no ads, no trial, no sign-up",
               font=font("segoeui.ttf", 24), fill=MUTED)
