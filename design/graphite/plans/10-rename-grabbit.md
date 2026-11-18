@@ -231,8 +231,9 @@ it) and `mdm-symbolicate` (a maintainer's tool, never shipped; its file stays up
 `grabbit-cli --version` says `grabbit-cli` (clap reads the package's name). The upstream-sync
 check: `sync.py status` sorts upstream's 53 waiting commits the same on this branch as on `dev`
 (all ports); 4 of them gain a conflict in a `Cargo.toml` or `Cargo.lock` from the rename, the
-lock ones what `pick --lock` resolves; `pick --lock`'s lock step (`apply_lock`) was run for one
-of them in a throwaway branch and made the lock against the renamed packages; `test_sync.py`
+lock ones what `pick --lock` resolves; `pick --lock`'s lock step (`apply_lock`) was run for the
+three of them in a throwaway branch (none bumps a version) and resolved the renamed packages'
+lock without a change; none waiting is a pure `lock` pick, so no real pick; `test_sync.py`
 passes. The removed themes' control styles and their drawing are gone (`palette.rs`,
 `winui.rs`): a theme file naming one gets Graphite's control without a warning, Graphite's own
 title bar is `caption = "graphite"`, and `button.glow` and `caption.button`, used only by them,
