@@ -133,8 +133,8 @@ focus = "ring"
 - **`[sizes]`** — corner radii, border widths, font sizes and row heights, in pixels.
 - **`[controls]`** — the shape of text boxes, check boxes, buttons, progress bars, scroll bars,
   the focus mark and the title bar. The layout is Graphite's in every theme (a `chrome` key is
-  no longer read). The styles `luna`, `aero`, `aqua`, `adwaita`, `breeze` and `metro` are being
-  removed: a theme file that names one will get Graphite's control. Its parts are drawn with the roles `panel`, `tile`, `text.secondary`,
+  no longer read). The removed themes' styles `luna`, `aero`, `aqua`, `adwaita`, `breeze` and
+  `metro` are gone: a theme file that names one gets Graphite's control. Its parts are drawn with the roles `panel`, `tile`, `text.secondary`,
   `menu.shortcut`, `toolbar.checked`, `button.danger`, `button.danger.text`, `banner.error`,
   `banner.info`, `banner.warning`, `glow`, `button.accent.top` and `progress.bar.end` (`glow`,
   `button.accent.top` and `progress.bar.end` are transparent unless a theme sets them: no glow,

@@ -1411,9 +1411,7 @@ def theme_keys() -> dict[str, list[tuple[str, str]]]:
     colors = [k for k in keys if k not in sizes]
     styles: dict[str, list[str]] = {}
     for k, v in re.findall(r'\("([a-z-]+)", "([a-z-]+)"\) =>', src):
-        # The removed themes' styles are still read, until plan 10e removes them: not offered.
-        if v not in ("luna", "aero", "aqua", "adwaita", "breeze", "metro"):
-            styles.setdefault(k, []).append(v)
+        styles.setdefault(k, []).append(v)
     if len(colors) < 50 or len(sizes) < 5 or len(styles) < 4:
         sys.exit("crates/app/src/palette.rs: the theme keys couldn't be read (build.py theme_keys)")
     return {"colors": colors, "sizes": sizes, "controls": [(k, ", ".join(v)) for k, v in styles.items()]}

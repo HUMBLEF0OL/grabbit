@@ -154,7 +154,7 @@ button = "graphite"
 progress = "graphite"
 scroll = "overlay"
 # A drawn, flat title bar coloured by the caption roles.
-caption = "metro"
+caption = "graphite"
 
 [sizes]
 # The mock's 8 on its 30-point controls, in proportion on MDM's 23-point ones.
