@@ -23,8 +23,12 @@ use std::sync::{Arc, Condvar, Mutex, OnceLock};
 
 use crate::win32 as os;
 
-/// The keychain's name for MDM's entries (Credential Manager's targets start with it).
-pub const SERVICE: &str = "Mister Download Manager";
+/// The keychain's name for Grabbit's entries (Credential Manager's targets start with it).
+pub const SERVICE: &str = "Grabbit";
+
+/// The original MDM's name for them (plan 10c): an entry a list still refers to there is read,
+/// written again under [`SERVICE`] with Grabbit's label, and deleted once the new one reads back.
+pub const OLD_SERVICE: &str = "Mister Download Manager";
 /// What the settings hold in a secret's place.
 pub const REF: &str = "keychain:";
 
@@ -147,12 +151,17 @@ struct State {
     /// Writes confirmed so far: the app saves again when it grows.
     confirmed: u64,
     worker: bool,
+    /// Entries read under the old service ([`Vault::old_service`]), by key: deleted once the
+    /// key's entry under the new one is written and reads back.
+    moving: HashMap<String, Target>,
 }
 
 /// The settings' secrets and the keychain, for one data folder.
 pub struct Vault {
     store: Box<dyn Store>,
     service: String,
+    /// The service entries were kept under before ([`OLD_SERVICE`]): moved to `service`.
+    old_service: Option<String>,
     /// Keeps one data folder's entries apart from another's.
     scope: String,
     /// False for a portable copy: nothing written outside its folder.
@@ -174,12 +183,19 @@ impl Vault {
         Vault {
             store,
             service: service.to_owned(),
+            old_service: None,
             scope: scope.to_owned(),
             writes,
             background,
             state: Mutex::default(),
             wake: Condvar::new(),
         }
+    }
+
+    /// Entries found under `old` are moved to this vault's service.
+    pub fn moving_from(mut self, old: &str) -> Vault {
+        self.old_service = Some(old.to_owned()).filter(|o| *o != self.service);
+        self
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, State> {
@@ -214,6 +230,9 @@ impl Vault {
             Ok(Some(secret)) => {
                 let mut s = self.lock();
                 s.unread.remove(target.key());
+                if self.old_service.as_ref() == Some(&target.service) {
+                    s.moving.insert(target.key().to_owned(), target.clone());
+                }
                 s.held.insert(target, secret.clone());
                 secret
             }
@@ -355,8 +374,21 @@ impl Vault {
                 Ok(()) => {
                     tracing::info!("sign-ins: {} kept in the keychain", target.key());
                     s.failed.remove(&target);
+                    // The old service's entry for it is superseded: it goes.
+                    let old = s.moving.remove_entry(target.key());
                     s.held.insert(target, secret);
                     s.confirmed += 1;
+                    drop(s);
+                    if let Some((key, old)) = old {
+                        match self.store.delete(&old.service, &old.account) {
+                            Ok(()) => tracing::info!(
+                                "sign-ins: {key} moved from the old keychain service"
+                            ),
+                            Err(f) => tracing::warn!(
+                                "sign-ins: {key}'s entry under the old keychain service couldn't be removed ({f})"
+                            ),
+                        }
+                    }
                 }
                 Err(f) => {
                     tracing::warn!(
@@ -413,12 +445,15 @@ impl Vault {
         }
     }
 
-    /// Every entry of the service, whichever data folder wrote it: how many went.
+    /// Every entry of the service, and of the old one, whichever data folder wrote it: how many
+    /// went.
     pub fn forget_all(&self) -> Result<usize, Fault> {
         let mut n = 0;
-        for account in self.store.list(&self.service)? {
-            self.store.delete(&self.service, &account)?;
-            n += 1;
+        for service in std::iter::once(&self.service).chain(&self.old_service) {
+            for account in self.store.list(service)? {
+                self.store.delete(service, &account)?;
+                n += 1;
+            }
         }
         Ok(n)
     }
@@ -502,6 +537,16 @@ fn service() -> String {
         .unwrap_or_else(|| SERVICE.to_owned())
 }
 
+/// `v` moving the original MDM's entries ([`OLD_SERVICE`]) when it is the real service (a
+/// test's own service never reaches the real entries).
+fn old_entries(v: Vault) -> Vault {
+    if v.service == SERVICE {
+        v.moving_from(OLD_SERVICE)
+    } else {
+        v
+    }
+}
+
 fn global() -> &'static Arc<Vault> {
     static VAULT: OnceLock<Arc<Vault>> = OnceLock::new();
     VAULT.get_or_init(|| {
@@ -511,13 +556,13 @@ fn global() -> &'static Arc<Vault> {
         #[cfg(not(test))]
         let store: Box<dyn Store> = Box::new(System);
         let portable = mdm_ipc::data_dir_var().is_none() && mdm_ipc::portable_dir().is_some();
-        Arc::new(Vault::new(
+        Arc::new(old_entries(Vault::new(
             store,
             &service(),
             &scope(),
             !portable,
             !cfg!(test),
-        ))
+        )))
     })
 }
 
@@ -572,7 +617,7 @@ pub fn is_prepared() -> bool {
 /// too): every entry of MDM's service goes, whichever data folder wrote it. Nothing else is
 /// touched.
 pub fn forget_all() -> std::process::ExitCode {
-    match Vault::new(Box::new(System), &service(), "", true, false).forget_all() {
+    match old_entries(Vault::new(Box::new(System), &service(), "", true, false)).forget_all() {
         Ok(n) => {
             println!("{n} sign-in(s) removed from the keychain");
             std::process::ExitCode::SUCCESS
@@ -887,6 +932,83 @@ mod tests {
             assert!(e.contains_key(&("MDM-test-unit".into(), "bbbb0001/debrid/1".into())));
             assert!(e.contains_key(&("MDM-test-other".into(), "aaaa0005/debrid/1".into())));
         });
+    }
+
+    /// Plan 10c: a list the original MDM saved (its references under its own service and its
+    /// data folder's scope) reads back whole; the next save writes each secret under the new
+    /// service with Grabbit's label, and only once that reads back is the old entry deleted.
+    /// Another data folder's entries of the old service stay until the data is removed.
+    #[test]
+    fn the_original_mdms_saved_logins_move_to_grabbits_entries() {
+        let mem = Arc::new(Memory::default());
+        let old = Arc::new(Vault::new(
+            Box::new(mem.clone()),
+            "MDM-test-old",
+            "0d1d0001",
+            true,
+            false,
+        ));
+        let saved = with_vault(&old, || {
+            let _ = on_disk(&sample());
+            old.run_once();
+            on_disk(&sample())
+        });
+        assert_eq!(saved.matches("keychain:MDM-test-old/0d1d0001/").count(), 3);
+        mem.entries.lock().unwrap().insert(
+            ("MDM-test-old".into(), "ffff0001/debrid/1".into()),
+            ("x".into(), "another folder's".into()),
+        );
+        // Grabbit, its data folder moved (another scope).
+        let new = Arc::new(
+            Vault::new(
+                Box::new(mem.clone()),
+                "MDM-test-unit",
+                "aaaa0009",
+                true,
+                false,
+            )
+            .moving_from("MDM-test-old"),
+        );
+        let json = with_vault(&new, || {
+            let loaded = read(&saved);
+            assert_eq!(loaded, sample(), "nothing lost");
+            // The new entries aren't confirmed yet: the old ones stay, the list seals them.
+            let first = on_disk(&loaded);
+            assert!(!first.contains(REF));
+            assert_eq!(mem.entries.lock().unwrap().len(), 4);
+            new.run_once();
+            assert_eq!(new.confirmed(), 3);
+            on_disk(&loaded)
+        });
+        assert_eq!(json.matches("keychain:MDM-test-unit/aaaa0009/").count(), 3);
+        assert!(!json.contains("MDM-test-old"));
+        {
+            let e = mem.entries.lock().unwrap();
+            let old_left: Vec<_> = e.keys().filter(|(s, _)| s == "MDM-test-old").collect();
+            assert_eq!(
+                old_left,
+                [&("MDM-test-old".to_owned(), "ffff0001/debrid/1".to_owned())],
+                "only another folder's is left"
+            );
+            let labels: Vec<&String> = e
+                .iter()
+                .filter(|((s, _), _)| s == "MDM-test-unit")
+                .map(|(_, (l, _))| l)
+                .collect();
+            assert_eq!(labels.len(), 3);
+            assert!(
+                labels.iter().all(|l| l.starts_with("Grabbit: ")),
+                "{labels:?}"
+            );
+        }
+        // The next start reads them from the new entries.
+        let next = vault_on(&mem, "aaaa0009");
+        assert_eq!(with_vault(&next, || read(&json)), sample());
+        // Removing the data (the uninstaller): the old service's entries go too.
+        let forget = Vault::new(Box::new(mem.clone()), "MDM-test-unit", "", true, false)
+            .moving_from("MDM-test-old");
+        assert_eq!(forget.forget_all(), Ok(4));
+        assert!(mem.entries.lock().unwrap().is_empty());
     }
 
     #[test]
