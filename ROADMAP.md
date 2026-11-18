@@ -636,6 +636,8 @@ These ship in a later version, when they're ready.
   logins, autostart, the `.torrent` link, the browser host and the programs (`grabbit*.exe`)
   take Grabbit's names, an original MDM's moved over once (10c). Next: the website, docs and
   downloads (10d)
+- ✅ Grabbit signs its own releases: Update now trusts Grabbit's release key, and each release's
+  checksum list is signed with it
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a
   centred stage, then a walk through adding, downloading, torrents and video as you scroll), the
   benchmark's seven medians drawn from its results file, the Grabbit mark and Geist, light and
