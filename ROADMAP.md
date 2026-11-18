@@ -634,8 +634,10 @@ These ship in a later version, when they're ready.
   sync's picks and pull requests (and CI on releases) stop the old name coming back with
   upstream's fixes. Done: the data folder (`%APPDATA%\grabbit`, `GRABBIT_DATA_DIR`), saved
   logins, autostart, the `.torrent` link, the browser host and the programs (`grabbit*.exe`)
-  take Grabbit's names, an original MDM's moved over once (10c). Next: the website, docs and
-  downloads (10d)
+  take Grabbit's names, an original MDM's moved over once (10c). Done: the website, the help,
+  README and the other docs say Grabbit, describe only the Graphite look, and the site moves to
+  https://humblef0ol.github.io/grabbit (10d). Next: the downloads' file names (10d) and the
+  internal names (10e)
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a
   centred stage, then a walk through adding, downloading, torrents and video as you scroll), the
   benchmark's seven medians drawn from its results file, the Grabbit mark and Geist, light and
@@ -643,7 +645,7 @@ These ship in a later version, when they're ready.
   the header and footer, and the video window's picture taken again in Graphite; the site's
   install manifest and search data carry Grabbit's name, mark and colours, the home page's walk
   through reads in full without JavaScript, and its stylesheet and script are never served stale
-  after an update. The pages' own text still says Mister Download Manager until the rename above
+  after an update. The pages' own text says Grabbit too since the rename above (10d)
 
 ### Bugs being looked into
 

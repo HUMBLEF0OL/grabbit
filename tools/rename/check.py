@@ -42,6 +42,7 @@ ALLOW = [
     (r"\bMDM\.popup\b", "internal window-property marker, never shown"),
     (r"\bMDM\.caption-less\.settled\b", "internal window-property marker, never shown"),
     (r"\bMDM-test-[\w{}:-]*", "keychain names of off-screen test copies, never shown"),
+    (r"fork of Mister Download Manager", "lineage: where Grabbit comes from (README, FAQ)"),
 ]
 ALLOW_RE = re.compile("|".join(f"(?:{p})" for p, _ in ALLOW))
 
@@ -49,6 +50,9 @@ ALLOW_RE = re.compile("|".join(f"(?:{p})" for p, _ in ALLOW))
 KEPT = {
     ("crates/app/src/secrets.rs", "Mister Download Manager"): "the original's keychain service: saved logins found under it move to Grabbit's (10c)",
     ("tools/installer/mdm.iss", '#define OldAppName "Mister Download Manager"'): "the old shortcuts an upgrade removes",
+    # 10c's upgrade notes: the old-name support goes (10d, never published), and these with it.
+    ("docs/ai-assistants.md", r"An install upgraded from Mister Download Manager keeps its folder (`...\Mister Download Manager`). Its MCP server was `misterdownloadmanager-mcp.exe` until Grabbit's rename: an assistant set up with that name needs `grabbit-mcp.exe` now, as the installer removes the old program."): "10c's upgrade note",
+    ("docs/getting-started.md", r"2. Choose whether to install for you only or for everyone on the computer. For you only needs no administrator rights and goes to `%LOCALAPPDATA%\Programs\Grabbit`. For everyone goes to `Program Files`. An install upgraded from Mister Download Manager stays in its folder."): "10c's upgrade note",
 }
 
 TEXT_EXT = {".md", ".html", ".json", ".txt", ".css", ".js", ".toml", ".yml", ".tsv", ".jsonl", ".webmanifest"}
@@ -146,8 +150,8 @@ def files(pattern):
 
 
 # (area, its files, done): a done area has no hit left, and `--done` keeps it that way (CI, and
-# tools/upstream-sync/sync.py after each pick: upstream still writes the old name). 10d marks
-# the website, docs and README done once it has renamed them.
+# tools/upstream-sync/sync.py after each pick: upstream still writes the old name). Every area
+# is done since 10d renamed the website, docs and README.
 AREAS = [
     # ponytail: labserver is a developer's test server, never shipped; skipped.
     ("App (Rust strings)", lambda: [(p, scan_rust) for p in files("crates/*/src/**/*.rs") + files("crates/*/build.rs") if p.parts[len(ROOT.parts) + 1] != "labserver"], True),
@@ -156,9 +160,12 @@ AREAS = [
     # Its scripts too: video.js's fallback texts, and any text a script shows (comments skipped).
     ("Extension", lambda: [(p, scan_text) for p in files("extension/_locales/**/*.json") + files("extension/*.html") + files("extension/manifest*.json")]
      + [(p, lambda q: scan_text(q, comment=("//", "/*", "*"))) for p in files("extension/*.js")], True),
-    ("Website", lambda: [(p, scan_text) for p in files("website/content/**/*") if p.suffix in TEXT_EXT], False),
-    ("Docs", lambda: [(p, scan_text) for p in files("docs/**/*") if p.suffix in TEXT_EXT], False),
-    ("README", lambda: [(p, scan_text) for p in files("README.md")], False),
+    # The pages written as Markdown, and the hand-written pages, scripts, styles and llms.txt.
+    ("Website", lambda: [(p, scan_text) for p in files("website/content/**/*") + files("website/*") if p.suffix in TEXT_EXT], True),
+    # ponytail: the API schema is generated from crates/ipc/src/api.rs's doc comments, which keep
+    # upstream's words (the sync rule); its descriptions follow them, so it isn't checked here.
+    ("Docs", lambda: [(p, scan_text) for p in files("docs/**/*") if p.suffix in TEXT_EXT and p.name != "automation-api.schema.json"], True),
+    ("README", lambda: [(p, scan_text) for p in files("README.md")], True),
 ]
 
 
@@ -216,6 +223,7 @@ const AFTER: &str = "MDM after";
         "keychain:MDM-test-unit/aaaa0001/", "MDM.caption-less.settled\\0",
     ]:
         assert hits_in(kept) == [], kept
+    assert hits_in("Grabbit began as a fork of Mister Download Manager by Ahmed Nefzaoui") == []
     assert hits_in("Support MDM") == ["MDM"]
     assert hits_in("Open Mister Download Manager (MDM)") == ["Mister Download Manager", "MDM"]
     print("self-test ok")

@@ -14,15 +14,6 @@ Plans and PRs link here instead of explaining a missing check again.
   variant.
 - **What closes it:** a high-contrast Graphite variant that follows Windows' setting.
 
-### G3 · Docs, help pictures and website show the old looks (plan 05.5 → 10)
-
-- **What:** after 05.5c, the docs, the help pictures (`tools/shots/shots.toml`'s `theme:*` takes),
-  the website's themes and licence pages, README, PRODUCT.md and CLAUDE.md still describe the
-  old themes and "IDM's look".
-- **Accepted:** rewritten with the rename (plan 10).
-- **Until then:** no release (`dev` → `main`), since the website is published from `main`.
-- **What closes it:** plan 10.
-
 ### G4 · Screenshots owed by the upstream-port PRs (2026-11-14)
 
 - **What:** CLAUDE.md rule 6 asks each changed window in pictures, before and after, light and
@@ -43,6 +34,15 @@ Plans and PRs link here instead of explaining a missing check again.
   (R1–R3) passes through every one of these windows and can take them there.
 
 ## Closed
+
+### G3 · Docs, help pictures and website show the old looks (plan 05.5 → 10; closed 2026-11-18)
+
+- **What:** after 05.5c, the docs, the help pictures (`tools/shots/shots.toml`'s `theme:*` takes),
+  the website's themes and licence pages, README, PRODUCT.md and CLAUDE.md still described the
+  old themes and "IDM's look".
+- **How it closed:** plan 10d rewrote them to describe only Graphite (the themes and licence
+  pages, `docs/themes.md`, the theme sample and AI prompt, README); `shots.toml` has no take
+  naming a removed theme.
 
 ### G1 · No screenshots on this PC (2026-11-12 to 2026-11-13)
 

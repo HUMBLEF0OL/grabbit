@@ -16,6 +16,8 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
   - Saved sign-ins move to Grabbit's entries in Windows Credential Manager, labelled "Grabbit: …", each once its copy there reads back.
   - Start with Windows, the `.torrent` and magnet link association, and browser integration are written again under Grabbit's names for this install (the extension reaches an app of either name); an older copy's elsewhere is left alone.
 
+- **The website, the help and the README say Grabbit too, and the website moves to [humblef0ol.github.io/grabbit](https://humblef0ol.github.io/grabbit).** The old address is no longer this project's. The help and the website describe only Graphite, Grabbit's look; the benchmark's results name Grabbit.
+
 ### Removed
 
 - MDM is Windows only now: Linux, macOS, Safari and Docker builds are no longer made.
