@@ -16,7 +16,7 @@ use std::path::Path;
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
-const APP: &str = env!("CARGO_BIN_EXE_misterdownloadmanager");
+const APP: &str = env!("CARGO_BIN_EXE_grabbit");
 
 /// The app's log so far (every file of `logs/`).
 fn log(data: &Path) -> String {

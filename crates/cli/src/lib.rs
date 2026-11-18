@@ -1,6 +1,6 @@
-//! `misterdownloadmanager-cli`'s commands. The app's program carries them (#25: one download
-//! engine shipped, not two): `misterdownloadmanager-cli` (main.rs) is a small launcher that runs
-//! `misterdownloadmanager --cli <arguments>`, and the app's `main` hands those to [`main`].
+//! `grabbit-cli`'s commands. The app's program carries them (#25: one download
+//! engine shipped, not two): `grabbit-cli` (main.rs) is a small launcher that runs
+//! `grabbit --cli <arguments>`, and the app's `main` hands those to [`main`].
 
 use std::ffi::OsString;
 use std::io::Write;
@@ -381,7 +381,7 @@ fn js_runtime_note() -> String {
 }
 
 /// The launcher's name, which the commands' help and messages show.
-pub const NAME: &str = "misterdownloadmanager-cli";
+pub const NAME: &str = "grabbit-cli";
 
 /// The app's program, started for the command line.
 pub struct Launch {
@@ -420,7 +420,7 @@ pub fn launched(args: Vec<OsString>) -> Option<Launch> {
     None
 }
 
-/// Run the command line `args` (without the program's name): what `misterdownloadmanager-cli`
+/// Run the command line `args` (without the program's name): what `grabbit-cli`
 /// does, its output, and its exit code (1 when a command fails).
 pub fn main(args: Vec<OsString>) -> ExitCode {
     main_with(args, None)
@@ -1415,6 +1415,6 @@ mod tests {
         assert!(launched(args(&["mdm", "/d", "--cli"])).is_none());
         assert!(launched(args(&["mdm", "--cli=x"])).is_none());
         assert!(launched(args(&["mdm", "--client"])).is_none());
-        assert!(launched(args(&["/x/misterdownloadmanager-cli", "status"])).is_none());
+        assert!(launched(args(&["/x/grabbit-cli", "status"])).is_none());
     }
 }

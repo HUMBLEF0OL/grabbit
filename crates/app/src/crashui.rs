@@ -123,7 +123,7 @@ pub fn monitor_main(m: MonitorArgs) -> eframe::Result {
     plan.watch.clear();
     plan.gl_checked = false;
     let data = m.data.clone();
-    crate::renderer::run("misterdownloadmanager-crash", &plan, options, move |cc| {
+    crate::renderer::run("grabbit-crash", &plan, options, move |cc| {
         crate::scale::start(&cc.egui_ctx, zoom);
         crate::theme::select(&crate::theme::startup_id(&settings.theme));
         crate::theme::apply(&cc.egui_ctx);

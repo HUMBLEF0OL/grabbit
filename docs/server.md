@@ -14,12 +14,12 @@ computer on your network), the browser extension pointed at it, or its command l
 ## Start it
 
 ```powershell
-misterdownloadmanager --headless --data C:\mdm-server --downloads D:\Downloads
+grabbit --headless --data C:\mdm-server --downloads D:\Downloads
 ```
 
 | Flag | Or the variable | What it sets |
 |---|---|---|
-| `--data <folder>` | `MDM_DATA_DIR` | the list, settings, certificate and paired devices |
+| `--data <folder>` | `GRABBIT_DATA_DIR` (or `MDM_DATA_DIR`) | the list, settings, certificate and paired devices |
 | `--downloads <folder>` | `MDM_DOWNLOADS` | where downloads go (each category's folder inside) |
 | `--port <number>` | `MDM_REMOTE_PORT` | the remote control's port (8463) |
 | `--listen <address>` | `MDM_REMOTE_LISTEN` | where it listens: every local network address unless given |
@@ -43,7 +43,7 @@ Then pair as [Control MDM from your phone](remote-control.md#pair-your-phone) sa
 code, at any time, with the same data folder:
 
 ```powershell
-$env:MDM_DATA_DIR = "C:\mdm-server"; misterdownloadmanager-cli pair
+$env:GRABBIT_DATA_DIR = "C:\mdm-server"; grabbit-cli pair
 ```
 
 To open the page by the computer's name (`https://homeserver.local:8463/`), give MDM that name:
@@ -51,8 +51,8 @@ To open the page by the computer's name (`https://homeserver.local:8463/`), give
 web page can reach MDM through a name of its own.
 
 The command line talks to it as to a desktop MDM, with the same data folder:
-`misterdownloadmanager-cli status` (once `api on`), `pair`, and adding an address:
-`misterdownloadmanager /d https://example.com/file.zip`.
+`grabbit-cli status` (once `api on`), `pair`, and adding an address:
+`grabbit /d https://example.com/file.zip`.
 
 ## Send downloads from your browser
 

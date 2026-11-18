@@ -632,9 +632,10 @@ These ship in a later version, when they're ready.
   plan refreshed against today's code. Done: the name the app, the command line, the AI
   assistants' server, the remote page, the installer and the extension show (10a); the upstream
   sync's picks and pull requests (and CI on releases) stop the old name coming back with
-  upstream's fixes. Next: moving
-  the data folder, saved logins, autostart, the `.torrent` link and the browser host to the new
-  name (10c), then the website, docs and downloads (10d)
+  upstream's fixes. Done: the data folder (`%APPDATA%\grabbit`, `GRABBIT_DATA_DIR`), saved
+  logins, autostart, the `.torrent` link, the browser host and the programs (`grabbit*.exe`)
+  take Grabbit's names, an original MDM's moved over once (10c). Next: the website, docs and
+  downloads (10d)
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a
   centred stage, then a walk through adding, downloading, torrents and video as you scroll), the
   benchmark's seven medians drawn from its results file, the Grabbit mark and Geist, light and

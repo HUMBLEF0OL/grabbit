@@ -29,7 +29,7 @@ When MDM isn't running, the browser starts it for each download and waits for it
 
 The browser started MDM's helper, but it stopped before answering. Security software is the usual cause.
 
-- Allow `misterdownloadmanager-nmhost.exe` (in MDM's folder) in your antivirus or anti-malware program.
+- Allow `grabbit-nmhost.exe` (in MDM's folder) in your antivirus or anti-malware program.
 - Reinstall MDM to restore its files.
 
 ## MDM doesn't accept this copy of the extension {#forbidden}

@@ -9,7 +9,7 @@ use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
 
-const HOST: &str = env!("CARGO_BIN_EXE_misterdownloadmanager-nmhost");
+const HOST: &str = env!("CARGO_BIN_EXE_grabbit-nmhost");
 const CALLER: &str = "chrome-extension://oogbclbbninliongijffeeggalppliok/";
 const UA: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/141.0.0.0 Safari/537.36";
 

@@ -26,7 +26,7 @@ Firefox 140 or later is needed. Install the add-on from its page on addons.mozil
 
 Install the extension from its page in the Chrome Web Store, [Mister Download Manager](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp): click **Add to Chrome**. In Edge the button is **Get**: Edge first asks to **Allow extensions from other stores** (click **Allow**), then **Add extension**. The browser keeps it updated. MDM's **Add Mister Download Manager to your browser** window opens that page in each browser for you, and Chrome may offer it by itself at its next start once MDM is installed.
 
-To load it by hand instead (a browser that can't use the store, or a build of your own): its files are in the `extension` folder where MDM is installed: `%LOCALAPPDATA%\Programs\Mister Download Manager\extension` if you installed it for yourself, or `Program Files\Mister Download Manager\extension` if you installed it for everyone. Every release also has them as their own download, `...-extension-chromium.zip` (unzip it first).
+To load it by hand instead (a browser that can't use the store, or a build of your own): its files are in the `extension` folder where MDM is installed: `%LOCALAPPDATA%\Programs\Grabbit\extension` if you installed it for yourself, or `Program Files\Grabbit\extension` if you installed it for everyone. Every release also has them as their own download, `...-extension-chromium.zip` (unzip it first).
 
 1. Open the extensions page: `chrome://extensions`, `edge://extensions` or `brave://extensions`.
 2. Turn on **Developer mode**.
@@ -39,7 +39,7 @@ To load it by hand instead (a browser that can't use the store, or a build of yo
 The `-x64.zip` copy has no installer, but you can register the helper yourself. Open a command prompt in MDM's folder and run:
 
 ```
-misterdownloadmanager-nmhost.exe --register
+grabbit-nmhost.exe --register
 ```
 
 This is for your Windows account only. `--unregister` undoes it. Then load the extension as above, from the zip's `extension` folder.

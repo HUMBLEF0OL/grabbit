@@ -434,7 +434,7 @@
         },
         "pair": {
           "default": false,
-          "description": "The remote control (#157, `misterdownloadmanager-cli pair`): show a new pairing code;\nanswered with it, the page's addresses and a QR code to scan ([`api::PairAnswer`]).",
+          "description": "The remote control (#157, `grabbit-cli pair`): show a new pairing code;\nanswered with it, the page's addresses and a QR code to scan ([`api::PairAnswer`]).",
           "type": "boolean"
         },
         "panel_hide_site": {

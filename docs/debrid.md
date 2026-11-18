@@ -111,7 +111,7 @@ Manager with it.
 
 **Uninstalling** with **remove the download list and settings** removes MDM's entries from
 Credential Manager too. To remove them yourself:
-`misterdownloadmanager --forget-sign-ins` (only MDM's own entries).
+`grabbit --forget-sign-ins` (only MDM's own entries).
 
 MDM never writes the token to its event log, crash reports, the automation API or the
 command line's output.

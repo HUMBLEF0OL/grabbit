@@ -249,7 +249,7 @@ pub struct Settings {
     /// Sounds: download complete, download failed, queue started, queue stopped/finished.
     pub sounds: [(bool, String); 4],
     /// The local automation API (beyond IDM): status queries over the command channel. Off by
-    /// default; `misterdownloadmanager-cli api on` turns it on.
+    /// default; `grabbit-cli api on` turns it on.
     pub automation_api: bool,
     /// Options → Remote (#141, beyond IDM): paired phones and computers on the local network
     /// add and control downloads (crates/remote). Off by default.

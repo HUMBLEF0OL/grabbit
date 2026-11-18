@@ -225,7 +225,7 @@ fn main() -> std::process::ExitCode {
     renderer::mark_start();
     // PAC's myIpAddress from the routing table, not a UDP socket (a firewall prompt, #35).
     mdm_engine::net::set_source_lookup(win32::source_address);
-    // misterdownloadmanager-cli's commands (crates/cli): its launcher starts this program for
+    // grabbit-cli's commands (crates/cli): its launcher starts this program for
     // them. Nothing of the app's runs: no window, instance, crash monitor or crash log.
     if let Some(cli) = mdm_cli::launched(std::env::args_os().collect()) {
         // The default browser's User-Agent (upstream issue 668): a command's download starts at
@@ -278,7 +278,7 @@ fn app() -> eframe::Result {
         return crashui::monitor_main(m);
     }
 
-    // A windowed app has no console: record panics in %APPDATA%\misterdownloadmanager\crash.log.
+    // A windowed app has no console: record panics in %APPDATA%\grabbit\crash.log.
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         if let Some(dir) = mdm_ipc::data_dir() {
@@ -400,7 +400,7 @@ fn app() -> eframe::Result {
         viewport: viewport.clone(),
         ..Default::default()
     };
-    let result = renderer::run("misterdownloadmanager", &plan, options, move |cc| {
+    let result = renderer::run("grabbit", &plan, options, move |cc| {
         win32::set_main_window(cc);
         scale::start(&cc.egui_ctx, z);
         let _ = window.set(cc.egui_ctx.clone());
@@ -558,7 +558,7 @@ mod tests {
     /// #629 on the real clipboard: several threads read it at once for a few seconds, and the
     /// process lives. Ignored by default (it reads the clipboard of the person at the computer;
     /// it never writes it, and what it reads is dropped unseen):
-    /// `cargo test -p mdm-app --bin misterdownloadmanager -- --ignored real_clipboard`.
+    /// `cargo test -p mdm-app --bin grabbit -- --ignored real_clipboard`.
     #[test]
     #[ignore = "reads the real clipboard"]
     fn real_clipboard_reads_from_many_threads_live() {

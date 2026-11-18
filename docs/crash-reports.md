@@ -43,7 +43,7 @@ In MDM's data folder:
 - `crashes\`: each report (`.txt`) and its crash data (`.dmp`);
 - `logs\`: MDM's log (`mdm.log`, with older ones as `mdm.1.log` and so on, 2 MB each).
 
-MDM's data folder is `%APPDATA%\misterdownloadmanager`. In [portable mode](portable.md) it is the `data` folder next to the program.
+MDM's data folder is `%APPDATA%\grabbit`. In [portable mode](portable.md) it is the `data` folder next to the program.
 
 The log records what MDM does, so a report can show what led to a problem. To log more detail, start MDM with the environment variable `MDM_LOG=debug`.
 
@@ -60,4 +60,4 @@ How it works: a second copy of MDM, the **monitor**, starts beside it with `--cr
   cargo run -p mdm-crash --bin mdm-symbolicate -- crash.dmp MisterDownloadManager-<version>-symbols-windows-x64.zip
   ```
 
-- **Testing it.** `cargo test -p mdm-crash` runs a real freeze, panic and crash (`examples/crashy.rs`) and checks each report's signature. To try it in the app, start MDM with `MDM_CRASH_TEST=1`, then run `misterdownloadmanager /show crash-test:freeze` (a deadlock; or `spin`, 12 s of a busy window thread, `panic`, `crash`, `abort`). `cargo test -p mdm-app --test freeze_report -- --ignored` does that in a copy of the app off the screens, its window visible and minimized.
+- **Testing it.** `cargo test -p mdm-crash` runs a real freeze, panic and crash (`examples/crashy.rs`) and checks each report's signature. To try it in the app, start MDM with `MDM_CRASH_TEST=1`, then run `grabbit /show crash-test:freeze` (a deadlock; or `spin`, 12 s of a busy window thread, `panic`, `crash`, `abort`). `cargo test -p mdm-app --test freeze_report -- --ignored` does that in a copy of the app off the screens, its window visible and minimized.

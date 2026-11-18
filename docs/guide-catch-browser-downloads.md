@@ -40,7 +40,7 @@ When a browser can't use its store (a computer managed by an organization, or a 
 1. Open your browser's extensions page: type `chrome://extensions`, `edge://extensions` or `brave://extensions` in the address bar.
 2. Turn on **Developer mode**.
 3. Click **Load unpacked**.
-4. Choose the `extension\chromium` folder inside MDM's folder. If you installed MDM for yourself, that is `%LOCALAPPDATA%\Programs\Mister Download Manager\extension\chromium`; you can paste that path into the folder box.
+4. Choose the `extension\chromium` folder inside MDM's folder. If you installed MDM for yourself, that is `%LOCALAPPDATA%\Programs\Grabbit\extension\chromium`; you can paste that path into the folder box.
 5. **Mister Download Manager** appears. Make sure it is turned on.
 6. Go to a web page and click a download link, for example a ZIP or an EXE.
 7. MDM opens **Download File Info** instead of the browser downloading the file. Click **Start Download**.

@@ -48,7 +48,7 @@ if (-not $Bin) {
   $Bin = if ($env:CARGO_TARGET_DIR) { Join-Path $env:CARGO_TARGET_DIR "release" } else { Join-Path $root "target\release" }
 }
 $Bin = (Resolve-Path $Bin).Path
-$exe = Join-Path $Bin "misterdownloadmanager.exe"
+$exe = Join-Path $Bin "grabbit.exe"
 $server = Join-Path $Bin "labserver.exe"
 foreach ($f in $exe, $server) { if (-not (Test-Path $f)) { throw "no ${f}: build it first (see the header)" } }
 # Theme ids are lower case and compared exactly by the app.

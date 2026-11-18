@@ -1517,7 +1517,7 @@ mod tests {
     #[test]
     fn a_freeze_inside_an_opengl_driver() {
         let at = |modules: &[&'static str]| modules.iter().map(|m| Some(*m)).collect::<Vec<_>>();
-        let mdm = "misterdownloadmanager.exe";
+        let mdm = "grabbit.exe";
         // Intel HD 5500 (#871), AMD (#860), Windows' own OpenGL showing a frame, NVIDIA: above
         // MDM's own code.
         for (stack, driver) in [

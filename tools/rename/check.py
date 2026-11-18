@@ -47,7 +47,7 @@ ALLOW_RE = re.compile("|".join(f"(?:{p})" for p, _ in ALLOW))
 
 # Whole texts kept on purpose at one place: (file, the text as listed) -> why.
 KEPT = {
-    ("crates/app/src/secrets.rs", "Mister Download Manager"): "keychain service: saved logins live under it (10c migrates)",
+    ("crates/app/src/secrets.rs", "Mister Download Manager"): "the original's keychain service: saved logins found under it move to Grabbit's (10c)",
     ("tools/installer/mdm.iss", '#define OldAppName "Mister Download Manager"'): "the old shortcuts an upgrade removes",
 }
 

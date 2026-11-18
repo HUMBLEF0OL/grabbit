@@ -1,4 +1,4 @@
-//! misterdownloadmanager-cli's `--json`, end to end: a download's progress and result as JSON lines, and failures as
+//! grabbit-cli's `--json`, end to end: a download's progress and result as JSON lines, and failures as
 //! `{"error"}` with a failing exit code.
 
 use std::process::Command;
@@ -6,9 +6,9 @@ use std::process::Command;
 use mdm_labserver::{Config, Faults, LabServer};
 use serde_json::Value;
 
-/// The app's program, which runs misterdownloadmanager-cli's commands when its launcher
+/// The app's program, which runs grabbit-cli's commands when its launcher
 /// (crates/cli) starts it with `--cli`.
-const APP: &str = env!("CARGO_BIN_EXE_misterdownloadmanager");
+const APP: &str = env!("CARGO_BIN_EXE_grabbit");
 
 fn lines(out: &[u8]) -> Vec<Value> {
     String::from_utf8_lossy(out)

@@ -6,19 +6,19 @@ The portable copy of MDM runs from any folder, including a USB stick, without in
 
 ## How it works
 
-`MisterDownloadManager-<version>-portable.zip` holds the same programs as the setup, plus a folder named `data` next to `misterdownloadmanager.exe`. When that folder is there and MDM can write to it, MDM is in portable mode:
+`MisterDownloadManager-<version>-portable.zip` holds the same programs as the setup, plus a folder named `data` next to `grabbit.exe`. When that folder is there and MDM can write to it, MDM is in portable mode:
 
 - The download list, settings, helpers for video and galleries (yt-dlp, ffmpeg, gallery-dl), torrent data, your [theme files](themes.md) (`data\themes`) and the logs are kept in `data`, not in your Windows profile.
 - Passwords (Sites Logins, the proxy's, debrid accounts) stay in `data` too, instead of in Windows Credential Manager. They are sealed for your Windows account: on another computer, or another account, type them again (and sign in to a debrid account again).
 - Nothing is written to the registry.
 
-Delete the `data` folder (or make it read-only) and the same copy behaves like the plain zip: it keeps its data in `%APPDATA%\misterdownloadmanager`.
+Delete the `data` folder (or make it read-only) and the same copy behaves like the plain zip: it keeps its data in `%APPDATA%\grabbit`.
 
 ## Set it up
 
 1. Download `MisterDownloadManager-<version>-portable.zip` from [Releases](https://github.com/HUMBLEF0OL/grabbit/releases).
 2. Unzip it where you want MDM to live, for example `E:\MDM` on a USB stick.
-3. Run `misterdownloadmanager.exe` from there.
+3. Run `grabbit.exe` from there.
 
 ## What is different
 

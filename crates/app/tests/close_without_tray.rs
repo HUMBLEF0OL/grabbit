@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus};
 use std::time::{Duration, Instant};
 
-const APP: &str = env!("CARGO_BIN_EXE_misterdownloadmanager");
+const APP: &str = env!("CARGO_BIN_EXE_grabbit");
 /// The main window's title (main.rs MAIN_TITLE).
 const MAIN: &str = concat!("Grabbit ", env!("CARGO_PKG_VERSION"));
 

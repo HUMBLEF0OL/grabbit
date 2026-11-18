@@ -1,6 +1,6 @@
 //! Mister Download Manager's command channel (shared by the app, its command line and the browser host).
 //! Single-instance command channel. The running app listens on a localhost port and writes
-//! `{port, token}` to `%APPDATA%\misterdownloadmanager\ipc.json`; a second launch (IDM-style command line)
+//! `{port, token}` to `%APPDATA%\grabbit\ipc.json`; a second launch (IDM-style command line)
 //! or the browser's native messaging host sends one JSON line per command, carrying the token.
 //! Only connections from 127.0.0.1 with the right token are accepted.
 
@@ -88,7 +88,7 @@ pub struct Command {
     /// The remote control: an uploaded .torrent file's bytes (never read from a request line).
     #[serde(skip)]
     pub torrent_file: Option<Vec<u8>>,
-    /// The remote control (#157, `misterdownloadmanager-cli pair`): show a new pairing code;
+    /// The remote control (#157, `grabbit-cli pair`): show a new pairing code;
     /// answered with it, the page's addresses and a QR code to scan ([`api::PairAnswer`]).
     pub pair: bool,
     /// `/exit` (beyond IDM): the running app saves and quits (the installer, before an upgrade
@@ -227,11 +227,31 @@ fn full(dir: PathBuf) -> PathBuf {
     std::path::absolute(&dir).unwrap_or(dir)
 }
 
-/// The app's data folder, `%APPDATA%\misterdownloadmanager` (list, settings, channel, crash
-/// log). The folder of the app's former codename, `idmnext`, is moved here once.
+/// The data folder's name in the profile (`%APPDATA%\grabbit`).
+pub const DATA_FOLDER: &str = "grabbit";
+
+/// The data folder's former names, newest first: the original MDM's (until the rename to
+/// Grabbit, plan 10c), then the app's codename before it. One found there is moved once.
+const OLD_DATA_FOLDERS: [&str; 2] = ["misterdownloadmanager", "idmnext"];
+
+/// The variables that give a data folder of its own (a separate instance with its own list and
+/// channel: tests, screenshots, a server), the new name first. `MDM_DATA_DIR` is the original
+/// MDM's and is still read, so scripts and containers set up for it keep working.
+pub const DATA_DIR_VARS: [&str; 2] = ["GRABBIT_DATA_DIR", "MDM_DATA_DIR"];
+
+/// The data folder a variable gives ([`DATA_DIR_VARS`]); None when neither is set.
+pub fn data_dir_var() -> Option<std::ffi::OsString> {
+    DATA_DIR_VARS
+        .iter()
+        .find_map(|v| std::env::var_os(v).filter(|d| !d.is_empty()))
+}
+
+/// The app's data folder, `%APPDATA%\grabbit` (list, settings, channel, crash log). A folder
+/// of a former name (`misterdownloadmanager`, `idmnext`) is moved here once.
 ///
-/// `MDM_DATA_DIR` overrides it (a separate instance with its own list and channel: tests,
-/// screenshots). Portable mode: a writable `data` folder next to the program holds it all.
+/// `GRABBIT_DATA_DIR` (or the original's `MDM_DATA_DIR`) overrides it (a separate instance with
+/// its own list and channel: tests, screenshots). Portable mode: a writable `data` folder next to
+/// the program holds it all.
 ///
 /// Worked out once per run and kept (#565): the window asks for it on every tick (torrents'
 /// state, the list), and the portable check below reads and writes the disk, so a slow disk
@@ -242,20 +262,37 @@ pub fn data_dir() -> Option<PathBuf> {
     }
     static RESOLVED: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
     once(&RESOLVED, || {
-        if let Some(dir) = std::env::var_os("MDM_DATA_DIR") {
+        if let Some(dir) = data_dir_var() {
             return Some(full(PathBuf::from(dir)));
         }
         if let Some(dir) = portable_dir() {
             return Some(dir);
         }
-        let base = dirs::data_dir()?;
-        let dir = base.join("misterdownloadmanager");
-        let legacy = base.join("idmnext");
-        if !dir.exists() && legacy.is_dir() {
-            let _ = std::fs::rename(&legacy, &dir);
-        }
-        Some(dir)
+        Some(profile_dir(&dirs::data_dir()?))
     })
+}
+
+/// The data folder in the profile folder `base`: [`DATA_FOLDER`], where the newest folder of a
+/// former name ([`OLD_DATA_FOLDERS`]) is moved the first time. A move that fails (the old app
+/// still running, a file held open) leaves the old folder in use for this run, nothing lost, and
+/// is tried again at the next start.
+fn profile_dir(base: &std::path::Path) -> PathBuf {
+    let dir = base.join(DATA_FOLDER);
+    if dir.exists() {
+        return dir;
+    }
+    let Some(old) = OLD_DATA_FOLDERS
+        .iter()
+        .map(|n| base.join(n))
+        .find(|o| o.is_dir())
+    else {
+        return dir;
+    };
+    if std::fs::rename(&old, &dir).is_ok() {
+        dir
+    } else {
+        old
+    }
 }
 
 /// `cell`'s value, worked out by `make` the first time only.
@@ -690,6 +727,45 @@ mod tests {
         assert!(parse_args(&a("--startup")).unwrap().startup);
         assert!(!parse_args(&a("/s")).unwrap().startup);
         assert!(parse_args(&[]).is_none());
+    }
+
+    /// Plan 10c: an MDM data folder (list, settings) becomes Grabbit's once, whole; an
+    /// existing Grabbit folder is never replaced; the codename's folder still moves.
+    #[test]
+    fn the_old_data_folder_moves_once() {
+        let base = tempfile::tempdir().unwrap();
+        let old = base.path().join("misterdownloadmanager");
+        std::fs::create_dir_all(old.join("torrents")).unwrap();
+        std::fs::write(old.join("downloads.json"), b"{\"the\":\"list\"}").unwrap();
+        std::fs::write(old.join("torrents").join("a.torrent"), b"t").unwrap();
+        let dir = profile_dir(base.path());
+        assert_eq!(dir, base.path().join("grabbit"));
+        assert!(!old.exists(), "moved, not copied");
+        assert_eq!(
+            std::fs::read(dir.join("downloads.json")).unwrap(),
+            b"{\"the\":\"list\"}"
+        );
+        assert!(dir.join("torrents").join("a.torrent").is_file());
+        // Another old folder appearing later (the old app run again) is left alone.
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(old.join("downloads.json"), b"older").unwrap();
+        assert_eq!(profile_dir(base.path()), dir);
+        assert_eq!(
+            std::fs::read(dir.join("downloads.json")).unwrap(),
+            b"{\"the\":\"list\"}"
+        );
+        assert!(old.join("downloads.json").is_file());
+
+        // The codename's folder, with no MDM folder.
+        let base = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(base.path().join("idmnext")).unwrap();
+        std::fs::write(base.path().join("idmnext").join("downloads.json"), b"x").unwrap();
+        let dir = profile_dir(base.path());
+        assert!(dir.join("downloads.json").is_file());
+        // A first start with nothing: the new name, not made yet.
+        let base = tempfile::tempdir().unwrap();
+        assert_eq!(profile_dir(base.path()), base.path().join("grabbit"));
+        assert!(!base.path().join("grabbit").exists());
     }
 
     /// Send `data` to a fresh local socket and return what `read_request` makes of it.

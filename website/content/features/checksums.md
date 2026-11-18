@@ -36,7 +36,7 @@ The command line's `get` takes `--checksum` and checks the finished file: the co
 own or named, as in `sha256:…`. One command downloads the file and checks it:
 
 ```
-misterdownloadmanager-cli get https://example.com/big.iso -o D:\Downloads --checksum sha256:9f86d0…
+grabbit-cli get https://example.com/big.iso -o D:\Downloads --checksum sha256:9f86d0…
 ```
 
 The [command line guide](command-line.md) lists everything `get` takes.

@@ -1,4 +1,4 @@
-//! The download list on disk: `%APPDATA%\misterdownloadmanager\downloads.json`, written with craft-atomic.
+//! The download list on disk: `%APPDATA%\grabbit\downloads.json`, written with craft-atomic.
 //! Also holds the list's column layout (order, widths, visibility, sort).
 //!
 //! Generations: `downloads.json.bak` is the list before the last save; `.1.bak` and `.2.bak`

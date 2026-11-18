@@ -590,7 +590,7 @@ let data = "";
 let downloads = "";
 // The yt-dlp the test instance uses (the streams case), or "" (none found).
 let ytdlp = "";
-const appExe = exe("misterdownloadmanager");
+const appExe = exe("grabbit");
 
 // One command to the instance over its channel (ipc.json), its one-line answer.
 function ipc(cmd, dir = data) {
@@ -626,7 +626,7 @@ function appProcesses() {
     [
       "-NoProfile",
       "-Command",
-      `Get-CimInstance Win32_Process -Filter "Name='misterdownloadmanager.exe'" | Where-Object { $_.ExecutablePath -eq '${p}' -and $_.CommandLine -notlike '*--headless*' } | ForEach-Object { "$($_.ProcessId) $($_.CommandLine -like '*--crash-monitor*')" }`,
+      `Get-CimInstance Win32_Process -Filter "Name='grabbit.exe'" | Where-Object { $_.ExecutablePath -eq '${p}' -and $_.CommandLine -notlike '*--headless*' } | ForEach-Object { "$($_.ProcessId) $($_.CommandLine -like '*--crash-monitor*')" }`,
     ],
     { encoding: "utf8" },
   ).stdout;
@@ -695,7 +695,7 @@ const brief = (e) => `${e.method} ${e.status} ${e.outcome} ${e.range || "-"}`;
 // ---- another Mister Download Manager (the remote case, #157) -------------------------------------
 
 // The server the remote case sends downloads to: E2E_REMOTE_URL names one already running
-// (E2E_REMOTE_PAIR is a command printing a pairing code, such as `misterdownloadmanager-cli
+// (E2E_REMOTE_PAIR is a command printing a pairing code, such as `grabbit-cli
 // pair` run there, and E2E_REMOTE_DOWNLOADS the folder its downloads land in, as
 // seen from here); else target/release's app runs headless here, on 127.0.0.1, with its own data
 // and download folders under target/e2e.
@@ -2126,15 +2126,17 @@ const KNOWN_BUGS = {};
 // The registry keys `nmhost --register` and `--unregister` touch (crates/nmhost REGISTRY_KEYS,
 // FIREFOX_KEY, CHROME_EXTERNAL_KEY): each browser's host entry and Chrome's external extension,
 // per user and for everyone (the latter only read: an installed copy's). [key, 32-bit view].
-const HOST = "com.misterdownloadmanager.host";
+const HOST = "com.grabbit.host";
+// The original MDM's name, which nmhost registers too (plan 10c).
+const OLD_HOST = "com.misterdownloadmanager.host";
 const REG_KEYS = ["HKCU", "HKLM"].flatMap((root) => [
-  ...[
+  ...[HOST, OLD_HOST].flatMap((host) => [
     "Software\\Google\\Chrome\\NativeMessagingHosts",
     "Software\\Chromium\\NativeMessagingHosts",
     "Software\\Microsoft\\Edge\\NativeMessagingHosts",
     "Software\\BraveSoftware\\Brave-Browser\\NativeMessagingHosts",
     "Software\\Mozilla\\NativeMessagingHosts",
-  ].map((k) => [`${root}\\${k}\\${HOST}`, false]),
+  ].map((k) => [`${root}\\${k}\\${host}`, false])),
   [`${root}\\Software\\Google\\Chrome\\Extensions`, true],
 ]);
 
@@ -2183,7 +2185,7 @@ const TEST_HOST_KEYS = {
   waterfox: "Software\\Mozilla\\NativeMessagingHosts",
 };
 function testHost(name, browsers, nmhost) {
-  if (!/^[a-z0-9_]+(\.[a-z0-9_]+)+$/.test(name) || name === HOST) throw new Error(`E2E_HOST_NAME: ${name} isn't a test host name`);
+  if (!/^[a-z0-9_]+(\.[a-z0-9_]+)+$/.test(name) || name === HOST || name === OLD_HOST) throw new Error(`E2E_HOST_NAME: ${name} isn't a test host name`);
   const other = browsers.filter((b) => !TEST_HOST_KEYS[b]);
   if (other.length) throw new Error(`E2E_HOST_NAME: not for ${other.join(", ")}`);
   // pack.ps1's folder for `kind`, copied with the test host's name in its background.js.
@@ -2192,8 +2194,13 @@ function testHost(name, browsers, nmhost) {
     fs.cpSync(path.join(root, "target", "extension", kind), dir, { recursive: true });
     const bg = path.join(dir, "background.js");
     const code = fs.readFileSync(bg, "utf8");
-    const renamed = code.replace(`const HOST = "${HOST}";`, `const HOST = ${JSON.stringify(name)};`);
-    if (renamed === code) throw new Error("background.js: its host's name wasn't found");
+    // Both of its names: the test's host is the only one it reaches.
+    const renamed = code
+      .replace(`const HOST = "${HOST}";`, `const HOST = ${JSON.stringify(name)};`)
+      .replace(`const OLD_HOST = "${OLD_HOST}";`, `const OLD_HOST = ${JSON.stringify(name)};`);
+    if (!renamed.includes(`const OLD_HOST = ${JSON.stringify(name)};`) || !renamed.includes(`const HOST = ${JSON.stringify(name)};`)) {
+      throw new Error("background.js: its host's names weren't found");
+    }
     fs.writeFileSync(bg, renamed);
     return dir;
   };
@@ -2262,7 +2269,7 @@ async function run() {
   const idm = spawnSync("tasklist", ["/FI", "IMAGENAME eq IDMan.exe", "/NH"], { encoding: "utf8" }).stdout;
   idmRunning = /IDMan\.exe/i.test(idm);
   if (idmRunning && process.env.E2E_IDM_OK !== "1") throw new Error("Internet Download Manager is running: quit it first (it takes the browsers' downloads), or set E2E_IDM_OK=1 if it leaves 127.0.0.1 alone");
-  for (const p of [appExe, exe("misterdownloadmanager-nmhost"), exe("labserver")]) {
+  for (const p of [appExe, exe("grabbit-nmhost"), exe("labserver")]) {
     if (!fs.existsSync(p)) throw new Error(`build it first: ${p}`);
   }
   const t0 = Date.now();
@@ -2310,7 +2317,7 @@ async function run() {
   before = new Set(appProcesses().map(([pid]) => pid));
   const server = spawn(exe("labserver"), ["--bind", `127.0.0.1:${PORT}`], { stdio: "ignore", windowsHide: true });
   const proxy = startProxy();
-  const nmhost = exe("misterdownloadmanager-nmhost");
+  const nmhost = exe("grabbit-nmhost");
   const results = [];
   let regBefore = null;
   let regCheck = null;
@@ -2319,9 +2326,10 @@ async function run() {
   let testLeft = [];
   try {
     await until("the lab server", 10000, () => fetch(`${LAB}/`).then((r) => r.ok, () => false));
-    // An installed Mister Download Manager's registration is never replaced or removed.
-    const key = "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.misterdownloadmanager.host";
-    const installed = spawnSync("reg", ["query", key], { stdio: "ignore" }).status === 0;
+    // An installed copy's registration (Grabbit's or the original MDM's) is never replaced or removed.
+    const installed = [HOST, OLD_HOST].some(
+      (h) => spawnSync("reg", ["query", `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${h}`], { stdio: "ignore" }).status === 0,
+    );
     if (installed) {
       throw new Error("Mister Download Manager's host is already registered (an installed copy): not touching it");
     }

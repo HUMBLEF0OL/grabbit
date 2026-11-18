@@ -8,13 +8,13 @@ description: Run Mister Download Manager without a window on a Windows home serv
 group: network
 order: 240
 since: 0.5
-where: The command line: `misterdownloadmanager --headless`
+where: The command line: `grabbit --headless`
 help: server.md
 ---
 
 ## The same MDM, without a window
 
-`misterdownloadmanager --headless` runs MDM with its list, categories, queues, Scheduler, speed
+`grabbit --headless` runs MDM with its list, categories, queues, Scheduler, speed
 limits and torrents, but no window. Its folders and port come from flags or the environment. It
 stops cleanly, saving its list, when it is stopped.
 
@@ -25,7 +25,7 @@ folder. Point the downloads at a network share and the files land straight on it
 
 The remote control is on in this mode. The log prints the address to open and a pairing code
 with a QR code: pair your phone as with the [remote control](/features/remote.html), and
-`misterdownloadmanager-cli pair` makes a new code at any time.
+`grabbit-cli pair` makes a new code at any time.
 
 In the browser extension, **Send downloads to → Another Mister Download Manager (a server)** sends the downloads it catches, and
 **Download with Mister Download Manager** on a link, to the server instead of your computer. The

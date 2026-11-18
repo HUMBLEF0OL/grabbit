@@ -17,7 +17,7 @@ param(
   # Only move the pointer there (hover states); no click.
   [switch]$NoClick,
   # Whose windows to capture (cap-own -ProcName), e.g. IDMan.
-  [string]$CapProc = "misterdownloadmanager",
+  [string]$CapProc = "grabbit",
   [int]$IdleMs = 2000,
   # Only this process's windows (a test instance next to the user's own, same titles).
   [int]$ProcessId = 0
@@ -115,7 +115,7 @@ try {
     if ($HoverClick) { [PO]::mouse_event(0x2, 0, 0, 0, [IntPtr]::Zero); Start-Sleep -Milliseconds 30; [PO]::mouse_event(0x4, 0, 0, 0, [IntPtr]::Zero); Start-Sleep -Milliseconds 500 }
   }
   if ($Out) { & "$PSScriptRoot\cap-own.ps1" -ProcName $CapProc -Out $Out -ProcessId $ProcessId }
-  & "$PSScriptRoot\windows.ps1" -ProcName misterdownloadmanager | Select-String "menu"
+  & "$PSScriptRoot\windows.ps1" -ProcName grabbit | Select-String "menu"
   if (-not $NoEscape) { [System.Windows.Forms.SendKeys]::SendWait("{ESC}"); Start-Sleep -Milliseconds 100 }
 } finally {
   [PO]::SetCursorPos($cur.X, $cur.Y) | Out-Null

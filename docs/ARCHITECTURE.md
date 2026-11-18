@@ -7,9 +7,9 @@ How Mister Download Manager's pieces fit together.
 | Path | Crate | Role |
 |---|---|---|
 | `crates/engine` | `mdm-engine` | Downloads one file over HTTP(S) or FTP(S): probe, segment planner, connection workers, resume state, per-host limits, speed limiter, checksums, proxy scripts |
-| `crates/app` | `mdm-app` | The desktop app (`misterdownloadmanager.exe`, egui): list, categories, queues, scheduler, dialogs, tray, settings |
-| `crates/cli` | `mdm-cli` | Headless downloads with progress (`get`, `resume`), videos, torrents and the automation API's commands: a library the app's program runs (`misterdownloadmanager --cli …`), and `misterdownloadmanager-cli`, a small launcher that starts it with the same arguments, terminal and exit code |
-| `crates/mcp` | `mdm-mcp` | The MCP server (`misterdownloadmanager-mcp`): AI assistants list, add and control the running app's downloads through the automation API |
+| `crates/app` | `mdm-app` | The desktop app (`grabbit.exe`, egui): list, categories, queues, scheduler, dialogs, tray, settings |
+| `crates/cli` | `mdm-cli` | Headless downloads with progress (`get`, `resume`), videos, torrents and the automation API's commands: a library the app's program runs (`grabbit --cli …`), and `grabbit-cli`, a small launcher that starts it with the same arguments, terminal and exit code |
+| `crates/mcp` | `mdm-mcp` | The MCP server (`grabbit-mcp`): AI assistants list, add and control the running app's downloads through the automation API |
 | `crates/remote` | `mdm-remote` | The remote control (#141): the HTTPS server a paired phone or computer on the local network uses (its page, pairing codes, device tokens, the self-signed certificate); every request becomes an automation API command the app answers |
 | `crates/nmhost` | `mdm-nmhost` | The browser's native messaging host: takes captured downloads from the extension and hands them to the app |
 | `crates/ipc` | `mdm-ipc` | The single-instance channel (a token-protected local socket), the data folder, and the capture rules shared by the app and the host |
@@ -117,8 +117,8 @@ scrolls.
 ### Data
 
 The download list and settings are saved atomically to the data folder (`downloads.json`):
-`%APPDATA%\misterdownloadmanager\`, a `data` folder beside a portable
-copy, or `MDM_DATA_DIR` (`mdm_ipc::data_dir`). The browser host reads the same file for the
+`%APPDATA%\grabbit\`, a `data` folder beside a portable
+copy, or `GRABBIT_DATA_DIR` (the original's `MDM_DATA_DIR` is still read; `mdm_ipc::data_dir`). The browser host reads the same file for the
 capture rules, so a change in Options applies to the next captured download.
 
 Sign-in secrets (debrid accounts, Sites Logins' and the proxy's passwords) live in Windows

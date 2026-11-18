@@ -2,7 +2,7 @@
 # windows), composited over black. Each window renders itself (PrintWindow), so pixels of other
 # programs never appear — even when a window is covered by the user's editor.
 # -Title: only windows whose title starts with it (one window for a screenshot).
-param([string]$ProcName = "misterdownloadmanager", [Parameter(Mandatory)][string]$Out, [int]$ProcessId = 0,
+param([string]$ProcName = "grabbit", [Parameter(Mandatory)][string]$Out, [int]$ProcessId = 0,
   [string]$Title = "")
 Add-Type -AssemblyName System.Drawing
 Add-Type @"

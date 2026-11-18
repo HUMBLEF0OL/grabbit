@@ -21,7 +21,7 @@ const DEFAULT_LIMIT: usize = 100;
 const NOT_RUNNING: &str = "Grabbit isn't running. Ask the user to start it, then \
                            try again.";
 const API_OFF: &str = "Grabbit's automation API is off. Ask the user to turn it \
-                       on once with `misterdownloadmanager-cli api on` (it stays on), then try \
+                       on once with `grabbit-cli api on` (it stays on), then try \
                        again.";
 
 const INSTRUCTIONS: &str = "Controls Grabbit, the download manager running on \
@@ -29,7 +29,7 @@ const INSTRUCTIONS: &str = "Controls Grabbit, the download manager running on \
     resume_downloads and remove_downloads act on those ids; add_download adds an address \
     (http, https, ftp, ftps or a magnet link); start_queue starts the main download queue. \
     Listing and acting on downloads needs the app's automation API, which the user turns on \
-    with `misterdownloadmanager-cli api on`. Sizes and speeds are in bytes and bytes per second.";
+    with `grabbit-cli api on`. Sizes and speeds are in bytes and bytes per second.";
 
 #[derive(Deserialize, JsonSchema, Default)]
 pub struct ListArgs {

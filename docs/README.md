@@ -42,7 +42,7 @@ These pages explain each part of the program. The tutorials walk through the thi
 - **[Themes](themes.md)** — Graphite, MDM's look, light and dark, and how to make your own theme in a text file.
 - **[Portable mode](portable.md)** — run MDM from a folder or a USB stick without installing it.
 - **[Keyboard shortcuts](keyboard-shortcuts.md)** — every key the main window answers, and screen readers.
-- **[Command line and automation](command-line.md)** — IDM's command-line switches, the `misterdownloadmanager-cli` tool, and the automation API other programs can use.
+- **[Command line and automation](command-line.md)** — IDM's command-line switches, the `grabbit-cli` tool, and the automation API other programs can use.
 - **[AI assistants (MCP)](ai-assistants.md)** — let Claude, Cursor, VS Code or another MCP assistant list, add, pause and remove your downloads.
 
 ## Tutorials

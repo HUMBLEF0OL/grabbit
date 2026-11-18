@@ -220,15 +220,15 @@ cargo build --release
 cargo test
 ```
 
-This makes `misterdownloadmanager.exe` (the app), `misterdownloadmanager-cli.exe` (headless
-command line), `misterdownloadmanager-mcp.exe` (the MCP server for AI assistants) and
-`misterdownloadmanager-nmhost.exe` (the browser host) in `target\release\`.
+This makes `grabbit.exe` (the app), `grabbit-cli.exe` (headless
+command line), `grabbit-mcp.exe` (the MCP server for AI assistants) and
+`grabbit-nmhost.exe` (the browser host) in `target\release\`.
 `tools\installer\build.ps1` builds the installer and both zips into `target\dist\` (needs
 [Inno Setup 6](https://jrsoftware.org/isinfo.php)); a `vX.Y.Z` tag does the same on GitHub
 Actions and publishes the release.
 
 Browser integration from a build: register the native messaging host with
-`target\release\misterdownloadmanager-nmhost.exe --register` (undo with `--unregister`), then in
+`target\release\grabbit-nmhost.exe --register` (undo with `--unregister`), then in
 `chrome://extensions` or `edge://extensions` turn on Developer mode, **Load unpacked** and pick
 the `extension/` folder (its ID is always `oogbclbbninliongijffeeggalppliok`).
 

@@ -12,12 +12,12 @@ Every version is on the [Releases](https://github.com/HUMBLEF0OL/grabbit/release
 |---|---|
 | `MisterDownloadManager-<version>-setup.exe` | The installer. Pick this one unless you have a reason not to. It can set up browser integration and open `.torrent` files and magnet links with MDM. |
 | `MisterDownloadManager-<version>-portable.zip` | A portable copy. The download list and settings stay in a `data` folder next to the program, and nothing is written to the registry. Browser integration needs the installer. See [Portable mode](portable.md). |
-| `MisterDownloadManager-<version>-x64.zip` | The same programs without an installer. It keeps its data in `%APPDATA%\misterdownloadmanager`, like an installed copy. |
+| `MisterDownloadManager-<version>-x64.zip` | The same programs without an installer. It keeps its data in `%APPDATA%\grabbit`, like an installed copy. |
 
 ## Install with the setup
 
 1. Run `MisterDownloadManager-<version>-setup.exe`.
-2. Choose whether to install for you only or for everyone on the computer. For you only needs no administrator rights and goes to `%LOCALAPPDATA%\Programs\Mister Download Manager`. For everyone goes to `Program Files`.
+2. Choose whether to install for you only or for everyone on the computer. For you only needs no administrator rights and goes to `%LOCALAPPDATA%\Programs\Grabbit`. For everyone goes to `Program Files`. An install upgraded from Mister Download Manager stays in its folder.
 3. Pick what the setup should do:
    - **Set up browser integration (Chrome, Edge, Brave, Firefox)**
    - **Open .torrent files and magnet links with Mister Download Manager**
@@ -36,9 +36,9 @@ Uninstall MDM from Windows **Settings → Apps**. The uninstaller asks whether t
 ## Use a zip copy
 
 1. Unzip the file to a folder you can write to (not straight into `Program Files`).
-2. Run `misterdownloadmanager.exe`.
+2. Run `grabbit.exe`.
 
-The zips hold the same programs as the setup: the app, `misterdownloadmanager-cli.exe` (downloads from the command line; see [Command line and automation](command-line.md)) and the `extension` folder.
+The zips hold the same programs as the setup: the app, `grabbit-cli.exe` (downloads from the command line; see [Command line and automation](command-line.md)) and the `extension` folder.
 
 ## The video helpers
 
@@ -116,7 +116,7 @@ To quit, choose **Tasks → Exit** or **Exit** in the tray menu.
 
 ## Where MDM keeps its data
 
-The download list and settings are in `%APPDATA%\misterdownloadmanager` (`downloads.json`). A portable copy keeps them in its `data` folder instead. Downloaded files go to your **Downloads** folder, sorted into a folder per category; you can change that in **Options → Save to**.
+The download list and settings are in `%APPDATA%\grabbit` (`downloads.json`). A portable copy keeps them in its `data` folder instead. Downloaded files go to your **Downloads** folder, sorted into a folder per category; you can change that in **Options → Save to**.
 
 ## Next steps
 

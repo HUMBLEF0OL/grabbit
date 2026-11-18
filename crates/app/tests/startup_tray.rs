@@ -14,7 +14,7 @@ use std::path::Path;
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
-const APP: &str = env!("CARGO_BIN_EXE_misterdownloadmanager");
+const APP: &str = env!("CARGO_BIN_EXE_grabbit");
 /// The main window's title (main.rs MAIN_TITLE).
 const MAIN: &str = concat!("Grabbit ", env!("CARGO_PKG_VERSION"));
 
@@ -72,7 +72,7 @@ impl Startup {
     /// The entry versions before 0.5.0 wrote for this program: the program alone, no argument.
     fn old(_dir: &Path) -> Startup {
         {
-            let name = format!("MisterDownloadManagerTest{}", std::process::id());
+            let name = format!("GrabbitTest{}", std::process::id());
             let status = Command::new("reg")
                 .args(["add", RUN, "/v", &name, "/t", "REG_SZ", "/f", "/d"])
                 .arg(format!("\"{APP}\""))

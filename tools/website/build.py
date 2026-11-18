@@ -1489,7 +1489,7 @@ def build_themes() -> None:
         <li id="try-it"><h3>Try it, without building MDM</h3>
           <p>Put the file in MDM's themes folder. <b>View → Theme → Open themes folder</b> opens it, and makes it the first time. It is in MDM's data folder:</p>
           <dl class="fields os-paths">
-            <div><dt>Windows</dt><dd><code translate="no">%APPDATA%\\misterdownloadmanager\\themes</code></dd></div>
+            <div><dt>Windows</dt><dd><code translate="no">%APPDATA%\\grabbit\\themes</code></dd></div>
             <div><dt>Portable copy</dt><dd><code translate="no">data\\themes</code> beside the program</dd></div>
           </dl>
           <p>Within two seconds it shows in <b>View → Theme</b>, under Graphite, by the <code>name</code> it gives itself. Pick it and the whole window changes at once. After you edit the file, pick it again in <b>View → Theme</b> to see the change. <b>View → Dark Mode support</b> and <b>Always dark</b> switch between its light and dark side.</p>
