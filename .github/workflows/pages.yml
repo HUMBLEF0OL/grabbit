@@ -1,4 +1,4 @@
-# Builds misterdownloadmanager.com (tools/website/build.py: website/, docs/ and CHANGELOG.md, in
+# Builds humblef0ol.github.io/grabbit (tools/website/build.py: website/, docs/ and CHANGELOG.md, in
 # English) and publishes it with GitHub Pages, on every push to main that touches them, or by
 # hand (Actions → Website → Run workflow) to refresh the star, fork and issue counts and the
 # contributors (tools/contributors.py). No daily run: Actions minutes are counted.

@@ -1,4 +1,4 @@
-# The bug report form. MDM's Help -> Report a problem opens it with the text fields filled in
+# The bug report form. Grabbit's Help -> Report a problem opens it with the text fields filled in
 # (crates/app/src/help.rs: the ids below are the URL's parameters; keep them in step). System and
 # Installed with are text fields, not dropdowns: GitHub's page showed a dropdown's value from the
 # address for a moment, then put it back to none.

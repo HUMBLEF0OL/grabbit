@@ -1,7 +1,7 @@
-# Mister Download Manager
+# Grabbit
 
 <p align="center">
-  <img src="docs/images/logo.png" alt="Mister Download Manager's logo" width="160">
+  <img src="art/grabbit.svg" alt="Grabbit's logo" width="160">
 </p>
 
 <h3 align="center">Downloads faster than IDM. Free, forever.</h3>
@@ -21,8 +21,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HUMBLEF0OL/grabbit/stargazers"><img src="https://img.shields.io/github/stars/HUMBLEF0OL/grabbit?style=social&label=Star%20MDM" alt="Star Mister Download Manager on GitHub" height="28"></a><br>
-  <sub>⭐ <b>Like it? Give it a star.</b> MDM has no ads and no marketing budget: stars are how people find it.</sub>
+  <a href="https://github.com/HUMBLEF0OL/grabbit/stargazers"><img src="https://img.shields.io/github/stars/HUMBLEF0OL/grabbit?style=social&label=Star%20Grabbit" alt="Star Grabbit on GitHub" height="28"></a><br>
+  <sub>⭐ <b>Like it? Give it a star.</b> Grabbit has no ads and no marketing budget: stars are how people find it.</sub>
 </p>
 
 <p align="center">
@@ -41,7 +41,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/main-dark.webp">
-    <img src="docs/images/main-light.webp" alt="Mister Download Manager's main window: categories, toolbar and a list of downloads" width="920">
+    <img src="docs/images/main-light.webp" alt="Grabbit's main window: categories, toolbar and a list of downloads" width="920">
   </picture>
 </p>
 
@@ -65,12 +65,12 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/races-dark.svg">
-    <img src="docs/images/races-light.svg" alt="Three races. A big 1 GB file: Mister Download Manager 1 second, IDM 5.5 seconds, 5 times faster. A small file: instantly versus 3.1 seconds, over 100 times faster. A shaky connection: 1.6 seconds versus 5.4 seconds, 3 times faster." width="880">
+    <img src="docs/images/races-light.svg" alt="Three races. A big 1 GB file: Grabbit 1 second, IDM 5.5 seconds, 5 times faster. A small file: instantly versus 3.1 seconds, over 100 times faster. A shaky connection: 1.6 seconds versus 5.4 seconds, 3 times faster." width="880">
   </picture>
 </p>
 
 <!-- compare:start -->
-| | Mister Download Manager | IDM 6.42 |
+| | Grabbit | IDM 6.42 |
 | --- | --- | --- |
 | Download a big file (1 GB) | **1 second** | 5.5 seconds |
 | Download a small file | **instantly** | 3.1 seconds |
@@ -96,8 +96,8 @@ one:
 
 | File | Choose it when |
 | --- | --- |
-| **`...-setup.exe`** | **Not sure? Take this one.** It installs MDM, connects it to your browser and asks your language. |
-| `...-portable.zip` | You want MDM on a USB stick or without installing: unzip and run. Everything stays in its folder. |
+| **`...-setup.exe`** | **Not sure? Take this one.** It installs Grabbit, connects it to your browser and asks your language. |
+| `...-portable.zip` | You want Grabbit on a USB stick or without installing: unzip and run. Everything stays in its folder. |
 | `...-x64.zip` | You want the plain programs without an installer. |
 | `...-extension-chromium.zip` | You want to add the browser extension by hand (Chrome, Edge, Brave, Opera, Vivaldi). From the stores is easier: [Add to Chrome](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp), [Add to Firefox](https://addons.mozilla.org/firefox/addon/mister-download-manager/). |
 
@@ -117,7 +117,7 @@ one:
     <td width="50%"><img src="docs/images/main-dark.webp" alt="Dark mode"><br><sub><b>Dark mode</b> that follows Windows.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/add-url.webp" alt="Add URL"><br><sub><b>Add a download</b>: paste a link, or let MDM catch it from your browser.</sub></td>
+    <td><img src="docs/images/add-url.webp" alt="Add URL"><br><sub><b>Add a download</b>: paste a link, or let Grabbit catch it from your browser.</sub></td>
     <td><img src="docs/images/add-torrent.webp" alt="Add torrent"><br><sub><b>Torrents and magnet links</b>: pick the files you want, skip the rest.</sub></td>
   </tr>
   <tr>
@@ -136,7 +136,7 @@ one:
   re-balancing until the last byte.
 - **Resumes** after a crash, a restart or a dropped connection, without starting over.
 - **Catches downloads from Firefox, Chrome, Edge, Brave, Opera and Vivaldi** (the extension is
-  on Firefox Add-ons and the Chrome Web Store), and gives them back to the browser when MDM isn't
+  on Firefox Add-ons and the Chrome Web Store), and gives them back to the browser when Grabbit isn't
   running.
 - **Downloads videos** from web pages (a button appears over the video; playlists, subtitles,
   the sound alone), **image galleries** with gallery-dl, and **torrents and magnet links**
@@ -148,13 +148,13 @@ one:
   down if you like.
 - **Through your VPN only**, if you want: hold every download to one network adapter, with a kill
   switch, and choose an encrypted DNS. Each download shows its server's country.
-- **From your phone, or on a server**: control MDM from a phone on your home network, or run it
+- **From your phone, or on a server**: control Grabbit from a phone on your home network, or run it
   without a window on a PC that stays on ([how](docs/server.md)).
 - **Works from scripts too**: IDM's command-line switches, a command-line tool, and a local API for other programs ([how](docs/command-line.md)).
 - **Works with your AI assistant**: an MCP server lets Claude, Cursor or VS Code list, add, pause and remove your downloads ([set it up](docs/ai-assistants.md)).
 - **Leaves you some speed**: limit one download or all of them, only while you're at the computer.
-- **Day and dark mode, and themes**: Classic, Native, High contrast, Metro, Adwaita, Breeze,
-  Luna, Aero, Aqua and Graphite, or your own in a text file ([how](docs/themes.md)). Everything larger, up
+- **Day and dark mode, and themes**: Graphite, light and dark, or your own in a text file
+  ([how](docs/themes.md)). Everything larger, up
   to 200 %, with **View → Interface size**. And a portable version for USB sticks.
 - **Works from the keyboard and with screen readers** (Narrator, NVDA): every window, dialog and
   menu ([the keys](docs/keyboard-shortcuts.md)).
@@ -171,40 +171,40 @@ Step by step: [your first download](docs/guide-first-download.md) ·
 
 Both programs downloaded the same files from the same local test server
 ([labserver](crates/labserver)), with the network trouble each scenario names: seven runs each,
-both at their default settings. MDM finished first in **all seven scenarios**; every difference is
-statistically significant (Mann-Whitney p < 0.001), and MDM used less CPU in every one.
+both at their default settings. Grabbit finished first in **all seven scenarios**; every difference is
+statistically significant (Mann-Whitney p < 0.001), and Grabbit used less CPU in every one.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/images/bench-time-dark.svg">
-    <img src="docs/images/bench-time-light.svg" alt="Time to finish a download in seconds, Mister Download Manager versus IDM, in seven scenarios" width="880">
+    <img src="docs/images/bench-time-light.svg" alt="Time to finish a download in seconds, Grabbit versus IDM, in seven scenarios" width="880">
   </picture>
 </p>
 
-On a server that allows only two connections, MDM used 2 and still finished first; IDM opened 480.
+On a server that allows only two connections, Grabbit used 2 and still finished first; IDM opened 480.
 The full table, the machine and the raw data: [docs/bench/run5/REPORT.md](docs/bench/run5/REPORT.md).
 The harness is in [tools/bench](tools/bench), so anyone can run it again.
 
 ## Not a reverse-engineering project
 
-MDM is an independent, clean-room program. It is a new implementation of a familiar way of
+Grabbit is an independent, clean-room program. It is a new implementation of a familiar way of
 working, not a copy of anyone's software.
 
 - **No one else's code or assets.** It contains no code, binaries, artwork, icons, sounds or
   text from Internet Download Manager, nor code from any other download manager. The app icon
-  was made for MDM with ChatGPT (OpenAI's image generation); the other icons come from openly
+  is Grabbit's own double chevron, drawn as plain vector shapes; the other icons come from openly
   licensed sets ([ATTRIBUTION.md](ATTRIBUTION.md)).
 - **Nothing taken apart.** No IDM file was ever disassembled, decompiled, debugged, patched or
   inspected below its user interface, and its licensing, trial and registration were never
   touched or bypassed.
-- **Learned as a user learns.** What MDM does was learned from IDM's public documentation and
+- **Learned as a user learns.** What Grabbit does was learned from IDM's public documentation and
   help pages, its public screenshots, and by using a licensed copy as a black box: downloading
   test files from our own test server ([labserver](crates/labserver)) and watching what reached
   the network and the screen.
 - **Built on public standards.** The download engine follows the HTTP specifications (RFC 9110,
   RFC 9112) and was designed, tested and measured independently. Its speed comes from its own
   design, which the benchmark shows.
-- **Not affiliated.** MDM isn't affiliated with, endorsed by or connected to Tonec Inc.
+- **Not affiliated.** Grabbit isn't affiliated with, endorsed by or connected to Tonec Inc.
   "Internet Download Manager" and "IDM" are trademarks of their owner, named here only to
   describe the layout people already know and to compare the two programs.
 
@@ -259,12 +259,12 @@ pieces fit.
 
 | Tool | What it does |
 |---|---|
-| `node tools/extension/e2e.mjs` | The browser extension in real Chrome, Brave, Edge and Firefox, headless: a link's download must reach MDM (or another MDM, a server) |
+| `node tools/extension/e2e.mjs` | The browser extension in real Chrome, Brave, Edge and Firefox, headless: a link's download must reach Grabbit (or another Grabbit, a server) |
 | `node tools/readme/build.mjs` | This page's pictures and comparison table, from the benchmark data |
 | `tools\lab\docs-shots.ps1` | The screenshots, from a separate test instance (`/show <window>` opens each window), off the screen |
 | `python tools/shots/make.py` | The help pages' pictures, from one list (`tools/shots/shots.toml`): shot, cropped, annotated, lossless WebP; `make.py check` keeps them in step |
 | `tools\lab\progress-shots.ps1` | The progress window of a video (yt-dlp) and of a torrent, from a swarm on this computer (`cargo run -p mdm-torrent --example swarm`) |
-| `python tools/website/build.py --serve` | misterdownloadmanager.com into `target/site` (help pages from `docs/`, news from the CHANGELOG, FAQ and legal pages from `website/content/`), served on http://127.0.0.1:8765; GitHub Pages publishes it (`pages.yml`) |
+| `python tools/website/build.py --serve` | humblef0ol.github.io/grabbit into `target/site` (help pages from `docs/`, news from the CHANGELOG, FAQ and legal pages from `website/content/`), served on http://127.0.0.1:8765/grabbit/; GitHub Pages publishes it (`pages.yml`) |
 | `python tools/readme/social.py` | The repository's social preview card (`docs/images/social-preview.png`) |
 | `MDM_FIT_AUDIT=<file>` | Lists every text that doesn't fit its window or runs over another |
 | `MDM_OFFSCREEN=1` | Opens every window off the screen, without focus, tray icon or sound (screenshots and checks) |
@@ -275,7 +275,7 @@ pieces fit.
 
 ## Status and helping out
 
-MDM is young: the engine, the main window and the browser integration are solid on Windows, and
+Grabbit is young: the engine, the main window and the browser integration are solid on Windows, and
 some corners are still "good enough for now".
 
 - **English only.** The interface, the installer, the extension and the website are in English;
@@ -291,7 +291,7 @@ in the app fills in your version and system. Pull requests are accepted under th
 ## Made possible by these amazing humans
 
 Everyone who sent a pull request, opened an issue or joined a conversation here: thank you. People
-with pull requests first, then issues, then comments; [the website](https://misterdownloadmanager.com/contributors.html)
+with pull requests first, then issues, then comments; [the website](https://humblef0ol.github.io/grabbit/contributors.html)
 shows what each one did.
 
 <!-- contributors:start (python tools/contributors.py readme) -->
@@ -329,26 +329,29 @@ shows what each one did.
 
 ## ⭐ Star history
 
-If MDM saves you time, a star is the quickest way to say so, and it helps the next person find
+If Grabbit saves you time, a star is the quickest way to say so, and it helps the next person find
 a free download manager. [Star it on GitHub](https://github.com/HUMBLEF0OL/grabbit/stargazers).
 
 <a href="https://star-history.com/#HUMBLEF0OL/grabbit&Date">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=HUMBLEF0OL/grabbit&type=Date&theme=dark">
-    <img src="https://api.star-history.com/svg?repos=HUMBLEF0OL/grabbit&type=Date" alt="Mister Download Manager's GitHub stars over time" width="600">
+    <img src="https://api.star-history.com/svg?repos=HUMBLEF0OL/grabbit&type=Date" alt="Grabbit's GitHub stars over time" width="600">
   </picture>
 </a>
 
-## Support MDM
+## Support Grabbit
 
-MDM is free and always will be. If it saves you time, [star it on
+Grabbit is free and always will be. If it saves you time, [star it on
 GitHub](https://github.com/HUMBLEF0OL/grabbit/stargazers). Nothing in the app changes or unlocks,
 and there is no paid edition.
 
 ## Licence and credits
 
-Copyright (c) 2026 Ahmed Nefzaoui. Mister Download Manager is free software under the
+Copyright (c) 2026 Ahmed Nefzaoui. Grabbit is free software under the
 [GNU General Public License, version 3](LICENSE) or (at your option) any later version.
+
+Grabbit began as a fork of Mister Download Manager by Ahmed Nefzaoui
+(`anefzaoui/misterdownloadmanager`), and still takes in its fixes.
 
 Built on [egui](https://github.com/emilk/egui) through
 [storytold's forks](https://github.com/storytold/egui) and

@@ -635,8 +635,10 @@ These ship in a later version, when they're ready.
   upstream's fixes. Done: the data folder (`%APPDATA%\grabbit`, `GRABBIT_DATA_DIR`), saved
   logins, autostart, the `.torrent` link, the browser host and the programs (`grabbit*.exe`)
   take Grabbit's names (10c; its migrations from the old names removed, never published).
-  Done: the release files (`Grabbit-<version>-…`), the website address in the app and the
-  Firefox add-on's ID (10d's code). Next: the website, docs and README (10d)
+  Done: the release files (`Grabbit-<version>-…`), the website address in the app, the Firefox
+  add-on's ID, and the website, help, README and other docs say Grabbit, describe only the
+  Graphite look, and the site moves to https://humblef0ol.github.io/grabbit (10d). Next: the
+  internal names (10e)
 - ✅ Grabbit signs its own releases: Update now trusts Grabbit's release key, and each release's
   checksum list is signed with it
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a
@@ -646,7 +648,7 @@ These ship in a later version, when they're ready.
   the header and footer, and the video window's picture taken again in Graphite; the site's
   install manifest and search data carry Grabbit's name, mark and colours, the home page's walk
   through reads in full without JavaScript, and its stylesheet and script are never served stale
-  after an update. The pages' own text still says Mister Download Manager until the rename above
+  after an update. The pages' own text says Grabbit too since the rename above (10d)
 
 ### Bugs being looked into
 

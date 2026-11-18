@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping with Mister Download Manager. Bug reports, ideas and pull requests are all
+Thanks for helping with Grabbit. Bug reports, ideas and pull requests are all
 welcome.
 
 ## Getting set up
@@ -48,29 +48,29 @@ python tools/rename/check.py --done
 
 Keep changes focused and match the code around them. A few rules hold everywhere:
 
-- **Clean room.** MDM contains no code, binaries, artwork, icons, sounds or text from Internet
+- **Clean room.** Grabbit contains no code, binaries, artwork, icons, sounds or text from Internet
   Download Manager or any other download manager. Never disassemble, decompile or patch another
   program, and never bypass anyone's licensing. See
   [Not a reverse-engineering project](README.md#not-a-reverse-engineering-project).
-- **Every text the user sees goes through `crate::i18n`** (`t`, `tc`, `tn`, `fmt`). MDM is
+- **Every text the user sees goes through `crate::i18n`** (`t`, `tc`, `tn`, `fmt`). Grabbit is
   English only, so they return the English text. Data inside a sentence (a file name, an
   address, a size) goes in through `i18n::ltr` or `i18n::isolate`, so a file name in Arabic or
   Hebrew can't reorder the sentence around it.
-- **MDM is Windows only. Windows-only calls live in `crates/app/src/win32.rs`**; the rest of the
+- **Grabbit is Windows only. Windows-only calls live in `crates/app/src/win32.rs`**; the rest of the
   workspace is safe, portable Rust (`unsafe_code = "deny"`).
 - **Fix causes, not cases**, and keep producers and consumers of shared data (the download list,
   the browser extension's messages, the catalogs) in step.
 
 ## Languages
 
-MDM, its installer, the browser extension and the website are in English only. The translations
+Grabbit, its installer, the browser extension and the website are in English only. The translations
 (86 languages), the language picker and the translation tools are kept on the
 `archive/multiplatform-i18n` branch.
 
 ## Reporting problems
 
 Use **Help → Report a problem** in the app: it opens the bug report form with your version,
-system and how MDM was installed filled in. The form asks for the same when you
+system and how Grabbit was installed filled in. The form asks for the same when you
 open it yourself. Security problems: see [SECURITY.md](SECURITY.md).
 
 Pull requests are accepted under the project's licence, the

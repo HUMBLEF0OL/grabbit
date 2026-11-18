@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds misterdownloadmanager.com into target/site (GitHub Pages publishes it, .github/workflows/
+"""Builds humblef0ol.github.io/grabbit into target/site (GitHub Pages publishes it, .github/workflows/
 pages.yml). No framework: website/ holds the hand-written home page, styles, scripts and assets;
 website/content/ the pages written as Markdown (FAQ, legal); the rest comes from the repository
 itself so the site never drifts from it: docs/*.md become the help pages, CHANGELOG.md the news
@@ -8,7 +8,7 @@ own title, description, canonical address, social card and structured data, and 
 sitemap.xml.
 
     python tools/website/build.py            # build target/site
-    python tools/website/build.py --serve    # build, then serve it on http://127.0.0.1:8765
+    python tools/website/build.py --serve    # build, then serve it on http://127.0.0.1:8765/grabbit/
 
 The repository's stars, forks and open issues are read from GitHub's API while building (with
 GITHUB_TOKEN when set), so visitors' browsers never call GitHub; offline, the numbers are left
@@ -40,7 +40,10 @@ ROOT = Path(__file__).resolve().parents[2]
 WEB = ROOT / "website"
 CONTENT = WEB / "content"
 OUT = ROOT / "target" / "site"
-SITE = "https://misterdownloadmanager.com"
+SITE = "https://humblef0ol.github.io/grabbit"
+# The path GitHub Pages serves this project site under. Pages and assets are written with root
+# paths ("/download.html") and rebase() puts BASE in front of them once everything is built.
+BASE = urllib.parse.urlsplit(SITE).path.rstrip("/")
 REPO = "https://github.com/HUMBLEF0OL/grabbit"
 # The Firefox add-on's listing (crates/ipc/src/extension.rs FIREFOX_PAGE): {{AMO}} in pages, and
 # <!--@amo--> for its Add to Firefox button.
@@ -48,7 +51,7 @@ AMO = "https://addons.mozilla.org/firefox/addon/mister-download-manager/"
 # The extension's listing in the Chrome Web Store (crates/ipc/src/extension.rs STORE_ID), for
 # Chrome, Edge, Brave, Opera and Vivaldi: {{CWS}} in pages; <!--@cws--> for its Add to Chrome button.
 CWS = "https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp"
-# The header's, the footer's and the home page's Support MDM: this fork's repository until its
+# The header's, the footer's and the home page's Support Grabbit: this fork's repository until its
 # owner's GitHub Sponsors page exists (see .github/FUNDING.yml; the app and the popup match).
 SPONSORS = REPO
 NAME = "Grabbit"
@@ -111,7 +114,7 @@ def setup_size() -> str:
 VERSION = published_version()
 SETUP_SIZE = setup_size()
 TODAY = datetime.date.today().isoformat()
-RELEASE = f"{REPO}/releases/download/v{VERSION}/MisterDownloadManager-{VERSION}"
+RELEASE = f"{REPO}/releases/download/v{VERSION}/Grabbit-{VERSION}"
 FILES = {
     "setup": f"{RELEASE}-setup.exe",
     "portable": f"{RELEASE}-portable.zip",
@@ -129,8 +132,8 @@ DOCS_MD: list[tuple[str, str, str, str]] = []
 FAQ_MD: list[tuple[str, str, str]] = []
 
 # The visit counter (privacy.md says what it records). Statcounter's own code, as given.
-STATCOUNTER = """<!-- Default Statcounter code for Mister Download Manager
-https://misterdownloadmanager.com/ -->
+STATCOUNTER = """<!-- Default Statcounter code for Grabbit
+https://humblef0ol.github.io/grabbit/ -->
 <script type="text/javascript">
 var sc_project=13364153;
 var sc_invisible=1;
@@ -175,7 +178,7 @@ def repo_stats() -> dict[str, str]:
 
 STATS: dict[str, str] = {}
 
-# The people who made MDM possible (tools/contributors.py), read once per build: everyone, and the
+# The people who made Grabbit possible (tools/contributors.py), read once per build: everyone, and the
 # releases for each one's own. None when GitHub can't be read: the home page then leaves its
 # section out, /contributors.html says so, and the News page thanks nobody (with a warning).
 CREW: list[dict] | None = None
@@ -367,8 +370,8 @@ def header(section: str = "") -> str:
         <button class="icon-btn theme" type="button" aria-label="Switch between light and dark" title="Light / dark">
           <svg class="for-light-i" aria-hidden="true"><use href="#i-moon"/></svg><svg class="for-dark-i" aria-hidden="true"><use href="#i-sun"/></svg>
         </button>
-        <a class="icon-btn top-gh" href="{REPO}" aria-label="Mister Download Manager on GitHub" title="GitHub"><svg aria-hidden="true"><use href="#i-github"/></svg></a>
-        <a class="icon-btn top-sponsor" href="{SPONSORS}" aria-label="Support MDM on GitHub" title="Support"><svg aria-hidden="true"><use href="#i-heart"/></svg></a>
+        <a class="icon-btn top-gh" href="{REPO}" aria-label="Grabbit on GitHub" title="GitHub"><svg aria-hidden="true"><use href="#i-github"/></svg></a>
+        <a class="icon-btn top-sponsor" href="{SPONSORS}" aria-label="Support Grabbit on GitHub" title="Support"><svg aria-hidden="true"><use href="#i-heart"/></svg></a>
         <a class="btn btn-go top-dl" href="/download.html">Download</a>
         <details class="menu">
           <summary class="icon-btn" aria-label="Menu"><svg aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg></summary>
@@ -422,7 +425,7 @@ def footer() -> str:
           <a class="brand" href="/"><img src="/assets/grabbit.svg" width="30" height="30" alt=""><span>{NAME}</span></a>
           <p class="foot-tag">A free, open-source download manager for Windows, written from scratch in Rust and measured faster than IDM.</p>
           <a class="text-link foot-star" href="{REPO}"><svg aria-hidden="true"><use href="#i-star"/></svg> Star it on GitHub</a>
-          <a class="text-link foot-star" href="{SPONSORS}"><svg aria-hidden="true"><use href="#i-heart"/></svg> Support MDM</a>
+          <a class="text-link foot-star" href="{SPONSORS}"><svg aria-hidden="true"><use href="#i-heart"/></svg> Support Grabbit</a>
         </div>
         <div>
           <h2>Product</h2>
@@ -616,7 +619,6 @@ SOFTWARE_LD = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": NAME,
-    "alternateName": "MDM",
     "applicationCategory": "UtilitiesApplication",
     "applicationSubCategory": "Download manager",
     "operatingSystem": "Windows 10, Windows 11",
@@ -1075,7 +1077,7 @@ def build_repo_pages() -> None:
     trail = [("Home", "/"), ("Contributing", path)]
     lede = ("Bug reports, ideas and pull requests are all welcome. "
             f'Everything happens in the open on <a href="{REPO}">GitHub</a>.')
-    body = f"""{page_head("Contribute to Mister Download Manager", lede, trail)}
+    body = f"""{page_head("Contribute to Grabbit", lede, trail)}
     <div class="wrap narrow prose page-body">
       <div class="contrib-ways">
         <a href="{REPO}/issues/new?template=bug.yml"><b>Report a bug</b><span>Something broken or odd? Tell us what you saw.</span></a>
@@ -1086,7 +1088,7 @@ def build_repo_pages() -> None:
       {page_tools("CONTRIBUTING.md", path, "Contributing")}
     </div>"""
     write(path, f"Contribute — {NAME}",
-          "How to help Mister Download Manager: report bugs, fix translations, build it from source and send pull requests. The checks CI runs and the project's rules.",
+          "How to help Grabbit: report bugs, fix translations, build it from source and send pull requests. The checks CI runs and the project's rules.",
           body, jsonld=[crumbs_ld(trail)], priority="0.5")
 
 
@@ -1100,12 +1102,12 @@ def bench_report() -> str:
 
 def bench_bars(axis: int = 16) -> str:
     """The home page's chart: each scenario's end-to-end median from website/bench/results.json,
-    MDM's bar over IDM's on one shared time axis (seconds). Drawn here so the page and the data
+    Grabbit's bar over IDM's on one shared time axis (seconds). Drawn here so the page and the data
     can't disagree; home.css styles it and home.js only adds the grow-in."""
     data = json.loads((WEB / "bench" / "results.json").read_text("utf-8"))
     rows = []
     for s in data["scenarios"]:
-        us = s["clients"]["MDM"]["stats"]["e2e_ms"]["median"] / 1000
+        us = s["clients"]["Grabbit"]["stats"]["e2e_ms"]["median"] / 1000
         them = s["clients"]["IDM"]["stats"]["e2e_ms"]["median"] / 1000
         rows.append(
             f'<li class="bench-row"><span class="bench-name">{esc(s["title"])}</span>'
@@ -1409,7 +1411,9 @@ def theme_keys() -> dict[str, list[tuple[str, str]]]:
     colors = [k for k in keys if k not in sizes]
     styles: dict[str, list[str]] = {}
     for k, v in re.findall(r'\("([a-z-]+)", "([a-z-]+)"\) =>', src):
-        styles.setdefault(k, []).append(v)
+        # The removed themes' styles are still read, until plan 10e removes them: not offered.
+        if v not in ("luna", "aero", "aqua", "adwaita", "breeze", "metro"):
+            styles.setdefault(k, []).append(v)
     if len(colors) < 50 or len(sizes) < 5 or len(styles) < 4:
         sys.exit("crates/app/src/palette.rs: the theme keys couldn't be read (build.py theme_keys)")
     return {"colors": colors, "sizes": sizes, "controls": [(k, ", ".join(v)) for k, v in styles.items()]}
@@ -1446,7 +1450,7 @@ def build_themes() -> None:
                         and (ROOT / "crates" / "app" / "assets" / "themes" / f"{t['id']}.toml").is_file())
     trail = [("Home", "/"), ("Themes", "/themes.html")]
     themes_dir = f"{REPO}/tree/main/crates/app/assets/themes"
-    body = f"""{page_head("The same window, your way", "MDM's look is Graphite, with a light and a dark side. Make your own in a text file, and View → Theme changes to it at once, keeping everything where it was.", trail)}
+    body = f"""{page_head("The same window, your way", "Grabbit's look is Graphite, with a light and a dark side. Make your own in a text file, and View → Theme changes to it at once, keeping everything where it was.", trail)}
     <div class="wrap themes">
       {coming_banner()}
       <div class="themes-bar">
@@ -1461,21 +1465,21 @@ def build_themes() -> None:
     </div>
     <div class="wrap narrow page-body prose make-own" id="make-your-own">
       <h2>Make your own theme</h2>
-      <p>A theme is one small text file, in <a href="https://toml.io/">TOML</a> (or JSON). It names only what it changes; everything else comes from the theme it builds on. You don't need to build MDM or know how to program.</p>
+      <p>A theme is one small text file, in <a href="https://toml.io/">TOML</a> (or JSON). It names only what it changes; everything else comes from the theme it builds on. You don't need to build Grabbit or know how to program.</p>
       <ol class="make-steps">
         <li id="make-it"><h3>Make it</h3>
           <p>Start with a few colours, then add more as you go:</p>
           <pre><code translate="no">{esc(THEME_SAMPLE)}</code></pre>
           <ul>
             <li><code>inherits</code> is the theme yours starts from: {builtin} (the default), or another theme file in the same folder.</li>
-            <li><code>[seeds]</code> are a handful of colours (<code>background</code>, <code>surface</code>, <code>header</code>, <code>text</code>, <code>accent</code>, <code>selection</code>, <code>error</code>, <code>warning</code>, <code>success</code>) that MDM spreads over every control. <code>[seeds.light]</code> and <code>[seeds.dark]</code> give each side its own.</li>
+            <li><code>[seeds]</code> are a handful of colours (<code>background</code>, <code>surface</code>, <code>header</code>, <code>text</code>, <code>accent</code>, <code>selection</code>, <code>error</code>, <code>warning</code>, <code>success</code>) that Grabbit spreads over every control. <code>[seeds.light]</code> and <code>[seeds.dark]</code> give each side its own.</li>
             <li><code>[colors]</code> sets single colour roles on both sides, <code>[light]</code> and <code>[dark]</code> on one side only: <code>#rrggbb</code>, or <code>#rrggbbaa</code> with transparency.</li>
             <li><code>[sizes]</code> are corner radii, border widths, font sizes and row heights, in pixels. <code>[controls]</code> chooses the shape of text boxes, check boxes, buttons, progress bars, scroll bars, the focus mark and the title bar.</li>
-            <li><code>font = "geist"</code> uses Geist, the typeface MDM carries, for every text; without it the windows keep Windows' own fonts.</li>
+            <li><code>font = "geist"</code> uses Geist, the typeface Grabbit carries, for every text; without it the windows keep Windows' own fonts.</li>
             <li>A theme in a folder of its own (<code>my-theme/theme.toml</code>) can bring its icons in <code>icons/16</code> and <code>icons/24</code>, each named for what it shows (<code>tb-add-url.svg</code>, <code>cat-music.png</code>); <code>-symbolic</code> ones take the theme's text colour. An icon it lacks is Graphite's.</li>
             <li><code>contrast = "high"</code> strengthens every edge and text colour on top.</li>
           </ul>
-          <p>A key MDM doesn't know, or a value it can't read, is skipped and written to MDM's log (the <code>logs</code> folder beside the themes folder), so a file made for a newer MDM still loads. Graphite is written the same way: <a href="{themes_dir}">read it on GitHub</a>.</p>
+          <p>A key Grabbit doesn't know, or a value it can't read, is skipped and written to Grabbit's log (the <code>logs</code> folder beside the themes folder), so a file made for a newer Grabbit still loads. Graphite is written the same way: <a href="{themes_dir}">read it on GitHub</a>.</p>
           <details class="keys-ref"><summary>Every colour role ({len(keys["colors"])})</summary>{keys_table(keys["colors"], "What it colours")}</details>
           <details class="keys-ref"><summary>Every size ({len(keys["sizes"])})</summary>{keys_table(keys["sizes"], "What it sets")}</details>
           <details class="keys-ref"><summary>Every control style ({len(keys["controls"])})</summary>{keys_table(keys["controls"], "Its styles")}</details>
@@ -1486,23 +1490,23 @@ def build_themes() -> None:
             <pre id="theme-prompt"><code translate="no">{esc(prompt)}</code></pre>
           </div>
         </li>
-        <li id="try-it"><h3>Try it, without building MDM</h3>
-          <p>Put the file in MDM's themes folder. <b>View → Theme → Open themes folder</b> opens it, and makes it the first time. It is in MDM's data folder:</p>
+        <li id="try-it"><h3>Try it, without building Grabbit</h3>
+          <p>Put the file in Grabbit's themes folder. <b>View → Theme → Open themes folder</b> opens it, and makes it the first time. It is in Grabbit's data folder:</p>
           <dl class="fields os-paths">
             <div><dt>Windows</dt><dd><code translate="no">%APPDATA%\\grabbit\\themes</code></dd></div>
             <div><dt>Portable copy</dt><dd><code translate="no">data\\themes</code> beside the program</dd></div>
           </dl>
           <p>Within two seconds it shows in <b>View → Theme</b>, under Graphite, by the <code>name</code> it gives itself. Pick it and the whole window changes at once. After you edit the file, pick it again in <b>View → Theme</b> to see the change. <b>View → Dark Mode support</b> and <b>Always dark</b> switch between its light and dark side.</p>
-          <p><b>View → Theme → Add a theme file…</b> does it for you: pick the file anywhere, and MDM copies it into the themes folder and uses it at once.</p>
+          <p><b>View → Theme → Add a theme file…</b> does it for you: pick the file anywhere, and Grabbit copies it into the themes folder and uses it at once.</p>
           <h4 id="schemes">Already have a Base16 or pywal scheme?</h4>
-          <p>It's a theme already. A <a href="https://github.com/tinted-theming/schemes">Base16 or Base24 scheme</a> (<code>.yaml</code>) or pywal's <code>colors.json</code>, added the same way, changes MDM's colours and nothing else: the scheme's backgrounds behind the list and the windows, its text kept readable (4.5:1 or more), its blue on the focus, the selection and the progress bar. Once <code>wal</code> has run, <b>View → Theme</b> lists <b>pywal</b>, read from <code>~/.cache/wal/colors.json</code> (<code translate="no">%USERPROFILE%\\.cache\\wal\\colors.json</code> on Windows), and MDM follows each new wallpaper's colours within two seconds. <a href="{REPO}/blob/main/docs/themes.md#base16-and-pywal-colour-schemes">The guide</a> shows which colour goes where.</p>
+          <p>It's a theme already. A <a href="https://github.com/tinted-theming/schemes">Base16 or Base24 scheme</a> (<code>.yaml</code>) or pywal's <code>colors.json</code>, added the same way, changes Grabbit's colours and nothing else: the scheme's backgrounds behind the list and the windows, its text kept readable (4.5:1 or more), its blue on the focus, the selection and the progress bar. Once <code>wal</code> has run, <b>View → Theme</b> lists <b>pywal</b>, read from <code>~/.cache/wal/colors.json</code> (<code translate="no">%USERPROFILE%\\.cache\\wal\\colors.json</code> on Windows), and Grabbit follows each new wallpaper's colours within two seconds. <a href="{REPO}/blob/main/docs/themes.md#base16-and-pywal-colour-schemes">The guide</a> shows which colour goes where.</p>
         </li>
         <li id="share-it"><h3>Share it</h3>
           <p>Made something others would like? Open a <a href="{REPO}/pulls">pull request on GitHub</a> that adds it to <a href="{themes_dir}"><code>crates/app/assets/themes</code></a>, with:</p>
           <ul>
             <li>the <code>.toml</code> file, and its folder of icons if it has one;</li>
             <li>screenshots of the main window in its light and its dark side;</li>
-            <li>a <code>SOURCES.txt</code> beside any icons, saying who drew them and under which licence. Icons must be your own or under a licence that lets MDM share them (GPL-3.0), never copied from another program.</li>
+            <li>a <code>SOURCES.txt</code> beside any icons, saying who drew them and under which licence. Icons must be your own or under a licence that lets Grabbit share them (GPL-3.0), never copied from another program.</li>
           </ul>
           <p>Not sure yet? <a href="{REPO}/discussions">Show it in the discussions</a> first. The <a href="/contributing.html">contributing guide</a> explains how pull requests work here.</p>
         </li>
@@ -1528,7 +1532,7 @@ def copy_feature_images() -> None:
 # ---- For AI assistants and search: llms.txt, llms-full.txt (llmstxt.org) ----------------------
 
 def build_llms() -> None:
-    """llms.txt: website/llms.txt (what MDM is, the main pages) and, made here, every help page
+    """llms.txt: website/llms.txt (what Grabbit is, the main pages) and, made here, every help page
     (as Markdown) and question. llms-full.txt: all of it in one file. Built from the same
     sources as the pages, so it never drifts from them."""
     head_md = (WEB / "llms.txt").read_text("utf-8").strip()
@@ -1574,14 +1578,13 @@ def copy_static() -> None:
     schema = ROOT / "docs" / "automation-api.schema.json"
     if schema.is_file():
         shutil.copy2(schema, OUT / "automation-api.schema.json")
-    (OUT / "CNAME").write_text("misterdownloadmanager.com\n", "utf-8")
     (OUT / ".nojekyll").write_text("", "utf-8")
     (OUT / "site.webmanifest").write_text(json.dumps({
-        "name": NAME, "short_name": NAME, "start_url": "/", "display": "browser",
+        "name": NAME, "short_name": NAME, "start_url": f"{BASE}/", "display": "browser",
         "background_color": "#f7f6fb", "theme_color": "#f7f6fb",
-        "icons": [{"src": "/assets/grabbit.svg", "sizes": "any", "type": "image/svg+xml"},
-                  {"src": "/assets/logo-640.png", "sizes": "640x640", "type": "image/png"},
-                  {"src": "/assets/apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}],
+        "icons": [{"src": f"{BASE}/assets/grabbit.svg", "sizes": "any", "type": "image/svg+xml"},
+                  {"src": f"{BASE}/assets/logo-640.png", "sizes": "640x640", "type": "image/png"},
+                  {"src": f"{BASE}/assets/apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}],
     }, indent=2), "utf-8")
 
 
@@ -1601,8 +1604,24 @@ def bust_caches() -> None:
             page.write_text(new, "utf-8", newline="\n")
 
 
+def rebase() -> None:
+    """BASE in front of every root path ("/x", not "//host") the pages and styles link to: in
+    href, src and action (also inside JSON-LD, quoted \\"), and in url(). Absolute addresses are
+    SITE's already."""
+    if not BASE:
+        return
+    root_path = re.compile(r"""(\s(?:href|src|action)=\\?["']|url\(["']?)/(?!/)""")
+    for f in OUT.rglob("*"):
+        if f.suffix in (".html", ".css"):
+            text = f.read_text("utf-8")
+            new = root_path.sub(lambda m: m.group(1) + BASE + "/", text)
+            if new != text:
+                f.write_text(new, "utf-8", newline="\n")
+
+
 def finish() -> None:
     bust_caches()
+    rebase()
     urls = "\n".join(f"  <url>\n    <loc>{SITE}{path}</loc>\n    <lastmod>{TODAY}</lastmod>\n"
                      f"    <priority>{pr}</priority>\n  </url>"
                      for path, pr in sorted(PAGES, key=lambda x: (-float(x[1]), x[0])))
@@ -1610,7 +1629,7 @@ def finish() -> None:
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n{urls}\n</urlset>\n',
         "utf-8", newline="\n")
-    (OUT / "robots.txt").write_text(f"User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n", "utf-8")
+    (OUT / "robots.txt").write_text(f"User-agent: *\nAllow: {BASE}/\n\nSitemap: {SITE}/sitemap.xml\n", "utf-8")
 
 
 def main() -> None:
@@ -1637,8 +1656,26 @@ def main() -> None:
     if "--serve" in sys.argv:
         import functools
         import http.server
-        handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(OUT))
-        print("http://127.0.0.1:8765/")
+        class AtBase(http.server.SimpleHTTPRequestHandler):
+            """Serves the site under BASE, as GitHub Pages does; anything else is 404."""
+            def translate_path(self, path):
+                if not path.startswith(BASE + "/"):
+                    return str(OUT / "-")  # outside the site: no such file
+                return super().translate_path(path[len(BASE):])
+
+            def send_error(self, code, message=None, explain=None):
+                if code == 404 and (OUT / "404.html").is_file():
+                    body = (OUT / "404.html").read_bytes()
+                    self.send_response(404)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
+                super().send_error(code, message, explain)
+
+        handler = functools.partial(AtBase, directory=str(OUT))
+        print(f"http://127.0.0.1:8765{BASE}/")
         http.server.ThreadingHTTPServer(("127.0.0.1", 8765), handler).serve_forever()
 
 

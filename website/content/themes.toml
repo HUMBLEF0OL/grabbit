@@ -1,4 +1,4 @@
-# The Themes page (/themes.html, tools/website/build.py build_themes): MDM's built-in themes, in
+# The Themes page (/themes.html, tools/website/build.py build_themes): Grabbit's built-in themes, in
 # View → Theme's order, each with its line and its picture (tools/shots/shots.toml, site-theme-*:
 # the main window, light and dark). `shot` is optional: a tile without one shows its text only.
 # `tag`: arrives after the rest, with its own "Coming with version" mark. `note`: a line under
@@ -7,5 +7,5 @@
 [[theme]]
 id = "graphite"
 name = "Graphite"
-feel = "MDM's own look and the only built-in one: near-black or white, royal amethyst for what you chose, electric cyan for what moves, rounded corners and one-colour icons."
+feel = "Grabbit's own look and the only built-in one: near-black or white, royal amethyst for what you chose, electric cyan for what moves, rounded corners and one-colour icons."
 shot = "images/help/site-theme-graphite.webp"

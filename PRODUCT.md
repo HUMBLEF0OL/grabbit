@@ -16,7 +16,7 @@ Secondary visitors: people reading the help pages while using the app, and contr
 
 ## Product Purpose
 
-Mister Download Manager (MDM) is a free, open-source (GPL-3.0) download manager for Windows,
+Grabbit is a free, open-source (GPL-3.0) download manager for Windows,
 laid out the way IDM users expect: same windows, menus and workflow, rebuilt from scratch in
 Rust. The website's job is to get the right visitor to download it with confidence, then to
 help them use it (help pages, FAQ, tutorials).
@@ -30,13 +30,13 @@ IDM's window, but faster and free. The layout is the one the visitor already kno
 is measured, not claimed (a public, reproducible benchmark against IDM 6.42); the price is
 nothing, with no ads, no trial and no sign-up. Torrents and video downloads are built in.
 
-MDM is a separate program, written from scratch. It is never presented as IDM, as made by IDM's
+Grabbit is a separate program, written from scratch. It is never presented as IDM, as made by IDM's
 maker (Tonec), or as a crack or copy of it.
 
 ## Operating Context
 
 - Visitors compare against IDM, often with IDM installed or remembered.
-- Download is from GitHub Releases: a Windows installer, a portable zip, a plain zip. MDM is
+- Download is from GitHub Releases: a Windows installer, a portable zip, a plain zip. Grabbit is
   Windows only: Linux and macOS builds are no longer made. The browser extension ships for Chrome, Edge, Brave, Opera,
   Vivaldi and Firefox.
 - Help pages are read alongside the running app, often to find a menu or setting.
@@ -45,7 +45,7 @@ maker (Tonec), or as a crack or copy of it.
 ## Capabilities and Constraints
 
 - Static site: `tools/website/build.py` builds `website/`, `docs/` (help) and `CHANGELOG.md`
-  (news) into `target/site`; GitHub Pages serves it at misterdownloadmanager.com. Plain HTML,
+  (news) into `target/site`; GitHub Pages serves it at humblef0ol.github.io/grabbit. Plain HTML,
   CSS and JavaScript, no framework, no external scripts except the Statcounter visit counter.
 - Every page is in English only (the translated site is kept on the `archive/multiplatform-i18n`
   branch).
@@ -58,7 +58,7 @@ maker (Tonec), or as a crack or copy of it.
 - Real, unretouched screenshots of the app: `website/assets/screens/` (light and dark) and
   `docs/images/`.
 - Benchmark results, final, 2026-10-29: `website/bench/results.json` (seven scenarios, alternating
-  runs, IDM 6.42 vs MDM at defaults); the methodology is on the benchmark page.
+  runs, IDM 6.42 vs Grabbit at defaults); the methodology is on the benchmark page.
 - The app's logo (`website/assets/logo-*`), browser logos for the extension (`website/assets/browsers/`).
 - No testimonials, reviews, user counts, press or customer logos exist; none may be invented.
   GitHub stars are few and shown only as the live count.

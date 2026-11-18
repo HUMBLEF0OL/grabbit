@@ -37,6 +37,7 @@ ALLOW = [
     (r"\bMDM\.popup\b", "internal window-property marker, never shown"),
     (r"\bMDM\.caption-less\.settled\b", "internal window-property marker, never shown"),
     (r"\bMDM-test-[\w{}:-]*", "keychain names of off-screen test copies, never shown"),
+    (r"fork of Mister Download Manager", "lineage: where Grabbit comes from (README, FAQ)"),
 ]
 ALLOW_RE = re.compile("|".join(f"(?:{p})" for p, _ in ALLOW))
 
@@ -139,8 +140,8 @@ def files(pattern):
 
 
 # (area, its files, done): a done area has no hit left, and `--done` keeps it that way (CI, and
-# tools/upstream-sync/sync.py after each pick: upstream still writes the old name). 10d marks
-# the website, docs and README done once it has renamed them.
+# tools/upstream-sync/sync.py after each pick: upstream still writes the old name). Every area
+# is done since 10d renamed the website, docs and README.
 AREAS = [
     # ponytail: labserver is a developer's test server, never shipped; skipped.
     ("App (Rust strings)", lambda: [(p, scan_rust) for p in files("crates/*/src/**/*.rs") + files("crates/*/build.rs") if p.parts[len(ROOT.parts) + 1] != "labserver"], True),
@@ -149,9 +150,12 @@ AREAS = [
     # Its scripts too: video.js's fallback texts, and any text a script shows (comments skipped).
     ("Extension", lambda: [(p, scan_text) for p in files("extension/_locales/**/*.json") + files("extension/*.html") + files("extension/manifest*.json")]
      + [(p, lambda q: scan_text(q, comment=("//", "/*", "*"))) for p in files("extension/*.js")], True),
-    ("Website", lambda: [(p, scan_text) for p in files("website/content/**/*") if p.suffix in TEXT_EXT], False),
-    ("Docs", lambda: [(p, scan_text) for p in files("docs/**/*") if p.suffix in TEXT_EXT], False),
-    ("README", lambda: [(p, scan_text) for p in files("README.md")], False),
+    # The pages written as Markdown, and the hand-written pages, scripts, styles and llms.txt.
+    ("Website", lambda: [(p, scan_text) for p in files("website/content/**/*") + files("website/*") if p.suffix in TEXT_EXT], True),
+    # ponytail: the API schema is generated from crates/ipc/src/api.rs's doc comments, which keep
+    # upstream's words (the sync rule); its descriptions follow them, so it isn't checked here.
+    ("Docs", lambda: [(p, scan_text) for p in files("docs/**/*") if p.suffix in TEXT_EXT and p.name != "automation-api.schema.json"], True),
+    ("README", lambda: [(p, scan_text) for p in files("README.md")], True),
 ]
 
 
@@ -208,6 +212,7 @@ const AFTER: &str = "MDM after";
         "keychain:MDM-test-unit/aaaa0001/", "MDM.caption-less.settled\\0",
     ]:
         assert hits_in(kept) == [], kept
+    assert hits_in("Grabbit began as a fork of Mister Download Manager by Ahmed Nefzaoui") == []
     assert hits_in("Support MDM") == ["MDM"]
     assert hits_in("Open Mister Download Manager (MDM)") == ["Mister Download Manager", "MDM"]
     print("self-test ok")

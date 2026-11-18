@@ -1,6 +1,6 @@
 # Architecture
 
-How Mister Download Manager's pieces fit together.
+How Grabbit's pieces fit together.
 
 ## Crates
 
@@ -16,13 +16,13 @@ How Mister Download Manager's pieces fit together.
 | `crates/debrid` | `mdm-debrid` | Debrid accounts (#44): the services' official APIs (Real-Debrid, AllDebrid, Premiumize) turn a file host's link into a direct one the engine downloads |
 | `crates/extract` | `mdm-extract` | Archive extraction (#37): zip, tar, gz and xz in process; 7z and RAR through an installed 7-Zip, run as its own program |
 | `crates/geo` | `mdm-geo` | Where a download's server is (#140): an IP-to-country range table built from DB-IP's Lite data (`tools/geo/build.py`), looked up on this computer only, and the countries' flags |
-| `crates/tools` | `mdm-tools` | Video pages through yt-dlp and ffmpeg, image galleries through gallery-dl (run as separate programs); while a network adapter is chosen, their connections go through a proxy of MDM's on 127.0.0.1 that binds them to it (`relay.rs`); each runs in a folder it can write, also its TEMP (`workdir.rs`) |
+| `crates/tools` | `mdm-tools` | Video pages through yt-dlp and ffmpeg, image galleries through gallery-dl (run as separate programs); while a network adapter is chosen, their connections go through a proxy of Grabbit's on 127.0.0.1 that binds them to it (`relay.rs`); each runs in a folder it can write, also its TEMP (`workdir.rs`) |
 | `crates/crash` | `mdm-crash` | Crash and freeze reports: the monitor process, out-of-process minidumps, symbolicated stacks, the report's text and the release logs ([crash-reports.md](crash-reports.md)) |
 | `crates/torrent` | `mdm-torrent` | BitTorrent and magnet links through librqbit |
 | `crates/labserver` | `mdm-labserver` | An HTTP Range server with a request log and fault injection, and an FTP/FTPS server with its own faults, for tests and benchmarks |
 | `extension/` | — | The Chromium (MV3) and Firefox extension |
 | `docs/` | — | The user guide and tutorials, this file, the benchmark data; the website makes the guide its help pages, which Help opens |
-| `website/` | — | misterdownloadmanager.com's own pages (home, download, features, themes, FAQ); `tools/website/build.py` adds the help from `docs/` and the news from the CHANGELOG, in English, and GitHub Pages publishes it |
+| `website/` | — | humblef0ol.github.io/grabbit's own pages (home, download, features, themes, FAQ); `tools/website/build.py` adds the help from `docs/` and the news from the CHANGELOG, in English, and GitHub Pages publishes it |
 
 Dependencies point inward: `app`, `cli`, `mcp`, `nmhost` and `remote` use `engine` and `ipc`; the engine knows
 nothing of the UI. The app sees the engine only through its events (progress, segment table
@@ -63,7 +63,7 @@ headers, and sessions are pooled per download and reused between segments.
 One egui window painted to fixed pixel coordinates, plus one immediate viewport per dialog.
 `app.rs` holds the state (downloads, queues, settings, the list's selection) and turns menu,
 toolbar, key and IPC commands into actions. Each dialog is its own module and returns an
-`Outcome` (open, closed, done with a value). MDM is Windows only. Windows calls are confined to `win32.rs`
+`Outcome` (open, closed, done with a value). Grabbit is Windows only. Windows calls are confined to `win32.rs`
 (starting with the session, the browsers' host, sounds, show in folder, the crash handler); every
 other file is safe, portable Rust. Fonts come from Windows' Fonts folder (`theme.rs`). Latin,
 Greek and Cyrillic text is drawn by DirectWrite in GDI-classic mode (`win32.rs`, through egui's
@@ -85,7 +85,7 @@ light and a dark palette, metrics, control styles and an icon style (`palette.rs
   for edges); a theme file's `contrast = "high"` strengthens every edge on top.
 - **Control styles.** `palette::Controls` names each control's shape (text boxes, check boxes,
   buttons, progress bars, scroll bars, the focus mark, the title bar); a theme picks its own
-  (Graphite: Windows 11's controls with a focus ring), and MDM draws the title bar itself (the
+  (Graphite: Windows 11's controls with a focus ring), and Grabbit draws the title bar itself (the
   `caption.*` roles) unless it is `system`.
 - **Theme files.** `themefile.rs` reads TOML or JSON from the data folder's `themes` (one file,
   or `<id>/theme.toml` with icons beside it). A file names only what it changes; the rest comes
@@ -107,7 +107,7 @@ eframe's wgpu, with that one backend only: Direct3D 12 (the default). View → D
 from the next start (`crates/app/src/renderer.rs`): when the chosen one can't start, the other one is
 tried, so the windows always open. A watched start with the system's API leaves a marker until
 its first frame is drawn: a start that ends before it (a crash inside the driver), one whose
-first frame doesn't come within 10 seconds (MDM then starts again with OpenGL), or a graphics
+first frame doesn't come within 10 seconds (Grabbit then starts again with OpenGL), or a graphics
 card lost twice in 10 minutes is remembered with its reason, which the menu shows.
 
 View → Interface size (`scale.rs`, #262) is egui's zoom factor over the display's own scale:
@@ -141,7 +141,7 @@ The extension asks the host which file types to take, checks each download again
 cancels the browser's download only after the app has accepted it; otherwise the browser keeps
 it, and the extension says why.
 
-The host serves only MDM's own extension. Its IDs are in one place, `mdm_ipc::extension`
+The host serves only Grabbit's own extension. Its IDs are in one place, `mdm_ipc::extension`
 (`crates/ipc/src/extension.rs`): the unpacked copy's (`UNPACKED_ID`, from the manifest's public
 key), the Chrome Web Store's (`STORE_ID`, signed with the store's own key: `pack.ps1` leaves the
 manifest's key out of the store's copy), the Firefox add-on's (`FIREFOX_ID`) and its
@@ -168,7 +168,7 @@ the app answers it on its next frame, as it answers the automation API. Its page
 
 ## Texts
 
-MDM is English only. Every text the UI shows still goes through `crate::i18n` (`t`, `tc`, `tn`,
+Grabbit is English only. Every text the UI shows still goes through `crate::i18n` (`t`, `tc`, `tn`,
 `fmt`), which returns the English text; craft-i18n is kept for what isn't translation: filling
 `{placeholders}`, English plurals, the bidi isolates around data (`ltr`, `isolate`, so a file
 name in Arabic can't reorder a sentence) and numbers written the system region's way. The
@@ -178,7 +178,7 @@ branch.
 ## Pictures
 
 The help pages' pictures (`docs/images/help/`) come from one list, `tools/shots/shots.toml`:
-`tools/shots/make.py` opens each window through MDM's own `/show <window>` command line in a test
+`tools/shots/make.py` opens each window through Grabbit's own `/show <window>` command line in a test
 instance off the screen, crops and annotates it from the window's accessibility tree, and writes
 lossless WebP; `make.py check` (CI) keeps the list, the pages and the files in step. The
 published ones are taken on GitHub's Windows runner (`docs-shots.yml`).

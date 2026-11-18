@@ -112,7 +112,7 @@ def main():
         sc = {"id": sid, "title": title, "size": size, "faults": faults or "none", "clients": {}}
         if sid in provisional:
             sc["provisional"] = provisional[sid]
-        for c in ("IDM", "MDM"):
+        for c in ("IDM", "Grabbit"):
             cr = [r for r in rs if r["client"] == c]
             ok = [r for r in cr if r["ok"] and r["size_ok"]]
             sc["clients"][c] = {
@@ -122,7 +122,7 @@ def main():
                 "e2e_ms": [r["e2e_ms"] for r in ok],
             }
         a = sc["clients"]["IDM"]["e2e_ms"]
-        b = sc["clients"]["MDM"]["e2e_ms"]
+        b = sc["clients"]["Grabbit"]["e2e_ms"]
         if len(a) >= 2 and len(b) >= 2:
             p = mannwhitneyu(a, b, alternative="two-sided").pvalue
             sc["compare"] = {
@@ -138,19 +138,19 @@ def main():
     (run / "results.json").write_text(json.dumps(out, indent=1))
 
     # Markdown report.
-    lines = [f"# IDM {env['idm_version']} vs MDM {env['mdm_commit']} — {env['date']}", "",
+    lines = [f"# IDM {env['idm_version']} vs Grabbit {env['mdm_commit']} — {env['date']}", "",
              f"{env['cpu']}, {env['ram_gb']} GB RAM, {env['os']}. {env['server']}. {env['settings']}.", "",
-             "| scenario | IDM median ms (IQR) | MDM median ms (IQR) | IDM / MDM (95% CI) | p (Mann-Whitney) |",
+             "| scenario | IDM median ms (IQR) | Grabbit median ms (IQR) | IDM / Grabbit (95% CI) | p (Mann-Whitney) |",
              "|---|---|---|---|---|"]
     for sc in out["scenarios"]:
         f = lambda c: (lambda s: f"{s['median']:.0f} ({s['q1']:.0f}–{s['q3']:.0f})" if s else "—")(
             sc["clients"][c]["stats"]["e2e_ms"])
         cmp = sc.get("compare")
         ratio = f"{cmp['ratio_idm_over_mdm']:.2f}× ({cmp['ratio_ci95'][0]:.2f}–{cmp['ratio_ci95'][1]:.2f})" if cmp else "—"
-        lines.append(f"| {sc['title']} | {f('IDM')} | {f('MDM')} | {ratio} | {cmp['mann_whitney_p'] if cmp else '—'} |")
+        lines.append(f"| {sc['title']} | {f('IDM')} | {f('Grabbit')} | {ratio} | {cmp['mann_whitney_p'] if cmp else '—'} |")
     lines += ["", "Phases (median ms): startup / transfer / finish", ""]
     for sc in out["scenarios"]:
-        for c in ("IDM", "MDM"):
+        for c in ("IDM", "Grabbit"):
             st = sc["clients"][c]["stats"]
             ph = " / ".join(f"{st[m]['median']:.0f}" if st[m] else "—" for m in ("startup_ms", "transfer_ms", "finish_ms"))
             lines.append(f"- {sc['id']} {c}: {ph}; connections {st['connections']['median'] if st['connections'] else '—'}, "

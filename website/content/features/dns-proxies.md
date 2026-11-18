@@ -3,8 +3,8 @@ name: DNS and proxies
 title: Proxy, SOCKS, PAC and DNS settings
 headline: Your network's rules, followed to the letter.
 line: The system's proxy, your own, a SOCKS proxy or your network's auto-config script.
-lede: MDM goes through the proxy your network needs: the one set in Windows, one you type, a SOCKS proxy or the auto-config script your network gives. Choosing who looks up names comes with version 0.5.
-description: Proxy settings in Mister Download Manager: the system's proxy, a manual HTTP or SOCKS5 proxy, PAC scripts, and soon a DNS of your choice over HTTPS or TLS.
+lede: Grabbit goes through the proxy your network needs: the one set in Windows, one you type, a SOCKS proxy or the auto-config script your network gives. Choosing who looks up names comes with version 0.5.
+description: Proxy settings in Grabbit: the system's proxy, a manual HTTP or SOCKS5 proxy, PAC scripts, and soon a DNS of your choice over HTTPS or TLS.
 group: network
 order: 220
 since: 0.1.0
@@ -23,9 +23,9 @@ as `socks5://host`. **Get System** fills the fields in from Windows' settings, t
 there.
 
 If your network gives a proxy auto-config (PAC) script, type its address, or pick the file,
-under **Use automatic configuration script**. MDM fetches it and asks it which way each download
+under **Use automatic configuration script**. Grabbit fetches it and asks it which way each download
 goes (`PROXY`, `SOCKS` or `DIRECT`), as browsers do. Until it has been fetched, or if it can't be,
-MDM uses the system's settings.
+Grabbit uses the system's settings.
 
 FTP never goes through the proxy, so the proxy's **ftp** box stays greyed.
 
@@ -33,12 +33,12 @@ FTP never goes through the proxy, so the proxy's **ftp** box stays greyed.
 
 <!--@coming 0.5-->
 
-With **Use proxy/socks from a browser's request** (on by default), a download MDM takes from the
+With **Use proxy/socks from a browser's request** (on by default), a download Grabbit takes from the
 browser goes through the proxy the browser used for it: a VPN or proxy extension's, the browser's
 own manual proxy, or its auto-config script. Content limited to the VPN's country keeps working.
 In Firefox, switch on **Send downloads through this browser's proxy or VPN extension** in the
 extension's popup. Chrome, Edge, Brave, Opera and Vivaldi can't hand the proxy over yet: set the
-same proxy in MDM there. A proxy that needs the VPN extension's own login can't be shared, and
+same proxy in Grabbit there. A proxy that needs the VPN extension's own login can't be shared, and
 the download says so rather than going without it.
 
 The proxy's password moves to Windows Credential Manager.
@@ -47,7 +47,7 @@ The proxy's password moves to Windows Credential Manager.
 
 <!--@coming 0.5-->
 
-**Options → Connection → DNS** picks who turns names into addresses for downloads, FTP, MDM's own
+**Options → Connection → DNS** picks who turns names into addresses for downloads, FTP, Grabbit's own
 downloads and the update check: the system's (the default), Cloudflare, Google, Quad9, AdGuard,
 NextDNS with your configuration ID, or your own. It is asked over HTTPS (the default) or TLS, so
 nobody on the way sees or changes the names you look up, or plainly over TCP. **Test** shows how

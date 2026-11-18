@@ -75,7 +75,7 @@
       var head = el("header");
       head.appendChild(el("h3", null, sc.title));
       var cmp = el("p", "bench-ratio");
-      var a = sc.clients.IDM.stats[metric], b = sc.clients.MDM.stats[metric];
+      var a = sc.clients.IDM.stats[metric], b = sc.clients.Grabbit.stats[metric];
       if (sc.provisional) {
         // Numbers shown, no verdict: the scenario is being measured again.
         card.classList.add("is-provisional");
@@ -104,11 +104,11 @@
         return most > 2 * med ? med + " (up to " + most.toLocaleString("en-US") + ")" : String(med);
       };
       var foot = el("p", "bench-meta", "faults: " + sc.faults + " · n=" + (a ? a.n : 0) +
-        " each · requests per run: IDM " + rq("IDM") + ", MDM " + rq("MDM"));
+        " each · requests per run: IDM " + rq("IDM") + ", Grabbit " + rq("Grabbit"));
       card.appendChild(foot);
       grid.appendChild(card);
 
-      var clients = ["IDM", "MDM"];
+      var clients = ["IDM", "Grabbit"];
       var stats = clients.map(function (c) { return sc.clients[c].stats[metric]; });
       var far = clients.map(function (c) { return Math.max.apply(null, values(sc, c, metric).concat([0])); });
       onView(box, function () {
@@ -175,7 +175,7 @@
             z: 2,
             data: [].concat(
               values(sc, "IDM", metric).map(function (v) { return { name: "IDM", value: [v, 0], itemStyle: { color: p.idm } }; }),
-              values(sc, "MDM", metric).map(function (v) { return { name: "MDM", value: [v, 1], itemStyle: { color: p.mdm } }; })
+              values(sc, "Grabbit", metric).map(function (v) { return { name: "Grabbit", value: [v, 1], itemStyle: { color: p.mdm } }; })
             ),
             itemStyle: { opacity: 0.85 },
             animationDelay: function (i) { return i * 45; },
@@ -193,7 +193,7 @@
     var cats = [];
     var parts = { startup_ms: [], transfer_ms: [], finish_ms: [] };
     data.scenarios.forEach(function (sc) {
-      ["IDM", "MDM"].forEach(function (c) {
+      ["IDM", "Grabbit"].forEach(function (c) {
         cats.push((SHORT[sc.id] || sc.id) + " · " + c);
         Object.keys(parts).forEach(function (m) {
           var s = sc.clients[c].stats[m];
@@ -254,9 +254,9 @@
       ],
       series: [
         { name: "IDM", type: "bar", data: med("IDM", "cpu_ms"), itemStyle: { color: p.idm, borderRadius: [3, 3, 0, 0] }, xAxisIndex: 0, yAxisIndex: 0, animationDelay: first },
-        { name: "MDM", type: "bar", data: med("MDM", "cpu_ms"), itemStyle: { color: p.mdm, borderRadius: [3, 3, 0, 0] }, xAxisIndex: 0, yAxisIndex: 0, animationDelay: first },
+        { name: "Grabbit", type: "bar", data: med("Grabbit", "cpu_ms"), itemStyle: { color: p.mdm, borderRadius: [3, 3, 0, 0] }, xAxisIndex: 0, yAxisIndex: 0, animationDelay: first },
         { name: "IDM", type: "bar", data: med("IDM", "peak_ws_mb"), itemStyle: { color: p.idm, borderRadius: [3, 3, 0, 0] }, xAxisIndex: 1, yAxisIndex: 1, animationDelay: second },
-        { name: "MDM", type: "bar", data: med("MDM", "peak_ws_mb"), itemStyle: { color: p.mdm, borderRadius: [3, 3, 0, 0] }, xAxisIndex: 1, yAxisIndex: 1, animationDelay: second },
+        { name: "Grabbit", type: "bar", data: med("Grabbit", "peak_ws_mb"), itemStyle: { color: p.mdm, borderRadius: [3, 3, 0, 0] }, xAxisIndex: 1, yAxisIndex: 1, animationDelay: second },
       ],
     }));
     });
@@ -266,7 +266,7 @@
     var tb = root.querySelector("[data-bench-table] tbody");
     tb.innerHTML = "";
     data.scenarios.forEach(function (sc) {
-      ["IDM", "MDM"].forEach(function (c, k) {
+      ["IDM", "Grabbit"].forEach(function (c, k) {
         var st = sc.clients[c].stats;
         var tr = document.createElement("tr");
         var cells = [
@@ -297,7 +297,7 @@
     var env = data.environment;
     root.querySelector("[data-bench-env]").textContent =
       env.cpu + " · " + env.ram_gb + " GB RAM · " + env.os + " · IDM " + env.idm_version +
-      " · MDM " + env.mdm_commit + " · " + env.date.replace("T", " ");
+      " · Grabbit " + env.mdm_commit + " · " + env.date.replace("T", " ");
   }
 
   function drawStatus() {
@@ -327,8 +327,8 @@
         return ["startup_ms", "transfer_ms", "finish_ms"].map(function (m) { return Math.max(1, st[m] ? st[m].median : 0); });
       };
       var two = sc.id === "maxconns-50m";
-      return { tab: SHORT[sc.id] || sc.title, note: sc.title + ".", mdm: ph("MDM"), idm: ph("IDM"),
-               e2e: [sc.clients.MDM.stats.e2e_ms.median, sc.clients.IDM.stats.e2e_ms.median],
+      return { tab: SHORT[sc.id] || sc.title, note: sc.title + ".", mdm: ph("Grabbit"), idm: ph("IDM"),
+               e2e: [sc.clients.Grabbit.stats.e2e_ms.median, sc.clients.IDM.stats.e2e_ms.median],
                ratio: sc.compare.ratio_idm_over_mdm, conns: two ? [2, 2] : [8, 8], bytes: bytes(sc.size) };
     });
     window.mdmRace(box, races);
@@ -382,7 +382,7 @@
     var sc = data.scenarios.filter(function (s) { return s.id === "maxconns-50m"; })[0];
     if (!sc) return;
     box.setAttribute("data-done", "1");
-    var n = { mdm: Math.round(sc.clients.MDM.stats.connections.median), idm: Math.round(sc.clients.IDM.stats.connections.median) };
+    var n = { mdm: Math.round(sc.clients.Grabbit.stats.connections.median), idm: Math.round(sc.clients.IDM.stats.connections.median) };
     Object.keys(n).forEach(function (k) {
       var grid = box.querySelector('[data-conn-grid="' + k + '"]');
       for (var i = 0; i < n[k]; i++) { var q = el("i"); q.style.setProperty("--i", i); grid.appendChild(q); }
@@ -434,7 +434,7 @@
     resizeT = setTimeout(function () { charts.forEach(function (c) { c.resize(); }); }, 120);
   });
 
-  fetch("/bench/results.json")
+  fetch("bench/results.json")
     .then(function (r) { return r.json(); })
     .then(function (j) { data = j; drawAll(); })
     .catch(function () {

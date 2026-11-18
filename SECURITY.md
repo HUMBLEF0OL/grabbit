@@ -11,7 +11,7 @@ public.
 What matters most here:
 
 - **The browser host and the command channel.** Downloads handed over by the browser extension
-  go through the native messaging host (`crates/nmhost`), which only answers MDM's own extension,
+  go through the native messaging host (`crates/nmhost`), which only answers Grabbit's own extension,
   and the running app listens only on `127.0.0.1` with a random token (`crates/ipc`).
 - **Helpers downloaded at run time.** yt-dlp is checked against its developers' signing key and
   ffmpeg against its published checksums before either runs (`crates/tools`).

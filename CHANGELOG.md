@@ -16,6 +16,8 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
   - The release files are named `Grabbit-<version>-…` (`Grabbit-<version>-setup.exe`, `-portable.zip`, `-x64.zip`), and the help links go to Grabbit's website, https://humblef0ol.github.io/grabbit.
 - **Grabbit's releases are signed with Grabbit's own release key** (fingerprint `7C8D 515A 5E85 9D47 3CBC 54C0 D9E8 9ED6 1BBE C99D`), and Update now installs only a release whose checksum list it signed.
 
+- **The website, the help and the README say Grabbit too, and the website moves to [humblef0ol.github.io/grabbit](https://humblef0ol.github.io/grabbit).** The old address is no longer this project's. The help and the website describe only Graphite, Grabbit's look; the benchmark's results name Grabbit.
+
 ### Removed
 
 - MDM is Windows only now: Linux, macOS, Safari and Docker builds are no longer made.

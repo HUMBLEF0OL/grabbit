@@ -1,10 +1,10 @@
 ---
 name: Server mode
-title: Run MDM on a home server
+title: Run Grabbit on a home server
 headline: Let the home server do the downloading.
-line: MDM without a window on a Windows PC that stays on, fed from your phone or browser.
-lede: Run MDM without a window on a Windows computer that stays on, and send it downloads from your phone or your browser. The files land in its own folders, such as a network share.
-description: Run Mister Download Manager without a window on a Windows home server, and send it downloads from your phone or your browser.
+line: Grabbit without a window on a Windows PC that stays on, fed from your phone or browser.
+lede: Run Grabbit without a window on a Windows computer that stays on, and send it downloads from your phone or your browser. The files land in its own folders, such as a network share.
+description: Run Grabbit without a window on a Windows home server, and send it downloads from your phone or your browser.
 group: network
 order: 240
 since: 0.5
@@ -12,9 +12,9 @@ where: The command line: `grabbit --headless`
 help: server.md
 ---
 
-## The same MDM, without a window
+## The same Grabbit, without a window
 
-`grabbit --headless` runs MDM with its list, categories, queues, Scheduler, speed
+`grabbit --headless` runs Grabbit with its list, categories, queues, Scheduler, speed
 limits and torrents, but no window. Its folders and port come from flags or the environment. It
 stops cleanly, saving its list, when it is stopped.
 
@@ -27,8 +27,8 @@ The remote control is on in this mode. The log prints the address to open and a 
 with a QR code: pair your phone as with the [remote control](/features/remote.html), and
 `grabbit-cli pair` makes a new code at any time.
 
-In the browser extension, **Send downloads to → Another Mister Download Manager (a server)** sends the downloads it catches, and
-**Download with Mister Download Manager** on a link, to the server instead of your computer. The
+In the browser extension, **Send downloads to → Another Grabbit (a server)** sends the downloads it catches, and
+**Download with Grabbit** on a link, to the server instead of your computer. The
 browser's cookies stay behind, so a download that needs you signed in to a site stays with your
 computer.
 

@@ -3,8 +3,8 @@ name: Accessibility
 title: Accessible download manager: screen readers and full keyboard use
 headline: Every window, from the keyboard. Read aloud.
 line: Works with Narrator and NVDA, and everything can be done from the keyboard, menus and dialogs included.
-lede: MDM works with screen readers such as Narrator and NVDA, which hear what each control is and its state. Everything can be done from the keyboard, with the keys most Windows programs use.
-description: Mister Download Manager works with screen readers (Narrator, NVDA) and from the keyboard alone: menus, dialogs, the download list and the Categories tree.
+lede: Grabbit works with screen readers such as Narrator and NVDA, which hear what each control is and its state. Everything can be done from the keyboard, with the keys most Windows programs use.
+description: Grabbit works with screen readers (Narrator, NVDA) and from the keyboard alone: menus, dialogs, the download list and the Categories tree.
 group: app
 order: 350
 since: 0.2.2
@@ -16,7 +16,7 @@ help: keyboard-shortcuts.md
 
 ## Screen readers know what is on screen
 
-Every window of MDM, its dialogs and menus included, tells a screen reader what each control is,
+Every window of Grabbit, its dialogs and menus included, tells a screen reader what each control is,
 its name and its state. The download list reads each download's name, status and size, so you
 know what is running and how far it has got without looking.
 
@@ -54,5 +54,5 @@ drop-down's choice can be set by its text. In dark mode, grey notes and error te
 4.5:1 contrast WCAG asks for. A theme file with `contrast = "high"` draws every edge and text in
 stronger colours (see [themes](/themes.html)). **View → Interface
 size** will make every window larger, from 100 % to 200 % on top of the system's display scale,
-with **Ctrl +**, **Ctrl −** and **Ctrl 0** in any MDM window, as in a browser; a window larger
+with **Ctrl +**, **Ctrl −** and **Ctrl 0** in any Grabbit window, as in a browser; a window larger
 than the screen scrolls the rest.

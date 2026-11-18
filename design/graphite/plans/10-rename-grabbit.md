@@ -107,8 +107,7 @@ and `.github/` (51 without `.github/`). Both by `git log --no-merges -G "<terms>
 
 Done on `rename/10a-display` (2026-11-16): `check.py` shows 0 for the app, remote page, installer
 and extension; the website, docs and README are 10d step 4. Kept on purpose (`check.py` KEPT):
-the keychain `SERVICE` (10c). The installer removes the old-named Start menu and desktop
-shortcuts on upgrade (`[InstallDelete]`); the GitHub issue forms say Grabbit too.
+the keychain `SERVICE` (10c). The GitHub issue forms say Grabbit too.
 
 `python tools/rename/check.py` lists every remaining user-visible name with file:line; 10a is done
 when it exits 0.
@@ -201,9 +200,26 @@ migrations were removed too (see 10c).
    code constants are `https://humblef0ol.github.io/grabbit`. Website and domain (`misterdownloadmanager.com`, 70 lines in 36 files, `help.rs:31 SITE`, the
    schema `$id` in `crates/ipc/src/api.rs:166-173`): the new domain, no redirects from the old;
    regenerate `docs/automation-api.schema.json`.
-4. Docs, README, CONTRIBUTING, PRODUCT, DESIGN, CLAUDE.md, `.impeccable/design.json`; CHANGELOG gets a
-   rename entry and keeps old entries as written; ROADMAP gets its own item for the rename (added
-   with the groundwork).
+   Website side done (`rename/10d-distribution`, 2026-11-18): the site is GitHub Pages' project
+   site **https://humblef0ol.github.io/grabbit** (the maintainer's choice, 2026-11-18).
+   `tools/website/build.py` `SITE` is the one constant: `BASE` (`/grabbit`) comes from it, pages
+   keep writing root paths and `rebase()` puts `BASE` in front of every `href`/`src`/`action`
+   and `url()` at the end; canonical URLs, the sitemap, news feed, llms.txt and JSON-LD use
+   `SITE`; the manifest's `start_url` and icons `BASE`; no `CNAME`; `--serve` serves under
+   `/grabbit/` (404 page included). Every link to the old domain in the docs, website, README,
+   issue forms and `pages.yml` points there. The app's `help.rs SITE` and the schema `$id` are
+   the code side (`rename/10c-cleanup`).
+4. Done (`rename/10d-distribution`, 2026-11-18): docs, README, CONTRIBUTING, PRODUCT, DESIGN,
+   CLAUDE.md, ATTRIBUTION, the website's pages, `llms.txt` and `build.py`'s texts say Grabbit;
+   the benchmark's data names its client `Grabbit` (`bench.py` writes it; `report.py`, `bench.js`,
+   `build.py` and `tools/readme/build.mjs` read it; REPORT.md and results.json regenerate
+   unchanged from runs.json), and the README's figures were drawn again. Kept on purpose: the
+   lineage ("a fork of Mister Download Manager by Ahmed Nefzaoui", `check.py` ALLOW), credits,
+   the upstream-sync tooling, crate names and `mdm_*::` paths (10e), file names (`mdm.iss`),
+   10c's two upgrade notes (`check.py` KEPT; the code side removes them), and the API schema,
+   generated from `api.rs`'s doc comments (not checked). `check.py` marks the website (now also
+   its hand-written pages, scripts, styles and `llms.txt`), docs and README done. CHANGELOG has
+   one entry for it, old entries as written; ROADMAP's rename item says so.
 ## 10e · Internal names and old styles (last, when no other branch is open)
 
 1. Packages `mdm-*` → `grabbit-*`, dependencies declared `mdm-x = { package = "grabbit-x", … }`
@@ -215,25 +231,26 @@ migrations were removed too (see 10c).
 
 ## Left from 05.5
 
-- `tools/shots/shots.toml`'s `theme:*` takes (the help's View, Theme pictures) and the docs pages
-  that show them still name the removed themes: rewrite them with the docs here. Until then,
-  don't run `make.py shoot` for them (they would show Graphite under the old names).
-- The website's themes and licence pages, README, PRODUCT.md and CLAUDE.md wording about the old
-  themes and "IDM's look" (KNOWN-GAPS G3).
+- Done (10d): `tools/shots/shots.toml` has no `theme:*` take naming a removed theme (only
+  `theme:graphite`, `view-theme` and `site-theme-graphite`), and the docs pages show none.
+- Done (10d, KNOWN-GAPS G3 closed): the website's themes page (only Graphite; the control-style
+  table leaves out the styles 10e removes) and licence page (Grabbit's mark, Tabler Icons and
+  Geist instead of the old icon sets), README, PRODUCT.md and CLAUDE.md describe only Graphite.
+  The layout "IDM users expect" stays: Graphite keeps it.
 - The control styles of the removed themes (`[controls]` `check`, `button`, `progress`,
   `caption` = `luna`, `aero`, `aqua`, `adwaita`, `breeze`, `metro`) stay as theme-file vocabulary
   with their drawing code: 05.5c kept them, to stay under its size limit. Decided: they go, in
   10e (decision 4).
-- The docs' theme guide (`docs/themes.md`), the website's theme sample (`tools/website/build.py`,
-  `inherits = "classic"`, `icons = "color"`) and its AI prompt (`website/content/theme-prompt.txt`)
-  still show the removed themes, the `icons` key and the palette roles 05.5d removed (the classic
-  toolbar's and tree's, `tree`, `header.sorted`, `font.ui.bold`): rewrite them here.
+- Done (10d): the docs' theme guide (`docs/themes.md`), the website's theme sample
+  (`inherits = "graphite"`, no `icons` key) and its AI prompt (`website/content/theme-prompt.txt`)
+  name only what `themefile.rs` and `palette.rs` read today; the removed themes' control styles
+  are mentioned only as being removed.
 - Plans 06 to 09 were adjusted after 05.5 (their Classic steps removed, 09b's default already done).
 
 ## Done when
 
-- [ ] No user-visible "Mister Download Manager" or "MDM" left in the app, installer, extension, website,
-      docs: `python tools/rename/check.py` exits 0
+- [x] No user-visible "Mister Download Manager" or "MDM" left in the app, installer, extension, website,
+      docs: `python tools/rename/check.py` exits 0 (10d, 2026-11-18; every area marked done)
 - [ ] A fresh install of Grabbit sets up downloads, settings, saved logins, autostart, the `.torrent`
       association and the browser extension under the new names (no upgrade test from MDM: never
       published, see 10d)

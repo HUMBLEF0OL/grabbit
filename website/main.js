@@ -1,4 +1,4 @@
-// Mister Download Manager — site behaviour: light/dark, the download for your system, the
+// Grabbit — site behaviour: light/dark, the download for your system, the
 // split button's menu and the "What do you download?" chips (the home page's own motion is in
 // home.js).
 (function () {
@@ -66,9 +66,9 @@
   var RACES = [
     { label: "faster", note: "1 GiB over a fast link. IDM spends 3 s before its first request reaches the server.",
       mdm: [14, 438, 556], idm: [3076, 1831, 545], e2e: [1009, 5456], ratio: 5.41, bytes: 1073741824 },
-    { label: "faster", note: "A 256 KiB file. MDM is done in 30 ms; IDM is still starting.",
+    { label: "faster", note: "A 256 KiB file. Grabbit is done in 30 ms; IDM is still starting.",
       mdm: [14, 7, 8], idm: [3090, 25, 32], e2e: [30, 3141], ratio: 105.9, bytes: 262144 },
-    { label: "faster", note: "A server that allows two connections. MDM learns it and keeps to two; IDM opened 480.",
+    { label: "faster", note: "A server that allows two connections. Grabbit learns it and keeps to two; IDM opened 480.",
       mdm: [14, 12546, 9], idm: [3069, 12733, 48], e2e: [12568, 15864], ratio: 1.26, bytes: 52428800 }
   ];
   // mdmRace(box, races): sets up one race box; the benchmark page calls it with every scenario
