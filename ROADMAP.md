@@ -570,8 +570,8 @@ The maintainer's first findings with 1.0.0 (in `dev`, for the next release):
 - ✅ A pasted link waits for Download File Info's answer: **Start downloading immediately while
   displaying "Download File Info" dialog** is off by default.
 - ✅ No glow under the default button or the progress bars, in dark mode either.
-- ✅ Light or dark from a button in the title bar (a moon, a sun) instead of View → Dark Mode
-  support and Always dark; it follows Windows until first clicked.
+- ✅ Light or dark from a small button at the status bar's end (a moon, a sun) instead of View →
+  Dark Mode support and Always dark; it follows Windows until first clicked.
 - ✅ Find in the main window: the title bar's field filters the list as you type, Enter, F3 and
   Shift+F3 step through the matches, and its funnel's menu chooses where to look and shows only
   some statuses or sources (the column filters themselves). The Find file window is gone.

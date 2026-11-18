@@ -24,7 +24,7 @@ param(
   [string]$Torrent = "",
   # Only these shots (names without .png); all when empty.
   [string[]]$Only = @(),
-  # Dark mode for every window (always_dark, as the title bar's light/dark button sets it: Windows' own mode doesn't matter).
+  # Dark mode for every window (always_dark, as the status bar's light/dark button sets it: Windows' own mode doesn't matter).
   [switch]$Dark,
   # Where the main window opens instead of far off the screens (MDM_OFFSCREEN_AT, "x,y"): on a
   # machine nobody watches whose OpenGL is software (GitHub's runner, docs-shots.yml), which

@@ -13,7 +13,7 @@ electric cyan, rounded corners, one-colour icons and its own typeface, Geist
 ([Getting started](getting-started.md#themes) describes it). A theme file that names a theme
 Grabbit doesn't have gets Graphite, and the log says so.
 
-The title bar's light/dark button chooses its light or dark side
+The status bar's light/dark button chooses its light or dark side
 ([Dark mode](getting-started.md#dark-mode)). Theme files of your own build on Graphite: open
 **View → Theme** and click one, and the whole window changes at once, nothing to restart.
 
@@ -167,7 +167,7 @@ Options pages, banners and tiles.
 
 1. **View → Theme → Open themes folder**, and make a new `.toml` file there (any text editor).
 2. Start from the example above: change the seeds' colours, then add roles and sizes as you go.
-3. Pick it in **View → Theme**, and look at both sides: click the title bar's light/dark button. Check
+3. Pick it in **View → Theme**, and look at both sides: click the status bar's light/dark button. Check
    that text is readable and the focus mark visible in both.
 
 The website's [Themes page](https://humblef0ol.github.io/grabbit/themes.html#ai-prompt) has a prompt

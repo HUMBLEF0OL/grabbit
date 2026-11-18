@@ -114,7 +114,7 @@ enum Cmd {
     AddToQueue(usize),
     RemoveFromQueue,
     ToggleCategories,
-    /// The title bar's light/dark button (1.0.1; was View → Dark Mode support and Always dark).
+    /// The status bar's light/dark button (1.0.1; was View → Dark Mode support and Always dark).
     ToggleMode,
     /// View → Paste bar (plan 06).
     TogglePasteBar,
@@ -1716,17 +1716,18 @@ impl App {
     }
 
     /// The strip under the list: how many downloads are shown and selected, how many run and
-    /// how fast in all (beyond IDM, which has no status bar).
+    /// how fast in all (beyond IDM, which has no status bar), and at its end the light/dark
+    /// button (1.0.1): true when it was clicked.
     fn status_strip(
         &self,
-        ui: &Ui,
+        ui: &mut Ui,
         layout: &chrome::Layout,
         o: Pos2,
         w: f32,
         h: f32,
         shown: usize,
-    ) {
-        let p = ui.painter();
+    ) -> bool {
+        let p = &ui.painter().clone();
         let top = o.y + layout.strip_top(h);
         let n = shown as u64;
         // While the search or a filter narrows the list: how many of the view's it shows.
@@ -1776,7 +1777,16 @@ impl App {
         let right_w = right
             .as_ref()
             .map_or(0.0, |r| winui::text_width_font(p, font.clone(), r).ceil());
-        let shown = winui::ellipsize(p, &font, &left, (w - 36.0 - right_w).max(0.0));
+        // The light/dark button at the trailing end, 4 in, centred in the strip.
+        let mode = egui::Rect::from_min_size(
+            pos2(
+                o.x + w - 4.0 - chrome::MODE_BUTTON.x,
+                (top + 1.0 + (layout.strip_h - 1.0 - chrome::MODE_BUTTON.y) / 2.0).round(),
+            ),
+            chrome::MODE_BUTTON,
+        );
+        let end = w - 8.0 - chrome::MODE_BUTTON.x;
+        let shown = winui::ellipsize(p, &font, &left, (end - 24.0 - right_w).max(0.0));
         // The mockup's secondary ink.
         let ink = c.text_secondary;
         let drawn = winui::text_font(p, font.clone(), o.x + 12.0, baseline, &shown, ink);
@@ -1784,9 +1794,10 @@ impl App {
             winui::full_on_hover(ui, drawn, "strip-left", &left);
         }
         if let Some(right) = right {
-            let x = o.x + w - 12.0 - right_w;
+            let x = o.x + end - right_w;
             winui::text_font(p, font, x, baseline, &right, ink);
         }
+        chrome::mode_button(ui, mode, crate::theme::dark(), ink)
     }
 
     /// "2 downloading, 1.25 MB/sec" while downloads run (the status strip, the tray's tip).
@@ -6836,7 +6847,7 @@ impl App {
             Sub("Toolbar", false, vec![]),
             Sub("&Tray icon", false, vec![]),
             off("C&ustomize URL List..."),
-            // Light or dark: the title bar's button (1.0.1), no longer two View items.
+            // Light or dark: the status bar's button (1.0.1), no longer two View items.
             // View → Theme (MDM's, #45); then Interface size (#262) and
             // Draw with (#89, renderer.rs).
             Self::theme_menu(&settings.theme, themes),
@@ -7638,13 +7649,12 @@ impl App {
             },
         );
     }
-    /// The title bar's search field (`field`, English) and light/dark button (`mode`), where
-    /// they fit: what they ask goes in `chosen`, or happens here (Escape gives the list the keys).
-    fn find_and_mode(
+    /// The title bar's search field (`field`, English), where it fits: what it asks goes in
+    /// `chosen`, or happens here (Escape gives the list the keys).
+    fn find_field(
         &mut self,
         ui: &mut Ui,
         field: Option<egui::Rect>,
-        mode: Option<egui::Rect>,
         key: &str,
         chosen: &mut Option<(Cmd, Option<u64>)>,
     ) {
@@ -7670,11 +7680,6 @@ impl App {
             }
         } else {
             self.find_bar.open = false;
-        }
-        if let Some(rc) = mode
-            && chrome::mode_button(ui, rc, crate::theme::dark())
-        {
-            *chosen = Some((Cmd::ToggleMode, None));
         }
     }
 
@@ -7820,11 +7825,7 @@ impl App {
             Vec::new()
         };
         let reserve = if layout.menus_in_caption {
-            chrome::caption_menus_width(&rel_titles)
-                + crate::find::FIELD_MIN
-                + 6.0
-                + chrome::MODE_BUTTON.x
-                + 32.0
+            chrome::caption_menus_width(&rel_titles) + crate::find::FIELD_MIN + 32.0
         } else {
             0.0
         };
@@ -7937,10 +7938,9 @@ impl App {
                 let end = titles.last().map_or(bar.title_end, |t| t.right());
                 let free = bar.buttons_start - end;
                 let mut more: Vec<egui::Rect> = titles.iter().map(|t| winui::rect(*t)).collect();
-                let (find_rc, mode_rc) =
-                    crate::find::caption_places(end, free, mid, chrome::MODE_BUTTON);
-                more.extend(find_rc.into_iter().chain(mode_rc).map(winui::rect));
-                self.find_and_mode(ui, find_rc, mode_rc, &find_key, &mut chosen);
+                let find_rc = crate::find::caption_place(end, free, mid);
+                more.extend(find_rc.map(winui::rect));
+                self.find_field(ui, find_rc, &find_key, &mut chosen);
                 self.publish_caption(ui, &layout, window_min, bar, &more);
                 (event, titles)
             }
@@ -7949,18 +7949,15 @@ impl App {
                     self.publish_caption(ui, &layout, window_min, bar, &[]);
                 }
                 let shown = chrome::menu_bar(ui, &layout, o, w, self.open_menu);
-                // The system's title bar: the search field and the light/dark button at the
-                // menu row's end, as tall as it.
+                // The system's title bar: the search field at the menu row's end, as tall as it.
                 let h = layout.menu_h - 1.0;
-                let mode =
-                    egui::Rect::from_min_size(pos2(o.x + w - 4.0 - h, o.y), egui::vec2(h, h));
                 let field = (w >= 640.0).then(|| {
                     egui::Rect::from_min_size(
-                        pos2(mode.left() - 6.0 - crate::find::FIELD_MIN, o.y),
+                        pos2(o.x + w - 4.0 - crate::find::FIELD_MIN, o.y),
                         egui::vec2(crate::find::FIELD_MIN, h),
                     )
                 });
-                self.find_and_mode(ui, field, Some(mode), &find_key, &mut chosen);
+                self.find_field(ui, field, &find_key, &mut chosen);
                 shown
             }
         };
@@ -8323,7 +8320,9 @@ impl App {
         {
             chosen = Some((cmd, None));
         }
-        self.status_strip(ui, &layout, o, w, h, ids.len());
+        if self.status_strip(ui, &layout, o, w, h, ids.len()) {
+            chosen = Some((Cmd::ToggleMode, None));
+        }
         if let Some((i, pos)) = r.context {
             self.open_popup(Popup::Item(i.map(|i| ids[i])), pos);
         }

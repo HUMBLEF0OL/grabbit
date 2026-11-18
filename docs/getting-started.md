@@ -69,9 +69,9 @@ From top to bottom:
 
 ## Dark mode
 
-Grabbit follows your system at first: when Windows is set to dark mode, so is Grabbit. The button beside the **Find** field in the title bar switches between light and dark: a moon in light mode, a sun in dark mode. Once you click it, Grabbit keeps the mode you chose whatever Windows does.
+Grabbit follows your system at first: when Windows is set to dark mode, so is Grabbit. The small button at the right end of the status bar, under the list, switches between light and dark: a moon in light mode, a sun in dark mode. Once you click it, Grabbit keeps the mode you chose whatever Windows does.
 
-![The title bar's Find field and, beside it, the light/dark button](images/help/view-dark-mode.webp)
+![The status bar under the list, with the light/dark button at its right end](images/help/view-dark-mode.webp)
 *The moon switches Grabbit to dark mode; in dark mode a sun switches it back.*
 
 ## Themes
@@ -88,7 +88,7 @@ keeping its layout.
 ![View → Theme open: Graphite, Add a theme file… and Open themes folder](images/help/view-theme.webp)
 *View → Theme switches at once, keeping the layout.*
 
-Graphite has a light and a dark side, and so does every theme file: the title bar's light/dark
+Graphite has a light and a dark side, and so does every theme file: the status bar's light/dark
 button chooses between them. Theme files you put in the themes folder (**View → Theme →
 Open themes folder**) build on Graphite, and so do Base16 and pywal colour schemes (**View →
 Theme → Add a theme file…**; **pywal** follows `wal` as it runs): [Themes](themes.md) says where

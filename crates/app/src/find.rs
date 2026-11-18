@@ -501,30 +501,16 @@ fn dropdown(ui: &mut Ui, funnel: Rect, bar: &mut Bar, q: &mut Query, list: &mut 
         });
 }
 
-/// The rect the field and the light/dark button take in Graphite's title bar, between the
-/// menus' `end` and the window's buttons (`free` px), centred on `mid`: the field as wide as
-/// the room allows ([`FIELD_MIN`] to [`FIELD_MAX`]), then 6 px, then the button. Field None
-/// when only the button fits; both None when neither does.
-pub fn caption_places(
-    end: f32,
-    free: f32,
-    mid: f32,
-    mode: egui::Vec2,
-) -> (Option<Rect>, Option<Rect>) {
-    let top = (mid - 13.0).round();
-    let room = free - 16.0 - 6.0 - mode.x;
-    if room >= FIELD_MIN {
+/// The search field's rect in Graphite's title bar, between the menus' `end` and the window's
+/// buttons (`free` px), centred on `mid`: as wide as the room allows ([`FIELD_MIN`] to
+/// [`FIELD_MAX`]); None when it doesn't fit.
+pub fn caption_place(end: f32, free: f32, mid: f32) -> Option<Rect> {
+    let room = free - 16.0;
+    (room >= FIELD_MIN).then(|| {
         let fw = room.min(FIELD_MAX);
-        let x = (end + (free - fw - 6.0 - mode.x) / 2.0).round();
-        let f = Rect::from_min_size(pos2(x, top), vec2(fw, 26.0));
-        let m = Rect::from_min_size(pos2(f.right() + 6.0, top), mode);
-        (Some(f), Some(m))
-    } else if free >= mode.x + 16.0 {
-        let x = (end + (free - mode.x) / 2.0).round();
-        (None, Some(Rect::from_min_size(pos2(x, top), mode)))
-    } else {
-        (None, None)
-    }
+        let x = (end + (free - fw) / 2.0).round();
+        Rect::from_min_size(pos2(x, (mid - 13.0).round()), vec2(fw, 26.0))
+    })
 }
 
 #[cfg(test)]

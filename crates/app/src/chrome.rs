@@ -485,7 +485,7 @@ mod a11y_tests {
         );
     }
 
-    /// The title bar's light/dark button is a button named for what it does, and a screen
+    /// The status strip's light/dark button is a button named for what it does, and a screen
     /// reader's Click presses it.
     #[test]
     fn the_mode_button_is_a_button() {
@@ -493,7 +493,8 @@ mod a11y_tests {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         let rc = Rect::from_min_size(pos2(800.0, 5.0), MODE_BUTTON);
-        let (nodes, clicked) = frame(&ctx, vec![], |ui| mode_button(ui, rc, false));
+        let ink = egui::Color32::GRAY;
+        let (nodes, clicked) = frame(&ctx, vec![], |ui| mode_button(ui, rc, false, ink));
         assert!(!clicked);
         let (id, _) = nodes
             .iter()
@@ -505,7 +506,7 @@ mod a11y_tests {
             target_node: *id,
             data: None,
         });
-        let (_, clicked) = frame(&ctx, vec![click], |ui| mode_button(ui, rc, false));
+        let (_, clicked) = frame(&ctx, vec![click], |ui| mode_button(ui, rc, false, ink));
         assert!(clicked);
         assert_eq!(mode_button_label(true), "Switch to light mode");
     }
@@ -852,52 +853,46 @@ fn key_font() -> egui::FontId {
     egui::FontId::proportional(crate::theme::metrics().font_small)
 }
 
-/// The light/dark button's size, beside Find in Graphite's title bar.
-pub const MODE_BUTTON: egui::Vec2 = vec2(26.0, 26.0);
+/// The light/dark button's size, at the status strip's trailing end.
+pub const MODE_BUTTON: egui::Vec2 = vec2(26.0, 22.0);
 
 /// What the light/dark button says it does, `dark` being the mode shown now.
 pub fn mode_button_label(dark: bool) -> &'static str {
     if dark {
-        // i18n: the title bar's button that switches the windows to their light side
+        // i18n: the status strip's button that switches the windows to their light side
         crate::i18n::t("Switch to light mode")
     } else {
-        // i18n: the title bar's button that switches the windows to their dark side
+        // i18n: the status strip's button that switches the windows to their dark side
         crate::i18n::t("Switch to dark mode")
     }
 }
 
-/// Paint the light/dark button in English rect `rc` ([`MODE_BUTTON`]), as Find is drawn: the
-/// mode it switches to (a moon in light, a sun in dark), its name as its tooltip and to screen
-/// readers. True when clicked.
-pub fn mode_button(ui: &mut Ui, rc: Rect, dark: bool) -> bool {
+/// Paint the light/dark button in English rect `rc` ([`MODE_BUTTON`]), icon only: the mode it
+/// switches to (a moon in light, a sun in dark, 16 px) in `ink`, the title bar's buttons' face
+/// under the pointer; its name as its tooltip and to screen readers. True when clicked.
+pub fn mode_button(ui: &mut Ui, rc: Rect, dark: bool, ink: egui::Color32) -> bool {
     let p = ui.painter().clone();
     let screen = winui::rect(rc);
-    let resp = ui.interact(
-        screen,
-        egui::Id::unique("caption-mode"),
-        winui::pointer_only(),
-    );
+    let resp = ui.interact(screen, egui::Id::unique("strip-mode"), egui::Sense::click());
     let label = mode_button_label(dark);
     winui::expose(&resp, egui::Role::Button, label, true, None);
-    let c = crate::theme::colors();
-    let face = if resp.is_pointer_button_down_on() {
-        c.button_pressed
-    } else if resp.hovered() {
-        c.button_hot
-    } else {
-        c.window
-    };
     let radius = crate::theme::metrics().part_radius;
-    p.rect_filled(screen, radius, face);
-    p.rect_stroke(
-        screen,
-        radius,
-        Stroke::new(1.0, c.button_border),
-        egui::StrokeKind::Inside,
-    );
-    let icon = Rect::from_center_size(rc.center(), vec2(14.0, 14.0));
+    if resp.is_pointer_button_down_on() {
+        p.rect_filled(screen, radius, winui::caption::CAPTION_PRESSED());
+    } else if resp.hovered() {
+        p.rect_filled(screen, radius, winui::caption::CAPTION_HOVER());
+    }
+    if resp.has_focus() {
+        p.rect_stroke(
+            screen,
+            radius,
+            Stroke::new(1.0, crate::theme::colors().accent),
+            egui::StrokeKind::Inside,
+        );
+    }
+    let icon = Rect::from_center_size(rc.center(), vec2(16.0, 16.0));
     let need = if dark { "gx-sun" } else { "gx-moon" };
-    crate::themeicons::paint_in(ui, &p, need, winui::rect(icon), c.text_secondary, true);
+    crate::themeicons::paint_in(ui, &p, need, winui::rect(icon), ink, true);
     resp.on_hover_text(label).clicked()
 }
 

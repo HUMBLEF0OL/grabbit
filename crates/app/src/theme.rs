@@ -237,12 +237,12 @@ pub fn system_changed() -> bool {
 }
 
 /// Dark or not: Always dark, else the system's mode while Dark Mode support is on (the
-/// settings' defaults: following Windows until the title bar's light/dark button is clicked).
+/// settings' defaults: following Windows until the status bar's light/dark button is clicked).
 fn wanted(dark_mode_support: bool, always_dark: bool, system_dark: bool) -> bool {
     always_dark || (dark_mode_support && system_dark)
 }
 
-/// The title bar's light/dark button (1.0.1): the settings (Dark Mode support, Always dark) that
+/// The status bar's light/dark button (1.0.1): the settings (Dark Mode support, Always dark) that
 /// switch from the mode shown, `dark`, to the other one, kept whatever Windows says from then on.
 pub fn toggled(dark: bool) -> (bool, bool) {
     if dark { (false, false) } else { (false, true) }

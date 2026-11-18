@@ -53,9 +53,9 @@ id = "view-dark-mode"
 page = "getting-started.md"
 under = "Dark mode"
 take = "@main"
-crop = { around = ["Find downloads", "Switch to dark mode"], pad = 12 }
-marks = [{ at = "Switch to dark mode", side = "bottom" }]
-alt = "The title bar's Find field and, beside it, the light/dark button"
+crop = { around = ["Switch to dark mode"], pad = 40 }
+marks = [{ at = "Switch to dark mode", side = "left" }]
+alt = "The status bar under the list, with the light/dark button at its right end"
 caption = "The moon switches Grabbit to dark mode; in dark mode a sun switches it back."
 
 [[shot]]
