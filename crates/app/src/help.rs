@@ -1364,7 +1364,7 @@ mod tests {
     }
 
     /// The same pages on a built website: `python tools/website/build.py` (MDM_SITE_PREVIEW=1
-    /// is enough, English), then `MDM_SITE_DIR=target/site cargo test -p mdm-app --
+    /// is enough, English), then `MDM_SITE_DIR=target/site cargo test -p grabbit-app --
     /// --ignored linked_help_pages_are_on_the_built_site`: each page is a file there, with its
     /// section's id.
     #[test]

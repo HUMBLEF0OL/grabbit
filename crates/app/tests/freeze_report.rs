@@ -10,7 +10,7 @@
 //! goes on once a window is asked for.
 //!
 //! It opens windows, which needs OpenGL or Direct3D, so it runs on request:
-//! `cargo test -p mdm-app --test freeze_report -- --ignored`.
+//! `cargo test -p grabbit-app --test freeze_report -- --ignored`.
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};

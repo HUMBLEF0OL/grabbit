@@ -13,7 +13,7 @@ publish.workspace = true
 name = "mdm_geo"
 
 [dependencies]
-# The table's xz (already in the tree for archives, mdm-extract).
+# The table's xz (already in the tree for archives, grabbit-extract).
 lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "xz"] }
 
 [dev-dependencies]

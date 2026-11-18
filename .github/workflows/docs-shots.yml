@@ -46,10 +46,10 @@ jobs:
 
       - name: Build
         run: |
-          cargo build -p mdm-app -p mdm-labserver -p mdm-cli -p mdm-nmhost
+          cargo build -p grabbit-app -p grabbit-labserver -p grabbit-cli -p grabbit-nmhost
           if ($LASTEXITCODE) { throw "build $LASTEXITCODE" }
           # The torrent's progress window: a swarm of seeders and a tracker on this runner.
-          cargo build -p mdm-torrent --example swarm
+          cargo build -p grabbit-torrent --example swarm
           if ($LASTEXITCODE) { throw "swarm $LASTEXITCODE" }
 
       # The video's progress window: yt-dlp brings a lab server file in (pinned and checked).

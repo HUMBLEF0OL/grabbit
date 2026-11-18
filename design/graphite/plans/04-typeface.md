@@ -43,7 +43,7 @@ Line numbers drift as phases land: find each item by its name first.
    skipped for a bundled family and egui's own rasterizer draws it. Prototype both; pick by legibility at
    100% (Geist's hinting), by code size and by frame time (no more than 5% slower than today on the main
    window with 1,000 rows: the mean of `ctx.input(|i| i.unstable_dt)` over 600 frames while
-   `cargo run -p mdm-labserver -- --faults "rate=2M"` feeds 10 running downloads). Record the choice in the PR.
+   `cargo run -p grabbit-labserver -- --faults "rate=2M"` feeds 10 running downloads). Record the choice in the PR.
 5. **Reload on theme change**: `Cmd::Theme` re-runs `fonts(ctx)` when the font changes (not on every
    switch), so choosing Graphite or leaving it swaps the face live.
 6. **Sizes**: Geist runs wider than Segoe UI. Set Graphite's `font.ui`, `font.body`, `font.small`,
@@ -128,8 +128,8 @@ Line numbers drift as phases land: find each item by its name first.
 
 | Check | Result |
 | --- | --- |
-| fmt, clippy | `cargo fmt --all` clean; `cargo clippy -p mdm-app --all-targets -- -D warnings` clean |
-| Tests | `cargo test -p mdm-app`: 317 pass (1 ignored, as before); new: `a_theme_names_a_bundled_font`, `a_theme_switch_swaps_the_face`, `fonts_are_remade_only_when_the_font_changes`, `directwrite_draws_the_bundled_face` (whole-pixel advances, Geist's 1 narrower than its 0), `every_mark_has_a_glyph` for both faces |
+| fmt, clippy | `cargo fmt --all` clean; `cargo clippy -p grabbit-app --all-targets -- -D warnings` clean |
+| Tests | `cargo test -p grabbit-app`: 317 pass (1 ignored, as before); new: `a_theme_names_a_bundled_font`, `a_theme_switch_swaps_the_face`, `fonts_are_remade_only_when_the_font_changes`, `directwrite_draws_the_bundled_face` (whole-pixel advances, Geist's 1 narrower than its 0), `every_mark_has_a_glyph` for both faces |
 | Classic unchanged | first-start main window, Classic, against `pr-shots` `03-icons/classic-main-empty*.png`: 0 of 1862 × 998 pixels differ, light and dark |
 | Shots | `pr-shots` `04-typeface/` (and every Graphite state, light, in `all/`): main window, Options General, Download File Info, light and dark; before-shots `03-icons/main-plain*`, `02-theme/options-general*`, `02-theme/fileinfo*` (Segoe UI and Tahoma; the dialogs' before-shots predate 03's icons) |
 | External audit | two rounds by read-only subagents; round 1: double-encoded characters in `theme.rs`, `BUNDLED` leaking between tests, the switch test bypassing the reload, `numbers` unmapped in 05's plan, `font` missing from docs/themes.md; round 2: the switch test now goes through `fonts_if_changed`, two boxes above qualified, the one-frame mix documented. All fixed |

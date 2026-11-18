@@ -6,7 +6,7 @@
 //! and that the wake is cancelled once there is no start left to wake for.
 //!
 //! It opens windows, which needs OpenGL or Direct3D, so it runs on request:
-//! `cargo test -p mdm-app --test wake_timer -- --ignored --nocapture`.
+//! `cargo test -p grabbit-app --test wake_timer -- --ignored --nocapture`.
 
 use std::path::Path;
 use std::process::{Child, Command};

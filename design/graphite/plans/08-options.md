@@ -66,7 +66,7 @@ Rules that keep it inside the box:
 2. **Start early.** 08a needs only 07a (in 07's PR 1), so it can run beside 07c, 07d and 07e; plans 07
    and 08 then fit in about 4½ hours together instead of 7.
 3. **Worktrees, builds, screenshots, audit, merges, running over:** as 07's fast track rules 2 to 7:
-   own `CARGO_TARGET_DIR` per worktree; `cargo check -p mdm-app` while iterating, the full workspace once
+   own `CARGO_TARGET_DIR` per worktree; `cargo check -p grabbit-app` while iterating, the full workspace once
    per PR; screenshots in one batch per part with `baseline.ps1 -Theme graphite -Shots <its pages>`
    (`options:<page>` shows a page), light and dark, `-InterfaceSize 100` and `200`, `-Work` inside the
    worktree, an exe copy per runner; one audit round against the fixed checklist, here also: every

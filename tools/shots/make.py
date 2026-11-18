@@ -91,7 +91,7 @@ def shoot(shots: list[dict], bin_dir: Path, work: str | None, extra: list[str]) 
     server = bin_dir / "labserver.exe"
     for p in (exe, server):
         if not p.is_file():
-            sys.exit(f"{p} missing: cargo build --release -p mdm-app -p mdm-labserver")
+            sys.exit(f"{p} missing: cargo build --release -p grabbit-app -p grabbit-labserver")
     takes = []
     for s in shots:
         if s.get("take") and s["take"] not in takes:

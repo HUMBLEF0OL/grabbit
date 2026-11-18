@@ -747,7 +747,7 @@ mod tests {
         assert_eq!(plain[0].selector, "b[height=360]");
     }
 
-    /// Live (#352): `MDM_LIVE_YTDLP=<yt-dlp> MDM_LIVE_PAGE=<video page> cargo test -p mdm-tools
+    /// Live (#352): `MDM_LIVE_YTDLP=<yt-dlp> MDM_LIVE_PAGE=<video page> cargo test -p grabbit-tools
     /// live_look_up -- --ignored --nocapture`. A look-up given cookies; with a yt-dlp that fails
     /// the way a signed-in session does (a wrapper forcing `web_embedded,tv_samsung,web` when it
     /// sees `--cookies`), the second look-up, without them, lists the page's videos.

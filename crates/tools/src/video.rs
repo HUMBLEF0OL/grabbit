@@ -1582,7 +1582,7 @@ mod tests {
     }
 
     /// Live (network, yt-dlp): `MDM_LIVE_YTDLP=<yt-dlp.exe> MDM_LIVE_PAGE=<video page>
-    /// cargo test -p mdm-tools live_download -- --ignored --nocapture`. Downloads the smallest
+    /// cargo test -p grabbit-tools live_download -- --ignored --nocapture`. Downloads the smallest
     /// audio and prints the log (a swapped server shows there).
     #[test]
     #[ignore]
@@ -1627,7 +1627,7 @@ mod tests {
     }
 
     /// Live (#61): `MDM_LIVE_YTDLP=<yt-dlp.exe> MDM_LIVE_SLOW=<a slow file's address>
-    /// cargo test -p mdm-tools live_stop -- --ignored --nocapture` (the lab server:
+    /// cargo test -p grabbit-tools live_stop -- --ignored --nocapture` (the lab server:
     /// `/gen/20M/clip.mp4?rate=50K`). Stopping a video download ends every yt-dlp process it
     /// started (Windows: the launcher and its child), and the part file stops growing.
     #[test]

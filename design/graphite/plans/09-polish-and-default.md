@@ -53,7 +53,7 @@ Rules that keep it inside the box:
    earlier); then only the review and the shots are left after 08b, about 2¾ hours. The review cannot
    start early: it must see 06, 07 and 08 finished.
 3. **Worktrees, builds, screenshots, audit, merges:** as 07's fast track rules 2 to 7: own
-   `CARGO_TARGET_DIR` per worktree; `cargo check -p mdm-app` while iterating, the full workspace once per
+   `CARGO_TARGET_DIR` per worktree; `cargo check -p grabbit-app` while iterating, the full workspace once per
    PR; screenshots in one batch per part with `baseline.ps1 -Theme graphite`, light and dark,
    `-Work` inside the worktree, an exe copy per runner; one audit round against the fixed checklist.
 4. **Running over.** The review is the open-ended part: what a review part has not fixed at 2:30 ships
@@ -135,8 +135,8 @@ Line numbers drift as phases land: find each item by its name first.
    below, which it did). Over 07's dialogs it leaves, as follow-ups under the
    ROADMAP's Graphite item: the side-by-side with the mock in the running app (light and dark,
    100/150/200 %, the Scheduler included), the keyboard pass and the accessibility-tree pass.
-   It also keeps `[profile.dev.package.mdm-crash] debug = "full"` in `Cargo.toml`: the checks
-   build with `--config profile.dev.debug=0`, and mdm-crash's end-to-end tests read crashy's own
+   It also keeps `[profile.dev.package.grabbit-crash] debug = "full"` in `Cargo.toml`: the checks
+   build with `--config profile.dev.debug=0`, and grabbit-crash's end-to-end tests read crashy's own
    debug info to name the function, so they fail without it (build setting only, no app change).
 
 ## 09b · Graphite by default

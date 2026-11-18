@@ -6,8 +6,8 @@
 # from your own MDM's tools folder: Tasks → Download video from a page installs it); the
 # torrent from the swarm example (seeders and a tracker on this computer):
 #
-#   cargo build --release -p mdm-app -p mdm-cli -p mdm-labserver
-#   cargo build --release -p mdm-torrent --example swarm
+#   cargo build --release -p grabbit-app -p grabbit-cli -p grabbit-labserver
+#   cargo build --release -p grabbit-torrent --example swarm
 #   tools\lab\progress-shots.ps1 -Bin target\release
 #
 # On a machine without MDM (GitHub's runner, docs-shots.yml), yt-dlp comes from -YtDlp:

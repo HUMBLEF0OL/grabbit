@@ -240,7 +240,7 @@ fn a_route_change_closes_what_is_open() {
 /// The real yt-dlp and ffmpeg, through `mdm_tools::proc` as the app starts them, against the lab
 /// server. Ignored: it needs `MDM_TEST_YTDLP` (yt-dlp's program) and `MDM_TEST_FFMPEG` (ffmpeg's).
 ///
-///   MDM_TEST_YTDLP=…\yt-dlp.exe MDM_TEST_FFMPEG=…\ffmpeg.exe cargo test -p mdm-tools --test relay -- --ignored --nocapture
+///   MDM_TEST_YTDLP=…\yt-dlp.exe MDM_TEST_FFMPEG=…\ffmpeg.exe cargo test -p grabbit-tools --test relay -- --ignored --nocapture
 #[test]
 #[ignore]
 fn real_helpers_go_through_the_relay() {

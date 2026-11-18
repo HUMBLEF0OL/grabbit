@@ -6,7 +6,7 @@
 // through the automation API, its Download video window through UI Automation) and that the
 // browser kept nothing.
 //
-//   cargo build --release -p mdm-app -p mdm-nmhost -p mdm-labserver; tools\extension\pack.ps1
+//   cargo build --release -p grabbit-app -p grabbit-nmhost -p grabbit-labserver; tools\extension\pack.ps1
 //   node tools/extension/e2e.mjs [chrome] [brave] [edge] [firefox] [waterfox] [--only=case,case]
 //
 // Waterfox runs with Firefox's driver (E2E_WATERFOX: its program, when not installed in the usual

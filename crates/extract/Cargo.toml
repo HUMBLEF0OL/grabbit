@@ -13,7 +13,7 @@ publish.workspace = true
 name = "mdm_extract"
 
 [dependencies]
-# zip's Deflate is already in the shipped app (mdm-crash, mdm-tools); Deflate64 (Explorer's zips
+# zip's Deflate is already in the shipped app (grabbit-crash, grabbit-tools); Deflate64 (Explorer's zips
 # over 2 GB) and WinZip AES are small additions.
 zip = { version = "9.1.3", default-features = false, features = ["deflate", "deflate64", "aes-crypto"] }
 tar = { version = "0.4.46", default-features = false }

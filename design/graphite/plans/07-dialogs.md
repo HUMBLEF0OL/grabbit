@@ -94,7 +94,7 @@ Rules that keep it inside the box:
    Their shared file is `dialogs.rs`: 07c and 07e both edit it, so each touches only its own
    dialogs' functions there. None of the three changes the kit; a kit fix found on the way goes in
    its own small PR to `dev`.
-3. **Build less while working.** While iterating: `cargo check -p mdm-app`, `cargo test -p mdm-app`.
+3. **Build less while working.** While iterating: `cargo check -p grabbit-app`, `cargo test -p grabbit-app`.
    Once before each PR: the full workspace `cargo build`, `cargo test`,
    `cargo clippy --all-targets`, `cargo fmt --all`.
 4. **Screenshots in one batch per wave** with `design/graphite/source/baseline.ps1 -Theme graphite -Shots <the wave's

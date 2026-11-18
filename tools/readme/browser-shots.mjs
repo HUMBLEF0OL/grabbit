@@ -5,7 +5,7 @@
 // it into the picture (PrintWindow), and a separate Mister Download Manager runs off the screen
 // for the button to ask (GRABBIT_DATA_DIR, MDM_OFFSCREEN). Windows only.
 //
-//   cargo build --release -p mdm-app -p mdm-nmhost; tools\extension\pack.ps1
+//   cargo build --release -p grabbit-app -p grabbit-nmhost; tools\extension\pack.ps1
 //   node tools/readme/browser-shots.mjs        -> target/browser-shots/video-button-*.png
 //   python tools/shots/make.py docs --png target/browser-shots/video-button-youtube.png ...
 //                                              -> docs/images/video-button-*.webp

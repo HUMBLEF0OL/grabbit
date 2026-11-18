@@ -3,7 +3,7 @@
 //! generated multi-file torrent, and a tracker that hands them to whoever announces. Writes
 //! `<out>/Open Movie Night.torrent`, then seeds until stopped.
 //!
-//!   cargo run --release -p mdm-torrent --example swarm -- target/swarm [size MB] [seeders] [port] [lsd|-] [piece KB]
+//!   cargo run --release -p grabbit-torrent --example swarm -- target/swarm [size MB] [seeders] [port] [lsd|-] [piece KB]
 //!
 //! The app leaves out trackers on this computer (#40), so for the app add `lsd`: the seeders
 //! then answer Local Service Discovery, and the app finds them that way (Torrent settings'

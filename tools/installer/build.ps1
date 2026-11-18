@@ -27,7 +27,7 @@ if (-not $NoBuild) {
   $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE ".cargo" }
   $env:CARGO_ENCODED_RUSTFLAGS = "--remap-path-prefix=$cargoHome=cargo" + [char]0x1f + "--remap-path-prefix=$root=mdm" + [char]0x1f + "-Ctarget-feature=+crt-static"
   try {
-    & cargo build --release -p mdm-app -p mdm-nmhost -p mdm-cli -p mdm-mcp
+    & cargo build --release -p grabbit-app -p grabbit-nmhost -p grabbit-cli -p grabbit-mcp
     if ($LASTEXITCODE) { throw "cargo build failed" }
   } finally {
     Remove-Item Env:CARGO_ENCODED_RUSTFLAGS

@@ -4,7 +4,7 @@ The palette is the one chosen in PLAN.md (Colour direction). The token -> theme 
 plans/01-prepare.md section 3 and plans/02-theme.md steps 1 to 3. After writing, it runs
 pal.py's own check and a contrast check on the mapped values (the pairs the app's palette tests
 look at, where the role is set here rather than derived). The app's tests check the file again
-(`cargo test -p mdm-app palette`).
+(`cargo test -p grabbit-app palette`).
 
     python design/graphite/source/make_theme.py
 """

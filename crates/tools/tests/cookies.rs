@@ -10,7 +10,7 @@
 //! Ignored: it needs yt-dlp's program, and for the browser part a Firefox profile folder whose
 //! `cookies.sqlite` has the cookie `ff=from-firefox` for 127.0.0.1:
 //!
-//!   MDM_TEST_YTDLP=…\yt-dlp.exe [MDM_TEST_FIREFOX_PROFILE=<folder>] cargo test -p mdm-tools --test cookies -- --ignored --nocapture
+//!   MDM_TEST_YTDLP=…\yt-dlp.exe [MDM_TEST_FIREFOX_PROFILE=<folder>] cargo test -p grabbit-tools --test cookies -- --ignored --nocapture
 
 use std::time::{Duration, Instant};
 

@@ -732,7 +732,7 @@ async fn hls_and_dash_without_their_endings_or_types() {
 /// only sound failed with "Error opening output files: Invalid argument". Ignored: it needs
 /// `MDM_TEST_FFMPEG` (ffmpeg's program).
 ///
-///   MDM_TEST_FFMPEG=…\ffmpeg.exe cargo test -p mdm-labserver --test http -- --ignored hls_tracks
+///   MDM_TEST_FFMPEG=…\ffmpeg.exe cargo test -p grabbit-labserver --test http -- --ignored hls_tracks
 #[tokio::test]
 #[ignore]
 async fn hls_tracks_merge_as_yt_dlp_merges_them() {

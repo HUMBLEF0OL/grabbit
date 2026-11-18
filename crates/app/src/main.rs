@@ -558,7 +558,7 @@ mod tests {
     /// #629 on the real clipboard: several threads read it at once for a few seconds, and the
     /// process lives. Ignored by default (it reads the clipboard of the person at the computer;
     /// it never writes it, and what it reads is dropped unseen):
-    /// `cargo test -p mdm-app --bin grabbit -- --ignored real_clipboard`.
+    /// `cargo test -p grabbit-app --bin grabbit -- --ignored real_clipboard`.
     #[test]
     #[ignore = "reads the real clipboard"]
     fn real_clipboard_reads_from_many_threads_live() {

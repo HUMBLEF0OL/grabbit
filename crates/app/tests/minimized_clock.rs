@@ -7,7 +7,7 @@
 //! the Download complete windows open.
 //!
 //! It opens windows, which needs OpenGL or Direct3D, so it runs on request:
-//! `cargo test -p mdm-app --test minimized_clock -- --ignored`.
+//! `cargo test -p grabbit-app --test minimized_clock -- --ignored`.
 
 use std::path::Path;
 use std::process::{Child, Command};

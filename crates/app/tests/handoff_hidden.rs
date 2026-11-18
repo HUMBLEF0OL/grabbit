@@ -8,7 +8,7 @@
 //! host uses). Both dialogs must open and the app must keep running.
 //!
 //! It opens windows, which needs OpenGL or Direct3D, so it runs on request:
-//! `cargo test -p mdm-app --test handoff_hidden -- --ignored`. tools/lab/magnet-hidden.ps1 plays
+//! `cargo test -p grabbit-app --test handoff_hidden -- --ignored`. tools/lab/magnet-hidden.ps1 plays
 //! the same on a release build, through the browser's native host too, in more window states.
 
 use std::path::Path;

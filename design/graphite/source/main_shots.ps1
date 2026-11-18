@@ -5,7 +5,7 @@
 # modes when -Mode is empty. Off the screens (MDM_OFFSCREEN), drawn as the active window
 # (MDM_TEST_ACTIVE).
 #
-#   cargo build --release -p mdm-app
+#   cargo build --release -p grabbit-app
 #   powershell -ExecutionPolicy Bypass -File design\graphite\source\main_shots.ps1 -Bin target\05-before -Out target\05a\before
 #
 # Pictures: <Out>\<theme>\<state>[-dark].png. States: plain (the list), empty (a first start),

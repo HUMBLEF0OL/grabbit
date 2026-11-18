@@ -1,7 +1,7 @@
 //! The flags of the table's countries drawn into one picture (#140), in the table's order: cell
 //! `i` (row-major, `COLUMNS` a row) is country `i + 1`'s. From lipis/flag-icons' 4x3 SVGs (MIT).
 //!
-//!   cargo run -p mdm-geo --example flag_atlas -- <flag-icons>/flags/4x3
+//!   cargo run -p grabbit-geo --example flag_atlas -- <flag-icons>/flags/4x3
 //!
 //! Writes crates/geo/data/flags.png.
 

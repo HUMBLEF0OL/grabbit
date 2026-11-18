@@ -37,7 +37,7 @@ const candidates = [
 ].filter(Boolean);
 const browser = candidates.find((p) => fs.existsSync(p));
 if (!browser) throw new Error("no Chromium found (--browser)");
-const profile = opt("keep-profile") || fs.mkdtempSync(path.join(os.tmpdir(), "mdm-remote-page-"));
+const profile = opt("keep-profile") || fs.mkdtempSync(path.join(os.tmpdir(), "grabbit-remote-page-"));
 
 const proc = spawn(
   browser,

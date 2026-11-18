@@ -43,7 +43,7 @@ push target below, which is the maintainer's rule and overrides the repository n
 2. `cargo clippy --workspace --all-targets -- -D warnings`
 3. `cargo test --workspace` (all green; new tests listed in the plan)
 4. `node tools/extension/test.mjs` (CI runs it; required when the extension or host is touched)
-5. `cargo build --release` and run the app: `cargo run -p mdm-app`
+5. `cargo build --release` and run the app: `cargo run -p grabbit-app`
 6. Keyboard pass: Tab, arrows, Alt and menu letters, Enter and Escape in every changed window
 7. Screen-reader pass where the plan touches layout (the accessibility tree in `winui.rs` must match what is painted)
 8. Interface size 100%, 150%, 200% (View, Interface size) for every changed window

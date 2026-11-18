@@ -2,7 +2,7 @@
 //! "The endpoints will respond with demo static data when called with the following static
 //! apikeys"). No account, nothing bought, nothing downloaded from a file host: it checks that
 //! MDM reads the real service's answers. Run by hand:
-//! `cargo test -p mdm-debrid --test alldebrid_real -- --ignored --nocapture`.
+//! `cargo test -p grabbit-debrid --test alldebrid_real -- --ignored --nocapture`.
 
 use std::sync::Arc;
 

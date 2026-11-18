@@ -242,20 +242,20 @@ pieces fit.
 
 | Crate | What it is |
 |---|---|
-| [`mdm-engine`](crates/engine) | The download engine: segmentation, connections, resume, limits |
-| [`mdm-app`](crates/app) | The desktop app (egui), and `--headless` for servers |
-| [`mdm-cli`](crates/cli) | Headless downloads from the command line |
-| [`mdm-mcp`](crates/mcp) | The MCP server, for AI assistants |
-| [`mdm-nmhost`](crates/nmhost) | The browser's native messaging host |
-| [`mdm-ipc`](crates/ipc) | Talking to a running app; shared capture rules; the extension's IDs |
-| [`mdm-remote`](crates/remote) | The remote control: the HTTPS server and page a paired phone uses |
-| [`mdm-crash`](crates/crash) | Crash and freeze reports: the monitor, minidumps, stacks |
-| [`mdm-debrid`](crates/debrid) | Debrid accounts through the services' official APIs |
-| [`mdm-extract`](crates/extract) | Archive extraction (zip, tar, gz, xz; 7z and RAR through 7-Zip) |
-| [`mdm-geo`](crates/geo) | A server's country, from an IP table on this computer |
-| [`mdm-tools`](crates/tools) | yt-dlp and ffmpeg for video pages, gallery-dl for galleries |
-| [`mdm-torrent`](crates/torrent) | BitTorrent through librqbit |
-| [`mdm-labserver`](crates/labserver) | An HTTP test server with fault injection, for tests and benchmarks |
+| [`grabbit-engine`](crates/engine) | The download engine: segmentation, connections, resume, limits |
+| [`grabbit-app`](crates/app) | The desktop app (egui), and `--headless` for servers |
+| [`grabbit-cli`](crates/cli) | Headless downloads from the command line |
+| [`grabbit-mcp`](crates/mcp) | The MCP server, for AI assistants |
+| [`grabbit-nmhost`](crates/nmhost) | The browser's native messaging host |
+| [`grabbit-ipc`](crates/ipc) | Talking to a running app; shared capture rules; the extension's IDs |
+| [`grabbit-remote`](crates/remote) | The remote control: the HTTPS server and page a paired phone uses |
+| [`grabbit-crash`](crates/crash) | Crash and freeze reports: the monitor, minidumps, stacks |
+| [`grabbit-debrid`](crates/debrid) | Debrid accounts through the services' official APIs |
+| [`grabbit-extract`](crates/extract) | Archive extraction (zip, tar, gz, xz; 7z and RAR through 7-Zip) |
+| [`grabbit-geo`](crates/geo) | A server's country, from an IP table on this computer |
+| [`grabbit-tools`](crates/tools) | yt-dlp and ffmpeg for video pages, gallery-dl for galleries |
+| [`grabbit-torrent`](crates/torrent) | BitTorrent through librqbit |
+| [`grabbit-labserver`](crates/labserver) | An HTTP test server with fault injection, for tests and benchmarks |
 
 | Tool | What it does |
 |---|---|
@@ -263,7 +263,7 @@ pieces fit.
 | `node tools/readme/build.mjs` | This page's pictures and comparison table, from the benchmark data |
 | `tools\lab\docs-shots.ps1` | The screenshots, from a separate test instance (`/show <window>` opens each window), off the screen |
 | `python tools/shots/make.py` | The help pages' pictures, from one list (`tools/shots/shots.toml`): shot, cropped, annotated, lossless WebP; `make.py check` keeps them in step |
-| `tools\lab\progress-shots.ps1` | The progress window of a video (yt-dlp) and of a torrent, from a swarm on this computer (`cargo run -p mdm-torrent --example swarm`) |
+| `tools\lab\progress-shots.ps1` | The progress window of a video (yt-dlp) and of a torrent, from a swarm on this computer (`cargo run -p grabbit-torrent --example swarm`) |
 | `python tools/website/build.py --serve` | humblef0ol.github.io/grabbit into `target/site` (help pages from `docs/`, news from the CHANGELOG, FAQ and legal pages from `website/content/`), served on http://127.0.0.1:8765/grabbit/; GitHub Pages publishes it (`pages.yml`) |
 | `python tools/readme/social.py` | The repository's social preview card (`docs/images/social-preview.png`) |
 | `MDM_FIT_AUDIT=<file>` | Lists every text that doesn't fit its window or runs over another |
