@@ -6,7 +6,7 @@ SVG renderer is needed: the mark at 1024 px, then each size scaled down from it.
 
 Writes crates/app/assets/icons/app/mdm-<size>.png, mdm.ico (all sizes), the browser
 extension's icons, the copy of icon-48 that extension/video.js carries as data, and the
-website's logos and favicon (website/assets/). tools/readme/social.py takes mdm-256.png.
+website's logos (website/assets/) and favicon.ico (website/). tools/readme/social.py takes mdm-256.png.
 Run from the repository root: python tools/icon/build_icon.py
 """
 
@@ -97,6 +97,9 @@ def main() -> None:
     for name, size in WEB.items():
         im = icons[size] if size in icons else big.resize((size, size), Image.LANCZOS)
         im.save(SITE / name, **({"lossless": True} if name.endswith(".webp") else {"optimize": True}))
+    # The sizes build.py's <link rel="icon" href="/favicon.ico"> announces.
+    fav = [16, 32, 48, 64]
+    icons[64].save(SITE.parent / "favicon.ico", sizes=[(s, s) for s in fav], append_images=[icons[s] for s in fav[:-1]])
     print("wrote", ", ".join(map(str, SIZES)), "+ mdm.ico + extension icons + video.js LOGO + website logos")
 
 
