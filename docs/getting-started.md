@@ -10,14 +10,14 @@ Every version is on the [Releases](https://github.com/HUMBLEF0OL/grabbit/release
 
 | File | What it is |
 |---|---|
-| `MisterDownloadManager-<version>-setup.exe` | The installer. Pick this one unless you have a reason not to. It can set up browser integration and open `.torrent` files and magnet links with Grabbit. |
-| `MisterDownloadManager-<version>-portable.zip` | A portable copy. The download list and settings stay in a `data` folder next to the program, and nothing is written to the registry. Browser integration needs the installer. See [Portable mode](portable.md). |
-| `MisterDownloadManager-<version>-x64.zip` | The same programs without an installer. It keeps its data in `%APPDATA%\grabbit`, like an installed copy. |
+| `Grabbit-<version>-setup.exe` | The installer. Pick this one unless you have a reason not to. It can set up browser integration and open `.torrent` files and magnet links with Grabbit. |
+| `Grabbit-<version>-portable.zip` | A portable copy. The download list and settings stay in a `data` folder next to the program, and nothing is written to the registry. Browser integration needs the installer. See [Portable mode](portable.md). |
+| `Grabbit-<version>-x64.zip` | The same programs without an installer. It keeps its data in `%APPDATA%\grabbit`, like an installed copy. |
 
 ## Install with the setup
 
-1. Run `MisterDownloadManager-<version>-setup.exe`.
-2. Choose whether to install for you only or for everyone on the computer. For you only needs no administrator rights and goes to `%LOCALAPPDATA%\Programs\Grabbit`. For everyone goes to `Program Files`. An install upgraded from Mister Download Manager stays in its folder.
+1. Run `Grabbit-<version>-setup.exe`.
+2. Choose whether to install for you only or for everyone on the computer. For you only needs no administrator rights and goes to `%LOCALAPPDATA%\Programs\Grabbit`. For everyone goes to `Program Files`.
 3. Pick what the setup should do:
    - **Set up browser integration (Chrome, Edge, Brave, Firefox)**
    - **Open .torrent files and magnet links with Grabbit**

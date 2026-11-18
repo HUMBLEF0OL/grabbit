@@ -1,5 +1,5 @@
 # Website screenshots: runs a separate Mister Download Manager instance (its own data folder via
-# MDM_DATA_DIR, so the real download list is untouched), fills it from labserver with realistic
+# GRABBIT_DATA_DIR, so the real download list is untouched), fills it from labserver with realistic
 # file names (some complete, one still downloading), and captures the main window in dark and
 # light mode plus the progress dialog. The user's own instance is stopped for the run (same
 # window title) and restarted afterwards.
@@ -31,7 +31,7 @@ $hadUserInstance = [bool](Get-Process grabbit -ErrorAction SilentlyContinue)
 Get-Process grabbit -ErrorAction SilentlyContinue | Stop-Process
 Get-Process labserver -ErrorAction SilentlyContinue | Stop-Process
 $srv = Start-Process -PassThru -WindowStyle Hidden "$root\target\release\labserver.exe" -ArgumentList "--bind 127.0.0.1:$Port"
-$env:MDM_DATA_DIR = "$work\data"
+$env:GRABBIT_DATA_DIR = "$work\data"
 try {
   Start-Sleep -Milliseconds 800
   $app = Start-Process -PassThru $exe
@@ -67,6 +67,6 @@ try {
 } finally {
   Get-Process grabbit -ErrorAction SilentlyContinue | Stop-Process
   Stop-Process $srv.Id -ErrorAction SilentlyContinue
-  Remove-Item Env:MDM_DATA_DIR
+  Remove-Item Env:GRABBIT_DATA_DIR
   if ($hadUserInstance) { Start-Process $exe; Start-Sleep 2; & "$PSScriptRoot\to-vscode-monitor.ps1" -Title "Grabbit" -DX 185 -DY 570 -Width 929 -Height 465 | Out-Null }
 }

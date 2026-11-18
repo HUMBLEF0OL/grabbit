@@ -8,7 +8,7 @@ A torrent comes from other people's computers, not from one website. That change
 
 - **Your IP address.** Everyone sharing the same torrent sees it, as do its trackers and the DHT (the network peers use to find each other). That's how BitTorrent works, and no setting in Grabbit changes it. To hide your address, use a VPN on your whole computer.
 - **What you download, on your local network.** Grabbit tells other computers on your network which torrents it has, so they can share faster. On public Wi-Fi, turn off **Find peers on the local network**.
-- **That you use Grabbit.** Peers see the name "MisterDownloadManager" and its major version, not the exact build.
+- **That you use Grabbit.** Peers see the name "Grabbit" and its major version, not the exact build.
 
 Grabbit's torrents don't use **encryption** (sometimes called "protocol encryption"). That kind of encryption only hides the traffic from simple filters. It never hides who you are, so Grabbit doesn't claim to offer it. Some peers that require it won't connect.
 

@@ -251,7 +251,7 @@ function With-App([bool]$dark, [scriptblock]$body) {
     ',"dark_mode_support":' + $d + ',"always_dark":' + $d + ',"update_check":false,"theme":"' + $Theme + '"' +
     ',"interface_size":' + $InterfaceSize + ',"torrent_incoming":false,"torrent_upnp":false,"torrent_dht":false,"torrent_lsd":false' +
     ',"category_dirs":[["General","' + ("$Work\Downloads" -replace '\\', '\\') + '"]]}}')
-  $env:MDM_DATA_DIR = "$Work\data"
+  $env:GRABBIT_DATA_DIR = "$Work\data"
   $env:MDM_OFFSCREEN = "1"
   $started = Get-Date
   $app = Start-Process -PassThru $exe
@@ -276,7 +276,7 @@ function With-App([bool]$dark, [scriptblock]$body) {
     Get-CimInstance Win32_Process -Filter "Name='$(Split-Path -Leaf $exe)'" |
       Where-Object { $_.ExecutablePath -eq $exe -and $_.CreationDate -ge $started } |
       ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
-    Remove-Item Env:MDM_DATA_DIR, Env:MDM_OFFSCREEN -ErrorAction SilentlyContinue
+    Remove-Item Env:GRABBIT_DATA_DIR, Env:MDM_OFFSCREEN -ErrorAction SilentlyContinue
     Start-Sleep 1
     Remove-Item $Work -Recurse -Force -ErrorAction SilentlyContinue
   }

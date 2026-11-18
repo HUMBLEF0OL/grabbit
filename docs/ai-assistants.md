@@ -46,8 +46,6 @@ grabbit-cli api on
 | Windows, for everyone | `C:\Program Files\Grabbit\grabbit-mcp.exe` |
 | Windows, a zip or [portable copy](portable.md) | `grabbit-mcp.exe` in its folder |
 
-An install upgraded from Mister Download Manager keeps its folder (`...\Mister Download Manager`). Its MCP server was `misterdownloadmanager-mcp.exe` until Grabbit's rename: an assistant set up with that name needs `grabbit-mcp.exe` now, as the installer removes the old program.
-
 A portable copy's server finds the portable copy's Grabbit by itself, from its own folder.
 
 ### 3. Tell your assistant

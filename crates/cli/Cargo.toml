@@ -17,12 +17,6 @@ path = "src/lib.rs"
 name = "grabbit-cli"
 path = "src/main.rs"
 
-# The original MDM's program name, in Grabbit's zips (plan 10c): starts grabbit.exe beside it,
-# so an old copy's own update, and shortcuts to the old name, reach Grabbit. std only.
-[[bin]]
-name = "misterdownloadmanager"
-path = "src/old_name.rs"
-
 [dependencies]
 mdm-ipc.workspace = true
 mdm-tools.workspace = true

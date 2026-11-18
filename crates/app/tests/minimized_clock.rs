@@ -48,7 +48,7 @@ fn wait_until(app: &mut Child, data: &Path, what: &str, wait: Duration, done: im
 fn second_launch(data: &Path, args: &[&str]) {
     let status = Command::new(APP)
         .args(args)
-        .env("MDM_DATA_DIR", data)
+        .env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .status()
         .unwrap();
@@ -101,7 +101,7 @@ async fn a_scheduled_queue_runs_while_minimized() {
     std::fs::write(data.join("downloads.json"), list.to_string()).unwrap();
     let result = tokio::task::spawn_blocking(move || {
         let mut app = Command::new(APP)
-            .env("MDM_DATA_DIR", &data)
+            .env("GRABBIT_DATA_DIR", &data)
             .env("MDM_OFFSCREEN", "1")
             .spawn()
             .unwrap();
@@ -124,7 +124,7 @@ async fn a_scheduled_queue_runs_while_minimized() {
         }));
         let _ = Command::new(APP)
             .arg("/exit")
-            .env("MDM_DATA_DIR", &data)
+            .env("GRABBIT_DATA_DIR", &data)
             .env("MDM_OFFSCREEN", "1")
             .status();
         let until = Instant::now() + Duration::from_secs(15);

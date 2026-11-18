@@ -114,7 +114,7 @@ def setup_size() -> str:
 VERSION = published_version()
 SETUP_SIZE = setup_size()
 TODAY = datetime.date.today().isoformat()
-RELEASE = f"{REPO}/releases/download/v{VERSION}/MisterDownloadManager-{VERSION}"
+RELEASE = f"{REPO}/releases/download/v{VERSION}/Grabbit-{VERSION}"
 FILES = {
     "setup": f"{RELEASE}-setup.exe",
     "portable": f"{RELEASE}-portable.zip",

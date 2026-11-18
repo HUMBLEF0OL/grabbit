@@ -215,16 +215,16 @@ mod tests {
                 .collect()
         };
         let full = a(&[
-            "MisterDownloadManager-0.2.2-setup.exe",
+            "Grabbit-0.2.2-setup.exe",
             "SHA256SUMS.txt",
             "SHA256SUMS.txt.sig",
         ]);
         assert_eq!(
             asset_for(Install::Installer, "0.2.2", &full).as_deref(),
-            Some("MisterDownloadManager-0.2.2-setup.exe")
+            Some("Grabbit-0.2.2-setup.exe")
         );
         // An unsigned release, another kind's file, a build from source: no.
-        let unsigned = a(&["MisterDownloadManager-0.2.2-setup.exe", "SHA256SUMS.txt"]);
+        let unsigned = a(&["Grabbit-0.2.2-setup.exe", "SHA256SUMS.txt"]);
         assert_eq!(asset_for(Install::Installer, "0.2.2", &unsigned), None);
         assert_eq!(asset_for(Install::PortableZip, "0.2.2", &full), None);
         assert_eq!(asset_for(Install::Source, "0.2.2", &full), None);

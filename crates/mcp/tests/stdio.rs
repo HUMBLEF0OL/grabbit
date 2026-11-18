@@ -56,7 +56,7 @@ struct Mcp {
 impl Mcp {
     fn start(data: &std::path::Path) -> Self {
         let mut child = Command::new(env!("CARGO_BIN_EXE_grabbit-mcp"))
-            .env("MDM_DATA_DIR", data)
+            .env("GRABBIT_DATA_DIR", data)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()

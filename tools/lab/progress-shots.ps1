@@ -1,6 +1,6 @@
 # The progress window of a video and of a torrent, for the docs (progress-video.png,
 # progress-torrent.png: docs/images/*.webp through `tools/shots/make.py docs`), at 1x and off the screens, as docs-shots.ps1 takes the others. Each
-# runs in a Mister Download Manager instance of its own (MDM_DATA_DIR, MDM_OFFSCREEN) whose list
+# runs in a Mister Download Manager instance of its own (GRABBIT_DATA_DIR, MDM_OFFSCREEN) whose list
 # holds that one download; the automation API starts it and /show progress opens its window,
 # so nothing is clicked or typed. The video comes from the labserver through yt-dlp (copied
 # from your own MDM's tools folder: Tasks → Download video from a page installs it); the
@@ -100,7 +100,7 @@ function Scenario([string]$name, [hashtable]$item, [int]$wait, [scriptblock]$pre
   }
   if ($prepare) { & $prepare $dir }
   [IO.File]::WriteAllText("$dir\data\downloads.json", ($list | ConvertTo-Json -Depth 8))
-  $env:MDM_DATA_DIR = "$dir\data"
+  $env:GRABBIT_DATA_DIR = "$dir\data"
   $env:MDM_OFFSCREEN = "1"
   if ($At) { $env:MDM_OFFSCREEN_AT = $At }
   $app = Start-Process -PassThru $exe
@@ -137,7 +137,7 @@ function Scenario([string]$name, [hashtable]$item, [int]$wait, [scriptblock]$pre
     }
   } finally {
     Stop-Process -Id $app.Id -ErrorAction SilentlyContinue
-    Remove-Item Env:MDM_DATA_DIR, Env:MDM_OFFSCREEN, Env:MDM_OFFSCREEN_AT, Env:MDM_LAB_PEERS -ErrorAction SilentlyContinue
+    Remove-Item Env:GRABBIT_DATA_DIR, Env:MDM_OFFSCREEN, Env:MDM_OFFSCREEN_AT, Env:MDM_LAB_PEERS -ErrorAction SilentlyContinue
   }
 }
 
@@ -147,7 +147,7 @@ try {
   New-Item -ItemType Directory -Force $work, $out | Out-Null
 
   if (Want "video") {
-    $tools = Join-Path ([Environment]::GetFolderPath("ApplicationData")) "misterdownloadmanager\tools"
+    $tools = Join-Path ([Environment]::GetFolderPath("ApplicationData")) "grabbit\tools"
     if ($YtDlp) {
       # A tools folder of the run's own, holding the given yt-dlp as MDM installs it.
       $tools = Join-Path $work "tools"

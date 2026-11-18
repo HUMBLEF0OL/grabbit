@@ -61,7 +61,7 @@ fn wait_until(app: &mut Child, data: &Path, what: &str, wait: Duration, done: im
 fn second_launch(data: &Path, args: &[&str]) {
     let status = Command::new(APP)
         .args(args)
-        .env("MDM_DATA_DIR", data)
+        .env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .env("MDM_CRASH_TEST", "1")
         .status()
@@ -107,7 +107,7 @@ fn start(data: &Path) -> Child {
     )
     .unwrap();
     Command::new(APP)
-        .env("MDM_DATA_DIR", data)
+        .env("GRABBIT_DATA_DIR", data)
         .env("MDM_OFFSCREEN", "1")
         .env("MDM_CRASH_TEST", "1")
         .spawn()
@@ -271,7 +271,7 @@ fn hidden_stall(what: &str, ask: Option<Duration>) -> (Option<Duration>, Option<
         // It answers: asked to quit as File → Exit does.
         let _ = Command::new(APP)
             .arg("/exit")
-            .env("MDM_DATA_DIR", data)
+            .env("GRABBIT_DATA_DIR", data)
             .env("MDM_OFFSCREEN", "1")
             .status();
         let until = Instant::now() + Duration::from_secs(30);

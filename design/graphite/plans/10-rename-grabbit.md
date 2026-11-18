@@ -97,16 +97,17 @@ and `.github/` (51 without `.github/`). Both by `git log --no-merges -G "<terms>
 - The Windows installer `AppId` (`tools/installer/mdm.iss:22`): upgrades depend on it.
 - The Chrome extension `key` (`extension/manifest.json:8`), the store and unpacked IDs
   (`crates/ipc/src/extension.rs:6 UNPACKED_ID`, `:10 STORE_ID`; the Edge and Opera placeholders at
-  `:13 OTHER_STORE_IDS`), the Firefox gecko ID `integration@misterdownloadmanager.com`
+  `:13 OTHER_STORE_IDS`), the Firefox gecko ID `grabbit@humblef0ol.github.io`
   (`manifest.firefox.json:9`, `crates/ipc/src/extension.rs:18 FIREFOX_ID`): changing any of them
-  makes a new extension and cuts existing users off.
+  makes a new extension and cuts existing users off. The gecko ID was changed once, on
+  2026-11-18, from `integration@misterdownloadmanager.com` (never published by the fork, a
+  domain the project doesn't control); it is fixed from now on.
 
 ## 10a · Display text (safe)
 
 Done on `rename/10a-display` (2026-11-16): `check.py` shows 0 for the app, remote page, installer
 and extension; the website, docs and README are 10d step 4. Kept on purpose (`check.py` KEPT):
-the keychain `SERVICE` (10c). The installer removes the old-named Start menu and desktop
-shortcuts on upgrade (`[InstallDelete]`); the GitHub issue forms say Grabbit too.
+the keychain `SERVICE` (10c). The GitHub issue forms say Grabbit too.
 
 `python tools/rename/check.py` lists every remaining user-visible name with file:line; 10a is done
 when it exits 0.
@@ -143,25 +144,18 @@ when it exits 0.
 
 ## 10c · Identifiers with users' data (migration)
 
-Done on `rename/10c-migration` (2026-11-18), each row with a test from the old state:
-- Data folder `%APPDATA%\grabbit` (`mdm_ipc::profile_dir`; a move that fails keeps the old
-  folder for that run), `GRABBIT_DATA_DIR` with `MDM_DATA_DIR` still read (`DATA_DIR_VARS`).
-- Keychain `SERVICE = "Grabbit"`, `OLD_SERVICE` read, an old entry deleted only once its new copy
-  reads back; `--forget-sign-ins` removes both. `check.py`'s KEPT entry names the old service as
-  the migration's source.
-- Run value `Grabbit` (`move_old_run_value`: only this install's folder), ProgID
-  `Grabbit.Torrent`, mutex `Grabbit.Running` (the installer asks either), `Grabbit.popup`.
-- Host `com.grabbit.host` and `com.misterdownloadmanager.host`, both registered; the extension
-  tries the new one, then the old, and keeps the one that answered.
-- Exes `grabbit*.exe`. `misterdownloadmanager.exe` is kept as a small program that starts
-  `grabbit.exe` (`crates/cli/src/old_name.rs`), in the installer and the zips: an original MDM
-  unzipped updates by unpacking the new zip over its folder and starting that name again, which
-  its own updater can't change; shortcuts and pins to it keep working. The installer removes the
-  old `-cli`, `-mcp` and `-nmhost`; at start the app registers its host again when this user's
-  registration names the old helper beside it (`extension::renew_old_registration`).
-- Release asset names (`MisterDownloadManager-<version>-…`) are unchanged here: they are 10d's.
-- No upgrade test from an MDM release: Grabbit was never published (see 10d). Each migration
-  is covered by its old-state test above; a fresh install is "Done when"'s check.
+Done on `rename/10c-migration` (PR 59, 2026-11-18): the data folder `%APPDATA%\grabbit` and
+`GRABBIT_DATA_DIR`, the keychain `SERVICE = "Grabbit"`, Run value `Grabbit`, ProgID
+`Grabbit.Torrent`, mutex `Grabbit.Running`, `Grabbit.popup`, host `com.grabbit.host`, exes
+`grabbit*.exe`.
+
+**Migrations removed on `rename/10c-cleanup` (2026-11-18).** Grabbit was never published, so no
+one has MDM's identifiers to move: PR 59's migrations and fallbacks were dead code and went with
+their tests (the data folder's move, also the codename `idmnext`'s and its `.idmnext.*`
+partial files; `MDM_DATA_DIR`; the old keychain service; `move_old_run_value`; the old ProgID's
+removal; the installer's old mutex, exes, shortcuts, Run value and ProgID; the second host name
+and the extension's fallback to it; `renew_old_registration`; the `misterdownloadmanager.exe`
+launcher). Only the new names exist. The table below is the plan as it was, kept for history.
 
 | Identifier | Where | Migration |
 | --- | --- | --- |
@@ -188,8 +182,8 @@ both host names.
 
 **No support for the old name from here on (decided by the maintainer, 2026-11-18).** Grabbit
 has never been published (the fork has no releases or tags), so nobody upgrades from an MDM
-build: 10d and 10e carry no fallbacks, old asset names, redirects or upgrade tests. 10c was
-already under way with its migrations and keeps them.
+build: 10d and 10e carry no fallbacks, old asset names, redirects or upgrade tests. 10c's
+migrations were removed too (see 10c).
 
 1. Done early (PR "Links: everything to the fork", 2026-11-14): the links to the original's
    repository and the 5 Sponsors links now point to the fork (Sponsors to its repository page and
@@ -198,11 +192,12 @@ already under way with its migrations and keeps them.
    those projects), `tools/contributors.py` (whose people the README and website thank), the
    creator's name where it credits him, and the upstream-sync tooling. 390 links to the original in ROADMAP (206) and CHANGELOG (184) (history entries keep
    their URLs).
-2. Update feed: rename the `MisterDownloadManager-{version}-{tail}` assets to Grabbit's
+2. Done (code, `rename/10c-cleanup`, 2026-11-18): `Grabbit-{version}-{tail}`. Update feed: rename the `MisterDownloadManager-{version}-{tail}` assets to Grabbit's
    (`crates/tools/src/update.rs:76`; extension assets `.github/workflows/release.yml:144-145`, the
    store zip at 149; setup and zip names from `mdm.iss:45` and `tools/installer/build.ps1`). Only
    the new names are published: no installed build looks for the old ones.
-3. Website and domain (`misterdownloadmanager.com`, 70 lines in 36 files, `help.rs:31 SITE`, the
+3. Code part done (`rename/10c-cleanup`, 2026-11-18): `SITE`, the schema `$id` and the other
+   code constants are `https://humblef0ol.github.io/grabbit`. Website and domain (`misterdownloadmanager.com`, 70 lines in 36 files, `help.rs:31 SITE`, the
    schema `$id` in `crates/ipc/src/api.rs:166-173`): the new domain, no redirects from the old;
    regenerate `docs/automation-api.schema.json`.
    Website side done (`rename/10d-distribution`, 2026-11-18): the site is GitHub Pages' project

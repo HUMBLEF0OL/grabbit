@@ -12,13 +12,8 @@
   #define AppVersion "0.5.2"
 #endif
 #define AppName "Grabbit"
-; The name before the rename (plan 10): its shortcuts are removed on upgrade.
-#define OldAppName "Mister Download Manager"
 #define AppExe "grabbit.exe"
 #define HostExe "grabbit-nmhost.exe"
-; The original MDM's program name (plan 10c): now a small program that starts {#AppExe}, so
-; shortcuts and pins made for it keep working.
-#define OldAppExe "misterdownloadmanager.exe"
 #define Root "..\.."
 #define Bin Root + "\target\release"
 
@@ -47,14 +42,13 @@ SetupIconFile={#Root}\crates\app\assets\icons\app\mdm.ico
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
 OutputDir={#Root}\target\dist
-OutputBaseFilename=MisterDownloadManager-{#AppVersion}-setup
+OutputBaseFilename=Grabbit-{#AppVersion}-setup
 ; A 64 MB dictionary (#25): an 8 MB one (lzma2/max) only finds what repeats close by in the
 ; solid archive. A few MB smaller; building needs about 750 MB of memory, installing 64 MB.
 Compression=lzma2/ultra64
 SolidCompression=yes
 ChangesAssociations=yes
-; A running copy is asked to quit by [Code] (it holds the mutex Grabbit.Running, the original
-; MDM MisterDownloadManager.Running);
+; A running copy is asked to quit by [Code] (it holds the mutex Grabbit.Running);
 ; AppMutex isn't used because it would refuse to start before that. Restart Manager is the
 ; fallback for anything else holding the files (a browser running the host).
 CloseApplications=yes
@@ -93,23 +87,12 @@ Source: "{#Bin}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
 Source: "{#Bin}\{#HostExe}"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
 Source: "{#Bin}\grabbit-cli.exe"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
 Source: "{#Bin}\grabbit-mcp.exe"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
-Source: "{#Bin}\{#OldAppExe}"; DestDir: "{app}"; Flags: ignoreversion {#SignFlag}
 ; The extension, for "Load unpacked" (Chromium) and about:debugging (Firefox) until it is in
 ; the stores.
 Source: "{#Root}\target\extension\chromium\*"; DestDir: "{app}\extension\chromium"; Flags: ignoreversion recursesubdirs
 Source: "{#Root}\target\extension\mdm-firefox.xpi"; DestDir: "{app}\extension"; Flags: ignoreversion
 Source: "{#Root}\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 Source: "{#Root}\ATTRIBUTION.md"; DestDir: "{app}"; DestName: "ATTRIBUTION.txt"; Flags: ignoreversion
-
-[InstallDelete]
-; The original MDM's helper programs (plan 10c): Grabbit's grabbit-*.exe replace them. Scripts
-; and AI assistants' settings that name them need the new names (the release notes say so).
-Type: files; Name: "{app}\misterdownloadmanager-cli.exe"
-Type: files; Name: "{app}\misterdownloadmanager-mcp.exe"
-Type: files; Name: "{app}\misterdownloadmanager-nmhost.exe"
-; The shortcuts an install under the old name made (an upgrade keeps its folder, not these).
-Type: files; Name: "{autoprograms}\{#OldAppName}.lnk"
-Type: files; Name: "{autodesktop}\{#OldAppName}.lnk"
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
@@ -118,11 +101,6 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 [Registry]
 ; Start with Windows: the same value Options -> "Launch on startup" writes and reads, with the
 ; argument that starts MDM in the notification area (#226; win32.rs startup_command).
-; The original MDM's entry and .torrent class go first (plan 10c: the app moves them too,
-; win32.rs move_old_run_value and set_torrent_handlers).
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "MisterDownloadManager"; Flags: deletevalue
-Root: HKA; Subkey: "Software\Classes\MisterDownloadManager.torrent"; Flags: deletekey
-Root: HKA; Subkey: "Software\Classes\.torrent\OpenWithProgids"; ValueName: "MisterDownloadManager.torrent"; Flags: deletevalue
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Grabbit"; ValueData: """{app}\{#AppExe}"" /startup"; Flags: uninsdeletevalue; Tasks: startup
 ; .torrent files and magnet links (HKA: the user's or everyone's classes, as installed).
 Root: HKA; Subkey: "Software\Classes\Grabbit.torrent"; ValueType: string; ValueName: ""; ValueData: "Torrent file"; Flags: uninsdeletekey; Tasks: torrents
@@ -149,12 +127,10 @@ Filename: "{app}\{#HostExe}"; Parameters: "--unregister --all-users"; Flags: run
 
 [UninstallDelete]
 Type: files; Name: "{app}\com.grabbit.host*.json"
-Type: files; Name: "{app}\com.misterdownloadmanager.host*.json"
 
 [Code]
 const
-  { Grabbit's, and the original MDM's (plan 10c): either is a running copy to ask to quit. }
-  RunningMutex = 'Grabbit.Running,MisterDownloadManager.Running';
+  RunningMutex = 'Grabbit.Running';
 
 { /relaunch=1 on the command line (MDM's Update now): start MDM again after installing. }
 function Relaunch: Boolean;
@@ -182,15 +158,12 @@ end;
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
   ExitRunningApp(ExpandConstant('{app}\{#AppExe}'));
-  { An upgrade from the original MDM: its own program is the one to ask. }
-  ExitRunningApp(ExpandConstant('{app}\{#OldAppExe}'));
   Result := '';
 end;
 
 function InitializeUninstall(): Boolean;
 begin
   ExitRunningApp(ExpandConstant('{app}\{#AppExe}'));
-  ExitRunningApp(ExpandConstant('{app}\{#OldAppExe}'));
   Result := True;
 end;
 
@@ -214,15 +187,11 @@ var
   Value, Data: String;
   Code: Integer;
 begin
-  { Grabbit's data folder, or the original MDM's when it was never moved (plan 10c). }
   Data := ExpandConstant('{userappdata}\grabbit');
-  if not DirExists(Data) then
-    Data := ExpandConstant('{userappdata}\misterdownloadmanager');
   if CurUninstallStep = usUninstall then
   begin
     ForgetIfOurs('Software\Classes\magnet', ExpandConstant('{app}\{#AppExe}'));
-    ForgetIfOurs('Software\Classes\magnet', ExpandConstant('{app}\{#OldAppExe}'));
-    if RegQueryStringValue(HKA, 'Software\Classes\.torrent', '', Value) and ((CompareText(Value, 'Grabbit.torrent') = 0) or (CompareText(Value, 'MisterDownloadManager.torrent') = 0)) then
+    if RegQueryStringValue(HKA, 'Software\Classes\.torrent', '', Value) and (CompareText(Value, 'Grabbit.torrent') = 0) then
       RegDeleteValue(HKA, 'Software\Classes\.torrent', '');
     RemoveData := False;
     if DirExists(Data) and not UninstallSilent() then

@@ -6,7 +6,7 @@ The portable copy of Grabbit runs from any folder, including a USB stick, withou
 
 ## How it works
 
-`MisterDownloadManager-<version>-portable.zip` holds the same programs as the setup, plus a folder named `data` next to `grabbit.exe`. When that folder is there and Grabbit can write to it, Grabbit is in portable mode:
+`Grabbit-<version>-portable.zip` holds the same programs as the setup, plus a folder named `data` next to `grabbit.exe`. When that folder is there and Grabbit can write to it, Grabbit is in portable mode:
 
 - The download list, settings, helpers for video and galleries (yt-dlp, ffmpeg, gallery-dl), torrent data, your [theme files](themes.md) (`data\themes`) and the logs are kept in `data`, not in your Windows profile.
 - Passwords (Sites Logins, the proxy's, debrid accounts) stay in `data` too, instead of in Windows Credential Manager. They are sealed for your Windows account: on another computer, or another account, type them again (and sign in to a debrid account again).
@@ -16,7 +16,7 @@ Delete the `data` folder (or make it read-only) and the same copy behaves like t
 
 ## Set it up
 
-1. Download `MisterDownloadManager-<version>-portable.zip` from [Releases](https://github.com/HUMBLEF0OL/grabbit/releases).
+1. Download `Grabbit-<version>-portable.zip` from [Releases](https://github.com/HUMBLEF0OL/grabbit/releases).
 2. Unzip it where you want Grabbit to live, for example `E:\Grabbit` on a USB stick.
 3. Run `grabbit.exe` from there.
 
