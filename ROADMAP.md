@@ -516,7 +516,8 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   clipboard fix, each waiting for a decision. 41 of upstream's commits from 2026-11-14 to
   2026-11-16 still wait for a port by hand
   (`sync.py status` lists them: the window-thread disk waits of Delete, Redownload and new
-  names, the hidden-window freeze grace, accessibility and menu keys among them); what the
+  names, the hidden-window freeze grace, accessibility and menu keys among them; the new names'
+  part of upstream 1232 is ported and recorded, its other four waits left out); what the
   ports' reviews left to do is in `tools/upstream-sync/follow-ups.md`. Ready for Graphite only: an old
   theme's licence never counts as moved to Graphite's, and a commit with a theme other than
   Graphite says to skip it.
