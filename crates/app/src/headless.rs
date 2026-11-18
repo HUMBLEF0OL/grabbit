@@ -8,7 +8,7 @@
 //!
 //! | Flag | Environment | |
 //! |---|---|---|
-//! | `--data <dir>` | `MDM_DATA_DIR` | the data folder (list, settings, certificate, devices) |
+//! | `--data <dir>` | `GRABBIT_DATA_DIR` (or `MDM_DATA_DIR`) | the data folder (list, settings, certificate, devices) |
 //! | `--downloads <dir>` | `MDM_DOWNLOADS` | where downloads go (each category's folder inside) |
 //! | `--port <n>` | `MDM_REMOTE_PORT` | the remote control's port (8463) |
 //! | `--listen <addr>` | `MDM_REMOTE_LISTEN` | where it listens: "" every local network address |
@@ -48,7 +48,10 @@ fn setting(args: &[String], name: &str, var: &str) -> Option<String> {
 pub fn main(args: Vec<String>) -> ExitCode {
     // A Windows server has no console for a windowed program: the one it was started from.
     crate::win32::cli_console(None);
-    if let Some(dir) = setting(&args, "data", "MDM_DATA_DIR") {
+    if let Some(dir) = mdm_ipc::DATA_DIR_VARS
+        .iter()
+        .find_map(|var| setting(&args, "data", var))
+    {
         mdm_ipc::set_data_dir(PathBuf::from(dir));
     }
     let Some(data) = mdm_ipc::data_dir() else {

@@ -194,7 +194,10 @@ var
   Value, Data: String;
   Code: Integer;
 begin
-  Data := ExpandConstant('{userappdata}\misterdownloadmanager');
+  { Grabbit's data folder, or the original MDM's when it was never moved (plan 10c). }
+  Data := ExpandConstant('{userappdata}\grabbit');
+  if not DirExists(Data) then
+    Data := ExpandConstant('{userappdata}\misterdownloadmanager');
   if CurUninstallStep = usUninstall then
   begin
     ForgetIfOurs('Software\Classes\magnet', ExpandConstant('{app}\{#AppExe}'));

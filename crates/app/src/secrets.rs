@@ -510,8 +510,7 @@ fn global() -> &'static Arc<Vault> {
         let store: Box<dyn Store> = Box::new(Arc::new(Memory::default()));
         #[cfg(not(test))]
         let store: Box<dyn Store> = Box::new(System);
-        let portable =
-            std::env::var_os("MDM_DATA_DIR").is_none() && mdm_ipc::portable_dir().is_some();
+        let portable = mdm_ipc::data_dir_var().is_none() && mdm_ipc::portable_dir().is_some();
         Arc::new(Vault::new(
             store,
             &service(),
