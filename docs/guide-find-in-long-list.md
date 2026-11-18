@@ -8,7 +8,7 @@ After a few months the list can hold hundreds of downloads. Here are four ways t
 
 1. Click the **Find** field in the title bar, or press **Ctrl+F** (or **Downloads → Find**).
 2. Type part of the file's name. The list keeps only the downloads that match as you type, and the status bar says how many of them it shows (**3 of 250 downloads**).
-3. Press **Enter** or **F3** to select the next match, **Shift+F3** the one before. It wraps round.
+3. Press **Enter** or **F3** to select the next match, **Shift+Enter** or **Shift+F3** the one before. It wraps round.
 4. Press **Esc**, or click **×** in the field, to see every download again.
 
 ![The Find field with part of a name typed, and the list of matches](images/help/find-file.webp)

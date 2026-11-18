@@ -785,11 +785,11 @@ const SHORTCUTS: [(&str, &str); 27] = [
     ),
     (
         "F3 / Shift+F3",
-        "Select the next / previous match (Enter in the field too)",
+        "Select the next / previous match (Enter / Shift+Enter in the field too)",
     ),
     (
         "Esc in the Find field",
-        "Clear it and go back to the list (with its menu open: close the menu)",
+        "Clear it and go back to the list (or close its menu)",
     ),
     ("Enter", "Open the selected download"),
     ("Alt+Enter", "Properties of the selected download"),

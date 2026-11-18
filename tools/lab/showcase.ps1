@@ -50,6 +50,8 @@ try {
   # Let the small ones finish; close their "Download complete" dialogs.
   for ($i = 0; $i -lt 30; $i++) { Start-Sleep 1; Close-Titled "Download complete" }
   Close-Titled "*ubuntu-26.04*"   # its progress window, for a clean main-window shot
+  # Dark whatever Windows' own mode (the status bar's light/dark button, set to one side).
+  & $exe /show mode:dark
   Start-Sleep 2
   & "$PSScriptRoot\cap-own.ps1" -Out "$root\$OutDir\main-dark.png"
   # The progress dialog of the ISO: double-click its row (last row).
@@ -58,7 +60,7 @@ try {
   & "$PSScriptRoot\capwin.ps1" -Pid $app.Id -Title "*ubuntu-26.04*" -Out "$root\$OutDir\progress-dark.png"
   Close-Titled "*ubuntu-26.04*"
   # Light mode: the status bar's light/dark button, through the app's own command line.
-  & $exe /show mode
+  & $exe /show mode:light
   Start-Sleep 3
   & "$PSScriptRoot\cap-own.ps1" -Out "$root\$OutDir\main-light.png"
   & "$PSScriptRoot\probe-own.ps1" -X 300 -Y 259 -Double -NoEscape

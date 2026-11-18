@@ -851,6 +851,15 @@ fn show_paste_arg(name: &str) -> Option<&str> {
     let address = name.strip_prefix("paste:")?.trim();
     (!address.is_empty()).then_some(address)
 }
+/// `/show mode[:light|:dark]`: does the light/dark button's switch run, the windows showing
+/// `dark` now? `mode` alone always (a click); `mode:light` / `mode:dark` only to reach that side.
+fn show_mode_switches(arg: &str, dark: bool) -> bool {
+    match arg {
+        "light" => dark,
+        "dark" => !dark,
+        _ => true,
+    }
+}
 /// Is this `/show details` (plan 06, requirement 21.1)? Only the bare name: it takes no
 /// argument (`details:x` is not it).
 fn is_show_details(name: &str) -> bool {
@@ -2563,8 +2572,13 @@ impl App {
                 self.find.text = tab.to_owned();
                 self.list.set_keys(false);
             }
-            // The status bar's light/dark button, as clicked (tools/lab/showcase.ps1).
-            "mode" => self.run(Cmd::ToggleMode, None, ctx),
+            // The status bar's light/dark button, as clicked (mode), or to one side whatever the
+            // mode shown (mode:light, mode:dark: tools/lab/showcase.ps1).
+            "mode" => {
+                if show_mode_switches(tab, crate::theme::dark()) {
+                    self.run(Cmd::ToggleMode, None, ctx);
+                }
+            }
             "find-options" => {
                 self.open_menu = None;
                 self.popup = None;
@@ -7689,6 +7703,7 @@ impl App {
                 &mut self.list,
             ) {
                 Some(crate::find::Event::Next) => *chosen = Some((Cmd::FindNext, None)),
+                Some(crate::find::Event::Previous) => *chosen = Some((Cmd::FindPrevious, None)),
                 Some(crate::find::Event::Leave) => {
                     self.tree_keys = false;
                     self.list.set_keys(true);
@@ -7699,8 +7714,12 @@ impl App {
             if ui.ctx().memory(|m| m.has_focus(crate::find::field_id())) {
                 self.list.set_keys(false);
             }
-        } else {
-            self.find_bar.hidden(&mut self.find);
+        } else if self.find_bar.hidden(&mut self.find) {
+            // It had the keys: the list takes them back (arrows, Delete, Enter).
+            ui.ctx()
+                .memory_mut(|m| m.surrender_focus(crate::find::field_id()));
+            self.tree_keys = false;
+            self.list.set_keys(true);
         }
     }
 
@@ -12790,6 +12809,16 @@ mod find_and_columns_tests {
         // Shift+F3 wraps round to it too.
         a.find_next(true);
         assert_eq!(a.selection.focus(), Some(2));
+    }
+
+    /// Audit 69-r2-2: `/show mode` switches; `mode:light` and `mode:dark` only to reach that side.
+    #[test]
+    fn show_mode_reaches_the_side_asked() {
+        for dark in [false, true] {
+            assert!(show_mode_switches("", dark));
+            assert_eq!(show_mode_switches("light", dark), dark);
+            assert_eq!(show_mode_switches("dark", dark), !dark);
+        }
     }
 
     /// Audit 69-9: the column menu's command never hides File Name, Size or Status; it

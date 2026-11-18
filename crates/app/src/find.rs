@@ -159,8 +159,10 @@ impl Bar {
     }
 
     /// The field isn't drawn this frame: nothing stays asked or open, and the search, which
-    /// nothing would show or clear, ends (the list shows every download again).
-    pub fn hidden(&mut self, q: &mut Query) {
+    /// nothing would show or clear, ends (the list shows every download again). True when the
+    /// field had the keys: the caller gives them back to the list.
+    pub fn hidden(&mut self, q: &mut Query) -> bool {
+        let had = std::mem::take(&mut self.focused);
         self.shown = false;
         self.open = false;
         self.focus = false;
@@ -168,6 +170,7 @@ impl Bar {
         if !q.text.is_empty() {
             q.text.clear();
         }
+        had
     }
 }
 
@@ -176,6 +179,8 @@ impl Bar {
 pub enum Event {
     /// Enter: select the next match.
     Next,
+    /// Shift+Enter: select the match before.
+    Previous,
     /// Escape: the text cleared and the field left; the list takes the keys.
     Leave,
 }
@@ -289,10 +294,22 @@ pub fn field(
     let name = crate::i18n::t("Find downloads");
     ctx.accesskit_node_builder(id, |n| n.set_label(name));
     // Enter in the field (it had the keys as the frame began; a one-line box may give them up
-    // on Enter): the next match, and the field keeps the keys for the one after.
-    if (had || resp.has_focus()) && ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+    // on Enter): the next match (Shift+Enter: the one before), and the field keeps the keys.
+    // The press's own modifiers (Shift held at that key, not at the frame's end).
+    let enter = ctx.input(|i| {
+        i.events.iter().find_map(|e| match e {
+            egui::Event::Key {
+                key: egui::Key::Enter,
+                pressed: true,
+                modifiers,
+                ..
+            } => Some(modifiers.shift),
+            _ => None,
+        })
+    });
+    if let Some(shift) = enter.filter(|_| had || resp.has_focus()) {
         ctx.memory_mut(|m| m.request_focus(id));
-        event = Some(Event::Next);
+        event = Some(if shift { Event::Previous } else { Event::Next });
     }
     if resp.changed() {
         ctx.request_repaint();
@@ -781,6 +798,10 @@ mod tests {
         bar.hidden(&mut q);
         assert!(!bar.focus && !bar.open && q.text.is_empty());
         assert!(!bar.ask_focus(), "hidden: nothing asked");
+        // Audit 69-r2-1: hidden while it had the keys says so (the list takes them back), once.
+        bar.focused = true;
+        assert!(bar.hidden(&mut q));
+        assert!(!bar.hidden(&mut q));
     }
 
     /// Enter in the field asks for the next match, and the field keeps the keys.
@@ -813,6 +834,18 @@ mod tests {
             "the field keeps the keys"
         );
         assert_eq!(q.text, "setup");
+        // Shift+Enter: the match before.
+        let shift_enter = egui::Event::Key {
+            key: egui::Key::Enter,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: egui::Modifiers::SHIFT,
+        };
+        assert_eq!(
+            frame(&ctx, vec![shift_enter], &mut bar, &mut q, &mut st),
+            Some(Event::Previous)
+        );
     }
 
     #[test]
