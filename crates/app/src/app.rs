@@ -1315,6 +1315,8 @@ impl App {
         if settings.launch_on_startup && mdm_ipc::portable_dir().is_none() {
             crate::win32::update_run_at_startup();
         }
+        // Browser integration: a registration that leads nowhere is repaired (upstream issue 818).
+        crate::extension::repair_at_start();
         // The categories, for code that only has a `Category` (the list's own too).
         settings.publish_categories();
         // The remote control (#141): off unless Options → Remote turned it on.

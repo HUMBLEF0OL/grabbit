@@ -5485,34 +5485,78 @@ pub fn mark_downloaded(path: &std::path::Path, url: &str, referrer: Option<&str>
     let _ = std::fs::write(stream, text);
 }
 
-/// Where browser integration stands: a browser looking for the native host (Chrome's key,
-/// which Chromium browsers read; Firefox's) finds a manifest that exists, for this user or for
-/// everyone, naming a helper program that is there (Options → General → Test browser
-/// integration).
+/// What each browser's registry entries for the native host lead to: the user's (HKCU) and the
+/// computer's (HKLM), for every key the browsers read (`mdm_ipc::browsers::WINDOWS_HOST_KEYS`).
+type HostHolders = Vec<(
+    Option<mdm_ipc::browsers::Holder>,
+    Option<mdm_ipc::browsers::Holder>,
+)>;
+
+fn host_holders() -> HostHolders {
+    use mdm_ipc::browsers::{HOST_NAME, Holder, WINDOWS_HOST_KEYS, registered_manifest};
+    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+    WINDOWS_HOST_KEYS
+        .iter()
+        .map(|(key, _)| {
+            let entry = format!(r"{key}\{HOST_NAME}");
+            let holder = |root| {
+                reg_string_in(root, &entry, "").map(|v| Holder::of(&registered_manifest(&v)))
+            };
+            (holder(HKEY_CURRENT_USER), holder(HKEY_LOCAL_MACHINE))
+        })
+        .collect()
+}
+
+/// Where browser integration stands: what a browser looking for the native host finds, for
+/// every key the browsers read: the user's entry (HKCU), or without one the computer's (HKLM),
+/// as the browsers read them (Chromium's launch_context_win.cc). One naming a manifest that is
+/// gone (a copy run from inside a zip, upstream issue 818) or a helper program that isn't there
+/// is the problem, whatever the others say (Options → General → Test browser integration).
 pub fn host_registration() -> crate::extension::Registration {
     use crate::extension::Registration;
-    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
-    let mut broken = None;
-    for key in [
-        r"Software\Google\Chrome\NativeMessagingHosts\com.grabbit.host",
-        r"Software\Mozilla\NativeMessagingHosts\com.grabbit.host",
-    ] {
-        for root in [HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE] {
-            let Some(manifest) = reg_string_in(root, key, "") else {
-                continue;
-            };
-            let manifest = std::path::PathBuf::from(manifest.trim().trim_matches('"'));
-            if !manifest.is_file() {
-                continue;
-            }
-            match mdm_ipc::browsers::manifest_program(&manifest) {
-                Some(p) if p.is_file() => return Registration::Ready,
-                Some(p) => broken = broken.or(Some(p)),
-                None => {}
-            }
+    use mdm_ipc::browsers::Holder;
+    let mut ready = false;
+    let mut dead = None;
+    for (user, machine) in host_holders() {
+        match user.or(machine) {
+            Some(Holder::Alive(_)) => ready = true,
+            Some(gone) => dead = dead.or(Some(gone)),
+            None => {}
         }
     }
-    broken.map_or(Registration::Missing, Registration::HelperMissing)
+    match dead {
+        Some(Holder::ManifestGone(manifest)) => Registration::Gone(manifest),
+        Some(Holder::ProgramGone(program)) => Registration::HelperMissing(program),
+        _ if ready => Registration::Ready,
+        _ => Registration::Missing,
+    }
+}
+
+/// At each start, on a thread of its own (upstream issue 818): when a browser's registration
+/// leads nowhere (`mdm_ipc::browsers::windows_repair`: its manifest or helper gone, such as a
+/// copy run from inside a zip whose temporary folder was deleted), the native host's `--repair`
+/// points it at this copy, for this user. Nothing runs while every one works or there is none:
+/// one that works naming another copy is that copy's, and none is the setup's box unticked.
+pub fn repair_browsers() {
+    use mdm_ipc::browsers::{Repair, windows_repair};
+    crate::launch::spawn("repair-browsers", || {
+        let needed = host_holders()
+            .iter()
+            .any(|(user, machine)| windows_repair(user.as_ref(), machine.as_ref()) != Repair::Keep);
+        if needed {
+            crate::extension::registered_as(&crate::extension::run_host(
+                "--repair",
+                crate::extension::SET_UP_LIMIT,
+            ));
+        }
+    });
+}
+
+/// `cmd` runs without a console window of its own (the native host is a console program).
+pub fn no_console(cmd: &mut std::process::Command) {
+    use std::os::windows::process::CommandExt;
+    // CREATE_NO_WINDOW
+    cmd.creation_flags(0x0800_0000);
 }
 
 /// Options → Sites Logins' passwords, encrypted for this Windows account (DPAPI) before the list

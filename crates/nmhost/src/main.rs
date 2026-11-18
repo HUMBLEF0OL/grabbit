@@ -16,6 +16,12 @@
 //!   manifests (Chromium's names the extension's origin, Firefox's its add-on ID). Windows: beside
 //!   this exe, with the per-user (HKCU) registry entries the browsers look up; with `--all-users`
 //!   (the installer, installing for everyone, elevated) under HKLM instead.
+//! - `grabbit-nmhost --repair`: what the app runs at its start (upstream issue 818): a
+//!   browser's registration that leads nowhere (its manifest or helper gone: a copy run from
+//!   inside a zip, moved or deleted) is pointed at this copy, for this user; one that works is
+//!   left alone, whichever copy it names, and none is added where there was none.
+//! - Neither registers a copy in a temporary folder (an archive run without extracting it first,
+//!   whose tool deletes the folder afterwards), nor a portable one.
 
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
@@ -25,20 +31,9 @@ use serde::{Deserialize, Serialize};
 
 mod win32;
 
-const HOST_NAME: &str = "com.grabbit.host";
+// Where each browser looks for native messaging hosts (HKCU or HKLM): WINDOWS_HOST_KEYS.
+use mdm_ipc::browsers::{Family, HOST_NAME, Holder, Repair, WINDOWS_HOST_KEYS};
 use mdm_ipc::extension::{FIREFOX_ID, STORE_UPDATE_URL, chromium_ids, store_id};
-/// Where each Chromium browser looks for native messaging hosts on Windows, under HKCU (one
-/// user) or HKLM (everyone). Chromium-branded builds (Chromium, Helium, Thorium, and Brave and
-/// Brave Origin with every channel) read Chromium's first, then Chrome's, as most other forks do
-/// (Chromium's launch_context_win.cc). Brave's own key is kept for builds that read it.
-const REGISTRY_KEYS: [&str; 4] = [
-    r"Software\Google\Chrome\NativeMessagingHosts",
-    r"Software\Chromium\NativeMessagingHosts",
-    r"Software\Microsoft\Edge\NativeMessagingHosts",
-    r"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts",
-];
-/// Where Firefox looks.
-const FIREFOX_KEY: &str = r"Software\Mozilla\NativeMessagingHosts";
 /// Chrome's external extensions: an entry naming the store's extension makes Chrome offer it at
 /// its next start ("New extension added"), the user turning it on there. HKLM's is read from the
 /// 32-bit view on 64-bit Windows, hence /reg:32 (HKCU has one view).
@@ -802,6 +797,23 @@ fn portable_refused() -> Result<(), String> {
     Ok(())
 }
 
+/// Upstream issue 818: this program runs from a folder that is deleted later (a zip or rar run
+/// without extracting it first, whose archive tool deletes its temporary folder afterwards;
+/// anything under the temporary folder): the browsers would be pointed at a helper that is soon
+/// gone, and would find no other copy.
+fn temporary_refused() -> Result<(), String> {
+    let program = this_program()?;
+    if mdm_ipc::browsers::in_temporary_folder(&program) {
+        return Err(format!(
+            "{} is a temporary folder, deleted once it quits (an archive run without extracting \
+             it first): browser integration is not registered. Extract Grabbit to a folder of \
+             its own and run it from there",
+            program.parent().unwrap_or(&program).display()
+        ));
+    }
+    Ok(())
+}
+
 /// A Chromium extension's origin, as browsers name the caller.
 fn origin(id: &str) -> String {
     format!("chrome-extension://{id}/")
@@ -815,37 +827,52 @@ fn our_caller(args: &[String]) -> bool {
         || args.get(1).is_some_and(|a| a == FIREFOX_ID)
 }
 
-/// The manifests beside this exe, and the registry entries naming them, per user
-/// (HKCU) or for everyone (HKLM).
-fn register(all_users: bool) -> Result<(), String> {
-    portable_refused()?;
-    let root = if all_users { "HKLM" } else { "HKCU" };
-    let path = exe_dir()?.join(format!("{HOST_NAME}.json"));
-    write_json(&path, &chromium_manifest(&this_program()?))?;
-    for key in REGISTRY_KEYS {
-        reg(&[
-            "add",
-            &format!(r"{root}\{key}\{HOST_NAME}"),
-            "/ve",
-            "/t",
-            "REG_SZ",
-            "/d",
-            &path.display().to_string(),
-            "/f",
-        ])?;
+/// The manifest beside this exe that a browser of `family` reads, written when it isn't already
+/// what it should be (an installation for everyone can't write there, and needn't).
+fn own_manifest(family: Family) -> Result<PathBuf, String> {
+    let program = this_program()?;
+    let (name, value) = match family {
+        Family::Chromium => (format!("{HOST_NAME}.json"), chromium_manifest(&program)),
+        Family::Gecko => (
+            format!("{HOST_NAME}.firefox.json"),
+            firefox_manifest(&program),
+        ),
+    };
+    let path = exe_dir()?.join(name);
+    let current = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok());
+    if current.as_ref() != Some(&value) {
+        write_json(&path, &value)?;
     }
-    let ff_path = exe_dir()?.join(format!("{HOST_NAME}.firefox.json"));
-    write_json(&ff_path, &firefox_manifest(&this_program()?))?;
+    Ok(path)
+}
+
+/// Point `root`'s (HKCU or HKLM) entry under `key` at `manifest`.
+fn reg_point(root: &str, key: &str, manifest: &std::path::Path) -> Result<(), String> {
     reg(&[
         "add",
-        &format!(r"{root}\{FIREFOX_KEY}\{HOST_NAME}"),
+        &format!(r"{root}\{key}\{HOST_NAME}"),
         "/ve",
         "/t",
         "REG_SZ",
         "/d",
-        &ff_path.display().to_string(),
+        &manifest.display().to_string(),
         "/f",
-    ])?;
+    ])
+}
+
+/// The manifests beside this exe, and the registry entries naming them, per user
+/// (HKCU) or for everyone (HKLM).
+fn register(all_users: bool) -> Result<(), String> {
+    portable_refused()?;
+    temporary_refused()?;
+    let root = if all_users { "HKLM" } else { "HKCU" };
+    for (key, family) in WINDOWS_HOST_KEYS {
+        reg_point(root, key, &own_manifest(family)?)?;
+    }
+    let path = own_manifest(Family::Chromium)?;
+    let ff_path = own_manifest(Family::Gecko)?;
     // 1.0.0's entry for the original project's extension goes (not the original app's own).
     drop_original_entry(all_users);
     // Chrome offers the store's extension once it is listed (never a placeholder ID).
@@ -872,9 +899,44 @@ fn register(all_users: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// At the app's start (upstream issue 818): each browser's registration that leads nowhere (a
+/// copy run from inside a zip, whose temporary folder is gone; a copy moved or deleted) is
+/// pointed at this copy, for this user. One that works is left alone, whichever copy it names,
+/// and none is added where there was none (`mdm_ipc::browsers::windows_repair`).
+fn repair() -> Result<(), String> {
+    portable_refused()?;
+    temporary_refused()?;
+    let holder = |machine: bool, entry: &str| {
+        win32::reg_string(machine, entry)
+            .map(|v| Holder::of(&mdm_ipc::browsers::registered_manifest(&v)))
+    };
+    let mut repaired = 0;
+    for (key, family) in WINDOWS_HOST_KEYS {
+        let entry = format!(r"{key}\{HOST_NAME}");
+        let user = holder(false, &entry);
+        match mdm_ipc::browsers::windows_repair(user.as_ref(), holder(true, &entry).as_ref()) {
+            Repair::Keep => continue,
+            Repair::Take => {
+                let manifest = own_manifest(family)?;
+                reg_point("HKCU", key, &manifest)?;
+                println!(r"HKCU\{entry}: {user:?}, now {}", manifest.display());
+            }
+            Repair::Clear => {
+                reg(&["delete", &format!(r"HKCU\{entry}"), "/f"])?;
+                println!(r"HKCU\{entry}: {user:?}, removed (the computer's works)");
+            }
+        }
+        repaired += 1;
+    }
+    if repaired == 0 {
+        println!("{HOST_NAME}: nothing to repair");
+    }
+    Ok(())
+}
+
 fn unregister(all_users: bool) -> Result<(), String> {
     let root = if all_users { "HKLM" } else { "HKCU" };
-    for key in REGISTRY_KEYS.into_iter().chain([FIREFOX_KEY]) {
+    for (key, _) in WINDOWS_HOST_KEYS {
         let _ = reg(&["delete", &format!(r"{root}\{key}\{HOST_NAME}"), "/f"]);
     }
     drop_original_entry(all_users);
@@ -910,6 +972,7 @@ fn main() {
     let result = match args.first().map(String::as_str).unwrap_or_default() {
         "--register" => register(all_users),
         "--unregister" => unregister(all_users),
+        "--repair" => repair(),
         // Browsers start the host naming the caller: serve only our own extension (the
         // manifests' allowed_origins / allowed_extensions say the same; this is a second check).
         _ if our_caller(&args) => serve().map_err(|e| e.to_string()),

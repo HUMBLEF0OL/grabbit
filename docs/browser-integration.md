@@ -40,6 +40,8 @@ grabbit-nmhost.exe --register
 
 This is for your Windows account only. `--unregister` undoes it. Then load the extension as above, from the zip's `extension` folder.
 
+Extract the zip to a folder of its own first. Run from inside the zip, or from anywhere in the temporary folder, the helper registers nothing: that folder is deleted afterwards, and the browsers would be left looking for a helper that is gone.
+
 ## What it takes
 
 When you click a download, the extension checks Grabbit's Options:

@@ -3561,7 +3561,11 @@ impl OptionsDialog {
                 // fixes at its start.
                 const W: f32 = 440.0;
                 const ROW: f32 = 26.0;
-                let body = 2.0 * winui::EDGE + checks.len() as f32 * ROW - 6.0;
+                // A check's path takes a line of its own under it (upstream issue 818).
+                const DETAIL_H: f32 = 18.0;
+                let details = checks.iter().filter(|c| c.detail.is_some()).count();
+                let body =
+                    2.0 * winui::EDGE + checks.len() as f32 * ROW - 6.0 + details as f32 * DETAIL_H;
                 let mut set_up = false;
                 let out = window(
                     ctx,
@@ -3574,8 +3578,8 @@ impl OptionsDialog {
                     |ui, o| {
                         let p = ui.painter().clone();
                         let e = winui::EDGE;
+                        let mut top = e;
                         for (k, c) in checks.iter().enumerate() {
-                            let top = e + k as f32 * ROW;
                             let (need, color) = if c.ok {
                                 ("st-complete", winui::SUCCESS())
                             } else {
@@ -3597,11 +3601,28 @@ impl OptionsDialog {
                                 &c.text,
                                 LIGHT_TEXT(),
                             );
+                            if let Some(path) = &c.detail {
+                                top += DETAIL_H;
+                                winui::fit_middle(
+                                    ui,
+                                    &p,
+                                    o.x + e + 24.0,
+                                    o.y + winui::baseline_in(top, 20.0),
+                                    path,
+                                    LIGHT_TEXT(),
+                                    o.x + W - e,
+                                    ("test-detail", k),
+                                );
+                            }
+                            top += ROW;
                         }
                         let first = checks.iter().find(|c| !c.ok);
                         let fix = first.and_then(|c| c.why);
+                        // Not from a portable copy, nor one in a temporary folder: neither
+                        // registers (upstream issue 818).
                         let can_set_up = first.is_some_and(|c| c.why == Some("not-installed"))
-                            && mdm_ipc::portable_dir().is_none();
+                            && mdm_ipc::portable_dir().is_none()
+                            && !crate::extension::temporary_copy();
                         // Tab and the footer as before: How to fix it, Set it up, Close; Enter
                         // and Escape both close.
                         let mut items = Vec::new();
