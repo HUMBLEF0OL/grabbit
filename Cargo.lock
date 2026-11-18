@@ -2831,7 +2831,7 @@ dependencies = [
 
 [[package]]
 name = "grabbit-app"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "arboard",
  "base64 0.23.1",
@@ -2884,7 +2884,7 @@ dependencies = [
 
 [[package]]
 name = "grabbit-cli"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2903,7 +2903,7 @@ dependencies = [
 
 [[package]]
 name = "grabbit-crash"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "breakpad-symbols",
  "chrono",
@@ -2927,7 +2927,7 @@ dependencies = [
 
 [[package]]
 name = "grabbit-debrid"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "bytes",
  "futures",
@@ -2946,7 +2946,7 @@ dependencies = [
 
 [[package]]
 name = "grabbit-engine"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "base64 0.23.1",
  "bytes",
@@ -2988,7 +2988,7 @@ dependencies = [
 
 [[package]]
 name = "grabbit-extract"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "flate2",
  "grabbit-engine",
@@ -3001,7 +3001,7 @@ dependencies = [
 
 [[package]]
 name = "grabbit-geo"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "lzma-rust2",
  "png 0.18.1",
@@ -3010,7 +3010,7 @@ dependencies = [
 
 [[package]]
 name = "grabbit-ipc"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "craft-atomic",
  "dirs 7.0.0",
@@ -3022,7 +3022,7 @@ dependencies = [
 
 [[package]]
 name = "grabbit-labserver"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "aws-lc-rs",
@@ -3049,7 +3049,7 @@ dependencies = [
 
 [[package]]
 name = "grabbit-mcp"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "grabbit-ipc",
  "rmcp",
@@ -3063,7 +3063,7 @@ dependencies = [
 
 [[package]]
 name = "grabbit-nmhost"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "grabbit-ipc",
@@ -3074,7 +3074,7 @@ dependencies = [
 
 [[package]]
 name = "grabbit-remote"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "aws-lc-rs",
  "axum",
@@ -3095,7 +3095,7 @@ dependencies = [
 
 [[package]]
 name = "grabbit-tools"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "aws-lc-rs",
  "base64 0.23.1",
@@ -3122,7 +3122,7 @@ dependencies = [
 
 [[package]]
 name = "grabbit-torrent"
-version = "0.5.2"
+version = "1.0.0"
 dependencies = [
  "flate2",
  "grabbit-engine",

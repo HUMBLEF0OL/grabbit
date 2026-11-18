@@ -5,6 +5,10 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-18
+
+Grabbit's first release: Mister Download Manager's fork under its own name, with the Graphite look, its own website and its own signed updates.
+
 ### Changed
 
 - **Mister Download Manager is now Grabbit.** The app's windows, menus and messages, the notification area, the crash report, the command line (`--version` says `grabbit-cli`), the AI assistants' server, the remote page, the installer and the browser extension say Grabbit. The bug, crash and idea forms on GitHub say Grabbit too. Sites and services now see Grabbit's name in its User-Agent (`Grabbit/<version>`).

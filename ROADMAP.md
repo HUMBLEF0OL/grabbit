@@ -1,9 +1,9 @@
 # Roadmap
 
-What's done for version 0.5.2, what's being built, and what's planned. Each item links to its
-issue, where the details and the discussion are. Released changes are in
+What's done for version 1.0.0, Grabbit's first release, what's being built, and what's planned.
+Each item links to its issue, where the details and the discussion are. Released changes are in
 [CHANGELOG.md](CHANGELOG.md). Ideas and bug reports are welcome in
-[Issues](https://github.com/anefzaoui/misterdownloadmanager/issues).
+[Issues](https://github.com/HUMBLEF0OL/grabbit/issues).
 
 ✅ done · 🔄 being built · 📋 planned · 🔍 looking into it · ⛔ dropped
 
@@ -490,7 +490,9 @@ Bug fixes from the first days of 0.5.0, a Safari extension, and more file types.
   ([#311](https://github.com/anefzaoui/misterdownloadmanager/issues/311))
 - ✅ The Download video button on YouTube in Chrome, Edge, Brave, Opera and Vivaldi
 
-## Next version (on `dev`)
+## Version 1.0.0
+
+Grabbit's first release (2026-11-18): everything below ships together in it.
 
 - ✅ English only: the other languages, the language picker (View → Language and the first
   start's), the right-to-left interface, the installer's languages, the extension's translations, the
