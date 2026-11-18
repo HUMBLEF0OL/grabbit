@@ -29,6 +29,7 @@ phase that must decide them before it starts.
 | Options: a Cancel button under Graphite | Decided in 08a (2026-11-14) | None, as recommended: Escape and the close box already discard the changes (`options.rs:3`); the footer is Help (Ghost), OK* |
 | Tabular digits: Geist's own or Geist Mono | Decided in 04 | Geist's default figures are proportional (a 1 is 384 units wide, a 0 663), so the list's numeric cells (sizes, rates, time left, percent) keep Segoe UI's tabular figures; Geist Mono is not bundled. 05b draws those cells in the `numbers` family it adds (Segoe UI, falling back like the others) |
 | Which repository the app points at; exe and crate names; the old control styles | Decided 2026-11-14 | Everything (links, Sponsors) points to the fork only; exes renamed to `grabbit*.exe` in 10c; crates renamed to `grabbit-*` (code paths stay `mdm_*::`, for the upstream sync) and the old control styles removed in 10e, last. Details and costs: plan 10, "Decisions" |
+| Options and the settings windows inside the main window | Decided 2026-11-18 (maintainer, after the mockups) | A behaviour change, not a look phase: plan 11. D1 the name stays **Options**; D2 a draft with a Discard / Save bar; D3 Back with unsaved changes asks once; D4 RSS stays a window; D5 the small entry dialogs stay dialogs; D6 no search box in 11; D7 today's 12 pages, then a hairline and the moved windows. Details in plan 11, "Decisions" |
 
 ## Build order
 
@@ -48,6 +49,7 @@ phase that must decide them before it starts.
 | 08 | [Options](plans/08-options.md) | Side list with pages unchanged inside (08a), then pages on the form and sub-dialogs (08b) | 07a, 02b, 03b; 04 before final sizes | `ui/08a-options-list`, `ui/08b-options-pages` |
 | 09 | [Polish and default](plans/09-polish-and-default.md) | Two-tone hot colour, dark glow, app mark, full visual/keyboard/accessibility review (09a); what is left of 09b now that 05.5c made Graphite the default | 06, 07e, 08b | `ui/09a-finish`, `ui/09b-default` |
 | 10 | [Rename to Grabbit](plans/10-rename-grabbit.md) | Display text, assets, migrated identifiers (exes renamed), distribution, then crates and old styles (10e) | 09b; the logo (maintainer) before 10b | `rename/10a…10e` |
+| 11 | [Options in the main window](plans/11-in-app-settings.md) | Options as a page in the main window with a Save bar (11a); Scheduler (11b1), Speed limiter, Torrents and Browser extension (11b2) as its sections; Appearance (11c, optional) | 08, 09, 10e | `ui/11a-options-page`, `ui/11b1-scheduler-section`, `ui/11b2-small-sections`, `ui/11c-appearance` |
 
 Tracks:
 
@@ -108,6 +110,7 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
       PR 48, merged 2026-11-15; the passes at the screen are left, see its plan's "Done when")
 - [x] 09b Default (complete: 09b-text PR 29, 09b-shots in this PR)
 - [ ] 10a to 10e Rename
+- [ ] 11a Options page, 11b1 Scheduler section, 11b2 small sections, 11c Appearance (optional)
 
 ## What is in this folder
 
