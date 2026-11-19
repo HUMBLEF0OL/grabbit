@@ -575,9 +575,6 @@ pub struct App {
     auto_update: Option<crate::help::Slot>,
     /// The automatic check found a new version: its window comes to the front once shown.
     raise_updates: bool,
-    /// Options was asked for from outside (the extension's Button settings..., `/show`): it comes
-    /// to the front once shown, or it would open behind the browser (#77).
-    raise_options: bool,
     /// When MDM started (the update check waits a few seconds after it).
     started: Instant,
     /// When this run last checked for updates by itself (seconds since the epoch).
@@ -587,7 +584,8 @@ pub struct App {
     settings: Settings,
     speed_settings: Option<dialogs::SpeedSettings>,
     scheduler: Option<crate::scheduler::Scheduler>,
-    options: Option<crate::options::OptionsDialog>,
+    /// Options, shown in the main window in the panes' place (plan 11a).
+    settings_page: Option<crate::settingspage::SettingsPage>,
     /// Downloads to finish off once stopped: Download File Info was cancelled after an early
     /// start (`None`: the download and its data go), or its file was given another place
     /// (`Some((dest, start))`: the data so far goes, it starts over there when `start`).
@@ -1429,7 +1427,6 @@ impl App {
             extension_weighed: false,
             auto_update: None,
             raise_updates: false,
-            raise_options: false,
             started: Instant::now(),
             update_checked_this_run: None,
             file_info: None,
@@ -1440,7 +1437,7 @@ impl App {
             settings,
             speed_settings: None,
             scheduler: None,
-            options: None,
+            settings_page: None,
             category_dlg: None,
             category_for_file_info: false,
             grabber: None,
@@ -2511,7 +2508,14 @@ impl App {
         let first = self.items.first().map(|i| i.id);
         let last = self.items.last().map(|i| i.id);
         let (window, tab) = name.split_once(':').unwrap_or((name, ""));
+        // Options is a page of the main window (plan 11a): every other name shows the downloads
+        // again first, the page's changes dropped (`downloads` does only that). The look's names
+        // (mode, theme, zoom, size) leave it open, for its pictures in either mode.
+        if window != "options" && !matches!(window, "mode" | "theme" | "zoom" | "size") {
+            self.close_settings_page();
+        }
         match window {
+            "downloads" => {}
             "addurl" => self.run(Cmd::AddUrl, None, ctx),
             // Download Later's queue selection panel, for no download (the screenshots').
             "later" if self.queue_pick.is_none() => {
@@ -2638,6 +2642,17 @@ impl App {
             }
             // The main window minimized, not to the tray (tests of #162).
             "minimized" => ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true)),
+            // The main window at `<w>x<h>` points (plan 11a's screenshot of Options in the
+            // smallest window, 600x300): off-screen runs only, which ignore the saved size.
+            "size" if crate::offscreen() => {
+                if let Some((w, h)) = tab.split_once('x')
+                    && let (Ok(w), Ok(h)) = (w.parse::<f32>(), h.parse::<f32>())
+                    && w >= 600.0
+                    && h >= 300.0
+                {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(w, h)));
+                }
+            }
             // Off-screen test copies: the interface zoomed (`zoom:1.5`) while running, as a
             // display's scale changing does to every window (#89's checks).
             "zoom" if crate::offscreen() => {
@@ -2915,18 +2930,31 @@ impl App {
                     _ => 0,
                 };
                 self.run(Cmd::Options, None, ctx);
-                self.options = self.options.take().map(|o| o.on_page(page));
-                self.raise_options = true;
-                // General → Download panels → Edit... (the video button's settings).
-                if tab == "panels" {
-                    self.options = self.options.take().map(|o| o.with_panels());
-                }
-                // A window over a page (screenshots, #192): options:test, options:account,
-                // options:progress.
-                self.options = self.options.take().map(|o| o.with_window(tab));
-                // Remote → Pair a device... (the docs' screenshots, #141).
-                if tab == "pair" {
-                    self.options = self.options.take().map(|o| o.with_pairing());
+                if let Some(mut p) = self.settings_page.take() {
+                    p.options = p.options.on_page(page);
+                    // General → Download panels → Edit... (the video button's settings).
+                    if tab == "panels" {
+                        p.options = p.options.with_panels();
+                    }
+                    // A window over a page (screenshots, #192): options:test, options:account,
+                    // options:progress.
+                    p.options = p.options.with_window(tab);
+                    // Remote → Pair a device... (the docs' screenshots, #141).
+                    if tab == "pair" {
+                        p.options = p.options.with_pairing();
+                    }
+                    // General with a change in the draft (Confirm before deleting downloads
+                    // flipped), its save bar live, and Back's question over it (plan 11a's
+                    // screenshots): options:changed, options:back. Nothing is saved.
+                    if matches!(tab, "changed" | "back") && !p.dirty() {
+                        let mut s = p.options.result();
+                        s.confirm_delete = !s.confirm_delete;
+                        p.options.set_draft(s);
+                    }
+                    if tab == "back" {
+                        p.back();
+                    }
+                    self.settings_page = Some(p);
                 }
             }
             _ => {}
@@ -3986,7 +4014,11 @@ impl App {
                 TrayCmd::Scheduler => Cmd::Scheduler,
                 TrayCmd::StartQueue => Cmd::StartQueue(0),
                 TrayCmd::StopQueue => Cmd::StopQueue(0),
-                TrayCmd::Options => Cmd::Options,
+                // A page of the main window now (plan 11a): the window comes back with it.
+                TrayCmd::Options => {
+                    self.show_window(ctx);
+                    Cmd::Options
+                }
                 TrayCmd::Exit => Cmd::Exit,
                 TrayCmd::ShowDownload(id) => {
                     self.open_item(id);
@@ -5732,7 +5764,71 @@ impl App {
         Ok(answer)
     }
 
-    /// Options → OK: keep the new settings and act on what changed.
+    /// A fresh Options draft of the settings as they are now, on page `page`.
+    fn options_draft(&self, page: usize) -> crate::options::OptionsDialog {
+        crate::options::OptionsDialog::new(
+            &self.settings,
+            &self.downloads,
+            self.host_limits.learned(),
+        )
+        .with_remote(self.remote.clone())
+        .on_page(page)
+    }
+
+    /// Options' draft dropped (Discard, Back's Yes, another `/show`): what it did live is
+    /// undone, as the Options window's Cancel did: categories it added, changed or restored are
+    /// published as they are again, and the remote control listens as before Pair a device...
+    /// moved it.
+    fn discard_options(&self) {
+        self.settings.publish_categories();
+        if let Some(r) = &self.remote {
+            r.apply(crate::remote::config(&self.settings));
+        }
+    }
+
+    /// Options' page closed, its changes dropped; the downloads show again.
+    fn close_settings_page(&mut self) {
+        if let Some(p) = self.settings_page.take() {
+            // Pair a device... goes with the page (another `/show`): its code no longer pairs.
+            if p.options.pairing()
+                && let Some(r) = &self.remote
+            {
+                r.stop_pairing();
+            }
+            self.discard_options();
+        }
+    }
+
+    /// What Options' page asked for (plan 11a, D2): Save merges what the page changed into the
+    /// settings and applies it, Discard drops it; either way the page stays, on a fresh draft
+    /// of the same page. Close goes back to the downloads.
+    fn settings_page_event(&mut self, ev: crate::settingspage::PageEvent) {
+        use crate::settingspage::PageEvent;
+        let Some(p) = &self.settings_page else {
+            return;
+        };
+        let page = p.page();
+        let saved = ev == PageEvent::Save;
+        match ev {
+            PageEvent::Save => {
+                let new =
+                    Settings::merge_changes(&self.settings, &p.options.from, &p.options.result());
+                self.apply_options(new);
+            }
+            PageEvent::Discard => self.discard_options(),
+            PageEvent::Close => {
+                self.close_settings_page();
+                return;
+            }
+        }
+        let fresh = self.options_draft(page);
+        let downloads = self.downloads.clone();
+        if let Some(p) = &mut self.settings_page {
+            p.options = fresh.keep_view(&p.options, saved, &downloads);
+        }
+    }
+
+    /// Options → Save: keep the new settings and act on what changed.
     fn apply_options(&mut self, new: Settings) {
         new.publish_categories();
         // Portable mode writes nothing outside its folder (the option is off there).
@@ -6396,18 +6492,15 @@ impl App {
                     self.batch = Some(crate::batch::Batch::new(clipboard));
                 }
             }
+            // A page of the main window in the panes' place (plan 11a); open already, it stays
+            // as it is.
             Cmd::Options => {
-                if self.options.is_none() {
-                    self.options = Some(
-                        crate::options::OptionsDialog::new(
-                            &self.settings,
-                            &self.downloads,
-                            self.host_limits.learned(),
-                        )
-                        .with_remote(self.remote.clone()),
-                    );
-                } else {
-                    dialogs::raise(ctx, dialogs::dialog_viewport("options"));
+                self.open_menu = None;
+                self.popup = None;
+                if self.settings_page.is_none() {
+                    self.settings_page = Some(crate::settingspage::SettingsPage::new(
+                        self.options_draft(0),
+                    ));
                 }
             }
             Cmd::Scheduler => {
@@ -7964,7 +8057,11 @@ impl App {
         // Tab and Shift+Tab between the paste field, the tree and the list, before any widget
         // that takes the focus is laid out (egui would give Tab's focus to the first one, the
         // paste field). After the menu keys above, which count Tab as another key (Alt+Tab).
-        self.tab_keys(&ctx);
+        // Not on Options' page (plan 11a): the tree and the list aren't there; Tab goes through
+        // the page's controls.
+        if self.settings_page.is_none() {
+            self.tab_keys(&ctx);
+        }
 
         // Menu bar and its popups: which menu is open is chrome::menubar_next's to say.
         let (event, titles) = match &bar {
@@ -8089,7 +8186,7 @@ impl App {
                 any_complete,
                 Cmd::DeleteCompleted,
             ),
-            // i18n: plural noun: opens the Options window (settings)
+            // i18n: plural noun: opens Options (settings), a page of the main window
             (Icon::Options, "Options", true, Cmd::Options),
             // i18n: noun: the tool that starts and stops queues on time
             (Icon::Scheduler, "Scheduler", true, Cmd::Scheduler),
@@ -8151,6 +8248,16 @@ impl App {
                 }
                 None => {}
             }
+        }
+
+        // Options' page in the panes' place (plan 11a): the tree, the list and the details
+        // pane aren't drawn, and their keys aren't run (the shortcuts, Ctrl+V, the Tab
+        // rotation): Delete or Ctrl+A pressed on the page can't act on a list nobody sees. The
+        // toolbar and the menus still act on the selection, as they did beside the Options
+        // window (Delete asks first, unless told not to).
+        if self.settings_page.is_some() {
+            self.paint_settings_page(ui, &layout, (o, w, h), pasted, chosen);
+            return;
         }
 
         // Categories pane.
@@ -8379,27 +8486,7 @@ impl App {
         if let Some(pos) = r.header_context {
             self.open_popup(Popup::Columns, pos);
         }
-        if let Some((kind, pos, serial)) = self.popup {
-            let (entries, target) = self.popup_entries(kind);
-            // The column chooser's items have no icons (the mockup's): only check marks.
-            let columns = matches!(kind, Popup::Columns);
-            match chrome::popup_with_icons(
-                &ctx,
-                MenuKind::Context,
-                &format!("popup-{serial}"),
-                pos,
-                &entries,
-                &|c: &Cmd| c.hint(),
-                &|c: &Cmd, l: &str| if columns { None } else { c.menu_icon(l) },
-            ) {
-                PopupResult::Open | PopupResult::Neighbor(_) => {}
-                PopupResult::Chosen(c) => {
-                    chosen = Some((c, target));
-                    self.popup = None;
-                }
-                PopupResult::Dismissed => self.popup = None,
-            }
-        }
+        self.popup_menu(&ctx, &mut chosen);
         // The main window's shortcut keys (Ctrl+F, F3, Ctrl+N, Ctrl+M / F2, Delete,
         // Shift+Delete), with no menu or popup open.
         if chosen.is_none() && self.popup.is_none() && self.open_menu.is_none() {
@@ -8419,6 +8506,74 @@ impl App {
             self.paste.fill(&clip);
             // The field takes the keys on the next frame: the list's selection goes grey.
             self.list.set_keys(false);
+        }
+        if let Some(new) = pasted {
+            self.route_new_url(new, &ctx);
+        }
+        if let Some((c, target)) = chosen {
+            self.run(c, target, &ctx);
+        }
+    }
+
+    /// The context menu open (`self.popup`), if any: what was chosen in it goes to `chosen`.
+    fn popup_menu(&mut self, ctx: &egui::Context, chosen: &mut Option<(Cmd, Option<u64>)>) {
+        if let Some((kind, pos, serial)) = self.popup {
+            let (entries, target) = self.popup_entries(kind);
+            // The column chooser's items have no icons (the mockup's): only check marks.
+            let columns = matches!(kind, Popup::Columns);
+            match chrome::popup_with_icons(
+                ctx,
+                MenuKind::Context,
+                &format!("popup-{serial}"),
+                pos,
+                &entries,
+                &|c: &Cmd| c.hint(),
+                &|c: &Cmd, l: &str| if columns { None } else { c.menu_icon(l) },
+            ) {
+                PopupResult::Open | PopupResult::Neighbor(_) => {}
+                PopupResult::Chosen(c) => {
+                    *chosen = Some((c, target));
+                    self.popup = None;
+                }
+                PopupResult::Dismissed => self.popup = None,
+            }
+        }
+    }
+
+    /// The rest of the main window's frame with Options' page open (plan 11a): the page in the
+    /// panes' place, the status strip, a toolbar arrow's menu, then what the bars above asked
+    /// for. The page has the keys while no menu is open and the paste and Find fields don't.
+    fn paint_settings_page(
+        &mut self,
+        ui: &mut Ui,
+        layout: &chrome::Layout,
+        (o, w, h): (Pos2, f32, f32),
+        pasted: Option<dialogs::NewUrl>,
+        mut chosen: Option<(Cmd, Option<u64>)>,
+    ) {
+        let ctx = ui.ctx().clone();
+        let area = egui::Rect::from_min_max(
+            pos2(o.x, o.y + layout.panes_top()),
+            pos2(o.x + w, o.y + layout.strip_top(h)),
+        );
+        let focused = ctx.memory(|m| m.focused());
+        let bars = focused
+            .is_some_and(|f| f == crate::panes::paste_field_id() || f == crate::find::field_id());
+        // Find's dropdown open: its check boxes have the keys (Enter there isn't Save).
+        let keys = self.popup.is_none() && self.open_menu.is_none() && !bars && !self.find_bar.open;
+        // A text box on the page has the keys: Alt+Left moves its caret by a word, not back.
+        let typing = focused.is_some_and(|id| egui::TextEdit::load_state(&ctx, id).is_some());
+        let ev = self
+            .settings_page
+            .as_mut()
+            .and_then(|p| p.show(ui, area, keys, typing, &self.downloads));
+        let shown = self.shown_ids().len();
+        if self.status_strip(ui, layout, o, w, h, shown) {
+            chosen = Some((Cmd::ToggleMode, None));
+        }
+        self.popup_menu(&ctx, &mut chosen);
+        if let Some(ev) = ev {
+            self.settings_page_event(ev);
         }
         if let Some(new) = pasted {
             self.route_new_url(new, &ctx);
@@ -9391,13 +9546,6 @@ impl App {
         } else {
             self.raise_updates = false;
         }
-        if self.options.is_some() {
-            if self.raise_options && crate::dialogs::focus_when_shown(ctx, "options") {
-                self.raise_options = false;
-            }
-        } else {
-            self.raise_options = false;
-        }
         // Until the check at start is due.
         if self.update_checked_this_run.is_none() && self.settings.update_check {
             ctx.request_repaint_after(crate::help::CHECK_AFTER_START);
@@ -9939,24 +10087,11 @@ impl App {
                 }
             }
         }
-        if let Some(d) = &mut self.options {
-            match d.show(ctx, &self.downloads) {
-                Outcome::Open => {}
-                Outcome::Closed => {
-                    // Cancel: categories the dialog added, changed or restored are undone, and
-                    // the remote control listens as before Pair a device... moved it.
-                    self.settings.publish_categories();
-                    if let Some(r) = &self.remote {
-                        r.apply(crate::remote::config(&self.settings));
-                    }
-                    self.options = None;
-                }
-                Outcome::Done(new) => {
-                    let new = Settings::merge_changes(&self.settings, &d.from, &new);
-                    self.options = None;
-                    self.apply_options(new);
-                }
-            }
+        // Options' page is drawn by `paint`; its small dialogs and the discard question here.
+        if let Some(p) = &mut self.settings_page
+            && let Some(ev) = p.overlays(ctx, &self.downloads)
+        {
+            self.settings_page_event(ev);
         }
         if let Some(mut s) = self.scheduler.take() {
             let mut actions = Vec::new();
@@ -12865,5 +13000,281 @@ mod find_and_columns_tests {
         let q = a.list.visible[1];
         a.run(Cmd::ToggleColumn(1), None, &ctx);
         assert_eq!(a.list.visible[1], !q);
+    }
+}
+
+/// Plan 11a: Options as a page of the main window, on an `App` built as the menus' test builds
+/// one. Nothing runs: the runtime is never driven.
+#[cfg(test)]
+mod settings_page_tests {
+    use super::*;
+    use crate::settingspage::PageEvent;
+
+    fn app(items: Vec<Item>) -> std::mem::ManuallyDrop<App> {
+        let rt = Box::leak(Box::new(
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
+        ));
+        let loaded = store::Loaded {
+            next_id: 100,
+            items,
+            columns: None,
+            settings: Settings::default(),
+            queues: Vec::new(),
+        };
+        let (_, commands) = std::sync::mpsc::channel();
+        // Never dropped: an App saves its list as it goes.
+        let mut app = std::mem::ManuallyDrop::new(App::assemble(
+            &egui::Context::default(),
+            rt.handle().clone(),
+            commands,
+            loaded,
+            crate::Start::Shown,
+        ));
+        app.downloads = PathBuf::from(r"C:\mdm-settings-page-test\Downloads");
+        app
+    }
+
+    fn item(id: u64, name: &str) -> Item {
+        let url = url::Url::parse(&format!("http://127.0.0.1:9/{name}")).unwrap();
+        let mut i = Item::new(id, url, PathBuf::from(name), Category::General);
+        i.status = Status::Stopped;
+        i
+    }
+
+    /// The draft changed as a page's control changes it.
+    fn change(a: &mut App, f: impl FnOnce(&mut Settings)) {
+        let p = a.settings_page.as_mut().expect("the page is open");
+        let mut s = p.options.result();
+        f(&mut s);
+        p.options.set_draft(s);
+    }
+
+    /// One frame of the main window (its client `size`), with `events`.
+    fn frame(a: &mut App, ctx: &egui::Context, events: Vec<egui::Event>) {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                Pos2::ZERO,
+                egui::vec2(1080.0, 560.0),
+            )),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| a.paint(ui));
+        out.textures_delta.clear();
+    }
+
+    fn key(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    /// The screenshots' names: `options:changed` opens General with a change in its draft
+    /// (Save live), `options:back` asks the question over it; nothing is saved.
+    #[test]
+    fn show_names_for_the_changed_page_and_its_question() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let saved = a.settings.clone();
+        a.show_named("options:changed", &ctx);
+        let p = a.settings_page.as_ref().expect("the page");
+        assert!(p.dirty() && !p.modal(), "changed");
+        a.show_named("options:back", &ctx);
+        let p = a.settings_page.as_ref().expect("the page");
+        assert!(p.dirty() && p.modal(), "asked");
+        assert_eq!(a.settings, saved, "nothing saved");
+    }
+
+    /// `/show options:<page>` opens the page there (the toolbar's, the menu's and the tray's
+    /// Options open it on General); every other name shows the downloads again, `downloads`
+    /// doing only that.
+    #[test]
+    fn show_names_open_their_section() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.run(Cmd::Options, None, &ctx);
+        assert_eq!(a.settings_page.as_ref().map(|p| p.page()), Some(0));
+        for (name, page) in [
+            ("options:proxy", 5),
+            ("options:remote", 11),
+            ("options:progress", 3),
+            ("options:sounds", 8),
+            ("options", 0),
+        ] {
+            a.show_named(name, &ctx);
+            assert_eq!(
+                a.settings_page.as_ref().map(|p| p.page()),
+                Some(page),
+                "{name}"
+            );
+        }
+        a.show_named("downloads", &ctx);
+        assert!(a.settings_page.is_none(), "downloads");
+        a.show_named("options:archives", &ctx);
+        a.show_named("about", &ctx);
+        assert!(a.settings_page.is_none(), "another name closes it");
+        // The toolbar's Options with the page open leaves it as it is.
+        a.show_named("options:regional", &ctx);
+        a.run(Cmd::Options, None, &ctx);
+        assert_eq!(a.settings_page.as_ref().map(|p| p.page()), Some(9));
+    }
+
+    /// D2: Save puts in only what the page changed: a setting changed elsewhere while it was
+    /// open (the details pane, here) stays as it is now. The page stays, on a clean draft.
+    #[test]
+    fn save_merges_only_what_options_changed() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.show_named("options:downloads", &ctx);
+        let before = a.settings.double_click_open;
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings.show_details = !a.settings.show_details;
+        let details = a.settings.show_details;
+        assert!(a.settings_page.as_ref().unwrap().dirty());
+        a.settings_page_event(PageEvent::Save);
+        assert_eq!(a.settings.double_click_open, !before, "the page's change");
+        assert_eq!(
+            a.settings.show_details, details,
+            "the change made elsewhere"
+        );
+        let p = a.settings_page.as_ref().expect("the page stays");
+        assert_eq!(p.page(), 3, "on its page");
+        assert!(!p.dirty(), "a fresh draft");
+    }
+
+    /// Discard (and Back's Yes) undo what the draft did live: its categories are published as
+    /// the settings hold them again. Discard keeps the page on a fresh draft; Close shuts it.
+    #[test]
+    fn discard_restores_categories_and_remote() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.show_named("options:saveto", &ctx);
+        const ID: u32 = 987_654_321;
+        let mut draft = None;
+        change(&mut a, |s| {
+            s.custom_categories.push(crate::model::CustomCategory {
+                id: ID,
+                name: "Page test".into(),
+                types: "xyz".into(),
+                folder: None,
+            });
+            // As the category editor's OK does: shown at once, in the draft.
+            s.publish_categories();
+            draft = Some(s.clone());
+        });
+        let saved = a.settings.clone();
+        a.settings_page_event(PageEvent::Discard);
+        assert!(
+            crate::model::custom(ID).is_none(),
+            "the draft's category undone"
+        );
+        assert_eq!(a.settings, saved, "nothing kept");
+        let p = a.settings_page.as_ref().expect("Discard keeps the page");
+        assert_eq!(p.page(), 2);
+        assert!(!p.dirty());
+        change(&mut a, |s| {
+            *s = draft.clone().unwrap();
+            s.publish_categories();
+        });
+        a.settings_page_event(PageEvent::Close);
+        assert!(a.settings_page.is_none());
+        assert!(crate::model::custom(ID).is_none(), "Close undoes it too");
+        assert_eq!(a.settings, saved);
+    }
+
+    /// Audit r1: Escape in the title bar's Find field clears and leaves the field, and the
+    /// page stays (it isn't Back too).
+    #[test]
+    fn escape_in_find_leaves_the_page_open() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.run(Cmd::Options, None, &ctx);
+        a.find.text = "zip".into();
+        frame(&mut a, &ctx, vec![]);
+        ctx.memory_mut(|m| m.request_focus(crate::find::field_id()));
+        frame(&mut a, &ctx, vec![]);
+        frame(&mut a, &ctx, vec![]);
+        assert!(
+            ctx.memory(|m| m.has_focus(crate::find::field_id())),
+            "Find has the keys"
+        );
+        frame(
+            &mut a,
+            &ctx,
+            vec![key(egui::Key::Escape, egui::Modifiers::NONE)],
+        );
+        frame(&mut a, &ctx, vec![]);
+        assert!(a.find.text.is_empty(), "Escape cleared Find");
+        assert!(a.settings_page.is_some(), "the page stays");
+    }
+
+    /// Audit r1: another `/show` drops the page with Remote → Pair a device... open: the
+    /// remote control stops showing the code, as closing the pairing window does.
+    #[test]
+    fn closing_the_page_stops_pairing() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        // The app's remote control, off (Options → Remote), as emote::start makes it.
+        let dir = tempfile::tempdir().unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let texts: mdm_remote::Texts = std::sync::Arc::new(|_: &str| Default::default());
+        let remote = mdm_remote::Remote::new(
+            a.rt.clone(),
+            dir.path().to_owned(),
+            mdm_ipc::Sink::new(tx, std::sync::Arc::new(|| {})),
+            texts,
+        );
+        a.remote = Some(remote.clone());
+        a.show_named("options:pair", &ctx);
+        assert!(a.settings_page.as_ref().unwrap().options.pairing());
+        assert!(remote.pairing().0.is_some(), "a code shown");
+        a.show_named("downloads", &ctx);
+        assert!(a.settings_page.is_none());
+        assert!(remote.pairing().0.is_none(), "the code is gone");
+    }
+
+    /// The downloads list's keys aren't the page's: with the page open, Delete and Ctrl+A act
+    /// on nothing (the selection stays, no deletion is asked), and the page has the panes'
+    /// place in the frame.
+    #[test]
+    fn the_list_takes_no_keys_while_the_page_is_open() {
+        let mut a = app(vec![item(1, "a.zip"), item(2, "b.zip")]);
+        let ctx = egui::Context::default();
+        a.selection.set(1);
+        a.run(Cmd::Options, None, &ctx);
+        frame(&mut a, &ctx, vec![]);
+        frame(
+            &mut a,
+            &ctx,
+            vec![
+                key(egui::Key::A, egui::Modifiers::COMMAND),
+                key(egui::Key::Delete, egui::Modifiers::NONE),
+            ],
+        );
+        frame(&mut a, &ctx, vec![]);
+        assert_eq!(a.selection.ids(), &[1], "Ctrl+A selected nothing more");
+        assert!(a.confirm_delete.is_none(), "Delete asked nothing");
+        assert!(a.settings_page.is_some());
+        // Escape goes back (nothing changed); the list has its keys again.
+        frame(
+            &mut a,
+            &ctx,
+            vec![key(egui::Key::Escape, egui::Modifiers::NONE)],
+        );
+        assert!(a.settings_page.is_none(), "Escape: back to the downloads");
+        frame(&mut a, &ctx, vec![]);
+        frame(
+            &mut a,
+            &ctx,
+            vec![key(egui::Key::Delete, egui::Modifiers::NONE)],
+        );
+        assert!(a.confirm_delete.is_some(), "Delete asks again");
     }
 }

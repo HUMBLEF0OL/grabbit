@@ -583,6 +583,10 @@ The maintainer's first findings with 1.0.0 (in `dev`, for the next release):
 - 🔄 The original MDM's fixes in the files the in-app Options page changes (plan 11), before it
   is built: of upstream's six waiting commits there, one already fixed here, two features
   skipped, three ported by hand (one done, two in progress).
+- 🔄 Options in the main window (plan 11): ✅ Options' pages open in place of the download list,
+  with **← Downloads**, a Save / Discard bar, and a question before unsaved changes are thrown
+  away (11a); the Scheduler, the Speed Limiter's and torrents' settings and the browser
+  extension become sections of it next (11b).
 
 ## Being worked on
 
@@ -822,9 +826,5 @@ kept on the `archive/multiplatform-i18n` branch.
 
 ### Look and performance
 
-- 📋 Options in the main window: Options, the Scheduler, the Speed Limiter's and torrents'
-  settings and the browser extension open as a page in the main window, with a side list and a
-  Save bar, instead of their own windows; adding and watching downloads stay dialogs
-  (`design/graphite/plans/11-in-app-settings.md`)
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))

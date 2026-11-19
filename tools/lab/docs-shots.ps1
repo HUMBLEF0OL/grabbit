@@ -211,7 +211,7 @@ try {
   # own come from tools/shots/shots.toml (-Show).
   $windows = [ordered]@{
     "add-url" = "addurl"; "speed-limiter" = "speedlimit"; "scheduler" = "scheduler"
-    "options-connection" = "options:connection"; "options-remote" = "options:remote"; "grabber" = "grabber"
+    "options-connection" = "options:connection+@main"; "options-remote" = "options:remote+@main"; "grabber" = "grabber"
     "progress" = "progress"
   }
   if ($Torrent -and (Want "add-torrent")) {
@@ -226,26 +226,23 @@ try {
   }
   foreach ($name in $windows.Keys) {
     if (-not (Want $name)) { continue }
+    # Options is a page of the main window (plan 11a): "options:x+@main" opens it there, and
+    # the main window is the shot; /show downloads shows the list again after.
+    if ($windows[$name] -like "*+@main") {
+      & $Exe /show ($windows[$name] -replace "\+@main$", "")
+      Start-Sleep -Milliseconds 1500
+      Shot $app.Id $main $name
+      & $Exe /show downloads
+      Start-Sleep -Milliseconds 600
+      continue
+    }
     $before = @(Titles $app.Id)
     & $Exe /show $windows[$name]
     # A window that doesn't come up is reported; the run goes on with the others.
     try { $t = New-Window $app.Id $before } catch { Write-Warning "${name}: no window"; continue }
-    # Options with a dialog over it: the dialog is the shot (the second new window).
-    $also = @()
-    if ($name -eq "options-panels") {
-      for ($i = 0; $i -lt 50; $i++) {
-        $new = @(Titles $app.Id | Where-Object { $before -notcontains $_ })
-        if ($new.Count -ge 2) { break }
-        Start-Sleep -Milliseconds 200
-      }
-      $also = @($t)
-      $t = @($new | Where-Object { $_ -ne $also[0] })[0]
-      if (-not $t) { Write-Warning "${name}: no dialog"; Close-Ours $app.Id $also[0]; continue }
-    }
     Start-Sleep -Milliseconds 1200
     Shot $app.Id $t $name
     Close-Ours $app.Id $t
-    foreach ($w in $also) { Close-Ours $app.Id $w }
     Start-Sleep -Milliseconds 600
   }
   # -Show's list (the help pages' shots), in its order.
@@ -255,6 +252,11 @@ try {
     # "theme:graphite+@main": /show theme:graphite first (no window of its own), then the shot.
     $parts = @($what -split "\+")
     $what = $parts[-1]
+    # The downloads list, not Options' page (plan 11a), unless this shot opens the page.
+    if ($what -eq "@main" -and -not ($parts | Where-Object { $_ -like "options*" })) {
+      & $Exe /show downloads
+      Start-Sleep -Milliseconds 600
+    }
     foreach ($p in $parts[0..($parts.Count - 2)]) {
       if ($parts.Count -lt 2) { break }
       & $Exe /show $p
@@ -304,10 +306,10 @@ try {
       & $Exe /show $what
     }
     try { $t = New-Window $app.Id $before } catch { Write-Warning "${name}: no window"; continue }
-    # Options → Download panels opens a dialog over Options, and video-helpers Helpers over the
-    # video window: that dialog is the shot.
+    # video-helpers opens Helpers over the video window: that dialog is the shot. (Options →
+    # Download panels' dialog is the only new window: Options is a page of the main window.)
     $also = @()
-    if ($what -in "options:panels", "video-helpers") {
+    if ($what -eq "video-helpers") {
       for ($i = 0; $i -lt 50; $i++) {
         $new = @(Titles $app.Id | Where-Object { $before -notcontains $_ })
         if ($new.Count -ge 2) { break }
@@ -315,7 +317,7 @@ try {
       }
       $also = @($t)
       # By its title where it has a known one (Helpers), else the new window that isn't the first.
-      $t = @($new | Where-Object { $_ -ne $also[0] -and ($what -ne "video-helpers" -or $_ -eq "Helpers") })[0]
+      $t = @($new | Where-Object { $_ -ne $also[0] -and $_ -eq "Helpers" })[0]
       if (-not $t) { Write-Warning "${name}: no dialog"; Close-Ours $app.Id $also[0]; continue }
     }
     Start-Sleep -Milliseconds 1500
@@ -328,6 +330,8 @@ try {
   # for a moment while an antivirus scan holds it).
   if ((Want "main-light") -or (Want "main-dark")) {
     $name = if ($dark) { "main-dark" } else { "main-light" }
+    & $Exe /show downloads
+    Start-Sleep -Milliseconds 600
     # Shot alone (no windows before it): give the last small files their moment too.
     if ($Only.Count -eq 1) { Start-Sleep 10 }
     if (Want $name) { Shot $app.Id $main $name }

@@ -78,6 +78,18 @@ a branch, and **Home** / **End** go to the first / last node.
 
 A window larger than the screen at a big interface size scrolls.
 
+## On the Options page
+
+**Options** opens in the main window, in place of the download list ([Options](options.md)).
+
+| Keys | What they do |
+|---|---|
+| **Esc** or **Alt+Left** | Back to the download list (**← Downloads**); with changes not saved yet, Grabbit asks first |
+| **Enter** | **Save** your changes (not while a smaller window over the page, or the paste bar or Find, has the keys) |
+| **Ctrl+Tab** / **Ctrl+Shift+Tab** | The next / previous page (also **Ctrl+Page Down** / **Page Up**) |
+| **Up** / **Down**, **Left** / **Right**, **Home** / **End** | In the list of pages: the page before / after, the first / last |
+| **Tab** / **Shift+Tab** | Move through the page's controls |
+
 ## In dialogs
 
 | Keys | What they do |
