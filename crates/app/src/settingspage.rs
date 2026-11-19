@@ -155,6 +155,10 @@ impl SettingsPage {
             false,
             None,
         );
+        // i18n: Options in the main window, to screen readers: the "← Downloads" button
+        let name = crate::i18n::t("Back to downloads");
+        ui.ctx()
+            .accesskit_node_builder(back.id, |n| n.set_label(name));
 
         // The section column: the page, then the save bar under it.
         let col = o.x + side_w;
@@ -392,7 +396,7 @@ mod tests {
         }
         for (role, label) in [
             (Role::List, "Pages"),
-            (Role::Button, "Downloads"),
+            (Role::Button, "Back to downloads"),
             (Role::Button, "Save"),
             (Role::Button, "Discard"),
             (Role::Button, "Help"),
@@ -427,7 +431,7 @@ mod tests {
         let mut d = page(&Settings::default());
         pass(&ctx, &mut d, area, vec![]);
         let (_, tree) = pass(&ctx, &mut d, area, vec![]);
-        for label in ["Save", "Discard", "Help", "Downloads"] {
+        for label in ["Save", "Discard", "Help", "Back to downloads"] {
             let rc = bounds(find(&tree, Role::Button, label).expect(label).1).unwrap();
             assert!(area.expand(0.5).contains_rect(rc), "{label}: {rc:?}");
         }
@@ -499,7 +503,7 @@ mod tests {
         let mut d = page(&s);
         pass(&ctx, &mut d, area, vec![]);
         let (_, tree) = pass(&ctx, &mut d, area, vec![]);
-        let back = bounds(find(&tree, Role::Button, "Downloads").unwrap().1).unwrap();
+        let back = bounds(find(&tree, Role::Button, "Back to downloads").unwrap().1).unwrap();
         assert_eq!(
             click(&ctx, &mut d, area, back.center()),
             Some(PageEvent::Close)

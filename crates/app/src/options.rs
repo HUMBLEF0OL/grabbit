@@ -427,8 +427,7 @@ impl OptionsDialog {
         s
     }
 
-    /// The draft replaced, as a page's controls change it (tests).
-    #[cfg(test)]
+    /// The draft replaced, as a page's controls change it (tests; `/show options:changed`).
     pub(crate) fn set_draft(&mut self, s: Settings) {
         self.s = s;
     }

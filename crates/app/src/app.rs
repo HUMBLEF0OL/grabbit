@@ -2510,8 +2510,8 @@ impl App {
         let (window, tab) = name.split_once(':').unwrap_or((name, ""));
         // Options is a page of the main window (plan 11a): every other name shows the downloads
         // again first, the page's changes dropped (`downloads` does only that). The look's names
-        // (mode, theme, zoom) leave it open, for its pictures in either mode.
-        if window != "options" && !matches!(window, "mode" | "theme" | "zoom") {
+        // (mode, theme, zoom, size) leave it open, for its pictures in either mode.
+        if window != "options" && !matches!(window, "mode" | "theme" | "zoom" | "size") {
             self.close_settings_page();
         }
         match window {
@@ -2644,6 +2644,17 @@ impl App {
             "minimized" => ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true)),
             // Off-screen test copies: the interface zoomed (`zoom:1.5`) while running, as a
             // display's scale changing does to every window (#89's checks).
+            // The main window at `<w>x<h>` points (plan 11a's screenshot of Options in the
+            // smallest window, 600x300): off-screen runs only, which ignore the saved size.
+            "size" if crate::offscreen() => {
+                if let Some((w, h)) = tab.split_once('x')
+                    && let (Ok(w), Ok(h)) = (w.parse::<f32>(), h.parse::<f32>())
+                    && w >= 600.0
+                    && h >= 300.0
+                {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(w, h)));
+                }
+            }
             "zoom" if crate::offscreen() => {
                 if let Ok(z) = tab.parse::<f32>()
                     && (0.5..=4.0).contains(&z)
@@ -2931,6 +2942,17 @@ impl App {
                     // Remote → Pair a device... (the docs' screenshots, #141).
                     if tab == "pair" {
                         p.options = p.options.with_pairing();
+                    }
+                    // General with a change in the draft (Confirm before deleting downloads
+                    // flipped), its save bar live, and Back's question over it (plan 11a's
+                    // screenshots): options:changed, options:back. Nothing is saved.
+                    if matches!(tab, "changed" | "back") && !p.dirty() {
+                        let mut s = p.options.result();
+                        s.confirm_delete = !s.confirm_delete;
+                        p.options.set_draft(s);
+                    }
+                    if tab == "back" {
+                        p.back();
                     }
                     self.settings_page = Some(p);
                 }
@@ -8535,7 +8557,8 @@ impl App {
         let focused = ctx.memory(|m| m.focused());
         let bars = focused
             .is_some_and(|f| f == crate::panes::paste_field_id() || f == crate::find::field_id());
-        let keys = self.popup.is_none() && self.open_menu.is_none() && !bars;
+        // Find's dropdown open: its check boxes have the keys (Enter there isn't Save).
+        let keys = self.popup.is_none() && self.open_menu.is_none() && !bars && !self.find_bar.open;
         // A text box on the page has the keys: Alt+Left moves its caret by a word, not back.
         let typing = focused.is_some_and(|id| egui::TextEdit::load_state(&ctx, id).is_some());
         let ev = self
@@ -13049,6 +13072,22 @@ mod settings_page_tests {
             repeat: false,
             modifiers,
         }
+    }
+
+    /// The screenshots' names: `options:changed` opens General with a change in its draft
+    /// (Save live), `options:back` asks the question over it; nothing is saved.
+    #[test]
+    fn show_names_for_the_changed_page_and_its_question() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let saved = a.settings.clone();
+        a.show_named("options:changed", &ctx);
+        let p = a.settings_page.as_ref().expect("the page");
+        assert!(p.dirty() && !p.modal(), "changed");
+        a.show_named("options:back", &ctx);
+        let p = a.settings_page.as_ref().expect("the page");
+        assert!(p.dirty() && p.modal(), "asked");
+        assert_eq!(a.settings, saved, "nothing saved");
     }
 
     /// `/show options:<page>` opens the page there (the toolbar's, the menu's and the tray's
