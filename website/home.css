@@ -156,7 +156,7 @@ html:not(.js-off) .bench:not(.in) .bench-bar i{width:0}
 .b4 .free{color:var(--ink);margin-top:auto;font-weight:600;font-size:88px;line-height:.85;letter-spacing:-.06em}
 .logos{margin-top:auto;display:flex;gap:14px}
 .logos img{width:38px;height:38px}
-.b5 .crop{width:520px;top:112px;left:auto;right:-40px}
+.b5 .crop{width:680px;top:112px;left:auto;right:-40px}
 .facts{list-style:none;margin-top:16px;display:grid;gap:8px;font-size:15px;color:var(--mute);position:relative;z-index:1}
 .facts li{padding-left:18px;position:relative}
 .facts li::before{content:"";position:absolute;left:0;top:.62em;width:8px;height:1.5px;background:var(--mute)}

@@ -15,11 +15,11 @@ The portable copy runs straight from a USB stick and keeps its list and settings
 
 By default, downloads go to the Downloads folder of the computer you're using. To keep them on the stick:
 
-1. Open **Downloads → Options** and the **Save to** tab.
+1. Open **Downloads → Options** and its **Save to** page.
 2. Under **Category**, choose **General**.
 3. In **Default download directory for "General" category**, click **Browse** and choose a folder on the stick, for example `E:\Downloads`.
 4. Choose the next category (**Compressed**, **Documents**, **Music**, **Programs**, **Video**, **Torrents**) and do the same, for example `E:\Downloads\Video`.
-5. Click **OK**.
+5. Click **Save**.
 
 ![Options, Save to: a category's folder](images/help/usb-save-to.webp)
 *Point each category's folder at the stick.*

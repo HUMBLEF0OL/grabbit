@@ -15,7 +15,7 @@ cable), never on an address the internet can reach.
 
 1. **Options → Remote**.
 2. Tick **Let phones and computers on the local network control Grabbit**.
-3. Click **OK**.
+3. Click **Save**.
 
 The page then says **On** and shows the address to open, such as `https://192.168.1.20:8463/`.
 
@@ -61,7 +61,7 @@ page follows your phone's light or dark mode.
 
 **Options → Remote** lists the paired devices, when each was paired and when it was last seen.
 Select one and click **Remove**: it is refused from its next request on, at once (no need for
-**OK**). On the phone, the page's **⋮ → Forget this device** does the same from that side.
+**Save**). On the phone, the page's **⋮ → Forget this device** does the same from that side.
 
 Lost your phone? Remove it in Options. To stop everyone at once, untick the box: nothing listens
 any more.

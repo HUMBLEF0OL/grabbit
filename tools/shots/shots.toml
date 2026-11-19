@@ -146,8 +146,11 @@ id = "options-integration"
 page = "browser-integration.md"
 under = "What it takes"
 take = "options:general+@main"
-crop = { around = ["Use advanced browser integration", "List:Capture downloads from the following browsers:", "Button:Test browser integration"], pad = 12 }
-marks = [{ at = "Use advanced browser integration", side = "right" }, { at = "List:Capture downloads from the following browsers:", side = "right" }]
+# Pad 6: the rows are 22 apart, so the row above stays out. Mark 2 inside the list, just past
+# the "Google Chrome" row's label (its tick box at [228, 452]): on the list's edge it sat beside
+# Test browser integration... and Add browser... and read as theirs.
+crop = { around = ["Use advanced browser integration", "List:Capture downloads from the following browsers:", "Button:Test browser integration"], pad = 6 }
+marks = [{ at = "Use advanced browser integration", side = "right" }, { at = [228, 452, 112, 17], side = "right" }]
 alt = "Options, General: Use advanced browser integration and the list of browsers Grabbit takes downloads from"
 caption = "1 must be on, and 2 your browser ticked."
 

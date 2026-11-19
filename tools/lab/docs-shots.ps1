@@ -333,6 +333,8 @@ try {
   if ((Want "main-light") -or (Want "main-dark")) {
     $name = if ($dark) { "main-dark" } else { "main-light" }
     & $Exe /show downloads
+    # At the first window size again, after a -Show take that resized it ("size:...+...").
+    & $Exe /show size:1080x560
     Start-Sleep -Milliseconds 600
     # Shot alone (no windows before it): give the last small files their moment too.
     if ($Only.Count -eq 1) { Start-Sleep 10 }
