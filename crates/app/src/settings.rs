@@ -1128,8 +1128,8 @@ mod tests {
         );
     }
 
-    /// Plan 06: a settings file from before the paste bar and the details pane loads with the
-    /// paste bar on, the pane off and the pane 276 points wide (D1).
+    /// The Add window's "Ask where to save each one": on in a settings file from before it, and
+    /// kept as left once unticked.
     #[test]
     fn an_old_settings_file_asks_where_each_add_goes() {
         let s: Settings = serde_json::from_str("{}").unwrap();
@@ -1142,6 +1142,8 @@ mod tests {
         assert!(!back.add_ask_where, "kept as left");
     }
 
+    /// Plan 06: a settings file from before the paste bar and the details pane loads with the
+    /// paste bar on, the pane off and the pane 276 points wide (D1).
     #[test]
     fn an_old_settings_file_gets_the_paste_bar_and_details_defaults() {
         let s: super::Settings =
