@@ -48,10 +48,17 @@ pub struct GalleryDialog {
     tool: Option<Option<mdm_tools::Installed>>,
 }
 
+#[cfg(not(test))]
 fn tool() -> Option<mdm_tools::Installed> {
     mdm_tools::tools_dir()
         .as_deref()
         .and_then(mdm_tools::gallery::installed)
+}
+
+/// Tests never find this computer's gallery-dl: a window drawn in a test starts no program.
+#[cfg(test)]
+fn tool() -> Option<mdm_tools::Installed> {
+    None
 }
 
 impl GalleryDialog {

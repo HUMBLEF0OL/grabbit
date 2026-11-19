@@ -266,7 +266,8 @@ impl AddWindow {
             &found_text,
             c.muted,
         );
-        said(ui, drawn, "add-found", &found_text);
+        // Read by screen readers (and found by name by the help's shot list).
+        winui::readable(ui, drawn, "add-found", &found_text);
         let list = r(
             o,
             winui::EDGE,
@@ -284,20 +285,17 @@ impl AddWindow {
             // i18n: Add: the empty list under the box
             let hint = crate::i18n::t("Type or paste addresses above, or drop them here.");
             let drawn = winui::text(&p, list.left() + 11.0, list.top() + 19.0, hint, c.muted);
-            said(ui, drawn, "add-empty", hint);
+            winui::readable(ui, drawn, "add-empty", hint);
         }
         let more = total.saturating_sub(ROWS);
         for (k, f) in found.iter().enumerate() {
             let top = list.top() + ROW_H * k as f32;
             if more > 0 && k + 1 == ROWS {
-                winui::text(
-                    &p,
-                    list.left() + 11.0,
-                    top + 19.0,
-                    // i18n: Add: the list's last row when more lines were found than it shows
-                    &crate::i18n::tn((more + 1) as u64, "and {n} more line", "and {n} more lines"),
-                    c.muted,
-                );
+                // i18n: Add: the list's last row when more lines were found than it shows
+                let rest =
+                    crate::i18n::tn((more + 1) as u64, "and {n} more line", "and {n} more lines");
+                let drawn = winui::text(&p, list.left() + 11.0, top + 19.0, &rest, c.muted);
+                winui::readable(ui, drawn, "add-more", &rest);
                 break;
             }
             if k > 0 {
@@ -365,7 +363,7 @@ impl AddWindow {
             winui::rect(open_rc).left() - 8.0,
             ("add", 2),
         );
-        said(ui, drawn, "add-drop-line", drop_line);
+        winui::readable(ui, drawn, "add-drop-line", drop_line);
         if winui::button(ui, open_rc, open_label, ButtonKind::Normal, true, None).clicked() {
             let kind = crate::i18n::t("Torrent files").to_owned();
             let title = crate::i18n::t("Open torrent file").to_owned();
@@ -488,13 +486,6 @@ impl AddWindow {
 
 /// The disk asked whether a .torrent file is there (a share isn't waited for: it shows as
 /// there, and Add torrent says if it isn't).
-/// A painted line read by screen readers (and found by name by the help's shot list): a
-/// label node over where it was drawn.
-fn said(ui: &mut Ui, drawn: egui::Rect, id: &'static str, text: &str) {
-    let resp = ui.interact(drawn, egui::Id::unique(id), egui::Sense::hover());
-    winui::expose(&resp, egui::Role::Label, text, true, None);
-}
-
 fn is_file(p: &Path) -> bool {
     p.to_string_lossy().starts_with("\\\\") || p.is_file()
 }
@@ -602,9 +593,15 @@ fn row(ui: &mut Ui, p: &egui::Painter, f: &Found, left: f32, right: f32, top: f3
     let said = crate::i18n::t("{kind}: {name}, {next}");
     let said = crate::i18n::fmt(
         said,
-        &[("kind", &chip_label), ("name", &name), ("next", &next)],
+        &[
+            ("kind", &chip_label),
+            ("name", &crate::i18n::isolate(&name)),
+            ("next", &next),
+        ],
     );
-    winui::expose(&resp, egui::Role::ListItem, &said, true, None);
+    // Not `winui::expose`: it reads "&" as an access key's mark, and an address or a file name
+    // ("watch?v=x&list=y", "Tom & Jerry.mp4") keeps every "&".
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::ListItem, true, &said));
 }
 
 #[cfg(test)]
@@ -828,7 +825,9 @@ mod tests {
     fn its_parts_have_names() {
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
-        let mut dlg = AddWindow::with_text("https://a.example/f.zip");
+        let mut dlg = AddWindow::with_text(
+            "https://a.example/f.zip\nhttps://www.youtube.com/watch?v=x&list=y",
+        );
         let mut names = Vec::new();
         for _ in 0..3 {
             let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
@@ -836,22 +835,33 @@ mod tests {
             });
             out.textures_delta.clear();
             if let Some(update) = out.platform_output.accesskit_update {
+                // A label's text is its value (egui's Label role), a control's its label.
                 names = update
                     .nodes
                     .iter()
-                    .filter_map(|(_, n)| n.label().map(str::to_owned))
+                    .filter_map(|(_, n)| n.label().or(n.value()).map(str::to_owned))
                     .collect();
             }
         }
         for want in [
             "Addresses, magnet links or video pages, one per line",
-            "Add 1",
+            "Add 2",
             "Later",
             "Open a .torrent file...",
             "Ask where to save each one",
+            // Painted lines read too (PR 76's audit; the help's shot finds "Found" by name).
+            "Found 2",
+            "Drop a .torrent file or a text with links here",
         ] {
             assert!(names.iter().any(|n| n == want), "{want} in {names:?}");
         }
         assert!(names.iter().any(|n| n.starts_with("Link: ")), "{names:?}");
+        // A row's address keeps its "&" (no access-key reading of it).
+        assert!(
+            names
+                .iter()
+                .any(|n| n.starts_with("Video: ") && n.contains("v=x&list=y")),
+            "{names:?}"
+        );
     }
 }

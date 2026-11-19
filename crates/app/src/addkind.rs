@@ -254,12 +254,22 @@ pub fn scan(text: &str, is_file: &dyn Fn(&Path) -> bool) -> Vec<Found> {
         // A word of running text may open with a bracket or a quote: "(https://…)".
         let words: Vec<&str> = line
             .split_whitespace()
-            .map(|w| w.trim_start_matches(['(', '[', '{', '<', '"', '\'']))
+            .map(|w| w.trim_start_matches(OPENERS))
             .filter(|w| is_written_address(w))
             .collect();
         // One address whole (a path with spaces too), unless the line holds several written
-        // ones (an address reads spaces after it as part of its path).
-        if !line.contains(char::is_whitespace) || (whole.is_ok() && words.len() < 2) {
+        // ones (an address reads spaces after it as part of its path). A lone word that isn't
+        // one may be one wrapped: "<https://…>", "“https://…”" pasted from a mail.
+        if !line.contains(char::is_whitespace) {
+            let bare = trim_prose(line.trim_start_matches(OPENERS));
+            if whole.is_err() && bare != line && is_written_address(bare) {
+                push(bare, read_line(bare, is_file));
+            } else {
+                push(line, whole);
+            }
+            continue;
+        }
+        if whole.is_ok() && words.len() < 2 {
             push(line, whole);
             continue;
         }
@@ -273,6 +283,10 @@ pub fn scan(text: &str, is_file: &dyn Fn(&Path) -> bool) -> Vec<Found> {
     }
     out
 }
+
+/// What may open a word of running text before an address: a bracket or a quote (straight,
+/// curly, a guillemet).
+const OPENERS: [char; 9] = ['(', '[', '{', '<', '"', '\'', '“', '‘', '«'];
 
 /// An address picked out of running text, without the sentence's punctuation after it
 /// ("…/f.zip," → "…/f.zip"): `, . ; : ! ? ' " >` at its end, and a closing bracket the
@@ -291,7 +305,10 @@ fn trim_prose(word: &str) -> &str {
         };
         let strip = match open {
             Some(o) => w.matches(o).count() < w.matches(last).count(),
-            None => matches!(last, ',' | '.' | ';' | ':' | '!' | '?' | '\'' | '"' | '>'),
+            None => matches!(
+                last,
+                ',' | '.' | ';' | ':' | '!' | '?' | '\'' | '"' | '>' | '”' | '’' | '»'
+            ),
         };
         if !strip {
             return w;
@@ -527,6 +544,21 @@ mod tests {
                 "https://en.wikipedia.org/wiki/Foo_(bar)"
             ]
         );
+        // Curly quotes and guillemets (a mail, a document), and a lone wrapped word on its line.
+        let found = scan(
+            "see “https://c.example/h.zip” and «https://d.example/i.zip»\n<https://e.example/j.zip>",
+            &none,
+        );
+        let texts: Vec<&str> = found.iter().map(|f| f.text.as_str()).collect();
+        assert_eq!(
+            texts,
+            [
+                "https://c.example/h.zip",
+                "https://d.example/i.zip",
+                "https://e.example/j.zip"
+            ]
+        );
+        assert!(found.iter().all(|f| matches!(f.kind, Ok(Kind::Link(_)))));
     }
 
     #[test]

@@ -13617,6 +13617,28 @@ mod settings_page_tests {
         assert_eq!(a.settings, saved, "nothing saved");
     }
 
+    /// PR 76's audit: Add ▾ → Add from the clipboard with Options' page open puts the copied
+    /// address in the paste bar (drawn on the page too), not later when the page closes.
+    #[test]
+    fn add_from_the_clipboard_works_on_the_page() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.settings.show_paste_bar = true;
+        a.run(Cmd::Options, None, &ctx);
+        assert!(a.settings_page.is_some());
+        let reader: &'static crate::clipboard::Reader = Box::leak(Box::new(
+            crate::clipboard::Reader::new(|| Some("https://a.example/c.zip".to_owned()), || {}),
+        ));
+        a.clip_paste = crate::clipboard::Prefill::ask_of(reader);
+        let started = std::time::Instant::now();
+        while a.paste.text.is_empty() && started.elapsed() < std::time::Duration::from_secs(5) {
+            frame(&mut a, &ctx, vec![]);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(a.paste.text, "https://a.example/c.zip");
+        assert!(a.settings_page.is_some(), "the page stays");
+    }
+
     /// `/show options:<page>` opens the page there (the toolbar's, the menu's and the tray's
     /// Options open it on General); every other name shows the downloads again, `downloads`
     /// doing only that.

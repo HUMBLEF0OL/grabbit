@@ -148,7 +148,7 @@ function Follow {
   Start-Sleep 4
   $script:main = @(Titles $script:app.Id | Where-Object { $_ -like "Grabbit*" })[0]
 }
-$srv = $null; $app = $null
+$srv = $null; $app = $null; $clipBefore = $null
 try {
   if (Test-Path $work) { Remove-Item $work -Recurse -Force }
   New-Item -ItemType Directory -Force "$work\data", "$work\Downloads" | Out-Null
@@ -172,6 +172,13 @@ try {
 
   $srv = Start-Process -PassThru -WindowStyle Hidden $Server -ArgumentList "--bind 127.0.0.1:$Port"
   $base = if ($Port -eq 80) { "http://$UrlHost" } else { "http://${UrlHost}:$Port" }
+  # The Add window fills itself with the clipboard's links as it opens: for a run that shoots
+  # it, a neutral address of the lab server's, and the user's own clipboard text back after the
+  # run (never in a picture). Only text is kept: a copied picture or file isn't restored.
+  if ((($Show -join ",") -match "addurl") -or (Want "add-url")) {
+    try { $clipBefore = Get-Clipboard -Raw } catch { $clipBefore = $null }
+    Set-Clipboard -Value "$base/gen/4M/project-report-2026.pdf"
+  }
   # /show crash-test:freeze for the crash report window's shot.
   $env:MDM_CRASH_TEST = "1"
   $env:GRABBIT_DATA_DIR = "$work\data"
@@ -362,6 +369,7 @@ try {
     Stop-Process -Id $mon -ErrorAction SilentlyContinue
   }
 } finally {
+  if ($null -ne $clipBefore) { try { Set-Clipboard -Value $clipBefore } catch {} }
   if ($app) { Stop-Process -Id $app.Id -ErrorAction SilentlyContinue }
   # A copy started again by itself, and its crash monitor: ours as well.
   Ours | ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
