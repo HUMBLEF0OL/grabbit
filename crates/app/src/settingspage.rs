@@ -684,6 +684,15 @@ mod tests {
         d.show_section(EXTENSION_PAGE);
         pass(&ctx, &mut d, area, vec![]);
         pass(&ctx, &mut d, area, vec![]);
+        // The list was scrolled well past General's row (else this test proves nothing).
+        let key = egui::Id::unique("settings-pages").with("pane");
+        let off = ctx
+            .data(|m| m.get_temp::<egui::Vec2>(key))
+            .unwrap_or_default();
+        assert!(
+            off.y > OptionsDialog::page_row(0).max,
+            "the Extension's visit scrolled the list: {off:?}"
+        );
         let mut d = page(&Settings::default());
         pass(&ctx, &mut d, area, vec![]);
         let (_, tree) = pass(&ctx, &mut d, area, vec![]);
