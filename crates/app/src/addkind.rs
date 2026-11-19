@@ -251,8 +251,10 @@ pub fn scan(text: &str, is_file: &dyn Fn(&Path) -> bool) -> Vec<Found> {
     };
     for line in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
         let whole = read_line(line, is_file);
+        // A word of running text may open with a bracket or a quote: "(https://…)".
         let words: Vec<&str> = line
             .split_whitespace()
+            .map(|w| w.trim_start_matches(['(', '[', '{', '<', '"', '\'']))
             .filter(|w| is_written_address(w))
             .collect();
         // One address whole (a path with spaces too), unless the line holds several written
@@ -265,10 +267,37 @@ pub fn scan(text: &str, is_file: &dyn Fn(&Path) -> bool) -> Vec<Found> {
             push(line, whole);
         }
         for w in words {
+            let w = trim_prose(w);
             push(w, read_line(w, is_file));
         }
     }
     out
+}
+
+/// An address picked out of running text, without the sentence's punctuation after it
+/// ("…/f.zip," → "…/f.zip"): `, . ; : ! ? ' " >` at its end, and a closing bracket the
+/// address doesn't open itself (a wiki's `Foo_(bar)` keeps its own).
+fn trim_prose(word: &str) -> &str {
+    let mut w = word;
+    loop {
+        let Some(last) = w.chars().last() else {
+            return w;
+        };
+        let open = match last {
+            ')' => Some('('),
+            ']' => Some('['),
+            '}' => Some('{'),
+            _ => None,
+        };
+        let strip = match open {
+            Some(o) => w.matches(o).count() < w.matches(last).count(),
+            None => matches!(last, ',' | '.' | ';' | ':' | '!' | '?' | '\'' | '"' | '>'),
+        };
+        if !strip {
+            return w;
+        }
+        w = &w[..w.len() - last.len_utf8()];
+    }
 }
 
 /// The items of a scan that can be added.
@@ -481,6 +510,23 @@ mod tests {
         assert_eq!(found.len(), 2);
         assert!(matches!(found[0].kind, Ok(Kind::Link(_))));
         assert!(matches!(found[1].kind, Ok(Kind::Video(_))));
+        // The sentence's comma isn't part of the address (PR 76's audit).
+        assert_eq!(found[0].text, "https://a.example/1.zip");
+        assert_eq!(found[1].text, "https://www.youtube.com/watch?v=x");
+        let found = scan(
+            "get https://a.example/f.zip. Also (https://b.example/g.zip) and \
+             https://en.wikipedia.org/wiki/Foo_(bar)!",
+            &none,
+        );
+        let texts: Vec<&str> = found.iter().map(|f| f.text.as_str()).collect();
+        assert_eq!(
+            texts,
+            [
+                "https://a.example/f.zip",
+                "https://b.example/g.zip",
+                "https://en.wikipedia.org/wiki/Foo_(bar)"
+            ]
+        );
     }
 
     #[test]

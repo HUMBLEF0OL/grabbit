@@ -209,7 +209,7 @@ impl AddWindow {
         }
         let p = ui.painter().clone();
         let c = crate::theme::colors();
-        let valid = addkind::valid(self.found()).len();
+        let valid = self.found().iter().filter(|f| f.kind.is_ok()).count();
 
         // i18n: Add: the label over its box
         let label = crate::i18n::t("Addresses, magnet links or video pages, one per line");
@@ -249,20 +249,24 @@ impl AddWindow {
         self.field_focused = field.has_focus();
 
         // "Found N" and the rows.
-        let found: Vec<Found> = self.found().to_vec();
+        // Only the rows shown are copied out of the cached scan (a long paste stays cheap).
+        let total = self.found().len();
+        let found: Vec<Found> = self.found().iter().take(ROWS).cloned().collect();
         let small = egui::FontId::proportional(crate::theme::metrics().font_small);
-        winui::text_font(
+        // i18n: Add: over the list of what was recognised; {n} is how many can be added
+        let found_text = crate::i18n::fmt(
+            crate::i18n::t("Found {n}"),
+            &[("n", &crate::i18n::integer(valid as u64))],
+        );
+        let drawn = winui::text_font(
             &p,
             small.clone(),
             o.x + winui::EDGE,
             o.y + FOUND_Y,
-            // i18n: Add: over the list of what was recognised; {n} is how many can be added
-            &crate::i18n::fmt(
-                crate::i18n::t("Found {n}"),
-                &[("n", &crate::i18n::integer(valid as u64))],
-            ),
+            &found_text,
             c.muted,
         );
+        said(ui, drawn, "add-found", &found_text);
         let list = r(
             o,
             winui::EDGE,
@@ -277,17 +281,13 @@ impl AddWindow {
             egui::StrokeKind::Inside,
         );
         if found.is_empty() {
-            winui::text(
-                &p,
-                list.left() + 11.0,
-                list.top() + 19.0,
-                // i18n: Add: the empty list under the box
-                crate::i18n::t("Type or paste addresses above, or drop them here."),
-                c.muted,
-            );
+            // i18n: Add: the empty list under the box
+            let hint = crate::i18n::t("Type or paste addresses above, or drop them here.");
+            let drawn = winui::text(&p, list.left() + 11.0, list.top() + 19.0, hint, c.muted);
+            said(ui, drawn, "add-empty", hint);
         }
-        let more = found.len().saturating_sub(ROWS);
-        for (k, f) in found.iter().take(ROWS).enumerate() {
+        let more = total.saturating_sub(ROWS);
+        for (k, f) in found.iter().enumerate() {
             let top = list.top() + ROW_H * k as f32;
             if more > 0 && k + 1 == ROWS {
                 winui::text(
@@ -353,17 +353,19 @@ impl AddWindow {
             open_w,
             winui::CONTROL_H,
         );
-        winui::fit(
+        // i18n: Add: the drop area's line
+        let drop_line = crate::i18n::t("Drop a .torrent file or a text with links here");
+        let drawn = winui::fit(
             ui,
             &p,
             lead + 38.0,
             drop.center().y + 5.0,
-            // i18n: Add: the drop area's line
-            crate::i18n::t("Drop a .torrent file or a text with links here"),
+            drop_line,
             c.muted,
             winui::rect(open_rc).left() - 8.0,
             ("add", 2),
         );
+        said(ui, drawn, "add-drop-line", drop_line);
         if winui::button(ui, open_rc, open_label, ButtonKind::Normal, true, None).clicked() {
             let kind = crate::i18n::t("Torrent files").to_owned();
             let title = crate::i18n::t("Open torrent file").to_owned();
@@ -471,7 +473,8 @@ impl AddWindow {
         }
         let later = pressed == Some(1);
         if (submit || pressed == Some(2) || later) && valid > 0 {
-            let items = addkind::valid(&found);
+            // Every line found, not only the rows shown.
+            let items = addkind::valid(self.found());
             return Outcome::Done(AddOut {
                 items,
                 login: self.typed_login(),
@@ -485,6 +488,13 @@ impl AddWindow {
 
 /// The disk asked whether a .torrent file is there (a share isn't waited for: it shows as
 /// there, and Add torrent says if it isn't).
+/// A painted line read by screen readers (and found by name by the help's shot list): a
+/// label node over where it was drawn.
+fn said(ui: &mut Ui, drawn: egui::Rect, id: &'static str, text: &str) {
+    let resp = ui.interact(drawn, egui::Id::unique(id), egui::Sense::hover());
+    winui::expose(&resp, egui::Role::Label, text, true, None);
+}
+
 fn is_file(p: &Path) -> bool {
     p.to_string_lossy().starts_with("\\\\") || p.is_file()
 }
@@ -588,13 +598,13 @@ fn row(ui: &mut Ui, p: &egui::Painter, f: &Found, left: f32, right: f32, top: f3
         egui::Id::unique(("add-row", k)),
         egui::Sense::hover(),
     );
-    winui::expose(
-        &resp,
-        egui::Role::ListItem,
-        &format!("{chip_label}: {name}, {next}"),
-        true,
-        None,
+    // i18n: Add: a found row to screen readers: {kind} is "Link", "Magnet"…, {name} the line, {next} what happens to it
+    let said = crate::i18n::t("{kind}: {name}, {next}");
+    let said = crate::i18n::fmt(
+        said,
+        &[("kind", &chip_label), ("name", &name), ("next", &next)],
     );
+    winui::expose(&resp, egui::Role::ListItem, &said, true, None);
 }
 
 #[cfg(test)]

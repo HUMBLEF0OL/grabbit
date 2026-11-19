@@ -174,16 +174,17 @@ pub fn paste_bar(
     if field.changed() {
         st.edited();
     }
-    // Named for screen readers, with its placeholder; the error, while shown, is its
-    // description.
+    // Named for screen readers, with its placeholder; its chip ("Link · example.org", "3
+    // links", "Not an address", or the error once Enter is refused) is its description, read
+    // even when the bar is too narrow to draw the chip.
     // i18n: noun: the web address (URL); the paste bar's field, to screen readers
     let name = crate::i18n::t("Address");
-    let error = st.error.clone();
+    let said = chip.as_ref().map(|(text, ..)| text.clone());
     ui.ctx().accesskit_node_builder(id, |node| {
         node.set_label(name);
         node.set_placeholder(placeholder);
-        if let Some(e) = error {
-            node.set_description(e);
+        if let Some(said) = said {
+            node.set_description(said);
         }
     });
     let event = field_keys(ui, &field, field_rc, st, history);
@@ -533,9 +534,11 @@ fn bar_chip(st: &PasteBar, bar: &crate::addkind::Bar) -> Option<Chip> {
             let word = crate::i18n::t(kind.chip());
             let label = match kind {
                 // "Link · example.org", "Video · youtube.com"
-                Kind::Link(u) | Kind::Video(u) => {
-                    format!("{word} · {}", crate::i18n::ltr(&site(u)))
-                }
+                Kind::Link(u) | Kind::Video(u) => crate::i18n::fmt(
+                    // i18n: the paste bar's chip for one link or video page: {kind} is "Link" or "Video", {site} the address's site
+                    crate::i18n::t("{kind} · {site}"),
+                    &[("kind", word), ("site", &crate::i18n::ltr(&site(u)))],
+                ),
                 _ => word.to_owned(),
             };
             let fill = if kind.web() {
@@ -1843,7 +1846,8 @@ mod tests {
         let ctx = focused(&mut bar, &[]);
         let (nodes, event) = band(&ctx, &mut bar, vec![press(egui::Key::Enter)]);
         assert_eq!(event, Some(PasteEvent::Submit));
-        assert_eq!(field_node(&nodes).description(), None, "no error yet");
+        // Before Enter is refused: the chip's word for it, read as the field's description.
+        assert_eq!(field_node(&nodes).description(), Some("Not an address"));
         // As `App::paint` does on `Submit`.
         assert!(submit(&mut bar).is_none(), "junk is rejected");
         let (nodes, event) = band(&ctx, &mut bar, vec![]);
@@ -1853,6 +1857,38 @@ mod tests {
         assert_eq!(field.description(), Some("Invalid address"));
         assert_eq!(bar.text, "not an address");
         assert!(field_focused(&ctx), "the field keeps the keys");
+    }
+
+    /// PR 76's audit: the chip is read too, as the field's description, whatever it names.
+    #[test]
+    fn the_chip_is_the_fields_description() {
+        let _fonts = crate::theme::font_tests();
+        let cases = [
+            // Screen readers get it without the direction isolates the chip draws with.
+            (
+                "https://example.org/f.zip".to_owned(),
+                "Link · example.org".to_owned(),
+            ),
+            ("magnet:?xt=urn:btih:abc".to_owned(), "Magnet".to_owned()),
+            (
+                "https://a.example/1.zip\nhttps://b.example/2.zip".to_owned(),
+                "2 links".to_owned(),
+            ),
+        ];
+        for (text, said) in cases {
+            let mut bar = PasteBar {
+                text,
+                ..Default::default()
+            };
+            let ctx = focused(&mut bar, &[]);
+            let (nodes, _) = band(&ctx, &mut bar, vec![]);
+            assert_eq!(field_node(&nodes).description(), Some(said.as_str()));
+        }
+        // Empty: nothing to say.
+        let mut bar = PasteBar::default();
+        let ctx = focused(&mut bar, &[]);
+        let (nodes, _) = band(&ctx, &mut bar, vec![]);
+        assert_eq!(field_node(&nodes).description(), None);
     }
 
     /// The bar hidden while its field has the keys (`Cmd::TogglePasteBar` calls `leave`): the

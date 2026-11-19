@@ -6799,6 +6799,11 @@ mod tests {
         let start = FooterButton::new("Start Download", ButtonKind::Disabled).primary();
         assert!(start.primary && !FooterButton::new("Cancel", ButtonKind::Normal).primary);
         assert!(FooterButton::new("OK", ButtonKind::Default).primary);
+        // A line before two trailing buttons ends a gap before them.
+        assert_eq!(
+            footer_trailing_left(400.0, &[60.0, 70.0]),
+            400.0 - EDGE - 130.0 - 16.0
+        );
     }
 
     #[test]

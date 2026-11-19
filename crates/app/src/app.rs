@@ -5405,18 +5405,21 @@ impl App {
             added.login,
             crate::i18n::mark("by batch download"),
             false,
+            self.settings.queue_panel_batch,
         );
     }
 
     /// Addresses added at once, without Download File Info (Batch download, Add's Later and
     /// "Ask where to save each one" off): each in its category's folder under the address's
-    /// name, then started (`start`) or put in a queue, as Batch download's are.
+    /// name, then started (`start`) or put in a queue, the queue selection panel shown if
+    /// `panel` (Batch download's own setting, or Download Later's for Add's Later).
     fn add_many(
         &mut self,
         urls: Vec<url::Url>,
         login: Option<(String, String)>,
         source: &'static str,
         start: bool,
+        panel: bool,
     ) {
         let mut ids = Vec::new();
         for url in urls {
@@ -5446,7 +5449,7 @@ impl App {
                 self.start(id, one);
             }
         } else {
-            self.queue_later(ids, self.settings.queue_panel_batch);
+            self.queue_later(ids, panel);
         }
         self.dirty = true;
     }
@@ -8437,6 +8440,12 @@ impl App {
             }
         }
 
+        // Add ▾ → Add from the clipboard: the clipboard's answer goes into the paste bar (or the
+        // Add window) whether the list or Options' page is shown; the bar is drawn on both.
+        if let Some(clip) = self.clip_paste.take() {
+            self.take_pasted(&clip);
+        }
+
         // Options' page in the panes' place (plan 11a): the tree, the list and the details
         // pane aren't drawn, and their keys aren't run (the shortcuts, Ctrl+V, the Tab
         // rotation): Delete or Ctrl+A pressed on the page can't act on a list nobody sees. The
@@ -8692,9 +8701,6 @@ impl App {
         {
             self.take_pasted(&clip);
         }
-        if let Some(clip) = self.clip_paste.take() {
-            self.take_pasted(&clip);
-        }
         self.bar_submitted(pasted, &ctx);
         if let Some((c, target)) = chosen {
             self.run(c, target, &ctx);
@@ -8915,7 +8921,14 @@ impl App {
             }
         }
         if !links.is_empty() {
-            self.add_many(links, out.login, crate::i18n::mark("by Add"), !out.later);
+            let panel = self.settings.queue_panel_later;
+            self.add_many(
+                links,
+                out.login,
+                crate::i18n::mark("by Add"),
+                !out.later,
+                panel,
+            );
         }
         self.dirty = true;
     }
@@ -11925,6 +11938,116 @@ mod route_tests {
             &ctx,
         );
         assert!(app.file_info.is_some(), "asking: Download File Info");
+    }
+
+    /// PR 76's audit: "Ask where to save each one" off adds a link and starts it at once (the
+    /// one way Add starts a download without asking first), and Later shows Download Later's
+    /// queue panel setting, not Batch download's; a .torrent file on the disk opens Add torrent.
+    #[test]
+    fn ask_off_starts_later_follows_download_later_a_torrent_file_opens_add_torrent() {
+        use crate::addkind::Kind;
+        let ctx = egui::Context::default();
+        let mut app = app(Vec::new());
+        let u = |s: &str| url::Url::parse(s).unwrap();
+        let out = |items, ask, later| crate::adddlg::AddOut {
+            items,
+            login: None,
+            ask,
+            later,
+        };
+        let before = app.items.len();
+        app.add_items(
+            out(vec![Kind::Link(u("https://a.example/9.zip"))], false, false),
+            &ctx,
+        );
+        assert_eq!(app.items.len(), before + 1, "added at once");
+        assert!(app.file_info.is_none(), "nothing asked");
+        assert!(app.items.last().unwrap().live.is_some(), "started");
+        // Later: Download Later's "show the queue panel" decides, Batch download's doesn't.
+        app.settings.queue_panel_later = false;
+        app.settings.queue_panel_batch = true;
+        app.add_items(
+            out(vec![Kind::Link(u("https://a.example/10.zip"))], true, true),
+            &ctx,
+        );
+        assert!(
+            app.queue_pick.is_none(),
+            "Download Later's setting: no panel"
+        );
+        app.settings.queue_panel_later = true;
+        app.settings.queue_panel_batch = false;
+        app.add_items(
+            out(vec![Kind::Link(u("https://a.example/11.zip"))], true, true),
+            &ctx,
+        );
+        assert!(
+            app.queue_pick.is_some(),
+            "Download Later's setting: the panel"
+        );
+        app.add_items(
+            out(
+                vec![Kind::TorrentFile(r"C:\t\Open Movie Night.torrent".into())],
+                true,
+                false,
+            ),
+            &ctx,
+        );
+        assert!(app.torrent_dlg.is_some(), "a .torrent file: Add torrent");
+    }
+
+    /// PR 76's audit: copied text (Ctrl+V, Add ▾ → Add from the clipboard) goes into the
+    /// paste bar when it is one address and the bar is shown; several, or the bar hidden, open
+    /// the Add window; an open Add window takes whatever is copied.
+    #[test]
+    fn copied_text_goes_to_the_bar_or_the_add_window() {
+        let mut app = app(Vec::new());
+        app.settings.show_paste_bar = true;
+        app.take_pasted("https://a.example/1.zip");
+        assert_eq!(app.paste.text, "https://a.example/1.zip", "one: the bar");
+        assert!(app.add_url.is_none());
+        app.take_pasted("https://a.example/2.zip\nhttps://a.example/3.zip");
+        let add = app.add_url.as_ref().expect("several: the Add window");
+        assert!(add.address.contains("2.zip") && add.address.contains("3.zip"));
+        app.take_pasted("https://a.example/4.zip");
+        let add = app.add_url.as_ref().expect("still open");
+        assert!(add.address.contains("4.zip"), "an open Add window takes it");
+        app.add_url = None;
+        app.settings.show_paste_bar = false;
+        app.take_pasted("https://a.example/5.zip");
+        assert!(app.add_url.is_some(), "the bar hidden: the Add window");
+    }
+
+    /// PR 76's audit: a page or a pattern that waited its turn opens a frame after the window
+    /// before it closed, not in the same frame (as Add torrent's next).
+    #[test]
+    fn the_next_page_and_pattern_open_a_frame_after_the_window_closes() {
+        let ctx = egui::Context::default();
+        let mut app = app(Vec::new());
+        let new_url = |s: &str| crate::dialogs::NewUrl {
+            url: url::Url::parse(s).unwrap(),
+            login: None,
+        };
+        app.pages_waiting
+            .push_back(new_url("https://commons.wikimedia.org/wiki/Category:Cats"));
+        app.batch_waiting
+            .push_back("https://a.example/p*.jpg".into());
+        // The windows before them just closed.
+        app.pages_closed = true;
+        app.batch_closed = true;
+        let pass = |app: &mut super::App| {
+            let mut out = ctx.run_ui(Default::default(), |ui| app.dialogs(ui.ctx()));
+            out.textures_delta.clear();
+        };
+        pass(&mut app);
+        assert!(
+            app.gallery_dlg.is_none() && app.batch.is_none(),
+            "not the same frame"
+        );
+        assert_eq!((app.pages_waiting.len(), app.batch_waiting.len()), (1, 1));
+        pass(&mut app);
+        assert!(app.gallery_dlg.is_some(), "the next page opens");
+        assert!(app.batch.is_some(), "the next pattern opens");
+        assert!(app.pages_waiting.is_empty() && app.batch_waiting.is_empty());
     }
 
     /// The toolbar's Add ▾ menu: the Add window, a .torrent file, the clipboard, then Batch
