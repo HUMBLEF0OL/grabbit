@@ -227,7 +227,8 @@ pub fn field(
         if had {
             ctx.memory_mut(|m| m.request_focus(id));
         }
-    } else if had && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+    } else if had && ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
+        // Taken: Options' page under the field (plan 11a) mustn't go back on it too.
         q.text.clear();
         event = Some(Event::Leave);
     }

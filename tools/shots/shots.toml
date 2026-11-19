@@ -494,11 +494,12 @@ id = "catch-file-types"
 page = "guide-catch-browser-downloads.md"
 under = "Choose what Grabbit takes"
 take = "options:types+@main"
-# The two lists have no accessible names: above their right ends, beside their labels. In
-# the Options window's pixels: measured again at the 1.0.1 picture retake, now that the page
-# is in the main window, under its bars (plan 11a).
+# The two lists have no accessible names: above their right ends, beside their labels. The
+# Options window's [700, 122] and [700, 258] moved with the page into the main window (plan
+# 11a): 110 lower (its title bar, toolbar and paste bar, 142, for the window's 32-point title
+# bar) and 17 right (the side list's scroll bar at the first window size, 1080 x 560).
 crop = { around = ["Pane:Options"], pad = 0 }
-marks = [{ at = [700, 122, 103, 72], side = "top" }, { at = [700, 258, 103, 44], side = "top" }]
+marks = [{ at = [717, 232, 103, 72], side = "top" }, { at = [717, 368, 103, 44], side = "top" }]
 alt = "Options, File types: the file types Grabbit takes from the browser, and the sites it leaves alone"
 caption = "1 the file types Grabbit takes, 2 the sites it leaves to the browser."
 

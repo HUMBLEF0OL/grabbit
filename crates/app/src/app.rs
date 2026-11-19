@@ -5766,7 +5766,13 @@ impl App {
 
     /// Options' page closed, its changes dropped; the downloads show again.
     fn close_settings_page(&mut self) {
-        if self.settings_page.take().is_some() {
+        if let Some(p) = self.settings_page.take() {
+            // Pair a device... goes with the page (another `/show`): its code no longer pairs.
+            if p.options.pairing()
+                && let Some(r) = &self.remote
+            {
+                r.stop_pairing();
+            }
             self.discard_options();
         }
     }
@@ -8222,7 +8228,9 @@ impl App {
 
         // Options' page in the panes' place (plan 11a): the tree, the list and the details
         // pane aren't drawn, and their keys aren't run (the shortcuts, Ctrl+V, the Tab
-        // rotation): Delete or Ctrl+A can't act on a list nobody sees.
+        // rotation): Delete or Ctrl+A pressed on the page can't act on a list nobody sees. The
+        // toolbar and the menus still act on the selection, as they did beside the Options
+        // window (Delete's question names the files).
         if self.settings_page.is_some() {
             self.paint_settings_page(ui, &layout, (o, w, h), pasted, chosen);
             return;
@@ -8528,10 +8536,12 @@ impl App {
         let bars = focused
             .is_some_and(|f| f == crate::panes::paste_field_id() || f == crate::find::field_id());
         let keys = self.popup.is_none() && self.open_menu.is_none() && !bars;
+        // A text box on the page has the keys: Alt+Left moves its caret by a word, not back.
+        let typing = focused.is_some_and(|id| egui::TextEdit::load_state(&ctx, id).is_some());
         let ev = self
             .settings_page
             .as_mut()
-            .and_then(|p| p.show(ui, area, keys, &self.downloads));
+            .and_then(|p| p.show(ui, area, keys, typing, &self.downloads));
         let shown = self.shown_ids().len();
         if self.status_strip(ui, layout, o, w, h, shown) {
             chosen = Some((Cmd::ToggleMode, None));
@@ -13136,6 +13146,57 @@ mod settings_page_tests {
         assert!(a.settings_page.is_none());
         assert!(crate::model::custom(ID).is_none(), "Close undoes it too");
         assert_eq!(a.settings, saved);
+    }
+
+    /// Audit r1: Escape in the title bar's Find field clears and leaves the field, and the
+    /// page stays (it isn't Back too).
+    #[test]
+    fn escape_in_find_leaves_the_page_open() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.run(Cmd::Options, None, &ctx);
+        a.find.text = "zip".into();
+        frame(&mut a, &ctx, vec![]);
+        ctx.memory_mut(|m| m.request_focus(crate::find::field_id()));
+        frame(&mut a, &ctx, vec![]);
+        frame(&mut a, &ctx, vec![]);
+        assert!(
+            ctx.memory(|m| m.has_focus(crate::find::field_id())),
+            "Find has the keys"
+        );
+        frame(
+            &mut a,
+            &ctx,
+            vec![key(egui::Key::Escape, egui::Modifiers::NONE)],
+        );
+        frame(&mut a, &ctx, vec![]);
+        assert!(a.find.text.is_empty(), "Escape cleared Find");
+        assert!(a.settings_page.is_some(), "the page stays");
+    }
+
+    /// Audit r1: another `/show` drops the page with Remote → Pair a device... open: the
+    /// remote control stops showing the code, as closing the pairing window does.
+    #[test]
+    fn closing_the_page_stops_pairing() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        // The app's remote control, off (Options → Remote), as emote::start makes it.
+        let dir = tempfile::tempdir().unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let texts: mdm_remote::Texts = std::sync::Arc::new(|_: &str| Default::default());
+        let remote = mdm_remote::Remote::new(
+            a.rt.clone(),
+            dir.path().to_owned(),
+            mdm_ipc::Sink::new(tx, std::sync::Arc::new(|| {})),
+            texts,
+        );
+        a.remote = Some(remote.clone());
+        a.show_named("options:pair", &ctx);
+        assert!(a.settings_page.as_ref().unwrap().options.pairing());
+        assert!(remote.pairing().0.is_some(), "a code shown");
+        a.show_named("downloads", &ctx);
+        assert!(a.settings_page.is_none());
+        assert!(remote.pairing().0.is_none(), "the code is gone");
     }
 
     /// The downloads list's keys aren't the page's: with the page open, Delete and Ctrl+A act

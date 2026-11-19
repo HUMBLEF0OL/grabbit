@@ -821,6 +821,17 @@ impl Settings {
         }
         // Under the built-in's shipped name: a rename keeps its folder.
         let key = cat.key();
+        // The same folder (but for a trailing separator, which Options' box adds) changes
+        // nothing: the list keeps its order, so a page only looked at has no changes to save.
+        let trim = |d: &str| d.trim_end_matches(['\\', '/']).to_owned();
+        let now = self
+            .category_dirs
+            .iter()
+            .find(|(c, _)| *c == *key)
+            .map(|(_, d)| trim(d));
+        if now == dir.as_deref().map(trim) {
+            return;
+        }
         self.category_dirs.retain(|(c, _)| *c != *key);
         if let Some(d) = dir {
             self.category_dirs.push((key.into_owned(), d));

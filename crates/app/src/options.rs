@@ -338,6 +338,11 @@ impl OptionsDialog {
         self.page
     }
 
+    /// Remote → Pair a device... is open: the remote control shows a pairing code.
+    pub(crate) fn pairing(&self) -> bool {
+        matches!(self.sub, Some(Sub::Pair))
+    }
+
     /// The side list from `o`, `foot` points tall: a click or a key there picks the page.
     pub(crate) fn pages(&mut self, ui: &mut Ui, o: Pos2, foot: f32) {
         if let Some(p) = side_list(ui, o, self.page, foot) {
@@ -4970,6 +4975,33 @@ mod tests {
                 tree.focus, first,
                 "{label}: the click at {rc:?} reached its control"
             );
+        }
+    }
+
+    /// Plan 11a (audit r1): every page only drawn leaves the draft as it opened, with folders
+    /// of their own for built-in categories (General's not the last of them, one written
+    /// without the separator the Save to box adds): Save and Discard stay greyed.
+    #[test]
+    fn a_page_only_looked_at_has_nothing_to_save() {
+        let s = Settings {
+            category_dirs: vec![
+                (
+                    Category::General.key().into_owned(),
+                    r"D:\Downloads".to_owned(),
+                ),
+                (Category::Video.key().into_owned(), r"D:\Videos\".to_owned()),
+                (Category::Music.key().into_owned(), r"D:\Music".to_owned()),
+            ],
+            ..Settings::default()
+        };
+        for (page, label, ..) in PAGES {
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            let mut d = OptionsDialog::new(&s, &std::env::temp_dir(), vec![]).on_page(page);
+            assert!(!d.dirty(), "{label}: opened");
+            page_pass(&ctx, &mut d, vec![]);
+            page_pass(&ctx, &mut d, vec![]);
+            assert!(!d.dirty(), "{label}: drawn");
         }
     }
 

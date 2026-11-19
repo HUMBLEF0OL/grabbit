@@ -55,7 +55,8 @@ impl SettingsPage {
         }
         if self.dirty() {
             self.ask = Some(Confirm::new(
-                "Options",
+                // i18n: the title of the question asked when going back from Options with changes
+                crate::i18n::mark("Options"),
                 // i18n: Options in the main window: Back (or Escape) with changes not saved yet
                 crate::i18n::t("Discard your changes to Options?").to_owned(),
             ));
@@ -67,12 +68,14 @@ impl SettingsPage {
 
     /// The page in `area` (the panes' place in the main window). `keys`: the window's keys are
     /// the page's (no menu or popup open, no text field of the bars above focused): Enter
-    /// saves, Escape and Alt+Left go back. What the app is to do, if anything.
+    /// saves, Escape and Alt+Left go back. `typing`: a text box on the page has the keys, so
+    /// Alt+Left is its own (a word back). What the app is to do, if anything.
     pub fn show(
         &mut self,
         ui: &mut Ui,
         area: Rect,
         keys: bool,
+        typing: bool,
         downloads: &std::path::Path,
     ) -> Option<PageEvent> {
         crate::crash::window("options");
@@ -222,7 +225,7 @@ impl SettingsPage {
         let back_key = keys
             && ui.input_mut(|i| {
                 i.key_pressed(egui::Key::Escape)
-                    || i.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft)
+                    || (!typing && i.consume_key(egui::Modifiers::ALT, egui::Key::ArrowLeft))
             });
         if modal {
             None
@@ -266,11 +269,15 @@ impl SettingsPage {
     }
 }
 
-/// The smallest the page's area gets drawn as (a 600 x 300 main window, plan 11): its parts'
-/// rects, for the tests.
+/// The page's area in the smallest main window (600 x 300, plan 11), its paste bar shown: the
+/// panes' place in Graphite's layout.
 #[cfg(test)]
 fn min_area() -> Rect {
-    Rect::from_min_size(egui::Pos2::ZERO, vec2(600.0, 160.0))
+    let layout = crate::chrome::Layout::GRAPHITE.with_panes(true, None);
+    Rect::from_min_max(
+        pos2(0.0, layout.panes_top()),
+        pos2(600.0, layout.strip_top(300.0)),
+    )
 }
 
 #[cfg(test)]
@@ -325,7 +332,7 @@ mod tests {
         let dir = std::env::temp_dir();
         let mut ev = None;
         let mut out = ctx.run_ui(input(area.max.to_vec2(), events), |ui| {
-            ev = d.show(ui, area, true, &dir);
+            ev = d.show(ui, area, true, false, &dir);
         });
         out.textures_delta.clear();
         (
@@ -426,17 +433,49 @@ mod tests {
         }
         let save = bounds(find(&tree, Role::Button, "Save").unwrap().1).unwrap();
         assert!(save.bottom() <= area.bottom() && save.top() >= area.bottom() - winui::FOOTER_H);
-        // Both scroll: the list's last rows and the page's lower part are beyond the area.
-        let (list, _) = find(&tree, Role::List, "Pages").unwrap();
+        // Both scroll: the list's last row and the page's lowest controls lie beyond what is
+        // shown of them (the area's bottom, the save bar's top), and the wheel over the page
+        // moves its controls up.
         let rows: Vec<Rect> = tree
             .nodes
             .iter()
             .filter(|(_, n)| n.role() == Role::ListItem)
             .filter_map(|(_, n)| bounds(n))
             .collect();
-        assert!(!rows.is_empty(), "rows under {list:?}");
-        assert!(OptionsDialog::pages_height() > area.height() - HEADER_H);
+        assert_eq!(rows.len(), 12, "every page's row");
+        let last = rows.iter().map(|r| r.bottom()).fold(f32::MIN, f32::max);
+        assert!(
+            last > area.bottom(),
+            "the list's last row below the area: {last}"
+        );
         assert!(PAGE_SIZE.x > area.width() - SIDE_W - 1.0);
+        let lowest = |tree: &TreeUpdate| {
+            tree.nodes
+                .iter()
+                .filter(|(_, n)| {
+                    matches!(n.role(), Role::CheckBox | Role::TextInput | Role::ComboBox)
+                })
+                .filter_map(|(_, n)| bounds(n))
+                .map(|r| r.bottom())
+                .fold(f32::MIN, f32::max)
+        };
+        let before = lowest(&tree);
+        assert!(
+            before > area.bottom() - winui::FOOTER_H,
+            "the page's lowest control under the save bar's top: {before}"
+        );
+        let over = pos2(area.right() - 60.0, area.top() + 30.0);
+        pass(&ctx, &mut d, area, vec![egui::Event::PointerMoved(over)]);
+        let wheel = egui::Event::MouseWheel {
+            unit: egui::MouseWheelUnit::Line,
+            delta: vec2(0.0, -3.0),
+            modifiers: Default::default(),
+            phase: egui::TouchPhase::Move,
+            source: egui::MouseWheelSource::Wheel,
+        };
+        pass(&ctx, &mut d, area, vec![wheel]);
+        let (_, tree) = pass(&ctx, &mut d, area, vec![]);
+        assert!(lowest(&tree) < before, "the wheel scrolled the page");
     }
 
     /// Plan 11a (D2, D3): a change makes Save and Discard live; Save and Discard say so; Back
@@ -512,7 +551,7 @@ mod tests {
                 area.max.to_vec2(),
                 vec![key(egui::Key::Enter, egui::Modifiers::NONE)],
             ),
-            |ui| ev = d.show(ui, area, false, &dir),
+            |ui| ev = d.show(ui, area, false, false, &dir),
         );
         out.textures_delta.clear();
         assert_eq!(ev, None);
