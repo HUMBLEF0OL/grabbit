@@ -148,7 +148,24 @@ function Follow {
   Start-Sleep 4
   $script:main = @(Titles $script:app.Id | Where-Object { $_ -like "Grabbit*" })[0]
 }
-$srv = $null; $app = $null; $clipBefore = $null
+$srv = $null; $app = $null; $clipBefore = $null; $clipSet = $false
+# The clipboard, set with a few tries: another program may hold it for a moment.
+function Set-ClipboardSoon($text) {
+  foreach ($try in 1..5) {
+    try {
+      if ($null -eq $text) {
+        # Empty again (Windows PowerShell 5.1 runs single-threaded, as the clipboard wants).
+        Add-Type -AssemblyName System.Windows.Forms
+        [System.Windows.Forms.Clipboard]::Clear()
+      } else {
+        Set-Clipboard -Value $text
+      }
+      return
+    }
+    catch { Start-Sleep -Milliseconds 200 }
+  }
+  Write-Warning "The clipboard couldn't be set."
+}
 try {
   if (Test-Path $work) { Remove-Item $work -Recurse -Force }
   New-Item -ItemType Directory -Force "$work\data", "$work\Downloads" | Out-Null
@@ -173,11 +190,20 @@ try {
   $srv = Start-Process -PassThru -WindowStyle Hidden $Server -ArgumentList "--bind 127.0.0.1:$Port"
   $base = if ($Port -eq 80) { "http://$UrlHost" } else { "http://${UrlHost}:$Port" }
   # The Add window fills itself with the clipboard's links as it opens: for a run that shoots
-  # it, a neutral address of the lab server's, and the user's own clipboard text back after the
-  # run (never in a picture). Only text is kept: a copied picture or file isn't restored.
+  # it, a neutral address of the lab server's, and the clipboard as it was after the run (its
+  # text back, or empty again), so no picture shows what the user copied. A copied picture or
+  # files are never overwritten: the clipboard is left alone then, and the Add window's shot
+  # shows its box empty. Don't copy anything while the run goes on.
   if ((($Show -join ",") -match "addurl") -or (Want "add-url")) {
-    try { $clipBefore = Get-Clipboard -Raw } catch { $clipBefore = $null }
-    Set-Clipboard -Value "$base/gen/4M/project-report-2026.pdf"
+    $other = $null
+    try { $other = (Get-Clipboard -Format Image) ; if (-not $other) { $other = Get-Clipboard -Format FileDropList } } catch {}
+    if ($other) {
+      Write-Warning "The clipboard holds a picture or files: left as it is; the Add window's shot shows an empty box."
+    } else {
+      try { $clipBefore = Get-Clipboard -Raw } catch { $clipBefore = $null }
+      Set-ClipboardSoon "$base/gen/4M/project-report-2026.pdf"
+      $clipSet = $true
+    }
   }
   # /show crash-test:freeze for the crash report window's shot.
   $env:MDM_CRASH_TEST = "1"
@@ -369,7 +395,8 @@ try {
     Stop-Process -Id $mon -ErrorAction SilentlyContinue
   }
 } finally {
-  if ($null -ne $clipBefore) { try { Set-Clipboard -Value $clipBefore } catch {} }
+  # The clipboard as it was: its text back, or empty again.
+  if ($clipSet) { Set-ClipboardSoon $clipBefore }
   if ($app) { Stop-Process -Id $app.Id -ErrorAction SilentlyContinue }
   # A copy started again by itself, and its crash monitor: ours as well.
   Ours | ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }

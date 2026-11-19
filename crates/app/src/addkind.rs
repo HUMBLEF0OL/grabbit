@@ -262,7 +262,10 @@ pub fn scan(text: &str, is_file: &dyn Fn(&Path) -> bool) -> Vec<Found> {
         // one may be one wrapped: "<https://…>", "“https://…”" pasted from a mail.
         if !line.contains(char::is_whitespace) {
             let bare = trim_prose(line.trim_start_matches(OPENERS));
-            if whole.is_err() && bare != line && is_written_address(bare) {
+            // A closing curly quote or guillemet never ends a real address unencoded (the
+            // address reads it as "%E2%80%9D"): the line's opening one was on the line before.
+            let quoted = line.ends_with(QUOTE_CLOSERS);
+            if (whole.is_err() || quoted) && bare != line && is_written_address(bare) {
                 push(bare, read_line(bare, is_file));
             } else {
                 push(line, whole);
@@ -284,13 +287,28 @@ pub fn scan(text: &str, is_file: &dyn Fn(&Path) -> bool) -> Vec<Found> {
     out
 }
 
+/// The addresses written in `text` (a dropped text, a drag's link), in order: each word that
+/// starts with a scheme, without the brackets, quotes and sentence punctuation around it, as
+/// [`scan`] picks them out of a line.
+pub fn written_addresses(text: &str) -> Vec<String> {
+    text.split_whitespace()
+        .map(|w| trim_prose(w.trim_start_matches(OPENERS)))
+        .filter(|w| is_written_address(w))
+        .map(str::to_owned)
+        .collect()
+}
+
 /// What may open a word of running text before an address: a bracket or a quote (straight,
-/// curly, a guillemet).
-const OPENERS: [char; 9] = ['(', '[', '{', '<', '"', '\'', '“', '‘', '«'];
+/// curly, German low quotes, guillemets).
+const OPENERS: [char; 12] = ['(', '[', '{', '<', '"', '\'', '“', '‘', '„', '‚', '«', '‹'];
+
+/// What may close a quote after an address: never the end of a real address unencoded.
+const QUOTE_CLOSERS: [char; 5] = ['”', '’', '“', '»', '›'];
 
 /// An address picked out of running text, without the sentence's punctuation after it
-/// ("…/f.zip," → "…/f.zip"): `, . ; : ! ? ' " >` at its end, and a closing bracket the
-/// address doesn't open itself (a wiki's `Foo_(bar)` keeps its own).
+/// ("…/f.zip," → "…/f.zip"): `, . ; : ! ? ' " >` and closing quotes (`” ’ “ » ›`) at its
+/// end, and a closing bracket the address doesn't open itself (a wiki's `Foo_(bar)` keeps its
+/// own).
 fn trim_prose(word: &str) -> &str {
     let mut w = word;
     loop {
@@ -305,10 +323,10 @@ fn trim_prose(word: &str) -> &str {
         };
         let strip = match open {
             Some(o) => w.matches(o).count() < w.matches(last).count(),
-            None => matches!(
-                last,
-                ',' | '.' | ';' | ':' | '!' | '?' | '\'' | '"' | '>' | '”' | '’' | '»'
-            ),
+            None => {
+                matches!(last, ',' | '.' | ';' | ':' | '!' | '?' | '\'' | '"' | '>')
+                    || QUOTE_CLOSERS.contains(&last)
+            }
         };
         if !strip {
             return w;
@@ -546,7 +564,8 @@ mod tests {
         );
         // Curly quotes and guillemets (a mail, a document), and a lone wrapped word on its line.
         let found = scan(
-            "see “https://c.example/h.zip” and «https://d.example/i.zip»\n<https://e.example/j.zip>",
+            "see “https://c.example/h.zip” and «https://d.example/i.zip»\n<https://e.example/j.zip>\n\
+             siehe „https://f.example/k.zip“ und ‹https://g.example/l.zip›\nhttps://h.example/m.zip”",
             &none,
         );
         let texts: Vec<&str> = found.iter().map(|f| f.text.as_str()).collect();
@@ -555,10 +574,31 @@ mod tests {
             [
                 "https://c.example/h.zip",
                 "https://d.example/i.zip",
-                "https://e.example/j.zip"
+                "https://e.example/j.zip",
+                "https://f.example/k.zip",
+                "https://g.example/l.zip",
+                // A lone line's closing quote (its opening one on the line before).
+                "https://h.example/m.zip"
             ]
         );
         assert!(found.iter().all(|f| matches!(f.kind, Ok(Kind::Link(_)))));
+    }
+
+    /// A dropped text's addresses (the drop target and a drop on the main window, win32::ole)
+    /// are picked as a line's: without the brackets, quotes and punctuation around them.
+    #[test]
+    fn a_dropped_texts_addresses_lose_what_is_around_them() {
+        assert_eq!(
+            written_addresses(
+                "get (https://a.example/f.zip), “magnet:?xt=urn:btih:abc” and <ftp://b.example/g.iso>.\nnot this"
+            ),
+            [
+                "https://a.example/f.zip",
+                "magnet:?xt=urn:btih:abc",
+                "ftp://b.example/g.iso"
+            ]
+        );
+        assert!(written_addresses("no address here").is_empty());
     }
 
     #[test]
