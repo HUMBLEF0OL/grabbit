@@ -8,18 +8,23 @@
 
 //!
 //! Under Options' pages, after "Tools", the windows that moved into the page (plan 11b): the
-//! Scheduler (11b1), its draft of the queues and Download limits made on its first visit and
-//! saved by the same Save, before Options' changes.
+//! Scheduler (11b1), Speed Limiter settings, Torrent settings and the browser extension (11b2),
+//! each draft made on its first visit and saved by the same Save, in that order, before
+//! Options' changes (the extension has nothing to save).
 
 use egui::{Rect, Sense, Ui, pos2, vec2};
 
 use crate::chrome::ShellIcons;
-use crate::dialogs::{Confirm, Outcome};
+use crate::dialogs::{Confirm, Outcome, SpeedSettings};
+use crate::extension::Extension;
 use crate::model::Item;
-use crate::options::{OptionsDialog, SCHEDULER_PAGE, SIDE_W};
+use crate::options::{
+    EXTENSION_PAGE, OptionsDialog, SCHEDULER_PAGE, SIDE_W, SPEED_PAGE, TORRENTS_PAGE,
+};
 use crate::queue::Queue;
 use crate::scheduler::{Action, Scheduler};
 use crate::settings::Settings;
+use crate::torrentdlg::TorrentSettings;
 use crate::winui::{self, ButtonKind, FooterButton, FooterItem};
 
 /// The band over the side list that holds "← Downloads".
@@ -57,6 +62,13 @@ pub struct SettingsPage {
     pub options: OptionsDialog,
     /// The Scheduler's section (plan 11b1): its draft, made on its first visit.
     pub scheduler: Option<Scheduler>,
+    /// The Speed limiter's and Torrents' sections (plan 11b2): their drafts, made on their
+    /// first visit.
+    pub speed: Option<SpeedSettings>,
+    pub torrents: Option<TorrentSettings>,
+    /// The browser extension's section (11b2): nothing to save, its browsers read on the
+    /// first visit.
+    extension: Option<Extension>,
     /// Back with unsaved changes: "Discard your changes to Options?" (D3).
     ask: Option<Confirm>,
 }
@@ -66,8 +78,16 @@ impl SettingsPage {
         SettingsPage {
             options,
             scheduler: None,
+            speed: None,
+            torrents: None,
+            extension: None,
             ask: None,
         }
+    }
+
+    /// The page on section `page` (a moved window's, plan 11b: its commands open it there).
+    pub fn show_section(&mut self, page: usize) {
+        self.options.show_page(page);
     }
 
     /// A small dialog over the page waits for an answer: the page's buttons and keys wait.
@@ -79,7 +99,10 @@ impl SettingsPage {
 
     /// Whether Save would change anything, in any section.
     pub fn dirty(&self) -> bool {
-        self.options.dirty() || self.scheduler.as_ref().is_some_and(Scheduler::dirty)
+        self.options.dirty()
+            || self.scheduler.as_ref().is_some_and(Scheduler::dirty)
+            || self.speed.as_ref().is_some_and(SpeedSettings::dirty)
+            || self.torrents.as_ref().is_some_and(TorrentSettings::dirty)
     }
 
     /// The page on the Scheduler's section, its draft made from `queues` and `settings` if it
@@ -122,8 +145,7 @@ impl SettingsPage {
         downloads: &std::path::Path,
         tools: &mut Tools,
     ) -> Option<PageEvent> {
-        let on_scheduler = self.options.page() == SCHEDULER_PAGE;
-        crate::crash::window(if on_scheduler { "scheduler" } else { "options" });
+        crate::crash::window(crash_name(self.options.page()));
         let c = crate::theme::colors();
         let o = area.min;
         let _surface = winui::Surface::enter(area.min.x, area.max.x);
@@ -234,8 +256,9 @@ impl SettingsPage {
         let foot = (area.height() - winui::FOOTER_H).max(0.0);
         let page_view = Rect::from_min_max(pos2(col, o.y), pos2(area.max.x, o.y + foot));
         // The side list may just have picked another section: what it shows now.
-        if self.options.page() == SCHEDULER_PAGE {
-            self.scheduler_pane(ui, page_view, tools);
+        let shown = self.options.page();
+        if shown >= SCHEDULER_PAGE {
+            self.tool_pane(ui, page_view, shown, tools);
         } else {
             self.options.page_pane(ui, page_view, downloads);
         }
@@ -297,11 +320,7 @@ impl SettingsPage {
             }
         }
         if pressed == Some(2) {
-            crate::help::open_page(if self.options.page() == SCHEDULER_PAGE {
-                "queues-and-scheduler.md#the-scheduler"
-            } else {
-                "options.md"
-            });
+            crate::help::open_page(help_page(self.options.page()));
         }
         let back_key = keys
             && ui.input_mut(|i| {
@@ -358,37 +377,94 @@ impl SettingsPage {
         self.options.page()
     }
 
-    /// The Scheduler's section in `view`: its heading, then the window's layout under it,
-    /// scrolled where `view` is smaller (`scale::pane`).
-    fn scheduler_pane(&mut self, ui: &mut Ui, view: Rect, tools: &mut Tools) {
-        let s = self
-            .scheduler
-            .get_or_insert_with(|| Scheduler::new(tools.queues, tools.settings));
-        let mut page = ui.new_child(egui::UiBuilder::new().max_rect(view));
-        page.set_clip_rect(view.intersect(ui.clip_rect()));
-        let size = vec2(
-            crate::scheduler::SIZE[0],
-            SECTION_TOP + crate::scheduler::SIZE[1],
-        );
-        crate::scale::pane(
-            &mut page,
-            egui::Id::unique("scheduler-section"),
-            size,
-            |ui, at| {
-                let _surface = winui::Surface::enter(at.x, at.x + size.x);
-                // Options' heading is laid out from the side list's left edge.
-                crate::options::heading(ui, at - vec2(SIDE_W + 1.0, 0.0), SCHEDULER_PAGE);
-                s.section(
+    /// The section of a moved window (`page`, not one of Options' own) in `view`, its draft
+    /// made on the first visit.
+    fn tool_pane(&mut self, ui: &mut Ui, view: Rect, page: usize, tools: &mut Tools) {
+        match page {
+            SCHEDULER_PAGE => {
+                let s = self
+                    .scheduler
+                    .get_or_insert_with(|| Scheduler::new(tools.queues, tools.settings));
+                section_pane(ui, view, page, crate::scheduler::SIZE, |ui, at| {
+                    s.section(
+                        ui,
+                        at,
+                        tools.icons,
+                        tools.items,
+                        tools.queues,
+                        tools.wake_error,
+                        tools.actions,
+                    );
+                });
+            }
+            SPEED_PAGE => {
+                let s = self
+                    .speed
+                    .get_or_insert_with(|| SpeedSettings::new(tools.settings));
+                section_pane(ui, view, page, s.size(), |ui, at| s.section(ui, at));
+            }
+            TORRENTS_PAGE => {
+                let s = self
+                    .torrents
+                    .get_or_insert_with(|| TorrentSettings::new(tools.settings));
+                section_pane(
                     ui,
-                    at + vec2(0.0, SECTION_TOP),
-                    tools.icons,
-                    tools.items,
-                    tools.queues,
-                    tools.wake_error,
-                    tools.actions,
+                    view,
+                    page,
+                    crate::torrentdlg::SETTINGS_SIZE,
+                    |ui, at| s.section(ui, at),
                 );
-            },
-        );
+            }
+            _ => {
+                let s = self.extension.get_or_insert_with(Extension::new);
+                let size = s.size(ui.ctx());
+                section_pane(ui, view, page, size, |ui, at| s.section(ui, at));
+            }
+        }
+    }
+}
+
+/// A moved window's section in `view` (plan 11b): its heading, then the window's layout
+/// (`size`, its client without the footer) under it, scrolled where `view` is smaller
+/// (`scale::pane`), from its top when another section is picked.
+fn section_pane(
+    ui: &mut Ui,
+    view: Rect,
+    page: usize,
+    size: [f32; 2],
+    body: impl FnOnce(&mut Ui, egui::Pos2),
+) {
+    let mut pane = ui.new_child(egui::UiBuilder::new().max_rect(view));
+    pane.set_clip_rect(view.intersect(ui.clip_rect()));
+    let id = egui::Id::unique(("tool-section", page));
+    let size = vec2(size[0], SECTION_TOP + size[1]);
+    crate::scale::pane(&mut pane, id, size, |ui, at| {
+        let _surface = winui::Surface::enter(at.x, at.x + size.x);
+        // Options' heading is laid out from the side list's left edge.
+        crate::options::heading(ui, at - vec2(SIDE_W + 1.0, 0.0), page);
+        body(ui, at + vec2(0.0, SECTION_TOP));
+    });
+}
+
+/// Each section's help page (Options' pages: options.md).
+fn help_page(page: usize) -> &'static str {
+    match page {
+        SCHEDULER_PAGE => "queues-and-scheduler.md#the-scheduler",
+        SPEED_PAGE => "connections-and-speed.md#speed-limiter",
+        TORRENTS_PAGE => "torrents.md#torrent-settings",
+        EXTENSION_PAGE => "browser-integration.md#set-it-up",
+        _ => "options.md",
+    }
+}
+
+/// Each section's name for crash reports (its window's, as before plan 11).
+fn crash_name(page: usize) -> &'static str {
+    match page {
+        SCHEDULER_PAGE => "scheduler",
+        SPEED_PAGE => "speed-settings",
+        TORRENTS_PAGE => "torrent-settings",
+        EXTENSION_PAGE => "extension",
+        _ => "options",
     }
 }
 
@@ -606,7 +682,7 @@ mod tests {
             .filter(|(_, n)| n.role() == Role::ListItem)
             .filter_map(|(_, n)| bounds(n))
             .collect();
-        assert_eq!(rows.len(), 13, "every page's row, and the Scheduler's");
+        assert_eq!(rows.len(), 16, "every page's row, and the tools'");
         let last = rows.iter().map(|r| r.bottom()).fold(f32::MIN, f32::max);
         assert!(
             last > area.bottom(),
@@ -811,6 +887,99 @@ mod tests {
         d.ask = None;
         click(&ctx, &mut d, area, general.center());
         assert_eq!(d.page(), 0, "picked once answered");
+    }
+
+    /// Plan 11b2: Speed Limiter settings, Torrent settings and the browser extension are
+    /// sections of the page, after the Scheduler: each shows its window's rows in the "Options"
+    /// pane, without its window's buttons (OK, Cancel, Close, Don't ask again: the save bar is
+    /// the page's). A change in the Speed limiter or Torrents is the page's; the extension has
+    /// nothing to save.
+    #[test]
+    fn the_moved_windows_are_sections_of_the_page() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let area = Rect::from_min_size(pos2(0.0, 100.0), vec2(1080.0, 700.0));
+        let mut d = page(&Settings::default());
+        for (section, row, control) in [
+            (
+                SPEED_PAGE,
+                "Speed limiter",
+                "Always turn on Speed Limiter on Grabbit startup",
+            ),
+            (
+                TORRENTS_PAGE,
+                "Torrents",
+                "Keep sharing torrents after they finish",
+            ),
+            (
+                EXTENSION_PAGE,
+                "Browser extension",
+                // A row's button, "Show me how for Chrome" (no store listing yet).
+                "Show me how",
+            ),
+        ] {
+            pass(&ctx, &mut d, area, vec![]);
+            let (_, tree) = pass(&ctx, &mut d, area, vec![]);
+            let at = bounds(find(&tree, Role::ListItem, row).expect(row).1).unwrap();
+            click(&ctx, &mut d, area, at.center());
+            assert_eq!(d.page(), section, "{row}");
+            pass(&ctx, &mut d, area, vec![]);
+            let (_, tree) = pass(&ctx, &mut d, area, vec![]);
+            assert!(
+                tree.nodes
+                    .iter()
+                    .any(|(_, n)| n.label().is_some_and(|l| l.starts_with(control))),
+                "{row}: {control}"
+            );
+            for gone in ["OK", "Cancel", "Close", "Don't ask again"] {
+                assert!(
+                    find(&tree, Role::Button, gone).is_none(),
+                    "{row}: no {gone}"
+                );
+            }
+            assert!(!d.dirty(), "{row}: only looked at");
+        }
+        assert!(d.speed.is_some() && d.torrents.is_some());
+        d.speed.as_mut().unwrap().on_startup ^= true;
+        assert!(d.dirty(), "the Speed limiter's change is the page's");
+        d.speed = Some(SpeedSettings::new(&Settings::default()));
+        let t = d.torrents.as_mut().unwrap();
+        let share = t.choice().share;
+        t.set_share(!share);
+        assert!(d.dirty(), "Torrents' change is the page's");
+    }
+
+    /// Plan 11b2: the Speed limiter's and Torrents' drafts read the settings back as they are
+    /// (nothing to save when opened); what Save gives is what they hold.
+    #[test]
+    fn speed_and_torrent_choices_round_trip() {
+        let s = Settings {
+            speed_limit_kb: 123,
+            limiter_on_startup: true,
+            global_limit_on: true,
+            global_limit_kb: 4567,
+            global_only_active: true,
+            torrent_keep_sharing: true,
+            torrent_port: 51413,
+            torrent_upload_on: true,
+            torrent_upload_kb: 99,
+            torrent_stop_ratio_on: true,
+            torrent_stop_ratio: 150,
+            ..Settings::default()
+        };
+        let speed = SpeedSettings::new(&s);
+        assert!(!speed.dirty());
+        let c = speed.choice();
+        assert_eq!(
+            (c.kb, c.on_startup, c.global_on, c.global_kb, c.only_active),
+            (123, true, true, 4567, true)
+        );
+        let torrents = TorrentSettings::new(&s);
+        assert!(!torrents.dirty());
+        let c = torrents.choice();
+        assert!(c.share && c.upload == (true, 99) && c.net.port == 51413);
+        assert!(c.seeding.ratio_on && c.seeding.ratio == 150);
+        assert_eq!(c.net, crate::torrentdlg::Net::of(&s));
     }
 
     /// A page whose draft differs from what it opened with (General's "Launch on startup"

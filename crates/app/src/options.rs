@@ -4361,17 +4361,45 @@ const PAGES: [(usize, &str, &str, &str); 12] = [
 
 /// The Scheduler's section on Options' page (plan 11b1): its number, as `on_page` takes it.
 pub(crate) const SCHEDULER_PAGE: usize = 12;
+/// The Speed limiter's, Torrents' and the browser extension's sections (plan 11b2).
+pub(crate) const SPEED_PAGE: usize = 13;
+pub(crate) const TORRENTS_PAGE: usize = 14;
+pub(crate) const EXTENSION_PAGE: usize = 15;
 
 /// The windows that moved into the page (plan 11b), listed after Options' own pages under a
 /// hairline and the caption "Tools": number, name in the list, Graphite icon, heading. Their
 /// bodies are drawn by `settingspage.rs`, not by [`OptionsDialog::page_area`].
-const TOOLS: [(usize, &str, &str, &str); 1] = [(
-    SCHEDULER_PAGE,
-    // i18n: noun: the tool that starts and stops queues on time
-    crate::i18n::mark("Scheduler"),
-    "tb-scheduler",
-    crate::i18n::mark("Queues and the scheduler"),
-)];
+const TOOLS: [(usize, &str, &str, &str); 4] = [
+    (
+        SCHEDULER_PAGE,
+        // i18n: noun: the tool that starts and stops queues on time
+        crate::i18n::mark("Scheduler"),
+        "tb-scheduler",
+        crate::i18n::mark("Queues and the scheduler"),
+    ),
+    (
+        SPEED_PAGE,
+        // i18n: Options in the main window: the side list's section with the Speed Limiter's settings
+        crate::i18n::mark("Speed limiter"),
+        "gx-gauge",
+        crate::i18n::mark("Speed Limiter settings"),
+    ),
+    (
+        TORRENTS_PAGE,
+        // i18n: Options in the main window: the side list's section with the torrent settings
+        crate::i18n::mark("Torrents"),
+        "cat-torrents",
+        crate::i18n::mark("Torrent settings"),
+    ),
+    (
+        EXTENSION_PAGE,
+        // i18n: Options in the main window: the side list's section that adds the browser extension
+        crate::i18n::mark("Browser extension"),
+        "gx-puzzle",
+        // i18n: title of the window that offers the browser extension
+        crate::i18n::mark("Add Grabbit to your browser"),
+    ),
+];
 
 /// Every row of the side list: [`PAGES`], then [`TOOLS`].
 const ROWS: usize = PAGES.len() + TOOLS.len();
@@ -4805,9 +4833,11 @@ mod tests {
     /// One pass of the side list on `page`: the page it picked.
     fn list_pass(ctx: &egui::Context, page: usize, events: Vec<egui::Event>) -> Option<usize> {
         let mut picked = None;
-        let mut out = ctx.run_ui(input(events), |ui| {
-            picked = side_list(ui, Pos2::ZERO, page, H - winui::FOOTER_H)
-        });
+        // Tall enough for every row, the tools' too (plan 11b).
+        let tall = OptionsDialog::pages_height();
+        let mut input = input(events);
+        input.screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(W, tall)));
+        let mut out = ctx.run_ui(input, |ui| picked = side_list(ui, Pos2::ZERO, page, tall));
         out.textures_delta.clear();
         picked
     }
@@ -4875,7 +4905,24 @@ mod tests {
         let order: Vec<usize> = (0..ROWS).map(|k| row(k).0).collect();
         assert_eq!(
             order,
-            [0, 1, 2, 3, 4, 11, 5, 6, 7, 8, 9, 10, SCHEDULER_PAGE],
+            [
+                0,
+                1,
+                2,
+                3,
+                4,
+                11,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                SCHEDULER_PAGE,
+                SPEED_PAGE,
+                TORRENTS_PAGE,
+                EXTENSION_PAGE
+            ],
             "the old tabs' order, then the tools (plan 11b)"
         );
         for (_, label, need, _) in PAGES.iter().chain(TOOLS.iter()).copied() {
@@ -4916,10 +4963,10 @@ mod tests {
                 w[1]
             );
         }
-        assert_eq!(press(SCHEDULER_PAGE, egui::Key::ArrowDown), None, "the end");
+        assert_eq!(press(EXTENSION_PAGE, egui::Key::ArrowDown), None, "the end");
         assert_eq!(press(0, egui::Key::ArrowUp), None, "the start");
         assert_eq!(press(4, egui::Key::Home), Some(0));
-        assert_eq!(press(4, egui::Key::End), Some(SCHEDULER_PAGE));
+        assert_eq!(press(4, egui::Key::End), Some(EXTENSION_PAGE));
         // Ctrl+Tab from anywhere: no row focused.
         ctx.memory_mut(|m| m.surrender_focus(egui::Id::unique(("opt-page", 0))));
         let ctrl = egui::Modifiers::COMMAND;
@@ -4935,8 +4982,8 @@ mod tests {
         );
         assert_eq!(
             back,
-            Some(SCHEDULER_PAGE),
-            "Ctrl+Shift+Tab wraps back to the Scheduler"
+            Some(EXTENSION_PAGE),
+            "Ctrl+Shift+Tab wraps back to the browser extension"
         );
     }
 

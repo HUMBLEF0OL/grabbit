@@ -62,9 +62,11 @@ headers, and sessions are pooled per download and reused between segments.
 
 One egui window painted to fixed pixel coordinates, plus one immediate viewport per dialog.
 Options is not a dialog: `settingspage.rs` draws its pages in the main window, in the panes'
-place, and the small dialogs its pages open are viewports over it. The Scheduler is one of its
-sections: `scheduler.rs` draws its layout there through `dialogs::inline`, its draft saved by
-the page's Save.
+place, and the small dialogs its pages open are viewports over it. The Scheduler, Speed Limiter
+settings, Torrent settings and the browser extension are sections of it: `scheduler.rs`,
+`dialogs.rs`, `torrentdlg.rs` and `extension.rs` draw their layouts there through
+`dialogs::inline`, their drafts saved by the page's Save (the extension's offer at a start stays
+a window).
 `app.rs` holds the state (downloads, queues, settings, the list's selection) and turns menu,
 toolbar, key and IPC commands into actions. Each dialog is its own module and returns an
 `Outcome` (open, closed, done with a value). Grabbit is Windows only. Windows calls are confined to `win32.rs`

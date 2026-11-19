@@ -113,7 +113,7 @@ The Speed Limiter keeps Grabbit from using all of your connection.
 
 1. Choose **Downloads → Speed Limiter → Settings...**.
 2. Set **Maximum download speed for one file** in KBytes/sec. It starts at 10, so set it before you turn the limiter on.
-3. Click **OK**.
+3. Click **Save**. (The settings open in the main window, as the **Speed limiter** section of [Options](options.md), listed under **Tools**; **← Downloads** goes back to the list.)
 4. Choose **Downloads → Speed Limiter → Turn on**. **Turn off** gives full speed again.
 
 **Always turn on Speed Limiter on Grabbit startup** turns it on each time Grabbit starts.
@@ -122,7 +122,7 @@ A torrent counts as one file here: each torrent gets the limit of its own. So do
 
 ### For all downloads together
 
-In the same window, tick **Limit all downloads together to** and set the speed. This caps Grabbit as a whole, however many files are downloading, torrents included. When torrents and other downloads run at the same time, each side gets at least half of the speed, and more when the other side needs less: a torrent going slowly leaves the rest to the other downloads, and the other way round. It applies whenever it is ticked, whether the per-file limiter is on or off.
+In the same place, tick **Limit all downloads together to** and set the speed. This caps Grabbit as a whole, however many files are downloading, torrents included. When torrents and other downloads run at the same time, each side gets at least half of the speed, and more when the other side needs less: a torrent going slowly leaves the rest to the other downloads, and the other way round. It applies whenever it is ticked, whether the per-file limiter is on or off.
 
 Tick **Only while I'm using the computer** to apply it only while you use the mouse or keyboard. After a minute without input, Grabbit goes back to full speed.
 

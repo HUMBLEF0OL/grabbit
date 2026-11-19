@@ -582,9 +582,9 @@ pub struct App {
     progress: Vec<Progress>,
     complete: Vec<Complete>,
     settings: Settings,
-    speed_settings: Option<dialogs::SpeedSettings>,
     /// Options, shown in the main window in the panes' place (plan 11a), with the Scheduler
-    /// as one of its sections (11b1).
+    /// (11b1), Speed Limiter settings, Torrent settings and the browser extension (11b2) as
+    /// sections of it.
     settings_page: Option<crate::settingspage::SettingsPage>,
     /// Downloads to finish off once stopped: Download File Info was cancelled after an early
     /// start (`None`: the download and its data go), or its file was given another place
@@ -638,7 +638,6 @@ pub struct App {
     torrent_waiting: std::collections::VecDeque<(String, Option<crate::torrents::Remote>)>,
     /// Add torrent closed this frame: the next waiting one opens after a frame without it.
     torrent_closed: bool,
-    torrent_settings: Option<crate::torrentdlg::TorrentSettings>,
     /// Right-click → Torrent → Add trackers… (#39).
     add_trackers: Option<crate::torrentdlg::AddTrackers>,
     torrent_files: Option<crate::torrentfiles::TorrentFiles>,
@@ -1435,7 +1434,6 @@ impl App {
             progress: Vec::new(),
             complete: Vec::new(),
             settings,
-            speed_settings: None,
             settings_page: None,
             category_dlg: None,
             category_for_file_info: false,
@@ -1467,7 +1465,6 @@ impl App {
             torrent_dlg: None,
             torrent_waiting: Default::default(),
             torrent_closed: false,
-            torrent_settings: None,
             add_trackers: None,
             torrent_files: None,
             rss: Default::default(),
@@ -2513,7 +2510,14 @@ impl App {
         // open, for its pictures in either mode.
         if !matches!(
             window,
-            "options" | "scheduler" | "mode" | "theme" | "zoom" | "size"
+            "options"
+                | "scheduler"
+                | "speedlimit"
+                | "torrent-settings"
+                | "mode"
+                | "theme"
+                | "zoom"
+                | "size"
         ) {
             self.close_settings_page();
         }
@@ -2937,6 +2941,9 @@ impl App {
                     "progress" => 3,
                     // The sections that were windows (plan 11b): `scheduler` also opens it.
                     "scheduler" => crate::options::SCHEDULER_PAGE,
+                    "speed" => crate::options::SPEED_PAGE,
+                    "torrents" => crate::options::TORRENTS_PAGE,
+                    "extension" => crate::options::EXTENSION_PAGE,
                     _ => 0,
                 };
                 self.run(Cmd::Options, None, ctx);
@@ -5834,6 +5841,23 @@ impl App {
                 for a in actions {
                     self.scheduler_action(a);
                 }
+                // Then the Speed limiter's and Torrents' drafts, each only if changed (as OK
+                // set them), before Options' (11b2).
+                let Some(p) = &self.settings_page else {
+                    return;
+                };
+                let speed = p.speed.as_ref().filter(|s| s.dirty()).map(|s| s.choice());
+                let torrents = p
+                    .torrents
+                    .as_ref()
+                    .filter(|t| t.dirty())
+                    .map(|t| t.choice());
+                if let Some(c) = speed {
+                    self.apply_speed(c);
+                }
+                if let Some(c) = torrents {
+                    self.apply_torrent_settings(c);
+                }
                 let Some(p) = &self.settings_page else {
                     return;
                 };
@@ -5851,11 +5875,17 @@ impl App {
         let downloads = self.downloads.clone();
         if let Some(p) = &mut self.settings_page {
             p.options = fresh.keep_view(&p.options, saved, &downloads);
-            // A fresh draft of the Scheduler too, once it has been visited.
+            // A fresh draft of the Scheduler, the Speed limiter and Torrents too, once visited.
             if let Some(old) = &p.scheduler {
                 p.scheduler = Some(
                     crate::scheduler::Scheduler::new(&self.queues, &self.settings).keep_view(old),
                 );
+            }
+            if p.speed.is_some() {
+                p.speed = Some(dialogs::SpeedSettings::new(&self.settings));
+            }
+            if p.torrents.is_some() {
+                p.torrents = Some(crate::torrentdlg::TorrentSettings::new(&self.settings));
             }
         }
     }
@@ -5890,6 +5920,79 @@ impl App {
             && !file.is_empty()
         {
             crate::options::play_sound(file);
+        }
+    }
+
+    /// Speed Limiter settings' Save (plan 11b2; its window's OK until then).
+    fn apply_speed(&mut self, c: dialogs::SpeedChoice) {
+        self.settings.speed_limit_kb = c.kb;
+        self.settings.limiter_on_startup = c.on_startup;
+        self.settings.global_limit_on = c.global_on;
+        self.settings.global_limit_kb = c.global_kb;
+        self.settings.global_only_active = c.only_active;
+        self.apply_speed_limit();
+        self.dirty = true;
+    }
+
+    /// Torrent settings' Save (plan 11b2; its window's OK until then).
+    fn apply_torrent_settings(&mut self, c: crate::torrentdlg::TorrentChoice) {
+        let crate::torrentdlg::TorrentChoice {
+            share,
+            assoc,
+            net,
+            upload,
+            seeding,
+        } = c;
+        // The network: the next torrent session takes it (torrent_tick).
+        net.apply(&mut self.settings);
+        // The upload limit: at once (torrent_tick sets it on the session).
+        (
+            self.settings.torrent_upload_on,
+            self.settings.torrent_upload_kb,
+        ) = upload;
+        // Seeding limits: the tick stops those over them; raised, the finished torrents now
+        // under them are shared again (when sharing stays on).
+        let s = &mut self.settings;
+        let before = s.sharing_limits();
+        s.torrent_stop_ratio_on = seeding.ratio_on;
+        s.torrent_stop_ratio = seeding.ratio;
+        s.torrent_stop_minutes_on = seeding.minutes_on;
+        s.torrent_stop_minutes = seeding.minutes;
+        if share
+            && share == self.settings.torrent_keep_sharing
+            && before != self.settings.sharing_limits()
+        {
+            self.torrent_host.set_sharing(
+                &self.rt,
+                self.session_hashes(),
+                self.complete_torrents(),
+                true,
+            );
+        }
+        if share != self.settings.torrent_keep_sharing {
+            self.settings.torrent_keep_sharing = share;
+            self.torrent_host.set_sharing(
+                &self.rt,
+                self.session_hashes(),
+                self.complete_torrents(),
+                share,
+            );
+        }
+        if assoc != self.settings.torrent_associations {
+            self.settings.torrent_associations = assoc;
+            crate::win32::set_torrent_handlers(assoc);
+        }
+        self.dirty = true;
+    }
+
+    /// Options' page on a moved window's section (plan 11b2), opened if need be; not while
+    /// a small dialog of the page waits for an answer (it stays where it is).
+    fn open_section(&mut self, page: usize, ctx: &egui::Context) {
+        self.run(Cmd::Options, None, ctx);
+        if let Some(p) = &mut self.settings_page
+            && !p.modal()
+        {
+            p.show_section(page);
         }
     }
 
@@ -6419,9 +6522,8 @@ impl App {
                 self.apply_speed_limit();
                 self.dirty = true;
             }
-            Cmd::LimiterSettings => {
-                self.speed_settings = Some(dialogs::SpeedSettings::new(&self.settings));
-            }
+            // A section of Options' page (plan 11b2), as the Scheduler's.
+            Cmd::LimiterSettings => self.open_section(crate::options::SPEED_PAGE, ctx),
             // The title bar's search field takes the keys, its text selected.
             // Not while the title bar has no room for it: nothing to give the keys to.
             Cmd::Find => {
@@ -6457,12 +6559,7 @@ impl App {
                     self.tell_friend = Some(crate::help::TellFriend::new());
                 }
             }
-            Cmd::TorrentSettings => {
-                if self.torrent_settings.is_none() {
-                    self.torrent_settings =
-                        Some(crate::torrentdlg::TorrentSettings::new(&self.settings));
-                }
-            }
+            Cmd::TorrentSettings => self.open_section(crate::options::TORRENTS_PAGE, ctx),
             Cmd::RssFeeds(rules) => {
                 if self.rss_dlg.is_none() {
                     self.rss_dlg = Some(crate::rssdlg::RssWindow::new(&self.rss, rules));
@@ -9950,61 +10047,6 @@ impl App {
                 );
             }
         }
-        if let Some(t) = &mut self.torrent_settings {
-            match t.show(ctx) {
-                Outcome::Open => {}
-                Outcome::Closed => self.torrent_settings = None,
-                Outcome::Done(crate::torrentdlg::TorrentChoice {
-                    share,
-                    assoc,
-                    net,
-                    upload,
-                    seeding,
-                }) => {
-                    self.torrent_settings = None;
-                    // The network: the next torrent session takes it (torrent_tick).
-                    net.apply(&mut self.settings);
-                    // The upload limit: at once (torrent_tick sets it on the session).
-                    (
-                        self.settings.torrent_upload_on,
-                        self.settings.torrent_upload_kb,
-                    ) = upload;
-                    // Seeding limits: the tick stops those over them; raised, the finished
-                    // torrents now under them are shared again (when sharing stays on).
-                    let s = &mut self.settings;
-                    let before = s.sharing_limits();
-                    s.torrent_stop_ratio_on = seeding.ratio_on;
-                    s.torrent_stop_ratio = seeding.ratio;
-                    s.torrent_stop_minutes_on = seeding.minutes_on;
-                    s.torrent_stop_minutes = seeding.minutes;
-                    if share
-                        && share == self.settings.torrent_keep_sharing
-                        && before != self.settings.sharing_limits()
-                    {
-                        self.torrent_host.set_sharing(
-                            &self.rt,
-                            self.session_hashes(),
-                            self.complete_torrents(),
-                            true,
-                        );
-                    }
-                    if share != self.settings.torrent_keep_sharing {
-                        self.settings.torrent_keep_sharing = share;
-                        self.torrent_host.set_sharing(
-                            &self.rt,
-                            self.session_hashes(),
-                            self.complete_torrents(),
-                            share,
-                        );
-                    }
-                    if assoc != self.settings.torrent_associations {
-                        self.settings.torrent_associations = assoc;
-                        crate::win32::set_torrent_handlers(assoc);
-                    }
-                    self.dirty = true;
-                }
-            }
-        }
         if let Some(w) = &mut self.rss_dlg {
             match w.show(ctx, &mut self.rss, &self.rss_busy) {
                 Outcome::Open => {}
@@ -10154,22 +10196,6 @@ impl App {
             && let Some(ev) = p.overlays(ctx, &self.downloads)
         {
             self.settings_page_event(ev);
-        }
-        if let Some(d) = &mut self.speed_settings {
-            match d.show(ctx) {
-                Outcome::Open => {}
-                Outcome::Closed => self.speed_settings = None,
-                Outcome::Done(c) => {
-                    self.settings.speed_limit_kb = c.kb;
-                    self.settings.limiter_on_startup = c.on_startup;
-                    self.settings.global_limit_on = c.global_on;
-                    self.settings.global_limit_kb = c.global_kb;
-                    self.settings.global_only_active = c.only_active;
-                    self.speed_settings = None;
-                    self.apply_speed_limit();
-                    self.dirty = true;
-                }
-            }
         }
         if let Some(mut fi) = self.file_info.take() {
             self.start_early(&mut fi);
@@ -13528,5 +13554,81 @@ mod settings_page_tests {
         let p = a.settings_page.as_ref().unwrap();
         assert!(p.options.dirty(), "Options' change kept");
         assert_eq!(p.options.result().limits_mb, 4321, "its draft as it was");
+    }
+
+    /// Plan 11b2: the Speed limiter's, Torrents' and the browser extension's sections open from
+    /// their commands and `/show` names; `/show extension` is still the offer's window (the
+    /// page closes for it, as for any other name).
+    #[test]
+    fn the_moved_windows_open_as_sections() {
+        use crate::options::{EXTENSION_PAGE, SPEED_PAGE, TORRENTS_PAGE};
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let page = |a: &App| a.settings_page.as_ref().map(|p| p.page());
+        a.run(Cmd::LimiterSettings, None, &ctx);
+        assert_eq!(page(&a), Some(SPEED_PAGE), "Speed Limiter → Settings...");
+        a.run(Cmd::TorrentSettings, None, &ctx);
+        assert_eq!(page(&a), Some(TORRENTS_PAGE), "Torrent settings...");
+        for (name, want) in [
+            ("speedlimit", SPEED_PAGE),
+            ("torrent-settings", TORRENTS_PAGE),
+            ("options:speed", SPEED_PAGE),
+            ("options:torrents", TORRENTS_PAGE),
+            ("options:extension", EXTENSION_PAGE),
+        ] {
+            a.show_named(name, &ctx);
+            assert_eq!(page(&a), Some(want), "{name}");
+        }
+        a.show_named("extension", &ctx);
+        assert!(a.settings_page.is_none(), "the offer's window instead");
+        assert!(a.extension.is_some());
+    }
+
+    /// Plan 11b2: Save sets the Speed limiter's and Torrents' changes (as their OK did), then
+    /// Options'; Discard drops them. A draft only looked at sets nothing: a speed changed
+    /// elsewhere meanwhile stays.
+    #[test]
+    fn save_sets_speed_and_torrents_then_options() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let before = a.settings.clone();
+        a.run(Cmd::LimiterSettings, None, &ctx);
+        let edit = |a: &mut App| {
+            let p = a.settings_page.as_mut().unwrap();
+            let s = p
+                .speed
+                .get_or_insert_with(|| dialogs::SpeedSettings::new(&before));
+            s.kb = "321".into();
+            let t = p
+                .torrents
+                .get_or_insert_with(|| crate::torrentdlg::TorrentSettings::new(&before));
+            t.set_share(!before.torrent_keep_sharing);
+            assert!(p.dirty());
+        };
+        edit(&mut a);
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings_page_event(PageEvent::Discard);
+        assert_eq!(a.settings, before, "Discard: nothing set");
+        assert!(!a.settings_page.as_ref().unwrap().dirty(), "fresh drafts");
+        edit(&mut a);
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings_page_event(PageEvent::Save);
+        assert_eq!(a.settings.speed_limit_kb, 321, "the Speed limiter's");
+        assert_eq!(
+            a.settings.torrent_keep_sharing, !before.torrent_keep_sharing,
+            "Torrents'"
+        );
+        assert_eq!(
+            a.settings.double_click_open, !before.double_click_open,
+            "Options'"
+        );
+        let p = a.settings_page.as_ref().expect("the page stays");
+        assert!(!p.dirty(), "fresh drafts");
+        assert_eq!(p.page(), crate::options::SPEED_PAGE);
+        // Untouched drafts: a speed set elsewhere meanwhile isn't put back by Save.
+        a.settings.speed_limit_kb = 777;
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings_page_event(PageEvent::Save);
+        assert_eq!(a.settings.speed_limit_kb, 777);
     }
 }

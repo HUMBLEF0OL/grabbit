@@ -2115,11 +2115,18 @@ pub struct SpeedSettings {
     pub global_kb: String,
     pub only_active: bool,
     /// How much taller the note is than IDM's three lines (a longer translation): the rows
-    /// below it and the window move down by this much (from the frame before).
+    /// below it and the section move down by this much (from the frame before).
     note_extra: f32,
+    /// [`SpeedSettings::choice`] as it opened: changed from it, the draft is dirty.
+    opened: SpeedChoice,
 }
 
-/// What Speed Limiter settings → OK sets.
+/// The Speed limiter section's width (the window's mockup width) and its rows' height.
+const SPEED_W: f32 = 480.0;
+const SPEED_BODY: f32 = 172.0;
+
+/// What Speed Limiter settings' Save sets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SpeedChoice {
     pub kb: u64,
     pub on_startup: bool,
@@ -2130,157 +2137,149 @@ pub struct SpeedChoice {
 
 impl SpeedSettings {
     pub fn new(s: &crate::settings::Settings) -> Self {
-        SpeedSettings {
+        let mut d = SpeedSettings {
             kb: s.speed_limit_kb.to_string(),
             on_startup: s.limiter_on_startup,
             global_on: s.global_limit_on,
             global_kb: s.global_limit_kb.to_string(),
             only_active: s.global_only_active,
             note_extra: 0.0,
+            opened: SpeedChoice {
+                kb: 0,
+                on_startup: false,
+                global_on: false,
+                global_kb: 0,
+                only_active: false,
+            },
+        };
+        // Its boxes as read back untouched (a value they clamp differs from the settings).
+        d.opened = d.choice();
+        d
+    }
+
+    /// The Speed limiter as a section of Options' page (plan 11b2): its rows at `o`, as the
+    /// window's client had them, [`SpeedSettings::size`] points; OK and Cancel are the page's
+    /// Save and Discard.
+    pub fn section(&mut self, ui: &mut Ui, o: Pos2) {
+        // The mockup's width; the rows as they were.
+        const W: f32 = SPEED_W;
+        inline(ui, o, self.size(), winui::LIGHT_BG(), |ui, o| {
+            let p = ui.painter().clone();
+            let black = winui::LIGHT_TEXT();
+            // The label ends where `text_right(265)` ended it: at 266.
+            let kb_box = winui::sentence(
+                ui,
+                &p,
+                // i18n: {kb} is an input box (kilobytes per second), drawn where it stands in the translation
+                crate::i18n::t("Maximum download speed for one file {kb} KBytes/sec"),
+                &[winui::SentenceLine {
+                    lead: winui::Lead::Right(o.x + 266.0),
+                    lead_baseline: o.y + 21.0,
+                    boxes: o + vec2(275.0, 7.0),
+                    gap: 11.0,
+                    baseline: o.y + 21.0,
+                }],
+                &[("kb", vec2(50.0, 23.0))],
+                |p, x, baseline, s| {
+                    winui::text(p, x, baseline, s, black);
+                },
+            );
+            let kb = winui::number_field(
+                ui,
+                kb_box[0],
+                &mut self.kb,
+                1,
+                9_999_999,
+                true,
+                winui::LIGHT_BG(),
+            );
+            // Inside its sentence, so no caption names it: named here for screen readers.
+            // i18n: what a screen reader calls the Speed Limiter's box for one file's speed
+            let name = crate::i18n::t("Maximum download speed for one file");
+            ui.ctx()
+                .accesskit_node_builder(kb.id, |n| n.set_label(name));
+            let note = crate::i18n::t(
+                "Note: Internet servers may break connection when the speed is too limited! Thus it's not\nrecommended to use Speed Limiter to download from servers that do not support\n\"resume\" feature.",
+            );
+            // Wrapped inside the window (IDM's English runs to x 440); a translation longer than three
+            // lines pushes the rest down and the window grows.
+            let lines = winui::paragraph(
+                &p,
+                o.x + 11.0,
+                o.y + 47.0,
+                note,
+                black,
+                o.x + W - winui::EDGE,
+                13.0,
+            );
+            self.note_extra = lines.saturating_sub(3) as f32 * 13.0;
+            let o = o + vec2(0.0, self.note_extra);
+            winui::checkbox_light(
+                ui,
+                o + vec2(11.0, 86.0),
+                &mut self.on_startup,
+                "Always turn on Speed Limiter on Grabbit startup",
+                true,
+            );
+            // Beyond IDM: a limit for all downloads together.
+            // Across to the window's text edge (464 of its 480).
+            winui::etched_h(&p, o.x + 11.0, o.y + 108.0, 453.0);
+            winui::checkbox_light_until(
+                ui,
+                o + vec2(11.0, 121.0),
+                &mut self.global_on,
+                "Limit all downloads together to",
+                true,
+                Some(o.x + 196.0),
+            );
+            let on = self.global_on;
+            winui::number_field(
+                ui,
+                r(o, 196.0, 116.0, 60.0, 23.0),
+                &mut self.global_kb,
+                1,
+                9_999_999,
+                on,
+                winui::LIGHT_BG(),
+            );
+            let c = if on { black } else { winui::LIGHT_DISABLED() };
+            // i18n: unit after an input box: kilobytes per second
+            winui::text(
+                &p,
+                o.x + 264.0,
+                o.y + 131.0,
+                crate::i18n::t("KBytes/sec"),
+                c,
+            );
+            winui::checkbox_light(
+                ui,
+                o + vec2(29.0, 143.0),
+                &mut self.only_active,
+                "Only while I'm using the computer",
+                on,
+            );
+        })
+    }
+
+    /// The section's layout size: the window's client without its footer.
+    pub fn size(&self) -> [f32; 2] {
+        [SPEED_W, SPEED_BODY + self.note_extra]
+    }
+
+    /// What Save sets: the boxes read (a box that doesn't parse keeps its bounds, as OK did).
+    pub fn choice(&self) -> SpeedChoice {
+        SpeedChoice {
+            kb: winui::number_in(&self.kb, 1, 9_999_999),
+            on_startup: self.on_startup,
+            global_on: self.global_on,
+            global_kb: winui::number_in(&self.global_kb, 1, 9_999_999),
+            only_active: self.only_active,
         }
     }
 
-    pub fn show(&mut self, ctx: &egui::Context) -> Outcome<SpeedChoice> {
-        let extra = self.note_extra;
-        // The mockup's width; the rows as they were, then the footer.
-        const W: f32 = 480.0;
-        let body = 172.0 + extra;
-        window(
-            ctx,
-            "speed-settings",
-            "Speed Limiter settings",
-            [W, body + winui::FOOTER_H],
-            false,
-            winui::LIGHT_BG(),
-            |ui, o| {
-                let p = ui.painter().clone();
-                let black = winui::LIGHT_TEXT();
-                // The label ends where `text_right(265)` ended it: at 266.
-                let kb_box = winui::sentence(
-                    ui,
-                    &p,
-                    // i18n: {kb} is an input box (kilobytes per second), drawn where it stands in the translation
-                    crate::i18n::t("Maximum download speed for one file {kb} KBytes/sec"),
-                    &[winui::SentenceLine {
-                        lead: winui::Lead::Right(o.x + 266.0),
-                        lead_baseline: o.y + 21.0,
-                        boxes: o + vec2(275.0, 7.0),
-                        gap: 11.0,
-                        baseline: o.y + 21.0,
-                    }],
-                    &[("kb", vec2(50.0, 23.0))],
-                    |p, x, baseline, s| {
-                        winui::text(p, x, baseline, s, black);
-                    },
-                );
-                let kb = winui::number_field(
-                    ui,
-                    kb_box[0],
-                    &mut self.kb,
-                    1,
-                    9_999_999,
-                    true,
-                    winui::LIGHT_BG(),
-                );
-                // Inside its sentence, so no caption names it: named here for screen readers.
-                // i18n: what a screen reader calls the Speed Limiter's box for one file's speed
-                let name = crate::i18n::t("Maximum download speed for one file");
-                ui.ctx()
-                    .accesskit_node_builder(kb.id, |n| n.set_label(name));
-                let note = crate::i18n::t(
-                    "Note: Internet servers may break connection when the speed is too limited! Thus it's not\nrecommended to use Speed Limiter to download from servers that do not support\n\"resume\" feature.",
-                );
-                // Wrapped inside the window (IDM's English runs to x 440); a translation longer than three
-                // lines pushes the rest down and the window grows.
-                let lines = winui::paragraph(
-                    &p,
-                    o.x + 11.0,
-                    o.y + 47.0,
-                    note,
-                    black,
-                    o.x + W - winui::EDGE,
-                    13.0,
-                );
-                self.note_extra = lines.saturating_sub(3) as f32 * 13.0;
-                let o = o + vec2(0.0, self.note_extra);
-                winui::checkbox_light(
-                    ui,
-                    o + vec2(11.0, 86.0),
-                    &mut self.on_startup,
-                    "Always turn on Speed Limiter on Grabbit startup",
-                    true,
-                );
-                // Beyond IDM: a limit for all downloads together.
-                // Across to the window's text edge (464 of its 480).
-                winui::etched_h(&p, o.x + 11.0, o.y + 108.0, 453.0);
-                winui::checkbox_light_until(
-                    ui,
-                    o + vec2(11.0, 121.0),
-                    &mut self.global_on,
-                    "Limit all downloads together to",
-                    true,
-                    Some(o.x + 196.0),
-                );
-                let on = self.global_on;
-                winui::number_field(
-                    ui,
-                    r(o, 196.0, 116.0, 60.0, 23.0),
-                    &mut self.global_kb,
-                    1,
-                    9_999_999,
-                    on,
-                    winui::LIGHT_BG(),
-                );
-                let c = if on { black } else { winui::LIGHT_DISABLED() };
-                // i18n: unit after an input box: kilobytes per second
-                winui::text(
-                    &p,
-                    o.x + 264.0,
-                    o.y + 131.0,
-                    crate::i18n::t("KBytes/sec"),
-                    c,
-                );
-                winui::checkbox_light(
-                    ui,
-                    o + vec2(29.0, 143.0),
-                    &mut self.only_active,
-                    "Only while I'm using the computer",
-                    on,
-                );
-                // Enter OK, Escape Cancel, as before. (`o` moved down by the note's extra lines:
-                // the footer is placed on the window's own top.)
-                let pressed = winui::footer(
-                    ui,
-                    o - vec2(0.0, self.note_extra),
-                    W,
-                    body,
-                    &mut [
-                        FooterItem::Button(
-                            // Its ring shows while nothing has the keys, as before.
-                            FooterButton::new("OK", ButtonKind::Default)
-                                .enter(true)
-                                .ring(true),
-                        ),
-                        FooterItem::Button(
-                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
-                        ),
-                    ],
-                );
-                if pressed == Some(1) {
-                    Outcome::Closed
-                } else if pressed == Some(0) {
-                    Outcome::Done(SpeedChoice {
-                        kb: winui::number_in(&self.kb, 1, 9_999_999),
-                        on_startup: self.on_startup,
-                        global_on: self.global_on,
-                        global_kb: winui::number_in(&self.global_kb, 1, 9_999_999),
-                        only_active: self.only_active,
-                    })
-                } else {
-                    Outcome::Open
-                }
-            },
-        )
+    /// Whether Save would change anything: the choice differs from the one it opened with.
+    pub fn dirty(&self) -> bool {
+        self.choice() != self.opened
     }
 }
 
