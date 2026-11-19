@@ -246,8 +246,14 @@ impl OptionsDialog {
 
     /// A fresh draft after Save or Discard (plan 11a) shown as `old` was: its page and scroll,
     /// the category chosen on Save to (its folder as the fresh draft has it), the lists' places
-    /// and selections, and User-Agent's Automatic tick.
-    pub(crate) fn keep_view(mut self, old: &OptionsDialog, downloads: &std::path::Path) -> Self {
+    /// and selections, and, once `saved`, User-Agent's Automatic tick (a tick Discard drops is
+    /// read again from the settings, as the box shows them).
+    pub(crate) fn keep_view(
+        mut self,
+        old: &OptionsDialog,
+        saved: bool,
+        downloads: &std::path::Path,
+    ) -> Self {
         self.page = old.page;
         self.scrolled = Some(old.page);
         let cats = Category::all();
@@ -259,7 +265,9 @@ impl OptionsDialog {
         self.account_rows = old.account_rows;
         self.sound_rows = old.sound_rows;
         self.device_rows = old.device_rows;
-        self.ua_auto = old.ua_auto;
+        if saved {
+            self.ua_auto = old.ua_auto;
+        }
         self
     }
 
@@ -5065,7 +5073,7 @@ mod tests {
             .unwrap();
         old.category = video;
         old.ua_auto = false;
-        let fresh = OptionsDialog::new(&s, &dir, vec![]).keep_view(&old, &dir);
+        let fresh = OptionsDialog::new(&s, &dir, vec![]).keep_view(&old, true, &dir);
         assert_eq!(
             (fresh.page, fresh.category, fresh.ua_auto),
             (2, video, false)
@@ -5075,6 +5083,21 @@ mod tests {
             display_dir(&s.category_dir(Category::Video, &dir))
         );
         assert!(!fresh.dirty());
+        // Audit r6: Discard drops a tick of Automatic: an own User-Agent saved, Automatic
+        // ticked in the draft, Discard: the box is the own one again, and the other way round.
+        let own = Settings {
+            user_agent: "Foo/1.0".into(),
+            ..Settings::default()
+        };
+        let mut old = OptionsDialog::new(&own, &dir, vec![]);
+        assert!(!old.ua_auto);
+        old.ua_auto = true;
+        let fresh = OptionsDialog::new(&own, &dir, vec![]).keep_view(&old, false, &dir);
+        assert!(!fresh.ua_auto, "Discard: the own User-Agent's box");
+        let mut old = OptionsDialog::new(&s, &dir, vec![]);
+        old.ua_auto = false;
+        let fresh = OptionsDialog::new(&s, &dir, vec![]).keep_view(&old, false, &dir);
+        assert!(fresh.ua_auto, "Discard: Automatic again");
     }
 
     /// #424: the list written and read back through a real file: nothing lost, nothing doubled.

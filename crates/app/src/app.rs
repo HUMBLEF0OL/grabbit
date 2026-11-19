@@ -5808,6 +5808,7 @@ impl App {
             return;
         };
         let page = p.page();
+        let saved = ev == PageEvent::Save;
         match ev {
             PageEvent::Save => {
                 let new =
@@ -5823,7 +5824,7 @@ impl App {
         let fresh = self.options_draft(page);
         let downloads = self.downloads.clone();
         if let Some(p) = &mut self.settings_page {
-            p.options = fresh.keep_view(&p.options, &downloads);
+            p.options = fresh.keep_view(&p.options, saved, &downloads);
         }
     }
 
