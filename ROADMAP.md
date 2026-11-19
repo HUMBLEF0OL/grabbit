@@ -576,17 +576,17 @@ The maintainer's first findings with 1.0.0 (in `dev`, for the next release):
   some statuses or sources (the column filters themselves). The Find file window is gone.
 - ✅ Options → Downloads → Customize "Download progress" dialog → Edit... opens its window, where
   the progress window can be turned off for new downloads (upstream issue 1041; it was greyed).
-- 🔄 The original MDM's fixes in the files the in-app Options page changes (plan 11), before it
-  is built: of upstream's six waiting commits there, one already fixed here, two features
-  skipped, three ported by hand (one done, two in progress)
 - ✅ Graphite green: Graphite's colours are now zinc greys and one emerald green (selection,
   ticked boxes, focus, links, the default button, progress) in place of amethyst and cyan, and
   the app icon's double chevron is the same emerald, light into deep: in the app, the installer,
   the browser extension, and the website's logos and favicon.
+- 🔄 The original MDM's fixes in the files the in-app Options page changes (plan 11), before it
+  is built: of upstream's six waiting commits there, one already fixed here, two features
+  skipped, three ported by hand (one done, two in progress).
 - 🔄 Options in the main window (plan 11): ✅ Options' pages open in place of the download list,
   with **← Downloads**, a Save / Discard bar, and a question before unsaved changes are thrown
   away (11a); the Scheduler, the Speed Limiter's and torrents' settings and the browser
-  extension become sections of it next (11b)
+  extension become sections of it next (11b).
 
 ## Being worked on
 

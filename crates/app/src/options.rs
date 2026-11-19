@@ -4142,7 +4142,7 @@ fn progress_dialog(ui: &mut Ui, o: Pos2, shown: &mut bool) -> Outcome<()> {
         o.x + e,
         o.y + 29.0,
         crate::i18n::t(
-            "Without it, downloads go on in the main window's list. Double-click one there to see its progress.",
+            "Without the progress window, downloads go on in the main window's list. Double-click one there to see its progress.",
         ),
         LIGHT_TEXT(),
         o.x + PROGRESS_W - e,

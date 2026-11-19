@@ -12852,6 +12852,32 @@ mod start_disk_tests {
         app.apply_state_reads();
         assert_eq!(get(&app, 2).downloaded, 7, "the late read is dropped");
     }
+
+    /// Upstream 1041 (PR 78's audit): with "Show download progress dialog when a download
+    /// starts" unticked, a start that would open the progress window doesn't, and a double-click
+    /// on the running download still opens it; ticked, the start opens it as before.
+    #[test]
+    fn the_progress_window_follows_its_setting() {
+        let dir = tempfile::tempdir().unwrap();
+        for shown in [false, true] {
+            let mut app = app_with(vec![row(3, dir.path().join("a.zip"), Status::Stopped)]);
+            app.settings.show_progress = shown;
+            app.start(3, true);
+            assert!(get(&app, 3).live.is_some(), "it started");
+            assert_eq!(
+                app.progress.iter().any(|p| p.id == 3),
+                shown,
+                "shown: {shown}"
+            );
+            if !shown {
+                app.open_item(3);
+                assert!(
+                    app.progress.iter().any(|p| p.id == 3),
+                    "a double-click opens it"
+                );
+            }
+        }
+    }
 }
 
 #[cfg(test)]
