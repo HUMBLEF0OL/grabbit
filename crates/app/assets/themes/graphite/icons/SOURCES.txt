@@ -112,3 +112,5 @@ gx-moon              moon
 gx-clipboard         clipboard
 gx-list-numbers      list-numbers
 gx-drag-drop         drag-drop
+gx-arrow-left        arrow-left
+gx-puzzle            puzzle

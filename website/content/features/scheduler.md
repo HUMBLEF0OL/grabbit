@@ -9,7 +9,7 @@ group: organising
 order: 110
 since: 0.1.0
 shot: /assets/screens/scheduler-light.webp
-shot_alt: The Scheduler: the queues on the left, the Main download queue's Schedule tab on the right with Start download at, Daily, Stop download at and Turn off computer when done
+shot_alt: The Scheduler, a section of Options in the main window: the queues on the left, the Main download queue's Schedule tab on the right with Start download at, Daily and Stop download at
 where: Downloads → Scheduler
 help: queues-and-scheduler.md
 ---

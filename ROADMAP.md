@@ -579,10 +579,20 @@ The maintainer's first findings with 1.0.0 (in `dev`, for the next release):
   each is and sends it into its usual window; its arrow has Open a .torrent file (Ctrl+O), Add
   from the clipboard and Batch download. The paste bar names what it found and its button says
   what Enter does; links dropped on the main window open the Add window.
+- ✅ Options → Downloads → Customize "Download progress" dialog → Edit... opens its window, where
+  the progress window can be turned off for new downloads (upstream issue 1041; it was greyed).
 - ✅ Graphite green: Graphite's colours are now zinc greys and one emerald green (selection,
   ticked boxes, focus, links, the default button, progress) in place of amethyst and cyan, and
   the app icon's double chevron is the same emerald, light into deep: in the app, the installer,
   the browser extension, and the website's logos and favicon.
+- 🔄 The original MDM's fixes in the files the in-app Options page changed (plan 11): of
+  upstream's six waiting commits there, one already fixed here, two features skipped, three
+  ported by hand (one done, two in progress).
+- ✅ Options in the main window (plan 11): Options' pages open in place of the download list,
+  with **← Downloads**, a Save / Discard bar, and a question before unsaved changes are thrown
+  away; the Scheduler, the Speed Limiter's and torrents' settings and the browser extension are
+  sections of it, under **Tools**; the help pages' pictures show the new page. The look's
+  settings stay in the View menu.
 
 ## Being worked on
 
@@ -822,9 +832,5 @@ kept on the `archive/multiplatform-i18n` branch.
 
 ### Look and performance
 
-- 📋 Options in the main window: Options, the Scheduler, the Speed Limiter's and torrents'
-  settings and the browser extension open as a page in the main window, with a side list and a
-  Save bar, instead of their own windows; adding and watching downloads stay dialogs
-  (`design/graphite/plans/11-in-app-settings.md`)
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))

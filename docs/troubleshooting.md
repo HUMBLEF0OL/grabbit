@@ -44,7 +44,7 @@ When none of this helps, the browser keeps the download, so nothing is lost. The
 ## The Scheduler didn't start the queue
 
 - Grabbit must be running at that time. Closing the window is fine (it stays in the tray); **Tasks → Exit** is not.
-- Did you click **Apply** after setting the time?
+- Did you click **Save** after setting the time?
 - **Daily** starts only on the ticked days. **Once at** starts only on that date.
 - A computer that is asleep doesn't run anything until it wakes, unless the queue has **Wake the computer to run this queue** ticked (on Windows it needs **Allow wake timers** in the power plan; the Scheduler says when it's off). See [Wake the computer to run a queue](queues-and-scheduler.md#wake-the-computer-to-run-a-queue).
 

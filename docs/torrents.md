@@ -98,7 +98,7 @@ Feeds and rules are kept in `rss.json` in Grabbit's data folder. Grabbit reads a
 
 ## Torrent settings
 
-Choose **Tasks → Torrent settings...**:
+Choose **Tasks → Torrent settings...**. They open in the main window, as the **Torrents** section of [Options](options.md), listed under **Tools**; **Save** keeps your changes, **Discard** throws them away, and **← Downloads** goes back to the list:
 
 ![Torrent settings: sharing, limits and what others can see](images/help/torrent-settings.webp)
 *Tasks → Torrent settings...*
@@ -111,7 +111,7 @@ Choose **Tasks → Torrent settings...**:
 - **Limit uploading for all torrents to** — off by default. Caps what all your torrents together send to other peers, while they download and while they share. A torrent's own upload limit, in its progress window, applies on top of it.
 - **Open magnet links and .torrent files with Grabbit** — Windows then opens magnet links in your browser and `.torrent` files in Explorer with Grabbit. This is for your Windows account only; a program you chose in Windows' **Open with** stays first. The setup can turn it on for you.
 
-The same window has the network switches (incoming connections, the port, UPnP, the DHT, a SOCKS5 proxy) and the blocklist: see [Torrents and your security](torrent-security.md).
+The same section has the network switches (incoming connections, the port, UPnP, the DHT, a SOCKS5 proxy) and the blocklist: see [Torrents and your security](torrent-security.md).
 
 Grabbit starts its torrent engine the first time you add a torrent. If you never use torrents, it never listens for peers.
 

@@ -98,9 +98,10 @@ def shoot(shots: list[dict], bin_dir: Path, work: str | None, extra: list[str]) 
             takes.append(s["take"])
     if not takes:
         return
-    # A take that changes something first ("theme:breeze+@main") goes last, so it doesn't
-    # change the other shots.
-    takes.sort(key=lambda t: "+" in t)
+    # A take that changes something before it opens its page ("size:1080x680+scheduler+@main")
+    # goes last, so it doesn't change the other shots: one more "+" than "options:x+@main".
+    # (docs-shots.ps1 sets the first size again before its own main-window shot.)
+    takes.sort(key=lambda t: t.count("+"))
     torrent = ROOT / "tools" / "lab" / "Open Movie Night.torrent"
     for mode in ("light", "dark"):
         out = RAW / mode

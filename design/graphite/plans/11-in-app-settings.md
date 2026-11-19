@@ -9,6 +9,52 @@ Plan written on dev `da63b006`, 2026-11-18 (by a read-only planning agent; verif
 - Branches: `ui/11a-options-page`, `ui/11b1-scheduler-section`, `ui/11b2-small-sections`, `ui/11c-appearance` (optional). Origin only, per 00.
 - Needs: 08 (side list, `page_area`), 09, 10e. Before 11a: `sync.py status`, port anything waiting in `options.rs` / `scheduler.rs`.
 
+## Status (2026-11-19): complete
+
+Plan 11 is complete: 11a (PR 79), 11b1 (PR 80) and 11b2 (PR 81) are merged; 11c is recorded as
+not wanted (below); the help pictures of the moved windows are retaken in the plan's closing PR.
+The history of each part follows.
+
+11a is merged (PR 79, with the panels port before it, PR 78): `settingspage.rs`, Options' shell
+in `options.rs`, the page in `App::paint`, `gx-arrow-left` and `gx-puzzle`, the docs, and the shot
+tools' `options:<page>+@main` takes. 11b1 is merged (PR 80): the side list's **Tools** caption
+and Scheduler row (`options::TOOLS`, page 12), `dialogs::inline`, `Scheduler::section` /
+`overlays` / `save` / `dirty` with Start now and Stop on its tabs' row, the page's Save saving the
+Scheduler first, the commands and `/show scheduler[:files|limits|name]` opening the section, the
+docs and the `scheduler+@main` takes. 11b2 is merged (PR 81): Speed limiter
+(13), Torrents (14) and Browser extension (15) sections (`SpeedSettings::section` / `choice` /
+`dirty`, `TorrentSettings::section` / `choice` / `dirty`, `Extension::section` without its
+footer), Save in the order Scheduler, Speed, Torrents, Options (`apply_speed`,
+`apply_torrent_settings`), `Cmd::LimiterSettings`, `Cmd::TorrentSettings`, `/show speedlimit`,
+`/show torrent-settings` and `options:speed|torrents|extension` opening them; the offer at a start
+and `/show extension` stay the window. 11c is not wanted (2026-11-19, the maintainer's call).
+
+The status at the 1.0.1 handover (2026-11-18, dev `9a12944b`): the pre-step ports are done but
+not merged; each is a pushed branch with one commit and no pull request yet, 6 commits behind dev:
+
+| Branch | Upstream | State |
+| --- | --- | --- |
+| `upstream-sync/2026-11-18` | 81afcae2 (upstream issue 1041): Options → Downloads → Edit… opens the Download progress dialog; also `winui::enter_is_not_a_click` clears egui's `FAKE_PRIMARY_CLICKED`, so Enter on a focused check box no longer ticks it and presses OK in every dialog | built, tests green; its ledger also records c0be4d33 covered, e44dfc02 and 34cacf3a skipped |
+| `upstream-sync/2026-11-18-1058` | 868f3087 (upstream issues 1058, 1091): a `.torrent` downloaded in the browser stays with the browser while Torrent settings don't open torrents with Grabbit; Grabbit is listed in Default apps | not yet compiled; review its installer (`mdm.iss`) edits |
+| `upstream-sync/2026-11-18-818` | a70b2c17: browser integration from a copy run inside a zip no longer leaves browsers looking for a helper that is gone | not yet compiled |
+
+The 1058 and 818 ports change `extension.rs`, `nmhost` and `win32.rs`, which the 1.0.1 feedback
+PR (69) rewrote (no store listing, only the unpacked ID, `com.grabbit.host`): merge dev into each
+and resolve onto that model, then build, test and open each through `sync.py pr`.
+
+Since this plan was written, dev changed the main window it builds on (verify every line number
+by name): PR 69 put the Find field in the title bar (`find.rs` `Bar`, `/show find:<text>`,
+`/show find-options`), the light/dark button at the status strip's end (`Cmd::ToggleMode`,
+`/show mode[:light|:dark]`; View → Dark Mode support and Always dark are gone, so 11c has no
+dark-mode rows), made the first window 1080 × 560 and changed the browser extension window's
+rows to "Show me how"; PR 75 switched Graphite to the green palette. The universal Add (PR 76,
+draft) changes the toolbar's first item and the paste bar; take its icon-list additions in
+`gen3.py` / `themeicons.rs` alongside this plan's `gx-arrow-left` and `gx-puzzle`.
+
+Order: the three ports, then 11a, 11b1, 11b2 (11c only if wanted), each its own pull request
+with an external audit until approved. The help pictures are retaken once for the 1.0.1 release,
+not per part (PR screenshots per part as usual).
+
 ## Decisions (default if no answer)
 
 | # | Question | Default | Why |
@@ -72,6 +118,11 @@ Speed limiter (`dialogs.rs:2127`) → `show(ui, o)` via `inline`, footer removed
 
 ## 11c · Appearance (optional)
 
+**Not wanted** (maintainer, 2026-11-19): it would only repeat the View menu's settings in a second
+place, with nothing new to set, and add one more section to every picture retake. The View menu
+stays the one place for the look; the side list keeps no **Look** caption. The proposal is kept
+below for the record.
+
 A section built from the View menu's data (themes, Add a theme file…, Open themes folder, interface size, draw with); each control emits the menu's own `Cmd`, live; save bar greyed. NOTE: PR 69 removed View → Dark Mode support / Always dark (the mode is the status-strip button now).
 
 ## Upstream sync
@@ -96,10 +147,10 @@ Hidden list keys (early return skips shortcut_cmd/tab_keys; tested); lost edits 
 
 ## Done when
 
-- [ ] 11a: Options opens in the main window from toolbar, menu, tray, `/show options:*` and the extension's Button settings; Save/Discard/Back per D2/D3; no "Grabbit Configuration" window remains.
-- [ ] 11b1: Scheduler is a section; queue right-click, Start now and Stop work; no Scheduler window remains.
-- [ ] 11b2: Speed limiter, Torrents and Browser extension are sections; the extension offer at start still opens by itself.
-- [ ] Flow dialogs and D5's small dialogs unchanged.
-- [ ] Help pictures retaken, `make.py check` passes; docs, website wording, ARCHITECTURE, CHANGELOG, ROADMAP updated.
-- [ ] `sync.py status` sorts upstream's waiting commits the same before and after each part.
-- [ ] 11c done or recorded as not wanted.
+- [x] 11a: Options opens in the main window from toolbar, menu, tray, `/show options:*` and the extension's Button settings; Save/Discard/Back per D2/D3; no "Grabbit Configuration" window remains.
+- [x] 11b1: Scheduler is a section; queue right-click, Start now and Stop work; no Scheduler window remains.
+- [x] 11b2: Speed limiter, Torrents and Browser extension are sections; the extension offer at start still opens by itself.
+- [x] Flow dialogs and D5's small dialogs unchanged (checked in each part's external audit, PRs 79-81).
+- [x] Help pictures retaken, `make.py check` passes; docs, website wording, ARCHITECTURE, CHANGELOG, ROADMAP updated.
+- [x] `sync.py status` sorts upstream's waiting commits the same before and after each part (95 waiting at PRs 80 and 81).
+- [x] 11c done or recorded as not wanted (not wanted, 2026-11-19).

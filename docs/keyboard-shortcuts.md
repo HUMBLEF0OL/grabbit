@@ -80,6 +80,18 @@ a branch, and **Home** / **End** go to the first / last node.
 
 A window larger than the screen at a big interface size scrolls.
 
+## On the Options page
+
+**Options** opens in the main window, in place of the download list ([Options](options.md)).
+
+| Keys | What they do |
+|---|---|
+| **Esc** or **Alt+Left** | Back to the download list (**← Downloads**); with changes not saved yet, Grabbit asks first |
+| **Enter** | **Save** your changes (not while a smaller window over the page, or the paste bar or Find, has the keys) |
+| **Ctrl+Tab** / **Ctrl+Shift+Tab** | The next / previous page (also **Ctrl+Page Down** / **Page Up**) |
+| **Up** / **Down**, **Left** / **Right**, **Home** / **End** | In the list of pages: the page before / after, the first / last |
+| **Tab** / **Shift+Tab** | Move through the page's controls |
+
 ## In dialogs
 
 | Keys | What they do |
@@ -89,7 +101,7 @@ A window larger than the screen at a big interface size scrolls.
 | **Space** | Press a focused button, tick a check box, tick the selected row of a list |
 | **Esc** | Close the dialog (an open drop-down list first) |
 | **Alt** + an underlined letter | That button or control |
-| **Ctrl+Tab** / **Ctrl+Shift+Tab** | The next / previous tab, or Options page (also **Ctrl+Page Down** / **Page Up**) |
+| **Ctrl+Tab** / **Ctrl+Shift+Tab** | The next / previous tab, or Options page (also **Ctrl+Page Down** / **Page Up**). On the Scheduler, a section of Options, the next / previous section: its two tabs switch with **Left** / **Right** on the selected tab |
 | **Left** / **Right** | The next tab of a focused tab strip, or Options page of its focused side list; the next choice of a radio group |
 | **Up** / **Down** | The next Options page of its focused side list; the next choice of a drop-down list or radio group; a number up or down |
 | **Alt+Down** or **F4** | Open a drop-down list |

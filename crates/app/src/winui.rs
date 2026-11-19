@@ -3999,6 +3999,12 @@ pub fn footer_button_width(p: &Painter, label: &str, icon: bool) -> f32 {
         .max(FOOTER_BUTTON_MIN)
 }
 
+/// Where a dialog's own line before a footer's trailing buttons (of the given widths) must end:
+/// one gap before the leftmost of them (English x).
+pub fn footer_trailing_left(client_w: f32, widths: &[f32]) -> f32 {
+    client_w - EDGE - widths.iter().sum::<f32>() - FOOTER_GAP * widths.len() as f32
+}
+
 /// What a [`footer`] holds: buttons, and leading check boxes (Add torrent's "Download in
 /// order", Confirm deletion's "Don't show this dialog again"): caption, value, and whether it
 /// can be ticked now (greyed otherwise, as Add torrent's until it has files).
@@ -5445,7 +5451,11 @@ pub fn focus_on_press(resp: &Response) {
 /// pressed OK). Links do open on Enter.
 pub fn enter_is_not_a_click(ui: &Ui, mut resp: Response) -> Response {
     if resp.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+        // egui marks a key's click FAKE_PRIMARY_CLICKED, not CLICKED (a pointer's): both go, or
+        // Enter still ticked the box while it pressed OK.
         resp.flags.remove(egui::response::Flags::CLICKED);
+        resp.flags
+            .remove(egui::response::Flags::FAKE_PRIMARY_CLICKED);
     }
     resp
 }

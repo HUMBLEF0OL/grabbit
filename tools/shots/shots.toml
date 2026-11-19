@@ -145,9 +145,13 @@ caption = "Download complete: Open the file, or Open folder."
 id = "options-integration"
 page = "browser-integration.md"
 under = "What it takes"
-take = "options:general"
-crop = [195, 162, 618, 199]
-marks = [{ at = "Use advanced browser integration", side = "right" }, { at = [206, 266, 255, 16], side = "right" }]
+take = "options:general+@main"
+# Pad 6: the rows are 22 apart, so the row above stays out. Mark 2 inside the list, just past
+# the "Google Chrome" row's label (its tick box at [228, 452]): on the list's edge it sat beside
+# Test browser integration... and Add browser... and read as theirs. Pixels, as the row's name
+# matches its whole width or only its tick box: check this mark when the General page changes.
+crop = { around = ["Use advanced browser integration", "List:Capture downloads from the following browsers:", "Button:Test browser integration"], pad = 6 }
+marks = [{ at = "Use advanced browser integration", side = "right" }, { at = [228, 452, 112, 17], side = "right" }]
 alt = "Options, General: Use advanced browser integration and the list of browsers Grabbit takes downloads from"
 caption = "1 must be on, and 2 your browser ticked."
 
@@ -263,7 +267,9 @@ caption = "RSS feeds, and the rules that pick what to download."
 id = "torrent-settings"
 page = "torrents.md"
 under = "Torrent settings"
-take = "torrent-settings"
+# A section of Options' page in the main window (plan 11b2).
+take = "torrent-settings+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Torrent settings: sharing, limits and what others can see"
 caption = "Tasks → Torrent settings..."
 
@@ -272,8 +278,10 @@ caption = "Tasks → Torrent settings..."
 [[shot]]
 id = "scheduler"
 page = "queues-and-scheduler.md"
-under = "The Scheduler window"
-take = "scheduler"
+under = "The Scheduler"
+# A section of Options' page in the main window (plan 11b1).
+take = "scheduler+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 marks = [{ at = "Main download queue", side = "right" }, { at = "Download limits", side = "right" }, { at = "TabItem:Schedule", side = "top" }, { at = "Files in the queue", side = "top" }]
 alt = "The Scheduler: the queues on the left with Download limits, the selected queue's Schedule tab on the right"
 caption = "1 the queues, 2 Download limits, 3 the queue's schedule, 4 its files."
@@ -357,7 +365,8 @@ caption = "Help → About: the version you have."
 id = "options-general"
 page = "options.md"
 under = "General"
-take = "options:general"
+take = "options:general+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Options on its General page: start with the system, the clipboard, browser integration and the browsers Grabbit takes downloads from"
 caption = "General: how Grabbit starts, and what it takes from the clipboard and the browsers."
 
@@ -365,7 +374,8 @@ caption = "General: how Grabbit starts, and what it takes from the clipboard and
 id = "options-file-types"
 page = "options.md"
 under = "File types"
-take = "options:types"
+take = "options:types+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Options on its File types page: the file types the browser hands to Grabbit and the sites it leaves alone"
 caption = "File types: what the browser hands over, and the sites left alone."
 
@@ -373,7 +383,8 @@ caption = "File types: what the browser hands over, and the sites left alone."
 id = "options-save-to"
 page = "options.md"
 under = "Save to"
-take = "options:saveto"
+take = "options:saveto+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Options on its Save to page: a category, its file types and its folder"
 caption = "Save to: each category's file types and folder."
 
@@ -381,7 +392,8 @@ caption = "Save to: each category's file types and folder."
 id = "options-downloads"
 page = "options.md"
 under = "Downloads"
-take = "options:downloads"
+take = "options:downloads+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Options on its Downloads page: the start download dialog, Download complete and duplicate links"
 caption = "Downloads: which windows show, and what a duplicate link does."
 
@@ -389,7 +401,8 @@ caption = "Downloads: which windows show, and what a duplicate link does."
 id = "options-connection"
 page = "options.md"
 under = "Connection"
-take = "options:connection"
+take = "options:connection+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Options on its Connection page: connections per download, per-server exceptions, download limits and DNS"
 caption = "Connection: how many connections, exceptions per server, download limits and DNS."
 
@@ -397,7 +410,8 @@ caption = "Connection: how many connections, exceptions per server, download lim
 id = "options-proxy"
 page = "options.md"
 under = "Proxy / Socks"
-take = "options:proxy"
+take = "options:proxy+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Options on its Proxy / Socks page"
 caption = "Proxy / Socks: no proxy, the system's, or your own."
 
@@ -405,7 +419,8 @@ caption = "Proxy / Socks: no proxy, the system's, or your own."
 id = "options-logins"
 page = "options.md"
 under = "Sites Logins"
-take = "options:logins"
+take = "options:logins+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Options on its Sites Logins page, before any site is added: the list of sites with their user names"
 caption = "Sites Logins: a user name and password per site."
 
@@ -413,7 +428,8 @@ caption = "Sites Logins: a user name and password per site."
 id = "options-accounts"
 page = "options.md"
 under = "Accounts"
-take = "options:accounts"
+take = "options:accounts+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Options on its Accounts page: debrid service accounts"
 caption = "Accounts: your debrid accounts."
 
@@ -421,7 +437,8 @@ caption = "Accounts: your debrid accounts."
 id = "options-sounds"
 page = "options.md"
 under = "Sounds"
-take = "options:sounds"
+take = "options:sounds+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Options on its Sounds page: a sound for each event"
 caption = "Sounds: a sound for each event."
 
@@ -429,7 +446,8 @@ caption = "Sounds: a sound for each event."
 id = "options-regional"
 page = "options.md"
 under = "Regional"
-take = "options:regional"
+take = "options:regional+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Options on its Regional page: the system's way of writing dates and times, or your own"
 caption = "Regional: dates and times as the system writes them, or your own way."
 
@@ -437,7 +455,8 @@ caption = "Regional: dates and times as the system writes them, or your own way.
 id = "options-archives"
 page = "options.md"
 under = "Archives"
-take = "options:archives"
+take = "options:archives+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Options on its Archives page: extracting archives when they are downloaded, and Link grabber's look-ups"
 caption = "Archives: extract when downloaded, and where the files go."
 
@@ -482,9 +501,13 @@ caption = "Done: Open the file, or Open folder."
 id = "catch-file-types"
 page = "guide-catch-browser-downloads.md"
 under = "Choose what Grabbit takes"
-take = "options:types"
-# The two lists have no accessible names: above their right ends, beside their labels.
-marks = [{ at = [700, 122, 103, 72], side = "top" }, { at = [700, 258, 103, 44], side = "top" }]
+take = "options:types+@main"
+# The two lists have no accessible names: above their right ends, beside their labels. The
+# Options window's [700, 122] and [700, 258] moved with the page into the main window (plan
+# 11a): 110 lower (its title bar, toolbar and paste bar, 142, for the window's 32-point title
+# bar) and 17 right (the side list's scroll bar at the first window size, 1080 x 560).
+crop = { around = ["Pane:Options"], pad = 0 }
+marks = [{ at = [717, 232, 103, 72], side = "top" }, { at = [717, 368, 103, 44], side = "top" }]
 alt = "Options, File types: the file types Grabbit takes from the browser, and the sites it leaves alone"
 caption = "1 the file types Grabbit takes, 2 the sites it leaves to the browser."
 
@@ -502,8 +525,8 @@ caption = "Download Later puts it in a queue instead of starting it."
 id = "overnight-start"
 page = "guide-download-overnight.md"
 under = "2. Set the start time"
-take = "scheduler"
-crop = [208, 130, 567, 192]
+take = "scheduler+@main"
+crop = { around = ["CheckBox:Start download at", "Daily", "CheckBox:Saturday", "CheckBox:Stop download at"], pad = 12 }
 marks = [{ at = "Start download at", side = "right" }, { at = "Daily", side = "right" }, { at = "Stop download at", side = "right" }]
 alt = "The Scheduler's Schedule tab: Start download at, Once at or Daily, and Stop download at"
 caption = "1 the start time, 2 once or daily, 3 a stop time if you want one."
@@ -512,8 +535,10 @@ caption = "1 the start time, 2 once or daily, 3 a stop time if you want one."
 id = "overnight-done"
 page = "guide-download-overnight.md"
 under = "4. Decide what happens at the end (optional)"
-take = "scheduler"
-crop = [218, 342, 562, 90]
+# The section's end is below the page at the first window size (1080 x 560): a taller window
+# (/show size, off-screen runs only), shot after the others (make.py's take order).
+take = "size:1080x680+scheduler+@main"
+crop = { around = ["CheckBox:Open the following file when done", "Edit:Open the following file when done", "ComboBox:Turn off computer when done", "CheckBox:Force processes to terminate"], pad = 12 }
 ring = ["CheckBox:Turn off computer when done"]
 alt = "The Scheduler's choices for when the queue is done, Turn off computer when done among them"
 caption = "When the queue is done: open a file, quit Grabbit, or turn the computer off."
@@ -522,7 +547,9 @@ caption = "When the queue is done: open a file, quit Grabbit, or turn the comput
 id = "speed-limiter"
 page = "guide-keep-speed-for-everything-else.md"
 under = "Cap Grabbit as a whole (recommended)"
-take = "speedlimit"
+# A section of Options' page in the main window (plan 11b2).
+take = "speedlimit+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Speed Limiter settings: the maximum speed for one file, and a limit for all downloads together"
 caption = "Downloads → Speed Limiter → Settings...: a speed for each file, or one for all downloads together."
 
@@ -530,7 +557,8 @@ caption = "Downloads → Speed Limiter → Settings...: a speed for each file, o
 id = "usb-save-to"
 page = "guide-usb-stick.md"
 under = "2. Save downloads to the stick"
-take = "options:saveto"
+take = "options:saveto+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 ring = ["Default download directory for"]
 alt = "Options, Save to: a category's folder"
 caption = "Point each category's folder at the stick."
@@ -573,8 +601,8 @@ caption = "It downloads like any other file."
 id = "test-integration"
 page = "browser-integration.md"
 under = "When Grabbit isn't running"
-take = "options:general"
-crop = [195, 256, 618, 114]
+take = "options:general+@main"
+crop = { around = ["Test browser integration...", "List:Capture downloads from the following browsers:"], pad = 12 }
 ring = ["Test browser integration..."]
 alt = "Options, General with Test browser integration..."
 caption = "Test browser integration... says whether the browser reaches Grabbit."

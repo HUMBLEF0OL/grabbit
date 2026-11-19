@@ -345,6 +345,22 @@ pub(crate) fn window<T>(
     dialog_window(ctx, id, title, client, minimize, bg, Kind::Plain, body)
 }
 
+/// A dialog's layout drawn in place, in a section of Options' page in the main window (plan
+/// 11b): `client` points from `o` filled with `bg`, `body` given `o` as [`window`] gives it its
+/// client origin, painting at the same coordinates. What `body` answers.
+pub(crate) fn inline<R>(
+    ui: &mut Ui,
+    o: Pos2,
+    client: [f32; 2],
+    bg: egui::Color32,
+    body: impl FnOnce(&mut Ui, Pos2) -> R,
+) -> R {
+    let rect = egui::Rect::from_min_size(o, egui::vec2(client[0], client[1]));
+    ui.painter().rect_filled(rect, 0.0, bg);
+    let _surface = winui::Surface::enter(o.x, o.x + client[0]);
+    body(ui, o)
+}
+
 /// A question that must be answered (Yes / No, a countdown): a `window` that stays above the
 /// app's other windows and takes the focus when it opens, so a click on the dialog that asked
 /// it, or on the main window, never hides it behind them (it is also owned by the main window).
@@ -1867,11 +1883,18 @@ pub struct SpeedSettings {
     pub global_kb: String,
     pub only_active: bool,
     /// How much taller the note is than IDM's three lines (a longer translation): the rows
-    /// below it and the window move down by this much (from the frame before).
+    /// below it and the section move down by this much (from the frame before).
     note_extra: f32,
+    /// [`SpeedSettings::choice`] as it opened: changed from it, the draft is dirty.
+    opened: SpeedChoice,
 }
 
-/// What Speed Limiter settings → OK sets.
+/// The Speed limiter section's width (the window's mockup width) and its rows' height.
+const SPEED_W: f32 = 480.0;
+const SPEED_BODY: f32 = 172.0;
+
+/// What Speed Limiter settings' Save sets.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SpeedChoice {
     pub kb: u64,
     pub on_startup: bool,
@@ -1882,27 +1905,37 @@ pub struct SpeedChoice {
 
 impl SpeedSettings {
     pub fn new(s: &crate::settings::Settings) -> Self {
-        SpeedSettings {
+        let mut d = SpeedSettings {
             kb: s.speed_limit_kb.to_string(),
             on_startup: s.limiter_on_startup,
             global_on: s.global_limit_on,
             global_kb: s.global_limit_kb.to_string(),
             only_active: s.global_only_active,
             note_extra: 0.0,
-        }
+            opened: SpeedChoice {
+                kb: 0,
+                on_startup: false,
+                global_on: false,
+                global_kb: 0,
+                only_active: false,
+            },
+        };
+        // Its boxes as read back untouched (a value they clamp differs from the settings).
+        d.opened = d.choice();
+        d
     }
 
-    pub fn show(&mut self, ctx: &egui::Context) -> Outcome<SpeedChoice> {
-        let extra = self.note_extra;
-        // The mockup's width; the rows as they were, then the footer.
-        const W: f32 = 480.0;
-        let body = 172.0 + extra;
-        window(
-            ctx,
-            "speed-settings",
-            "Speed Limiter settings",
-            [W, body + winui::FOOTER_H],
-            false,
+    /// The Speed limiter as a section of Options' page (plan 11b2): its rows at `o`, as the
+    /// window's client had them, [`SpeedSettings::size`] points; OK and Cancel are the page's
+    /// Save and Discard.
+    #[rustfmt::skip]
+    pub fn section(&mut self, ui: &mut Ui, o: Pos2) {
+        // The mockup's width; the rows as they were.
+        const W: f32 = SPEED_W;
+        inline(
+            ui,
+            o,
+            self.size(),
             winui::LIGHT_BG(),
             |ui, o| {
                 let p = ui.painter().clone();
@@ -1999,40 +2032,29 @@ impl SpeedSettings {
                     "Only while I'm using the computer",
                     on,
                 );
-                // Enter OK, Escape Cancel, as before. (`o` moved down by the note's extra lines:
-                // the footer is placed on the window's own top.)
-                let pressed = winui::footer(
-                    ui,
-                    o - vec2(0.0, self.note_extra),
-                    W,
-                    body,
-                    &mut [
-                        FooterItem::Button(
-                            // Its ring shows while nothing has the keys, as before.
-                            FooterButton::new("OK", ButtonKind::Default)
-                                .enter(true)
-                                .ring(true),
-                        ),
-                        FooterItem::Button(
-                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
-                        ),
-                    ],
-                );
-                if pressed == Some(1) {
-                    Outcome::Closed
-                } else if pressed == Some(0) {
-                    Outcome::Done(SpeedChoice {
-                        kb: winui::number_in(&self.kb, 1, 9_999_999),
-                        on_startup: self.on_startup,
-                        global_on: self.global_on,
-                        global_kb: winui::number_in(&self.global_kb, 1, 9_999_999),
-                        only_active: self.only_active,
-                    })
-                } else {
-                    Outcome::Open
-                }
             },
-        )
+        );
+    }
+
+    /// The section's layout size: the window's client without its footer.
+    pub fn size(&self) -> [f32; 2] {
+        [SPEED_W, SPEED_BODY + self.note_extra]
+    }
+
+    /// What Save sets: the boxes read (a box that doesn't parse keeps its bounds, as OK did).
+    pub fn choice(&self) -> SpeedChoice {
+        SpeedChoice {
+            kb: winui::number_in(&self.kb, 1, 9_999_999),
+            on_startup: self.on_startup,
+            global_on: self.global_on,
+            global_kb: winui::number_in(&self.global_kb, 1, 9_999_999),
+            only_active: self.only_active,
+        }
+    }
+
+    /// Whether Save would change anything: the choice differs from the one it opened with.
+    pub fn dirty(&self) -> bool {
+        self.choice() != self.opened
     }
 }
 

@@ -38,7 +38,7 @@ These pages explain each part of the program. The tutorials walk through the thi
 
 ## Settings
 
-- **[Options](options.md)** — every page of the Options window.
+- **[Options](options.md)** — every page of Options.
 - **[Themes](themes.md)** — Graphite, Grabbit's look, light and dark, and how to make your own theme in a text file.
 - **[Portable mode](portable.md)** — run Grabbit from a folder or a USB stick without installing it.
 - **[Keyboard shortcuts](keyboard-shortcuts.md)** — every key the main window answers, and screen readers.

@@ -29,9 +29,9 @@ The **Q** column shows which downloads are in a queue. Under **Queues** in the c
 
 A running queue starts its downloads in list order, a few at a time (four by default). When one fails, it moves to the end of the queue and is tried again 30 seconds later. The queue stops when nothing is left to download.
 
-## The Scheduler window
+## The Scheduler
 
-Open it with **Scheduler** on the toolbar or **Downloads → Scheduler**. Right-clicking a queue and choosing **Schedule** or **Edit queue** opens it on that queue.
+Open it with **Scheduler** on the toolbar or **Downloads → Scheduler**. Right-clicking a queue and choosing **Schedule** or **Edit queue** opens it on that queue. It opens in the main window, as a section of [Options](options.md) listed under **Tools**, in place of the download list; the toolbar, the paste bar and the status bar stay, and downloads keep running. **← Downloads** (or **Esc**, or **Alt+Left**) goes back to the list.
 
 ![The Scheduler: the queues on the left with Download limits, the selected queue's Schedule tab on the right](images/help/scheduler.webp)
 *1 the queues, 2 Download limits, 3 the queue's schedule, 4 its files.*
@@ -39,8 +39,9 @@ Open it with **Scheduler** on the toolbar or **Downloads → Scheduler**. Right-
 The queues are on the left, with **Download limits** below them. The right side shows the selected queue on two tabs, **Schedule** and **Files in the queue**.
 
 - **New queue** asks for a name and adds a queue. **Delete** removes one of your own queues; the two built-in queues can't be deleted. A deleted queue's downloads stay in the list.
-- **Start now** and **Stop** run or halt the selected queue straight away.
-- **Apply** saves your changes. **Close** closes the window.
+- **Start now** and **Stop**, at the right end of the tabs' row, run or halt the selected queue straight away. **Start now** keeps the Scheduler's changes first.
+- **Save**, at the bottom, keeps your changes, and **Discard** throws them away; both are greyed until you change something. Going back with changes not saved asks first whether to discard them (closing the Scheduler window used to keep them).
+- **Ctrl+Tab** goes to the next section of Options; click a tab, or use **Left** / **Right** on the selected tab, to switch between **Schedule** and **Files in the queue**.
 
 ## Schedule: starting and stopping on time
 
@@ -87,11 +88,11 @@ For an internet plan with a data cap, select **Download limits** on the left:
 
 1. Tick **Download limits**.
 2. Fill in **Download no more than [N] MBytes every [H] hours**. It starts at 200 MBytes every 5 hours.
-3. Click **Apply**.
+3. Click **Save**.
 
 When the limit is reached, Grabbit stops downloading. New downloads show **Waiting: the download limit is reached (Scheduler)**. Everything resumes on its own when the period is over. **Show warning before stopping downloads** tells you when this happens and when downloads will go on.
 
-The same setting is in **Options → Connection**.
+The same setting is in **Options → Connection**. If you change it in both before saving, Options → Connection's change is the one kept.
 
 ## Next steps
 

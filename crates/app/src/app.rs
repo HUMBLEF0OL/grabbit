@@ -593,9 +593,6 @@ pub struct App {
     auto_update: Option<crate::help::Slot>,
     /// The automatic check found a new version: its window comes to the front once shown.
     raise_updates: bool,
-    /// Options was asked for from outside (the extension's Button settings..., `/show`): it comes
-    /// to the front once shown, or it would open behind the browser (#77).
-    raise_options: bool,
     /// When MDM started (the update check waits a few seconds after it).
     started: Instant,
     /// When this run last checked for updates by itself (seconds since the epoch).
@@ -603,9 +600,10 @@ pub struct App {
     progress: Vec<Progress>,
     complete: Vec<Complete>,
     settings: Settings,
-    speed_settings: Option<dialogs::SpeedSettings>,
-    scheduler: Option<crate::scheduler::Scheduler>,
-    options: Option<crate::options::OptionsDialog>,
+    /// Options, shown in the main window in the panes' place (plan 11a), with the Scheduler
+    /// (11b1), Speed Limiter settings, Torrent settings and the browser extension (11b2) as
+    /// sections of it.
+    settings_page: Option<crate::settingspage::SettingsPage>,
     /// Downloads to finish off once stopped: Download File Info was cancelled after an early
     /// start (`None`: the download and its data go), or its file was given another place
     /// (`Some((dest, start))`: the data so far goes, it starts over there when `start`).
@@ -658,7 +656,6 @@ pub struct App {
     torrent_waiting: std::collections::VecDeque<(String, Option<crate::torrents::Remote>)>,
     /// Add torrent closed this frame: the next waiting one opens after a frame without it.
     torrent_closed: bool,
-    torrent_settings: Option<crate::torrentdlg::TorrentSettings>,
     /// Right-click → Torrent → Add trackers… (#39).
     add_trackers: Option<crate::torrentdlg::AddTrackers>,
     torrent_files: Option<crate::torrentfiles::TorrentFiles>,
@@ -1463,7 +1460,6 @@ impl App {
             extension_weighed: false,
             auto_update: None,
             raise_updates: false,
-            raise_options: false,
             started: Instant::now(),
             update_checked_this_run: None,
             file_info: None,
@@ -1472,9 +1468,7 @@ impl App {
             progress: Vec::new(),
             complete: Vec::new(),
             settings,
-            speed_settings: None,
-            scheduler: None,
-            options: None,
+            settings_page: None,
             category_dlg: None,
             category_for_file_info: false,
             grabber: None,
@@ -1505,7 +1499,6 @@ impl App {
             torrent_dlg: None,
             torrent_waiting: Default::default(),
             torrent_closed: false,
-            torrent_settings: None,
             add_trackers: None,
             torrent_files: None,
             rss: Default::default(),
@@ -2118,7 +2111,7 @@ impl App {
                 }
             } else if !live {
                 self.start(id, true);
-            } else if !self.progress.iter().any(|p| p.id == id) {
+            } else if self.settings.show_progress && !self.progress.iter().any(|p| p.id == id) {
                 self.progress
                     .push(Progress::new(id, self.settings.show_complete));
             }
@@ -2545,7 +2538,25 @@ impl App {
         let first = self.items.first().map(|i| i.id);
         let last = self.items.last().map(|i| i.id);
         let (window, tab) = name.split_once(':').unwrap_or((name, ""));
+        // Options is a page of the main window (plan 11a), the Scheduler one of its sections
+        // (11b1): every other name shows the downloads again first, the page's changes dropped
+        // (`downloads` does only that). The look's names (mode, theme, zoom, size) leave it
+        // open, for its pictures in either mode.
+        if !matches!(
+            window,
+            "options"
+                | "scheduler"
+                | "speedlimit"
+                | "torrent-settings"
+                | "mode"
+                | "theme"
+                | "zoom"
+                | "size"
+        ) {
+            self.close_settings_page();
+        }
         match window {
+            "downloads" => {}
             "addurl" => self.run(Cmd::AddUrl, None, ctx),
             // Download Later's queue selection panel, for no download (the screenshots').
             "later" if self.queue_pick.is_none() => {
@@ -2622,12 +2633,17 @@ impl App {
                 self.popup = None;
                 self.find_bar.open = true;
             }
-            // scheduler:files, scheduler:limits and scheduler:name open it on its main queue's
-            // Files in the queue, on Download limits, or asking a new queue's name (plan 07e's
-            // screenshots).
+            // The Scheduler's section of Options' page (plan 11b1); scheduler:files,
+            // scheduler:limits and scheduler:name open it on its main queue's Files in the
+            // queue, on Download limits, or asking a new queue's name (plan 07e's screenshots).
             "scheduler" => {
                 self.run(Cmd::Scheduler, None, ctx);
-                if let Some(s) = &mut self.scheduler {
+                if let Some(s) = self
+                    .settings_page
+                    .as_mut()
+                    .filter(|p| !p.modal())
+                    .and_then(|p| p.scheduler.as_mut())
+                {
                     match tab {
                         "files" => s.show_queue(0, true),
                         "limits" => s.show_limits(),
@@ -2676,6 +2692,17 @@ impl App {
             }
             // The main window minimized, not to the tray (tests of #162).
             "minimized" => ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true)),
+            // The main window at `<w>x<h>` points (plan 11a's screenshot of Options in the
+            // smallest window, 600x300): off-screen runs only, which ignore the saved size.
+            "size" if crate::offscreen() => {
+                if let Some((w, h)) = tab.split_once('x')
+                    && let (Ok(w), Ok(h)) = (w.parse::<f32>(), h.parse::<f32>())
+                    && w >= 600.0
+                    && h >= 300.0
+                {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(w, h)));
+                }
+            }
             // Off-screen test copies: the interface zoomed (`zoom:1.5`) while running, as a
             // display's scale changing does to every window (#89's checks).
             "zoom" if crate::offscreen() => {
@@ -2948,20 +2975,41 @@ impl App {
                     "sounds" => 8,
                     "regional" => 9,
                     "remote" | "pair" => 11,
+                    // Downloads → Customize "Download progress" dialog → Edit... (upstream 1041).
+                    "progress" => 3,
+                    // The sections that were windows (plan 11b): `scheduler` also opens it.
+                    "scheduler" => crate::options::SCHEDULER_PAGE,
+                    "speed" => crate::options::SPEED_PAGE,
+                    "torrents" => crate::options::TORRENTS_PAGE,
+                    "extension" => crate::options::EXTENSION_PAGE,
                     _ => 0,
                 };
                 self.run(Cmd::Options, None, ctx);
-                self.options = self.options.take().map(|o| o.on_page(page));
-                self.raise_options = true;
-                // General → Download panels → Edit... (the video button's settings).
-                if tab == "panels" {
-                    self.options = self.options.take().map(|o| o.with_panels());
-                }
-                // A window over a page (screenshots, #192): options:test, options:account.
-                self.options = self.options.take().map(|o| o.with_window(tab));
-                // Remote → Pair a device... (the docs' screenshots, #141).
-                if tab == "pair" {
-                    self.options = self.options.take().map(|o| o.with_pairing());
+                if let Some(mut p) = self.settings_page.take() {
+                    p.options = p.options.on_page(page);
+                    // General → Download panels → Edit... (the video button's settings).
+                    if tab == "panels" {
+                        p.options = p.options.with_panels();
+                    }
+                    // A window over a page (screenshots, #192): options:test, options:account,
+                    // options:progress.
+                    p.options = p.options.with_window(tab);
+                    // Remote → Pair a device... (the docs' screenshots, #141).
+                    if tab == "pair" {
+                        p.options = p.options.with_pairing();
+                    }
+                    // General with a change in the draft (Confirm before deleting downloads
+                    // flipped), its save bar live, and Back's question over it (plan 11a's
+                    // screenshots): options:changed, options:back. Nothing is saved.
+                    if matches!(tab, "changed" | "back") && !p.dirty() {
+                        let mut s = p.options.result();
+                        s.confirm_delete = !s.confirm_delete;
+                        p.options.set_draft(s);
+                    }
+                    if tab == "back" {
+                        p.back();
+                    }
+                    self.settings_page = Some(p);
                 }
             }
             _ => {}
@@ -3303,8 +3351,10 @@ impl App {
         }
     }
 
-    /// Start or resume a download; `show` opens its progress dialog (IDM's default).
+    /// Start or resume a download; `show` opens its progress dialog (IDM's default), unless
+    /// Options → Downloads → Customize "Download progress" dialog turned it off (upstream 1041).
     fn start(&mut self, id: u64, show: bool) {
+        let show = show && self.settings.show_progress;
         self.stopped_by_hand.remove(&id);
         let rt = self.rt.clone();
         let Some(item) = self.item(id) else { return };
@@ -4016,10 +4066,18 @@ impl App {
                 TrayCmd::Batch => Cmd::Batch(false),
                 TrayCmd::LimiterOn => Cmd::LimiterOn,
                 TrayCmd::LimiterOff => Cmd::LimiterOff,
-                TrayCmd::Scheduler => Cmd::Scheduler,
+                // A section of the main window's page now (plan 11b1): the window comes back.
+                TrayCmd::Scheduler => {
+                    self.show_window(ctx);
+                    Cmd::Scheduler
+                }
                 TrayCmd::StartQueue => Cmd::StartQueue(0),
                 TrayCmd::StopQueue => Cmd::StopQueue(0),
-                TrayCmd::Options => Cmd::Options,
+                // A page of the main window now (plan 11a): the window comes back with it.
+                TrayCmd::Options => {
+                    self.show_window(ctx);
+                    Cmd::Options
+                }
                 TrayCmd::Exit => Cmd::Exit,
                 TrayCmd::ShowDownload(id) => {
                     self.open_item(id);
@@ -5790,7 +5848,112 @@ impl App {
         Ok(answer)
     }
 
-    /// Options → OK: keep the new settings and act on what changed.
+    /// A fresh Options draft of the settings as they are now, on page `page`.
+    fn options_draft(&self, page: usize) -> crate::options::OptionsDialog {
+        crate::options::OptionsDialog::new(
+            &self.settings,
+            &self.downloads,
+            self.host_limits.learned(),
+        )
+        .with_remote(self.remote.clone())
+        .on_page(page)
+    }
+
+    /// Options' draft dropped (Discard, Back's Yes, another `/show`): what it did live is
+    /// undone, as the Options window's Cancel did: categories it added, changed or restored are
+    /// published as they are again, and the remote control listens as before Pair a device...
+    /// moved it.
+    fn discard_options(&self) {
+        self.settings.publish_categories();
+        if let Some(r) = &self.remote {
+            r.apply(crate::remote::config(&self.settings));
+        }
+    }
+
+    /// Options' page closed, its changes dropped; the downloads show again.
+    fn close_settings_page(&mut self) {
+        if let Some(p) = self.settings_page.take() {
+            // Pair a device... goes with the page (another `/show`): its code no longer pairs.
+            if p.options.pairing()
+                && let Some(r) = &self.remote
+            {
+                r.stop_pairing();
+            }
+            self.discard_options();
+        }
+    }
+
+    /// What Options' page asked for (plan 11a, D2): Save merges what the page changed into the
+    /// settings and applies it, Discard drops it; either way the page stays, on a fresh draft
+    /// of the same page. Close goes back to the downloads.
+    fn settings_page_event(&mut self, ev: crate::settingspage::PageEvent) {
+        use crate::settingspage::PageEvent;
+        let Some(p) = &mut self.settings_page else {
+            return;
+        };
+        let page = p.page();
+        let saved = ev == PageEvent::Save;
+        match ev {
+            PageEvent::Save => {
+                // The Scheduler's draft first (11b1), then only what Options' pages changed:
+                // Download limits, in both, keep the Scheduler's unless Options changed them.
+                let mut actions = Vec::new();
+                if let Some(s) = &mut p.scheduler {
+                    s.save(&self.queues, &mut actions);
+                }
+                for a in actions {
+                    self.scheduler_action(a);
+                }
+                // Then the Speed limiter's and Torrents' drafts, each only if changed (as OK
+                // set them), before Options' (11b2).
+                let Some(p) = &self.settings_page else {
+                    return;
+                };
+                let speed = p.speed.as_ref().filter(|s| s.dirty()).map(|s| s.choice());
+                let torrents = p
+                    .torrents
+                    .as_ref()
+                    .filter(|t| t.dirty())
+                    .map(|t| t.choice());
+                if let Some(c) = speed {
+                    self.apply_speed(c);
+                }
+                if let Some(c) = torrents {
+                    self.apply_torrent_settings(c);
+                }
+                let Some(p) = &self.settings_page else {
+                    return;
+                };
+                let new =
+                    Settings::merge_changes(&self.settings, &p.options.from, &p.options.result());
+                self.apply_options(new);
+            }
+            PageEvent::Discard => self.discard_options(),
+            PageEvent::Close => {
+                self.close_settings_page();
+                return;
+            }
+        }
+        let fresh = self.options_draft(page);
+        let downloads = self.downloads.clone();
+        if let Some(p) = &mut self.settings_page {
+            p.options = fresh.keep_view(&p.options, saved, &downloads);
+            // A fresh draft of the Scheduler, the Speed limiter and Torrents too, once visited.
+            if let Some(old) = &p.scheduler {
+                p.scheduler = Some(
+                    crate::scheduler::Scheduler::new(&self.queues, &self.settings).keep_view(old),
+                );
+            }
+            if p.speed.is_some() {
+                p.speed = Some(dialogs::SpeedSettings::new(&self.settings));
+            }
+            if p.torrents.is_some() {
+                p.torrents = Some(crate::torrentdlg::TorrentSettings::new(&self.settings));
+            }
+        }
+    }
+
+    /// Options → Save: keep the new settings and act on what changed.
     fn apply_options(&mut self, new: Settings) {
         new.publish_categories();
         // Portable mode writes nothing outside its folder (the option is off there).
@@ -5820,6 +5983,79 @@ impl App {
             && !file.is_empty()
         {
             crate::options::play_sound(file);
+        }
+    }
+
+    /// Speed Limiter settings' Save (plan 11b2; its window's OK until then).
+    fn apply_speed(&mut self, c: dialogs::SpeedChoice) {
+        self.settings.speed_limit_kb = c.kb;
+        self.settings.limiter_on_startup = c.on_startup;
+        self.settings.global_limit_on = c.global_on;
+        self.settings.global_limit_kb = c.global_kb;
+        self.settings.global_only_active = c.only_active;
+        self.apply_speed_limit();
+        self.dirty = true;
+    }
+
+    /// Torrent settings' Save (plan 11b2; its window's OK until then).
+    fn apply_torrent_settings(&mut self, c: crate::torrentdlg::TorrentChoice) {
+        let crate::torrentdlg::TorrentChoice {
+            share,
+            assoc,
+            net,
+            upload,
+            seeding,
+        } = c;
+        // The network: the next torrent session takes it (torrent_tick).
+        net.apply(&mut self.settings);
+        // The upload limit: at once (torrent_tick sets it on the session).
+        (
+            self.settings.torrent_upload_on,
+            self.settings.torrent_upload_kb,
+        ) = upload;
+        // Seeding limits: the tick stops those over them; raised, the finished torrents now
+        // under them are shared again (when sharing stays on).
+        let s = &mut self.settings;
+        let before = s.sharing_limits();
+        s.torrent_stop_ratio_on = seeding.ratio_on;
+        s.torrent_stop_ratio = seeding.ratio;
+        s.torrent_stop_minutes_on = seeding.minutes_on;
+        s.torrent_stop_minutes = seeding.minutes;
+        if share
+            && share == self.settings.torrent_keep_sharing
+            && before != self.settings.sharing_limits()
+        {
+            self.torrent_host.set_sharing(
+                &self.rt,
+                self.session_hashes(),
+                self.complete_torrents(),
+                true,
+            );
+        }
+        if share != self.settings.torrent_keep_sharing {
+            self.settings.torrent_keep_sharing = share;
+            self.torrent_host.set_sharing(
+                &self.rt,
+                self.session_hashes(),
+                self.complete_torrents(),
+                share,
+            );
+        }
+        if assoc != self.settings.torrent_associations {
+            self.settings.torrent_associations = assoc;
+            crate::win32::set_torrent_handlers(assoc);
+        }
+        self.dirty = true;
+    }
+
+    /// Options' page on a moved window's section (plan 11b2), opened if need be; not while
+    /// a small dialog of the page waits for an answer (it stays where it is).
+    fn open_section(&mut self, page: usize, ctx: &egui::Context) {
+        self.run(Cmd::Options, None, ctx);
+        if let Some(p) = &mut self.settings_page
+            && !p.modal()
+        {
+            p.show_section(page);
         }
     }
 
@@ -6356,9 +6592,8 @@ impl App {
                 self.apply_speed_limit();
                 self.dirty = true;
             }
-            Cmd::LimiterSettings => {
-                self.speed_settings = Some(dialogs::SpeedSettings::new(&self.settings));
-            }
+            // A section of Options' page (plan 11b2), as the Scheduler's.
+            Cmd::LimiterSettings => self.open_section(crate::options::SPEED_PAGE, ctx),
             // The title bar's search field takes the keys, its text selected.
             // Not while the title bar has no room for it: nothing to give the keys to.
             Cmd::Find => {
@@ -6394,12 +6629,7 @@ impl App {
                     self.tell_friend = Some(crate::help::TellFriend::new());
                 }
             }
-            Cmd::TorrentSettings => {
-                if self.torrent_settings.is_none() {
-                    self.torrent_settings =
-                        Some(crate::torrentdlg::TorrentSettings::new(&self.settings));
-                }
-            }
+            Cmd::TorrentSettings => self.open_section(crate::options::TORRENTS_PAGE, ctx),
             Cmd::RssFeeds(rules) => {
                 if self.rss_dlg.is_none() {
                     self.rss_dlg = Some(crate::rssdlg::RssWindow::new(&self.rss, rules));
@@ -6461,39 +6691,34 @@ impl App {
                     self.batch = Some(crate::batch::Batch::new(clipboard));
                 }
             }
+            // A page of the main window in the panes' place (plan 11a); open already, it stays
+            // as it is.
             Cmd::Options => {
-                if self.options.is_none() {
-                    self.options = Some(
-                        crate::options::OptionsDialog::new(
-                            &self.settings,
-                            &self.downloads,
-                            self.host_limits.learned(),
-                        )
-                        .with_remote(self.remote.clone()),
-                    );
-                } else {
-                    dialogs::raise(ctx, dialogs::dialog_viewport("options"));
-                }
-            }
-            Cmd::Scheduler => {
-                if self.scheduler.is_none() {
-                    self.scheduler = Some(crate::scheduler::Scheduler::new(
-                        &self.queues,
-                        &self.settings,
+                self.open_menu = None;
+                self.popup = None;
+                if self.settings_page.is_none() {
+                    self.settings_page = Some(crate::settingspage::SettingsPage::new(
+                        self.options_draft(0),
                     ));
-                } else {
-                    dialogs::raise(ctx, dialogs::dialog_viewport("scheduler"));
                 }
             }
-            Cmd::EditQueue(_) | Cmd::ScheduleQueue(_) | Cmd::NewQueue => {
-                let s = self.scheduler.get_or_insert_with(|| {
-                    crate::scheduler::Scheduler::new(&self.queues, &self.settings)
-                });
-                match cmd {
-                    // Edit queue: its files; Schedule: when it runs.
-                    Cmd::EditQueue(q) => s.show_queue(q, true),
-                    Cmd::ScheduleQueue(q) => s.show_queue(q, false),
-                    _ => s.new_queue(),
+            // A section of Options' page (plan 11b1): the page opens on it (or goes to it), its
+            // draft made on its first visit and kept while the page is open.
+            Cmd::Scheduler | Cmd::EditQueue(_) | Cmd::ScheduleQueue(_) | Cmd::NewQueue => {
+                self.run(Cmd::Options, None, ctx);
+                // Not while a small dialog of the page waits for an answer (Enter queue
+                // name, Delete's question, an Options page's): it stays on its section.
+                if let Some(p) = &mut self.settings_page
+                    && !p.modal()
+                {
+                    let s = p.show_scheduler(&self.queues, &self.settings);
+                    match cmd {
+                        // Edit queue: its files; Schedule: when it runs.
+                        Cmd::EditQueue(q) => s.show_queue(q, true),
+                        Cmd::ScheduleQueue(q) => s.show_queue(q, false),
+                        Cmd::NewQueue => s.new_queue(),
+                        _ => {}
+                    }
                 }
             }
             // A dialog already open (half filled in) stays.
@@ -8020,7 +8245,11 @@ impl App {
         // Tab and Shift+Tab between the paste field, the tree and the list, before any widget
         // that takes the focus is laid out (egui would give Tab's focus to the first one, the
         // paste field). After the menu keys above, which count Tab as another key (Alt+Tab).
-        self.tab_keys(&ctx);
+        // Not on Options' page (plan 11a): the tree and the list aren't there; Tab goes through
+        // the page's controls.
+        if self.settings_page.is_none() {
+            self.tab_keys(&ctx);
+        }
 
         // Menu bar and its popups: which menu is open is chrome::menubar_next's to say.
         let (event, titles) = match &bar {
@@ -8145,7 +8374,7 @@ impl App {
                 any_complete,
                 Cmd::DeleteCompleted,
             ),
-            // i18n: plural noun: opens the Options window (settings)
+            // i18n: plural noun: opens Options (settings), a page of the main window
             (Icon::Options, "Options", true, Cmd::Options),
             // i18n: noun: the tool that starts and stops queues on time
             (Icon::Scheduler, "Scheduler", true, Cmd::Scheduler),
@@ -8206,6 +8435,16 @@ impl App {
                 }
                 None => {}
             }
+        }
+
+        // Options' page in the panes' place (plan 11a): the tree, the list and the details
+        // pane aren't drawn, and their keys aren't run (the shortcuts, Ctrl+V, the Tab
+        // rotation): Delete or Ctrl+A pressed on the page can't act on a list nobody sees. The
+        // toolbar and the menus still act on the selection, as they did beside the Options
+        // window (Delete asks first, unless told not to).
+        if self.settings_page.is_some() {
+            self.paint_settings_page(ui, &layout, (o, w, h), pasted, chosen);
+            return;
         }
 
         // Categories pane.
@@ -8434,27 +8673,7 @@ impl App {
         if let Some(pos) = r.header_context {
             self.open_popup(Popup::Columns, pos);
         }
-        if let Some((kind, pos, serial)) = self.popup {
-            let (entries, target) = self.popup_entries(kind);
-            // The column chooser's items have no icons (the mockup's): only check marks.
-            let columns = matches!(kind, Popup::Columns);
-            match chrome::popup_with_icons(
-                &ctx,
-                MenuKind::Context,
-                &format!("popup-{serial}"),
-                pos,
-                &entries,
-                &|c: &Cmd| c.hint(),
-                &|c: &Cmd, l: &str| if columns { None } else { c.menu_icon(l) },
-            ) {
-                PopupResult::Open | PopupResult::Neighbor(_) => {}
-                PopupResult::Chosen(c) => {
-                    chosen = Some((c, target));
-                    self.popup = None;
-                }
-                PopupResult::Dismissed => self.popup = None,
-            }
-        }
+        self.popup_menu(&ctx, &mut chosen);
         // The main window's shortcut keys (Ctrl+F, F3, Ctrl+N, Ctrl+M / F2, Delete,
         // Shift+Delete), with no menu or popup open.
         if chosen.is_none() && self.popup.is_none() && self.open_menu.is_none() {
@@ -8476,14 +8695,117 @@ impl App {
         if let Some(clip) = self.clip_paste.take() {
             self.take_pasted(&clip);
         }
+        self.bar_submitted(pasted, &ctx);
+        if let Some((c, target)) = chosen {
+            self.run(c, target, &ctx);
+        }
+    }
+
+    /// What the paste bar's Enter or button gave: one address goes where it belongs, several
+    /// open the Add window with them (the downloads list's frame and Options' page alike).
+    fn bar_submitted(&mut self, pasted: Option<crate::addkind::Bar>, ctx: &egui::Context) {
         match pasted {
-            Some(crate::addkind::Bar::One(kind)) => self.add_kind(kind, None, &ctx),
+            Some(crate::addkind::Bar::One(kind)) => self.add_kind(kind, None, ctx),
             Some(crate::addkind::Bar::Many(_)) => {
                 let text = std::mem::take(&mut self.paste.pending);
                 self.open_add_with(&text);
             }
             _ => {}
         }
+    }
+
+    /// The context menu open (`self.popup`), if any: what was chosen in it goes to `chosen`.
+    fn popup_menu(&mut self, ctx: &egui::Context, chosen: &mut Option<(Cmd, Option<u64>)>) {
+        if let Some((kind, pos, serial)) = self.popup {
+            let (entries, target) = self.popup_entries(kind);
+            // The column chooser's items have no icons (the mockup's): only check marks.
+            let columns = matches!(kind, Popup::Columns);
+            match chrome::popup_with_icons(
+                ctx,
+                MenuKind::Context,
+                &format!("popup-{serial}"),
+                pos,
+                &entries,
+                &|c: &Cmd| c.hint(),
+                &|c: &Cmd, l: &str| if columns { None } else { c.menu_icon(l) },
+            ) {
+                PopupResult::Open | PopupResult::Neighbor(_) => {}
+                PopupResult::Chosen(c) => {
+                    *chosen = Some((c, target));
+                    self.popup = None;
+                }
+                PopupResult::Dismissed => self.popup = None,
+            }
+        }
+    }
+
+    /// The rest of the main window's frame with Options' page open (plan 11a): the page in the
+    /// panes' place, the status strip, a toolbar arrow's menu, then what the bars above asked
+    /// for. The page has the keys while no menu is open and the paste and Find fields don't.
+    fn paint_settings_page(
+        &mut self,
+        ui: &mut Ui,
+        layout: &chrome::Layout,
+        (o, w, h): (Pos2, f32, f32),
+        pasted: Option<crate::addkind::Bar>,
+        mut chosen: Option<(Cmd, Option<u64>)>,
+    ) {
+        let ctx = ui.ctx().clone();
+        let area = egui::Rect::from_min_max(
+            pos2(o.x, o.y + layout.panes_top()),
+            pos2(o.x + w, o.y + layout.strip_top(h)),
+        );
+        let focused = ctx.memory(|m| m.focused());
+        let bars = focused
+            .is_some_and(|f| f == crate::panes::paste_field_id() || f == crate::find::field_id());
+        // Find's dropdown open: its check boxes have the keys (Enter there isn't Save).
+        let keys = self.popup.is_none() && self.open_menu.is_none() && !bars && !self.find_bar.open;
+        // A text box on the page has the keys: Alt+Left moves its caret by a word, not back.
+        let typing = focused.is_some_and(|id| egui::TextEdit::load_state(&ctx, id).is_some());
+        let mut actions = Vec::new();
+        let mut tools = crate::settingspage::Tools {
+            icons: &mut self.icons,
+            items: &self.items,
+            queues: &self.queues,
+            settings: &self.settings,
+            wake_error: self.wake.error.as_deref(),
+            actions: &mut actions,
+        };
+        let ev = self
+            .settings_page
+            .as_mut()
+            .and_then(|p| p.show(ui, area, keys, typing, &self.downloads, &mut tools));
+        // The Scheduler's Start now and Stop, at once (11b1). Start now applied the
+        // Scheduler's draft (its Download limits too): an Options draft without changes is
+        // made again from the settings now in force, so Connection shows them.
+        let applied = actions
+            .iter()
+            .any(|a| matches!(a, crate::scheduler::Action::Apply { .. }));
+        for a in actions {
+            self.scheduler_action(a);
+        }
+        if applied
+            && self
+                .settings_page
+                .as_ref()
+                .is_some_and(|p| !p.options.dirty())
+        {
+            let page = self.settings_page.as_ref().map_or(0, |p| p.page());
+            let fresh = self.options_draft(page);
+            let downloads = self.downloads.clone();
+            if let Some(p) = &mut self.settings_page {
+                p.options = fresh.keep_view(&p.options, true, &downloads);
+            }
+        }
+        let shown = self.shown_ids().len();
+        if self.status_strip(ui, layout, o, w, h, shown) {
+            chosen = Some((Cmd::ToggleMode, None));
+        }
+        self.popup_menu(&ctx, &mut chosen);
+        if let Some(ev) = ev {
+            self.settings_page_event(ev);
+        }
+        self.bar_submitted(pasted, &ctx);
         if let Some((c, target)) = chosen {
             self.run(c, target, &ctx);
         }
@@ -8850,7 +9172,7 @@ impl App {
             });
         } else if i.live.is_none() {
             self.start(id, true);
-        } else if !self.progress.iter().any(|p| p.id == id) {
+        } else if self.settings.show_progress && !self.progress.iter().any(|p| p.id == id) {
             self.progress
                 .push(Progress::new(id, self.settings.show_complete));
         }
@@ -9548,13 +9870,6 @@ impl App {
         } else {
             self.raise_updates = false;
         }
-        if self.options.is_some() {
-            if self.raise_options && crate::dialogs::focus_when_shown(ctx, "options") {
-                self.raise_options = false;
-            }
-        } else {
-            self.raise_options = false;
-        }
         // Until the check at start is due.
         if self.update_checked_this_run.is_none() && self.settings.update_check {
             ctx.request_repaint_after(crate::help::CHECK_AFTER_START);
@@ -9904,61 +10219,6 @@ impl App {
                 );
             }
         }
-        if let Some(t) = &mut self.torrent_settings {
-            match t.show(ctx) {
-                Outcome::Open => {}
-                Outcome::Closed => self.torrent_settings = None,
-                Outcome::Done(crate::torrentdlg::TorrentChoice {
-                    share,
-                    assoc,
-                    net,
-                    upload,
-                    seeding,
-                }) => {
-                    self.torrent_settings = None;
-                    // The network: the next torrent session takes it (torrent_tick).
-                    net.apply(&mut self.settings);
-                    // The upload limit: at once (torrent_tick sets it on the session).
-                    (
-                        self.settings.torrent_upload_on,
-                        self.settings.torrent_upload_kb,
-                    ) = upload;
-                    // Seeding limits: the tick stops those over them; raised, the finished
-                    // torrents now under them are shared again (when sharing stays on).
-                    let s = &mut self.settings;
-                    let before = s.sharing_limits();
-                    s.torrent_stop_ratio_on = seeding.ratio_on;
-                    s.torrent_stop_ratio = seeding.ratio;
-                    s.torrent_stop_minutes_on = seeding.minutes_on;
-                    s.torrent_stop_minutes = seeding.minutes;
-                    if share
-                        && share == self.settings.torrent_keep_sharing
-                        && before != self.settings.sharing_limits()
-                    {
-                        self.torrent_host.set_sharing(
-                            &self.rt,
-                            self.session_hashes(),
-                            self.complete_torrents(),
-                            true,
-                        );
-                    }
-                    if share != self.settings.torrent_keep_sharing {
-                        self.settings.torrent_keep_sharing = share;
-                        self.torrent_host.set_sharing(
-                            &self.rt,
-                            self.session_hashes(),
-                            self.complete_torrents(),
-                            share,
-                        );
-                    }
-                    if assoc != self.settings.torrent_associations {
-                        self.settings.torrent_associations = assoc;
-                        crate::win32::set_torrent_handlers(assoc);
-                    }
-                    self.dirty = true;
-                }
-            }
-        }
         if let Some(w) = &mut self.rss_dlg {
             match w.show(ctx, &mut self.rss, &self.rss_busy) {
                 Outcome::Open => {}
@@ -10129,57 +10389,12 @@ impl App {
             self.batch_closed = true;
             ctx.request_repaint();
         }
-        if let Some(d) = &mut self.options {
-            match d.show(ctx, &self.downloads) {
-                Outcome::Open => {}
-                Outcome::Closed => {
-                    // Cancel: categories the dialog added, changed or restored are undone, and
-                    // the remote control listens as before Pair a device... moved it.
-                    self.settings.publish_categories();
-                    if let Some(r) = &self.remote {
-                        r.apply(crate::remote::config(&self.settings));
-                    }
-                    self.options = None;
-                }
-                Outcome::Done(new) => {
-                    let new = Settings::merge_changes(&self.settings, &d.from, &new);
-                    self.options = None;
-                    self.apply_options(new);
-                }
-            }
-        }
-        if let Some(mut s) = self.scheduler.take() {
-            let mut actions = Vec::new();
-            let open = s.show(
-                ctx,
-                &mut self.icons,
-                &self.items,
-                &self.queues,
-                self.wake.error.as_deref(),
-                &mut actions,
-            );
-            for a in actions {
-                self.scheduler_action(a);
-            }
-            if open {
-                self.scheduler = Some(s);
-            }
-        }
-        if let Some(d) = &mut self.speed_settings {
-            match d.show(ctx) {
-                Outcome::Open => {}
-                Outcome::Closed => self.speed_settings = None,
-                Outcome::Done(c) => {
-                    self.settings.speed_limit_kb = c.kb;
-                    self.settings.limiter_on_startup = c.on_startup;
-                    self.settings.global_limit_on = c.global_on;
-                    self.settings.global_limit_kb = c.global_kb;
-                    self.settings.global_only_active = c.only_active;
-                    self.speed_settings = None;
-                    self.apply_speed_limit();
-                    self.dirty = true;
-                }
-            }
+        // Options' page is drawn by `paint`; its small dialogs (the Scheduler's too) and the
+        // discard question here.
+        if let Some(p) = &mut self.settings_page
+            && let Some(ev) = p.overlays(ctx, &self.downloads)
+        {
+            self.settings_page_event(ev);
         }
         if let Some(mut fi) = self.file_info.take() {
             self.start_early(&mut fi);
@@ -13074,6 +13289,32 @@ mod start_disk_tests {
         app.apply_state_reads();
         assert_eq!(get(&app, 2).downloaded, 7, "the late read is dropped");
     }
+
+    /// Upstream 1041 (PR 78's audit): with "Show download progress dialog when a download
+    /// starts" unticked, a start that would open the progress window doesn't, and a double-click
+    /// on the running download still opens it; ticked, the start opens it as before.
+    #[test]
+    fn the_progress_window_follows_its_setting() {
+        let dir = tempfile::tempdir().unwrap();
+        for shown in [false, true] {
+            let mut app = app_with(vec![row(3, dir.path().join("a.zip"), Status::Stopped)]);
+            app.settings.show_progress = shown;
+            app.start(3, true);
+            assert!(get(&app, 3).live.is_some(), "it started");
+            assert_eq!(
+                app.progress.iter().any(|p| p.id == 3),
+                shown,
+                "shown: {shown}"
+            );
+            if !shown {
+                app.open_item(3);
+                assert!(
+                    app.progress.iter().any(|p| p.id == 3),
+                    "a double-click opens it"
+                );
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -13161,5 +13402,577 @@ mod find_and_columns_tests {
         let q = a.list.visible[1];
         a.run(Cmd::ToggleColumn(1), None, &ctx);
         assert_eq!(a.list.visible[1], !q);
+    }
+}
+
+/// Plan 11a: Options as a page of the main window, on an `App` built as the menus' test builds
+/// one. Nothing runs: the runtime is never driven.
+#[cfg(test)]
+mod settings_page_tests {
+    use super::*;
+    use crate::settingspage::PageEvent;
+
+    fn app(items: Vec<Item>) -> std::mem::ManuallyDrop<App> {
+        let rt = Box::leak(Box::new(
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
+        ));
+        let loaded = store::Loaded {
+            next_id: 100,
+            items,
+            columns: None,
+            settings: Settings::default(),
+            queues: Vec::new(),
+        };
+        let (_, commands) = std::sync::mpsc::channel();
+        // Never dropped: an App saves its list as it goes.
+        let mut app = std::mem::ManuallyDrop::new(App::assemble(
+            &egui::Context::default(),
+            rt.handle().clone(),
+            commands,
+            loaded,
+            crate::Start::Shown,
+        ));
+        app.downloads = PathBuf::from(r"C:\mdm-settings-page-test\Downloads");
+        app
+    }
+
+    fn item(id: u64, name: &str) -> Item {
+        let url = url::Url::parse(&format!("http://127.0.0.1:9/{name}")).unwrap();
+        let mut i = Item::new(id, url, PathBuf::from(name), Category::General);
+        i.status = Status::Stopped;
+        i
+    }
+
+    /// The draft changed as a page's control changes it.
+    fn change(a: &mut App, f: impl FnOnce(&mut Settings)) {
+        let p = a.settings_page.as_mut().expect("the page is open");
+        let mut s = p.options.result();
+        f(&mut s);
+        p.options.set_draft(s);
+    }
+
+    /// One frame of the main window (its client `size`), with `events`.
+    fn frame(a: &mut App, ctx: &egui::Context, events: Vec<egui::Event>) {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                Pos2::ZERO,
+                egui::vec2(1080.0, 560.0),
+            )),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| a.paint(ui));
+        out.textures_delta.clear();
+    }
+
+    fn key(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    /// The screenshots' names: `options:changed` opens General with a change in its draft
+    /// (Save live), `options:back` asks the question over it; nothing is saved.
+    #[test]
+    fn show_names_for_the_changed_page_and_its_question() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let saved = a.settings.clone();
+        a.show_named("options:changed", &ctx);
+        let p = a.settings_page.as_ref().expect("the page");
+        assert!(p.dirty() && !p.modal(), "changed");
+        a.show_named("options:back", &ctx);
+        let p = a.settings_page.as_ref().expect("the page");
+        assert!(p.dirty() && p.modal(), "asked");
+        assert_eq!(a.settings, saved, "nothing saved");
+    }
+
+    /// `/show options:<page>` opens the page there (the toolbar's, the menu's and the tray's
+    /// Options open it on General); every other name shows the downloads again, `downloads`
+    /// doing only that.
+    #[test]
+    fn show_names_open_their_section() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.run(Cmd::Options, None, &ctx);
+        assert_eq!(a.settings_page.as_ref().map(|p| p.page()), Some(0));
+        for (name, page) in [
+            ("options:proxy", 5),
+            ("options:remote", 11),
+            ("options:progress", 3),
+            ("options:sounds", 8),
+            ("options", 0),
+        ] {
+            a.show_named(name, &ctx);
+            assert_eq!(
+                a.settings_page.as_ref().map(|p| p.page()),
+                Some(page),
+                "{name}"
+            );
+        }
+        a.show_named("downloads", &ctx);
+        assert!(a.settings_page.is_none(), "downloads");
+        a.show_named("options:archives", &ctx);
+        a.show_named("about", &ctx);
+        assert!(a.settings_page.is_none(), "another name closes it");
+        // The toolbar's Options with the page open leaves it as it is.
+        a.show_named("options:regional", &ctx);
+        a.run(Cmd::Options, None, &ctx);
+        assert_eq!(a.settings_page.as_ref().map(|p| p.page()), Some(9));
+    }
+
+    /// D2: Save puts in only what the page changed: a setting changed elsewhere while it was
+    /// open (the details pane, here) stays as it is now. The page stays, on a clean draft.
+    #[test]
+    fn save_merges_only_what_options_changed() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.show_named("options:downloads", &ctx);
+        let before = a.settings.double_click_open;
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings.show_details = !a.settings.show_details;
+        let details = a.settings.show_details;
+        assert!(a.settings_page.as_ref().unwrap().dirty());
+        a.settings_page_event(PageEvent::Save);
+        assert_eq!(a.settings.double_click_open, !before, "the page's change");
+        assert_eq!(
+            a.settings.show_details, details,
+            "the change made elsewhere"
+        );
+        let p = a.settings_page.as_ref().expect("the page stays");
+        assert_eq!(p.page(), 3, "on its page");
+        assert!(!p.dirty(), "a fresh draft");
+    }
+
+    /// Discard (and Back's Yes) undo what the draft did live: its categories are published as
+    /// the settings hold them again. Discard keeps the page on a fresh draft; Close shuts it.
+    #[test]
+    fn discard_restores_categories_and_remote() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.show_named("options:saveto", &ctx);
+        const ID: u32 = 987_654_321;
+        let mut draft = None;
+        change(&mut a, |s| {
+            s.custom_categories.push(crate::model::CustomCategory {
+                id: ID,
+                name: "Page test".into(),
+                types: "xyz".into(),
+                folder: None,
+            });
+            // As the category editor's OK does: shown at once, in the draft.
+            s.publish_categories();
+            draft = Some(s.clone());
+        });
+        let saved = a.settings.clone();
+        a.settings_page_event(PageEvent::Discard);
+        assert!(
+            crate::model::custom(ID).is_none(),
+            "the draft's category undone"
+        );
+        assert_eq!(a.settings, saved, "nothing kept");
+        let p = a.settings_page.as_ref().expect("Discard keeps the page");
+        assert_eq!(p.page(), 2);
+        assert!(!p.dirty());
+        change(&mut a, |s| {
+            *s = draft.clone().unwrap();
+            s.publish_categories();
+        });
+        a.settings_page_event(PageEvent::Close);
+        assert!(a.settings_page.is_none());
+        assert!(crate::model::custom(ID).is_none(), "Close undoes it too");
+        assert_eq!(a.settings, saved);
+    }
+
+    /// Audit r1: Escape in the title bar's Find field clears and leaves the field, and the
+    /// page stays (it isn't Back too).
+    #[test]
+    fn escape_in_find_leaves_the_page_open() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.run(Cmd::Options, None, &ctx);
+        a.find.text = "zip".into();
+        frame(&mut a, &ctx, vec![]);
+        ctx.memory_mut(|m| m.request_focus(crate::find::field_id()));
+        frame(&mut a, &ctx, vec![]);
+        frame(&mut a, &ctx, vec![]);
+        assert!(
+            ctx.memory(|m| m.has_focus(crate::find::field_id())),
+            "Find has the keys"
+        );
+        frame(
+            &mut a,
+            &ctx,
+            vec![key(egui::Key::Escape, egui::Modifiers::NONE)],
+        );
+        frame(&mut a, &ctx, vec![]);
+        assert!(a.find.text.is_empty(), "Escape cleared Find");
+        assert!(a.settings_page.is_some(), "the page stays");
+    }
+
+    /// Audit r1: another `/show` drops the page with Remote → Pair a device... open: the
+    /// remote control stops showing the code, as closing the pairing window does.
+    #[test]
+    fn closing_the_page_stops_pairing() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        // The app's remote control, off (Options → Remote), as emote::start makes it.
+        let dir = tempfile::tempdir().unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let texts: mdm_remote::Texts = std::sync::Arc::new(|_: &str| Default::default());
+        let remote = mdm_remote::Remote::new(
+            a.rt.clone(),
+            dir.path().to_owned(),
+            mdm_ipc::Sink::new(tx, std::sync::Arc::new(|| {})),
+            texts,
+        );
+        a.remote = Some(remote.clone());
+        a.show_named("options:pair", &ctx);
+        assert!(a.settings_page.as_ref().unwrap().options.pairing());
+        assert!(remote.pairing().0.is_some(), "a code shown");
+        a.show_named("downloads", &ctx);
+        assert!(a.settings_page.is_none());
+        assert!(remote.pairing().0.is_none(), "the code is gone");
+    }
+
+    /// The downloads list's keys aren't the page's: with the page open, Delete and Ctrl+A act
+    /// on nothing (the selection stays, no deletion is asked), and the page has the panes'
+    /// place in the frame.
+    #[test]
+    fn the_list_takes_no_keys_while_the_page_is_open() {
+        let mut a = app(vec![item(1, "a.zip"), item(2, "b.zip")]);
+        let ctx = egui::Context::default();
+        a.selection.set(1);
+        a.run(Cmd::Options, None, &ctx);
+        frame(&mut a, &ctx, vec![]);
+        frame(
+            &mut a,
+            &ctx,
+            vec![
+                key(egui::Key::A, egui::Modifiers::COMMAND),
+                key(egui::Key::Delete, egui::Modifiers::NONE),
+            ],
+        );
+        frame(&mut a, &ctx, vec![]);
+        assert_eq!(a.selection.ids(), &[1], "Ctrl+A selected nothing more");
+        assert!(a.confirm_delete.is_none(), "Delete asked nothing");
+        assert!(a.settings_page.is_some());
+        // Escape goes back (nothing changed); the list has its keys again.
+        frame(
+            &mut a,
+            &ctx,
+            vec![key(egui::Key::Escape, egui::Modifiers::NONE)],
+        );
+        assert!(a.settings_page.is_none(), "Escape: back to the downloads");
+        frame(&mut a, &ctx, vec![]);
+        frame(
+            &mut a,
+            &ctx,
+            vec![key(egui::Key::Delete, egui::Modifiers::NONE)],
+        );
+        assert!(a.confirm_delete.is_some(), "Delete asks again");
+    }
+
+    /// Plan 11b1: the Scheduler opens as a section of the page from its commands (the toolbar's
+    /// and menus' Scheduler, a queue's Edit, Schedule and Create new queue) and its `/show`
+    /// names; another name shows the downloads again. No Scheduler window is left.
+    #[test]
+    fn the_scheduler_opens_as_a_section() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let shown = |a: &App| {
+            let p = a.settings_page.as_ref().expect("the page");
+            assert_eq!(p.page(), crate::options::SCHEDULER_PAGE, "on the Scheduler");
+            p.scheduler.as_ref().expect("its draft").shown()
+        };
+        a.run(Cmd::Scheduler, None, &ctx);
+        assert_eq!(shown(&a), (Some((0, false)), false));
+        a.run(Cmd::EditQueue(1), None, &ctx);
+        assert_eq!(shown(&a), (Some((1, true)), false), "Edit: its files");
+        a.run(Cmd::ScheduleQueue(0), None, &ctx);
+        assert_eq!(shown(&a), (Some((0, false)), false), "Schedule: when");
+        a.run(Cmd::NewQueue, None, &ctx);
+        assert!(shown(&a).1, "Create new queue asks its name");
+        assert!(a.settings_page.as_ref().unwrap().modal());
+        // Audit r1: while it asks, the Scheduler's commands and names leave it as it is.
+        a.run(Cmd::EditQueue(1), None, &ctx);
+        a.show_named("scheduler:limits", &ctx);
+        assert_eq!(shown(&a), (Some((0, false)), true), "held while it asks");
+        a.show_named("downloads", &ctx);
+        assert!(a.settings_page.is_none());
+        a.show_named("scheduler:limits", &ctx);
+        assert_eq!(shown(&a), (None, false), "Download limits");
+        a.show_named("scheduler:files", &ctx);
+        assert_eq!(shown(&a), (Some((0, true)), false));
+        a.show_named("options:scheduler", &ctx);
+        assert_eq!(
+            a.settings_page.as_ref().map(|p| p.page()),
+            Some(crate::options::SCHEDULER_PAGE)
+        );
+        // From another page of Options, the Scheduler goes to its section.
+        a.show_named("options:sounds", &ctx);
+        a.run(Cmd::Scheduler, None, &ctx);
+        assert_eq!(shown(&a).0, Some((0, true)), "its draft kept its view");
+        a.show_named("about", &ctx);
+        assert!(a.settings_page.is_none(), "another name closes it");
+    }
+
+    /// Plan 11b1: Save saves the Scheduler first, then only what Options' pages changed: the
+    /// Download limits set in the Scheduler stay unless Options' Connection changed them too
+    /// (then Options' are kept, as saved last). Both drafts are fresh after.
+    #[test]
+    fn scheduler_save_then_options_save_order() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let before = a.settings.clone();
+        a.run(Cmd::Scheduler, None, &ctx);
+        let p = a.settings_page.as_mut().unwrap();
+        p.scheduler.as_mut().unwrap().set_limits(true, 999);
+        assert!(p.dirty(), "the Scheduler's change is the page's");
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings_page_event(PageEvent::Save);
+        assert!(
+            a.settings.limits_on && a.settings.limits_mb == 999,
+            "the Scheduler's"
+        );
+        assert_eq!(
+            a.settings.double_click_open, !before.double_click_open,
+            "Options'"
+        );
+        let p = a.settings_page.as_ref().expect("the page stays");
+        assert!(!p.dirty(), "fresh drafts");
+        assert_eq!(p.page(), crate::options::SCHEDULER_PAGE);
+        // Both change Download limits: Options' Connection is saved last, and only what it
+        // changed (the check box, not the size the Scheduler set).
+        a.settings_page
+            .as_mut()
+            .unwrap()
+            .scheduler
+            .as_mut()
+            .unwrap()
+            .set_limits(true, 500);
+        change(&mut a, |s| s.limits_on = false);
+        a.settings_page_event(PageEvent::Save);
+        assert!(!a.settings.limits_on, "Options' change, saved last");
+        assert_eq!(
+            a.settings.limits_mb, 500,
+            "the Scheduler's, which Options didn't change"
+        );
+    }
+
+    /// Plan 11b1 (D3): the Scheduler's changes are the page's: Back asks, Discard drops them
+    /// (the queues as they were, the page on a fresh draft), and nothing is applied by leaving.
+    #[test]
+    fn the_schedulers_changes_wait_for_save() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let saved = a.settings.clone();
+        let queues = a.queues.clone();
+        a.run(Cmd::Scheduler, None, &ctx);
+        let p = a.settings_page.as_mut().unwrap();
+        p.scheduler.as_mut().unwrap().set_limits(true, 777);
+        assert_eq!(p.back(), None, "Back asks");
+        assert!(p.modal());
+        // No: the page stays with its changes, its buttons live again.
+        p.answer_no();
+        assert!(!p.modal() && p.dirty());
+        a.settings_page_event(PageEvent::Discard);
+        assert_eq!(a.settings, saved, "nothing applied");
+        assert_eq!(a.queues, queues);
+        let p = a.settings_page.as_ref().expect("Discard keeps the page");
+        assert!(!p.dirty());
+        a.settings_page
+            .as_mut()
+            .unwrap()
+            .scheduler
+            .as_mut()
+            .unwrap()
+            .set_limits(true, 777);
+        a.settings_page_event(PageEvent::Close);
+        assert!(a.settings_page.is_none());
+        assert_eq!(a.settings, saved, "Close drops it too");
+    }
+
+    /// Audit r2: Start now applies the Scheduler's draft at once, its Download limits too: an
+    /// Options draft without changes is made again from them (Connection shows what is in
+    /// force, nothing to save); one with changes is left as it is.
+    #[test]
+    fn start_now_refreshes_an_untouched_options_draft() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let click_start = |a: &mut App| {
+            let input = |events| egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    egui::vec2(1080.0, 560.0),
+                )),
+                events,
+                ..Default::default()
+            };
+            let mut at = None;
+            for _ in 0..2 {
+                let mut out = ctx.run_ui(input(vec![]), |ui| a.paint(ui));
+                out.textures_delta.clear();
+                let tree = out
+                    .platform_output
+                    .accesskit_update
+                    .expect("AccessKit is on");
+                at = tree
+                    .nodes
+                    .iter()
+                    .find(|(_, n)| {
+                        n.role() == egui::accesskit::Role::Button
+                            && n.label().map(|l| l.replace('&', "")).as_deref() == Some("Start now")
+                    })
+                    .and_then(|(_, n)| n.bounds())
+                    .map(|b| pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32));
+            }
+            let at = at.expect("Start now");
+            for down in [None, Some(true), Some(false)] {
+                let mut events = vec![egui::Event::PointerMoved(at)];
+                if let Some(pressed) = down {
+                    events.push(egui::Event::PointerButton {
+                        pos: at,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: Default::default(),
+                    });
+                }
+                let mut out = ctx.run_ui(input(events), |ui| a.paint(ui));
+                out.textures_delta.clear();
+            }
+        };
+        a.run(Cmd::Scheduler, None, &ctx);
+        let s = a
+            .settings_page
+            .as_mut()
+            .unwrap()
+            .scheduler
+            .as_mut()
+            .unwrap();
+        s.set_limits(true, 4321);
+        click_start(&mut a);
+        // (An empty queue stops again at once: the Start itself is scheduler.rs's test.)
+        assert!(
+            a.settings.limits_on && a.settings.limits_mb == 4321,
+            "applied"
+        );
+        let p = a.settings_page.as_ref().unwrap();
+        assert!(!p.dirty(), "nothing left to save");
+        assert_eq!(p.options.result().limits_mb, 4321, "Options shows it");
+        assert_eq!(p.page(), crate::options::SCHEDULER_PAGE);
+        // Options has a change of its own: its draft stays as it is (Save merges it).
+        a.run(Cmd::ScheduleQueue(1), None, &ctx);
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        let s = a
+            .settings_page
+            .as_mut()
+            .unwrap()
+            .scheduler
+            .as_mut()
+            .unwrap();
+        s.set_limits(true, 55);
+        click_start(&mut a);
+        assert_eq!(a.settings.limits_mb, 55, "applied");
+        let p = a.settings_page.as_ref().unwrap();
+        assert!(p.options.dirty(), "Options' change kept");
+        assert_eq!(p.options.result().limits_mb, 4321, "its draft as it was");
+    }
+
+    /// Plan 11b2: the Speed limiter's, Torrents' and the browser extension's sections open from
+    /// their commands and `/show` names; `/show extension` is still the offer's window (the
+    /// page closes for it, as for any other name).
+    #[test]
+    fn the_moved_windows_open_as_sections() {
+        use crate::options::{EXTENSION_PAGE, SPEED_PAGE, TORRENTS_PAGE};
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let page = |a: &App| a.settings_page.as_ref().map(|p| p.page());
+        a.run(Cmd::LimiterSettings, None, &ctx);
+        assert_eq!(page(&a), Some(SPEED_PAGE), "Speed Limiter → Settings...");
+        a.run(Cmd::TorrentSettings, None, &ctx);
+        assert_eq!(page(&a), Some(TORRENTS_PAGE), "Torrent settings...");
+        for (name, want) in [
+            ("speedlimit", SPEED_PAGE),
+            ("torrent-settings", TORRENTS_PAGE),
+            ("options:speed", SPEED_PAGE),
+            ("options:torrents", TORRENTS_PAGE),
+            ("options:extension", EXTENSION_PAGE),
+        ] {
+            a.show_named(name, &ctx);
+            assert_eq!(page(&a), Some(want), "{name}");
+        }
+        // Audit r1: while a small dialog of the page waits (Enter queue name), their commands
+        // and names leave the page where it is.
+        a.run(Cmd::NewQueue, None, &ctx);
+        assert!(a.settings_page.as_ref().unwrap().modal());
+        a.run(Cmd::LimiterSettings, None, &ctx);
+        a.run(Cmd::TorrentSettings, None, &ctx);
+        a.show_named("speedlimit", &ctx);
+        a.show_named("torrent-settings", &ctx);
+        assert_eq!(
+            page(&a),
+            Some(crate::options::SCHEDULER_PAGE),
+            "held while it asks"
+        );
+        a.show_named("extension", &ctx);
+        assert!(a.settings_page.is_none(), "the offer's window instead");
+        assert!(a.extension.is_some());
+    }
+
+    /// Plan 11b2: Save sets the Speed limiter's and Torrents' changes (as their OK did), then
+    /// Options'; Discard drops them. A draft only looked at sets nothing: a speed changed
+    /// elsewhere meanwhile stays.
+    #[test]
+    fn save_sets_speed_and_torrents_then_options() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let before = a.settings.clone();
+        a.run(Cmd::LimiterSettings, None, &ctx);
+        let edit = |a: &mut App| {
+            let p = a.settings_page.as_mut().unwrap();
+            let s = p
+                .speed
+                .get_or_insert_with(|| dialogs::SpeedSettings::new(&before));
+            s.kb = "321".into();
+            let t = p
+                .torrents
+                .get_or_insert_with(|| crate::torrentdlg::TorrentSettings::new(&before));
+            t.set_share(!before.torrent_keep_sharing);
+            assert!(p.dirty());
+        };
+        edit(&mut a);
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings_page_event(PageEvent::Discard);
+        assert_eq!(a.settings, before, "Discard: nothing set");
+        assert!(!a.settings_page.as_ref().unwrap().dirty(), "fresh drafts");
+        edit(&mut a);
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings_page_event(PageEvent::Save);
+        assert_eq!(a.settings.speed_limit_kb, 321, "the Speed limiter's");
+        assert_eq!(
+            a.settings.torrent_keep_sharing, !before.torrent_keep_sharing,
+            "Torrents'"
+        );
+        assert_eq!(
+            a.settings.double_click_open, !before.double_click_open,
+            "Options'"
+        );
+        let p = a.settings_page.as_ref().expect("the page stays");
+        assert!(!p.dirty(), "fresh drafts");
+        assert_eq!(p.page(), crate::options::SPEED_PAGE);
+        // Untouched drafts: a speed set elsewhere meanwhile isn't put back by Save.
+        a.settings.speed_limit_kb = 777;
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings_page_event(PageEvent::Save);
+        assert_eq!(a.settings.speed_limit_kb, 777);
     }
 }
