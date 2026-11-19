@@ -1033,6 +1033,13 @@ impl OptionsDialog {
         };
         let default = display_dir(&cat.default_folder(&base));
         let typed = self.cat_dir.trim();
+        // The box as it was shown (nothing typed or picked): nothing changes, so a page only
+        // looked at has nothing to save (plan 11a), a folder of its own equal to the default
+        // included.
+        let shown = display_dir(&self.s.category_dir(cat, downloads));
+        if typed.trim_end_matches(['\\', '/']) == shown.trim_end_matches(['\\', '/']) {
+            return;
+        }
         let own = (!typed.is_empty()
             && typed.trim_end_matches(['\\', '/']) != default.trim_end_matches(['\\', '/']))
         .then(|| typed.to_owned());
@@ -5003,6 +5010,34 @@ mod tests {
             page_pass(&ctx, &mut d, vec![]);
             assert!(!d.dirty(), "{label}: drawn");
         }
+        // Audit r2: Save to showing a built-in category whose own folder is its default (General
+        // moved there since): looking at it keeps that folder its own.
+        let downloads = std::path::Path::new(r"D:\Downloads");
+        let video = Category::Video.default_folder(downloads);
+        let s = Settings {
+            category_dirs: vec![
+                (
+                    Category::General.key().into_owned(),
+                    downloads.display().to_string(),
+                ),
+                (
+                    Category::Video.key().into_owned(),
+                    video.display().to_string(),
+                ),
+            ],
+            ..Settings::default()
+        };
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut d = OptionsDialog::new(&s, &std::env::temp_dir(), vec![]).on_page(2);
+        d.category = Category::all()
+            .iter()
+            .position(|c| *c == Category::Video)
+            .unwrap();
+        d.cat_dir = display_dir(&d.s.category_dir(Category::Video, &std::env::temp_dir()));
+        page_pass(&ctx, &mut d, vec![]);
+        page_pass(&ctx, &mut d, vec![]);
+        assert!(!d.dirty(), "Save to on Video");
     }
 
     /// #424: the list written and read back through a real file: nothing lost, nothing doubled.

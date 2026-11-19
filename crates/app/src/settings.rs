@@ -810,9 +810,12 @@ impl Settings {
 
     /// Set (or forget, with `None`) the category's own folder.
     pub fn set_category_dir(&mut self, cat: crate::model::Category, dir: Option<String>) {
+        // The same folder (but for a trailing separator, which Options' box adds) changes
+        // nothing: the list keeps its order, so a page only looked at has no changes to save.
+        let trim = |d: &str| d.trim_end_matches(['\\', '/']).to_owned();
         if let crate::model::Category::Custom(id) = cat {
             if let Some(c) = self.custom_categories.iter_mut().find(|c| c.id == id)
-                && c.folder != dir
+                && c.folder.as_deref().map(trim) != dir.as_deref().map(trim)
             {
                 c.folder = dir;
                 crate::model::set_custom(&self.custom_categories);
@@ -821,9 +824,6 @@ impl Settings {
         }
         // Under the built-in's shipped name: a rename keeps its folder.
         let key = cat.key();
-        // The same folder (but for a trailing separator, which Options' box adds) changes
-        // nothing: the list keeps its order, so a page only looked at has no changes to save.
-        let trim = |d: &str| d.trim_end_matches(['\\', '/']).to_owned();
         let now = self
             .category_dirs
             .iter()
@@ -1069,6 +1069,37 @@ pub fn own_net() -> mdm_engine::Options {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+
+    /// Plan 11a (audit r2): a category's folder set again as Options' box shows it (with a
+    /// trailing separator) is no change, for a category of the user's as for a built-in one.
+    #[test]
+    fn the_same_category_folder_changes_nothing() {
+        let mut s = crate::settings::Settings {
+            custom_categories: vec![crate::model::CustomCategory {
+                id: 7,
+                name: "Library".into(),
+                types: "epub".into(),
+                folder: Some(r"D:\Lib".into()),
+            }],
+            category_dirs: vec![
+                (
+                    crate::model::Category::Video.key().into_owned(),
+                    r"D:\Videos".into(),
+                ),
+                (
+                    crate::model::Category::Music.key().into_owned(),
+                    r"D:\Music".into(),
+                ),
+            ],
+            ..crate::settings::Settings::default()
+        };
+        let before = s.clone();
+        s.set_category_dir(crate::model::Category::Custom(7), Some(r"D:\Lib\".into()));
+        s.set_category_dir(crate::model::Category::Video, Some(r"D:\Videos\".into()));
+        assert_eq!(s, before);
+        s.set_category_dir(crate::model::Category::Custom(7), Some(r"E:\Lib".into()));
+        assert_eq!(s.custom_categories[0].folder.as_deref(), Some(r"E:\Lib"));
+    }
 
     /// Upstream issue 668: the User-Agent for links added by hand is the default browser's unless
     /// one is set. Saved before, MDM's former default (Internet Explorer 11's) or nothing reads as

@@ -8230,7 +8230,7 @@ impl App {
         // pane aren't drawn, and their keys aren't run (the shortcuts, Ctrl+V, the Tab
         // rotation): Delete or Ctrl+A pressed on the page can't act on a list nobody sees. The
         // toolbar and the menus still act on the selection, as they did beside the Options
-        // window (Delete's question names the files).
+        // window (Delete asks first, unless told not to).
         if self.settings_page.is_some() {
             self.paint_settings_page(ui, &layout, (o, w, h), pasted, chosen);
             return;
