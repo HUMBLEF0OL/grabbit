@@ -2642,8 +2642,6 @@ impl App {
             }
             // The main window minimized, not to the tray (tests of #162).
             "minimized" => ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true)),
-            // Off-screen test copies: the interface zoomed (`zoom:1.5`) while running, as a
-            // display's scale changing does to every window (#89's checks).
             // The main window at `<w>x<h>` points (plan 11a's screenshot of Options in the
             // smallest window, 600x300): off-screen runs only, which ignore the saved size.
             "size" if crate::offscreen() => {
@@ -2655,6 +2653,8 @@ impl App {
                     ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(w, h)));
                 }
             }
+            // Off-screen test copies: the interface zoomed (`zoom:1.5`) while running, as a
+            // display's scale changing does to every window (#89's checks).
             "zoom" if crate::offscreen() => {
                 if let Ok(z) = tab.parse::<f32>()
                     && (0.5..=4.0).contains(&z)
