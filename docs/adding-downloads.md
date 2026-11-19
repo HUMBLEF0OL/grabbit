@@ -71,7 +71,7 @@ mode** switches it off for servers that only take active connections. FTP connec
 server directly, not through the HTTP proxy.
 
 Browsers no longer download `ftp://` links themselves. Right-click one and choose **Download with
-Grabbit**, or copy it and use **Add URL**.
+Grabbit**, or copy it and use **Add**.
 
 ## Google Drive links
 
@@ -147,7 +147,7 @@ With **Options → General → Offer to download links copied to the clipboard**
 ## Drag and drop
 
 1. Choose **Tasks → Show drop target**. A small box with the Grabbit icon appears and stays on top of other windows.
-2. Drag a link from your browser onto it. Grabbit adds it as if you had used **Add URL**.
+2. Drag a link from your browser onto it. Grabbit adds it as if you had used **Add**.
 
 You can also drop magnet links and `.torrent` files on it. Drag the box to move it, and double-click it to bring the main window back. Right-click it for **Show Grabbit**, **Add new download** and **Hide drop target**.
 

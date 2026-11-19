@@ -139,7 +139,7 @@ signed in.
   profile you're in (a private window, a Firefox container), for the look-up and the download.
   Nothing to set up. Each cookie goes with the domain the browser keeps it for, so a sign-in on
   YouTube Music (music.youtube.com) or YouTube's mobile site reaches www.youtube.com too.
-- **A pasted address** (Add URL, Download video from a page, a playlist): choose your browser in
+- **A pasted address** (Add, Download video from a page, a playlist): choose your browser in
   **Options → Sites Logins → Cookies for video sites**. yt-dlp then reads that browser's cookies
   on this computer for every video it looks up or downloads. When the extension passed the
   page's own cookies, those are used instead: they are that page's and that session's.

@@ -26,7 +26,7 @@ The report names what happened and where in Grabbit's code, so the problem can b
 ## You read it first, and you send it
 
 Everything that would be sent is in the window, under **The report**. You can add a few words
-under **What were you doing when it happened?**, such as "I opened Add URL".
+under **What were you doing when it happened?**, such as "I opened Add".
 
 **Send on GitHub** opens GitHub's crash report form in your browser, already filled in, with the
 folder that holds the report. You check it and submit it. That needs a GitHub account. **Nothing

@@ -13,7 +13,7 @@ If Grabbit closes unexpectedly or stops responding, a **crash report** window op
 
 In the window:
 
-1. **What were you doing when it happened?** is optional. A few words, such as "I opened Add URL", help a lot.
+1. **What were you doing when it happened?** is optional. A few words, such as "I opened Add", help a lot.
 2. **The report** shows everything that would be sent. Read it first if you like.
 3. **Send on GitHub** opens GitHub's **Crash report** form in your browser, already filled in, along with the folder that holds the report. Drag the report's file into the form, check it, and submit. You need a GitHub account. **Nothing is sent by itself.**
 4. If someone already reported the same problem, the window says so (**Already reported as issue #…**). **Open the reported issue** opens it and puts your report on the clipboard, so you can add it as a comment.

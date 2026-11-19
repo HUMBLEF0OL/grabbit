@@ -73,11 +73,12 @@ caption = "View → Theme switches at once, keeping the layout."
 [[shot]]
 id = "add-url"
 page = "adding-downloads.md"
-under = "Add URL"
+under = "Add"
 take = "addurl"
-marks = [{ at = "Address", n = 3, side = "corner" }, { at = "Use authorization", n = 4, side = "right" }, { at = "OK", n = 5, side = "corner" }]
-alt = "Enter new address to download, with the Address box, Use authorization and OK"
-caption = "The numbers are the steps above: 3 the address, 4 a login if the server needs one, 5 OK."
+# The Add window (PR 76): its box, the Found list's caption ("Found 2"), Use authorization, Add.
+marks = [{ at = "Edit:Addresses, magnet links or video pages, one per line", n = 3, side = "corner" }, { at = "Found", n = 4, side = "right" }, { at = "CheckBox:Use authorization", n = 5, side = "right" }, { at = "Button:Add", n = 6, side = "corner" }]
+alt = "The Add window: its box, what was found, the drop area, Use authorization and Add"
+caption = "The numbers are the steps above: 3 the addresses, 4 what was found, 5 a login if the server needs one, 6 Add."
 
 [[shot]]
 id = "download-file-info"
@@ -467,9 +468,9 @@ id = "first-add-url"
 page = "guide-first-download.md"
 under = "Steps"
 take = "addurl"
-ring = ["OK"]
-alt = "Enter new address to download, its OK button ringed"
-caption = "Add URL: Grabbit puts the address you copied in the Address box (paste it there if it isn't). Click OK."
+ring = ["Button:Add"]
+alt = "The Add window, its Add button ringed"
+caption = "Add: Grabbit puts the address you copied in the box (paste it there if it isn't). Click Add 1."
 
 [[shot]]
 id = "first-file-info"
