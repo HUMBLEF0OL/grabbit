@@ -298,17 +298,29 @@ pub fn written_addresses(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// What may open a word of running text before an address: a bracket or a quote (straight,
-/// curly, German low quotes, guillemets).
-const OPENERS: [char; 12] = ['(', '[', '{', '<', '"', '\'', '“', '‘', '„', '‚', '«', '‹'];
+/// A dragged link's addresses (the browser's link format): each as it is, nothing trimmed, as
+/// a link ends where its address does ("…/Washington,_D.C." keeps its dot).
+pub fn dragged_links(text: &str) -> Vec<String> {
+    text.split_whitespace()
+        .filter(|w| is_written_address(w))
+        .map(str::to_owned)
+        .collect()
+}
 
-/// What may close a quote after an address: never the end of a real address unencoded.
-const QUOTE_CLOSERS: [char; 5] = ['”', '’', '“', '»', '›'];
+/// What may open a word of running text before an address: a bracket or a quote (straight,
+/// curly, German low quotes, guillemets either way round).
+const OPENERS: [char; 14] = [
+    '(', '[', '{', '<', '"', '\'', '“', '‘', '„', '‚', '«', '‹', '»', '›',
+];
+
+/// What may close a quote after an address (English, German, French or German guillemets):
+/// never the end of a real address unencoded.
+const QUOTE_CLOSERS: [char; 8] = ['”', '’', '“', '‘', '»', '›', '«', '‹'];
 
 /// An address picked out of running text, without the sentence's punctuation after it
-/// ("…/f.zip," → "…/f.zip"): `, . ; : ! ? ' " >` and closing quotes (`” ’ “ » ›`) at its
-/// end, and a closing bracket the address doesn't open itself (a wiki's `Foo_(bar)` keeps its
-/// own).
+/// ("…/f.zip," → "…/f.zip"): `, . ; : ! ? ' " >` and closing quotes (`” ’ “ ‘ » › « ‹`) at
+/// its end, and a closing bracket the address doesn't open itself (a wiki's `Foo_(bar)` keeps
+/// its own).
 fn trim_prose(word: &str) -> &str {
     let mut w = word;
     loop {
@@ -565,7 +577,8 @@ mod tests {
         // Curly quotes and guillemets (a mail, a document), and a lone wrapped word on its line.
         let found = scan(
             "see “https://c.example/h.zip” and «https://d.example/i.zip»\n<https://e.example/j.zip>\n\
-             siehe „https://f.example/k.zip“ und ‹https://g.example/l.zip›\nhttps://h.example/m.zip”",
+             siehe „https://f.example/k.zip“ und ‹https://g.example/l.zip›\nhttps://h.example/m.zip”\n\
+             auch ‚https://i.example/n.zip‘ und »https://j.example/o.zip«",
             &none,
         );
         let texts: Vec<&str> = found.iter().map(|f| f.text.as_str()).collect();
@@ -578,7 +591,10 @@ mod tests {
                 "https://f.example/k.zip",
                 "https://g.example/l.zip",
                 // A lone line's closing quote (its opening one on the line before).
-                "https://h.example/m.zip"
+                "https://h.example/m.zip",
+                // German single quotes, German (reversed) guillemets.
+                "https://i.example/n.zip",
+                "https://j.example/o.zip"
             ]
         );
         assert!(found.iter().all(|f| matches!(f.kind, Ok(Kind::Link(_)))));
@@ -599,6 +615,16 @@ mod tests {
             ]
         );
         assert!(written_addresses("no address here").is_empty());
+        // A dragged link (the browser's link format) is taken whole.
+        assert_eq!(
+            dragged_links("https://en.wikipedia.org/wiki/Washington,_D.C."),
+            ["https://en.wikipedia.org/wiki/Washington,_D.C."]
+        );
+        assert_eq!(
+            dragged_links("https://en.wikipedia.org/wiki/Foo_(bar)"),
+            ["https://en.wikipedia.org/wiki/Foo_(bar)"]
+        );
+        assert!(dragged_links("not a link").is_empty());
     }
 
     #[test]

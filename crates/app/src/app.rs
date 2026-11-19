@@ -2558,6 +2558,16 @@ impl App {
         match window {
             "downloads" => {}
             "addurl" => self.run(Cmd::AddUrl, None, ctx),
+            // The Add window holding the text after `add:` instead of the clipboard's links (the
+            // screenshots': `add:https://downloads.example/a.zip`), so a picture never shows
+            // what the user copied and the clipboard is never touched.
+            "add" => {
+                if let Some(text) = name.strip_prefix("add:").map(str::trim)
+                    && !text.is_empty()
+                {
+                    self.open_add_with(text);
+                }
+            }
             // Download Later's queue selection panel, for no download (the screenshots').
             "later" if self.queue_pick.is_none() => {
                 let names = self.queues.iter().map(|q| q.name.clone()).collect();
@@ -12015,6 +12025,13 @@ mod route_tests {
         app.settings.show_paste_bar = false;
         app.take_pasted("https://a.example/5.zip");
         assert!(app.add_url.is_some(), "the bar hidden: the Add window");
+        // The screenshots' `/show add:<text>`: the Add window with that text, the clipboard
+        // never read.
+        app.add_url = None;
+        let ctx = egui::Context::default();
+        app.show_named("add:https://downloads.example/a.zip", &ctx);
+        let add = app.add_url.as_ref().expect("add: opens the Add window");
+        assert_eq!(add.address.trim(), "https://downloads.example/a.zip");
     }
 
     /// PR 76's audit: a page or a pattern that waited its turn opens a frame after the window

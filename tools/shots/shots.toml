@@ -8,7 +8,8 @@
 #   take     what to open, as tools/lab/docs-shots.ps1 -Show takes it: a /show argument
 #            ("options:connection"), "@main", "@menu:<show argument>" (a menu, over the main
 #            window), "@download:<lab server path>" (Download File Info, as a browser hands a
-#            download over), "@complete:<path>" (Download complete), "@torrent" (Add torrent for
+#            download over), "@add:<lab server path>" (the Add window holding that address, never
+#            the clipboard's), "@complete:<path>" (Download complete), "@torrent" (Add torrent for
 #            tools/lab/Open Movie Night.torrent); "a+b" runs /show a first ("theme:graphite+@main").
 #            Shots with the same take share one capture.
 #   from     instead of take: a picture already in the repository (the browser's, made by
@@ -74,7 +75,7 @@ caption = "View → Theme switches at once, keeping the layout."
 id = "add-url"
 page = "adding-downloads.md"
 under = "Add"
-take = "addurl"
+take = "@add:gen/4M/project-report-2026.pdf"
 # The Add window (PR 76): its box, the Found list's caption ("Found 2"), Use authorization, Add.
 marks = [{ at = "Edit:Addresses, magnet links or video pages, one per line", n = 3, side = "corner" }, { at = "Found", n = 4, side = "right" }, { at = "CheckBox:Use authorization", n = 5, side = "right" }, { at = "Button:Add", n = 6, side = "corner" }]
 alt = "The Add window: its box, what was found, the drop area, Use authorization and Add"
@@ -467,7 +468,7 @@ caption = "Archives: extract when downloaded, and where the files go."
 id = "first-add-url"
 page = "guide-first-download.md"
 under = "Steps"
-take = "addurl"
+take = "@add:gen/4M/project-report-2026.pdf"
 ring = ["Button:Add"]
 alt = "The Add window, its Add button ringed"
 caption = "Add: Grabbit puts the address you copied in the box (paste it there if it isn't). Click Add 1."

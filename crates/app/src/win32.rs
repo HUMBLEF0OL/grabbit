@@ -4826,8 +4826,14 @@ pub mod ole {
             let url_format = RegisterClipboardFormatW(name.as_ptr()) as u16;
             for cf in [url_format, CF_UNICODETEXT] {
                 if let Some(text) = get_text(data, cf) {
-                    // As the Add window reads a line: "(https://…)," gives the address.
-                    let urls = crate::addkind::written_addresses(&text);
+                    // A dragged link is one address as it is ("…/Washington,_D.C." keeps its
+                    // dot); a dropped text's are picked as the Add window reads a line
+                    // ("(https://…)," gives the address).
+                    let urls = if cf == url_format {
+                        crate::addkind::dragged_links(&text)
+                    } else {
+                        crate::addkind::written_addresses(&text)
+                    };
                     if !urls.is_empty() {
                         return urls;
                     }

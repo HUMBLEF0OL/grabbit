@@ -37,6 +37,7 @@ param(
   # tools/shots/make.py): <what> is a /show argument (options:connection), "@main" (the main
   # window), "@menu:<show argument>" (a menu: every window of ours, composed), or
   # "@download:<path>" (Download File Info for the lab server's <path>, as a browser hands it),
+  # "@add:<path>" (the Add window holding the lab server's <path>, not the clipboard's links),
   # or "@complete:<path>" (the Download complete window once that small file is in).
   # With -Torrent, "@torrent" is its Add torrent window. "a+b" runs /show a first, then shoots b
   # ("theme:graphite+@main").
@@ -148,24 +149,7 @@ function Follow {
   Start-Sleep 4
   $script:main = @(Titles $script:app.Id | Where-Object { $_ -like "Grabbit*" })[0]
 }
-$srv = $null; $app = $null; $clipBefore = $null; $clipSet = $false
-# The clipboard, set with a few tries: another program may hold it for a moment.
-function Set-ClipboardSoon($text) {
-  foreach ($try in 1..5) {
-    try {
-      if ($null -eq $text) {
-        # Empty again (Windows PowerShell 5.1 runs single-threaded, as the clipboard wants).
-        Add-Type -AssemblyName System.Windows.Forms
-        [System.Windows.Forms.Clipboard]::Clear()
-      } else {
-        Set-Clipboard -Value $text
-      }
-      return
-    }
-    catch { Start-Sleep -Milliseconds 200 }
-  }
-  Write-Warning "The clipboard couldn't be set."
-}
+$srv = $null; $app = $null
 try {
   if (Test-Path $work) { Remove-Item $work -Recurse -Force }
   New-Item -ItemType Directory -Force "$work\data", "$work\Downloads" | Out-Null
@@ -189,22 +173,6 @@ try {
 
   $srv = Start-Process -PassThru -WindowStyle Hidden $Server -ArgumentList "--bind 127.0.0.1:$Port"
   $base = if ($Port -eq 80) { "http://$UrlHost" } else { "http://${UrlHost}:$Port" }
-  # The Add window fills itself with the clipboard's links as it opens: for a run that shoots
-  # it, a neutral address of the lab server's, and the clipboard as it was after the run (its
-  # text back, or empty again), so no picture shows what the user copied. A copied picture or
-  # files are never overwritten: the clipboard is left alone then, and the Add window's shot
-  # shows its box empty. Don't copy anything while the run goes on.
-  if ((($Show -join ",") -match "addurl") -or (Want "add-url")) {
-    $other = $null
-    try { $other = (Get-Clipboard -Format Image) ; if (-not $other) { $other = Get-Clipboard -Format FileDropList } } catch {}
-    if ($other) {
-      Write-Warning "The clipboard holds a picture or files: left as it is; the Add window's shot shows an empty box."
-    } else {
-      try { $clipBefore = Get-Clipboard -Raw } catch { $clipBefore = $null }
-      Set-ClipboardSoon "$base/gen/4M/project-report-2026.pdf"
-      $clipSet = $true
-    }
-  }
   # /show crash-test:freeze for the crash report window's shot.
   $env:MDM_CRASH_TEST = "1"
   $env:GRABBIT_DATA_DIR = "$work\data"
@@ -243,7 +211,9 @@ try {
   # site's pictures and the few docs pages not yet in the help's shot list; the help pages'
   # own come from tools/shots/shots.toml (-Show).
   $windows = [ordered]@{
-    "add-url" = "addurl"; "speed-limiter" = "speedlimit+@main"; "scheduler" = "scheduler+@main"
+    # The Add window holding a lab address, never the clipboard's (no picture shows what the
+    # user copied, and the clipboard is never touched).
+    "add-url" = "add:$base/gen/4M/project-report-2026.pdf"; "speed-limiter" = "speedlimit+@main"; "scheduler" = "scheduler+@main"
     "options-connection" = "options:connection+@main"; "options-remote" = "options:remote+@main"; "grabber" = "grabber"
     "progress" = "progress"
   }
@@ -338,6 +308,9 @@ try {
     } elseif ($what -like "@download:*") {
       # As a browser hands it over: no /n, so Download File Info asks.
       & $Exe /d "$base/$($what.Substring(10))"
+    } elseif ($what -like "@add:*") {
+      # The Add window holding the lab server's <path>, never the clipboard's links.
+      & $Exe /show "add:$base/$($what.Substring(5))"
     } else {
       & $Exe /show $what
     }
@@ -395,8 +368,6 @@ try {
     Stop-Process -Id $mon -ErrorAction SilentlyContinue
   }
 } finally {
-  # The clipboard as it was: its text back, or empty again.
-  if ($clipSet) { Set-ClipboardSoon $clipBefore }
   if ($app) { Stop-Process -Id $app.Id -ErrorAction SilentlyContinue }
   # A copy started again by itself, and its crash monitor: ours as well.
   Ours | ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
