@@ -49,7 +49,7 @@ phase that must decide them before it starts.
 | 08 | [Options](plans/08-options.md) | Side list with pages unchanged inside (08a), then pages on the form and sub-dialogs (08b) | 07a, 02b, 03b; 04 before final sizes | `ui/08a-options-list`, `ui/08b-options-pages` |
 | 09 | [Polish and default](plans/09-polish-and-default.md) | Two-tone hot colour, dark glow, app mark, full visual/keyboard/accessibility review (09a); what is left of 09b now that 05.5c made Graphite the default | 06, 07e, 08b | `ui/09a-finish`, `ui/09b-default` |
 | 10 | [Rename to Grabbit](plans/10-rename-grabbit.md) | Display text, assets, migrated identifiers (exes renamed), distribution, then crates and old styles (10e) | 09b; the logo (maintainer) before 10b | `rename/10a…10e` |
-| 11 | [Options in the main window](plans/11-in-app-settings.md) | Options as a page in the main window with a Save bar (11a); Scheduler (11b1), Speed limiter, Torrents and Browser extension (11b2) as its sections; Appearance (11c, optional) | 08, 09, 10e | `ui/11a-options-page`, `ui/11b1-scheduler-section`, `ui/11b2-small-sections`, `ui/11c-appearance` |
+| 11 | [Options in the main window](plans/11-in-app-settings.md) | Options as a page in the main window with a Save bar (11a); Scheduler (11b1), Speed limiter, Torrents and Browser extension (11b2) as its sections; Appearance (11c, not wanted) | 08, 09, 10e | `ui/11a-options-page`, `ui/11b1-scheduler-section`, `ui/11b2-small-sections`, `ui/11c-appearance` |
 
 Tracks:
 
@@ -110,7 +110,9 @@ A phase is ticked when its PR is merged into `dev` on origin (00, Paperwork).
       PR 48, merged 2026-11-15; the passes at the screen are left, see its plan's "Done when")
 - [x] 09b Default (complete: 09b-text PR 29, 09b-shots in this PR)
 - [ ] 10a to 10e Rename
-- [ ] 11a Options page, 11b1 Scheduler section, 11b2 small sections, 11c Appearance (optional)
+- [x] 11 Options in the main window (complete: 11a PR 79, 11b1 PR 80, 11b2 PR 81, merged
+      2026-11-19; 11c Appearance not wanted; the moved windows' help pictures retaken in the
+      closing PR)
 
 ## What is in this folder
 

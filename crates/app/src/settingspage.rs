@@ -71,6 +71,9 @@ pub struct SettingsPage {
     extension: Option<Extension>,
     /// Back with unsaved changes: "Discard your changes to Options?" (D3).
     ask: Option<Confirm>,
+    /// The page whose row the side list last brought into view (a section opened by a command,
+    /// `/show scheduler`, is shown in the list too, in a window too short for every row).
+    listed: Option<usize>,
 }
 
 impl SettingsPage {
@@ -82,6 +85,7 @@ impl SettingsPage {
             torrents: None,
             extension: None,
             ask: None,
+            listed: None,
         }
     }
 
@@ -193,21 +197,34 @@ impl SettingsPage {
             pos2(o.x + side_w, area.max.y.max(list_top)),
         );
         let list_h = if list_scrolls { rows_h } else { list_room };
+        let side_id = egui::Id::unique("settings-pages");
+        // A page newly shown (opened on a section, or picked): its row into view, the list
+        // moved no more than that. `scale::pane` keeps the list's offset under `id.with("pane")`,
+        // which outlives this page: Options opened anew starts from the list's top.
+        let page = self.options.page();
+        if self.listed != Some(page) {
+            let fresh = self.listed.is_none();
+            self.listed = Some(page);
+            if list_scrolls {
+                ui.ctx().data_mut(|d| {
+                    let off = d.get_temp_mut_or_default::<egui::Vec2>(side_id.with("pane"));
+                    let from = if fresh { 0.0 } else { off.y };
+                    off.y = row_into_view(from, OptionsDialog::page_row(page), list_room);
+                });
+            }
+            // A row picked this pass (a key, a click) is scrolled to next pass: draw it now.
+            ui.ctx().request_repaint();
+        }
         let mut side = ui.new_child(egui::UiBuilder::new().max_rect(view));
         side.set_clip_rect(view.intersect(ui.clip_rect()));
-        crate::scale::pane(
-            &mut side,
-            egui::Id::unique("settings-pages"),
-            vec2(SIDE_W + 1.0, list_h),
-            |ui, at| {
-                // While a small dialog waits for an answer the page stays where it is.
-                let before = self.options.page();
-                self.options.pages(ui, at, list_h);
-                if modal {
-                    self.options.show_page(before);
-                }
-            },
-        );
+        crate::scale::pane(&mut side, side_id, vec2(SIDE_W + 1.0, list_h), |ui, at| {
+            // While a small dialog waits for an answer the page stays where it is.
+            let before = self.options.page();
+            self.options.pages(ui, at, list_h);
+            if modal {
+                self.options.show_page(before);
+            }
+        });
 
         // The header: "← Downloads" over the list, the list's border down its side: right of
         // its scroll bar while it scrolls (the list's own border, left of the bar, hidden).
@@ -468,6 +485,12 @@ fn crash_name(page: usize) -> &'static str {
     }
 }
 
+/// The list's offset `off` moved the least that shows `row` in `room` points of it.
+fn row_into_view(off: f32, row: egui::Rangef, room: f32) -> f32 {
+    let lo = (row.max - room).max(0.0);
+    off.clamp(lo, row.min.max(lo))
+}
+
 /// The page's area in the smallest main window (600 x 300, plan 11), its paste bar shown: the
 /// panes' place in Graphite's layout.
 #[cfg(test)]
@@ -607,6 +630,79 @@ mod tests {
         pass(ctx, d, area, vec![egui::Event::PointerMoved(at)]);
         pass(ctx, d, area, button(at, true));
         pass(ctx, d, area, button(at, false)).0
+    }
+
+    #[test]
+    fn row_into_view_moves_the_least() {
+        let row = egui::Rangef::new(400.0, 430.0);
+        // Below the view: scrolled until its bottom shows; above: until its top does.
+        assert_eq!(row_into_view(0.0, row, 200.0), 230.0);
+        assert_eq!(row_into_view(500.0, row, 200.0), 400.0);
+        // Already in view: the list stays.
+        assert_eq!(row_into_view(300.0, row, 200.0), 300.0);
+        // A row near the top in a short list: never above the list's start.
+        assert_eq!(
+            row_into_view(50.0, egui::Rangef::new(10.0, 40.0), 200.0),
+            10.0
+        );
+    }
+
+    /// Plan 11, PR 82's audit: a section opened by a command (`/show scheduler`, the toolbar's
+    /// Scheduler) in a window too short for every row shows its row in the side list.
+    #[test]
+    fn a_section_opened_by_a_command_is_in_view_in_the_list() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let area = min_area();
+        for (section, label) in [
+            (SCHEDULER_PAGE, "Scheduler"),
+            (EXTENSION_PAGE, "Browser extension"),
+        ] {
+            let mut d = page(&Settings::default());
+            d.show_section(section);
+            pass(&ctx, &mut d, area, vec![]);
+            let (_, tree) = pass(&ctx, &mut d, area, vec![]);
+            let (_, list) = find(&tree, Role::List, "Pages").expect("the side list");
+            let list = bounds(list).expect("the list's bounds");
+            let (_, row) = find(&tree, Role::ListItem, label).expect("the section's row");
+            let row = bounds(row).expect("the row's bounds");
+            assert!(
+                row.top() >= area.top() + HEADER_H - 0.5 && row.bottom() <= area.bottom() + 0.5,
+                "section {section}: its row {row:?} is out of the page's view {area:?} (list {list:?})"
+            );
+        }
+    }
+
+    /// PR 82's audit r2: the list's offset outlives a page (egui's temp data); Options opened
+    /// anew on General after a visit to a section low in the list shows the list from its top.
+    #[test]
+    fn options_opened_anew_shows_the_list_from_its_top() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let area = min_area();
+        let mut d = page(&Settings::default());
+        d.show_section(EXTENSION_PAGE);
+        pass(&ctx, &mut d, area, vec![]);
+        pass(&ctx, &mut d, area, vec![]);
+        // The list was scrolled well past General's row (else this test proves nothing).
+        let key = egui::Id::unique("settings-pages").with("pane");
+        let off = ctx
+            .data(|m| m.get_temp::<egui::Vec2>(key))
+            .unwrap_or_default();
+        assert!(
+            off.y > OptionsDialog::page_row(0).max,
+            "the Extension's visit scrolled the list: {off:?}"
+        );
+        let mut d = page(&Settings::default());
+        pass(&ctx, &mut d, area, vec![]);
+        let (_, tree) = pass(&ctx, &mut d, area, vec![]);
+        let (_, row) = find(&tree, Role::ListItem, "General").expect("General's row");
+        let row = bounds(row).expect("the row's bounds");
+        let top = area.top() + HEADER_H + OptionsDialog::page_row(0).min;
+        assert!(
+            (row.top() - top).abs() < 0.5,
+            "General's row {row:?} should be at the list's top, y {top}"
+        );
     }
 
     /// Plan 11a: a page frame has the "Options" pane holding the "Pages" list and the Back

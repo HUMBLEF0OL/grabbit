@@ -377,6 +377,12 @@ impl OptionsDialog {
         }
     }
 
+    /// Page `page`'s row in the side list, from the list's top: its top and bottom.
+    pub(crate) fn page_row(page: usize) -> egui::Rangef {
+        let rc = side_row(Pos2::ZERO, page_at(page));
+        egui::Rangef::new(rc.top(), rc.bottom())
+    }
+
     /// The side list's rows end this far below its top (`SIDE_TOP` and every row).
     pub(crate) fn pages_height() -> f32 {
         SIDE_TOP + ROWS as f32 * (ROW_H + ROW_GAP) + TOOLS_GAP + 8.0
