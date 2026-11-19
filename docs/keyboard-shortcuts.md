@@ -99,7 +99,7 @@ A window larger than the screen at a big interface size scrolls.
 | **Space** | Press a focused button, tick a check box, tick the selected row of a list |
 | **Esc** | Close the dialog (an open drop-down list first) |
 | **Alt** + an underlined letter | That button or control |
-| **Ctrl+Tab** / **Ctrl+Shift+Tab** | The next / previous tab, or Options page (also **Ctrl+Page Down** / **Page Up**) |
+| **Ctrl+Tab** / **Ctrl+Shift+Tab** | The next / previous tab, or Options page (also **Ctrl+Page Down** / **Page Up**). On the Scheduler, a section of Options, the next / previous section: its two tabs switch with **Left** / **Right** on the selected tab |
 | **Left** / **Right** | The next tab of a focused tab strip, or Options page of its focused side list; the next choice of a radio group |
 | **Up** / **Down** | The next Options page of its focused side list; the next choice of a drop-down list or radio group; a number up or down |
 | **Alt+Down** or **F4** | Open a drop-down list |

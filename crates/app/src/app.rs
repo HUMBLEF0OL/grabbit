@@ -2599,6 +2599,7 @@ impl App {
                 if let Some(s) = self
                     .settings_page
                     .as_mut()
+                    .filter(|p| !p.modal())
                     .and_then(|p| p.scheduler.as_mut())
                 {
                     match tab {
@@ -4020,7 +4021,11 @@ impl App {
                 TrayCmd::Batch => Cmd::Batch(false),
                 TrayCmd::LimiterOn => Cmd::LimiterOn,
                 TrayCmd::LimiterOff => Cmd::LimiterOff,
-                TrayCmd::Scheduler => Cmd::Scheduler,
+                // A section of the main window's page now (plan 11b1): the window comes back.
+                TrayCmd::Scheduler => {
+                    self.show_window(ctx);
+                    Cmd::Scheduler
+                }
                 TrayCmd::StartQueue => Cmd::StartQueue(0),
                 TrayCmd::StopQueue => Cmd::StopQueue(0),
                 // A page of the main window now (plan 11a): the window comes back with it.
@@ -6534,7 +6539,11 @@ impl App {
             // draft made on its first visit and kept while the page is open.
             Cmd::Scheduler | Cmd::EditQueue(_) | Cmd::ScheduleQueue(_) | Cmd::NewQueue => {
                 self.run(Cmd::Options, None, ctx);
-                if let Some(p) = &mut self.settings_page {
+                // Not while a small dialog of the page waits for an answer (Enter queue
+                // name, Delete's question, an Options page's): it stays on its section.
+                if let Some(p) = &mut self.settings_page
+                    && !p.modal()
+                {
                     let s = p.show_scheduler(&self.queues, &self.settings);
                     match cmd {
                         // Edit queue: its files; Schedule: when it runs.
@@ -8597,9 +8606,27 @@ impl App {
             .settings_page
             .as_mut()
             .and_then(|p| p.show(ui, area, keys, typing, &self.downloads, &mut tools));
-        // The Scheduler's Start now and Stop, at once (11b1).
+        // The Scheduler's Start now and Stop, at once (11b1). Start now applied the
+        // Scheduler's draft (its Download limits too): an Options draft without changes is
+        // made again from the settings now in force, so Connection shows them.
+        let applied = actions
+            .iter()
+            .any(|a| matches!(a, crate::scheduler::Action::Apply { .. }));
         for a in actions {
             self.scheduler_action(a);
+        }
+        if applied
+            && self
+                .settings_page
+                .as_ref()
+                .is_some_and(|p| !p.options.dirty())
+        {
+            let page = self.settings_page.as_ref().map_or(0, |p| p.page());
+            let fresh = self.options_draft(page);
+            let downloads = self.downloads.clone();
+            if let Some(p) = &mut self.settings_page {
+                p.options = fresh.keep_view(&p.options, true, &downloads);
+            }
         }
         let shown = self.shown_ids().len();
         if self.status_strip(ui, layout, o, w, h, shown) {
@@ -13317,6 +13344,10 @@ mod settings_page_tests {
         a.run(Cmd::NewQueue, None, &ctx);
         assert!(shown(&a).1, "Create new queue asks its name");
         assert!(a.settings_page.as_ref().unwrap().modal());
+        // Audit r1: while it asks, the Scheduler's commands and names leave it as it is.
+        a.run(Cmd::EditQueue(1), None, &ctx);
+        a.show_named("scheduler:limits", &ctx);
+        assert_eq!(shown(&a), (Some((0, false)), true), "held while it asks");
         a.show_named("downloads", &ctx);
         assert!(a.settings_page.is_none());
         a.show_named("scheduler:limits", &ctx);
@@ -13392,6 +13423,9 @@ mod settings_page_tests {
         p.scheduler.as_mut().unwrap().set_limits(true, 777);
         assert_eq!(p.back(), None, "Back asks");
         assert!(p.modal());
+        // No: the page stays with its changes, its buttons live again.
+        p.answer_no();
+        assert!(!p.modal() && p.dirty());
         a.settings_page_event(PageEvent::Discard);
         assert_eq!(a.settings, saved, "nothing applied");
         assert_eq!(a.queues, queues);

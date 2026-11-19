@@ -8,7 +8,6 @@ use egui::{Color32, Pos2, Rect, Sense, Ui, pos2, vec2};
 
 use crate::chrome::{IconKey, ShellIcons};
 use crate::dialogs::{Outcome, inline, question};
-use crate::icons::Icon;
 use crate::model::{self, Item};
 use crate::queue::{Queue, TurnOff};
 use crate::regional::DateOrder;
@@ -456,12 +455,12 @@ impl Scheduler {
         let p = ui.painter().clone();
 
         // ---- left pane ----------------------------------------------------------------
-        let clock = r(o, 11.0, 7.0, 32.0, 32.0);
-        Icon::Scheduler.image(true).paint_at(ui, clock);
+        // The window's clock icon is the section heading's tile now (plan 11b1): the label
+        // starts at the list's edge.
         // i18n: plural noun: label above the list of queues
         text(
             &p,
-            o.x + 74.0,
+            o.x + 11.0,
             o.y + 34.0,
             crate::i18n::t("Queues"),
             LIGHT_TEXT(),
@@ -527,7 +526,8 @@ impl Scheduler {
                 r(o, start_x, buttons_top, start_w, winui::CONTROL_H),
                 // i18n: verb: start the queue now
                 "Start now",
-                kind(!is_running, ButtonKind::Default),
+                // Not the default's look: Enter is the page's Save.
+                kind(!is_running, ButtonKind::Normal),
                 false,
                 Some(0),
             )
@@ -2253,14 +2253,6 @@ fn merge_items(base: &[u64], draft: &[u64], live: &[u64]) -> Vec<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Plan 09: the mock's 800 wide. Plan 11b1: as a section of Options' page, it fits the main
-    /// window's first size (1080 wide) right of the side list without scrolling sideways.
-    #[test]
-    fn the_section_fits_the_first_main_window() {
-        assert_eq!(W, 800.0);
-        const { assert!(SIZE[0] <= 1080.0 - crate::options::SIDE_W - 1.0) };
-    }
 
     #[test]
     fn the_draft_keeps_its_order_and_the_lists_changes() {

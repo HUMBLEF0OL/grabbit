@@ -177,7 +177,14 @@ impl SettingsPage {
             &mut side,
             egui::Id::unique("settings-pages"),
             vec2(SIDE_W + 1.0, list_h),
-            |ui, at| self.options.pages(ui, at, list_h),
+            |ui, at| {
+                // While a small dialog waits for an answer the page stays where it is.
+                let before = self.options.page();
+                self.options.pages(ui, at, list_h);
+                if modal {
+                    self.options.show_page(before);
+                }
+            },
         );
 
         // The header: "← Downloads" over the list, the list's border down its side: right of
@@ -312,6 +319,12 @@ impl SettingsPage {
         } else {
             None
         }
+    }
+
+    /// Back's question answered No, as its window's No does (tests).
+    #[cfg(test)]
+    pub(crate) fn answer_no(&mut self) {
+        self.ask = None;
     }
 
     /// The windows over the page (a page's small dialogs, the discard question): every frame
@@ -789,6 +802,15 @@ mod tests {
         );
         assert_eq!(ev, None, "Back asks first");
         assert!(d.ask.is_some());
+        // Audit r1: while the question waits, a click on another page's row leaves the page
+        // on the Scheduler.
+        let (_, tree) = pass(&ctx, &mut d, area, vec![]);
+        let general = bounds(find(&tree, Role::ListItem, "General").unwrap().1).unwrap();
+        click(&ctx, &mut d, area, general.center());
+        assert_eq!(d.page(), SCHEDULER_PAGE, "held while modal");
+        d.ask = None;
+        click(&ctx, &mut d, area, general.center());
+        assert_eq!(d.page(), 0, "picked once answered");
     }
 
     /// A page whose draft differs from what it opened with (General's "Launch on startup"
