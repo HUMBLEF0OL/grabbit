@@ -135,13 +135,29 @@ impl SettingsPage {
             |ui, at| self.options.pages(ui, at, list_h),
         );
 
-        // The header: "← Downloads" over the list, the list's border down its side.
+        // The header: "← Downloads" over the list, the list's border down its side: right of
+        // its scroll bar while it scrolls (the list's own border, left of the bar, hidden).
+        let border = o.x + side_w - 1.0;
+        if list_scrolls {
+            winui::fill(
+                &p,
+                o.x + SIDE_W,
+                list_top,
+                o.x + SIDE_W,
+                area.max.y - 1.0,
+                c.panel,
+            );
+        }
         winui::fill(
             &p,
-            o.x + SIDE_W,
+            border,
             o.y,
-            o.x + SIDE_W,
-            list_top - 1.0,
+            border,
+            if list_scrolls {
+                area.max.y - 1.0
+            } else {
+                list_top - 1.0
+            },
             c.menubar_line,
         );
         let back_rc = winui::r(o, 8.0, 5.0, SIDE_W - 16.0, winui::CONTROL_H);

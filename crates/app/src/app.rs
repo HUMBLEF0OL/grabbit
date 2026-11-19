@@ -5820,9 +5820,10 @@ impl App {
                 return;
             }
         }
-        let fresh = self.options_draft(page).keep_scroll();
+        let fresh = self.options_draft(page);
+        let downloads = self.downloads.clone();
         if let Some(p) = &mut self.settings_page {
-            p.options = fresh;
+            p.options = fresh.keep_view(&p.options, &downloads);
         }
     }
 

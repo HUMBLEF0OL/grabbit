@@ -244,9 +244,22 @@ impl OptionsDialog {
         self
     }
 
-    /// Its page kept where it was scrolled (a fresh draft after Save or Discard, plan 11a).
-    pub fn keep_scroll(mut self) -> Self {
-        self.scrolled = Some(self.page);
+    /// A fresh draft after Save or Discard (plan 11a) shown as `old` was: its page and scroll,
+    /// the category chosen on Save to (its folder as the fresh draft has it), the lists' places
+    /// and selections, and User-Agent's Automatic tick.
+    pub(crate) fn keep_view(mut self, old: &OptionsDialog, downloads: &std::path::Path) -> Self {
+        self.page = old.page;
+        self.scrolled = Some(old.page);
+        let cats = Category::all();
+        self.category = old.category.min(cats.len() - 1);
+        self.cat_dir = display_dir(&self.s.category_dir(cats[self.category], downloads));
+        self.browser_rows = old.browser_rows;
+        self.exc_rows = old.exc_rows;
+        self.login_rows = old.login_rows;
+        self.account_rows = old.account_rows;
+        self.sound_rows = old.sound_rows;
+        self.device_rows = old.device_rows;
+        self.ua_auto = old.ua_auto;
         self
     }
 
@@ -5037,6 +5050,31 @@ mod tests {
         page_pass(&ctx, &mut d, vec![]);
         page_pass(&ctx, &mut d, vec![]);
         assert!(!d.dirty(), "Save to on Video");
+    }
+
+    /// Plan 11a (audit r5): after Save or Discard the fresh draft stays on the category Save to
+    /// showed, with that category's folder as the fresh draft has it, and on the same page.
+    #[test]
+    fn a_fresh_draft_keeps_the_view() {
+        let dir = std::env::temp_dir();
+        let s = Settings::default();
+        let mut old = OptionsDialog::new(&s, &dir, vec![]).on_page(2);
+        let video = Category::all()
+            .iter()
+            .position(|c| *c == Category::Video)
+            .unwrap();
+        old.category = video;
+        old.ua_auto = false;
+        let fresh = OptionsDialog::new(&s, &dir, vec![]).keep_view(&old, &dir);
+        assert_eq!(
+            (fresh.page, fresh.category, fresh.ua_auto),
+            (2, video, false)
+        );
+        assert_eq!(
+            fresh.cat_dir,
+            display_dir(&s.category_dir(Category::Video, &dir))
+        );
+        assert!(!fresh.dirty());
     }
 
     /// #424: the list written and read back through a real file: nothing lost, nothing doubled.
