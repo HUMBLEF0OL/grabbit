@@ -13442,4 +13442,91 @@ mod settings_page_tests {
         assert!(a.settings_page.is_none());
         assert_eq!(a.settings, saved, "Close drops it too");
     }
+
+    /// Audit r2: Start now applies the Scheduler's draft at once, its Download limits too: an
+    /// Options draft without changes is made again from them (Connection shows what is in
+    /// force, nothing to save); one with changes is left as it is.
+    #[test]
+    fn start_now_refreshes_an_untouched_options_draft() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let click_start = |a: &mut App| {
+            let input = |events| egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    egui::vec2(1080.0, 560.0),
+                )),
+                events,
+                ..Default::default()
+            };
+            let mut at = None;
+            for _ in 0..2 {
+                let mut out = ctx.run_ui(input(vec![]), |ui| a.paint(ui));
+                out.textures_delta.clear();
+                let tree = out
+                    .platform_output
+                    .accesskit_update
+                    .expect("AccessKit is on");
+                at = tree
+                    .nodes
+                    .iter()
+                    .find(|(_, n)| {
+                        n.role() == egui::accesskit::Role::Button
+                            && n.label().map(|l| l.replace('&', "")).as_deref() == Some("Start now")
+                    })
+                    .and_then(|(_, n)| n.bounds())
+                    .map(|b| pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32));
+            }
+            let at = at.expect("Start now");
+            for down in [None, Some(true), Some(false)] {
+                let mut events = vec![egui::Event::PointerMoved(at)];
+                if let Some(pressed) = down {
+                    events.push(egui::Event::PointerButton {
+                        pos: at,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: Default::default(),
+                    });
+                }
+                let mut out = ctx.run_ui(input(events), |ui| a.paint(ui));
+                out.textures_delta.clear();
+            }
+        };
+        a.run(Cmd::Scheduler, None, &ctx);
+        let s = a
+            .settings_page
+            .as_mut()
+            .unwrap()
+            .scheduler
+            .as_mut()
+            .unwrap();
+        s.set_limits(true, 4321);
+        click_start(&mut a);
+        // (An empty queue stops again at once: the Start itself is scheduler.rs's test.)
+        assert!(
+            a.settings.limits_on && a.settings.limits_mb == 4321,
+            "applied"
+        );
+        let p = a.settings_page.as_ref().unwrap();
+        assert!(!p.dirty(), "nothing left to save");
+        assert_eq!(p.options.result().limits_mb, 4321, "Options shows it");
+        assert_eq!(p.page(), crate::options::SCHEDULER_PAGE);
+        // Options has a change of its own: its draft stays as it is (Save merges it).
+        a.run(Cmd::ScheduleQueue(1), None, &ctx);
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        let s = a
+            .settings_page
+            .as_mut()
+            .unwrap()
+            .scheduler
+            .as_mut()
+            .unwrap();
+        s.set_limits(true, 55);
+        click_start(&mut a);
+        assert_eq!(a.settings.limits_mb, 55, "applied");
+        let p = a.settings_page.as_ref().unwrap();
+        assert!(p.options.dirty(), "Options' change kept");
+        assert_eq!(p.options.result().limits_mb, 4321, "its draft as it was");
+    }
 }
