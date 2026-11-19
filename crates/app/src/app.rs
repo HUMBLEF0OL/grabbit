@@ -13579,6 +13579,19 @@ mod settings_page_tests {
             a.show_named(name, &ctx);
             assert_eq!(page(&a), Some(want), "{name}");
         }
+        // Audit r1: while a small dialog of the page waits (Enter queue name), their commands
+        // and names leave the page where it is.
+        a.run(Cmd::NewQueue, None, &ctx);
+        assert!(a.settings_page.as_ref().unwrap().modal());
+        a.run(Cmd::LimiterSettings, None, &ctx);
+        a.run(Cmd::TorrentSettings, None, &ctx);
+        a.show_named("speedlimit", &ctx);
+        a.show_named("torrent-settings", &ctx);
+        assert_eq!(
+            page(&a),
+            Some(crate::options::SCHEDULER_PAGE),
+            "held while it asks"
+        );
         a.show_named("extension", &ctx);
         assert!(a.settings_page.is_none(), "the offer's window instead");
         assert!(a.extension.is_some());

@@ -426,7 +426,7 @@ impl SettingsPage {
 
 /// A moved window's section in `view` (plan 11b): its heading, then the window's layout
 /// (`size`, its client without the footer) under it, scrolled where `view` is smaller
-/// (`scale::pane`), from its top when another section is picked.
+/// (`scale::pane`); each section keeps its own scroll while the page is open.
 fn section_pane(
     ui: &mut Ui,
     view: Rect,
@@ -904,18 +904,19 @@ mod tests {
             (
                 SPEED_PAGE,
                 "Speed limiter",
-                "Always turn on Speed Limiter on Grabbit startup",
+                &["Always turn on Speed Limiter on Grabbit startup"][..],
             ),
             (
                 TORRENTS_PAGE,
                 "Torrents",
-                "Keep sharing torrents after they finish",
+                &["Keep sharing torrents after they finish"][..],
             ),
             (
                 EXTENSION_PAGE,
                 "Browser extension",
-                // A row's button, "Show me how for Chrome" (no store listing yet).
-                "Show me how",
+                // A row's button ("Show me how for Chrome"; "Add the extension…" once listed in
+                // a store), whatever browsers this computer has.
+                &["Show me how", "Add the extension"][..],
             ),
         ] {
             pass(&ctx, &mut d, area, vec![]);
@@ -926,11 +927,25 @@ mod tests {
             pass(&ctx, &mut d, area, vec![]);
             let (_, tree) = pass(&ctx, &mut d, area, vec![]);
             assert!(
-                tree.nodes
-                    .iter()
-                    .any(|(_, n)| n.label().is_some_and(|l| l.starts_with(control))),
-                "{row}: {control}"
+                tree.nodes.iter().any(|(_, n)| n
+                    .label()
+                    .is_some_and(|l| control.iter().any(|c| l.starts_with(c)))),
+                "{row}: {control:?}"
             );
+            // Audit r1: a caption that ends before its box ends where the section has it, not
+            // at the window's x (Torrents' were cut to "Stop shari..." right of the side list).
+            if section == TORRENTS_PAGE {
+                let caption = tree
+                    .nodes
+                    .iter()
+                    .find(|(_, n)| {
+                        n.role() == Role::CheckBox
+                            && n.label() == Some("Stop sharing at a share ratio of")
+                    })
+                    .and_then(|(_, n)| bounds(n))
+                    .expect("its check box");
+                assert!(caption.width() > 200.0, "cut: {caption:?}");
+            }
             for gone in ["OK", "Cancel", "Close", "Don't ask again"] {
                 assert!(
                     find(&tree, Role::Button, gone).is_none(),
