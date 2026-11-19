@@ -135,6 +135,8 @@ pub const EXTRAS: &[(&str, &str)] = &[
     ("gx-computer", "Server: this computer"),
     ("gx-sun", "Title bar: switch to light mode"),
     ("gx-moon", "Title bar: switch to dark mode"),
+    ("gx-arrow-left", "Options: back to the downloads"),
+    ("gx-puzzle", "Options: Browser extension"),
 ];
 
 /// Whether a set's file named for `need` is read: a need, or an extra.
@@ -363,12 +365,12 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "ft-executable.svg", "ft-font.svg", "ft-generic.svg", "ft-image.svg", "ft-pdf.svg",
             "ft-presentation.svg", "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.svg",
             "ft-video.svg",
-            "gx-adjust.svg", "gx-apps.svg", "gx-browser.svg", "gx-bug.svg", "gx-computer.svg",
+            "gx-adjust.svg", "gx-apps.svg", "gx-arrow-left.svg", "gx-browser.svg", "gx-bug.svg", "gx-computer.svg",
             "gx-copy.svg",
             "gx-device.svg", "gx-dots.svg", "gx-download.svg", "gx-edit.svg", "gx-external.svg",
             "gx-filter.svg", "gx-gauge.svg", "gx-gift.svg", "gx-grip.svg", "gx-hash.svg",
             "gx-info.svg", "gx-key.svg", "gx-keyboard.svg", "gx-link.svg", "gx-merge.svg",
-            "gx-minus.svg", "gx-network.svg", "gx-plus.svg", "gx-pointer.svg", "gx-power.svg",
+            "gx-minus.svg", "gx-network.svg", "gx-plus.svg", "gx-pointer.svg", "gx-power.svg", "gx-puzzle.svg",
             "gx-refresh.svg", "gx-rss.svg", "gx-search.svg", "gx-send.svg", "gx-shield.svg",
             "gx-sidebar.svg", "gx-sun.svg", "gx-moon.svg", "gx-upload.svg", "gx-user.svg", "gx-volume.svg",
             "gx-window.svg",
@@ -387,12 +389,12 @@ static SETS: LazyLock<Mutex<HashMap<String, Arc<Set>>>> = LazyLock::new(|| {
             "ft-executable.svg", "ft-font.svg", "ft-generic.svg", "ft-image.svg", "ft-pdf.svg",
             "ft-presentation.svg", "ft-spreadsheet.svg", "ft-text.svg", "ft-torrent.svg",
             "ft-video.svg",
-            "gx-adjust.svg", "gx-apps.svg", "gx-browser.svg", "gx-bug.svg", "gx-computer.svg",
+            "gx-adjust.svg", "gx-apps.svg", "gx-arrow-left.svg", "gx-browser.svg", "gx-bug.svg", "gx-computer.svg",
             "gx-copy.svg",
             "gx-device.svg", "gx-dots.svg", "gx-download.svg", "gx-edit.svg", "gx-external.svg",
             "gx-filter.svg", "gx-gauge.svg", "gx-gift.svg", "gx-grip.svg", "gx-hash.svg",
             "gx-info.svg", "gx-key.svg", "gx-keyboard.svg", "gx-link.svg", "gx-merge.svg",
-            "gx-minus.svg", "gx-network.svg", "gx-plus.svg", "gx-pointer.svg", "gx-power.svg",
+            "gx-minus.svg", "gx-network.svg", "gx-plus.svg", "gx-pointer.svg", "gx-power.svg", "gx-puzzle.svg",
             "gx-refresh.svg", "gx-rss.svg", "gx-search.svg", "gx-send.svg", "gx-shield.svg",
             "gx-sidebar.svg", "gx-sun.svg", "gx-moon.svg", "gx-upload.svg", "gx-user.svg", "gx-volume.svg",
             "gx-window.svg",
@@ -803,7 +805,7 @@ mod tests {
         let n = ids.len();
         ids.dedup();
         assert_eq!(ids.len(), n, "an id twice");
-        assert_eq!(EXTRAS.len(), 39);
+        assert_eq!(EXTRAS.len(), 41);
         let graphite = set("graphite").unwrap();
         for (extra, _) in EXTRAS {
             assert!(extra.starts_with("gx-"), "{extra}");

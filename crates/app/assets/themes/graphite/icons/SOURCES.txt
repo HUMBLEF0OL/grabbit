@@ -108,3 +108,5 @@ gx-volume            volume
 gx-computer          device-desktop
 gx-sun               sun
 gx-moon              moon
+gx-arrow-left        arrow-left
+gx-puzzle            puzzle

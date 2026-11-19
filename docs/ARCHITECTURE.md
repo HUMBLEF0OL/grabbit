@@ -61,6 +61,8 @@ headers, and sessions are pooled per download and reused between segments.
 ## App
 
 One egui window painted to fixed pixel coordinates, plus one immediate viewport per dialog.
+Options is not a dialog: `settingspage.rs` draws its pages in the main window, in the panes'
+place, and the small dialogs its pages open are viewports over it.
 `app.rs` holds the state (downloads, queues, settings, the list's selection) and turns menu,
 toolbar, key and IPC commands into actions. Each dialog is its own module and returns an
 `Outcome` (open, closed, done with a value). Grabbit is Windows only. Windows calls are confined to `win32.rs`

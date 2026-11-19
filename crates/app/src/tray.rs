@@ -166,7 +166,7 @@ impl Tray {
             TrayCmd::StartQueue,
         );
         let stop_queue = add(&menu, mark("Stop main download queue"), TrayCmd::StopQueue);
-        // i18n: plural noun: opens the Options window (settings)
+        // i18n: plural noun: opens Options (settings), a page of the main window
         add(&menu, mark("Options"), TrayCmd::Options);
         menu.append(&PredefinedMenuItem::separator()).ok();
         // i18n: verb: quit the app

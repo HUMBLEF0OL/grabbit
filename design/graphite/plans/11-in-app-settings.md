@@ -9,10 +9,15 @@ Plan written on dev `da63b006`, 2026-11-18 (by a read-only planning agent; verif
 - Branches: `ui/11a-options-page`, `ui/11b1-scheduler-section`, `ui/11b2-small-sections`, `ui/11c-appearance` (optional). Origin only, per 00.
 - Needs: 08 (side list, `page_area`), 09, 10e. Before 11a: `sync.py status`, port anything waiting in `options.rs` / `scheduler.rs`.
 
-## Status (2026-11-18, dev `9a12944b`)
+## Status (2026-11-19)
 
-Not started: no part of 11a–11c is built. The pre-step ports are done but not merged; each is a
-pushed branch with one commit and no pull request yet, 6 commits behind dev:
+11a is built on `ui/11a-options-page` (on top of the panels port below, which it needs: both
+change `options.rs`): `settingspage.rs`, Options' shell in `options.rs`, the page in `App::paint`,
+`gx-arrow-left` and `gx-puzzle`, the docs, and the shot tools' `options:<page>+@main` takes. 11b1,
+11b2 and 11c are not started.
+
+The status at the 1.0.1 handover (2026-11-18, dev `9a12944b`): the pre-step ports are done but
+not merged; each is a pushed branch with one commit and no pull request yet, 6 commits behind dev:
 
 | Branch | Upstream | State |
 | --- | --- | --- |

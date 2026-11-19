@@ -55,6 +55,7 @@ mod scrollbar;
 mod secrets;
 mod selection;
 mod settings;
+mod settingspage;
 mod store;
 mod theme;
 mod themefile;
