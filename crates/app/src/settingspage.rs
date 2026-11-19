@@ -944,7 +944,16 @@ mod tests {
                     })
                     .and_then(|(_, n)| bounds(n))
                     .expect("its check box");
-                assert!(caption.width() > 200.0, "cut: {caption:?}");
+                // Its click area holds the whole caption, in the font it is drawn in.
+                let mut text = 0.0;
+                let mut out = ctx.run_ui(input(area.max.to_vec2(), vec![]), |ui| {
+                    text = winui::text_width(ui.painter(), "Stop sharing at a share ratio of");
+                });
+                out.textures_delta.clear();
+                assert!(
+                    text > 50.0 && caption.width() >= text,
+                    "cut: {caption:?}, the caption {text} wide"
+                );
             }
             for gone in ["OK", "Cancel", "Close", "Don't ask again"] {
                 assert!(
