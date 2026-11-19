@@ -253,9 +253,10 @@ try {
     # "theme:graphite+@main": /show theme:graphite first (no window of its own), then the shot.
     $parts = @($what -split "\+")
     $what = $parts[-1]
-    # The downloads list, not Options' page (plan 11a), unless this shot opens the page (its
-    # sections too: the Scheduler, 11b1; the Speed limiter and Torrents, 11b2).
-    if ($what -eq "@main" -and -not ($parts | Where-Object { $_ -like "options*" -or $_ -like "scheduler*" -or $_ -in "speedlimit", "torrent-settings" })) {
+    # The downloads list, not Options' page (plan 11a). A shot that opens the page (its
+    # sections too: the Scheduler, 11b1; the Speed limiter and Torrents, 11b2) opens it anew, so
+    # its side list starts from the top, not from where the last shot's section left it.
+    if ($what -eq "@main") {
       & $Exe /show downloads
       Start-Sleep -Milliseconds 600
     }

@@ -148,7 +148,8 @@ under = "What it takes"
 take = "options:general+@main"
 # Pad 6: the rows are 22 apart, so the row above stays out. Mark 2 inside the list, just past
 # the "Google Chrome" row's label (its tick box at [228, 452]): on the list's edge it sat beside
-# Test browser integration... and Add browser... and read as theirs.
+# Test browser integration... and Add browser... and read as theirs. Pixels, as the row's name
+# matches its whole width or only its tick box: check this mark when the General page changes.
 crop = { around = ["Use advanced browser integration", "List:Capture downloads from the following browsers:", "Button:Test browser integration"], pad = 6 }
 marks = [{ at = "Use advanced browser integration", side = "right" }, { at = [228, 452, 112, 17], side = "right" }]
 alt = "Options, General: Use advanced browser integration and the list of browsers Grabbit takes downloads from"
