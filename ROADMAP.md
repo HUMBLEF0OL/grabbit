@@ -585,8 +585,8 @@ The maintainer's first findings with 1.0.0 (in `dev`, for the next release):
   skipped, three ported by hand (one done, two in progress).
 - 🔄 Options in the main window (plan 11): ✅ Options' pages open in place of the download list,
   with **← Downloads**, a Save / Discard bar, and a question before unsaved changes are thrown
-  away (11a); ✅ the Scheduler is a section of it, under **Tools** (11b1); the Speed Limiter's
-  and torrents' settings and the browser extension become sections of it next (11b2).
+  away (11a); ✅ the Scheduler is a section of it, under **Tools** (11b1); ✅ so are the Speed
+  Limiter's and torrents' settings and the browser extension (11b2).
 
 ## Being worked on
 

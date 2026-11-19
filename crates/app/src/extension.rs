@@ -151,11 +151,10 @@ impl Extension {
         }
     }
 
-    /// Open until closed; Done when "Don't ask again" was pressed.
-    pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
-        // The host marks the extension seen when a browser starts it: look again now and then
-        // (each browser's own, as each adds it), beside the window, one read at a time; what
-        // was read last shows meanwhile.
+    /// The host marks the extension seen when a browser starts it: look again now and then
+    /// (each browser's own, as each adds it), beside the window, one read at a time; what was
+    /// read last shows meanwhile. Every frame the window or the page's section is drawn.
+    fn refresh(&mut self, ctx: &egui::Context) {
         if let Some(answer) = self.reading.as_ref().and_then(Reading::take) {
             self.reading = None;
             if let Some(l) = answer {
@@ -172,7 +171,36 @@ impl Extension {
             self.reading = Reading::start(ctx, Looked::now);
         }
         ctx.request_repaint_after(Duration::from_secs(1));
-        let h = BANNER + 16.0 + self.browsers.len() as f32 * ROW + 104.0;
+    }
+
+    /// The rows' height with the window's footer band (`body`'s `h`).
+    fn height(&self) -> f32 {
+        BANNER + 16.0 + self.browsers.len() as f32 * ROW + 104.0
+    }
+
+    /// The section's layout size (plan 11b2): the window's client without its footer, a long
+    /// translation's banner included (`winui::banner`).
+    pub fn size(&self, ctx: &egui::Context) -> [f32; 2] {
+        let extra = crate::dialogs::grow_extra(ctx, "extension-banner");
+        [W, self.height() - 32.0 + extra]
+    }
+
+    /// The browser extension as a section of Options' page (plan 11b2): the window's rows at
+    /// `o`, [`Extension::size`] points, without its footer (nothing to save; the offer at a
+    /// start, with Don't ask again, stays the window).
+    pub fn section(&mut self, ui: &mut Ui, o: Pos2) {
+        self.refresh(ui.ctx());
+        let h = self.height();
+        let size = self.size(ui.ctx());
+        crate::dialogs::inline(ui, o, size, winui::BG(), |ui, o| {
+            self.body(ui, o, h, None);
+        });
+    }
+
+    /// Open until closed; Done when "Don't ask again" was pressed.
+    pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
+        self.refresh(ctx);
+        let h = self.height();
         // A long translation's subline makes the banner taller (winui::banner).
         let extra = crate::dialogs::grow_extra(ctx, "extension-banner");
         let mut answer = None;
@@ -185,7 +213,7 @@ impl Extension {
             false,
             winui::BG(),
             |ui, o| {
-                self.body(ui, o, h, &mut answer);
+                self.body(ui, o, h, Some(&mut answer));
                 match answer.take() {
                     Some(true) => Outcome::Done(()),
                     Some(false) => Outcome::Closed,
@@ -196,7 +224,9 @@ impl Extension {
         )
     }
 
-    fn body(&mut self, ui: &mut Ui, o: Pos2, h: f32, answer: &mut Option<bool>) {
+    /// Its rows from `o`, `h` tall with the window's footer; `answer` is the window's (None in
+    /// the page's section: no footer).
+    fn body(&mut self, ui: &mut Ui, o: Pos2, h: f32, answer: Option<&mut Option<bool>>) {
         let p = ui.painter().clone();
         let (ink, muted) = (winui::TEXT(), winui::MUTED());
         // The banner: what the extension does, in one line, and how.
@@ -374,6 +404,11 @@ impl Extension {
         {
             crate::help::open_page(mdm_ipc::extension::GUIDE_DOC);
         }
+        // As a section of Options' page (plan 11b2) there is no footer: the page has its own
+        // bar, and the offer's answers are the window's.
+        let Some(answer) = answer else {
+            return;
+        };
         // The footer: Don't ask again (quiet, at its start) only while no extension has reached
         // MDM, and Close, which Enter presses, as before (Escape closes it too, in `show`).
         let mut items = vec![FooterItem::Button(

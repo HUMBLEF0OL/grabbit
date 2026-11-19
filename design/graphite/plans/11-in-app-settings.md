@@ -13,11 +13,17 @@ Plan written on dev `da63b006`, 2026-11-18 (by a read-only planning agent; verif
 
 11a is merged (PR 79, with the panels port before it, PR 78): `settingspage.rs`, Options' shell
 in `options.rs`, the page in `App::paint`, `gx-arrow-left` and `gx-puzzle`, the docs, and the shot
-tools' `options:<page>+@main` takes. 11b1 is built on `ui/11b1-scheduler-section`: the side
-list's **Tools** caption and Scheduler row (`options::TOOLS`, page 12), `dialogs::inline`,
-`Scheduler::section` / `overlays` / `save` / `dirty` with Start now and Stop on its tabs' row, the
-page's Save saving the Scheduler first, the commands and `/show scheduler[:files|limits|name]`
-opening the section, the docs and the `scheduler+@main` takes. 11b2 and 11c are not started.
+tools' `options:<page>+@main` takes. 11b1 is merged (PR 80): the side list's **Tools** caption
+and Scheduler row (`options::TOOLS`, page 12), `dialogs::inline`, `Scheduler::section` /
+`overlays` / `save` / `dirty` with Start now and Stop on its tabs' row, the page's Save saving the
+Scheduler first, the commands and `/show scheduler[:files|limits|name]` opening the section, the
+docs and the `scheduler+@main` takes. 11b2 is built on `ui/11b2-small-sections`: Speed limiter
+(13), Torrents (14) and Browser extension (15) sections (`SpeedSettings::section` / `choice` /
+`dirty`, `TorrentSettings::section` / `choice` / `dirty`, `Extension::section` without its
+footer), Save in the order Scheduler, Speed, Torrents, Options (`apply_speed`,
+`apply_torrent_settings`), `Cmd::LimiterSettings`, `Cmd::TorrentSettings`, `/show speedlimit`,
+`/show torrent-settings` and `options:speed|torrents|extension` opening them; the offer at a start
+and `/show extension` stay the window. 11c is not started (wanted or not: the maintainer's call).
 
 The status at the 1.0.1 handover (2026-11-18, dev `9a12944b`): the pre-step ports are done but
 not merged; each is a pushed branch with one commit and no pull request yet, 6 commits behind dev:
@@ -132,9 +138,9 @@ Hidden list keys (early return skips shortcut_cmd/tab_keys; tested); lost edits 
 
 ## Done when
 
-- [ ] 11a: Options opens in the main window from toolbar, menu, tray, `/show options:*` and the extension's Button settings; Save/Discard/Back per D2/D3; no "Grabbit Configuration" window remains.
-- [ ] 11b1: Scheduler is a section; queue right-click, Start now and Stop work; no Scheduler window remains.
-- [ ] 11b2: Speed limiter, Torrents and Browser extension are sections; the extension offer at start still opens by itself.
+- [x] 11a: Options opens in the main window from toolbar, menu, tray, `/show options:*` and the extension's Button settings; Save/Discard/Back per D2/D3; no "Grabbit Configuration" window remains.
+- [x] 11b1: Scheduler is a section; queue right-click, Start now and Stop work; no Scheduler window remains.
+- [x] 11b2: Speed limiter, Torrents and Browser extension are sections; the extension offer at start still opens by itself.
 - [ ] Flow dialogs and D5's small dialogs unchanged.
 - [ ] Help pictures retaken, `make.py check` passes; docs, website wording, ARCHITECTURE, CHANGELOG, ROADMAP updated.
 - [ ] `sync.py status` sorts upstream's waiting commits the same before and after each part.

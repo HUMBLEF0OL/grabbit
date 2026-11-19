@@ -263,7 +263,9 @@ caption = "RSS feeds, and the rules that pick what to download."
 id = "torrent-settings"
 page = "torrents.md"
 under = "Torrent settings"
-take = "torrent-settings"
+# A section of Options' page in the main window (plan 11b2).
+take = "torrent-settings+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Torrent settings: sharing, limits and what others can see"
 caption = "Tasks → Torrent settings..."
 
@@ -539,7 +541,9 @@ caption = "When the queue is done: open a file, quit Grabbit, or turn the comput
 id = "speed-limiter"
 page = "guide-keep-speed-for-everything-else.md"
 under = "Cap Grabbit as a whole (recommended)"
-take = "speedlimit"
+# A section of Options' page in the main window (plan 11b2).
+take = "speedlimit+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Speed Limiter settings: the maximum speed for one file, and a limit for all downloads together"
 caption = "Downloads → Speed Limiter → Settings...: a speed for each file, or one for all downloads together."
 
