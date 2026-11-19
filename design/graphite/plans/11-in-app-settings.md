@@ -11,10 +11,13 @@ Plan written on dev `da63b006`, 2026-11-18 (by a read-only planning agent; verif
 
 ## Status (2026-11-19)
 
-11a is built on `ui/11a-options-page` (on top of the panels port below, which it needs: both
-change `options.rs`): `settingspage.rs`, Options' shell in `options.rs`, the page in `App::paint`,
-`gx-arrow-left` and `gx-puzzle`, the docs, and the shot tools' `options:<page>+@main` takes. 11b1,
-11b2 and 11c are not started.
+11a is merged (PR 79, with the panels port before it, PR 78): `settingspage.rs`, Options' shell
+in `options.rs`, the page in `App::paint`, `gx-arrow-left` and `gx-puzzle`, the docs, and the shot
+tools' `options:<page>+@main` takes. 11b1 is built on `ui/11b1-scheduler-section`: the side
+list's **Tools** caption and Scheduler row (`options::TOOLS`, page 12), `dialogs::inline`,
+`Scheduler::section` / `overlays` / `save` / `dirty` with Start now and Stop on its tabs' row, the
+page's Save saving the Scheduler first, the commands and `/show scheduler[:files|limits|name]`
+opening the section, the docs and the `scheduler+@main` takes. 11b2 and 11c are not started.
 
 The status at the 1.0.1 handover (2026-11-18, dev `9a12944b`): the pre-step ports are done but
 not merged; each is a pushed branch with one commit and no pull request yet, 6 commits behind dev:

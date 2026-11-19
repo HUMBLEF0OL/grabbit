@@ -345,6 +345,22 @@ pub(crate) fn window<T>(
     dialog_window(ctx, id, title, client, minimize, bg, Kind::Plain, body)
 }
 
+/// A dialog's layout drawn in place, in a section of Options' page in the main window (plan
+/// 11b): `client` points from `o` filled with `bg`, `body` given `o` as [`window`] gives it its
+/// client origin, painting at the same coordinates. What `body` answers.
+pub(crate) fn inline<R>(
+    ui: &mut Ui,
+    o: Pos2,
+    client: [f32; 2],
+    bg: egui::Color32,
+    body: impl FnOnce(&mut Ui, Pos2) -> R,
+) -> R {
+    let rect = egui::Rect::from_min_size(o, egui::vec2(client[0], client[1]));
+    ui.painter().rect_filled(rect, 0.0, bg);
+    let _surface = winui::Surface::enter(o.x, o.x + client[0]);
+    body(ui, o)
+}
+
 /// A question that must be answered (Yes / No, a countdown): a `window` that stays above the
 /// app's other windows and takes the focus when it opens, so a click on the dialog that asked
 /// it, or on the main window, never hides it behind them (it is also owned by the main window).
