@@ -146,7 +146,7 @@ id = "options-integration"
 page = "browser-integration.md"
 under = "What it takes"
 take = "options:general+@main"
-crop = { around = ["Use advanced browser integration", "List:Capture downloads from the following browsers:"], pad = 12 }
+crop = { around = ["Use advanced browser integration", "List:Capture downloads from the following browsers:", "Button:Test browser integration"], pad = 12 }
 marks = [{ at = "Use advanced browser integration", side = "right" }, { at = "List:Capture downloads from the following browsers:", side = "right" }]
 alt = "Options, General: Use advanced browser integration and the list of browsers Grabbit takes downloads from"
 caption = "1 must be on, and 2 your browser ticked."
@@ -522,7 +522,7 @@ id = "overnight-start"
 page = "guide-download-overnight.md"
 under = "2. Set the start time"
 take = "scheduler+@main"
-crop = { around = ["CheckBox:Start download at", "Daily", "CheckBox:Stop download at"], pad = 12 }
+crop = { around = ["CheckBox:Start download at", "Daily", "CheckBox:Saturday", "CheckBox:Stop download at"], pad = 12 }
 marks = [{ at = "Start download at", side = "right" }, { at = "Daily", side = "right" }, { at = "Stop download at", side = "right" }]
 alt = "The Scheduler's Schedule tab: Start download at, Once at or Daily, and Stop download at"
 caption = "1 the start time, 2 once or daily, 3 a stop time if you want one."
@@ -531,8 +531,10 @@ caption = "1 the start time, 2 once or daily, 3 a stop time if you want one."
 id = "overnight-done"
 page = "guide-download-overnight.md"
 under = "4. Decide what happens at the end (optional)"
-take = "scheduler+@main"
-crop = { around = ["CheckBox:Open the following file when done", "CheckBox:Force processes to terminate"], pad = 12 }
+# The section's end is below the page at the first window size (1080 x 560): a taller window
+# (/show size, off-screen runs only), shot after the others (make.py's take order).
+take = "size:1080x680+scheduler+@main"
+crop = { around = ["CheckBox:Open the following file when done", "Edit:Open the following file when done", "ComboBox:Turn off computer when done", "CheckBox:Force processes to terminate"], pad = 12 }
 ring = ["CheckBox:Turn off computer when done"]
 alt = "The Scheduler's choices for when the queue is done, Turn off computer when done among them"
 caption = "When the queue is done: open a file, quit Grabbit, or turn the computer off."
