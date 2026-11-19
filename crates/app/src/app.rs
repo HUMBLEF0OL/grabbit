@@ -2084,7 +2084,7 @@ impl App {
                 }
             } else if !live {
                 self.start(id, true);
-            } else if !self.progress.iter().any(|p| p.id == id) {
+            } else if self.settings.show_progress && !self.progress.iter().any(|p| p.id == id) {
                 self.progress
                     .push(Progress::new(id, self.settings.show_complete));
             }
@@ -2910,6 +2910,8 @@ impl App {
                     "sounds" => 8,
                     "regional" => 9,
                     "remote" | "pair" => 11,
+                    // Downloads → Customize "Download progress" dialog → Edit... (upstream 1041).
+                    "progress" => 3,
                     _ => 0,
                 };
                 self.run(Cmd::Options, None, ctx);
@@ -2919,7 +2921,8 @@ impl App {
                 if tab == "panels" {
                     self.options = self.options.take().map(|o| o.with_panels());
                 }
-                // A window over a page (screenshots, #192): options:test, options:account.
+                // A window over a page (screenshots, #192): options:test, options:account,
+                // options:progress.
                 self.options = self.options.take().map(|o| o.with_window(tab));
                 // Remote → Pair a device... (the docs' screenshots, #141).
                 if tab == "pair" {
@@ -3265,8 +3268,10 @@ impl App {
         }
     }
 
-    /// Start or resume a download; `show` opens its progress dialog (IDM's default).
+    /// Start or resume a download; `show` opens its progress dialog (IDM's default), unless
+    /// Options → Downloads → Customize "Download progress" dialog turned it off (upstream 1041).
     fn start(&mut self, id: u64, show: bool) {
+        let show = show && self.settings.show_progress;
         self.stopped_by_hand.remove(&id);
         let rt = self.rt.clone();
         let Some(item) = self.item(id) else { return };
@@ -8694,7 +8699,7 @@ impl App {
             });
         } else if i.live.is_none() {
             self.start(id, true);
-        } else if !self.progress.iter().any(|p| p.id == id) {
+        } else if self.settings.show_progress && !self.progress.iter().any(|p| p.id == id) {
             self.progress
                 .push(Progress::new(id, self.settings.show_complete));
         }
@@ -12746,6 +12751,32 @@ mod start_disk_tests {
         std::thread::sleep(Duration::from_millis(200));
         app.apply_state_reads();
         assert_eq!(get(&app, 2).downloaded, 7, "the late read is dropped");
+    }
+
+    /// Upstream 1041 (PR 78's audit): with "Show download progress dialog when a download
+    /// starts" unticked, a start that would open the progress window doesn't, and a double-click
+    /// on the running download still opens it; ticked, the start opens it as before.
+    #[test]
+    fn the_progress_window_follows_its_setting() {
+        let dir = tempfile::tempdir().unwrap();
+        for shown in [false, true] {
+            let mut app = app_with(vec![row(3, dir.path().join("a.zip"), Status::Stopped)]);
+            app.settings.show_progress = shown;
+            app.start(3, true);
+            assert!(get(&app, 3).live.is_some(), "it started");
+            assert_eq!(
+                app.progress.iter().any(|p| p.id == 3),
+                shown,
+                "shown: {shown}"
+            );
+            if !shown {
+                app.open_item(3);
+                assert!(
+                    app.progress.iter().any(|p| p.id == 3),
+                    "a double-click opens it"
+                );
+            }
+        }
     }
 }
 

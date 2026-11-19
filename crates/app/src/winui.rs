@@ -5451,7 +5451,11 @@ pub fn focus_on_press(resp: &Response) {
 /// pressed OK). Links do open on Enter.
 pub fn enter_is_not_a_click(ui: &Ui, mut resp: Response) -> Response {
     if resp.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+        // egui marks a key's click FAKE_PRIMARY_CLICKED, not CLICKED (a pointer's): both go, or
+        // Enter still ticked the box while it pressed OK.
         resp.flags.remove(egui::response::Flags::CLICKED);
+        resp.flags
+            .remove(egui::response::Flags::FAKE_PRIMARY_CLICKED);
     }
     resp
 }

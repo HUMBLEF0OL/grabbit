@@ -41,6 +41,9 @@ enum Sub {
     Panels(bool, String, String),
     /// General → Keys...: (also take the files the browser would open).
     Keys(bool),
+    /// Downloads → Customize "Download progress" dialog → Edit... (upstream 1041): (show it
+    /// when a download starts).
+    Progress(bool),
     /// General → Test browser integration...: the checks, as found when it opened.
     Test(Vec<crate::extension::Check>),
     /// File types → "Don't start downloading automatically from the following addresses" →
@@ -261,12 +264,14 @@ impl OptionsDialog {
         self
     }
 
-    /// With General → Test browser integration's window over it, or Accounts → Add's (`/show
-    /// options:test`, `options:account`: screenshots, #192).
+    /// With General → Test browser integration's window over it, Accounts → Add's, or
+    /// Downloads → Customize "Download progress" dialog's (`/show options:test`,
+    /// `options:account`, `options:progress`: screenshots, #192, upstream 1041).
     pub fn with_window(mut self, name: &str) -> Self {
         match name {
             "test" => self.sub = Some(Sub::Test(crate::extension::checks(&self.s))),
             "account" => self.sub = Some(Sub::Account(AccountEdit::default())),
+            "progress" => self.sub = Some(Sub::Progress(self.s.show_progress)),
             _ => {}
         }
         self
@@ -1046,41 +1051,46 @@ impl OptionsDialog {
 
     fn downloads(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        let s = &mut self.s;
         let (left, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
         let w = right - left;
         // Edit... as wide as its label in this language (#192) at the end of its row, its
-        // sentence at the leading edge (greyed, as the button: neither is built yet).
+        // sentence at the leading edge.
         let (edit_x, edit_w) =
             winui::buttons_to_right(&p, right, 0.0, &[("Edit...", 73.0)], 160.0)[0];
         // A longer translation is cut with "..." before the button, whole on hover.
-        let greyed = |ui: &Ui, top: f32, s: &str| {
+        let caption = |ui: &Ui, top: f32, s: &str, colour: egui::Color32| {
             let (rect, cut) = winui::text_fit(
                 &p,
                 o.x + left,
                 o.y + winui::baseline_in(top, h),
                 s,
-                LIGHT_DISABLED(),
+                colour,
                 o.x + edit_x - 8.0,
             );
             if cut {
-                winui::full_on_hover(ui, rect, ("downloads-greyed", top as i32), s);
+                winui::full_on_hover(ui, rect, ("downloads-caption", top as i32), s);
             }
         };
-        greyed(
+        caption(
             ui,
             88.0,
             crate::i18n::t("Customize \"Download progress\" dialog"),
+            LIGHT_TEXT(),
         );
-        // The progress dialog customisation dialog is not built yet.
-        winui::button_light(
+        // Whether a download's progress window opens when it starts (upstream 1041).
+        if winui::button_light(
             ui,
             r(o, edit_x, 88.0, edit_w, h),
             // i18n: verb: edit the item
             "Edit...",
-            ButtonKind::Disabled,
+            ButtonKind::Normal,
             false,
-        );
+        )
+        .clicked()
+        {
+            self.sub = Some(Sub::Progress(self.s.show_progress));
+        }
+        let s = &mut self.s;
         // The mock's check boxes, 22 apart (closer than its 30, so the page fits its area).
         winui::checkbox_light(
             ui,
@@ -1194,7 +1204,13 @@ impl OptionsDialog {
             winui::edit_light(ui, rc, &mut s.user_agent, true, false);
         }
         winui::rule(&p, o, left, 399.0, w);
-        greyed(ui, 407.0, crate::i18n::t("Virus checking settings"));
+        // Greyed, as its button: not built yet.
+        caption(
+            ui,
+            407.0,
+            crate::i18n::t("Virus checking settings"),
+            LIGHT_DISABLED(),
+        );
         winui::button_light(
             ui,
             r(o, edit_x, 407.0, edit_w, h),
@@ -3494,6 +3510,23 @@ impl OptionsDialog {
                     Outcome::Closed => {}
                 }
             }
+            Sub::Progress(mut shown) => {
+                let out = window(
+                    ctx,
+                    "opt-progress",
+                    // i18n: window title: Options → Downloads → Edit... (the progress window's settings)
+                    "Download progress dialog",
+                    [PROGRESS_W, PROGRESS_BODY + winui::FOOTER_H],
+                    false,
+                    LIGHT_BG(),
+                    |ui, o| progress_dialog(ui, o, &mut shown),
+                );
+                match out {
+                    Outcome::Open => self.sub = Some(Sub::Progress(shown)),
+                    Outcome::Done(()) => self.s.show_progress = shown,
+                    Outcome::Closed => {}
+                }
+            }
             Sub::Test(mut checks) => {
                 // The mockup's layout: a status icon and a line per check, the footer with the
                 // fixes at its start.
@@ -4107,6 +4140,37 @@ fn read_sites_file(path: &std::path::Path) -> std::io::Result<String> {
         .take(1 << 20)
         .read_to_end(&mut text)?;
     String::from_utf8(text).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+}
+
+/// Downloads → Customize "Download progress" dialog's size: Keys' layout (a sentence, the
+/// check box, the footer).
+const PROGRESS_W: f32 = 400.0;
+const PROGRESS_BODY: f32 = 96.0;
+
+/// Downloads → Customize "Download progress" dialog → Edit... (upstream 1041): whether a
+/// download's progress window opens when it starts, and where to find it when it doesn't.
+fn progress_dialog(ui: &mut Ui, o: Pos2, shown: &mut bool) -> Outcome<()> {
+    let p = ui.painter().clone();
+    let e = winui::EDGE;
+    let lines = winui::paragraph(
+        &p,
+        o.x + e,
+        o.y + 29.0,
+        crate::i18n::t(
+            "Without the progress window, downloads go on in the main window's list. Double-click one there to see its progress.",
+        ),
+        LIGHT_TEXT(),
+        o.x + PROGRESS_W - e,
+        LINE,
+    );
+    winui::checkbox_light(
+        ui,
+        o + vec2(e, 16.0 + lines.max(2) as f32 * LINE + 16.0),
+        shown,
+        "Show download progress dialog when a download starts",
+        true,
+    );
+    ok_cancel(ui, o, PROGRESS_W, PROGRESS_BODY, true)
 }
 
 /// A sub-dialog's footer at English `y` across `w`: Cancel, OK* (OK greyed until `valid`).
@@ -4966,5 +5030,90 @@ mod tests {
         let (back, added) = mdm_ipc::capture::merge_sites("", &text);
         assert_eq!((back.as_str(), added), (sites, 2));
         assert_eq!(mdm_ipc::capture::merge_sites(sites, &text).1, 0);
+    }
+
+    /// The centre of the topmost control with `role` and `label` that takes clicks.
+    fn control_at(tree: &TreeUpdate, role: Role, label: &str) -> Pos2 {
+        tree.nodes
+            .iter()
+            .filter(|(_, n)| n.role() == role && n.label() == Some(label) && !n.is_disabled())
+            .filter_map(|(_, n)| n.bounds())
+            .map(|b| {
+                Rect::from_min_max(
+                    pos2(b.x0 as f32, b.y0 as f32),
+                    pos2(b.x1 as f32, b.y1 as f32),
+                )
+            })
+            .min_by(|a, b| a.top().partial_cmp(&b.top()).unwrap())
+            .unwrap_or_else(|| panic!("no {role:?} {label:?}"))
+            .center()
+    }
+
+    /// Upstream 1041: Downloads → Customize "Download progress" dialog → Edit... opens its
+    /// dialog with the setting as it is (it was greyed and did nothing).
+    #[test]
+    fn edit_opens_the_download_progress_dialog() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let s = Settings {
+            show_progress: false,
+            ..Settings::default()
+        };
+        let mut d = OptionsDialog::new(&s, &std::env::temp_dir(), vec![]).on_page(3);
+        page_pass(&ctx, &mut d, vec![]);
+        let tree = page_pass(&ctx, &mut d, vec![]);
+        let edit = control_at(&tree, Role::Button, "Edit...");
+        assert!(d.sub.is_none());
+        page_pass(&ctx, &mut d, button(edit, true));
+        page_pass(&ctx, &mut d, button(edit, false));
+        assert!(matches!(d.sub, Some(Sub::Progress(false))));
+    }
+
+    /// Upstream 1041: its check box turns the progress window off, and OK (Enter) keeps it.
+    #[test]
+    fn the_download_progress_dialog_turns_the_window_off() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut shown = true;
+        let mut pass = |events| {
+            let mut out = Outcome::Open;
+            let mut o = ctx.run_ui(input(events), |ui| {
+                out = progress_dialog(ui, Pos2::ZERO, &mut shown)
+            });
+            o.textures_delta.clear();
+            (
+                out,
+                o.platform_output.accesskit_update.expect("AccessKit is on"),
+            )
+        };
+        pass(vec![]);
+        let (_, tree) = pass(vec![]);
+        let check = control_at(
+            &tree,
+            Role::CheckBox,
+            "Show download progress dialog when a download starts",
+        );
+        pass(button(check, true));
+        let (out, _) = pass(button(check, false));
+        assert!(matches!(out, Outcome::Open));
+        let (_, tree) = pass(vec![]);
+        let ticked = tree
+            .nodes
+            .iter()
+            .find(|(_, n)| n.role() == Role::CheckBox)
+            .and_then(|(_, n)| n.toggled());
+        assert_eq!(
+            ticked,
+            Some(egui::accesskit::Toggled::False),
+            "the click unticks it"
+        );
+        let (out, tree) = pass(vec![key(egui::Key::Enter, egui::Modifiers::NONE)]);
+        let after = tree
+            .nodes
+            .iter()
+            .find(|(_, n)| n.role() == Role::CheckBox)
+            .map(|(id, n)| (n.toggled(), *id == tree.focus));
+        assert!(matches!(out, Outcome::Done(())), "{after:?}");
+        assert!(!shown, "{after:?}");
     }
 }
