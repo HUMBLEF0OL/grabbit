@@ -583,8 +583,8 @@ pub struct App {
     complete: Vec<Complete>,
     settings: Settings,
     speed_settings: Option<dialogs::SpeedSettings>,
-    scheduler: Option<crate::scheduler::Scheduler>,
-    /// Options, shown in the main window in the panes' place (plan 11a).
+    /// Options, shown in the main window in the panes' place (plan 11a), with the Scheduler
+    /// as one of its sections (11b1).
     settings_page: Option<crate::settingspage::SettingsPage>,
     /// Downloads to finish off once stopped: Download File Info was cancelled after an early
     /// start (`None`: the download and its data go), or its file was given another place
@@ -1436,7 +1436,6 @@ impl App {
             complete: Vec::new(),
             settings,
             speed_settings: None,
-            scheduler: None,
             settings_page: None,
             category_dlg: None,
             category_for_file_info: false,
@@ -2508,10 +2507,14 @@ impl App {
         let first = self.items.first().map(|i| i.id);
         let last = self.items.last().map(|i| i.id);
         let (window, tab) = name.split_once(':').unwrap_or((name, ""));
-        // Options is a page of the main window (plan 11a): every other name shows the downloads
-        // again first, the page's changes dropped (`downloads` does only that). The look's names
-        // (mode, theme, zoom, size) leave it open, for its pictures in either mode.
-        if window != "options" && !matches!(window, "mode" | "theme" | "zoom" | "size") {
+        // Options is a page of the main window (plan 11a), the Scheduler one of its sections
+        // (11b1): every other name shows the downloads again first, the page's changes dropped
+        // (`downloads` does only that). The look's names (mode, theme, zoom, size) leave it
+        // open, for its pictures in either mode.
+        if !matches!(
+            window,
+            "options" | "scheduler" | "mode" | "theme" | "zoom" | "size"
+        ) {
             self.close_settings_page();
         }
         match window {
@@ -2588,12 +2591,17 @@ impl App {
                 self.popup = None;
                 self.find_bar.open = true;
             }
-            // scheduler:files, scheduler:limits and scheduler:name open it on its main queue's
-            // Files in the queue, on Download limits, or asking a new queue's name (plan 07e's
-            // screenshots).
+            // The Scheduler's section of Options' page (plan 11b1); scheduler:files,
+            // scheduler:limits and scheduler:name open it on its main queue's Files in the
+            // queue, on Download limits, or asking a new queue's name (plan 07e's screenshots).
             "scheduler" => {
                 self.run(Cmd::Scheduler, None, ctx);
-                if let Some(s) = &mut self.scheduler {
+                if let Some(s) = self
+                    .settings_page
+                    .as_mut()
+                    .filter(|p| !p.modal())
+                    .and_then(|p| p.scheduler.as_mut())
+                {
                     match tab {
                         "files" => s.show_queue(0, true),
                         "limits" => s.show_limits(),
@@ -2927,6 +2935,8 @@ impl App {
                     "remote" | "pair" => 11,
                     // Downloads → Customize "Download progress" dialog → Edit... (upstream 1041).
                     "progress" => 3,
+                    // The sections that were windows (plan 11b): `scheduler` also opens it.
+                    "scheduler" => crate::options::SCHEDULER_PAGE,
                     _ => 0,
                 };
                 self.run(Cmd::Options, None, ctx);
@@ -4011,7 +4021,11 @@ impl App {
                 TrayCmd::Batch => Cmd::Batch(false),
                 TrayCmd::LimiterOn => Cmd::LimiterOn,
                 TrayCmd::LimiterOff => Cmd::LimiterOff,
-                TrayCmd::Scheduler => Cmd::Scheduler,
+                // A section of the main window's page now (plan 11b1): the window comes back.
+                TrayCmd::Scheduler => {
+                    self.show_window(ctx);
+                    Cmd::Scheduler
+                }
                 TrayCmd::StartQueue => Cmd::StartQueue(0),
                 TrayCmd::StopQueue => Cmd::StopQueue(0),
                 // A page of the main window now (plan 11a): the window comes back with it.
@@ -5804,13 +5818,25 @@ impl App {
     /// of the same page. Close goes back to the downloads.
     fn settings_page_event(&mut self, ev: crate::settingspage::PageEvent) {
         use crate::settingspage::PageEvent;
-        let Some(p) = &self.settings_page else {
+        let Some(p) = &mut self.settings_page else {
             return;
         };
         let page = p.page();
         let saved = ev == PageEvent::Save;
         match ev {
             PageEvent::Save => {
+                // The Scheduler's draft first (11b1), then only what Options' pages changed:
+                // Download limits, in both, keep the Scheduler's unless Options changed them.
+                let mut actions = Vec::new();
+                if let Some(s) = &mut p.scheduler {
+                    s.save(&self.queues, &mut actions);
+                }
+                for a in actions {
+                    self.scheduler_action(a);
+                }
+                let Some(p) = &self.settings_page else {
+                    return;
+                };
                 let new =
                     Settings::merge_changes(&self.settings, &p.options.from, &p.options.result());
                 self.apply_options(new);
@@ -5825,6 +5851,12 @@ impl App {
         let downloads = self.downloads.clone();
         if let Some(p) = &mut self.settings_page {
             p.options = fresh.keep_view(&p.options, saved, &downloads);
+            // A fresh draft of the Scheduler too, once it has been visited.
+            if let Some(old) = &p.scheduler {
+                p.scheduler = Some(
+                    crate::scheduler::Scheduler::new(&self.queues, &self.settings).keep_view(old),
+                );
+            }
         }
     }
 
@@ -6503,25 +6535,23 @@ impl App {
                     ));
                 }
             }
-            Cmd::Scheduler => {
-                if self.scheduler.is_none() {
-                    self.scheduler = Some(crate::scheduler::Scheduler::new(
-                        &self.queues,
-                        &self.settings,
-                    ));
-                } else {
-                    dialogs::raise(ctx, dialogs::dialog_viewport("scheduler"));
-                }
-            }
-            Cmd::EditQueue(_) | Cmd::ScheduleQueue(_) | Cmd::NewQueue => {
-                let s = self.scheduler.get_or_insert_with(|| {
-                    crate::scheduler::Scheduler::new(&self.queues, &self.settings)
-                });
-                match cmd {
-                    // Edit queue: its files; Schedule: when it runs.
-                    Cmd::EditQueue(q) => s.show_queue(q, true),
-                    Cmd::ScheduleQueue(q) => s.show_queue(q, false),
-                    _ => s.new_queue(),
+            // A section of Options' page (plan 11b1): the page opens on it (or goes to it), its
+            // draft made on its first visit and kept while the page is open.
+            Cmd::Scheduler | Cmd::EditQueue(_) | Cmd::ScheduleQueue(_) | Cmd::NewQueue => {
+                self.run(Cmd::Options, None, ctx);
+                // Not while a small dialog of the page waits for an answer (Enter queue
+                // name, Delete's question, an Options page's): it stays on its section.
+                if let Some(p) = &mut self.settings_page
+                    && !p.modal()
+                {
+                    let s = p.show_scheduler(&self.queues, &self.settings);
+                    match cmd {
+                        // Edit queue: its files; Schedule: when it runs.
+                        Cmd::EditQueue(q) => s.show_queue(q, true),
+                        Cmd::ScheduleQueue(q) => s.show_queue(q, false),
+                        Cmd::NewQueue => s.new_queue(),
+                        _ => {}
+                    }
                 }
             }
             // A dialog already open (half filled in) stays.
@@ -8563,10 +8593,41 @@ impl App {
         let keys = self.popup.is_none() && self.open_menu.is_none() && !bars && !self.find_bar.open;
         // A text box on the page has the keys: Alt+Left moves its caret by a word, not back.
         let typing = focused.is_some_and(|id| egui::TextEdit::load_state(&ctx, id).is_some());
+        let mut actions = Vec::new();
+        let mut tools = crate::settingspage::Tools {
+            icons: &mut self.icons,
+            items: &self.items,
+            queues: &self.queues,
+            settings: &self.settings,
+            wake_error: self.wake.error.as_deref(),
+            actions: &mut actions,
+        };
         let ev = self
             .settings_page
             .as_mut()
-            .and_then(|p| p.show(ui, area, keys, typing, &self.downloads));
+            .and_then(|p| p.show(ui, area, keys, typing, &self.downloads, &mut tools));
+        // The Scheduler's Start now and Stop, at once (11b1). Start now applied the
+        // Scheduler's draft (its Download limits too): an Options draft without changes is
+        // made again from the settings now in force, so Connection shows them.
+        let applied = actions
+            .iter()
+            .any(|a| matches!(a, crate::scheduler::Action::Apply { .. }));
+        for a in actions {
+            self.scheduler_action(a);
+        }
+        if applied
+            && self
+                .settings_page
+                .as_ref()
+                .is_some_and(|p| !p.options.dirty())
+        {
+            let page = self.settings_page.as_ref().map_or(0, |p| p.page());
+            let fresh = self.options_draft(page);
+            let downloads = self.downloads.clone();
+            if let Some(p) = &mut self.settings_page {
+                p.options = fresh.keep_view(&p.options, true, &downloads);
+            }
+        }
         let shown = self.shown_ids().len();
         if self.status_strip(ui, layout, o, w, h, shown) {
             chosen = Some((Cmd::ToggleMode, None));
@@ -10087,28 +10148,12 @@ impl App {
                 }
             }
         }
-        // Options' page is drawn by `paint`; its small dialogs and the discard question here.
+        // Options' page is drawn by `paint`; its small dialogs (the Scheduler's too) and the
+        // discard question here.
         if let Some(p) = &mut self.settings_page
             && let Some(ev) = p.overlays(ctx, &self.downloads)
         {
             self.settings_page_event(ev);
-        }
-        if let Some(mut s) = self.scheduler.take() {
-            let mut actions = Vec::new();
-            let open = s.show(
-                ctx,
-                &mut self.icons,
-                &self.items,
-                &self.queues,
-                self.wake.error.as_deref(),
-                &mut actions,
-            );
-            for a in actions {
-                self.scheduler_action(a);
-            }
-            if open {
-                self.scheduler = Some(s);
-            }
         }
         if let Some(d) = &mut self.speed_settings {
             match d.show(ctx) {
@@ -13276,5 +13321,212 @@ mod settings_page_tests {
             vec![key(egui::Key::Delete, egui::Modifiers::NONE)],
         );
         assert!(a.confirm_delete.is_some(), "Delete asks again");
+    }
+
+    /// Plan 11b1: the Scheduler opens as a section of the page from its commands (the toolbar's
+    /// and menus' Scheduler, a queue's Edit, Schedule and Create new queue) and its `/show`
+    /// names; another name shows the downloads again. No Scheduler window is left.
+    #[test]
+    fn the_scheduler_opens_as_a_section() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let shown = |a: &App| {
+            let p = a.settings_page.as_ref().expect("the page");
+            assert_eq!(p.page(), crate::options::SCHEDULER_PAGE, "on the Scheduler");
+            p.scheduler.as_ref().expect("its draft").shown()
+        };
+        a.run(Cmd::Scheduler, None, &ctx);
+        assert_eq!(shown(&a), (Some((0, false)), false));
+        a.run(Cmd::EditQueue(1), None, &ctx);
+        assert_eq!(shown(&a), (Some((1, true)), false), "Edit: its files");
+        a.run(Cmd::ScheduleQueue(0), None, &ctx);
+        assert_eq!(shown(&a), (Some((0, false)), false), "Schedule: when");
+        a.run(Cmd::NewQueue, None, &ctx);
+        assert!(shown(&a).1, "Create new queue asks its name");
+        assert!(a.settings_page.as_ref().unwrap().modal());
+        // Audit r1: while it asks, the Scheduler's commands and names leave it as it is.
+        a.run(Cmd::EditQueue(1), None, &ctx);
+        a.show_named("scheduler:limits", &ctx);
+        assert_eq!(shown(&a), (Some((0, false)), true), "held while it asks");
+        a.show_named("downloads", &ctx);
+        assert!(a.settings_page.is_none());
+        a.show_named("scheduler:limits", &ctx);
+        assert_eq!(shown(&a), (None, false), "Download limits");
+        a.show_named("scheduler:files", &ctx);
+        assert_eq!(shown(&a), (Some((0, true)), false));
+        a.show_named("options:scheduler", &ctx);
+        assert_eq!(
+            a.settings_page.as_ref().map(|p| p.page()),
+            Some(crate::options::SCHEDULER_PAGE)
+        );
+        // From another page of Options, the Scheduler goes to its section.
+        a.show_named("options:sounds", &ctx);
+        a.run(Cmd::Scheduler, None, &ctx);
+        assert_eq!(shown(&a).0, Some((0, true)), "its draft kept its view");
+        a.show_named("about", &ctx);
+        assert!(a.settings_page.is_none(), "another name closes it");
+    }
+
+    /// Plan 11b1: Save saves the Scheduler first, then only what Options' pages changed: the
+    /// Download limits set in the Scheduler stay unless Options' Connection changed them too
+    /// (then Options' are kept, as saved last). Both drafts are fresh after.
+    #[test]
+    fn scheduler_save_then_options_save_order() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let before = a.settings.clone();
+        a.run(Cmd::Scheduler, None, &ctx);
+        let p = a.settings_page.as_mut().unwrap();
+        p.scheduler.as_mut().unwrap().set_limits(true, 999);
+        assert!(p.dirty(), "the Scheduler's change is the page's");
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings_page_event(PageEvent::Save);
+        assert!(
+            a.settings.limits_on && a.settings.limits_mb == 999,
+            "the Scheduler's"
+        );
+        assert_eq!(
+            a.settings.double_click_open, !before.double_click_open,
+            "Options'"
+        );
+        let p = a.settings_page.as_ref().expect("the page stays");
+        assert!(!p.dirty(), "fresh drafts");
+        assert_eq!(p.page(), crate::options::SCHEDULER_PAGE);
+        // Both change Download limits: Options' Connection is saved last, and only what it
+        // changed (the check box, not the size the Scheduler set).
+        a.settings_page
+            .as_mut()
+            .unwrap()
+            .scheduler
+            .as_mut()
+            .unwrap()
+            .set_limits(true, 500);
+        change(&mut a, |s| s.limits_on = false);
+        a.settings_page_event(PageEvent::Save);
+        assert!(!a.settings.limits_on, "Options' change, saved last");
+        assert_eq!(
+            a.settings.limits_mb, 500,
+            "the Scheduler's, which Options didn't change"
+        );
+    }
+
+    /// Plan 11b1 (D3): the Scheduler's changes are the page's: Back asks, Discard drops them
+    /// (the queues as they were, the page on a fresh draft), and nothing is applied by leaving.
+    #[test]
+    fn the_schedulers_changes_wait_for_save() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let saved = a.settings.clone();
+        let queues = a.queues.clone();
+        a.run(Cmd::Scheduler, None, &ctx);
+        let p = a.settings_page.as_mut().unwrap();
+        p.scheduler.as_mut().unwrap().set_limits(true, 777);
+        assert_eq!(p.back(), None, "Back asks");
+        assert!(p.modal());
+        // No: the page stays with its changes, its buttons live again.
+        p.answer_no();
+        assert!(!p.modal() && p.dirty());
+        a.settings_page_event(PageEvent::Discard);
+        assert_eq!(a.settings, saved, "nothing applied");
+        assert_eq!(a.queues, queues);
+        let p = a.settings_page.as_ref().expect("Discard keeps the page");
+        assert!(!p.dirty());
+        a.settings_page
+            .as_mut()
+            .unwrap()
+            .scheduler
+            .as_mut()
+            .unwrap()
+            .set_limits(true, 777);
+        a.settings_page_event(PageEvent::Close);
+        assert!(a.settings_page.is_none());
+        assert_eq!(a.settings, saved, "Close drops it too");
+    }
+
+    /// Audit r2: Start now applies the Scheduler's draft at once, its Download limits too: an
+    /// Options draft without changes is made again from them (Connection shows what is in
+    /// force, nothing to save); one with changes is left as it is.
+    #[test]
+    fn start_now_refreshes_an_untouched_options_draft() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let click_start = |a: &mut App| {
+            let input = |events| egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    egui::vec2(1080.0, 560.0),
+                )),
+                events,
+                ..Default::default()
+            };
+            let mut at = None;
+            for _ in 0..2 {
+                let mut out = ctx.run_ui(input(vec![]), |ui| a.paint(ui));
+                out.textures_delta.clear();
+                let tree = out
+                    .platform_output
+                    .accesskit_update
+                    .expect("AccessKit is on");
+                at = tree
+                    .nodes
+                    .iter()
+                    .find(|(_, n)| {
+                        n.role() == egui::accesskit::Role::Button
+                            && n.label().map(|l| l.replace('&', "")).as_deref() == Some("Start now")
+                    })
+                    .and_then(|(_, n)| n.bounds())
+                    .map(|b| pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32));
+            }
+            let at = at.expect("Start now");
+            for down in [None, Some(true), Some(false)] {
+                let mut events = vec![egui::Event::PointerMoved(at)];
+                if let Some(pressed) = down {
+                    events.push(egui::Event::PointerButton {
+                        pos: at,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: Default::default(),
+                    });
+                }
+                let mut out = ctx.run_ui(input(events), |ui| a.paint(ui));
+                out.textures_delta.clear();
+            }
+        };
+        a.run(Cmd::Scheduler, None, &ctx);
+        let s = a
+            .settings_page
+            .as_mut()
+            .unwrap()
+            .scheduler
+            .as_mut()
+            .unwrap();
+        s.set_limits(true, 4321);
+        click_start(&mut a);
+        // (An empty queue stops again at once: the Start itself is scheduler.rs's test.)
+        assert!(
+            a.settings.limits_on && a.settings.limits_mb == 4321,
+            "applied"
+        );
+        let p = a.settings_page.as_ref().unwrap();
+        assert!(!p.dirty(), "nothing left to save");
+        assert_eq!(p.options.result().limits_mb, 4321, "Options shows it");
+        assert_eq!(p.page(), crate::options::SCHEDULER_PAGE);
+        // Options has a change of its own: its draft stays as it is (Save merges it).
+        a.run(Cmd::ScheduleQueue(1), None, &ctx);
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        let s = a
+            .settings_page
+            .as_mut()
+            .unwrap()
+            .scheduler
+            .as_mut()
+            .unwrap();
+        s.set_limits(true, 55);
+        click_start(&mut a);
+        assert_eq!(a.settings.limits_mb, 55, "applied");
+        let p = a.settings_page.as_ref().unwrap();
+        assert!(p.options.dirty(), "Options' change kept");
+        assert_eq!(p.options.result().limits_mb, 4321, "its draft as it was");
     }
 }

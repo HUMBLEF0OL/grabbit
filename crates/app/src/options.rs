@@ -244,6 +244,12 @@ impl OptionsDialog {
         self
     }
 
+    /// [`OptionsDialog::on_page`] on the open page (the Scheduler's section, plan 11b1: its
+    /// commands open the page there).
+    pub(crate) fn show_page(&mut self, page: usize) {
+        self.page = page;
+    }
+
     /// A fresh draft after Save or Discard (plan 11a) shown as `old` was: its page and scroll,
     /// the category chosen on Save to (its folder as the fresh draft has it), the lists' places
     /// and selections, and, once `saved`, User-Agent's Automatic tick (a tick Discard drops is
@@ -373,7 +379,7 @@ impl OptionsDialog {
 
     /// The side list's rows end this far below its top (`SIDE_TOP` and every row).
     pub(crate) fn pages_height() -> f32 {
-        SIDE_TOP + PAGES.len() as f32 * (ROW_H + ROW_GAP) + 8.0
+        SIDE_TOP + ROWS as f32 * (ROW_H + ROW_GAP) + TOOLS_GAP + 8.0
     }
 
     /// The chosen page under its heading in `view` (on screen, right of the side list's
@@ -4353,17 +4359,48 @@ const PAGES: [(usize, &str, &str, &str); 12] = [
     ),
 ];
 
-/// The page's place in [`PAGES`] (0 for a number that is none).
-fn page_at(page: usize) -> usize {
-    PAGES.iter().position(|p| p.0 == page).unwrap_or(0)
+/// The Scheduler's section on Options' page (plan 11b1): its number, as `on_page` takes it.
+pub(crate) const SCHEDULER_PAGE: usize = 12;
+
+/// The windows that moved into the page (plan 11b), listed after Options' own pages under a
+/// hairline and the caption "Tools": number, name in the list, Graphite icon, heading. Their
+/// bodies are drawn by `settingspage.rs`, not by [`OptionsDialog::page_area`].
+const TOOLS: [(usize, &str, &str, &str); 1] = [(
+    SCHEDULER_PAGE,
+    // i18n: noun: the tool that starts and stops queues on time
+    crate::i18n::mark("Scheduler"),
+    "tb-scheduler",
+    crate::i18n::mark("Queues and the scheduler"),
+)];
+
+/// Every row of the side list: [`PAGES`], then [`TOOLS`].
+const ROWS: usize = PAGES.len() + TOOLS.len();
+
+/// Side list row `k`: a page of [`PAGES`], then a section of [`TOOLS`].
+fn row(k: usize) -> (usize, &'static str, &'static str, &'static str) {
+    if k < PAGES.len() {
+        PAGES[k]
+    } else {
+        TOOLS[(k - PAGES.len()).min(TOOLS.len() - 1)]
+    }
 }
+
+/// The page's row in the side list (0 for a number that is none).
+fn page_at(page: usize) -> usize {
+    (0..ROWS).position(|k| row(k).0 == page).unwrap_or(0)
+}
+
+/// The room between Options' pages and the tools in the side list: a hairline, then the
+/// caption "Tools" over the tools' rows.
+const TOOLS_GAP: f32 = 30.0;
 
 /// Side list row `k`'s rect (window-relative to `o`).
 fn side_row(o: Pos2, k: usize) -> Rect {
+    let gap = if k >= PAGES.len() { TOOLS_GAP } else { 0.0 };
     r(
         o,
         8.0,
-        SIDE_TOP + k as f32 * (ROW_H + ROW_GAP),
+        SIDE_TOP + k as f32 * (ROW_H + ROW_GAP) + gap,
         SIDE_W - 16.0,
         ROW_H,
     )
@@ -4396,8 +4433,30 @@ fn side_list(ui: &mut Ui, o: Pos2, page: usize, foot: f32) -> Option<usize> {
         o.y + foot - 1.0,
         c.menubar_line,
     );
-    let mut picked = winui::tab_keys(ui, PAGES.len(), at);
-    for (k, (_, label, icon, _)) in PAGES.iter().enumerate() {
+    // Under Options' own pages: a hairline, then "Tools" over the windows that moved in.
+    let below = side_row(o, PAGES.len() - 1).bottom() + ROW_GAP;
+    fill(
+        &p,
+        o.x + 16.0,
+        below + 6.0,
+        o.x + SIDE_W - 17.0,
+        below + 6.0,
+        c.menubar_line,
+    );
+    winui::fit(
+        ui,
+        &p,
+        o.x + 17.0,
+        below + 23.0,
+        // i18n: Options in the main window: the caption in its side list over the sections that were windows of their own (Scheduler…)
+        crate::i18n::t("Tools"),
+        c.muted,
+        o.x + SIDE_W - 8.0,
+        "opt-tools-caption",
+    );
+    let mut picked = winui::tab_keys(ui, ROWS, at);
+    for k in 0..ROWS {
+        let (_, label, icon, _) = row(k);
         let sel = k == at;
         let rc = side_row(o, k);
         let sense = if sel {
@@ -4415,7 +4474,7 @@ fn side_list(ui: &mut Ui, o: Pos2, page: usize, foot: f32) -> Option<usize> {
         if sel {
             winui::keep_keys(ui, &resp, true, true, false);
             if resp.has_focus() {
-                let last = PAGES.len() - 1;
+                let last = ROWS - 1;
                 let to = if winui::take_key(ui, egui::Key::ArrowDown)
                     || winui::take_key(ui, egui::Key::ArrowRight)
                 {
@@ -4476,15 +4535,16 @@ fn side_list(ui: &mut Ui, o: Pos2, page: usize, foot: f32) -> Option<usize> {
     if let Some(k) = picked
         && k != at
     {
-        Some(PAGES[k].0)
+        Some(row(k).0)
     } else {
         None
     }
 }
 
-/// The page's heading above it: its icon on a tile and its title.
-fn heading(ui: &Ui, o: Pos2, page: usize) {
-    let (_, _, icon, title) = PAGES[page_at(page)];
+/// The page's heading above it: its icon on a tile and its title (a section of [`TOOLS`] too,
+/// from `settingspage.rs`).
+pub(crate) fn heading(ui: &Ui, o: Pos2, page: usize) {
+    let (_, _, icon, title) = row(page_at(page));
     let x = SIDE_W + winui::EDGE;
     winui::icon_tile(
         ui,
@@ -4790,7 +4850,7 @@ mod tests {
             .filter(|(_, n)| n.role() == Role::ListItem)
             .map(|(id, _)| *id)
             .collect();
-        assert_eq!(items.len(), PAGES.len());
+        assert_eq!(items.len(), ROWS, "Options' pages and the tools");
         assert!(
             items.iter().all(|i| under.contains(i)),
             "every row under the list"
@@ -4812,13 +4872,13 @@ mod tests {
     #[test]
     fn every_page_is_reached_by_click_arrows_and_ctrl_tab() {
         let ctx = egui::Context::default();
-        let order: Vec<usize> = PAGES.iter().map(|p| p.0).collect();
+        let order: Vec<usize> = (0..ROWS).map(|k| row(k).0).collect();
         assert_eq!(
             order,
-            [0, 1, 2, 3, 4, 11, 5, 6, 7, 8, 9, 10],
-            "the old tabs' order"
+            [0, 1, 2, 3, 4, 11, 5, 6, 7, 8, 9, 10, SCHEDULER_PAGE],
+            "the old tabs' order, then the tools (plan 11b)"
         );
-        for (_, label, need, _) in PAGES {
+        for (_, label, need, _) in PAGES.iter().chain(TOOLS.iter()).copied() {
             assert!(
                 crate::themeicons::graphite_has(need, 16)
                     && crate::themeicons::graphite_has(need, 24),
@@ -4856,10 +4916,10 @@ mod tests {
                 w[1]
             );
         }
-        assert_eq!(press(10, egui::Key::ArrowDown), None, "the end");
+        assert_eq!(press(SCHEDULER_PAGE, egui::Key::ArrowDown), None, "the end");
         assert_eq!(press(0, egui::Key::ArrowUp), None, "the start");
         assert_eq!(press(4, egui::Key::Home), Some(0));
-        assert_eq!(press(4, egui::Key::End), Some(10));
+        assert_eq!(press(4, egui::Key::End), Some(SCHEDULER_PAGE));
         // Ctrl+Tab from anywhere: no row focused.
         ctx.memory_mut(|m| m.surrender_focus(egui::Id::unique(("opt-page", 0))));
         let ctrl = egui::Modifiers::COMMAND;
@@ -4873,7 +4933,11 @@ mod tests {
             0,
             vec![key(egui::Key::Tab, ctrl | egui::Modifiers::SHIFT)],
         );
-        assert_eq!(back, Some(10), "Ctrl+Shift+Tab wraps back to Archives");
+        assert_eq!(
+            back,
+            Some(SCHEDULER_PAGE),
+            "Ctrl+Shift+Tab wraps back to the Scheduler"
+        );
     }
 
     /// Plan 08b3: a sub-dialog's footer keeps its keys: Enter is OK only while the entry is

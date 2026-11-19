@@ -210,7 +210,7 @@ try {
   # site's pictures and the few docs pages not yet in the help's shot list; the help pages'
   # own come from tools/shots/shots.toml (-Show).
   $windows = [ordered]@{
-    "add-url" = "addurl"; "speed-limiter" = "speedlimit"; "scheduler" = "scheduler"
+    "add-url" = "addurl"; "speed-limiter" = "speedlimit"; "scheduler" = "scheduler+@main"
     "options-connection" = "options:connection+@main"; "options-remote" = "options:remote+@main"; "grabber" = "grabber"
     "progress" = "progress"
   }
@@ -226,8 +226,9 @@ try {
   }
   foreach ($name in $windows.Keys) {
     if (-not (Want $name)) { continue }
-    # Options is a page of the main window (plan 11a): "options:x+@main" opens it there, and
-    # the main window is the shot; /show downloads shows the list again after.
+    # Options is a page of the main window (plan 11a), the Scheduler a section of it (11b1):
+    # "options:x+@main" and "scheduler+@main" open it there, and the main window is the shot;
+    # /show downloads shows the list again after.
     if ($windows[$name] -like "*+@main") {
       & $Exe /show ($windows[$name] -replace "\+@main$", "")
       Start-Sleep -Milliseconds 1500
@@ -252,8 +253,9 @@ try {
     # "theme:graphite+@main": /show theme:graphite first (no window of its own), then the shot.
     $parts = @($what -split "\+")
     $what = $parts[-1]
-    # The downloads list, not Options' page (plan 11a), unless this shot opens the page.
-    if ($what -eq "@main" -and -not ($parts | Where-Object { $_ -like "options*" })) {
+    # The downloads list, not Options' page (plan 11a), unless this shot opens the page (its
+    # Scheduler's section too, 11b1).
+    if ($what -eq "@main" -and -not ($parts | Where-Object { $_ -like "options*" -or $_ -like "scheduler*" })) {
       & $Exe /show downloads
       Start-Sleep -Milliseconds 600
     }

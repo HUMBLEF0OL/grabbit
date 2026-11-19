@@ -272,8 +272,10 @@ caption = "Tasks → Torrent settings..."
 [[shot]]
 id = "scheduler"
 page = "queues-and-scheduler.md"
-under = "The Scheduler window"
-take = "scheduler"
+under = "The Scheduler"
+# A section of Options' page in the main window (plan 11b1).
+take = "scheduler+@main"
+crop = { around = ["Pane:Options"], pad = 0 }
 marks = [{ at = "Main download queue", side = "right" }, { at = "Download limits", side = "right" }, { at = "TabItem:Schedule", side = "top" }, { at = "Files in the queue", side = "top" }]
 alt = "The Scheduler: the queues on the left with Download limits, the selected queue's Schedule tab on the right"
 caption = "1 the queues, 2 Download limits, 3 the queue's schedule, 4 its files."
@@ -517,8 +519,8 @@ caption = "Download Later puts it in a queue instead of starting it."
 id = "overnight-start"
 page = "guide-download-overnight.md"
 under = "2. Set the start time"
-take = "scheduler"
-crop = [208, 130, 567, 192]
+take = "scheduler+@main"
+crop = { around = ["CheckBox:Start download at", "Daily", "CheckBox:Stop download at"], pad = 12 }
 marks = [{ at = "Start download at", side = "right" }, { at = "Daily", side = "right" }, { at = "Stop download at", side = "right" }]
 alt = "The Scheduler's Schedule tab: Start download at, Once at or Daily, and Stop download at"
 caption = "1 the start time, 2 once or daily, 3 a stop time if you want one."
@@ -527,8 +529,8 @@ caption = "1 the start time, 2 once or daily, 3 a stop time if you want one."
 id = "overnight-done"
 page = "guide-download-overnight.md"
 under = "4. Decide what happens at the end (optional)"
-take = "scheduler"
-crop = [218, 342, 562, 90]
+take = "scheduler+@main"
+crop = { around = ["CheckBox:Open the following file when done", "CheckBox:Force processes to terminate"], pad = 12 }
 ring = ["CheckBox:Turn off computer when done"]
 alt = "The Scheduler's choices for when the queue is done, Turn off computer when done among them"
 caption = "When the queue is done: open a file, quit Grabbit, or turn the computer off."

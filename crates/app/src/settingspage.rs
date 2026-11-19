@@ -6,14 +6,41 @@
 //! The page's small dialogs (New login, DNS settings, Pair a device...) stay windows over the
 //! main window (D5); the app keeps the settings, merges a Save and applies it (app.rs).
 
+//!
+//! Under Options' pages, after "Tools", the windows that moved into the page (plan 11b): the
+//! Scheduler (11b1), its draft of the queues and Download limits made on its first visit and
+//! saved by the same Save, before Options' changes.
+
 use egui::{Rect, Sense, Ui, pos2, vec2};
 
+use crate::chrome::ShellIcons;
 use crate::dialogs::{Confirm, Outcome};
-use crate::options::{OptionsDialog, SIDE_W};
+use crate::model::Item;
+use crate::options::{OptionsDialog, SCHEDULER_PAGE, SIDE_W};
+use crate::queue::Queue;
+use crate::scheduler::{Action, Scheduler};
+use crate::settings::Settings;
 use crate::winui::{self, ButtonKind, FooterButton, FooterItem};
 
 /// The band over the side list that holds "← Downloads".
 pub const HEADER_H: f32 = 40.0;
+
+/// Where a moved window's layout starts in its section: under the section's heading (its tile
+/// 16 from the top, 40 tall), as Options' pages' controls start under theirs.
+const SECTION_TOP: f32 = 56.0;
+
+/// What the sections that were windows need from the app every frame they are drawn.
+pub struct Tools<'a> {
+    pub icons: &'a mut ShellIcons,
+    pub items: &'a [Item],
+    /// The app's queues as they are now (what runs, their downloads).
+    pub queues: &'a [Queue],
+    pub settings: &'a Settings,
+    /// Scheduler → "Wake the computer to run this queue": why it could not be set, if so.
+    pub wake_error: Option<&'a str>,
+    /// What the Scheduler's Start now and Stop ask of the app, at once.
+    pub actions: &'a mut Vec<Action>,
+}
 
 /// What the page asks of the app.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,23 +55,39 @@ pub enum PageEvent {
 
 pub struct SettingsPage {
     pub options: OptionsDialog,
+    /// The Scheduler's section (plan 11b1): its draft, made on its first visit.
+    pub scheduler: Option<Scheduler>,
     /// Back with unsaved changes: "Discard your changes to Options?" (D3).
     ask: Option<Confirm>,
 }
 
 impl SettingsPage {
     pub fn new(options: OptionsDialog) -> Self {
-        SettingsPage { options, ask: None }
+        SettingsPage {
+            options,
+            scheduler: None,
+            ask: None,
+        }
     }
 
     /// A small dialog over the page waits for an answer: the page's buttons and keys wait.
     pub fn modal(&self) -> bool {
-        self.options.modal() || self.ask.is_some()
+        self.options.modal()
+            || self.ask.is_some()
+            || self.scheduler.as_ref().is_some_and(Scheduler::modal)
     }
 
-    /// Whether Save would change anything.
+    /// Whether Save would change anything, in any section.
     pub fn dirty(&self) -> bool {
-        self.options.dirty()
+        self.options.dirty() || self.scheduler.as_ref().is_some_and(Scheduler::dirty)
+    }
+
+    /// The page on the Scheduler's section, its draft made from `queues` and `settings` if it
+    /// has none yet: the Scheduler, to be shown on a queue or asked a new one's name.
+    pub fn show_scheduler(&mut self, queues: &[Queue], settings: &Settings) -> &mut Scheduler {
+        self.options.show_page(SCHEDULER_PAGE);
+        self.scheduler
+            .get_or_insert_with(|| Scheduler::new(queues, settings))
     }
 
     /// Back, as "← Downloads", Escape and Alt+Left ask for it: closes at once without changes,
@@ -77,8 +120,10 @@ impl SettingsPage {
         keys: bool,
         typing: bool,
         downloads: &std::path::Path,
+        tools: &mut Tools,
     ) -> Option<PageEvent> {
-        crate::crash::window("options");
+        let on_scheduler = self.options.page() == SCHEDULER_PAGE;
+        crate::crash::window(if on_scheduler { "scheduler" } else { "options" });
         let c = crate::theme::colors();
         let o = area.min;
         let _surface = winui::Surface::enter(area.min.x, area.max.x);
@@ -132,7 +177,14 @@ impl SettingsPage {
             &mut side,
             egui::Id::unique("settings-pages"),
             vec2(SIDE_W + 1.0, list_h),
-            |ui, at| self.options.pages(ui, at, list_h),
+            |ui, at| {
+                // While a small dialog waits for an answer the page stays where it is.
+                let before = self.options.page();
+                self.options.pages(ui, at, list_h);
+                if modal {
+                    self.options.show_page(before);
+                }
+            },
         );
 
         // The header: "← Downloads" over the list, the list's border down its side: right of
@@ -181,7 +233,12 @@ impl SettingsPage {
         let col_w = (area.max.x - col).max(0.0);
         let foot = (area.height() - winui::FOOTER_H).max(0.0);
         let page_view = Rect::from_min_max(pos2(col, o.y), pos2(area.max.x, o.y + foot));
-        self.options.page_pane(ui, page_view, downloads);
+        // The side list may just have picked another section: what it shows now.
+        if self.options.page() == SCHEDULER_PAGE {
+            self.scheduler_pane(ui, page_view, tools);
+        } else {
+            self.options.page_pane(ui, page_view, downloads);
+        }
 
         let dirty = self.dirty();
         let state = if dirty {
@@ -240,7 +297,11 @@ impl SettingsPage {
             }
         }
         if pressed == Some(2) {
-            crate::help::open_page("options.md");
+            crate::help::open_page(if self.options.page() == SCHEDULER_PAGE {
+                "queues-and-scheduler.md#the-scheduler"
+            } else {
+                "options.md"
+            });
         }
         let back_key = keys
             && ui.input_mut(|i| {
@@ -260,6 +321,12 @@ impl SettingsPage {
         }
     }
 
+    /// Back's question answered No, as its window's No does (tests).
+    #[cfg(test)]
+    pub(crate) fn answer_no(&mut self) {
+        self.ask = None;
+    }
+
     /// The windows over the page (a page's small dialogs, the discard question): every frame
     /// the page is open, from the app's `dialogs`. `Close` once Yes drops the changes.
     pub fn overlays(
@@ -268,6 +335,9 @@ impl SettingsPage {
         downloads: &std::path::Path,
     ) -> Option<PageEvent> {
         self.options.overlays(ctx, downloads);
+        if let Some(s) = &mut self.scheduler {
+            s.overlays(ctx);
+        }
         let d = self.ask.as_mut()?;
         match d.show(ctx) {
             Outcome::Open => None,
@@ -286,6 +356,39 @@ impl SettingsPage {
     /// The page shown (Options' page numbers), kept by a fresh draft after Save or Discard.
     pub fn page(&self) -> usize {
         self.options.page()
+    }
+
+    /// The Scheduler's section in `view`: its heading, then the window's layout under it,
+    /// scrolled where `view` is smaller (`scale::pane`).
+    fn scheduler_pane(&mut self, ui: &mut Ui, view: Rect, tools: &mut Tools) {
+        let s = self
+            .scheduler
+            .get_or_insert_with(|| Scheduler::new(tools.queues, tools.settings));
+        let mut page = ui.new_child(egui::UiBuilder::new().max_rect(view));
+        page.set_clip_rect(view.intersect(ui.clip_rect()));
+        let size = vec2(
+            crate::scheduler::SIZE[0],
+            SECTION_TOP + crate::scheduler::SIZE[1],
+        );
+        crate::scale::pane(
+            &mut page,
+            egui::Id::unique("scheduler-section"),
+            size,
+            |ui, at| {
+                let _surface = winui::Surface::enter(at.x, at.x + size.x);
+                // Options' heading is laid out from the side list's left edge.
+                crate::options::heading(ui, at - vec2(SIDE_W + 1.0, 0.0), SCHEDULER_PAGE);
+                s.section(
+                    ui,
+                    at + vec2(0.0, SECTION_TOP),
+                    tools.icons,
+                    tools.items,
+                    tools.queues,
+                    tools.wake_error,
+                    tools.actions,
+                );
+            },
+        );
     }
 }
 
@@ -342,6 +445,30 @@ mod tests {
         SettingsPage::new(OptionsDialog::new(s, &std::env::temp_dir(), vec![]))
     }
 
+    /// The two built-in queues, as a new list has them.
+    fn queues() -> Vec<Queue> {
+        vec![
+            Queue::new("Main download queue", false),
+            Queue::new("Synchronization queue", true),
+        ]
+    }
+
+    /// `f` with what the sections need from an app with [`queues`] and default settings; what
+    /// the Scheduler asked of the app, after.
+    fn with_tools<R>(f: impl FnOnce(Tools) -> R) -> (R, Vec<Action>) {
+        let (queues, settings) = (queues(), Settings::default());
+        let mut actions = Vec::new();
+        let out = f(Tools {
+            icons: &mut ShellIcons,
+            items: &[],
+            queues: &queues,
+            settings: &settings,
+            wake_error: None,
+            actions: &mut actions,
+        });
+        (out, actions)
+    }
+
     /// One pass of the page in `area`: what it asked for, and the AccessKit tree.
     fn pass(
         ctx: &egui::Context,
@@ -349,17 +476,34 @@ mod tests {
         area: Rect,
         events: Vec<egui::Event>,
     ) -> (Option<PageEvent>, TreeUpdate) {
+        pass_keys(ctx, d, area, events, true).0
+    }
+
+    /// [`pass`] with the window's keys the page's or not (`keys`); what the Scheduler asked of
+    /// the app too.
+    fn pass_keys(
+        ctx: &egui::Context,
+        d: &mut SettingsPage,
+        area: Rect,
+        events: Vec<egui::Event>,
+        keys: bool,
+    ) -> ((Option<PageEvent>, TreeUpdate), Vec<Action>) {
         let dir = std::env::temp_dir();
         let mut ev = None;
-        let mut out = ctx.run_ui(input(area.max.to_vec2(), events), |ui| {
-            ev = d.show(ui, area, true, false, &dir);
+        let (mut out, actions) = with_tools(|mut tools| {
+            ctx.run_ui(input(area.max.to_vec2(), events), |ui| {
+                ev = d.show(ui, area, keys, false, &dir, &mut tools);
+            })
         });
         out.textures_delta.clear();
         (
-            ev,
-            out.platform_output
-                .accesskit_update
-                .expect("AccessKit is on"),
+            (
+                ev,
+                out.platform_output
+                    .accesskit_update
+                    .expect("AccessKit is on"),
+            ),
+            actions,
         )
     }
 
@@ -462,7 +606,7 @@ mod tests {
             .filter(|(_, n)| n.role() == Role::ListItem)
             .filter_map(|(_, n)| bounds(n))
             .collect();
-        assert_eq!(rows.len(), 12, "every page's row");
+        assert_eq!(rows.len(), 13, "every page's row, and the Scheduler's");
         let last = rows.iter().map(|r| r.bottom()).fold(f32::MIN, f32::max);
         assert!(
             last > area.bottom(),
@@ -564,16 +708,13 @@ mod tests {
                 m.surrender_focus(f);
             }
         });
-        let dir = std::env::temp_dir();
-        let mut ev = None;
-        let mut out = ctx.run_ui(
-            input(
-                area.max.to_vec2(),
-                vec![key(egui::Key::Enter, egui::Modifiers::NONE)],
-            ),
-            |ui| ev = d.show(ui, area, false, false, &dir),
+        let ((ev, _), _) = pass_keys(
+            &ctx,
+            &mut d,
+            area,
+            vec![key(egui::Key::Enter, egui::Modifiers::NONE)],
+            false,
         );
-        out.textures_delta.clear();
         assert_eq!(ev, None);
         assert_eq!(
             pass(
@@ -585,6 +726,91 @@ mod tests {
             .0,
             Some(PageEvent::Save)
         );
+    }
+
+    /// Plan 11b1: the Scheduler is a section of the page, after "Tools" in the side list: a
+    /// click there shows its queue list, its tabs, Start now and Stop in the "Options" pane,
+    /// above the page's save bar; its draft is made then, and a change in it is the page's
+    /// (Save live, Back asks).
+    #[test]
+    fn the_scheduler_is_a_section_of_the_page() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let area = Rect::from_min_size(pos2(0.0, 100.0), vec2(1080.0, 600.0));
+        let mut d = page(&Settings::default());
+        pass(&ctx, &mut d, area, vec![]);
+        let (_, tree) = pass(&ctx, &mut d, area, vec![]);
+        let row = bounds(find(&tree, Role::ListItem, "Scheduler").expect("its row").1).unwrap();
+        assert!(d.scheduler.is_none(), "made on the first visit");
+        click(&ctx, &mut d, area, row.center());
+        assert_eq!(d.page(), SCHEDULER_PAGE);
+        pass(&ctx, &mut d, area, vec![]);
+        let (_, tree) = pass(&ctx, &mut d, area, vec![]);
+        let nodes: std::collections::HashMap<NodeId, &egui::accesskit::Node> =
+            tree.nodes.iter().map(|(id, n)| (*id, n)).collect();
+        let (pane, _) = find(&tree, Role::Pane, "Options").expect("the Options pane");
+        let mut under = vec![pane];
+        let mut i = 0;
+        while i < under.len() {
+            if let Some(n) = nodes.get(&under[i]) {
+                under.extend_from_slice(n.children());
+            }
+            i += 1;
+        }
+        for (role, label) in [
+            (Role::Tab, "Schedule"),
+            (Role::Tab, "Files in the queue"),
+            (Role::Button, "Start now"),
+            (Role::Button, "Stop"),
+            (Role::Button, "New queue"),
+            (Role::Button, "Save"),
+        ] {
+            let (id, n) = tree
+                .nodes
+                .iter()
+                .find(|(_, n)| {
+                    n.role() == role
+                        && n.label().map(|l| l.replace('&', "")).as_deref() == Some(label)
+                })
+                .unwrap_or_else(|| panic!("no {label}"));
+            assert!(under.contains(id), "{label} under the pane");
+            // The section above the save bar.
+            if label != "Save" {
+                let rc = bounds(n).unwrap();
+                assert!(
+                    rc.bottom() <= area.bottom() - winui::FOOTER_H,
+                    "{label}: {rc:?}"
+                );
+            }
+        }
+        assert!(
+            find(&tree, Role::Button, "Save").unwrap().1.is_disabled(),
+            "nothing changed yet"
+        );
+        d.scheduler
+            .as_mut()
+            .expect("its draft")
+            .set_limits(true, 321);
+        assert!(d.dirty());
+        let (_, tree) = pass(&ctx, &mut d, area, vec![]);
+        assert!(!find(&tree, Role::Button, "Save").unwrap().1.is_disabled());
+        let (ev, _) = pass(
+            &ctx,
+            &mut d,
+            area,
+            vec![key(egui::Key::Escape, egui::Modifiers::NONE)],
+        );
+        assert_eq!(ev, None, "Back asks first");
+        assert!(d.ask.is_some());
+        // Audit r1: while the question waits, a click on another page's row leaves the page
+        // on the Scheduler.
+        let (_, tree) = pass(&ctx, &mut d, area, vec![]);
+        let general = bounds(find(&tree, Role::ListItem, "General").unwrap().1).unwrap();
+        click(&ctx, &mut d, area, general.center());
+        assert_eq!(d.page(), SCHEDULER_PAGE, "held while modal");
+        d.ask = None;
+        click(&ctx, &mut d, area, general.center());
+        assert_eq!(d.page(), 0, "picked once answered");
     }
 
     /// A page whose draft differs from what it opened with (General's "Launch on startup"
