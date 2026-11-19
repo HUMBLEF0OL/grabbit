@@ -75,8 +75,9 @@ caption = "View → Theme switches at once, keeping the layout."
 id = "add-url"
 page = "adding-downloads.md"
 under = "Add"
-take = "@add:gen/4M/project-report-2026.pdf"
-# The Add window (PR 76): its box, the Found list's caption ("Found 2"), Use authorization, Add.
+# Lower case: /show's arguments arrive lower-cased (mdm_ipc::parse_args).
+take = "@add:gen/4m/project-report-2026.pdf"
+# The Add window (PR 76): its box, the Found list's caption ("Found 1"), Use authorization, Add.
 marks = [{ at = "Edit:Addresses, magnet links or video pages, one per line", n = 3, side = "corner" }, { at = "Found", n = 4, side = "right" }, { at = "CheckBox:Use authorization", n = 5, side = "right" }, { at = "Button:Add", n = 6, side = "corner" }]
 alt = "The Add window: its box, what was found, the drop area, Use authorization and Add"
 caption = "The numbers are the steps above: 3 the addresses, 4 what was found, 5 a login if the server needs one, 6 Add."
@@ -468,7 +469,7 @@ caption = "Archives: extract when downloaded, and where the files go."
 id = "first-add-url"
 page = "guide-first-download.md"
 under = "Steps"
-take = "@add:gen/4M/project-report-2026.pdf"
+take = "@add:gen/4m/project-report-2026.pdf"
 ring = ["Button:Add"]
 alt = "The Add window, its Add button ringed"
 caption = "Add: Grabbit puts the address you copied in the box (paste it there if it isn't). Click Add 1."

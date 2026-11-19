@@ -212,8 +212,9 @@ try {
   # own come from tools/shots/shots.toml (-Show).
   $windows = [ordered]@{
     # The Add window holding a lab address, never the clipboard's (no picture shows what the
-    # user copied, and the clipboard is never touched).
-    "add-url" = "add:$base/gen/4M/project-report-2026.pdf"; "speed-limiter" = "speedlimit+@main"; "scheduler" = "scheduler+@main"
+    # user copied, and the clipboard is never touched). In lower case, as /show's arguments
+    # arrive (mdm_ipc::parse_args lower-cases them).
+    "add-url" = "add:$base/gen/4m/project-report-2026.pdf"; "speed-limiter" = "speedlimit+@main"; "scheduler" = "scheduler+@main"
     "options-connection" = "options:connection+@main"; "options-remote" = "options:remote+@main"; "grabber" = "grabber"
     "progress" = "progress"
   }

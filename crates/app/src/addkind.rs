@@ -287,7 +287,7 @@ pub fn scan(text: &str, is_file: &dyn Fn(&Path) -> bool) -> Vec<Found> {
     out
 }
 
-/// The addresses written in `text` (a dropped text, a drag's link), in order: each word that
+/// The addresses written in `text` (a dropped text), in order: each word that
 /// starts with a scheme, without the brackets, quotes and sentence punctuation around it, as
 /// [`scan`] picks them out of a line.
 pub fn written_addresses(text: &str) -> Vec<String> {

@@ -2560,7 +2560,8 @@ impl App {
             "addurl" => self.run(Cmd::AddUrl, None, ctx),
             // The Add window holding the text after `add:` instead of the clipboard's links (the
             // screenshots': `add:https://downloads.example/a.zip`), so a picture never shows
-            // what the user copied and the clipboard is never touched.
+            // what the user copied and the clipboard is never touched. The text arrives
+            // lower-cased, as every /show argument does (`mdm_ipc::parse_args`, as `paste:`).
             "add" => {
                 if let Some(text) = name.strip_prefix("add:").map(str::trim)
                     && !text.is_empty()
