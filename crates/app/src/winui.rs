@@ -2151,6 +2151,34 @@ pub fn end_align() -> egui::Align {
     }
 }
 
+/// The text part of a field drawn by its caller (the title bar's search field, find.rs): the
+/// text box in `rc` (on screen), no frame of its own, with id `id`.
+pub fn bare_edit(ui: &mut Ui, rc: Rect, value: &mut String, id: egui::Id) -> Response {
+    edit_text_with(
+        ui,
+        rc,
+        value,
+        true,
+        false,
+        2.0,
+        TEXT(),
+        start_align(),
+        Some(id),
+    )
+}
+
+/// Give text box `id` the keys with its whole text (`len` characters) selected (Ctrl+F in the
+/// search field).
+pub fn select_all_in(ctx: &egui::Context, id: egui::Id, len: usize) {
+    use egui::text::{CCursor, CCursorRange};
+    let mut state = egui::TextEdit::load_state(ctx, id).unwrap_or_default();
+    state
+        .cursor
+        .set_char_range(Some(CCursorRange::two(CCursor::new(0), CCursor::new(len))));
+    state.store(ctx, id);
+    ctx.memory_mut(|m| m.request_focus(id));
+}
+
 #[allow(clippy::too_many_arguments)]
 fn edit_text_with(
     ui: &mut Ui,
@@ -5423,7 +5451,11 @@ pub fn focus_on_press(resp: &Response) {
 /// pressed OK). Links do open on Enter.
 pub fn enter_is_not_a_click(ui: &Ui, mut resp: Response) -> Response {
     if resp.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+        // egui marks a key's click FAKE_PRIMARY_CLICKED, not CLICKED (a pointer's): both go, or
+        // Enter still ticked the box while it pressed OK.
         resp.flags.remove(egui::response::Flags::CLICKED);
+        resp.flags
+            .remove(egui::response::Flags::FAKE_PRIMARY_CLICKED);
     }
     resp
 }

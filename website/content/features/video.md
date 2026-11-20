@@ -16,7 +16,7 @@ help: video.md
 
 ## One window for any video page
 
-Give a video's page address to **Add URL** (**Ctrl+N**) and Grabbit sees that it is a video page:
+Give a video's page address to **Add** (**Ctrl+N**) and Grabbit sees that it is a video page:
 **Download video from a page** opens and looks it up. YouTube, Vimeo, Dailymotion, Twitch,
 TikTok, Instagram, Reddit and well over a thousand other sites work. With the
 [browser extension](/features/browser-extension.html), the button over a video opens the same

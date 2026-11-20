@@ -18,4 +18,4 @@ What matters most here:
 - **Files written to disk.** Downloaded names are sanitised before they become paths
   (`crates/engine/src/naming.rs`).
 
-Only the latest release gets security fixes during the preview (0.x).
+Only the latest release gets security fixes.

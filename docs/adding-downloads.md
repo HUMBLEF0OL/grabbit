@@ -4,33 +4,45 @@
 
 There are several ways to give Grabbit something to download. Most of them end in the same window, **Download File Info**, where you choose where the file goes.
 
-## Add URL
+## Add
 
-1. Copy the file's address (in a browser: right-click the link → **Copy link**).
-2. Click **Add URL** on the toolbar, choose **Tasks → Add new download**, or press **Ctrl+N**.
-3. **Enter new address to download** opens. If the clipboard holds a web address, it is already filled in. The arrow at the end of **Address** lists the last 20 addresses you entered; pick one to use it again. Right-click the box for **Cut**, **Copy**, **Paste**, **Delete** and **Select all**.
-4. If the server needs a user name and password, tick **Use authorization** and type them.
-5. Click **OK**.
+**Add** on the toolbar takes anything Grabbit downloads: a file's address, a magnet link, a `.torrent` file or its address, a video's page, a gallery's page, or an address with a `*` for a batch download.
 
-Grabbit takes `http://`, `https://`, `ftp://`, `ftps://`, `ftpes://` and `magnet:` addresses. Anything else gets **Invalid address**.
+1. Copy the address (in a browser: right-click the link → **Copy link**). Several at once are fine.
+2. Click **Add** on the toolbar, choose **Tasks → Add new download**, or press **Ctrl+N**.
+3. The **Add** window opens with the clipboard's addresses already in its box, one per line. Type or paste more, or drop links or a `.torrent` file on the window. **Open a .torrent file...** picks one from the disk.
+4. Under the box, **Found** lists each line with what it is (**Link**, **Magnet**, **Torrent file**, **Video**, **Gallery**, **Batch**) and what comes next. A line that isn't an address says why and is left out.
+5. If the server needs a user name and password, tick **Use authorization** and type them.
+6. Click **Add** (it says how many), or press **Enter**. **Shift+Enter** starts a new line in the box; **Esc** closes the window without adding.
 
-![Enter new address to download, with the Address box, Use authorization and OK](images/help/add-url.webp)
-*The numbers are the steps above: 3 the address, 4 a login if the server needs one, 5 OK.*
+![The Add window: its box, what was found, the drop area, Use authorization and Add](images/help/add-url.webp)
+*The numbers are the steps above: 3 the addresses, 4 what was found, 5 a login if the server needs one, 6 Add.*
 
-If the address is a video's page (YouTube, Vimeo, TikTok and others), the video window opens instead. See [Video downloads](video.md). A magnet link opens **Add torrent**; see [Torrents](torrents.md).
+Each item then goes where it always has: a file's address to **Download File Info**, a magnet link or a `.torrent` to **Add torrent** (to choose its files), a video's page to the video window (to choose its quality), a gallery's page to the gallery window, and a `*` address to **Add batch download**. Several of one kind open one after another.
+
+**Ask where to save each one** (ticked at first; Grabbit remembers how you leave it) shows **Download File Info** for every file's address. Untick it to add the files at once to their category's folder and start them. **Later** adds the files without starting them: they wait in a queue, as **Download Later** does. Added this way (unticked, or with **Later**), a link already in the list is added again, as Batch download does: **Options → Downloads → If a duplicate download link is added** applies only to links that go on to **Download File Info**. Torrents, videos and galleries always open their own window, as they need your choice.
+
+Grabbit takes `http://`, `https://`, `ftp://`, `ftps://`, `ftpes://` and `magnet:` addresses, and `.torrent` files on this computer.
+
+The arrow beside **Add** opens its menu: **Add links or a magnet...** (**Ctrl+N**), **Open a .torrent file...** (**Ctrl+O**), **Add from the clipboard** (**Ctrl+V**) and **Batch download...**.
+
+**Dropping on the main window.** Links, text with links, magnet links and `.torrent` files dropped anywhere on the main window open the **Add** window with them, so you see what each is before anything is added. A list file (`.txt`, `.ef2`, `.htm`, `.csv`) still opens **Import**.
+
+See [Video downloads](video.md), [Torrents](torrents.md) and [Image galleries](galleries.md) for those windows.
 
 ## Paste bar
 
 The paste bar is the address box under the toolbar. It is there unless you turned it off: **View → Paste bar** shows or hides it.
 
-1. Paste a file's address or a magnet link into the box.
-2. Press **Enter** or click **Download**.
+1. Paste an address, a magnet link or a video's page into the box.
+2. A chip beside it says what Grabbit found (**Link · example.org**, **Magnet**, **Torrent file**, **Video · youtube.com**, **3 links**, or **Not an address**), and the button says what it will do: **Download**, **Add torrent**, **Choose quality**, or **Add 3...**.
+3. Press **Enter** or click the button. Nothing is added before that.
 
-Grabbit goes on as if you had clicked **OK** in **Add URL**: a file's address opens **Download File Info**, a magnet link or a `.torrent` address opens **Add torrent**, a video's page the video window ([Video downloads](video.md)) and a gallery's page the gallery window ([Image galleries](galleries.md)). An address Grabbit doesn't take shows **Invalid address** in place of **Enter adds it**, and stays in the box for you to fix.
+A file's address opens **Download File Info**, a magnet link or a `.torrent` opens **Add torrent**, a video's page the video window and a gallery's page the gallery window. Several links open the **Add** window, listed. Text that isn't an address greys the button; **Enter** then shows **Invalid address** and leaves the text in the box for you to fix.
 
-The paste bar shares **Add URL**'s list of the last 20 addresses. The arrow at the end of the box (or **Alt+Down** or **F4**) opens it, and **Up** and **Down** in the box step through the same addresses.
+The paste bar keeps a list of the last 20 addresses added. The arrow at the end of the box (or **Alt+Down** or **F4**) opens it, and **Up** and **Down** in the box step through the same addresses.
 
-**Ctrl+V** while nothing else has the keyboard puts the first line of the clipboard in the paste bar. It adds nothing until you press **Enter**. **Esc** leaves the box, and **Tab** moves between the paste bar, the categories and the download list.
+**Ctrl+V** while nothing else has the keyboard puts the clipboard's address in the paste bar. It adds nothing until you press **Enter**. With the paste bar hidden, or the clipboard holding several links, **Ctrl+V** opens the **Add** window with them instead. **Esc** leaves the box, and **Tab** moves between the paste bar, the categories and the download list.
 
 ## FTP and FTPS
 
@@ -59,7 +71,7 @@ mode** switches it off for servers that only take active connections. FTP connec
 server directly, not through the HTTP proxy.
 
 Browsers no longer download `ftp://` links themselves. Right-click one and choose **Download with
-Grabbit**, or copy it and use **Add URL**.
+Grabbit**, or copy it and use **Add**.
 
 ## Google Drive links
 
@@ -116,7 +128,7 @@ Then choose:
 - **Download Later** — add it to a queue without starting. See below.
 - **Cancel** (or **Esc**) — add nothing.
 
-By default Grabbit starts downloading while this window is open, so no time is lost while you decide. **Cancel** drops what it fetched. You can turn this off in **Options → Downloads → Start downloading immediately while displaying "Download File Info" dialog**.
+Nothing is downloaded until you choose **Start Download** or **Download Later**. To have Grabbit start while this window is still open, so no time is lost while you decide, turn on **Options → Downloads → Start downloading immediately while displaying "Download File Info" dialog**; **Cancel** then drops what it fetched.
 
 If the folder doesn't exist yet, Grabbit asks **Do you want to create it?** before it starts.
 
@@ -135,7 +147,7 @@ With **Options → General → Offer to download links copied to the clipboard**
 ## Drag and drop
 
 1. Choose **Tasks → Show drop target**. A small box with the Grabbit icon appears and stays on top of other windows.
-2. Drag a link from your browser onto it. Grabbit adds it as if you had used **Add URL**.
+2. Drag a link from your browser onto it. Grabbit adds it as if you had used **Add**.
 
 You can also drop magnet links and `.torrent` files on it. Drag the box to move it, and double-click it to bring the main window back. Right-click it for **Show Grabbit**, **Add new download** and **Hide drop target**.
 

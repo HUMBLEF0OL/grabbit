@@ -11,11 +11,12 @@ use mdm_engine::state::state_path;
 use mdm_engine::{Destination, Download, Options, Request};
 use reqwest::header::{AUTHORIZATION, HeaderMap, HeaderValue};
 
+use crate::adddlg::AddWindow;
 use crate::chrome::{
     self, IconKey, MenuBarEvent, MenuEntry, MenuKind, PopupResult, ShellIcons, ToolbarEvent,
     TreeEvent, TreeRow,
 };
-use crate::dialogs::{self, AddUrl, Complete, FileInfo, Outcome, Start};
+use crate::dialogs::{self, Complete, FileInfo, Outcome, Start};
 use crate::icons::Icon;
 use crate::list;
 use crate::model::{self, Category, Item, Live, Status};
@@ -62,7 +63,11 @@ type GoneCheck = std::sync::Arc<dyn Fn(&std::path::Path) -> bool + Send + Sync>;
 /// Menu, toolbar and context-menu commands.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Cmd {
+    /// Add: the Add window, the clipboard's links in it (the toolbar's Add, Ctrl+N).
     AddUrl,
+    /// Add ▾ → Add from the clipboard (Ctrl+V with nothing focused): the copied text in the
+    /// paste bar, or in the Add window when it holds several links or the bar is hidden.
+    AddFromClipboard,
     /// Help → a page of the website (`""` = home).
     HelpPage(&'static str),
     Shortcuts,
@@ -114,10 +119,8 @@ enum Cmd {
     AddToQueue(usize),
     RemoveFromQueue,
     ToggleCategories,
-    /// View → Dark Mode support.
-    ToggleDarkMode,
-    /// View → Always dark (#60).
-    ToggleAlwaysDark,
+    /// The status bar's light/dark button (1.0.1; was View → Dark Mode support and Always dark).
+    ToggleMode,
     /// View → Paste bar (plan 06).
     TogglePasteBar,
     /// View → Details pane, and the toolbar's Details (plan 06).
@@ -182,6 +185,8 @@ enum Cmd {
     /// Downloads → Find (Ctrl-F) / Find Next (F3).
     Find,
     FindNext,
+    /// Shift+F3: the match before the selection.
+    FindPrevious,
     /// View → Arrange files: sort by a column (data slot), or by order of addition.
     Arrange(Option<usize>),
     /// Header right-click → Clear all filters.
@@ -353,12 +358,13 @@ impl Cmd {
             Cmd::None => return chrome::menu_icon(label),
             Cmd::AddUrl => "tb-add-url",
             Cmd::OpenTorrentFile => "tb-add-torrent",
+            Cmd::AddFromClipboard => "gx-clipboard",
             Cmd::AddMagnet | Cmd::LinkGrabber | Cmd::RefreshAddress | Cmd::TogglePasteBar => {
                 "gx-link"
             }
             Cmd::ToggleDetails => "gx-sidebar",
             Cmd::TorrentSettings | Cmd::Options => "tb-options",
-            Cmd::Batch(false) => "gx-hash",
+            Cmd::Batch(false) => "gx-list-numbers",
             Cmd::Batch(true) => "gx-copy",
             Cmd::VideoPage => "ft-video",
             Cmd::RssFeeds(_) => "gx-rss",
@@ -372,7 +378,7 @@ impl Cmd {
             Cmd::Resume => "tb-resume",
             Cmd::Redownload => "gx-refresh",
             Cmd::DeleteCompleted => "tb-delete-completed",
-            Cmd::Find | Cmd::FindNext => "gx-search",
+            Cmd::Find | Cmd::FindNext | Cmd::FindPrevious => "gx-search",
             Cmd::Scheduler | Cmd::ScheduleQueue(_) => "tb-scheduler",
             Cmd::StartQueue(_) => "tb-start-queue",
             Cmd::StopQueue(_) => "tb-stop-queue",
@@ -401,8 +407,11 @@ impl Cmd {
     fn hint(&self) -> Option<&'static str> {
         Some(match self {
             Cmd::AddUrl => "Ctrl+N",
+            Cmd::OpenTorrentFile => "Ctrl+O",
+            Cmd::AddFromClipboard => "Ctrl+V",
             Cmd::Find => "Ctrl+F",
             Cmd::FindNext => "F3",
+            Cmd::FindPrevious => "Shift+F3",
             Cmd::MoveRename => "Ctrl+M",
             Cmd::Remove => "Delete",
             Cmd::RemoveWithFiles => "Shift+Delete",
@@ -424,8 +433,8 @@ enum Popup {
     Item(Option<u64>),
     /// The Start Queue (true) / Stop Queue drop-down arrows.
     QueueDrop(bool),
-    /// The Add Torrent button's drop-down arrow.
-    TorrentDrop,
+    /// The Add button's drop-down arrow.
+    AddDrop,
     /// Right-click on the drop target.
     DropTarget,
     /// Categories right-click: the node's view (None: the "Queues" root).
@@ -544,7 +553,17 @@ pub struct App {
     unfinished_open: bool,
     finished_open: bool,
     queues_open: bool,
-    add_url: Option<AddUrl>,
+    /// The Add window (the toolbar's Add, Ctrl+N, a drop, the paste bar's several links).
+    add_url: Option<AddWindow>,
+    /// Video and gallery pages added while their window was open, waiting their turn, and
+    /// whether that window closed this frame (the next opens a frame later, as Add torrent's).
+    pages_waiting: std::collections::VecDeque<dialogs::NewUrl>,
+    pages_closed: bool,
+    /// Batch patterns added while Batch download was open, waiting their turn (the same way).
+    batch_waiting: std::collections::VecDeque<String>,
+    batch_closed: bool,
+    /// Add ▾ → Add from the clipboard: the clipboard, asked off the window's thread.
+    clip_paste: crate::clipboard::Prefill,
     file_info: Option<FileInfo>,
     /// Addresses (and their browser context) waiting for Download File Info to close.
     file_info_waiting: std::collections::VecDeque<(dialogs::NewUrl, ipc::Command)>,
@@ -574,9 +593,6 @@ pub struct App {
     auto_update: Option<crate::help::Slot>,
     /// The automatic check found a new version: its window comes to the front once shown.
     raise_updates: bool,
-    /// Options was asked for from outside (the extension's Button settings..., `/show`): it comes
-    /// to the front once shown, or it would open behind the browser (#77).
-    raise_options: bool,
     /// When MDM started (the update check waits a few seconds after it).
     started: Instant,
     /// When this run last checked for updates by itself (seconds since the epoch).
@@ -584,9 +600,10 @@ pub struct App {
     progress: Vec<Progress>,
     complete: Vec<Complete>,
     settings: Settings,
-    speed_settings: Option<dialogs::SpeedSettings>,
-    scheduler: Option<crate::scheduler::Scheduler>,
-    options: Option<crate::options::OptionsDialog>,
+    /// Options, shown in the main window in the panes' place (plan 11a), with the Scheduler
+    /// (11b1), Speed Limiter settings, Torrent settings and the browser extension (11b2) as
+    /// sections of it.
+    settings_page: Option<crate::settingspage::SettingsPage>,
     /// Downloads to finish off once stopped: Download File Info was cancelled after an early
     /// start (`None`: the download and its data go), or its file was given another place
     /// (`Some((dest, start))`: the data so far goes, it starts over there when `start`).
@@ -639,7 +656,6 @@ pub struct App {
     torrent_waiting: std::collections::VecDeque<(String, Option<crate::torrents::Remote>)>,
     /// Add torrent closed this frame: the next waiting one opens after a frame without it.
     torrent_closed: bool,
-    torrent_settings: Option<crate::torrentdlg::TorrentSettings>,
     /// Right-click → Torrent → Add trackers… (#39).
     add_trackers: Option<crate::torrentdlg::AddTrackers>,
     torrent_files: Option<crate::torrentfiles::TorrentFiles>,
@@ -701,9 +717,10 @@ pub struct App {
     helper_started: HashMap<u64, Option<u64>>,
     helper_own: HashMap<u64, Option<u64>>,
     limit_restarts: Vec<u64>,
-    find: Option<crate::find::Find>,
-    /// The last search, for Find Next.
-    last_find: Option<crate::find::Query>,
+    /// The title bar's search (1.0.1): what it filters the list by, kept for Find Next.
+    find: crate::find::Query,
+    /// The search field's dropdown and Ctrl+F's request.
+    find_bar: crate::find::Bar,
     /// A message with OK: its window title and message: "Cannot find …", an export that failed…
     notice: Option<(&'static str, String)>,
     /// The list files Import is reading, beside the window (upstream issue 805).
@@ -811,36 +828,7 @@ pub struct App {
     commands: std::sync::mpsc::Receiver<ipc::Incoming>,
 }
 
-/// Where an accepted address goes, in Add URL's order (plan 06): `route_of` picks it,
-/// `App::route_new_url` opens it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Route {
-    /// A magnet link: Add torrent.
-    Magnet,
-    /// A .torrent's address (#39): Add torrent fetches it.
-    TorrentUrl,
-    /// A video's page (YouTube, Vimeo…): the video window.
-    VideoPage,
-    /// An image gallery's page (#58): gallery-dl.
-    GalleryPage,
-    /// Anything else: the duplicate check, then Download File Info.
-    File,
-}
-
-/// The route for an accepted address: the first check that holds wins, in this order.
-fn route_of(url: &url::Url) -> Route {
-    if url.scheme() == "magnet" {
-        Route::Magnet
-    } else if crate::torrents::is_torrent_url(url, None, None) {
-        Route::TorrentUrl
-    } else if mdm_tools::pages::is_video_page(url) {
-        Route::VideoPage
-    } else if mdm_tools::pages::is_gallery_page(url) {
-        Route::GalleryPage
-    } else {
-        Route::File
-    }
-}
+use crate::addkind::{Route, route_of};
 
 /// `/show paste:<address>`'s address (plan 06, requirement 21.2): what follows `paste:`,
 /// trimmed. None for another name or an empty address. The address comes in lower case
@@ -848,6 +836,15 @@ fn route_of(url: &url::Url) -> Route {
 fn show_paste_arg(name: &str) -> Option<&str> {
     let address = name.strip_prefix("paste:")?.trim();
     (!address.is_empty()).then_some(address)
+}
+/// `/show mode[:light|:dark]`: does the light/dark button's switch run, the windows showing
+/// `dark` now? `mode` alone always (a click); `mode:light` / `mode:dark` only to reach that side.
+fn show_mode_switches(arg: &str, dark: bool) -> bool {
+    match arg {
+        "light" => dark,
+        "dark" => !dark,
+        _ => true,
+    }
 }
 /// Is this `/show details` (plan 06, requirement 21.1)? Only the bare name: it takes no
 /// argument (`details:x` is not it).
@@ -869,6 +866,42 @@ fn show_details_pick<'a>(items: impl Iterator<Item = &'a Item> + Clone) -> Optio
 /// text box keeps them, as on dev, except the paste bar's field while it is empty (D12).
 fn menu_keys_blocked(text_edit_focused: bool, is_paste_field: bool, paste_empty: bool) -> bool {
     text_edit_focused && !(is_paste_field && paste_empty)
+}
+
+/// A dropped file Import reads: a list of addresses (.txt, .ef2, .htm, .csv).
+fn is_list_file(s: &str) -> bool {
+    let p = std::path::Path::new(s);
+    p.extension().is_some_and(|e| {
+        ["txt", "ef2", "htm", "html", "csv"]
+            .contains(&e.to_string_lossy().to_ascii_lowercase().as_str())
+    }) && p.is_file()
+}
+
+/// The toolbar's Add ▾ menu: the Add window, a .torrent file, the clipboard, Batch download.
+/// RSS feeds and Torrent settings, on the old Add Torrent arrow, stay in the Tasks menu.
+fn add_drop_entries() -> Vec<MenuEntry<Cmd>> {
+    use MenuEntry::{Item as I, Sep};
+    vec![
+        // i18n: Add ▾: the Add window (links, magnets, video pages)
+        I("&Add links or a magnet...", Cmd::AddUrl, true, false),
+        // i18n: Add ▾: pick a .torrent file on this computer
+        I(
+            "Open a .&torrent file...",
+            Cmd::OpenTorrentFile,
+            true,
+            false,
+        ),
+        // i18n: Add ▾: what was copied, into the paste bar
+        I(
+            "Add from the &clipboard",
+            Cmd::AddFromClipboard,
+            true,
+            false,
+        ),
+        Sep,
+        // i18n: Add ▾: File → Add batch download
+        I("&Batch download...", Cmd::Batch(false), true, false),
+    ]
 }
 
 /// The command a details pane button runs on the shown download (Requirement 15.5, D10): Show
@@ -899,8 +932,9 @@ fn take_menu_text(ctx: &egui::Context, menu_open: bool) {
 /// The main window's shortcut keys at the end of `App::paint` (no menu or popup open, no command
 /// chosen yet), the command they run. The full list: Help → Keyboard shortcuts (`help.rs`).
 ///
-/// - Ctrl+F finds, F3 finds the next match (Downloads menu); Ctrl+N adds a download (not in
-///   IDM); Ctrl+M as IDM and F2 as renaming in Explorer move or rename. These are consumed
+/// - Ctrl+F finds, F3 finds the next match (Downloads menu); Ctrl+N opens Add and Ctrl+O
+///   Open a .torrent file (not in IDM); Ctrl+M as IDM and F2 as renaming in Explorer move or
+///   rename. These are consumed
 ///   whatever has the focus (no text box answers them); of several in one frame Find wins, then
 ///   Find next, Add, Move/rename (Ctrl+M first: F2 is then left in the input).
 /// - Else, while no widget is `focused` (a text box, Find, a filter or the paste field, has the
@@ -909,16 +943,23 @@ fn take_menu_text(ctx: &egui::Context, menu_open: bool) {
 ///   Shift+Delete as Cut (Ctrl+X is Cut too, without Shift).
 fn shortcut_cmd(i: &mut egui::InputState, focused: bool) -> Option<Cmd> {
     let find = i.consume_key(egui::Modifiers::COMMAND, egui::Key::F);
+    // Shift+F3 first: F3's pattern (no modifiers) matches Shift+F3 too.
+    let previous = i.consume_key(egui::Modifiers::SHIFT, egui::Key::F3);
     let next = i.consume_key(egui::Modifiers::NONE, egui::Key::F3);
     let add = i.consume_key(egui::Modifiers::COMMAND, egui::Key::N);
+    let torrent = i.consume_key(egui::Modifiers::COMMAND, egui::Key::O);
     let rename = i.consume_key(egui::Modifiers::COMMAND, egui::Key::M)
         || i.consume_key(egui::Modifiers::NONE, egui::Key::F2);
     if find {
         return Some(Cmd::Find);
+    } else if previous {
+        return Some(Cmd::FindPrevious);
     } else if next {
         return Some(Cmd::FindNext);
     } else if add {
         return Some(Cmd::AddUrl);
+    } else if torrent {
+        return Some(Cmd::OpenTorrentFile);
     } else if rename {
         return Some(Cmd::MoveRename);
     }
@@ -1303,6 +1344,8 @@ impl App {
         if settings.launch_on_startup && mdm_ipc::portable_dir().is_none() {
             crate::win32::update_run_at_startup();
         }
+        // Browser integration: a registration that leads nowhere is repaired (upstream issue 818).
+        crate::extension::repair_at_start();
         // The categories, for code that only has a `Category` (the list's own too).
         settings.publish_categories();
         // The remote control (#141): off unless Options → Remote turned it on.
@@ -1402,6 +1445,11 @@ impl App {
             move_many_for: Vec::new(),
             list_view: view,
             add_url: None,
+            pages_waiting: Default::default(),
+            pages_closed: false,
+            batch_waiting: Default::default(),
+            batch_closed: false,
+            clip_paste: Default::default(),
             about: None,
             updates: None,
             shortcuts: None,
@@ -1414,7 +1462,6 @@ impl App {
             extension_weighed: false,
             auto_update: None,
             raise_updates: false,
-            raise_options: false,
             started: Instant::now(),
             update_checked_this_run: None,
             file_info: None,
@@ -1423,9 +1470,7 @@ impl App {
             progress: Vec::new(),
             complete: Vec::new(),
             settings,
-            speed_settings: None,
-            scheduler: None,
-            options: None,
+            settings_page: None,
             category_dlg: None,
             category_for_file_info: false,
             grabber: None,
@@ -1456,7 +1501,6 @@ impl App {
             torrent_dlg: None,
             torrent_waiting: Default::default(),
             torrent_closed: false,
-            torrent_settings: None,
             add_trackers: None,
             torrent_files: None,
             rss: Default::default(),
@@ -1487,8 +1531,8 @@ impl App {
             helper_started: HashMap::new(),
             helper_own: HashMap::new(),
             limit_restarts: Vec::new(),
-            find: None,
-            last_find: None,
+            find: crate::find::Query::default(),
+            find_bar: crate::find::Bar::default(),
             notice: None,
             importing: Default::default(),
             save_failed: None,
@@ -1710,20 +1754,35 @@ impl App {
     }
 
     /// The strip under the list: how many downloads are shown and selected, how many run and
-    /// how fast in all (beyond IDM, which has no status bar).
+    /// how fast in all (beyond IDM, which has no status bar), and at its end the light/dark
+    /// button (1.0.1): true when it was clicked.
     fn status_strip(
         &self,
-        ui: &Ui,
+        ui: &mut Ui,
         layout: &chrome::Layout,
         o: Pos2,
         w: f32,
         h: f32,
         shown: usize,
-    ) {
-        let p = ui.painter();
+    ) -> bool {
+        let p = &ui.painter().clone();
         let top = o.y + layout.strip_top(h);
         let n = shown as u64;
-        let mut left = crate::i18n::tn(n, "{n} download", "{n} downloads");
+        // While the search or a filter narrows the list: how many of the view's it shows.
+        let mut left = if self.find.active() || list::any_filter(&self.list) {
+            let all = self
+                .items
+                .iter()
+                .filter(|i| self.in_view(self.view, i))
+                .count() as u64;
+            crate::i18n::fmt(
+                // i18n: the status strip while a search or a filter narrows the list: {shown} downloads shown of {n}
+                &crate::i18n::tn(all, "{shown} of {n} download", "{shown} of {n} downloads"),
+                &[("shown", &n.to_string())],
+            )
+        } else {
+            crate::i18n::tn(n, "{n} download", "{n} downloads")
+        };
         let selected = self.selection.ids().len() as u64;
         if selected > 1 {
             left += "   ";
@@ -1756,7 +1815,16 @@ impl App {
         let right_w = right
             .as_ref()
             .map_or(0.0, |r| winui::text_width_font(p, font.clone(), r).ceil());
-        let shown = winui::ellipsize(p, &font, &left, (w - 36.0 - right_w).max(0.0));
+        // The light/dark button at the trailing end, 4 in, centred in the strip.
+        let mode = egui::Rect::from_min_size(
+            pos2(
+                o.x + w - 4.0 - chrome::MODE_BUTTON.x,
+                (top + 1.0 + (layout.strip_h - 1.0 - chrome::MODE_BUTTON.y) / 2.0).round(),
+            ),
+            chrome::MODE_BUTTON,
+        );
+        let end = w - 8.0 - chrome::MODE_BUTTON.x;
+        let shown = winui::ellipsize(p, &font, &left, (end - 24.0 - right_w).max(0.0));
         // The mockup's secondary ink.
         let ink = c.text_secondary;
         let drawn = winui::text_font(p, font.clone(), o.x + 12.0, baseline, &shown, ink);
@@ -1764,9 +1832,16 @@ impl App {
             winui::full_on_hover(ui, drawn, "strip-left", &left);
         }
         if let Some(right) = right {
-            let x = o.x + w - 12.0 - right_w;
+            let x = o.x + end - right_w;
             winui::text_font(p, font, x, baseline, &right, ink);
         }
+        chrome::mode_button(
+            ui,
+            mode,
+            crate::theme::dark(),
+            ink,
+            !crate::theme::one_sided(),
+        )
     }
 
     /// "2 downloading, 1.25 MB/sec" while downloads run (the status strip, the tray's tip).
@@ -1792,7 +1867,7 @@ impl App {
     /// The list's rows as drawn: the view's downloads in the list's order that pass the column
     /// filters (Find, Select all and scrolling count these, so they match what is shown).
     fn shown_ids(&self) -> Vec<u64> {
-        if self.list.filters.iter().all(Option::is_none) {
+        if self.list.filters.iter().all(Option::is_none) && !self.find.active() {
             return self.view_ids();
         }
         self.list_rows().0
@@ -1805,8 +1880,12 @@ impl App {
             .iter()
             .flat_map(|q| q.items.iter().copied())
             .collect();
+        // The search first, on the downloads themselves (nothing allocated per download), so
+        // only its matches get rows built.
+        let search = self.find.active();
         self.view_items()
             .into_iter()
+            .filter(|it| !search || self.find.matches(it))
             .map(|it| (it.id, self.row(it, &queued)))
             .filter(|(_, r)| list::matches(&self.list, r))
             .unzip()
@@ -2034,7 +2113,7 @@ impl App {
                 }
             } else if !live {
                 self.start(id, true);
-            } else if !self.progress.iter().any(|p| p.id == id) {
+            } else if self.settings.show_progress && !self.progress.iter().any(|p| p.id == id) {
                 self.progress
                     .push(Progress::new(id, self.settings.show_complete));
             }
@@ -2461,8 +2540,37 @@ impl App {
         let first = self.items.first().map(|i| i.id);
         let last = self.items.last().map(|i| i.id);
         let (window, tab) = name.split_once(':').unwrap_or((name, ""));
+        // Options is a page of the main window (plan 11a), the Scheduler one of its sections
+        // (11b1): every other name shows the downloads again first, the page's changes dropped
+        // (`downloads` does only that). The look's names (mode, theme, zoom, size) leave it
+        // open, for its pictures in either mode.
+        if !matches!(
+            window,
+            "options"
+                | "scheduler"
+                | "speedlimit"
+                | "torrent-settings"
+                | "mode"
+                | "theme"
+                | "zoom"
+                | "size"
+        ) {
+            self.close_settings_page();
+        }
         match window {
+            "downloads" => {}
             "addurl" => self.run(Cmd::AddUrl, None, ctx),
+            // The Add window holding the text after `add:` instead of the clipboard's links (the
+            // screenshots': `add:https://downloads.example/a.zip`), so a picture never shows
+            // what the user copied and the clipboard is never touched. The text arrives
+            // lower-cased, as every /show argument does (`mdm_ipc::parse_args`, as `paste:`).
+            "add" => {
+                if let Some(text) = name.strip_prefix("add:").map(str::trim)
+                    && !text.is_empty()
+                {
+                    self.open_add_with(text);
+                }
+            }
             // Download Later's queue selection panel, for no download (the screenshots').
             "later" if self.queue_pick.is_none() => {
                 let names = self.queues.iter().map(|q| q.name.clone()).collect();
@@ -2477,9 +2585,13 @@ impl App {
                 if let Some(address) = show_paste_arg(name) {
                     self.settings.show_paste_bar = true;
                     self.paste.fill(address);
-                    let accepted = dialogs::accept_address(&self.paste.text);
-                    if let Some(new) = crate::panes::submit(&mut self.paste, accepted) {
-                        self.route_new_url(new, ctx);
+                    match crate::panes::submit(&mut self.paste) {
+                        Some(crate::addkind::Bar::One(kind)) => self.add_kind(kind, None, ctx),
+                        Some(crate::addkind::Bar::Many(_)) => {
+                            let text = std::mem::take(&mut self.paste.pending);
+                            self.open_add_with(&text);
+                        }
+                        _ => {}
                     }
                 }
             }
@@ -2516,13 +2628,35 @@ impl App {
             // MDM_CRASH_TEST=1 only (crash.rs): the crash reports' own check.
             "crash-test" => crate::crash::test(tab),
             "batch" => self.run(Cmd::Batch(false), None, ctx),
-            "find" => self.run(Cmd::Find, None, ctx),
-            // scheduler:files, scheduler:limits and scheduler:name open it on its main queue's
-            // Files in the queue, on Download limits, or asking a new queue's name (plan 07e's
-            // screenshots).
+            // The title bar's search with text typed (find:<text>; empty clears it), and its
+            // dropdown open (find-options): screenshots. There is no Find window any more.
+            "find" => {
+                self.find.text = tab.to_owned();
+                self.list.set_keys(false);
+            }
+            // The status bar's light/dark button, as clicked (mode), or to one side whatever the
+            // mode shown (mode:light, mode:dark: tools/lab/showcase.ps1).
+            "mode" => {
+                if show_mode_switches(tab, crate::theme::dark()) {
+                    self.run(Cmd::ToggleMode, None, ctx);
+                }
+            }
+            "find-options" => {
+                self.open_menu = None;
+                self.popup = None;
+                self.find_bar.open = true;
+            }
+            // The Scheduler's section of Options' page (plan 11b1); scheduler:files,
+            // scheduler:limits and scheduler:name open it on its main queue's Files in the
+            // queue, on Download limits, or asking a new queue's name (plan 07e's screenshots).
             "scheduler" => {
                 self.run(Cmd::Scheduler, None, ctx);
-                if let Some(s) = &mut self.scheduler {
+                if let Some(s) = self
+                    .settings_page
+                    .as_mut()
+                    .filter(|p| !p.modal())
+                    .and_then(|p| p.scheduler.as_mut())
+                {
                     match tab {
                         "files" => s.show_queue(0, true),
                         "limits" => s.show_limits(),
@@ -2571,6 +2705,17 @@ impl App {
             }
             // The main window minimized, not to the tray (tests of #162).
             "minimized" => ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true)),
+            // The main window at `<w>x<h>` points (plan 11a's screenshot of Options in the
+            // smallest window, 600x300): off-screen runs only, which ignore the saved size.
+            "size" if crate::offscreen() => {
+                if let Some((w, h)) = tab.split_once('x')
+                    && let (Ok(w), Ok(h)) = (w.parse::<f32>(), h.parse::<f32>())
+                    && w >= 600.0
+                    && h >= 300.0
+                {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(w, h)));
+                }
+            }
             // Off-screen test copies: the interface zoomed (`zoom:1.5`) while running, as a
             // display's scale changing does to every window (#89's checks).
             "zoom" if crate::offscreen() => {
@@ -2584,6 +2729,10 @@ impl App {
             // starts again (renderer.rs).
             "renderer-lost" if crate::offscreen() => crate::renderer::test_device_lost(),
             "helpers" => self.helpers = Some(crate::helpers::Helpers::new()),
+            // Torrent settings' notice that Windows' Default apps keeps another program (upstream
+            // issue 1091), as turning the switch on shows it: off-screen runs only (the
+            // screenshots'), with the names in MDM_TEST_TORRENT_DEFAULTS; nothing is changed.
+            "torrent-defaults" if crate::offscreen() => self.tell_torrent_defaults(),
             "torrent-settings" => self.run(Cmd::TorrentSettings, None, ctx),
             // The first download's: Add trackers (a torrent), its right-click menu.
             "add-trackers" if first.is_some() => self.run(Cmd::TorrentAddTrackers, first, ctx),
@@ -2843,20 +2992,41 @@ impl App {
                     "sounds" => 8,
                     "regional" => 9,
                     "remote" | "pair" => 11,
+                    // Downloads → Customize "Download progress" dialog → Edit... (upstream 1041).
+                    "progress" => 3,
+                    // The sections that were windows (plan 11b): `scheduler` also opens it.
+                    "scheduler" => crate::options::SCHEDULER_PAGE,
+                    "speed" => crate::options::SPEED_PAGE,
+                    "torrents" => crate::options::TORRENTS_PAGE,
+                    "extension" => crate::options::EXTENSION_PAGE,
                     _ => 0,
                 };
                 self.run(Cmd::Options, None, ctx);
-                self.options = self.options.take().map(|o| o.on_page(page));
-                self.raise_options = true;
-                // General → Download panels → Edit... (the video button's settings).
-                if tab == "panels" {
-                    self.options = self.options.take().map(|o| o.with_panels());
-                }
-                // A window over a page (screenshots, #192): options:test, options:account.
-                self.options = self.options.take().map(|o| o.with_window(tab));
-                // Remote → Pair a device... (the docs' screenshots, #141).
-                if tab == "pair" {
-                    self.options = self.options.take().map(|o| o.with_pairing());
+                if let Some(mut p) = self.settings_page.take() {
+                    p.options = p.options.on_page(page);
+                    // General → Download panels → Edit... (the video button's settings).
+                    if tab == "panels" {
+                        p.options = p.options.with_panels();
+                    }
+                    // A window over a page (screenshots, #192): options:test, options:account,
+                    // options:progress.
+                    p.options = p.options.with_window(tab);
+                    // Remote → Pair a device... (the docs' screenshots, #141).
+                    if tab == "pair" {
+                        p.options = p.options.with_pairing();
+                    }
+                    // General with a change in the draft (Confirm before deleting downloads
+                    // flipped), its save bar live, and Back's question over it (plan 11a's
+                    // screenshots): options:changed, options:back. Nothing is saved.
+                    if matches!(tab, "changed" | "back") && !p.dirty() {
+                        let mut s = p.options.result();
+                        s.confirm_delete = !s.confirm_delete;
+                        p.options.set_draft(s);
+                    }
+                    if tab == "back" {
+                        p.back();
+                    }
+                    self.settings_page = Some(p);
                 }
             }
             _ => {}
@@ -3198,8 +3368,10 @@ impl App {
         }
     }
 
-    /// Start or resume a download; `show` opens its progress dialog (IDM's default).
+    /// Start or resume a download; `show` opens its progress dialog (IDM's default), unless
+    /// Options → Downloads → Customize "Download progress" dialog turned it off (upstream 1041).
     fn start(&mut self, id: u64, show: bool) {
+        let show = show && self.settings.show_progress;
         self.stopped_by_hand.remove(&id);
         let rt = self.rt.clone();
         let Some(item) = self.item(id) else { return };
@@ -3911,10 +4083,18 @@ impl App {
                 TrayCmd::Batch => Cmd::Batch(false),
                 TrayCmd::LimiterOn => Cmd::LimiterOn,
                 TrayCmd::LimiterOff => Cmd::LimiterOff,
-                TrayCmd::Scheduler => Cmd::Scheduler,
+                // A section of the main window's page now (plan 11b1): the window comes back.
+                TrayCmd::Scheduler => {
+                    self.show_window(ctx);
+                    Cmd::Scheduler
+                }
                 TrayCmd::StartQueue => Cmd::StartQueue(0),
                 TrayCmd::StopQueue => Cmd::StopQueue(0),
-                TrayCmd::Options => Cmd::Options,
+                // A page of the main window now (plan 11a): the window comes back with it.
+                TrayCmd::Options => {
+                    self.show_window(ctx);
+                    Cmd::Options
+                }
                 TrayCmd::Exit => Cmd::Exit,
                 TrayCmd::ShowDownload(id) => {
                     self.open_item(id);
@@ -4165,30 +4345,31 @@ impl App {
         }
     }
 
-    /// Select the next download matching `q` after the selection: in the list as shown, else
-    /// in all downloads (switching the view to All Downloads).
-    fn find_next(&mut self, q: &crate::find::Query) {
-        let shown = self.shown_ids();
+    /// Select the next download the search matches after the selection (the one before it when
+    /// `back`), wrapping round: in the list as shown (which the search filters), else in all
+    /// downloads (switching the view to All Downloads). None anywhere: the empty list and the
+    /// status strip's "0 of N" say so.
+    fn find_next(&mut self, back: bool) {
+        let q = self.find.clone();
         let found = q
-            .next(&shown, &self.items, self.selection.focus())
+            .step(&self.shown_ids(), &self.items, self.selection.focus(), back)
             .or_else(|| {
+                if !self.items.iter().any(|i| q.matches(i)) {
+                    return None;
+                }
+                // All Downloads, as it would show them (its column filters too): the view
+                // changes only when a match is there to select.
+                let was = self.view;
                 self.view = View::All;
-                q.next(&self.shown_ids(), &self.items, self.selection.focus())
+                let found = q.step(&self.shown_ids(), &self.items, self.selection.focus(), back);
+                if found.is_none() {
+                    self.view = was;
+                }
+                found
             });
-        match found {
-            Some(id) => {
-                self.selection.set(id);
-                self.list.scroll_to = self.shown_ids().iter().position(|x| *x == id);
-            }
-            None => {
-                self.notice = Some((
-                    crate::i18n::mark("Find file"),
-                    crate::i18n::fmt(
-                        crate::i18n::t("Cannot find \"{text}\""),
-                        &[("text", q.text.trim())],
-                    ),
-                ))
-            }
+        if let Some(id) = found {
+            self.selection.set(id);
+            self.list.scroll_to = self.shown_ids().iter().position(|x| *x == id);
         }
     }
 
@@ -4528,6 +4709,50 @@ impl App {
             .iter()
             .filter_map(|i| i.torrent.as_ref().map(|t| t.hash.clone()))
             .collect()
+    }
+
+    /// Torrent settings' switch just turned on (upstream issue 1091): when Windows still opens
+    /// magnet links or .torrent files with another program (a choice in Default apps, which no
+    /// program may change), say which and open Settings at Grabbit's Default apps page, where the
+    /// user picks it. An instance off the screens (a test's) never asks this computer: it takes
+    /// the names in MDM_TEST_TORRENT_DEFAULTS (`;` between them), and its log says what would
+    /// have opened.
+    fn tell_torrent_defaults(&mut self) {
+        let others: Vec<String> = if crate::offscreen() {
+            std::env::var("MDM_TEST_TORRENT_DEFAULTS")
+                .unwrap_or_default()
+                .split(';')
+                .map(str::trim)
+                .filter(|n| !n.is_empty())
+                .map(str::to_owned)
+                .collect()
+        } else {
+            crate::win32::torrent_defaults_elsewhere()
+        };
+        if others.is_empty() {
+            return;
+        }
+        tracing::info!(
+            "torrents: Windows opens magnet links or .torrent files with {}",
+            others.join(", ")
+        );
+        self.notice = Some((
+            crate::i18n::mark("Torrent settings"),
+            crate::i18n::fmt(
+                // i18n: after ticking "Open magnet links and .torrent files with Grabbit", when Windows' Default apps keeps another app; {apps}: their names. "MAGNET" as Windows' Default apps lists it
+                crate::i18n::t(
+                    "Windows still opens magnet links or .torrent files with {apps}, chosen in Windows' Default apps, where only you can change it. Settings opens there now: pick Grabbit for MAGNET and .torrent.",
+                ),
+                &[("apps", &crate::i18n::isolate(&others.join(", ")))],
+            ),
+        ));
+        // Off the screens (a test's), this computer's registrations aren't read at all.
+        let page = if crate::offscreen() {
+            crate::win32::default_apps_uri(false)
+        } else {
+            crate::win32::default_apps_page()
+        };
+        crate::launch::open_page(&page);
     }
 
     /// The hashes librqbit should keep or restore in its session.
@@ -5236,8 +5461,29 @@ impl App {
     /// Batch download → OK: every address goes to the main download queue (IDM's default; its
     /// queue selection panel is not built yet).
     fn add_batch(&mut self, added: crate::batch::Added) {
+        self.add_many(
+            added.urls,
+            added.login,
+            crate::i18n::mark("by batch download"),
+            false,
+            self.settings.queue_panel_batch,
+        );
+    }
+
+    /// Addresses added at once, without Download File Info (Batch download, Add's Later and
+    /// "Ask where to save each one" off): each in its category's folder under the address's
+    /// name, then started (`start`) or put in a queue, the queue selection panel shown if
+    /// `panel` (Batch download's own setting, or Download Later's for Add's Later).
+    fn add_many(
+        &mut self,
+        urls: Vec<url::Url>,
+        login: Option<(String, String)>,
+        source: &'static str,
+        start: bool,
+        panel: bool,
+    ) {
         let mut ids = Vec::new();
-        for url in added.urls {
+        for url in urls {
             let name = mdm_engine::naming::file_name(None, &url);
             let category = Category::of(&name);
             let dir = self.settings.category_dir(category, &self.downloads);
@@ -5250,15 +5496,22 @@ impl App {
                 category,
                 String::new(),
                 None,
-                added.login.clone(),
+                login.clone(),
                 Default::default(),
-                crate::i18n::mark("by batch download"),
+                source,
             );
             self.name_guessed(id, true);
             self.number_at_start(id);
             ids.push(id);
         }
-        self.queue_later(ids, self.settings.queue_panel_batch);
+        if start {
+            let one = ids.len() == 1;
+            for id in ids {
+                self.start(id, one);
+            }
+        } else {
+            self.queue_later(ids, panel);
+        }
         self.dirty = true;
     }
 
@@ -5659,7 +5912,112 @@ impl App {
         Ok(answer)
     }
 
-    /// Options → OK: keep the new settings and act on what changed.
+    /// A fresh Options draft of the settings as they are now, on page `page`.
+    fn options_draft(&self, page: usize) -> crate::options::OptionsDialog {
+        crate::options::OptionsDialog::new(
+            &self.settings,
+            &self.downloads,
+            self.host_limits.learned(),
+        )
+        .with_remote(self.remote.clone())
+        .on_page(page)
+    }
+
+    /// Options' draft dropped (Discard, Back's Yes, another `/show`): what it did live is
+    /// undone, as the Options window's Cancel did: categories it added, changed or restored are
+    /// published as they are again, and the remote control listens as before Pair a device...
+    /// moved it.
+    fn discard_options(&self) {
+        self.settings.publish_categories();
+        if let Some(r) = &self.remote {
+            r.apply(crate::remote::config(&self.settings));
+        }
+    }
+
+    /// Options' page closed, its changes dropped; the downloads show again.
+    fn close_settings_page(&mut self) {
+        if let Some(p) = self.settings_page.take() {
+            // Pair a device... goes with the page (another `/show`): its code no longer pairs.
+            if p.options.pairing()
+                && let Some(r) = &self.remote
+            {
+                r.stop_pairing();
+            }
+            self.discard_options();
+        }
+    }
+
+    /// What Options' page asked for (plan 11a, D2): Save merges what the page changed into the
+    /// settings and applies it, Discard drops it; either way the page stays, on a fresh draft
+    /// of the same page. Close goes back to the downloads.
+    fn settings_page_event(&mut self, ev: crate::settingspage::PageEvent) {
+        use crate::settingspage::PageEvent;
+        let Some(p) = &mut self.settings_page else {
+            return;
+        };
+        let page = p.page();
+        let saved = ev == PageEvent::Save;
+        match ev {
+            PageEvent::Save => {
+                // The Scheduler's draft first (11b1), then only what Options' pages changed:
+                // Download limits, in both, keep the Scheduler's unless Options changed them.
+                let mut actions = Vec::new();
+                if let Some(s) = &mut p.scheduler {
+                    s.save(&self.queues, &mut actions);
+                }
+                for a in actions {
+                    self.scheduler_action(a);
+                }
+                // Then the Speed limiter's and Torrents' drafts, each only if changed (as OK
+                // set them), before Options' (11b2).
+                let Some(p) = &self.settings_page else {
+                    return;
+                };
+                let speed = p.speed.as_ref().filter(|s| s.dirty()).map(|s| s.choice());
+                let torrents = p
+                    .torrents
+                    .as_ref()
+                    .filter(|t| t.dirty())
+                    .map(|t| t.choice());
+                if let Some(c) = speed {
+                    self.apply_speed(c);
+                }
+                if let Some(c) = torrents {
+                    self.apply_torrent_settings(c);
+                }
+                let Some(p) = &self.settings_page else {
+                    return;
+                };
+                let new =
+                    Settings::merge_changes(&self.settings, &p.options.from, &p.options.result());
+                self.apply_options(new);
+            }
+            PageEvent::Discard => self.discard_options(),
+            PageEvent::Close => {
+                self.close_settings_page();
+                return;
+            }
+        }
+        let fresh = self.options_draft(page);
+        let downloads = self.downloads.clone();
+        if let Some(p) = &mut self.settings_page {
+            p.options = fresh.keep_view(&p.options, saved, &downloads);
+            // A fresh draft of the Scheduler, the Speed limiter and Torrents too, once visited.
+            if let Some(old) = &p.scheduler {
+                p.scheduler = Some(
+                    crate::scheduler::Scheduler::new(&self.queues, &self.settings).keep_view(old),
+                );
+            }
+            if p.speed.is_some() {
+                p.speed = Some(dialogs::SpeedSettings::new(&self.settings));
+            }
+            if p.torrents.is_some() {
+                p.torrents = Some(crate::torrentdlg::TorrentSettings::new(&self.settings));
+            }
+        }
+    }
+
+    /// Options → Save: keep the new settings and act on what changed.
     fn apply_options(&mut self, new: Settings) {
         new.publish_categories();
         // Portable mode writes nothing outside its folder (the option is off there).
@@ -5689,6 +6047,88 @@ impl App {
             && !file.is_empty()
         {
             crate::options::play_sound(file);
+        }
+    }
+
+    /// Speed Limiter settings' Save (plan 11b2; its window's OK until then).
+    fn apply_speed(&mut self, c: dialogs::SpeedChoice) {
+        self.settings.speed_limit_kb = c.kb;
+        self.settings.limiter_on_startup = c.on_startup;
+        self.settings.global_limit_on = c.global_on;
+        self.settings.global_limit_kb = c.global_kb;
+        self.settings.global_only_active = c.only_active;
+        self.apply_speed_limit();
+        self.dirty = true;
+    }
+
+    /// Torrent settings' Save (plan 11b2; its window's OK until then).
+    fn apply_torrent_settings(&mut self, c: crate::torrentdlg::TorrentChoice) {
+        let crate::torrentdlg::TorrentChoice {
+            share,
+            assoc,
+            net,
+            upload,
+            seeding,
+        } = c;
+        // The network: the next torrent session takes it (torrent_tick).
+        net.apply(&mut self.settings);
+        // The upload limit: at once (torrent_tick sets it on the session).
+        (
+            self.settings.torrent_upload_on,
+            self.settings.torrent_upload_kb,
+        ) = upload;
+        // Seeding limits: the tick stops those over them; raised, the finished torrents now
+        // under them are shared again (when sharing stays on).
+        let s = &mut self.settings;
+        let before = s.sharing_limits();
+        s.torrent_stop_ratio_on = seeding.ratio_on;
+        s.torrent_stop_ratio = seeding.ratio;
+        s.torrent_stop_minutes_on = seeding.minutes_on;
+        s.torrent_stop_minutes = seeding.minutes;
+        if share
+            && share == self.settings.torrent_keep_sharing
+            && before != self.settings.sharing_limits()
+        {
+            self.torrent_host.set_sharing(
+                &self.rt,
+                self.session_hashes(),
+                self.complete_torrents(),
+                true,
+            );
+        }
+        if share != self.settings.torrent_keep_sharing {
+            self.settings.torrent_keep_sharing = share;
+            self.torrent_host.set_sharing(
+                &self.rt,
+                self.session_hashes(),
+                self.complete_torrents(),
+                share,
+            );
+        }
+        if Some(assoc) != self.settings.torrent_associations {
+            self.settings.torrent_associations = Some(assoc);
+            // Not from an instance off the screens (a test's), as at start.
+            if !crate::offscreen() {
+                crate::win32::set_torrent_handlers(assoc);
+            }
+            // A choice recorded in Windows' Default apps for another program stays first, and
+            // only the user can change it (upstream issue 1091): Grabbit says so and opens its
+            // page there.
+            if assoc {
+                self.tell_torrent_defaults();
+            }
+        }
+        self.dirty = true;
+    }
+
+    /// Options' page on a moved window's section (plan 11b2), opened if need be; not while
+    /// a small dialog of the page waits for an answer (it stays where it is).
+    fn open_section(&mut self, page: usize, ctx: &egui::Context) {
+        self.run(Cmd::Options, None, ctx);
+        if let Some(p) = &mut self.settings_page
+            && !p.modal()
+        {
+            p.show_section(page);
         }
     }
 
@@ -6006,7 +6446,14 @@ impl App {
             .and_then(|id| self.items.iter().find(|i| i.id == id))
             .is_some_and(|i| i.moved_away);
         match cmd {
-            Cmd::AddUrl => self.add_url = Some(AddUrl::from_clipboard(&self.settings.url_history)),
+            Cmd::AddUrl => {
+                if self.add_url.is_none() {
+                    let mut w = AddWindow::from_clipboard();
+                    w.ask = self.settings.add_ask_where;
+                    self.add_url = Some(w);
+                }
+            }
+            Cmd::AddFromClipboard => self.clip_paste = crate::clipboard::Prefill::ask(),
             Cmd::Exit => self.quit(ctx),
             Cmd::Stop => {
                 for id in many {
@@ -6073,13 +6520,10 @@ impl App {
                 self.dirty = true;
             }
             Cmd::ToggleCategories => self.show_categories = !self.show_categories,
-            Cmd::ToggleDarkMode => {
-                self.settings.dark_mode_support = !self.settings.dark_mode_support;
-                self.theme_checked = None;
-                self.dirty = true;
-            }
-            Cmd::ToggleAlwaysDark => {
-                self.settings.always_dark = !self.settings.always_dark;
+            Cmd::ToggleMode => {
+                let (support, always) = crate::theme::toggled(crate::theme::dark());
+                self.settings.dark_mode_support = support;
+                self.settings.always_dark = always;
                 self.theme_checked = None;
                 self.dirty = true;
             }
@@ -6213,26 +6657,30 @@ impl App {
                     dialogs::show_download_in_folder(&d, moved_away);
                 }
             }
-            Cmd::ToggleColumn(i) => self.list.visible[i] = !self.list.visible[i],
+            Cmd::ToggleColumn(i) => {
+                self.list.visible[i] = list::always_shown(i) || !self.list.visible[i];
+            }
             Cmd::LimiterOn | Cmd::LimiterOff => {
                 self.settings.speed_limit_on = cmd == Cmd::LimiterOn;
                 self.apply_speed_limit();
                 self.dirty = true;
             }
-            Cmd::LimiterSettings => {
-                self.speed_settings = Some(dialogs::SpeedSettings::new(&self.settings));
-            }
+            // A section of Options' page (plan 11b2), as the Scheduler's.
+            Cmd::LimiterSettings => self.open_section(crate::options::SPEED_PAGE, ctx),
+            // The title bar's search field takes the keys, its text selected.
+            // Not while the title bar has no room for it: nothing to give the keys to.
             Cmd::Find => {
-                if self.find.is_none() {
-                    self.find = Some(crate::find::Find::new(self.last_find.as_ref()));
-                } else {
-                    dialogs::raise(ctx, dialogs::dialog_viewport("find"));
+                if self.find_bar.ask_focus() {
+                    self.list.set_keys(false);
                 }
             }
-            Cmd::FindNext => match self.last_find.clone() {
-                Some(q) => self.find_next(&q),
-                None => self.find = Some(crate::find::Find::new(None)),
-            },
+            Cmd::FindNext | Cmd::FindPrevious if !self.find.active() => {
+                if self.find_bar.ask_focus() {
+                    self.list.set_keys(false);
+                }
+            }
+            Cmd::FindNext => self.find_next(false),
+            Cmd::FindPrevious => self.find_next(true),
             Cmd::VideoPage => {
                 if self.video_dlg.is_none() {
                     self.video_dlg = Some(self.video_dialog(None));
@@ -6254,12 +6702,7 @@ impl App {
                     self.tell_friend = Some(crate::help::TellFriend::new());
                 }
             }
-            Cmd::TorrentSettings => {
-                if self.torrent_settings.is_none() {
-                    self.torrent_settings =
-                        Some(crate::torrentdlg::TorrentSettings::new(&self.settings));
-                }
-            }
+            Cmd::TorrentSettings => self.open_section(crate::options::TORRENTS_PAGE, ctx),
             Cmd::RssFeeds(rules) => {
                 if self.rss_dlg.is_none() {
                     self.rss_dlg = Some(crate::rssdlg::RssWindow::new(&self.rss, rules));
@@ -6321,39 +6764,34 @@ impl App {
                     self.batch = Some(crate::batch::Batch::new(clipboard));
                 }
             }
+            // A page of the main window in the panes' place (plan 11a); open already, it stays
+            // as it is.
             Cmd::Options => {
-                if self.options.is_none() {
-                    self.options = Some(
-                        crate::options::OptionsDialog::new(
-                            &self.settings,
-                            &self.downloads,
-                            self.host_limits.learned(),
-                        )
-                        .with_remote(self.remote.clone()),
-                    );
-                } else {
-                    dialogs::raise(ctx, dialogs::dialog_viewport("options"));
-                }
-            }
-            Cmd::Scheduler => {
-                if self.scheduler.is_none() {
-                    self.scheduler = Some(crate::scheduler::Scheduler::new(
-                        &self.queues,
-                        &self.settings,
+                self.open_menu = None;
+                self.popup = None;
+                if self.settings_page.is_none() {
+                    self.settings_page = Some(crate::settingspage::SettingsPage::new(
+                        self.options_draft(0),
                     ));
-                } else {
-                    dialogs::raise(ctx, dialogs::dialog_viewport("scheduler"));
                 }
             }
-            Cmd::EditQueue(_) | Cmd::ScheduleQueue(_) | Cmd::NewQueue => {
-                let s = self.scheduler.get_or_insert_with(|| {
-                    crate::scheduler::Scheduler::new(&self.queues, &self.settings)
-                });
-                match cmd {
-                    // Edit queue: its files; Schedule: when it runs.
-                    Cmd::EditQueue(q) => s.show_queue(q, true),
-                    Cmd::ScheduleQueue(q) => s.show_queue(q, false),
-                    _ => s.new_queue(),
+            // A section of Options' page (plan 11b1): the page opens on it (or goes to it), its
+            // draft made on its first visit and kept while the page is open.
+            Cmd::Scheduler | Cmd::EditQueue(_) | Cmd::ScheduleQueue(_) | Cmd::NewQueue => {
+                self.run(Cmd::Options, None, ctx);
+                // Not while a small dialog of the page waits for an answer (Enter queue
+                // name, Delete's question, an Options page's): it stays on its section.
+                if let Some(p) = &mut self.settings_page
+                    && !p.modal()
+                {
+                    let s = p.show_scheduler(&self.queues, &self.settings);
+                    match cmd {
+                        // Edit queue: its files; Schedule: when it runs.
+                        Cmd::EditQueue(q) => s.show_queue(q, true),
+                        Cmd::ScheduleQueue(q) => s.show_queue(q, false),
+                        Cmd::NewQueue => s.new_queue(),
+                        _ => {}
+                    }
                 }
             }
             // A dialog already open (half filled in) stays.
@@ -6693,6 +7131,8 @@ impl App {
                 Sep,
                 I("Find (Ctrl-F)", Cmd::Find, true, false),
                 I("Find Next (F3)", Cmd::FindNext, true, false),
+                // i18n: Downloads menu: select the match before the selection (Shift+F3)
+                I("Find Previous (Shift+F3)", Cmd::FindPrevious, true, false),
                 I(
                     "Select &all",
                     Cmd::SelectAll,
@@ -6810,21 +7250,8 @@ impl App {
             Sub("Toolbar", false, vec![]),
             Sub("&Tray icon", false, vec![]),
             off("C&ustomize URL List..."),
-            I(
-                "Dark Mode support",
-                Cmd::ToggleDarkMode,
-                true,
-                settings.dark_mode_support,
-            ),
-            // MDM's (#60): dark whatever the system says (a desktop that reports nothing).
-            I(
-                // i18n: View menu: a check item; dark mode on, whatever the system's setting
-                "Always dark",
-                Cmd::ToggleAlwaysDark,
-                true,
-                settings.always_dark,
-            ),
-            // View → Theme (MDM's, #45), after Always dark; then Interface size (#262) and
+            // Light or dark: the status bar's button (1.0.1), no longer two View items.
+            // View → Theme (MDM's, #45); then Interface size (#262) and
             // Draw with (#89, renderer.rs).
             Self::theme_menu(&settings.theme, themes),
             Self::interface_size_menu(zoom),
@@ -6843,7 +7270,7 @@ impl App {
         // Graphite, MDM's only built-in look: chosen too when the setting names a theme MDM no
         // longer has (plan 05.5c), which is Graphite now.
         let graphite = chosen == "graphite" || crate::theme::current().id == "graphite";
-        // i18n: View → Theme: MDM's own look (rounded, amethyst and cyan), a name: keep "Graphite" as written
+        // i18n: View → Theme: MDM's own look (rounded, grey and green), a name: keep "Graphite" as written
         items.push(Radio("Graphite", Cmd::Theme("graphite"), true, graphite));
         let wal = crate::themefile::PYWAL;
         for e in themes.iter().filter(|e| e.path.is_some()) {
@@ -7069,7 +7496,8 @@ impl App {
     /// The entries of the popup menu `kind`, and the download it acts on.
     fn popup_entries(&self, kind: Popup) -> (Vec<MenuEntry<Cmd>>, Option<u64>) {
         match kind {
-            // Column chooser (IDM: right-click on the header). File Name always stays.
+            // Column chooser (IDM: right-click on the header). File Name, Size and Status always
+            // stay (list::always_shown).
             Popup::Columns => {
                 let mut e: Vec<MenuEntry<Cmd>> = list::TITLES
                     .iter()
@@ -7083,7 +7511,12 @@ impl App {
                             crate::i18n::tc("column", t)
                         };
                         let name = crate::chrome::label(&name.replace('&', "&&"));
-                        MenuEntry::Item(name, Cmd::ToggleColumn(i), i != 0, self.list.visible[i])
+                        MenuEntry::Item(
+                            name,
+                            Cmd::ToggleColumn(i),
+                            !list::always_shown(i),
+                            self.list.visible[i],
+                        )
                     })
                     .collect();
                 e.push(MenuEntry::Sep);
@@ -7105,16 +7538,7 @@ impl App {
             Popup::Item(None) => (self.blank_entries(), None),
             Popup::Item(id) => (self.item_entries(id), id),
             Popup::QueueDrop(start) => (self.queue_drop(start), None),
-            Popup::TorrentDrop => (
-                vec![
-                    MenuEntry::Item("Open &torrent file...", Cmd::OpenTorrentFile, true, false),
-                    MenuEntry::Item("Add &magnet link...", Cmd::AddMagnet, true, false),
-                    MenuEntry::Item("&RSS feeds...", Cmd::RssFeeds(false), true, false),
-                    MenuEntry::Sep,
-                    MenuEntry::Item("Torrent setti&ngs...", Cmd::TorrentSettings, true, false),
-                ],
-                None,
-            ),
+            Popup::AddDrop => (add_drop_entries(), None),
             Popup::Node(node) => (self.node_entries(node), None),
             Popup::DropTarget => (
                 vec![
@@ -7619,6 +8043,45 @@ impl App {
             },
         );
     }
+    /// The title bar's search field (`field`, English), where it fits: what it asks goes in
+    /// `chosen`, or happens here (Escape gives the list the keys).
+    fn find_field(
+        &mut self,
+        ui: &mut Ui,
+        field: Option<egui::Rect>,
+        key: &str,
+        chosen: &mut Option<(Cmd, Option<u64>)>,
+    ) {
+        if let Some(rc) = field {
+            match crate::find::field(
+                ui,
+                rc,
+                key,
+                &mut self.find_bar,
+                &mut self.find,
+                &mut self.list,
+            ) {
+                Some(crate::find::Event::Next) => *chosen = Some((Cmd::FindNext, None)),
+                Some(crate::find::Event::Previous) => *chosen = Some((Cmd::FindPrevious, None)),
+                Some(crate::find::Event::Leave) => {
+                    self.tree_keys = false;
+                    self.list.set_keys(true);
+                }
+                None => {}
+            }
+            // A click in the field takes the keys from the list (its selection goes grey).
+            if ui.ctx().memory(|m| m.has_focus(crate::find::field_id())) {
+                self.list.set_keys(false);
+            }
+        } else if self.find_bar.hidden(&mut self.find) {
+            // It had the keys: the list takes them back (arrows, Delete, Enter).
+            ui.ctx()
+                .memory_mut(|m| m.surrender_focus(crate::find::field_id()));
+            self.tree_keys = false;
+            self.list.set_keys(true);
+        }
+    }
+
     fn toggle(&mut self, b: Branch) {
         match b {
             Branch::All => self.all_open = !self.all_open,
@@ -7636,8 +8099,9 @@ impl App {
             tree: self.show_categories,
             tree_keys: self.tree_keys,
             menu_open: self.popup.is_some() || self.open_menu.is_some(),
-            filter_open: self.list.filter_is_open(),
-            filter_ends: self.list.filter_ends(),
+            // The search's dropdown goes round its controls as a header's filter box does.
+            filter_open: self.list.filter_is_open() || self.find_bar.open,
+            filter_ends: self.list.filter_ends().or(self.find_bar.ends),
         }
     }
 
@@ -7753,7 +8217,6 @@ impl App {
         let window_min = full.min;
         // Graphite's title bar keeps room after its title for the menus and Find (plan 05b).
         let find_key = chrome::key_label(Cmd::Find.hint().unwrap_or("Ctrl+F"));
-        let find_size = chrome::find_button_size(ui.painter(), &find_key);
         // The menu titles' places once a frame (measured at 0, 0; moved where they go).
         let rel_titles = if layout.menus_in_caption {
             chrome::caption_titles(ui.painter(), 0.0, 0.0)
@@ -7761,7 +8224,7 @@ impl App {
             Vec::new()
         };
         let reserve = if layout.menus_in_caption {
-            chrome::caption_menus_width(&rel_titles) + find_size.x + 32.0
+            chrome::caption_menus_width(&rel_titles) + crate::find::FIELD_MIN + 32.0
         } else {
             0.0
         };
@@ -7855,7 +8318,11 @@ impl App {
         // Tab and Shift+Tab between the paste field, the tree and the list, before any widget
         // that takes the focus is laid out (egui would give Tab's focus to the first one, the
         // paste field). After the menu keys above, which count Tab as another key (Alt+Tab).
-        self.tab_keys(&ctx);
+        // Not on Options' page (plan 11a): the tree and the list aren't there; Tab goes through
+        // the page's controls.
+        if self.settings_page.is_none() {
+            self.tab_keys(&ctx);
+        }
 
         // Menu bar and its popups: which menu is open is chrome::menubar_next's to say.
         let (event, titles) = match &bar {
@@ -7874,14 +8341,9 @@ impl App {
                 let end = titles.last().map_or(bar.title_end, |t| t.right());
                 let free = bar.buttons_start - end;
                 let mut more: Vec<egui::Rect> = titles.iter().map(|t| winui::rect(*t)).collect();
-                if free >= find_size.x + 16.0 {
-                    let x = (end + (free - find_size.x) / 2.0).round();
-                    let rc = egui::Rect::from_min_size(pos2(x, (mid - 13.0).round()), find_size);
-                    if chrome::find_button(ui, rc, &find_key) {
-                        chosen = Some((Cmd::Find, None));
-                    }
-                    more.push(winui::rect(rc));
-                }
+                let find_rc = crate::find::caption_place(end, free, mid);
+                more.extend(find_rc.map(winui::rect));
+                self.find_field(ui, find_rc, &find_key, &mut chosen);
                 self.publish_caption(ui, &layout, window_min, bar, &more);
                 (event, titles)
             }
@@ -7889,7 +8351,17 @@ impl App {
                 if let Some(bar) = bar {
                     self.publish_caption(ui, &layout, window_min, bar, &[]);
                 }
-                chrome::menu_bar(ui, &layout, o, w, self.open_menu)
+                let shown = chrome::menu_bar(ui, &layout, o, w, self.open_menu);
+                // The system's title bar: the search field at the menu row's end, as tall as it.
+                let h = layout.menu_h - 1.0;
+                let field = (w >= 640.0).then(|| {
+                    egui::Rect::from_min_size(
+                        pos2(o.x + w - 4.0 - crate::find::FIELD_MIN, o.y),
+                        egui::vec2(crate::find::FIELD_MIN, h),
+                    )
+                });
+                self.find_field(ui, field, &find_key, &mut chosen);
+                shown
             }
         };
         if let Some(event) = event {
@@ -7960,8 +8432,8 @@ impl App {
         let can_stop_all = self.can_stop_all();
         let any_complete = self.items.iter().any(|i| i.status == Status::Complete);
         let buttons = [
-            (Icon::AddUrl, "Add URL", true, Cmd::AddUrl),
-            (Icon::AddTorrent, "Add Torrent", true, Cmd::OpenTorrentFile),
+            // i18n: verb: the toolbar's Add (links, magnets, .torrent files, video pages)
+            (Icon::Add, "Add", true, Cmd::AddUrl),
             // i18n: verb: continue the selected downloads
             (Icon::Resume, "Resume", resumable, Cmd::Resume),
             // i18n: verb: stop the selected downloads
@@ -7975,7 +8447,7 @@ impl App {
                 any_complete,
                 Cmd::DeleteCompleted,
             ),
-            // i18n: plural noun: opens the Options window (settings)
+            // i18n: plural noun: opens Options (settings), a page of the main window
             (Icon::Options, "Options", true, Cmd::Options),
             // i18n: noun: the tool that starts and stops queues on time
             (Icon::Scheduler, "Scheduler", true, Cmd::Scheduler),
@@ -8005,7 +8477,7 @@ impl App {
             Some(ToolbarEvent::Toggle) => chosen = Some((Cmd::ToggleDetails, None)),
             Some(ToolbarEvent::Click(k)) => chosen = Some((buttons[k].3, None)),
             Some(ToolbarEvent::Drop(k, at)) => match buttons[k].0 {
-                Icon::AddTorrent => self.open_popup(Popup::TorrentDrop, at),
+                Icon::Add => self.open_popup(Popup::AddDrop, at),
                 icon => self.open_popup(Popup::QueueDrop(matches!(icon, Icon::StartQueue)), at),
             },
             None => {}
@@ -8013,15 +8485,14 @@ impl App {
 
         // The paste bar under the toolbar (plan 06a). An accepted address goes on as Add URL's
         // OK sends it, at the end of the frame as every other route.
-        let mut pasted: Option<dialogs::NewUrl> = None;
+        let mut pasted: Option<crate::addkind::Bar> = None;
         if self.settings.show_paste_bar {
             // An open menu's keys are the menu's (the list's rule).
             self.paste.menu_open = self.popup.is_some() || self.open_menu.is_some();
             let history = &self.settings.url_history;
             match crate::panes::paste_bar(ui, &layout, o, w, &mut self.paste, history) {
                 Some(crate::panes::PasteEvent::Submit) => {
-                    let accepted = dialogs::accept_address(&self.paste.text);
-                    pasted = crate::panes::submit(&mut self.paste, accepted);
+                    pasted = crate::panes::submit(&mut self.paste);
                     // Added: the field gives up the keys and the list takes them, as after
                     // Escape (the new download is there). Rejected, the field keeps them.
                     if pasted.is_some() {
@@ -8037,6 +8508,22 @@ impl App {
                 }
                 None => {}
             }
+        }
+
+        // Add ▾ → Add from the clipboard: the clipboard's answer goes into the paste bar (or the
+        // Add window) whether the list or Options' page is shown; the bar is drawn on both.
+        if let Some(clip) = self.clip_paste.take() {
+            self.take_pasted(&clip);
+        }
+
+        // Options' page in the panes' place (plan 11a): the tree, the list and the details
+        // pane aren't drawn, and their keys aren't run (the shortcuts, Ctrl+V, the Tab
+        // rotation): Delete or Ctrl+A pressed on the page can't act on a list nobody sees. The
+        // toolbar and the menus still act on the selection, as they did beside the Options
+        // window (Delete asks first, unless told not to).
+        if self.settings_page.is_some() {
+            self.paint_settings_page(ui, &layout, (o, w, h), pasted, chosen);
+            return;
         }
 
         // Categories pane.
@@ -8251,7 +8738,9 @@ impl App {
         {
             chosen = Some((cmd, None));
         }
-        self.status_strip(ui, &layout, o, w, h, ids.len());
+        if self.status_strip(ui, &layout, o, w, h, ids.len()) {
+            chosen = Some((Cmd::ToggleMode, None));
+        }
         if let Some((i, pos)) = r.context {
             self.open_popup(Popup::Item(i.map(|i| ids[i])), pos);
         }
@@ -8263,12 +8752,52 @@ impl App {
         if let Some(pos) = r.header_context {
             self.open_popup(Popup::Columns, pos);
         }
+        self.popup_menu(&ctx, &mut chosen);
+        // The main window's shortcut keys (Ctrl+F, F3, Ctrl+N, Ctrl+M / F2, Delete,
+        // Shift+Delete), with no menu or popup open.
+        if chosen.is_none() && self.popup.is_none() && self.open_menu.is_none() {
+            let focused = ctx.memory(|m| m.focused().is_some());
+            chosen = ctx
+                .input_mut(|i| shortcut_cmd(i, focused))
+                .map(|c| (c, None));
+        }
+        // Ctrl+V with no widget focused (and Add ▾ → Add from the clipboard) puts the copied
+        // text in the paste bar and gives it the keys; Enter or its button adds it (D13).
+        // Several links, or the bar hidden: the Add window lists them.
+        let focused = ctx.memory(|m| m.focused().is_some());
+        let busy = chosen.is_some() || self.popup.is_some() || self.open_menu.is_some();
+        if let Some(clip) =
+            ctx.input(|i| crate::panes::ctrl_v(true, focused, busy, &i.events).map(str::to_owned))
+        {
+            self.take_pasted(&clip);
+        }
+        self.bar_submitted(pasted, &ctx);
+        if let Some((c, target)) = chosen {
+            self.run(c, target, &ctx);
+        }
+    }
+
+    /// What the paste bar's Enter or button gave: one address goes where it belongs, several
+    /// open the Add window with them (the downloads list's frame and Options' page alike).
+    fn bar_submitted(&mut self, pasted: Option<crate::addkind::Bar>, ctx: &egui::Context) {
+        match pasted {
+            Some(crate::addkind::Bar::One(kind)) => self.add_kind(kind, None, ctx),
+            Some(crate::addkind::Bar::Many(_)) => {
+                let text = std::mem::take(&mut self.paste.pending);
+                self.open_add_with(&text);
+            }
+            _ => {}
+        }
+    }
+
+    /// The context menu open (`self.popup`), if any: what was chosen in it goes to `chosen`.
+    fn popup_menu(&mut self, ctx: &egui::Context, chosen: &mut Option<(Cmd, Option<u64>)>) {
         if let Some((kind, pos, serial)) = self.popup {
             let (entries, target) = self.popup_entries(kind);
             // The column chooser's items have no icons (the mockup's): only check marks.
             let columns = matches!(kind, Popup::Columns);
             match chrome::popup_with_icons(
-                &ctx,
+                ctx,
                 MenuKind::Context,
                 &format!("popup-{serial}"),
                 pos,
@@ -8278,35 +8807,81 @@ impl App {
             ) {
                 PopupResult::Open | PopupResult::Neighbor(_) => {}
                 PopupResult::Chosen(c) => {
-                    chosen = Some((c, target));
+                    *chosen = Some((c, target));
                     self.popup = None;
                 }
                 PopupResult::Dismissed => self.popup = None,
             }
         }
-        // The main window's shortcut keys (Ctrl+F, F3, Ctrl+N, Ctrl+M / F2, Delete,
-        // Shift+Delete), with no menu or popup open.
-        if chosen.is_none() && self.popup.is_none() && self.open_menu.is_none() {
-            let focused = ctx.memory(|m| m.focused().is_some());
-            chosen = ctx
-                .input_mut(|i| shortcut_cmd(i, focused))
-                .map(|c| (c, None));
+    }
+
+    /// The rest of the main window's frame with Options' page open (plan 11a): the page in the
+    /// panes' place, the status strip, a toolbar arrow's menu, then what the bars above asked
+    /// for. The page has the keys while no menu is open and the paste and Find fields don't.
+    fn paint_settings_page(
+        &mut self,
+        ui: &mut Ui,
+        layout: &chrome::Layout,
+        (o, w, h): (Pos2, f32, f32),
+        pasted: Option<crate::addkind::Bar>,
+        mut chosen: Option<(Cmd, Option<u64>)>,
+    ) {
+        let ctx = ui.ctx().clone();
+        let area = egui::Rect::from_min_max(
+            pos2(o.x, o.y + layout.panes_top()),
+            pos2(o.x + w, o.y + layout.strip_top(h)),
+        );
+        let focused = ctx.memory(|m| m.focused());
+        let bars = focused
+            .is_some_and(|f| f == crate::panes::paste_field_id() || f == crate::find::field_id());
+        // Find's dropdown open: its check boxes have the keys (Enter there isn't Save).
+        let keys = self.popup.is_none() && self.open_menu.is_none() && !bars && !self.find_bar.open;
+        // A text box on the page has the keys: Alt+Left moves its caret by a word, not back.
+        let typing = focused.is_some_and(|id| egui::TextEdit::load_state(&ctx, id).is_some());
+        let mut actions = Vec::new();
+        let mut tools = crate::settingspage::Tools {
+            icons: &mut self.icons,
+            items: &self.items,
+            queues: &self.queues,
+            settings: &self.settings,
+            wake_error: self.wake.error.as_deref(),
+            actions: &mut actions,
+        };
+        let ev = self
+            .settings_page
+            .as_mut()
+            .and_then(|p| p.show(ui, area, keys, typing, &self.downloads, &mut tools));
+        // The Scheduler's Start now and Stop, at once (11b1). Start now applied the
+        // Scheduler's draft (its Download limits too): an Options draft without changes is
+        // made again from the settings now in force, so Connection shows them.
+        let applied = actions
+            .iter()
+            .any(|a| matches!(a, crate::scheduler::Action::Apply { .. }));
+        for a in actions {
+            self.scheduler_action(a);
         }
-        // Ctrl+V with no widget focused puts the copied address in the paste bar and gives it
-        // the keys; Enter or Download adds it (D13).
-        let focused = ctx.memory(|m| m.focused().is_some());
-        let busy = chosen.is_some() || self.popup.is_some() || self.open_menu.is_some();
-        let shown = self.settings.show_paste_bar;
-        if let Some(clip) =
-            ctx.input(|i| crate::panes::ctrl_v(shown, focused, busy, &i.events).map(str::to_owned))
+        if applied
+            && self
+                .settings_page
+                .as_ref()
+                .is_some_and(|p| !p.options.dirty())
         {
-            self.paste.fill(&clip);
-            // The field takes the keys on the next frame: the list's selection goes grey.
-            self.list.set_keys(false);
+            let page = self.settings_page.as_ref().map_or(0, |p| p.page());
+            let fresh = self.options_draft(page);
+            let downloads = self.downloads.clone();
+            if let Some(p) = &mut self.settings_page {
+                p.options = fresh.keep_view(&p.options, true, &downloads);
+            }
         }
-        if let Some(new) = pasted {
-            self.route_new_url(new, &ctx);
+        let shown = self.shown_ids().len();
+        if self.status_strip(ui, layout, o, w, h, shown) {
+            chosen = Some((Cmd::ToggleMode, None));
         }
+        self.popup_menu(&ctx, &mut chosen);
+        if let Some(ev) = ev {
+            self.settings_page_event(ev);
+        }
+        self.bar_submitted(pasted, &ctx);
         if let Some((c, target)) = chosen {
             self.run(c, target, &ctx);
         }
@@ -8330,6 +8905,13 @@ impl App {
                     parts,
                 };
                 self.open_torrent_dialog_with(Some(new.url.to_string()), Some(remote), ctx);
+            }
+            // One video or gallery window at a time: another page waits its turn (several
+            // added at once from the Add window).
+            Route::VideoPage | Route::GalleryPage
+                if self.video_dlg.is_some() || self.gallery_dlg.is_some() =>
+            {
+                self.pages_waiting.push_back(new);
             }
             // A video's page, not a file (YouTube, Vimeo…): the video window looks it up.
             Route::VideoPage => {
@@ -8355,6 +8937,96 @@ impl App {
                     self.open_file_info(new, Default::default(), ctx);
                 }
             }
+        }
+    }
+
+    /// Copied text (Ctrl+V with nothing focused, Add ▾ → Add from the clipboard): into the
+    /// Add window when it is open; else into the paste bar when it is shown and the text holds
+    /// at most one address; else the Add window opens with it.
+    fn take_pasted(&mut self, clip: &str) {
+        if let Some(w) = &mut self.add_url {
+            w.append(clip);
+            return;
+        }
+        let many = matches!(
+            crate::addkind::bar_kind(clip, &|_| true),
+            crate::addkind::Bar::Many(_)
+        );
+        if self.settings.show_paste_bar && !many {
+            self.paste.fill(clip);
+            // The field takes the keys on the next frame: the list's selection goes grey.
+            self.list.set_keys(false);
+        } else {
+            self.open_add_with(clip);
+        }
+    }
+
+    /// The Add window with `text` added to it (opened when it isn't).
+    fn open_add_with(&mut self, text: &str) {
+        match &mut self.add_url {
+            Some(w) => w.append(text),
+            None => {
+                let mut w = AddWindow::with_text(text);
+                w.ask = self.settings.add_ask_where;
+                self.add_url = Some(w);
+            }
+        }
+    }
+
+    /// What the Add window's Add (or Later) hands on, each item into the flow it has always
+    /// had. Links go to Download File Info one after another while "Ask where to save each
+    /// one" is on; off, or with Later, they are added at once to their category's folder
+    /// (started, or waiting in a queue). Magnets, .torrent files, video and gallery pages and
+    /// batch patterns always go to their own window: they ask what to take.
+    fn add_items(&mut self, out: crate::adddlg::AddOut, ctx: &egui::Context) {
+        let direct = !out.ask || out.later;
+        let mut links = Vec::new();
+        for kind in out.items {
+            match kind {
+                crate::addkind::Kind::Link(url) if direct => {
+                    crate::settings::remember(&mut self.settings.url_history, url.as_str());
+                    links.push(url);
+                }
+                other => self.add_kind(other, out.login.clone(), ctx),
+            }
+        }
+        if !links.is_empty() {
+            let panel = self.settings.queue_panel_later;
+            self.add_many(
+                links,
+                out.login,
+                crate::i18n::mark("by Add"),
+                !out.later,
+                panel,
+            );
+        }
+        self.dirty = true;
+    }
+
+    /// One item of Add (or the paste bar) into its flow: an address as Add URL's OK sent it
+    /// (`route_new_url`), a .torrent file to Add torrent, a pattern to Batch download.
+    fn add_kind(
+        &mut self,
+        kind: crate::addkind::Kind,
+        login: Option<(String, String)>,
+        ctx: &egui::Context,
+    ) {
+        use crate::addkind::Kind;
+        match kind {
+            Kind::TorrentFile(path) => self.open_torrent_dialog(Some(path), ctx),
+            // One Batch download at a time: the next pattern waits its turn.
+            Kind::Batch(pattern) => {
+                if self.batch.is_none() {
+                    self.batch = Some(crate::batch::Batch::with_address(&pattern));
+                } else {
+                    self.batch_waiting.push_back(pattern);
+                }
+            }
+            Kind::Link(url)
+            | Kind::Magnet(url)
+            | Kind::TorrentUrl(url)
+            | Kind::Video(url)
+            | Kind::Gallery(url) => self.route_new_url(dialogs::NewUrl { url, login }, ctx),
         }
     }
 
@@ -8583,7 +9255,7 @@ impl App {
             });
         } else if i.live.is_none() {
             self.start(id, true);
-        } else if !self.progress.iter().any(|p| p.id == id) {
+        } else if self.settings.show_progress && !self.progress.iter().any(|p| p.id == id) {
             self.progress
                 .push(Progress::new(id, self.settings.show_complete));
         }
@@ -8778,7 +9450,21 @@ impl App {
     fn main_drops(&mut self, ctx: &egui::Context) {
         let got = self.drops.poll(ctx, crate::MAIN_TITLE);
         if !got.is_empty() {
-            self.dropped(got, ctx);
+            self.dropped_on_main(got);
+        }
+    }
+
+    /// Dropped on the main window: a list file (.txt, .ef2, .htm, .csv) shows in Import as
+    /// before; links, magnet links, .torrent files and anything else go to the Add window,
+    /// which says what each is (or why it isn't added) before anything is added.
+    fn dropped_on_main(&mut self, items: Vec<String>) {
+        let (lists, rest): (Vec<String>, Vec<String>) =
+            items.into_iter().partition(|s| is_list_file(s));
+        for file in lists {
+            self.import_file(std::path::Path::new(&file));
+        }
+        if !rest.is_empty() {
+            self.open_add_with(&rest.join("\n"));
         }
     }
 
@@ -8786,16 +9472,8 @@ impl App {
     /// link or a .torrent file goes the usual way (Download File Info, Add torrent); several
     /// addresses, or a list file (.txt, .ef2, .htm, .csv), show in Import to tick first.
     fn dropped(&mut self, items: Vec<String>, ctx: &egui::Context) {
-        let list_file = |s: &str| {
-            let p = std::path::Path::new(s);
-            p.is_file()
-                && p.extension().is_some_and(|e| {
-                    ["txt", "ef2", "htm", "html", "csv"]
-                        .contains(&e.to_string_lossy().to_ascii_lowercase().as_str())
-                })
-        };
         let (lists, items): (Vec<String>, Vec<String>) =
-            items.into_iter().partition(|s| list_file(s));
+            items.into_iter().partition(|s| is_list_file(s));
         for file in lists {
             self.import_file(std::path::Path::new(&file));
         }
@@ -9275,13 +9953,6 @@ impl App {
         } else {
             self.raise_updates = false;
         }
-        if self.options.is_some() {
-            if self.raise_options && crate::dialogs::focus_when_shown(ctx, "options") {
-                self.raise_options = false;
-            }
-        } else {
-            self.raise_options = false;
-        }
         // Until the check at start is due.
         if self.update_checked_this_run.is_none() && self.settings.update_check {
             ctx.request_repaint_after(crate::help::CHECK_AFTER_START);
@@ -9512,12 +10183,18 @@ impl App {
             }
         }
         if let Some(d) = &mut self.add_url {
-            match d.show(ctx, |url| self.settings.site_login(url)) {
+            let shown = d.show(ctx, |url| self.settings.site_login(url));
+            // "Ask where to save each one" is kept as it was left, closed or added.
+            if !matches!(shown, Outcome::Open) && self.settings.add_ask_where != d.ask {
+                self.settings.add_ask_where = d.ask;
+                self.dirty = true;
+            }
+            match shown {
                 Outcome::Open => {}
                 Outcome::Closed => self.add_url = None,
-                Outcome::Done(new) => {
+                Outcome::Done(out) => {
                     self.add_url = None;
-                    self.route_new_url(new, ctx);
+                    self.add_items(out, ctx);
                 }
             }
         }
@@ -9605,18 +10282,6 @@ impl App {
                 self.dirty = true;
             }
         }
-        if let Some(f) = &mut self.find {
-            match f.show(ctx) {
-                Outcome::Open => {}
-                Outcome::Closed => self.find = None,
-                Outcome::Done(()) => {
-                    let q = f.query.clone();
-                    self.find = None;
-                    self.find_next(&q);
-                    self.last_find = Some(q);
-                }
-            }
-        }
         if let Some((title, text)) = &self.notice
             && !matches!(dialogs::message(ctx, "notice", title, text), Outcome::Open)
         {
@@ -9624,8 +10289,32 @@ impl App {
         }
         if !self.torrents_started {
             self.torrents_started = true;
-            // The handlers follow the exe (a portable copy may have moved).
-            if self.settings.torrent_associations {
+            // Torrent settings' switch never decided (a list 1.0.0 saved, a new one): settled
+            // once, as the user chose (the installer's task, an earlier tick, or what Windows
+            // opens .torrent files with now), and saved for the browser integration (upstream
+            // issue 1058). An instance off the screens (a test's, MDM_OFFSCREEN) never reads this
+            // computer's installer value or associations: off, unless its list ticked it before.
+            if self.settings.torrent_associations.is_none() {
+                let system = !crate::offscreen();
+                let installer = (system && mdm_ipc::portable_dir().is_none())
+                    .then(crate::win32::install_torrents)
+                    .flatten();
+                let registered = || system && crate::win32::torrent_handler_is_ours();
+                if self.settings.settle_torrent_handler(installer, registered) {
+                    tracing::info!(
+                        "torrents: Open magnet links and .torrent files with Grabbit settled {}",
+                        if self.settings.torrent_associations == Some(true) {
+                            "on"
+                        } else {
+                            "off"
+                        }
+                    );
+                    self.dirty = true;
+                }
+            }
+            // The handlers follow the exe (a portable copy may have moved). Never from an
+            // instance off the screens (a test's build would take this computer's associations).
+            if self.settings.torrent_associations == Some(true) && !crate::offscreen() {
                 crate::win32::set_torrent_handlers(true);
             }
             if self.settings.torrent_keep_sharing {
@@ -9635,61 +10324,6 @@ impl App {
                     self.complete_torrents(),
                     true,
                 );
-            }
-        }
-        if let Some(t) = &mut self.torrent_settings {
-            match t.show(ctx) {
-                Outcome::Open => {}
-                Outcome::Closed => self.torrent_settings = None,
-                Outcome::Done(crate::torrentdlg::TorrentChoice {
-                    share,
-                    assoc,
-                    net,
-                    upload,
-                    seeding,
-                }) => {
-                    self.torrent_settings = None;
-                    // The network: the next torrent session takes it (torrent_tick).
-                    net.apply(&mut self.settings);
-                    // The upload limit: at once (torrent_tick sets it on the session).
-                    (
-                        self.settings.torrent_upload_on,
-                        self.settings.torrent_upload_kb,
-                    ) = upload;
-                    // Seeding limits: the tick stops those over them; raised, the finished
-                    // torrents now under them are shared again (when sharing stays on).
-                    let s = &mut self.settings;
-                    let before = s.sharing_limits();
-                    s.torrent_stop_ratio_on = seeding.ratio_on;
-                    s.torrent_stop_ratio = seeding.ratio;
-                    s.torrent_stop_minutes_on = seeding.minutes_on;
-                    s.torrent_stop_minutes = seeding.minutes;
-                    if share
-                        && share == self.settings.torrent_keep_sharing
-                        && before != self.settings.sharing_limits()
-                    {
-                        self.torrent_host.set_sharing(
-                            &self.rt,
-                            self.session_hashes(),
-                            self.complete_torrents(),
-                            true,
-                        );
-                    }
-                    if share != self.settings.torrent_keep_sharing {
-                        self.settings.torrent_keep_sharing = share;
-                        self.torrent_host.set_sharing(
-                            &self.rt,
-                            self.session_hashes(),
-                            self.complete_torrents(),
-                            share,
-                        );
-                    }
-                    if assoc != self.settings.torrent_associations {
-                        self.settings.torrent_associations = assoc;
-                        crate::win32::set_torrent_handlers(assoc);
-                    }
-                    self.dirty = true;
-                }
             }
         }
         if let Some(w) = &mut self.rss_dlg {
@@ -9790,6 +10424,16 @@ impl App {
                 ctx.request_repaint();
             }
         }
+        // The next page added while the video or gallery window was open, a frame after it
+        // closed (as Add torrent's next, above).
+        let page_open = self.video_dlg.is_some() || self.gallery_dlg.is_some();
+        if !page_open && !self.pages_waiting.is_empty() {
+            if std::mem::take(&mut self.pages_closed) {
+                ctx.request_repaint();
+            } else if let Some(next) = self.pages_waiting.pop_front() {
+                self.route_new_url(next, ctx);
+            }
+        }
         if let Some(g) = &mut self.gallery_dlg {
             match g.show(ctx, &self.rt) {
                 Outcome::Open => {}
@@ -9825,6 +10469,19 @@ impl App {
                 }
             }
         }
+        if page_open && self.video_dlg.is_none() && self.gallery_dlg.is_none() {
+            self.pages_closed = true;
+            ctx.request_repaint();
+        }
+        // The next pattern a frame after Batch download closed (as Add torrent's next).
+        if self.batch.is_none() && !self.batch_waiting.is_empty() {
+            if std::mem::take(&mut self.batch_closed) {
+                ctx.request_repaint();
+            } else if let Some(next) = self.batch_waiting.pop_front() {
+                self.batch = Some(crate::batch::Batch::with_address(&next));
+            }
+        }
+        let batch_open = self.batch.is_some();
         if let Some(b) = &mut self.batch {
             match b.show(ctx) {
                 Outcome::Open => {}
@@ -9835,57 +10492,16 @@ impl App {
                 }
             }
         }
-        if let Some(d) = &mut self.options {
-            match d.show(ctx, &self.downloads) {
-                Outcome::Open => {}
-                Outcome::Closed => {
-                    // Cancel: categories the dialog added, changed or restored are undone, and
-                    // the remote control listens as before Pair a device... moved it.
-                    self.settings.publish_categories();
-                    if let Some(r) = &self.remote {
-                        r.apply(crate::remote::config(&self.settings));
-                    }
-                    self.options = None;
-                }
-                Outcome::Done(new) => {
-                    let new = Settings::merge_changes(&self.settings, &d.from, &new);
-                    self.options = None;
-                    self.apply_options(new);
-                }
-            }
+        if batch_open && self.batch.is_none() {
+            self.batch_closed = true;
+            ctx.request_repaint();
         }
-        if let Some(mut s) = self.scheduler.take() {
-            let mut actions = Vec::new();
-            let open = s.show(
-                ctx,
-                &mut self.icons,
-                &self.items,
-                &self.queues,
-                self.wake.error.as_deref(),
-                &mut actions,
-            );
-            for a in actions {
-                self.scheduler_action(a);
-            }
-            if open {
-                self.scheduler = Some(s);
-            }
-        }
-        if let Some(d) = &mut self.speed_settings {
-            match d.show(ctx) {
-                Outcome::Open => {}
-                Outcome::Closed => self.speed_settings = None,
-                Outcome::Done(c) => {
-                    self.settings.speed_limit_kb = c.kb;
-                    self.settings.limiter_on_startup = c.on_startup;
-                    self.settings.global_limit_on = c.global_on;
-                    self.settings.global_limit_kb = c.global_kb;
-                    self.settings.global_only_active = c.only_active;
-                    self.speed_settings = None;
-                    self.apply_speed_limit();
-                    self.dirty = true;
-                }
-            }
+        // Options' page is drawn by `paint`; its small dialogs (the Scheduler's too) and the
+        // discard question here.
+        if let Some(p) = &mut self.settings_page
+            && let Some(ev) = p.overlays(ctx, &self.downloads)
+        {
+            self.settings_page_event(ev);
         }
         if let Some(mut fi) = self.file_info.take() {
             self.start_early(&mut fi);
@@ -11134,7 +11750,8 @@ mod mark_finished_tests {
 }
 #[cfg(test)]
 mod route_tests {
-    use super::{Route, route_of};
+    use super::route_new_url_tests::app;
+    use super::{Cmd, MenuEntry, Route, add_drop_entries, route_of};
     fn route(s: &str) -> Route {
         route_of(&url::Url::parse(s).unwrap())
     }
@@ -11240,13 +11857,13 @@ mod route_tests {
         }
     }
 
-    /// What Add URL's OK hands on for `typed`: the real dialog, its box holding `typed` and
-    /// Enter pressed in it (OK, the default button), drawn in its own window rendered
-    /// headlessly as dialogs.rs's tests do, and handled as `App` handles its outcome (the
-    /// dialog goes with the first `Done`). No Sites Logins entry and nothing typed under "Use
-    /// authorization".
-    fn add_url_ok(typed: &str) -> Vec<crate::dialogs::NewUrl> {
-        use crate::dialogs::{AddUrl, Outcome};
+    /// What the Add window's Add hands on for `typed`: the real window, its box holding
+    /// `typed` and Enter pressed in it (Add, the default button), drawn in its own window
+    /// rendered headlessly as dialogs.rs's tests do, and handled as `App` handles its outcome
+    /// (the window goes with the first `Done`). No Sites Logins entry and nothing typed under
+    /// "Use authorization".
+    fn add_url_ok(typed: &str) -> Vec<crate::adddlg::AddOut> {
+        use crate::dialogs::Outcome;
         thread_local! {
             static ENTER: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
         }
@@ -11269,7 +11886,7 @@ mod route_tests {
                     .collect(),
                 screen_rect: Some(egui::Rect::from_min_size(
                     egui::Pos2::ZERO,
-                    egui::vec2(600.0, 160.0),
+                    egui::vec2(600.0, 480.0),
                 )),
                 ..Default::default()
             };
@@ -11279,12 +11896,10 @@ mod route_tests {
         });
         let ctx = egui::Context::default();
         ctx.set_embed_viewports(false);
-        let mut dlg = AddUrl::default();
-        dlg.address = typed.to_owned();
-        let mut dlg = Some(dlg);
+        let mut dlg = Some(crate::adddlg::AddWindow::with_text(typed));
         let mut handed = Vec::new();
-        // A frame (the box takes the focus), Enter, then two frames more.
-        for enter in [false, true, false, false] {
+        // Two frames (the box takes the focus), Enter, then two frames more.
+        for enter in [false, false, true, false, false] {
             ENTER.with(|e| e.set(enter));
             let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
                 if let Some(d) = &mut dlg {
@@ -11327,33 +11942,268 @@ mod route_tests {
                 Route::GalleryPage,
             ),
         ] {
-            // The paste bar: Enter or Download, as `App::paint` handles it.
+            // The paste bar: Enter or its button, as `App::paint` handles it.
             let mut bar = crate::panes::PasteBar {
                 text: typed.to_owned(),
                 ..Default::default()
             };
-            let accepted = crate::dialogs::accept_address(&bar.text);
-            let pasted = crate::panes::submit(&mut bar, accepted)
-                .unwrap_or_else(|| panic!("the paste bar takes {typed}"));
+            let Some(crate::addkind::Bar::One(pasted)) = crate::panes::submit(&mut bar) else {
+                panic!("the paste bar takes {typed}");
+            };
             // Once: the field emptied, so a second Enter hands nothing on.
-            let accepted = crate::dialogs::accept_address(&bar.text);
             assert!(
-                crate::panes::submit(&mut bar, accepted).is_none(),
+                crate::panes::submit(&mut bar).is_none(),
                 "{typed}: handed on once"
             );
 
             let ok = add_url_ok(typed);
-            assert_eq!(ok.len(), 1, "{typed}: Add URL's OK hands it on once");
+            assert_eq!(ok.len(), 1, "{typed}: Add hands it on once");
             let added = &ok[0];
-            assert_eq!(pasted.url, added.url, "{typed}: the same url");
-            assert!(
-                pasted.login.is_none(),
-                "{typed}: the paste bar sends no login"
-            );
-            assert!(added.login.is_none(), "{typed}: nothing typed in Add URL");
-            assert_eq!(route_of(&pasted.url), route, "{typed}");
-            assert_eq!(route_of(&added.url), route, "{typed}");
+            assert_eq!(added.items, vec![pasted.clone()], "{typed}: the same item");
+            assert!(added.ask && !added.later, "{typed}: into its flow, asking");
+            assert!(added.login.is_none(), "{typed}: nothing typed in Add");
+            let url = pasted.url().expect("an address");
+            assert_eq!(route_of(url), route, "{typed}");
         }
+    }
+
+    /// Add's routing: each kind goes into the flow it had (the App's dialogs, opened as
+    /// `add_items` hands them on), a link with "Ask where to save each one" to Download File
+    /// Info, without it straight into the list.
+    #[test]
+    fn add_sends_each_kind_into_its_flow() {
+        use crate::addkind::Kind;
+        let ctx = egui::Context::default();
+        let mut app = app(Vec::new());
+        let u = |s: &str| url::Url::parse(s).unwrap();
+        let out = |items, ask, later| crate::adddlg::AddOut {
+            items,
+            login: None,
+            ask,
+            later,
+        };
+        app.add_items(
+            out(
+                vec![
+                    Kind::Batch("https://a.example/p*.jpg".into()),
+                    Kind::Batch("https://b.example/q*.jpg".into()),
+                ],
+                true,
+                false,
+            ),
+            &ctx,
+        );
+        assert!(app.batch.is_some(), "a pattern: Batch download");
+        assert_eq!(
+            app.batch_waiting,
+            ["https://b.example/q*.jpg".to_owned()],
+            "the next pattern waits its turn"
+        );
+        app.add_items(
+            out(
+                vec![
+                    Kind::Video(u("https://www.youtube.com/watch?v=a")),
+                    Kind::Video(u("https://www.youtube.com/watch?v=b")),
+                ],
+                true,
+                false,
+            ),
+            &ctx,
+        );
+        assert!(app.video_dlg.is_some(), "a video page: the video window");
+        assert_eq!(app.pages_waiting.len(), 1, "the second waits its turn");
+        let before = app.items.len();
+        app.add_items(
+            out(
+                vec![
+                    Kind::Link(u("https://a.example/1.zip")),
+                    Kind::Link(u("https://a.example/2.zip")),
+                ],
+                true,
+                true,
+            ),
+            &ctx,
+        );
+        assert_eq!(app.items.len(), before + 2, "Later: both in the list");
+        assert!(app.items.iter().all(|i| i.live.is_none()), "none started");
+        assert!(app.file_info.is_none(), "Later asks nothing");
+        app.add_items(
+            out(vec![Kind::Link(u("https://a.example/3.zip"))], true, false),
+            &ctx,
+        );
+        assert!(app.file_info.is_some(), "asking: Download File Info");
+    }
+
+    /// PR 76's audit: "Ask where to save each one" off adds a link and starts it at once (the
+    /// one way Add starts a download without asking first), and Later shows Download Later's
+    /// queue panel setting, not Batch download's; a .torrent file on the disk opens Add torrent.
+    #[test]
+    fn ask_off_starts_later_follows_download_later_a_torrent_file_opens_add_torrent() {
+        use crate::addkind::Kind;
+        let ctx = egui::Context::default();
+        let mut app = app(Vec::new());
+        let u = |s: &str| url::Url::parse(s).unwrap();
+        let out = |items, ask, later| crate::adddlg::AddOut {
+            items,
+            login: None,
+            ask,
+            later,
+        };
+        let before = app.items.len();
+        app.add_items(
+            out(vec![Kind::Link(u("https://a.example/9.zip"))], false, false),
+            &ctx,
+        );
+        assert_eq!(app.items.len(), before + 1, "added at once");
+        assert!(app.file_info.is_none(), "nothing asked");
+        assert!(app.items.last().unwrap().live.is_some(), "started");
+        // Later: Download Later's "show the queue panel" decides, Batch download's doesn't.
+        app.settings.queue_panel_later = false;
+        app.settings.queue_panel_batch = true;
+        app.add_items(
+            out(vec![Kind::Link(u("https://a.example/10.zip"))], true, true),
+            &ctx,
+        );
+        assert!(
+            app.queue_pick.is_none(),
+            "Download Later's setting: no panel"
+        );
+        app.settings.queue_panel_later = true;
+        app.settings.queue_panel_batch = false;
+        app.add_items(
+            out(vec![Kind::Link(u("https://a.example/11.zip"))], true, true),
+            &ctx,
+        );
+        assert!(
+            app.queue_pick.is_some(),
+            "Download Later's setting: the panel"
+        );
+        app.add_items(
+            out(
+                vec![Kind::TorrentFile(r"C:\t\Open Movie Night.torrent".into())],
+                true,
+                false,
+            ),
+            &ctx,
+        );
+        assert!(app.torrent_dlg.is_some(), "a .torrent file: Add torrent");
+    }
+
+    /// PR 76's audit: copied text (Ctrl+V, Add ▾ → Add from the clipboard) goes into the
+    /// paste bar when it is one address and the bar is shown; several, or the bar hidden, open
+    /// the Add window; an open Add window takes whatever is copied.
+    #[test]
+    fn copied_text_goes_to_the_bar_or_the_add_window() {
+        let mut app = app(Vec::new());
+        app.settings.show_paste_bar = true;
+        app.take_pasted("https://a.example/1.zip");
+        assert_eq!(app.paste.text, "https://a.example/1.zip", "one: the bar");
+        assert!(app.add_url.is_none());
+        app.take_pasted("https://a.example/2.zip\nhttps://a.example/3.zip");
+        let add = app.add_url.as_ref().expect("several: the Add window");
+        assert!(add.address.contains("2.zip") && add.address.contains("3.zip"));
+        app.take_pasted("https://a.example/4.zip");
+        let add = app.add_url.as_ref().expect("still open");
+        assert!(add.address.contains("4.zip"), "an open Add window takes it");
+        app.add_url = None;
+        app.settings.show_paste_bar = false;
+        app.take_pasted("https://a.example/5.zip");
+        assert!(app.add_url.is_some(), "the bar hidden: the Add window");
+        // The screenshots' `/show add:<text>`: the Add window with that text, the clipboard
+        // never read.
+        app.add_url = None;
+        let ctx = egui::Context::default();
+        app.show_named("add:https://downloads.example/a.zip", &ctx);
+        let add = app.add_url.as_ref().expect("add: opens the Add window");
+        assert_eq!(add.address.trim(), "https://downloads.example/a.zip");
+    }
+
+    /// PR 76's audit: a page or a pattern that waited its turn opens a frame after the window
+    /// before it closed, not in the same frame (as Add torrent's next).
+    #[test]
+    fn the_next_page_and_pattern_open_a_frame_after_the_window_closes() {
+        let ctx = egui::Context::default();
+        let mut app = app(Vec::new());
+        let new_url = |s: &str| crate::dialogs::NewUrl {
+            url: url::Url::parse(s).unwrap(),
+            login: None,
+        };
+        app.pages_waiting
+            .push_back(new_url("https://commons.wikimedia.org/wiki/Category:Cats"));
+        app.batch_waiting
+            .push_back("https://a.example/p*.jpg".into());
+        // The windows before them just closed.
+        app.pages_closed = true;
+        app.batch_closed = true;
+        let pass = |app: &mut super::App| {
+            let mut out = ctx.run_ui(Default::default(), |ui| app.dialogs(ui.ctx()));
+            out.textures_delta.clear();
+        };
+        pass(&mut app);
+        assert!(
+            app.gallery_dlg.is_none() && app.batch.is_none(),
+            "not the same frame"
+        );
+        assert_eq!((app.pages_waiting.len(), app.batch_waiting.len()), (1, 1));
+        pass(&mut app);
+        assert!(app.gallery_dlg.is_some(), "the next page opens");
+        assert!(app.batch.is_some(), "the next pattern opens");
+        assert!(app.pages_waiting.is_empty() && app.batch_waiting.is_empty());
+    }
+
+    /// The toolbar's Add ▾ menu: the Add window, a .torrent file, the clipboard, then Batch
+    /// download, with their keys.
+    #[test]
+    fn the_add_menu_holds_its_four_commands() {
+        let entries = add_drop_entries();
+        let cmds: Vec<Cmd> = entries
+            .iter()
+            .filter_map(|e| match e {
+                MenuEntry::Item(_, c, true, false) => Some(*c),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            cmds,
+            vec![
+                Cmd::AddUrl,
+                Cmd::OpenTorrentFile,
+                Cmd::AddFromClipboard,
+                Cmd::Batch(false)
+            ]
+        );
+        assert!(matches!(entries[3], MenuEntry::Sep));
+        assert_eq!(Cmd::AddUrl.hint(), Some("Ctrl+N"));
+        assert_eq!(Cmd::OpenTorrentFile.hint(), Some("Ctrl+O"));
+        assert_eq!(Cmd::AddFromClipboard.hint(), Some("Ctrl+V"));
+        assert_eq!(Cmd::AddFromClipboard.menu_icon(""), Some("gx-clipboard"));
+        assert_eq!(Cmd::Batch(false).menu_icon(""), Some("gx-list-numbers"));
+    }
+
+    /// A drop on the main window: links, magnets and .torrent files go to the Add window
+    /// (one opened, or the open one), nothing added before it is confirmed.
+    #[test]
+    fn a_drop_on_the_main_window_opens_add_with_it() {
+        let mut app = app(Vec::new());
+        let before = app.items.len();
+        app.dropped_on_main(vec![
+            "https://a.example/1.zip".into(),
+            "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567".into(),
+        ]);
+        let w = app.add_url.as_ref().expect("the Add window");
+        assert_eq!(
+            w.address,
+            "https://a.example/1.zip\nmagnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567"
+        );
+        app.dropped_on_main(vec!["https://a.example/2.zip".into()]);
+        assert!(
+            app.add_url
+                .as_ref()
+                .unwrap()
+                .address
+                .ends_with("\nhttps://a.example/2.zip")
+        );
+        assert_eq!(app.items.len(), before, "nothing added yet");
     }
 }
 
@@ -11608,7 +12458,7 @@ mod route_new_url_tests {
     use super::*;
 
     /// The window's state with `items`, its downloads folder a test path.
-    fn app(items: Vec<Item>) -> std::mem::ManuallyDrop<App> {
+    pub(super) fn app(items: Vec<Item>) -> std::mem::ManuallyDrop<App> {
         let rt = Box::leak(Box::new(
             tokio::runtime::Builder::new_current_thread()
                 .build()
@@ -11722,7 +12572,12 @@ mod route_new_url_tests {
         app.route_new_url(new_url(VIDEO, None), &ctx);
         let dlg = app.video_dlg.as_ref().expect("Download video");
         assert_eq!(dlg.save_folder(), video);
+        // One page window at a time: the gallery waits for the video window.
         app.route_new_url(new_url(GALLERY, None), &ctx);
+        assert!(app.gallery_dlg.is_none() && app.pages_waiting.len() == 1);
+        app.video_dlg = None;
+        let next = app.pages_waiting.pop_front().unwrap();
+        app.route_new_url(next, &ctx);
         let dlg = app.gallery_dlg.as_ref().expect("Download a gallery");
         assert_eq!(dlg.folder(), general.display().to_string());
     }
@@ -11830,12 +12685,14 @@ mod old_keys_tests {
     }
 
     /// The end of `App::paint` on `dev` (85df4c43), copied as it was: the oracle. No menu or
-    /// popup open, no command chosen before it.
+    /// popup open, no command chosen before it. 1.0.1 adds Shift+F3 (Find previous), read
+    /// before F3 (whose pattern matches it too).
     fn dev_keys(ctx: &egui::Context) -> Option<Cmd> {
         let mut chosen = None;
-        let (find, next, add) = ctx.input_mut(|i| {
+        let (find, previous, next, add) = ctx.input_mut(|i| {
             (
                 i.consume_key(egui::Modifiers::COMMAND, egui::Key::F),
+                i.consume_key(egui::Modifiers::SHIFT, egui::Key::F3),
                 i.consume_key(egui::Modifiers::NONE, egui::Key::F3),
                 i.consume_key(egui::Modifiers::COMMAND, egui::Key::N),
             )
@@ -11848,6 +12705,8 @@ mod old_keys_tests {
         }
         if find {
             chosen = Some(Cmd::Find);
+        } else if previous {
+            chosen = Some(Cmd::FindPrevious);
         } else if next {
             chosen = Some(Cmd::FindNext);
         } else if add {
@@ -11946,7 +12805,19 @@ mod old_keys_tests {
         vec![
             ("Ctrl+F", ctrl, vec![key(Key::F, ctrl)], Some(Cmd::Find)),
             ("F3", none, vec![key(Key::F3, none)], Some(Cmd::FindNext)),
+            (
+                "Shift+F3",
+                shift,
+                vec![key(Key::F3, shift)],
+                Some(Cmd::FindPrevious),
+            ),
             ("Ctrl+N", ctrl, vec![key(Key::N, ctrl)], Some(Cmd::AddUrl)),
+            (
+                "Ctrl+O",
+                ctrl,
+                vec![key(Key::O, ctrl)],
+                Some(Cmd::OpenTorrentFile),
+            ),
             (
                 "Ctrl+M",
                 ctrl,
@@ -12052,6 +12923,10 @@ mod old_keys_tests {
             let (cmd, left, text) = frame(mods, &events, Focus::Nothing, new_keys);
             assert_eq!(cmd, expected, "{name}, nothing focused");
             assert_eq!(text, "abc", "{name}: the unfocused field is untouched");
+            // Ctrl+O is new with the universal Add (Open a .torrent file): dev had none.
+            if name == "Ctrl+O" {
+                continue;
+            }
             for focus in [Focus::Nothing, Focus::PasteField, Focus::OtherBox] {
                 let now = frame(mods, &events, focus, new_keys);
                 let dev = frame(mods, &events, focus, dev_keys);
@@ -12311,7 +13186,7 @@ mod access_key_tests {
             Popup::Columns,
             Popup::QueueDrop(true),
             Popup::QueueDrop(false),
-            Popup::TorrentDrop,
+            Popup::AddDrop,
             Popup::DropTarget,
             Popup::Item(None),
         ];
@@ -12637,5 +13512,713 @@ mod start_disk_tests {
         std::thread::sleep(Duration::from_millis(200));
         app.apply_state_reads();
         assert_eq!(get(&app, 2).downloaded, 7, "the late read is dropped");
+    }
+
+    /// Upstream 1041 (PR 78's audit): with "Show download progress dialog when a download
+    /// starts" unticked, a start that would open the progress window doesn't, and a double-click
+    /// on the running download still opens it; ticked, the start opens it as before.
+    #[test]
+    fn the_progress_window_follows_its_setting() {
+        let dir = tempfile::tempdir().unwrap();
+        for shown in [false, true] {
+            let mut app = app_with(vec![row(3, dir.path().join("a.zip"), Status::Stopped)]);
+            app.settings.show_progress = shown;
+            app.start(3, true);
+            assert!(get(&app, 3).live.is_some(), "it started");
+            assert_eq!(
+                app.progress.iter().any(|p| p.id == 3),
+                shown,
+                "shown: {shown}"
+            );
+            if !shown {
+                app.open_item(3);
+                assert!(
+                    app.progress.iter().any(|p| p.id == 3),
+                    "a double-click opens it"
+                );
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod find_and_columns_tests {
+    //! PR 69's audit: Find Next across views, and the columns that can't be hidden.
+    use super::*;
+
+    fn app(items: Vec<Item>) -> std::mem::ManuallyDrop<App> {
+        let rt = Box::leak(Box::new(
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
+        ));
+        let loaded = store::Loaded {
+            next_id: 100,
+            items,
+            columns: None,
+            settings: Settings::default(),
+            queues: Vec::new(),
+        };
+        let (_, commands) = std::sync::mpsc::channel();
+        // Never dropped: an App saves its list as it goes.
+        std::mem::ManuallyDrop::new(App::assemble(
+            &egui::Context::default(),
+            rt.handle().clone(),
+            commands,
+            loaded,
+            crate::Start::Shown,
+        ))
+    }
+
+    fn item(id: u64, name: &str, status: Status) -> Item {
+        let url = url::Url::parse(&format!("http://127.0.0.1:9/{name}")).unwrap();
+        let mut i = Item::new(id, url, PathBuf::from(name), Category::General);
+        i.status = status;
+        i
+    }
+
+    /// Audit 69-8: a match outside the view switches to All Downloads and is selected; a match
+    /// that All Downloads' column filters hide too leaves the view and the selection alone.
+    #[test]
+    fn find_next_switches_views_only_to_select_a_match() {
+        let mut a = app(vec![
+            item(1, "a.zip", Status::Complete),
+            item(2, "b.iso", Status::Stopped),
+        ]);
+        a.view = View::Finished(None);
+        a.find.text = "b.iso".into();
+        // The Status filter hides Stopped everywhere: nothing to select, nothing moves.
+        list::set_value(&mut a.list, 3, "Stopped", false);
+        a.find_next(false);
+        assert_eq!(a.view, View::Finished(None));
+        assert_eq!(a.selection.focus(), None);
+        // Without it: All Downloads, the match selected.
+        list::set_value(&mut a.list, 3, "Stopped", true);
+        a.find_next(false);
+        assert_eq!(a.view, View::All);
+        assert_eq!(a.selection.focus(), Some(2));
+        // Shift+F3 wraps round to it too.
+        a.find_next(true);
+        assert_eq!(a.selection.focus(), Some(2));
+    }
+
+    /// Audit 69-r2-2: `/show mode` switches; `mode:light` and `mode:dark` only to reach that side.
+    #[test]
+    fn show_mode_reaches_the_side_asked() {
+        for dark in [false, true] {
+            assert!(show_mode_switches("", dark));
+            assert_eq!(show_mode_switches("light", dark), dark);
+            assert_eq!(show_mode_switches("dark", dark), !dark);
+        }
+    }
+
+    /// Audit 69-9: the column menu's command never hides File Name, Size or Status; it
+    /// toggles the others.
+    #[test]
+    fn toggle_column_leaves_the_always_shown_ones() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        for c in [0, 2, 3] {
+            a.run(Cmd::ToggleColumn(c), None, &ctx);
+            assert!(a.list.visible[c], "column {c}");
+        }
+        let q = a.list.visible[1];
+        a.run(Cmd::ToggleColumn(1), None, &ctx);
+        assert_eq!(a.list.visible[1], !q);
+    }
+}
+
+/// Plan 11a: Options as a page of the main window, on an `App` built as the menus' test builds
+/// one. Nothing runs: the runtime is never driven.
+#[cfg(test)]
+mod settings_page_tests {
+    use super::*;
+    use crate::settingspage::PageEvent;
+
+    fn app(items: Vec<Item>) -> std::mem::ManuallyDrop<App> {
+        let rt = Box::leak(Box::new(
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
+        ));
+        let loaded = store::Loaded {
+            next_id: 100,
+            items,
+            columns: None,
+            settings: Settings::default(),
+            queues: Vec::new(),
+        };
+        let (_, commands) = std::sync::mpsc::channel();
+        // Never dropped: an App saves its list as it goes.
+        let mut app = std::mem::ManuallyDrop::new(App::assemble(
+            &egui::Context::default(),
+            rt.handle().clone(),
+            commands,
+            loaded,
+            crate::Start::Shown,
+        ));
+        app.downloads = PathBuf::from(r"C:\mdm-settings-page-test\Downloads");
+        app
+    }
+
+    fn item(id: u64, name: &str) -> Item {
+        let url = url::Url::parse(&format!("http://127.0.0.1:9/{name}")).unwrap();
+        let mut i = Item::new(id, url, PathBuf::from(name), Category::General);
+        i.status = Status::Stopped;
+        i
+    }
+
+    /// The draft changed as a page's control changes it.
+    fn change(a: &mut App, f: impl FnOnce(&mut Settings)) {
+        let p = a.settings_page.as_mut().expect("the page is open");
+        let mut s = p.options.result();
+        f(&mut s);
+        p.options.set_draft(s);
+    }
+
+    /// One frame of the main window (its client `size`), with `events`.
+    fn frame(a: &mut App, ctx: &egui::Context, events: Vec<egui::Event>) {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                Pos2::ZERO,
+                egui::vec2(1080.0, 560.0),
+            )),
+            events,
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| a.paint(ui));
+        out.textures_delta.clear();
+    }
+
+    fn key(key: egui::Key, modifiers: egui::Modifiers) -> egui::Event {
+        egui::Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        }
+    }
+
+    /// The screenshots' names: `options:changed` opens General with a change in its draft
+    /// (Save live), `options:back` asks the question over it; nothing is saved.
+    #[test]
+    fn show_names_for_the_changed_page_and_its_question() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let saved = a.settings.clone();
+        a.show_named("options:changed", &ctx);
+        let p = a.settings_page.as_ref().expect("the page");
+        assert!(p.dirty() && !p.modal(), "changed");
+        a.show_named("options:back", &ctx);
+        let p = a.settings_page.as_ref().expect("the page");
+        assert!(p.dirty() && p.modal(), "asked");
+        assert_eq!(a.settings, saved, "nothing saved");
+    }
+
+    /// PR 76's audit: Add ▾ → Add from the clipboard with Options' page open puts the copied
+    /// address in the paste bar (drawn on the page too), not later when the page closes.
+    #[test]
+    fn add_from_the_clipboard_works_on_the_page() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.settings.show_paste_bar = true;
+        a.run(Cmd::Options, None, &ctx);
+        assert!(a.settings_page.is_some());
+        let reader: &'static crate::clipboard::Reader = Box::leak(Box::new(
+            crate::clipboard::Reader::new(|| Some("https://a.example/c.zip".to_owned()), || {}),
+        ));
+        a.clip_paste = crate::clipboard::Prefill::ask_of(reader);
+        let started = std::time::Instant::now();
+        while a.paste.text.is_empty() && started.elapsed() < std::time::Duration::from_secs(5) {
+            frame(&mut a, &ctx, vec![]);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(a.paste.text, "https://a.example/c.zip");
+        assert!(a.settings_page.is_some(), "the page stays");
+    }
+
+    /// `/show options:<page>` opens the page there (the toolbar's, the menu's and the tray's
+    /// Options open it on General); every other name shows the downloads again, `downloads`
+    /// doing only that.
+    #[test]
+    fn show_names_open_their_section() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.run(Cmd::Options, None, &ctx);
+        assert_eq!(a.settings_page.as_ref().map(|p| p.page()), Some(0));
+        for (name, page) in [
+            ("options:proxy", 5),
+            ("options:remote", 11),
+            ("options:progress", 3),
+            ("options:sounds", 8),
+            ("options", 0),
+        ] {
+            a.show_named(name, &ctx);
+            assert_eq!(
+                a.settings_page.as_ref().map(|p| p.page()),
+                Some(page),
+                "{name}"
+            );
+        }
+        a.show_named("downloads", &ctx);
+        assert!(a.settings_page.is_none(), "downloads");
+        a.show_named("options:archives", &ctx);
+        a.show_named("about", &ctx);
+        assert!(a.settings_page.is_none(), "another name closes it");
+        // The toolbar's Options with the page open leaves it as it is.
+        a.show_named("options:regional", &ctx);
+        a.run(Cmd::Options, None, &ctx);
+        assert_eq!(a.settings_page.as_ref().map(|p| p.page()), Some(9));
+    }
+
+    /// D2: Save puts in only what the page changed: a setting changed elsewhere while it was
+    /// open (the details pane, here) stays as it is now. The page stays, on a clean draft.
+    #[test]
+    fn save_merges_only_what_options_changed() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.show_named("options:downloads", &ctx);
+        let before = a.settings.double_click_open;
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings.show_details = !a.settings.show_details;
+        let details = a.settings.show_details;
+        assert!(a.settings_page.as_ref().unwrap().dirty());
+        a.settings_page_event(PageEvent::Save);
+        assert_eq!(a.settings.double_click_open, !before, "the page's change");
+        assert_eq!(
+            a.settings.show_details, details,
+            "the change made elsewhere"
+        );
+        let p = a.settings_page.as_ref().expect("the page stays");
+        assert_eq!(p.page(), 3, "on its page");
+        assert!(!p.dirty(), "a fresh draft");
+    }
+
+    /// Discard (and Back's Yes) undo what the draft did live: its categories are published as
+    /// the settings hold them again. Discard keeps the page on a fresh draft; Close shuts it.
+    #[test]
+    fn discard_restores_categories_and_remote() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.show_named("options:saveto", &ctx);
+        const ID: u32 = 987_654_321;
+        let mut draft = None;
+        change(&mut a, |s| {
+            s.custom_categories.push(crate::model::CustomCategory {
+                id: ID,
+                name: "Page test".into(),
+                types: "xyz".into(),
+                folder: None,
+            });
+            // As the category editor's OK does: shown at once, in the draft.
+            s.publish_categories();
+            draft = Some(s.clone());
+        });
+        let saved = a.settings.clone();
+        a.settings_page_event(PageEvent::Discard);
+        assert!(
+            crate::model::custom(ID).is_none(),
+            "the draft's category undone"
+        );
+        assert_eq!(a.settings, saved, "nothing kept");
+        let p = a.settings_page.as_ref().expect("Discard keeps the page");
+        assert_eq!(p.page(), 2);
+        assert!(!p.dirty());
+        change(&mut a, |s| {
+            *s = draft.clone().unwrap();
+            s.publish_categories();
+        });
+        a.settings_page_event(PageEvent::Close);
+        assert!(a.settings_page.is_none());
+        assert!(crate::model::custom(ID).is_none(), "Close undoes it too");
+        assert_eq!(a.settings, saved);
+    }
+
+    /// Audit r1: Escape in the title bar's Find field clears and leaves the field, and the
+    /// page stays (it isn't Back too).
+    #[test]
+    fn escape_in_find_leaves_the_page_open() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        a.run(Cmd::Options, None, &ctx);
+        a.find.text = "zip".into();
+        frame(&mut a, &ctx, vec![]);
+        ctx.memory_mut(|m| m.request_focus(crate::find::field_id()));
+        frame(&mut a, &ctx, vec![]);
+        frame(&mut a, &ctx, vec![]);
+        assert!(
+            ctx.memory(|m| m.has_focus(crate::find::field_id())),
+            "Find has the keys"
+        );
+        frame(
+            &mut a,
+            &ctx,
+            vec![key(egui::Key::Escape, egui::Modifiers::NONE)],
+        );
+        frame(&mut a, &ctx, vec![]);
+        assert!(a.find.text.is_empty(), "Escape cleared Find");
+        assert!(a.settings_page.is_some(), "the page stays");
+    }
+
+    /// Audit r1: another `/show` drops the page with Remote → Pair a device... open: the
+    /// remote control stops showing the code, as closing the pairing window does.
+    #[test]
+    fn closing_the_page_stops_pairing() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        // The app's remote control, off (Options → Remote), as emote::start makes it.
+        let dir = tempfile::tempdir().unwrap();
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let texts: mdm_remote::Texts = std::sync::Arc::new(|_: &str| Default::default());
+        let remote = mdm_remote::Remote::new(
+            a.rt.clone(),
+            dir.path().to_owned(),
+            mdm_ipc::Sink::new(tx, std::sync::Arc::new(|| {})),
+            texts,
+        );
+        a.remote = Some(remote.clone());
+        a.show_named("options:pair", &ctx);
+        assert!(a.settings_page.as_ref().unwrap().options.pairing());
+        assert!(remote.pairing().0.is_some(), "a code shown");
+        a.show_named("downloads", &ctx);
+        assert!(a.settings_page.is_none());
+        assert!(remote.pairing().0.is_none(), "the code is gone");
+    }
+
+    /// The downloads list's keys aren't the page's: with the page open, Delete and Ctrl+A act
+    /// on nothing (the selection stays, no deletion is asked), and the page has the panes'
+    /// place in the frame.
+    #[test]
+    fn the_list_takes_no_keys_while_the_page_is_open() {
+        let mut a = app(vec![item(1, "a.zip"), item(2, "b.zip")]);
+        let ctx = egui::Context::default();
+        a.selection.set(1);
+        a.run(Cmd::Options, None, &ctx);
+        frame(&mut a, &ctx, vec![]);
+        frame(
+            &mut a,
+            &ctx,
+            vec![
+                key(egui::Key::A, egui::Modifiers::COMMAND),
+                key(egui::Key::Delete, egui::Modifiers::NONE),
+            ],
+        );
+        frame(&mut a, &ctx, vec![]);
+        assert_eq!(a.selection.ids(), &[1], "Ctrl+A selected nothing more");
+        assert!(a.confirm_delete.is_none(), "Delete asked nothing");
+        assert!(a.settings_page.is_some());
+        // Escape goes back (nothing changed); the list has its keys again.
+        frame(
+            &mut a,
+            &ctx,
+            vec![key(egui::Key::Escape, egui::Modifiers::NONE)],
+        );
+        assert!(a.settings_page.is_none(), "Escape: back to the downloads");
+        frame(&mut a, &ctx, vec![]);
+        frame(
+            &mut a,
+            &ctx,
+            vec![key(egui::Key::Delete, egui::Modifiers::NONE)],
+        );
+        assert!(a.confirm_delete.is_some(), "Delete asks again");
+    }
+
+    /// Plan 11b1: the Scheduler opens as a section of the page from its commands (the toolbar's
+    /// and menus' Scheduler, a queue's Edit, Schedule and Create new queue) and its `/show`
+    /// names; another name shows the downloads again. No Scheduler window is left.
+    #[test]
+    fn the_scheduler_opens_as_a_section() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let shown = |a: &App| {
+            let p = a.settings_page.as_ref().expect("the page");
+            assert_eq!(p.page(), crate::options::SCHEDULER_PAGE, "on the Scheduler");
+            p.scheduler.as_ref().expect("its draft").shown()
+        };
+        a.run(Cmd::Scheduler, None, &ctx);
+        assert_eq!(shown(&a), (Some((0, false)), false));
+        a.run(Cmd::EditQueue(1), None, &ctx);
+        assert_eq!(shown(&a), (Some((1, true)), false), "Edit: its files");
+        a.run(Cmd::ScheduleQueue(0), None, &ctx);
+        assert_eq!(shown(&a), (Some((0, false)), false), "Schedule: when");
+        a.run(Cmd::NewQueue, None, &ctx);
+        assert!(shown(&a).1, "Create new queue asks its name");
+        assert!(a.settings_page.as_ref().unwrap().modal());
+        // Audit r1: while it asks, the Scheduler's commands and names leave it as it is.
+        a.run(Cmd::EditQueue(1), None, &ctx);
+        a.show_named("scheduler:limits", &ctx);
+        assert_eq!(shown(&a), (Some((0, false)), true), "held while it asks");
+        a.show_named("downloads", &ctx);
+        assert!(a.settings_page.is_none());
+        a.show_named("scheduler:limits", &ctx);
+        assert_eq!(shown(&a), (None, false), "Download limits");
+        a.show_named("scheduler:files", &ctx);
+        assert_eq!(shown(&a), (Some((0, true)), false));
+        a.show_named("options:scheduler", &ctx);
+        assert_eq!(
+            a.settings_page.as_ref().map(|p| p.page()),
+            Some(crate::options::SCHEDULER_PAGE)
+        );
+        // From another page of Options, the Scheduler goes to its section.
+        a.show_named("options:sounds", &ctx);
+        a.run(Cmd::Scheduler, None, &ctx);
+        assert_eq!(shown(&a).0, Some((0, true)), "its draft kept its view");
+        a.show_named("about", &ctx);
+        assert!(a.settings_page.is_none(), "another name closes it");
+    }
+
+    /// Plan 11b1: Save saves the Scheduler first, then only what Options' pages changed: the
+    /// Download limits set in the Scheduler stay unless Options' Connection changed them too
+    /// (then Options' are kept, as saved last). Both drafts are fresh after.
+    #[test]
+    fn scheduler_save_then_options_save_order() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let before = a.settings.clone();
+        a.run(Cmd::Scheduler, None, &ctx);
+        let p = a.settings_page.as_mut().unwrap();
+        p.scheduler.as_mut().unwrap().set_limits(true, 999);
+        assert!(p.dirty(), "the Scheduler's change is the page's");
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings_page_event(PageEvent::Save);
+        assert!(
+            a.settings.limits_on && a.settings.limits_mb == 999,
+            "the Scheduler's"
+        );
+        assert_eq!(
+            a.settings.double_click_open, !before.double_click_open,
+            "Options'"
+        );
+        let p = a.settings_page.as_ref().expect("the page stays");
+        assert!(!p.dirty(), "fresh drafts");
+        assert_eq!(p.page(), crate::options::SCHEDULER_PAGE);
+        // Both change Download limits: Options' Connection is saved last, and only what it
+        // changed (the check box, not the size the Scheduler set).
+        a.settings_page
+            .as_mut()
+            .unwrap()
+            .scheduler
+            .as_mut()
+            .unwrap()
+            .set_limits(true, 500);
+        change(&mut a, |s| s.limits_on = false);
+        a.settings_page_event(PageEvent::Save);
+        assert!(!a.settings.limits_on, "Options' change, saved last");
+        assert_eq!(
+            a.settings.limits_mb, 500,
+            "the Scheduler's, which Options didn't change"
+        );
+    }
+
+    /// Plan 11b1 (D3): the Scheduler's changes are the page's: Back asks, Discard drops them
+    /// (the queues as they were, the page on a fresh draft), and nothing is applied by leaving.
+    #[test]
+    fn the_schedulers_changes_wait_for_save() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let saved = a.settings.clone();
+        let queues = a.queues.clone();
+        a.run(Cmd::Scheduler, None, &ctx);
+        let p = a.settings_page.as_mut().unwrap();
+        p.scheduler.as_mut().unwrap().set_limits(true, 777);
+        assert_eq!(p.back(), None, "Back asks");
+        assert!(p.modal());
+        // No: the page stays with its changes, its buttons live again.
+        p.answer_no();
+        assert!(!p.modal() && p.dirty());
+        a.settings_page_event(PageEvent::Discard);
+        assert_eq!(a.settings, saved, "nothing applied");
+        assert_eq!(a.queues, queues);
+        let p = a.settings_page.as_ref().expect("Discard keeps the page");
+        assert!(!p.dirty());
+        a.settings_page
+            .as_mut()
+            .unwrap()
+            .scheduler
+            .as_mut()
+            .unwrap()
+            .set_limits(true, 777);
+        a.settings_page_event(PageEvent::Close);
+        assert!(a.settings_page.is_none());
+        assert_eq!(a.settings, saved, "Close drops it too");
+    }
+
+    /// Audit r2: Start now applies the Scheduler's draft at once, its Download limits too: an
+    /// Options draft without changes is made again from them (Connection shows what is in
+    /// force, nothing to save); one with changes is left as it is.
+    #[test]
+    fn start_now_refreshes_an_untouched_options_draft() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let click_start = |a: &mut App| {
+            let input = |events| egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    Pos2::ZERO,
+                    egui::vec2(1080.0, 560.0),
+                )),
+                events,
+                ..Default::default()
+            };
+            let mut at = None;
+            for _ in 0..2 {
+                let mut out = ctx.run_ui(input(vec![]), |ui| a.paint(ui));
+                out.textures_delta.clear();
+                let tree = out
+                    .platform_output
+                    .accesskit_update
+                    .expect("AccessKit is on");
+                at = tree
+                    .nodes
+                    .iter()
+                    .find(|(_, n)| {
+                        n.role() == egui::accesskit::Role::Button
+                            && n.label().map(|l| l.replace('&', "")).as_deref() == Some("Start now")
+                    })
+                    .and_then(|(_, n)| n.bounds())
+                    .map(|b| pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32));
+            }
+            let at = at.expect("Start now");
+            for down in [None, Some(true), Some(false)] {
+                let mut events = vec![egui::Event::PointerMoved(at)];
+                if let Some(pressed) = down {
+                    events.push(egui::Event::PointerButton {
+                        pos: at,
+                        button: egui::PointerButton::Primary,
+                        pressed,
+                        modifiers: Default::default(),
+                    });
+                }
+                let mut out = ctx.run_ui(input(events), |ui| a.paint(ui));
+                out.textures_delta.clear();
+            }
+        };
+        a.run(Cmd::Scheduler, None, &ctx);
+        let s = a
+            .settings_page
+            .as_mut()
+            .unwrap()
+            .scheduler
+            .as_mut()
+            .unwrap();
+        s.set_limits(true, 4321);
+        click_start(&mut a);
+        // (An empty queue stops again at once: the Start itself is scheduler.rs's test.)
+        assert!(
+            a.settings.limits_on && a.settings.limits_mb == 4321,
+            "applied"
+        );
+        let p = a.settings_page.as_ref().unwrap();
+        assert!(!p.dirty(), "nothing left to save");
+        assert_eq!(p.options.result().limits_mb, 4321, "Options shows it");
+        assert_eq!(p.page(), crate::options::SCHEDULER_PAGE);
+        // Options has a change of its own: its draft stays as it is (Save merges it).
+        a.run(Cmd::ScheduleQueue(1), None, &ctx);
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        let s = a
+            .settings_page
+            .as_mut()
+            .unwrap()
+            .scheduler
+            .as_mut()
+            .unwrap();
+        s.set_limits(true, 55);
+        click_start(&mut a);
+        assert_eq!(a.settings.limits_mb, 55, "applied");
+        let p = a.settings_page.as_ref().unwrap();
+        assert!(p.options.dirty(), "Options' change kept");
+        assert_eq!(p.options.result().limits_mb, 4321, "its draft as it was");
+    }
+
+    /// Plan 11b2: the Speed limiter's, Torrents' and the browser extension's sections open from
+    /// their commands and `/show` names; `/show extension` is still the offer's window (the
+    /// page closes for it, as for any other name).
+    #[test]
+    fn the_moved_windows_open_as_sections() {
+        use crate::options::{EXTENSION_PAGE, SPEED_PAGE, TORRENTS_PAGE};
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let page = |a: &App| a.settings_page.as_ref().map(|p| p.page());
+        a.run(Cmd::LimiterSettings, None, &ctx);
+        assert_eq!(page(&a), Some(SPEED_PAGE), "Speed Limiter → Settings...");
+        a.run(Cmd::TorrentSettings, None, &ctx);
+        assert_eq!(page(&a), Some(TORRENTS_PAGE), "Torrent settings...");
+        for (name, want) in [
+            ("speedlimit", SPEED_PAGE),
+            ("torrent-settings", TORRENTS_PAGE),
+            ("options:speed", SPEED_PAGE),
+            ("options:torrents", TORRENTS_PAGE),
+            ("options:extension", EXTENSION_PAGE),
+        ] {
+            a.show_named(name, &ctx);
+            assert_eq!(page(&a), Some(want), "{name}");
+        }
+        // Audit r1: while a small dialog of the page waits (Enter queue name), their commands
+        // and names leave the page where it is.
+        a.run(Cmd::NewQueue, None, &ctx);
+        assert!(a.settings_page.as_ref().unwrap().modal());
+        a.run(Cmd::LimiterSettings, None, &ctx);
+        a.run(Cmd::TorrentSettings, None, &ctx);
+        a.show_named("speedlimit", &ctx);
+        a.show_named("torrent-settings", &ctx);
+        assert_eq!(
+            page(&a),
+            Some(crate::options::SCHEDULER_PAGE),
+            "held while it asks"
+        );
+        a.show_named("extension", &ctx);
+        assert!(a.settings_page.is_none(), "the offer's window instead");
+        assert!(a.extension.is_some());
+    }
+
+    /// Plan 11b2: Save sets the Speed limiter's and Torrents' changes (as their OK did), then
+    /// Options'; Discard drops them. A draft only looked at sets nothing: a speed changed
+    /// elsewhere meanwhile stays.
+    #[test]
+    fn save_sets_speed_and_torrents_then_options() {
+        let mut a = app(Vec::new());
+        let ctx = egui::Context::default();
+        let before = a.settings.clone();
+        a.run(Cmd::LimiterSettings, None, &ctx);
+        let edit = |a: &mut App| {
+            let p = a.settings_page.as_mut().unwrap();
+            let s = p
+                .speed
+                .get_or_insert_with(|| dialogs::SpeedSettings::new(&before));
+            s.kb = "321".into();
+            let t = p
+                .torrents
+                .get_or_insert_with(|| crate::torrentdlg::TorrentSettings::new(&before));
+            t.set_share(!before.torrent_keep_sharing);
+            assert!(p.dirty());
+        };
+        edit(&mut a);
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings_page_event(PageEvent::Discard);
+        assert_eq!(a.settings, before, "Discard: nothing set");
+        assert!(!a.settings_page.as_ref().unwrap().dirty(), "fresh drafts");
+        edit(&mut a);
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings_page_event(PageEvent::Save);
+        assert_eq!(a.settings.speed_limit_kb, 321, "the Speed limiter's");
+        assert_eq!(
+            a.settings.torrent_keep_sharing, !before.torrent_keep_sharing,
+            "Torrents'"
+        );
+        assert_eq!(
+            a.settings.double_click_open, !before.double_click_open,
+            "Options'"
+        );
+        let p = a.settings_page.as_ref().expect("the page stays");
+        assert!(!p.dirty(), "fresh drafts");
+        assert_eq!(p.page(), crate::options::SPEED_PAGE);
+        // Untouched drafts: a speed set elsewhere meanwhile isn't put back by Save.
+        a.settings.speed_limit_kb = 777;
+        change(&mut a, |s| s.double_click_open = !s.double_click_open);
+        a.settings_page_event(PageEvent::Save);
+        assert_eq!(a.settings.speed_limit_kb, 777);
     }
 }

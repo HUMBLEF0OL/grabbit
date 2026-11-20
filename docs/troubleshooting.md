@@ -34,7 +34,7 @@ Every download keeps a log of its recent events: retries, redirects, the server'
 ## The browser doesn't send downloads to Grabbit
 
 1. Was Grabbit installed with the setup, with **Set up browser integration** ticked? A portable copy can't take browser downloads. Run the setup again to add it.
-2. Is the extension loaded and turned on? Look for **Grabbit** on the browser's extensions page. In Firefox, install it from addons.mozilla.org: a temporary add-on is gone after a restart. See [Browser integration](browser-integration.md).
+2. Is the extension loaded and turned on? Look for **Grabbit** on the browser's extensions page. In Firefox, a temporary add-on is gone after a restart: load it again (see [Firefox forgets the extension](browser-help.md#firefox-temporary)). See [Browser integration](browser-integration.md).
 3. Is **Options → General → Use advanced browser integration** on, and your browser ticked under **Capture downloads from the following browsers**?
 4. Is the file's type in **Options → File types**? Only listed types are taken automatically. **Download with Grabbit** on the right-click menu takes any link.
 5. Is the site in **Don't start downloading automatically from the following sites**?
@@ -44,7 +44,7 @@ When none of this helps, the browser keeps the download, so nothing is lost. The
 ## The Scheduler didn't start the queue
 
 - Grabbit must be running at that time. Closing the window is fine (it stays in the tray); **Tasks → Exit** is not.
-- Did you click **Apply** after setting the time?
+- Did you click **Save** after setting the time?
 - **Daily** starts only on the ticked days. **Once at** starts only on that date.
 - A computer that is asleep doesn't run anything until it wakes, unless the queue has **Wake the computer to run this queue** ticked (on Windows it needs **Allow wake timers** in the power plan; the Scheduler says when it's off). See [Wake the computer to run a queue](queues-and-scheduler.md#wake-the-computer-to-run-a-queue).
 
@@ -104,7 +104,7 @@ To check that your copy is the real one:
 2. Get your file's SHA-256: run `certutil -hashfile "Grabbit-0.5.0-setup.exe" SHA256`.
 3. Compare it with the same file's line in that release's `SHA256SUMS.txt`.
 
-If they match, it is the file we published. Every release is built on GitHub from the [public source code](https://github.com/HUMBLEF0OL/grabbit), so anyone can read what went into it.
+If they match, it is the file we published. Every release is built from the [public source code](https://github.com/HUMBLEF0OL/grabbit) at its tagged commit, and its `SHA256SUMS.txt` is signed with Grabbit's release key, so anyone can read what went into it.
 
 If your antivirus quarantined Grabbit, restore it and add an exception for its folder. If it flags something other than the setup or Grabbit's own programs, or a copy from anywhere else, don't run it, and please [tell us](https://github.com/HUMBLEF0OL/grabbit/issues).
 

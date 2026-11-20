@@ -1,10 +1,9 @@
 //! The browser extension's offer: at each start, until a browser's extension has reached the
 //! app (the native host notes it: mdm_ipc::extension::seen), a window lists the browsers
-//! installed and opens the extension's page in the one picked (addons.mozilla.org for Firefox
-//! and its family, the Chrome Web Store for Chrome, Edge, Brave, Opera and Vivaldi), with the
-//! tutorial that adds it by hand as the fallback. Chrome may ask by itself too: registering the
-//! host also names the store's extension to it (crates/nmhost). "Don't ask again" stops the
-//! offer; `/show extension` brings it back.
+//! installed and, for the one picked, opens the tutorial's section that loads the copy in
+//! Grabbit's folder (Grabbit has no store listing yet; once the Chrome Web Store has it, Chrome,
+//! Edge, Brave, Opera and Vivaldi get its page, and registering the host names it to Chrome,
+//! crates/nmhost). "Don't ask again" stops the offer; `/show extension` brings it back.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -110,10 +109,21 @@ fn is_seen(seen: &[String], row: &str) -> bool {
     seen.iter().any(|b| b == named)
 }
 
-/// A row for a browser of Firefox's family (Firefox, Zen, LibreWolf …): it gets the add-on's
-/// page on addons.mozilla.org, not the Chrome Web Store.
+/// A row for a browser of Firefox's family (Firefox, Zen, LibreWolf …): it gets the tutorial's
+/// Firefox section, not the Chrome Web Store.
 fn is_gecko(row: &str) -> bool {
     mdm_ipc::browsers::named(row).is_some_and(|b| b.family == mdm_ipc::browsers::Family::Gecko)
+}
+
+/// Where a row's button goes: the store's page (`store`, None while Grabbit isn't listed), else
+/// the tutorial's section for that browser (a docs/ path, for help::page_url). Firefox's family
+/// has no listing: always its section.
+fn row_target<'a>(row: &str, store: Option<&'a str>) -> (Option<&'a str>, &'static str) {
+    if is_gecko(row) {
+        (None, mdm_ipc::extension::GUIDE_FIREFOX)
+    } else {
+        (store, mdm_ipc::extension::GUIDE_CHROMIUM)
+    }
 }
 
 impl Extension {
@@ -141,11 +151,10 @@ impl Extension {
         }
     }
 
-    /// Open until closed; Done when "Don't ask again" was pressed.
-    pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
-        // The host marks the extension seen when a browser starts it: look again now and then
-        // (each browser's own, as each adds it), beside the window, one read at a time; what
-        // was read last shows meanwhile.
+    /// The host marks the extension seen when a browser starts it: look again now and then
+    /// (each browser's own, as each adds it), beside the window, one read at a time; what was
+    /// read last shows meanwhile. Every frame the window or the page's section is drawn.
+    fn refresh(&mut self, ctx: &egui::Context) {
         if let Some(answer) = self.reading.as_ref().and_then(Reading::take) {
             self.reading = None;
             if let Some(l) = answer {
@@ -162,7 +171,36 @@ impl Extension {
             self.reading = Reading::start(ctx, Looked::now);
         }
         ctx.request_repaint_after(Duration::from_secs(1));
-        let h = BANNER + 16.0 + self.browsers.len() as f32 * ROW + 104.0;
+    }
+
+    /// The rows' height with the window's footer band (`body`'s `h`).
+    fn height(&self) -> f32 {
+        BANNER + 16.0 + self.browsers.len() as f32 * ROW + 104.0
+    }
+
+    /// The section's layout size (plan 11b2): the window's client without its footer, a long
+    /// translation's banner included (`winui::banner`).
+    pub fn size(&self, ctx: &egui::Context) -> [f32; 2] {
+        let extra = crate::dialogs::grow_extra(ctx, "extension-banner");
+        [W, self.height() - 32.0 + extra]
+    }
+
+    /// The browser extension as a section of Options' page (plan 11b2): the window's rows at
+    /// `o`, [`Extension::size`] points, without its footer (nothing to save; the offer at a
+    /// start, with Don't ask again, stays the window).
+    pub fn section(&mut self, ui: &mut Ui, o: Pos2) {
+        self.refresh(ui.ctx());
+        let h = self.height();
+        let size = self.size(ui.ctx());
+        crate::dialogs::inline(ui, o, size, winui::BG(), |ui, o| {
+            self.body(ui, o, h, None);
+        });
+    }
+
+    /// Open until closed; Done when "Don't ask again" was pressed.
+    pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
+        self.refresh(ctx);
+        let h = self.height();
         // A long translation's subline makes the banner taller (winui::banner).
         let extra = crate::dialogs::grow_extra(ctx, "extension-banner");
         let mut answer = None;
@@ -175,7 +213,7 @@ impl Extension {
             false,
             winui::BG(),
             |ui, o| {
-                self.body(ui, o, h, &mut answer);
+                self.body(ui, o, h, Some(&mut answer));
                 match answer.take() {
                     Some(true) => Outcome::Done(()),
                     Some(false) => Outcome::Closed,
@@ -186,7 +224,9 @@ impl Extension {
         )
     }
 
-    fn body(&mut self, ui: &mut Ui, o: Pos2, h: f32, answer: &mut Option<bool>) {
+    /// Its rows from `o`, `h` tall with the window's footer; `answer` is the window's (None in
+    /// the page's section: no footer).
+    fn body(&mut self, ui: &mut Ui, o: Pos2, h: f32, answer: Option<&mut Option<bool>>) {
         let p = ui.painter().clone();
         let (ink, muted) = (winui::TEXT(), winui::MUTED());
         // The banner: what the extension does, in one line, and how.
@@ -206,16 +246,12 @@ impl Extension {
         let o = o + egui::vec2(0.0, extra);
 
         // One row per browser: its name, and the button that opens the extension's page in it:
-        // Firefox's on addons.mozilla.org, the Chrome Web Store's for the others (the tutorial
-        // while STORE_ID is a placeholder, as in a build of its own).
+        // the Chrome Web Store's once Grabbit is listed there; until then (and always for
+        // Firefox's family, which has no listing) the tutorial's section for that browser.
         let store = mdm_ipc::extension::store_page();
         for (k, (name, program)) in self.browsers.iter().enumerate() {
             let y = BANNER + 16.0 + k as f32 * ROW;
-            let page = if is_gecko(name) {
-                Some(mdm_ipc::extension::FIREFOX_PAGE.to_owned())
-            } else {
-                store.clone()
-            };
+            let (page, guide) = row_target(name, store.as_deref());
             winui::text_font(
                 &p,
                 winui::tahoma_bold(),
@@ -282,10 +318,8 @@ impl Extension {
             ui.ctx()
                 .accesskit_node_builder(add.id, |n| n.set_label(spoken));
             if add.clicked() {
-                // No store page: the tutorial on the website, in the interface language.
-                let url = page
-                    .clone()
-                    .unwrap_or_else(|| crate::help::page_url(mdm_ipc::extension::GUIDE_DOC));
+                // No store page: the tutorial on the website, at this browser's section.
+                let url = page.map_or_else(|| crate::help::page_url(guide), str::to_owned);
                 let url = url.as_str();
                 match program {
                     Some(program) => crate::win32::open_in(program, url),
@@ -334,10 +368,19 @@ impl Extension {
                 crate::i18n::t("Connected: downloads from your browser now come here.").to_owned(),
                 winui::SUCCESS(),
             )
-        } else {
+        } else if store.is_some() {
             (
                 crate::i18n::t(
                     "Once it is added, this window says so. Chrome may also ask by itself at its next start.",
+                )
+                .to_owned(),
+                muted,
+            )
+        } else {
+            (
+                // i18n: in the browser extension's window, under the browsers, while it has no store listing
+                crate::i18n::t(
+                    "The extension comes with Grabbit: Show me how loads it from Grabbit's folder. Once it is added, this window says so.",
                 )
                 .to_owned(),
                 muted,
@@ -361,6 +404,11 @@ impl Extension {
         {
             crate::help::open_page(mdm_ipc::extension::GUIDE_DOC);
         }
+        // As a section of Options' page (plan 11b2) there is no footer: the page has its own
+        // bar, and the offer's answers are the window's.
+        let Some(answer) = answer else {
+            return;
+        };
         // The footer: Don't ask again (quiet, at its start) only while no extension has reached
         // MDM, and Close, which Enter presses, as before (Escape closes it too, in `show`).
         let mut items = vec![FooterItem::Button(
@@ -396,7 +444,10 @@ pub enum Registration {
     /// A browser's folder (or the registry) has no manifest.
     Missing,
     /// A manifest names a helper program that isn't there or can't be run (#253).
-    HelperMissing(std::path::PathBuf),
+    HelperMissing(PathBuf),
+    /// The browsers are pointed at a manifest that is gone, with the copy that wrote it: one run
+    /// from inside a zip, whose temporary folder was deleted (upstream issue 818).
+    Gone(PathBuf),
 }
 
 /// Where browser integration's registration stands: the native host's manifests where the
@@ -410,18 +461,104 @@ pub fn registered() -> bool {
     registration() == Registration::Ready
 }
 
+/// Why the last registration failed (at a start, or Set it up's), in the native host's words;
+/// None once one succeeded.
+static REGISTER_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+/// Why the last registration failed, if it did (Test browser integration says it).
+fn register_error() -> Option<String> {
+    REGISTER_ERROR.lock().ok().and_then(|e| e.clone())
+}
+
+/// Note how a registration went: logged, and its failure kept for Test browser integration.
+pub(crate) fn registered_as(result: &Result<String, String>) {
+    match result {
+        Ok(said) => tracing::info!("browser integration set up: {said}"),
+        Err(e) => tracing::warn!("browser integration not set up: {e}"),
+    }
+    if let Ok(mut last) = REGISTER_ERROR.lock() {
+        *last = result.as_ref().err().cloned();
+    }
+}
+
+/// The native host beside this program run with `arg` (`--register`, `--repair`), waiting up
+/// to `limit`: what it says it did, or why it failed.
+pub(crate) fn run_host(arg: &str, limit: Duration) -> Result<String, String> {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    let host = std::env::current_exe()
+        .map_err(|e| e.to_string())?
+        .with_file_name("grabbit-nmhost.exe");
+    let mut cmd = Command::new(&host);
+    cmd.arg(arg)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    crate::win32::no_console(&mut cmd);
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("{}: {e}", host.display()))?;
+    let status = crate::launch::wait_within(&mut child, limit);
+    // A few lines at most: they fit the pipes, so the helper never waits on them.
+    let mut said = String::new();
+    if let Some(mut out) = child.stdout.take() {
+        let _ = out.read_to_string(&mut said);
+    }
+    if let Some(mut err) = child.stderr.take() {
+        said.push('\n');
+        let _ = err.read_to_string(&mut said);
+    }
+    let said = said.split_whitespace().collect::<Vec<_>>().join(" ");
+    match status {
+        Some(s) if s.success() => Ok(said),
+        Some(s) => Err(format!("{} {arg}: {s}: {said}", host.display())),
+        None => Err(format!("{} {arg}: no answer in {limit:?}", host.display())),
+    }
+}
+
+/// This copy runs from a folder that is deleted later (upstream issue 818): an archive run
+/// without extracting it first (WinRAR, 7-Zip and Windows Explorer extract it to a temporary
+/// folder, deleted once it quits), or anything under the temporary folder. It registers nothing
+/// with the browsers, which would be left with a helper that is gone.
+pub fn temporary_copy() -> bool {
+    static TEMPORARY: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *TEMPORARY.get_or_init(|| {
+        std::env::current_exe().is_ok_and(|p| mdm_ipc::browsers::in_temporary_folder(&p))
+    })
+}
+
+/// At each start, on a thread of its own (not in a portable copy, which registers nothing, nor
+/// an off-screen test run, whose browsers are the person's): a browser's registration that leads
+/// nowhere is repaired for this copy, one that works is left alone, whichever copy it names
+/// (upstream issue 818).
+pub fn repair_at_start() {
+    if mdm_ipc::portable_dir().is_some() || crate::offscreen() {
+        return;
+    }
+    if temporary_copy() {
+        tracing::warn!(
+            "browser integration: not set up, this copy runs from a temporary folder ({}), \
+             deleted once it quits: extract it to a folder of its own",
+            std::env::current_exe().unwrap_or_default().display()
+        );
+        return;
+    }
+    crate::win32::repair_browsers();
+}
+
 /// Set it up's runs finished so far: a window that shows the checks reads them again when this
 /// changes ([`set_up_finished`]).
 static SET_UP_DONE: AtomicU64 = AtomicU64::new(0);
 /// A Set it up is running (a second press waits for it).
 static SETTING_UP: AtomicBool = AtomicBool::new(false);
 /// How long the native host's `--register` has (it writes a few files, or registry keys).
-const SET_UP_LIMIT: Duration = Duration::from_secs(20);
+pub(crate) const SET_UP_LIMIT: Duration = Duration::from_secs(20);
 
-/// Register it now, for a copy installed without it (the setup's box unticked): the native
-/// host's own `--register`, for this user, on a thread of its own (a program waited for on the
-/// window's thread freezes it for as long as the program takes, #222). The window repaints when
-/// it's done, and [`set_up_finished`] tells the checks to read the result.
+/// Register it now, for a copy installed without it (the setup's box unticked), or to take the
+/// browsers back from another copy: the native host's own `--register`, for this user, on a
+/// thread of its own (a program waited for on the window's thread freezes it for as long as the
+/// program takes, #222). The window repaints when it's done, and [`set_up_finished`] tells the
+/// checks to read the result, and why it failed if it did.
 pub fn set_up(ctx: &egui::Context) {
     if SETTING_UP.swap(true, Ordering::AcqRel) {
         return;
@@ -430,13 +567,7 @@ pub fn set_up(ctx: &egui::Context) {
     let started = std::thread::Builder::new()
         .name("set-up".into())
         .spawn(move || {
-            if let Ok(exe) = std::env::current_exe() {
-                crate::launch::run_within(
-                    std::process::Command::new(exe.with_file_name("grabbit-nmhost.exe"))
-                        .arg("--register"),
-                    SET_UP_LIMIT,
-                );
-            }
+            registered_as(&run_host("--register", SET_UP_LIMIT));
             SETTING_UP.store(false, Ordering::Release);
             SET_UP_DONE.fetch_add(1, Ordering::AcqRel);
             ctx.request_repaint();
@@ -459,6 +590,9 @@ pub struct Check {
     pub ok: bool,
     pub text: String,
     pub why: Option<&'static str>,
+    /// A path the check names, on a line of its own under it: shortened in the middle when it
+    /// doesn't fit, whole on hover.
+    pub detail: Option<String>,
 }
 
 /// The checks in the order a connection needs them; the first failing one is what to fix.
@@ -467,6 +601,7 @@ pub fn checks(settings: &crate::settings::Settings) -> Vec<Check> {
         ok,
         text: crate::i18n::t(text).to_owned(),
         why: (!ok).then_some(why).flatten(),
+        detail: None,
     };
     let mut out = vec![
         check(
@@ -482,6 +617,14 @@ pub fn checks(settings: &crate::settings::Settings) -> Vec<Check> {
             Some("not-installed"),
         ),
     ];
+    if temporary_copy() {
+        out.push(check(
+            false,
+            // i18n: a check of Test browser integration: Grabbit was started from inside a zip (or from the temporary folder), which is deleted after it quits, so it can't be connected to the browsers
+            "This copy runs from a temporary folder that will be deleted",
+            Some("not-installed"),
+        ));
+    }
     let registration = registration();
     out.push(match &registration {
         Registration::Ready | Registration::Missing => check(
@@ -499,7 +642,32 @@ pub fn checks(settings: &crate::settings::Settings) -> Vec<Check> {
                 Some("not-installed"),
             )
         }
+        Registration::Gone(manifest) => {
+            tracing::warn!("browser integration: {} is gone", manifest.display());
+            let folder = manifest.parent().unwrap_or(manifest);
+            Check {
+                ok: false,
+                // i18n: a check of Test browser integration: the browsers are pointed at a copy of Grabbit that was deleted (often one started from inside a zip); that copy's folder shows on the line under it
+                text: crate::i18n::t("The browsers are set up for a copy that is gone:").to_owned(),
+                why: Some("not-installed"),
+                detail: Some(crate::i18n::ltr(&folder.display().to_string())),
+            }
+        }
     });
+    if registration != Registration::Ready
+        && let Some(error) = register_error()
+    {
+        out.push(Check {
+            ok: false,
+            text: crate::i18n::fmt(
+                // i18n: a check of Test browser integration: setting it up failed; {error} is the helper program's own message, in English
+                crate::i18n::t("Setting it up failed: {error}"),
+                &[("error", &crate::i18n::ltr(&error))],
+            ),
+            why: Some("not-installed"),
+            detail: None,
+        });
+    }
     let seen = mdm_ipc::extension::seen_browsers();
     if seen.is_empty() {
         out.push(check(
@@ -532,6 +700,7 @@ pub fn checks(settings: &crate::settings::Settings) -> Vec<Check> {
             ok: true,
             text,
             why: None,
+            detail: None,
         });
     }
     out
@@ -600,5 +769,32 @@ mod tests {
         for b in ["Google Chrome", "Helium", "Brave", "Your browser", ""] {
             assert!(!is_gecko(b), "{b}");
         }
+    }
+
+    /// Grabbit has no store listing: every row opens the tutorial at its browser's section
+    /// (never the original project's listings); a listing, once there, is Chromium's only.
+    #[test]
+    fn rows_open_the_tutorial_until_listed() {
+        let store = mdm_ipc::extension::store_page();
+        assert_eq!(store, None);
+        for b in ["Google Chrome", "Brave", "Microsoft Edge", ""] {
+            assert_eq!(
+                row_target(b, store.as_deref()),
+                (None, mdm_ipc::extension::GUIDE_CHROMIUM),
+                "{b}"
+            );
+        }
+        assert_eq!(
+            row_target("Mozilla Firefox", Some("https://store/x")),
+            (None, mdm_ipc::extension::GUIDE_FIREFOX)
+        );
+        assert_eq!(
+            row_target("Brave", Some("https://store/x")).0,
+            Some("https://store/x")
+        );
+        assert!(
+            crate::help::page_url(mdm_ipc::extension::GUIDE_CHROMIUM)
+                .ends_with("/help/guide-catch-browser-downloads.html#chromium")
+        );
     }
 }

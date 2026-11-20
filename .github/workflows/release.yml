@@ -2,7 +2,8 @@
 # and the browser extensions (tools/extension/pack.ps1: Chromium zip, Firefox .xpi).
 # Releases are built and published from the maintainer's computer (tools/installer/publish.ps1,
 # the same steps), so a tag starts nothing here. Run by hand (Actions -> Release -> Run workflow)
-# this only builds the downloads and keeps them as artifacts: nothing is published.
+# on a branch, this only builds the downloads and keeps them as artifacts: nothing is published.
+# Run by hand on a tag, its publish job still publishes that release: don't, use publish.ps1.
 name: Release
 
 on:
@@ -145,11 +146,12 @@ jobs:
           New-Item -ItemType Directory -Force target/store | Out-Null
           Copy-Item target/extension/mdm-chrome-store.zip "target/store/Grabbit-$v-chrome-web-store.zip"
 
-      # The Firefox add-on is listed on addons.mozilla.org: each release's version is sent there
-      # for review (not waited for); Firefox installs and updates it from its listing. The .xpi
-      # in the release stays the unsigned one (for about:debugging).
+      # Once Grabbit's add-on is listed on addons.mozilla.org (the repository variable
+      # AMO_LISTED set; it isn't yet, so this step is skipped), each release's version is sent
+      # there for review (not waited for). The .xpi in the release stays the unsigned one (for
+      # about:debugging).
       - name: Send the Firefox add-on to addons.mozilla.org
-        if: ${{ startsWith(github.ref, 'refs/tags/') && env.AMO_JWT_ISSUER != '' }}
+        if: ${{ startsWith(github.ref, 'refs/tags/') && env.AMO_JWT_ISSUER != '' && vars.AMO_LISTED != '' }}
         env:
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
         shell: pwsh
@@ -166,19 +168,20 @@ jobs:
             exit 1
           }
 
-      # The extension is listed in the Chrome Web Store (ejoleppdfgjdndddcjoehopknmlglojp,
-      # crates/ipc STORE_ID): each release's zip is uploaded and sent for review (not waited for);
+      # Once Grabbit's extension is listed in the Chrome Web Store (its ID in the repository
+      # variable CWS_EXTENSION_ID and crates/ipc STORE_ID; none yet, so this step is skipped),
+      # each release's zip is uploaded and sent for review (not waited for);
       # Chrome, Edge, Brave, Opera and Vivaldi update from the listing. A store refusal (a version
       # it has already) never fails the release.
       - name: Send the extension to the Chrome Web Store
-        if: ${{ startsWith(github.ref, 'refs/tags/') && env.CWS_REFRESH_TOKEN != '' }}
+        if: ${{ startsWith(github.ref, 'refs/tags/') && env.CWS_REFRESH_TOKEN != '' && vars.CWS_EXTENSION_ID != '' }}
         continue-on-error: true
         env:
           CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
           REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
           PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
-          EXTENSION_ID: ejoleppdfgjdndddcjoehopknmlglojp
+          EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
         run: npx --yes chrome-webstore-upload-cli@4 --source target/extension/mdm-chrome-store.zip
 
       - uses: actions/upload-artifact@v4

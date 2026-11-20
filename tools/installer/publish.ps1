@@ -1,6 +1,7 @@
-# Publishes a Grabbit release from this computer: the same downloads, checksums, signature and
-# notes as .github/workflows/release.yml's tag run, without GitHub's runners (a release then costs
-# no Actions time; only the website's deploy runs there).
+# Publishes a Grabbit release from this computer: the same downloads, checksums and signature as
+# .github/workflows/release.yml's tag run, without GitHub's runners (a release then costs no
+# Actions time; only the website's deploy runs there). Its notes are the version's CHANGELOG
+# section alone (release.yml also added the contributors' thanks).
 #
 #   tools/installer/publish.ps1            from a clean checkout of main at the release commit
 #   tools/installer/publish.ps1 -NoBuild   the programs in target/release are already this commit's

@@ -8,7 +8,7 @@ Queue big files during the day and let Grabbit download them at night, when nobo
 
 For new downloads:
 
-1. Add the download as usual (**Add URL**, or from the browser).
+1. Add the download as usual (**Add**, or from the browser).
 2. In **Download File Info**, click **Download Later**.
 3. Under **Add to queue**, pick **Main download queue**. Leave **Start the queue now** unticked. Click **OK**.
 
@@ -24,7 +24,7 @@ The **Q** column now shows a queue icon for each of them.
 
 ## 2. Set the start time
 
-1. Click **Scheduler** on the toolbar (or **Downloads → Scheduler**).
+1. Click **Scheduler** on the toolbar (or **Downloads → Scheduler**). It opens in the main window, in place of the download list.
 2. Select **Main download queue** on the left. The **Schedule** tab opens.
 3. Tick **Start download at** and set the time, for example 1:00:00 AM. Click the hours and use the arrows or type the number.
 4. Choose **Daily** and tick the days, or **Once at** and pick a date.
@@ -49,9 +49,9 @@ Back on the **Schedule** tab:
 ![The Scheduler's choices for when the queue is done, Turn off computer when done among them](images/help/overnight-done.webp)
 *When the queue is done: open a file, quit Grabbit, or turn the computer off.*
 
-## 5. Apply and leave Grabbit running
+## 5. Save and leave Grabbit running
 
-1. Click **Apply**, then **Close**.
+1. Click **Save** at the bottom, then **← Downloads** to see the download list again.
 2. Leave Grabbit running. Closing the main window is fine: Grabbit keeps going in the tray. Don't use **Tasks → Exit**.
 3. Make sure the computer doesn't go to sleep before the start time.
 

@@ -101,6 +101,9 @@ pub struct Settings {
     /// View → Paste bar (plan 06): the address band under the toolbar. On by default, for
     /// existing lists too.
     pub show_paste_bar: bool,
+    /// The Add window's "Ask where to save each one", as last left (on by default, for
+    /// existing lists too: Download File Info for every link).
+    pub add_ask_where: bool,
     /// View → Details pane, and the toolbar's Details (plan 06): the selected download beside
     /// the list. Off by default.
     pub show_details: bool,
@@ -183,7 +186,14 @@ pub struct Settings {
     pub mark_downloads: bool,
     /// Downloads.
     pub show_start_dialog: bool,
+    /// Downloads → Customize "Download progress" dialog → Edit... (upstream 1041): a download's
+    /// progress window opens when it starts. Off, it runs in the list (double-click opens it).
+    pub show_progress: bool,
     pub only_add_to_queue: bool,
+    /// Start downloading while Download File Info is open (app.rs `start_early`). Off by default
+    /// since 1.0.1: nothing starts before the dialog's answer. Saved under a key of its own:
+    /// 1.0.0 wrote `start_immediately` (on) into every settings file, which would keep it on.
+    #[serde(rename = "start_while_asking")]
     pub start_immediately: bool,
     pub queue_panel_later: bool,
     pub queue_panel_batch: bool,
@@ -262,8 +272,19 @@ pub struct Settings {
     /// Torrents keep sharing after they finish (D-018: off; a finished torrent stops, like any
     /// download).
     pub torrent_keep_sharing: bool,
-    /// Windows opens magnet links and .torrent files with MDM (D-018: opt-in, current user).
-    pub torrent_associations: bool,
+    /// Torrent settings' "Open magnet links and .torrent files with Grabbit": Windows opens them
+    /// with Grabbit (D-018: opt-in, current user), and the browser hands a .torrent download over
+    /// (upstream issue 1058: off, it stays with the browser for the user's own torrent client).
+    /// None: never decided, settled once at the first start (`settle_torrent_handler`) and saved.
+    /// Saved as `torrent_handler`, which mdm_ipc::capture::CaptureRules reads (None there: taken,
+    /// as before): every list 1.0.0 saved has `torrent_associations: false`, unticked and never
+    /// looked at alike.
+    #[serde(rename = "torrent_handler")]
+    pub torrent_associations: Option<bool>,
+    /// The switch as 1.0.0 saved it, read only: true was the user's tick; false says nothing
+    /// (`settle_torrent_handler`).
+    #[serde(rename = "torrent_associations", skip_serializing)]
+    pub torrent_associations_before: bool,
     /// Torrent settings → Network (#40, `torrent_config`): accept incoming connections, map
     /// the port with the router's UPnP, a fixed port (0: any, picked at each start), the DHT,
     /// finding peers on the local network.
@@ -379,6 +400,7 @@ impl Default for Settings {
             branches: [true, false, false, false],
             view: None,
             show_paste_bar: true,
+            add_ask_where: true,
             show_details: false,
             details_width: 276,
             dark_mode_support: true,
@@ -414,8 +436,9 @@ impl Default for Settings {
             set_creation_date: false,
             mark_downloads: true,
             show_start_dialog: true,
+            show_progress: true,
             only_add_to_queue: false,
-            start_immediately: true,
+            start_immediately: false,
             queue_panel_later: true,
             queue_panel_batch: true,
             ignore_mtime: false,
@@ -451,7 +474,8 @@ impl Default for Settings {
             remote_port: mdm_remote::PORT,
             remote_listen: String::new(),
             torrent_keep_sharing: false,
-            torrent_associations: false,
+            torrent_associations: None,
+            torrent_associations_before: false,
             torrent_incoming: true,
             torrent_upnp: true,
             torrent_port: 0,
@@ -485,6 +509,26 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// Upstream issue 1058: Torrent settings' switch as the user chose it, for a list that never
+    /// decided it (None): ticked in 1.0.0 (a saved true was the user's), else what the
+    /// installer's task left (`installer`: ticked or not; None for a portable copy or no
+    /// installer), else whether this program is what Windows opens .torrent files with now
+    /// (`registered`, asked only then). Once decided, the box and the browser's hand-off follow
+    /// the saved value only: a later look at the system would tick it again after the user
+    /// unticked it while everyone's association (HKLM) stays. True when it changed (to save).
+    pub fn settle_torrent_handler(
+        &mut self,
+        installer: Option<bool>,
+        registered: impl FnOnce() -> bool,
+    ) -> bool {
+        if self.torrent_associations.is_some() {
+            return false;
+        }
+        let on = self.torrent_associations_before || installer.unwrap_or_else(registered);
+        self.torrent_associations = Some(on);
+        true
+    }
+
     /// The settings as the list file writes them (#44, secrets.rs): each secret's field holds
     /// its keychain reference once the keychain holds it, else the secret sealed as before
     /// (and the keychain is asked to take it). Serialized inside `secrets::prepared`, where these
@@ -802,9 +846,12 @@ impl Settings {
 
     /// Set (or forget, with `None`) the category's own folder.
     pub fn set_category_dir(&mut self, cat: crate::model::Category, dir: Option<String>) {
+        // The same folder (but for a trailing separator, which Options' box adds) changes
+        // nothing: the list keeps its order, so a page only looked at has no changes to save.
+        let trim = |d: &str| d.trim_end_matches(['\\', '/']).to_owned();
         if let crate::model::Category::Custom(id) = cat {
             if let Some(c) = self.custom_categories.iter_mut().find(|c| c.id == id)
-                && c.folder != dir
+                && c.folder.as_deref().map(trim) != dir.as_deref().map(trim)
             {
                 c.folder = dir;
                 crate::model::set_custom(&self.custom_categories);
@@ -813,6 +860,14 @@ impl Settings {
         }
         // Under the built-in's shipped name: a rename keeps its folder.
         let key = cat.key();
+        let now = self
+            .category_dirs
+            .iter()
+            .find(|(c, _)| *c == *key)
+            .map(|(_, d)| trim(d));
+        if now == dir.as_deref().map(trim) {
+            return;
+        }
         self.category_dirs.retain(|(c, _)| *c != *key);
         if let Some(d) = dir {
             self.category_dirs.push((key.into_owned(), d));
@@ -1051,6 +1106,37 @@ pub fn own_net() -> mdm_engine::Options {
 mod tests {
     use std::path::Path;
 
+    /// Plan 11a (audit r2): a category's folder set again as Options' box shows it (with a
+    /// trailing separator) is no change, for a category of the user's as for a built-in one.
+    #[test]
+    fn the_same_category_folder_changes_nothing() {
+        let mut s = crate::settings::Settings {
+            custom_categories: vec![crate::model::CustomCategory {
+                id: 7,
+                name: "Library".into(),
+                types: "epub".into(),
+                folder: Some(r"D:\Lib".into()),
+            }],
+            category_dirs: vec![
+                (
+                    crate::model::Category::Video.key().into_owned(),
+                    r"D:\Videos".into(),
+                ),
+                (
+                    crate::model::Category::Music.key().into_owned(),
+                    r"D:\Music".into(),
+                ),
+            ],
+            ..crate::settings::Settings::default()
+        };
+        let before = s.clone();
+        s.set_category_dir(crate::model::Category::Custom(7), Some(r"D:\Lib\".into()));
+        s.set_category_dir(crate::model::Category::Video, Some(r"D:\Videos\".into()));
+        assert_eq!(s, before);
+        s.set_category_dir(crate::model::Category::Custom(7), Some(r"E:\Lib".into()));
+        assert_eq!(s.custom_categories[0].folder.as_deref(), Some(r"E:\Lib"));
+    }
+
     /// Upstream issue 668: the User-Agent for links added by hand is the default browser's unless
     /// one is set. Saved before, MDM's former default (Internet Explorer 11's) or nothing reads as
     /// automatic; automatic is saved empty, which an older MDM reads as its own default again.
@@ -1120,6 +1206,20 @@ mod tests {
         );
     }
 
+    /// The Add window's "Ask where to save each one": on in a settings file from before it, and
+    /// kept as left once unticked.
+    #[test]
+    fn an_old_settings_file_asks_where_each_add_goes() {
+        let s: Settings = serde_json::from_str("{}").unwrap();
+        assert!(s.add_ask_where);
+        let off = Settings {
+            add_ask_where: false,
+            ..Default::default()
+        };
+        let back: Settings = serde_json::from_str(&serde_json::to_string(&off).unwrap()).unwrap();
+        assert!(!back.add_ask_where, "kept as left");
+    }
+
     /// Plan 06: a settings file from before the paste bar and the details pane loads with the
     /// paste bar on, the pane off and the pane 276 points wide (D1).
     #[test]
@@ -1183,6 +1283,88 @@ mod tests {
             (c.port, c.listen, c.dht, c.lsd),
             (Some(51413), true, true, true)
         );
+    }
+
+    /// Upstream issue 1058: the browser integration (the native host,
+    /// mdm_ipc::capture::CaptureRules) reads the capture settings from the saved list by the
+    /// app's own names: Torrent settings' switch too, as settled; not decided yet, it takes
+    /// torrents, as before.
+    #[test]
+    fn the_host_reads_the_capture_settings_as_saved() {
+        use mdm_ipc::capture::CaptureRules;
+        let read = |s: &Settings| -> CaptureRules {
+            serde_json::from_value(serde_json::to_value(s).unwrap()).unwrap()
+        };
+        let d = Settings::default();
+        let r = read(&d);
+        assert_eq!((d.torrent_associations, r.torrent_handler), (None, None));
+        assert!(r.takes_torrents());
+        assert_eq!(r.auto_types, d.auto_types);
+        assert_eq!(r.capture_min_kb, d.capture_min_kb);
+        for on in [false, true] {
+            let s = Settings {
+                torrent_associations: Some(on),
+                capture_min_kb: 7,
+                ..Settings::default()
+            };
+            let r = read(&s);
+            assert_eq!(r.torrent_handler, Some(on));
+            assert_eq!(r.takes_torrents(), on);
+            assert_eq!(r.capture_min_kb, 7);
+        }
+    }
+
+    /// Upstream issue 1058: Torrent settings' switch is settled once, as the user chose it.
+    #[test]
+    fn the_torrent_switch_is_settled_once_as_chosen() {
+        let undecided = Settings::default;
+        let settle = |mut s: Settings, installer: Option<bool>, registered: bool| {
+            let changed = s.settle_torrent_handler(installer, || registered);
+            (s.torrent_associations, changed)
+        };
+        // Never decided: Grabbit opens .torrent files now (the installer's task, an earlier
+        // tick, an all-users association) → on; it doesn't → off.
+        assert_eq!(settle(undecided(), None, true), (Some(true), true));
+        assert_eq!(settle(undecided(), None, false), (Some(false), true));
+        // The installer's value wins over what the system says.
+        assert_eq!(settle(undecided(), Some(false), true), (Some(false), true));
+        assert_eq!(settle(undecided(), Some(true), false), (Some(true), true));
+        // 1.0.0's tick stays.
+        let ticked = Settings {
+            torrent_associations_before: true,
+            ..Settings::default()
+        };
+        assert_eq!(settle(ticked, Some(false), false), (Some(true), true));
+        // Decided: kept, whatever the system says (an everyone's association, HKLM, that
+        // unticking couldn't remove), and the system isn't asked.
+        for on in [false, true] {
+            let mut s = Settings {
+                torrent_associations: Some(on),
+                ..Settings::default()
+            };
+            assert!(!s.settle_torrent_handler(Some(!on), || panic!("asked")));
+            assert_eq!(s.torrent_associations, Some(on));
+        }
+        // A list 1.0.0 saved: its false is undecided, its true ticked.
+        let old: Settings = serde_json::from_str(r#"{"torrent_associations":false}"#).unwrap();
+        assert_eq!(
+            (old.torrent_associations, old.torrent_associations_before),
+            (None, false)
+        );
+        let old: Settings = serde_json::from_str(r#"{"torrent_associations":true}"#).unwrap();
+        assert_eq!(
+            (old.torrent_associations, old.torrent_associations_before),
+            (None, true)
+        );
+        // Settled and saved, it reads back decided: no second settling.
+        let mut s = old;
+        s.settle_torrent_handler(None, || false);
+        let json = serde_json::to_value(&s).unwrap();
+        assert_eq!(json["torrent_handler"], serde_json::json!(true));
+        assert!(json.get("torrent_associations").is_none(), "{json}");
+        let mut back: Settings = serde_json::from_value(json).unwrap();
+        assert!(!back.settle_torrent_handler(Some(false), || false));
+        assert_eq!(back.torrent_associations, Some(true));
     }
 
     /// #41: a list saved before Zen was known gets it, captured; a choice made is kept.
@@ -1343,6 +1525,19 @@ mod tests {
                 proptest::prop_assert_eq!(&back.theme, &source.theme);
             }
         }
+    }
+
+    /// 1.0.1: a download no longer starts behind Download File Info by default, and 1.0.0's
+    /// saved "on" (every settings file had it) reads as off; the new key keeps a choice.
+    #[test]
+    fn start_while_asking_is_off_and_the_old_on_doesnt_count() {
+        assert!(!Settings::default().start_immediately);
+        let old: Settings = serde_json::from_str(r#"{"start_immediately":true}"#).unwrap();
+        assert!(!old.start_immediately);
+        let chosen: Settings = serde_json::from_str(r#"{"start_while_asking":true}"#).unwrap();
+        assert!(chosen.start_immediately);
+        let saved = serde_json::to_value(&chosen).unwrap();
+        assert_eq!(saved["start_while_asking"], true);
     }
 
     #[test]

@@ -24,7 +24,7 @@ param(
   [string]$Torrent = "",
   # Only these shots (names without .png); all when empty.
   [string[]]$Only = @(),
-  # Dark mode for every window (View → Always dark: Windows' own mode doesn't matter).
+  # Dark mode for every window (always_dark, as the status bar's light/dark button sets it: Windows' own mode doesn't matter).
   [switch]$Dark,
   # Where the main window opens instead of far off the screens (MDM_OFFSCREEN_AT, "x,y"): on a
   # machine nobody watches whose OpenGL is software (GitHub's runner, docs-shots.yml), which
@@ -37,6 +37,7 @@ param(
   # tools/shots/make.py): <what> is a /show argument (options:connection), "@main" (the main
   # window), "@menu:<show argument>" (a menu: every window of ours, composed), or
   # "@download:<path>" (Download File Info for the lab server's <path>, as a browser hands it),
+  # "@add:<path>" (the Add window holding the lab server's <path>, not the clipboard's links),
   # or "@complete:<path>" (the Download complete window once that small file is in).
   # With -Torrent, "@torrent" is its Add torrent window. "a+b" runs /show a first, then shoots b
   # ("theme:graphite+@main").
@@ -152,8 +153,8 @@ $srv = $null; $app = $null
 try {
   if (Test-Path $work) { Remove-Item $work -Recurse -Force }
   New-Item -ItemType Directory -Force "$work\data", "$work\Downloads" | Out-Null
-  # Nothing asked at the first start; light mode unless asked, dark with View →
-  # Always dark, whatever Windows' own mode. Every category's folder is under $work, so no shot
+  # Nothing asked at the first start; light mode unless asked, dark with always_dark (the light/dark button's setting)
+  # whatever Windows' own mode. Every category's folder is under $work, so no shot
   # shows the user's own folders (or name). Nothing reaches out: no update check, and the torrent
   # engine neither listens nor uses the DHT, UPnP or local discovery (no firewall prompt).
   $dark = $Dark -or ($Only -contains "main-dark")
@@ -210,8 +211,11 @@ try {
   # site's pictures and the few docs pages not yet in the help's shot list; the help pages'
   # own come from tools/shots/shots.toml (-Show).
   $windows = [ordered]@{
-    "add-url" = "addurl"; "speed-limiter" = "speedlimit"; "scheduler" = "scheduler"
-    "options-connection" = "options:connection"; "options-remote" = "options:remote"; "grabber" = "grabber"
+    # The Add window holding a lab address, never the clipboard's (no picture shows what the
+    # user copied, and the clipboard is never touched). In lower case, as /show's arguments
+    # arrive (mdm_ipc::parse_args lower-cases them).
+    "add-url" = "add:$base/gen/4m/project-report-2026.pdf"; "speed-limiter" = "speedlimit+@main"; "scheduler" = "scheduler+@main"
+    "options-connection" = "options:connection+@main"; "options-remote" = "options:remote+@main"; "grabber" = "grabber"
     "progress" = "progress"
   }
   if ($Torrent -and (Want "add-torrent")) {
@@ -226,26 +230,24 @@ try {
   }
   foreach ($name in $windows.Keys) {
     if (-not (Want $name)) { continue }
+    # Options is a page of the main window (plan 11a), the Scheduler and the Speed limiter
+    # sections of it (11b): "options:x+@main", "scheduler+@main" and "speedlimit+@main" open it
+    # there, and the main window is the shot; /show downloads shows the list again after.
+    if ($windows[$name] -like "*+@main") {
+      & $Exe /show ($windows[$name] -replace "\+@main$", "")
+      Start-Sleep -Milliseconds 1500
+      Shot $app.Id $main $name
+      & $Exe /show downloads
+      Start-Sleep -Milliseconds 600
+      continue
+    }
     $before = @(Titles $app.Id)
     & $Exe /show $windows[$name]
     # A window that doesn't come up is reported; the run goes on with the others.
     try { $t = New-Window $app.Id $before } catch { Write-Warning "${name}: no window"; continue }
-    # Options with a dialog over it: the dialog is the shot (the second new window).
-    $also = @()
-    if ($name -eq "options-panels") {
-      for ($i = 0; $i -lt 50; $i++) {
-        $new = @(Titles $app.Id | Where-Object { $before -notcontains $_ })
-        if ($new.Count -ge 2) { break }
-        Start-Sleep -Milliseconds 200
-      }
-      $also = @($t)
-      $t = @($new | Where-Object { $_ -ne $also[0] })[0]
-      if (-not $t) { Write-Warning "${name}: no dialog"; Close-Ours $app.Id $also[0]; continue }
-    }
     Start-Sleep -Milliseconds 1200
     Shot $app.Id $t $name
     Close-Ours $app.Id $t
-    foreach ($w in $also) { Close-Ours $app.Id $w }
     Start-Sleep -Milliseconds 600
   }
   # -Show's list (the help pages' shots), in its order.
@@ -255,6 +257,13 @@ try {
     # "theme:graphite+@main": /show theme:graphite first (no window of its own), then the shot.
     $parts = @($what -split "\+")
     $what = $parts[-1]
+    # The downloads list, not Options' page (plan 11a). A shot that opens the page (its
+    # sections too: the Scheduler, 11b1; the Speed limiter and Torrents, 11b2) opens it anew, so
+    # its side list starts from the top, not from where the last shot's section left it.
+    if ($what -eq "@main") {
+      & $Exe /show downloads
+      Start-Sleep -Milliseconds 600
+    }
     foreach ($p in $parts[0..($parts.Count - 2)]) {
       if ($parts.Count -lt 2) { break }
       & $Exe /show $p
@@ -300,14 +309,17 @@ try {
     } elseif ($what -like "@download:*") {
       # As a browser hands it over: no /n, so Download File Info asks.
       & $Exe /d "$base/$($what.Substring(10))"
+    } elseif ($what -like "@add:*") {
+      # The Add window holding the lab server's <path>, never the clipboard's links.
+      & $Exe /show "add:$base/$($what.Substring(5))"
     } else {
       & $Exe /show $what
     }
     try { $t = New-Window $app.Id $before } catch { Write-Warning "${name}: no window"; continue }
-    # Options → Download panels opens a dialog over Options, and video-helpers Helpers over the
-    # video window: that dialog is the shot.
+    # video-helpers opens Helpers over the video window: that dialog is the shot. (Options →
+    # Download panels' dialog is the only new window: Options is a page of the main window.)
     $also = @()
-    if ($what -in "options:panels", "video-helpers") {
+    if ($what -eq "video-helpers") {
       for ($i = 0; $i -lt 50; $i++) {
         $new = @(Titles $app.Id | Where-Object { $before -notcontains $_ })
         if ($new.Count -ge 2) { break }
@@ -315,7 +327,7 @@ try {
       }
       $also = @($t)
       # By its title where it has a known one (Helpers), else the new window that isn't the first.
-      $t = @($new | Where-Object { $_ -ne $also[0] -and ($what -ne "video-helpers" -or $_ -eq "Helpers") })[0]
+      $t = @($new | Where-Object { $_ -ne $also[0] -and $_ -eq "Helpers" })[0]
       if (-not $t) { Write-Warning "${name}: no dialog"; Close-Ours $app.Id $also[0]; continue }
     }
     Start-Sleep -Milliseconds 1500
@@ -328,6 +340,10 @@ try {
   # for a moment while an antivirus scan holds it).
   if ((Want "main-light") -or (Want "main-dark")) {
     $name = if ($dark) { "main-dark" } else { "main-light" }
+    & $Exe /show downloads
+    # At the first window size again, after a -Show take that resized it ("size:...+...").
+    & $Exe /show size:1080x560
+    Start-Sleep -Milliseconds 600
     # Shot alone (no windows before it): give the last small files their moment too.
     if ($Only.Count -eq 1) { Start-Sleep 10 }
     if (Want $name) { Shot $app.Id $main $name }

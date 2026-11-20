@@ -63,11 +63,11 @@
     <div class="wrap narrow prose page-body">
       <h2 id="extension">The browser extension</h2>
       <p>It hands your browser's downloads to Grabbit with their cookies, adds <b>Download with Grabbit</b> to the right-click menu and puts a <b>Download video</b> button over videos.</p>
-      <p><b>Firefox</b> (and Zen, LibreWolf): one click from its add-ons store, and Firefox keeps it up to date.</p>
-      <p class="store-act"><!--@amo--></p>
-      <p><b>Chrome, Edge, Brave, Opera and Vivaldi</b>: one click from the Chrome Web Store, and the browser keeps it up to date. Edge first asks to allow extensions from other stores.</p>
+      <p>It isn't in the browsers' stores yet: it comes with the app, in its <code>extension</code> folder, and you add it from there once. (The <i>Mister Download Manager</i> extension in the stores belongs to another project and doesn't connect to Grabbit.)</p>
+      <p><b>Chrome, Edge, Brave, Opera and Vivaldi</b>: <b>Load unpacked</b> the <code>extension\chromium</code> folder on the browser's extensions page, with Developer mode on. It is also <a href="{{FILE_CHROMIUM}}">its own download</a> (<code>.zip</code>: unzip it first).</p>
       <p class="store-act"><span class="store-btns"><!--@cws--></span></p>
-      <p>Can't use a store? It comes with the app, in its <code>extension</code> folder, and <a href="{{FILE_CHROMIUM}}">as its own download</a> for Chromium browsers (<code>.zip</code>: unzip, then <b>Load unpacked</b> on the browser's extensions page with Developer mode on). The <a href="/help/guide-catch-browser-downloads.html">step-by-step guide</a> shows each browser.</p>
+      <p><b>Firefox</b> (and Zen, LibreWolf): Mozilla hasn't signed the add-on yet, so release Firefox loads it as a temporary add-on, until it closes; Firefox Developer Edition and Nightly can keep it.</p>
+      <p class="store-act"><!--@amo--></p>
 
       <h2>Install in three steps</h2>
       <ol>
@@ -84,7 +84,7 @@
       </ul>
 
       <h2 id="check-your-download">Check your download</h2>
-      <p>Every release lists the SHA-256 checksum of each file in <a href="{{FILE_SUMS}}">SHA256SUMS.txt</a>. Compare it with <code>certutil -hashfile file SHA256</code>. All files are built from the public source by GitHub Actions; the build logs are on <a href="{{REPO}}/actions">GitHub</a>.</p>
+      <p>Every release lists the SHA-256 checksum of each file in <a href="{{FILE_SUMS}}">SHA256SUMS.txt</a>. Compare it with <code>certutil -hashfile file SHA256</code>. The list is signed with Grabbit's release key (<a href="{{REPO}}/blob/main/crates/tools/keys/grabbit-release.asc">its public key</a>, fingerprint <code>7C8D 515A 5E85 9D47 3CBC 54C0 D9E8 9ED6 1BBE C99D</code>): with the release's <code>SHA256SUMS.txt.sig</code> beside it, <code>gpg --verify SHA256SUMS.txt.sig SHA256SUMS.txt</code> checks it. Every file is built from the release's tagged source on GitHub.</p>
 
       <h2>Older versions and source code</h2>
       <p>Every release, with its notes and files, is on <a href="{{REPO}}/releases">GitHub Releases</a>. The source code is at <a href="{{REPO}}">github.com/HUMBLEF0OL/grabbit</a> under the GNU GPL, version 3.</p>

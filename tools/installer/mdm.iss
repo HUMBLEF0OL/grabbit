@@ -9,7 +9,7 @@
 ; Windows Credential Manager (grabbit --forget-sign-ins).
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.0.1"
 #endif
 #define AppName "Grabbit"
 #define AppExe "grabbit.exe"
@@ -23,7 +23,7 @@ AppId={{667DB4D8-32C2-4487-A0E5-5825BF29778C}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-AppPublisher=Ahmed Nefzaoui
+AppPublisher=HUMBLEFOOL
 AppPublisherURL=https://github.com/HUMBLEF0OL/grabbit
 AppSupportURL=https://github.com/HUMBLEF0OL/grabbit/issues
 AppUpdatesURL=https://github.com/HUMBLEF0OL/grabbit/releases
@@ -53,7 +53,7 @@ ChangesAssociations=yes
 ; fallback for anything else holding the files (a browser running the host).
 CloseApplications=yes
 VersionInfoVersion={#AppVersion}
-VersionInfoCompany=Ahmed Nefzaoui
+VersionInfoCompany=HUMBLEFOOL
 VersionInfoDescription={#AppName} setup
 VersionInfoProductName={#AppName}
 #ifdef Sign
@@ -102,6 +102,11 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 ; Start with Windows: the same value Options -> "Launch on startup" writes and reads, with the
 ; argument that starts MDM in the notification area (#226; win32.rs startup_command).
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Grabbit"; ValueData: """{app}\{#AppExe}"" /startup"; Flags: uninsdeletevalue; Tasks: startup
+; The "torrents" task, ticked or not: Torrent settings' switch on the app's first start that hasn't
+; decided it (upstream issue 1058: it then also decides whether the browser hands .torrent
+; downloads over; settings.rs settle_torrent_handler, win32.rs install_torrents). Only read, once.
+Root: HKCU; Subkey: "Software\Grabbit"; ValueType: string; ValueName: "InstallTorrents"; ValueData: "1"; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: torrents
+Root: HKCU; Subkey: "Software\Grabbit"; ValueType: string; ValueName: "InstallTorrents"; ValueData: "0"; Flags: uninsdeletevalue uninsdeletekeyifempty; Tasks: not torrents
 ; .torrent files and magnet links (HKA: the user's or everyone's classes, as installed).
 Root: HKA; Subkey: "Software\Classes\Grabbit.torrent"; ValueType: string; ValueName: ""; ValueData: "Torrent file"; Flags: uninsdeletekey; Tasks: torrents
 Root: HKA; Subkey: "Software\Classes\Grabbit.torrent\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExe},0"; Tasks: torrents
@@ -112,6 +117,20 @@ Root: HKA; Subkey: "Software\Classes\magnet"; ValueType: string; ValueName: ""; 
 Root: HKA; Subkey: "Software\Classes\magnet"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Tasks: torrents
 Root: HKA; Subkey: "Software\Classes\magnet\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#AppExe},0"; Tasks: torrents
 Root: HKA; Subkey: "Software\Classes\magnet\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: torrents
+; Windows' Default apps (upstream issue 1091): Grabbit listed for MAGNET and .torrent, where the
+; user picks it (a choice recorded there for another program stays first, and no program may
+; change it). The same keys and names as win32.rs set_torrent_handlers; ApplicationName matches
+; the RegisteredApplications value's name, and each association has a Grabbit-only ProgID.
+Root: HKA; Subkey: "Software\Classes\Grabbit.Magnet"; ValueType: string; ValueName: ""; ValueData: "URL:Magnet link"; Flags: uninsdeletekey; Tasks: torrents
+Root: HKA; Subkey: "Software\Classes\Grabbit.Magnet"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Tasks: torrents
+Root: HKA; Subkey: "Software\Classes\Grabbit.Magnet\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"",0"; Tasks: torrents
+Root: HKA; Subkey: "Software\Classes\Grabbit.Magnet\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: torrents
+Root: HKA; Subkey: "Software\Grabbit\Capabilities"; ValueType: string; ValueName: "ApplicationName"; ValueData: "{#AppName}"; Flags: uninsdeletekey; Tasks: torrents
+Root: HKA; Subkey: "Software\Grabbit\Capabilities"; ValueType: string; ValueName: "ApplicationDescription"; ValueData: "Downloads files, videos and torrents"; Tasks: torrents
+Root: HKA; Subkey: "Software\Grabbit\Capabilities"; ValueType: string; ValueName: "ApplicationIcon"; ValueData: """{app}\{#AppExe}"",0"; Tasks: torrents
+Root: HKA; Subkey: "Software\Grabbit\Capabilities\FileAssociations"; ValueType: string; ValueName: ".torrent"; ValueData: "Grabbit.Torrent"; Tasks: torrents
+Root: HKA; Subkey: "Software\Grabbit\Capabilities\UrlAssociations"; ValueType: string; ValueName: "magnet"; ValueData: "Grabbit.Magnet"; Tasks: torrents
+Root: HKA; Subkey: "Software\RegisteredApplications"; ValueType: string; ValueName: "{#AppName}"; ValueData: "Software\Grabbit\Capabilities"; Flags: uninsdeletevalue; Tasks: torrents
 
 [Run]
 Filename: "{app}\{#HostExe}"; Parameters: "--register"; Flags: runhidden; Tasks: browser; Check: not IsAdminInstallMode
@@ -193,6 +212,17 @@ begin
     ForgetIfOurs('Software\Classes\magnet', ExpandConstant('{app}\{#AppExe}'));
     if RegQueryStringValue(HKA, 'Software\Classes\.torrent', '', Value) and (CompareText(Value, 'Grabbit.torrent') = 0) then
       RegDeleteValue(HKA, 'Software\Classes\.torrent', '');
+    { Default apps (upstream issue 1091): what the app registered for this user (Torrent
+      settings' switch), also when this install was everyone's; only when it is this install's
+      (its icon is this exe), so a portable copy's own listing stays. }
+    if RegQueryStringValue(HKCU, 'Software\Grabbit\Capabilities', 'ApplicationIcon', Value) and (Pos(Lowercase(ExpandConstant('{app}\{#AppExe}')), Lowercase(Value)) > 0) then
+    begin
+      if RegQueryStringValue(HKCU, 'Software\RegisteredApplications', '{#AppName}', Value) and (CompareText(Value, 'Software\Grabbit\Capabilities') = 0) then
+        RegDeleteValue(HKCU, 'Software\RegisteredApplications', '{#AppName}');
+      RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Grabbit\Capabilities');
+    end;
+    if RegQueryStringValue(HKCU, 'Software\Classes\Grabbit.Magnet\shell\open\command', '', Value) and (Pos(Lowercase(ExpandConstant('{app}\{#AppExe}')), Lowercase(Value)) > 0) then
+      RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\Grabbit.Magnet');
     RemoveData := False;
     if DirExists(Data) and not UninstallSilent() then
       RemoveData := MsgBox(CustomMessage('KeepData'), mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;

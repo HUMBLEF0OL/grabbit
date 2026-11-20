@@ -101,7 +101,9 @@ and `.github/` (51 without `.github/`). Both by `git log --no-merges -G "<terms>
   (`manifest.firefox.json:9`, `crates/ipc/src/extension.rs:18 FIREFOX_ID`): changing any of them
   makes a new extension and cuts existing users off. The gecko ID was changed once, on
   2026-11-18, from `integration@misterdownloadmanager.com` (never published by the fork, a
-  domain the project doesn't control); it is fixed from now on.
+  domain the project doesn't control); it is fixed from now on. `STORE_ID` named the original
+  project's listing until 1.0.1, an extension that never reached Grabbit's host (no one is cut
+  off): it is a placeholder until Grabbit has its own listing, and that ID is then fixed.
 
 ## 10a · Display text (safe)
 

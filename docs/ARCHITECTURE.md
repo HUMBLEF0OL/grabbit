@@ -61,6 +61,12 @@ headers, and sessions are pooled per download and reused between segments.
 ## App
 
 One egui window painted to fixed pixel coordinates, plus one immediate viewport per dialog.
+Options is not a dialog: `settingspage.rs` draws its pages in the main window, in the panes'
+place, and the small dialogs its pages open are viewports over it. The Scheduler, Speed Limiter
+settings, Torrent settings and the browser extension are sections of it: `scheduler.rs`,
+`dialogs.rs`, `torrentdlg.rs` and `extension.rs` draw their layouts there through
+`dialogs::inline`, their drafts saved by the page's Save (the extension's offer at a start stays
+a window).
 `app.rs` holds the state (downloads, queues, settings, the list's selection) and turns menu,
 toolbar, key and IPC commands into actions. Each dialog is its own module and returns an
 `Outcome` (open, closed, done with a value). Grabbit is Windows only. Windows calls are confined to `win32.rs`
@@ -144,10 +150,12 @@ it, and the extension says why.
 The host serves only Grabbit's own extension. Its IDs are in one place, `mdm_ipc::extension`
 (`crates/ipc/src/extension.rs`): the unpacked copy's (`UNPACKED_ID`, from the manifest's public
 key), the Chrome Web Store's (`STORE_ID`, signed with the store's own key: `pack.ps1` leaves the
-manifest's key out of the store's copy), the Firefox add-on's (`FIREFOX_ID`) and its
-addons.mozilla.org page; the Edge and Opera stores' are placeholders, never served, until the
-extension is listed there. The host writes each browser's manifest with those IDs, and the app
-offers the store's copy (Add to Chrome, Add to Firefox) before the unpacked one.
+manifest's key out of the store's copy) and the Firefox add-on's (`FIREFOX_ID`). Grabbit has no
+store listing yet: `STORE_ID`, like the Edge and Opera stores' IDs, is a placeholder, never served
+or named, until it is listed (1.0.0 named the original project's listing there, whose extension
+never reached Grabbit's host). The host writes each browser's manifest with those IDs, and the
+app's extension window opens the tutorial that loads the copy in Grabbit's folder, at each
+browser's section (the store's page first, once there is one).
 
 ## Remote control
 
@@ -181,15 +189,17 @@ The help pages' pictures (`docs/images/help/`) come from one list, `tools/shots/
 `tools/shots/make.py` opens each window through Grabbit's own `/show <window>` command line in a test
 instance off the screen, crops and annotates it from the window's accessibility tree, and writes
 lossless WebP; `make.py check` (CI) keeps the list, the pages and the files in step. The
-published ones are taken on GitHub's Windows runner (`docs-shots.yml`).
+published ones are taken on the maintainer's computer with these tools (`docs-shots.yml` can
+also take them on GitHub's Windows runner).
 
 ## Contributors
 
 `tools/contributors.py` reads who opened pull requests and issues, and who commented, from
 GitHub's public API (the maintainer, Claude and bots left out) for every place that thanks them:
 the website's home page, `/contributors.html` and each release on the News page (`build.py`, on
-every build), each release's notes (`release.yml`, the people active since the release before)
-and the README (`python tools/contributors.py readme` at each release's preparation: its round
+every build), each release's notes only if one is ever published by `release.yml` run on a tag
+(a release published with `tools/installer/publish.ps1`, the usual way, has its CHANGELOG
+section only) and the README (`python tools/contributors.py readme` at each release's preparation: its round
 photos are committed in `art/contributors/`, since GitHub can't round a picture in a README).
 
 ## Tests and benchmarks

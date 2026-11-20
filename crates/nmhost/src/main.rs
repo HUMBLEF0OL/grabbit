@@ -16,6 +16,12 @@
 //!   manifests (Chromium's names the extension's origin, Firefox's its add-on ID). Windows: beside
 //!   this exe, with the per-user (HKCU) registry entries the browsers look up; with `--all-users`
 //!   (the installer, installing for everyone, elevated) under HKLM instead.
+//! - `grabbit-nmhost --repair`: what the app runs at its start (upstream issue 818): a
+//!   browser's registration that leads nowhere (its manifest or helper gone: a copy run from
+//!   inside a zip, moved or deleted) is pointed at this copy, for this user; one that works is
+//!   left alone, whichever copy it names, and none is added where there was none.
+//! - Neither registers a copy in a temporary folder (an archive run without extracting it first,
+//!   whose tool deletes the folder afterwards), nor a portable one.
 
 use std::io::{self, Read, Write};
 use std::path::PathBuf;
@@ -25,24 +31,48 @@ use serde::{Deserialize, Serialize};
 
 mod win32;
 
-const HOST_NAME: &str = "com.grabbit.host";
-use mdm_ipc::extension::{FIREFOX_ID, STORE_ID, STORE_UPDATE_URL, chromium_ids, store_id};
-/// Where each Chromium browser looks for native messaging hosts on Windows, under HKCU (one
-/// user) or HKLM (everyone). Chromium-branded builds (Chromium, Helium, Thorium, and Brave and
-/// Brave Origin with every channel) read Chromium's first, then Chrome's, as most other forks do
-/// (Chromium's launch_context_win.cc). Brave's own key is kept for builds that read it.
-const REGISTRY_KEYS: [&str; 4] = [
-    r"Software\Google\Chrome\NativeMessagingHosts",
-    r"Software\Chromium\NativeMessagingHosts",
-    r"Software\Microsoft\Edge\NativeMessagingHosts",
-    r"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts",
-];
-/// Where Firefox looks.
-const FIREFOX_KEY: &str = r"Software\Mozilla\NativeMessagingHosts";
+// Where each browser looks for native messaging hosts (HKCU or HKLM): WINDOWS_HOST_KEYS.
+use mdm_ipc::browsers::{Family, HOST_NAME, Holder, Repair, WINDOWS_HOST_KEYS};
+use mdm_ipc::extension::{FIREFOX_ID, STORE_UPDATE_URL, chromium_ids, store_id};
 /// Chrome's external extensions: an entry naming the store's extension makes Chrome offer it at
 /// its next start ("New extension added"), the user turning it on there. HKLM's is read from the
 /// 32-bit view on 64-bit Windows, hence /reg:32 (HKCU has one view).
 const CHROME_EXTERNAL_KEY: &str = r"Software\Google\Chrome\Extensions";
+/// The original project's Chrome Web Store extension, which Grabbit 1.0.0 named under
+/// CHROME_EXTERNAL_KEY by mistake: Chrome offered an extension that talks to the original's host,
+/// never to Grabbit's. Registering and unregistering remove that entry; nothing else names it.
+const ORIGINAL_STORE_ID: &str = "ejoleppdfgjdndddcjoehopknmlglojp";
+/// The original project's own native host, under Chrome's key: while it is registered under a
+/// root, the external entry there is the original app's own, and stays.
+const ORIGINAL_HOST_KEY: &str =
+    r"Software\Google\Chrome\NativeMessagingHosts\com.misterdownloadmanager.host";
+
+/// The roots whose entry for the original's extension is 1.0.0's leftover, to delete: HKCU, and
+/// HKLM too on an all-users run (an admin install runs only `--register --all-users`, and 1.0.0
+/// may have been installed for the user before);
+/// never a root where the original app's own host is registered (`original_at(root)`), which
+/// wrote the same entry and keeps its extension by it.
+fn leftover_roots(all_users: bool, original_at: impl Fn(&str) -> bool) -> Vec<&'static str> {
+    let roots: &[&'static str] = if all_users {
+        &["HKLM", "HKCU"]
+    } else {
+        &["HKCU"]
+    };
+    roots.iter().copied().filter(|r| !original_at(r)).collect()
+}
+
+/// Delete 1.0.0's entry for the original's extension where it is a leftover.
+fn drop_original_entry(all_users: bool) {
+    let original_at = |root: &str| reg(&["query", &format!(r"{root}\{ORIGINAL_HOST_KEY}")]).is_ok();
+    for root in leftover_roots(all_users, original_at) {
+        let _ = reg(&[
+            "delete",
+            &format!(r"{root}\{CHROME_EXTERNAL_KEY}\{ORIGINAL_STORE_ID}"),
+            "/f",
+            "/reg:32",
+        ]);
+    }
+}
 
 /// A message from the extension.
 #[derive(Debug, Default, Deserialize, PartialEq)]
@@ -192,6 +222,11 @@ struct Reply {
     /// For `rules` when `capture` is false: why (`integration-off`, `browser`).
     #[serde(skip_serializing_if = "Option::is_none")]
     capture_off: Option<&'static str>,
+    /// For `rules`: whether a .torrent is taken (Torrent settings → "Open magnet links and
+    /// .torrent files with Grabbit", upstream issue 1058); false, the extension leaves one to the
+    /// browser (`torrents`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    torrents: Option<bool>,
     /// A download left to the browser by Options: which rule (a `Declined` code), for the
     /// extension to say (its popup).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -255,6 +290,7 @@ fn answer(m: Message, rules: &mdm_ipc::capture::CaptureRules) -> Reply {
             opened: Some(rules.capture_opened),
             min_kb: Some(rules.capture_min_kb),
             capture_off: rules.capture_off(browser).map(|d| d.code()),
+            torrents: Some(rules.takes_torrents()),
             ..Default::default()
         };
     }
@@ -495,6 +531,11 @@ fn verdict(
     }
     let (name, browser) = (file_name_of(m), browser(m));
     rules.accepts(&m.url, &name, browser)?;
+    // A .torrent only its type tells (a name of another listed type), as the app's Add torrent
+    // would take it (upstream issue 1058).
+    if !rules.takes_torrents() && mdm_ipc::capture::is_torrent(&m.url, &name, m.mime.as_deref()) {
+        return Err(mdm_ipc::capture::Declined::Torrents);
+    }
     if rules.too_small(m.size) {
         return Err(mdm_ipc::capture::Declined::Small);
     }
@@ -767,6 +808,23 @@ fn portable_refused() -> Result<(), String> {
     Ok(())
 }
 
+/// Upstream issue 818: this program runs from a folder that is deleted later (a zip or rar run
+/// without extracting it first, whose archive tool deletes its temporary folder afterwards;
+/// anything under the temporary folder): the browsers would be pointed at a helper that is soon
+/// gone, and would find no other copy.
+fn temporary_refused() -> Result<(), String> {
+    let program = this_program()?;
+    if mdm_ipc::browsers::in_temporary_folder(&program) {
+        return Err(format!(
+            "{} is a temporary folder, deleted once it quits (an archive run without extracting \
+             it first): browser integration is not registered. Extract Grabbit to a folder of \
+             its own and run it from there",
+            program.parent().unwrap_or(&program).display()
+        ));
+    }
+    Ok(())
+}
+
 /// A Chromium extension's origin, as browsers name the caller.
 fn origin(id: &str) -> String {
     format!("chrome-extension://{id}/")
@@ -780,37 +838,54 @@ fn our_caller(args: &[String]) -> bool {
         || args.get(1).is_some_and(|a| a == FIREFOX_ID)
 }
 
-/// The manifests beside this exe, and the registry entries naming them, per user
-/// (HKCU) or for everyone (HKLM).
-fn register(all_users: bool) -> Result<(), String> {
-    portable_refused()?;
-    let root = if all_users { "HKLM" } else { "HKCU" };
-    let path = exe_dir()?.join(format!("{HOST_NAME}.json"));
-    write_json(&path, &chromium_manifest(&this_program()?))?;
-    for key in REGISTRY_KEYS {
-        reg(&[
-            "add",
-            &format!(r"{root}\{key}\{HOST_NAME}"),
-            "/ve",
-            "/t",
-            "REG_SZ",
-            "/d",
-            &path.display().to_string(),
-            "/f",
-        ])?;
+/// The manifest beside this exe that a browser of `family` reads, written when it isn't already
+/// what it should be (an installation for everyone can't write there, and needn't).
+fn own_manifest(family: Family) -> Result<PathBuf, String> {
+    let program = this_program()?;
+    let (name, value) = match family {
+        Family::Chromium => (format!("{HOST_NAME}.json"), chromium_manifest(&program)),
+        Family::Gecko => (
+            format!("{HOST_NAME}.firefox.json"),
+            firefox_manifest(&program),
+        ),
+    };
+    let path = exe_dir()?.join(name);
+    let current = std::fs::read(&path)
+        .ok()
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok());
+    if current.as_ref() != Some(&value) {
+        write_json(&path, &value)?;
     }
-    let ff_path = exe_dir()?.join(format!("{HOST_NAME}.firefox.json"));
-    write_json(&ff_path, &firefox_manifest(&this_program()?))?;
+    Ok(path)
+}
+
+/// Point `root`'s (HKCU or HKLM) entry under `key` at `manifest`.
+fn reg_point(root: &str, key: &str, manifest: &std::path::Path) -> Result<(), String> {
     reg(&[
         "add",
-        &format!(r"{root}\{FIREFOX_KEY}\{HOST_NAME}"),
+        &format!(r"{root}\{key}\{HOST_NAME}"),
         "/ve",
         "/t",
         "REG_SZ",
         "/d",
-        &ff_path.display().to_string(),
+        &manifest.display().to_string(),
         "/f",
-    ])?;
+    ])
+}
+
+/// The manifests beside this exe, and the registry entries naming them, per user
+/// (HKCU) or for everyone (HKLM).
+fn register(all_users: bool) -> Result<(), String> {
+    portable_refused()?;
+    temporary_refused()?;
+    let root = if all_users { "HKLM" } else { "HKCU" };
+    for (key, family) in WINDOWS_HOST_KEYS {
+        reg_point(root, key, &own_manifest(family)?)?;
+    }
+    let path = own_manifest(Family::Chromium)?;
+    let ff_path = own_manifest(Family::Gecko)?;
+    // 1.0.0's entry for the original project's extension goes (not the original app's own).
+    drop_original_entry(all_users);
     // Chrome offers the store's extension once it is listed (never a placeholder ID).
     if let Some(id) = store_id() {
         reg(&[
@@ -835,17 +910,55 @@ fn register(all_users: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// At the app's start (upstream issue 818): each browser's registration that leads nowhere (a
+/// copy run from inside a zip, whose temporary folder is gone; a copy moved or deleted) is
+/// pointed at this copy, for this user. One that works is left alone, whichever copy it names,
+/// and none is added where there was none (`mdm_ipc::browsers::windows_repair`).
+fn repair() -> Result<(), String> {
+    portable_refused()?;
+    temporary_refused()?;
+    let holder = |machine: bool, entry: &str| {
+        win32::reg_string(machine, entry)
+            .map(|v| Holder::of(&mdm_ipc::browsers::registered_manifest(&v)))
+    };
+    let mut repaired = 0;
+    for (key, family) in WINDOWS_HOST_KEYS {
+        let entry = format!(r"{key}\{HOST_NAME}");
+        let user = holder(false, &entry);
+        match mdm_ipc::browsers::windows_repair(user.as_ref(), holder(true, &entry).as_ref()) {
+            Repair::Keep => continue,
+            Repair::Take => {
+                let manifest = own_manifest(family)?;
+                reg_point("HKCU", key, &manifest)?;
+                println!(r"HKCU\{entry}: {user:?}, now {}", manifest.display());
+            }
+            Repair::Clear => {
+                reg(&["delete", &format!(r"HKCU\{entry}"), "/f"])?;
+                println!(r"HKCU\{entry}: {user:?}, removed (the computer's works)");
+            }
+        }
+        repaired += 1;
+    }
+    if repaired == 0 {
+        println!("{HOST_NAME}: nothing to repair");
+    }
+    Ok(())
+}
+
 fn unregister(all_users: bool) -> Result<(), String> {
     let root = if all_users { "HKLM" } else { "HKCU" };
-    for key in REGISTRY_KEYS.into_iter().chain([FIREFOX_KEY]) {
+    for (key, _) in WINDOWS_HOST_KEYS {
         let _ = reg(&["delete", &format!(r"{root}\{key}\{HOST_NAME}"), "/f"]);
     }
-    let _ = reg(&[
-        "delete",
-        &format!(r"{root}\{CHROME_EXTERNAL_KEY}\{STORE_ID}"),
-        "/f",
-        "/reg:32",
-    ]);
+    drop_original_entry(all_users);
+    if let Some(id) = store_id() {
+        let _ = reg(&[
+            "delete",
+            &format!(r"{root}\{CHROME_EXTERNAL_KEY}\{id}"),
+            "/f",
+            "/reg:32",
+        ]);
+    }
     let _ = std::fs::remove_file(exe_dir()?.join(format!("{HOST_NAME}.json")));
     let _ = std::fs::remove_file(exe_dir()?.join(format!("{HOST_NAME}.firefox.json")));
     println!("unregistered {HOST_NAME}");
@@ -870,6 +983,7 @@ fn main() {
     let result = match args.first().map(String::as_str).unwrap_or_default() {
         "--register" => register(all_users),
         "--unregister" => unregister(all_users),
+        "--repair" => repair(),
         // Browsers start the host naming the caller: serve only our own extension (the
         // manifests' allowed_origins / allowed_extensions say the same; this is a second check).
         _ if our_caller(&args) => serve().map_err(|e| e.to_string()),
@@ -896,28 +1010,38 @@ fn downloadable(url: &str) -> bool {
 mod tests {
     use super::*;
 
-    /// The Chrome Web Store's copy and the app folder's (unpacked) both connect, and both are
-    /// served: the manifest's allowed_origins and the host's own caller check agree.
+    /// The app folder's (unpacked) copy connects; the original project's store extension, which
+    /// 1.0.0 named to Chrome, doesn't (Grabbit has no store listing yet): the manifest's
+    /// allowed_origins and the host's own caller check agree.
     #[test]
-    fn store_and_unpacked_extensions_both_allowed() {
+    fn unpacked_extension_allowed_not_the_originals() {
         let manifest = chromium_manifest(&this_program().unwrap());
-        for id in [
-            "ejoleppdfgjdndddcjoehopknmlglojp",
-            "oogbclbbninliongijffeeggalppliok",
-        ] {
-            let o = format!("chrome-extension://{id}/");
-            assert!(
-                manifest["allowed_origins"]
-                    .as_array()
-                    .unwrap()
-                    .contains(&serde_json::json!(o)),
-                "{manifest}"
-            );
-            assert!(our_caller(&[o]));
-        }
+        let allowed = manifest["allowed_origins"].as_array().unwrap();
+        let o = "chrome-extension://oogbclbbninliongijffeeggalppliok/".to_owned();
+        assert!(allowed.contains(&serde_json::json!(o)), "{manifest}");
+        assert!(our_caller(&[o]));
+        let original = format!("chrome-extension://{ORIGINAL_STORE_ID}/");
+        assert!(
+            !allowed.contains(&serde_json::json!(original)),
+            "{manifest}"
+        );
+        assert!(!our_caller(&[original]));
         assert!(!our_caller(&[
             "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/".into()
         ]));
+    }
+
+    /// Audit 69-1: 1.0.0's entry for the original's extension is deleted where it is a
+    /// leftover, never where the original app's own host is registered (it wrote the same
+    /// entry); an all-users run cleans HKCU too.
+    #[test]
+    fn only_the_leftover_entry_for_the_originals_extension_goes() {
+        assert_eq!(leftover_roots(false, |_| false), ["HKCU"]);
+        assert!(leftover_roots(false, |r| r == "HKCU").is_empty());
+        assert_eq!(leftover_roots(true, |_| false), ["HKLM", "HKCU"]);
+        assert_eq!(leftover_roots(true, |r| r == "HKLM"), ["HKCU"]);
+        assert_eq!(leftover_roots(true, |r| r == "HKCU"), ["HKLM"]);
+        assert!(leftover_roots(true, |_| true).is_empty());
     }
 
     #[test]
@@ -1230,6 +1354,74 @@ mod tests {
         };
         let json = serde_json::to_string(&answer(hello, &rules)).unwrap();
         assert!(json.contains(r#""capture":false"#) && json.contains(r#""captureOff":"browser""#));
+    }
+
+    #[test]
+    fn a_torrent_stays_with_the_browser_while_torrent_settings_leave_torrents_alone() {
+        // Upstream issue 1058: a tracker's download.php serving a .torrent (Content-Disposition's
+        // name).
+        let ua = "Mozilla/5.0 (Windows NT 10.0) Chrome/141.0.0.0 Safari/537.36";
+        let msg = |name: &str, mime: &str| Message {
+            url: "https://tracker.test/download.php?id=42".into(),
+            filename: Some(name.into()),
+            mime: Some(mime.into()),
+            user_agent: Some(ua.into()),
+            ..Default::default()
+        };
+        let mut rules = mdm_ipc::capture::CaptureRules {
+            torrent_handler: Some(false),
+            ..Default::default()
+        };
+        let r = answer(msg("Show.S01.torrent", "application/x-bittorrent"), &rules);
+        assert_eq!(
+            (r.ok, r.why, r.declined),
+            (false, Some("options"), Some("torrents"))
+        );
+        // Only its type says so (named as another listed type): the app would open Add torrent.
+        assert_eq!(
+            verdict(&msg("Show.S01.bin", "application/x-bittorrent"), &rules),
+            Err(mdm_ipc::capture::Declined::Torrents)
+        );
+        // Asked for (the right-click menu): taken.
+        let explicit = Message {
+            explicit: true,
+            ..msg("Show.S01.torrent", "application/x-bittorrent")
+        };
+        assert_eq!(verdict(&explicit, &rules), Ok(()));
+        // Other types as before.
+        assert_eq!(verdict(&msg("a.zip", "application/zip"), &rules), Ok(()));
+        // The rules tell the extension, which leaves one alone without asking.
+        let hello = || Message {
+            hello: true,
+            user_agent: Some(ua.into()),
+            ..Default::default()
+        };
+        let json = serde_json::to_string(&answer(hello(), &rules)).unwrap();
+        assert!(json.contains(r#""torrents":false"#), "{json}");
+        // On: taken as before.
+        rules.torrent_handler = Some(true);
+        assert_eq!(
+            verdict(&msg("Show.S01.torrent", "application/x-bittorrent"), &rules),
+            Ok(())
+        );
+        assert_eq!(
+            verdict(&msg("Show.S01.bin", "application/x-bittorrent"), &rules),
+            Ok(())
+        );
+        let json = serde_json::to_string(&answer(hello(), &rules)).unwrap();
+        assert!(json.contains(r#""torrents":true"#), "{json}");
+        // Not decided yet (an app that hasn't started since its update): taken, as before.
+        rules.torrent_handler = None;
+        assert_eq!(
+            verdict(&msg("Show.S01.torrent", "application/x-bittorrent"), &rules),
+            Ok(())
+        );
+        // The log says why.
+        assert!(
+            notice_reason("torrents").contains("Torrent settings"),
+            "{}",
+            notice_reason("torrents")
+        );
     }
 
     #[test]

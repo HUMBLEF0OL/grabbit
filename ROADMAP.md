@@ -1,6 +1,6 @@
 # Roadmap
 
-What's done for version 1.0.0, Grabbit's first release, what's being built, and what's planned.
+What's done for version 1.0.1, what's being built, and what's planned.
 Each item links to its issue, where the details and the discussion are. Released changes are in
 [CHANGELOG.md](CHANGELOG.md). Ideas and bug reports are welcome in
 [Issues](https://github.com/HUMBLEF0OL/grabbit/issues).
@@ -196,10 +196,9 @@ Everything below ships together, in version 0.5.0.
 - ✅ Streams whose address doesn't end in .m3u8 or .mpd, served as plain text, are found too: by
   the button over the video, the right-click menu and the media list, read only when asked
   ([#171](https://github.com/anefzaoui/misterdownloadmanager/issues/171))
-- ✅ The extension in the [Chrome Web Store](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp): **Add to Chrome** beside **Add to Firefox**
-  on the website, in the help, the FAQ and the README; MDM's **Add Mister Download Manager to
-  your browser** window opens the store in Chrome, Edge, Brave, Opera and Vivaldi, with the
-  manual install as the fallback
+- ⛔ The extension in the Chrome Web Store: that listing is the original project's, whose
+  extension never reaches Grabbit; Grabbit isn't listed yet, and since 1.0.1 its window, help,
+  website and README offer the copy in Grabbit's folder instead (Load unpacked)
 - ✅ Themes, the groundwork: every colour and size the controls are drawn with comes from one
   theme, and theme files can change them; the classic look is unchanged
   ([#45](https://github.com/anefzaoui/misterdownloadmanager/issues/45))
@@ -246,9 +245,9 @@ Everything below ships together, in version 0.5.0.
 - ✅ Linux: MDM's first window opens seconds sooner; the system's fonts are looked up all at once
   while it starts, not one by one in the window (on a busy computer that froze it, part of
   [#164](https://github.com/anefzaoui/misterdownloadmanager/issues/164))
-- ✅ Firefox's add-on offered from [addons.mozilla.org](https://addons.mozilla.org/firefox/addon/mister-download-manager/)
-  first: **Add to Firefox** on the website, in the help, the FAQ and the README, and in MDM's
-  **Add Mister Download Manager to your browser** window (for Zen and LibreWolf too)
+- ⛔ Firefox's add-on offered from addons.mozilla.org: that page is the original project's;
+  Grabbit's add-on isn't listed or signed yet, and since 1.0.1 the help says how to load it from
+  Grabbit's folder (a temporary add-on, or Firefox Developer Edition or Nightly)
 - ✅ Support MDM: a way to support its creator on [GitHub Sponsors](https://github.com/sponsors/anefzaoui),
   asked for only (**Help → Support MDM**, a line in About, the website, the README, the
   extension's popup and GitHub's Sponsor button); MDM stays free, nothing changes or unlocks
@@ -555,6 +554,49 @@ everything below ships in it.
   encrypted piece whose key can't be had leaves nothing behind, and deleting a video takes its
   HLS audio stream's files too.
 
+## Version 1.0.1
+
+Released 2026-11-20: the maintainer's first findings with 1.0.0, and what came with them.
+
+- ✅ The browser extension connects in Brave, Chrome, Edge and Firefox: Grabbit has no store
+  listing yet, so the **Add Grabbit to your browser** window opens the tutorial that loads the
+  copy in Grabbit's folder (Load unpacked; a temporary add-on in Firefox) instead of the original
+  project's listings, whose extension never reached Grabbit, and Chrome is no longer told to
+  offer that extension.
+- ✅ Seven columns at first (Source, File Name, Size, Status, Time left, Transfer rate, Added),
+  which fit the window's first size without scrolling sideways; File Name, Size and Status are
+  always shown, the rest a right-click on the header away.
+- ✅ A pasted link waits for Download File Info's answer: **Start downloading immediately while
+  displaying "Download File Info" dialog** is off by default.
+- ✅ No glow under the default button or the progress bars, in dark mode either.
+- ✅ Light or dark from a small button at the status bar's end (a moon, a sun) instead of View →
+  Dark Mode support and Always dark; it follows Windows until first clicked.
+- ✅ Find in the main window: the title bar's field filters the list as you type, Enter, F3 and
+  Shift+F3 step through the matches, and its funnel's menu chooses where to look and shows only
+  some statuses or sources (the column filters themselves). The Find file window is gone.
+- ✅ One **Add** for everything: Add URL and Add Torrent made one toolbar item whose window takes
+  addresses, magnet links, `.torrent` files and video pages (typed, pasted or dropped), says what
+  each is and sends it into its usual window; its arrow has Open a .torrent file (Ctrl+O), Add
+  from the clipboard and Batch download. The paste bar names what it found and its button says
+  what Enter does; links dropped on the main window open the Add window.
+- ✅ Options → Downloads → Customize "Download progress" dialog → Edit... opens its window, where
+  the progress window can be turned off for new downloads (upstream issue 1041; it was greyed).
+- ✅ Graphite green: Graphite's colours are now zinc greys and one emerald green (selection,
+  ticked boxes, focus, links, the default button, progress) in place of amethyst and cyan, and
+  the app icon's double chevron is the same emerald, light into deep: in the app, the installer,
+  the browser extension, and the website's logos and favicon.
+- ✅ The original MDM's fixes in the files the in-app Options page changed (plan 11): of
+  upstream's six waiting commits there, one already fixed here, two features skipped, three
+  ported by hand: the Download progress dialog's Edit... (upstream issue 1041), browser
+  integration from a copy run inside a zip (upstream issue 818), and torrents left to the
+  browser when Grabbit isn't to open them, with Grabbit in Windows' Default apps (upstream
+  issues 1058, 1091).
+- ✅ Options in the main window (plan 11): Options' pages open in place of the download list,
+  with **← Downloads**, a Save / Discard bar, and a question before unsaved changes are thrown
+  away; the Scheduler, the Speed Limiter's and torrents' settings and the browser extension are
+  sections of it, under **Tools**; the help pages' pictures show the new page. The look's
+  settings stay in the View menu.
+
 ## Being worked on
 
 These ship in a later version, when they're ready.
@@ -649,10 +691,6 @@ These ship in a later version, when they're ready.
   name are taken again and say Grabbit
 - ✅ Grabbit signs its own releases: Update now trusts Grabbit's release key, and each release's
   checksum list is signed with it
-- 🔄 Code-signed programs and installer, so Windows SmartScreen stops warning: free open-source
-  signing through the SignPath Foundation. Done: applied, and the code signing policy is on the
-  website's Security page. Still to do once approved: the release built and signed by GitHub
-  Actions
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a
   centred stage, then a walk through adding, downloading, torrents and video as you scroll), the
   benchmark's seven medians drawn from its results file, the Grabbit mark and Geist, light and
@@ -663,6 +701,13 @@ These ship in a later version, when they're ready.
   after an update. The pages' own text says Grabbit too since the rename above (10d)
 - ✅ The website's tab icon is Grabbit's mark: its `favicon.ico` was still the old name's, and
   the icon script now writes it with the other icons
+
+### Looking into
+
+- 🔍 Code-signed programs and installer, so Windows SmartScreen stops warning. The SignPath
+  Foundation's free signing didn't accept the project; another certificate for open-source
+  projects is being looked into. Until then each release's checksums are signed with Grabbit's
+  own release key, which Update now verifies.
 
 ### Bugs being looked into
 

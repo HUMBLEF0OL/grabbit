@@ -16,7 +16,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import pal  # noqa: E402
 
-PALETTE = "amethyst"
+PALETTE = "graphite"
 REPO = HERE.parent.parent.parent
 OUT = REPO / "crates" / "app" / "assets" / "themes" / "graphite.toml"
 
@@ -27,9 +27,10 @@ WARNING = {"light": "#9d5d00", "dark": "#f5a524"}
 # The keyboard focus ring. The mockup draws focus as an accent border with a faint halo (the
 # `ring` token: 25 % light, 33 % dark); the app draws the ring alone, and its tests want it seen
 # at 3:1 on the window and on boxes, its transparency included (palette.rs,
-# style_themes_focus_rings_are_seen). `ring` gives 1.5 to 1.8:1, so the ring is the accent at
-# a0 (63 %): 3.2 to 3.4:1 light, 3.5 to 3.6:1 dark.
-RING = "acc@a0"
+# style_themes_focus_rings_are_seen). `ring` is too faint for that, so the ring is the accent at
+# b0 (69 %), as Graphite green's light emerald needs (a0 gave 2.8:1): 3.1 to 3.2:1 light, 4.8 to
+# 5:1 dark.
+RING = "acc@b0"
 
 # The toolbar's faces. Its band is a panel (`surface`, plan 05b), which `hover` and `press`
 # are made for; the other half of a split button under the pointer half-way to `hover`.
@@ -124,15 +125,15 @@ ROLES = [
         ("toolbar.checked", "sel"), ("button.danger", "dng"), ("button.danger.text", "ondng"),
         ("banner.error", "errSoft"), ("banner.info", "sel"), ("banner.warning", "warnSoft"),
     ]),
-    ("Two-tone finish and glow (09a): the outlaw colour's lighter stop, a glow in dark only", [
+    ("Two-tone finish (09a): the outlaw colour's lighter stop; no glow, in either mode (1.0.1)", [
         ("glow", "glow"), ("button.accent.top", "out2"), ("progress.bar.end", "out2"),
     ]),
 ]
 
 HEADER = """\
 # Graphite: one of Mister Download Manager's built-in themes, its own new look (design/graphite):
-# colours and shapes of our own design, light and dark (jet black, royal amethyst, electric
-# cyan); it borrows nothing but its MIT-licensed Tabler icons (graphite/icons/SOURCES.txt) and
+# colours and shapes of our own design, light and dark ({base} greys, {primary} green for the
+# accent); it borrows nothing but its MIT-licensed Tabler icons (graphite/icons/SOURCES.txt) and
 # its typeface, Geist (Vercel, SIL Open Font License 1.1), which MDM carries (assets/fonts/geist).
 # It is also an example of a theme file: seeds for the colours, many roles set by hand (the
 # outlaw colour on the default button and the progress bars), rounded corners, Windows 11's
@@ -214,7 +215,7 @@ def key(k: str) -> str:
 
 def render() -> str:
     p = pal.PALS[PALETTE]
-    out = [HEADER.format(name=PALETTE)]
+    out = [HEADER.format(name=PALETTE, base=p["base"], primary=p["primary"])]
     for variant in ("light", "dark"):
         tokens = p[variant]
         out.append(f"\n[seeds.{variant}]")

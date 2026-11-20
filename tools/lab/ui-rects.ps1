@@ -7,7 +7,7 @@
 # Without -Title, every visible window of the process (a menu over the main window), placed as
 # cap-own.ps1 composes them.
 #
-#   tools\lab\ui-rects.ps1 -ProcessId 1234 -Title "Add URL" -Out target\shots\add-url.ui.json
+#   tools\lab\ui-rects.ps1 -ProcessId 1234 -Title "Add" -Out target\shots\add-url.ui.json
 param([Parameter(Mandatory)][int]$ProcessId, [string]$Title = "",
   [Parameter(Mandatory)][string]$Out)
 $ErrorActionPreference = "Stop"

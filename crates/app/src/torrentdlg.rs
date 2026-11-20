@@ -23,6 +23,9 @@ const ADD_BODY: f32 = 424.0;
 /// Torrent settings' and Add trackers' widths and footers (where their OK rows were).
 const SETTINGS_W: f32 = 480.0;
 const SETTINGS_BODY: f32 = 448.0;
+/// Torrent settings' section in Options' page (plan 11b2): the window's client without its
+/// footer.
+pub const SETTINGS_SIZE: [f32; 2] = [SETTINGS_W, SETTINGS_BODY];
 const TRACKERS_W: f32 = 440.0;
 const TRACKERS_BODY: f32 = 212.0;
 
@@ -962,6 +965,8 @@ pub struct TorrentSettings {
     stop_ratio: String,
     stop_min_on: bool,
     stop_min: String,
+    /// [`TorrentSettings::choice`] as it opened: changed from it, the draft is dirty.
+    opened: TorrentChoice,
 }
 
 /// Torrent settings' seeding limits as OK gives them (`Settings::torrent_stop_*`).
@@ -1020,7 +1025,8 @@ impl Net {
     }
 }
 
-/// What OK gives: keep sharing, associations, the network, the upload limit (on, KBytes/sec).
+/// What Save gives: keep sharing, associations, the network, the upload limit (on, KBytes/sec).
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TorrentChoice {
     pub share: bool,
     pub assoc: bool,
@@ -1032,9 +1038,9 @@ pub struct TorrentChoice {
 impl TorrentSettings {
     pub fn new(s: &crate::settings::Settings) -> Self {
         let net = Net::of(s);
-        TorrentSettings {
+        let mut d = TorrentSettings {
             share: s.torrent_keep_sharing,
-            assoc: s.torrent_associations,
+            assoc: s.torrent_associations == Some(true),
             port: if net.port == 0 {
                 String::new()
             } else {
@@ -1048,16 +1054,33 @@ impl TorrentSettings {
             stop_ratio: format!("{:.2}", f64::from(s.torrent_stop_ratio.max(1)) / 100.0),
             stop_min_on: s.torrent_stop_minutes_on,
             stop_min: s.torrent_stop_minutes.max(1).to_string(),
-        }
+            opened: TorrentChoice {
+                share: false,
+                assoc: false,
+                net: Net::of(s),
+                upload: (false, 0),
+                seeding: Seeding {
+                    ratio_on: false,
+                    ratio: 0,
+                    minutes_on: false,
+                    minutes: 0,
+                },
+            },
+        };
+        // Its boxes as read back untouched (a value they clamp differs from the settings).
+        d.opened = d.choice();
+        d
     }
 
-    pub fn show(&mut self, ctx: &egui::Context) -> Outcome<TorrentChoice> {
-        window(
-            ctx,
-            "torrent-settings",
-            "Torrent settings",
-            [SETTINGS_W, SETTINGS_BODY + winui::FOOTER_H],
-            false,
+    /// Torrent settings as a section of Options' page (plan 11b2): its rows at `o`, as the
+    /// window's client had them, [`SETTINGS_SIZE`] points; OK and Cancel are the page's Save
+    /// and Discard.
+    #[rustfmt::skip]
+    pub fn section(&mut self, ui: &mut egui::Ui, o: Pos2) {
+        crate::dialogs::inline(
+            ui,
+            o,
+            SETTINGS_SIZE,
             winui::BG(),
             |ui, o| {
                 let p = ui.painter().clone();
@@ -1087,7 +1110,7 @@ impl TorrentSettings {
                     // i18n: Torrent settings, under "Keep sharing": stop sharing a finished torrent once its share ratio (sent ÷ received) reaches the number in the box after it
                     "Stop sharing at a share ratio of",
                     share,
-                    Some(326.0),
+                    Some(o.x + 326.0),
                 );
                 winui::edit_right(
                     ui,
@@ -1105,7 +1128,7 @@ impl TorrentSettings {
                     // i18n: Torrent settings, under "Keep sharing": or stop sharing a finished torrent after sharing it for the number of minutes in the box after it
                     "Stop sharing after sharing for",
                     share,
-                    Some(326.0),
+                    Some(o.x + 326.0),
                 );
                 winui::edit_right(
                     ui,
@@ -1260,7 +1283,7 @@ impl TorrentSettings {
                     // i18n: Torrent settings: an upload speed limit for all torrents together, followed by a box with the speed and "KBytes/sec"
                     "Limit uploading for all torrents to",
                     true,
-                    Some(326.0),
+                    Some(o.x + 326.0),
                 );
                 winui::edit_right(
                     ui,
@@ -1315,44 +1338,38 @@ impl TorrentSettings {
                     o.x + 456.0,
                     ("torrent-settings", 6),
                 );
-                // Enter OK, Escape Cancel, as before.
-                let pressed = winui::footer(
-                    ui,
-                    o,
-                    SETTINGS_W,
-                    SETTINGS_BODY,
-                    &mut [
-                        FooterItem::Button(
-                            FooterButton::new("OK", ButtonKind::Default).enter(true),
-                        ),
-                        FooterItem::Button(
-                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
-                        ),
-                    ],
-                );
-                if pressed == Some(1) {
-                    Outcome::Closed
-                } else if pressed == Some(0) {
-                    let mut net = self.net.clone();
-                    net.port = self.port.parse().unwrap_or(0);
-                    Outcome::Done(TorrentChoice {
-                        share: self.share,
-                        assoc: self.assoc,
-                        net,
-                        upload: (self.upload_on, self.upload_kb.parse().unwrap_or(0).max(1)),
-                        seeding: Seeding {
-                            ratio_on: self.stop_ratio_on,
-                            // Not a number: the default, 2.00.
-                            ratio: ratio_hundredths(&self.stop_ratio).unwrap_or(200),
-                            minutes_on: self.stop_min_on,
-                            minutes: self.stop_min.parse().unwrap_or(0).max(1),
-                        },
-                    })
-                } else {
-                    Outcome::Open
-                }
             },
-        )
+        );
+    }
+
+    /// What Save gives: the boxes read (one that doesn't parse keeps its default, as OK did).
+    pub fn choice(&self) -> TorrentChoice {
+        let mut net = self.net.clone();
+        net.port = self.port.parse().unwrap_or(0);
+        TorrentChoice {
+            share: self.share,
+            assoc: self.assoc,
+            net,
+            upload: (self.upload_on, self.upload_kb.parse().unwrap_or(0).max(1)),
+            seeding: Seeding {
+                ratio_on: self.stop_ratio_on,
+                // Not a number: the default, 2.00.
+                ratio: ratio_hundredths(&self.stop_ratio).unwrap_or(200),
+                minutes_on: self.stop_min_on,
+                minutes: self.stop_min.parse().unwrap_or(0).max(1),
+            },
+        }
+    }
+
+    /// Whether Save would change anything: the choice differs from the one it opened with.
+    pub fn dirty(&self) -> bool {
+        self.choice() != self.opened
+    }
+
+    /// "Keep sharing torrents after they finish" set, as its check box does (tests).
+    #[cfg(test)]
+    pub(crate) fn set_share(&mut self, on: bool) {
+        self.share = on;
     }
 }
 

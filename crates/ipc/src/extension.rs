@@ -6,15 +6,16 @@
 pub const UNPACKED_ID: &str = "oogbclbbninliongijffeeggalppliok";
 /// Its ID in the Chrome Web Store, which signs it with the store's own key
 /// (tools/extension/pack.ps1 leaves the manifest's key out of the store's copy). [`store_id`] is
-/// `None` while this is not a valid ID (a placeholder), and then nothing names it.
-pub const STORE_ID: &str = "ejoleppdfgjdndddcjoehopknmlglojp";
+/// `None` while this is not a valid ID (a placeholder), and then nothing names it. Grabbit isn't
+/// listed yet: until it is, every Chromium browser gets the tutorial that loads the copy in
+/// Grabbit's folder (1.0.0 named the original project's listing here, whose extension talks to
+/// the original's host, never to Grabbit's).
+pub const STORE_ID: &str = "CHROME_WEB_STORE_ID_PENDING";
 /// Its IDs in Microsoft Edge Add-ons and Opera add-ons, which give their own; placeholders until
 /// listed there, never served then (`valid_id`).
 pub const OTHER_STORE_IDS: [&str; 2] = ["EDGE_ADDONS_ID_PENDING", "OPERA_ADDONS_ID_PENDING"];
-/// The Firefox add-on's page on addons.mozilla.org (listed: Firefox installs and updates it from
-/// there).
-pub const FIREFOX_PAGE: &str = "https://addons.mozilla.org/firefox/addon/mister-download-manager/";
-/// The Firefox add-on's ID (extension/manifest.firefox.json).
+/// The Firefox add-on's ID (extension/manifest.firefox.json). It has no addons.mozilla.org
+/// listing yet: Firefox's rows get the tutorial's Firefox section ([`GUIDE_FIREFOX`]).
 pub const FIREFOX_ID: &str = "grabbit@humblef0ol.github.io";
 /// Chrome's update service: an external-install entry naming it makes Chrome offer the store's
 /// extension at its next start (developer.chrome.com, "Alternative extension distribution
@@ -42,14 +43,17 @@ pub fn chromium_ids() -> Vec<&'static str> {
 /// The extension's page in the Chrome Web Store (Chrome, Edge, Brave, Opera and Vivaldi all
 /// install from it), once it is listed: the listing's own address, its name then its ID.
 pub fn store_page() -> Option<String> {
-    store_id()
-        .map(|id| format!("https://chromewebstore.google.com/detail/mister-download-manager/{id}"))
+    store_id().map(|id| format!("https://chromewebstore.google.com/detail/grabbit/{id}"))
 }
 
-/// The tutorial that adds the extension: from the stores, and by hand (a build of its own, or
-/// a browser that can't use its store). Its file in docs/: the app opens it on the website, in
-/// the interface language (the app's help::page_url).
+/// The tutorial that adds the extension by hand, from Grabbit's own folder (Load unpacked in a
+/// Chromium browser, a temporary add-on in Firefox). Its file in docs/: the app opens it on the
+/// website (the app's help::page_url).
 pub const GUIDE_DOC: &str = "guide-catch-browser-downloads.md";
+/// The tutorial's section for Chrome, Edge, Brave, Opera and Vivaldi.
+pub const GUIDE_CHROMIUM: &str = "guide-catch-browser-downloads.md#chromium";
+/// The tutorial's section for Firefox and its family.
+pub const GUIDE_FIREFOX: &str = "guide-catch-browser-downloads.md#firefox";
 
 /// The help page for a browser that doesn't reach Mister Download Manager, at the section for
 /// `why` (the native host's reasons, and the app's own checks): its file in docs/ and the
@@ -121,23 +125,16 @@ mod tests {
         assert_eq!(store_page().is_some(), store_id().is_some());
     }
 
-    /// The store's copy and the app folder's (unpacked) both reach the host: the manifests'
-    /// allowed_origins and the host's own caller check are this list.
+    /// Grabbit has no store listing yet: only the app folder's (unpacked) copy reaches the host,
+    /// and nothing names the original project's listing (its extension talks to the original's
+    /// host, never to Grabbit's).
     #[test]
-    fn store_and_unpacked_both_served() {
-        assert_eq!(STORE_ID, "ejoleppdfgjdndddcjoehopknmlglojp");
+    fn only_the_unpacked_copy_until_listed() {
         assert_eq!(UNPACKED_ID, "oogbclbbninliongijffeeggalppliok");
-        let ids = chromium_ids();
-        assert!(
-            ids.contains(&UNPACKED_ID) && ids.contains(&STORE_ID),
-            "{ids:?}"
-        );
-        assert_eq!(
-            store_page().as_deref(),
-            Some(
-                "https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp"
-            )
-        );
+        assert_eq!(store_id(), None);
+        assert_eq!(store_page(), None);
+        assert_eq!(chromium_ids(), vec![UNPACKED_ID]);
+        assert!(!chromium_ids().contains(&"ejoleppdfgjdndddcjoehopknmlglojp"));
     }
 
     #[test]

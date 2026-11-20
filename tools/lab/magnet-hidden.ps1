@@ -13,7 +13,7 @@
 #             Info. The address is on 127.0.0.1 port 9, where nothing answers.
 # -State: visible (the window as it opens), hidden (ShowWindow hides it, as the notification area
 #   does), tray (MDM hides it there itself: `/show tray`, after 0.2.4), minimized,
-#   dialog (Options open, the main window minimized), twice (two in a row, hidden), restoring (a
+#   dialog (About open, the main window minimized), twice (two in a row, hidden), restoring (a
 #   plain second launch, which shows the window again, right before), all (each in turn).
 # -Renderer: glow or direct3d (MDM_RENDERER; after 0.2.4).
 #
@@ -149,7 +149,7 @@ function Run-State([string]$St) {
   $app = Start-Process -FilePath $Exe -PassThru
   $reply = ""
   try {
-    # The main window: the copy's first (its title has the version, Options' starts the same).
+    # The main window: the copy's first (its title has the version, as About's does).
     $main = Wait-Window $app.Id "Grabbit*"
     Start-Sleep -Milliseconds 800
     switch ($St) {
@@ -159,7 +159,8 @@ function Run-State([string]$St) {
       "minimized" { [MagWin]::ShowWindow($main.Handle, $SW_SHOWMINNOACTIVE) | Out-Null }
       "dialog" {
         $had = @(Windows-Of $app.Id | ForEach-Object { $_.Handle })
-        Second-Launch @("/show", "options")
+        # A dialog that is a window of its own (Options is a page of the main window, plan 11a).
+        Second-Launch @("/show", "about")
         Wait-Window $app.Id "*" -Except $had | Out-Null
         Start-Sleep -Milliseconds 500
         [MagWin]::ShowWindow($main.Handle, $SW_SHOWMINNOACTIVE) | Out-Null

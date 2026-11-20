@@ -12,12 +12,12 @@
 
 <p align="center">
   🧩 <b>Browser extension:</b><br>
-  <a href="https://addons.mozilla.org/firefox/addon/mister-download-manager/"><img src="https://img.shields.io/badge/Add%20to-Firefox-2a78d6?style=flat-square&logo=firefoxbrowser&logoColor=white" alt="Add to Firefox" height="34"></a>
-  <a href="https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp"><img src="https://img.shields.io/badge/Add%20to-Chrome-2a78d6?style=flat-square&logo=googlechrome&logoColor=white" alt="Add to Chrome" height="34"></a><br>
-  <sub>The Chrome Web Store's is for
+  <a href="docs/guide-catch-browser-downloads.md#firefox"><img src="https://img.shields.io/badge/Add%20to-Firefox-2a78d6?style=flat-square&logo=firefoxbrowser&logoColor=white" alt="Add to Firefox" height="34"></a>
+  <a href="docs/guide-catch-browser-downloads.md#chromium"><img src="https://img.shields.io/badge/Add%20to-Chrome-2a78d6?style=flat-square&logo=googlechrome&logoColor=white" alt="Add to Chrome" height="34"></a><br>
+  <sub>It comes with Grabbit (not in the stores yet): load it from Grabbit's folder in Chrome,
   <img src="docs/images/browsers/edge.png" width="16" height="16" alt=""> Edge,
   <img src="docs/images/browsers/brave.png" width="16" height="16" alt=""> Brave,
-  <img src="docs/images/browsers/opera.png" width="16" height="16" alt=""> Opera and Vivaldi too (<a href="docs/browser-integration.md">how</a>).</sub>
+  <img src="docs/images/browsers/opera.png" width="16" height="16" alt=""> Opera and Vivaldi, or Firefox (<a href="docs/guide-catch-browser-downloads.md">how</a>).</sub>
 </p>
 
 <p align="center">
@@ -50,8 +50,6 @@
   <a href="https://github.com/HUMBLEF0OL/grabbit/releases"><img src="https://img.shields.io/github/downloads/HUMBLEF0OL/grabbit/total?logo=github" alt="Downloads"></a>
   <a href="https://github.com/HUMBLEF0OL/grabbit/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/HUMBLEF0OL/grabbit/ci.yml?logo=github&label=ci" alt="CI"></a>
   <a href="https://github.com/HUMBLEF0OL/grabbit/stargazers"><img src="https://img.shields.io/github/stars/HUMBLEF0OL/grabbit?logo=github" alt="GitHub stars"></a>
-  <a href="https://addons.mozilla.org/firefox/addon/mister-download-manager/"><img src="https://img.shields.io/amo/v/mister-download-manager?logo=firefoxbrowser&label=Firefox%20add-on" alt="Firefox add-on"></a>
-  <a href="https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp"><img src="https://img.shields.io/chrome-web-store/v/ejoleppdfgjdndddcjoehopknmlglojp?logo=googlechrome&label=Chrome%20Web%20Store" alt="Chrome Web Store"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/HUMBLEF0OL/grabbit" alt="GPL-3.0 license"></a>
 </p>
 
@@ -99,7 +97,7 @@ one:
 | **`...-setup.exe`** | **Not sure? Take this one.** It installs Grabbit, connects it to your browser and asks your language. |
 | `...-portable.zip` | You want Grabbit on a USB stick or without installing: unzip and run. Everything stays in its folder. |
 | `...-x64.zip` | You want the plain programs without an installer. |
-| `...-extension-chromium.zip` | You want to add the browser extension by hand (Chrome, Edge, Brave, Opera, Vivaldi). From the stores is easier: [Add to Chrome](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp), [Add to Firefox](https://addons.mozilla.org/firefox/addon/mister-download-manager/). |
+| `...-extension-chromium.zip` | You want to add the browser extension by hand (Chrome, Edge, Brave, Opera, Vivaldi). The setup puts the same files in Grabbit's `extension` folder ([how to add them](docs/guide-catch-browser-downloads.md)). |
 
 > [!NOTE]
 > Windows may say *"Windows protected your PC"* the first time, because this early version isn't
@@ -117,7 +115,7 @@ one:
     <td width="50%"><img src="docs/images/main-dark.webp" alt="Dark mode"><br><sub><b>Dark mode</b> that follows Windows.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/add-url.webp" alt="Add URL"><br><sub><b>Add a download</b>: paste a link, or let Grabbit catch it from your browser.</sub></td>
+    <td><img src="docs/images/add-url.webp" alt="The Add window"><br><sub><b>Add a download</b>: paste a link, or let Grabbit catch it from your browser.</sub></td>
     <td><img src="docs/images/add-torrent.webp" alt="Add torrent"><br><sub><b>Torrents and magnet links</b>: pick the files you want, skip the rest.</sub></td>
   </tr>
   <tr>
@@ -224,8 +222,9 @@ This makes `grabbit.exe` (the app), `grabbit-cli.exe` (headless
 command line), `grabbit-mcp.exe` (the MCP server for AI assistants) and
 `grabbit-nmhost.exe` (the browser host) in `target\release\`.
 `tools\installer\build.ps1` builds the installer and both zips into `target\dist\` (needs
-[Inno Setup 6](https://jrsoftware.org/isinfo.php)); a `vX.Y.Z` tag does the same on GitHub
-Actions and publishes the release.
+[Inno Setup 6](https://jrsoftware.org/isinfo.php)); a release is built, signed and published
+from the maintainer's computer with `tools\installer\publish.ps1` (see
+[CONTRIBUTING.md](CONTRIBUTING.md#branches)).
 
 Browser integration from a build: register the native messaging host with
 `target\release\grabbit-nmhost.exe --register` (undo with `--unregister`), then in

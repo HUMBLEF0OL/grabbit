@@ -259,3 +259,33 @@ fn strangers_are_refused() {
     assert!(!ok && replies.is_empty());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Upstream issue 818: a copy run from a temporary folder (an archive run without extracting it
+/// first, whose tool deletes the folder afterwards) refuses to register itself, at Set it up
+/// (`--register`) and at the app's start (`--repair`): the browsers would be left with a helper
+/// that is gone, and look for no other. The refusal comes before anything is written.
+#[test]
+fn a_host_in_a_temporary_folder_is_not_registered() {
+    let home = data_dir("temporary", serde_json::json!({}));
+    let extracted = home.join("Rar$EXa34720.17029.rartemp").join("Grabbit");
+    std::fs::create_dir_all(&extracted).unwrap();
+    let copy = extracted.join("grabbit-nmhost.exe");
+    std::fs::copy(HOST, &copy).unwrap();
+    for arg in ["--register", "--repair"] {
+        let out = Command::new(&copy)
+            .arg(arg)
+            .env("GRABBIT_DATA_DIR", &home)
+            .output()
+            .unwrap();
+        assert!(!out.status.success(), "{arg}: {out:?}");
+        assert!(
+            String::from_utf8_lossy(&out.stderr).contains("temporary folder"),
+            "{arg}: {out:?}"
+        );
+        assert!(
+            !extracted.join("com.grabbit.host.json").exists(),
+            "{arg}: no manifest written"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&home);
+}

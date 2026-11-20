@@ -1,6 +1,7 @@
-//! Options (Downloads → Options, the toolbar's Options): the configuration dialog, twelve pages
-//! listed down its side (plan 08; IDM's two rows of tabs before, notes/ui-spec/options-dialog.md).
-//! It edits a copy of the settings: OK applies it, the close box and Escape discard it.
+//! Options (Downloads → Options, the toolbar's Options): twelve pages listed down a side list
+//! (plan 08; IDM's two rows of tabs before, notes/ui-spec/options-dialog.md), shown in the main
+//! window by `settingspage` (plan 11a; a window of its own before). It edits a copy of the
+//! settings: Save applies it, Discard and Back (once asked) drop it.
 
 use egui::{Pos2, Rect, Sense, Ui, pos2, vec2};
 
@@ -41,6 +42,9 @@ enum Sub {
     Panels(bool, String, String),
     /// General → Keys...: (also take the files the browser would open).
     Keys(bool),
+    /// Downloads → Customize "Download progress" dialog → Edit... (upstream 1041): (show it
+    /// when a download starts).
+    Progress(bool),
     /// General → Test browser integration...: the checks, as found when it opened.
     Test(Vec<crate::extension::Check>),
     /// File types → "Don't start downloading automatically from the following addresses" →
@@ -179,8 +183,10 @@ fn set_dns_index(s: &mut Settings, i: usize) {
 
 pub struct OptionsDialog {
     s: Settings,
-    /// The settings it opened with: OK applies only what changed from them.
+    /// The settings it opened with: Save applies only what changed from them.
     pub from: Settings,
+    /// [`OptionsDialog::result`] as it opened, untouched: changed from it, the draft is dirty.
+    opened: Settings,
     page: usize,
     /// The browsers check list's scroll and selection.
     browser_rows: winui::RowList,
@@ -238,6 +244,39 @@ impl OptionsDialog {
         self
     }
 
+    /// [`OptionsDialog::on_page`] on the open page (the Scheduler's section, plan 11b1: its
+    /// commands open the page there).
+    pub(crate) fn show_page(&mut self, page: usize) {
+        self.page = page;
+    }
+
+    /// A fresh draft after Save or Discard (plan 11a) shown as `old` was: its page and scroll,
+    /// the category chosen on Save to (its folder as the fresh draft has it), the lists' places
+    /// and selections, and, once `saved`, User-Agent's Automatic tick (a tick Discard drops is
+    /// read again from the settings, as the box shows them).
+    pub(crate) fn keep_view(
+        mut self,
+        old: &OptionsDialog,
+        saved: bool,
+        downloads: &std::path::Path,
+    ) -> Self {
+        self.page = old.page;
+        self.scrolled = Some(old.page);
+        let cats = Category::all();
+        self.category = old.category.min(cats.len() - 1);
+        self.cat_dir = display_dir(&self.s.category_dir(cats[self.category], downloads));
+        self.browser_rows = old.browser_rows;
+        self.exc_rows = old.exc_rows;
+        self.login_rows = old.login_rows;
+        self.account_rows = old.account_rows;
+        self.sound_rows = old.sound_rows;
+        self.device_rows = old.device_rows;
+        if saved {
+            self.ua_auto = old.ua_auto;
+        }
+        self
+    }
+
     /// With the app's remote control (Remote: its state, devices and pairing).
     pub fn with_remote(mut self, remote: Option<mdm_remote::Remote>) -> Self {
         self.remote = remote;
@@ -261,12 +300,14 @@ impl OptionsDialog {
         self
     }
 
-    /// With General → Test browser integration's window over it, or Accounts → Add's (`/show
-    /// options:test`, `options:account`: screenshots, #192).
+    /// With General → Test browser integration's window over it, Accounts → Add's, or
+    /// Downloads → Customize "Download progress" dialog's (`/show options:test`,
+    /// `options:account`, `options:progress`: screenshots, #192, upstream 1041).
     pub fn with_window(mut self, name: &str) -> Self {
         match name {
             "test" => self.sub = Some(Sub::Test(crate::extension::checks(&self.s))),
             "account" => self.sub = Some(Sub::Account(AccountEdit::default())),
+            "progress" => self.sub = Some(Sub::Progress(self.s.show_progress)),
             _ => {}
         }
         self
@@ -278,7 +319,8 @@ impl OptionsDialog {
         learned: Vec<(String, u32)>,
     ) -> Self {
         let s = settings.clone();
-        OptionsDialog {
+        let mut d = OptionsDialog {
+            opened: s.clone(),
             from: s.clone(),
             browser_rows: Default::default(),
             cat_dir: display_dir(&s.category_dir(Category::General, downloads)),
@@ -306,91 +348,67 @@ impl OptionsDialog {
             cookie_browser: cookie_browser_at(settings),
             ua_auto: settings.own_user_agent().is_none(),
             scrolled: None,
+        };
+        // Its typed fields as read back untouched (a value they clamp differs from `from`).
+        d.opened = d.result();
+        d
+    }
+
+    /// Whether a small dialog of a page is open over it (a sub-dialog, the category editor,
+    /// the restore question): the page's Save, Discard and Back wait for it, as OK did.
+    pub(crate) fn modal(&self) -> bool {
+        self.sub.is_some() || self.cat_edit.is_some() || self.restore_ask.is_some()
+    }
+
+    /// The page shown (the numbers in `PAGES`).
+    pub(crate) fn page(&self) -> usize {
+        self.page
+    }
+
+    /// Remote → Pair a device... is open: the remote control shows a pairing code.
+    pub(crate) fn pairing(&self) -> bool {
+        matches!(self.sub, Some(Sub::Pair))
+    }
+
+    /// The side list from `o`, `foot` points tall: a click or a key there picks the page.
+    pub(crate) fn pages(&mut self, ui: &mut Ui, o: Pos2, foot: f32) {
+        if let Some(p) = side_list(ui, o, self.page, foot) {
+            self.page = p;
         }
     }
 
-    /// `Done(settings)` on OK.
-    pub fn show(&mut self, ctx: &egui::Context, downloads: &std::path::Path) -> Outcome<Settings> {
-        let modal = self.sub.is_some() || self.cat_edit.is_some() || self.restore_ask.is_some();
-        // Shorter where the screen is (a large interface size): the page scrolls between the
-        // side list and the footer, which stay.
-        let caption = if crate::dialogs::drawn_captions() {
-            winui::caption::CAPTION_H
-        } else {
-            0.0
-        };
-        let h = fit_height(
-            crate::dialogs::shown_size(ctx, [W, H + caption])[1] - caption,
-            ctx.pixels_per_point(),
-        );
-        // Wider by the page's scroll bar when it has one.
-        let w = if h < H {
-            W + crate::scrollbar::THICK
-        } else {
-            W
-        };
-        let outcome = window(
-            ctx,
-            "options",
-            "Grabbit Configuration",
-            [w, h],
-            false,
-            LIGHT_BG(),
-            |ui, o| {
-                let foot = h - winui::FOOTER_H;
-                if let Some(p) = side_list(ui, o, self.page, foot) {
-                    self.page = p;
-                }
-                if h < H {
-                    // Right of the list's border: its English x 0 is the window's SIDE_W + 1.
-                    let view = r(o, SIDE_W + 1.0, 0.0, w - SIDE_W - 1.0, foot);
-                    let mut page = ui.new_child(egui::UiBuilder::new().max_rect(view));
-                    page.set_clip_rect(view.intersect(ui.clip_rect()));
-                    let pane = egui::Id::unique("options-page");
-                    if self.scrolled != Some(self.page) {
-                        self.scrolled = Some(self.page);
-                        crate::scale::to_top(ui.ctx(), pane);
-                    }
-                    crate::scale::pane(
-                        &mut page,
-                        pane,
-                        vec2(W - SIDE_W - 1.0, H - winui::FOOTER_H),
-                        |ui, at| self.page_area(ui, at - vec2(SIDE_W + 1.0, 0.0), downloads),
-                    );
-                } else {
-                    self.page_area(ui, o, downloads);
-                }
-                // No Cancel (PLAN.md): Escape and the close box discard the changes, as before.
-                // Escape and Enter keep their old order: Escape first.
-                let escape = winui::escape_pressed(ui);
-                let pressed = winui::footer(
-                    ui,
-                    o,
-                    w,
-                    foot,
-                    // Tab order as before: OK, then Help.
-                    &mut [
-                        FooterItem::Button(
-                            FooterButton::new("OK", ButtonKind::Default).enter(!modal),
-                        ),
-                        // i18n: noun: button that opens the help
-                        FooterItem::Button(FooterButton::new("Help", ButtonKind::Ghost).leading()),
-                    ],
-                );
-                if pressed == Some(1) {
-                    crate::help::open_page("options.md");
-                }
-                if modal {
-                    Outcome::Open
-                } else if escape {
-                    Outcome::Closed
-                } else if pressed == Some(0) {
-                    Outcome::Done(())
-                } else {
-                    Outcome::Open
-                }
-            },
-        );
+    /// Page `page`'s row in the side list, from the list's top: its top and bottom.
+    pub(crate) fn page_row(page: usize) -> egui::Rangef {
+        let rc = side_row(Pos2::ZERO, page_at(page));
+        egui::Rangef::new(rc.top(), rc.bottom())
+    }
+
+    /// The side list's rows end this far below its top (`SIDE_TOP` and every row).
+    pub(crate) fn pages_height() -> f32 {
+        SIDE_TOP + ROWS as f32 * (ROW_H + ROW_GAP) + TOOLS_GAP + 8.0
+    }
+
+    /// The chosen page under its heading in `view` (on screen, right of the side list's
+    /// border), its English layout from `view`'s top-left: scrolled where `view` is smaller
+    /// (`scale::pane`), from its top when another page is picked.
+    pub(crate) fn page_pane(&mut self, ui: &mut Ui, view: Rect, downloads: &std::path::Path) {
+        let mut page = ui.new_child(egui::UiBuilder::new().max_rect(view));
+        page.set_clip_rect(view.intersect(ui.clip_rect()));
+        let pane = egui::Id::unique("options-page");
+        if self.scrolled != Some(self.page) {
+            self.scrolled = Some(self.page);
+            crate::scale::to_top(ui.ctx(), pane);
+        }
+        // Right of the list's border: the page's English x 0 is the list's left edge.
+        crate::scale::pane(&mut page, pane, PAGE_SIZE, |ui, at| {
+            let _surface = winui::Surface::enter(at.x, at.x + PAGE_SIZE.x);
+            self.page_area(ui, at - vec2(SIDE_W + 1.0, 0.0), downloads)
+        });
+    }
+
+    /// The small dialogs over the page (each a window of its own): a page's sub-dialog, the
+    /// category editor, the restore question. Every frame the page is open.
+    pub(crate) fn overlays(&mut self, ctx: &egui::Context, downloads: &std::path::Path) {
         if self.sub.is_some() {
             self.sub_dialog(ctx);
         }
@@ -415,7 +433,7 @@ impl OptionsDialog {
                 Outcome::Closed => self.restore_ask = None,
                 Outcome::Done(()) => {
                     self.restore_ask = None;
-                    // In this draft: Cancel undoes it, as it undoes the dialog's other edits.
+                    // In this draft: Discard undoes it, as it undoes the page's other edits.
                     crate::categories::restore(&mut self.s);
                     let cats = Category::all();
                     self.category = self.category.min(cats.len() - 1);
@@ -424,23 +442,32 @@ impl OptionsDialog {
                 }
             }
         }
-        match outcome {
-            Outcome::Done(()) => {
-                let mut s = self.s.clone();
-                s.max_connections = self
-                    .conns
-                    .parse()
-                    .unwrap_or(8)
-                    .clamp(1, s.connection_limit());
-                s.limits_mb = self.mb.parse().unwrap_or(200).max(1);
-                s.capture_min_kb = self.min_kb.parse().unwrap_or(0);
-                s.limits_hours = self.hours.parse().unwrap_or(5).max(1);
-                s.remote_port = self.remote_port();
-                Outcome::Done(s)
-            }
-            Outcome::Closed => Outcome::Closed,
-            Outcome::Open => Outcome::Open,
-        }
+    }
+
+    /// The draft as Save keeps it: the typed fields read (a field that doesn't parse keeps
+    /// its default, as OK did).
+    pub(crate) fn result(&self) -> Settings {
+        let mut s = self.s.clone();
+        s.max_connections = self
+            .conns
+            .parse()
+            .unwrap_or(8)
+            .clamp(1, s.connection_limit());
+        s.limits_mb = self.mb.parse().unwrap_or(200).max(1);
+        s.capture_min_kb = self.min_kb.parse().unwrap_or(0);
+        s.limits_hours = self.hours.parse().unwrap_or(5).max(1);
+        s.remote_port = self.remote_port();
+        s
+    }
+
+    /// The draft replaced, as a page's controls change it (tests; `/show options:changed`).
+    pub(crate) fn set_draft(&mut self, s: Settings) {
+        self.s = s;
+    }
+
+    /// Whether Save would change anything: the draft differs from what the page opened with.
+    pub(crate) fn dirty(&self) -> bool {
+        self.result() != self.opened
     }
 
     /// The chosen page under its heading, drawn in its own English pixels ([`PAGE_LEFT`] ..
@@ -1038,6 +1065,13 @@ impl OptionsDialog {
         };
         let default = display_dir(&cat.default_folder(&base));
         let typed = self.cat_dir.trim();
+        // The box as it was shown (nothing typed or picked): nothing changes, so a page only
+        // looked at has nothing to save (plan 11a), a folder of its own equal to the default
+        // included.
+        let shown = display_dir(&self.s.category_dir(cat, downloads));
+        if typed.trim_end_matches(['\\', '/']) == shown.trim_end_matches(['\\', '/']) {
+            return;
+        }
         let own = (!typed.is_empty()
             && typed.trim_end_matches(['\\', '/']) != default.trim_end_matches(['\\', '/']))
         .then(|| typed.to_owned());
@@ -1046,41 +1080,46 @@ impl OptionsDialog {
 
     fn downloads(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
-        let s = &mut self.s;
         let (left, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
         let w = right - left;
         // Edit... as wide as its label in this language (#192) at the end of its row, its
-        // sentence at the leading edge (greyed, as the button: neither is built yet).
+        // sentence at the leading edge.
         let (edit_x, edit_w) =
             winui::buttons_to_right(&p, right, 0.0, &[("Edit...", 73.0)], 160.0)[0];
         // A longer translation is cut with "..." before the button, whole on hover.
-        let greyed = |ui: &Ui, top: f32, s: &str| {
+        let caption = |ui: &Ui, top: f32, s: &str, colour: egui::Color32| {
             let (rect, cut) = winui::text_fit(
                 &p,
                 o.x + left,
                 o.y + winui::baseline_in(top, h),
                 s,
-                LIGHT_DISABLED(),
+                colour,
                 o.x + edit_x - 8.0,
             );
             if cut {
-                winui::full_on_hover(ui, rect, ("downloads-greyed", top as i32), s);
+                winui::full_on_hover(ui, rect, ("downloads-caption", top as i32), s);
             }
         };
-        greyed(
+        caption(
             ui,
             88.0,
             crate::i18n::t("Customize \"Download progress\" dialog"),
+            LIGHT_TEXT(),
         );
-        // The progress dialog customisation dialog is not built yet.
-        winui::button_light(
+        // Whether a download's progress window opens when it starts (upstream 1041).
+        if winui::button_light(
             ui,
             r(o, edit_x, 88.0, edit_w, h),
             // i18n: verb: edit the item
             "Edit...",
-            ButtonKind::Disabled,
+            ButtonKind::Normal,
             false,
-        );
+        )
+        .clicked()
+        {
+            self.sub = Some(Sub::Progress(self.s.show_progress));
+        }
+        let s = &mut self.s;
         // The mock's check boxes, 22 apart (closer than its 30, so the page fits its area).
         winui::checkbox_light(
             ui,
@@ -1194,7 +1233,13 @@ impl OptionsDialog {
             winui::edit_light(ui, rc, &mut s.user_agent, true, false);
         }
         winui::rule(&p, o, left, 399.0, w);
-        greyed(ui, 407.0, crate::i18n::t("Virus checking settings"));
+        // Greyed, as its button: not built yet.
+        caption(
+            ui,
+            407.0,
+            crate::i18n::t("Virus checking settings"),
+            LIGHT_DISABLED(),
+        );
         winui::button_light(
             ui,
             r(o, edit_x, 407.0, edit_w, h),
@@ -3494,12 +3539,33 @@ impl OptionsDialog {
                     Outcome::Closed => {}
                 }
             }
+            Sub::Progress(mut shown) => {
+                let out = window(
+                    ctx,
+                    "opt-progress",
+                    // i18n: window title: Options → Downloads → Edit... (the progress window's settings)
+                    "Download progress dialog",
+                    [PROGRESS_W, PROGRESS_BODY + winui::FOOTER_H],
+                    false,
+                    LIGHT_BG(),
+                    |ui, o| progress_dialog(ui, o, &mut shown),
+                );
+                match out {
+                    Outcome::Open => self.sub = Some(Sub::Progress(shown)),
+                    Outcome::Done(()) => self.s.show_progress = shown,
+                    Outcome::Closed => {}
+                }
+            }
             Sub::Test(mut checks) => {
                 // The mockup's layout: a status icon and a line per check, the footer with the
                 // fixes at its start.
                 const W: f32 = 440.0;
                 const ROW: f32 = 26.0;
-                let body = 2.0 * winui::EDGE + checks.len() as f32 * ROW - 6.0;
+                // A check's path takes a line of its own under it (upstream issue 818).
+                const DETAIL_H: f32 = 18.0;
+                let details = checks.iter().filter(|c| c.detail.is_some()).count();
+                let body =
+                    2.0 * winui::EDGE + checks.len() as f32 * ROW - 6.0 + details as f32 * DETAIL_H;
                 let mut set_up = false;
                 let out = window(
                     ctx,
@@ -3512,8 +3578,8 @@ impl OptionsDialog {
                     |ui, o| {
                         let p = ui.painter().clone();
                         let e = winui::EDGE;
+                        let mut top = e;
                         for (k, c) in checks.iter().enumerate() {
-                            let top = e + k as f32 * ROW;
                             let (need, color) = if c.ok {
                                 ("st-complete", winui::SUCCESS())
                             } else {
@@ -3535,11 +3601,28 @@ impl OptionsDialog {
                                 &c.text,
                                 LIGHT_TEXT(),
                             );
+                            if let Some(path) = &c.detail {
+                                top += DETAIL_H;
+                                winui::fit_middle(
+                                    ui,
+                                    &p,
+                                    o.x + e + 24.0,
+                                    o.y + winui::baseline_in(top, 20.0),
+                                    path,
+                                    LIGHT_TEXT(),
+                                    o.x + W - e,
+                                    ("test-detail", k),
+                                );
+                            }
+                            top += ROW;
                         }
                         let first = checks.iter().find(|c| !c.ok);
                         let fix = first.and_then(|c| c.why);
+                        // Not from a portable copy, nor one in a temporary folder: neither
+                        // registers (upstream issue 818).
                         let can_set_up = first.is_some_and(|c| c.why == Some("not-installed"))
-                            && mdm_ipc::portable_dir().is_none();
+                            && mdm_ipc::portable_dir().is_none()
+                            && !crate::extension::temporary_copy();
                         // Tab and the footer as before: How to fix it, Set it up, Close; Enter
                         // and Escape both close.
                         let mut items = Vec::new();
@@ -4109,6 +4192,37 @@ fn read_sites_file(path: &std::path::Path) -> std::io::Result<String> {
     String::from_utf8(text).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
+/// Downloads → Customize "Download progress" dialog's size: Keys' layout (a sentence, the
+/// check box, the footer).
+const PROGRESS_W: f32 = 400.0;
+const PROGRESS_BODY: f32 = 96.0;
+
+/// Downloads → Customize "Download progress" dialog → Edit... (upstream 1041): whether a
+/// download's progress window opens when it starts, and where to find it when it doesn't.
+fn progress_dialog(ui: &mut Ui, o: Pos2, shown: &mut bool) -> Outcome<()> {
+    let p = ui.painter().clone();
+    let e = winui::EDGE;
+    let lines = winui::paragraph(
+        &p,
+        o.x + e,
+        o.y + 29.0,
+        crate::i18n::t(
+            "Without the progress window, downloads go on in the main window's list. Double-click one there to see its progress.",
+        ),
+        LIGHT_TEXT(),
+        o.x + PROGRESS_W - e,
+        LINE,
+    );
+    winui::checkbox_light(
+        ui,
+        o + vec2(e, 16.0 + lines.max(2) as f32 * LINE + 16.0),
+        shown,
+        "Show download progress dialog when a download starts",
+        true,
+    );
+    ok_cancel(ui, o, PROGRESS_W, PROGRESS_BODY, true)
+}
+
 /// A sub-dialog's footer at English `y` across `w`: Cancel, OK* (OK greyed until `valid`).
 /// Enter is OK while `valid`, Escape is Cancel, as before; Tab: OK, then Cancel.
 fn ok_cancel(ui: &mut Ui, o: Pos2, w: f32, y: f32, valid: bool) -> Outcome<()> {
@@ -4151,27 +4265,16 @@ fn hint(p: &egui::Painter, o: Pos2, x: f32, baseline: f32, s: &str, right: f32) 
 /// A sub-dialog's line height for wrapped text.
 const LINE: f32 = 16.0;
 
-/// The window: the side list ([`SIDE_W`]), the page area, the footer ([`winui::footer`]).
-/// The mock's 820 x 520 (plan 08b).
+/// The layout the pages are drawn in: the side list ([`SIDE_W`]), the page area and the save
+/// bar ([`winui::footer`]) of the mock's 820 x 520 (plan 08b; the Options window's until plan
+/// 11 put the pages in the main window).
 const W: f32 = 820.0;
 const H: f32 = 520.0;
-/// The shortest the window gets on a short screen: the side list whole above the footer.
-const MIN_H: f32 = SIDE_TOP + PAGES.len() as f32 * (ROW_H + ROW_GAP) + 8.0 + winui::FOOTER_H;
-
-/// The window's client height when `room` points are left for it on the screen: [`H`] where it
-/// fits; shorter where it doesn't (its page scrolls), but never below [`MIN_H`] (the whole
-/// window scrolls then, as before). At `ppp` pixels per point: a page short by a device pixel
-/// or less shows no scroll bar (`scale::pane`), so the window keeps [`H`] then.
-fn fit_height(room: f32, ppp: f32) -> f32 {
-    let h = room.floor();
-    if room >= H || ((H - h) * ppp).round() <= 1.0 {
-        H
-    } else {
-        h.max(MIN_H)
-    }
-}
+/// A page's whole layout right of the list's border, above the save bar: what the main
+/// window's section column shows, scrolled where it is smaller (plan 11a).
+pub(crate) const PAGE_SIZE: egui::Vec2 = vec2(W - SIDE_W - 1.0, H - winui::FOOTER_H);
 /// The side list's width (its right border at this x).
-const SIDE_W: f32 = 190.0;
+pub(crate) const SIDE_W: f32 = 190.0;
 /// A side list row: its height and the gap after it, from the list's top `SIDE_TOP`.
 const ROW_H: f32 = 30.0;
 const ROW_GAP: f32 = 1.0;
@@ -4283,17 +4386,76 @@ const PAGES: [(usize, &str, &str, &str); 12] = [
     ),
 ];
 
-/// The page's place in [`PAGES`] (0 for a number that is none).
-fn page_at(page: usize) -> usize {
-    PAGES.iter().position(|p| p.0 == page).unwrap_or(0)
+/// The Scheduler's section on Options' page (plan 11b1): its number, as `on_page` takes it.
+pub(crate) const SCHEDULER_PAGE: usize = 12;
+/// The Speed limiter's, Torrents' and the browser extension's sections (plan 11b2).
+pub(crate) const SPEED_PAGE: usize = 13;
+pub(crate) const TORRENTS_PAGE: usize = 14;
+pub(crate) const EXTENSION_PAGE: usize = 15;
+
+/// The windows that moved into the page (plan 11b), listed after Options' own pages under a
+/// hairline and the caption "Tools": number, name in the list, Graphite icon, heading. Their
+/// bodies are drawn by `settingspage.rs`, not by [`OptionsDialog::page_area`].
+const TOOLS: [(usize, &str, &str, &str); 4] = [
+    (
+        SCHEDULER_PAGE,
+        // i18n: noun: the tool that starts and stops queues on time
+        crate::i18n::mark("Scheduler"),
+        "tb-scheduler",
+        crate::i18n::mark("Queues and the scheduler"),
+    ),
+    (
+        SPEED_PAGE,
+        // i18n: Options in the main window: the side list's section with the Speed Limiter's settings
+        crate::i18n::mark("Speed limiter"),
+        "gx-gauge",
+        crate::i18n::mark("Speed Limiter settings"),
+    ),
+    (
+        TORRENTS_PAGE,
+        // i18n: Options in the main window: the side list's section with the torrent settings
+        crate::i18n::mark("Torrents"),
+        "cat-torrents",
+        crate::i18n::mark("Torrent settings"),
+    ),
+    (
+        EXTENSION_PAGE,
+        // i18n: Options in the main window: the side list's section that adds the browser extension
+        crate::i18n::mark("Browser extension"),
+        "gx-puzzle",
+        // i18n: title of the window that offers the browser extension
+        crate::i18n::mark("Add Grabbit to your browser"),
+    ),
+];
+
+/// Every row of the side list: [`PAGES`], then [`TOOLS`].
+const ROWS: usize = PAGES.len() + TOOLS.len();
+
+/// Side list row `k`: a page of [`PAGES`], then a section of [`TOOLS`].
+fn row(k: usize) -> (usize, &'static str, &'static str, &'static str) {
+    if k < PAGES.len() {
+        PAGES[k]
+    } else {
+        TOOLS[(k - PAGES.len()).min(TOOLS.len() - 1)]
+    }
 }
+
+/// The page's row in the side list (0 for a number that is none).
+fn page_at(page: usize) -> usize {
+    (0..ROWS).position(|k| row(k).0 == page).unwrap_or(0)
+}
+
+/// The room between Options' pages and the tools in the side list: a hairline, then the
+/// caption "Tools" over the tools' rows.
+const TOOLS_GAP: f32 = 30.0;
 
 /// Side list row `k`'s rect (window-relative to `o`).
 fn side_row(o: Pos2, k: usize) -> Rect {
+    let gap = if k >= PAGES.len() { TOOLS_GAP } else { 0.0 };
     r(
         o,
         8.0,
-        SIDE_TOP + k as f32 * (ROW_H + ROW_GAP),
+        SIDE_TOP + k as f32 * (ROW_H + ROW_GAP) + gap,
         SIDE_W - 16.0,
         ROW_H,
     )
@@ -4326,8 +4488,30 @@ fn side_list(ui: &mut Ui, o: Pos2, page: usize, foot: f32) -> Option<usize> {
         o.y + foot - 1.0,
         c.menubar_line,
     );
-    let mut picked = winui::tab_keys(ui, PAGES.len(), at);
-    for (k, (_, label, icon, _)) in PAGES.iter().enumerate() {
+    // Under Options' own pages: a hairline, then "Tools" over the windows that moved in.
+    let below = side_row(o, PAGES.len() - 1).bottom() + ROW_GAP;
+    fill(
+        &p,
+        o.x + 16.0,
+        below + 6.0,
+        o.x + SIDE_W - 17.0,
+        below + 6.0,
+        c.menubar_line,
+    );
+    winui::fit(
+        ui,
+        &p,
+        o.x + 17.0,
+        below + 23.0,
+        // i18n: Options in the main window: the caption in its side list over the sections that were windows of their own (Scheduler…)
+        crate::i18n::t("Tools"),
+        c.muted,
+        o.x + SIDE_W - 8.0,
+        "opt-tools-caption",
+    );
+    let mut picked = winui::tab_keys(ui, ROWS, at);
+    for k in 0..ROWS {
+        let (_, label, icon, _) = row(k);
         let sel = k == at;
         let rc = side_row(o, k);
         let sense = if sel {
@@ -4345,7 +4529,7 @@ fn side_list(ui: &mut Ui, o: Pos2, page: usize, foot: f32) -> Option<usize> {
         if sel {
             winui::keep_keys(ui, &resp, true, true, false);
             if resp.has_focus() {
-                let last = PAGES.len() - 1;
+                let last = ROWS - 1;
                 let to = if winui::take_key(ui, egui::Key::ArrowDown)
                     || winui::take_key(ui, egui::Key::ArrowRight)
                 {
@@ -4406,15 +4590,16 @@ fn side_list(ui: &mut Ui, o: Pos2, page: usize, foot: f32) -> Option<usize> {
     if let Some(k) = picked
         && k != at
     {
-        Some(PAGES[k].0)
+        Some(row(k).0)
     } else {
         None
     }
 }
 
-/// The page's heading above it: its icon on a tile and its title.
-fn heading(ui: &Ui, o: Pos2, page: usize) {
-    let (_, _, icon, title) = PAGES[page_at(page)];
+/// The page's heading above it: its icon on a tile and its title (a section of [`TOOLS`] too,
+/// from `settingspage.rs`).
+pub(crate) fn heading(ui: &Ui, o: Pos2, page: usize) {
+    let (_, _, icon, title) = row(page_at(page));
     let x = SIDE_W + winui::EDGE;
     winui::icon_tile(
         ui,
@@ -4675,9 +4860,11 @@ mod tests {
     /// One pass of the side list on `page`: the page it picked.
     fn list_pass(ctx: &egui::Context, page: usize, events: Vec<egui::Event>) -> Option<usize> {
         let mut picked = None;
-        let mut out = ctx.run_ui(input(events), |ui| {
-            picked = side_list(ui, Pos2::ZERO, page, H - winui::FOOTER_H)
-        });
+        // Tall enough for every row, the tools' too (plan 11b).
+        let tall = OptionsDialog::pages_height();
+        let mut input = input(events);
+        input.screen_rect = Some(Rect::from_min_size(Pos2::ZERO, vec2(W, tall)));
+        let mut out = ctx.run_ui(input, |ui| picked = side_list(ui, Pos2::ZERO, page, tall));
         out.textures_delta.clear();
         picked
     }
@@ -4720,7 +4907,7 @@ mod tests {
             .filter(|(_, n)| n.role() == Role::ListItem)
             .map(|(id, _)| *id)
             .collect();
-        assert_eq!(items.len(), PAGES.len());
+        assert_eq!(items.len(), ROWS, "Options' pages and the tools");
         assert!(
             items.iter().all(|i| under.contains(i)),
             "every row under the list"
@@ -4737,37 +4924,35 @@ mod tests {
         assert_eq!(account_box(4), (94.0 + 2.0 * LINE, 2.0 * LINE));
     }
 
-    /// 09r3: the window keeps the mock's height where the screen has room, and is shorter (its
-    /// page scrolling) where it hasn't, the side list still whole.
-    #[test]
-    fn options_fits_a_short_screen() {
-        assert_eq!(fit_height(900.0, 1.0), H);
-        assert_eq!(fit_height(H, 1.0), H);
-        // 1080p at 200 %: about 496 points less a drawn title bar.
-        assert_eq!(fit_height(464.4, 2.0), 464.0);
-        assert_eq!(fit_height(300.0, 1.0), MIN_H);
-        // A device pixel short shows no bar (scale::pane): the window keeps its height, with no
-        // empty bar strip; two pixels short scroll.
-        assert_eq!(fit_height(H - 0.6, 1.0), H);
-        assert_eq!(fit_height(H - 0.6, 2.0), H - 1.0);
-        assert_eq!(fit_height(H - 1.6, 1.0), H - 2.0);
-        const { assert!(MIN_H < 464.0, "fits 1080p at 200 %") };
-        let last = side_row(Pos2::ZERO, PAGES.len() - 1);
-        assert!(last.bottom() <= MIN_H - winui::FOOTER_H, "the list whole");
-    }
-
     /// Plan 08 tests: every page is picked by a click on its row, Up / Down walk the list in
     /// its order (Home / End to its ends), and Ctrl+Tab / Ctrl+Shift+Tab wrap round it.
     #[test]
     fn every_page_is_reached_by_click_arrows_and_ctrl_tab() {
         let ctx = egui::Context::default();
-        let order: Vec<usize> = PAGES.iter().map(|p| p.0).collect();
+        let order: Vec<usize> = (0..ROWS).map(|k| row(k).0).collect();
         assert_eq!(
             order,
-            [0, 1, 2, 3, 4, 11, 5, 6, 7, 8, 9, 10],
-            "the old tabs' order"
+            [
+                0,
+                1,
+                2,
+                3,
+                4,
+                11,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                SCHEDULER_PAGE,
+                SPEED_PAGE,
+                TORRENTS_PAGE,
+                EXTENSION_PAGE
+            ],
+            "the old tabs' order, then the tools (plan 11b)"
         );
-        for (_, label, need, _) in PAGES {
+        for (_, label, need, _) in PAGES.iter().chain(TOOLS.iter()).copied() {
             assert!(
                 crate::themeicons::graphite_has(need, 16)
                     && crate::themeicons::graphite_has(need, 24),
@@ -4805,10 +4990,10 @@ mod tests {
                 w[1]
             );
         }
-        assert_eq!(press(10, egui::Key::ArrowDown), None, "the end");
+        assert_eq!(press(EXTENSION_PAGE, egui::Key::ArrowDown), None, "the end");
         assert_eq!(press(0, egui::Key::ArrowUp), None, "the start");
         assert_eq!(press(4, egui::Key::Home), Some(0));
-        assert_eq!(press(4, egui::Key::End), Some(10));
+        assert_eq!(press(4, egui::Key::End), Some(EXTENSION_PAGE));
         // Ctrl+Tab from anywhere: no row focused.
         ctx.memory_mut(|m| m.surrender_focus(egui::Id::unique(("opt-page", 0))));
         let ctrl = egui::Modifiers::COMMAND;
@@ -4822,7 +5007,11 @@ mod tests {
             0,
             vec![key(egui::Key::Tab, ctrl | egui::Modifiers::SHIFT)],
         );
-        assert_eq!(back, Some(10), "Ctrl+Shift+Tab wraps back to Archives");
+        assert_eq!(
+            back,
+            Some(EXTENSION_PAGE),
+            "Ctrl+Shift+Tab wraps back to the browser extension"
+        );
     }
 
     /// Plan 08b3: a sub-dialog's footer keeps its keys: Enter is OK only while the entry is
@@ -4954,6 +5143,101 @@ mod tests {
         }
     }
 
+    /// Plan 11a (audit r1): every page only drawn leaves the draft as it opened, with folders
+    /// of their own for built-in categories (General's not the last of them, one written
+    /// without the separator the Save to box adds): Save and Discard stay greyed.
+    #[test]
+    fn a_page_only_looked_at_has_nothing_to_save() {
+        let s = Settings {
+            category_dirs: vec![
+                (
+                    Category::General.key().into_owned(),
+                    r"D:\Downloads".to_owned(),
+                ),
+                (Category::Video.key().into_owned(), r"D:\Videos\".to_owned()),
+                (Category::Music.key().into_owned(), r"D:\Music".to_owned()),
+            ],
+            ..Settings::default()
+        };
+        for (page, label, ..) in PAGES {
+            let ctx = egui::Context::default();
+            ctx.enable_accesskit();
+            let mut d = OptionsDialog::new(&s, &std::env::temp_dir(), vec![]).on_page(page);
+            assert!(!d.dirty(), "{label}: opened");
+            page_pass(&ctx, &mut d, vec![]);
+            page_pass(&ctx, &mut d, vec![]);
+            assert!(!d.dirty(), "{label}: drawn");
+        }
+        // Audit r2: Save to showing a built-in category whose own folder is its default (General
+        // moved there since): looking at it keeps that folder its own.
+        let downloads = std::path::Path::new(r"D:\Downloads");
+        let video = Category::Video.default_folder(downloads);
+        let s = Settings {
+            category_dirs: vec![
+                (
+                    Category::General.key().into_owned(),
+                    downloads.display().to_string(),
+                ),
+                (
+                    Category::Video.key().into_owned(),
+                    video.display().to_string(),
+                ),
+            ],
+            ..Settings::default()
+        };
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut d = OptionsDialog::new(&s, &std::env::temp_dir(), vec![]).on_page(2);
+        d.category = Category::all()
+            .iter()
+            .position(|c| *c == Category::Video)
+            .unwrap();
+        d.cat_dir = display_dir(&d.s.category_dir(Category::Video, &std::env::temp_dir()));
+        page_pass(&ctx, &mut d, vec![]);
+        page_pass(&ctx, &mut d, vec![]);
+        assert!(!d.dirty(), "Save to on Video");
+    }
+
+    /// Plan 11a (audit r5): after Save or Discard the fresh draft stays on the category Save to
+    /// showed, with that category's folder as the fresh draft has it, and on the same page.
+    #[test]
+    fn a_fresh_draft_keeps_the_view() {
+        let dir = std::env::temp_dir();
+        let s = Settings::default();
+        let mut old = OptionsDialog::new(&s, &dir, vec![]).on_page(2);
+        let video = Category::all()
+            .iter()
+            .position(|c| *c == Category::Video)
+            .unwrap();
+        old.category = video;
+        old.ua_auto = false;
+        let fresh = OptionsDialog::new(&s, &dir, vec![]).keep_view(&old, true, &dir);
+        assert_eq!(
+            (fresh.page, fresh.category, fresh.ua_auto),
+            (2, video, false)
+        );
+        assert_eq!(
+            fresh.cat_dir,
+            display_dir(&s.category_dir(Category::Video, &dir))
+        );
+        assert!(!fresh.dirty());
+        // Audit r6: Discard drops a tick of Automatic: an own User-Agent saved, Automatic
+        // ticked in the draft, Discard: the box is the own one again, and the other way round.
+        let own = Settings {
+            user_agent: "Foo/1.0".into(),
+            ..Settings::default()
+        };
+        let mut old = OptionsDialog::new(&own, &dir, vec![]);
+        assert!(!old.ua_auto);
+        old.ua_auto = true;
+        let fresh = OptionsDialog::new(&own, &dir, vec![]).keep_view(&old, false, &dir);
+        assert!(!fresh.ua_auto, "Discard: the own User-Agent's box");
+        let mut old = OptionsDialog::new(&s, &dir, vec![]);
+        old.ua_auto = false;
+        let fresh = OptionsDialog::new(&s, &dir, vec![]).keep_view(&old, false, &dir);
+        assert!(fresh.ua_auto, "Discard: Automatic again");
+    }
+
     /// #424: the list written and read back through a real file: nothing lost, nothing doubled.
     #[test]
     fn sites_round_trip_through_a_file() {
@@ -4966,5 +5250,90 @@ mod tests {
         let (back, added) = mdm_ipc::capture::merge_sites("", &text);
         assert_eq!((back.as_str(), added), (sites, 2));
         assert_eq!(mdm_ipc::capture::merge_sites(sites, &text).1, 0);
+    }
+
+    /// The centre of the topmost control with `role` and `label` that takes clicks.
+    fn control_at(tree: &TreeUpdate, role: Role, label: &str) -> Pos2 {
+        tree.nodes
+            .iter()
+            .filter(|(_, n)| n.role() == role && n.label() == Some(label) && !n.is_disabled())
+            .filter_map(|(_, n)| n.bounds())
+            .map(|b| {
+                Rect::from_min_max(
+                    pos2(b.x0 as f32, b.y0 as f32),
+                    pos2(b.x1 as f32, b.y1 as f32),
+                )
+            })
+            .min_by(|a, b| a.top().partial_cmp(&b.top()).unwrap())
+            .unwrap_or_else(|| panic!("no {role:?} {label:?}"))
+            .center()
+    }
+
+    /// Upstream 1041: Downloads → Customize "Download progress" dialog → Edit... opens its
+    /// dialog with the setting as it is (it was greyed and did nothing).
+    #[test]
+    fn edit_opens_the_download_progress_dialog() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let s = Settings {
+            show_progress: false,
+            ..Settings::default()
+        };
+        let mut d = OptionsDialog::new(&s, &std::env::temp_dir(), vec![]).on_page(3);
+        page_pass(&ctx, &mut d, vec![]);
+        let tree = page_pass(&ctx, &mut d, vec![]);
+        let edit = control_at(&tree, Role::Button, "Edit...");
+        assert!(d.sub.is_none());
+        page_pass(&ctx, &mut d, button(edit, true));
+        page_pass(&ctx, &mut d, button(edit, false));
+        assert!(matches!(d.sub, Some(Sub::Progress(false))));
+    }
+
+    /// Upstream 1041: its check box turns the progress window off, and OK (Enter) keeps it.
+    #[test]
+    fn the_download_progress_dialog_turns_the_window_off() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut shown = true;
+        let mut pass = |events| {
+            let mut out = Outcome::Open;
+            let mut o = ctx.run_ui(input(events), |ui| {
+                out = progress_dialog(ui, Pos2::ZERO, &mut shown)
+            });
+            o.textures_delta.clear();
+            (
+                out,
+                o.platform_output.accesskit_update.expect("AccessKit is on"),
+            )
+        };
+        pass(vec![]);
+        let (_, tree) = pass(vec![]);
+        let check = control_at(
+            &tree,
+            Role::CheckBox,
+            "Show download progress dialog when a download starts",
+        );
+        pass(button(check, true));
+        let (out, _) = pass(button(check, false));
+        assert!(matches!(out, Outcome::Open));
+        let (_, tree) = pass(vec![]);
+        let ticked = tree
+            .nodes
+            .iter()
+            .find(|(_, n)| n.role() == Role::CheckBox)
+            .and_then(|(_, n)| n.toggled());
+        assert_eq!(
+            ticked,
+            Some(egui::accesskit::Toggled::False),
+            "the click unticks it"
+        );
+        let (out, tree) = pass(vec![key(egui::Key::Enter, egui::Modifiers::NONE)]);
+        let after = tree
+            .nodes
+            .iter()
+            .find(|(_, n)| n.role() == Role::CheckBox)
+            .map(|(id, n)| (n.toggled(), *id == tree.focus));
+        assert!(matches!(out, Outcome::Done(())), "{after:?}");
+        assert!(!shown, "{after:?}");
     }
 }

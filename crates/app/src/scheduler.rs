@@ -1,13 +1,13 @@
-//! The Scheduler (Downloads → Scheduler; notes/ui-spec/scheduler-and-misc.md §1). Light in both
-//! modes, as IDM's. Queues on the left; on the right the selected queue's Schedule and Files in
-//! the queue, or the Download limits page. Edits stay in a draft until Apply, Start now or Close.
+//! The Scheduler (Downloads → Scheduler; notes/ui-spec/scheduler-and-misc.md §1), a section of
+//! Options' page in the main window (plan 11b1). Light in both modes, as IDM's. Queues on the
+//! left; on the right the selected queue's Schedule and Files in the queue, or the Download
+//! limits page. Edits stay in a draft until the page's Save, or Start now.
 
 use chrono::{Datelike, Duration as Days, NaiveDate};
 use egui::{Color32, Pos2, Rect, Sense, Ui, pos2, vec2};
 
 use crate::chrome::{IconKey, ShellIcons};
-use crate::dialogs::{Outcome, question, window};
-use crate::icons::Icon;
+use crate::dialogs::{Outcome, inline, question};
 use crate::model::{self, Item};
 use crate::queue::{Queue, TurnOff};
 use crate::regional::DateOrder;
@@ -166,16 +166,19 @@ pub struct Scheduler {
     naming: Option<String>,
     /// Delete's question, for this queue, while it is asked.
     deleting: Option<(usize, crate::dialogs::Confirm)>,
+    /// The pass the section was last drawn in: shown again after a gap, its pickers start
+    /// closed.
+    shown_at: Option<u64>,
 }
 
 /// How much lower everything under "Start download at" sits than in IDM's window: the room for
 /// "Wake the computer to run this queue" and its note (#142).
 const DY: f32 = 40.0;
-/// The Scheduler's width, and where its footer starts (Graphite, plan 07e; the mock's 800 in
-/// plan 09): the queue list as before, New queue and Delete under it, the window's buttons in
-/// the footer. The right pane takes the width, which gives back the height of a weekday row
-/// (`DAYS_UP`), of a "when done" row (`DONE_UP`) and of the file-to-open's own row (`OPEN_UP`),
-/// so the window, with Graphite's drawn title bar, fits a 1080p screen at 200 %.
+/// The Scheduler's width (Graphite, plan 07e; the mock's 800 in plan 09): the queue list as
+/// before, New queue and Delete under it. The right pane takes the width, which gives back the
+/// height of a weekday row (`DAYS_UP`), of a "when done" row (`DONE_UP`) and of the
+/// file-to-open's own row (`OPEN_UP`), so the window it was, with Graphite's drawn title bar
+/// and its footer, fit a 1080p screen at 200 %.
 const W: f32 = 800.0;
 /// The right edge of the pages' rows (627 at IDM's 651).
 const RIGHT: f32 = W - 24.0;
@@ -192,6 +195,8 @@ const UP: f32 = DAYS_UP + DONE_UP + OPEN_UP;
 /// taskbar too (the rows don't move).
 const PAGE_UP: f32 = 4.0;
 const BODY: f32 = 432.0 + DY - UP - PAGE_UP;
+/// The section's layout, as the window's client was without its footer (plan 11b1).
+pub const SIZE: [f32; 2] = [W, BODY];
 
 // i18n: checkbox in the Scheduler, under the start time: wake the computer from sleep shortly before the queue starts, and keep it awake while the queue runs
 const WAKE_LABEL: &str = crate::i18n::mark("Wake the computer to run this queue");
@@ -253,6 +258,7 @@ impl Scheduler {
             focus: Focus::default(),
             naming: None,
             deleting: None,
+            shown_at: None,
             base,
         };
         s.applied = s.state();
@@ -324,17 +330,78 @@ impl Scheduler {
         }
     }
 
-    /// Draw the dialog. `live` is the app's queues (what runs, their downloads now). Returns
-    /// false once closed.
-    pub fn show(
+    /// Download limits' draft set, as its check box and box do (tests).
+    #[cfg(test)]
+    pub(crate) fn set_limits(&mut self, on: bool, mb: u32) {
+        self.limits.on = on;
+        self.limits_mb = mb.to_string();
+    }
+
+    /// The queue shown, and whether on its Files in the queue (`None`: Download limits); the
+    /// name prompt open (tests).
+    #[cfg(test)]
+    pub(crate) fn shown(&self) -> (Option<(usize, bool)>, bool) {
+        let on =
+            (self.selected < self.queues.len()).then_some((self.selected, self.tab == Tab::Files));
+        (on, self.naming.is_some())
+    }
+
+    /// Whether Save would change anything: the draft differs from what was last applied.
+    pub fn dirty(&self) -> bool {
+        let (q, l) = self.state();
+        (&q, &l) != (&self.applied.0, &self.applied.1)
+    }
+
+    /// Save (plan 11b1, Apply's work): the draft to the app, if it differs.
+    pub fn save(&mut self, live: &[Queue], actions: &mut Vec<Action>) {
+        self.sync_items(live);
+        self.apply(actions);
+    }
+
+    /// Its small dialogs (the new queue's name, Delete's question) wait for an answer: the
+    /// page's buttons and keys wait too.
+    pub fn modal(&self) -> bool {
+        self.naming.is_some() || self.deleting.is_some()
+    }
+
+    /// A fresh draft after Save or Discard (plan 11b1) shown as `old` was: the same queue (by
+    /// name, else its place) and tab, or Download limits, and the queue list's place.
+    pub fn keep_view(mut self, old: &Scheduler) -> Self {
+        let on_limits = old.selected >= old.queues.len();
+        let name = old.queues.get(old.selected).map(|q| q.name.as_str());
+        self.selected = if on_limits {
+            self.queues.len()
+        } else {
+            name.and_then(|n| self.queues.iter().position(|q| q.name == n))
+                .unwrap_or(old.selected.min(self.queues.len().saturating_sub(1)))
+        };
+        self.tab = old.tab;
+        self.tree_rows = old.tree_rows;
+        self
+    }
+
+    /// The Scheduler as a section of Options' page (plan 11b1): its layout at `o` (its client
+    /// origin as the window had it), [`SIZE`] points. `live` is the app's queues (what runs,
+    /// their downloads now). Start now and Stop ask the app through `actions`; the rest waits
+    /// in the draft for the page's Save.
+    #[allow(clippy::too_many_arguments)]
+    pub fn section(
         &mut self,
-        ctx: &egui::Context,
+        ui: &mut Ui,
+        o: Pos2,
         icons: &mut ShellIcons,
         items: &[Item],
         live: &[Queue],
         wake_error: Option<&str>,
         actions: &mut Vec<Action>,
-    ) -> bool {
+    ) {
+        // Shown again (or for the first time): the calendar left open when the section was
+        // left, or by another Scheduler, doesn't open again with it.
+        let pass = ui.ctx().cumulative_pass_nr();
+        if self.shown_at.is_none_or(|at| pass > at + 1) {
+            close_pickers(ui.ctx(), &mut self.focus);
+        }
+        self.shown_at = Some(pass);
         self.sync_items(live);
         let running: Vec<String> = live
             .iter()
@@ -342,17 +409,15 @@ impl Scheduler {
             .map(|q| q.name.clone())
             .collect();
         let running = running.as_slice();
-        let naming = self.naming.is_some() || self.deleting.is_some();
-        let outcome = window(
-            ctx,
-            "scheduler",
-            // i18n: noun: the tool that starts and stops queues on time
-            "Scheduler",
-            [W, BODY + winui::FOOTER_H],
-            false,
-            LIGHT_BG(),
-            |ui, o| self.body(ui, o, icons, items, running, wake_error, actions, naming),
-        );
+        let naming = self.modal();
+        inline(ui, o, SIZE, LIGHT_BG(), |ui, o| {
+            self.body(ui, o, icons, items, running, wake_error, actions, naming)
+        });
+    }
+
+    /// The windows over the section (the new queue's name, Delete's question): every frame
+    /// the page holds this Scheduler, from the app's `dialogs`.
+    pub fn overlays(&mut self, ctx: &egui::Context) {
         if self.naming.is_some() {
             self.name_prompt(ctx);
         }
@@ -373,16 +438,6 @@ impl Scheduler {
                 }
             }
         }
-        if !matches!(outcome, Outcome::Open) {
-            // Closed: the calendar doesn't open again with the next Scheduler.
-            close_pickers(ctx, &mut self.focus);
-        }
-        if matches!(outcome, Outcome::Closed) {
-            // Close keeps the changes (as Apply would) [IDM: unknown, lab].
-            self.apply(actions);
-            return false;
-        }
-        true
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -396,16 +451,16 @@ impl Scheduler {
         wake_error: Option<&str>,
         actions: &mut Vec<Action>,
         modal: bool,
-    ) -> Outcome<()> {
+    ) {
         let p = ui.painter().clone();
 
         // ---- left pane ----------------------------------------------------------------
-        let clock = r(o, 11.0, 7.0, 32.0, 32.0);
-        Icon::Scheduler.image(true).paint_at(ui, clock);
+        // The window's clock icon is the section heading's tile now (plan 11b1): the label
+        // starts at the list's edge.
         // i18n: plural noun: label above the list of queues
         text(
             &p,
-            o.x + 74.0,
+            o.x + 11.0,
             o.y + 34.0,
             crate::i18n::t("Queues"),
             LIGHT_TEXT(),
@@ -415,9 +470,10 @@ impl Scheduler {
         let buttons_y = BODY - 12.0 - winui::CONTROL_H;
         let tree = r(o, 11.0, 44.0, 173.0, buttons_y - 8.0 - 44.0);
         let delete_key = self.tree(ui, icons, tree);
+        // Delete has no access letter in the main window: Alt+D opens its Downloads menu.
         let row = winui::button_row_from_left(
             &ui.painter().clone(),
-            &[("&New queue", 11.0, 84.0), ("&Delete", 103.0, 81.0)],
+            &[("&New queue", 11.0, 84.0), ("Delete", 103.0, 81.0)],
             8.0,
             184.0,
             173.0,
@@ -435,7 +491,7 @@ impl Scheduler {
             ui,
             r(o, row[1].0, buttons_y, row[1].1, winui::CONTROL_H),
             // i18n: verb: delete the queue
-            "&Delete",
+            "Delete",
             if deletable {
                 ButtonKind::Normal
             } else {
@@ -444,12 +500,48 @@ impl Scheduler {
             false,
         )
         .clicked();
-        // The line between the panes runs down to the footer.
+        // The line between the panes runs down to the layout's bottom.
         winui::etched_v(&p, o.x + 197.0, o.y + 11.0, BODY - 22.0);
 
         // ---- right pane ---------------------------------------------------------------
         let on_queue = self.selected < self.queues.len();
+        let is_running = on_queue && running.contains(&self.queues[self.selected].name);
+        let mut start = false;
+        let mut stop = false;
         if on_queue {
+            // The queue's Start now and Stop on its tabs' row, at the pane's right end (plan
+            // 11b1: the window's footer is gone; the page's save bar is under the section).
+            // Start now first in Tab order, as before, and last on the row. Stop has no access
+            // letter in the main window: Alt+T opens its Tasks menu.
+            let kind = |on: bool, normal: ButtonKind| {
+                if on { normal } else { ButtonKind::Disabled }
+            };
+            let start_w = winui::footer_button_width(&p, "Start now", false);
+            let stop_w = winui::footer_button_width(&p, "Stop", false);
+            let start_x = 213.0 + 428.0 + DX - 3.0 - start_w;
+            let stop_x = start_x - 8.0 - stop_w;
+            let buttons_top = 23.0 + 20.0 - 4.0 - winui::CONTROL_H;
+            start = winui::button(
+                ui,
+                r(o, start_x, buttons_top, start_w, winui::CONTROL_H),
+                // i18n: verb: start the queue now
+                "Start now",
+                // Not the default's look: Enter is the page's Save.
+                kind(!is_running, ButtonKind::Normal),
+                false,
+                Some(0),
+            )
+            .clicked();
+            stop = winui::button(
+                ui,
+                r(o, stop_x, buttons_top, stop_w, winui::CONTROL_H),
+                // i18n: verb: stop the queue
+                "Stop",
+                kind(is_running, ButtonKind::Normal),
+                false,
+                None,
+            )
+            .clicked();
             // A built-in queue's name is in the catalog; the user's own stay as typed.
             let name = crate::i18n::t(&self.queues[self.selected].name).to_owned();
             let w = winui::text_width(&p, &name);
@@ -459,7 +551,8 @@ impl Scheduler {
                 o.y + 15.0,
                 &name,
                 LIGHT_TEXT(),
-                o.x + W - 11.0,
+                // Up to the buttons.
+                o.x + stop_x - 8.0,
             );
             if cut {
                 winui::full_on_hover(ui, rect, "sched-header", &name);
@@ -478,15 +571,15 @@ impl Scheduler {
                 },
             ];
             let current = if self.tab == Tab::Schedule { 0 } else { 1 };
+            // Ctrl+Tab is the page's (its next section): the tabs by a click, or the arrows on
+            // the chosen one.
             if let Some(t) = winui::tabs_light(
                 ui,
                 o,
                 r(o, 213.0, 23.0, 428.0 + DX, 403.0 + DY - UP - PAGE_UP),
                 &tabs,
                 current,
-            )
-            .or(winui::tab_keys(ui, 2, current))
-            {
+            ) {
                 self.tab = if t == 0 { Tab::Schedule } else { Tab::Files };
             }
             match self.tab {
@@ -497,69 +590,13 @@ impl Scheduler {
             self.limits_page(ui, o);
         }
 
-        // ---- bottom buttons -----------------------------------------------------------
-        let is_running = on_queue && running.contains(&self.queues[self.selected].name);
-        let kind = |on: bool, normal: ButtonKind| {
-            if on { normal } else { ButtonKind::Disabled }
-        };
-        let dirty = {
-            let (q, l) = self.state();
-            (&q, &l) != (&self.applied.0, &self.applied.1)
-        };
-        // Escape first leaves a selected time or date field, then closes the window.
+        // Escape first leaves a selected time or date field, then goes back (the page's).
         if !modal && self.focus.at.is_some() && winui::take_key(ui, egui::Key::Escape) {
             self.focus.at = None;
         }
-        // The footer: Stop at its start; Help (quiet), Apply, Close, and Start now last, the
-        // window's answer by look only: Enter presses nothing, as before. Tab and the access
-        // letters keep their order (Start now, Stop, Help, Apply, Close).
-        let pressed = winui::footer(
-            ui,
-            o,
-            W,
-            BODY,
-            &mut [
-                // i18n: verb: start the queue now
-                FooterItem::Button(
-                    FooterButton::new(
-                        "Start now",
-                        kind(on_queue && !is_running, ButtonKind::Default),
-                    )
-                    .primary()
-                    .mnemonic(0),
-                ),
-                // i18n: verb: stop the queue
-                FooterItem::Button(
-                    FooterButton::new("Stop", kind(is_running, ButtonKind::Normal))
-                        .leading()
-                        .mnemonic(1),
-                ),
-                // i18n: noun: button that opens the help
-                FooterItem::Button(FooterButton::new("Help", ButtonKind::Ghost).mnemonic(0)),
-                // i18n: verb: save the changes
-                FooterItem::Button(
-                    FooterButton::new("Apply", kind(dirty, ButtonKind::Normal)).mnemonic(0),
-                ),
-                // i18n: verb: close the window
-                FooterItem::Button(
-                    FooterButton::new("Close", ButtonKind::Normal)
-                        .mnemonic(0)
-                        .escape(true),
-                ),
-            ],
-        );
-        let (start, stop, apply, close) = (
-            pressed == Some(0),
-            pressed == Some(1),
-            pressed == Some(3),
-            pressed == Some(4),
-        );
-        if pressed == Some(2) {
-            crate::help::open_page("queues-and-scheduler.md#the-scheduler-window");
-        }
 
         if modal {
-            return Outcome::Open;
+            return;
         }
         if new_queue {
             self.new_queue();
@@ -576,20 +613,14 @@ impl Scheduler {
                 crate::dialogs::Confirm::new(crate::i18n::mark("Delete queue"), text),
             ));
         }
-        if apply {
-            self.apply(actions);
-        }
+        // Start now applies the Scheduler's draft first, as before (the page's other sections
+        // wait for Save).
         if start && on_queue {
             self.apply(actions);
             actions.push(Action::Start(self.queues[self.selected].name.clone()));
         }
         if stop && on_queue {
             actions.push(Action::Stop(self.queues[self.selected].name.clone()));
-        }
-        if close {
-            Outcome::Closed
-        } else {
-            Outcome::Open
         }
     }
 
@@ -2223,22 +2254,6 @@ fn merge_items(base: &[u64], draft: &[u64], live: &[u64]) -> Vec<u64> {
 mod tests {
     use super::*;
 
-    /// Plan 09: the mock's 800 wide, and on a 1080p screen at interface size 200 % shown whole,
-    /// without a scroll bar (the rule every fixed window is shown by: `dialogs::shown_size`),
-    /// with the title bar Graphite draws in the client (`dialog_window` adds it before sizing),
-    /// above Windows 11's 48 px taskbar (8 more than `room_on`'s 40).
-    #[test]
-    fn the_window_fits_a_1080p_screen_at_200_percent() {
-        let client = vec2(W, BODY + winui::FOOTER_H + winui::caption::CAPTION_H);
-        assert_eq!(W, 800.0);
-        let room = crate::scale::room_on(vec2(1920.0, 1080.0 - 8.0), 2.0, 2.0);
-        assert_eq!(
-            crate::scale::shown(client, Some(room)),
-            client,
-            "room {room:?}"
-        );
-    }
-
     #[test]
     fn the_draft_keeps_its_order_and_the_lists_changes() {
         // Opened with 1 2 3; the Scheduler moved 3 up and removed 1; meanwhile the main window
@@ -2298,6 +2313,124 @@ mod tests {
         f.apply_to(&mut out);
         assert_eq!(out.schedule.start_at, None);
         assert_eq!(out.files_at_once, 4);
+    }
+
+    /// One pass of the section at the origin, the app's queues `live`, with `events`: what it
+    /// asked of the app, and the AccessKit tree.
+    fn section_pass(
+        ctx: &egui::Context,
+        s: &mut Scheduler,
+        live: &[Queue],
+        events: Vec<egui::Event>,
+    ) -> (Vec<Action>, egui::accesskit::TreeUpdate) {
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1000.0, 600.0))),
+            events,
+            ..Default::default()
+        };
+        let mut actions = Vec::new();
+        let mut out = ctx.run_ui(input, |ui| {
+            s.section(
+                ui,
+                Pos2::ZERO,
+                &mut ShellIcons,
+                &[],
+                live,
+                None,
+                &mut actions,
+            );
+        });
+        out.textures_delta.clear();
+        let tree = out
+            .platform_output
+            .accesskit_update
+            .expect("AccessKit is on");
+        (actions, tree)
+    }
+
+    /// A click on the button named `label` (its access letter's "&" aside) in the section.
+    fn click(ctx: &egui::Context, s: &mut Scheduler, live: &[Queue], label: &str) -> Vec<Action> {
+        let (_, tree) = section_pass(ctx, s, live, vec![]);
+        let b = tree
+            .nodes
+            .iter()
+            .find(|(_, n)| {
+                n.role() == egui::accesskit::Role::Button
+                    && n.label().map(|l| l.replace('&', "")).as_deref() == Some(label)
+            })
+            .and_then(|(_, n)| n.bounds())
+            .unwrap_or_else(|| panic!("no {label}"));
+        let at = pos2(((b.x0 + b.x1) / 2.0) as f32, ((b.y0 + b.y1) / 2.0) as f32);
+        let press = |down: bool| {
+            vec![
+                egui::Event::PointerMoved(at),
+                egui::Event::PointerButton {
+                    pos: at,
+                    button: egui::PointerButton::Primary,
+                    pressed: down,
+                    modifiers: Default::default(),
+                },
+            ]
+        };
+        section_pass(ctx, s, live, vec![egui::Event::PointerMoved(at)]);
+        section_pass(ctx, s, live, press(true));
+        section_pass(ctx, s, live, press(false)).0
+    }
+
+    /// Plan 11b1: Start now, on the section's tabs' row, applies the Scheduler's draft first,
+    /// then starts the queue, without waiting for the page's Save; Stop only stops.
+    #[test]
+    fn start_now_applies_then_starts() {
+        let ctx = egui::Context::default();
+        ctx.enable_accesskit();
+        let mut live = vec![
+            Queue::new("Main download queue", false),
+            Queue::new("Synchronization queue", true),
+        ];
+        let mut s = Scheduler::new(&live, &Settings::default());
+        s.forms[0].start_on_startup = !s.forms[0].start_on_startup;
+        assert!(s.dirty());
+        section_pass(&ctx, &mut s, &live, vec![]);
+        let actions = click(&ctx, &mut s, &live, "Start now");
+        assert_eq!(actions.len(), 2, "applied, then started");
+        match &actions[0] {
+            Action::Apply { queues, .. } => {
+                assert_eq!(
+                    queues[0].schedule.start_on_startup,
+                    !live[0].schedule.start_on_startup
+                )
+            }
+            _ => panic!("Apply first"),
+        }
+        assert!(matches!(&actions[1], Action::Start(n) if n == "Main download queue"));
+        assert!(!s.dirty(), "nothing left for Save");
+        // Running: Stop asks for nothing but the stop.
+        live[0].running = true;
+        let actions = click(&ctx, &mut s, &live, "Stop");
+        assert_eq!(actions.len(), 1);
+        assert!(matches!(&actions[0], Action::Stop(n) if n == "Main download queue"));
+    }
+
+    /// Plan 11b1: a fresh draft after Save or Discard shows what the old one showed: the same
+    /// queue and tab, or Download limits.
+    #[test]
+    fn a_fresh_draft_keeps_the_view() {
+        let queues = vec![
+            Queue::new("Main download queue", false),
+            Queue::new("Synchronization queue", true),
+            Queue::new("Night", false),
+        ];
+        let settings = Settings::default();
+        let mut old = Scheduler::new(&queues, &settings);
+        old.show_queue(2, true);
+        let fresh = Scheduler::new(&queues[..2], &settings).keep_view(&old);
+        assert_eq!(fresh.selected, 1, "Night gone: the last queue left");
+        let fresh = Scheduler::new(&queues, &settings).keep_view(&old);
+        assert!(fresh.selected == 2 && fresh.tab == Tab::Files);
+        old.show_limits();
+        let fresh = Scheduler::new(&queues, &settings).keep_view(&old);
+        assert_eq!(fresh.selected, queues.len(), "Download limits");
+        assert!(!fresh.dirty());
     }
 
     #[test]

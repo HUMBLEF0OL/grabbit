@@ -19,7 +19,7 @@ The layout is familiar on purpose: the toolbar, the categories, the download lis
 
 ### Is it safe? Does it contain adware or spyware? {#is-it-safe}
 
-Grabbit contains no adware, spyware, bundled offers or tracking. Its whole source code is public, so anyone can check what it does, and every release is built from that code by GitHub's servers, where the build can be inspected. The helper programs it can fetch for videos are verified before they run: yt-dlp against its developers' signing key, ffmpeg against its published checksums. Download Grabbit only from [this site](/download.html) or the project's GitHub releases.
+Grabbit contains no adware, spyware, bundled offers or tracking. Its whole source code is public, so anyone can check what it does, and every release is built from that code (each release's commit and tag are on GitHub) and its checksums are signed with Grabbit's release key: see [Download](/download.html#check-your-download). The helper programs it can fetch for videos are verified before they run: yt-dlp against its developers' signing key, ffmpeg against its published checksums. Download Grabbit only from [this site](/download.html) or the project's GitHub releases.
 
 ### Does Grabbit collect my data? {#privacy}
 
@@ -55,11 +55,11 @@ Open Windows **Settings → Apps**, find Grabbit and choose Uninstall. The unins
 
 ### Which browsers does it work with? {#browsers}
 
-Firefox (from [addons.mozilla.org](https://addons.mozilla.org/firefox/addon/mister-download-manager/)), Google Chrome, Microsoft Edge, Brave, Opera and Vivaldi (from [the Chrome Web Store](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp)), through the Grabbit browser extension, and browsers built on them: Zen and LibreWolf, Helium. The extension hands downloads to Grabbit with their cookies and referrer, so files behind a sign-in still work, and it adds **Download with Grabbit** to the right-click menu and a **Download video** button over videos. See [Browser integration](/help/browser-integration.html).
+Firefox, Google Chrome, Microsoft Edge, Brave, Opera and Vivaldi, through the Grabbit browser extension, and browsers built on them: Zen and LibreWolf, Helium. The extension hands downloads to Grabbit with their cookies and referrer, so files behind a sign-in still work, and it adds **Download with Grabbit** to the right-click menu and a **Download video** button over videos. See [Browser integration](/help/browser-integration.html).
 
 ### How do I install the browser extension? {#install-extension}
 
-Install Grabbit with the setup and keep **Set up browser integration** ticked. In Firefox, then open [the add-on's page on addons.mozilla.org](https://addons.mozilla.org/firefox/addon/mister-download-manager/) and click **Add to Firefox**. In Chrome, Edge, Brave, Opera and Vivaldi, open [its page in the Chrome Web Store](https://chromewebstore.google.com/detail/mister-download-manager/ejoleppdfgjdndddcjoehopknmlglojp) and click **Add to Chrome** (Edge shows **Get**, and first asks to allow extensions from other stores). Can't use a store? Open the browser's extensions page, turn on Developer mode, choose **Load unpacked** and pick the `extension\chromium` folder in Grabbit's folder. The [tutorial](/help/guide-catch-browser-downloads.html) walks through it.
+Install Grabbit with the setup and keep **Set up browser integration** ticked. The extension isn't in the browsers' stores yet (the *Mister Download Manager* one there belongs to another project and doesn't connect to Grabbit): it comes with Grabbit. In Chrome, Edge, Brave, Opera and Vivaldi, open the browser's extensions page, turn on Developer mode, choose **Load unpacked** and pick the `extension\chromium` folder in Grabbit's folder. In Firefox, load `extension\mdm-firefox.xpi` from `about:debugging` as a temporary add-on (until Firefox closes), or install it for good in Firefox Developer Edition or Nightly. The [tutorial](/help/guide-catch-browser-downloads.html) walks through it.
 
 ### Why doesn't Grabbit take over my download? {#not-catching}
 
@@ -67,7 +67,7 @@ Check four things: the extension is installed and turned on; **Options → Gener
 
 ### Can I download without the browser extension? {#without-extension}
 
-Yes. Copy a link to a file and Grabbit offers to download it at once (**Options → General → Offer to download links copied to the clipboard**, on by default). You can also paste links into **Add URL**, drag them onto the drop target, add a whole batch, or use the command line. See [Adding downloads](/help/adding-downloads.html).
+Yes. Copy a link to a file and Grabbit offers to download it at once (**Options → General → Offer to download links copied to the clipboard**, on by default). You can also paste links into **Add** or the paste bar, drag them onto the drop target, add a whole batch, or use the command line. See [Adding downloads](/help/adding-downloads.html).
 
 ## Downloading
 

@@ -193,9 +193,8 @@ mod a11y_tests {
         v
     }
 
-    const BUTTONS: [(Icon, &str, bool); 11] = [
-        (Icon::AddUrl, "Add URL", true),
-        (Icon::AddTorrent, "Add Torrent", true),
+    const BUTTONS: [(Icon, &str, bool); 10] = [
+        (Icon::Add, "Add", true),
         (Icon::Resume, "Resume", false),
         (Icon::Stop, "Stop", false),
         (Icon::StopAll, "Stop All", false),
@@ -207,10 +206,10 @@ mod a11y_tests {
         (Icon::StopQueue, "Stop Queue", false),
     ];
 
-    /// The toolbar's 11 buttons are buttons for screen readers, by their labels, greyed as
-    /// drawn.
+    /// The toolbar's 10 buttons (one Add since the universal Add) are buttons for screen
+    /// readers, by their labels, greyed as drawn.
     #[test]
-    fn the_toolbar_exposes_its_eleven_buttons() {
+    fn the_toolbar_exposes_its_ten_buttons() {
         let _fonts = crate::theme::font_tests();
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
@@ -246,7 +245,7 @@ mod a11y_tests {
             .filter(|n| n.role() == Role::Button)
             .filter_map(|n| n.bounds().map(|b| b.x1))
             .collect();
-        assert_eq!(rights.len(), 11);
+        assert_eq!(rights.len(), 10);
         assert!(rights.iter().all(|r| *r <= 710.0), "{rights:?}");
     }
 
@@ -318,16 +317,16 @@ mod a11y_tests {
         })
     }
 
-    /// With the Details toggle the toolbar has 12 buttons: the 11 as before, then "Details",
+    /// With the Details toggle the toolbar has 11 buttons: the 10 as before, then "Details",
     /// usable, its toggled state the setting's (requirements 11.4).
     #[test]
-    fn the_toolbar_exposes_the_details_toggle_as_its_twelfth_button() {
+    fn the_toolbar_exposes_the_details_toggle_after_its_buttons() {
         let _fonts = crate::theme::font_tests();
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         for on in [false, true] {
             let buttons = toolbar_buttons(&toolbar_nodes(&ctx, || details(on)));
-            assert_eq!(buttons.len(), 12, "{buttons:?}");
+            assert_eq!(buttons.len(), 11, "{buttons:?}");
             for ((label, disabled, toggled, _), (_, want, enabled)) in buttons.iter().zip(&BUTTONS)
             {
                 assert_eq!(
@@ -335,7 +334,7 @@ mod a11y_tests {
                     (*want, !enabled, None)
                 );
             }
-            let (label, disabled, toggled, _) = &buttons[11];
+            let (label, disabled, toggled, _) = &buttons[10];
             let want = if on { Toggled::True } else { Toggled::False };
             assert_eq!(
                 (label.as_str(), *disabled, *toggled),
@@ -365,7 +364,7 @@ mod a11y_tests {
         assert!(matches!(event, Some(ToolbarEvent::Toggle)));
     }
 
-    /// Without a toggle the toolbar is as before (requirements 4.10): its 11 buttons, none with
+    /// Without a toggle the toolbar is as before (requirements 4.10): its 10 buttons, none with
     /// a toggled state, where they are beside the toggle; a Click on one is still that button's.
     #[test]
     fn without_a_toggle_the_toolbar_is_as_before() {
@@ -374,11 +373,11 @@ mod a11y_tests {
         ctx.enable_accesskit();
         let nodes = toolbar_nodes(&ctx, || None);
         let plain = toolbar_buttons(&nodes);
-        assert_eq!(plain.len(), 11, "{plain:?}");
+        assert_eq!(plain.len(), 10, "{plain:?}");
         assert!(plain.iter().all(|b| b.2.is_none() && b.0 != "Details"));
         let with = toolbar_buttons(&toolbar_nodes(&ctx, || details(true)));
-        assert_eq!(plain[..], with[..11]);
-        let click = click_on(&nodes, "Add URL");
+        assert_eq!(plain[..], with[..10]);
+        let click = click_on(&nodes, "Add");
         let (_, event) = frame(&ctx, vec![click], |ui| {
             toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 1240.0, &BUTTONS, None)
         });
@@ -414,13 +413,13 @@ mod a11y_tests {
                     "{why}: o.x {ox}, width {width}, on {on}, {buttons:?}"
                 )))
             };
-            if buttons.len() != 12 || bounds.len() != 12 || buttons[11].0 != "Details" {
-                return fail("12 buttons, Details last");
+            if buttons.len() != 11 || bounds.len() != 11 || buttons[10].0 != "Details" {
+                return fail("11 buttons, Details last");
             }
             if !bounds.iter().all(|b| b[2] <= end) {
                 return fail("a right edge past o.x + width");
             }
-            if bounds[11][0] < bounds[10][2] {
+            if bounds[10][0] < bounds[9][2] {
                 return fail("the toggle over the last button");
             }
             Ok(())
@@ -485,28 +484,37 @@ mod a11y_tests {
         );
     }
 
-    /// Graphite's Find button is a button named Find, and a screen reader's Click presses it
-    /// (Cmd::Find, as Ctrl+F).
+    /// The status strip's light/dark button is a button named for what it does, and a screen
+    /// reader's Click presses it.
     #[test]
-    fn the_find_button_is_a_button() {
+    fn the_mode_button_is_a_button() {
         let _fonts = crate::theme::font_tests();
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
-        let rc = Rect::from_min_size(pos2(800.0, 5.0), vec2(120.0, 26.0));
-        let (nodes, clicked) = frame(&ctx, vec![], |ui| find_button(ui, rc, "Ctrl+F"));
+        let rc = Rect::from_min_size(pos2(800.0, 5.0), MODE_BUTTON);
+        let ink = egui::Color32::GRAY;
+        let (nodes, clicked) = frame(&ctx, vec![], |ui| mode_button(ui, rc, false, ink, true));
         assert!(!clicked);
         let (id, _) = nodes
             .iter()
-            .find(|(_, n)| n.role() == Role::Button && n.label() == Some("Find"))
-            .expect("a Find button");
+            .find(|(_, n)| n.role() == Role::Button && n.label() == Some("Switch to dark mode"))
+            .expect("the light/dark button");
         let click = egui::Event::AccessKitActionRequest(egui::accesskit::ActionRequest {
             action: egui::accesskit::Action::Click,
             target_tree: egui::accesskit::TreeId::ROOT,
             target_node: *id,
             data: None,
         });
-        let (_, clicked) = frame(&ctx, vec![click], |ui| find_button(ui, rc, "Ctrl+F"));
+        let (_, clicked) = frame(&ctx, vec![click.clone()], |ui| {
+            mode_button(ui, rc, false, ink, true)
+        });
         assert!(clicked);
+        // Audit 69-11: while a scheme decides the mode, it is greyed and a Click does nothing.
+        let (_, clicked) = frame(&ctx, vec![click], |ui| {
+            mode_button(ui, rc, false, ink, false)
+        });
+        assert!(!clicked);
+        assert_eq!(mode_button_label(true), "Switch to light mode");
     }
 
     /// Graphite's menus draw each item's icon by its command; a submenu's and a greyed
@@ -846,66 +854,68 @@ pub fn caption_menu_bar(
     (hit, titles)
 }
 
-/// Graphite's Find button, in the title bar between the menus and the window's buttons (plan
-/// 05b; 00's accepted exception: a new way to Downloads → Find): its size for the label and
-/// `key` ("Ctrl+F").
-pub fn find_button_size(p: &egui::Painter, key: &str) -> egui::Vec2 {
-    let label = text_width_font(p, winui::segoe(), crate::i18n::t("Find")).ceil();
-    let key = text_width_font(p, key_font(), key).ceil();
-    vec2(9.0 + 14.0 + 7.0 + label + 7.0 + key + 9.0, 26.0)
-}
-
 /// The font of a Graphite menu's shortcut column and of the Find button's key.
 fn key_font() -> egui::FontId {
     egui::FontId::proportional(crate::theme::metrics().font_small)
 }
 
-/// Paint the Find button in English rect `rc` ([`find_button_size`]): the window's face, the
-/// buttons' border, radius 6, a magnifier, "Find" and its key in the shortcuts' ink. Exposed as
-/// a button named Find. True when clicked (or invoked by a screen reader).
-pub fn find_button(ui: &mut Ui, rc: Rect, key: &str) -> bool {
+/// The light/dark button's size, at the status strip's trailing end.
+pub const MODE_BUTTON: egui::Vec2 = vec2(26.0, 22.0);
+
+/// What the light/dark button says it does, `dark` being the mode shown now.
+pub fn mode_button_label(dark: bool) -> &'static str {
+    if dark {
+        // i18n: the status strip's button that switches the windows to their light side
+        crate::i18n::t("Switch to light mode")
+    } else {
+        // i18n: the status strip's button that switches the windows to their dark side
+        crate::i18n::t("Switch to dark mode")
+    }
+}
+
+/// Paint the light/dark button in English rect `rc` ([`MODE_BUTTON`]), icon only: the mode it
+/// switches to (a moon in light, a sun in dark, 16 px) in `ink`, the title bar's buttons' face
+/// under the pointer; its name as its tooltip and to screen readers. True when clicked. Greyed
+/// and inert while the theme has one side only (`!enabled`: a Base16 or pywal scheme decides
+/// light or dark), its tooltip saying so.
+pub fn mode_button(ui: &mut Ui, rc: Rect, dark: bool, ink: egui::Color32, enabled: bool) -> bool {
     let p = ui.painter().clone();
     let screen = winui::rect(rc);
-    let resp = ui.interact(
-        screen,
-        egui::Id::unique("caption-find"),
-        winui::pointer_only(),
-    );
-    // i18n: the title bar's button that opens Find file (Ctrl+F)
-    let label = crate::i18n::t("Find");
-    winui::expose(&resp, egui::Role::Button, label, true, None);
-    let c = crate::theme::colors();
-    let face = if resp.is_pointer_button_down_on() {
-        c.button_pressed
-    } else if resp.hovered() {
-        c.button_hot
+    let sense = if enabled {
+        egui::Sense::click()
     } else {
-        c.window
+        egui::Sense::hover()
     };
+    let resp = ui.interact(screen, egui::Id::unique("strip-mode"), sense);
+    let label = mode_button_label(dark);
+    winui::expose(&resp, egui::Role::Button, label, enabled, None);
     let radius = crate::theme::metrics().part_radius;
-    p.rect_filled(screen, radius, face);
-    p.rect_stroke(
-        screen,
-        radius,
-        Stroke::new(1.0, c.button_border),
-        egui::StrokeKind::Inside,
-    );
-    let mid = rc.center().y;
-    let icon = Rect::from_min_size(pos2(rc.left() + 9.0, (mid - 7.0).round()), vec2(14.0, 14.0));
-    // The mockup's: the icon and the label in the secondary ink, the key in the shortcuts'.
-    let ink = c.text_secondary;
-    crate::themeicons::paint_in(ui, &p, "gx-search", winui::rect(icon), ink, true);
-    let baseline = rc.top() + 17.0;
-    let drawn = text_font(&p, winui::segoe(), icon.right() + 7.0, baseline, label, ink);
-    text_font(
-        &p,
-        key_font(),
-        winui::rect(drawn).right() + 7.0,
-        baseline,
-        key,
-        c.menu_shortcut,
-    );
-    resp.clicked()
+    let icon = Rect::from_center_size(rc.center(), vec2(16.0, 16.0));
+    let need = if dark { "gx-sun" } else { "gx-moon" };
+    if !enabled {
+        let grey = crate::theme::colors().text_disabled;
+        crate::themeicons::paint_in(ui, &p, need, winui::rect(icon), grey, true);
+        // i18n: tooltip of the greyed light/dark button: the chosen colour scheme has one side
+        resp.on_hover_text(crate::i18n::t(
+            "This theme's colours decide light or dark: pick Graphite in View → Theme to switch",
+        ));
+        return false;
+    }
+    if resp.is_pointer_button_down_on() {
+        p.rect_filled(screen, radius, winui::caption::CAPTION_PRESSED());
+    } else if resp.hovered() {
+        p.rect_filled(screen, radius, winui::caption::CAPTION_HOVER());
+    }
+    if resp.has_focus() {
+        p.rect_stroke(
+            screen,
+            radius,
+            Stroke::new(1.0, crate::theme::colors().accent),
+            egui::StrokeKind::Inside,
+        );
+    }
+    crate::themeicons::paint_in(ui, &p, need, winui::rect(icon), ink, true);
+    resp.on_hover_text(label).clicked()
 }
 
 /// The menu bar's titles in `titles` (English rects; `bar` around them all), drawn IDM's way
@@ -2363,13 +2373,13 @@ pub struct ToolbarToggle<'a> {
 pub const TB_BUTTON_TOP: f32 = 5.0;
 pub const TB_BUTTON_H: f32 = 47.0;
 
-/// The buttons that end a group of Graphite's toolbar (a rule after each): [Add URL, Add
-/// Torrent] [Resume, Stop, Stop All] [Delete, Delete Completed] [Options, Scheduler] [Start
-/// Queue, Stop Queue], IDM's order.
+/// The buttons that end a group of Graphite's toolbar (a rule after each): [Add] [Resume,
+/// Stop, Stop All] [Delete, Delete Completed] [Options, Scheduler] [Start Queue, Stop Queue],
+/// IDM's order with its Add URL and Add Torrent made one Add.
 fn ends_group(icon: Icon) -> bool {
     matches!(
         icon,
-        Icon::AddTorrent | Icon::StopAll | Icon::DeleteCompleted | Icon::Scheduler
+        Icon::Add | Icon::StopAll | Icon::DeleteCompleted | Icon::Scheduler
     )
 }
 
@@ -2410,8 +2420,7 @@ pub fn toolbar(
     const GAP: f32 = 2.0;
     const RULE_GAP: f32 = 6.0;
     const SIDE: f32 = 10.0;
-    let is_dropdown =
-        |icon: &Icon| matches!(icon, Icon::StartQueue | Icon::StopQueue | Icon::AddTorrent);
+    let is_dropdown = |icon: &Icon| matches!(icon, Icon::StartQueue | Icon::StopQueue | Icon::Add);
     let fixed: f32 = 2.0 * SIDE
         + buttons
             .iter()

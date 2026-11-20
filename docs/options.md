@@ -2,9 +2,9 @@
 
 [← Back to docs index](README.md)
 
-Open **Downloads → Options**, or click **Options** on the toolbar. The window lists its twelve pages down its left side; click one to show it. With a page's name selected, **Up** / **Down** (or **Left** / **Right**) move to the page before or after it, **Home** / **End** to the first or last; **Ctrl+Tab** / **Ctrl+Shift+Tab** go to the next / previous page from anywhere in the window, round the list.
+Open **Downloads → Options**, click **Options** on the toolbar, or choose **Options** from Grabbit's icon in the notification area. Options opens inside the main window, in place of the download list; the toolbar, the paste bar and the status bar stay, and downloads keep running. Its twelve pages are listed down its left side, and under **Tools** the settings that used to be windows of their own: the [Scheduler](queues-and-scheduler.md#the-scheduler), the [Speed limiter](connections-and-speed.md#speed-limiter), [Torrents](torrents.md#torrent-settings) and the [Browser extension](browser-integration.md#set-it-up); click one to show it. With a page's name selected, **Up** / **Down** (or **Left** / **Right**) move to the page before or after it, **Home** / **End** to the first or last; **Ctrl+Tab** / **Ctrl+Shift+Tab** go to the next / previous page from anywhere in the window, round the list. Where the window is too small for a page, the page scrolls.
 
-At the bottom, **OK** saves your changes and **Help** opens this page. There is no Cancel: closing the window or pressing **Esc** throws your changes away. The smaller windows a page opens (**DNS settings**, **Add an account**, **New login**…) have their own **OK** and **Cancel**: **Enter** is OK once what you typed can be used, **Esc** is Cancel.
+At the bottom, **Save** keeps your changes and **Discard** throws them away; both are greyed until you change something, and **Unsaved changes** shows beside **Help** meanwhile. **Enter** is Save. **Help** opens this page (on a section under **Tools**, that section's help). One **Save** keeps the changes of every page and section; the Browser extension has nothing to save. **← Downloads** above the list, **Esc** or **Alt+Left** go back to the download list; with changes not saved yet, Grabbit asks first whether to discard them. The smaller windows a page opens (**DNS settings**, **Add an account**, **New login**…) have their own **OK** and **Cancel**: **Enter** is OK once what you typed can be used, **Esc** is Cancel.
 
 Some buttons are greyed. They belong to features that aren't built yet.
 
@@ -53,9 +53,10 @@ Grabbit doesn't use a temporary folder: every connection writes straight into th
 ![Options on its Downloads page: the start download dialog, Download complete and duplicate links](images/help/options-downloads.webp)
 *Downloads: which windows show, and what a duplicate link does.*
 
+- **Customize "Download progress" dialog → Edit...** — **Show download progress dialog when a download starts**: on by default. Untick it and a download no longer opens its progress window when it starts, from the browser, a link you add or a video; it goes on in the main window's list, where a double-click opens its progress window. **Download complete** still shows when it finishes, as **Show download complete dialog** below says.
 - **Show start download dialog** — show **Download File Info** for each new download. With it off, downloads start at once, or only join the queue if you tick **Do not start downloading, only add files to the queue**.
 - **Show download complete dialog** — show **Download complete** when a file finishes.
-- **Start downloading immediately while displaying "Download File Info" dialog** — on by default, so the download is already under way while you choose a folder.
+- **Start downloading immediately while displaying "Download File Info" dialog** — off by default: nothing starts until you answer the dialog. Turn it on to have the download already under way while you choose a folder.
 - **Show queue selection panel on pressing "Download Later" button** — ask which queue; off puts it in the **Main download queue**.
 - **Show queue selection panel on closing batch download dialogs** — the same for batch downloads.
 - **Ignore file modification time changes when resuming a download** — for servers that report a new date for the same file each time. Without it, such a server makes every resume start over.
@@ -109,7 +110,7 @@ More in [Connections and speed](connections-and-speed.md).
 ![Options on its Sites Logins page, before any site is added: the list of sites with their user names](images/help/options-logins.webp)
 *Sites Logins: a user name and password per site.*
 
-User names and passwords for sites that ask for them. **New** adds a row: the site (with a path if the login is only for part of it), the user name and the password. **Edit** and **Remove** change or delete the selected row. Grabbit uses the login for every download from that site. A login typed in **Add URL** (**Use authorization**) takes priority for that one download.
+User names and passwords for sites that ask for them. **New** adds a row: the site (with a path if the login is only for part of it), the user name and the password. **Edit** and **Remove** change or delete the selected row. Grabbit uses the login for every download from that site. A login typed in **Add** (**Use authorization**) takes priority for that one download.
 
 The passwords (these, the proxy's and the debrid accounts') are kept in Windows Credential Manager; Grabbit's settings keep only a reference. Without it, they stay in Grabbit's settings, sealed for your Windows account. **Options → Accounts** says where they are. A [portable copy](portable.md) keeps them in its own folder.
 
@@ -173,11 +174,11 @@ Control Grabbit from your phone or another computer on the local network: see
 
 ## Elsewhere
 
-A few settings live outside this window:
+A few settings live outside Options' twelve pages:
 
-- **Downloads → Speed Limiter → Settings...** — speed limits. See [Connections and speed](connections-and-speed.md#speed-limiter).
-- **Tasks → Torrent settings...** — sharing and file associations. See [Torrents](torrents.md#torrent-settings).
-- **View → Dark Mode support**, **Always dark**, **Theme**, **Draw with**, and **Interface size**. See [Getting started](getting-started.md#themes) and [Troubleshooting](troubleshooting.md).
+- **Downloads → Speed Limiter → Settings...** — speed limits, the **Speed limiter** section under **Tools**. See [Connections and speed](connections-and-speed.md#speed-limiter).
+- **Tasks → Torrent settings...** — sharing and file associations, and whether the browser hands `.torrent` downloads to Grabbit, the **Torrents** section under **Tools**. See [Torrents](torrents.md#torrent-settings).
+- The status bar's light/dark button, **View → Theme**, **Draw with**, and **Interface size**. See [Getting started](getting-started.md#themes) and [Troubleshooting](troubleshooting.md).
 - **Help → Check for updates...** — **Check for updates at every start** is in that window.
 
 ## Next steps
