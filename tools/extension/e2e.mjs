@@ -1038,10 +1038,14 @@ async function videoButton(session, never) {
   near(b.l, v.l + 10, "after a reload: left edge");
   near(b.b, v.b - 10, "after a reload: bottom");
   if (!never) return "shown, clicked (the video's file), dragged, kept";
-  // Its menu by keyboard: open, down to "Never on 127.0.0.1", Enter.
-  await session.mouse(b.r - 12, (b.t + b.b) / 2, "click");
+  // Its menu by keyboard: open, down to "Never on 127.0.0.1", Enter. The chip at the bottom left
+  // opens to the right under the pointer; its ⌄ is at the open pill's right end.
+  await session.mouse(b.l + 14, (b.t + b.b) / 2);
+  await sleep(300);
+  const open = await session.pill();
+  if (!open || open.w < 80) throw new Error(`the chip didn't open under the pointer: ${JSON.stringify(open)}`);
+  await session.mouse(b.l + open.w - 12, (b.t + b.b) / 2, "click");
   await sleep(200);
-  await session.key("ArrowDown");
   await session.key("ArrowDown");
   await session.key("Enter");
   await sleep(500);
@@ -1647,14 +1651,14 @@ const CASES = {
     const v = await rect(t.session, "#video");
     const b = await hover(t.session, v);
     if (!b) throw new Error("no button over the video under csp=strict");
-    near(b.b - b.t, 34, "the button's height");
+    near(b.b - b.t, 30, "the button's height");
     const pill = await t.session.pill();
     if (!pill) throw new Error("the button's pill wasn't found");
-    if (Math.abs(pill.h - 34) > 2 || !/gradient/.test(pill.image)) throw new Error(`the pill isn't styled: ${JSON.stringify(pill)}`);
+    if (Math.abs(pill.h - 30) > 2 || !/^rgba\(24, 24, 27/.test(pill.color)) throw new Error(`the pill isn't styled: ${JSON.stringify(pill)}`);
     const address = await clickButton(t.session, b);
     const want = `${LAB}/gen/1M/clip.mp4?inline=1`;
     if (address !== want) throw new Error(`the video window got ${address}, not ${want}`);
-    return `styled (${Math.round(pill.h)}px, ${pill.image.slice(0, 15)}...), sent ${address.replace(LAB, "")}`;
+    return `styled (${Math.round(pill.h)}px, ${pill.color}), sent ${address.replace(LAB, "")}`;
   },
 
   // The button doesn't sit on a control of the page (#421: a thumbnail's watch-later button at

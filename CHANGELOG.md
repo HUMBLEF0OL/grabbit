@@ -5,6 +5,10 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ## [Unreleased]
 
+### Changed
+
+- **A smaller button over videos.** The browser extension's button is now a 30-pixel round chip in Graphite's colours, dark glass with a green arrow, in place of the wide light **Download video** bar. Pointing at it opens it to **Download video ⌄**, toward the inside of the video, with the arrow staying under the pointer; after a click it says for two seconds what happened (a tick and **Sent to Grabbit**, or a red mark and why not). Its menu lost **Download video**, which did what the button does; **Hide on this video**, **Never on** the site and **Button settings...** are unchanged. It still drags to any edge and stays there on that site.
+
 ## [1.0.1] - 2026-11-20
 
 One Add for links, magnets, torrents and video pages; Options, the Scheduler and the other settings in the main window; Find in the title bar; a light/dark button; Graphite in green; and fixes from the original MDM.
