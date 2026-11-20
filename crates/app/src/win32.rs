@@ -5923,7 +5923,7 @@ pub fn no_console(cmd: &mut std::process::Command) {
     cmd.creation_flags(0x0800_0000);
 }
 
-/// Options → Sites Logins' passwords, encrypted for this Windows account (DPAPI) before the list
+/// Options → Site logins' passwords, encrypted for this Windows account (DPAPI) before the list
 /// is written: another account, or a copy of the file, can't read them.
 #[allow(unsafe_code)]
 pub fn protect(plain: &str) -> Option<Vec<u8>> {
