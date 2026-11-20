@@ -133,14 +133,14 @@ pub struct Options {
     pub hosts: Vec<(String, Vec<std::net::IpAddr>)>,
     /// Options → Connection → DNS: who answers the names (#36).
     pub dns: crate::dns::DnsChoice,
-    /// Options → Proxy / Socks → Network adapter (#35): the adapter every connection goes
+    /// Options → Proxy / SOCKS → Network adapter (#35): the adapter every connection goes
     /// through, or none at all.
     pub route: crate::net::Route,
     /// A service account that unlocks this download's link first (#44, `crate::unlock`): asked
     /// before the first request and when the direct link dies. Not in the resume state (like
     /// the headers): whoever resumes gives it again.
     pub unlocker: Option<Arc<dyn crate::unlock::Unlocker>>,
-    /// Options → Proxy / Socks.
+    /// Options → Proxy / SOCKS.
     pub proxy: Proxy,
     /// A limit shared by every download using the same limiter (a global speed cap), on top
     /// of the download's own.
@@ -218,7 +218,7 @@ impl std::fmt::Debug for FileHook {
     }
 }
 
-/// Which proxy downloads go through (Options → Proxy / Socks).
+/// Which proxy downloads go through (Options → Proxy / SOCKS).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Proxy {
     /// "No proxy/socks" (IDM's default): direct connections.

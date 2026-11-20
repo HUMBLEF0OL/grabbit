@@ -1889,7 +1889,7 @@ pub struct SpeedSettings {
     opened: SpeedChoice,
 }
 
-/// The Speed limiter section's width (the window's mockup width) and its rows' height.
+/// The Speed Limiter section's width (the window's mockup width) and its rows' height.
 const SPEED_W: f32 = 480.0;
 const SPEED_BODY: f32 = 172.0;
 
@@ -1925,7 +1925,7 @@ impl SpeedSettings {
         d
     }
 
-    /// The Speed limiter as a section of Options' page (plan 11b2): its rows at `o`, as the
+    /// The Speed Limiter as a section of Options' page (plan 11b2): its rows at `o`, as the
     /// window's client had them, [`SpeedSettings::size`] points; OK and Cancel are the page's
     /// Save and Discard.
     #[rustfmt::skip]

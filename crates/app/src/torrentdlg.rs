@@ -955,7 +955,7 @@ pub struct TorrentSettings {
     net: Net,
     /// The port box's text (digits; empty: any).
     port: String,
-    /// Proxy / Socks has a SOCKS5 proxy torrents can use.
+    /// Proxy / SOCKS has a SOCKS5 proxy torrents can use.
     socks: bool,
     /// "Limit uploading to": on, and the KBytes/sec box's text.
     upload_on: bool,
@@ -1238,22 +1238,22 @@ impl TorrentSettings {
                     o.x + 456.0,
                     ("torrent-settings", 3),
                 );
-                // Asked for once and since gone from Proxy / Socks: it stays on (and torrents
+                // Asked for once and since gone from Proxy / SOCKS: it stays on (and torrents
                 // don't start) until turned off here.
                 let can_proxy = self.socks || n.proxy;
                 let proxy = winui::checkbox(
                     ui,
                     pos2(o.x + 14.0, o.y + 274.0),
                     &mut n.proxy,
-                    // i18n: Torrent settings: use the SOCKS5 proxy set in Options → Proxy / Socks
-                    "Use the proxy (Options → Proxy / Socks, SOCKS5)",
+                    // i18n: Torrent settings: use the SOCKS5 proxy set in Options → Proxy / SOCKS
+                    "Use the proxy (Options → Proxy / SOCKS, SOCKS5)",
                     can_proxy,
                 );
                 winui::why_disabled(
                     proxy,
                     !can_proxy,
                     // i18n: why "Use the proxy" is greyed in Torrent settings
-                    "Set a socks5:// proxy in Options → Proxy / Socks first",
+                    "Set a socks5:// proxy in Options → Proxy / SOCKS first",
                 );
                 winui::fit(
                     ui,

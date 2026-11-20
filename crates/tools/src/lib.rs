@@ -89,7 +89,7 @@ impl Error {
 }
 
 /// A client for MDM's own requests to `url`'s server (a release list, its checksums): through
-/// `net`'s proxy (Options → Proxy / Socks), DNS and network adapter, as the engine's downloads
+/// `net`'s proxy (Options → Proxy / SOCKS), DNS and network adapter, as the engine's downloads
 /// go (upstream issue 816: the release list went past the proxy the download itself took).
 pub(crate) fn client(net: &mdm_engine::Options, url: &str) -> Result<reqwest::Client, Error> {
     let parsed = url::Url::parse(url).map_err(|e| Error::BadRelease(e.to_string()))?;
@@ -178,7 +178,7 @@ pub(crate) async fn signed_list(
 pub const USER_AGENT: &str = concat!("Grabbit/", env!("CARGO_PKG_VERSION"));
 
 /// How MDM downloads its helpers and its updates: through its own engine (several connections,
-/// resumable), as MDM itself, through `proxy` (Options → Proxy / Socks).
+/// resumable), as MDM itself, through `proxy` (Options → Proxy / SOCKS).
 pub fn net(proxy: mdm_engine::Proxy) -> mdm_engine::Options {
     mdm_engine::Options {
         user_agent: USER_AGENT.to_owned(),

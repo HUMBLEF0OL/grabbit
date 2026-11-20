@@ -112,7 +112,7 @@ If your antivirus quarantined Grabbit, restore it and add an exception for its f
 
 - Installed or the plain zip: `%APPDATA%\grabbit`. The list and settings are in `downloads.json`.
 - Portable: the `data` folder next to `grabbit.exe`.
-- Passwords (Sites Logins, the proxy, debrid accounts) are in Windows Credential Manager, not in `downloads.json`; see [Options → Sites Logins](options.md#sites-logins).
+- Passwords (Site logins, the proxy, debrid accounts) are in Windows Credential Manager, not in `downloads.json`; see [Options → Site logins](options.md#site-logins).
 
 To back up your list, quit Grabbit (**Tasks → Exit**) and copy `downloads.json`.
 

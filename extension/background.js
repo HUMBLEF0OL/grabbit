@@ -1284,7 +1284,7 @@ async function siteAccess(url) {
 // ---- the browser's proxy (#42) -------------------------------------------------------------
 
 // A VPN or proxy extension is a proxy for the browser only: the app downloads through the same
-// one (Options → Proxy / Socks → "Use proxy/socks from a browser's request"), or the download
+// one (Options → Proxy / SOCKS → "Use proxy/socks from a browser's request"), or the download
 // would leave from the user's own address. What goes with each download:
 // - `proxy`: the proxy the browser uses for its address, "scheme://host:port";
 // - `proxyPac`: the browser's proxy auto-config script (its text), when it uses one;

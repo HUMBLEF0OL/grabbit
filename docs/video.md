@@ -126,7 +126,7 @@ A video yt-dlp downloads by itself ([How a video comes down](#how-a-video-comes-
 
 ## Through a VPN's adapter
 
-With **Options → Proxy / Socks → [Network adapter](options.md#proxy--socks)** set, video downloads go through that adapter too, with the same kill switch as other downloads: Grabbit hands yt-dlp (and the ffmpeg it starts) a proxy of its own on this computer, and opens every connection through the adapter, looking the names up with the DNS you chose in **Options → Connection** (without an adapter, yt-dlp uses the system's DNS). When the adapter disconnects, the video download stops, and it starts again when the adapter is back. Formats sent over RTMP, RTSP, MMS or FTP can't go through it and are refused.
+With **Options → Proxy / SOCKS → [Network adapter](options.md#proxy--socks)** set, video downloads go through that adapter too, with the same kill switch as other downloads: Grabbit hands yt-dlp (and the ffmpeg it starts) a proxy of its own on this computer, and opens every connection through the adapter, looking the names up with the DNS you chose in **Options → Connection** (without an adapter, yt-dlp uses the system's DNS). When the adapter disconnects, the video download stops, and it starts again when the adapter is back. Formats sent over RTMP, RTSP, MMS or FTP can't go through it and are refused.
 
 ## Sites that want you signed in
 
@@ -140,11 +140,11 @@ signed in.
   Nothing to set up. Each cookie goes with the domain the browser keeps it for, so a sign-in on
   YouTube Music (music.youtube.com) or YouTube's mobile site reaches www.youtube.com too.
 - **A pasted address** (Add, Download video from a page, a playlist): choose your browser in
-  **Options → Sites Logins → Cookies for video sites**. yt-dlp then reads that browser's cookies
+  **Options → Site logins → Cookies for video sites**. yt-dlp then reads that browser's cookies
   on this computer for every video it looks up or downloads. When the extension passed the
   page's own cookies, those are used instead: they are that page's and that session's.
 
-![Options, Sites Logins: Cookies for video sites, From browser: Firefox](images/help/options-logins.webp)
+![Options, Site logins: Cookies for video sites, From browser: Firefox](images/help/options-logins.webp)
 *Cookies for video sites: off, or a browser and its profile.*
 
 Sign in to the site in that browser first. Grabbit never logs or shows the cookies; the download's

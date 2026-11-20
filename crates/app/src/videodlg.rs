@@ -1244,7 +1244,7 @@ pub fn browser_label(name: &str) -> &'static str {
 
 /// yt-dlp's reason in plain words where it is one users meet often; otherwise its own text.
 /// `sent`: the browser's extension passed the page's cookies; `store`: else, the browser whose
-/// cookies yt-dlp read (Options → Sites Logins → Cookies for video sites, #229).
+/// cookies yt-dlp read (Options → Site logins → Cookies for video sites, #229).
 fn lookup_error(e: &str, sent: bool, store: Option<&mdm_tools::proc::BrowserCookies>) -> String {
     let lower = e.to_ascii_lowercase();
     let browser = store.map_or("?", |b| browser_label(&b.browser));
@@ -1255,17 +1255,17 @@ fn lookup_error(e: &str, sent: bool, store: Option<&mdm_tools::proc::BrowserCook
         return if lower.contains("could not copy chrome cookie database") {
             // i18n: the Download video window: yt-dlp couldn't read the cookies of the browser chosen in Options (Chrome, Edge...), which holds them while it runs; {browser} = its name
             named(
-                "yt-dlp can't read {browser}'s cookies while {browser} is open. Close {browser} and look the page up again, or choose Firefox in Options → Sites Logins.",
+                "yt-dlp can't read {browser}'s cookies while {browser} is open. Close {browser} and look the page up again, or choose Firefox in Options → Site logins.",
             )
         } else if lower.contains("could not find") {
             // i18n: the Download video window: the browser chosen in Options has no cookies on this computer (not installed, or another profile); {browser} = its name
             named(
-                "yt-dlp found no cookies of {browser} on this computer. Check the browser and its profile in Options → Sites Logins.",
+                "yt-dlp found no cookies of {browser} on this computer. Check the browser and its profile in Options → Site logins.",
             )
         } else if lower.contains("decrypt") || lower.contains("unknown cookie version") {
             // i18n: the Download video window: Chrome 127 and later (and Edge, Brave) on Windows encrypt their cookies so only they can read them; {browser} = its name
             named(
-                "{browser} keeps its cookies locked to itself on Windows, so yt-dlp can't read them. Choose Firefox in Options → Sites Logins, or use the Download video button over the video in {browser}.",
+                "{browser} keeps its cookies locked to itself on Windows, so yt-dlp can't read them. Choose Firefox in Options → Site logins, or use the Download video button over the video in {browser}.",
             )
         } else {
             crate::i18n::fmt(
@@ -1288,7 +1288,7 @@ fn lookup_error(e: &str, sent: bool, store: Option<&mdm_tools::proc::BrowserCook
             "The site's bot check (Cloudflare) refused yt-dlp, even with your browser's cookies for this page. Try again later, or from another browser."
         } else {
             // i18n: the Download video window: the site's bot check (Cloudflare) turned yt-dlp away and no browser cookies were used
-            "The site's bot check (Cloudflare) refused yt-dlp. If the page opens in your browser, choose that browser in Options → Sites Logins → Cookies for video sites and look the page up again, or use the Download video button over the video."
+            "The site's bot check (Cloudflare) refused yt-dlp. If the page opens in your browser, choose that browser in Options → Site logins → Cookies for video sites and look the page up again, or use the Download video button over the video."
         }
     } else if mdm_tools::proc::untrusted_certificate(e) {
         // i18n: the Download video window: the site's certificate is trusted neither by yt-dlp nor by the computer (asked again with the computer's certificates, #955); usually an antivirus or a proxy that reads secure (HTTPS) connections signs sites with a certificate of its own
@@ -1314,7 +1314,7 @@ fn lookup_error(e: &str, sent: bool, store: Option<&mdm_tools::proc::BrowserCook
             "The site wants you signed in, even with your browser's cookies for this page. Sign in to it in your browser, then try again."
         } else {
             // i18n: the Download video window: the video needs the user to be signed in
-            "This video needs you to be signed in. Use the Download video button over it in your browser, which passes your sign-in on, or choose your browser in Options → Sites Logins → Cookies for video sites."
+            "This video needs you to be signed in. Use the Download video button over it in your browser, which passes your sign-in on, or choose your browser in Options → Site logins → Cookies for video sites."
         }
     } else {
         return e.to_owned();

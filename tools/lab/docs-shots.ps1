@@ -45,7 +45,7 @@ param(
   # Beside each picture, <name>.ui.json: its controls' names and places (ui-rects.ps1).
   [switch]$Ui,
   # More settings for the run, as JSON members added to downloads.json's settings
-  # ('"video_cookies":"firefox"': Options, Sites Logins, with a browser chosen).
+  # ('"video_cookies":"firefox"': Options, Site logins, with a browser chosen).
   [string]$Settings = ""
 )
 $ErrorActionPreference = "Stop"

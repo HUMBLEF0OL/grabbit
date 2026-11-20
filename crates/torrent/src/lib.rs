@@ -358,7 +358,7 @@ pub struct Config {
     /// The DHT's first nodes (`host:port`); None: MDM's public routers (`DHT_BOOTSTRAP`). Tests
     /// and test tools name nodes on loopback.
     pub dht_bootstrap: Option<Vec<String>>,
-    /// Options → Proxy / Socks → Network adapter (#35, #143): what holds every socket of the
+    /// Options → Proxy / SOCKS → Network adapter (#35, #143): what holds every socket of the
     /// session to the adapter. UPnP and local peer discovery are off then: they speak to the
     /// local network, not through the adapter.
     pub bind: Option<Bind>,

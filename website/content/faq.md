@@ -93,11 +93,11 @@ Yes. Put downloads in a queue and let the Scheduler start it at a set time, stop
 
 ### Does it support FTP? {#ftp}
 
-Yes: `ftp://`, and FTP over TLS both ways (`ftpes://` and `ftps://`), with several connections at once, resume, and logins from the address or from Sites Logins. See [Adding downloads](/help/adding-downloads.html#ftp-and-ftps).
+Yes: `ftp://`, and FTP over TLS both ways (`ftpes://` and `ftps://`), with several connections at once, resume, and logins from the address or from Site logins. See [Adding downloads](/help/adding-downloads.html#ftp-and-ftps).
 
 ### Does it support proxies? {#proxy}
 
-Yes: HTTP and SOCKS proxies, and proxy auto-config (PAC) scripts, in **Options → Proxy / Socks**. See [Options](/help/options.html). To keep every download on a VPN, see [Network adapter](/features/network-adapter.html).
+Yes: HTTP and SOCKS proxies, and proxy auto-config (PAC) scripts, in **Options → Proxy / SOCKS**. See [Options](/help/options.html). To keep every download on a VPN, see [Network adapter](/features/network-adapter.html).
 
 ## Video and torrents
 

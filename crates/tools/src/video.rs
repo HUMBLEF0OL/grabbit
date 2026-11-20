@@ -1458,7 +1458,7 @@ impl VideoJob {
             Some(b) if cookies.is_none() => vec![(
                 std::time::SystemTime::now(),
                 format!(
-                    "Cookies read from {} on this computer (Options → Sites Logins)",
+                    "Cookies read from {} on this computer (Options → Site logins)",
                     b.browser
                 ),
             )],

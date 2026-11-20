@@ -610,8 +610,8 @@ Done since 1.0.1; ships in the next release.
   privacy and terms pages and metadata, the app's file details and the installer. The copyright
   notices keep Mister Download Manager's author alongside, as the GPL asks.
 - ✅ One way into each setting: Torrent settings left the Tasks menu (Options → Torrents), menu
-  items that open a section of Options lost their "...", and the side list says **Speed
-  Limiter** as the menus do.
+  items that open a section of Options lost their "...", and Options' names are written one
+  way (**Speed Limiter**, **Proxy / SOCKS**, **Site logins**, **Browser extension**).
 
 ## Being worked on
 

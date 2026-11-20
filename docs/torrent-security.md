@@ -30,7 +30,7 @@ A `.torrent` file fetched from a web address goes through the same checks as one
 
 ## Blocking addresses
 
-**Block the addresses in this list** takes the address of a public IP blocklist, in the P2P (PeerGuardian) or eMule `.dat` format, plain or gzipped. Grabbit downloads it with its own downloader (your Proxy / Socks settings apply), checks it, and fetches it again every 7 days. Peers in it are refused. A list Grabbit can't read is left out, and the last good one stays. The engine reads the list when it starts.
+**Block the addresses in this list** takes the address of a public IP blocklist, in the P2P (PeerGuardian) or eMule `.dat` format, plain or gzipped. Grabbit downloads it with its own downloader (your Proxy / SOCKS settings apply), checks it, and fetches it again every 7 days. Peers in it are refused. A list Grabbit can't read is left out, and the last good one stays. The engine reads the list when it starts.
 
 ## Files from a torrent
 
@@ -41,13 +41,13 @@ A `.torrent` file fetched from a web address goes through the same checks as one
 
 ## Proxies
 
-Grabbit's Proxy / Socks settings are for web and FTP downloads. Torrents can use a SOCKS5 one too: set a `socks5://` proxy in **Options → Proxy / Socks** and turn on **Use the proxy** in Torrent settings. The proxy covers connections to peers and web trackers only, so with it Grabbit turns off the DHT, local peer discovery, incoming connections and UDP trackers; it opens no UDP socket toward the network at all. If the proxy is gone from Proxy / Socks while that switch is on, torrents don't start rather than go around it.
+Grabbit's Proxy / SOCKS settings are for web and FTP downloads. Torrents can use a SOCKS5 one too: set a `socks5://` proxy in **Options → Proxy / SOCKS** and turn on **Use the proxy** in Torrent settings. The proxy covers connections to peers and web trackers only, so with it Grabbit turns off the DHT, local peer discovery, incoming connections and UDP trackers; it opens no UDP socket toward the network at all. If the proxy is gone from Proxy / SOCKS while that switch is on, torrents don't start rather than go around it.
 
 To route *everything* through another network, use a VPN for the whole computer.
 
 ## A network adapter
 
-**Options → Proxy / Socks → Network adapter** holds Grabbit's connections to one adapter, usually a VPN's ([Options](options.md#proxy--socks)). The torrent engine binds every socket to it: peers (TCP, and through a SOCKS proxy), HTTP and UDP trackers, the DHT and the listening port. It binds the adapter's address (its IPv4 one when it has one), and Windows sends a packet only through the adapter that has its source address. UPnP and local peer discovery are turned off then, because they talk to the local network rather than through the adapter.
+**Options → Proxy / SOCKS → Network adapter** holds Grabbit's connections to one adapter, usually a VPN's ([Options](options.md#proxy--socks)). The torrent engine binds every socket to it: peers (TCP, and through a SOCKS proxy), HTTP and UDP trackers, the DHT and the listening port. It binds the adapter's address (its IPv4 one when it has one), and Windows sends a packet only through the adapter that has its source address. UPnP and local peer discovery are turned off then, because they talk to the local network rather than through the adapter.
 
 It works as a kill switch. When the adapter disconnects, running torrents stop with "… is not connected; it goes on when it is back", and they start again through the adapter when it is. Until Grabbit notices (within a second), the engine's sockets are still bound to an address that is gone, so nothing can leave another way. A torrent added while the adapter isn't connected doesn't start, and says why. Tracker names are still looked up by the system's DNS.
 

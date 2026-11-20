@@ -5,7 +5,7 @@
 //! download: `App::add_items`).
 //!
 //! Kept from Add URL: the clipboard's links filled in as it opens, "Use authorization" with its
-//! login and password (and Options → Sites Logins shown there, #511), and the addresses go into
+//! login and password (and Options → Site logins shown there, #511), and the addresses go into
 //! the Address history as before (the paste bar's drop list and Up / Down step through them).
 
 use std::path::Path;
@@ -51,7 +51,7 @@ pub struct AddWindow {
     pub password: String,
     /// "Ask where to save each one" (on as it opens).
     pub ask: bool,
-    /// The address Options → Sites Logins was last looked up for, and the login it gave
+    /// The address Options → Site logins was last looked up for, and the login it gave
     /// (#511): "Use authorization" shows it while the box is left as it was filled.
     looked_up: String,
     filled: Option<(String, String)>,
@@ -138,7 +138,7 @@ impl AddWindow {
         self.found.as_ref().map_or(&[], |(_, f)| f.as_slice())
     }
 
-    /// The first link's address (what Sites Logins is looked up for).
+    /// The first link's address (what Site logins is looked up for).
     fn first_link(&mut self) -> Option<Url> {
         self.found().iter().find_map(|f| match &f.kind {
             Ok(Kind::Link(u) | Kind::TorrentUrl(u)) => Some(u.clone()),
@@ -147,7 +147,7 @@ impl AddWindow {
         })
     }
 
-    /// "Use authorization" shows the Sites Logins entry the first link will use (#511):
+    /// "Use authorization" shows the Site logins entry the first link will use (#511):
     /// `site_login` is that same match (`Settings::site_login`). A login typed or changed in
     /// the box is left alone; one filled from Options follows the address.
     fn follow_site_login(&mut self, site_login: impl Fn(&Url) -> Option<(String, String)>) {
@@ -172,7 +172,7 @@ impl AddWindow {
         self.filled = found;
     }
 
-    /// The login Add hands on: none while the box shows the Sites Logins entry as it was
+    /// The login Add hands on: none while the box shows the Site logins entry as it was
     /// filled, so the download keeps following Options, as it does without one.
     pub(crate) fn typed_login(&self) -> Option<(String, String)> {
         let own = (self.login.clone(), self.password.clone());
@@ -791,7 +791,7 @@ mod tests {
         assert_eq!(typed.address, "https://typed.example/b.zip", "typed: kept");
     }
 
-    /// #511, kept from Add URL: the first link's Sites Logins entry shows in "Use
+    /// #511, kept from Add URL: the first link's Site logins entry shows in "Use
     /// authorization", follows the address while left as filled, and a typed login stays.
     #[test]
     fn it_shows_the_sites_logins_entry_for_its_first_link() {

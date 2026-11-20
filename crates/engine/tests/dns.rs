@@ -153,7 +153,7 @@ async fn a_dead_dns_fails_the_download_and_names_itself() {
     assert!(text.contains("the test DNS"), "{text}");
 }
 
-/// Options → Proxy / Socks → Network adapter (#35), on this computer's loopback: 127.0.0.2
+/// Options → Proxy / SOCKS → Network adapter (#35), on this computer's loopback: 127.0.0.2
 /// stands for the adapter's address (Windows answers on all of 127/8). `loopback_too` binds what is otherwise left unbound.
 fn bound(v4: [u8; 4]) -> mdm_engine::Route {
     mdm_engine::Route::Bound(Arc::new(mdm_engine::net::Binding {

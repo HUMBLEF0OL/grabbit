@@ -159,7 +159,8 @@ enum Cmd {
     AddMagnet,
     /// Add torrent → Open torrent file…: pick a .torrent, then the Add torrent dialog.
     OpenTorrentFile,
-    /// Add torrent → Torrent settings… (sharing after finishing, Windows associations).
+    /// Options → Tools → Torrents (sharing after finishing, Windows associations); no menu
+    /// item, `/show torrent-settings` and the file-association notice run it.
     TorrentSettings,
     /// Right-click → Torrent (#39): read every piece again; ask the trackers again; add
     /// trackers (a window); copy its magnet link.
@@ -697,7 +698,7 @@ pub struct App {
     pub remote_torrents: Vec<crate::remote::Lookup>,
     /// Free space where downloads go, and when it was last looked up (`free_space`).
     free_space: std::sync::Arc<std::sync::Mutex<(Option<Instant>, Option<u64>)>>,
-    /// Options → Proxy / Socks → Network adapter (#35): the watch, the route seen last frame, and
+    /// Options → Proxy / SOCKS → Network adapter (#35): the watch, the route seen last frame, and
     /// the downloads stopped because it changed, to start again when it allows.
     netwatch: crate::netwatch::NetWatch,
     /// Options → Accounts (#44): the debrid accounts downloads go through, and what they were
@@ -878,7 +879,8 @@ fn is_list_file(s: &str) -> bool {
 }
 
 /// The toolbar's Add ▾ menu: the Add window, a .torrent file, the clipboard, Batch download.
-/// RSS feeds and Torrent settings, on the old Add Torrent arrow, stay in the Tasks menu.
+/// RSS feeds, on the old Add Torrent arrow, stays in the Tasks menu; Torrent settings, also
+/// there once, are Options → Torrents only.
 fn add_drop_entries() -> Vec<MenuEntry<Cmd>> {
     use MenuEntry::{Item as I, Sep};
     vec![
@@ -3213,7 +3215,7 @@ impl App {
     }
 
     /// The headers and options `url`'s requests go with: the download's own `login`, else the
-    /// one Options → Sites Logins has for its address, else an FTP address's own (its resume
+    /// one Options → Site logins has for its address, else an FTP address's own (its resume
     /// state keeps the address without the password); the browser's Referer, Cookie,
     /// User-Agent and form (`context`); Options' connections, proxy and User-Agent.
     ///
@@ -5970,7 +5972,7 @@ impl App {
                 for a in actions {
                     self.scheduler_action(a);
                 }
-                // Then the Speed limiter's and Torrents' drafts, each only if changed (as OK
+                // Then the Speed Limiter's and Torrents' drafts, each only if changed (as OK
                 // set them), before Options' (11b2).
                 let Some(p) = &self.settings_page else {
                     return;
@@ -6004,7 +6006,7 @@ impl App {
         let downloads = self.downloads.clone();
         if let Some(p) = &mut self.settings_page {
             p.options = fresh.keep_view(&p.options, saved, &downloads);
-            // A fresh draft of the Scheduler, the Speed limiter and Torrents too, once visited.
+            // A fresh draft of the Scheduler, the Speed Limiter and Torrents too, once visited.
             if let Some(old) = &p.scheduler {
                 p.scheduler = Some(
                     crate::scheduler::Scheduler::new(&self.queues, &self.settings).keep_view(old),
@@ -7042,8 +7044,7 @@ impl App {
                 I("&Add new download", Cmd::AddUrl, true, false),
                 I("Open &torrent file...", Cmd::OpenTorrentFile, true, false),
                 I("Add &magnet link...", Cmd::AddMagnet, true, false),
-                // Torrent settings: Options → Torrents only; a menu keeps a shortcut into
-                // Options just beside the tool's own switches (Scheduler, Speed Limiter).
+                // Torrent settings: Options → Torrents only (Tasks adds things).
                 I("Add &batch download", Cmd::Batch(false), true, false),
                 I(
                     "Add batch download from &clipboard",
@@ -7143,6 +7144,8 @@ impl App {
                     false,
                 ),
                 Sep,
+                // The menus' ways into Options' page: Options itself, and a shortcut only
+                // beside a tool's own commands (the queues', the Speed Limiter's switches).
                 I("S&cheduler", Cmd::Scheduler, true, false),
                 Sub("Start &queue", true, self.queue_drop(true)),
                 Sub("S&top queue", true, self.queue_drop(false)),
@@ -11864,7 +11867,7 @@ mod route_tests {
     /// What the Add window's Add hands on for `typed`: the real window, its box holding
     /// `typed` and Enter pressed in it (Add, the default button), drawn in its own window
     /// rendered headlessly as dialogs.rs's tests do, and handled as `App` handles its outcome
-    /// (the window goes with the first `Done`). No Sites Logins entry and nothing typed under
+    /// (the window goes with the first `Done`). No Site logins entry and nothing typed under
     /// "Use authorization".
     fn add_url_ok(typed: &str) -> Vec<crate::adddlg::AddOut> {
         use crate::dialogs::Outcome;
@@ -14137,7 +14140,7 @@ mod settings_page_tests {
         assert_eq!(p.options.result().limits_mb, 4321, "its draft as it was");
     }
 
-    /// Plan 11b2: the Speed limiter's, Torrents' and the browser extension's sections open from
+    /// Plan 11b2: the Speed Limiter's, Torrents' and the browser extension's sections open from
     /// their commands and `/show` names; `/show extension` is still the offer's window (the
     /// page closes for it, as for any other name).
     #[test]
@@ -14223,7 +14226,7 @@ mod settings_page_tests {
         }
     }
 
-    /// Plan 11b2: Save sets the Speed limiter's and Torrents' changes (as their OK did), then
+    /// Plan 11b2: Save sets the Speed Limiter's and Torrents' changes (as their OK did), then
     /// Options'; Discard drops them. A draft only looked at sets nothing: a speed changed
     /// elsewhere meanwhile stays.
     #[test]
@@ -14252,7 +14255,7 @@ mod settings_page_tests {
         edit(&mut a);
         change(&mut a, |s| s.double_click_open = !s.double_click_open);
         a.settings_page_event(PageEvent::Save);
-        assert_eq!(a.settings.speed_limit_kb, 321, "the Speed limiter's");
+        assert_eq!(a.settings.speed_limit_kb, 321, "the Speed Limiter's");
         assert_eq!(
             a.settings.torrent_keep_sharing, !before.torrent_keep_sharing,
             "Torrents'"

@@ -329,7 +329,7 @@ pub fn is_torrent_url(url: &url::Url, name: Option<&str>, mime: Option<&str>) ->
 }
 
 /// A .torrent on the web: its address and the request it goes with (`App::request_parts`: the
-/// browser's cookies and Referer, a site login, Proxy / Socks).
+/// browser's cookies and Referer, a site login, Proxy / SOCKS).
 #[derive(Clone)]
 pub struct Remote {
     pub url: url::Url,
@@ -418,7 +418,7 @@ pub fn blocklist_updated(url: &str) -> Option<std::time::SystemTime> {
 
 /// Fetch and convert the blocklist at `url` (#40) when it was never converted, comes from
 /// another address now, or is older than `BLOCKLIST_DAYS`; in the background, one at a time
-/// (`busy`), with MDM's own downloader (Proxy / Socks applies). A list that isn't one keeps the
+/// (`busy`), with MDM's own downloader (Proxy / SOCKS applies). A list that isn't one keeps the
 /// last good one. The torrent session reads it when it starts.
 pub fn refresh_blocklist(
     rt: &tokio::runtime::Handle,
@@ -709,9 +709,9 @@ impl Host {
         // Held to the adapter as it is now, not as it was when the settings were last read.
         let bind = route_bind(&crate::settings::own_route())?;
         let mut cfg = self.wanted.lock().unwrap().clone().ok_or_else(|| {
-            // i18n: an error: Torrent settings ask for the proxy, and Options → Proxy / Socks has no SOCKS5 one
+            // i18n: an error: Torrent settings ask for the proxy, and Options → Proxy / SOCKS has no SOCKS5 one
             crate::i18n::t(
-                "Torrent settings say to use the proxy, but Proxy / Socks has no SOCKS5 proxy",
+                "Torrent settings say to use the proxy, but Proxy / SOCKS has no SOCKS5 proxy",
             )
             .to_owned()
         })?;

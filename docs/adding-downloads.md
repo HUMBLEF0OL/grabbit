@@ -56,7 +56,7 @@ same progress window.
 The server's certificate is checked against Windows' trusted certificates, as for `https://`.
 
 **Logging in.** Write the login in the address (`ftp://user:password@server/folder/file.iso`),
-tick **Use authorization**, or save it in **Options → Sites Logins**. Without one, Grabbit logs in as
+tick **Use authorization**, or save it in **Options → Site logins**. Without one, Grabbit logs in as
 `anonymous`. The path is relative to the folder the login starts in; to start from the server's
 root, write `%2F` after the server (`ftp://server/%2Fpub/file.iso`).
 
@@ -66,7 +66,7 @@ resume, it says the file changed on the server instead of mixing two versions
 password is not written to the resume file next to the download: Grabbit gives it again when it
 resumes.
 
-**Connections.** Passive mode is used by default. **Options → Proxy / Socks → Use FTP in PASV
+**Connections.** Passive mode is used by default. **Options → Proxy / SOCKS → Use FTP in PASV
 mode** switches it off for servers that only take active connections. FTP connects to the
 server directly, not through the HTTP proxy.
 

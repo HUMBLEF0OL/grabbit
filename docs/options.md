@@ -83,10 +83,10 @@ Grabbit doesn't use a temporary folder: every connection writes straight into th
 
 More in [Connections and speed](connections-and-speed.md).
 
-## Proxy / Socks
+## Proxy / SOCKS
 
-![Options on its Proxy / Socks page](images/help/options-proxy.webp)
-*Proxy / Socks: no proxy, the system's, or your own.*
+![Options on its Proxy / SOCKS page](images/help/options-proxy.webp)
+*Proxy / SOCKS: no proxy, the system's, or your own.*
 
 - **No proxy/socks** — connect directly. This is the default.
 - **Use system settings** — use Windows' proxy settings.
@@ -105,10 +105,10 @@ More in [Connections and speed](connections-and-speed.md).
   - Connections to this computer itself (`localhost`) aren't bound. A proxy on this computer carries the downloads, and where it sends them is up to it.
 - **Use FTP in PASV mode** — on by default: for FTP downloads Grabbit opens the data connections itself (passive mode), which works through routers and firewalls. Turn it off only for a server that needs active mode (the server connects back to you). FTP never goes through the proxy above, so its **ftp** box stays greyed. See [FTP and FTPS](adding-downloads.md#ftp-and-ftps).
 
-## Sites Logins
+## Site logins
 
-![Options on its Sites Logins page, before any site is added: the list of sites with their user names](images/help/options-logins.webp)
-*Sites Logins: a user name and password per site.*
+![Options on its Site logins page, before any site is added: the list of sites with their user names](images/help/options-logins.webp)
+*Site logins: a user name and password per site.*
 
 User names and passwords for sites that ask for them. **New** adds a row: the site (with a path if the login is only for part of it), the user name and the password. **Edit** and **Remove** change or delete the selected row. Grabbit uses the login for every download from that site. A login typed in **Add** (**Use authorization**) takes priority for that one download.
 

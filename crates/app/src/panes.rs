@@ -483,7 +483,7 @@ pub fn bar_of(st: &PasteBar) -> crate::addkind::Bar {
 
 /// A submit's outcome (Enter or the button) from what the field holds ([`bar_of`]). One
 /// address or several: the field empties and they go on (one into its flow as Add URL's OK
-/// sent it, without a login: Sites Logins still applies, D3; several, their text kept in
+/// sent it, without a login: Site logins still applies, D3; several, their text kept in
 /// `pending`, to the Add window). Nothing: the text stays, "Invalid address" takes the chip's
 /// place (D2) and the field keeps the keys.
 pub fn submit(st: &mut PasteBar) -> Option<crate::addkind::Bar> {
