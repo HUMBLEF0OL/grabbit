@@ -44,8 +44,9 @@ page = "getting-started.md"
 under = "The main window"
 take = "@main"
 # 1 right of the menu bar's last menu, 2 on the toolbar's rule between its delete and its
-# settings groups, 3 and 4 in the empty space under the categories and the list's rows.
-marks = [{ at = "MenuItem:Help", side = "right" }, { at = [520, 70, 0, 0], side = "center" }, { at = [0, 446, 223, 22], side = "center" }, { at = [224, 408, 708, 44], side = "center" }]
+# settings groups (x 476 since the one Add, PR 76), 3 and 4 in the empty space under the
+# categories and the list's rows.
+marks = [{ at = "MenuItem:Help", side = "right" }, { at = [476, 70, 0, 0], side = "center" }, { at = [0, 446, 223, 22], side = "center" }, { at = [224, 408, 708, 44], side = "center" }]
 alt = "The main window: the menu bar, the toolbar, the categories on the left and the download list on the right"
 caption = "1 the menu bar, 2 the toolbar, 3 the categories, 4 the download list."
 
@@ -78,7 +79,9 @@ under = "Add"
 # Lower case: /show's arguments arrive lower-cased (mdm_ipc::parse_args).
 take = "@add:gen/4m/project-report-2026.pdf"
 # The Add window (PR 76): its box, the Found list's caption ("Found 1"), Use authorization, Add.
-marks = [{ at = "Edit:Addresses, magnet links or video pages, one per line", n = 3, side = "corner" }, { at = "Found", n = 4, side = "right" }, { at = "CheckBox:Use authorization", n = 5, side = "right" }, { at = "Button:Add", n = 6, side = "corner" }]
+# 3 in the box's empty middle (one address on its first line), 5 over the tick box (its right
+# is the Login field).
+marks = [{ at = "Edit:Addresses, magnet links or video pages, one per line", n = 3, side = "center" }, { at = "Found", n = 4, side = "right" }, { at = "CheckBox:Use authorization", n = 5, side = "top" }, { at = "Button:Add", n = 6, side = "corner" }]
 alt = "The Add window: its box, what was found, the drop area, Use authorization and Add"
 caption = "The numbers are the steps above: 3 the addresses, 4 what was found, 5 a login if the server needs one, 6 Add."
 
