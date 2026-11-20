@@ -606,6 +606,9 @@ Done since 1.0.1; ships in the next release.
   and shows the result of a click on itself; its menu no longer repeats **Download video**. The
   help's and the README's pictures show it, taken again with a test host of their own, so an
   installed Grabbit no longer stops the picture script.
+- ✅ Grabbit names its maintainer, HUMBLEF0OL, as its author and publisher: the website's footer,
+  privacy and terms pages and metadata, the app's file details and the installer. The copyright
+  notices keep Mister Download Manager's author alongside, as the GPL asks.
 
 ## Being worked on
 

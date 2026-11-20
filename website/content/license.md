@@ -20,7 +20,7 @@ priority: 0.4
 
 This summary is not the licence. The full text is in the [LICENSE file]({{REPO}}/blob/main/LICENSE) and at [gnu.org/licenses/gpl-3.0](https://www.gnu.org/licenses/gpl-3.0.html).
 
-Copyright © 2026 Ahmed Nefzaoui and contributors.
+Copyright © 2026 HUMBLEF0OL and contributors; portions copyright © 2026 Ahmed Nefzaoui (Mister Download Manager, which Grabbit is forked from).
 
 > Grabbit is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 >

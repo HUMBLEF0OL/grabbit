@@ -19,7 +19,7 @@ priority: 0.4
 
 </div>
 
-Grabbit is free, open-source software made by Ahmed Nefzaoui and contributors. Because its whole source code is public at [github.com/HUMBLEF0OL/grabbit]({{REPO}}), you don't have to take this page's word for it: every network connection described here can be checked in the code.
+Grabbit is free, open-source software made by HUMBLEF0OL and contributors. Because its whole source code is public at [github.com/HUMBLEF0OL/grabbit]({{REPO}}), you don't have to take this page's word for it: every network connection described here can be checked in the code.
 
 ## The app
 

@@ -13,7 +13,7 @@ Key facts:
 - Privacy: the app has no accounts, no analytics, no telemetry; an update check against GitHub at each start (and once a day while it runs) that can be turned off.
 - Themes: Graphite, Grabbit's own look (light and dark), is the only built-in theme; theme files of your own build on it.
 - In the source now, coming with version 0.5.0: View → Interface size, a link grabber with archive extraction, image galleries via gallery-dl, RSS feeds for torrents, debrid accounts (Real-Debrid, AllDebrid, Premiumize), downloads held to one network adapter with a kill switch, a chosen DNS, the server's country and round trip, a phone remote control on the local network, a headless server mode (Docker, Unraid), and sign-ins in the system's keychain. Each has a page under https://humblef0ol.github.io/grabbit/features/.
-- Written in Rust with egui. Made by Ahmed Nefzaoui and contributors.
+- Written in Rust with egui. Made by HUMBLEF0OL and contributors.
 
 ## Pages
 
