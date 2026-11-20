@@ -19,7 +19,7 @@ priority: 0.3
 
 ## 1. Who we are
 
-Grabbit ("the software") and the website humblef0ol.github.io/grabbit ("the site") are made by Ahmed Nefzaoui and contributors ("we"). By using the software or the site you accept these terms. If you don't, please don't use them.
+Grabbit ("the software") and the website humblef0ol.github.io/grabbit ("the site") are made by HUMBLEF0OL and contributors ("we"). By using the software or the site you accept these terms. If you don't, please don't use them.
 
 ## 2. The software's licence
 

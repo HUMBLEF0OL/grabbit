@@ -56,6 +56,24 @@
         "value": "geist",
         "createdAt": "2026-11-16T02:31:25.729Z",
         "reason": "user confirmed 2026-11-16: Geist is DESIGN.md's declared face; the detector's font check misreads it"
+      },
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "website/benchmark.html"
+        ],
+        "createdAt": "2026-11-20T16:04:55.353Z",
+        "reason": "user confirmed 2026-11-20: false positive, .race has padding clamp(20px, 3vw, 32px) in styles.css"
+      },
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "website/benchmark.html"
+        ],
+        "createdAt": "2026-11-20T16:05:06.266Z",
+        "reason": "user confirmed 2026-11-20: false positive, the dot is the leading edge of each connection's progress line in the download animation (styles.css .live), not a liveness pulse"
       }
     ]
   }

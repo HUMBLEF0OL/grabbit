@@ -346,7 +346,8 @@ and there is no paid edition.
 
 ## Licence and credits
 
-Copyright (c) 2026 Ahmed Nefzaoui. Grabbit is free software under the
+Copyright (c) 2026 HUMBLEF0OL and contributors; portions copyright (c) 2026 Ahmed Nefzaoui
+(Mister Download Manager). Grabbit is free software under the
 [GNU General Public License, version 3](LICENSE) or (at your option) any later version.
 
 Grabbit began as a fork of Mister Download Manager by Ahmed Nefzaoui

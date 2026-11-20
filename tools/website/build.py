@@ -475,7 +475,7 @@ def footer() -> str:
       </div>
       <div class="foot-bottom">
         <p>GPL-3.0 · built in the open on <a href="{REPO}">GitHub</a></p>
-        <p>© {year} Ahmed Nefzaoui and contributors</p>
+        <p>© {year} HUMBLEF0OL and contributors</p>
       </div>
       <p class="legal">Not affiliated with Tonec Inc.; Internet Download Manager and IDM are trademarks of their owner, named here only to compare.</p>
     </div>
@@ -631,7 +631,7 @@ SOFTWARE_LD = {
     "installUrl": FILES["setup"],
     "screenshot": SITE + "/assets/screens/main-light.webp",
     "image": SITE + "/assets/grabbit.svg",
-    "author": {"@type": "Person", "name": "Ahmed Nefzaoui", "url": "https://github.com/anefzaoui"},
+    "author": {"@type": "Person", "name": "HUMBLEF0OL", "url": "https://github.com/HUMBLEF0OL"},
     "codeRepository": REPO,
     "featureList": [
         "Up to 128 connections per download with dynamic re-splitting",
@@ -868,7 +868,7 @@ def build_help() -> None:
             ld.append({"@context": "https://schema.org", "@type": "TechArticle", "headline": heading,
                        "description": desc, "inLanguage": "en", "dateModified": TODAY,
                        "about": {"@type": "SoftwareApplication", "name": NAME},
-                       "author": {"@type": "Person", "name": "Ahmed Nefzaoui"}})
+                       "author": {"@type": "Person", "name": "HUMBLEF0OL"}})
         write(path, title, desc, body, section="help", jsonld=ld, og_type="article",
               priority="0.7" if f.stem.startswith("guide-") or is_index else "0.6",
               extra=f'\n  <link rel="alternate" type="text/markdown" href="{md_path}">')
@@ -1009,7 +1009,7 @@ def build_news() -> None:
   <link href="{SITE}/news.xml" rel="self"/>
   <link href="{SITE}/news.html"/>
   <updated>{TODAY}T00:00:00Z</updated>
-  <author><name>Ahmed Nefzaoui</name></author>
+  <author><name>HUMBLEF0OL</name></author>
 {chr(10).join(entries)}
 </feed>
 """
