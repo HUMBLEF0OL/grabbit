@@ -4406,6 +4406,26 @@ pub fn set_torrent_handlers(on: bool) {
     let exe = exe.display().to_string();
     let open = format!("\"{exe}\" \"%1\"");
     let icon = format!("\"{exe}\",0");
+    let tree = |k: &str| {
+        let k = w(k);
+        // SAFETY: NUL-terminated key under HKCU.
+        unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, k.as_ptr()) };
+    };
+    let value = |key: &str, name: &str| {
+        let (k, n) = (w(key), w(name));
+        // SAFETY: NUL-terminated key and value names (empty: the default value).
+        unsafe { RegDeleteKeyValueW(HKEY_CURRENT_USER, k.as_ptr(), n.as_ptr()) };
+    };
+    // This user's own Default apps listing (upstream issue 1091), off the list.
+    let drop_user_listing = || {
+        tree(&format!("Software\\Classes\\{MAGNET_PROGID}"));
+        tree(CAPABILITIES);
+        if get("Software\\RegisteredApplications", Some(REGISTERED_NAME))
+            .is_some_and(|v| v.eq_ignore_ascii_case(CAPABILITIES))
+        {
+            value("Software\\RegisteredApplications", REGISTERED_NAME);
+        }
+    };
     if on {
         set("Software\\Classes\\magnet", None, "URL:Magnet link");
         set("Software\\Classes\\magnet", Some("URL Protocol"), "");
@@ -4451,24 +4471,18 @@ pub fn set_torrent_handlers(on: bool) {
                 Some(REGISTERED_NAME),
                 CAPABILITIES,
             );
+        } else {
+            // Everyone's lists it: a listing of this user's written before would show Grabbit
+            // twice in Default apps.
+            drop_user_listing();
         }
     } else {
         let ours = get("Software\\Classes\\magnet\\shell\\open\\command", None)
             .is_some_and(|c| c.contains(&exe));
-        let tree = |k: &str| {
-            let k = w(k);
-            // SAFETY: NUL-terminated key under HKCU.
-            unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, k.as_ptr()) };
-        };
         if ours {
             tree("Software\\Classes\\magnet");
         }
         tree(&format!("Software\\Classes\\{TORRENT_PROGID}"));
-        let value = |key: &str, name: &str| {
-            let (k, n) = (w(key), w(name));
-            // SAFETY: NUL-terminated key and value names (empty: the default value).
-            unsafe { RegDeleteKeyValueW(HKEY_CURRENT_USER, k.as_ptr(), n.as_ptr()) };
-        };
         // Registry names ignore case (the installer writes `….torrent`).
         if get("Software\\Classes\\.torrent", None)
             .is_some_and(|v| v.eq_ignore_ascii_case(TORRENT_PROGID))
@@ -4478,13 +4492,7 @@ pub fn set_torrent_handlers(on: bool) {
         // Off Default apps' list too (upstream issue 1091): what this user's registration wrote.
         // A choice made there for Grabbit then finds no program, and Windows asks again, as for
         // an app removed.
-        tree(&format!("Software\\Classes\\{MAGNET_PROGID}"));
-        tree(CAPABILITIES);
-        if get("Software\\RegisteredApplications", Some(REGISTERED_NAME))
-            .is_some_and(|v| v.eq_ignore_ascii_case(CAPABILITIES))
-        {
-            value("Software\\RegisteredApplications", REGISTERED_NAME);
-        }
+        drop_user_listing();
     }
     // Tell Explorer the associations changed.
     // SAFETY: no pointers are passed.
@@ -4527,7 +4535,8 @@ pub fn default_apps_page() -> String {
     default_apps_uri(registered_for_everyone(&exe.display().to_string()))
 }
 
-fn default_apps_uri(everyone: bool) -> String {
+/// Default apps' page for this user's (`everyone` false) or an all-users registration.
+pub fn default_apps_uri(everyone: bool) -> String {
     let who = if everyone {
         "registeredAppMachine"
     } else {
@@ -5873,7 +5882,8 @@ pub fn host_registration() -> crate::extension::Registration {
     let mut dead = None;
     for (user, machine) in host_holders() {
         match user.or(machine) {
-            Some(Holder::Alive(_)) => ready = true,
+            // Working, or there but unreadable now (not known to be gone): registered.
+            Some(h) if !h.dead() => ready = true,
             Some(gone) => dead = dead.or(Some(gone)),
             None => {}
         }

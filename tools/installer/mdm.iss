@@ -213,10 +213,14 @@ begin
     if RegQueryStringValue(HKA, 'Software\Classes\.torrent', '', Value) and (CompareText(Value, 'Grabbit.torrent') = 0) then
       RegDeleteValue(HKA, 'Software\Classes\.torrent', '');
     { Default apps (upstream issue 1091): what the app registered for this user (Torrent
-      settings' switch), also when this install was everyone's. }
-    if RegQueryStringValue(HKCU, 'Software\RegisteredApplications', '{#AppName}', Value) and (CompareText(Value, 'Software\Grabbit\Capabilities') = 0) then
-      RegDeleteValue(HKCU, 'Software\RegisteredApplications', '{#AppName}');
-    RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Grabbit\Capabilities');
+      settings' switch), also when this install was everyone's; only when it is this install's
+      (its icon is this exe), so a portable copy's own listing stays. }
+    if RegQueryStringValue(HKCU, 'Software\Grabbit\Capabilities', 'ApplicationIcon', Value) and (Pos(Lowercase(ExpandConstant('{app}\{#AppExe}')), Lowercase(Value)) > 0) then
+    begin
+      if RegQueryStringValue(HKCU, 'Software\RegisteredApplications', '{#AppName}', Value) and (CompareText(Value, 'Software\Grabbit\Capabilities') = 0) then
+        RegDeleteValue(HKCU, 'Software\RegisteredApplications', '{#AppName}');
+      RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Grabbit\Capabilities');
+    end;
     if RegQueryStringValue(HKCU, 'Software\Classes\Grabbit.Magnet\shell\open\command', '', Value) and (Pos(Lowercase(ExpandConstant('{app}\{#AppExe}')), Lowercase(Value)) > 0) then
       RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\Grabbit.Magnet');
     RemoveData := False;

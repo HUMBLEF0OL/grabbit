@@ -155,26 +155,31 @@ pub fn registered_manifest(value: &str) -> PathBuf {
 pub enum Holder {
     /// A manifest naming a helper program that is there (this one).
     Alive(PathBuf),
-    /// The manifest isn't there (or can't be read): the copy that wrote it is gone, such as one
-    /// run from inside a zip, whose temporary folder the archive tool deleted afterwards.
+    /// The manifest isn't there: the copy that wrote it is gone, such as one run from inside a
+    /// zip, whose temporary folder the archive tool deleted afterwards.
     ManifestGone(PathBuf),
     /// The manifest names a helper program that isn't there (this path).
     ProgramGone(PathBuf),
+    /// The manifest is there but can't be read now (held by an antivirus, edited by hand): not
+    /// taken for gone, so no copy takes another's registration over it.
+    Unreadable(PathBuf),
 }
 
 impl Holder {
     /// What the manifest at `manifest` leads to.
     pub fn of(manifest: &Path) -> Holder {
         match manifest_program(manifest) {
+            None if manifest.exists() => Holder::Unreadable(manifest.to_owned()),
             None => Holder::ManifestGone(manifest.to_owned()),
             Some(program) if !program.is_file() => Holder::ProgramGone(program),
             Some(program) => Holder::Alive(program),
         }
     }
 
-    /// The helper it leads to is gone: no browser can start it.
+    /// The helper it leads to is gone: no browser can start it. An unreadable manifest isn't
+    /// known to be gone, and is left alone.
     pub fn dead(&self) -> bool {
-        !matches!(self, Holder::Alive(_))
+        matches!(self, Holder::ManifestGone(_) | Holder::ProgramGone(_))
     }
 }
 
@@ -198,7 +203,8 @@ pub enum Repair {
 /// that leads nowhere hides a computer's that works (Chromium's `launch_context_win.cc`).
 pub fn windows_repair(user: Option<&Holder>, machine: Option<&Holder>) -> Repair {
     match (user, machine) {
-        (Some(Holder::Alive(_)), _) => Repair::Keep,
+        // Working, or not known to be gone (unreadable now): left as it is.
+        (Some(u), _) if !u.dead() => Repair::Keep,
         (Some(_), Some(Holder::Alive(_))) => Repair::Clear,
         (Some(_), _) => Repair::Take,
         (None, Some(m)) if m.dead() => Repair::Take,
@@ -225,8 +231,23 @@ fn temporary_folders() -> Vec<PathBuf> {
     if let Some(root) = std::env::var_os("SystemRoot") {
         dirs.push(PathBuf::from(root).join("Temp"));
     }
-    dirs.retain(|d| d.is_absolute());
+    let profile = std::env::var_os("USERPROFILE").map(PathBuf::from);
+    dirs.retain(|d| usable_temp(d, profile.as_deref()));
     dirs
+}
+
+/// A temporary folder worth comparing with: a whole drive (`C:\`) or the user's profile, which
+/// some set TMP or TEMP to, would make every copy temporary, so neither counts.
+fn usable_temp(dir: &Path, profile: Option<&Path>) -> bool {
+    let same = |a: &Path, b: &Path| {
+        a.to_string_lossy()
+            .trim_end_matches(['\\', '/'])
+            .to_lowercase()
+            == b.to_string_lossy()
+                .trim_end_matches(['\\', '/'])
+                .to_lowercase()
+    };
+    dir.is_absolute() && dir.parent().is_some() && !profile.is_some_and(|p| same(dir, p))
 }
 
 /// [`in_temporary_folder`] with the temporary folders given.
@@ -370,6 +391,21 @@ mod tests {
         assert_eq!(manifest_program(&d.path().join("none.json")), None);
     }
 
+    /// A TMP or TEMP set to a whole drive or to the user's profile isn't a temporary folder
+    /// (every copy would be in it).
+    #[test]
+    fn a_drive_or_the_profile_isnt_a_temporary_folder() {
+        let profile = Path::new(r"C:\Users\someone");
+        assert!(!usable_temp(Path::new(r"C:\"), Some(profile)));
+        assert!(!usable_temp(Path::new(r"C:\Users\Someone\"), Some(profile)));
+        assert!(!usable_temp(Path::new("relative"), Some(profile)));
+        assert!(usable_temp(
+            Path::new(r"C:\Users\someone\AppData\Local\Temp"),
+            Some(profile)
+        ));
+        assert!(usable_temp(Path::new(r"D:\Temp"), None));
+    }
+
     /// Upstream issue 818: a copy run from inside an archive, or from anywhere under the
     /// temporary folder, is in a folder that is deleted later; a copy in a folder of its own
     /// isn't.
@@ -445,6 +481,12 @@ mod tests {
         let m = manifest_naming(d.path(), &missing);
         assert_eq!(Holder::of(&m), Holder::ProgramGone(missing));
         assert!(Holder::of(&m).dead());
+        // A manifest that is there but can't be read now isn't taken for gone.
+        let bad = d.path().join("bad").join(format!("{HOST_NAME}.json"));
+        std::fs::create_dir_all(bad.parent().unwrap()).unwrap();
+        std::fs::write(&bad, b"{ not json").unwrap();
+        assert_eq!(Holder::of(&bad), Holder::Unreadable(bad.clone()));
+        assert!(!Holder::of(&bad).dead());
     }
 
     /// Upstream issue 818: at a start, only an entry that leads nowhere is repaired; one that
@@ -455,6 +497,7 @@ mod tests {
         let alive = Holder::Alive(PathBuf::from(r"C:\Other\grabbit-nmhost.exe"));
         let gone = Holder::ManifestGone(PathBuf::from(r"C:\Temp\Rar$EXa1\x.json"));
         let helper = Holder::ProgramGone(PathBuf::from(r"C:\Old\grabbit-nmhost.exe"));
+        let unreadable = Holder::Unreadable(PathBuf::from(r"C:\Grabbit\x.json"));
         use Repair::*;
         for (user, machine, repair) in [
             (None, None, Keep),
@@ -468,6 +511,10 @@ mod tests {
             (None, Some(&gone), Take),
             (Some(&gone), Some(&alive), Clear),
             (Some(&helper), Some(&alive), Clear),
+            // Unreadable now: left alone, never taken over or cleared.
+            (Some(&unreadable), None, Keep),
+            (Some(&unreadable), Some(&alive), Keep),
+            (None, Some(&unreadable), Keep),
         ] {
             assert_eq!(
                 windows_repair(user, machine),

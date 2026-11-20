@@ -2729,6 +2729,10 @@ impl App {
             // starts again (renderer.rs).
             "renderer-lost" if crate::offscreen() => crate::renderer::test_device_lost(),
             "helpers" => self.helpers = Some(crate::helpers::Helpers::new()),
+            // Torrent settings' notice that Windows' Default apps keeps another program (upstream
+            // issue 1091), as turning the switch on shows it: off-screen runs only (the
+            // screenshots'), with the names in MDM_TEST_TORRENT_DEFAULTS; nothing is changed.
+            "torrent-defaults" if crate::offscreen() => self.tell_torrent_defaults(),
             "torrent-settings" => self.run(Cmd::TorrentSettings, None, ctx),
             // The first download's: Add trackers (a torrent), its right-click menu.
             "add-trackers" if first.is_some() => self.run(Cmd::TorrentAddTrackers, first, ctx),
@@ -4742,7 +4746,13 @@ impl App {
                 &[("apps", &crate::i18n::isolate(&others.join(", ")))],
             ),
         ));
-        crate::launch::open_page(&crate::win32::default_apps_page());
+        // Off the screens (a test's), this computer's registrations aren't read at all.
+        let page = if crate::offscreen() {
+            crate::win32::default_apps_uri(false)
+        } else {
+            crate::win32::default_apps_page()
+        };
+        crate::launch::open_page(&page);
     }
 
     /// The hashes librqbit should keep or restore in its session.
