@@ -30,8 +30,8 @@
   const IDLE_MS = 2600;
   const INSET = 10;
   const DRAG_PX = 4;
-  // Our app icon (extension/icons/icon-48.png, as data: no extension file is exposed to pages).
-  const LOGO = "data:image/png;base64,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";
+  // The chip's size at rest (it opens wider on hover, keyboard focus, menu and a result).
+  const CHIP = 30;
 
   const t = (key, ...subs) => ext.i18n.getMessage(key, subs) || FALLBACK[key] || key;
   const FALLBACK = {
@@ -530,59 +530,93 @@
 
   // ---- the button: a closed shadow tree the page's styles and scripts can't reach ----------
   const root = document.createElement("mdm-video-button");
-  // Each with !important: a page's own rules can't hide or move it.
+  // Each with !important: a page's own rules can't hide or move it. The chip at rest: its box,
+  // whatever width the pill opens to inside it.
   for (const [k, v] of Object.entries({
     all: "initial", position: "fixed", "z-index": "2147483647", left: "0", top: "0", display: "none",
+    width: `${CHIP}px`, height: `${CHIP}px`,
     contain: "layout style", opacity: "1", visibility: "visible", "pointer-events": "auto",
   })) root.style.setProperty(k, v, "important");
   const shadow = root.attachShadow({ mode: "closed" });
   const CSS = `
 :host { all: initial; }
 * { box-sizing: border-box; }
-/* A light, glossy panel that stands out over a dark video, with our icon: the classic download
-   button's feel, made modern (rounded, crisp type, soft shadow and motion). */
+/* A small dark glass chip with a green arrow, in Grabbit's Graphite colours: little of the video
+   at rest, open to "Download ⌄" under the pointer, with the keyboard on it, its menu open or a
+   result to show. Its arrow stays where it is: on the video's right half (.end) it opens to the
+   left, mirrored, so the pointer that reached the arrow is still on it. */
 .pill {
-  display: flex; align-items: stretch; height: 34px; border-radius: 9px;
-  background: linear-gradient(#ffffff, #f1f4f8 48%, #e3e8ef 52%, #eef2f6);
-  color: #17324d; border: 1px solid rgba(23, 50, 77, .28);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .32), 0 1px 0 rgba(255, 255, 255, .9) inset;
-  font: 600 13px/1 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  /* max-content: its own width, not the 30px host's (a result would wrap at every word). */
+  position: absolute; top: 0; left: 0; width: max-content;
+  display: flex; align-items: stretch; height: 30px; border-radius: 15px; overflow: hidden;
+  background: rgba(24, 24, 27, .84); color: #f4f4f5; border: 1px solid rgba(255, 255, 255, .16);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .35);
+  font: 600 12.5px/1 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
   opacity: 0; transform: translateY(-3px) scale(.98);
-  transition: opacity .16s ease-out, transform .16s ease-out, filter .12s;
+  transition: opacity .16s ease-out, transform .16s ease-out;
   user-select: none; -webkit-user-select: none; touch-action: none; white-space: nowrap;
 }
+.pill.end { left: auto; right: 0; flex-direction: row-reverse; }
+/* On the video's bottom edge a result on two lines grows upward, into the video. */
+.pill.low { top: auto; bottom: 0; }
 .pill.shown { opacity: 1; transform: none; }
-.pill.dragging { cursor: grabbing; box-shadow: 0 10px 28px rgba(0, 0, 0, .45); transition: none; }
+.pill.dragging { cursor: grabbing; box-shadow: 0 8px 22px rgba(0, 0, 0, .5); transition: none; }
 .pill.dragging .go { cursor: grabbing; }
-.pill.ok { background: linear-gradient(#f2fff6, #d4f3df); border-color: #2f9a5b; color: #135c33; }
-.pill.err { background: linear-gradient(#fff4f4, #f6d6d6); border-color: #c24848; color: #7d1f1f; }
+.pill.err { border-color: rgba(255, 139, 128, .55); }
 button {
   /* all: unset resets box-sizing too, past the rule above: without it a menu item's 100 % width
      plus its padding ran past the menu's edge (#81). */
-  all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px;
+  all: unset; box-sizing: border-box; display: flex; align-items: center;
   color: inherit; cursor: pointer; font: inherit;
 }
-.go { padding: 0 12px 0 8px; border-radius: 8px 0 0 8px; cursor: grab; }
-.more { padding: 0 9px; border-left: 1px solid rgba(23, 50, 77, .18); border-radius: 0 8px 8px 0; }
-.go:hover, .more:hover { background: linear-gradient(rgba(214, 232, 255, .9), rgba(182, 212, 250, .9)); }
-.go:active, .more:active { background: rgba(160, 196, 242, .9); }
-button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
-.go img { width: 22px; height: 22px; flex: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .25)); }
-.more svg { width: 12px; height: 12px; color: #3b5876; }
-.compact .label { display: none; }
-.compact .go { padding: 0 6px; border-radius: 8px 0 0 8px; }
+.go { gap: 0; padding: 0 6px; color: #3ecf8e; cursor: grab; }
+.end .go { flex-direction: row-reverse; }
+.err .go { color: #ff8b80; }
+.go svg { width: 16px; height: 16px; flex: none; }
+.ic-ok, .ic-err, .ok .ic-dl, .err .ic-dl { display: none; }
+.ok .ic-ok, .err .ic-err { display: block; }
+.label, .more { max-width: 0; opacity: 0; overflow: hidden; transition: max-width .18s ease-out, opacity .14s; }
+.label { color: #f4f4f5; text-overflow: ellipsis; }
+.more { padding: 0; color: #b4b4bc; }
+.more svg { width: 11px; height: 11px; flex: none; }
+/* Open: the keyboard's focus only (:focus-visible), not a mouse click's, which would keep it
+   open after the pointer left. A result (.ok, .err) has its own rules below. */
+.pill:is(:hover, :has(:focus-visible), .open):not(.dragging, .ok, .err) .go { gap: 6px; padding: 0 4px 0 7px; }
+.end:is(:hover, :has(:focus-visible), .open):not(.dragging, .ok, .err) .go { padding: 0 7px 0 4px; }
+.pill:is(:hover, :has(:focus-visible), .open):not(.dragging, .ok, .err) .label {
+  max-width: min(120px, var(--label, 120px)); opacity: 1;
+}
+.pill:is(:hover, :has(:focus-visible), .open):not(.dragging, .ok, .err) .more, .pill .more:focus-visible {
+  max-width: 32px; opacity: 1; padding: 0 8px 0 6px; border-left: 1px solid rgba(255, 255, 255, .14);
+}
+.end:is(:hover, :has(:focus-visible), .open):not(.dragging, .ok, .err) .more, .end .more:focus-visible {
+  padding: 0 6px 0 8px; border-left: 0; border-right: 1px solid rgba(255, 255, 255, .14);
+}
+/* A result: whole, on as many lines as the room left on the video (--label) takes. */
+.pill:is(.ok, .err) { height: auto; min-height: 30px; }
+.pill:is(.ok, .err) .go { gap: 6px; padding: 6px 11px 6px 7px; }
+.end:is(.ok, .err) .go { padding: 6px 7px 6px 11px; }
+.pill:is(.ok, .err) .label {
+  max-width: var(--label, 300px); opacity: 1; white-space: normal; line-height: 1.3; text-overflow: clip;
+}
+.status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.go:hover, .more:hover { background: rgba(255, 255, 255, .09); }
+.go:active, .more:active { background: rgba(255, 255, 255, .16); }
+button:focus-visible { outline: 2px solid #3ecf8e; outline-offset: -2px; }
 .menu {
-  position: absolute; min-width: 210px; padding: 4px; border-radius: 9px;
-  background: #fbfcfe; color: #17324d; border: 1px solid rgba(23, 50, 77, .22);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .35);
-  font: 400 13px/1.2 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  position: absolute; min-width: 200px; padding: 4px; border-radius: 10px;
+  background: rgba(24, 24, 27, .95); color: #f4f4f5; border: 1px solid rgba(255, 255, 255, .14);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .45);
+  font: 400 12.5px/1.2 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
   display: none;
 }
 .menu.open { display: block; }
-.menu button { display: block; width: 100%; padding: 8px 12px; border-radius: 6px; cursor: default; }
-.menu button:hover, .menu button:focus-visible { background: #dceafb; outline: none; }
-.menu hr { border: 0; border-top: 1px solid rgba(23, 50, 77, .12); margin: 4px 2px; }
-@media (prefers-reduced-motion: reduce) { .pill { transition: none; transform: none; } }
+.menu button { display: block; width: 100%; padding: 7px 10px; border-radius: 6px; cursor: default; }
+.menu button:hover, .menu button:focus-visible { background: rgba(62, 207, 142, .16); outline: none; }
+.menu hr { border: 0; border-top: 1px solid rgba(255, 255, 255, .12); margin: 4px 2px; }
+@media (prefers-reduced-motion: reduce) { .pill, .label, .more { transition: none; } .pill { transform: none; } }
 `;
   // A constructed sheet: a page whose Content-Security-Policy refuses inline styles can't strip
   // it (Firefox applies the page's policy to what a content script adds).
@@ -598,28 +632,32 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   shadow.innerHTML += `
 <div class="pill" part="pill">
   <button class="go" type="button">
-    <img alt="" draggable="false">
+    <svg class="ic-dl" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13.5h10"/></svg>
+    <svg class="ic-ok" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg>
+    <svg class="ic-err" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.8v3.6M8 11.1v.1"/></svg>
     <span class="label"></span>
   </button>
   <button class="more" type="button" aria-haspopup="menu" aria-expanded="false">
-    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"
+    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7"
       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5 6 7.5l3-3"/></svg>
   </button>
 </div>
+<span class="status" role="status"></span>
 <div class="menu" role="menu">
-  <button role="menuitem" data-act="download"></button>
-  <hr>
   <button role="menuitem" data-act="hide"></button>
   <button role="menuitem" data-act="never"></button>
   <hr>
   <button role="menuitem" data-act="settings"></button>
 </div>`;
-  shadow.querySelector(".go img").src = LOGO;
   const pill = shadow.querySelector(".pill");
   const go = shadow.querySelector(".go");
   const label = shadow.querySelector(".label");
   const more = shadow.querySelector(".more");
   const menu = shadow.querySelector(".menu");
+  const status = shadow.querySelector(".status");
   const item = (act) => menu.querySelector(`[data-act="${act}"]`);
   pill.dir = "ltr";
   menu.dir = "ltr";
@@ -629,7 +667,6 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   go.setAttribute("aria-label", idleLabel);
   more.title = t("video_more");
   more.setAttribute("aria-label", t("video_more"));
-  item("download").textContent = idleLabel;
   item("hide").textContent = t("video_hide_here");
   item("never").textContent = ext.i18n.getMessage("video_never_site", [host]) || `Never on ${host}`;
   item("settings").textContent = t("video_settings");
@@ -691,8 +728,9 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   // them 0 or 1 (on an edge).
   function rects() {
     const r = held ? held.r : (lastRect = video.getBoundingClientRect());
-    const w = pill.offsetWidth || 150;
-    const h = pill.offsetHeight || 32;
+    // Placed by its size at rest: opening never moves it.
+    const w = CHIP;
+    const h = CHIP;
     return { r, w, h, roomX: Math.max(0, r.width - w - 2 * INSET), roomY: Math.max(0, r.height - h - 2 * INSET) };
   }
 
@@ -759,14 +797,21 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
       if (menuOpen) placeMenu(pinned.top, pinned.left, w);
       return;
     }
-    // A narrow video gets the icon only.
-    pill.classList.toggle("compact", r.width < 360);
     // Held for a video gone (#503): where it was, not a corner found anew over what the page
     // shows there now.
-    const at = dragging ? dragging.at : held && !chosen ? held.at : spot(r, w, pill.offsetHeight || 32, roomX, roomY);
+    const at = dragging ? dragging.at : held && !chosen ? held.at : spot(r, w, CHIP, roomX, roomY);
     const left = r.left + INSET + at.x * roomX;
+    // On the video's right half it opens to the left, into the video.
+    const end = left + w / 2 > r.left + r.width / 2;
+    pill.classList.toggle("end", end);
+    pill.classList.toggle("low", at.y > 0.5);
+    // Its text's room: to the video's far edge, in the window (the arrow and padding take 40px).
+    const room = end
+      ? left + w - Math.max(r.left + INSET, 4)
+      : Math.min(r.right - INSET, innerWidth - 4) - left;
+    pill.style.setProperty("--label", `${Math.max(80, Math.round(room - 40))}px`);
     // In the part of the video on screen: one scrolled half out keeps its button in view.
-    const h = pill.offsetHeight || 32;
+    const h = CHIP;
     const visTop = Math.max(r.top, 0) + INSET;
     const visBottom = Math.min(r.bottom, innerHeight) - INSET - h;
     const top = Math.min(Math.max(r.top + INSET + at.y * roomY, visTop), Math.max(visTop, visBottom));
@@ -977,12 +1022,16 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
     pill.classList.remove("ok", "err");
     pill.classList.add(kind);
     label.textContent = text;
+    go.setAttribute("aria-label", text);
+    status.textContent = text;
     lastMove = Date.now();
     position();
     setTimeout(() => {
       flashing = false;
       pill.classList.remove(kind);
       label.textContent = idleLabel;
+      go.setAttribute("aria-label", idleLabel);
+      status.textContent = "";
       if (video) position();
     }, 2200);
   }
@@ -990,6 +1039,7 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   function openMenu() {
     menuOpen = true;
     menu.classList.add("open");
+    pill.classList.add("open");
     more.setAttribute("aria-expanded", "true");
     position();
     menu.querySelector("button").focus();
@@ -999,6 +1049,7 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
     if (!menuOpen) return;
     menuOpen = false;
     menu.classList.remove("open");
+    pill.classList.remove("open");
     more.setAttribute("aria-expanded", "false");
   }
 
@@ -1009,7 +1060,6 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   });
 
   async function run(act) {
-    if (act === "download") return download();
     closeMenu();
     if (act === "hide") {
       held = null;
@@ -1061,13 +1111,15 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   go.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || !video || !e.isTrusted) return;
     const { r, roomX, roomY } = rects();
+    // Where in the chip it was taken: within the chip at rest, which it shrinks to while dragged
+    // (taken by its open label, it would trail that far behind the pointer).
+    const inChip = (n) => Math.min(Math.max(n, 0), CHIP);
     dragging = {
       id: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
-      // Where in the button it was taken.
-      dx: e.clientX - (r.left + INSET + (chosen ? place : auto.at || place).x * roomX),
-      dy: e.clientY - (r.top + INSET + (chosen ? place : auto.at || place).y * roomY),
+      dx: inChip(e.clientX - (r.left + INSET + (chosen ? place : auto.at || place).x * roomX)),
+      dy: inChip(e.clientY - (r.top + INSET + (chosen ? place : auto.at || place).y * roomY)),
       at: chosen ? place : auto.at || place,
       moved: false,
     };

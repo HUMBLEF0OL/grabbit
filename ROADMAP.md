@@ -597,6 +597,14 @@ Released 2026-11-20: the maintainer's first findings with 1.0.0, and what came w
   sections of it, under **Tools**; the help pages' pictures show the new page. The look's
   settings stay in the View menu.
 
+## Next version
+
+Done since 1.0.1; ships in the next release.
+
+- ✅ A smaller button over videos: a 30-pixel round chip in Graphite's colours (dark glass, green
+  arrow) that opens to **Download video ⌄** under the pointer, toward the inside of the video,
+  and shows the result of a click on itself; its menu no longer repeats **Download video**.
+
 ## Being worked on
 
 These ship in a later version, when they're ready.
