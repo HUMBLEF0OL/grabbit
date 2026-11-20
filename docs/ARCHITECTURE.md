@@ -189,15 +189,17 @@ The help pages' pictures (`docs/images/help/`) come from one list, `tools/shots/
 `tools/shots/make.py` opens each window through Grabbit's own `/show <window>` command line in a test
 instance off the screen, crops and annotates it from the window's accessibility tree, and writes
 lossless WebP; `make.py check` (CI) keeps the list, the pages and the files in step. The
-published ones are taken on GitHub's Windows runner (`docs-shots.yml`).
+published ones are taken on the maintainer's computer with these tools (`docs-shots.yml` can
+also take them on GitHub's Windows runner).
 
 ## Contributors
 
 `tools/contributors.py` reads who opened pull requests and issues, and who commented, from
 GitHub's public API (the maintainer, Claude and bots left out) for every place that thanks them:
 the website's home page, `/contributors.html` and each release on the News page (`build.py`, on
-every build), each release's notes (`release.yml`, the people active since the release before)
-and the README (`python tools/contributors.py readme` at each release's preparation: its round
+every build), each release's notes when `release.yml` builds it (the people active since the
+release before; a release published with `tools/installer/publish.ps1` has its CHANGELOG
+section only) and the README (`python tools/contributors.py readme` at each release's preparation: its round
 photos are committed in `art/contributors/`, since GitHub can't round a picture in a README).
 
 ## Tests and benchmarks
