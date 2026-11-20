@@ -33,7 +33,9 @@ try {
   git fetch -q origin main
   if ((git rev-parse HEAD) -ne (git rev-parse origin/main)) { throw "HEAD isn't origin/main: check out main at the release commit" }
   if (git ls-remote --tags origin "refs/tags/$tag") { throw "$tag exists on origin already" }
-  $log = Get-Content CHANGELOG.md -Raw
+  # UTF-8 said outright: Windows PowerShell 5.1 reads a file without a BOM as ANSI, and 1.0.0's
+  # notes went out with "→" as "â†’".
+  $log = Get-Content CHANGELOG.md -Raw -Encoding UTF8
   $m = [regex]::Match($log, "(?ms)^## \[$([regex]::Escape($v))\][^\n]*\n(.*?)(?=^## |\z)")
   if (-not ($m.Success -and $m.Groups[1].Value.Trim())) { throw "CHANGELOG.md has no [$v] section" }
 
