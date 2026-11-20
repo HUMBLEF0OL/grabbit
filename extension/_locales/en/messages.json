@@ -194,8 +194,8 @@
     "description": "why a download stayed with the browser: the app's setting 'Use advanced browser integration' is off; keep the setting's name as the app shows it"
   },
   "declined_torrents": {
-    "message": "It's a torrent, and Open magnet links and .torrent files with Grabbit is off in Torrent settings.",
-    "description": "why a download stayed with the browser: it is a .torrent file and the app's Torrent settings don't open torrents with Grabbit, so the browser keeps it for the user's own torrent program; keep the setting's name as the app shows it"
+    "message": "It's a torrent, and Open magnet links and .torrent files with Grabbit is off in Grabbit's Options → Torrents.",
+    "description": "why a download stayed with the browser: it is a .torrent file and the app's Options → Torrents section doesn't open torrents with Grabbit, so the browser keeps it for the user's own torrent program; keep the setting's and the section's names as the app shows them"
   },
   "declined_site_access": {
     "message": "The extension isn't allowed to read this site (the browser's site access).",

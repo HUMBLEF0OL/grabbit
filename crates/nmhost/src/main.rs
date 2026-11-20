@@ -1418,7 +1418,7 @@ mod tests {
         );
         // The log says why.
         assert!(
-            notice_reason("torrents").contains("Torrent settings"),
+            notice_reason("torrents").contains("Options > Torrents"),
             "{}",
             notice_reason("torrents")
         );

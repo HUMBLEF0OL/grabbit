@@ -4741,7 +4741,8 @@ impl App {
             others.join(", ")
         );
         self.notice = Some((
-            crate::i18n::mark("Torrent settings"),
+            // i18n: the notice's title: Options → Torrents, where its switch is
+            crate::i18n::mark("Torrents"),
             crate::i18n::fmt(
                 // i18n: after ticking "Open magnet links and .torrent files with Grabbit", when Windows' Default apps keeps another app; {apps}: their names. "MAGNET" as Windows' Default apps lists it
                 crate::i18n::t(
