@@ -18,10 +18,10 @@ fn main() {
         res.set_icon("assets/icons/app/mdm.ico")
             .set("ProductName", "Grabbit")
             .set("FileDescription", "Grabbit")
-            .set("CompanyName", "HUMBLEFOOL")
+            .set("CompanyName", "HUMBLEF0OL")
             .set(
                 "LegalCopyright",
-                "Copyright (C) 2026 Ahmed Nefzaoui. GPL-3.0-or-later.",
+                "Copyright (C) 2026 HUMBLEF0OL and contributors; portions (C) 2026 Ahmed Nefzaoui. GPL-3.0-or-later.",
             );
         if let Err(e) = res.compile() {
             // A missing resource compiler must not break the build; the window still sets

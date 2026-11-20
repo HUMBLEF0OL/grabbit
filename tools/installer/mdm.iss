@@ -23,11 +23,11 @@ AppId={{667DB4D8-32C2-4487-A0E5-5825BF29778C}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
-AppPublisher=HUMBLEFOOL
+AppPublisher=HUMBLEF0OL
 AppPublisherURL=https://github.com/HUMBLEF0OL/grabbit
 AppSupportURL=https://github.com/HUMBLEF0OL/grabbit/issues
 AppUpdatesURL=https://github.com/HUMBLEF0OL/grabbit/releases
-AppCopyright=Copyright (C) 2026 Ahmed Nefzaoui
+AppCopyright=Copyright (C) 2026 HUMBLEF0OL and contributors; portions (C) 2026 Ahmed Nefzaoui
 DefaultDirName={autopf}\{#AppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
@@ -53,7 +53,7 @@ ChangesAssociations=yes
 ; fallback for anything else holding the files (a browser running the host).
 CloseApplications=yes
 VersionInfoVersion={#AppVersion}
-VersionInfoCompany=HUMBLEFOOL
+VersionInfoCompany=HUMBLEF0OL
 VersionInfoDescription={#AppName} setup
 VersionInfoProductName={#AppName}
 #ifdef Sign
