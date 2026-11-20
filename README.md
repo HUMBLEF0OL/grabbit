@@ -222,8 +222,9 @@ This makes `grabbit.exe` (the app), `grabbit-cli.exe` (headless
 command line), `grabbit-mcp.exe` (the MCP server for AI assistants) and
 `grabbit-nmhost.exe` (the browser host) in `target\release\`.
 `tools\installer\build.ps1` builds the installer and both zips into `target\dist\` (needs
-[Inno Setup 6](https://jrsoftware.org/isinfo.php)); a `vX.Y.Z` tag does the same on GitHub
-Actions and publishes the release.
+[Inno Setup 6](https://jrsoftware.org/isinfo.php)); a release is built, signed and published
+from the maintainer's computer with `tools\installer\publish.ps1` (see
+[CONTRIBUTING.md](CONTRIBUTING.md#branches)).
 
 Browser integration from a build: register the native messaging host with
 `target\release\grabbit-nmhost.exe --register` (undo with `--unregister`), then in

@@ -19,7 +19,7 @@ The layout is familiar on purpose: the toolbar, the categories, the download lis
 
 ### Is it safe? Does it contain adware or spyware? {#is-it-safe}
 
-Grabbit contains no adware, spyware, bundled offers or tracking. Its whole source code is public, so anyone can check what it does, and every release is built from that code by GitHub's servers, where the build can be inspected. The helper programs it can fetch for videos are verified before they run: yt-dlp against its developers' signing key, ffmpeg against its published checksums. Download Grabbit only from [this site](/download.html) or the project's GitHub releases.
+Grabbit contains no adware, spyware, bundled offers or tracking. Its whole source code is public, so anyone can check what it does, and every release is built from that code (each release's commit and tag are on GitHub) and its checksums are signed with Grabbit's release key: see [Download](/download.html#check-your-download). The helper programs it can fetch for videos are verified before they run: yt-dlp against its developers' signing key, ffmpeg against its published checksums. Download Grabbit only from [this site](/download.html) or the project's GitHub releases.
 
 ### Does Grabbit collect my data? {#privacy}
 

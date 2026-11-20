@@ -1,6 +1,6 @@
 # Roadmap
 
-What's done for version 1.0.0, Grabbit's first release, what's being built, and what's planned.
+What's done for version 1.0.1, what's being built, and what's planned.
 Each item links to its issue, where the details and the discussion are. Released changes are in
 [CHANGELOG.md](CHANGELOG.md). Ideas and bug reports are welcome in
 [Issues](https://github.com/HUMBLEF0OL/grabbit/issues).
@@ -556,7 +556,7 @@ everything below ships in it.
 
 ## Version 1.0.1
 
-The maintainer's first findings with 1.0.0 (in `dev`, for the next release):
+Released 2026-11-20: the maintainer's first findings with 1.0.0, and what came with them.
 
 - ✅ The browser extension connects in Brave, Chrome, Edge and Firefox: Grabbit has no store
   listing yet, so the **Add Grabbit to your browser** window opens the tutorial that loads the
@@ -691,10 +691,6 @@ These ship in a later version, when they're ready.
   name are taken again and say Grabbit
 - ✅ Grabbit signs its own releases: Update now trusts Grabbit's release key, and each release's
   checksum list is signed with it
-- 🔄 Code-signed programs and installer, so Windows SmartScreen stops warning: free open-source
-  signing through the SignPath Foundation. Done: applied, and the code signing policy is on the
-  website's Security page. Still to do once approved: the release built and signed by GitHub
-  Actions
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a
   centred stage, then a walk through adding, downloading, torrents and video as you scroll), the
   benchmark's seven medians drawn from its results file, the Grabbit mark and Geist, light and
@@ -705,6 +701,13 @@ These ship in a later version, when they're ready.
   after an update. The pages' own text says Grabbit too since the rename above (10d)
 - ✅ The website's tab icon is Grabbit's mark: its `favicon.ico` was still the old name's, and
   the icon script now writes it with the other icons
+
+### Looking into
+
+- 🔍 Code-signed programs and installer, so Windows SmartScreen stops warning. The SignPath
+  Foundation's free signing didn't accept the project; another certificate for open-source
+  projects is being looked into. Until then each release's checksums are signed with Grabbit's
+  own release key, which Update now verifies.
 
 ### Bugs being looked into
 
