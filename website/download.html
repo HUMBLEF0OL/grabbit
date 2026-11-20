@@ -84,7 +84,7 @@
       </ul>
 
       <h2 id="check-your-download">Check your download</h2>
-      <p>Every release lists the SHA-256 checksum of each file in <a href="{{FILE_SUMS}}">SHA256SUMS.txt</a>. Compare it with <code>certutil -hashfile file SHA256</code>. All files are built from the public source by GitHub Actions; the build logs are on <a href="{{REPO}}/actions">GitHub</a>.</p>
+      <p>Every release lists the SHA-256 checksum of each file in <a href="{{FILE_SUMS}}">SHA256SUMS.txt</a>. Compare it with <code>certutil -hashfile file SHA256</code>. The list is signed with Grabbit's release key (<a href="{{REPO}}/blob/main/crates/tools/keys/grabbit-release.asc">its public key</a>, fingerprint <code>7C8D 515A 5E85 9D47 3CBC 54C0 D9E8 9ED6 1BBE C99D</code>): with the release's <code>SHA256SUMS.txt.sig</code> beside it, <code>gpg --verify SHA256SUMS.txt.sig SHA256SUMS.txt</code> checks it. Every file is built from the release's tagged source on GitHub.</p>
 
       <h2>Older versions and source code</h2>
       <p>Every release, with its notes and files, is on <a href="{{REPO}}/releases">GitHub Releases</a>. The source code is at <a href="{{REPO}}">github.com/HUMBLEF0OL/grabbit</a> under the GNU GPL, version 3.</p>

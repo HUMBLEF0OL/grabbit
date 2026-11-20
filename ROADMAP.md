@@ -691,10 +691,6 @@ These ship in a later version, when they're ready.
   name are taken again and say Grabbit
 - ✅ Grabbit signs its own releases: Update now trusts Grabbit's release key, and each release's
   checksum list is signed with it
-- 🔍 Code-signed programs and installer, so Windows SmartScreen stops warning. The SignPath
-  Foundation's free signing didn't accept the project; another certificate for open-source
-  projects is being looked into. Until then each release's checksums are signed with Grabbit's
-  own release key, which Check for updates verifies.
 - ✅ The website in Graphite, as Grabbit: the home page rebuilt around the real app at work (a
   centred stage, then a walk through adding, downloading, torrents and video as you scroll), the
   benchmark's seven medians drawn from its results file, the Grabbit mark and Geist, light and
@@ -705,6 +701,13 @@ These ship in a later version, when they're ready.
   after an update. The pages' own text says Grabbit too since the rename above (10d)
 - ✅ The website's tab icon is Grabbit's mark: its `favicon.ico` was still the old name's, and
   the icon script now writes it with the other icons
+
+### Looking into
+
+- 🔍 Code-signed programs and installer, so Windows SmartScreen stops warning. The SignPath
+  Foundation's free signing didn't accept the project; another certificate for open-source
+  projects is being looked into. Until then each release's checksums are signed with Grabbit's
+  own release key, which Update now verifies.
 
 ### Bugs being looked into
 

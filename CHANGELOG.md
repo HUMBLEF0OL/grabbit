@@ -1,7 +1,7 @@
 # Changelog
 
 Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
-`.github/workflows/release.yml`).
+`tools/installer/publish.ps1`).
 
 ## [Unreleased]
 
