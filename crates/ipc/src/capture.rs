@@ -8,7 +8,9 @@
 use serde::Deserialize;
 
 /// Options → File types defaults: IDM 6.42's; TORRENT (a .torrent the browser hands over opens
-/// Add torrent, #39); and today's installers, packages and archives (macOS DMG and PKG, Linux
+/// Add torrent, #39; only while Torrent settings open torrents with Grabbit, else the browser
+/// keeps it for the user's own torrent client, upstream issue 1058: `CaptureRules::takes_torrents`);
+/// and today's installers, packages and archives (macOS DMG and PKG, Linux
 /// DEB, RPM and AppImage, Windows MSIX, APPX and CAB, Java's JAR, XZ, Zstandard and their tarballs)
 /// and open audio and video formats (WEBM, FLAC, OPUS; #208); and what people fetch by the
 /// gigabyte today (#382): AI models and datasets, 3D and CAD, camera RAW and design files, books
@@ -62,6 +64,12 @@ pub struct CaptureRules {
     /// Options → File types: files smaller than this (KB) stay with the browser (a receipt, an
     /// icon); 0 takes any size. Only when the browser knows the size.
     pub capture_min_kb: u64,
+    /// Torrent settings → "Open magnet links and .torrent files with Grabbit" as the app settled
+    /// it (`Settings::torrent_associations`, saved under this name). Off, a .torrent the browser
+    /// downloads stays with the browser too, which opens it in the user's own torrent client
+    /// (upstream issue 1058), though TORRENT is in File types. None (not decided yet: an app that
+    /// hasn't started since its update): taken, as before (`takes_torrents`).
+    pub torrent_handler: Option<bool>,
 }
 
 impl Default for CaptureRules {
@@ -76,6 +84,7 @@ impl Default for CaptureRules {
             video_panel_sites: String::new(),
             capture_opened: true,
             capture_min_kb: 0,
+            torrent_handler: None,
         }
     }
 }
@@ -89,16 +98,18 @@ pub enum Declined {
     Site,
     Address,
     Small,
+    Torrents,
 }
 
 impl Declined {
-    pub const ALL: [Declined; 6] = [
+    pub const ALL: [Declined; 7] = [
         Declined::IntegrationOff,
         Declined::Browser,
         Declined::FileType,
         Declined::Site,
         Declined::Address,
         Declined::Small,
+        Declined::Torrents,
     ];
 
     /// Its name between the native host and the extension: the host's reply (`declined`), and
@@ -112,6 +123,7 @@ impl Declined {
             Declined::Site => "site",
             Declined::Address => "address",
             Declined::Small => "small",
+            Declined::Torrents => "torrents",
         }
     }
 
@@ -137,6 +149,9 @@ impl Declined {
             }
             Declined::Small => {
                 "it is smaller than Options > File types > Don't take files smaller than"
+            }
+            Declined::Torrents => {
+                "it is a .torrent and Tasks > Torrent settings > Open magnet links and .torrent files with Grabbit is off"
             }
         }
     }
@@ -164,6 +179,11 @@ impl CaptureRules {
             self.auto_types = types.into();
         }
         self
+    }
+
+    /// Does the browser hand a .torrent over (Torrent settings' switch on, or not decided yet)?
+    pub fn takes_torrents(&self) -> bool {
+        self.torrent_handler != Some(false)
     }
 
     /// Is a file of `size` bytes (the browser's figure, when it has one) too small to take?
@@ -199,6 +219,9 @@ impl CaptureRules {
         }
         if !self.auto_type(file_name) {
             return Err(Declined::FileType);
+        }
+        if !self.takes_torrents() && is_torrent(url, file_name, None) {
+            return Err(Declined::Torrents);
         }
         let host = host_of(url);
         if self
@@ -287,6 +310,23 @@ pub fn merge_sites(sites: &str, text: &str) -> (String, usize) {
         }
     }
     (out.join(" "), added)
+}
+
+/// Is it a .torrent, as the app's Add torrent tells one: its name or its address's path ends in
+/// `.torrent`, or its type (the browser's, when it has one) is `application/x-bittorrent`. The
+/// extension tells one the same way (extension/background.js `isTorrent`).
+pub fn is_torrent(url: &str, name: &str, mime: Option<&str>) -> bool {
+    let ends = |s: &str| s.to_ascii_lowercase().ends_with(".torrent");
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    let path = rest.split(['?', '#']).next().unwrap_or("");
+    let path = path.split_once('/').map_or("", |(_, p)| p);
+    ends(name)
+        || ends(path)
+        || mime.is_some_and(|m| {
+            m.split(';')
+                .next()
+                .is_some_and(|m| m.trim().eq_ignore_ascii_case("application/x-bittorrent"))
+        })
 }
 
 /// Does `name`'s extension appear in `types` (Options → File types: `EXE ZIP R0*`)?
@@ -576,8 +616,8 @@ mod tests {
             r.accepts("https://example.com/page.html", "page.html", CHROME),
             Err(Declined::FileType)
         );
-        // #39: a .torrent, by default (Add torrent shows what it holds); a list saved before keeps
-        // what it had.
+        // #39: a .torrent, by default (Add torrent shows what it holds; Torrent settings' switch
+        // not decided yet counts as on, upstream issue 1058); a list saved before keeps what it had.
         assert_eq!(
             r.accepts("https://example.com/dl/set.torrent", "set.torrent", CHROME),
             Ok(())
@@ -587,6 +627,107 @@ mod tests {
             saved.accepts("https://example.com/dl/set.torrent", "set.torrent", CHROME),
             Err(Declined::FileType)
         );
+    }
+
+    #[test]
+    fn a_torrent_goes_to_grabbit_only_while_torrent_settings_open_torrents_with_it() {
+        // Upstream issue 1058: a tracker's `download.php?id=…` serving a .torrent (its name from
+        // Content-Disposition), and a plain .torrent link.
+        let off = CaptureRules {
+            torrent_handler: Some(false),
+            ..CaptureRules::default()
+        };
+        let on = CaptureRules {
+            torrent_handler: Some(true),
+            ..CaptureRules::default()
+        };
+        // Not decided yet (an app that hasn't started since its update): as before, taken.
+        let undecided = CaptureRules::default();
+        for (url, name) in [
+            (
+                "https://tracker.test/download.php?id=42",
+                "Some.Show.S01.torrent",
+            ),
+            ("https://tracker.test/dl/set.TORRENT", "set.TORRENT"),
+        ] {
+            assert_eq!(
+                off.accepts(url, name, CHROME),
+                Err(Declined::Torrents),
+                "{url}"
+            );
+            assert_eq!(on.accepts(url, name, FIREFOX), Ok(()), "{url}");
+            assert_eq!(undecided.accepts(url, name, CHROME), Ok(()), "{url}");
+        }
+        // Every other type as before, either way.
+        for r in [&off, &on] {
+            for name in ["setup.exe", "a.zip", "movie.mkv", "movie.part.r01"] {
+                assert_eq!(
+                    r.accepts(&format!("https://tracker.test/{name}"), name, CHROME),
+                    Ok(()),
+                    "{name}"
+                );
+            }
+            assert_eq!(
+                r.accepts("https://tracker.test/page.html", "page.html", CHROME),
+                Err(Declined::FileType)
+            );
+        }
+        // The other rules still say first why it stays (integration off, the type not listed).
+        let unlisted = CaptureRules {
+            auto_types: "ZIP".into(),
+            ..off.clone()
+        };
+        assert_eq!(
+            unlisted.accepts("https://x.test/a.torrent", "a.torrent", CHROME),
+            Err(Declined::FileType)
+        );
+        let integration_off = CaptureRules {
+            advanced_integration: false,
+            ..off.clone()
+        };
+        assert_eq!(
+            integration_off.accepts("https://x.test/a.torrent", "a.torrent", CHROME),
+            Err(Declined::IntegrationOff)
+        );
+        // Read from the app's saved settings under the app's name. A list saved by 1.0.0 (its
+        // `torrent_associations: false` says nothing: unticked or never looked at) is undecided
+        // until the app settles it: taken.
+        let saved: CaptureRules = serde_json::from_str(r#"{"torrent_handler":false}"#).unwrap();
+        assert!(!saved.takes_torrents());
+        let saved: CaptureRules = serde_json::from_str(r#"{"torrent_handler":true}"#).unwrap();
+        assert!(saved.takes_torrents());
+        let before: CaptureRules =
+            serde_json::from_str(r#"{"auto_types":"TORRENT","torrent_associations":false}"#)
+                .unwrap();
+        assert_eq!(before.torrent_handler, None);
+        assert!(before.takes_torrents());
+        assert!(Declined::Torrents.reason().contains("Torrent settings"));
+    }
+
+    #[test]
+    fn a_torrent_is_told_by_its_name_its_path_or_its_type() {
+        assert!(is_torrent(
+            "https://t.test/download.php?id=1",
+            "x.torrent",
+            None
+        ));
+        assert!(is_torrent("https://t.test/f/x.Torrent?k=1#a", "", None));
+        assert!(is_torrent(
+            "https://t.test/download.php?id=1",
+            "download.php",
+            Some("application/x-bittorrent; charset=binary")
+        ));
+        assert!(!is_torrent(
+            "https://t.test/download.php?name=x.torrent",
+            "x.zip",
+            Some("application/zip")
+        ));
+        assert!(!is_torrent("https://x.torrent/", "a.zip", None));
+        assert!(!is_torrent(
+            "https://t.test/a.torrent.zip",
+            "a.torrent.zip",
+            None
+        ));
     }
 
     #[test]
@@ -794,7 +935,10 @@ mod tests {
     fn each_refusal_has_a_name_and_a_reason() {
         for d in Declined::ALL {
             assert_eq!(Declined::from_code(d.code()), Some(d));
-            assert!(d.reason().contains("Options >"), "{d:?}");
+            assert!(
+                d.reason().contains("Options >") || d.reason().contains("Torrent settings >"),
+                "{d:?}"
+            );
         }
         assert_eq!(Declined::from_code("FileType"), None);
         let mut r = CaptureRules {

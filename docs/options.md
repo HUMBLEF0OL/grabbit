@@ -177,7 +177,7 @@ Control Grabbit from your phone or another computer on the local network: see
 A few settings live outside Options' twelve pages:
 
 - **Downloads → Speed Limiter → Settings...** — speed limits, the **Speed limiter** section under **Tools**. See [Connections and speed](connections-and-speed.md#speed-limiter).
-- **Tasks → Torrent settings...** — sharing and file associations, the **Torrents** section under **Tools**. See [Torrents](torrents.md#torrent-settings).
+- **Tasks → Torrent settings...** — sharing and file associations, and whether the browser hands `.torrent` downloads to Grabbit, the **Torrents** section under **Tools**. See [Torrents](torrents.md#torrent-settings).
 - The status bar's light/dark button, **View → Theme**, **Draw with**, and **Interface size**. See [Getting started](getting-started.md#themes) and [Troubleshooting](troubleshooting.md).
 - **Help → Check for updates...** — **Check for updates at every start** is in that window.
 

@@ -13,8 +13,9 @@ The browser can't find the small helper program it talks to. It is registered wh
 1. Install Grabbit with the setup from [the download page](https://humblef0ol.github.io/grabbit/download.html), and keep **Set up browser integration** ticked.
 2. Already installed? Open Grabbit, then **Options → General → Test browser integration**, and click **Set it up** if it offers to.
 3. The portable copy can't be connected: it writes nothing outside its own folder. Use the installed copy for browser integration. See [Portable mode](portable.md).
-4. Restart the browser after setting it up.
-5. **Zen on Windows:** Zen 1.21.15b and later have a bug of their own that keeps add-ons from reaching their helper program ([zen-browser/desktop#15432](https://github.com/zen-browser/desktop/issues/15432)), with any add-on that uses one. Until Zen fixes it, Zen 1.21.14b works.
+4. **Started Grabbit from inside a zip?** WinRAR, 7-Zip and Windows itself run a program from inside a zip by unpacking it to a temporary folder, which they delete afterwards. A copy run that way can't be connected (**Test browser integration** says **This copy runs from a temporary folder that will be deleted**): extract the zip to a folder of its own first. Earlier versions of Grabbit did set browser integration up from there, and left the browsers looking for a copy that was gone (**The browsers are set up for a copy that is gone**). Start your installed Grabbit, up to date, once: it takes browser integration back by itself. A registration that works is left alone, whichever copy of Grabbit it names; **Set it up** takes it for the copy you click it in.
+5. Restart the browser after setting it up.
+6. **Zen on Windows:** Zen 1.21.15b and later have a bug of their own that keeps add-ons from reaching their helper program ([zen-browser/desktop#15432](https://github.com/zen-browser/desktop/issues/15432)), with any add-on that uses one. Until Zen fixes it, Zen 1.21.14b works.
 
 ## Grabbit didn't start in time {#not-running}
 
@@ -60,6 +61,7 @@ The extension is connected, but Grabbit's own settings leave this download to th
 2. The file's type is listed in **Options → File types**.
 3. The site isn't in **Don't start downloading automatically from the following sites**, nor the address in **Don't start downloading automatically from the following addresses**.
 4. The file isn't smaller than **Don't take files smaller than** in **Options → File types**.
+5. For a `.torrent` file: **Open magnet links and .torrent files with Grabbit** is on in **Tasks → Torrent settings**.
 
 Also check the extension's toolbar button: with **Take downloads from this browser** off, everything stays with the browser.
 

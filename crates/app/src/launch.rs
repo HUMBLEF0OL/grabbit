@@ -4,7 +4,7 @@
 //! window starts them here, on a thread of their own, each with a time limit, and goes on.
 
 use std::ffi::OsStr;
-use std::process::{Child, Command, ExitStatus, Stdio};
+use std::process::{Child, ExitStatus};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
@@ -146,23 +146,6 @@ where
     }
 }
 
-/// Run `cmd` quietly, waiting at most `limit` for it: true when it ran and succeeded. One that
-/// runs out of time is ended. For a thread other than the window's.
-pub fn run_within(cmd: &mut Command, limit: Duration) -> bool {
-    let child = cmd
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn();
-    match child {
-        Ok(mut child) => wait_within(&mut child, limit).is_some_and(|s| s.success()),
-        Err(e) => {
-            tracing::debug!("{}: {e}", program_name(cmd));
-            false
-        }
-    }
-}
-
 /// Wait for `child` at most `limit`: its exit status, or None when it ran out of time (it is
 /// ended and reaped) or couldn't be waited for.
 pub(crate) fn wait_within(child: &mut Child, limit: Duration) -> Option<ExitStatus> {
@@ -185,8 +168,4 @@ pub(crate) fn wait_within(child: &mut Child, limit: Duration) -> Option<ExitStat
             }
         }
     }
-}
-
-fn program_name(cmd: &Command) -> String {
-    cmd.get_program().to_string_lossy().into_owned()
 }
