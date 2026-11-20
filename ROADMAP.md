@@ -603,7 +603,9 @@ Done since 1.0.1; ships in the next release.
 
 - ✅ A smaller button over videos: a 30-pixel round chip in Graphite's colours (dark glass, green
   arrow) that opens to **Download video ⌄** under the pointer, toward the inside of the video,
-  and shows the result of a click on itself; its menu no longer repeats **Download video**.
+  and shows the result of a click on itself; its menu no longer repeats **Download video**. The
+  help's and the README's pictures show it, taken again with a test host of their own, so an
+  installed Grabbit no longer stops the picture script.
 
 ## Being worked on
 

@@ -3,13 +3,16 @@
 // YouTube, and the same film as a plain video file. Nothing shows on the screen: the window
 // opens far off the screens without taking the focus (and keeps painting there), Windows draws
 // it into the picture (PrintWindow), and a separate Mister Download Manager runs off the screen
-// for the button to ask (GRABBIT_DATA_DIR, MDM_OFFSCREEN). Windows only.
+// for the button to ask (GRABBIT_DATA_DIR, MDM_OFFSCREEN), through a host registered for this
+// run only, under a test name (an installed Grabbit's own registration is never touched). The
+// pointer rests on the button, so the pictures show it open. Windows only.
 //
 //   cargo build --release -p grabbit-app -p grabbit-nmhost; tools\extension\pack.ps1
 //   node tools/readme/browser-shots.mjs        -> target/browser-shots/video-button-*.png
 //   python tools/shots/make.py docs --png target/browser-shots/video-button-youtube.png ...
 //                                              -> docs/images/video-button-*.webp
 import { spawn, spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { Pipe, exe, killProfile, killTree, root, sleep, until } from "../extension/e2e.mjs";
@@ -44,6 +47,30 @@ function capture(pid, out) {
 // Undoes what main() set up: the host registration, the browser, the app. Run when main ends
 // and when the time limit stops it.
 let cleanup = () => {};
+
+// The host under a test name, for Chrome only, and a copy of the extension that asks for it:
+// pack.ps1's copy with the name in its background.js, and the host's manifest allowing that
+// copy's ID (from its manifest's key, as Chrome makes it). Returns the copy's folder and the
+// registry key to remove at the end.
+const TEST_HOST = "com.grabbit.shots";
+function testHost(nmhost) {
+  const dir = path.join(work, "extension");
+  fs.cpSync(path.join(root, "target", "extension", "chromium"), dir, { recursive: true });
+  const bg = path.join(dir, "background.js");
+  const code = fs.readFileSync(bg, "utf8");
+  const renamed = code.replace('const HOST = "com.grabbit.host";', `const HOST = "${TEST_HOST}";`);
+  if (renamed === code) throw new Error("background.js: its host's name wasn't found");
+  fs.writeFileSync(bg, renamed);
+  const key = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8")).key;
+  const hex = crypto.createHash("sha256").update(Buffer.from(key, "base64")).digest("hex").slice(0, 32);
+  const id = [...hex].map((c) => String.fromCharCode(97 + parseInt(c, 16))).join("");
+  const manifest = path.join(work, `${TEST_HOST}.json`);
+  fs.writeFileSync(manifest, JSON.stringify({ name: TEST_HOST, description: "Grabbit (pictures)", path: nmhost, type: "stdio", allowed_origins: [`chrome-extension://${id}/`] }, null, 2));
+  const reg = `HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\${TEST_HOST}`;
+  if (spawnSync("reg", ["query", reg], { stdio: "ignore" }).status === 0) throw new Error(`${reg} is there already: not touching it`);
+  if (spawnSync("reg", ["add", reg, "/ve", "/t", "REG_SZ", "/d", manifest, "/f"], { stdio: "ignore" }).status !== 0) throw new Error(`reg add ${reg}`);
+  return { dir, reg };
+}
 
 // A close-up of the button over its video: 16:9, the button near its top right corner, cut from
 // the window's picture (the page fills its bottom, centred across).
@@ -83,20 +110,17 @@ async function main() {
   const app = spawn(exe("grabbit"), [], { env: process.env, stdio: "ignore" });
   const nmhost = exe("grabbit-nmhost");
   let browser = null;
+  let host = null;
   cleanup = () => {
     cleanup = () => {};
-    spawnSync(nmhost, ["--unregister"]);
+    if (host) spawnSync("reg", ["delete", host.reg, "/f"], { stdio: "ignore" });
     killTree(browser);
     killProfile(profile);
     killTree(app);
   };
   try {
     await until("Mister Download Manager", 20000, () => fs.existsSync(path.join(data, "ipc.json")));
-    const key = "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.grabbit.host";
-    if (spawnSync("reg", ["query", key], { stdio: "ignore" }).status === 0) {
-      throw new Error("Mister Download Manager's host is already registered (an installed copy): not touching it");
-    }
-    spawnSync(nmhost, ["--register"]);
+    host = testHost(nmhost);
     browser = spawn(
       chrome,
       [
@@ -123,7 +147,7 @@ async function main() {
       { env: process.env, stdio: ["ignore", "ignore", "ignore", "pipe", "pipe"] },
     );
     const cdp = new Pipe(browser);
-    await cdp.send("Extensions.loadUnpacked", { path: path.join(root, "target", "extension", "chromium") });
+    await cdp.send("Extensions.loadUnpacked", { path: host.dir });
     console.error("extension loaded");
     await sleep(1500);
     for (const shot of SHOTS) {
@@ -226,12 +250,16 @@ async function one(cdp, browser, shot) {
     return evaluate("document.querySelector('mdm-video-button')?.style.display === 'block'");
   });
   await sleep(600); // faded in
-  console.error(`${shot.name}: button shown, capturing`);
-  // Keep the pointer moving while the window is drawn, so nothing fades.
-  const keep = setInterval(() => move(Math.random() * 4).catch(() => {}), 400);
   // Where the button is (page coordinates), and the page's size and scale.
   const at = await evaluate(`(() => { const r = document.querySelector('mdm-video-button').getBoundingClientRect();
     return { l: r.left, t: r.top, r: r.right, b: r.bottom, w: innerWidth, h: innerHeight, dpr: devicePixelRatio }; })()`);
+  // The pointer onto its arrow: it opens to "Download video ⌄" (and stays while pointed at).
+  const on = (d) => cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: (at.l + at.r) / 2 + d, y: (at.t + at.b) / 2 }, sessionId);
+  await on(0);
+  await sleep(500); // opened
+  console.error(`${shot.name}: button open, capturing`);
+  // Keep the pointer moving on it while the window is drawn, so nothing fades.
+  const keep = setInterval(() => on(Math.random() * 2).catch(() => {}), 400);
   const whole = path.join(work, `${shot.name}-window.png`);
   try {
     capture(browser.pid, whole);
