@@ -67,7 +67,7 @@ Check four things: the extension is installed and turned on; **Options → Gener
 
 ### Can I download without the browser extension? {#without-extension}
 
-Yes. Copy a link to a file and Grabbit offers to download it at once (**Options → General → Offer to download links copied to the clipboard**, on by default). You can also paste links into **Add URL**, drag them onto the drop target, add a whole batch, or use the command line. See [Adding downloads](/help/adding-downloads.html).
+Yes. Copy a link to a file and Grabbit offers to download it at once (**Options → General → Offer to download links copied to the clipboard**, on by default). You can also paste links into **Add** or the paste bar, drag them onto the drop target, add a whole batch, or use the command line. See [Adding downloads](/help/adding-downloads.html).
 
 ## Downloading
 

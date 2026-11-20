@@ -101,6 +101,9 @@ pub struct Settings {
     /// View → Paste bar (plan 06): the address band under the toolbar. On by default, for
     /// existing lists too.
     pub show_paste_bar: bool,
+    /// The Add window's "Ask where to save each one", as last left (on by default, for
+    /// existing lists too: Download File Info for every link).
+    pub add_ask_where: bool,
     /// View → Details pane, and the toolbar's Details (plan 06): the selected download beside
     /// the list. Off by default.
     pub show_details: bool,
@@ -386,6 +389,7 @@ impl Default for Settings {
             branches: [true, false, false, false],
             view: None,
             show_paste_bar: true,
+            add_ask_where: true,
             show_details: false,
             details_width: 276,
             dark_mode_support: true,
@@ -1168,6 +1172,20 @@ mod tests {
                 .unwrap()
                 .contains("language_asked")
         );
+    }
+
+    /// The Add window's "Ask where to save each one": on in a settings file from before it, and
+    /// kept as left once unticked.
+    #[test]
+    fn an_old_settings_file_asks_where_each_add_goes() {
+        let s: Settings = serde_json::from_str("{}").unwrap();
+        assert!(s.add_ask_where);
+        let off = Settings {
+            add_ask_where: false,
+            ..Default::default()
+        };
+        let back: Settings = serde_json::from_str(&serde_json::to_string(&off).unwrap()).unwrap();
+        assert!(!back.add_ask_where, "kept as left");
     }
 
     /// Plan 06: a settings file from before the paste bar and the details pane loads with the

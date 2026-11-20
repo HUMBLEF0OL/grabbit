@@ -35,7 +35,7 @@ whose service supports its host. **Up** and **Down** change it.
 ## Torrents through the service
 
 Tick **Send torrents and magnet links to the first account instead of to peers** in
-**Options → Accounts**. A magnet link (Add URL, the browser, the clipboard, a drop) or a
+**Options → Accounts**. A magnet link (Add, the browser, the clipboard, a drop) or a
 `.torrent` file (Add torrent's **Download Now** or **Later**) then goes to the first account in
 the list:
 
@@ -57,7 +57,7 @@ the list:
 
 ## What happens to a link
 
-- Add URL, the clipboard, the browser's **Download with Grabbit** link menu,
+- Add, the clipboard, the browser's **Download with Grabbit** link menu,
   and batch downloads go through the account when its service supports
   the link's host.
 - A download the browser had already started (Grabbit took it over from the browser) is

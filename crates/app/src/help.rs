@@ -776,9 +776,16 @@ impl About {
 // Keyboard shortcuts
 
 /// Every shortcut the main window answers (keep in step with `app.rs` and `list.rs`).
-const SHORTCUTS: [(&str, &str); 27] = [
-    ("Ctrl+N", "Add a download (Add URL)"),
-    ("Ctrl+V", "Paste an address into the paste bar"),
+const SHORTCUTS: [(&str, &str); 28] = [
+    (
+        "Ctrl+N",
+        "Add links, magnets or video pages (the Add window)",
+    ),
+    ("Ctrl+O", "Open a .torrent file"),
+    (
+        "Ctrl+V",
+        "Paste into the paste bar (several links: the Add window)",
+    ),
     (
         "Ctrl+F",
         "Go to the Find field in the title bar, its text selected",

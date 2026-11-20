@@ -10,14 +10,14 @@ order: 50
 since: 0.1.0
 shot: /assets/screens/torrent-light.webp
 shot_alt: A torrent's progress window on its Pieces tab: a square for each piece, filled once it's here
-where: Tasks → Add magnet link..., or the toolbar's Add Torrent
+where: The toolbar's Add, or Tasks → Open torrent file... / Add magnet link...
 help: torrents.md
 ---
 
 ## One list for everything
 
-Click **Add Torrent** on the toolbar to open a `.torrent` file, or use the arrow next to it for
-**Add magnet link...**. A magnet link pasted into **Add URL** works too. Torrents land in the same
+Paste a magnet link into **Add** on the toolbar (or the paste bar), drop a `.torrent` file on the
+window, or use **Add**'s arrow for **Open a .torrent file...** (**Ctrl+O**). Torrents land in the same
 list as your other downloads, marked **Torrent** in the **Source** column, and go into queues and
 the Scheduler like them.
 

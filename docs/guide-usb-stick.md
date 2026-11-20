@@ -26,7 +26,7 @@ By default, downloads go to the Downloads folder of the computer you're using. T
 
 ## 3. Use it
 
-- Add downloads with **Add URL**, the clipboard (**Options → General → Offer to download links copied to the clipboard**) or the drop target (**Tasks → Show drop target**).
+- Add downloads with **Add**, the clipboard (**Options → General → Offer to download links copied to the clipboard**) or the drop target (**Tasks → Show drop target**).
 - The browser extension can't send downloads to a portable copy, because that needs the installer.
 - Before you unplug the stick, quit Grabbit with **Tasks → Exit** so it saves everything. Closing the window only hides it in the tray.
 

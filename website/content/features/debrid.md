@@ -16,7 +16,7 @@ help: debrid.md
 
 ## The file host's link, Grabbit's download
 
-Paste a link from a file host your service supports, in **Add URL**, from the browser's
+Paste a link from a file host your service supports, in **Add**, from the browser's
 **Download with Grabbit**, or in a batch download. Grabbit unlocks it through your
 account, then downloads it with all its connections, pause and resume. When the direct link
 expires, Grabbit asks the service for a new one.

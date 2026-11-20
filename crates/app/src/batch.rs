@@ -67,6 +67,14 @@ impl Batch {
         }
     }
 
+    /// Opened with `address` (a pattern from the Add window or the paste bar) in its box.
+    pub fn with_address(address: &str) -> Self {
+        Batch {
+            address: address.to_owned(),
+            ..Self::new(false)
+        }
+    }
+
     /// The clipboard's text as the address, when it is one MDM downloads and the box is still
     /// empty (nothing typed meanwhile).
     fn fill_from_clipboard(&mut self, clip: &str) {
