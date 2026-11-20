@@ -115,7 +115,7 @@ one:
     <td width="50%"><img src="docs/images/main-dark.webp" alt="Dark mode"><br><sub><b>Dark mode</b> that follows Windows.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/add-url.webp" alt="Add URL"><br><sub><b>Add a download</b>: paste a link, or let Grabbit catch it from your browser.</sub></td>
+    <td><img src="docs/images/add-url.webp" alt="The Add window"><br><sub><b>Add a download</b>: paste a link, or let Grabbit catch it from your browser.</sub></td>
     <td><img src="docs/images/add-torrent.webp" alt="Add torrent"><br><sub><b>Torrents and magnet links</b>: pick the files you want, skip the rest.</sub></td>
   </tr>
   <tr>

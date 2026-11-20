@@ -1,7 +1,7 @@
 # need -> (tabler outline name, phosphor name)
 import json, os, sys
 MAP = {
- "tb-add-url": ("link-plus","link-simple"), "tb-add-torrent": ("magnet","magnet"),
+ "tb-add": ("circle-plus","plus-circle"), "tb-add-url": ("link-plus","link-simple"), "tb-add-torrent": ("magnet","magnet"),
  "tb-resume": ("player-play","play"), "tb-stop": ("player-pause","pause"),
  "tb-stop-all": ("hand-stop","hand-palm"), "tb-delete": ("trash","trash"),
  "tb-delete-completed": ("clear-all","broom"), "tb-options": ("settings","gear-six"),

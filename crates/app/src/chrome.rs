@@ -193,9 +193,8 @@ mod a11y_tests {
         v
     }
 
-    const BUTTONS: [(Icon, &str, bool); 11] = [
-        (Icon::AddUrl, "Add URL", true),
-        (Icon::AddTorrent, "Add Torrent", true),
+    const BUTTONS: [(Icon, &str, bool); 10] = [
+        (Icon::Add, "Add", true),
         (Icon::Resume, "Resume", false),
         (Icon::Stop, "Stop", false),
         (Icon::StopAll, "Stop All", false),
@@ -207,10 +206,10 @@ mod a11y_tests {
         (Icon::StopQueue, "Stop Queue", false),
     ];
 
-    /// The toolbar's 11 buttons are buttons for screen readers, by their labels, greyed as
-    /// drawn.
+    /// The toolbar's 10 buttons (one Add since the universal Add) are buttons for screen
+    /// readers, by their labels, greyed as drawn.
     #[test]
-    fn the_toolbar_exposes_its_eleven_buttons() {
+    fn the_toolbar_exposes_its_ten_buttons() {
         let _fonts = crate::theme::font_tests();
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
@@ -246,7 +245,7 @@ mod a11y_tests {
             .filter(|n| n.role() == Role::Button)
             .filter_map(|n| n.bounds().map(|b| b.x1))
             .collect();
-        assert_eq!(rights.len(), 11);
+        assert_eq!(rights.len(), 10);
         assert!(rights.iter().all(|r| *r <= 710.0), "{rights:?}");
     }
 
@@ -318,16 +317,16 @@ mod a11y_tests {
         })
     }
 
-    /// With the Details toggle the toolbar has 12 buttons: the 11 as before, then "Details",
+    /// With the Details toggle the toolbar has 11 buttons: the 10 as before, then "Details",
     /// usable, its toggled state the setting's (requirements 11.4).
     #[test]
-    fn the_toolbar_exposes_the_details_toggle_as_its_twelfth_button() {
+    fn the_toolbar_exposes_the_details_toggle_after_its_buttons() {
         let _fonts = crate::theme::font_tests();
         let ctx = egui::Context::default();
         ctx.enable_accesskit();
         for on in [false, true] {
             let buttons = toolbar_buttons(&toolbar_nodes(&ctx, || details(on)));
-            assert_eq!(buttons.len(), 12, "{buttons:?}");
+            assert_eq!(buttons.len(), 11, "{buttons:?}");
             for ((label, disabled, toggled, _), (_, want, enabled)) in buttons.iter().zip(&BUTTONS)
             {
                 assert_eq!(
@@ -335,7 +334,7 @@ mod a11y_tests {
                     (*want, !enabled, None)
                 );
             }
-            let (label, disabled, toggled, _) = &buttons[11];
+            let (label, disabled, toggled, _) = &buttons[10];
             let want = if on { Toggled::True } else { Toggled::False };
             assert_eq!(
                 (label.as_str(), *disabled, *toggled),
@@ -365,7 +364,7 @@ mod a11y_tests {
         assert!(matches!(event, Some(ToolbarEvent::Toggle)));
     }
 
-    /// Without a toggle the toolbar is as before (requirements 4.10): its 11 buttons, none with
+    /// Without a toggle the toolbar is as before (requirements 4.10): its 10 buttons, none with
     /// a toggled state, where they are beside the toggle; a Click on one is still that button's.
     #[test]
     fn without_a_toggle_the_toolbar_is_as_before() {
@@ -374,11 +373,11 @@ mod a11y_tests {
         ctx.enable_accesskit();
         let nodes = toolbar_nodes(&ctx, || None);
         let plain = toolbar_buttons(&nodes);
-        assert_eq!(plain.len(), 11, "{plain:?}");
+        assert_eq!(plain.len(), 10, "{plain:?}");
         assert!(plain.iter().all(|b| b.2.is_none() && b.0 != "Details"));
         let with = toolbar_buttons(&toolbar_nodes(&ctx, || details(true)));
-        assert_eq!(plain[..], with[..11]);
-        let click = click_on(&nodes, "Add URL");
+        assert_eq!(plain[..], with[..10]);
+        let click = click_on(&nodes, "Add");
         let (_, event) = frame(&ctx, vec![click], |ui| {
             toolbar(ui, &Layout::GRAPHITE, Pos2::ZERO, 1240.0, &BUTTONS, None)
         });
@@ -414,13 +413,13 @@ mod a11y_tests {
                     "{why}: o.x {ox}, width {width}, on {on}, {buttons:?}"
                 )))
             };
-            if buttons.len() != 12 || bounds.len() != 12 || buttons[11].0 != "Details" {
-                return fail("12 buttons, Details last");
+            if buttons.len() != 11 || bounds.len() != 11 || buttons[10].0 != "Details" {
+                return fail("11 buttons, Details last");
             }
             if !bounds.iter().all(|b| b[2] <= end) {
                 return fail("a right edge past o.x + width");
             }
-            if bounds[11][0] < bounds[10][2] {
+            if bounds[10][0] < bounds[9][2] {
                 return fail("the toggle over the last button");
             }
             Ok(())
@@ -2374,13 +2373,13 @@ pub struct ToolbarToggle<'a> {
 pub const TB_BUTTON_TOP: f32 = 5.0;
 pub const TB_BUTTON_H: f32 = 47.0;
 
-/// The buttons that end a group of Graphite's toolbar (a rule after each): [Add URL, Add
-/// Torrent] [Resume, Stop, Stop All] [Delete, Delete Completed] [Options, Scheduler] [Start
-/// Queue, Stop Queue], IDM's order.
+/// The buttons that end a group of Graphite's toolbar (a rule after each): [Add] [Resume,
+/// Stop, Stop All] [Delete, Delete Completed] [Options, Scheduler] [Start Queue, Stop Queue],
+/// IDM's order with its Add URL and Add Torrent made one Add.
 fn ends_group(icon: Icon) -> bool {
     matches!(
         icon,
-        Icon::AddTorrent | Icon::StopAll | Icon::DeleteCompleted | Icon::Scheduler
+        Icon::Add | Icon::StopAll | Icon::DeleteCompleted | Icon::Scheduler
     )
 }
 
@@ -2421,8 +2420,7 @@ pub fn toolbar(
     const GAP: f32 = 2.0;
     const RULE_GAP: f32 = 6.0;
     const SIDE: f32 = 10.0;
-    let is_dropdown =
-        |icon: &Icon| matches!(icon, Icon::StartQueue | Icon::StopQueue | Icon::AddTorrent);
+    let is_dropdown = |icon: &Icon| matches!(icon, Icon::StartQueue | Icon::StopQueue | Icon::Add);
     let fixed: f32 = 2.0 * SIDE
         + buttons
             .iter()

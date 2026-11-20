@@ -8,7 +8,8 @@
 #   take     what to open, as tools/lab/docs-shots.ps1 -Show takes it: a /show argument
 #            ("options:connection"), "@main", "@menu:<show argument>" (a menu, over the main
 #            window), "@download:<lab server path>" (Download File Info, as a browser hands a
-#            download over), "@complete:<path>" (Download complete), "@torrent" (Add torrent for
+#            download over), "@add:<lab server path>" (the Add window holding that address, never
+#            the clipboard's), "@complete:<path>" (Download complete), "@torrent" (Add torrent for
 #            tools/lab/Open Movie Night.torrent); "a+b" runs /show a first ("theme:graphite+@main").
 #            Shots with the same take share one capture.
 #   from     instead of take: a picture already in the repository (the browser's, made by
@@ -43,8 +44,9 @@ page = "getting-started.md"
 under = "The main window"
 take = "@main"
 # 1 right of the menu bar's last menu, 2 on the toolbar's rule between its delete and its
-# settings groups, 3 and 4 in the empty space under the categories and the list's rows.
-marks = [{ at = "MenuItem:Help", side = "right" }, { at = [520, 70, 0, 0], side = "center" }, { at = [0, 446, 223, 22], side = "center" }, { at = [224, 408, 708, 44], side = "center" }]
+# settings groups (x 476 since the one Add, PR 76), 3 and 4 in the empty space under the
+# categories and the list's rows.
+marks = [{ at = "MenuItem:Help", side = "right" }, { at = [476, 70, 0, 0], side = "center" }, { at = [0, 446, 223, 22], side = "center" }, { at = [224, 408, 708, 44], side = "center" }]
 alt = "The main window: the menu bar, the toolbar, the categories on the left and the download list on the right"
 caption = "1 the menu bar, 2 the toolbar, 3 the categories, 4 the download list."
 
@@ -73,11 +75,15 @@ caption = "View → Theme switches at once, keeping the layout."
 [[shot]]
 id = "add-url"
 page = "adding-downloads.md"
-under = "Add URL"
-take = "addurl"
-marks = [{ at = "Address", n = 3, side = "corner" }, { at = "Use authorization", n = 4, side = "right" }, { at = "OK", n = 5, side = "corner" }]
-alt = "Enter new address to download, with the Address box, Use authorization and OK"
-caption = "The numbers are the steps above: 3 the address, 4 a login if the server needs one, 5 OK."
+under = "Add"
+# Lower case: /show's arguments arrive lower-cased (mdm_ipc::parse_args).
+take = "@add:gen/4m/project-report-2026.pdf"
+# The Add window (PR 76): its box, the Found list's caption ("Found 1"), Use authorization, Add.
+# 3 in the box's empty middle (one address on its first line), 5 over the tick box (its right
+# is the Login field).
+marks = [{ at = "Edit:Addresses, magnet links or video pages, one per line", n = 3, side = "center" }, { at = "Found", n = 4, side = "right" }, { at = "CheckBox:Use authorization", n = 5, side = "top" }, { at = "Button:Add", n = 6, side = "corner" }]
+alt = "The Add window: its box, what was found, the drop area, Use authorization and Add"
+caption = "The numbers are the steps above: 3 the addresses, 4 what was found, 5 a login if the server needs one, 6 Add."
 
 [[shot]]
 id = "download-file-info"
@@ -466,10 +472,10 @@ caption = "Archives: extract when downloaded, and where the files go."
 id = "first-add-url"
 page = "guide-first-download.md"
 under = "Steps"
-take = "addurl"
-ring = ["OK"]
-alt = "Enter new address to download, its OK button ringed"
-caption = "Add URL: Grabbit puts the address you copied in the Address box (paste it there if it isn't). Click OK."
+take = "@add:gen/4m/project-report-2026.pdf"
+ring = ["Button:Add"]
+alt = "The Add window, its Add button ringed"
+caption = "Add: Grabbit puts the address you copied in the box (paste it there if it isn't). Click Add 1."
 
 [[shot]]
 id = "first-file-info"

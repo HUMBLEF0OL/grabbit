@@ -1,5 +1,7 @@
 #![windows_subsystem = "windows"]
 
+mod adddlg;
+mod addkind;
 mod app;
 mod batch;
 mod categories;

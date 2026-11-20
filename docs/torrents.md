@@ -6,7 +6,7 @@ Grabbit downloads BitTorrent files from magnet links and `.torrent` files. Torre
 
 ## Add a torrent
 
-1. Click **Add Torrent** on the toolbar to choose a `.torrent` file. Or click the arrow next to it and choose **Open torrent file...** or **Add magnet link...** (also under **Tasks**).
+1. Click **Add** on the toolbar and paste a magnet link (or drop a `.torrent` file on the window), then click **Add**. Or click the arrow next to **Add** and choose **Open a .torrent file...** (**Ctrl+O**). **Tasks** has **Open torrent file...** and **Add magnet link...** too.
 2. **Add torrent** opens. Paste a magnet link into **Torrent**, or click **...** to choose a `.torrent` file, then click **Look up**.
 3. Grabbit reads the torrent and shows its files as a folder tree. A `.torrent` file is read at once. A magnet link first has to get the file list from other peers, usually within seconds. While it waits, **Add torrent** shows how many peers it found, from the trackers, the DHT or your local network, and how many answered. After 30 seconds without an answer, it says what may be in the way: a link with no trackers while the DHT is off, or a firewall, a VPN or a network that blocks BitTorrent.
 4. Untick the folders or files you don't want. **Select all** and **Select none** help with big torrents. **Selected** shows how many files and how much data you picked.
@@ -23,9 +23,9 @@ Grabbit downloads BitTorrent files from magnet links and `.torrent` files. Torre
 3. ![The Pieces tab: a square for each piece, filled once it's here](images/help/torrent-pieces.webp)
    *Pieces: the torrent's map, filling in.*
 
-You can also paste a magnet link into **Add URL**, or drop a magnet link or a `.torrent` file on the drop target (**Tasks → Show drop target**). If a torrent is already in the list, Grabbit says so instead of adding it twice.
+You can also paste a magnet link into the paste bar (its button says **Add torrent**), drop a magnet link or a `.torrent` file on the main window, or drop a magnet link or a `.torrent` file on the drop target (**Tasks → Show drop target**). If a torrent is already in the list, Grabbit says so instead of adding it twice.
 
-A `.torrent` file's web address works too: paste it into **Add URL** or **Torrent**, or let the browser hand the download over. Grabbit fetches the file, with the browser's cookies when the browser sent it, and **Add torrent** shows what it holds. The browser hands `.torrent` downloads over when `TORRENT` is in **Options → File types** and **Open magnet links and .torrent files with Grabbit** is on in [Torrent settings](#torrent-settings). `TORRENT` is in the list by default; a list you had before it came keeps what it had, so add `TORRENT` to it yourself. While that setting is off, the browser keeps `.torrent` downloads and opens them in your own torrent program, and the extension's button says why. **Download with Grabbit** on a link always hands it over. A command line with `/n` (silent) saves the `.torrent` file itself, like any file. Grabbit fetches at most 10 MB: anything bigger isn't a `.torrent` file.
+A `.torrent` file's web address works too: paste it into **Add**, the paste bar or **Torrent**, or let the browser hand the download over. Grabbit fetches the file, with the browser's cookies when the browser sent it, and **Add torrent** shows what it holds. The browser hands `.torrent` downloads over when `TORRENT` is in **Options → File types** and **Open magnet links and .torrent files with Grabbit** is on in [Torrent settings](#torrent-settings). `TORRENT` is in the list by default; a list you had before it came keeps what it had, so add `TORRENT` to it yourself. While that setting is off, the browser keeps `.torrent` downloads and opens them in your own torrent program, and the extension's button says why. **Download with Grabbit** on a link always hands it over. A command line with `/n` (silent) saves the `.torrent` file itself, like any file. Grabbit fetches at most 10 MB: anything bigger isn't a `.torrent` file.
 
 If some of the torrent's files are already in the folder, Grabbit asks before using them. **Yes** keeps them for the torrent: Grabbit checks them, keeps what matches the torrent and downloads the rest, which is how you continue a download started elsewhere or share files you already have. **No** (the default) goes back, so you can choose another folder and nothing of yours is overwritten.
 
@@ -72,7 +72,7 @@ A torrent in order isn't faster to finish, and it helps the swarm less: use it f
 
 ## RSS feeds
 
-Many sites publish their new torrents as an RSS or Atom feed. Grabbit can watch feeds, list what they hold, and add the new torrents you want by itself. Choose **Tasks → RSS feeds...**, or click the arrow next to **Add Torrent**.
+Many sites publish their new torrents as an RSS or Atom feed. Grabbit can watch feeds, list what they hold, and add the new torrents you want by itself. Choose **Tasks → RSS feeds...**.
 
 ![RSS feeds before any is added: the list of feeds, their items, and the Download rules tab](images/help/rss-feeds.webp)
 *RSS feeds, and the rules that pick what to download.*
@@ -98,7 +98,7 @@ Feeds and rules are kept in `rss.json` in Grabbit's data folder. Grabbit reads a
 
 ## Torrent settings
 
-Choose **Tasks → Torrent settings...** (or the arrow next to **Add Torrent**). They open in the main window, as the **Torrents** section of [Options](options.md), listed under **Tools**; **Save** keeps your changes, **Discard** throws them away, and **← Downloads** goes back to the list:
+Choose **Tasks → Torrent settings...**. They open in the main window, as the **Torrents** section of [Options](options.md), listed under **Tools**; **Save** keeps your changes, **Discard** throws them away, and **← Downloads** goes back to the list:
 
 ![Torrent settings: sharing, limits and what others can see](images/help/torrent-settings.webp)
 *Tasks → Torrent settings...*

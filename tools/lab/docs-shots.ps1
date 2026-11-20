@@ -37,6 +37,7 @@ param(
   # tools/shots/make.py): <what> is a /show argument (options:connection), "@main" (the main
   # window), "@menu:<show argument>" (a menu: every window of ours, composed), or
   # "@download:<path>" (Download File Info for the lab server's <path>, as a browser hands it),
+  # "@add:<path>" (the Add window holding the lab server's <path>, not the clipboard's links),
   # or "@complete:<path>" (the Download complete window once that small file is in).
   # With -Torrent, "@torrent" is its Add torrent window. "a+b" runs /show a first, then shoots b
   # ("theme:graphite+@main").
@@ -210,7 +211,10 @@ try {
   # site's pictures and the few docs pages not yet in the help's shot list; the help pages'
   # own come from tools/shots/shots.toml (-Show).
   $windows = [ordered]@{
-    "add-url" = "addurl"; "speed-limiter" = "speedlimit+@main"; "scheduler" = "scheduler+@main"
+    # The Add window holding a lab address, never the clipboard's (no picture shows what the
+    # user copied, and the clipboard is never touched). In lower case, as /show's arguments
+    # arrive (mdm_ipc::parse_args lower-cases them).
+    "add-url" = "add:$base/gen/4m/project-report-2026.pdf"; "speed-limiter" = "speedlimit+@main"; "scheduler" = "scheduler+@main"
     "options-connection" = "options:connection+@main"; "options-remote" = "options:remote+@main"; "grabber" = "grabber"
     "progress" = "progress"
   }
@@ -305,6 +309,9 @@ try {
     } elseif ($what -like "@download:*") {
       # As a browser hands it over: no /n, so Download File Info asks.
       & $Exe /d "$base/$($what.Substring(10))"
+    } elseif ($what -like "@add:*") {
+      # The Add window holding the lab server's <path>, never the clipboard's links.
+      & $Exe /show "add:$base/$($what.Substring(5))"
     } else {
       & $Exe /show $what
     }

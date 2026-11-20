@@ -36,6 +36,8 @@ pub struct PasteBar {
     /// A menu or a popup menu of the main window is open (set each frame, as the list's): its
     /// keys (Enter, Escape, the arrows) are the menu's, not the field's.
     pub menu_open: bool,
+    /// The text a submit of several links handed on (the Add window lists them).
+    pub pending: String,
 }
 
 /// What the paste bar reports in a frame.
@@ -106,8 +108,9 @@ pub fn paste_geometry(w: f32, hint_w: f32, button_w: f32) -> PasteGeometry {
 }
 
 /// Paint the band from `layout.paste_top()`, `w` wide from `o.x`: on `panel` with its bottom
-/// rule; the address field (the `gx-link` icon, the placeholder, the history arrow), the hint
-/// "Enter adds it" or the error in the error colour, the accent Download button (`gx-download`).
+/// rule; the address field (the `gx-link` icon, the placeholder, the history arrow), the chip
+/// naming what it holds (or the error, in the error colours), and the accent button whose
+/// label says what Enter does (`bar_button`; greyed while the field holds no address).
 /// The field takes the focus asked for (`focus_next`); an edit clears the error.
 ///
 /// The field's keys: Up / Down step through `history` (its list closed); Alt+Down or F4, or a
@@ -136,18 +139,23 @@ pub fn paste_bar(
         0.0,
         c.menubar_line,
     );
-    // i18n: the paste bar's hint beside its address field: Enter adds the typed address
-    let hint = crate::i18n::t("Enter adds it");
-    // As the frame starts: an edit below clears the error from the next frame.
-    let (slot, ink) = match st.error.clone() {
-        Some(e) => (e, c.error),
-        None => (hint.to_owned(), c.muted),
-    };
-    let font = winui::segoe();
-    let slot_w = winui::text_width_font(&p, font.clone(), &slot).ceil();
-    // i18n: the paste bar's button: add the typed address as a download
-    let label = "Download";
-    let g = paste_geometry(w, slot_w, winui::icon_label_button_width(&p, label));
+    // What the field holds, as the frame starts (an edit below shows from the next): the chip
+    // between the field and the button says what it is, and the button what it does (Enter
+    // presses it: no hint needed).
+    let bar = bar_of(st);
+    let chip = bar_chip(st, &bar);
+    let chip_font = egui::FontId::new(
+        crate::theme::metrics().font_small,
+        egui::FontFamily::Name("geist-medium".into()),
+    );
+    let slot_w = chip.as_ref().map_or(0.0, |(t, icon, ..)| {
+        (winui::text_width_font(&p, chip_font.clone(), t).round()
+            + if icon.is_some() { 17.0 } else { 0.0 }
+            + 16.0)
+            .ceil()
+    });
+    let label = bar_button(&bar);
+    let g = paste_geometry(w, slot_w, winui::icon_label_button_width(&p, &label));
     let y = top + FIELD_TOP;
 
     let id = paste_field_id();
@@ -160,28 +168,38 @@ pub fn paste_bar(
         vec2(g.field, FIELD_H),
     ));
     // i18n: the paste bar's address field while it is empty
-    let placeholder = crate::i18n::t("Paste an address or a magnet link");
+    let placeholder = crate::i18n::t("Paste an address, a magnet link or a video page");
     let field = winui::icon_combo_edit(ui, field_rc, &mut st.text, id, "gx-link", placeholder);
     // An error about the address goes once it is edited.
     if field.changed() {
         st.edited();
     }
-    // Named for screen readers, with its placeholder; the error, while shown, is its
-    // description.
+    // Named for screen readers, with its placeholder; its chip ("Link · example.org", "3
+    // links", "Not an address", or the error once Enter is refused) is its description, read
+    // even when the bar is too narrow to draw the chip.
     // i18n: noun: the web address (URL); the paste bar's field, to screen readers
     let name = crate::i18n::t("Address");
-    let error = st.error.clone();
+    let said = chip.as_ref().map(|(text, ..)| text.clone());
     ui.ctx().accesskit_node_builder(id, |node| {
         node.set_label(name);
         node.set_placeholder(placeholder);
-        if let Some(e) = error {
-            node.set_description(e);
+        if let Some(said) = said {
+            node.set_description(said);
         }
     });
     let event = field_keys(ui, &field, field_rc, st, history);
 
-    if g.hint {
-        winui::text_font(&p, font, o.x + SIDE + g.field + GAP, y + 20.0, &slot, ink);
+    if g.hint
+        && let Some((text, icon, fill, ink)) = &chip
+    {
+        crate::adddlg::chip(
+            ui,
+            &p,
+            (o.x + SIDE + g.field + GAP, y + FIELD_H / 2.0),
+            text,
+            *icon,
+            (*fill, *ink),
+        );
     }
     // At the band's end, never over the field (a window narrower than the narrowest parts).
     let left = (o.x + w - SIDE - g.button).max(o.x + SIDE + g.field + GAP);
@@ -192,8 +210,12 @@ pub fn paste_bar(
     // A click leaves no widget focused (a main-window button), so Enter after it is not a
     // second submit; a screen reader's Focus, or egui's order from another focused widget,
     // still reaches it. From the keyboard, Enter in the field submits as it does.
-    let download =
-        winui::icon_label_button(ui, button_rc, "gx-download", label, ButtonKind::Accent);
+    let kind = if bar.enabled() {
+        ButtonKind::Accent
+    } else {
+        ButtonKind::Disabled
+    };
+    let download = winui::icon_label_button(ui, button_rc, "gx-download", &label, kind);
     event.or(download.clicked().then_some(PasteEvent::Submit))
 }
 
@@ -453,22 +475,92 @@ pub fn paste_field_id() -> egui::Id {
     egui::Id::unique("graphite-paste-field")
 }
 
-/// A submit's outcome (Enter or Download) from what `dialogs::accept_address` made of the
-/// field's text. Accepted: the field empties and the address goes on as Add URL's OK sends it,
-/// without a login (Sites Logins still applies, D3). Rejected: the text stays, Add URL's
-/// "Invalid address" takes the hint's place (D2) and the field keeps the keys.
-pub fn submit(st: &mut PasteBar, accepted: Option<url::Url>) -> Option<crate::dialogs::NewUrl> {
-    match accepted {
-        Some(url) => {
-            st.text.clear();
-            st.error = None;
-            Some(crate::dialogs::NewUrl { url, login: None })
+/// What the field holds, read by `addkind`'s rules (no disk asked: a .torrent path named is
+/// taken as there, and Add torrent says if it isn't).
+pub fn bar_of(st: &PasteBar) -> crate::addkind::Bar {
+    crate::addkind::bar_kind(&st.text, &|_| true)
+}
+
+/// A submit's outcome (Enter or the button) from what the field holds ([`bar_of`]). One
+/// address or several: the field empties and they go on (one into its flow as Add URL's OK
+/// sent it, without a login: Sites Logins still applies, D3; several, their text kept in
+/// `pending`, to the Add window). Nothing: the text stays, "Invalid address" takes the chip's
+/// place (D2) and the field keeps the keys.
+pub fn submit(st: &mut PasteBar) -> Option<crate::addkind::Bar> {
+    let bar = bar_of(st);
+    if bar.enabled() {
+        st.pending = std::mem::take(&mut st.text);
+        st.error = None;
+        Some(bar)
+    } else {
+        st.error = Some(crate::i18n::t("Invalid address").to_owned());
+        st.focus_next = true;
+        None
+    }
+}
+
+/// A chip as drawn: its text, icon, fill (None: the error's outline) and ink.
+type Chip = (
+    String,
+    Option<&'static str>,
+    Option<egui::Color32>,
+    egui::Color32,
+);
+
+/// The paste bar's chip for what the field holds. None while the field is empty.
+fn bar_chip(st: &PasteBar, bar: &crate::addkind::Bar) -> Option<Chip> {
+    use crate::addkind::{Bar, Kind, site};
+    let c = crate::theme::colors();
+    if let Some(e) = &st.error {
+        return Some((e.clone(), None, None, c.error));
+    }
+    Some(match bar {
+        Bar::Empty => return None,
+        // i18n: the paste bar's chip when the field holds no address
+        Bar::Invalid => (
+            crate::i18n::t("Not an address").to_owned(),
+            None,
+            None,
+            c.error,
+        ),
+        // i18n: the paste bar's chip for several addresses; {n} is how many
+        Bar::Many(n) => (
+            crate::i18n::tn(*n as u64, "{n} link", "{n} links"),
+            Some("gx-link"),
+            Some(c.chip_web),
+            c.chip_text,
+        ),
+        Bar::One(kind) => {
+            let word = crate::i18n::t(kind.chip());
+            let label = match kind {
+                // "Link · example.org", "Video · youtube.com"
+                Kind::Link(u) | Kind::Video(u) => crate::i18n::fmt(
+                    // i18n: the paste bar's chip for one link or video page: {kind} is "Link" or "Video", {site} the address's site
+                    crate::i18n::t("{kind} · {site}"),
+                    &[("kind", word), ("site", &crate::i18n::ltr(&site(u)))],
+                ),
+                _ => word.to_owned(),
+            };
+            let fill = if kind.web() {
+                c.chip_web
+            } else {
+                c.chip_torrent
+            };
+            (label, Some(kind.icon()), Some(fill), c.chip_text)
         }
-        None => {
-            st.error = Some(crate::i18n::t("Invalid address").to_owned());
-            st.focus_next = true;
-            None
-        }
+    })
+}
+
+/// The paste bar's button label for what the field holds: Download, Add torrent, Choose
+/// quality, "Add N…" (several, the Add window lists them).
+pub fn bar_button(bar: &crate::addkind::Bar) -> String {
+    match bar {
+        // i18n: the paste bar's button for several addresses: the Add window lists them
+        crate::addkind::Bar::Many(n) => crate::i18n::fmt(
+            crate::i18n::t("Add {n}..."),
+            &[("n", &crate::i18n::integer(*n as u64))],
+        ),
+        other => crate::i18n::t(other.button()).to_owned(),
     }
 }
 
@@ -479,12 +571,19 @@ impl PasteBar {
         self.error = None;
     }
 
-    /// Put text in the field (Ctrl+V): its first line, without control characters and trimmed;
-    /// any "Invalid address" goes and the field takes the focus on the next frame. Nothing is
-    /// submitted: Enter or Download does that (D13).
+    /// Put text in the field (Ctrl+V): its lines on one, a space between them, without control
+    /// characters and trimmed (several links read as "N links"); any "Invalid address" goes
+    /// and the field takes the focus on the next frame. Nothing is submitted: Enter or the
+    /// button does that (D13).
     pub fn fill(&mut self, clip: &str) {
-        let first = clip.lines().next().unwrap_or_default();
-        self.text = crate::winui::single_line(first).trim().to_owned();
+        let lines: Vec<&str> = clip
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .collect();
+        self.text = crate::winui::single_line(&lines.join(" "))
+            .trim()
+            .to_owned();
         self.error = None;
         self.focus_next = true;
     }
@@ -1307,14 +1406,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn fill_keeps_the_first_line_trimmed_without_control_characters() {
+    fn fill_puts_the_lines_on_one_trimmed_without_control_characters() {
         let mut bar = PasteBar {
             text: "typed before".into(),
             error: Some("Invalid address".into()),
             ..Default::default()
         };
         bar.fill("  \thttps://example.com/a\u{7}b.zip \r\nhttps://example.com/second\n");
-        assert_eq!(bar.text, "https://example.com/ab.zip");
+        assert_eq!(
+            bar.text,
+            "https://example.com/ab.zip https://example.com/second"
+        );
+        assert_eq!(bar_of(&bar), crate::addkind::Bar::Many(2));
         assert_eq!(bar.error, None);
         assert!(bar.focus_next);
         // Tabs inside the line are spaces; a lone carriage return is no line break of its own.
@@ -1445,9 +1548,14 @@ mod tests {
             data: None,
         });
         // Typing in the focused field clears the error.
-        band(&ctx, &mut bar, vec![egui::Event::Text("x".into())]);
-        assert_eq!(bar.text, "x");
+        band(
+            &ctx,
+            &mut bar,
+            vec![egui::Event::Text("a.example/f.zip".into())],
+        );
+        assert_eq!(bar.text, "a.example/f.zip");
         assert_eq!(bar.error, None);
+        // An address: the button is pressable (greyed while the field holds none).
         let (_, event) = band(&ctx, &mut bar, vec![click]);
         assert_eq!(event, Some(PasteEvent::Submit));
     }
@@ -1522,8 +1630,7 @@ mod tests {
         }
         assert_eq!(event, Some(PasteEvent::Submit));
         assert_eq!(ctx.memory(|m| m.focused()), None, "no widget focused");
-        let accepted = crate::dialogs::accept_address(&bar.text);
-        assert!(submit(&mut bar, accepted).is_some());
+        assert!(submit(&mut bar).is_some());
         bar.leave(&ctx);
         band(&ctx, &mut bar, vec![]);
         let (_, event) = band(&ctx, &mut bar, vec![press(egui::Key::Enter)]);
@@ -1569,24 +1676,36 @@ mod tests {
         assert_eq!(event, Some(PasteEvent::Submit));
     }
 
-    /// Accepted, the field empties and the address goes on once, without a login; rejected,
-    /// the text stays with Add URL's "Invalid address" and the field keeps the keys.
+    /// Accepted, the field empties and the address goes on once; several, their text is kept
+    /// for the Add window; rejected, the text stays with "Invalid address" and the field keeps
+    /// the keys.
     #[test]
     fn submit_hands_on_an_accepted_address_and_keeps_a_rejected_text() {
+        use crate::addkind::{Bar, Kind};
         let mut bar = PasteBar {
             text: "example.org/a.zip".into(),
             error: Some("Invalid address".into()),
             ..Default::default()
         };
-        let accepted = crate::dialogs::accept_address(&bar.text);
-        let new = submit(&mut bar, accepted).expect("accepted");
-        assert_eq!(new.url.as_str(), "https://example.org/a.zip");
-        assert!(new.login.is_none());
+        let got = submit(&mut bar).expect("accepted");
+        assert_eq!(
+            got,
+            Bar::One(Kind::Link(
+                url::Url::parse("https://example.org/a.zip").unwrap()
+            ))
+        );
         assert_eq!((bar.text.as_str(), bar.error.as_deref()), ("", None));
+        assert!(submit(&mut bar).is_none(), "once: the field emptied");
+
+        bar.text = "https://a.example/1.zip https://a.example/2.zip".into();
+        assert_eq!(submit(&mut bar), Some(Bar::Many(2)));
+        assert_eq!(
+            bar.pending,
+            "https://a.example/1.zip https://a.example/2.zip"
+        );
 
         bar.text = "not an address".into();
-        let accepted = crate::dialogs::accept_address(&bar.text);
-        assert!(submit(&mut bar, accepted).is_none());
+        assert!(submit(&mut bar).is_none());
         assert_eq!(bar.text, "not an address");
         assert_eq!(bar.error.as_deref(), Some("Invalid address"));
         assert!(bar.focus_next, "the field keeps the keys");
@@ -1609,13 +1728,14 @@ mod tests {
         )];
         let clip = ctrl_v(true, false, false, &events).expect("the bar's paste");
         bar.fill(clip);
-        assert_eq!(bar.text, "https://example.com/a.zip");
+        let both = "https://example.com/a.zip https://example.com/b.zip";
+        assert_eq!(bar.text, both);
         assert_eq!(bar.error, None);
         for _ in 0..2 {
             let (_, event) = band(&ctx, &mut bar, vec![]);
             assert_eq!(event, None, "nothing submitted");
         }
-        assert_eq!(bar.text, "https://example.com/a.zip");
+        assert_eq!(bar.text, both);
         assert!(ctx.memory(|m| m.has_focus(paste_field_id())));
     }
 
@@ -1726,10 +1846,10 @@ mod tests {
         let ctx = focused(&mut bar, &[]);
         let (nodes, event) = band(&ctx, &mut bar, vec![press(egui::Key::Enter)]);
         assert_eq!(event, Some(PasteEvent::Submit));
-        assert_eq!(field_node(&nodes).description(), None, "no error yet");
+        // Before Enter is refused: the chip's word for it, read as the field's description.
+        assert_eq!(field_node(&nodes).description(), Some("Not an address"));
         // As `App::paint` does on `Submit`.
-        let accepted = crate::dialogs::accept_address(&bar.text);
-        assert!(submit(&mut bar, accepted).is_none(), "junk is rejected");
+        assert!(submit(&mut bar).is_none(), "junk is rejected");
         let (nodes, event) = band(&ctx, &mut bar, vec![]);
         assert_eq!(event, None);
         let field = field_node(&nodes);
@@ -1737,6 +1857,38 @@ mod tests {
         assert_eq!(field.description(), Some("Invalid address"));
         assert_eq!(bar.text, "not an address");
         assert!(field_focused(&ctx), "the field keeps the keys");
+    }
+
+    /// PR 76's audit: the chip is read too, as the field's description, whatever it names.
+    #[test]
+    fn the_chip_is_the_fields_description() {
+        let _fonts = crate::theme::font_tests();
+        let cases = [
+            // Screen readers get it without the direction isolates the chip draws with.
+            (
+                "https://example.org/f.zip".to_owned(),
+                "Link · example.org".to_owned(),
+            ),
+            ("magnet:?xt=urn:btih:abc".to_owned(), "Magnet".to_owned()),
+            (
+                "https://a.example/1.zip\nhttps://b.example/2.zip".to_owned(),
+                "2 links".to_owned(),
+            ),
+        ];
+        for (text, said) in cases {
+            let mut bar = PasteBar {
+                text,
+                ..Default::default()
+            };
+            let ctx = focused(&mut bar, &[]);
+            let (nodes, _) = band(&ctx, &mut bar, vec![]);
+            assert_eq!(field_node(&nodes).description(), Some(said.as_str()));
+        }
+        // Empty: nothing to say.
+        let mut bar = PasteBar::default();
+        let ctx = focused(&mut bar, &[]);
+        let (nodes, _) = band(&ctx, &mut bar, vec![]);
+        assert_eq!(field_node(&nodes).description(), None);
     }
 
     /// The bar hidden while its field has the keys (`Cmd::TogglePasteBar` calls `leave`): the
@@ -2188,9 +2340,9 @@ mod tests {
     // **Validates: Requirements 7.3, 7.4, 7.6, 9.1, 9.3, 9.5**
     proptest::proptest! {
         #![proptest_config(proptest::prelude::ProptestConfig::with_cases(256))]
-        /// Accepted by Add URL's rule, the field empties with no error and the address goes on
-        /// without a login; rejected, the text stays with "Invalid address" and the field keeps
-        /// the keys; any edit after a rejection clears the error.
+        /// Something to add (`addkind`'s rules), the field empties with no error and it goes
+        /// on as it was read; nothing, the text stays with "Invalid address" and the field
+        /// keeps the keys; any edit after a rejection clears the error.
         #[test]
         fn a_submit_empties_an_accepted_field_and_keeps_a_rejected_one(
             text in typed(),
@@ -2204,17 +2356,15 @@ mod tests {
                 focus_next,
                 ..Default::default()
             };
-            let accepted = crate::dialogs::accept_address(&bar.text);
-            let new = submit(&mut bar, accepted.clone());
-            match accepted {
-                Some(url) => {
-                    let new = new.expect("an accepted address goes on");
-                    proptest::prop_assert_eq!(new.url, url);
-                    proptest::prop_assert!(new.login.is_none());
+            let read = bar_of(&bar);
+            let new = submit(&mut bar);
+            match read.enabled() {
+                true => {
+                    proptest::prop_assert_eq!(new, Some(read));
                     proptest::prop_assert!(bar.text.is_empty());
                     proptest::prop_assert_eq!(bar.error, None);
                 }
-                None => {
+                false => {
                     proptest::prop_assert!(new.is_none());
                     proptest::prop_assert_eq!(&bar.text, &text);
                     proptest::prop_assert_eq!(bar.error.as_deref(), Some("Invalid address"));
@@ -2227,8 +2377,9 @@ mod tests {
             }
         }
 
-        /// Ctrl+V's fill: the clipboard's first line, tabs and carriage returns as spaces,
-        /// other control characters out, trimmed; no error and the focus asked for.
+        /// Ctrl+V's fill: the clipboard's lines on one, a space between them, tabs and carriage
+        /// returns as spaces, other control characters out, trimmed; no error and the focus
+        /// asked for.
         #[test]
         fn fill_gives_one_trimmed_line_without_control_characters(
             clip in clipboard(),
@@ -2237,8 +2388,10 @@ mod tests {
         ) {
             let mut bar = PasteBar { text, error, ..Default::default() };
             bar.fill(&clip);
-            let first = clip.lines().next().unwrap_or_default();
-            let want: String = first
+            let lines: Vec<&str> =
+                clip.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+            let want: String = lines
+                .join(" ")
                 .chars()
                 .filter_map(|ch| match ch {
                     '\r' | '\t' => Some(' '),

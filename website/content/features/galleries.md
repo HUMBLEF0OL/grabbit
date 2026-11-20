@@ -16,7 +16,7 @@ help: galleries.md
 
 ## Paste the address, get the pictures
 
-Click **Add URL** and paste a gallery's address. Instead of saving the page as a file, Grabbit opens
+Click **Add** and paste a gallery's address. Instead of saving the page as a file, Grabbit opens
 **Download a gallery**. When its line reads **gallery-dl can download this gallery's files**,
 check **Save to** and click **Download Now**, or **Later** to add it without starting.
 
@@ -34,7 +34,7 @@ nothing but the new pictures.
 
 ## Which sites
 
-Add URL sends these to the gallery window: Wikimedia Commons categories, Flickr photographers and
+Add sends these to the gallery window: Wikimedia Commons categories, Flickr photographers and
 albums, DeviantArt and ArtStation galleries, Imgur albums, Pixiv artists and works, Pinterest
 boards and pins, Danbooru and Gelbooru searches, Tumblr blogs and Bluesky profiles. A picture's
 own address, one ending in `.jpg` or `.png`, still downloads as a single file.

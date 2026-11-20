@@ -15,15 +15,17 @@ not), and the menu bar and every right-click menu as menus whose items can be ru
 
 | Keys | What they do |
 |---|---|
-| **Ctrl+N** | Add a download (**Add URL**) |
-| **Ctrl+V** | Paste an address into the paste bar (while nothing else has the keyboard; it doesn't add it, **Enter** does) |
+| **Ctrl+N** | Add links, magnets or video pages (the **Add** window) |
+| **Ctrl+O** | Open a `.torrent` file |
+| **Ctrl+V** | Paste an address into the paste bar (while nothing else has the keyboard; it doesn't add it, **Enter** does). Several links, or the paste bar hidden: the **Add** window lists them |
+| **Enter** / **Shift+Enter** in the **Add** window's box | Add what it found / start a new line |
 | **Ctrl+F** | Go to the **Find** field in the title bar, its text selected |
 | **F3** / **Shift+F3** | Next / previous match (in the field: **Enter** / **Shift+Enter**) |
 | **Esc** in the **Find** field | Clear it and go back to the list (or close its menu) |
 | Type a name | Jump to the download whose name starts with it |
 
-In the paste bar's address box, **Enter** adds the address, **Esc** leaves the box, **Up** /
-**Down** step through the last addresses (the same list as **Add URL**'s), and **Alt+Down** or
+In the paste bar's address box, **Enter** does what its button says, **Esc** leaves the box, **Up** /
+**Down** step through the last addresses added, and **Alt+Down** or
 **F4** opens that list.
 
 ## The selected download
@@ -106,7 +108,7 @@ A window larger than the screen at a big interface size scrolls.
 | Type a name | Jump to the item that starts with it, in a list or a drop-down |
 | **Delete** | Remove the selected item of a list (a login, an exception, a queue: asks first) |
 
-In **Add URL**'s address and **Download File Info**'s **Save As**, **Up** / **Down** go through
+In the paste bar's address and **Download File Info**'s **Save As**, **Up** / **Down** go through
 the addresses and folders used before.
 
 Right-click any text box for **Undo**, **Cut**, **Copy**, **Paste**, **Delete** and **Select

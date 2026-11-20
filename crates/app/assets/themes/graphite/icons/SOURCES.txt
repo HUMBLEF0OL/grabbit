@@ -14,6 +14,7 @@ stroke="#ffffff" (the app tints white), stroke-width="1.75", width and height
 16 or 24; viewBox 0 0 24 24 kept. Made by design/graphite/source/export_icons.py.
 
 need -> Tabler outline icon
+tb-add               circle-plus
 tb-add-url           link-plus
 tb-add-torrent       magnet
 tb-resume            player-play
@@ -108,5 +109,8 @@ gx-volume            volume
 gx-computer          device-desktop
 gx-sun               sun
 gx-moon              moon
+gx-clipboard         clipboard
+gx-list-numbers      list-numbers
+gx-drag-drop         drag-drop
 gx-arrow-left        arrow-left
 gx-puzzle            puzzle
