@@ -9,6 +9,8 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 One Add for links, magnets, torrents and video pages; Options, the Scheduler and the other settings in the main window; Find in the title bar; a light/dark button; Graphite in green; and fixes from the original MDM.
 
+**Updating from 1.0.0:** **Help → Check for updates → Update now** (or run the new setup); your list and settings stay. The browser extension isn't in the browsers' stores yet, so add it once by hand: **Options → Browser extension → Show me how** opens the steps that load it from Grabbit's folder (1.0.0's window sent you to the original app's listing, whose extension never reaches Grabbit). The setup isn't code-signed yet, so Windows SmartScreen may ask: **More info → Run anyway**; each release's checksums are signed with Grabbit's release key.
+
 ### Changed
 
 - **One Add for everything.** The toolbar's **Add URL** and **Add Torrent** are one **Add**: its window takes addresses, magnet links, `.torrent` files and video pages, one per line, typed, pasted or dropped on it, and lists what it found (**Link**, **Magnet**, **Torrent file**, **Video**…) with what comes next, or why a line is left out. **Add** sends each one where it always went (Download File Info, Add torrent, the video window, Batch download); **Ask where to save each one** off adds the files straight to their folders, and **Later** adds them without starting. Its arrow has **Add links or a magnet...** (**Ctrl+N**), **Open a .torrent file...** (**Ctrl+O**), **Add from the clipboard** (**Ctrl+V**) and **Batch download...**. Links and `.torrent` files dropped on the main window open the Add window with them ([Adding downloads](docs/adding-downloads.md)).
