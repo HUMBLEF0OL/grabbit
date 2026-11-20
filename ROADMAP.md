@@ -611,7 +611,8 @@ Done since 1.0.1; ships in the next release.
   notices keep Mister Download Manager's author alongside, as the GPL asks.
 - ✅ One way into each setting: Torrent settings left the Tasks menu (Options → Torrents), menu
   items that open a section of Options lost their "...", and Options' names are written one
-  way (**Speed Limiter**, **Proxy / SOCKS**, **Site logins**, **Browser extension**).
+  way (**Speed Limiter**, **Proxy / SOCKS**, **Site logins**, **Browser extension**); each
+  section under **Tools** is headed with its row's name.
 
 ## Being worked on
 

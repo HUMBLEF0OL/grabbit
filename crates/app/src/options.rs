@@ -4394,36 +4394,37 @@ pub(crate) const TORRENTS_PAGE: usize = 14;
 pub(crate) const EXTENSION_PAGE: usize = 15;
 
 /// The windows that moved into the page (plan 11b), listed after Options' own pages under a
-/// hairline and the caption "Tools": number, name in the list, Graphite icon, heading. Their
-/// bodies are drawn by `settingspage.rs`, not by [`OptionsDialog::page_area`].
+/// hairline and the caption "Tools": number, name in the list, Graphite icon, heading (the
+/// row's name: one name for each tool, as its menus say it). Their bodies are drawn by
+/// `settingspage.rs`, not by [`OptionsDialog::page_area`].
 const TOOLS: [(usize, &str, &str, &str); 4] = [
     (
         SCHEDULER_PAGE,
         // i18n: noun: the tool that starts and stops queues on time
         crate::i18n::mark("Scheduler"),
         "tb-scheduler",
-        crate::i18n::mark("Queues and the scheduler"),
+        crate::i18n::mark("Scheduler"),
     ),
     (
         SPEED_PAGE,
         // i18n: Options in the main window: the side list's section with the Speed Limiter's settings
         crate::i18n::mark("Speed Limiter"),
         "gx-gauge",
-        crate::i18n::mark("Speed Limiter settings"),
+        crate::i18n::mark("Speed Limiter"),
     ),
     (
         TORRENTS_PAGE,
         // i18n: Options in the main window: the side list's section with the torrent settings
         crate::i18n::mark("Torrents"),
         "cat-torrents",
-        crate::i18n::mark("Torrent settings"),
+        crate::i18n::mark("Torrents"),
     ),
     (
         EXTENSION_PAGE,
         // i18n: Options in the main window: the side list's section that adds the browser extension
         crate::i18n::mark("Browser extension"),
         "gx-puzzle",
-        // Its row's name: the window at a start keeps its own title, "Add Grabbit to your browser".
+        // The window at a start keeps its own title, "Add Grabbit to your browser".
         crate::i18n::mark("Browser extension"),
     ),
 ];
@@ -4825,6 +4826,14 @@ fn kept_text(kept: crate::secrets::Kept) -> Option<&'static str> {
 mod tests {
     use super::*;
     use egui::accesskit::{NodeId, Role, TreeUpdate};
+
+    /// A tool under "Tools" has one name: its row's, its heading's.
+    #[test]
+    fn tools_are_headed_with_their_row_names() {
+        for (_, name, _, heading) in TOOLS {
+            assert_eq!(name, heading);
+        }
+    }
 
     fn input(events: Vec<egui::Event>) -> egui::RawInput {
         egui::RawInput {
