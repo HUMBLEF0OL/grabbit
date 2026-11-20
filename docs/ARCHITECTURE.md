@@ -197,8 +197,8 @@ also take them on GitHub's Windows runner).
 `tools/contributors.py` reads who opened pull requests and issues, and who commented, from
 GitHub's public API (the maintainer, Claude and bots left out) for every place that thanks them:
 the website's home page, `/contributors.html` and each release on the News page (`build.py`, on
-every build), each release's notes when `release.yml` builds it (the people active since the
-release before; a release published with `tools/installer/publish.ps1` has its CHANGELOG
+every build), each release's notes only if one is ever published by `release.yml` run on a tag
+(a release published with `tools/installer/publish.ps1`, the usual way, has its CHANGELOG
 section only) and the README (`python tools/contributors.py readme` at each release's preparation: its round
 photos are committed in `art/contributors/`, since GitHub can't round a picture in a README).
 

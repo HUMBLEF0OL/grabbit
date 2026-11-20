@@ -2,7 +2,8 @@
 # and the browser extensions (tools/extension/pack.ps1: Chromium zip, Firefox .xpi).
 # Releases are built and published from the maintainer's computer (tools/installer/publish.ps1,
 # the same steps), so a tag starts nothing here. Run by hand (Actions -> Release -> Run workflow)
-# this only builds the downloads and keeps them as artifacts: nothing is published.
+# on a branch, this only builds the downloads and keeps them as artifacts: nothing is published.
+# Run by hand on a tag, its publish job still publishes that release: don't, use publish.ps1.
 name: Release
 
 on:

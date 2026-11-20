@@ -104,7 +104,7 @@ To check that your copy is the real one:
 2. Get your file's SHA-256: run `certutil -hashfile "Grabbit-0.5.0-setup.exe" SHA256`.
 3. Compare it with the same file's line in that release's `SHA256SUMS.txt`.
 
-If they match, it is the file we published. Every release is built on GitHub from the [public source code](https://github.com/HUMBLEF0OL/grabbit), so anyone can read what went into it.
+If they match, it is the file we published. Every release is built from the [public source code](https://github.com/HUMBLEF0OL/grabbit) at its tagged commit, and its `SHA256SUMS.txt` is signed with Grabbit's release key, so anyone can read what went into it.
 
 If your antivirus quarantined Grabbit, restore it and add an exception for its folder. If it flags something other than the setup or Grabbit's own programs, or a copy from anywhere else, don't run it, and please [tell us](https://github.com/HUMBLEF0OL/grabbit/issues).
 
