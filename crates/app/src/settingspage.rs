@@ -999,7 +999,7 @@ mod tests {
         for (section, row, control) in [
             (
                 SPEED_PAGE,
-                "Speed limiter",
+                "Speed Limiter",
                 &["Always turn on Speed Limiter on Grabbit startup"][..],
             ),
             (

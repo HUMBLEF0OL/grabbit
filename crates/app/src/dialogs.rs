@@ -1874,7 +1874,7 @@ impl Complete {
 
 // ---- Speed Limiter settings (client 453 × 145, light) --------------------------------------
 
-/// Downloads → Speed Limiter → Settings... (notes/ui-spec/scheduler-and-misc.md §2).
+/// Downloads → Speed Limiter → Settings (notes/ui-spec/scheduler-and-misc.md §2).
 pub struct SpeedSettings {
     pub kb: String,
     pub on_startup: bool,

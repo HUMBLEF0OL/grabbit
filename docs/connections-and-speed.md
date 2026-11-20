@@ -111,9 +111,9 @@ The Speed Limiter keeps Grabbit from using all of your connection.
 
 ### For every download
 
-1. Choose **Downloads → Speed Limiter → Settings...**.
+1. Choose **Downloads → Speed Limiter → Settings**.
 2. Set **Maximum download speed for one file** in KBytes/sec. It starts at 10, so set it before you turn the limiter on.
-3. Click **Save**. (The settings open in the main window, as the **Speed limiter** section of [Options](options.md), listed under **Tools**; **← Downloads** goes back to the list.)
+3. Click **Save**. (The settings open in the main window, as the **Speed Limiter** section of [Options](options.md), listed under **Tools**; **← Downloads** goes back to the list.)
 4. Choose **Downloads → Speed Limiter → Turn on**. **Turn off** gives full speed again.
 
 **Always turn on Speed Limiter on Grabbit startup** turns it on each time Grabbit starts.

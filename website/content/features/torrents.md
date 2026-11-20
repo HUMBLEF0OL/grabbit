@@ -39,7 +39,7 @@ from, the trackers, a map of the pieces, and the share ratio.
 ## Sharing is your choice
 
 A finished torrent stops, like any download. Turn on **Keep sharing torrents after they finish**
-in **Tasks → Torrent settings...** to go on uploading to others.
+in **Downloads → Options → Torrents** to go on uploading to others.
 
 Plainly: everyone sharing the same torrent sees your IP address. That is how BitTorrent works,
 and no setting changes it. To hide it, use a VPN for the whole computer.

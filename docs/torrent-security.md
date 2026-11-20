@@ -2,7 +2,7 @@
 
 [← Back to docs index](README.md)
 
-A torrent comes from other people's computers, not from one website. That changes what you can trust and what others can see. This page says plainly what Grabbit does and what it doesn't. The switches it mentions are in **Tasks → Torrent settings...**.
+A torrent comes from other people's computers, not from one website. That changes what you can trust and what others can see. This page says plainly what Grabbit does and what it doesn't. The switches it mentions are in **Downloads → Options → Torrents**.
 
 ## What other people can see
 

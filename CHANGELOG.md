@@ -9,6 +9,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 - **A smaller button over videos.** The browser extension's button is now a 30-pixel round chip in Graphite's colours, dark glass with a green arrow, in place of the wide light **Download video** bar. Pointing at it opens it to **Download video ⌄**, toward the inside of the video, with the arrow staying under the pointer; after a click it says for two seconds what happened (a tick and **Sent to Grabbit**, or a red mark and why not). Its menu lost **Download video**, which did what the button does; **Hide on this video**, **Never on** the site and **Button settings...** are unchanged. It still drags to any edge and stays there on that site.
 - **Grabbit's own author and publisher.** The website's footer, its privacy and terms pages, the app's file details (**Properties → Details**) and the installer name HUMBLEF0OL, Grabbit's maintainer. The copyright notices still name Ahmed Nefzaoui, the author of Mister Download Manager that Grabbit is forked from.
+- **One way into Torrent settings.** **Tasks → Torrent settings...** is gone: the Tasks menu adds things, and Torrent settings are the **Torrents** section of **Downloads → Options**, under **Tools**. **Downloads → Speed Limiter → Settings** lost its "...", as Options and the Scheduler have none: they open a section of the main window, not a window. Options' side list says **Speed Limiter**, as the menus, the tray and the progress window do.
 
 ## [1.0.1] - 2026-11-20
 

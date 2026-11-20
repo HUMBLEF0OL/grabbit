@@ -4407,7 +4407,7 @@ const TOOLS: [(usize, &str, &str, &str); 4] = [
     (
         SPEED_PAGE,
         // i18n: Options in the main window: the side list's section with the Speed Limiter's settings
-        crate::i18n::mark("Speed limiter"),
+        crate::i18n::mark("Speed Limiter"),
         "gx-gauge",
         crate::i18n::mark("Speed Limiter settings"),
     ),

@@ -2899,6 +2899,8 @@ impl App {
                     "draw" => "Draw with",
                     "theme" => "Theme",
                     "size" => "&Interface size",
+                    // menu:2:speed: Downloads → Speed Limiter.
+                    "speed" => "Speed &Limiter",
                     _ => "",
                 };
                 let at = self
@@ -7040,7 +7042,8 @@ impl App {
                 I("&Add new download", Cmd::AddUrl, true, false),
                 I("Open &torrent file...", Cmd::OpenTorrentFile, true, false),
                 I("Add &magnet link...", Cmd::AddMagnet, true, false),
-                I("Torrent setti&ngs...", Cmd::TorrentSettings, true, false),
+                // Torrent settings: Options → Torrents only; a menu keeps a shortcut into
+                // Options just beside the tool's own switches (Scheduler, Speed Limiter).
                 I("Add &batch download", Cmd::Batch(false), true, false),
                 I(
                     "Add batch download from &clipboard",
@@ -7161,7 +7164,8 @@ impl App {
                             !self.settings.speed_limit_on,
                         ),
                         Sep,
-                        I("S&ettings...", Cmd::LimiterSettings, true, false),
+                        // No "...": a section of Options' page, not a window, as Options itself.
+                        I("S&ettings", Cmd::LimiterSettings, true, false),
                     ],
                 ),
                 Sep,
@@ -14143,9 +14147,9 @@ mod settings_page_tests {
         let ctx = egui::Context::default();
         let page = |a: &App| a.settings_page.as_ref().map(|p| p.page());
         a.run(Cmd::LimiterSettings, None, &ctx);
-        assert_eq!(page(&a), Some(SPEED_PAGE), "Speed Limiter → Settings...");
+        assert_eq!(page(&a), Some(SPEED_PAGE), "Speed Limiter → Settings");
         a.run(Cmd::TorrentSettings, None, &ctx);
-        assert_eq!(page(&a), Some(TORRENTS_PAGE), "Torrent settings...");
+        assert_eq!(page(&a), Some(TORRENTS_PAGE), "Cmd::TorrentSettings");
         for (name, want) in [
             ("speedlimit", SPEED_PAGE),
             ("torrent-settings", TORRENTS_PAGE),
@@ -14172,6 +14176,51 @@ mod settings_page_tests {
         a.show_named("extension", &ctx);
         assert!(a.settings_page.is_none(), "the offer's window instead");
         assert!(a.extension.is_some());
+    }
+
+    /// The menus' ways into Options' page: no "..." (a page, not a window), and none in Tasks
+    /// (adding things); Downloads keeps Options and the shortcuts beside the tools' switches.
+    #[test]
+    fn menu_shortcuts_into_options_agree() {
+        use crate::chrome::MenuEntry;
+        fn walk(e: &[MenuEntry<Cmd>], out: &mut Vec<(&'static str, bool)>) {
+            for e in e {
+                match e {
+                    MenuEntry::Item(l, c, ..) | MenuEntry::Radio(l, c, ..) => {
+                        let opens_page = matches!(
+                            c,
+                            Cmd::Options
+                                | Cmd::Scheduler
+                                | Cmd::LimiterSettings
+                                | Cmd::TorrentSettings
+                        );
+                        out.push((l, opens_page));
+                    }
+                    MenuEntry::Sub(_, _, kids) => walk(kids, out),
+                    MenuEntry::Sep => {}
+                }
+            }
+        }
+        let a = app(Vec::new());
+        let items = |i| {
+            let mut out = Vec::new();
+            walk(&a.menu_entries(i), &mut out);
+            out
+        };
+        assert!(
+            !items(0).iter().any(|(_, page)| *page),
+            "Tasks has no way into Options"
+        );
+        let downloads: Vec<_> = items(2).into_iter().filter(|(_, p)| *p).collect();
+        assert_eq!(
+            downloads.iter().map(|(l, _)| *l).collect::<Vec<_>>(),
+            ["S&cheduler", "S&ettings", "&Options"]
+        );
+        for i in 0..5 {
+            for (l, page) in items(i) {
+                assert!(!(page && l.ends_with("...")), "{l}: a page, no \"...\"");
+            }
+        }
     }
 
     /// Plan 11b2: Save sets the Speed limiter's and Torrents' changes (as their OK did), then

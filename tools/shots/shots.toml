@@ -278,7 +278,7 @@ under = "Torrent settings"
 take = "torrent-settings+@main"
 crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Torrent settings: sharing, limits and what others can see"
-caption = "Tasks → Torrent settings..."
+caption = "Downloads → Options → Torrents"
 
 # ---- Queues and the Scheduler -------------------------------------------------------------------
 
@@ -558,7 +558,7 @@ under = "Cap Grabbit as a whole (recommended)"
 take = "speedlimit+@main"
 crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Speed Limiter settings: the maximum speed for one file, and a limit for all downloads together"
-caption = "Downloads → Speed Limiter → Settings...: a speed for each file, or one for all downloads together."
+caption = "Downloads → Speed Limiter → Settings: a speed for each file, or one for all downloads together."
 
 [[shot]]
 id = "usb-save-to"

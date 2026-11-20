@@ -98,10 +98,10 @@ Feeds and rules are kept in `rss.json` in Grabbit's data folder. Grabbit reads a
 
 ## Torrent settings
 
-Choose **Tasks → Torrent settings...**. They open in the main window, as the **Torrents** section of [Options](options.md), listed under **Tools**; **Save** keeps your changes, **Discard** throws them away, and **← Downloads** goes back to the list:
+Choose **Downloads → Options**, then **Torrents** under **Tools** in the list down the side. They open in the main window, as that section of [Options](options.md); **Save** keeps your changes, **Discard** throws them away, and **← Downloads** goes back to the list:
 
 ![Torrent settings: sharing, limits and what others can see](images/help/torrent-settings.webp)
-*Tasks → Torrent settings...*
+*Downloads → Options → Torrents*
 
 - **Keep sharing torrents after they finish** — off by default: a finished torrent stops, like any download. Turn it on to keep uploading to other peers after your download is complete.
   - **Stop sharing at a share ratio of** — a finished torrent stops being shared once it has sent that many times what it has (2.00: twice). Off by default.
