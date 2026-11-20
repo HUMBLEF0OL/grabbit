@@ -1,4 +1,4 @@
-//! Options → Proxy / Socks → Network adapter (#35): every connection MDM opens goes out through
+//! Options → Proxy / SOCKS → Network adapter (#35): every connection MDM opens goes out through
 //! the chosen adapter (a VPN's, usually), or not at all.
 //!
 //! A socket bound to the adapter before it connects can't leave through another one: the

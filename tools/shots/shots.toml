@@ -278,7 +278,7 @@ under = "Torrent settings"
 take = "torrent-settings+@main"
 crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Torrent settings: sharing, limits and what others can see"
-caption = "Tasks → Torrent settings..."
+caption = "Downloads → Options → Torrents"
 
 # ---- Queues and the Scheduler -------------------------------------------------------------------
 
@@ -416,20 +416,20 @@ caption = "Connection: how many connections, exceptions per server, download lim
 [[shot]]
 id = "options-proxy"
 page = "options.md"
-under = "Proxy / Socks"
+under = "Proxy / SOCKS"
 take = "options:proxy+@main"
 crop = { around = ["Pane:Options"], pad = 0 }
-alt = "Options on its Proxy / Socks page"
-caption = "Proxy / Socks: no proxy, the system's, or your own."
+alt = "Options on its Proxy / SOCKS page"
+caption = "Proxy / SOCKS: no proxy, the system's, or your own."
 
 [[shot]]
 id = "options-logins"
 page = "options.md"
-under = "Sites Logins"
+under = "Site logins"
 take = "options:logins+@main"
 crop = { around = ["Pane:Options"], pad = 0 }
-alt = "Options on its Sites Logins page, before any site is added: the list of sites with their user names"
-caption = "Sites Logins: a user name and password per site."
+alt = "Options on its Site logins page, before any site is added: the list of sites with their user names"
+caption = "Site logins: a user name and password per site."
 
 [[shot]]
 id = "options-accounts"
@@ -558,7 +558,7 @@ under = "Cap Grabbit as a whole (recommended)"
 take = "speedlimit+@main"
 crop = { around = ["Pane:Options"], pad = 0 }
 alt = "Speed Limiter settings: the maximum speed for one file, and a limit for all downloads together"
-caption = "Downloads → Speed Limiter → Settings...: a speed for each file, or one for all downloads together."
+caption = "Downloads → Speed Limiter → Settings: a speed for each file, or one for all downloads together."
 
 [[shot]]
 id = "usb-save-to"

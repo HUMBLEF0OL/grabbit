@@ -209,14 +209,14 @@ pub struct Settings {
     pub user_agent: String,
     /// Connection: per-server connection limits (server, number).
     pub conn_exceptions: Vec<(String, u32)>,
-    /// Proxy / Socks: 0 none, 1 system, 2 automatic script, 3 manual.
+    /// Proxy / SOCKS: 0 none, 1 system, 2 automatic script, 3 manual.
     pub proxy_from_browser: bool,
     pub proxy_mode: u8,
     pub proxy_script: String,
     pub proxy_host: String,
     pub proxy_port: String,
     pub proxy_user: String,
-    /// Sealed on disk like Sites Logins' passwords (`sealed`); a plain one from before still reads.
+    /// Sealed on disk like Site logins' passwords (`sealed`); a plain one from before still reads.
     #[serde(with = "sealed")]
     pub proxy_pass: String,
     pub proxy_http: bool,
@@ -236,7 +236,7 @@ pub struct Settings {
     pub dns_nextdns_id: String,
     /// When the chosen DNS can't be reached, ask the system's (off: strict).
     pub dns_fallback: bool,
-    /// Options → Proxy / Socks → Network adapter (#35): every connection goes through this
+    /// Options → Proxy / SOCKS → Network adapter (#35): every connection goes through this
     /// adapter (its name as the system shows it, or one of its addresses), or none at all; ""
     /// lets the system choose.
     pub net_adapter: String,
@@ -244,7 +244,7 @@ pub struct Settings {
     /// NAT), else active. Named anew when FTP arrived: `ftp_pasv` was saved as false while
     /// the box was greyed.
     pub ftp_passive: bool,
-    /// Sites Logins: (site/path, user, password). The passwords are written sealed for this
+    /// Site logins: (site/path, user, password). The passwords are written sealed for this
     /// Windows account (`sealed_logins`).
     #[serde(with = "sealed_logins")]
     pub site_logins: Vec<(String, String, String)>,
@@ -293,7 +293,7 @@ pub struct Settings {
     pub torrent_port: u16,
     pub torrent_dht: bool,
     pub torrent_lsd: bool,
-    /// Torrents go through Proxy / Socks' SOCKS5 proxy (a manual `socks5://` one only).
+    /// Torrents go through Proxy / SOCKS' SOCKS5 proxy (a manual `socks5://` one only).
     pub torrent_proxy: bool,
     /// A blocklist's address (empty: none), fetched again every `BLOCKLIST_DAYS`.
     pub torrent_blocklist: String,
@@ -326,7 +326,7 @@ pub struct Settings {
     /// Download video from a page: the subtitles last chosen (#68), offered again for the
     /// next video when it has that language (none at first).
     pub video_subs: mdm_tools::video::Subs,
-    /// Options → Sites Logins → Cookies for video sites (#229): the browser whose cookies
+    /// Options → Site logins → Cookies for video sites (#229): the browser whose cookies
     /// yt-dlp reads on this computer when the extension passed none (yt-dlp's name: `firefox`,
     /// `chrome`...; empty: off, the default), and its profile (a name or a folder; empty: the
     /// browser's last used). A settings file from before has neither: off.
@@ -666,9 +666,9 @@ impl Settings {
         crate::model::category_folder(cat, downloads, &self.category_dirs)
     }
 
-    /// Options → Proxy / Socks for the engine. An automatic configuration script (PAC) is run
+    /// Options → Proxy / SOCKS for the engine. An automatic configuration script (PAC) is run
     /// once it has been fetched (pacfetch.rs); until then, the system's settings.
-    /// The SOCKS5 proxy torrents may use: Proxy / Socks' manual one when its address is a
+    /// The SOCKS5 proxy torrents may use: Proxy / SOCKS' manual one when its address is a
     /// `socks5://` (or `socks5h://`) one, with its login; librqbit takes no other kind.
     pub fn socks5_proxy(&self) -> Option<String> {
         let host = self.proxy_host.trim();
@@ -690,7 +690,7 @@ impl Settings {
     }
 
     /// The torrent engine as Torrent settings say (#40), its data in `state_dir`. None when they
-    /// say to use the proxy and Proxy / Socks has no SOCKS5 one: torrents then don't start, never
+    /// say to use the proxy and Proxy / SOCKS has no SOCKS5 one: torrents then don't start, never
     /// going around the proxy unasked.
     pub fn torrent_config(&self, state_dir: std::path::PathBuf) -> Option<mdm_torrent::Config> {
         let proxy = match (self.torrent_proxy, self.socks5_proxy()) {
@@ -775,9 +775,9 @@ impl Settings {
     /// user's own address, so the download stops and says so.
     pub fn browser_proxy_refused(&self, context: &mdm_ipc::Command) -> Option<String> {
         (self.proxy_from_browser && context.proxy_login).then(|| {
-            // i18n: an error: the browser's VPN or proxy extension logs in to its proxy itself, and MDM can't; Options → Proxy / Socks → Network adapter is where an adapter can be chosen
+            // i18n: an error: the browser's VPN or proxy extension logs in to its proxy itself, and MDM can't; Options → Proxy / SOCKS → Network adapter is where an adapter can be chosen
             crate::i18n::t(
-                "the browser's proxy (a VPN or proxy extension) asks for a login only that extension has: use the VPN's own app, or choose its network adapter in Options → Proxy / Socks",
+                "the browser's proxy (a VPN or proxy extension) asks for a login only that extension has: use the VPN's own app, or choose its network adapter in Options → Proxy / SOCKS",
             )
             .to_owned()
         })
@@ -819,7 +819,7 @@ impl Settings {
             .clamp(1, self.connection_limit())
     }
 
-    /// The Sites Logins entry for `url`: its site/path is a prefix of the address (without the
+    /// The Site logins entry for `url`: its site/path is a prefix of the address (without the
     /// scheme); `*.` matches subdomains.
     pub fn site_login(&self, url: &url::Url) -> Option<(String, String)> {
         let host = url.host_str()?.to_ascii_lowercase();
@@ -1032,7 +1032,7 @@ pub fn dns_choice(
 }
 
 /// The proxy MDM's own downloads go through (its helpers, its updates, a crash report's
-/// symbols): Options → Proxy / Socks, kept in step by the app ([`share_proxy`]); Windows' own
+/// symbols): Options → Proxy / SOCKS, kept in step by the app ([`share_proxy`]); Windows' own
 /// settings in a process without them (the crash monitor).
 static OWN_PROXY: std::sync::RwLock<Option<mdm_engine::Proxy>> = std::sync::RwLock::new(None);
 /// The same for Options → Connection → DNS ([`share_dns`]).
@@ -1070,7 +1070,7 @@ pub fn share_route(route: mdm_engine::Route) {
 }
 
 impl Settings {
-    /// Options → Sites Logins → Cookies for video sites, as yt-dlp is given it (None: off, or
+    /// Options → Site logins → Cookies for video sites, as yt-dlp is given it (None: off, or
     /// a browser yt-dlp doesn't read).
     pub fn video_cookies(&self) -> Option<mdm_tools::proc::BrowserCookies> {
         mdm_tools::proc::BrowserCookies::new(&self.video_cookies, &self.video_cookies_profile)
@@ -1613,7 +1613,7 @@ mod tests {
     }
 }
 
-/// Sites Logins' passwords on disk: in the system's keychain once it holds them (secrets.rs),
+/// Site logins' passwords on disk: in the system's keychain once it holds them (secrets.rs),
 /// else sealed as `sealed` seals them. A list from before reads as before, and a password that
 /// can't be opened (the list copied to another account) reads as none.
 mod sealed_logins {

@@ -361,7 +361,7 @@ fn connecting(fault: mdm_engine::fault::Fault) -> bool {
     )
 }
 
-/// The address (`host:port`) of the proxy Options → Proxy / Socks sets by hand for secure
+/// The address (`host:port`) of the proxy Options → Proxy / SOCKS sets by hand for secure
 /// connections, which the helpers' all are.
 fn own_proxy() -> Option<String> {
     match crate::settings::own_net().proxy {
@@ -405,7 +405,7 @@ pub fn tools_advice(e: &mdm_tools::Error, name: &str) -> Option<String> {
         _ => e.network()?.1,
     };
     let text = match fault {
-        // i18n: what to do when the proxy set in Options didn't let a helper's download connect; {proxy} = the Options tab Proxy / Socks; {name} = yt-dlp, ffmpeg or gallery-dl; {helpers} and {other} = the buttons Helpers and Use another program
+        // i18n: what to do when the proxy set in Options didn't let a helper's download connect; {proxy} = the Options tab Proxy / SOCKS; {name} = yt-dlp, ffmpeg or gallery-dl; {helpers} and {other} = the buttons Helpers and Use another program
         f if connecting(f) && own_proxy().is_some() => t(
             "Check the proxy in Options → {proxy}, or download {name} yourself and choose it in {helpers} → {other}.",
         ),
@@ -417,7 +417,7 @@ pub fn tools_advice(e: &mdm_tools::Error, name: &str) -> Option<String> {
         F::Status(_) | F::CutShort => {
             t("Try again later, or download {name} yourself and choose it in {helpers} → {other}.")
         }
-        // i18n: what to do when a helper's server couldn't be reached; {proxy} = the Options tab Proxy / Socks; {name} = yt-dlp, ffmpeg or gallery-dl; {helpers} and {other} = the buttons Helpers and Use another program
+        // i18n: what to do when a helper's server couldn't be reached; {proxy} = the Options tab Proxy / SOCKS; {name} = yt-dlp, ffmpeg or gallery-dl; {helpers} and {other} = the buttons Helpers and Use another program
         _ => t(
             "If you use a proxy, set it in Options → {proxy}. Or download {name} yourself and choose it in {helpers} → {other}.",
         ),
@@ -427,7 +427,7 @@ pub fn tools_advice(e: &mdm_tools::Error, name: &str) -> Option<String> {
         text,
         &[
             ("name", name),
-            ("proxy", &label("Proxy / Socks")),
+            ("proxy", &label("Proxy / SOCKS")),
             ("helpers", &label("Helpers...")),
             ("other", &label("Use another program...")),
         ],

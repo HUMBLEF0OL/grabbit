@@ -1,4 +1,4 @@
-//! Options → Proxy / Socks → Network adapter (#35): the chosen adapter, watched. Once a second
+//! Options → Proxy / SOCKS → Network adapter (#35): the chosen adapter, watched. Once a second
 //! a thread of its own reads the computer's adapters and works out the route connections take:
 //! through the chosen adapter while it has an address, none at all while it doesn't (a VPN
 //! switched off), and the system's choice when no adapter is chosen. The binding itself is the

@@ -62,7 +62,7 @@ pub struct SettingsPage {
     pub options: OptionsDialog,
     /// The Scheduler's section (plan 11b1): its draft, made on its first visit.
     pub scheduler: Option<Scheduler>,
-    /// The Speed limiter's and Torrents' sections (plan 11b2): their drafts, made on their
+    /// The Speed Limiter's and Torrents' sections (plan 11b2): their drafts, made on their
     /// first visit.
     pub speed: Option<SpeedSettings>,
     pub torrents: Option<TorrentSettings>,
@@ -988,7 +988,7 @@ mod tests {
     /// Plan 11b2: Speed Limiter settings, Torrent settings and the browser extension are
     /// sections of the page, after the Scheduler: each shows its window's rows in the "Options"
     /// pane, without its window's buttons (OK, Cancel, Close, Don't ask again: the save bar is
-    /// the page's). A change in the Speed limiter or Torrents is the page's; the extension has
+    /// the page's). A change in the Speed Limiter or Torrents is the page's; the extension has
     /// nothing to save.
     #[test]
     fn the_moved_windows_are_sections_of_the_page() {
@@ -999,7 +999,7 @@ mod tests {
         for (section, row, control) in [
             (
                 SPEED_PAGE,
-                "Speed limiter",
+                "Speed Limiter",
                 &["Always turn on Speed Limiter on Grabbit startup"][..],
             ),
             (
@@ -1061,7 +1061,7 @@ mod tests {
         }
         assert!(d.speed.is_some() && d.torrents.is_some());
         d.speed.as_mut().unwrap().on_startup ^= true;
-        assert!(d.dirty(), "the Speed limiter's change is the page's");
+        assert!(d.dirty(), "the Speed Limiter's change is the page's");
         d.speed = Some(SpeedSettings::new(&Settings::default()));
         let t = d.torrents.as_mut().unwrap();
         let share = t.choice().share;
@@ -1069,7 +1069,7 @@ mod tests {
         assert!(d.dirty(), "Torrents' change is the page's");
     }
 
-    /// Plan 11b2: the Speed limiter's and Torrents' drafts read the settings back as they are
+    /// Plan 11b2: the Speed Limiter's and Torrents' drafts read the settings back as they are
     /// (nothing to save when opened); what Save gives is what they hold.
     #[test]
     fn speed_and_torrent_choices_round_trip() {

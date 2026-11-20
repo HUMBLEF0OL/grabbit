@@ -32,7 +32,7 @@ pub enum ProcError {
     Adapter(#[from] mdm_engine::NetError),
 }
 
-/// Options → Proxy / Socks → Network adapter (#35) for the helpers and the media-server checks;
+/// Options → Proxy / SOCKS → Network adapter (#35) for the helpers and the media-server checks;
 /// the app shares it as it changes ([`set_route`]).
 static ROUTE: std::sync::RwLock<mdm_engine::Route> = std::sync::RwLock::new(mdm_engine::Route::Any);
 /// Options → Connection → DNS (#36): what the relay looks the helpers' servers up with.
@@ -78,7 +78,7 @@ pub fn cookie_browsers() -> Vec<&'static str> {
     COOKIE_BROWSERS.to_vec()
 }
 
-/// Options → Sites Logins → Cookies for video sites (#229): the browser whose cookies yt-dlp
+/// Options → Site logins → Cookies for video sites (#229): the browser whose cookies yt-dlp
 /// reads on this computer, and its profile (a name, or a profile folder: a Chromium fork's
 /// `chromium:<its profile folder>`), for the runs the browser's extension passed no cookies to.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -111,7 +111,7 @@ impl BrowserCookies {
 /// The browser yt-dlp reads cookies from, as the app shares it ([`set_browser_cookies`]).
 static BROWSER_COOKIES: std::sync::RwLock<Option<BrowserCookies>> = std::sync::RwLock::new(None);
 
-/// Options → Sites Logins → Cookies for video sites (the app's setting; None: off).
+/// Options → Site logins → Cookies for video sites (the app's setting; None: off).
 pub fn set_browser_cookies(chosen: Option<BrowserCookies>) {
     if *BROWSER_COOKIES.read().unwrap() != chosen {
         *BROWSER_COOKIES.write().unwrap() = chosen;
@@ -376,7 +376,7 @@ pub fn cookie_trouble(line: &str) -> bool {
     .any(|k| l.contains(k))
 }
 
-/// Options -> Proxy / Socks for the helpers (#363): yt-dlp and gallery-dl go through the same proxy
+/// Options -> Proxy / SOCKS for the helpers (#363): yt-dlp and gallery-dl go through the same proxy
 /// as MDM's downloads. The app shares it as it changes ([`set_proxy`]).
 static PROXY: std::sync::RwLock<mdm_engine::Proxy> =
     std::sync::RwLock::new(mdm_engine::Proxy::None);
@@ -520,7 +520,7 @@ fn through_adapter(
     url: Option<&str>,
 ) -> Result<Vec<String>, ProcError> {
     match route() {
-        // No adapter: Options -> Proxy / Socks (#363).
+        // No adapter: Options -> Proxy / SOCKS (#363).
         mdm_engine::Route::Any => Ok(through_proxy(cmd, url)),
         mdm_engine::Route::Down { label } => Err(mdm_engine::NetError::Down { label }.into()),
         mdm_engine::Route::Bound(_) => {
@@ -1564,7 +1564,7 @@ mod tests {
             .and_then(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
     }
 
-    /// #363: Options -> Proxy / Socks reaches yt-dlp: the address on the command line, a login
+    /// #363: Options -> Proxy / SOCKS reaches yt-dlp: the address on the command line, a login
     /// only in the environment, never as an argument; a manual proxy only for its ticked
     /// schemes; "no proxy" and a script's DIRECT: nothing added, so yt-dlp's own default stays.
     #[test]

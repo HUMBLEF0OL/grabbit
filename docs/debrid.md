@@ -96,7 +96,7 @@ the list:
 
 ## Where the sign-in is kept
 
-In **Windows Credential Manager**, as are Sites Logins' passwords and the proxy's. Grabbit's
+In **Windows Credential Manager**, as are Site logins' passwords and the proxy's. Grabbit's
 settings keep only a reference to it. **Options → Accounts** says where they are on your computer.
 
 - **Installed or the plain zip**: in **Windows Credential Manager** (Control Panel → Credential Manager → Windows

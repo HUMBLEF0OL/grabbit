@@ -26,7 +26,7 @@ Every download keeps a log of its recent events: retries, redirects, the server'
 
 ## Downloads are slow
 
-- Check that the Speed Limiter is off: **Downloads → Speed Limiter → Turn off**. Also look at **Downloads → Speed Limiter → Settings... → Limit all downloads together to**, which applies even with the limiter off.
+- Check that the Speed Limiter is off: **Downloads → Speed Limiter → Turn off**. Also look at **Downloads → Speed Limiter → Settings → Limit all downloads together to**, which applies even with the limiter off.
 - Check the download's own **Speed Limiter** tab in its progress window.
 - Check **Options → Connection**. A low **Default max. conn. number**, or an exception for the server, means fewer connections. Rows marked **(auto)** are servers that refused more connections; Grabbit can't do more there.
 - Check **Download limits** in the Scheduler. When the limit is reached, downloads wait with **Waiting: the download limit is reached (Scheduler)**.
@@ -112,7 +112,7 @@ If your antivirus quarantined Grabbit, restore it and add an exception for its f
 
 - Installed or the plain zip: `%APPDATA%\grabbit`. The list and settings are in `downloads.json`.
 - Portable: the `data` folder next to `grabbit.exe`.
-- Passwords (Sites Logins, the proxy, debrid accounts) are in Windows Credential Manager, not in `downloads.json`; see [Options → Sites Logins](options.md#sites-logins).
+- Passwords (Site logins, the proxy, debrid accounts) are in Windows Credential Manager, not in `downloads.json`; see [Options → Site logins](options.md#site-logins).
 
 To back up your list, quit Grabbit (**Tasks → Exit**) and copy `downloads.json`.
 

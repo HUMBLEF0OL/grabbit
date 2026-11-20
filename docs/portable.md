@@ -9,7 +9,7 @@ The portable copy of Grabbit runs from any folder, including a USB stick, withou
 `Grabbit-<version>-portable.zip` holds the same programs as the setup, plus a folder named `data` next to `grabbit.exe`. When that folder is there and Grabbit can write to it, Grabbit is in portable mode:
 
 - The download list, settings, helpers for video and galleries (yt-dlp, ffmpeg, gallery-dl), torrent data, your [theme files](themes.md) (`data\themes`) and the logs are kept in `data`, not in your Windows profile.
-- Passwords (Sites Logins, the proxy's, debrid accounts) stay in `data` too, instead of in Windows Credential Manager. They are sealed for your Windows account: on another computer, or another account, type them again (and sign in to a debrid account again).
+- Passwords (Site logins, the proxy's, debrid accounts) stay in `data` too, instead of in Windows Credential Manager. They are sealed for your Windows account: on another computer, or another account, type them again (and sign in to a debrid account again).
 - Nothing is written to the registry.
 
 Delete the `data` folder (or make it read-only) and the same copy behaves like the plain zip: it keeps its data in `%APPDATA%\grabbit`.
@@ -25,7 +25,7 @@ Delete the `data` folder (or make it read-only) and the same copy behaves like t
 - **Downloads still go to the computer's Downloads folder** unless you change it. To keep them with Grabbit, set each category's folder in **Options → Save to**. [Carry Grabbit on a USB stick](guide-usb-stick.md) shows how.
 - **Launch Grabbit on startup** in **Options → General** is greyed: starting with Windows needs the registry.
 - **Browser integration needs the installer.** The browser finds Grabbit's helper through the registry, so a portable copy can't take downloads from the browser. Use **Add**, the clipboard or the drop target instead (see [Adding downloads](adding-downloads.md)).
-- **Tasks → Torrent settings → Open magnet links and .torrent files with Grabbit** does write to the registry, for your Windows account only. Leave it off to keep the portable copy registry-free.
+- **Downloads → Options → Torrents → Open magnet links and .torrent files with Grabbit** does write to the registry, for your Windows account only. Leave it off to keep the portable copy registry-free.
 
 ## Moving between computers
 

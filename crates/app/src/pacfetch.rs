@@ -1,4 +1,4 @@
-//! The proxy auto-config script of Options → Proxy / Socks ("Use automatic configuration
+//! The proxy auto-config script of Options → Proxy / SOCKS ("Use automatic configuration
 //! script"): fetched from its address (http, https, file or a path) when the settings are
 //! loaded or changed, and kept for the engine to run (mdm_engine::pac). Until it has arrived,
 //! or when it can't be had, downloads use the system's proxy settings.

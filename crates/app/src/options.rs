@@ -34,7 +34,7 @@ const SOUND_EVENTS: [&str; 4] = [
 
 /// A small entry dialog opened from a page.
 enum Sub {
-    /// Sites Logins → New / Edit: (row being edited, site/path, user, password).
+    /// Site logins → New / Edit: (row being edited, site/path, user, password).
     Login(Option<usize>, String, String, String),
     /// Connection → New / Edit exception: (row, server, number).
     Exception(Option<usize>, String, String),
@@ -114,7 +114,7 @@ impl DnsEdit {
     }
 }
 
-/// Sites Logins → Cookies for video sites' browser at first (#229): the one chosen, else the
+/// Site logins → Cookies for video sites' browser at first (#229): the one chosen, else the
 /// first browser whose extension reached MDM when yt-dlp reads it (MDM doesn't know the
 /// system's default browser), else Firefox, which yt-dlp reads on every system.
 fn cookie_browser_at(s: &Settings) -> usize {
@@ -214,7 +214,7 @@ pub struct OptionsDialog {
     learned: Vec<(String, u32)>,
     /// 7-Zip's program (Archives: RAR goes through it), looked for when the window opens.
     seven_zip: Option<std::path::PathBuf>,
-    /// Proxy / Socks → Network adapter (#35): the computer's adapters, read again every 2 s.
+    /// Proxy / SOCKS → Network adapter (#35): the computer's adapters, read again every 2 s.
     adapters: Option<(std::time::Instant, Vec<mdm_engine::net::Adapter>)>,
     /// Remote (#141): the running remote control (its state, paired devices, pairing), the
     /// port as typed, and the paired devices list's scroll and selection.
@@ -223,7 +223,7 @@ pub struct OptionsDialog {
     device_rows: winui::RowList,
     /// Test browser integration → Set it up's runs seen finished (crate::extension).
     set_up_seen: u64,
-    /// Sites Logins → Cookies for video sites (#229): the browser in the list (an index into
+    /// Site logins → Cookies for video sites (#229): the browser in the list (an index into
     /// `mdm_tools::proc::cookie_browsers`), kept while Off is chosen.
     cookie_browser: usize,
     /// Downloads → User-Agent → Automatic (upstream issue 668): the default browser's, the box
@@ -236,8 +236,8 @@ pub struct OptionsDialog {
 }
 
 impl OptionsDialog {
-    /// Open on page `page` (the numbers in `PAGES`: 0 General … 4 Connection, 5 Proxy / Socks,
-    /// 6 Sites Logins, 7 Accounts, 8 Sounds, 9 Regional, 10 Archives, 11 Remote); for
+    /// Open on page `page` (the numbers in `PAGES`: 0 General … 4 Connection, 5 Proxy / SOCKS,
+    /// 6 Site logins, 7 Accounts, 8 Sounds, 9 Regional, 10 Archives, 11 Remote); for
     /// `/show options:<page>`.
     pub fn on_page(mut self, page: usize) -> Self {
         self.page = page;
@@ -1657,7 +1657,7 @@ impl OptionsDialog {
         self.adapter_row(ui, o);
     }
 
-    /// Proxy / Socks → Network adapter (#35): the adapter every connection goes through (a VPN's),
+    /// Proxy / SOCKS → Network adapter (#35): the adapter every connection goes through (a VPN's),
     /// and what it is doing now. The list is the computer's adapters, read every 2 s; the one
     /// chosen stays in it while it's gone, "(not connected)".
     fn adapter_row(&mut self, ui: &mut Ui, o: Pos2) {
@@ -1958,7 +1958,7 @@ impl OptionsDialog {
             })
             .collect();
         // The list leaves the page's foot to Cookies for video sites (#229).
-        // i18n: what a screen reader calls the list of sites and their logins (Options → Sites Logins)
+        // i18n: what a screen reader calls the list of sites and their logins (Options → Site logins)
         self.login_rows.name = crate::i18n::t("Sites and their logins");
         let (dbl, del_key) = report(
             ui,
@@ -2045,29 +2045,29 @@ impl OptionsDialog {
         self.video_cookies(ui, o);
     }
 
-    /// Sites Logins → Cookies for video sites (#229): Off, or the browser whose cookies yt-dlp
+    /// Site logins → Cookies for video sites (#229): Off, or the browser whose cookies yt-dlp
     /// reads on this computer (`--cookies-from-browser`) when the extension passed none, and its
     /// profile (a name, or a folder: a Chromium fork's).
     fn video_cookies(&mut self, ui: &mut Ui, o: Pos2) {
         let p = ui.painter().clone();
         let h = winui::CONTROL_H;
         winui::rule(&p, o, PAGE_LEFT, 296.0, PAGE_RIGHT - PAGE_LEFT);
-        // i18n: Options → Sites Logins: group box title: yt-dlp signs in to video sites with a browser's cookies
+        // i18n: Options → Site logins: group box title: yt-dlp signs in to video sites with a browser's cookies
         Self::group_title(ui, o, PAGE_LEFT, 316.0, "Cookies for video sites");
         let browsers = mdm_tools::proc::cookie_browsers();
         let at = self.cookie_browser.min(browsers.len() - 1);
         let on = !self.s.video_cookies.is_empty();
-        // i18n: Options → Sites Logins → Cookies for video sites: the tooltip of its choices
+        // i18n: Options → Site logins → Cookies for video sites: the tooltip of its choices
         let tip = crate::i18n::t(
             "yt-dlp signs in to video sites with this browser's cookies, read from its files on this computer only. Used when the browser's extension didn't pass the page's own: a pasted address, a playlist.",
         );
-        // i18n: Options → Sites Logins → Cookies for video sites: don't read any browser's cookies (the default)
+        // i18n: Options → Site logins → Cookies for video sites: don't read any browser's cookies (the default)
         let off =
             winui::radio_light(ui, o + vec2(PAGE_LEFT, 328.0), !on, "Off", true).on_hover_text(tip);
         // The browser's list right after the caption, wherever it ends (at 200 % a fixed place
         // cut it to "..."); the profile's box lines up with it.
         let (row, combo_w) = (350.0, 200.0);
-        // i18n: Options → Sites Logins → Cookies for video sites: read the cookies of the browser chosen in the list after it
+        // i18n: Options → Site logins → Cookies for video sites: read the cookies of the browser chosen in the list after it
         let from_caption = "From browser:";
         let combo_x =
             (PAGE_LEFT + 16.0 + winui::text_width(&p, crate::i18n::t(from_caption)) + 12.0)
@@ -2112,7 +2112,7 @@ impl OptionsDialog {
         // after a longer label.
         let row = 388.0;
         let lx = PAGE_LEFT + 16.0;
-        // i18n: Options → Sites Logins → Cookies for video sites: label before the browser profile's name or folder (may stay empty)
+        // i18n: Options → Site logins → Cookies for video sites: label before the browser profile's name or folder (may stay empty)
         let label = "Profile (optional):";
         let fx = combo_x.max((lx + winui::text_width(&p, crate::i18n::t(label)) + 12.0).ceil());
         winui::form_label(&p, o, lx, row, h, label, on);
@@ -2126,10 +2126,10 @@ impl OptionsDialog {
             LIGHT_PAGE(),
         )
         .on_hover_text(crate::i18n::t(
-            // i18n: Options → Sites Logins → Cookies for video sites: the tooltip of the profile box
+            // i18n: Options → Site logins → Cookies for video sites: the tooltip of the profile box
             "A profile's name or its folder. Empty: the profile used last. For a browser built on Chromium that isn't listed (Helium, Thorium...), choose Chromium and its profile's folder.",
         ));
-        // i18n: Options → Sites Logins → Cookies for video sites: the title of the window, and the tooltip of the button, that pick a browser profile's folder
+        // i18n: Options → Site logins → Cookies for video sites: the title of the window, and the tooltip of the button, that pick a browser profile's folder
         let pick_title_en = "Choose the profile's folder";
         let pick_title = crate::i18n::t(pick_title_en);
         // The browse button as every other one: gx-dots, its tooltip its name.
@@ -2149,7 +2149,7 @@ impl OptionsDialog {
         let chromium = on && self.s.video_cookies != "firefox";
         let (note, ink) = if chromium {
             (
-                // i18n: Options → Sites Logins → Cookies for video sites, a Chrome-like browser chosen on Windows
+                // i18n: Options → Site logins → Cookies for video sites, a Chrome-like browser chosen on Windows
                 crate::i18n::t(
                     "On Windows, Chrome, Edge and Brave may lock their cookies. Firefox works.",
                 ),
@@ -2157,7 +2157,7 @@ impl OptionsDialog {
             )
         } else {
             (
-                // i18n: Options → Sites Logins → Cookies for video sites: a note under the choices
+                // i18n: Options → Site logins → Cookies for video sites: a note under the choices
                 crate::i18n::t("Read on this computer only, and sent only to the video's site."),
                 winui::MUTED(),
             )
@@ -2623,7 +2623,7 @@ impl OptionsDialog {
 
     // ---- entry dialogs --------------------------------------------------------------------
 
-    /// The computer's adapters, read again every 2 s (Proxy / Socks' adapter, Remote's address).
+    /// The computer's adapters, read again every 2 s (Proxy / SOCKS' adapter, Remote's address).
     fn adapters_now(&mut self) -> Vec<mdm_engine::net::Adapter> {
         let stale = self
             .adapters
@@ -3672,7 +3672,7 @@ impl OptionsDialog {
 
 // ---- pieces -----------------------------------------------------------------------------
 
-/// Proxy / Socks → Get System: Windows' own proxy (host, port), if one is set.
+/// Proxy / SOCKS → Get System: Windows' own proxy (host, port), if one is set.
 fn system_proxy() -> Option<(String, String)> {
     crate::win32::system_proxy()
 }
@@ -4331,7 +4331,7 @@ const PAGES: [(usize, &str, &str, &str); 12] = [
         // i18n: Options page name: connection settings
         crate::i18n::mark("Connection"),
         "gx-network",
-        crate::i18n::mark("Connections and Limits"),
+        crate::i18n::mark("Connections and limits"),
     ),
     (
         REMOTE_PAGE,
@@ -4344,14 +4344,14 @@ const PAGES: [(usize, &str, &str, &str); 12] = [
     (
         5,
         // i18n: Options page name
-        crate::i18n::mark("Proxy / Socks"),
+        crate::i18n::mark("Proxy / SOCKS"),
         "gx-shield",
-        crate::i18n::mark("Proxy / socks configuration"),
+        crate::i18n::mark("Proxy / SOCKS configuration"),
     ),
     (
         6,
         // i18n: Options page name: user names and passwords for sites
-        crate::i18n::mark("Sites Logins"),
+        crate::i18n::mark("Site logins"),
         "gx-key",
         crate::i18n::mark("User names and passwords for servers/sites"),
     ),
@@ -4388,7 +4388,7 @@ const PAGES: [(usize, &str, &str, &str); 12] = [
 
 /// The Scheduler's section on Options' page (plan 11b1): its number, as `on_page` takes it.
 pub(crate) const SCHEDULER_PAGE: usize = 12;
-/// The Speed limiter's, Torrents' and the browser extension's sections (plan 11b2).
+/// The Speed Limiter's, Torrents' and the browser extension's sections (plan 11b2).
 pub(crate) const SPEED_PAGE: usize = 13;
 pub(crate) const TORRENTS_PAGE: usize = 14;
 pub(crate) const EXTENSION_PAGE: usize = 15;
@@ -4407,7 +4407,7 @@ const TOOLS: [(usize, &str, &str, &str); 4] = [
     (
         SPEED_PAGE,
         // i18n: Options in the main window: the side list's section with the Speed Limiter's settings
-        crate::i18n::mark("Speed limiter"),
+        crate::i18n::mark("Speed Limiter"),
         "gx-gauge",
         crate::i18n::mark("Speed Limiter settings"),
     ),
@@ -4423,8 +4423,8 @@ const TOOLS: [(usize, &str, &str, &str); 4] = [
         // i18n: Options in the main window: the side list's section that adds the browser extension
         crate::i18n::mark("Browser extension"),
         "gx-puzzle",
-        // i18n: title of the window that offers the browser extension
-        crate::i18n::mark("Add Grabbit to your browser"),
+        // Its row's name: the window at a start keeps its own title, "Add Grabbit to your browser".
+        crate::i18n::mark("Browser extension"),
     ),
 ];
 
@@ -4796,7 +4796,7 @@ fn password(ui: &mut Ui, rc: Rect, value: &mut String, enabled: bool) {
     winui::password_light_on(ui, rc, value, enabled, LIGHT_PAGE());
 }
 
-/// Options → Accounts: where the sign-ins (and Sites Logins' passwords, the proxy's) are kept,
+/// Options → Accounts: where the sign-ins (and Site logins' passwords, the proxy's) are kept,
 /// as `secrets::Vault::kept` found it. None while it is still looking.
 fn kept_text(kept: crate::secrets::Kept) -> Option<&'static str> {
     use crate::secrets::Kept;
@@ -5101,7 +5101,7 @@ mod tests {
                 })
                 .collect();
             assert!(!controls.is_empty(), "{label}: no controls");
-            // A caption's limit is a window x: Sites Logins' "From browser:" was cut down to
+            // A caption's limit is a window x: Site logins' "From browser:" was cut down to
             // "..." when given as a page x.
             if page == 6 {
                 let b = tree

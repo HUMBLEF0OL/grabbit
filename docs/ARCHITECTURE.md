@@ -127,7 +127,7 @@ The download list and settings are saved atomically to the data folder (`downloa
 copy, or `GRABBIT_DATA_DIR` (`mdm_ipc::data_dir`). The browser host reads the same file for the
 capture rules, so a change in Options applies to the next captured download.
 
-Sign-in secrets (debrid accounts, Sites Logins' and the proxy's passwords) live in Windows
+Sign-in secrets (debrid accounts, Site logins' and the proxy's passwords) live in Windows
 Credential Manager (`secrets.rs`, `win32.rs`, #44). The settings keep a `keychain:<service>/<scope>/<key>`
 reference in their place, written only once Credential Manager has confirmed the secret; without
 it the secret stays in the settings as

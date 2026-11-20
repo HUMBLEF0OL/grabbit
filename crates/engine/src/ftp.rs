@@ -11,7 +11,7 @@
 //! connect, a TLS handshake and a login per part.
 //!
 //! The login comes from the address (`ftp://user:pass@host/…`), else from an
-//! `Authorization: Basic` header (the app's "Use authorization" and Sites Logins), else
+//! `Authorization: Basic` header (the app's "Use authorization" and Site logins), else
 //! anonymous. The path is relative to the login folder (RFC 1738; `%2F` makes it absolute).
 //! TLS uses the system's certificate store, like HTTPS. FTP doesn't go through the HTTP proxy.
 

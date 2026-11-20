@@ -89,13 +89,13 @@ A download resumes where it stopped: after you stop it, after the connection dro
 
 ## Through your VPN only: the network adapter and its kill switch
 
-**Options → Proxy / Socks → Network adapter** holds every connection Grabbit opens to one network
+**Options → Proxy / SOCKS → Network adapter** holds every connection Grabbit opens to one network
 adapter, usually your VPN's: downloads, FTP, torrents, video pages and galleries, Grabbit's own
 downloads and the update check. It works as a kill switch: when the adapter disconnects, or the
 VPN is switched off, nothing goes out through your normal connection. Running downloads stop with
 **… is not connected**, and start again by themselves when the adapter is back. The line under
 the list shows the adapter's address, or that it isn't connected. Details in
-[Options → Proxy / Socks](options.md#proxy--socks) and, for torrents, in
+[Options → Proxy / SOCKS](options.md#proxy--socks) and, for torrents, in
 [Torrents and your security](torrent-security.md).
 
 ## The DNS
@@ -111,9 +111,9 @@ The Speed Limiter keeps Grabbit from using all of your connection.
 
 ### For every download
 
-1. Choose **Downloads → Speed Limiter → Settings...**.
+1. Choose **Downloads → Speed Limiter → Settings**.
 2. Set **Maximum download speed for one file** in KBytes/sec. It starts at 10, so set it before you turn the limiter on.
-3. Click **Save**. (The settings open in the main window, as the **Speed limiter** section of [Options](options.md), listed under **Tools**; **← Downloads** goes back to the list.)
+3. Click **Save**. (The settings open in the main window, as the **Speed Limiter** section of [Options](options.md), listed under **Tools**; **← Downloads** goes back to the list.)
 4. Choose **Downloads → Speed Limiter → Turn on**. **Turn off** gives full speed again.
 
 **Always turn on Speed Limiter on Grabbit startup** turns it on each time Grabbit starts.

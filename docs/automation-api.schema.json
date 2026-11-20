@@ -467,7 +467,7 @@
         },
         "proxy": {
           "default": null,
-          "description": "From the browser (#42): the proxy it uses for this address (\"http://host:port\",\n\"https://…\", \"socks5h://…\", \"socks4://…\"), set by a VPN or proxy extension or its\nsettings; or its proxy auto-config script's text. The app downloads through the same\none (Options → Proxy / Socks → \"Use proxy/socks from a browser's request\").",
+          "description": "From the browser (#42): the proxy it uses for this address (\"http://host:port\",\n\"https://…\", \"socks5h://…\", \"socks4://…\"), set by a VPN or proxy extension or its\nsettings; or its proxy auto-config script's text. The app downloads through the same\none (Options → Proxy / SOCKS → \"Use proxy/socks from a browser's request\").",
           "type": [
             "string",
             "null"

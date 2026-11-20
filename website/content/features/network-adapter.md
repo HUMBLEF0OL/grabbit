@@ -9,8 +9,8 @@ group: network
 order: 210
 since: 0.5
 shot: images/help/options-proxy.webp
-shot_alt: Options on its Proxy / Socks page, with Network adapter near the bottom set to Any (the system chooses)
-where: Options → Proxy / Socks → Network adapter
+shot_alt: Options on its Proxy / SOCKS page, with Network adapter near the bottom set to Any (the system chooses)
+where: Options → Proxy / SOCKS → Network adapter
 help: options.md#proxy-socks
 ---
 

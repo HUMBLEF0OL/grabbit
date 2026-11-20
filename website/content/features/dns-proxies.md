@@ -9,8 +9,8 @@ group: network
 order: 220
 since: 0.1.0
 shot: images/help/options-proxy.webp
-shot_alt: Options on its Proxy / Socks page: No proxy/socks, Use system settings, Use automatic configuration script and Manual proxy/socks configuration
-where: Options → Proxy / Socks
+shot_alt: Options on its Proxy / SOCKS page: No proxy/socks, Use system settings, Use automatic configuration script and Manual proxy/socks configuration
+where: Options → Proxy / SOCKS
 help: options.md#proxy-socks
 ---
 

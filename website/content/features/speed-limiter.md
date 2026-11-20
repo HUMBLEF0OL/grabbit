@@ -10,13 +10,13 @@ order: 120
 since: 0.1.0
 shot: images/help/speed-limiter.webp
 shot_alt: Speed Limiter settings: Maximum download speed for one file, Always turn on Speed Limiter on startup, and Limit all downloads together to, with Only while I'm using the computer
-where: Downloads → Speed Limiter → Settings...
+where: Downloads → Speed Limiter → Settings
 help: connections-and-speed.md#speed-limiter
 ---
 
 ## One cap for all of Grabbit
 
-In **Downloads → Speed Limiter → Settings...**, tick **Limit all downloads together to** and type
+In **Downloads → Speed Limiter → Settings**, tick **Limit all downloads together to** and type
 a speed in KBytes/sec. However many files are downloading, together they stay under it. It works
 on its own: there is nothing else to turn on. About two thirds of your connection's speed is a
 good start.

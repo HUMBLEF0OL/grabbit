@@ -119,7 +119,7 @@ async fn the_login_comes_from_the_address_or_the_authorization_header() {
         .await
         .expect("logged in from the address");
     check(&out.path, 0);
-    // "Use authorization" / Sites Logins arrive as a Basic header.
+    // "Use authorization" / Site logins arrive as a Basic header.
     let mut h = HeaderMap::new();
     h.insert(AUTHORIZATION, "Basic YW5uOnBAc3M=".parse().unwrap()); // ann:p@ss
     fetch(&s, "/gen/256K/d.bin", 0, opts(&s), h).await;
