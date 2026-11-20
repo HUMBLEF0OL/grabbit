@@ -597,6 +597,14 @@ Released 2026-11-20: the maintainer's first findings with 1.0.0, and what came w
   sections of it, under **Tools**; the help pages' pictures show the new page. The look's
   settings stay in the View menu.
 
+## Next version
+
+Done since 1.0.1; ships in the next release.
+
+- ✅ Grabbit names its maintainer, HUMBLEF0OL, as its author and publisher: the website's footer,
+  privacy and terms pages and metadata, the app's file details and the installer. The copyright
+  notices keep Mister Download Manager's author alongside, as the GPL asks.
+
 ## Being worked on
 
 These ship in a later version, when they're ready.

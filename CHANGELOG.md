@@ -5,6 +5,10 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ## [Unreleased]
 
+### Changed
+
+- **Grabbit's own author and publisher.** The website's footer, its privacy and terms pages, the app's file details (**Properties → Details**) and the installer name HUMBLEF0OL, Grabbit's maintainer. The copyright notices still name Ahmed Nefzaoui, the author of Mister Download Manager that Grabbit is forked from.
+
 ## [1.0.1] - 2026-11-20
 
 One Add for links, magnets, torrents and video pages; Options, the Scheduler and the other settings in the main window; Find in the title bar; a light/dark button; Graphite in green; and fixes from the original MDM.
