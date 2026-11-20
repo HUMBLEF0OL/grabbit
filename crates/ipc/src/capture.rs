@@ -936,7 +936,7 @@ mod tests {
         for d in Declined::ALL {
             assert_eq!(Declined::from_code(d.code()), Some(d));
             assert!(
-                d.reason().contains("Options >") || d.reason().contains("Torrent settings >"),
+                d.reason().contains("Options >"),
                 "{d:?}"
             );
         }
