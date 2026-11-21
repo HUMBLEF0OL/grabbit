@@ -79,32 +79,42 @@ Order: 13a can land any time. 13b-13d land after 12c (words), so every string is
 - **Compact (board 1, 6).** 440 wide. Name (13/500); the reading (28/500, percent or a word) with time
   left at the right; a 6 px strip; a detail line (size so far, speed); footer: Show details at the
   left, Stop and Cancel at the right. Two edges only: x 20 and the right edge.
-- **The strip.** A file download: one segment per connection (up to `MAX_CONNECTIONS`, 32; 128 when
-  unlocked, `download.rs:84-87`), each filled from its start, a 2 px tick at its write point. Above
-  about 48 connections: one plain fill. A torrent: pieces bucketed into columns, lit by how much of
-  each column is in. One progress value for screen readers; segments hidden from them.
+- **The strip.** A file download: the engine's segments (`Snapshot::segments`, byte ranges `start`,
+  `cursor`, `end`), each as wide as its share of the file, as today's `segment_bar` draws them;
+  each filled from its start to its cursor, with a 2 px tick at the cursor of a segment still being
+  written. Segments are not connections: there can be more of them than connections (up to
+  `MAX_CONNECTIONS`, 32; 128 when unlocked, `download.rs:84-87`). When a segment is narrower than
+  3 px, drop the gaps and ticks: one plain fill. A torrent: pieces bucketed into columns, lit by
+  how much of each column is in. A video or a gallery (one progress for the whole job,
+  `tool_snapshot`): one plain fill. One progress value for screen readers; segments hidden.
 - **Expanded (boards 2, 3, 10-12).** The compact block stays in place at the left (400); the right
   column (288) holds the detail.
   - File download: Saved to (folder button), Server, Can resume, From (copy address), Limit
     (with "Remember for this file" and its note), When done; right: speed graph for 60 s with the
     limit as a dashed line, Connections (fixed height, scrolls; receiving first, then retrying,
     connecting, done).
-  - Torrent: Saved to, From (copy magnet link), Peers, Seeds, Sent, Ratio, Limit (Down, Up), When
-    done with "Then keeps sharing"; right: Files / Peers / Trackers tabs. Files has Download in order,
-    First and last pieces first, Recheck files; Trackers has Add trackers... and Ask trackers again.
-  - Video by yt-dlp: Format and "Downloaded by" rows; a Parts table (picture, sound) in place of
-    Connections.
+  - Torrent: Saved to, From (copy magnet link; its tooltip shows the info hash), Peers ("12
+    connected, 48 known": `peers_live`, `peers_seen`), Sent, Ratio, **Pieces ("98 of 1,470, 512 KB
+    each": the exact count the strip can't show, so a torrent stuck on its last piece is visible)**,
+    Limit (Down, Up), When done with "Then keeps sharing"; right: Files / Peers / Trackers tabs.
+    Files has Download in order, First and last pieces first, Recheck files; Peers lists address,
+    client, received, sent; Trackers lists the trackers (no status: the engine gives only their
+    addresses) with Add trackers... and Ask trackers again.
+  - Video: Format and "Downloaded by" rows; the right column has the speed graph only (one progress
+    for the whole video, no connections or parts).
 - **When done** (every download, torrents too): Show the Done window, Do nothing, Exit Grabbit, Shut
   down, Sleep, Hibernate; "Force apps to close" under the last three. Hang up modem is dropped.
 - **States (boards 4, 8, 9).** Stopped (grey strip, Resume filled), error (hatched missing part, the
   reason in a line; an expired link offers Refresh download address..., other errors Retry), joining
-  picture and sound, size not known (the reading is the amount received, empty strip), waiting
-  ("3rd in Main queue", Stop greyed), finishing, torrent checking files ("41 pieces to download
-  again"), sharing (Close only), the site sent a web page (Open in browser filled), at a debrid
-  service, and the server can't resume (after Stop: Keep downloading filled, Stop anyway).
+  picture and sound (percent when known, no time left), size not known (the reading is the amount
+  received, empty strip), waiting ("3rd in Main queue", Stop greyed), finishing, torrent checking
+  files (bytes checked as a plain fill: piece-by-piece results aren't known until the check ends),
+  sharing ("Sent 308 MB, 6 peers connected", "shared for 1 h 12 min"; Close only), the site sent a
+  web page (Open in browser filled), at a debrid service (named, as `at_service` gives it: "62% at
+  Real-Debrid"), and the server can't resume (after Stop: Keep downloading filled, Stop anyway).
 - **Done window (boards 5, 7, 13, 14).** Same layout as the progress window: name, "Done" with the
-  size, a full strip, file count and time, Saved to (opens the folder), Main file, "Don't show this
-  window again", footer.
+  size, a full strip, the file count, Saved to (opens the folder), Main file, "Don't show this
+  window again", footer. No "took 5 min": the app doesn't keep when a download started.
   - A main file exists when the largest file is at least half the total **and** at least 4 times the
     second largest (size only). Then: [Open ▾] filled, [Open folder], [Close]; the menu lists the 6
     largest files (the main file checked), then Open with...
@@ -122,9 +132,17 @@ Order: 13a can land any time. 13b-13d land after 12c (words), so every string is
   button, Esc closes, Alt+O and Alt+F open. Tabs: arrows move, only the selected tab is a Tab stop.
 - **Filled button rule.** A state's one main action is filled; Stop and Cancel never are.
 - **Dropped on purpose:** the three top tabs and Hide tab / Show hidden tabs (#326); the Pieces and
-  General tabs (the strip is the piece map; Copy magnet link carries the info hash); the "Start
-  positions and download progress by connections" caption. Kept: the title bar's percent, rounded
-  down as today (`window_title`: 6.7% reads 6%).
+  General tabs (the strip is the piece map, the Pieces row keeps the exact count, the From row's
+  tooltip shows the info hash; the rest of General is in the facts rows and the Sharing state); the
+  "Start positions and download progress by connections" caption. Kept: the title bar's percent,
+  rounded down as today (`window_title`: 6.7% reads 6%).
+- **Data.** Every value shown comes from what the app already has (`Snapshot`, `ConnView`,
+  `torrents::Details`, `mdm_torrent::Stats`, the item), with two things it must start keeping:
+  - the last 60 s of speed, sampled once a second per open window, for the graph (13c);
+  - a waiting download's place in its queue ("3rd in Main queue"), from the queue's order (13b).
+
+  Not shown, because the app doesn't have it: a torrent's seeds, each tracker's status, a video's
+  separate parts, how long a finished download took. Each could come later with its data.
 - **Tokens.** Hover `#222227` (exists), error track `#3a1b1b`/`#5a2a28`, accent track `#15302a`, plus
   their light values; numbers in the `numbers` family (plan 05).
 
@@ -154,6 +172,7 @@ Open folder opens its parent, so both "open a folder" (`dialogs.rs`, the Done wi
 - Stop/Stopped (A4); Refresh download address... on an expired link (E2); Show/Hide details (F9);
   the percent and "KB/s" in this window (F8's lines here); the filled-button rule (C3).
 - The can't-resume confirm when Stop is pressed on a download whose server can't resume.
+- A waiting download's place in its queue, from the queue's order, for the Waiting state.
 - The torrent commands (Add trackers..., Ask trackers again, Recheck files, the two order options,
   Copy magnet link) call the existing `Cmd::Torrent*` commands.
 - Main window, Torrent submenu: add "Stop sharing" / "Start sharing" for a finished torrent that is
@@ -169,7 +188,11 @@ Open folder opens its parent, so both "open a folder" (`dialogs.rs`, the Done wi
 
 - The compact layout, the reading, the strip (connections, pieces, the plain fill above 48), the
   detail line, the footer, the two edges and the 4 px spacing scale (boards 1, 2, 3, 6, 10-12).
-- The speed graph (last 60 s, limit line) and the tables (fixed height, sorted rows).
+- The speed graph (last 60 s, limit line), fed by a new sampler: 60 readings of the item's rate,
+  one a second, kept per open window and dropped when it closes. The tables (fixed height, sorted
+  rows). The torrent facts with the Pieces row and the From row's info-hash tooltip.
+- Tests: the sampler keeps 60 readings and starts empty; segment widths follow byte ranges and
+  fall back to one fill below 3 px; the Pieces row counts `pieces`.
 - The new tokens in every theme; numbers in the `numbers` family.
 - Accessibility: the strip as one progress value with a spoken text (`winui::expose_value` with a
   progress role), the graph's summary, tabs with their selected state, tooltips on keyboard focus
