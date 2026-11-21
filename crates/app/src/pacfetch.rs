@@ -174,7 +174,10 @@ mod tests {
         let ago = |secs: u64| Some(now - Duration::from_secs(secs));
         assert!(fetch_due(true, true, ago(1), now), "a new address");
         assert!(fetch_due(false, false, None, now), "never fetched");
-        assert!(!fetch_due(false, true, ago(60), now), "arrived a minute ago");
+        assert!(
+            !fetch_due(false, true, ago(60), now),
+            "arrived a minute ago"
+        );
         assert!(fetch_due(false, true, ago(10 * 60), now), "ten minutes on");
         assert!(!fetch_due(false, false, ago(10), now), "missing, 10 s ago");
         assert!(fetch_due(false, false, ago(30), now), "missing, 30 s on");

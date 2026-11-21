@@ -1846,7 +1846,7 @@ mod tests {
         let mut d = VideoDialog::for_page(video, "https://video.example/talk", Default::default())
             .with_music_folder(music.then_some(music_dir));
         // No helpers looked for on this computer: no merged qualities.
-        d.tools = Some((None, None, None));
+        d.tools = Some((None, None, None, false));
         d.looked_up = d.page.clone();
         d.set_video(mdm_tools::resolve::parse(SAMPLE.as_bytes()).unwrap());
         d

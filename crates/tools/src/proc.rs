@@ -2145,7 +2145,9 @@ mod tests {
         // asking; an old one is asked again (updated in place with `yt-dlp -U`).
         assert!(takes_with(Some("2026.10.26"), || panic!("asked")));
         assert!(takes_with(Some("2025.10.22"), || Some("2026.10.26".into())));
-        assert!(!takes_with(Some("2025.10.22"), || Some("2025.10.22".into())));
+        assert!(!takes_with(Some("2025.10.22"), || Some(
+            "2025.10.22".into()
+        )));
         assert!(!takes_with(None, || Some("2024.12.23".into())));
         // No answer: as before, taken to have it.
         assert!(takes_with(Some("2025.10.22"), || None));

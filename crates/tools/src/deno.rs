@@ -356,7 +356,16 @@ mod tests {
     fn versions_are_numbers() {
         assert!(numeric_version("2.9.8"));
         assert!(numeric_version("2.10.0"));
-        for bad in ["2.9.8.", "v2.9.8", "2.9.8-rc1", "", ".", "2..8", "CON", "2.9.8 "] {
+        for bad in [
+            "2.9.8.",
+            "v2.9.8",
+            "2.9.8-rc1",
+            "",
+            ".",
+            "2..8",
+            "CON",
+            "2.9.8 ",
+        ] {
             assert!(!numeric_version(bad), "{bad:?}");
         }
     }
