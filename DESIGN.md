@@ -1,35 +1,33 @@
 ---
 name: Grabbit website
-description: Graphite at page scale. One stage where the real app does the work, one cyan for the action and Grabbit's own numbers.
+description: Graphite at page scale, in the app's Graphite green. One stage where the real app does the work, one emerald for the action, Grabbit's own numbers and the way around.
 colors:
-  ground: "#f7f6fb"
+  ground: "#fafafa"
   tray: "#ffffff"
-  ink: "#0d0b14"
-  mute: "#5a5570"
-  line: "#d9d5e3"
-  go: "#00788e"
+  ink: "#18181b"
+  mute: "#6b6b74"
+  line: "#e4e4e7"
+  go: "#0c704d"
   on-go: "#ffffff"
-  amethyst: "#6527d4"
-  selection: "#efe7fe"
-  ink-2: "#4b4760"
-  tray-2: "#f3f1f9"
-  go-wash: "#f0f7f8"
-  go-tint: "#e0eff2"
-  go-tint-strong: "#d6ebef"
-  ground-dark: "#09080d"
-  tray-dark: "#121019"
-  ink-dark: "#f0eef7"
-  mute-dark: "#9a94ad"
-  line-dark: "#2a2637"
-  go-dark: "#1fe0f0"
-  on-go-dark: "#00171c"
-  amethyst-dark: "#b08cff"
-  selection-dark: "#231a3a"
-  ink-2-dark: "#bab4cc"
-  tray-2-dark: "#1c1828"
-  go-wash-dark: "#131c26"
-  go-tint-dark: "#13252f"
-  go-tint-strong-dark: "#14313b"
+  selection: "#e6f2ec"
+  ink-2: "#52525b"
+  tray-2: "#f1f1f3"
+  go-wash: "#f0f6f4"
+  go-tint: "#e7f1ed"
+  go-tint-strong: "#d8e8e3"
+  ground-dark: "#121214"
+  tray-dark: "#18181b"
+  ink-dark: "#f4f4f5"
+  mute-dark: "#8e8e98"
+  line-dark: "#2b2b30"
+  go-dark: "#3ecf8e"
+  on-go-dark: "#06281a"
+  selection-dark: "#15302a"
+  ink-2-dark: "#b4b4bc"
+  tray-2-dark: "#222227"
+  go-wash-dark: "#1a2322"
+  go-tint-dark: "#1c2a26"
+  go-tint-strong-dark: "#1e352d"
 typography:
   display:
     fontFamily: "Geist, Segoe UI, system-ui, sans-serif"
@@ -141,21 +139,21 @@ components:
 
 # Design System: Grabbit website
 
-> **Status.** The home page (`website/index.html`, `website/home.css`, `website/home.js`, and the benchmark chart drawn by `bench_bars()` in `tools/website/build.py`) is the reference implementation of this system. The other pages (download, benchmark, IDM alternative, features, help, FAQ, news, legal) render from `website/styles.css`, whose tokens map onto this system: the ground (`--board`), the tray (`--paper`), ink, signal cyan (`--go`), amethyst (`--link`), Geist and pill buttons. Their layouts are the older ones (sheets with bands, the IDM alternative's label), restyled. New pages and reworked sections are built from this document and `home.css`.
+> **Status.** The home page (`website/index.html`, `website/home.css`, `website/home.js`, and the benchmark chart drawn by `bench_bars()` in `tools/website/build.py`) is the reference implementation of this system. The other pages (download, benchmark, IDM alternative, features, help, FAQ, news, legal) render from `website/styles.css`, whose tokens map onto this system: the ground (`--board`), the tray (`--paper`), ink, Graphite green (`--go`, and `--link` with the same value), Geist and pill buttons. Their layouts are the older ones (sheets with bands, the IDM alternative's label), restyled. New pages and reworked sections are built from this document and `home.css`.
 
 ## Overview
 
 **Creative North Star: "One Take"**
 
-The camera never cuts. A single centred stage holds the real Grabbit window doing its work. As the visitor scrolls, the stage stays put and the copy walks through the app's four jobs beside it. The site is Graphite's website palette at page scale (the app itself is now Graphite green; the site keeps its cyan for now): a jet-black or near-white ground, one raised tray surface, hairlines lit along the top edge, and a single cyan that means "this is Grabbit acting". Proof comes from the app and its measured numbers. Nothing on the page is drawn to look like the app.
+The camera never cuts. A single centred stage holds the real Grabbit window doing its work. As the visitor scrolls, the stage stays put and the copy walks through the app's four jobs beside it. The site wears the app's own palette, Graphite green (`design/graphite/source/pal.py`, "graphite": Zinc + Emerald), at page scale: a zinc-black or near-white ground, one raised tray surface, hairlines lit along the top edge, and a single emerald that means "this is Grabbit acting". Proof comes from the app and its measured numbers. Nothing on the page is drawn to look like the app.
 
-Density is calm and generous: a 1200px column, 160px between sections, big tight-tracked headings, muted ink for everything secondary. Colour is scarce on purpose. Cyan marks the Download action and Grabbit's own figures, amethyst marks links, focus and selection, and the gradient lives only inside the double-chevron mark. Light and dark are equal citizens and follow the visitor's system setting by default.
+Density is calm and generous: a 1200px column, 160px between sections, big tight-tracked headings, muted ink for everything secondary. Colour is scarce on purpose. Emerald marks the Download action and Grabbit's own figures, and points the way (links, focus, selection) as it does in the app; the gradient lives only inside the double-chevron mark. Light and dark are equal citizens and follow the visitor's system setting by default.
 
 IDM appears only as the benchmark's yardstick (grey bars, plain-weight figures) and as a "moving from IDM" path. It is never the frame of reference for the look.
 
 **Key Characteristics:**
-- Jet-black / near-white ground, one tray surface, 1px hairlines with a top light edge.
-- One accent, cyan, for Download and Grabbit's own numbers. Amethyst for links, focus and selection only.
+- Zinc-black / near-white ground, one tray surface, 1px hairlines with a top light edge.
+- One accent, the app's emerald: filled for Download and Grabbit's own numbers, as text or a ring for links, focus and selection.
 - Geist in three weights, tight negative tracking, tabular figures everywhere.
 - Pills for controls, nested 24/16px shells for stages and cells, 8px for app windows.
 - Every image is the real app in its light and dark versions, framed and lifted, never mocked.
@@ -163,13 +161,13 @@ IDM appears only as the benchmark's yardstick (grey bars, plain-weight figures) 
 
 ## Colors
 
-Graphite's palette: neutral grounds with a faint violet cast, one cyan that does the work, and one amethyst that only points.
+The app's Graphite green palette (pal.py "graphite", contrast-checked there): zinc neutrals with no tint, and one emerald that does the work and points the way. The site follows the app; when pal.py's "graphite" changes, these values change with it.
 
 ### Primary
-- **Signal Cyan** (go / go-dark): the Download pill (nav, hero, close), Grabbit's bar and figures in the benchmark chart, the cyan words of the benchmark statement, the active walk-through rail segment, the filling connection bars, and the "Complete" state. It sits on On-Cyan text: white in light mode, near-black teal in dark mode. Its tints mark Grabbit's own row and results, never decoration: go-wash (6% on the tray) behind the comparison's own row, go-tint (12%) behind its live strip and table row, go-tint-strong (16%) for the result pills ("Delivered") with ink text.
+- **Graphite Green** (go / go-dark): the Download pill (nav, hero, close), Grabbit's bar and figures in the benchmark chart, the green words of the benchmark statement, the active walk-through rail segment, the filling connection bars, and the "Complete" state. It sits on On-Green text: white in light mode, near-black green in dark mode. Its tints mark Grabbit's own row and results, never decoration: go-wash (6% on the tray) behind the comparison's own row, go-tint (10%) behind its live strip and table row, go-tint-strong (16%) for the result pills ("Delivered") with ink text.
 
-### Secondary
-- **Amethyst** (amethyst / amethyst-dark): inline links (underlined 1px at a 4px offset), the 2px focus ring, and the selection tint (selection / selection-dark). Never used for fills, headings or buttons.
+### Pointing
+- **The same green, as a line** (go / go-dark): inline links (underlined 1px at a 4px offset), the 2px focus ring, and the selection tint (selection / selection-dark), as the app does. As a pointer it is never a fill, a heading or a button.
 
 ### Neutral
 - **Ground** (ground / ground-dark): the page itself.
@@ -180,9 +178,9 @@ Graphite's palette: neutral grounds with a faint violet cast, one cyan that does
 - **Hairline** (line / line-dark): 1px rings around the tray surfaces, window borders, section rules, and the inactive rail.
 
 ### Named Rules
-**The One Signal Rule.** Cyan means Grabbit is acting: the Download action, or a number Grabbit measured. Never use it for decoration, a heading, a link or the comparison's bars.
+**The One Signal Rule.** A green fill means Grabbit is acting: the Download action, or a number Grabbit measured. Never use it for decoration, a heading or IDM's bars.
 
-**The Amethyst Points Rule.** Amethyst only shows where you can go or where you are: links, focus, selection. It never fills a surface.
+**The Green Points Rule.** Green as a line or text only shows where you can go or where you are: links, focus, selection. It never fills a surface.
 
 **The Mark Owns The Gradient Rule.** The mark's emerald gradient (Graphite green, the app's palette) appears only inside the Grabbit mark (`website/assets/grabbit.svg`). There is no gradient text, gradient fill or glow anywhere else.
 
@@ -195,7 +193,7 @@ Graphite's palette: neutral grounds with a faint violet cast, one cyan that does
 
 ### Hierarchy
 - **Display** (600, clamp(46px, 6vw, 84px), 1.0, -0.045em, balanced wrap): the hero headline in two lines, the second in Mute. The closing "Get Grabbit" uses the same voice at clamp(44px, 5.4vw, 76px).
-- **Statement** (500, clamp(34px, 4.2vw, 58px), 1.1, -0.04em): the one benchmark sentence, lit word by word, with its Grabbit figure in cyan.
+- **Statement** (500, clamp(34px, 4.2vw, 58px), 1.1, -0.04em): the one benchmark sentence, lit word by word, with its Grabbit figure in green.
 - **Headline** (600, clamp(32px, 3.6vw, 48px), 1.05, -0.035em, max 18ch): section headings.
 - **Title** (600, 21-22px, 1.25, -0.02em): walk-through steps and bento cells.
 - **Lede** (400, 20px, 1.5, max 600px, pretty wrap): the line under the hero headline, in Mute.
@@ -225,9 +223,9 @@ Depth comes from tonal layering plus a single lift. The ground is flat. The tray
 
 ### Shadow Vocabulary
 - **Tray edge** (`box-shadow: inset 0 1px 0 var(--edge), 0 0 0 1px var(--line)`): every tray surface (chart, bento cells, nav). Edge is white at 70% in light mode and 7% in dark mode. On hover a cell's ring deepens to 18% ink.
-- **Window lift** (`box-shadow: 0 40px 80px -30px rgb(40 22 90 / .28), 0 2px 6px rgb(40 22 90 / .08)`, dark: `0 40px 80px -30px rgb(0 0 0 / .7), 0 2px 6px rgb(0 0 0 / .4)`): app screenshots only, always together with a 1px hairline border.
+- **Window lift** (`box-shadow: 0 40px 80px -30px rgb(24 24 27 / .28), 0 2px 6px rgb(24 24 27 / .08)`, dark: `0 40px 80px -30px rgb(0 0 0 / .7), 0 2px 6px rgb(0 0 0 / .4)`): app screenshots only, always together with a 1px hairline border.
 - **Nav float** (`inset 0 1px 0 var(--edge), 0 0 0 1px var(--line), 0 10px 30px -14px rgb(0 0 0 / .35)` with `backdrop-filter: blur(14px) saturate(1.4)`): the glass pill nav only.
-- **Pill bevel** (`inset 0 1px 0 rgb(255 255 255 / .25), inset 0 -1px 0 rgb(0 0 0 / .15)`): the cyan Download pill only.
+- **Pill bevel** (`inset 0 1px 0 rgb(255 255 255 / .25), inset 0 -1px 0 rgb(0 0 0 / .15)`): the green Download pill only.
 
 ### Named Rules
 **The Only Windows Lift Rule.** Drop shadows belong to the app's windows. Panels and cells rise through a hairline and a top light edge, never through a drop shadow or a glow.
@@ -239,11 +237,11 @@ The geometry is soft and nested. Controls are full pills (999px), and so are the
 ## Components
 
 ### Buttons
-Few and round: one cyan pill and one ghost.
+Few and round: one green pill and one ghost.
 - **Shape:** pill (999px), 52px tall, 24px horizontal padding, 600 at 16px, an optional 18px stroke icon with a 10px gap. In the nav: 36px tall, 16px padding, 14px text.
-- **Primary (Download):** Signal Cyan with On-Cyan text and the pill bevel.
+- **Primary (Download):** Graphite Green with On-Green text and the pill bevel.
 - **Ghost:** 5% ink fill with a hairline ring and ink text. Hover goes to 9%.
-- **Hover / Active / Focus:** primary rises 1px and brightens to 1.06 on a springy `cubic-bezier(.34,1.56,.64,1)` over .45s. Both buttons press to scale .97. Focus is the global 2px amethyst ring at a 4px offset.
+- **Hover / Active / Focus:** primary rises 1px and brightens to 1.06 on a springy `cubic-bezier(.34,1.56,.64,1)` over .45s. Both buttons press to scale .97. Focus is the global 2px green ring at a 4px offset.
 
 ### Cards / Containers (tray cells)
 - **Corner Style:** 24px.
@@ -252,29 +250,29 @@ Few and round: one cyan pill and one ghost.
 - **Content:** a 21px title, a Mute line no wider than 34ch, then one piece of proof pinned to the bottom (a live connection strip, browser logos at 38px, an 88px ink "Free", a lifted screenshot crop bleeding off an edge, or a menu-path well). Hovering lifts a crop 6px over .7s.
 
 ### Navigation
-- **Style:** a floating glass pill fixed 16px from the top and centred, 48px tall. It holds the mark and wordmark (600, 15px), Mute pill links (14px) that hover to ink on a 6% ink tint, a 34px circular theme toggle, and the small cyan Download.
+- **Style:** a floating glass pill fixed 16px from the top and centred, 48px tall. It holds the mark and wordmark (600, 15px), Mute pill links (14px) that hover to ink on a 6% ink tint, a 34px circular theme toggle, and the small green Download.
 - **Mobile:** under 1000px only the mark, the toggle and Download remain. Under 560px the wordmark hides too.
 
 ### Stage (signature)
 A double-bezel tray that frames real app windows. In the hero it is 1080px wide, the window has 48px 64px of breathing room, and the whole thing fades out at the fold. In the walk-through it is 600px tall, and each job's window enters with a .6s fade plus a .9s rise from 14px at .97 scale on `cubic-bezier(.16,1,.3,1)`.
 
 ### Walk-through Rail (signature)
-Four steps, each with a 3px rail segment and a 22px title. Inactive steps sit at 38% opacity. The active step goes to full opacity, fills its rail with cyan, and opens its Mute description. The step that crosses mid-viewport becomes active.
+Four steps, each with a 3px rail segment and a 22px title. Inactive steps sit at 38% opacity. The active step goes to full opacity, fills its rail with green, and opens its Mute description. The step that crosses mid-viewport becomes active.
 
 ### Benchmark Chart (signature)
-Rendered from `website/bench/results.json` by `bench_bars()`, so the page and the data cannot disagree. Each scenario gets two 8px bars on a shared axis: Grabbit in cyan with a 600 cyan figure, IDM in 22% ink with a 400 Mute figure. A key and a sourcing note in Mute complete it. The bars grow once from zero over 1.1s when the chart scrolls into view, and they rest at full width without JS or with reduced motion.
+Rendered from `website/bench/results.json` by `bench_bars()`, so the page and the data cannot disagree. Each scenario gets two 8px bars on a shared axis: Grabbit in green with a 600 green figure, IDM in 22% ink with a 400 Mute figure. A key and a sourcing note in Mute complete it. The bars grow once from zero over 1.1s when the chart scrolls into view, and they rest at full width without JS or with reduced motion.
 
 ### Connection Strip
-Eight 6px tracks, numbered in 12.5px Mute, that fill in cyan in real time to the benchmark's 1.01 s median. Tracks still filling show 75% cyan, finished ones full cyan. A 34px clock counts up, the state reads Starting, Downloading, then Complete (in cyan), holds for 1.8 s and replays while visible. Reduced motion shows it complete.
+Eight 6px tracks, numbered in 12.5px Mute, that fill in green in real time to the benchmark's 1.01 s median. Tracks still filling show 75% green, finished ones full green. A 34px clock counts up, the state reads Starting, Downloading, then Complete (in green), holds for 1.8 s and replays while visible. Reduced motion shows it complete.
 
 ## Do's and Don'ts
 
 ### Do:
 - **Do** build every page from the Ground / Tray / Ink / Mute / Hairline tokens, in both themes, defaulting to the visitor's system choice.
-- **Do** keep cyan to Download and Grabbit's own numbers, and amethyst to links, focus and selection.
+- **Do** keep green fills to Download and Grabbit's own numbers, and green lines to links, focus and selection; take the values from the app's pal.py "graphite".
 - **Do** frame real app screenshots, in light and dark versions, in an 8px window with a hairline and the window lift, inside a 24/16px double bezel or a tray cell.
 - **Do** set type in Geist 400/500/600 with tracking that tightens as the size grows, and tabular figures.
-- **Do** draw every chart from its data file at build time, and show IDM in neutral ink beside Grabbit's cyan.
+- **Do** draw every chart from its data file at build time, and show IDM in neutral ink beside Grabbit's green.
 - **Do** give every motion a finished state at rest: entrance rise once (.9s, `cubic-bezier(.16,1,.3,1)`), bars grow once, and reduced motion or no JS shows the end state.
 
 ### Don't:
@@ -283,4 +281,4 @@ Eight 6px tracks, numbered in 12.5px Mute, that fill in cyan in real time to the
 - **Don't** draw a mock window or retouch a screenshot. Don't use IDM artwork, and don't present Grabbit as an IDM look-alike.
 - **Don't** add a second typeface or set headings in uppercase or with wide tracking.
 - **Don't** use square corners on controls or radii outside the 4 (micro, under 20px) / 8 / 12 / 16 / 24 / pill set.
-- **Don't** bring back the old blue-board look (Archivo, the blue board, green buttons, tilted labels) in any page.
+- **Don't** bring back the old blue-board look (Archivo, the blue board, its bright flat green buttons, tilted labels) in any page.
