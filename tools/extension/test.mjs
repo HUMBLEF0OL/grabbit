@@ -905,6 +905,28 @@ const ok = (what) => {
     assert.deepEqual(await ask(listeners, { type: "video-pick", token: "t1", choice: -1 }, fromPrivate), { fallback: true });
     assert.equal(natives(calls).length, sent);
   }
+  // The browser stops the script while the menu waits for a pick (Chrome's idle service worker,
+  // Firefox's unloaded background page): a fresh start reads the lookups' tabs back from the
+  // session's storage, so the pick from the tab that asked is still taken, another tab's still
+  // refused.
+  {
+    const session = {};
+    const lookup = (m) => (m.videoLookup ? { ok: true, lookup: { state: "pending", token: "t9" } } : { ok: true, lookup: { state: "started" } });
+    const asker = { id: "ours", url: "https://news.test/story", frameId: 0, tab: { id: 9, url: "https://news.test/story", incognito: false } };
+    const first = fakeApi({ firefox: true, rules: { videoLookup: true }, session, lookup });
+    load(first.api, true);
+    await refreshed();
+    assert.deepEqual(await ask(first.listeners, { type: "video-lookup", src: "https://cdn.test/v/clip.mp4" }, asker), { lookup: { state: "pending", token: "t9" } });
+    assert.ok(JSON.stringify(session.lookupTabs || []).includes("t9"), "kept in the session's storage");
+    // Started again, the same session's storage.
+    const again = fakeApi({ firefox: true, rules: { videoLookup: true }, session, lookup });
+    load(again.api, true);
+    await refreshed();
+    assert.deepEqual(await ask(again.listeners, { type: "video-pick", token: "t9", choice: 0 }, sender), { fallback: true }, "another tab's pick, after a restart");
+    assert.deepEqual(lookups(again.calls), [], "nothing to the app for it");
+    assert.deepEqual(await ask(again.listeners, { type: "video-pick", token: "t9", choice: 0 }, asker), { lookup: { state: "started" } }, "the asking tab's pick, after a restart");
+    assert.ok(!JSON.stringify(session.lookupTabs || []).includes("t9"), "taken once: gone from the storage too");
+  }
   // What a lookup comes to is never the connection's status: no "!" on the toolbar button, the
   // rule for PDFs and music untouched, still able.
   {

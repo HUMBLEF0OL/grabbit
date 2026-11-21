@@ -751,7 +751,7 @@ async fn fetch_within(
 
 /// Whether `url`'s host is an address written as such that is this computer's own (loopback),
 /// a link's own (link-local: a router's, a cloud's metadata service) or no address at all
-/// (unspecified): a page can name one in its stream's address or redirect to one, and the
+/// (unspecified), or `localhost` by name (and its subdomains): a page can name one in its stream's address or redirect to one, and the
 /// browser's cookie and referrer must never go there. yt-dlp asks such a stream itself.
 fn local_address(url: &Url) -> bool {
     use std::net::{IpAddr, Ipv4Addr};
@@ -759,7 +759,12 @@ fn local_address(url: &Url) -> bool {
     let ip = match url.host() {
         Some(url::Host::Ipv4(ip)) => IpAddr::V4(ip),
         Some(url::Host::Ipv6(ip)) => IpAddr::V6(ip),
-        _ => return false,
+        // `localhost` and its subdomains are this computer's by name (RFC 6761).
+        Some(url::Host::Domain(name)) => {
+            let name = name.trim_end_matches('.').to_ascii_lowercase();
+            return name == "localhost" || name.ends_with(".localhost");
+        }
+        None => return false,
     };
     match ip {
         IpAddr::V4(ip) => v4(ip),
@@ -1482,8 +1487,8 @@ mod tests {
     }
 
     /// This computer's, a link's own and no address, written as such, are never asked with the
-    /// browser's cookie: not as the stream's address, nor where a redirect leads. A name is
-    /// left to its resolver.
+    /// browser's cookie: not as the stream's address, nor where a redirect leads; nor
+    /// `localhost` by name. Any other name is left to its resolver.
     #[test]
     fn local_addresses_are_never_asked() {
         let local = |s: &str| local_address(&Url::parse(s).unwrap());
@@ -1496,18 +1501,41 @@ mod tests {
             "http://[fe80::1]/a.m3u8",
             "http://[::]/a.m3u8",
             "http://[::ffff:127.0.0.1]/a.m3u8",
+            "http://localhost/a.m3u8",
+            "http://LocalHost./a.m3u8",
+            "http://media.localhost:8080/a.m3u8",
         ] {
             assert!(local(s), "{s}");
         }
         for s in [
             "https://cdn.test/a.m3u8",
-            "http://localhost/a.m3u8",
+            "http://notlocalhost/a.m3u8",
+            "http://localhost.example/a.m3u8",
             "http://10.0.0.1/a.m3u8",
             "http://93.184.216.34/a.m3u8",
             "http://[2001:db8::1]/a.m3u8",
         ] {
             assert!(!local(s), "{s}");
         }
+        // A redirect's address, as `Hops::get` takes it (`address_in`): written however oddly,
+        // it is normalised to the address it is, and refused.
+        let public = Url::parse("https://cdn.test/v/master.m3u8").unwrap();
+        for to in [
+            "http://0x7f.1/x.m3u8",
+            "http://2130706433/x.m3u8",
+            "http://0177.0.0.1/x.m3u8",
+            "http://[0:0:0:0:0:0:0:1]/x.m3u8",
+            "http://169.254.169.254/x.m3u8",
+        ] {
+            let at = address_in(&public, to).unwrap_or_else(|| panic!("{to}: not an address"));
+            assert!(local_address(&at), "{to} -> {at}");
+        }
+        assert_eq!(
+            address_in(&public, "http://0x7f.1/x.m3u8")
+                .unwrap()
+                .as_str(),
+            "http://127.0.0.1/x.m3u8"
+        );
         // A real read: a stream on this computer is never asked, the server sees nothing.
         let s = Server::start(Arc::new(|path: &str| match path {
             "/v/master.m3u8" => ok(MASTER),

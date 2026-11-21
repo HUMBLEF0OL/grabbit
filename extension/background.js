@@ -2369,7 +2369,7 @@ async function videoLookup(m, page, sender) {
     private: Boolean(tab.incognito),
   });
   if (reply.lookup && typeof reply.lookup === "object") {
-    lookupTab(reply.lookup.token, tab.id);
+    await lookupTab(reply.lookup.token, tab.id);
     return { lookup: reply.lookup };
   }
   // No `lookup`: a host or an app that can't look up after all (an older one refuses the message),
@@ -2384,15 +2384,33 @@ async function videoLookup(m, page, sender) {
 const lookupToken = (token) => typeof token === "string" && token.length > 0 && token.length <= 200;
 
 // Which tab asked for each lookup (its token's): only that tab may ask how it goes or pick from
-// it, for as long as the app keeps it (10 minutes), or until a pick took it.
+// it, for as long as the app keeps it (10 minutes), or until a pick took it. Kept in the
+// session's storage too, as the tabs' media are (`keepMedia`): the browser stops this script
+// while the menu waits for a pick, and the pick must still be its tab's. Read back once at
+// start, merged with what came meanwhile.
 const LOOKUP_KEEP_MS = 10 * 60 * 1000;
 const lookupTabs = new Map();
-function lookupTab(token, tabId) {
+const lookupTabsBack = session
+  ? session
+      .get({ lookupTabs: [] })
+      .then((v) => {
+        for (const [token, kept] of v.lookupTabs || []) if (!lookupTabs.has(token)) lookupTabs.set(token, kept);
+      })
+      .catch(() => {})
+  : Promise.resolve();
+// Written at once (no batching): a pick may follow just before the browser stops the script.
+function keepLookupTabs() {
+  if (session) session.set({ lookupTabs: [...lookupTabs] }).catch(() => {});
+}
+async function lookupTab(token, tabId) {
+  await lookupTabsBack;
   forget(lookupTabs, LOOKUP_KEEP_MS);
   if (lookupToken(token) && tabId !== undefined && tabId !== null) lookupTabs.set(token, { tab: tabId, at: Date.now() });
+  keepLookupTabs();
 }
 // Whether `sender`'s tab is the one that asked for lookup `token`.
-function lookupOf(token, sender) {
+async function lookupOf(token, sender) {
+  await lookupTabsBack;
   forget(lookupTabs, LOOKUP_KEEP_MS);
   const kept = lookupTabs.get(token);
   return Boolean(kept) && kept.tab === (sender.tab || {}).id;
@@ -2402,7 +2420,7 @@ async function videoPoll(m, sender) {
   if (await remoteTarget()) return { fallback: true };
   if (!lookupToken(m.token)) return { lookup: { state: "gone" } };
   // Another tab's lookup (a token it can't have come by itself): the window, as for a click.
-  if (!lookupOf(m.token, sender)) return { fallback: true };
+  if (!(await lookupOf(m.token, sender))) return { fallback: true };
   const reply = await native({ videoPoll: { token: m.token } });
   return { lookup: reply.lookup && typeof reply.lookup === "object" ? reply.lookup : { state: "gone" } };
 }
@@ -2410,9 +2428,10 @@ async function videoPoll(m, sender) {
 async function videoPick(m, sender) {
   if (await remoteTarget()) return { fallback: true };
   if (!lookupToken(m.token) || !Number.isInteger(m.choice) || m.choice < 0) return { fallback: true };
-  if (!lookupOf(m.token, sender)) return { fallback: true };
+  if (!(await lookupOf(m.token, sender))) return { fallback: true };
   // Taken once (the app forgets the lookup with its pick).
   lookupTabs.delete(m.token);
+  keepLookupTabs();
   const tab = sender.tab || {};
   // The token and the row's number from the page, nothing else: private or not and the
   // container are the tab's, as the browser says; the app checks them against the lookup's.
