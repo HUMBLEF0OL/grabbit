@@ -741,7 +741,8 @@ These ship in a later version, when they're ready.
   the icon script now writes it with the other icons
 - ✅ The website in Graphite green, the app's own colours: zinc greys and one emerald green for
   Download, Grabbit's own numbers, links, focus and selection, in place of cyan and amethyst, on
-  every page, light and dark (and the browser's bar colour with them)
+  every page, light and dark (and the browser's bar colour with them); live on the website since
+  2026-11-21, ahead of the next release
 
 ### Looking into
 
