@@ -751,8 +751,9 @@ async fn fetch_within(
 
 /// Whether `url`'s host is an address written as such that is this computer's own (loopback),
 /// a link's own (link-local: a router's, a cloud's metadata service) or no address at all
-/// (unspecified), or `localhost` by name (and its subdomains): a page can name one in its stream's address or redirect to one, and the
-/// browser's cookie and referrer must never go there. yt-dlp asks such a stream itself.
+/// (unspecified), or `localhost` by name (and its subdomains): a page can name one in its
+/// stream's address or redirect to one, and the browser's cookie and referrer must never go
+/// there. yt-dlp asks such a stream itself.
 fn local_address(url: &Url) -> bool {
     use std::net::{IpAddr, Ipv4Addr};
     let v4 = |ip: Ipv4Addr| ip.is_loopback() || ip.is_link_local() || ip.is_unspecified();

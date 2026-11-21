@@ -2415,6 +2415,16 @@ async function lookupOf(token, sender) {
   const kept = lookupTabs.get(token);
   return Boolean(kept) && kept.tab === (sender.tab || {}).id;
 }
+// `lookupOf`, and the token taken in the same turn: a second pick can't pass the check meanwhile.
+async function takeLookup(token, sender) {
+  await lookupTabsBack;
+  forget(lookupTabs, LOOKUP_KEEP_MS);
+  const kept = lookupTabs.get(token);
+  if (!kept || kept.tab !== (sender.tab || {}).id) return false;
+  lookupTabs.delete(token);
+  keepLookupTabs();
+  return true;
+}
 
 async function videoPoll(m, sender) {
   if (await remoteTarget()) return { fallback: true };
@@ -2428,10 +2438,8 @@ async function videoPoll(m, sender) {
 async function videoPick(m, sender) {
   if (await remoteTarget()) return { fallback: true };
   if (!lookupToken(m.token) || !Number.isInteger(m.choice) || m.choice < 0) return { fallback: true };
-  if (!(await lookupOf(m.token, sender))) return { fallback: true };
   // Taken once (the app forgets the lookup with its pick).
-  lookupTabs.delete(m.token);
-  keepLookupTabs();
+  if (!(await takeLookup(m.token, sender))) return { fallback: true };
   const tab = sender.tab || {};
   // The token and the row's number from the page, nothing else: private or not and the
   // container are the tab's, as the browser says; the app checks them against the lookup's.
