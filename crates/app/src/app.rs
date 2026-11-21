@@ -159,9 +159,6 @@ enum Cmd {
     AddMagnet,
     /// Add torrent → Open torrent file…: pick a .torrent, then the Add torrent dialog.
     OpenTorrentFile,
-    /// Options → Tools → Torrents (sharing after finishing, Windows associations); no menu
-    /// item, `/show torrent-settings` and the file-association notice run it.
-    TorrentSettings,
     /// Right-click → Torrent (#39): read every piece again; ask the trackers again; add
     /// trackers (a window); copy its magnet link.
     TorrentRecheck,
@@ -364,7 +361,7 @@ impl Cmd {
                 "gx-link"
             }
             Cmd::ToggleDetails => "gx-sidebar",
-            Cmd::TorrentSettings | Cmd::Options => "tb-options",
+            Cmd::Options => "tb-options",
             Cmd::Batch(false) => "gx-list-numbers",
             Cmd::Batch(true) => "gx-copy",
             Cmd::VideoPage => "ft-video",
@@ -2735,7 +2732,7 @@ impl App {
             // issue 1091), as turning the switch on shows it: off-screen runs only (the
             // screenshots'), with the names in MDM_TEST_TORRENT_DEFAULTS; nothing is changed.
             "torrent-defaults" if crate::offscreen() => self.tell_torrent_defaults(),
-            "torrent-settings" => self.run(Cmd::TorrentSettings, None, ctx),
+            "torrent-settings" => self.open_section(crate::options::TORRENTS_PAGE, ctx),
             // The first download's: Add trackers (a torrent), its right-click menu.
             "add-trackers" if first.is_some() => self.run(Cmd::TorrentAddTrackers, first, ctx),
             // rss:rules opens it on its Download rules tab.
@@ -2901,8 +2898,6 @@ impl App {
                     "draw" => "Draw with",
                     "theme" => "Theme",
                     "size" => "&Interface size",
-                    // menu:2:speed: Downloads → Speed Limiter.
-                    "speed" => "Speed &Limiter",
                     _ => "",
                 };
                 let at = self
@@ -6707,7 +6702,6 @@ impl App {
                     self.tell_friend = Some(crate::help::TellFriend::new());
                 }
             }
-            Cmd::TorrentSettings => self.open_section(crate::options::TORRENTS_PAGE, ctx),
             Cmd::RssFeeds(rules) => {
                 if self.rss_dlg.is_none() {
                     self.rss_dlg = Some(crate::rssdlg::RssWindow::new(&self.rss, rules));
@@ -14152,8 +14146,6 @@ mod settings_page_tests {
         let page = |a: &App| a.settings_page.as_ref().map(|p| p.page());
         a.run(Cmd::LimiterSettings, None, &ctx);
         assert_eq!(page(&a), Some(SPEED_PAGE), "Speed Limiter → Settings");
-        a.run(Cmd::TorrentSettings, None, &ctx);
-        assert_eq!(page(&a), Some(TORRENTS_PAGE), "Cmd::TorrentSettings");
         for (name, want) in [
             ("speedlimit", SPEED_PAGE),
             ("torrent-settings", TORRENTS_PAGE),
@@ -14169,7 +14161,6 @@ mod settings_page_tests {
         a.run(Cmd::NewQueue, None, &ctx);
         assert!(a.settings_page.as_ref().unwrap().modal());
         a.run(Cmd::LimiterSettings, None, &ctx);
-        a.run(Cmd::TorrentSettings, None, &ctx);
         a.show_named("speedlimit", &ctx);
         a.show_named("torrent-settings", &ctx);
         assert_eq!(
@@ -14191,13 +14182,8 @@ mod settings_page_tests {
             for e in e {
                 match e {
                     MenuEntry::Item(l, c, ..) | MenuEntry::Radio(l, c, ..) => {
-                        let opens_page = matches!(
-                            c,
-                            Cmd::Options
-                                | Cmd::Scheduler
-                                | Cmd::LimiterSettings
-                                | Cmd::TorrentSettings
-                        );
+                        let opens_page =
+                            matches!(c, Cmd::Options | Cmd::Scheduler | Cmd::LimiterSettings);
                         out.push((l, opens_page));
                     }
                     MenuEntry::Sub(_, _, kids) => walk(kids, out),
