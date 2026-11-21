@@ -7,6 +7,7 @@
 pub mod chosen;
 pub mod ffmpeg;
 pub mod gallery;
+pub mod github;
 mod openpgp;
 pub mod pages;
 pub mod pieces;
@@ -32,8 +33,12 @@ const YTDLP_KEY: &str = include_str!("../keys/yt-dlp.asc");
 /// SHA256SUMS.txt with it (from the maintainer's gpg keyring), and Grabbit updates itself only
 /// from a list it signed.
 const MDM_KEY: &str = include_str!("../keys/grabbit-release.asc");
-/// Where releases come from.
+/// Where releases come from: GitHub's API, else its pages (`github`, #1337).
 const RELEASES: &str = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest";
+/// yt-dlp's repository on GitHub.
+const YTDLP_REPO: &str = "yt-dlp/yt-dlp";
+/// yt-dlp's checksum list in each release, and its signature.
+const YTDLP_SUMS: [&str; 2] = ["SHA2-256SUMS", "SHA2-256SUMS.sig"];
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -277,18 +282,6 @@ pub(crate) fn newer(a: &str, b: &str) -> bool {
     parts(a) > parts(b)
 }
 
-#[derive(Deserialize)]
-struct Release {
-    tag_name: String,
-    assets: Vec<Asset>,
-}
-
-#[derive(Deserialize)]
-struct Asset {
-    name: String,
-    browser_download_url: String,
-}
-
 /// Whether the once-per-session update has a yt-dlp to refresh.
 pub fn refreshable(dir: &Path) -> bool {
     installed(dir).is_some()
@@ -307,37 +300,34 @@ pub async fn install_latest(
     if let Some(mine) = chosen::chosen(dir, chosen::Helper::YtDlp) {
         return Ok(mine);
     }
-    let client = client(net, RELEASES)?;
-    let body = client
-        .get(RELEASES)
-        .send()
-        .await?
-        .error_for_status()?
-        .bytes()
-        .await?;
-    let release: Release =
-        serde_json::from_slice(&body).map_err(|e| Error::BadRelease(e.to_string()))?;
+    // From GitHub's API, else (its rate limit) github.com's pages: the same files either way,
+    // checked the same way below.
+    let asset = ytdlp_asset();
+    let [sums_name, sig_name] = YTDLP_SUMS;
+    let release = github::latest_release(
+        net,
+        RELEASES,
+        github::WEB,
+        YTDLP_REPO,
+        &[sums_name, sig_name, asset],
+    )
+    .await?;
     if let Some(current) = own_ytdlp(dir)
-        && !newer(&release.tag_name, &current.version)
+        && !newer(&release.tag, &current.version)
     {
         return Ok(current); // never the same again, never older
     }
     let url = |name: &str| {
         release
-            .assets
+            .files
             .iter()
-            .find(|a| a.name == name)
-            .map(|a| a.browser_download_url.clone())
+            .find(|(n, _)| n == name)
+            .map(|(_, u)| u.clone())
             .ok_or_else(|| Error::Missing(name.to_owned()))
     };
-    let sums = signed_list(
-        &client,
-        &url("SHA2-256SUMS")?,
-        &url("SHA2-256SUMS.sig")?,
-        signed_by_ytdlp,
-    )
-    .await?;
-    let asset = ytdlp_asset();
+    let sums_url = url(sums_name)?;
+    let client = client(net, &sums_url)?;
+    let sums = signed_list(&client, &sums_url, &url(sig_name)?, signed_by_ytdlp).await?;
     let expected =
         sum_for(&sums, asset).ok_or_else(|| Error::Missing(format!("checksum for {asset}")))?;
     let exe_url = url(asset)?;
@@ -351,7 +341,7 @@ pub async fn install_latest(
     if Sha256::digest(&program).as_slice() != expected {
         return Err(Error::BadChecksum);
     }
-    put(dir, "yt-dlp", &release.tag_name, asset, &program, &exe_url)
+    put(dir, "yt-dlp", &release.tag, asset, &program, &exe_url)
 }
 
 /// Install verified `program` as `version` of `tool` (`dir/<tool>/<version>/<asset>`) and make it

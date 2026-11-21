@@ -129,6 +129,8 @@ When there is one, **Update now** downloads it, checks it, puts it in place and 
 
 Grabbit installs an update only when the release's list of checksums is signed by Grabbit's release key and the file matches it; anything else is refused, and **Download** opens the [Releases](https://github.com/HUMBLEF0OL/grabbit/releases) page instead. Updating this way starts with version 0.2.1: earlier versions open the Releases page.
 
+Grabbit asks GitHub's API for the newest version (of Grabbit, and of yt-dlp and ffmpeg). GitHub answers 60 such questions an hour for each internet address, so on a network many people share (a mobile or home internet provider that puts many customers behind one address, a campus, an office) others can use them up. Grabbit then reads GitHub's ordinary release pages instead, with the same checks of what it downloads. If GitHub refuses those too, the window says **api.github.com refused the request (403 Forbidden): too many requests from your network for now**: try again in an hour, or from another network.
+
 **Help → About Grabbit** shows the version you have.
 
 ![About Grabbit: its version, licence and links](images/help/about-updates.webp)
