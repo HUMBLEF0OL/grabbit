@@ -616,7 +616,7 @@ Done since 1.0.1; ships in the next release.
   and a screenshot-only menu hook, are removed.
 - ✅ **Set it up** works for a copy installed for everyone (Program Files, the setup's browser
   box unticked), and the browser extension's window says why when it can't.
-- ✅ The original MDM's fixes looked at up to upstream `247846319174` (2026-11-21): 116 commits
+- ✅ The original MDM's fixes looked at up to upstream `7ebd5b42f7bc` (2026-11-21): 119 commits
   decided. Eight critical ones taken (one picked, seven ported by hand): a delete question that
   remembered deleting finished files (upstream issue 1563), a few kilobytes saved as a browser's
   file (1460), Pause waiting for a slow disk (1328), the log waiting for the disk (1354),
@@ -625,7 +625,9 @@ Done since 1.0.1; ships in the next release.
   moved three commits); four dependency bumps picked. 44 skipped (translations, Linux, macOS,
   upstream's CI and website, features), 59 deferred with what each waits for (`sync.py
   status`). Three critical ones wait for a PR of their own: live recordings recorded over,
-  torrents writing over files that aren't theirs, and a failed way of drawing retried.
+  torrents writing over files that aren't theirs, and a failed way of drawing retried. The last
+  three: two screen-reader fixes deferred to the keyboard and screen-reader port, and LuluStream
+  site support skipped as a feature.
 - ✅ Torrents write only into files Grabbit made (from upstream issue 1121): a guarded storage
   for the torrent engine, a record of each torrent's files by identity, a check before every
   start, re-add and restore, and Delete with files removing only what Grabbit made. Asking
