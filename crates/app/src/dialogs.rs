@@ -1436,16 +1436,22 @@ impl FileInfo {
                         }
                     }
                     Some(Err(reason)) => {
-                        // On the Server row, where the server shows when the look succeeds.
+                        // On the Server row, where the server shows when the look succeeds. The
+                        // reason is worded to follow "Error: "; standing alone it starts upper case.
+                        let mut chars = reason.chars();
+                        let reason: String = chars
+                            .next()
+                            .map(|c| c.to_uppercase().chain(chars).collect())
+                            .unwrap_or_default();
                         let (rect, cut) = winui::text_fit(
                             &p,
                             o.x + fx,
                             server_baseline,
-                            reason,
+                            &reason,
                             winui::ERROR(),
                             o.x + right,
                         );
-                        winui::copyable(ui, rect, "file-info-failed", reason, cut);
+                        winui::copyable(ui, rect, "file-info-failed", &reason, cut);
                     }
                 }
 
