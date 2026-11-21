@@ -457,10 +457,41 @@ fn proxy_given(proxy: &mdm_engine::Proxy, url: Option<&url::Url>) -> ProxyGiven 
     }
 }
 
+/// The scheme (`http`, `https`) of `url` that Options' manual proxy, set with an address, isn't
+/// ticked for: a helper's run for it goes straight to the site.
+fn manual_skips(proxy: &mdm_engine::Proxy, url: Option<&url::Url>) -> Option<&'static str> {
+    let mdm_engine::Proxy::Manual {
+        url: address,
+        http,
+        https,
+        ..
+    } = proxy
+    else {
+        return None;
+    };
+    let https_page = url.is_none_or(|u| u.scheme() == "https");
+    let ticked = if https_page { *https } else { *http };
+    (!ticked && !address.trim().is_empty()).then_some(if https_page { "https" } else { "http" })
+}
+
 /// Give `helper` the proxy for `url`: returns the arguments to pass (before `--`).
 fn through_proxy(cmd: &mut Command, url: Option<&str>) -> Vec<String> {
     let page = url.and_then(|u| url::Url::parse(u).ok());
-    match proxy_given(&PROXY.read().unwrap(), page.as_ref()) {
+    let proxy = PROXY.read().unwrap().clone();
+    // Said in MDM's log once for each setting (#1448: it went straight to YouTube unsaid).
+    if let Some(scheme) = manual_skips(&proxy, page.as_ref()) {
+        static SAID: Mutex<Option<mdm_engine::Proxy>> = Mutex::new(None);
+        let mut said = SAID
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if said.as_ref() != Some(&proxy) {
+            tracing::info!(
+                "Options → Proxy / Socks: the manual proxy isn't ticked for {scheme}, so yt-dlp and gallery-dl go straight to {scheme} addresses"
+            );
+            *said = Some(proxy.clone());
+        }
+    }
+    match proxy_given(&proxy, page.as_ref()) {
         ProxyGiven::Nothing => Vec::new(),
         ProxyGiven::Argument(p) => vec!["--proxy".into(), p],
         ProxyGiven::Environment(p) => {
@@ -965,40 +996,136 @@ fn with_usable_path(cmd: &mut Command) {
     }
 }
 
-/// This computer's JavaScript runtime for yt-dlp ([`js_runtime`]): `Some` with the arguments
-/// that tell yt-dlp of it (none for Deno on the PATH, which it finds itself), in the PATH
-/// folders a helper gets ([`usable_dirs`]: a node.exe behind a junction is named by its real
-/// folder). Kept once found; while there is none it is looked for again at each run, so one
-/// installed meanwhile counts at the next look-up (upstream issue 852).
+/// The folders of MDM's PATH a helper gets ([`usable_dirs`]: a node.exe behind a junction is
+/// named by its real folder).
+fn path_dirs() -> Vec<PathBuf> {
+    std::env::var_os("PATH")
+        .map(|p| usable_dirs(&p))
+        .unwrap_or_default()
+}
+
+/// The person's home folder (`HOME`, else Windows' `USERPROFILE`).
+fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+}
+
+/// `--js-runtimes name:path`.
+fn runtime_args(name: &str, path: &Path) -> Vec<String> {
+    vec![
+        "--js-runtimes".to_owned(),
+        format!("{name}:{}", path.display()),
+    ]
+}
+
+/// This computer's own JavaScript runtime for yt-dlp, MDM's aside (#1448): Deno on the PATH, else
+/// the one [`js_runtime`] finds (Deno where its installer puts it, Node.js, Bun). What Helpers
+/// shows, so that nothing is downloaded that is already here. Looked for afresh.
+pub fn system_js_runtime() -> Option<PathBuf> {
+    let dirs = path_dirs();
+    program_in(&dirs, "deno")
+        .or_else(|| js_runtime(&dirs, &runtime_dirs(), home_dir().as_deref()).map(|(_, path)| path))
+}
+
+/// This computer's JavaScript runtime for yt-dlp: MDM's own Deno first (Helpers, #1448, #1470),
+/// named to yt-dlp; else [`js_runtime`]: `Some` with the arguments that tell yt-dlp of it (none
+/// for Deno on the PATH, which it finds itself), in the PATH folders a helper gets
+/// ([`path_dirs`]). Kept once found; while there is none it is looked for again at each run, so
+/// one installed meanwhile counts at the next look-up (upstream issue 852). MDM's own Deno is
+/// read at each run, so the one Helpers just installed is used from the next look-up on.
 fn js_runtime_found() -> Option<Vec<String>> {
+    if let Some(own) = crate::tools_dir()
+        .as_deref()
+        .and_then(crate::deno::installed)
+    {
+        return Some(runtime_args("deno", &own.exe));
+    }
     static FOUND: Mutex<Option<Vec<String>>> = Mutex::new(None);
     let mut found = FOUND
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     if found.is_none() {
-        let dirs: Vec<PathBuf> = std::env::var_os("PATH")
-            .map(|p| usable_dirs(&p))
-            .unwrap_or_default();
-        let home = std::env::var_os("HOME")
-            .or_else(|| std::env::var_os("USERPROFILE"))
-            .map(PathBuf::from);
+        let dirs = path_dirs();
         *found = if program_in(&dirs, "deno").is_some() {
             Some(Vec::new())
         } else {
-            js_runtime(&dirs, &runtime_dirs(), home.as_deref()).map(|(name, path)| {
-                vec![
-                    "--js-runtimes".to_owned(),
-                    format!("{name}:{}", path.display()),
-                ]
-            })
+            js_runtime(&dirs, &runtime_dirs(), home_dir().as_deref())
+                .map(|(name, path)| runtime_args(name, &path))
         };
     }
     found.clone()
 }
 
-/// `--js-runtimes` for this computer's runtime, when yt-dlp must be told of it.
-fn js_runtime_args() -> Vec<String> {
-    js_runtime_found().unwrap_or_default()
+/// The first yt-dlp that has `--js-runtimes` (2025.11.12, when YouTube came to need a
+/// JavaScript runtime): an older one stops at an option it doesn't know, on every site.
+const JS_RUNTIMES_SINCE: &str = "2025.11.12";
+
+/// Whether yt-dlp `version` has `--js-runtimes` ([`JS_RUNTIMES_SINCE`]); a version that isn't a
+/// date (a build of the person's own) is taken to have it, as before.
+fn knows_js_runtimes(version: &str) -> bool {
+    let dated = version
+        .split('.')
+        .filter(|p| p.parse::<u64>().is_ok())
+        .count()
+        >= 3;
+    !dated || !crate::newer(JS_RUNTIMES_SINCE, version)
+}
+
+/// Whether the yt-dlp at `exe` has `--js-runtimes`: MDM's own and a chosen one by the version
+/// they were installed or chosen with; any other is asked (`--version`), once a session.
+/// Not known (it didn't answer): taken to have it, as before.
+fn takes_js_runtimes(exe: &Path) -> bool {
+    static KNOWN: Mutex<Vec<(PathBuf, bool)>> = Mutex::new(Vec::new());
+    let known = KNOWN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+        .find(|(p, _)| p == exe)
+        .map(|(_, t)| *t);
+    if let Some(takes) = known {
+        return takes;
+    }
+    let version = crate::tools_dir()
+        .as_deref()
+        .and_then(crate::installed)
+        .filter(|i| i.exe == exe)
+        .map(|i| i.version)
+        .or_else(|| {
+            crate::chosen::ask(crate::chosen::Helper::YtDlp, exe)
+                .ok()
+                .map(|i| i.version)
+        });
+    let takes = version.as_deref().is_none_or(knows_js_runtimes);
+    if !takes {
+        tracing::warn!(
+            "yt-dlp {} is older than {JS_RUNTIMES_SINCE}: not told of a JavaScript runtime",
+            version.unwrap_or_default()
+        );
+    }
+    KNOWN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .push((exe.to_owned(), takes));
+    takes
+}
+
+/// `--js-runtimes` for this computer's runtime, when yt-dlp must be told of it and knows how to
+/// hear it ([`takes_js_runtimes`]). Said in MDM's log each time it changes.
+fn js_runtime_args(exe: &Path) -> Vec<String> {
+    let args = js_runtime_found().unwrap_or_default();
+    if args.is_empty() || !takes_js_runtimes(exe) {
+        return Vec::new();
+    }
+    static SAID: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    let mut said = SAID
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if *said != args {
+        tracing::info!("yt-dlp's JavaScript runtime: {}", args.join(" "));
+        said.clone_from(&args);
+    }
+    args
 }
 
 /// `yt-dlp` with arguments in layers: `user` extras, then `ours` (then the chosen browser's
@@ -1015,7 +1142,7 @@ pub fn ytdlp(
     let route = through_adapter(&mut cmd, Helper::YtDlp, Some(url))?;
     layers(&mut cmd, user, ours)?;
     cmd.args(["--ignore-config", "--no-exec", "--no-update"]);
-    cmd.args(js_runtime_args());
+    cmd.args(js_runtime_args(exe));
     cmd.args(cert_args(SYSTEM_CERTS.load(Ordering::Relaxed)));
     cmd.args(UTF8);
     cmd.args(route);
@@ -1025,18 +1152,21 @@ pub fn ytdlp(
 }
 
 /// `yt-dlp` working from a looked-up page (`-J` output, maybe edited) instead of an address:
-/// the same layers, then `--load-info-json` and the file.
+/// the same layers, then `--load-info-json` and the file. `url` is the page's address, which
+/// the proxy is chosen for as for its look-up ([`through_proxy`]; #1448: Options' automatic
+/// configuration script was asked about no address, and yt-dlp's download went around it).
 pub fn ytdlp_info(
     exe: &Path,
     user: &[String],
     ours: &[String],
     info: &Path,
+    url: &str,
 ) -> Result<Command, ProcError> {
     let mut cmd = helper_command(exe);
-    let route = through_adapter(&mut cmd, Helper::YtDlp, None)?;
+    let route = through_adapter(&mut cmd, Helper::YtDlp, Some(url))?;
     layers(&mut cmd, user, ours)?;
     cmd.args(["--ignore-config", "--no-exec", "--no-update"]);
-    cmd.args(js_runtime_args());
+    cmd.args(js_runtime_args(exe));
     cmd.args(cert_args(SYSTEM_CERTS.load(Ordering::Relaxed)));
     cmd.args(UTF8);
     cmd.args(route);
@@ -1748,6 +1878,21 @@ mod tests {
             ProxyGiven::Nothing,
             "https unticked: this https page isn't covered"
         );
+        // #1448: and that is said (MDM's log), for the scheme left out only.
+        assert_eq!(
+            manual_skips(&manual(None, true, false), Some(&youtube)),
+            Some("https")
+        );
+        assert_eq!(
+            manual_skips(&manual(None, true, true), Some(&youtube)),
+            None
+        );
+        let plain = url::Url::parse("http://videos.test/v").unwrap();
+        assert_eq!(
+            manual_skips(&manual(None, false, true), Some(&plain)),
+            Some("http")
+        );
+        assert_eq!(manual_skips(&Proxy::None, Some(&youtube)), None);
         // A login: in the environment, encoded, never an argument.
         assert_eq!(
             proxy_given(&manual(Some(("u@me", "p:ss")), true, true), Some(&youtube)),
@@ -1800,6 +1945,24 @@ mod tests {
             proxied(&cmd).as_deref(),
             Some("http://me:secret@127.0.0.1:10808/")
         );
+        // #1448: a run from the looked-up page (the download, the choice of formats) asks the
+        // automatic configuration script about the page, as its look-up did: it went straight
+        // to the site when the script was asked about no address.
+        set_proxy(Proxy::Pac {
+            script: std::sync::Arc::from(
+                "function FindProxyForURL(u,h){return h=='www.youtube.com'?'PROXY 10.0.0.1:3128':'DIRECT';}",
+            ),
+        });
+        let info = std::path::Path::new("/info.json");
+        for args in [
+            args_of(&ytdlp(exe, &[], &["-J".into()], url).unwrap()),
+            args_of(&ytdlp_info(exe, &[], &[], info, url).unwrap()),
+        ] {
+            let at = args.iter().position(|a| a == "--proxy").expect("--proxy");
+            assert_eq!(args[at + 1], "http://10.0.0.1:3128");
+        }
+        let elsewhere = args_of(&ytdlp_info(exe, &[], &[], info, "https://other.test/v").unwrap());
+        assert!(!elsewhere.iter().any(|a| a == "--proxy"), "DIRECT for it");
         set_proxy(Proxy::None);
         let none = args_of(&ytdlp(exe, &[], &["-J".into()], url).unwrap());
         assert!(!none.iter().any(|a| a == "--proxy"));
@@ -1910,6 +2073,41 @@ mod tests {
         // Deno on the PATH: yt-dlp finds it itself.
         touch(&path, "deno");
         assert_eq!(js_runtime(&dirs, &[], Some(&home)), None);
+    }
+
+    /// #1448: MDM's own Deno is named to yt-dlp by its path, as one argument after the option
+    /// (a Windows path's `C:` stays whole: yt-dlp splits at the first colon only).
+    #[test]
+    fn mdms_own_deno_is_named_to_yt_dlp() {
+        let deno = Path::new(r"C:\Users\A B\AppData\Roaming\Grabbit\tools\deno\2.9.8\deno.exe");
+        assert_eq!(
+            runtime_args("deno", deno),
+            [
+                "--js-runtimes".to_owned(),
+                format!("deno:{}", deno.display())
+            ]
+        );
+    }
+
+    /// yt-dlp before 2025.11.12 has no `--js-runtimes`, and stops at it: it isn't told of a
+    /// runtime. A version that isn't a date (a build of the person's own) is, as before.
+    #[test]
+    fn only_a_yt_dlp_that_has_the_option_is_told_of_a_runtime() {
+        for old in ["2025.10.22", "2025.11.11", "2024.12.23", "2023.03.04.1"] {
+            assert!(!knows_js_runtimes(old), "{old}");
+        }
+        for new in [
+            "2025.11.12",
+            "2025.11.12.232521",
+            "2025.12.8",
+            "2026.10.26",
+            "2026.10.26.1",
+        ] {
+            assert!(knows_js_runtimes(new), "{new}");
+        }
+        for unknown in ["", "system", "master", "1.0"] {
+            assert!(knows_js_runtimes(unknown), "{unknown}");
+        }
     }
 
     /// Upstream issue 852: what yt-dlp 2026.10.26 wrote looking a YouTube video up (`-J`, its
@@ -2309,7 +2507,7 @@ foreach ($d in $env:PATH.Split(';')) {
         };
         let built = [
             ytdlp(exe, &[], &["-J".into()], "https://x.test/v").unwrap(),
-            ytdlp_info(exe, &[], &[], Path::new("/info.json")).unwrap(),
+            ytdlp_info(exe, &[], &[], Path::new("/info.json"), "https://x.test/v").unwrap(),
             gallery_dl(&tool, &[], "https://x.test/g").unwrap(),
         ];
         for cmd in &built {
