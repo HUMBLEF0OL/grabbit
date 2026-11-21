@@ -1035,12 +1035,27 @@ pub fn system_js_runtime() -> Option<PathBuf> {
 /// one installed meanwhile counts at the next look-up (upstream issue 852). MDM's own Deno is
 /// read at each run, so the one Helpers just installed is used from the next look-up on.
 fn js_runtime_found() -> Option<Vec<String>> {
-    if let Some(own) = crate::tools_dir()
+    let own = crate::tools_dir()
         .as_deref()
-        .and_then(crate::deno::installed)
-    {
-        return Some(runtime_args("deno", &own.exe));
+        .and_then(crate::deno::installed);
+    own_deno_first(own.as_ref().map(|i| i.exe.as_path()), system_runtime_found)
+}
+
+/// MDM's own Deno (`own`) named to yt-dlp, the computer's (`system`) not even looked for;
+/// without one, the computer's.
+fn own_deno_first(
+    own: Option<&Path>,
+    system: impl FnOnce() -> Option<Vec<String>>,
+) -> Option<Vec<String>> {
+    match own {
+        Some(deno) => Some(runtime_args("deno", deno)),
+        None => system(),
     }
+}
+
+/// The computer's own runtime for yt-dlp ([`js_runtime_found`] without MDM's Deno), kept once
+/// found.
+fn system_runtime_found() -> Option<Vec<String>> {
     static FOUND: Mutex<Option<Vec<String>>> = Mutex::new(None);
     let mut found = FOUND
         .lock()
@@ -1072,9 +1087,26 @@ fn knows_js_runtimes(version: &str) -> bool {
     !dated || !crate::newer(JS_RUNTIMES_SINCE, version)
 }
 
-/// Whether the yt-dlp at `exe` has `--js-runtimes`: MDM's own and a chosen one by the version
-/// they were installed or chosen with; any other is asked (`--version`), once a session.
-/// Not known (it didn't answer): taken to have it, as before.
+/// Whether a yt-dlp has `--js-runtimes`: the version it was installed or chosen with (`saved`)
+/// when that says so; else (none saved, or an old one, which a chosen yt-dlp updated in place
+/// with `yt-dlp -U` no longer is) the version it answers now (`ask`). Not known (it didn't
+/// answer): taken to have it, as before.
+fn takes_with(saved: Option<&str>, ask: impl FnOnce() -> Option<String>) -> bool {
+    if saved.is_some_and(knows_js_runtimes) {
+        return true;
+    }
+    let version = ask();
+    let takes = version.as_deref().is_none_or(knows_js_runtimes);
+    if !takes {
+        tracing::warn!(
+            "yt-dlp {} is older than {JS_RUNTIMES_SINCE}: not told of a JavaScript runtime",
+            version.unwrap_or_default()
+        );
+    }
+    takes
+}
+
+/// Whether the yt-dlp at `exe` has `--js-runtimes` ([`takes_with`]), found once a session.
 fn takes_js_runtimes(exe: &Path) -> bool {
     static KNOWN: Mutex<Vec<(PathBuf, bool)>> = Mutex::new(Vec::new());
     let known = KNOWN
@@ -1086,23 +1118,16 @@ fn takes_js_runtimes(exe: &Path) -> bool {
     if let Some(takes) = known {
         return takes;
     }
-    let version = crate::tools_dir()
+    let saved = crate::tools_dir()
         .as_deref()
         .and_then(crate::installed)
         .filter(|i| i.exe == exe)
-        .map(|i| i.version)
-        .or_else(|| {
-            crate::chosen::ask(crate::chosen::Helper::YtDlp, exe)
-                .ok()
-                .map(|i| i.version)
-        });
-    let takes = version.as_deref().is_none_or(knows_js_runtimes);
-    if !takes {
-        tracing::warn!(
-            "yt-dlp {} is older than {JS_RUNTIMES_SINCE}: not told of a JavaScript runtime",
-            version.unwrap_or_default()
-        );
-    }
+        .map(|i| i.version);
+    let takes = takes_with(saved.as_deref(), || {
+        crate::chosen::ask(crate::chosen::Helper::YtDlp, exe)
+            .ok()
+            .map(|i| i.version)
+    });
     KNOWN
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -2087,6 +2112,14 @@ mod tests {
                 format!("deno:{}", deno.display())
             ]
         );
+        // It wins over the computer's own, which isn't even looked for.
+        assert_eq!(
+            own_deno_first(Some(deno), || panic!("looked for the system's")),
+            Some(runtime_args("deno", deno))
+        );
+        let node = runtime_args("node", Path::new(r"C:\Program Files\nodejs\node.exe"));
+        assert_eq!(own_deno_first(None, || Some(node.clone())), Some(node));
+        assert_eq!(own_deno_first(None, || None), None);
     }
 
     /// yt-dlp before 2025.11.12 has no `--js-runtimes`, and stops at it: it isn't told of a
@@ -2108,6 +2141,15 @@ mod tests {
         for unknown in ["", "system", "master", "1.0"] {
             assert!(knows_js_runtimes(unknown), "{unknown}");
         }
+        // The version saved when it was chosen is trusted when it has the option, without
+        // asking; an old one is asked again (updated in place with `yt-dlp -U`).
+        assert!(takes_with(Some("2026.10.26"), || panic!("asked")));
+        assert!(takes_with(Some("2025.10.22"), || Some("2026.10.26".into())));
+        assert!(!takes_with(Some("2025.10.22"), || Some("2025.10.22".into())));
+        assert!(!takes_with(None, || Some("2024.12.23".into())));
+        // No answer: as before, taken to have it.
+        assert!(takes_with(Some("2025.10.22"), || None));
+        assert!(takes_with(None, || None));
     }
 
     /// Upstream issue 852: what yt-dlp 2026.10.26 wrote looking a YouTube video up (`-J`, its

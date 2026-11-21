@@ -318,11 +318,10 @@ impl OptionsDialog {
         downloads: &std::path::Path,
         learned: Vec<(String, u32)>,
     ) -> Self {
-        let mut s = settings.clone();
-        tick_manual_protocols(&mut s);
+        let s = settings.clone();
         let mut d = OptionsDialog {
             opened: s.clone(),
-            from: settings.clone(),
+            from: s.clone(),
             browser_rows: Default::default(),
             cat_dir: display_dir(&s.category_dir(Category::General, downloads)),
             conns: s.max_connections.clamp(1, s.connection_limit()).to_string(),
@@ -352,6 +351,9 @@ impl OptionsDialog {
         };
         // Its typed fields as read back untouched (a value they clamp differs from `from`).
         d.opened = d.result();
+        // #1448: a manual proxy for nothing is ticked for http and https, a change of the
+        // draft's (the save bar shows it; Discard leaves the settings as they were).
+        tick_manual_protocols(&mut d.s);
         d
     }
 
@@ -4856,12 +4858,15 @@ mod tests {
         let dialog = OptionsDialog::new(&s, &std::env::temp_dir(), vec![]);
         assert!(dialog.s.proxy_http && dialog.s.proxy_https);
         assert!(!dialog.from.proxy_http && !dialog.from.proxy_https);
+        // A change of the draft's: the save bar shows it, Save keeps it.
+        assert!(dialog.dirty());
         s.proxy_http = true;
         let dialog = OptionsDialog::new(&s, &std::env::temp_dir(), vec![]);
         assert!(
             dialog.s.proxy_http && !dialog.s.proxy_https,
             "http only, as chosen"
         );
+        assert!(!dialog.dirty(), "nothing changed");
         let mut other = Settings::default();
         tick_manual_protocols(&mut other);
         assert!(

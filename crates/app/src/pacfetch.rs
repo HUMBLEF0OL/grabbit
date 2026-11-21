@@ -67,22 +67,38 @@ fn read_system(rt: &tokio::runtime::Handle) {
     let mut system = SYSTEM.lock().unwrap();
     let now = Instant::now();
     let changed = address != system.address;
-    let again = if address.as_deref().is_some_and(|a| script(a).is_none()) {
-        RETRY_EVERY
-    } else {
-        FETCH_EVERY
-    };
-    let due = changed || system.fetched.is_none_or(|at| now >= at + again);
+    let arrived = address.as_deref().is_some_and(|a| script(a).is_some());
+    let due = fetch_due(changed, arrived, system.fetched, now);
     if changed {
         tracing::info!(
             "The system's automatic proxy configuration script: {}",
-            address.as_deref().unwrap_or("none")
+            address.as_deref().map_or("none".to_owned(), where_from)
         );
     }
     system.address.clone_from(&address);
     if let Some(address) = address.filter(|_| due) {
         system.fetched = Some(now);
         refresh(&address, rt);
+    }
+}
+
+/// Whether the system's script is fetched (again) `now`: its address `changed`, else once
+/// [`FETCH_EVERY`] has passed since it was last `fetched`, or [`RETRY_EVERY`] while it hasn't
+/// `arrived` (its program not started yet).
+fn fetch_due(changed: bool, arrived: bool, fetched: Option<Instant>, now: Instant) -> bool {
+    let again = if arrived { FETCH_EVERY } else { RETRY_EVERY };
+    changed || fetched.is_none_or(|at| now >= at + again)
+}
+
+/// A script's address for the log: its scheme and server only (a login or a token in its path
+/// or query stays out of it); a path, as "a file".
+fn where_from(address: &str) -> String {
+    match url::Url::parse(address) {
+        Ok(u) if u.host_str().is_some() => {
+            format!("{}://{}", u.scheme(), u.host_str().unwrap_or_default())
+        }
+        Ok(u) if u.scheme() == "file" => "a file".to_owned(),
+        _ => "a file or an address that isn't one".to_owned(),
     }
 }
 
@@ -143,4 +159,35 @@ async fn fetch(address: &str) -> Result<String, String> {
         .and_then(|u| u.to_file_path().ok())
         .unwrap_or_else(|| std::path::PathBuf::from(address));
     std::fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// #1448: the system's script is fetched when its address changes, again every ten minutes,
+    /// and every 30 s while it hasn't arrived; not in between.
+    #[test]
+    fn the_system_script_is_fetched_when_due() {
+        // An hour ahead: the times "ago" never fall before the computer started.
+        let now = Instant::now() + Duration::from_secs(3600);
+        let ago = |secs: u64| Some(now - Duration::from_secs(secs));
+        assert!(fetch_due(true, true, ago(1), now), "a new address");
+        assert!(fetch_due(false, false, None, now), "never fetched");
+        assert!(!fetch_due(false, true, ago(60), now), "arrived a minute ago");
+        assert!(fetch_due(false, true, ago(10 * 60), now), "ten minutes on");
+        assert!(!fetch_due(false, false, ago(10), now), "missing, 10 s ago");
+        assert!(fetch_due(false, false, ago(30), now), "missing, 30 s on");
+    }
+
+    /// The log names the script's server, never its login or path.
+    #[test]
+    fn the_log_names_the_server_only() {
+        assert_eq!(
+            where_from("http://me:secret@127.0.0.1:7890/pac?token=abc"),
+            "http://127.0.0.1"
+        );
+        assert_eq!(where_from("file:///C:/proxy/a.pac"), "a file");
+        assert!(!where_from(r"C:\proxy\secret.pac").contains("secret"));
+    }
 }

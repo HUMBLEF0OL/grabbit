@@ -120,7 +120,9 @@ fn fake_ytdlp() -> ExitCode {
     }
     // #1448: with `record-args` beside it, each run's arguments, one JSON line each, in
     // `args.jsonl` there.
-    if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_owned))
+    if let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(Path::to_owned))
         && dir.join("record-args").exists()
     {
         use std::io::Write;

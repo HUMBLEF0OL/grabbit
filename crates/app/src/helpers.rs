@@ -441,16 +441,24 @@ pub struct Programs {
     dir: Option<std::path::PathBuf>,
     /// The helpers as found (read again after each change, not every frame: it reads files).
     found: [Option<mdm_tools::Installed>; 3],
-    /// MDM's own Deno, and the computer's own runtime (`proc::system_js_runtime`), read with
-    /// `found`.
+    /// MDM's own Deno, read with `found`.
     deno: Option<mdm_tools::Installed>,
+    /// The computer's own runtime (`proc::system_js_runtime`), and the look for it under way,
+    /// off the window's thread (the PATH's folders may be on a share that doesn't answer).
     runtime: Option<std::path::PathBuf>,
+    finding: Option<Finding>,
     /// A chosen program being checked (`--version`), and what it answered.
     checking: Option<(Helper, Answer)>,
     /// MDM's own Deno being downloaded, and how that went.
     installing_deno: Option<Answer>,
+    /// A download of Deno started elsewhere (Download video, the session's update) was under
+    /// way at the last frame: the card is read again once it ends.
+    elsewhere: bool,
     error: Option<String>,
 }
+
+/// The computer's own JavaScript runtime, once looked for.
+type Finding = Arc<Mutex<Option<Option<std::path::PathBuf>>>>;
 
 const HELPERS: [Helper; 3] = [Helper::YtDlp, Helper::Ffmpeg, Helper::GalleryDl];
 
@@ -464,8 +472,10 @@ impl Programs {
             found: [None, None, None],
             deno: None,
             runtime: None,
+            finding: None,
             checking: None,
             installing_deno: None,
+            elsewhere: false,
             error: None,
         };
         p.look();
@@ -482,7 +492,14 @@ impl Programs {
             mdm_tools::gallery::installed(dir),
         ];
         self.deno = mdm_tools::deno::installed(dir);
-        self.runtime = mdm_tools::proc::system_js_runtime();
+        if self.finding.is_none() {
+            let slot: Finding = Arc::new(Mutex::new(None));
+            let out = slot.clone();
+            std::thread::spawn(move || {
+                *out.lock().unwrap() = Some(mdm_tools::proc::system_js_runtime());
+            });
+            self.finding = Some(slot);
+        }
     }
 
     /// MDM's own Deno (#1448): downloaded and checked against its release's checksums, from then
@@ -532,6 +549,24 @@ impl Programs {
             self.error = res.err();
             self.installing_deno = None;
             self.look();
+        }
+        // A download of Deno started elsewhere: read again once it ends.
+        let elsewhere = self.installing_deno.is_none() && mdm_tools::deno::downloading();
+        if self.elsewhere && !elsewhere {
+            self.look();
+        }
+        self.elsewhere = elsewhere;
+        let found = self
+            .finding
+            .as_ref()
+            .and_then(|slot| slot.lock().unwrap().take());
+        if let Some(found) = found {
+            self.runtime = found;
+            self.finding = None;
+        }
+        // Nothing wakes the window when these end: it looks again now and then meanwhile.
+        if elsewhere || self.finding.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(250));
         }
         for h in HELPERS {
             if let Some(path) = winui::picked(ctx, &format!("helper-{}", h.name()))
@@ -768,7 +803,9 @@ impl Programs {
             ("helper-what", k),
         );
         let available = mdm_tools::deno::available();
-        let status = if self.installing_deno.is_some() {
+        // One download of Deno at a time: one started from Download video shows here too.
+        let downloading = self.installing_deno.is_some() || mdm_tools::deno::downloading();
+        let status = if downloading {
             // i18n: Video helpers: MDM's own copy of a helper is being downloaded
             crate::i18n::t("Downloading Grabbit's own copy...").to_owned()
         } else if let Some(own) = &self.deno {
@@ -776,6 +813,9 @@ impl Programs {
                 crate::i18n::t("Grabbit's own copy, version {version}"),
                 &[("version", &own.version)],
             )
+        } else if self.finding.is_some() {
+            // i18n: Video helpers: looking for a JavaScript runtime (Node.js, Deno) on this computer
+            crate::i18n::t("Looking for one on this computer...").to_owned()
         } else if let Some(path) = &self.runtime {
             crate::i18n::fmt(
                 // i18n: Video helpers: {path} = the computer's own JavaScript runtime (node.exe, deno.exe), used as it is: MDM needn't download one
@@ -786,7 +826,8 @@ impl Programs {
             crate::i18n::t("Not installed yet").to_owned()
         } else {
             // i18n: Video helpers: MDM can't download Deno on this system (32-bit Windows, an unusual processor); Deno and Node.js are program names
-            crate::i18n::t("Grabbit has no copy for this system: install Deno or Node.js").to_owned()
+            crate::i18n::t("Grabbit has no copy for this system: install Deno or Node.js")
+                .to_owned()
         };
         winui::fit(
             ui,
@@ -811,7 +852,7 @@ impl Programs {
             ui,
             r(o, own_at.0, y - o.y + 46.0, own_at.1, 21.0),
             "Use Grabbit's own copy",
-            if available && self.deno.is_none() && !self.busy() {
+            if available && self.deno.is_none() && !self.busy() && !downloading {
                 ButtonKind::Normal
             } else {
                 ButtonKind::Disabled

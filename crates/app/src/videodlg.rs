@@ -127,11 +127,12 @@ pub struct VideoDialog {
     clip: crate::clipboard::Prefill,
 }
 
-/// What is installed in the tools folder: (folder, yt-dlp, ffmpeg).
+/// What is installed in the tools folder: (folder, yt-dlp, ffmpeg, whether MDM's own Deno is).
 type Tools = (
     Option<PathBuf>,
     Option<mdm_tools::Installed>,
     Option<mdm_tools::Installed>,
+    bool,
 );
 
 /// Keep yt-dlp current: video sites change often and an old yt-dlp is the usual reason a page
@@ -166,7 +167,11 @@ fn tools() -> Tools {
     let dir = mdm_tools::tools_dir();
     let ytdlp = dir.as_deref().and_then(mdm_tools::installed);
     let ffmpeg = dir.as_deref().and_then(mdm_tools::ffmpeg::installed);
-    (dir, ytdlp, ffmpeg)
+    let deno = dir
+        .as_deref()
+        .and_then(mdm_tools::deno::installed)
+        .is_some();
+    (dir, ytdlp, ffmpeg, deno)
 }
 
 impl VideoDialog {
@@ -592,7 +597,7 @@ impl VideoDialog {
 
     fn body(&mut self, ui: &mut Ui, o: Pos2, rt: &tokio::runtime::Handle) -> Outcome<()> {
         let p = ui.painter().clone();
-        let (dir, ytdlp, ffmpeg) = self.tools.get_or_insert_with(tools).clone();
+        let (dir, ytdlp, ffmpeg, own_deno) = self.tools.get_or_insert_with(tools).clone();
         // The labels' column (the rows under the list share it).
         let bx = winui::form(
             &p,
@@ -698,13 +703,12 @@ impl VideoDialog {
             // its own to offer for this processor (looked up again once it is installed). Before
             // ffmpeg: the line says what's missing is the runtime, and without one YouTube may
             // list nothing ffmpeg could join.
+            // Not while Helpers downloads it (one download of Deno at a time).
             (Some(_), _)
                 if runtime_note
                     && mdm_tools::deno::available()
-                    && dir
-                        .as_deref()
-                        .and_then(mdm_tools::deno::installed)
-                        .is_none() =>
+                    && !own_deno
+                    && !mdm_tools::deno::downloading() =>
             {
                 Some((
                     Tool::Deno,

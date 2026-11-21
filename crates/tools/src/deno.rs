@@ -86,14 +86,25 @@ pub fn installed(dir: &Path) -> Option<Installed> {
         .filter(|i| i.exe.is_file())
 }
 
+/// Held while [`install_latest`] runs.
+static INSTALLING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Whether Deno is being downloaded or installed now (from anywhere in the app): its buttons
+/// wait, and say so.
+pub fn downloading() -> bool {
+    INSTALLING.try_lock().is_err()
+}
+
 /// Install Deno's latest release into `dir` unless the installed one is as new, the zip
 /// downloaded with MDM's engine (`net`), counted into `progress`. Returns what is installed
-/// afterwards.
+/// afterwards. One at a time (Helpers, Download video's Install Deno, the session's update
+/// share one zip and one `.part`): a second call waits for the first, then finds it installed.
 pub async fn install_latest(
     dir: &Path,
     net: &mdm_engine::Options,
     progress: Option<&crate::update::Progress>,
 ) -> Result<Installed, Error> {
+    let _one = INSTALLING.lock().await;
     let asset = asset().ok_or_else(|| Error::Missing("Deno build for this system".into()))?;
     // From GitHub's API, else (its rate limit) github.com's pages (#1337): the same files,
     // checked the same way.
@@ -144,20 +155,55 @@ async fn install_release(
     // Named by its checksum: one release's cut-off download resumes, never another's.
     let zip_path = root.join(format!("deno-{}.zip", hex::encode(&expected[..8])));
     crate::fetch_verified(&zip_url, &zip_path, expected, net, progress).await?;
-    let res = unpack(&zip_path, &root, &version, &zip_url);
+    let res = unpack(&zip_path, expected, &root, &version, &zip_url);
     let _ = std::fs::remove_file(&zip_path);
     let exe = res?;
     tracing::info!("Deno {version} verified and installed: {}", exe.display());
     make_current(&root, Installed { version, exe })
 }
 
-/// Unpack the zip's one program (`deno.exe`, at its top) into `root/<version>/`.
-fn unpack(zip_path: &Path, root: &Path, version: &str, from: &str) -> Result<PathBuf, Error> {
-    if version.is_empty() || version.contains(['/', '\\', ':']) || version.starts_with('.') {
+/// The largest `deno.exe` unpacked (Deno 2.9's is about 120 MB): a zip that says more is
+/// refused, not written out without end.
+const PROGRAM_MAX: u64 = 512 << 20;
+
+/// Whether `version` is a release's numbers (`2.9.8`): nothing else names a folder.
+fn numeric_version(version: &str) -> bool {
+    version
+        .split('.')
+        .all(|p| !p.is_empty() && p.parse::<u32>().is_ok())
+}
+
+/// Unpack the zip's one program (`deno.exe`, at its top) into `root/<version>/`, the zip
+/// checked against `expected` once more as it is opened (the very file read is the one hashed).
+fn unpack(
+    zip_path: &Path,
+    expected: [u8; 32],
+    root: &Path,
+    version: &str,
+    from: &str,
+) -> Result<PathBuf, Error> {
+    use std::io::{Read, Seek};
+    if !numeric_version(version) {
         return Err(Error::BadRelease(format!("version {version:?}")));
     }
-    let mut zip = zip::ZipArchive::new(std::fs::File::open(zip_path)?)
-        .map_err(|e| Error::BadRelease(e.to_string()))?;
+    let mut file = std::fs::File::open(zip_path)?;
+    {
+        use sha2::Digest;
+        let mut hash = sha2::Sha256::new();
+        let mut buf = vec![0u8; 1 << 16];
+        loop {
+            let n = file.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            hash.update(&buf[..n]);
+        }
+        if hash.finalize()[..] != expected[..] {
+            return Err(Error::BadChecksum);
+        }
+    }
+    file.rewind()?;
+    let mut zip = zip::ZipArchive::new(file).map_err(|e| Error::BadRelease(e.to_string()))?;
     let mut entry = zip
         .by_name(PROGRAM)
         .map_err(|_| Error::Missing(format!("{PROGRAM} in the release")))?;
@@ -169,10 +215,18 @@ fn unpack(zip_path: &Path, root: &Path, version: &str, from: &str) -> Result<Pat
     let exe = folder.join(PROGRAM);
     // Written beside, then put in place: a cut-off unpack never leaves half a program.
     let part = folder.join(format!("{PROGRAM}.part"));
-    {
+    let copied = {
         let mut out = std::fs::File::create(&part)?;
-        std::io::copy(&mut entry, &mut out)?;
+        let copied = std::io::copy(&mut (&mut entry).take(PROGRAM_MAX + 1), &mut out)?;
         out.sync_all()?;
+        copied
+    };
+    if copied > PROGRAM_MAX {
+        let _ = std::fs::remove_file(&part);
+        return Err(Error::BadRelease(format!(
+            "{PROGRAM} is larger than {} MB",
+            PROGRAM_MAX >> 20
+        )));
     }
     std::fs::rename(&part, &exe)?;
     mark_downloaded(&exe, from);
@@ -263,21 +317,66 @@ mod tests {
             }
             w.finish().unwrap();
         }
-        let exe = unpack(&zip_path, dir.path(), "2.9.8", "https://x/").unwrap();
+        let sum = sum_of(&zip_path);
+        let exe = unpack(&zip_path, sum, dir.path(), "2.9.8", "https://x/").unwrap();
         assert_eq!(exe, dir.path().join("2.9.8").join(PROGRAM));
         assert_eq!(std::fs::read_to_string(&exe).unwrap(), "deno");
         assert!(!exe.with_file_name("README.md").exists());
         assert!(!exe.with_file_name(format!("{PROGRAM}.part")).exists());
-        assert!(unpack(&zip_path, dir.path(), "../x", "https://x/").is_err());
+        // Only a release's numbers name the folder.
+        for bad in ["../x", "2.9.8.", " 2.9.8", "2..8", "", "CON", "2.9.8 "] {
+            assert!(
+                unpack(&zip_path, sum, dir.path(), bad, "https://x/").is_err(),
+                "{bad:?}"
+            );
+        }
+        // A zip that isn't the one checked (changed since): refused, nothing unpacked.
+        assert!(matches!(
+            unpack(&zip_path, [0; 32], dir.path(), "2.9.9", "https://x/"),
+            Err(Error::BadChecksum)
+        ));
+        assert!(!dir.path().join("2.9.9").exists());
         // A zip without the program is refused.
         let empty = dir.path().join("e.zip");
         zip::ZipWriter::new(std::fs::File::create(&empty).unwrap())
             .finish()
             .unwrap();
         assert!(matches!(
-            unpack(&empty, dir.path(), "2.9.9", "https://x/"),
+            unpack(&empty, sum_of(&empty), dir.path(), "2.9.9", "https://x/"),
             Err(Error::Missing(_))
         ));
+    }
+
+    /// The SHA-256 of the file at `path`.
+    fn sum_of(path: &Path) -> [u8; 32] {
+        <sha2::Sha256 as sha2::Digest>::digest(std::fs::read(path).unwrap()).into()
+    }
+
+    #[test]
+    fn versions_are_numbers() {
+        assert!(numeric_version("2.9.8"));
+        assert!(numeric_version("2.10.0"));
+        for bad in ["2.9.8.", "v2.9.8", "2.9.8-rc1", "", ".", "2..8", "CON", "2.9.8 "] {
+            assert!(!numeric_version(bad), "{bad:?}");
+        }
+    }
+
+    /// One install at a time: while one runs, another waits (and the buttons say Downloading).
+    #[tokio::test]
+    async fn one_install_at_a_time() {
+        let held = INSTALLING.lock().await;
+        assert!(downloading());
+        let dir = tempfile::tempdir().unwrap();
+        let net = crate::net(mdm_engine::Proxy::None);
+        // It waits for the one under way: it hasn't even asked for the release.
+        let waited = tokio::time::timeout(
+            std::time::Duration::from_millis(200),
+            install_latest(dir.path(), &net, None),
+        )
+        .await;
+        assert!(waited.is_err(), "it went ahead beside the other");
+        drop(held);
+        assert!(!downloading());
     }
 
     /// Installed as `current.json` names it, only while the program is there.
@@ -379,6 +478,23 @@ mod tests {
         newer_one.tag = "v2.9.9".into();
         let bad = install_release(dir.path(), &net, None, asset, &newer_one).await;
         assert!(matches!(bad, Err(Error::BadChecksum)), "{bad:?}");
+        assert_eq!(installed(dir.path()), Some(got.clone()));
+        // A release without the checksum file: nothing downloaded, nothing installed.
+        let mut no_sums = release(&sum);
+        no_sums.tag = "v2.9.9".into();
+        no_sums.files.retain(|(n, _)| *n == asset);
+        let missing = install_release(dir.path(), &net, None, asset, &no_sums).await;
+        assert!(matches!(missing, Err(Error::Missing(_))), "{missing:?}");
+        // A checksum file without the zip's line (another file's): the same.
+        std::fs::write(
+            files.path().join(sums_name(asset)),
+            format!("{sum}  deno-riscv64-pc-windows-msvc.zip\n"),
+        )
+        .unwrap();
+        let mut other = release(&sum);
+        other.tag = "v2.9.9".into();
+        let missing = install_release(dir.path(), &net, None, asset, &other).await;
+        assert!(matches!(missing, Err(Error::Missing(_))), "{missing:?}");
         assert_eq!(installed(dir.path()), Some(got));
     }
 }
