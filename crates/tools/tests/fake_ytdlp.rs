@@ -41,6 +41,8 @@ fn main() -> ExitCode {
         list_checks(&me);
         engine_checks(&me);
         recording_checks(&me);
+        // Last: it sets the media servers' checks for the whole process.
+        preloaded_checks(&me);
         println!("fake_ytdlp: ok");
         return ExitCode::SUCCESS;
     }
@@ -98,6 +100,11 @@ fn out_bytes(b: &[u8]) {
     let _ = o.flush();
 }
 
+/// The page the fake's look-up (`-J`) gives.
+const PAGE: &str = r#"{"title": "Talk", "language": "ru", "formats": [
+    {"format_id": "18", "ext": "mp4", "height": 360, "vcodec": "avc1", "acodec": "mp4a"}],
+    "automatic_captions": {"en": [{"name": "English"}], "ru": [{"name": "Russian"}]}}"#;
+
 fn fake_ytdlp() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("--linger") {
@@ -133,9 +140,6 @@ fn fake_ytdlp() -> ExitCode {
         .and_then(|e| e.parent().map(Path::to_owned))
         .expect("the fake's folder");
     if has("-J") {
-        const PAGE: &str = r#"{"title": "Talk", "language": "ru", "formats": [
-            {"format_id": "18", "ext": "mp4", "height": 360, "vcodec": "avc1", "acodec": "mp4a"}],
-            "automatic_captions": {"en": [{"name": "English"}], "ru": [{"name": "Russian"}]}}"#;
         // Upstream issue 852: YouTube looked up without a JavaScript runtime, as yt-dlp says it.
         if args
             .last()
@@ -187,6 +191,10 @@ fn fake_ytdlp() -> ExitCode {
     let template = after("-o").expect("-o");
     let dir = Path::new(&template).parent().expect("a folder").to_owned();
     let mode = mode(&dir);
+    // The page it was given to download from, kept for the checks to read.
+    if let Some(info) = after("--load-info-json") {
+        let _ = std::fs::copy(info, dir.join("loaded.txt"));
+    }
     let tries = dir.join("tries.txt");
     let tried = std::fs::read_to_string(&tries)
         .ok()
@@ -303,7 +311,7 @@ fn fake_ytdlp() -> ExitCode {
         );
         return ExitCode::FAILURE;
     }
-    println!("MDMP 1024 4096 NA 1000");
+    println!("MDMP 1024 4096 NA 1000 18");
     println!("MDMQ 18 640x360");
     // #79: it falls over mid-way, leaving a helper running (Windows: the launcher's child).
     if mode == "crash" {
@@ -870,6 +878,117 @@ fn job_checks(me: &Path) {
         log.iter().any(|t| t
             == "The server rr1---sn-dead.googlevideo.com couldn't be reached; looking the page up again without it"),
         "{log:?}"
+    );
+}
+
+/// The download chosen in the browser's quality menu takes the menu's look-up (the page yt-dlp
+/// read for it) in its first run, without asking yt-dlp to read the page again; with the note
+/// when that look-up had to leave the cookies out. A look-up that doesn't offer the choice made,
+/// a failed one, and every run after the first read the page afresh.
+fn preloaded_checks(me: &Path) {
+    use mdm_tools::video::{InfoSlot, Preloaded};
+    let run = |mode: &str, preloaded: Option<Preloaded>| {
+        let tools = tempfile::tempdir().unwrap();
+        let out = tempfile::tempdir().unwrap();
+        std::fs::write(out.path().join("mode.txt"), mode).unwrap();
+        let exe = fake_in(me, tools.path());
+        let job = VideoJob::start_with(
+            &exe,
+            "https://video.example/talk",
+            "b[height=360]",
+            out.path(),
+            "Talk",
+            None,
+            1,
+            None,
+            None,
+            &Default::default(),
+            &Subs::default(),
+            None,
+            preloaded,
+        )
+        .expect("started");
+        let end = Instant::now() + Duration::from_secs(120);
+        let p = loop {
+            let p = job.progress();
+            if p.state != State::Running {
+                break p;
+            }
+            assert!(Instant::now() < end, "still running: {p:?}");
+            std::thread::sleep(Duration::from_millis(100));
+        };
+        let looked = std::fs::read_to_string(tools.path().join("looked.txt"))
+            .ok()
+            .and_then(|t| t.trim().parse::<u32>().ok())
+            .unwrap_or(0);
+        let loaded = std::fs::read_to_string(out.path().join("loaded.txt")).unwrap_or_default();
+        (p, looked, loaded)
+    };
+    let menu_of = |page: &str, label: &str, without_cookies: Option<bool>| {
+        let slot = InfoSlot::new(Instant::now());
+        match without_cookies {
+            Some(w) => slot.fill(page.as_bytes().to_vec(), w),
+            None => slot.fail(),
+        }
+        Some(Preloaded {
+            slot,
+            selector: "b[height=360]".into(),
+            label: label.into(),
+            merge: false,
+        })
+    };
+    let menu = |label: &str, without_cookies: Option<bool>| menu_of(PAGE, label, without_cookies);
+    let note =
+        "The site offered no format with the browser's cookies; looked the page up without them";
+
+    let (p, looked, _) = run("", menu("360p MP4", Some(true)));
+    assert!(matches!(p.state, State::Done(_)), "{:?}", p.state);
+    assert_eq!(looked, 0, "the menu's look-up, not another");
+    assert!(log_of(&p).iter().any(|t| t == note), "{:?}", log_of(&p));
+
+    // Its own look-up when there's none, as before.
+    let (p, looked, _) = run("", None);
+    assert!(matches!(p.state, State::Done(_)), "{:?}", p.state);
+    assert_eq!(looked, 1);
+
+    // The menu's look-up doesn't offer that choice under that label, or failed: afresh.
+    for menu in [menu("720p MP4", Some(false)), menu("360p MP4", None)] {
+        let (p, looked, _) = run("", menu);
+        assert!(matches!(p.state, State::Done(_)), "{:?}", p.state);
+        assert_eq!(looked, 1);
+    }
+
+    // The first run fails (a server stopped resolving): the second reads the page afresh.
+    let (p, looked, _) = run("dns-once", menu("360p MP4", Some(false)));
+    assert!(matches!(p.state, State::Done(_)), "{:?}", p.state);
+    assert_eq!(looked, 1, "the retry's");
+
+    // The menu's look-up names a media server this computer can't reach (#94): its links are
+    // moved to the alternative the site lists, as a fresh look-up's would be, and yt-dlp
+    // downloads from that list without reading the page again. The servers are the test's
+    // (`check_servers_with`): none is ever asked.
+    mdm_tools::video::check_servers_with(
+        |host| host.contains("sn-alive"),
+        |link| link.contains("sn-alive"),
+    );
+    let dead = "https://rr1---sn-dead.googlevideo.com/videoplayback?id=1&mn=sn-dead%2Csn-alive";
+    let page = PAGE.replace(
+        r#""acodec": "mp4a"}"#,
+        &format!(r#""acodec": "mp4a", "protocol": "https", "url": "{dead}"}}"#),
+    );
+    assert!(page.contains(dead));
+    let (p, looked, loaded) = run("", menu_of(&page, "360p MP4", Some(false)));
+    assert!(matches!(p.state, State::Done(_)), "{:?}", p.state);
+    assert_eq!(looked, 0, "the menu's look-up, moved");
+    assert!(
+        loaded.contains("rr1---sn-alive.googlevideo.com") && !loaded.contains("rr1---sn-dead."),
+        "{loaded}"
+    );
+    assert!(
+        log_of(&p).iter().any(|t| t
+            == "The server rr1---sn-dead.googlevideo.com can't be reached; downloading from rr1---sn-alive.googlevideo.com"),
+        "{:?}",
+        log_of(&p)
     );
 }
 

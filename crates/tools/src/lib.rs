@@ -8,6 +8,7 @@ pub mod chosen;
 pub mod ffmpeg;
 pub mod gallery;
 pub mod github;
+pub mod manifest;
 mod openpgp;
 pub mod pages;
 pub mod pieces;
