@@ -1172,10 +1172,20 @@ impl FileInfo {
         if self.info.is_none()
             && let Some(res) = self.probe.lock().unwrap().take()
         {
-            let res = res.map(|(pi, kept)| {
-                self.kept = kept;
-                pi
-            });
+            let res = res
+                .map(|(pi, kept)| {
+                    self.kept = kept;
+                    pi
+                })
+                // Worded to follow "Error: "; this window shows it alone (the Server row, the
+                // size's hover), so it starts upper case.
+                .map_err(|e| {
+                    let mut chars = e.chars();
+                    chars
+                        .next()
+                        .map(|c| c.to_uppercase().chain(chars).collect())
+                        .unwrap_or_default()
+                });
             if let (Ok(pi), false) = (&res, self.edited) {
                 self.category = Category::of(&pi.file_name);
                 let dir = crate::model::category_folder(self.category, &self.downloads, &self.dirs);
@@ -1436,22 +1446,16 @@ impl FileInfo {
                         }
                     }
                     Some(Err(reason)) => {
-                        // On the Server row, where the server shows when the look succeeds. The
-                        // reason is worded to follow "Error: "; standing alone it starts upper case.
-                        let mut chars = reason.chars();
-                        let reason: String = chars
-                            .next()
-                            .map(|c| c.to_uppercase().chain(chars).collect())
-                            .unwrap_or_default();
+                        // On the Server row, where the server shows when the look succeeds.
                         let (rect, cut) = winui::text_fit(
                             &p,
                             o.x + fx,
                             server_baseline,
-                            &reason,
+                            reason,
                             winui::ERROR(),
                             o.x + right,
                         );
-                        winui::copyable(ui, rect, "file-info-failed", &reason, cut);
+                        winui::copyable(ui, rect, "file-info-failed", reason, cut);
                     }
                 }
 
