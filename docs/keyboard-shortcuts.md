@@ -36,8 +36,8 @@ In the paste bar's address box, **Enter** does what its button says, **Esc** lea
 | **Alt+Enter** | **Properties** of the selected download |
 | **Ctrl+M** or **F2** | Move or rename the selected download |
 | **Shift+F10** or the **Menu** key | Open the selected download's menu |
-| **Delete** | Delete the selected downloads (asks first) |
-| **Shift+Delete** | Delete the selected downloads and their files (asks first) |
+| **Delete** | Delete the selected downloads from the list (asks first, unless you turned the question off; their files stay unless you tick the box) |
+| **Shift+Delete** | Delete the selected downloads and their files (always asks first) |
 
 ## Selecting
 
