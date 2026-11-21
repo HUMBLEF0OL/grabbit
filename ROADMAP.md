@@ -622,7 +622,7 @@ Done since 1.0.1; ships in the next release.
   torrents that couldn't start after a crash (1357), a video job held by ffmpeg (1521), a false
   freeze report while minimized (1481) and an OpenGL crash on some drivers (1448, with egui
   moved three commits); four dependency bumps picked. 44 skipped (translations, Linux, macOS,
-  upstream's CI and website, features), 60 deferred with what each waits for (`sync.py
+  upstream's CI and website, features), 59 deferred with what each waits for (`sync.py
   status`). Three critical ones wait for a PR of their own: live recordings recorded over,
   torrents writing over files that aren't theirs, and a failed way of drawing retried.
 
