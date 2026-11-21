@@ -6,6 +6,7 @@
 
 use std::time::{Duration, Instant};
 
+use mdm_engine::download::State;
 use mdm_engine::{Destination, Download, Options, Request};
 use mdm_labserver::{Config, Faults, LabServer, LogEntry, content};
 use reqwest::header::{COOKIE, HeaderMap, REFERER, USER_AGENT};
