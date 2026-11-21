@@ -2337,16 +2337,17 @@ async function run() {
   let testLeft = [];
   try {
     await until("the lab server", 10000, () => fetch(`${LAB}/`).then((r) => r.ok, () => false));
-    // An installed Mister Download Manager's registration is never replaced or removed.
-    const key = "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.grabbit.host";
-    const installed = spawnSync("reg", ["query", key], { stdio: "ignore" }).status === 0;
-    if (installed) {
-      throw new Error("Mister Download Manager's host is already registered (an installed copy): not touching it");
-    }
     regBefore = regSnapshot(path.join(work, "registry", "before"));
     if (process.env.E2E_HOST_NAME) {
+      // Its own test name only: an installed Grabbit's registration is left as it is.
       test = testHost(process.env.E2E_HOST_NAME, names, nmhost);
     } else {
+      // An installed Grabbit's registration is never replaced or removed: `--register` would.
+      const key = "HKCU\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.grabbit.host";
+      const installed = spawnSync("reg", ["query", key], { stdio: "ignore" }).status === 0;
+      if (installed) {
+        throw new Error("Grabbit's host is already registered (an installed copy): not touching it; set E2E_HOST_NAME=com.grabbit.e2etest to test beside it");
+      }
       const reg = spawnSync(nmhost, ["--register"], { encoding: "utf8" });
       if (reg.status !== 0) throw new Error(`nmhost --register: ${reg.stderr || reg.stdout}`);
     }
