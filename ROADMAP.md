@@ -868,5 +868,11 @@ kept on the `archive/multiplatform-i18n` branch.
 
 ### Look and performance
 
+- 📋 One way of saying each thing (plan 12, `design/graphite/plans/12-ui-consistency.md`): one
+  name per command in menus, toolbar and windows, sentence case throughout, the same buttons at
+  the end of every add window, deleted files moved to the Recycle Bin, a search that finds nothing
+  says so, a failed download offers to refresh its address, the status bar says when the Speed
+  Limiter is on, and the shared pieces (separators, focus rings, the Find box, browse buttons)
+  drawn one way
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))
