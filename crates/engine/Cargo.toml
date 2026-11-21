@@ -12,7 +12,18 @@ publish.workspace = true
 [lib]
 name = "mdm_engine"
 
+[features]
+# The browser-like connection for sites whose bot check refuses Grabbit's own (upstream issue
+# 668, src/browserlike.rs). Off by default, so everyday builds and tests skip BoringSSL; release
+# builds turn it on (tools/installer/build.ps1). Without it a bot check's refusal stands (the
+# browser takes the download).
+browser-connection = ["dep:wreq", "dep:wreq-util", "dep:rustls-native-certs", "dep:webpki-root-certs"]
+
 [dependencies]
+wreq = { workspace = true, optional = true }
+wreq-util = { workspace = true, optional = true }
+rustls-native-certs = { workspace = true, optional = true }
+webpki-root-certs = { workspace = true, optional = true }
 bytes.workspace = true
 craft-atomic.workspace = true
 serde_json.workspace = true
