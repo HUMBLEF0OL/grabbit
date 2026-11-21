@@ -310,7 +310,12 @@ mod tests {
             "https://github.com/yt-dlp/yt-dlp/releases/download/2026.10.26/SHA2-256SUMS.sig"
         );
         assert_eq!(
-            download_url(WEB, "HUMBLEF0OL/grabbit", "v1.0.1", "Grabbit-1.0.1-setup.exe"),
+            download_url(
+                WEB,
+                "HUMBLEF0OL/grabbit",
+                "v1.0.1",
+                "Grabbit-1.0.1-setup.exe"
+            ),
             "https://github.com/HUMBLEF0OL/grabbit/releases/download/v1.0.1/Grabbit-1.0.1-setup.exe"
         );
         assert_eq!(
