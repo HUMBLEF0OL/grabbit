@@ -3,36 +3,34 @@
   "generatedAt": "2026-11-16T00:00:00+00:00",
   "title": "Design System: Grabbit website",
   "extensions": {
-    "status": "The home page (website/index.html, website/home.css, website/home.js, and the benchmark chart drawn by bench_bars() in tools/website/build.py) is the reference implementation of this system. The other pages (download, benchmark, IDM alternative, features, help, FAQ, news, legal) render from website/styles.css, whose tokens map onto this system: the ground (--board), the tray (--paper), ink, signal cyan (--go), amethyst (--link), Geist and pill buttons. Their layouts are the older ones (sheets with bands, the IDM alternative's label), restyled. New pages and reworked sections are built from this document and home.css.",
+    "status": "The home page (website/index.html, website/home.css, website/home.js, and the benchmark chart drawn by bench_bars() in tools/website/build.py) is the reference implementation of this system. The other pages (download, benchmark, IDM alternative, features, help, FAQ, news, legal) render from website/styles.css, whose tokens map onto this system: the ground (--board), the tray (--paper), ink, Graphite green (--go, and --link with the same value), Geist and pill buttons. Their layouts are the older ones (sheets with bands, the IDM alternative's label), restyled. New pages and reworked sections are built from this document and home.css.",
     "colorMeta": {
-      "go": { "role": "primary", "displayName": "Signal Cyan", "canonical": "#00788e", "purpose": "Download pill and Grabbit's own numbers (light).", "tonalRamp": ["#00222a", "#003a46", "#005666", "#00788e", "#2e9cb0", "#6cbfcd", "#a9dde5", "#e2f5f8"] },
-      "go-dark": { "role": "primary", "displayName": "Signal Cyan (dark)", "canonical": "#1fe0f0", "purpose": "Download pill and Grabbit's own numbers (dark).", "tonalRamp": ["#00262a", "#004a51", "#00727c", "#00a2ae", "#1fe0f0", "#6aedf6", "#aef5fa", "#e3fcfd"] },
-      "on-go": { "role": "primary", "displayName": "On-Cyan (light)", "canonical": "#ffffff" },
-      "on-go-dark": { "role": "primary", "displayName": "On-Cyan (dark)", "canonical": "#00171c" },
-      "go-wash": { "role": "primary", "displayName": "Cyan Wash", "canonical": "#f0f7f8", "purpose": "6% on the tray, behind the comparison's own row (light)." },
-      "go-wash-dark": { "role": "primary", "displayName": "Cyan Wash (dark)", "canonical": "#131c26", "purpose": "6% on the tray, behind the comparison's own row (dark)." },
-      "go-tint": { "role": "primary", "displayName": "Cyan Tint", "canonical": "#e0eff2", "purpose": "12%, behind Grabbit's live strip and table row (light)." },
-      "go-tint-dark": { "role": "primary", "displayName": "Cyan Tint (dark)", "canonical": "#13252f", "purpose": "12%, behind Grabbit's live strip and table row (dark)." },
-      "go-tint-strong": { "role": "primary", "displayName": "Cyan Tint Strong", "canonical": "#d6ebef", "purpose": "16%, the result pills (\"Delivered\") with ink text (light)." },
-      "go-tint-strong-dark": { "role": "primary", "displayName": "Cyan Tint Strong (dark)", "canonical": "#14313b", "purpose": "16%, the result pills (\"Delivered\") with ink text (dark)." },
-      "amethyst": { "role": "secondary", "displayName": "Amethyst", "canonical": "#6527d4", "purpose": "Links, focus ring (light).", "tonalRamp": ["#1a0840", "#2f1172", "#4a1ca8", "#6527d4", "#8656e6", "#a989f2", "#cdbaf9", "#efe7fe"] },
-      "amethyst-dark": { "role": "secondary", "displayName": "Amethyst (dark)", "canonical": "#b08cff", "purpose": "Links, focus ring (dark).", "tonalRamp": ["#1e0f45", "#3a1f7c", "#5a36b3", "#7f5be0", "#b08cff", "#c6abff", "#ddcdff", "#f3edff"] },
-      "selection": { "role": "secondary", "displayName": "Selection Tint", "canonical": "#efe7fe" },
-      "selection-dark": { "role": "secondary", "displayName": "Selection Tint (dark)", "canonical": "#231a3a" },
-      "ground": { "role": "neutral", "displayName": "Near-white Ground", "canonical": "#f7f6fb" },
-      "ground-dark": { "role": "neutral", "displayName": "Jet Ground", "canonical": "#09080d" },
+      "go": { "role": "primary", "displayName": "Graphite Green", "canonical": "#0c704d", "purpose": "Download pill, Grabbit's own numbers, links and focus (light). The app's pal.py \"graphite\" acc/out.", "tonalRamp": ["#04241a", "#073d2b", "#0a5f41", "#0c704d", "#047857", "#3ecf8e", "#a7ecc9", "#e6f2ec"] },
+      "go-dark": { "role": "primary", "displayName": "Graphite Green (dark)", "canonical": "#3ecf8e", "purpose": "Download pill, Grabbit's own numbers, links and focus (dark).", "tonalRamp": ["#06281a", "#15302a", "#1e6a4a", "#35b77c", "#3ecf8e", "#6ee7b7", "#7ee2b4", "#d1f7e4"] },
+      "on-go": { "role": "primary", "displayName": "On-Green (light)", "canonical": "#ffffff" },
+      "on-go-dark": { "role": "primary", "displayName": "On-Green (dark)", "canonical": "#06281a" },
+      "go-wash": { "role": "primary", "displayName": "Green Wash", "canonical": "#f0f6f4", "purpose": "6% on the tray, behind the comparison's own row (light)." },
+      "go-wash-dark": { "role": "primary", "displayName": "Green Wash (dark)", "canonical": "#1a2322", "purpose": "6% on the tray, behind the comparison's own row (dark)." },
+      "go-tint": { "role": "primary", "displayName": "Green Tint", "canonical": "#e7f1ed", "purpose": "10%, behind Grabbit's live strip and table row (light)." },
+      "go-tint-dark": { "role": "primary", "displayName": "Green Tint (dark)", "canonical": "#1c2a26", "purpose": "10%, behind Grabbit's live strip and table row (dark)." },
+      "go-tint-strong": { "role": "primary", "displayName": "Green Tint Strong", "canonical": "#d8e8e3", "purpose": "16%, the result pills (\"Delivered\") with ink text (light)." },
+      "go-tint-strong-dark": { "role": "primary", "displayName": "Green Tint Strong (dark)", "canonical": "#1e352d", "purpose": "16%, the result pills (\"Delivered\") with ink text (dark)." },
+      "selection": { "role": "secondary", "displayName": "Selection Tint", "canonical": "#e6f2ec" },
+      "selection-dark": { "role": "secondary", "displayName": "Selection Tint (dark)", "canonical": "#15302a" },
+      "ground": { "role": "neutral", "displayName": "Near-white Ground", "canonical": "#fafafa" },
+      "ground-dark": { "role": "neutral", "displayName": "Zinc Ground", "canonical": "#121214" },
       "tray": { "role": "neutral", "displayName": "Tray", "canonical": "#ffffff" },
-      "tray-dark": { "role": "neutral", "displayName": "Tray (dark)", "canonical": "#121019" },
-      "tray-2": { "role": "neutral", "displayName": "Tray 2", "canonical": "#f3f1f9", "purpose": "The band header of a tray and selected rows on the inner pages (light)." },
-      "tray-2-dark": { "role": "neutral", "displayName": "Tray 2 (dark)", "canonical": "#1c1828", "purpose": "The band header of a tray and selected rows on the inner pages (dark)." },
-      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#0d0b14", "tonalRamp": ["#0d0b14", "#26222f", "#3f3a4c", "#5a5570", "#7c7790", "#a29eb2", "#ccc9d6", "#f0eef7"] },
-      "ink-dark": { "role": "neutral", "displayName": "Ink (dark)", "canonical": "#f0eef7" },
-      "ink-2": { "role": "neutral", "displayName": "Ink 2", "canonical": "#4b4760", "purpose": "Secondary reading text on the inner pages: answers, captions, values beside a figure (light)." },
-      "ink-2-dark": { "role": "neutral", "displayName": "Ink 2 (dark)", "canonical": "#bab4cc", "purpose": "Secondary reading text on the inner pages: answers, captions, values beside a figure (dark)." },
-      "mute": { "role": "neutral", "displayName": "Mute", "canonical": "#5a5570" },
-      "mute-dark": { "role": "neutral", "displayName": "Mute (dark)", "canonical": "#9a94ad" },
-      "line": { "role": "neutral", "displayName": "Hairline", "canonical": "#d9d5e3" },
-      "line-dark": { "role": "neutral", "displayName": "Hairline (dark)", "canonical": "#2a2637" }
+      "tray-dark": { "role": "neutral", "displayName": "Tray (dark)", "canonical": "#18181b" },
+      "tray-2": { "role": "neutral", "displayName": "Tray 2", "canonical": "#f1f1f3", "purpose": "The band header of a tray and selected rows on the inner pages (light)." },
+      "tray-2-dark": { "role": "neutral", "displayName": "Tray 2 (dark)", "canonical": "#222227", "purpose": "The band header of a tray and selected rows on the inner pages (dark)." },
+      "ink": { "role": "neutral", "displayName": "Ink", "canonical": "#18181b", "tonalRamp": ["#18181b", "#27272a", "#3f3f46", "#52525b", "#6b6b74", "#a1a1aa", "#d4d4d8", "#f4f4f5"] },
+      "ink-dark": { "role": "neutral", "displayName": "Ink (dark)", "canonical": "#f4f4f5" },
+      "ink-2": { "role": "neutral", "displayName": "Ink 2", "canonical": "#52525b", "purpose": "Secondary reading text on the inner pages: answers, captions, values beside a figure (light)." },
+      "ink-2-dark": { "role": "neutral", "displayName": "Ink 2 (dark)", "canonical": "#b4b4bc", "purpose": "Secondary reading text on the inner pages: answers, captions, values beside a figure (dark)." },
+      "mute": { "role": "neutral", "displayName": "Mute", "canonical": "#6b6b74" },
+      "mute-dark": { "role": "neutral", "displayName": "Mute (dark)", "canonical": "#8e8e98" },
+      "line": { "role": "neutral", "displayName": "Hairline", "canonical": "#e4e4e7" },
+      "line-dark": { "role": "neutral", "displayName": "Hairline (dark)", "canonical": "#2b2b30" }
     },
     "typographyMeta": {
       "display": { "displayName": "Display", "purpose": "Hero headline (second line in Mute) and the closing 'Get Grabbit'." },
@@ -47,9 +45,9 @@
     },
     "shadows": [
       { "name": "tray-edge", "value": "inset 0 1px 0 var(--edge), 0 0 0 1px var(--line)", "purpose": "Every tray surface; edge is rgb(255 255 255 / .7) light, / .07 dark." },
-      { "name": "window-lift", "value": "0 40px 80px -30px rgb(40 22 90 / .28), 0 2px 6px rgb(40 22 90 / .08)", "purpose": "App screenshots only (light). Dark: 0 40px 80px -30px rgb(0 0 0 / .7), 0 2px 6px rgb(0 0 0 / .4)." },
+      { "name": "window-lift", "value": "0 40px 80px -30px rgb(24 24 27 / .28), 0 2px 6px rgb(24 24 27 / .08)", "purpose": "App screenshots only (light). Dark: 0 40px 80px -30px rgb(0 0 0 / .7), 0 2px 6px rgb(0 0 0 / .4)." },
       { "name": "nav-float", "value": "inset 0 1px 0 var(--edge), 0 0 0 1px var(--line), 0 10px 30px -14px rgb(0 0 0 / .35)", "purpose": "Glass pill nav, with backdrop-filter: blur(14px) saturate(1.4)." },
-      { "name": "pill-bevel", "value": "inset 0 1px 0 rgb(255 255 255 / .25), inset 0 -1px 0 rgb(0 0 0 / .15)", "purpose": "The cyan Download pill only." }
+      { "name": "pill-bevel", "value": "inset 0 1px 0 rgb(255 255 255 / .25), inset 0 -1px 0 rgb(0 0 0 / .15)", "purpose": "The green Download pill only." }
     ],
     "motion": [
       { "name": "ease-out-expo", "value": "cubic-bezier(.16,1,.3,1)", "purpose": "Entrance rise (.9s), stage crossfade rise (.9s), bar growth (1.1s), crop lift (.7s)." },
@@ -68,9 +66,9 @@
       "name": "Download Pill",
       "kind": "button",
       "refersTo": "button-go",
-      "description": "The one cyan action: Download for Windows.",
+      "description": "The one green action: Download for Windows.",
       "html": "<a class=\"ds-go\" href=\"#\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 4v12m0 0l-5-5m5 5l5-5M5 20h14\"/></svg>Download for Windows</a>",
-      "css": ".ds-go{display:inline-flex;align-items:center;gap:10px;height:52px;padding:0 24px;border-radius:999px;font:600 16px Geist,'Segoe UI',system-ui,sans-serif;text-decoration:none;background:#00788e;color:#fff;box-shadow:inset 0 1px 0 rgb(255 255 255 / .25),inset 0 -1px 0 rgb(0 0 0 / .15);transition:transform .45s cubic-bezier(.34,1.56,.64,1),filter .2s}.ds-go svg{width:18px;height:18px}.ds-go:hover{transform:translateY(-1px);filter:brightness(1.06)}.ds-go:active{transform:scale(.97)}.ds-go:focus-visible{outline:2px solid #6527d4;outline-offset:4px}"
+      "css": ".ds-go{display:inline-flex;align-items:center;gap:10px;height:52px;padding:0 24px;border-radius:999px;font:600 16px Geist,'Segoe UI',system-ui,sans-serif;text-decoration:none;background:#0c704d;color:#fff;box-shadow:inset 0 1px 0 rgb(255 255 255 / .25),inset 0 -1px 0 rgb(0 0 0 / .15);transition:transform .45s cubic-bezier(.34,1.56,.64,1),filter .2s}.ds-go svg{width:18px;height:18px}.ds-go:hover{transform:translateY(-1px);filter:brightness(1.06)}.ds-go:active{transform:scale(.97)}.ds-go:focus-visible{outline:2px solid #0c704d;outline-offset:4px}"
     },
     {
       "name": "Ghost Pill",
@@ -78,7 +76,7 @@
       "refersTo": "button-ghost",
       "description": "Secondary action beside the Download pill.",
       "html": "<a class=\"ds-ghost\" href=\"#\">See the benchmark</a>",
-      "css": ".ds-ghost{display:inline-flex;align-items:center;height:52px;padding:0 24px;border-radius:999px;font:600 16px Geist,'Segoe UI',system-ui,sans-serif;text-decoration:none;color:#0d0b14;background:rgb(13 11 20 / .05);box-shadow:inset 0 0 0 1px #d9d5e3;transition:background .2s,transform .45s cubic-bezier(.34,1.56,.64,1)}.ds-ghost:hover{background:rgb(13 11 20 / .09)}.ds-ghost:active{transform:scale(.97)}.ds-ghost:focus-visible{outline:2px solid #6527d4;outline-offset:4px}"
+      "css": ".ds-ghost{display:inline-flex;align-items:center;height:52px;padding:0 24px;border-radius:999px;font:600 16px Geist,'Segoe UI',system-ui,sans-serif;text-decoration:none;color:#18181b;background:rgb(24 24 27 / .05);box-shadow:inset 0 0 0 1px #e4e4e7;transition:background .2s,transform .45s cubic-bezier(.34,1.56,.64,1)}.ds-ghost:hover{background:rgb(24 24 27 / .09)}.ds-ghost:active{transform:scale(.97)}.ds-ghost:focus-visible{outline:2px solid #0c704d;outline-offset:4px}"
     },
     {
       "name": "Glass Pill Nav",
@@ -86,7 +84,7 @@
       "refersTo": "nav-pill",
       "description": "Floating centred nav: mark, links, theme toggle, small Download.",
       "html": "<nav class=\"ds-nav\"><a class=\"ds-name\" href=\"#\">Grabbit</a><a class=\"ds-l\" href=\"#\">Features</a><a class=\"ds-l\" href=\"#\">Benchmark</a><a class=\"ds-l\" href=\"#\">Help</a><a class=\"ds-dl\" href=\"#\">Download</a></nav>",
-      "css": ".ds-nav{display:inline-flex;align-items:center;gap:2px;height:48px;padding:0 6px 0 14px;border-radius:999px;background:rgb(255 255 255 / .78);backdrop-filter:blur(14px) saturate(1.4);box-shadow:inset 0 1px 0 rgb(255 255 255 / .7),0 0 0 1px #d9d5e3,0 10px 30px -14px rgb(0 0 0 / .35);font:400 14px Geist,'Segoe UI',system-ui,sans-serif}.ds-name{font-weight:600;font-size:15px;color:#0d0b14;text-decoration:none;margin-right:12px;letter-spacing:-.01em}.ds-l{color:#5a5570;text-decoration:none;padding:7px 12px;border-radius:999px;transition:color .2s,background .2s}.ds-l:hover{color:#0d0b14;background:rgb(13 11 20 / .06)}.ds-l:focus-visible,.ds-dl:focus-visible{outline:2px solid #6527d4;outline-offset:4px}.ds-dl{margin-left:6px;display:inline-flex;align-items:center;height:36px;padding:0 16px;border-radius:999px;background:#00788e;color:#fff;font-weight:600;text-decoration:none}"
+      "css": ".ds-nav{display:inline-flex;align-items:center;gap:2px;height:48px;padding:0 6px 0 14px;border-radius:999px;background:rgb(255 255 255 / .78);backdrop-filter:blur(14px) saturate(1.4);box-shadow:inset 0 1px 0 rgb(255 255 255 / .7),0 0 0 1px #e4e4e7,0 10px 30px -14px rgb(0 0 0 / .35);font:400 14px Geist,'Segoe UI',system-ui,sans-serif}.ds-name{font-weight:600;font-size:15px;color:#18181b;text-decoration:none;margin-right:12px;letter-spacing:-.01em}.ds-l{color:#6b6b74;text-decoration:none;padding:7px 12px;border-radius:999px;transition:color .2s,background .2s}.ds-l:hover{color:#18181b;background:rgb(24 24 27 / .06)}.ds-l:focus-visible,.ds-dl:focus-visible{outline:2px solid #0c704d;outline-offset:4px}.ds-dl{margin-left:6px;display:inline-flex;align-items:center;height:36px;padding:0 16px;border-radius:999px;background:#0c704d;color:#fff;font-weight:600;text-decoration:none}"
     },
     {
       "name": "Tray Cell",
@@ -94,7 +92,7 @@
       "refersTo": "cell",
       "description": "Bento cell: title, Mute line, proof pinned to the bottom.",
       "html": "<div class=\"ds-cell\"><h3>No ads, no trial</h3><p>No account.</p><p class=\"ds-free\">Free</p></div>",
-      "css": ".ds-cell{display:flex;flex-direction:column;min-height:260px;padding:28px;border-radius:24px;background:#fff;box-shadow:inset 0 1px 0 rgb(255 255 255 / .7),0 0 0 1px #d9d5e3;font-family:Geist,'Segoe UI',system-ui,sans-serif;transition:box-shadow .3s}.ds-cell:hover{box-shadow:inset 0 1px 0 rgb(255 255 255 / .7),0 0 0 1px rgb(13 11 20 / .18)}.ds-cell h3{font-weight:600;font-size:21px;line-height:1.25;letter-spacing:-.02em;color:#0d0b14;margin:0}.ds-cell p{font-size:15.5px;line-height:1.5;color:#5a5570;margin:6px 0 0}.ds-cell .ds-free{margin-top:auto;color:#0d0b14;font-weight:600;font-size:88px;line-height:.85;letter-spacing:-.06em}"
+      "css": ".ds-cell{display:flex;flex-direction:column;min-height:260px;padding:28px;border-radius:24px;background:#fff;box-shadow:inset 0 1px 0 rgb(255 255 255 / .7),0 0 0 1px #e4e4e7;font-family:Geist,'Segoe UI',system-ui,sans-serif;transition:box-shadow .3s}.ds-cell:hover{box-shadow:inset 0 1px 0 rgb(255 255 255 / .7),0 0 0 1px rgb(24 24 27 / .18)}.ds-cell h3{font-weight:600;font-size:21px;line-height:1.25;letter-spacing:-.02em;color:#18181b;margin:0}.ds-cell p{font-size:15.5px;line-height:1.5;color:#6b6b74;margin:6px 0 0}.ds-cell .ds-free{margin-top:auto;color:#18181b;font-weight:600;font-size:88px;line-height:.85;letter-spacing:-.06em}"
     },
     {
       "name": "Double-bezel Stage",
@@ -102,31 +100,31 @@
       "refersTo": "stage-bezel",
       "description": "24px shell around a 16px tray core holding a real app window (8px, lifted).",
       "html": "<div class=\"ds-bezel\"><div class=\"ds-core\"><div class=\"ds-win\"></div></div></div>",
-      "css": ".ds-bezel{padding:10px;border-radius:24px;background:rgb(13 11 20 / .04);box-shadow:inset 0 0 0 1px #d9d5e3}.ds-core{border-radius:16px;background:#fff;box-shadow:inset 0 1px 0 rgb(255 255 255 / .7);padding:32px 40px 0;overflow:hidden}.ds-win{height:140px;border-radius:8px 8px 0 0;border:1px solid #d9d5e3;border-bottom:0;background:#f7f6fb;box-shadow:0 40px 80px -30px rgb(40 22 90 / .28),0 2px 6px rgb(40 22 90 / .08)}"
+      "css": ".ds-bezel{padding:10px;border-radius:24px;background:rgb(24 24 27 / .04);box-shadow:inset 0 0 0 1px #e4e4e7}.ds-core{border-radius:16px;background:#fff;box-shadow:inset 0 1px 0 rgb(255 255 255 / .7);padding:32px 40px 0;overflow:hidden}.ds-win{height:140px;border-radius:8px 8px 0 0;border:1px solid #e4e4e7;border-bottom:0;background:#fafafa;box-shadow:0 40px 80px -30px rgb(24 24 27 / .28),0 2px 6px rgb(24 24 27 / .08)}"
     },
     {
       "name": "Benchmark Bars",
       "kind": "custom",
       "refersTo": "cell",
-      "description": "Grabbit (cyan) over IDM (22% ink) on one shared seconds axis.",
+      "description": "Grabbit (green) over IDM (22% ink) on one shared seconds axis.",
       "html": "<div class=\"ds-bench\"><span class=\"ds-n\">1 GiB, fast link</span><span class=\"ds-bar us\" style=\"--w:6.3%\"><i></i><b>1.01 s</b></span><span class=\"ds-bar them\" style=\"--w:34.1%\"><i></i><b>5.46 s</b></span></div>",
-      "css": ".ds-bench{display:grid;gap:5px;font-family:Geist,'Segoe UI',system-ui,sans-serif;font-variant-numeric:tabular-nums;max-width:520px}.ds-n{font-size:15.5px;color:#5a5570}.ds-bar{display:flex;align-items:center;gap:10px;height:12px}.ds-bar i{display:block;height:8px;width:var(--w);border-radius:4px}.ds-bar.us i{background:#00788e}.ds-bar.them i{background:rgb(13 11 20 / .22)}.ds-bar b{font-size:13.5px;font-weight:600}.ds-bar.us b{color:#00788e}.ds-bar.them b{font-weight:400;color:#5a5570}"
+      "css": ".ds-bench{display:grid;gap:5px;font-family:Geist,'Segoe UI',system-ui,sans-serif;font-variant-numeric:tabular-nums;max-width:520px}.ds-n{font-size:15.5px;color:#6b6b74}.ds-bar{display:flex;align-items:center;gap:10px;height:12px}.ds-bar i{display:block;height:8px;width:var(--w);border-radius:4px}.ds-bar.us i{background:#0c704d}.ds-bar.them i{background:rgb(24 24 27 / .22)}.ds-bar b{font-size:13.5px;font-weight:600}.ds-bar.us b{color:#0c704d}.ds-bar.them b{font-weight:400;color:#6b6b74}"
     }
   ],
   "narrative": {
     "northStar": "One Take",
-    "overview": "The camera never cuts. A single centred stage holds the real Grabbit window doing its work. As the visitor scrolls, the stage stays put and the copy walks through the app's four jobs beside it. The site is Graphite, the app's own look, at page scale: a jet-black or near-white ground, one raised tray surface, hairlines lit along the top edge, and a single cyan that means \"this is Grabbit acting\". Proof comes from the app and its measured numbers. Nothing on the page is drawn to look like the app.\n\nDensity is calm and generous: a 1200px column, 160px between sections, big tight-tracked headings, muted ink for everything secondary. Colour is scarce on purpose. Cyan marks the Download action and Grabbit's own figures, amethyst marks links, focus and selection, and the gradient lives only inside the double-chevron mark. Light and dark are equal citizens and follow the visitor's system setting by default.\n\nIDM appears only as the benchmark's yardstick (grey bars, plain-weight figures) and as a \"moving from IDM\" path. It is never the frame of reference for the look.",
+    "overview": "The camera never cuts. A single centred stage holds the real Grabbit window doing its work. As the visitor scrolls, the stage stays put and the copy walks through the app's four jobs beside it. The site wears the app's own palette, Graphite green (pal.py \"graphite\": Zinc + Emerald), at page scale: a zinc-black or near-white ground, one raised tray surface, hairlines lit along the top edge, and a single emerald that means \"this is Grabbit acting\". Proof comes from the app and its measured numbers. Nothing on the page is drawn to look like the app.\n\nDensity is calm and generous: a 1200px column, 160px between sections, big tight-tracked headings, muted ink for everything secondary. Colour is scarce on purpose. Emerald marks the Download action and Grabbit's own figures, and points the way (links, focus, selection) as it does in the app; the gradient lives only inside the double-chevron mark. Light and dark are equal citizens and follow the visitor's system setting by default.\n\nIDM appears only as the benchmark's yardstick (grey bars, plain-weight figures) and as a \"moving from IDM\" path. It is never the frame of reference for the look.",
     "keyCharacteristics": [
-      "Jet-black / near-white ground, one tray surface, 1px hairlines with a top light edge.",
-      "One accent, cyan, for Download and Grabbit's own numbers. Amethyst for links, focus and selection only.",
+      "Zinc-black / near-white ground, one tray surface, 1px hairlines with a top light edge.",
+      "One accent, the app's emerald: filled for Download and Grabbit's own numbers, as text or a ring for links, focus and selection.",
       "Geist in three weights, tight negative tracking, tabular figures everywhere.",
       "Pills for controls, nested 24/16px shells for stages and cells, 8px for app windows.",
       "Every image is the real app in its light and dark versions, framed and lifted, never mocked.",
       "Motion plays once or runs to measured time, and every element has a finished state at rest."
     ],
     "rules": [
-      { "name": "The One Signal Rule", "body": "Cyan means Grabbit is acting: the Download action, or a number Grabbit measured. Never use it for decoration, a heading, a link or the comparison's bars.", "section": "colors" },
-      { "name": "The Amethyst Points Rule", "body": "Amethyst only shows where you can go or where you are: links, focus, selection. It never fills a surface.", "section": "colors" },
+      { "name": "The One Signal Rule", "body": "A green fill means Grabbit is acting: the Download action, or a number Grabbit measured. Never use it for decoration, a heading or IDM's bars.", "section": "colors" },
+      { "name": "The Green Points Rule", "body": "Green as a line or text only shows where you can go or where you are: links, focus, selection. It never fills a surface.", "section": "colors" },
       { "name": "The Mark Owns The Gradient Rule", "body": "The mark's emerald gradient (Graphite green, the app's palette) appears only inside the Grabbit mark (website/assets/grabbit.svg). There is no gradient text, gradient fill or glow anywhere else.", "section": "colors" },
       { "name": "The Tighter As It Grows Rule", "body": "Tracking scales with size: -0.01em at 15-18px, -0.02em at titles, -0.035 to -0.045em at headlines and display. Body copy is never tracked.", "section": "typography" },
       { "name": "The Tabular Figures Rule", "body": "Tabular figures are set on the body, so every time, size and count lines up without extra work.", "section": "typography" },
@@ -134,10 +132,10 @@
     ],
     "dos": [
       "Do build every page from the Ground / Tray / Ink / Mute / Hairline tokens, in both themes, defaulting to the visitor's system choice.",
-      "Do keep cyan to Download and Grabbit's own numbers, and amethyst to links, focus and selection.",
+      "Do keep green fills to Download and Grabbit's own numbers, and green lines to links, focus and selection; take the values from the app's pal.py \"graphite\".",
       "Do frame real app screenshots, in light and dark versions, in an 8px window with a hairline and the window lift, inside a 24/16px double bezel or a tray cell.",
       "Do set type in Geist 400/500/600 with tracking that tightens as the size grows, and tabular figures.",
-      "Do draw every chart from its data file at build time, and show IDM in neutral ink beside Grabbit's cyan.",
+      "Do draw every chart from its data file at build time, and show IDM in neutral ink beside Grabbit's green.",
       "Do give every motion a finished state at rest: entrance rise once (.9s, cubic-bezier(.16,1,.3,1)), bars grow once, and reduced motion or no JS shows the end state."
     ],
     "donts": [
@@ -146,7 +144,7 @@
       "Don't draw a mock window or retouch a screenshot. Don't use IDM artwork, and don't present Grabbit as an IDM look-alike.",
       "Don't add a second typeface or set headings in uppercase or with wide tracking.",
       "Don't use square corners on controls or radii outside the 4 (micro, under 20px) / 8 / 12 / 16 / 24 / pill set.",
-      "Don't bring back the old blue-board look (Archivo, the blue board, green buttons, tilted labels) in any page."
+      "Don't bring back the old blue-board look (Archivo, the blue board, its bright flat green buttons, tilted labels) in any page."
     ]
   }
 }
