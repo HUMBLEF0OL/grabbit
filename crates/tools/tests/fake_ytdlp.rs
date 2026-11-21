@@ -641,7 +641,6 @@ fn fake_ffmpeg() -> ExitCode {
     }
 }
 
-
 /// The fake, as a copy of this program named `fake-ytdlp` in `dir`.
 fn fake_in(me: &Path, dir: &Path) -> PathBuf {
     let exe = dir.join(format!("fake-ytdlp{}", std::env::consts::EXE_SUFFIX));

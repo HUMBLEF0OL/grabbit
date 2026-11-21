@@ -933,8 +933,8 @@ fn supervise(
             Attempt::Save(None)
         } else {
             attempt(
-                exe, url, &ours, browser, progress, child, expected, retry, &dead, reroute,
-                engine, recorder,
+                exe, url, &ours, browser, progress, child, expected, retry, &dead, reroute, engine,
+                recorder,
             )
         };
         match ended {
@@ -1617,7 +1617,7 @@ fn attempt(
     engine: Option<&ByEngine>,
     recorder: &Recorder,
 ) -> Attempt {
-    let failed =|error: String, rerouted: bool| Attempt::Failed { error, rerouted };
+    let failed = |error: String, rerouted: bool| Attempt::Failed { error, rerouted };
     let mut info = match look_up(exe, url, browser) {
         Ok((v, without_cookies)) => {
             if without_cookies {
