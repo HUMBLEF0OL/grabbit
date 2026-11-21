@@ -613,6 +613,8 @@ Done since 1.0.1; ships in the next release.
   items that open a section of Options lost their "...", and Options' names are written one
   way (**Speed Limiter**, **Proxy / SOCKS**, **Site logins**, **Browser extension**); each
   section under **Tools** is headed with its row's name.
+- ✅ **Set it up** works for a copy installed for everyone (Program Files, the setup's browser
+  box unticked), and the browser extension's window says why when it can't.
 
 ## Being worked on
 

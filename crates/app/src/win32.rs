@@ -5901,12 +5901,27 @@ pub fn host_registration() -> crate::extension::Registration {
 /// copy run from inside a zip whose temporary folder was deleted), the native host's `--repair`
 /// points it at this copy, for this user. Nothing runs while every one works or there is none:
 /// one that works naming another copy is that copy's, and none is the setup's box unticked.
+/// It also runs while the user's entries name their own manifest in the data folder, which
+/// only `--repair` keeps up to date.
 pub fn repair_browsers() {
     use mdm_ipc::browsers::{Repair, windows_repair};
     crate::launch::spawn("repair-browsers", || {
+        use mdm_ipc::browsers::{
+            HOST_NAME, WINDOWS_HOST_KEYS, is_user_manifest, registered_manifest,
+        };
+        use windows_sys::Win32::System::Registry::HKEY_CURRENT_USER;
+        // Or the user's own manifest (Set it up for a copy installed for everyone): `--repair`
+        // writes it again as this version does.
+        let own = || {
+            WINDOWS_HOST_KEYS.iter().any(|(key, _)| {
+                reg_string_in(HKEY_CURRENT_USER, &format!(r"{key}\{HOST_NAME}"), "")
+                    .is_some_and(|v| is_user_manifest(&registered_manifest(&v)))
+            })
+        };
         let needed = host_holders()
             .iter()
-            .any(|(user, machine)| windows_repair(user.as_ref(), machine.as_ref()) != Repair::Keep);
+            .any(|(user, machine)| windows_repair(user.as_ref(), machine.as_ref()) != Repair::Keep)
+            || own();
         if needed {
             crate::extension::registered_as(&crate::extension::run_host(
                 "--repair",

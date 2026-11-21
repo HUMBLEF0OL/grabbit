@@ -838,9 +838,11 @@ fn our_caller(args: &[String]) -> bool {
         || args.get(1).is_some_and(|a| a == FIREFOX_ID)
 }
 
-/// The manifest beside this exe that a browser of `family` reads, written when it isn't already
-/// what it should be (an installation for everyone can't write there, and needn't).
-fn own_manifest(family: Family) -> Result<PathBuf, String> {
+/// The manifest a browser of `family` reads: beside this exe, written when it isn't already what
+/// it should be. For this user only (`per_user`), when that folder can't be written (installed
+/// for everyone in Program Files, the setup's box unticked, then Set it up as the user), the
+/// user's own copy in the data folder instead.
+fn own_manifest(family: Family, per_user: bool) -> Result<PathBuf, String> {
     let program = this_program()?;
     let (name, value) = match family {
         Family::Chromium => (format!("{HOST_NAME}.json"), chromium_manifest(&program)),
@@ -849,14 +851,39 @@ fn own_manifest(family: Family) -> Result<PathBuf, String> {
             firefox_manifest(&program),
         ),
     };
-    let path = exe_dir()?.join(name);
-    let current = std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok());
-    if current.as_ref() != Some(&value) {
-        write_json(&path, &value)?;
+    let fallback = per_user
+        .then(mdm_ipc::browsers::user_manifest_dir)
+        .flatten()
+        .map(|d| d.join(&name));
+    place_manifest(&exe_dir()?.join(&name), fallback.as_deref(), &value)
+}
+
+/// `value` at `beside` (left alone when it already says that), else at `fallback` when given:
+/// the path the browsers are to be pointed at.
+fn place_manifest(
+    beside: &std::path::Path,
+    fallback: Option<&std::path::Path>,
+    value: &serde_json::Value,
+) -> Result<PathBuf, String> {
+    let ensure = |path: &std::path::Path| -> Result<(), String> {
+        let current = std::fs::read(path)
+            .ok()
+            .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok());
+        if current.as_ref() == Some(value) {
+            return Ok(());
+        }
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        write_json(path, value)
+    };
+    match (ensure(beside), fallback) {
+        (Ok(()), _) => Ok(beside.to_path_buf()),
+        (Err(e), Some(other)) => ensure(other)
+            .map(|()| other.to_path_buf())
+            .map_err(|e2| format!("{e}; {e2}")),
+        (Err(e), None) => Err(e),
     }
-    Ok(path)
 }
 
 /// Point `root`'s (HKCU or HKLM) entry under `key` at `manifest`.
@@ -880,10 +907,10 @@ fn register(all_users: bool) -> Result<(), String> {
     temporary_refused()?;
     let root = if all_users { "HKLM" } else { "HKCU" };
     for (key, family) in WINDOWS_HOST_KEYS {
-        reg_point(root, key, &own_manifest(family)?)?;
+        reg_point(root, key, &own_manifest(family, !all_users)?)?;
     }
-    let path = own_manifest(Family::Chromium)?;
-    let ff_path = own_manifest(Family::Gecko)?;
+    let path = own_manifest(Family::Chromium, !all_users)?;
+    let ff_path = own_manifest(Family::Gecko, !all_users)?;
     // 1.0.0's entry for the original project's extension goes (not the original app's own).
     drop_original_entry(all_users);
     // Chrome offers the store's extension once it is listed (never a placeholder ID).
@@ -922,13 +949,52 @@ fn repair() -> Result<(), String> {
             .map(|v| Holder::of(&mdm_ipc::browsers::registered_manifest(&v)))
     };
     let mut repaired = 0;
+    let program = this_program()?;
     for (key, family) in WINDOWS_HOST_KEYS {
         let entry = format!(r"{key}\{HOST_NAME}");
         let user = holder(false, &entry);
-        match mdm_ipc::browsers::windows_repair(user.as_ref(), holder(true, &entry).as_ref()) {
+        let machine = holder(true, &entry);
+        match mdm_ipc::browsers::windows_repair(user.as_ref(), machine.as_ref()) {
+            // The user's own manifest for this copy (Set it up for one installed for everyone):
+            // kept as this version writes it (a new extension ID), as the setup does beside the
+            // program; it would otherwise hide a newer one of the computer's.
+            Repair::Keep
+                if user == Some(Holder::Alive(program.clone()))
+                    && win32::reg_string(false, &entry).is_some_and(|v| {
+                        mdm_ipc::browsers::is_user_manifest(
+                            &mdm_ipc::browsers::registered_manifest(&v),
+                        )
+                    }) =>
+            {
+                // It works as it is: a failure here (the file held by an antivirus) is said,
+                // not the repair's.
+                let named = win32::reg_string(false, &entry)
+                    .map(|v| mdm_ipc::browsers::registered_manifest(&v));
+                match own_manifest(family, true) {
+                    Ok(m) if named.as_deref() == Some(m.as_path()) => {}
+                    // The setup has since written the one beside the program and the computer's
+                    // entry names a working copy (upgraded with the box ticked): the user's goes,
+                    // so uninstalling for everyone leaves nothing of it.
+                    Ok(m)
+                        if !mdm_ipc::browsers::is_user_manifest(&m)
+                            && matches!(machine, Some(Holder::Alive(_))) =>
+                    {
+                        match reg(&["delete", &format!(r"HKCU\{entry}"), "/f"]) {
+                            Ok(()) => println!(r"HKCU\{entry}: removed (the computer's works)"),
+                            Err(e) => println!(r"HKCU\{entry}: left as it is: {e}"),
+                        }
+                    }
+                    Ok(m) => match reg_point("HKCU", key, &m) {
+                        Ok(()) => println!(r"HKCU\{entry}: the user's own, now {}", m.display()),
+                        Err(e) => println!(r"HKCU\{entry}: left as it is: {e}"),
+                    },
+                    Err(e) => println!(r"HKCU\{entry}: the user's own left as it is: {e}"),
+                }
+                continue;
+            }
             Repair::Keep => continue,
             Repair::Take => {
-                let manifest = own_manifest(family)?;
+                let manifest = own_manifest(family, true)?;
                 reg_point("HKCU", key, &manifest)?;
                 println!(r"HKCU\{entry}: {user:?}, now {}", manifest.display());
             }
@@ -947,8 +1013,22 @@ fn repair() -> Result<(), String> {
 
 fn unregister(all_users: bool) -> Result<(), String> {
     let root = if all_users { "HKLM" } else { "HKCU" };
+    let exe = exe_dir()?;
+    let program = this_program()?;
+    // For one user, only this copy's: a manifest beside it, or the user's own naming it. Another
+    // copy's that works (one for everyone, set up by this user) stays.
+    let ours = |m: &std::path::Path| {
+        m.parent()
+            .is_some_and(|d| d.as_os_str().eq_ignore_ascii_case(exe.as_os_str()))
+            || Holder::of(m) == Holder::Alive(program.clone())
+    };
     for (key, _) in WINDOWS_HOST_KEYS {
-        let _ = reg(&["delete", &format!(r"{root}\{key}\{HOST_NAME}"), "/f"]);
+        let entry = format!(r"{key}\{HOST_NAME}");
+        let named = win32::reg_string(all_users, &entry)
+            .map(|v| mdm_ipc::browsers::registered_manifest(&v));
+        if all_users || named.as_deref().is_some_and(ours) {
+            let _ = reg(&["delete", &format!(r"{root}\{entry}"), "/f"]);
+        }
     }
     drop_original_entry(all_users);
     if let Some(id) = store_id() {
@@ -959,8 +1039,25 @@ fn unregister(all_users: bool) -> Result<(), String> {
             "/reg:32",
         ]);
     }
-    let _ = std::fs::remove_file(exe_dir()?.join(format!("{HOST_NAME}.json")));
-    let _ = std::fs::remove_file(exe_dir()?.join(format!("{HOST_NAME}.firefox.json")));
+    // Beside this exe, and the user's own copies (`own_manifest`'s fallback) naming this one.
+    let names = [
+        format!("{HOST_NAME}.json"),
+        format!("{HOST_NAME}.firefox.json"),
+    ];
+    for name in &names {
+        let _ = std::fs::remove_file(exe.join(name));
+    }
+    if let Some(dir) = (!all_users)
+        .then(mdm_ipc::browsers::user_manifest_dir)
+        .flatten()
+    {
+        for name in &names {
+            let m = dir.join(name);
+            if Holder::of(&m) == Holder::Alive(program.clone()) {
+                let _ = std::fs::remove_file(m);
+            }
+        }
+    }
     println!("unregistered {HOST_NAME}");
     Ok(())
 }
@@ -1009,6 +1106,42 @@ fn downloadable(url: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Set it up for a copy installed for everyone (Program Files, the setup's box unticked):
+    /// the manifest beside the exe can't be written by the user, so the user's own copy is
+    /// written and named; one that already says the same is used as it is; without a fallback
+    /// (`--all-users`) the failure is said.
+    #[test]
+    fn a_manifest_the_user_cant_write_falls_back_to_their_own() {
+        let dir = std::env::temp_dir().join(format!("grabbit-manifest-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let beside = dir.join("app").join("m.json");
+        let own = dir.join("user").join("m.json");
+        let value = serde_json::json!({ "name": "x" });
+        // Writable: written beside the exe, no copy of the user's.
+        assert_eq!(place_manifest(&beside, Some(&own), &value).unwrap(), beside);
+        assert!(!own.exists());
+        // Already right but read-only (installed for everyone with the box ticked): kept.
+        let mut ro = std::fs::metadata(&beside).unwrap().permissions();
+        ro.set_readonly(true);
+        std::fs::set_permissions(&beside, ro.clone()).unwrap();
+        assert_eq!(place_manifest(&beside, Some(&own), &value).unwrap(), beside);
+        // Read-only and different (unwritable for this user): the user's own copy.
+        let newer = serde_json::json!({ "name": "y" });
+        assert_eq!(place_manifest(&beside, Some(&own), &newer).unwrap(), own);
+        let written: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&own).unwrap()).unwrap();
+        assert_eq!(written, newer);
+        // For everyone there is no fallback: the error says where it failed.
+        let e = place_manifest(&beside, None, &newer).unwrap_err();
+        assert!(e.contains("m.json"), "{e}");
+        // Writable again so the folder can be removed (Windows only: no Unix mode involved).
+        #[allow(clippy::permissions_set_readonly_false)]
+        ro.set_readonly(false);
+        std::fs::set_permissions(&beside, ro).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     /// The app folder's (unpacked) copy connects; the original project's store extension, which
     /// 1.0.0 named to Chrome, doesn't (Grabbit has no store listing yet): the manifest's
