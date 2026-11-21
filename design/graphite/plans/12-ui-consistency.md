@@ -13,6 +13,9 @@ in. No new visual direction: Graphite (locked, 05–09) stays.
 **Scope.** The desktop app (`crates/app/src`). Out of scope, by the maintainer's decision:
 accessibility and window scaling (toolbar keyboard reach, interface size, minimum sizes,
 resizable dialogs, menu access keys). The website and the browser extension are not covered.
+The download (progress) window and the Done window are redesigned by plan 13
+(`13-download-window.md`): their items moved there and are marked "moved to 13" below, so neither
+plan does the same work twice.
 
 **Rules.** 00-conventions applies: behaviour parts and look parts are separate PRs (a look part
 changes no command, key, default or enabled rule); each part gets an external audit until
@@ -103,8 +106,9 @@ owner answer; 12e waits for the two decisions below.
 - **E2. Refresh from a failed download.** The failed state offers only details, open page and Resume
   (`progress.rs:538-584`). `Error::LinkExpired` tells the user to "(refresh the download address)"
   (`errors.rs:74-76`), but `Cmd::RefreshAddress` exists only in the row menu (`app.rs:7660-7665`).
-  Add a "Refresh download address" button to the progress window and the Details pane for LinkExpired
-  and HTTP 403/410 (`Error::Status`, `errors.rs:14-17`).
+  Add a "Refresh download address..." button to the Details pane for LinkExpired and HTTP 403/410
+  (`Error::Status`, `errors.rs:14-17`). The progress window's button is moved to 13 (13b); both use
+  the same label and predicate.
 - **C4. One rule for Open folder.** The Details pane's button is always enabled (`panes.rs:1374-1381`);
   the row menu enables it only when the download is done or a torrent (`app.rs:7645-7649`). Both run
   `Cmd::OpenFolder`. Share one predicate, the row menu's.
@@ -182,10 +186,12 @@ its icon: `chrome::menu_icon` (`chrome.rs:1656-1673`, e.g. "On Double click"), `
     `7584`).
   - Access keys in the Downloads menu: "&Stop", "&Delete", "Delete with &files", "&Resume",
     "R&edownload". The test `no_two_items_of_a_menu_share_an_access_key` (`app.rs:13220`) must pass.
-- **A4.** Status word: the progress window says "Paused" for `Status::Stopped` (`progress.rs:1187`);
-  the list says "Stopped" (`model.rs:1246`). Use "Stopped". The progress window's button "Pause"
-  (`progress.rs:568`) becomes "Stop", like the toolbar and Details (`app.rs:8447`, `panes.rs:1356`).
-  Keep "Stopped" as the Status filter value (`list.rs:134`; tests `app.rs:12658`, `13599-13604`).
+- **A4. Moved to 13 (13b).** The progress window's "Paused" (`progress.rs:1187`) and "Pause"
+  (`progress.rs:568`) become "Stopped" and "Stop" there. Nothing changes here: the list already
+  says "Stopped" (`model.rs:1246`), which stays the Status filter value (`list.rs:134`).
+- **`Cmd::TorrentReannounce`: "Ask trackers again"** (today "Reannounce", the Torrent submenu,
+  `app.rs:7736`). Plan 13's torrent view uses the same name, so the rename is done once, here. Its
+  failure message follows E5.
 - **DF4.** "Delete from queue" (`app.rs:7684`; it deletes nothing) and "Remove from the queue"
   (`scheduler.rs:1227`) both become "Remove from queue".
 
@@ -214,7 +220,8 @@ its icon: `chrome::menu_icon` (`chrome.rs:1656-1673`, e.g. "On Double click"), `
     - Its buttons "Start Download" / "Download Later" (`dialogs.rs:1497`, `1492`) follow B1 ("Download
       now" / "Later" / "Cancel"). The queue question's own "Download later" (`dialogs.rs:2852`) stays
       as it is.
-    - "Downloaded {size} ({bytes} Bytes)" (`dialogs.rs:1672`) becomes "… bytes)".
+    - "Downloaded {size} ({bytes} Bytes)" (`dialogs.rs:1672`): moved to 13, whose Done window drops
+      the byte count.
     - "Customize Grabbit Download panels in browsers" (`options.rs:698`) becomes "Customize
       Grabbit's download panels in browsers".
     - "Note: These settings don't relate to queue processing" (`options.rs:1150`) becomes "Note:
@@ -253,8 +260,8 @@ its icon: `chrome::menu_icon` (`chrome.rs:1656-1673`, e.g. "On Double click"), `
 - **C6 (words).** Link grabber's "Check all" / "Uncheck all" (`grabber.rs:639-641`) becomes "Select
   all" / "Select none", as in Add torrent and Playlist (`torrentdlg.rs:607`, `620`;
   `playlistdlg.rs:540`, `550`).
-- **F9.** The progress window's "<< Hide details" / "Show details >>" (`progress.rs:490-492`) become
-  "Hide details" / "Show details", with the theme's chevron icon instead of ASCII arrows.
+- **F9. Moved to 13 (13b).** The progress window's "<< Hide details" / "Show details >>"
+  (`progress.rs:490-492`) become "Hide details" / "Show details" with a chevron there.
 
 **Options and other labels:**
 - **C9.** On Options → Connection, "Max. connections number" is drawn as a field label
@@ -262,8 +269,9 @@ its icon: `chrome::menu_icon` (`chrome.rs:1656-1673`, e.g. "On Double click"), `
   Draw it like the page's other group titles. The button order is in 12b.
 - **D5.** "Number of retries for each file if downloading failed :" (`scheduler.rs:857`) loses the
   space before the colon. The weekday layout is in 12b.
-- **F2.** "Save to:" (`grabber.rs:1012`, `rssdlg.rs:628`), "Save To:" (`progress.rs:951`,
-  `properties.rs:150`, `215`) and "Save To..." (`options.rs:864`) become "Save to". Download File
+- **F2.** "Save to:" (`grabber.rs:1012`, `rssdlg.rs:628`), "Save To:" (`properties.rs:150`, `215`)
+  and "Save To..." (`options.rs:864`) become "Save to". The progress window's "Save To:"
+  (`progress.rs:951`) goes with its Options on completion tab in 13. Download File
   Info's "Save As" (`dialogs.rs:1282`) stays: it edits the full path and the name.
 - **F3.** Labels drop their colons, as Options mostly writes them (`options.rs:866`, `1568`, `1583`)
   and the add dialogs do. Remove them at `options.rs:1297`, `1682`, `2688`, `2727`, `3209`, `3764`,
@@ -296,16 +304,20 @@ its icon: `chrome::menu_icon` (`chrome.rs:1656-1673`, e.g. "On Double click"), `
   - `checksum.rs:154` "Cannot read the file"
   - `extractq.rs:393` "Couldn't extract"
   - `extension.rs:664` "Setting it up failed:"
-  - `app.rs:5445`, `5447` "Recheck failed:" / "Reannounce failed:"
-  - `progress.rs:1192`, `2221` "Error: {error}"
+  - `app.rs:5445`, `5447` "Recheck failed:" / "Reannounce failed:" (the second names the renamed
+    command: "The trackers could not be asked again: {error}")
+  - `progress.rs:1192`, `2221` "Error: {error}": moved to 13, which writes the reason as its own line
 - **F8.** Numbers say the same thing the same way:
   - Sizes: one precision for a given quantity. `size` (2 decimals, `model.rs:1359-1371`) and `size3`
     (3 decimals, `model.rs:1373-1384`) show the same file as "6.00 GB" in the list and "6.000 GB" in
-    the progress window. Default: `size3` follows `size`, and the tests change with it.
-  - Percent: "( 1.58 % )" (`progress.rs:1241`) becomes "(1.58%)", like the list (`model.rs:1355`).
+    the progress window. Default: `size3` follows `size`, and the tests change with it. (Plan 13's
+    window calls `model::size`; the function change stays here.)
+  - Percent: the progress window's "( 1.58 % )" (`progress.rs:1241`) is moved to 13, whose reading
+    and detail line replace it.
   - The double space before a unit, from `dialog_size` (`dialogs.rs:683-686`) and `size_list`
     (`model.rs:1395-1398`), becomes one space.
-  - Units: "KBytes/sec" (`progress.rs:815`, `913`; `dialogs.rs:1948`, `2025`; `torrentdlg.rs:1301`)
+  - Units: "KBytes/sec" (`dialogs.rs:1948`, `2025`; `torrentdlg.rs:1301`; the progress window's
+    `progress.rs:815`, `913` are moved to 13, which writes "KB/s")
     and "MBytes" (`quota.rs:12`, `dialogs.rs:2162`) become "KB/s" and "MB", matching the rates'
     style (`model.rs:1386-1393`; "MB/sec" there becomes "MB/s").
   - Costs a few lines in model.rs and dialogs.rs (high churn), but each is one function. It goes
@@ -339,12 +351,12 @@ Changes made at the helper where possible. Costly items are last and can be spli
   if the 12c date still needs it), taking the width from Status, which has room. Keep
   `the_default_columns_fit_the_first_window` (`list.rs:2334`) passing. Only users who never resized
   a column get the new widths (`list.rs:340`).
-- **G2. One separator.** The 2 px etched line (`properties.rs:302`, `317`, `380`; `progress.rs:982`;
+- **G2. One separator.** The 2 px etched line (`properties.rs:302`, `317`, `380`;
   `scheduler.rs:504`, `699`, `707`, `833`, `871`; `dialogs.rs:2000`) becomes the 1 px hairline.
   Change the bodies of `etched_h`/`etched_v` (`winui.rs:5588-5601`) to a 1 px `fill_l` in
   `menubar_line`, as `rule()` draws. They take absolute coordinates, `rule` takes `o + x`, so this is
   a body swap with no call sites touched. It applies to every theme: take a shot in a non-Graphite
-  theme too.
+  theme too. (`progress.rs:982` goes away with plan 13's removal of the Options on completion tab.)
 - **G3. Focus rings only from the keyboard.** Find's filter chips (`find.rs:531-537`) and the
   light/dark button (`chrome.rs:909-915`) draw an accent ring on `has_focus()`. Use
   `winui::focus_ring_round`, which checks `keyboard_in_use` (`winui.rs:4836-4839`).
@@ -393,7 +405,7 @@ DA6 and DA1t, if the other option is chosen. Each is behaviour and gets its own 
 | --- | --- | --- |
 | B5 | No speed-limit presets in the tray or menu | A new feature, not consistency; add it to ROADMAP if wanted |
 | B6 | The Scheduler page asks before deleting a queue | Asking costs nothing (12b fixes the comment) |
-| C3 | The progress window fills both Pause and Resume | Its own deliberate look (plan 07, `progress.rs:566-571`) |
+| C3 | The progress window fills both Pause and Resume | Moved to 13, which sets the rule: only a state's main action is filled |
 | D2 | No dialog can be resized | Window scaling is out of scope |
 | D3 | Add 560, torrent and video 600, gallery 520 wide | They hold different content |
 | D6 | The crash report's hint is cut | By design, readable on hover (#164) |
@@ -406,7 +418,7 @@ DA6 and DA1t, if the other option is chosen. Each is behaviour and gets its own 
 00-conventions' checks 1–6: fmt, clippy, test, the extension test where touched, release build and
 run, and a keyboard pass in every changed window. The external audit loop: a fresh read-only auditor
 until APPROVED. Screenshots per part on `pr-shots`. Help pictures are retaken once, after 12d, not
-per part. After each part, `python tools/upstream-sync/sync.py status --fetch`: any newly
+per part; pictures of the progress and Done windows are left to plan 13, which retakes them after 13d. After each part, `python tools/upstream-sync/sync.py status --fetch`: any newly
 conflicting upstream commit is noted in the PR.
 
 ## Definition of done
