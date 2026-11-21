@@ -616,6 +616,16 @@ Done since 1.0.1; ships in the next release.
   and a screenshot-only menu hook, are removed.
 - ✅ **Set it up** works for a copy installed for everyone (Program Files, the setup's browser
   box unticked), and the browser extension's window says why when it can't.
+- ✅ The original MDM's fixes looked at up to upstream `247846319174` (2026-11-21): 116 commits
+  decided. Eight critical ones taken (one picked, seven ported by hand): a delete question that
+  remembered deleting finished files (upstream issue 1563), a few kilobytes saved as a browser's
+  file (1460), Pause waiting for a slow disk (1328), the log waiting for the disk (1354),
+  torrents that couldn't start after a crash (1357), a video job held by ffmpeg (1521), a false
+  freeze report while minimized (1481) and an OpenGL crash on some drivers (1448, with egui
+  moved three commits); four dependency bumps picked. 44 skipped (translations, Linux, macOS,
+  upstream's CI and website, features), 59 deferred with what each waits for (`sync.py
+  status`). Three critical ones wait for a PR of their own: live recordings recorded over,
+  torrents writing over files that aren't theirs, and a failed way of drawing retried.
 
 ## Being worked on
 

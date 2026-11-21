@@ -2526,14 +2526,21 @@ impl App {
     /// command does. Unknown names do nothing.
     fn show_named(&mut self, name: &str, ctx: &egui::Context) {
         // MDM_CRASH_TEST=1 only (crash.rs): a stall in a later tick of the window hidden in the
-        // notification area (#1126), which this hides rather than shows.
+        // notification area (#1126), which this hides rather than shows; or of the window
+        // minimized to the taskbar (#1481), which this minimizes (as its title bar's button does).
         if crate::crash::testing()
             && let Some(test) = name.strip_prefix("crash-test:")
-            && test.starts_with("hidden-")
         {
-            self.hide_to_tray(ctx);
-            crate::crash::test(test);
-            return;
+            if test.starts_with("hidden-") {
+                self.hide_to_tray(ctx);
+                crate::crash::test(test);
+                return;
+            }
+            if test.starts_with("minimized-") {
+                crate::dialogs::minimize(ctx, self.main_hwnd);
+                crate::crash::test(test);
+                return;
+            }
         }
         self.show_window(ctx);
         let first = self.items.first().map(|i| i.id);
@@ -2858,6 +2865,11 @@ impl App {
             "speedlimit" => self.run(Cmd::LimiterSettings, None, ctx),
             "properties" if first.is_some() => self.run(Cmd::Properties, first, ctx),
             "delete" if first.is_some() => self.run(Cmd::Remove, first, ctx),
+            // Remove with files on every download (screenshots: the finished files it counts).
+            "delete-files" => {
+                let all = self.items.iter().map(|i| i.id).collect();
+                self.ask_delete(all, true);
+            }
             "progress" => {
                 if let Some(id) = last
                     && !self.progress.iter().any(|p| p.id == id)
@@ -3755,33 +3767,46 @@ impl App {
         doomed
     }
 
-    /// Delete / Remove / Delete All Completed: asks first (unless "Don't show this dialog
-    /// again" was ticked) whether only the list entries go or the files too; `files` ticks that
-    /// box (Shift+Delete). Running downloads are left alone.
+    /// Delete / Remove / Delete All Completed: asks first whether only the list entries go or
+    /// the files too. The box starts unticked every time; `files` ticks it for this once
+    /// (Shift+Delete, Remove with files). With "Don't show this dialog again" ticked, a plain
+    /// Delete only takes the downloads off the list, never their files; Shift+Delete still asks,
+    /// as nothing leaves the disk unasked (upstream #1563). Running downloads are left alone.
     fn ask_delete(&mut self, ids: Vec<u64>, files: bool) {
         let gone: Vec<&Item> = ids
             .iter()
             .filter_map(|id| self.items.iter().find(|i| i.id == *id && i.live.is_none()))
             .collect();
         let Some(first) = gone.first() else { return };
-        // Shift+Delete ticks "also the files" this once; only a plain Delete's answer is
-        // remembered (else one Shift+Delete made every later Delete erase files).
-        let shift = files;
-        let files = files || self.settings.delete_files_too;
-        if self.settings.confirm_delete {
+        if self.settings.confirm_delete || files {
             let one = gone.len() == 1;
-            let mut ask = dialogs::ConfirmDelete::new(
+            // A finished file goes with a ticked box: the window says how many (upstream #1563).
+            let finished = gone
+                .iter()
+                .filter(|i| i.status == Status::Complete && i.gallery.is_none())
+                .count() as u64;
+            self.confirm_delete = Some(dialogs::ConfirmDelete::new(
                 gone.iter().map(|i| i.id).collect(),
                 first.file_name.clone(),
                 one && first.status != Status::Complete,
                 files,
-            );
-            ask.remember = !shift;
-            self.confirm_delete = Some(ask);
+                finished,
+            ));
         } else {
             let ids: Vec<u64> = gone.into_iter().map(|i| i.id).collect();
-            self.remove_downloads(&ids, files);
+            self.remove_downloads(&ids, false);
         }
+    }
+
+    /// The delete question answered Yes: the downloads go, with their files if its box was
+    /// ticked this time (never remembered, upstream #1563); "Don't show this dialog again" turns
+    /// the question off.
+    fn confirmed_delete(&mut self, ids: &[u64], files: bool, dont_show: bool) {
+        self.remove_downloads(ids, files);
+        if dont_show {
+            self.settings.confirm_delete = false;
+        }
+        self.dirty = true;
     }
 
     fn delete_completed(&mut self) {
@@ -4229,6 +4254,13 @@ impl App {
         item.description = c.description;
         item.login = c.login;
         item.set_referer(c.referer);
+        // Paused a moment before and still writing to a slow disk (upstream issue 1328): its
+        // last save comes first, so it doesn't write over the state rewritten below. At once
+        // when nothing settles there (the usual case); upstream moved these rewrites off the
+        // window's thread (its `Deleter::rewrite`), which the fork hasn't taken yet.
+        if c.direct.is_some() || c.address.is_some() {
+            mdm_engine::naming::wait_settled(&item.dest);
+        }
         // "Through …" changed (#44): the next start goes the new way. The service's link is
         // dropped from the resume state: directly, it continues from the host's own address;
         // through the account, from a new link the service gives. The size and validators
@@ -10206,16 +10238,8 @@ impl App {
                 Outcome::Closed => self.confirm_delete = None,
                 Outcome::Done((files, dont_show)) => {
                     let ids = std::mem::take(&mut d.ids);
-                    let remember = d.remember;
                     self.confirm_delete = None;
-                    self.remove_downloads(&ids, files);
-                    if remember {
-                        self.settings.delete_files_too = files;
-                    }
-                    if dont_show {
-                        self.settings.confirm_delete = false;
-                    }
-                    self.dirty = true;
+                    self.confirmed_delete(&ids, files, dont_show);
                 }
             }
         }
@@ -10675,9 +10699,14 @@ impl App {
         // The freeze watchdog times this as it times `ui` (crash.rs): a command or the clock
         // that hangs is reported too, minimized or not (#202).
         crate::crash::logic_begin();
-        // Whether a stall now could be seen: every window of MDM's hidden (the main window in
-        // the notification area, no other window open) is felt by nobody (#1126).
-        crate::crash::hidden(self.hidden && ctx.input(|i| i.raw.viewports.len() <= 1));
+        // Whether a stall now could be seen: every window of MDM's out of sight (the main window
+        // in the notification area or minimized to the taskbar, no other window open) is felt by
+        // nobody (#1126, #1481). egui's window state says whether it is minimized, read afresh
+        // each frame on Windows.
+        let windows = ctx.input(|i| i.raw.viewports.len());
+        let minimized =
+            !self.hidden && windows <= 1 && ctx.input(|i| i.viewport().minimized == Some(true));
+        crate::crash::hidden(crate::crash::out_of_sight(self.hidden, minimized, windows));
         crate::crash::armed();
         crate::crash::step(crate::crash::Step::Commands);
         let mut handled = false;
@@ -10963,6 +10992,16 @@ impl App {
             d.checked_sub(SESSION_END_LIST).unwrap_or(d)
         });
         let unsaved = self.wait_stopped(&stopping, saves_by);
+        // Those paused a moment before, still writing to a slow disk (upstream issue 1328):
+        // their rows say they are stopped already.
+        let settling = mdm_engine::naming::wait_all_settled(saves_by);
+        if settling > 0 {
+            tracing::warn!(
+                "{settling} paused download(s) still saving after {} ms: those resume from their \
+                 last save",
+                began.elapsed().as_millis()
+            );
+        }
         match (stopping.len(), unsaved) {
             (0, _) => {}
             (n, 0) => tracing::info!(
@@ -14259,5 +14298,137 @@ mod settings_page_tests {
         change(&mut a, |s| s.double_click_open = !s.double_click_open);
         a.settings_page_event(PageEvent::Save);
         assert_eq!(a.settings.speed_limit_kb, 777);
+    }
+}
+
+/// Upstream #1563: "Also delete the files from disk" is never remembered, and nothing leaves the
+/// disk without the question: a list that remembered the box ticked, with the question turned
+/// off, deleted finished files with every Delete All Completed.
+#[cfg(test)]
+mod delete_tests {
+    use super::*;
+    use std::path::Path;
+
+    /// An App over `items` with the settings an older list saved: the box remembered ticked,
+    /// the question on or off.
+    fn app_with_saved_tick(items: Vec<Item>, confirm: bool) -> std::mem::ManuallyDrop<App> {
+        let rt = Box::leak(Box::new(
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap(),
+        ));
+        let settings: Settings = serde_json::from_value(serde_json::json!({
+            "confirm_delete": confirm,
+            "delete_files_too": true,
+        }))
+        .unwrap();
+        let loaded = store::Loaded {
+            next_id: 100,
+            items,
+            columns: None,
+            settings,
+            queues: Vec::new(),
+        };
+        let (_, commands) = std::sync::mpsc::channel();
+        // Never dropped: an App saves its list as it goes.
+        std::mem::ManuallyDrop::new(App::assemble(
+            &egui::Context::default(),
+            rt.handle().clone(),
+            commands,
+            loaded,
+            crate::Start::Shown,
+        ))
+    }
+
+    /// Two finished downloads and a stopped one, each with its file on the disk.
+    fn three(dir: &Path) -> (Vec<Item>, [PathBuf; 3]) {
+        let paths = ["a.bin", "b.bin", "c.bin"].map(|n| dir.join(n));
+        let items = paths
+            .iter()
+            .zip([Status::Complete, Status::Complete, Status::Stopped])
+            .enumerate()
+            .map(|(n, (dest, status))| {
+                std::fs::write(dest, b"finished").unwrap();
+                let name = dest.file_name().unwrap().to_string_lossy().into_owned();
+                let url = url::Url::parse(&format!("http://127.0.0.1:9/{name}")).unwrap();
+                let mut i = Item::new(n as u64 + 1, url, dest.clone(), Category::General);
+                i.status = status;
+                i
+            })
+            .collect();
+        (items, paths)
+    }
+
+    fn ids(app: &App) -> Vec<u64> {
+        app.items.iter().map(|i| i.id).collect()
+    }
+
+    fn asked(app: &App) -> &dialogs::ConfirmDelete {
+        app.confirm_delete.as_ref().expect("the question is shown")
+    }
+
+    #[test]
+    fn without_the_question_deleting_only_takes_rows_off_the_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let (items, files) = three(dir.path());
+        let mut app = app_with_saved_tick(items, false);
+        let ctx = egui::Context::default();
+        app.run(Cmd::DeleteCompleted, None, &ctx);
+        assert!(app.confirm_delete.is_none(), "not asked");
+        assert_eq!(ids(&app), [3], "the finished rows went");
+        app.run(Cmd::Remove, Some(3), &ctx);
+        assert!(app.confirm_delete.is_none());
+        assert!(app.items.is_empty());
+        assert!(app.deleter.finish(Duration::from_secs(10)));
+        for f in &files {
+            assert!(f.exists(), "{} kept", f.display());
+        }
+    }
+
+    #[test]
+    fn the_box_starts_unticked_and_a_tick_is_not_remembered() {
+        let dir = tempfile::tempdir().unwrap();
+        let (items, files) = three(dir.path());
+        let mut app = app_with_saved_tick(items, true);
+        let ctx = egui::Context::default();
+        app.run(Cmd::DeleteCompleted, None, &ctx);
+        let ask = asked(&app);
+        assert!(!ask.files, "Delete All Completed starts unticked");
+        assert_eq!((ask.ids.clone(), ask.finished), (vec![1, 2], 2));
+        // Yes with the box ticked this time: those files go.
+        let chosen = app.confirm_delete.take().unwrap().ids;
+        app.confirmed_delete(&chosen, true, false);
+        assert!(app.deleter.finish(Duration::from_secs(10)));
+        assert!(!files[0].exists() && !files[1].exists());
+        // The next Delete starts unticked again.
+        app.run(Cmd::Remove, Some(3), &ctx);
+        assert!(!asked(&app).files, "the tick was not remembered");
+        app.confirm_delete = None;
+        assert!(files[2].exists());
+    }
+
+    #[test]
+    fn remove_with_files_asks_even_without_the_question() {
+        let dir = tempfile::tempdir().unwrap();
+        let (items, files) = three(dir.path());
+        let mut app = app_with_saved_tick(items, false);
+        let ctx = egui::Context::default();
+        app.selection.apply(crate::selection::Pick::All, &[1, 2, 3]);
+        app.run(Cmd::RemoveWithFiles, None, &ctx);
+        let ask = asked(&app);
+        assert!(ask.files, "Shift+Delete ticks it, this once");
+        assert_eq!(ask.ids, [1, 2, 3]);
+        assert_eq!(ask.finished, 2, "the window counts the finished files");
+        assert_eq!(app.items.len(), 3, "nothing gone before Yes");
+        app.confirm_delete = None; // No
+        // Its tick is not remembered either: a plain Delete after it asks nothing and keeps
+        // the file.
+        app.selection.set(1);
+        app.run(Cmd::Remove, None, &ctx);
+        assert!(app.confirm_delete.is_none());
+        assert_eq!(ids(&app), [2, 3]);
+        assert!(app.deleter.finish(Duration::from_secs(10)));
+        assert!(files.iter().all(|f| f.exists()));
     }
 }

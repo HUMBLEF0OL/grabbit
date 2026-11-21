@@ -39,6 +39,10 @@ ALLOW = [
     (r"\bMDM-test-[\w{}:-]*", "keychain names of off-screen test copies, never shown"),
     (r"fork of Mister Download Manager", "lineage: where Grabbit comes from (README, FAQ)"),
     (
+        r"\(Mister Download Manager(?:, which Grabbit is forked from)?\)",
+        "copyright notices naming the original's author and work, as the GPL asks (README, licence page)",
+    ),
+    (
         r"named \*\*Mister Download Manager\*\*|(?:\*\*|\*|<i>)Mister Download Manager(?:\*\*|\*|</i>)"
         r"(?= (?:extension|one) (?:there|in the stores))",
         "the original's extension in the stores, named so users tell it from Grabbit's (1.0.1)",

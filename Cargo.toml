@@ -178,6 +178,17 @@ debug = "line-tables-only"
 [profile.dev.package.grabbit-crash]
 debug = "full"
 
+# The crash monitor's stack walker (rust-minidump's, through framehop) works out a frozen
+# thread's frames from the registers the dump caught, which can be anything mid-instruction: it
+# adds to them as a release build does, wrapping, and a frame that leads nowhere ends the walk.
+# Debug builds check that arithmetic and panicked instead ("attempt to add with overflow" in
+# pe-unwind-info), so a freeze test's report was never written (the busy minimized window's,
+# #1481). Release builds never checked it.
+[profile.dev.package.pe-unwind-info]
+overflow-checks = false
+[profile.dev.package.framehop]
+overflow-checks = false
+
 # storytold's egui fork (as storytold/craft-libs, D-003) plus MDM's commits on anefzaoui/egui
 # (branch mdm-start-hidden, on mdm-wgpu, on mdm-accesskit-windows): every window created hidden
 # gets an AccessKit adapter, with OpenGL (glow) and with Direct3D (wgpu, #89), so screen readers
@@ -192,7 +203,11 @@ debug = "full"
 # by one thread at a time, egui's copy and paste and MDM's own reads (`egui_winit::clipboard::
 # lock_system_clipboard`, #629); a dialog that changes its size is drawn at the window's new size
 # (its size applied before the pass, the Direct3D surface matched to the window before painting,
-# #471, by aniyow07). craft-libs can take the same commits to share one egui again.
+# #471, by aniyow07); a texture OpenGL can't create is kept for a later frame instead of a panic
+# (#1173); a window OpenGL can't paint for a moment (its context can't be made current on it, a
+# frame that can't be shown) is painted again 100 ms later instead of a panic, the context kept,
+# and the app is told (`ViewportHooks::gl_paint_failed`, branch mdm-gl-context-errors, #1448).
+# craft-libs can take the same commits to share one egui again.
 [patch.crates-io]
 # librqbit 9.1.0 with per-torrent rate limits that change while a torrent runs (#39), and a
 # magnet lookup's progress counted (#92), and every socket bound to one address (`bind_ip`,
@@ -213,16 +228,16 @@ librqbit-peer-protocol = { git = "https://github.com/anefzaoui/rqbit.git", rev =
 librqbit-sha1-wrapper = { git = "https://github.com/anefzaoui/rqbit.git", rev = "fab046042915709ab160626ebc59cce08de4d779" }
 librqbit-tracker-comms = { git = "https://github.com/anefzaoui/rqbit.git", rev = "fab046042915709ab160626ebc59cce08de4d779" }
 librqbit-upnp = { git = "https://github.com/anefzaoui/rqbit.git", rev = "fab046042915709ab160626ebc59cce08de4d779" }
-ecolor = { git = "https://github.com/anefzaoui/egui.git", rev = "91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d" }
-emath = { git = "https://github.com/anefzaoui/egui.git", rev = "91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d" }
-epaint = { git = "https://github.com/anefzaoui/egui.git", rev = "91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d" }
-epaint_default_fonts = { git = "https://github.com/anefzaoui/egui.git", rev = "91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d" }
-egui = { git = "https://github.com/anefzaoui/egui.git", rev = "91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d" }
-egui-winit = { git = "https://github.com/anefzaoui/egui.git", rev = "91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d" }
-egui_glow = { git = "https://github.com/anefzaoui/egui.git", rev = "91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d" }
-egui-wgpu = { git = "https://github.com/anefzaoui/egui.git", rev = "91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d" }
-egui_extras = { git = "https://github.com/anefzaoui/egui.git", rev = "91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d" }
-eframe = { git = "https://github.com/anefzaoui/egui.git", rev = "91dd7f70ed2ccfcfd3196a87ceda0d106e22c98d" }
+ecolor = { git = "https://github.com/anefzaoui/egui.git", rev = "823e3f3bffce51c87a48f15a27edaa9c13698447" }
+emath = { git = "https://github.com/anefzaoui/egui.git", rev = "823e3f3bffce51c87a48f15a27edaa9c13698447" }
+epaint = { git = "https://github.com/anefzaoui/egui.git", rev = "823e3f3bffce51c87a48f15a27edaa9c13698447" }
+epaint_default_fonts = { git = "https://github.com/anefzaoui/egui.git", rev = "823e3f3bffce51c87a48f15a27edaa9c13698447" }
+egui = { git = "https://github.com/anefzaoui/egui.git", rev = "823e3f3bffce51c87a48f15a27edaa9c13698447" }
+egui-winit = { git = "https://github.com/anefzaoui/egui.git", rev = "823e3f3bffce51c87a48f15a27edaa9c13698447" }
+egui_glow = { git = "https://github.com/anefzaoui/egui.git", rev = "823e3f3bffce51c87a48f15a27edaa9c13698447" }
+egui-wgpu = { git = "https://github.com/anefzaoui/egui.git", rev = "823e3f3bffce51c87a48f15a27edaa9c13698447" }
+egui_extras = { git = "https://github.com/anefzaoui/egui.git", rev = "823e3f3bffce51c87a48f15a27edaa9c13698447" }
+eframe = { git = "https://github.com/anefzaoui/egui.git", rev = "823e3f3bffce51c87a48f15a27edaa9c13698447" }
 winit = { git = "https://github.com/storytold/winit.git", rev = "a517b3846ee8457d84ee4975110bfda6797c44dc" }
 # wgpu-hal 30.0.1 (the v30.0.1 release commit) with one change: a window's Direct3D 12 swap chain
 # is made with DXGI_SCALING_NONE instead of STRETCH, so while a dialog resizes, Windows shows the

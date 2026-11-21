@@ -81,11 +81,14 @@ pub struct Settings {
     pub show_complete: bool,
     /// List right-click → On Double click: Open (true) or Properties (IDM default).
     pub double_click_open: bool,
-    /// Ask before deleting downloads ("Don't show this dialog again" clears it).
+    /// Ask before deleting downloads ("Don't show this dialog again" clears it). Off, Delete only
+    /// takes downloads off the list: deleting files from the disk always asks (upstream #1563).
+    ///
+    /// Its "Also delete the files from disk" is never remembered: it starts unticked, or ticked
+    /// for one Shift+Delete. Lists before #1563 saved the last answer as `delete_files_too`,
+    /// which made every later delete (and, with this off, one never asked) take the finished
+    /// files too; that key is no longer read, and goes with the next save.
     pub confirm_delete: bool,
-    /// The confirmation's "Also delete the files from disk", as last answered (IDM keeps it):
-    /// its first state next time, and what happens when it no longer asks.
-    pub delete_files_too: bool,
     /// The Categories pane's width (plan 05b: 224 by default, the mockup's), dragged with the
     /// splitter. IDM's layout's own (`categories_width`) is read no more since plan 05.5c.
     pub graphite_categories_width: u32,
@@ -392,7 +395,6 @@ impl Default for Settings {
             show_complete: true,
             double_click_open: false,
             confirm_delete: true,
-            delete_files_too: false,
             graphite_categories_width: 224,
             window: None,
             window_maximized: false,
@@ -1105,6 +1107,23 @@ pub fn own_net() -> mdm_engine::Options {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+
+    /// Upstream #1563: a list that remembered "Also delete the files from disk" ticked (and the
+    /// question turned off) loads as before otherwise, and its next save drops the tick.
+    #[test]
+    fn a_remembered_files_tick_is_dropped() {
+        let old: super::Settings = serde_json::from_value(serde_json::json!({
+            "confirm_delete": false,
+            "delete_files_too": true,
+            "max_connections": 3,
+        }))
+        .unwrap();
+        assert!(!old.confirm_delete);
+        assert_eq!(old.max_connections, 3, "the rest is read as before");
+        let saved = serde_json::to_value(&old).unwrap();
+        assert!(saved.get("delete_files_too").is_none(), "{saved}");
+        assert!(saved.get("confirm_delete").is_some());
+    }
 
     /// Plan 11a (audit r2): a category's folder set again as Options' box shows it (with a
     /// trailing separator) is no change, for a category of the user's as for a built-in one.

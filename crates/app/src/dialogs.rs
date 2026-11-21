@@ -2373,35 +2373,40 @@ impl TurnOffCountdown {
 
 /// "Confirm deletion of downloads": Delete / Remove / Delete All Completed. Asks whether the
 /// files go too (user, 2026-10-29: IDM's checkbox; for an unfinished download its data so far),
-/// for one download or several. `Done((files, dont_show_again))` on Yes.
+/// for one download or several. `Done((files, dont_show_again))` on Yes. The box is never
+/// remembered (upstream #1563): unticked, or ticked by Shift+Delete for this once; ticked, the
+/// window says how many finished files go with it.
 pub struct ConfirmDelete {
     pub ids: Vec<u64>,
     /// The file name when there is one download.
     name: String,
     /// One download, not complete (IDM's wording).
     unfinished: bool,
-    files: bool,
+    /// "Also delete the files from disk".
+    pub files: bool,
+    /// How many of the downloads are finished: their files go too when `files` is ticked.
+    pub finished: u64,
     dont_show: bool,
-    /// The files box's answer becomes the next one's default (not after Shift+Delete).
-    pub remember: bool,
 }
 
 impl ConfirmDelete {
-    /// `files`: the checkbox's first state (the last answer, or Shift+Delete).
-    pub fn new(ids: Vec<u64>, name: String, unfinished: bool, files: bool) -> Self {
+    /// `files`: the checkbox's first state (ticked only by Shift+Delete / Remove with files).
+    pub fn new(ids: Vec<u64>, name: String, unfinished: bool, files: bool, finished: u64) -> Self {
         ConfirmDelete {
             ids,
             name,
             unfinished,
             files,
+            finished,
             dont_show: false,
-            remember: true,
         }
     }
 
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<(bool, bool)> {
         let n = self.ids.len() as u64;
         let extra = grow_extra(ctx, "confirm-delete");
+        // The finished files' line under the box, while it is ticked (upstream #1563).
+        let warned = grow_extra(ctx, "confirm-delete-finished");
         // The mockup's layout: a delete tile, the question beside it, the files box, the
         // footer with "Don't show this dialog again" at its start.
         const W: f32 = 480.0;
@@ -2410,7 +2415,7 @@ impl ConfirmDelete {
             ctx,
             "confirm-delete",
             "Confirm deletion of downloads",
-            [W, BODY + extra + winui::FOOTER_H],
+            [W, BODY + extra + warned + winui::FOOTER_H],
             false,
             winui::LIGHT_BG(),
             |ui, o| {
@@ -2478,6 +2483,33 @@ it from Grabbit's list of downloads?",
                     )
                 };
                 winui::checkbox_light(ui, o + vec2(e, 74.0), &mut self.files, &files, true);
+                // Ticked, the finished downloads' files go too: said, so none is lost by
+                // surprise (upstream #1563); under the box, beside its caption.
+                let warn = if self.files && self.finished > 0 {
+                    let text = crate::i18n::fmt(
+                        // i18n: under "Also delete the files from disk", while it is ticked: how many of the downloads being deleted are finished, whose complete files are deleted from the disk too
+                        &crate::i18n::tn(
+                            self.finished,
+                            "This also deletes {n} finished file.",
+                            "This also deletes {n} finished files.",
+                        ),
+                        &[("n", &crate::i18n::integer(self.finished))],
+                    );
+                    let lines = winui::paragraph(
+                        &p,
+                        o.x + e + 16.0,
+                        o.y + 102.0,
+                        &text,
+                        crate::theme::colors().error_strong,
+                        o.x + W - e,
+                        13.0,
+                    );
+                    lines as f32 * 13.0 + 6.0
+                } else {
+                    0.0
+                };
+                grow_px(ui.ctx(), "confirm-delete-finished", warn);
+                let o = o + vec2(0.0, warn);
                 // Enter Yes, Escape No, as before; Tab: the files box, Yes, No, then "Don't
                 // show this dialog again".
                 let pressed = winui::footer(

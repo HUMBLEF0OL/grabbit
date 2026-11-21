@@ -399,6 +399,16 @@ pub enum Error {
         "the site sent a web page instead of the file (a waiting page, a captcha or a sign-in): open the link in your browser, finish there, and the download comes back to Grabbit"
     )]
     GotWebPage,
+    /// The server's answer is no larger than a web page (`sent` bytes) where the browser's own
+    /// download of the link was a file of `size` bytes, larger than any page (upstream issue
+    /// 1460): an error, a notice or an empty answer in the file's place (a link that works once,
+    /// or only in the browser), never saved as the file.
+    #[error(
+        "the server sent only {} where the browser's file is {} (a link that works once, or only in the browser): Alt+click the link to let the browser download it",
+        disk::human(*sent),
+        disk::human(*size)
+    )]
+    NotTheFile { size: u64, sent: u64 },
     /// A full answer to a range request for the same, unchanged file: the server (or one CDN
     /// edge) didn't serve the range this time. Retried; the file did not change.
     #[error("the server did not send the requested part")]
@@ -446,7 +456,10 @@ impl Error {
     /// The address no longer serves this file (or refuses us): retrying won't help.
     fn link_dead(&self) -> bool {
         matches!(self, Error::Status(s) if matches!(s.as_u16(), 401 | 403 | 404 | 410 | 416))
-            || matches!(self, Error::GotWebPage | Error::LinkExpired | Error::BotCheck)
+            || matches!(
+                self,
+                Error::GotWebPage | Error::NotTheFile { .. } | Error::LinkExpired | Error::BotCheck
+            )
             // A site's refusal; a service's, unless waiting helps (#44).
             || matches!(self, Error::Refused(r) if !matches!(r, Refusal::Service { fault, .. } if fault.retry_wait().is_some()))
             // Login refused; no such file (or no permission); a name the server won't take.
@@ -746,6 +759,12 @@ pub enum State {
     /// video download, never an engine download's.
     Merging,
     Completing,
+    /// Stopped (paused) by [`Download::cancel`] while downloading: its connections are closed,
+    /// and what they received and the resume state are still being written (upstream issue
+    /// 1328). A disk slower than the network takes as long as it takes; the download is stopped
+    /// for whoever shows it, and a new run at its place waits for it (`naming::Settling`).
+    /// `Cancelled` follows once everything is saved.
+    Stopping,
     Done,
     Failed,
     Cancelled,
@@ -962,6 +981,11 @@ pub async fn probe_kept(
         StatusCode::OK => (resp.content_length(), true),
         _ => (resp.content_length(), false),
     };
+    // No larger than a page where the browser's file is larger than any (upstream issue 1460):
+    // said here, before anything is saved.
+    if let Some(sent) = size {
+        not_the_file(opts.expected_size, sent)?;
+    }
     let file_name = name_for(resp.headers(), &final_url, unlocked.as_ref(), opts);
     // A page where a file that never is one was expected, whatever type it came as (upstream
     // issue 701): said before anything is saved.
@@ -1078,6 +1102,7 @@ impl Download {
             let sh = shared.clone();
             let body = async move {
                 after_clearing(req.dest.folder(), &cancel).await?;
+                after_settling(&req.dest, &cancel).await?;
                 if crate::ftp::is_ftp(&req.url) {
                     run_fresh_ftp(req, opts, sh, cancel).await
                 } else {
@@ -1135,6 +1160,9 @@ impl Download {
                 if let Some(dir) = state_file.parent() {
                     after_clearing(dir, &cancel).await?;
                 }
+                // Stopped there a moment before and still saving (upstream issue 1328): the
+                // state it saves last is the one looked at.
+                after_settling(&req.dest, &cancel).await?;
                 let look = {
                     let state_file = state_file.clone();
                     tokio::task::spawn_blocking(move || Found::look(&state_file))
@@ -1207,6 +1235,7 @@ impl Download {
             disk_held: Default::default(),
             held: Default::default(),
             checked: Default::default(),
+            settle: Default::default(),
         });
         let task = tokio::spawn(f(shared.clone(), cancel.clone()));
         Download {
@@ -1329,9 +1358,26 @@ struct Shared {
     held: std::sync::atomic::AtomicU64,
     /// While `Verifying`: the bytes of the finished file checked so far (#736).
     checked: Arc<std::sync::atomic::AtomicU64>,
+    /// Stopped and still writing (`State::Stopping`): its place waits for it until `run` has
+    /// let go of everything (upstream issue 1328).
+    settle: Mutex<Option<naming::Settling>>,
 }
 
 impl Shared {
+    /// Stopped while downloading to `dest` (upstream issue 1328): the connections are closing,
+    /// and the download says so at once; what they received and the resume state are written
+    /// after, and the place is held for that long (`naming::settling`).
+    fn stopping(&self, dest: &Path) {
+        let mut v = self.view.lock().unwrap();
+        if v.state != State::Downloading {
+            return;
+        }
+        v.state = State::Stopping;
+        drop(v);
+        *self.settle.lock().unwrap() = Some(naming::settling(dest));
+        self.event("Stopped");
+    }
+
     fn snapshot(&self) -> Snapshot {
         let mut s = self.view.lock().unwrap().clone();
         s.server = self.seen.get().and_then(|seen| seen.get());
@@ -1440,7 +1486,10 @@ struct Ctx {
     file: Arc<File>,
     opts: Options,
     shared: Arc<Shared>,
+    /// Stops the connections: a stop asked for (`stop`), every byte in, or a fatal error.
     cancel: CancellationToken,
+    /// The download asked to stop ([`Download::cancel`]): `cancel`'s parent.
+    stop: CancellationToken,
     /// `RANGES_*`: learned from the first range answer.
     ranges: AtomicU8,
     /// The first answer advertised ranges (`Accept-Ranges: bytes`, or a 206): a full answer to
@@ -1751,11 +1800,16 @@ async fn run(
     shared: Arc<Shared>,
 ) -> Result<Outcome, Error> {
     let result = body.await;
-    shared.event(match &result {
-        Ok(o) => format!("Complete: {}", o.path.display()),
-        Err(Error::Cancelled) => "Stopped".to_owned(),
-        Err(e) => format!("Failed: {e}"),
-    });
+    // Said as it stopped (`Shared::stopping`) when it was downloading.
+    let said = shared.view.lock().unwrap().state == State::Stopping;
+    match &result {
+        Ok(o) => shared.event(format!("Complete: {}", o.path.display())),
+        Err(Error::Cancelled) if said => {}
+        Err(Error::Cancelled) => shared.event("Stopped"),
+        Err(e) => shared.event(format!("Failed: {e}")),
+    }
+    // The body has let go of its place and its part file: whatever waits for them goes on.
+    drop(shared.settle.lock().unwrap().take());
     let mut v = shared.view.lock().unwrap();
     v.state = match &result {
         Ok(o) => {
@@ -1773,6 +1827,26 @@ async fn run(
     };
     drop(v);
     result
+}
+
+/// Before a download starts at its place (`Destination::File`): the run stopped there just
+/// before has let go of it, its last bytes and its resume state written (upstream issue 1328: it
+/// said it was stopped as its connections closed, and a slow disk may still be writing). Waits on
+/// a thread that may wait, unless the download is cancelled meanwhile; at once when nothing
+/// settles there. Whether it waited.
+async fn after_settling(dest: &Destination, cancel: &CancellationToken) -> Result<bool, Error> {
+    let Destination::File(place) = dest else {
+        return Ok(false);
+    };
+    if !naming::is_settling(place) {
+        return Ok(false);
+    }
+    let place = place.clone();
+    let wait = tokio::task::spawn_blocking(move || naming::wait_settled(&place));
+    tokio::select! {
+        _ = cancel.cancelled() => Err(Error::Cancelled),
+        _ = wait => Ok(true),
+    }
 }
 
 /// Before a download looks at its folder: the deletes of old files there that it must come
@@ -1934,6 +2008,11 @@ async fn run_fresh(
         resp.status(),
         size.map_or("unknown".to_owned(), disk::human),
     ));
+    // Upstream issue 1460: no larger than a page where the browser's file is larger than any,
+    // however it was asked (the look's kept answer, the browser-like connection, as Grabbit).
+    if let Some(sent) = size {
+        not_the_file(opts.expected_size, sent)?;
+    }
     // Credentials stay with the host they were given for, with the cookies pages set on the way
     // (`get`); the first request's own range (`request_cap`) isn't theirs.
     let mut headers = headers;
@@ -1981,6 +2060,11 @@ async fn run_fresh(
     if never_page && first.is_empty() {
         first = not_a_page(&mut resp, cancel).await?;
     }
+    // Upstream issue 1460: an answer that doesn't say its size, read as far as a page goes
+    // first where the browser's file is larger: one that ends there isn't the file.
+    if size.is_none() {
+        first = not_short(&mut resp, first, opts.expected_size, cancel).await?;
+    }
     let (dest, _reservation, file) =
         open_destination(&req.dest, size, &opts, || server_name).await?;
     downloading(shared, &dest, size, ranges);
@@ -2019,6 +2103,7 @@ async fn run_fresh(
             // A child token: the supervisor stops its own connections without cancelling the
             // download (which may still fall back to one connection).
             cancel: cancel.child_token(),
+            stop: cancel.clone(),
             ranges: AtomicU8::new(ranges),
             advertised,
             wait_for_ranges,
@@ -2234,6 +2319,7 @@ async fn run_fresh_ftp(
             opts: opts.clone(),
             shared: shared.clone(),
             cancel: cancel.child_token(),
+            stop: cancel.clone(),
             ranges: AtomicU8::new(ranges),
             // FTP's REST is asked for, not advertised.
             advertised: true,
@@ -2278,6 +2364,15 @@ async fn run_resume(
     }
     shared.limiter.set(opts.speed_limit);
     let bad = |what: &str| Error::BadState(format!("{}: {what}", state_file.display()));
+    if state_file != state_path(&saved.dest) {
+        return Err(bad("does not belong to the file it names"));
+    }
+    // Stopped a moment ago and still saving (upstream issue 1328): it goes on from the state
+    // saved last.
+    let saved = match after_settling(&Destination::File(saved.dest.clone()), &cancel).await? {
+        true => ResumeState::load(&state_file).map_err(Error::BadState)?,
+        false => saved,
+    };
     if state_file != state_path(&saved.dest) {
         return Err(bad("does not belong to the file it names"));
     }
@@ -2409,6 +2504,7 @@ async fn run_resume(
         opts,
         shared: shared.clone(),
         cancel: cancel.child_token(),
+        stop: cancel.clone(),
         // Ranges worked before: a 200 now is a changed file or a range-less edge.
         ranges: AtomicU8::new(RANGES_YES),
         advertised: true,
@@ -2471,7 +2567,21 @@ async fn refresh_final_url(
         return None;
     }
     let (_, _, total) = parse_content_range(resp.headers()).ok()?;
-    (total == Some(size)).then(|| (resp.url().clone(), headers))
+    let url = resp.url().clone();
+    if total != Some(size) {
+        return None;
+    }
+    // Read to its end (one byte), the connection goes back to the pool, where a connection that
+    // asks for its part after it has gone back takes it rather than opening one more (two round
+    // trips to a far server, upstream issue 1328).
+    let mut resp = resp;
+    let mut read = 0;
+    while read < PAGE_SNIFF_BYTES
+        && let Ok(Some(chunk)) = cancellable(cancel, async { Ok(resp.chunk().await?) }).await
+    {
+        read += chunk.len();
+    }
+    Some((url, headers))
 }
 
 /// Check the finished part file against `hash` (at most two files at once: it reads them
@@ -2563,14 +2673,16 @@ async fn segmented(
     first: Option<Body>,
 ) -> Result<(), Error> {
     let path = state_path(&saved.dest);
+    let dest = saved.dest.clone();
     let mut synced = Synced {
         at: std::time::Instant::now(),
         bytes: 0,
         took: Duration::ZERO,
         covered: Duration::ZERO,
     };
-    save_state(&ctx, &mut saved, &path, &mut synced, true).await?;
     let interval = ctx.opts.save_interval;
+    // Asked to stop while the connections ran (`Shared::stopping`).
+    let mut told = false;
     let result = {
         // Saves until told to stop or a save fails (resolving to that error). It stops only
         // between saves: a save's blocking write can't be cancelled, so dropping the saver
@@ -2578,6 +2690,11 @@ async fn segmented(
         // stale state file next to a finished or already resumed download (#106).
         let stop = CancellationToken::new();
         let saver = async {
+            // The state as the connections start, beside them: a resume's first request no
+            // longer waits for a write to the disk (upstream issue 1328).
+            if let Err(e) = save_state(&ctx, &mut saved, &path, &mut synced, true).await {
+                return Some(e);
+            }
             loop {
                 tokio::select! {
                     () = tokio::time::sleep(interval) => {}
@@ -2590,15 +2707,30 @@ async fn segmented(
         };
         let supervisor = supervise(ctx.clone(), first);
         tokio::pin!(saver, supervisor);
-        tokio::select! {
-            r = &mut supervisor => {
-                // The connections stopped: let a save under way finish. Its error, if any, is
-                // the final save's to report (it writes the same file, forced, just below).
-                stop.cancel();
-                let _ = saver.await;
-                r
+        loop {
+            tokio::select! {
+                r = &mut supervisor => {
+                    // The connections stopped: let a save under way finish. Its error, if any,
+                    // is the final save's to report (it writes the same file, forced, below).
+                    stop.cancel();
+                    let _ = saver.as_mut().await;
+                    break r;
+                }
+                e = &mut saver => {
+                    // The connections are stopped and waited for, as every stop does (#201).
+                    ctx.cancel.cancel();
+                    let _ = supervisor.as_mut().await;
+                    break Err(e.expect("the saver only stops when told to"));
+                }
+                // Paused or stopped (upstream issue 1328): the download says so as its
+                // connections close, not once a disk slower than the network has taken what
+                // they received and the state (a flush under way, then the last one: over a
+                // minute, measured).
+                () = ctx.stop.cancelled(), if !told => {
+                    told = true;
+                    ctx.shared.stopping(&dest);
+                }
             }
-            e = &mut saver => Err(e.expect("the saver only stops when told to")),
         }
     };
     match &result {
@@ -2609,6 +2741,11 @@ async fn segmented(
         // Complete: the final state stays until `finish` has renamed the part file, so a
         // crash in between still resumes (to an immediate rename).
         Ok(()) | Err(_) => save_state(&ctx, &mut saved, &path, &mut synced, true).await?,
+    }
+    // Said stopped, it stays stopped, even when its last bytes came in meanwhile: the next start
+    // finds every byte in, checks and names the file (upstream issue 1328).
+    if told && result.is_ok() {
+        return Err(Error::Cancelled);
     }
     result
 }
@@ -2727,6 +2864,17 @@ async fn save_state(
     s.validators = validators;
     s.final_url = final_url;
     s.final_get = final_get;
+    // A save that claims no byte the last one didn't has nothing to flush: the first state of a
+    // new download, a resume's new address (a signed link asked again) or validators. A flush
+    // waits for all the disk still has to write, and a resume waited for it (upstream issue
+    // 1328).
+    if bytes <= saved.downloaded() {
+        s.segments = segments;
+        *saved = tokio::task::spawn_blocking(move || s.write(&path).map(|()| s))
+            .await
+            .expect("state writer panicked")?;
+        return Ok(());
+    }
     // Tests' slow disk (its extra flush time not for the forced saves at the start and the end).
     let slow = ctx.opts.slow_disk.clone();
     let began = std::time::Instant::now();
@@ -2746,10 +2894,11 @@ async fn save_state(
     Ok(())
 }
 
-/// The flush time the next flush is judged by. A forced save runs while no connection writes
-/// (before they start, after they stop), so it holds no transfer up and says nothing of the
-/// next one: the first one at the start, which also pays for creating the part file, once
-/// delayed the first save of progress past the end of a short download (#518).
+/// The flush time the next flush is judged by. A forced save says nothing of the next one: the
+/// last runs once the connections have stopped, and the first as they start, before they have
+/// written much (it usually claims nothing and flushes nothing); the first one, which also paid
+/// for creating the part file, once delayed the first save of progress past the end of a short
+/// download (#518).
 fn forced_gap(force: bool, took: Duration) -> Duration {
     if force { Duration::ZERO } else { took }
 }
@@ -2761,8 +2910,9 @@ fn forced_gap(force: bool, took: Duration) -> Duration {
 fn link_refused(e: &Error) -> bool {
     matches!(e, Error::Status(s) if matches!(s.as_u16(), 401 | 403 | 404 | 410 | 412))
         // The site's page where the browser got the file (upstream issue 701): its link spent,
-        // or bound to the browser's visit.
-        || matches!(e, Error::GotWebPage)
+        // or bound to the browser's visit. So is an answer far smaller than the browser's file
+        // (upstream issue 1460).
+        || matches!(e, Error::GotWebPage | Error::NotTheFile { .. })
 }
 
 /// What a download's first request needs besides its address, headers and options.
@@ -3126,7 +3276,60 @@ async fn first_get(
         )
     })
     .await?;
+    // Upstream issue 1460: an answer no larger than a page where the browser's file is larger
+    // than any, told here so the address the browser's download ended at is asked instead (#630).
+    if let Some(sent) = answer_size(resp.status(), resp.headers(), resp.content_length()) {
+        not_the_file(opts.expected_size, sent)?;
+    }
     Ok(((resp, headers), took))
+}
+
+/// The whole file's size an answer gives: a 200's length, a 206's total; None when it doesn't
+/// say (a chunked answer, a 206 of unknown total).
+fn answer_size(status: StatusCode, headers: &HeaderMap, len: Option<u64>) -> Option<u64> {
+    match status {
+        StatusCode::OK => len,
+        StatusCode::PARTIAL_CONTENT => parse_content_range(headers).ok().and_then(|(.., t)| t),
+        _ => None,
+    }
+}
+
+/// `Error::NotTheFile` when the server's answer, `sent` bytes in all, is no larger than a web
+/// page (`PAGE_PEEK`) where the browser's own download of the link announced a file of `size`
+/// bytes, larger than any page (upstream issue 1460, `Options::expected_size`): an error, a
+/// notice or an empty answer in the file's place, which a type alone doesn't tell (JSON, plain
+/// text, none). Sizes that differ less are left alone: a file the server changed, a browser's
+/// estimate.
+fn not_the_file(size: Option<u64>, sent: u64) -> Result<(), Error> {
+    match size {
+        Some(size) if size > PAGE_PEEK as u64 && sent <= PAGE_PEEK as u64 => {
+            Err(Error::NotTheFile { size, sent })
+        }
+        _ => Ok(()),
+    }
+}
+
+/// [`not_the_file`] for an answer that doesn't say its size (chunked): `resp`'s first bytes, up
+/// to one more than a page has, are read after `first` (read from it already) and returned with
+/// them, to go first to the file ([`Body::after`]); an answer that ends before is no larger than
+/// a page. Nothing is read when the browser announced no larger file.
+async fn not_short(
+    resp: &mut Response,
+    first: Bytes,
+    size: Option<u64>,
+    cancel: &CancellationToken,
+) -> Result<Bytes, Error> {
+    if size.is_none_or(|n| n <= PAGE_PEEK as u64) {
+        return Ok(first);
+    }
+    let mut seen = first.to_vec();
+    while seen.len() <= PAGE_PEEK {
+        let next = cancellable(cancel, async { Ok(resp.chunk().await?) }).await?;
+        let Some(c) = next else { break };
+        seen.extend_from_slice(&c);
+    }
+    not_the_file(size, seen.len() as u64)?;
+    Ok(Bytes::from(seen))
 }
 
 /// `attempt` retried as `first_get` does; with its result, how long the try that got it took.
@@ -3982,6 +4185,59 @@ mod web_page_tests {
         ));
     }
 
+    /// Upstream issue 1460: an answer no larger than a page where the browser's file is larger
+    /// than any is not the file; sizes that differ less, or no size from the browser, are left
+    /// alone.
+    #[test]
+    fn an_answer_far_smaller_than_the_browsers_file_is_not_it() {
+        let page = PAGE_PEEK as u64;
+        // The report's: 117.65 MB announced, 4.65 KB sent.
+        let report = 123_365_000;
+        assert!(matches!(
+            not_the_file(Some(report), 4_762),
+            Err(Error::NotTheFile {
+                size: 123_365_000,
+                sent: 4_762
+            })
+        ));
+        assert!(not_the_file(Some(report), 0).is_err(), "an empty answer");
+        assert!(not_the_file(Some(page + 1), page).is_err());
+        // The file, a file a little different (changed, re-encoded), or a larger one.
+        assert!(not_the_file(Some(report), report).is_ok());
+        assert!(not_the_file(Some(report), report - (5 << 20)).is_ok());
+        assert!(not_the_file(Some(page + 1), page + 1).is_ok());
+        // A browser's file no larger than a page: a small file is a small file.
+        assert!(not_the_file(Some(page), 10).is_ok());
+        assert!(not_the_file(Some(40 << 10), 4_762).is_ok());
+        // Nothing announced (a link added by hand, Link grabber).
+        assert!(not_the_file(None, 0).is_ok());
+    }
+
+    /// Upstream issue 1460: the size an answer gives, by its status.
+    #[test]
+    fn an_answers_size_by_its_status() {
+        let mut h = HeaderMap::new();
+        assert_eq!(answer_size(StatusCode::OK, &h, Some(4_762)), Some(4_762));
+        assert_eq!(answer_size(StatusCode::OK, &h, None), None);
+        h.insert(
+            header::CONTENT_RANGE,
+            HeaderValue::from_static("bytes 0-1023/123365000"),
+        );
+        assert_eq!(
+            answer_size(StatusCode::PARTIAL_CONTENT, &h, Some(1024)),
+            Some(123_365_000)
+        );
+        h.insert(
+            header::CONTENT_RANGE,
+            HeaderValue::from_static("bytes 0-1023/*"),
+        );
+        assert_eq!(
+            answer_size(StatusCode::PARTIAL_CONTENT, &h, Some(1024)),
+            None
+        );
+        assert_eq!(answer_size(StatusCode::NO_CONTENT, &h, Some(0)), None);
+    }
+
     #[test]
     fn a_pages_first_bytes_are_told_from_a_files() {
         for page in [
@@ -4032,12 +4288,16 @@ async fn receive(
     let mut checked = std::time::Instant::now();
     loop {
         let next = tokio::select! {
-            _ = ctx.cancel.cancelled() => {
-                // Paused or stopped: keep what arrived (it is claimed, so it is ours to write).
-                out.finish(&mut pace).await?;
-                return Err(Error::Cancelled);
-            }
-            n = body.chunk() => n,
+            _ = ctx.cancel.cancelled() => None,
+            n = body.chunk() => Some(n),
+        };
+        let Some(next) = next else {
+            // Paused or stopped: the connection closes now, whatever the disk still has to do
+            // (upstream issue 1328), and what arrived is kept (it is claimed, so it is ours to
+            // write).
+            drop(body);
+            out.finish(&mut pace).await?;
+            return Err(Error::Cancelled);
         };
         // `complete`: the segment ended where this connection had written (a split shortened it).
         let (ended, err, complete) = match next {
@@ -4069,13 +4329,16 @@ async fn receive(
                         g.acquire(want).await;
                     }
                 };
-                tokio::select! {
-                    _ = ctx.cancel.cancelled() => {
-                        // Not claimed yet: this chunk isn't ours to keep; what is, is written.
-                        out.finish(&mut pace).await?;
-                        return Err(Error::Cancelled);
-                    }
-                    _ = paid => {}
+                let stopped = tokio::select! {
+                    _ = ctx.cancel.cancelled() => true,
+                    _ = paid => false,
+                };
+                if stopped {
+                    // Not claimed yet: this chunk isn't ours to keep; what is, is written, the
+                    // connection closed first.
+                    drop(body);
+                    out.finish(&mut pace).await?;
+                    return Err(Error::Cancelled);
                 }
                 let at = out.next();
                 // An answer that runs to the end of the file (`whole`: the probe's plain GET),
