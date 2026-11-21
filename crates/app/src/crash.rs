@@ -868,7 +868,7 @@ mod watchdog_tests {
         // A window on screen, or the thread running: a freeze, as before.
         assert_eq!(computers_for(stall, None, false, 0), None);
         assert!(!idle(8_006, 8_006));
-        assert!(!idle(500, 8_006), "6 % is MDM's own work");
+        assert!(!idle(500, 8_006), "6 % is Grabbit's own work");
         assert!(idle(300, 8_006), "under 5 % is waiting");
         // A window asked for 20 s into the stall (the tray, a second launch, the browser):
         // counted from the ask.
