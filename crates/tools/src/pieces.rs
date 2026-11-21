@@ -976,7 +976,7 @@ async fn fetch_piece(run: &Run, c: usize, i: usize, piece: &Piece) -> Result<(),
         Some((start, len)) => {
             let len = len.max(1);
             match status {
-                206 if range_start(&resp) == Some(start) => (0, Some(len)),
+                206 if range_start(resp.headers()) == Some(start) => (0, Some(len)),
                 206 => {
                     return Err(PieceError::Again(format!(
                         "{}: the server answered another range",
@@ -1134,8 +1134,8 @@ async fn fetch_piece(run: &Run, c: usize, i: usize, piece: &Piece) -> Result<(),
 }
 
 /// Where a 206 answer's range starts (`Content-Range: bytes <start>-<end>/<total>`).
-fn range_start(resp: &reqwest::Response) -> Option<u64> {
-    resp.headers()
+fn range_start(headers: &HeaderMap) -> Option<u64> {
+    headers
         .get(reqwest::header::CONTENT_RANGE)?
         .to_str()
         .ok()?

@@ -161,9 +161,7 @@ async fn refused_under_every_name_it_tells_the_bot_check() {
     assert_eq!(own.user_agent.as_deref(), Some(OWN_USER_AGENT), "{log:?}");
     assert_eq!(own.outcome, "fault:browser_only", "{log:?}");
     assert!(
-        events
-            .iter()
-            .any(|e| e.contains("asked as Grabbit")),
+        events.iter().any(|e| e.contains("asked as Grabbit")),
         "{events:?}"
     );
 }

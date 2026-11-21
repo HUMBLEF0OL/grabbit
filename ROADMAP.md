@@ -634,6 +634,11 @@ Done since 1.0.1; ships in the next release.
 - ✅ The update check and the yt-dlp and ffmpeg installs past GitHub's API rate limit: GitHub's
   release pages when the API refuses (from upstream issue 1337); the update check still asks
   only this fork's repository.
+- ✅ Sites that let only browsers through (from upstream issues 668, 771, 1289, 1422): one more
+  try connecting the way the browser does (`wreq` on BoringSSL), on all of a download's
+  connections and a stream's pieces, then once more under Grabbit's own name. Built into
+  release builds only (the `browser-connection` feature, `tools/installer/build.ps1`), so
+  everyday builds and tests don't compile BoringSSL; the program grows about 4 MB.
 - ✅ A way of drawing that failed is tried again after a driver update or a while, and at the
   next start when Windows' own start slowed it (from upstream issue 1205); View → Draw with
   says since when and when.

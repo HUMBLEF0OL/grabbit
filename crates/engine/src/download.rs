@@ -2175,8 +2175,8 @@ async fn run_fresh(
     }
     let preempt_after = (ttfb * PREEMPT_TTFB).max(PREEMPT_MIN);
     let size = match head.status {
-        // The length still to come: the look's `first` bytes, read already, count too.
-        StatusCode::OK => head.len.map(|n| n + first.len() as u64),
+        // The whole answer's length: `head` was taken before the look read its `first` bytes.
+        StatusCode::OK => head.len,
         // Some servers answer partially even without Range; accept it if it starts at 0.
         StatusCode::PARTIAL_CONTENT => match parse_content_range(&head.headers)? {
             (0, _, total) => total,
