@@ -634,6 +634,9 @@ Done since 1.0.1; ships in the next release.
 - ✅ The update check and the yt-dlp and ffmpeg installs past GitHub's API rate limit: GitHub's
   release pages when the API refuses (from upstream issue 1337); the update check still asks
   only this fork's repository.
+- ✅ A way of drawing that failed is tried again after a driver update or a while, and at the
+  next start when Windows' own start slowed it (from upstream issue 1205); View → Draw with
+  says since when and when.
 
 ## Being worked on
 
