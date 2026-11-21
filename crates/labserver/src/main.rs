@@ -42,6 +42,9 @@ struct Args {
     /// printed) instead of HTTP: `browser_only` then looks at the TLS handshake too.
     #[arg(long)]
     tls: bool,
+    /// With --tls, offer HTTP/2 too (ALPN h2), as most sites do.
+    #[arg(long, requires = "tls")]
+    http2: bool,
 }
 
 #[tokio::main]
@@ -71,6 +74,7 @@ async fn main() -> anyhow::Result<()> {
         files: args.files.clone(),
         rss_dir: args.rss_dir,
         tls: args.tls,
+        http2: args.http2,
     })
     .await?;
     eprintln!(
