@@ -34,6 +34,7 @@ fn main() -> ExitCode {
         return fake_ffprobe();
     }
     if std::env::var_os("MDM_SUBS_RETRY_SECS").is_some() {
+        proxy_checks(&me);
         held_output_checks(&me);
         checks(&me);
         job_checks(&me);
@@ -109,6 +110,28 @@ fn fake_ytdlp() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("--linger") {
         return linger(Path::new(&args[1]), args.get(2).map(String::as_str));
+    }
+    // `--version` as yt-dlp answers it, and nothing else: MDM asks a yt-dlp it didn't install
+    // whether it has `--js-runtimes` (2025.11.12, #1448) before telling it of this computer's
+    // JavaScript runtime. Not a run of its own (not in the record below).
+    if args == ["--version"] {
+        println!("2026.10.26");
+        return ExitCode::SUCCESS;
+    }
+    // #1448: with `record-args` beside it, each run's arguments, one JSON line each, in
+    // `args.jsonl` there.
+    if let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(Path::to_owned))
+        && dir.join("record-args").exists()
+    {
+        use std::io::Write;
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(dir.join("args.jsonl"))
+            .expect("the record of runs");
+        writeln!(f, "{}", serde_json::to_string(&args).unwrap()).unwrap();
     }
     let after = |flag: &str| {
         args.iter()
@@ -654,6 +677,65 @@ fn fake_in(me: &Path, dir: &Path) -> PathBuf {
     let exe = dir.join(format!("fake-ytdlp{}", std::env::consts::EXE_SUFFIX));
     std::fs::copy(me, &exe).expect("copy the fake");
     exe
+}
+
+/// #1448: Options' automatic configuration script reaches every run of yt-dlp for a video, the
+/// look-up and the download from its looked-up page alike: each is asked about the page. The
+/// download's run went straight to the site, the script asked about no address.
+fn proxy_checks(me: &Path) {
+    let tools = tempfile::tempdir().unwrap();
+    let out = tempfile::tempdir().unwrap();
+    let exe = fake_in(me, tools.path());
+    std::fs::write(tools.path().join("record-args"), "").unwrap();
+    mdm_tools::proc::set_proxy(mdm_engine::Proxy::Pac {
+        script: std::sync::Arc::from(
+            "function FindProxyForURL(u,h){return h=='video.example'?'PROXY 127.0.0.1:3128':'DIRECT';}",
+        ),
+    });
+    let job = VideoJob::start(
+        &exe,
+        "https://video.example/talk",
+        "b",
+        out.path(),
+        "Talk",
+        None,
+        1,
+        None,
+        None,
+        &Default::default(),
+        &Subs::default(),
+        None,
+    )
+    .expect("started");
+    let until = Instant::now() + Duration::from_secs(60);
+    let progress = loop {
+        let progress = job.progress();
+        if progress.state != State::Running {
+            break progress;
+        }
+        assert!(Instant::now() < until, "still running: {progress:?}");
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    mdm_tools::proc::set_proxy(mdm_engine::Proxy::None);
+    assert!(matches!(progress.state, State::Done(_)), "{progress:?}");
+    let runs: Vec<Vec<String>> = std::fs::read_to_string(tools.path().join("args.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|s| serde_json::from_str(s).unwrap())
+        .collect();
+    assert!(
+        runs.iter()
+            .any(|args| args.iter().any(|a| a == "--load-info-json")),
+        "download ran: {runs:?}"
+    );
+    for args in &runs {
+        let at = args.iter().position(|a| a == "--proxy");
+        assert_eq!(
+            at.and_then(|i| args.get(i + 1)).map(String::as_str),
+            Some("http://127.0.0.1:3128"),
+            "{args:?}"
+        );
+    }
 }
 
 /// #1521: yt-dlp ended, but a process it started still holds its output open (an ffmpeg that

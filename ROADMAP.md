@@ -607,6 +607,10 @@ Done since 1.0.1; ships in the next release.
   stream qualities read by Grabbit itself, a look-up shared for 10 minutes); a pick downloads at
   once with only its progress window. Stream sizes, video duplicates and a smooth progress bar
   came with it (ported from upstream issue 449).
+- ✅ Deno for YouTube: Helpers downloads Deno's official build (checked against its release's
+  SHA-256 and GitHub's digest) and yt-dlp uses it, or a runtime already on the computer; Install
+  Deno in Download video, `install-deno` on the command line. yt-dlp gets the proxy on every run,
+  and Use system settings follows Windows' setup script (ported from upstream issue 1448).
 - ✅ A smaller button over videos: a 30-pixel round chip in Graphite's colours (dark glass, green
   arrow) that opens to **Download video ⌄** under the pointer, toward the inside of the video,
   and shows the result of a click on itself; its menu no longer repeats **Download video**. The

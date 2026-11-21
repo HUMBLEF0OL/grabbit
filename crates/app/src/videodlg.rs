@@ -58,6 +58,19 @@ pub struct VideoAdd {
 enum Tool {
     YtDlp,
     Ffmpeg,
+    /// The JavaScript runtime YouTube needs (#1448, #1470).
+    Deno,
+}
+
+impl Tool {
+    /// The program's name, in messages.
+    fn name(self) -> &'static str {
+        match self {
+            Tool::YtDlp => "yt-dlp",
+            Tool::Ffmpeg => "ffmpeg",
+            Tool::Deno => "Deno",
+        }
+    }
 }
 
 pub struct VideoDialog {
@@ -112,32 +125,43 @@ pub struct VideoDialog {
     pref: Subs,
     /// The clipboard's page address, read off the window's thread (#661).
     clip: crate::clipboard::Prefill,
+    /// Deno was downloading at the last frame (here or elsewhere, #1448): the helpers are read
+    /// again once it ends.
+    deno_busy: bool,
 }
 
-/// What is installed in the tools folder: (folder, yt-dlp, ffmpeg).
+/// What is installed in the tools folder: (folder, yt-dlp, ffmpeg, whether MDM's own Deno is).
 type Tools = (
     Option<PathBuf>,
     Option<mdm_tools::Installed>,
     Option<mdm_tools::Installed>,
+    bool,
 );
 
 /// Keep yt-dlp current: video sites change often and an old yt-dlp is the usual reason a page
 /// stops working. Once per session, when the video window opens and yt-dlp is installed, the
 /// newest release is fetched in the background (mdm_tools::install_latest: signed by yt-dlp's
 /// developers, never older, switched atomically, the previous version kept). Quiet: a failure
-/// leaves the installed version in use. A system copy is left to its package manager.
+/// leaves the installed version in use. A system copy is left to its package manager. MDM's own
+/// Deno (#1448) is kept current the same way, after yt-dlp: it runs YouTube's scripts.
 pub fn refresh_ytdlp(rt: &tokio::runtime::Handle) {
     use std::sync::atomic::{AtomicBool, Ordering};
     static DONE: AtomicBool = AtomicBool::new(false);
     let Some(dir) = mdm_tools::tools_dir() else {
         return;
     };
-    if !mdm_tools::refreshable(&dir) || DONE.swap(true, Ordering::SeqCst) {
+    let ytdlp = mdm_tools::refreshable(&dir);
+    let deno = mdm_tools::deno::installed(&dir).is_some();
+    if !(ytdlp || deno) || DONE.swap(true, Ordering::SeqCst) {
         return;
     }
     rt.spawn(async move {
-        if let Err(e) = mdm_tools::install_latest(&dir, &crate::settings::own_net(), None).await {
+        let net = crate::settings::own_net();
+        if ytdlp && let Err(e) = mdm_tools::install_latest(&dir, &net, None).await {
             eprintln!("yt-dlp update check: {e}"); // not translated: a log line
+        }
+        if deno && let Err(e) = mdm_tools::deno::install_latest(&dir, &net, None).await {
+            tracing::warn!("Deno update check: {e}");
         }
     });
 }
@@ -146,7 +170,11 @@ fn tools() -> Tools {
     let dir = mdm_tools::tools_dir();
     let ytdlp = dir.as_deref().and_then(mdm_tools::installed);
     let ffmpeg = dir.as_deref().and_then(mdm_tools::ffmpeg::installed);
-    (dir, ytdlp, ffmpeg)
+    let deno = dir
+        .as_deref()
+        .and_then(mdm_tools::deno::installed)
+        .is_some();
+    (dir, ytdlp, ffmpeg, deno)
 }
 
 impl VideoDialog {
@@ -203,6 +231,7 @@ impl VideoDialog {
             embed: false,
             pref: Subs::default(),
             clip: Default::default(),
+            deno_busy: false,
         }
     }
 
@@ -392,17 +421,15 @@ impl VideoDialog {
             self.tools = None;
             match res {
                 Err(e) => {
-                    let what = if tool == Tool::YtDlp {
-                        "yt-dlp"
-                    } else {
-                        "ffmpeg"
-                    };
                     self.error = Some(crate::i18n::fmt(
                         // i18n: an error: {what} = a helper program (yt-dlp, ffmpeg), {error} = why
                         crate::i18n::t("{what} could not be installed: {error}"),
-                        &[("what", what), ("error", &e)],
+                        &[("what", tool.name()), ("error", &e)],
                     ));
                 }
+                // With a JavaScript runtime YouTube lists its qualities: the page is looked up
+                // again (#1448).
+                Ok(_) if tool == Tool::Deno => self.auto_look = true,
                 // With ffmpeg the qualities that need merging appear.
                 Ok(_) if tool == Tool::Ffmpeg => {
                     if let Some((v, _)) = self.video.take() {
@@ -411,6 +438,17 @@ impl VideoDialog {
                 }
                 Ok(_) => {}
             }
+        }
+        // Deno downloading anywhere (Helpers, another video window): once it ends, the helpers
+        // are read again, so an Install Deno no longer wanted goes. Nothing wakes this window
+        // then: it looks now and then meanwhile.
+        let deno_busy = mdm_tools::deno::downloading();
+        if self.deno_busy && !deno_busy {
+            self.tools = None;
+        }
+        self.deno_busy = deno_busy;
+        if deno_busy {
+            ctx.request_repaint_after(std::time::Duration::from_millis(250));
         }
         // A playlist's question before adding many (#69): Yes goes ahead in the window's frame.
         if let Some(list) = &mut self.list
@@ -432,7 +470,7 @@ impl VideoDialog {
         self.follow_sound();
         // Helpers... open: on Close, the helpers are read again (another program, or MDM's own).
         if let Some(h) = &mut self.helpers
-            && !matches!(h.show(ctx), Outcome::Open)
+            && !matches!(h.show(ctx, rt), Outcome::Open)
         {
             self.helpers = None;
             self.tools = None;
@@ -555,15 +593,17 @@ impl VideoDialog {
         let (out, ctx) = (slot.clone(), ctx.clone());
         let net = crate::settings::own_net();
         rt.spawn(async move {
-            let (res, name) = match tool {
-                Tool::YtDlp => (mdm_tools::install_latest(&dir, &net, None).await, "yt-dlp"),
-                Tool::Ffmpeg => (
-                    mdm_tools::ffmpeg::install_latest(&dir, &net, None).await,
-                    "ffmpeg",
-                ),
+            let res = match tool {
+                Tool::YtDlp => mdm_tools::install_latest(&dir, &net, None).await,
+                Tool::Ffmpeg => mdm_tools::ffmpeg::install_latest(&dir, &net, None).await,
+                Tool::Deno => mdm_tools::deno::install_latest(&dir, &net, None).await,
             };
-            // What failed and what to do (upstream issue 816).
-            *out.lock().unwrap() = Some(res.map_err(|e| crate::errors::tools_and_advice(&e, name)));
+            // What failed and what to do (upstream issue 816). Deno's advice would point at a
+            // "Use another program..." its Helpers row hasn't: what failed alone.
+            *out.lock().unwrap() = Some(res.map_err(|e| match tool {
+                Tool::Deno => crate::errors::tools(&e),
+                _ => crate::errors::tools_and_advice(&e, tool.name()),
+            }));
             ctx.request_repaint();
         });
         self.install = Some((tool, slot));
@@ -572,7 +612,7 @@ impl VideoDialog {
 
     fn body(&mut self, ui: &mut Ui, o: Pos2, rt: &tokio::runtime::Handle) -> Outcome<()> {
         let p = ui.painter().clone();
-        let (dir, ytdlp, ffmpeg) = self.tools.get_or_insert_with(tools).clone();
+        let (dir, ytdlp, ffmpeg, own_deno) = self.tools.get_or_insert_with(tools).clone();
         // The labels' column (the rows under the list share it).
         let bx = winui::form(
             &p,
@@ -660,6 +700,11 @@ impl VideoDialog {
         // The status line: a helper missing or installing / looking up / the title.
         let line_y = o.y + 70.0;
         let installing = self.install.as_ref().map(|(t, _)| *t);
+        // Upstream issue 852: YouTube looked up without a JavaScript runtime lists only some of
+        // its qualities (on some days only the sound): said on the title's line and the one
+        // under it, with the help page's section on installing one.
+        let runtime_note =
+            self.error.is_none() && self.video.as_ref().is_some_and(|(v, _)| v.needs_js_runtime);
         let offer = match (&ytdlp, &ffmpeg) {
             (None, _) => Some((
                 Tool::YtDlp,
@@ -669,6 +714,21 @@ impl VideoDialog {
                     "Video lookups use yt-dlp (about 23 MB, checked against its signature).",
                 ),
             )),
+            // #1448, #1470: YouTube said yt-dlp had no JavaScript runtime, and MDM has a Deno of
+            // its own to offer for this processor (looked up again once it is installed). Before
+            // ffmpeg: the line says what's missing is the runtime, and without one YouTube may
+            // list nothing ffmpeg could join. While Deno downloads elsewhere (Helpers; one at a
+            // time), the note alone: no button, not ffmpeg's in its place.
+            (Some(_), _) if runtime_note && mdm_tools::deno::available() && !own_deno => {
+                (!mdm_tools::deno::downloading()).then(|| {
+                    (
+                        Tool::Deno,
+                        // i18n: button in Download video: download and install Deno, the JavaScript runtime YouTube needs (Deno is a program's name)
+                        crate::i18n::mark("Install Deno"),
+                        js_runtime_note(),
+                    )
+                })
+            }
             (Some(_), None) => Some((
                 Tool::Ffmpeg,
                 // i18n: button: download and install the ffmpeg program
@@ -695,17 +755,13 @@ impl VideoDialog {
             .filter(|(v, _)| ffmpeg.is_none() && mdm_tools::resolve::needs_merging(v))
             .and(offer.as_ref())
             .map(|(_, _, msg)| *msg);
-        // Upstream issue 852: YouTube looked up without a JavaScript runtime lists only some of
-        // its qualities (on some days only the sound): said on the title's line and the one
-        // under it, with the help page's section on installing one.
-        let runtime_note =
-            self.error.is_none() && self.video.as_ref().is_some_and(|(v, _)| v.needs_js_runtime);
         if let Some(t) = installing {
             crate::torrentdlg::spinner(ui, pos2(o.x + LX + 7.0, line_y - 4.0), 6.0);
-            let msg = if t == Tool::YtDlp {
-                crate::i18n::t("Downloading and verifying yt-dlp...")
-            } else {
-                crate::i18n::t("Downloading and verifying ffmpeg (about 80 MB)...")
+            let msg = match t {
+                Tool::YtDlp => crate::i18n::t("Downloading and verifying yt-dlp..."),
+                Tool::Ffmpeg => crate::i18n::t("Downloading and verifying ffmpeg (about 80 MB)..."),
+                // i18n: in Download video: MDM downloads Deno (a program's name) and checks it against its published checksum
+                Tool::Deno => crate::i18n::t("Downloading and verifying Deno (about 40 MB)..."),
             };
             text(&p, o.x + LX + 20.0, line_y, msg, winui::TEXT());
         } else if self.lookup.is_some() {
@@ -1802,7 +1858,7 @@ mod tests {
         let mut d = VideoDialog::for_page(video, "https://video.example/talk", Default::default())
             .with_music_folder(music.then_some(music_dir));
         // No helpers looked for on this computer: no merged qualities.
-        d.tools = Some((None, None, None));
+        d.tools = Some((None, None, None, false));
         d.looked_up = d.page.clone();
         d.set_video(mdm_tools::resolve::parse(SAMPLE.as_bytes()).unwrap());
         d

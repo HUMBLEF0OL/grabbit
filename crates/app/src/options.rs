@@ -351,6 +351,9 @@ impl OptionsDialog {
         };
         // Its typed fields as read back untouched (a value they clamp differs from `from`).
         d.opened = d.result();
+        // #1448: a manual proxy for nothing is ticked for http and https, a change of the
+        // draft's (the save bar shows it; Discard leaves the settings as they were).
+        tick_manual_protocols(&mut d.s);
         d
     }
 
@@ -1536,6 +1539,7 @@ impl OptionsDialog {
             ),
             (228.0, crate::i18n::mark("Manual proxy/socks configuration")),
         ];
+        let was = s.proxy_mode;
         let mut group = Vec::new();
         for (i, (y, label)) in modes.iter().enumerate() {
             let resp = winui::radio_light(
@@ -1552,6 +1556,9 @@ impl OptionsDialog {
         }
         if let Some(i) = winui::radio_keys(ui, &group) {
             s.proxy_mode = i as u8;
+        }
+        if s.proxy_mode != was {
+            tick_manual_protocols(s);
         }
         // One label column for the script's address and the manual rows, under the radios.
         let lx = PAGE_LEFT + 24.0;
@@ -3672,6 +3679,16 @@ impl OptionsDialog {
 
 // ---- pieces -----------------------------------------------------------------------------
 
+/// Proxy / Socks → Manual proxy/socks configuration with no protocol ticked uses the proxy for
+/// nothing, and the boxes start unticked (#1448: yt-dlp went straight to YouTube): chosen, or
+/// found so when Options opens, it is ticked for http and https, as Get System ticks it.
+fn tick_manual_protocols(s: &mut Settings) {
+    if s.proxy_mode == 3 && !s.proxy_http && !s.proxy_https {
+        s.proxy_http = true;
+        s.proxy_https = true;
+    }
+}
+
 /// Proxy / SOCKS → Get System: Windows' own proxy (host, port), if one is set.
 fn system_proxy() -> Option<(String, String)> {
     crate::win32::system_proxy()
@@ -4826,6 +4843,37 @@ fn kept_text(kept: crate::secrets::Kept) -> Option<&'static str> {
 mod tests {
     use super::*;
     use egui::accesskit::{NodeId, Role, TreeUpdate};
+
+    /// #1448: Manual proxy/socks configuration with no protocol ticked gets http and https
+    /// ticked, when Options opens on it as when it is chosen; a choice of one is kept, and the
+    /// change is the dialog's (Save keeps it, Discard doesn't).
+    #[test]
+    fn a_manual_proxy_for_nothing_is_ticked_for_http_and_https() {
+        let mut s = Settings {
+            proxy_mode: 3,
+            proxy_host: "127.0.0.1".into(),
+            proxy_port: "7890".into(),
+            ..Settings::default()
+        };
+        let dialog = OptionsDialog::new(&s, &std::env::temp_dir(), vec![]);
+        assert!(dialog.s.proxy_http && dialog.s.proxy_https);
+        assert!(!dialog.from.proxy_http && !dialog.from.proxy_https);
+        // A change of the draft's: the save bar shows it, Save keeps it.
+        assert!(dialog.dirty());
+        s.proxy_http = true;
+        let dialog = OptionsDialog::new(&s, &std::env::temp_dir(), vec![]);
+        assert!(
+            dialog.s.proxy_http && !dialog.s.proxy_https,
+            "http only, as chosen"
+        );
+        assert!(!dialog.dirty(), "nothing changed");
+        let mut other = Settings::default();
+        tick_manual_protocols(&mut other);
+        assert!(
+            !other.proxy_http && !other.proxy_https,
+            "not Manual: as it is"
+        );
+    }
 
     /// A tool under "Tools" has one name: its row's, its heading's.
     #[test]

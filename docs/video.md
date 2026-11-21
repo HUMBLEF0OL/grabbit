@@ -29,7 +29,7 @@ resumes, and uses your proxy settings:
 - **yt-dlp** (about 23 MB) looks the page up and finds where the video and its sound come from; Grabbit downloads them ([How a video comes down](#how-a-video-comes-down)). The first time, click **Install yt-dlp**. Grabbit checks the download against the signature yt-dlp's developers publish before it uses it.
 - **ffmpeg** (about 80 MB) joins a video and its sound when a site keeps them apart, which most sites do for the higher qualities, and turns the sound into an MP3, Opus or FLAC file. Click **Install ffmpeg** when Grabbit offers it. Grabbit checks it against the checksums its release publishes.
 
-Both are kept in a `tools` folder in Grabbit's data folder.
+Both are kept in a `tools` folder in Grabbit's data folder. For YouTube, yt-dlp also needs a JavaScript runtime, which Grabbit can download too: see [A JavaScript runtime for YouTube](#javascript-runtime).
 
 ### Use your own copies
 
@@ -40,13 +40,15 @@ Already have yt-dlp or ffmpeg for another program? Use those instead of a second
 
 ### A JavaScript runtime for YouTube {#javascript-runtime}
 
-YouTube hides most of a video's qualities behind small puzzles that yt-dlp solves with a JavaScript runtime: **Deno**, **Node.js** or **Bun**. Without one, the list is short, sometimes only the sound and a low quality, and Grabbit says so: *YouTube needs a JavaScript runtime to list its video qualities*. Other sites don't need one.
+YouTube hides most of a video's qualities behind small puzzles that yt-dlp solves with a JavaScript runtime: **Deno**, **Node.js** or **Bun**. Without one, a look-up is slow, the list is short (sometimes only the sound and a low quality) or it fails with *Requested format is not available*, and Grabbit says so: *YouTube needs a JavaScript runtime to list its video qualities*. Other sites don't need one.
 
-Install one of them, either works, then look the video up again. Grabbit finds Deno, Node.js (also one installed with nvm) and Bun by itself, and Deno or Node.js just installed with winget or Node.js's installer. If it still says so, the new program's folder isn't on the `PATH` Grabbit started with: quit Grabbit (**Tasks → Exit**) and start it again.
+The quickest way is Grabbit's own copy of Deno: click **Install Deno** beside that message, or, in **Helpers...**, **Use Grabbit's own copy** in the **JavaScript runtime (Deno)** row. Grabbit downloads Deno's official Windows build for your processor (about 40 MB; x64 and ARM64) from Deno's GitHub releases with its own downloader, checks it against the SHA-256 checksum the release publishes before it uses it, keeps it in the `tools` folder beside yt-dlp and ffmpeg, and from then on tells yt-dlp to use it. It keeps it up to date the way it keeps yt-dlp's: once a session, in the background, never an older version. The video is looked up again by itself once Deno is in.
+
+Already have Node.js or Deno? Then nothing needs downloading: Helpers says *Your system's, nothing to download* in that row, and yt-dlp uses it. Grabbit finds Deno, Node.js (also one installed with nvm) and Bun by itself, and Deno or Node.js just installed with winget or Node.js's installer. If you'd rather install one yourself, either works; then look the video up again. If Grabbit still says so, the new program's folder isn't on the `PATH` Grabbit started with: quit Grabbit (**Tasks → Exit**) and start it again.
 
 - `winget install DenoLand.Deno`, or `winget install OpenJS.NodeJS.LTS`. The installers on [deno.com](https://deno.com) and [nodejs.org](https://nodejs.org) work too.
 
-If the list stays short, your own yt-dlp may be too old for YouTube: click **Use Grabbit's own copy** beside yt-dlp in **Helpers...**.
+If the list stays short, your own yt-dlp may be too old for YouTube: click **Use Grabbit's own copy** beside yt-dlp in **Helpers...**. A yt-dlp older than 2025.11.12 can't be told of a runtime at all; Grabbit then leaves the runtime out rather than stop the look-up.
 
 ## Choose the quality
 

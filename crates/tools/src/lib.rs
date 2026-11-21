@@ -5,6 +5,8 @@
 //! atomically, never downgrade, and keep the previous version for rollback.
 
 pub mod chosen;
+// Deno, the JavaScript runtime yt-dlp needs for YouTube (#1448, #1470).
+pub mod deno;
 pub mod ffmpeg;
 pub mod gallery;
 pub mod github;

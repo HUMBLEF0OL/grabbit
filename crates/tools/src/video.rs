@@ -1538,9 +1538,12 @@ struct Ran {
 
 /// Run yt-dlp with `ours` on the page looked up into `file`, following its progress with
 /// `meter` (a live stream's, by its recording's size). None: stopped before or while it ran, or
-/// `recorder` was saving before it started.
+/// `recorder` was saving before it started. `url` is the page's address, which the proxy is
+/// chosen for (#1448).
+#[allow(clippy::too_many_arguments)]
 fn run(
     exe: &Path,
+    url: &str,
     ours: &[String],
     file: &Path,
     progress: &Mutex<Progress>,
@@ -1568,7 +1571,7 @@ fn run(
             return Ok(None);
         }
         let spawned =
-            proc::ytdlp_info(exe, &[], ours, file).and_then(|cmd| proc::spawn(cmd, "yt-dlp"));
+            proc::ytdlp_info(exe, &[], ours, file, url).and_then(|cmd| proc::spawn(cmd, "yt-dlp"));
         match spawned {
             Ok(mut s) => {
                 let out = s.child.stdout.take().expect("piped");
@@ -2057,7 +2060,7 @@ fn attempt(
     {
         return Attempt::Blocked(e);
     }
-    let ran = match run(exe, ours, &file, progress, child, meter, recorder) {
+    let ran = match run(exe, url, ours, &file, progress, child, meter, recorder) {
         Ok(Some(r)) => r,
         Ok(None) if recorder.saving() => return Attempt::Save(None),
         Ok(None) => return Attempt::Stopped,
@@ -2129,7 +2132,16 @@ fn attempt(
             return Attempt::Done(video, Vec::new(), quality);
         }
         let codes: Vec<String> = refused.iter().map(|(c, _)| c.clone()).collect();
-        match run(exe, &r.args(&codes), &file, progress, child, None, recorder) {
+        match run(
+            exe,
+            url,
+            &r.args(&codes),
+            &file,
+            progress,
+            child,
+            None,
+            recorder,
+        ) {
             Ok(Some(again)) if again.status.as_ref().is_ok_and(|s| s.success()) => {
                 still = subtitle_failures(&again.warnings);
             }
@@ -2190,11 +2202,17 @@ fn moved(
 }
 
 /// yt-dlp's choice (`-O "%()j"` after its format selection) on the page looked up into `file`,
-/// with `args` (the choice's `-f`, `-o`, merge and conversion, the browser's context).
-fn choose(exe: &Path, args: &[String], file: &Path) -> Result<serde_json::Value, String> {
+/// with `args` (the choice's `-f`, `-o`, merge and conversion, the browser's context). `url` is
+/// the page's address, which the proxy is chosen for (#1448).
+fn choose(
+    exe: &Path,
+    url: &str,
+    args: &[String],
+    file: &Path,
+) -> Result<serde_json::Value, String> {
     let mut ours = args.to_vec();
     ours.extend(["-O".into(), CHOICE.into()]);
-    let cmd = proc::ytdlp_info(exe, &[], &ours, file).map_err(|e| e.to_string())?;
+    let cmd = proc::ytdlp_info(exe, &[], &ours, file, url).map_err(|e| e.to_string())?;
     let out = proc::output(cmd, "yt-dlp", Duration::from_secs(90)).map_err(|e| e.to_string())?;
     String::from_utf8_lossy(&out)
         .lines()
@@ -2266,7 +2284,7 @@ impl ByEngine {
         dead: &std::collections::BTreeSet<String>,
         reroute: bool,
     ) -> Engined {
-        let chosen = match choose(exe, &self.choose, file) {
+        let chosen = match choose(exe, url, &self.choose, file) {
             Ok(c) => c,
             Err(e) => return Engined::Failed(e),
         };
@@ -2335,7 +2353,7 @@ fn relink(
     std::fs::write(&file, info.to_string())
         .map_err(|e| format!("Cannot write the video information: {e}"))?;
     let _cleanup = Remove(file.clone());
-    let chosen = choose(exe, &with_selector(choose_args, id), &file)?;
+    let chosen = choose(exe, url, &with_selector(choose_args, id), &file)?;
     crate::streams::format_of(&chosen, id)
         .cloned()
         .ok_or_else(|| format!("the page no longer offers format {id}"))
