@@ -1172,10 +1172,20 @@ impl FileInfo {
         if self.info.is_none()
             && let Some(res) = self.probe.lock().unwrap().take()
         {
-            let res = res.map(|(pi, kept)| {
-                self.kept = kept;
-                pi
-            });
+            let res = res
+                .map(|(pi, kept)| {
+                    self.kept = kept;
+                    pi
+                })
+                // Worded to follow "Error: "; this window shows it alone (the Server row, the
+                // size's hover), so it starts upper case.
+                .map_err(|e| {
+                    let mut chars = e.chars();
+                    chars
+                        .next()
+                        .map(|c| c.to_uppercase().chain(chars).collect())
+                        .unwrap_or_default()
+                });
             if let (Ok(pi), false) = (&res, self.edited) {
                 self.category = Category::of(&pi.file_name);
                 let dir = crate::model::category_folder(self.category, &self.downloads, &self.dirs);
