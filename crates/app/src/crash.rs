@@ -389,7 +389,8 @@ pub fn clean_exit() {
 }
 
 /// How long a report (or an exit) waits for the log's last lines to be in the file: the log
-/// writes on its own thread (#513), and a disk held longer than this leaves them out.
+/// writes on its own thread (#513), and a disk held longer than this leaves them out (a panic's
+/// or a freeze's report then takes them from the app's memory, sent with it: #1354).
 const LOG_FOR_A_REPORT: Duration = Duration::from_secs(1);
 
 /// What made the time that follows the computer's: a wake ([`WAKE_GRACE`]), a start with the
