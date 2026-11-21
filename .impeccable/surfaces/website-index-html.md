@@ -31,9 +31,10 @@ scroll walks its four jobs while the stage stays put. It refuses the clone pitch
 look-alike window under "works like IDM") and the dev-tool template (glow, gradient text, card
 rows).
 
-OWN-WORLD: Graphite at page scale: jet black #09080d / near-white #f7f6fb grounds, one raised
-tray surface, hairlines with a top light edge; cyan (#1fe0f0 dark, #00788e light) is the single
-accent, for Download and Grabbit's own numbers; amethyst only for links, focus, selection; the
+OWN-WORLD: Graphite at page scale, in the app's Graphite green (pal.py "graphite"): zinc
+#121214 / near-white #fafafa grounds, one raised tray surface, hairlines with a top light edge;
+emerald (#3ecf8e dark, #0c704d light) is the single accent, filled for Download and Grabbit's
+own numbers, as a line for links, focus, selection (2026-11-21, was cyan + amethyst); the
 Grabbit double-chevron mark carries the one gradient. Geist, tight tracking, tabular figures.
 Pill controls, 24/16px nested shells, 8px windows.
 
@@ -42,7 +43,7 @@ download, torrent and fetch video, sees the measured times against IDM, and down
 
 FIRST VIEWPORT: Floating glass pill nav at top centre (mark, Features, Benchmark, Help,
 GitHub). Centred headline about 80px, two lines, the second in muted ink; one 20px line under
-it; the cyan "Download for Windows" pill beside a ghost "See the benchmark". Under them, the
+it; the green "Download for Windows" pill beside a ghost "See the benchmark". Under them, the
 stage: a 1080px double-bezel tray holding the real main window, fading into the ground at the
 fold.
 

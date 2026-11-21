@@ -511,8 +511,8 @@ def head(path: str, title: str, desc: str, *, jsonld: list | None = None, og_typ
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{esc(title)}</title>
   <meta name="description" content="{esc(desc)}">{robots}
-  <meta name="theme-color" content="#f7f6fb" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#09080d" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121214" media="(prefers-color-scheme: dark)">
   <meta name="color-scheme" content="light dark">
   <link rel="canonical" href="{url}">
   <meta property="og:type" content="{og_type}">
@@ -1580,7 +1580,7 @@ def copy_static() -> None:
     (OUT / ".nojekyll").write_text("", "utf-8")
     (OUT / "site.webmanifest").write_text(json.dumps({
         "name": NAME, "short_name": NAME, "start_url": f"{BASE}/", "display": "browser",
-        "background_color": "#f7f6fb", "theme_color": "#f7f6fb",
+        "background_color": "#fafafa", "theme_color": "#fafafa",
         "icons": [{"src": f"{BASE}/assets/grabbit.svg", "sizes": "any", "type": "image/svg+xml"},
                   {"src": f"{BASE}/assets/logo-640.png", "sizes": "640x640", "type": "image/png"},
                   {"src": f"{BASE}/assets/apple-touch-icon.png", "sizes": "180x180", "type": "image/png"}],

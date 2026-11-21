@@ -1,28 +1,29 @@
 /* Grabbit home page, "One take" (direction contract: .impeccable/surfaces/website-index-html.md).
-   Graphite at page scale: cyan is the single accent (Download, Grabbit's own numbers); amethyst only
-   for links, focus and selection; the Grabbit mark carries the one gradient. Radii: pills full,
+   Graphite at page scale, in the app's Graphite green (pal.py "graphite": Zinc + Emerald): emerald is
+   the single accent (Download, Grabbit's own numbers, links, focus, selection); the Grabbit mark
+   carries the one gradient. Radii: pills full,
    shells 24 outside / 16 inside, cells 24, windows 8. The other pages keep styles.css until ported. */
 @font-face{font-family:Geist;src:url(/assets/fonts/geist/Geist-Regular.ttf) format("truetype");font-weight:400;font-display:swap}
 @font-face{font-family:Geist;src:url(/assets/fonts/geist/Geist-Medium.ttf) format("truetype");font-weight:500;font-display:swap}
 @font-face{font-family:Geist;src:url(/assets/fonts/geist/Geist-SemiBold.ttf) format("truetype");font-weight:600;font-display:swap}
 
 :root{
-  --bg:#f7f6fb;--tray:#ffffff;--ink:#0d0b14;--mute:#5a5570;--line:#d9d5e3;
-  --acc:#6527d4;--go:#00788e;--ongo:#ffffff;--sel:#efe7fe;
+  --bg:#fafafa;--tray:#ffffff;--ink:#18181b;--mute:#6b6b74;--line:#e4e4e7;
+  --acc:#0c704d;--go:#0c704d;--ongo:#ffffff;--sel:#e6f2ec;
   --edge:rgb(255 255 255 / .7);
-  --lift:0 40px 80px -30px rgb(40 22 90 / .28),0 2px 6px rgb(40 22 90 / .08);
+  --lift:0 40px 80px -30px rgb(24 24 27 / .28),0 2px 6px rgb(24 24 27 / .08);
   color-scheme:light;
 }
 :root[data-theme="dark"]{
-  --bg:#09080d;--tray:#121019;--ink:#f0eef7;--mute:#9a94ad;--line:#2a2637;
-  --acc:#b08cff;--go:#1fe0f0;--ongo:#00171c;--sel:#231a3a;
+  --bg:#121214;--tray:#18181b;--ink:#f4f4f5;--mute:#8e8e98;--line:#2b2b30;
+  --acc:#3ecf8e;--go:#3ecf8e;--ongo:#06281a;--sel:#15302a;
   --edge:rgb(255 255 255 / .07);
   --lift:0 40px 80px -30px rgb(0 0 0 / .7),0 2px 6px rgb(0 0 0 / .4);
   color-scheme:dark;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#09080d;--tray:#121019;--ink:#f0eef7;--mute:#9a94ad;--line:#2a2637;
-  --acc:#b08cff;--go:#1fe0f0;--ongo:#00171c;--sel:#231a3a;
+  --bg:#121214;--tray:#18181b;--ink:#f4f4f5;--mute:#8e8e98;--line:#2b2b30;
+  --acc:#3ecf8e;--go:#3ecf8e;--ongo:#06281a;--sel:#15302a;
   --edge:rgb(255 255 255 / .07);
   --lift:0 40px 80px -30px rgb(0 0 0 / .7),0 2px 6px rgb(0 0 0 / .4);
   color-scheme:dark;

@@ -709,6 +709,9 @@ These ship in a later version, when they're ready.
   after an update. The pages' own text says Grabbit too since the rename above (10d)
 - ✅ The website's tab icon is Grabbit's mark: its `favicon.ico` was still the old name's, and
   the icon script now writes it with the other icons
+- ✅ The website in Graphite green, the app's own colours: zinc greys and one emerald green for
+  Download, Grabbit's own numbers, links, focus and selection, in place of cyan and amethyst, on
+  every page, light and dark (and the browser's bar colour with them)
 
 ### Looking into
 
