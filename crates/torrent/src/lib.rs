@@ -160,7 +160,7 @@ fn set_aside_broken(db: &Path, len: usize, why: &str) {
         Ok(()) => tracing::warn!(
             "torrents: the saved torrent list {} could not be read ({len} bytes: {why}); kept as \
              {}, and the session starts with a new one. The download list's torrents are added \
-             again from MDM's own .torrent copies when they start",
+             again from Grabbit's own .torrent copies when they start",
             db.display(),
             aside.display()
         ),

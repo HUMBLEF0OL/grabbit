@@ -372,3 +372,4 @@ only to fix a mistake; `sync.py doctor` reports a bad or duplicated row.
 | 74dcf1c63cc7d00a4756f2eca6da57ab91bf4268 | deferred | 2026-11-21 |  | fix(extension,app): sniff and download Google Drive videos in shared folders (#758) (#1321) | wanted fix (Google Drive videos in shared folders); port in a later run |
 | f81e4b13d906753878d0e99a41c3c84abc8ebcb5 | deferred | 2026-11-21 |  | Refresh download address opens the page the download was started from (fixes #607) (#1060) | wanted fix (Refresh download address opens the download's page); port in a later run |
 | cad1930fcca5dba6e7365be6f4cceda7c64148f0 | deferred | 2026-11-21 |  | The log's flush-count test holds on a slow machine (macOS CI) (#1385) | the log's flush-count test; with a4a13ea459bd's port |
+| e03a3f16e03dfa85eea42ab8484a25abf000cf9b | picked | 2026-11-21 | 614f3538b508 | Torrents start again after a crash left their saved list empty (#1357) (#1372) | left out 2 file(s) |
