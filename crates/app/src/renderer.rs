@@ -1097,7 +1097,9 @@ fn gl_paint_failed(main: bool, error: &str, in_a_row: u32, failing_for: std::tim
             tracing::error!("{details}: not started again (it would draw with OpenGL again)");
             return;
         }
-        tracing::warn!("OpenGL can't draw Grabbit here: {details}; passed over from the next start");
+        tracing::warn!(
+            "OpenGL can't draw Grabbit here: {details}; passed over from the next start"
+        );
         remember_failure(Way::OpenGl, Why::LostTwice, &details);
     } else if let Some(f) = file(GL_LOST) {
         let _ = std::fs::write(f, now.to_string());

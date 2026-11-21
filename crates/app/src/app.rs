@@ -10710,9 +10710,8 @@ impl App {
         // nobody (#1126, #1481). egui's window state says whether it is minimized, read afresh
         // each frame on Windows.
         let windows = ctx.input(|i| i.raw.viewports.len());
-        let minimized = !self.hidden
-            && windows <= 1
-            && ctx.input(|i| i.viewport().minimized == Some(true));
+        let minimized =
+            !self.hidden && windows <= 1 && ctx.input(|i| i.viewport().minimized == Some(true));
         crate::crash::hidden(crate::crash::out_of_sight(self.hidden, minimized, windows));
         crate::crash::armed();
         crate::crash::step(crate::crash::Step::Commands);
