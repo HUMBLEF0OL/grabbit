@@ -97,14 +97,12 @@ pub fn downloading() -> bool {
 
 /// Install Deno's latest release into `dir` unless the installed one is as new, the zip
 /// downloaded with MDM's engine (`net`), counted into `progress`. Returns what is installed
-/// afterwards. One at a time (Helpers, Download video's Install Deno, the session's update
-/// share one zip and one `.part`): a second call waits for the first, then finds it installed.
+/// afterwards. One download at a time ([`install_release`]).
 pub async fn install_latest(
     dir: &Path,
     net: &mdm_engine::Options,
     progress: Option<&crate::update::Progress>,
 ) -> Result<Installed, Error> {
-    let _one = INSTALLING.lock().await;
     let asset = asset().ok_or_else(|| Error::Missing("Deno build for this system".into()))?;
     // From GitHub's API, else (its rate limit) github.com's pages (#1337): the same files,
     // checked the same way.
@@ -114,7 +112,10 @@ pub async fn install_latest(
     install_release(dir, net, progress, asset, &release).await
 }
 
-/// [`install_latest`] from `release`, its zip `asset`.
+/// [`install_latest`] from `release`, its zip `asset`. Only a download takes the lock (the
+/// check that the installed one is current doesn't, so Helpers says "Downloading" only while
+/// one is): Helpers, Download video's Install Deno and the session's update share one zip and
+/// one `.part`, so a second waits for the first, then finds it installed.
 async fn install_release(
     dir: &Path,
     net: &mdm_engine::Options,
@@ -124,10 +125,14 @@ async fn install_release(
 ) -> Result<Installed, Error> {
     let sums = sums_name(asset);
     let version = version_of(&release.tag).to_owned();
-    if let Some(current) = installed(dir)
-        && !newer(&version, &current.version)
-    {
+    let current = || installed(dir).filter(|c| !newer(&version, &c.version));
+    if let Some(current) = current() {
         return Ok(current); // never the same again, never older
+    }
+    let _one = INSTALLING.lock().await;
+    // Installed by the one that held it meanwhile.
+    if let Some(current) = current() {
+        return Ok(current);
     }
     let url = |name: &str| {
         release
@@ -166,11 +171,12 @@ async fn install_release(
 /// refused, not written out without end.
 const PROGRAM_MAX: u64 = 512 << 20;
 
-/// Whether `version` is a release's numbers (`2.9.8`): nothing else names a folder.
+/// Whether `version` is a release's numbers (`2.9.8`): nothing else names a folder. Digits
+/// alone in each part (`u32`'s parse takes a leading `+` too).
 fn numeric_version(version: &str) -> bool {
-    version
-        .split('.')
-        .all(|p| !p.is_empty() && p.parse::<u32>().is_ok())
+    version.split('.').all(|p| {
+        !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()) && p.parse::<u32>().is_ok()
+    })
 }
 
 /// Unpack the zip's one program (`deno.exe`, at its top) into `root/<version>/`, the zip
@@ -365,27 +371,60 @@ mod tests {
             "2..8",
             "CON",
             "2.9.8 ",
+            "+2.9.8",
+            "2.+9.8",
         ] {
             assert!(!numeric_version(bad), "{bad:?}");
         }
     }
 
-    /// One install at a time: while one runs, another waits (and the buttons say Downloading).
+    /// One download at a time: while one runs, another waits (and the buttons say
+    /// Downloading); finding the installed one current waits for nothing.
     #[tokio::test]
     async fn one_install_at_a_time() {
+        let Some(asset) = asset() else {
+            return; // no Deno build for this processor
+        };
+        // Addresses nothing answers at: whatever went ahead would fail, not hang.
+        let release = |tag: &str| github::Latest {
+            tag: tag.into(),
+            files: [asset.to_owned(), sums_name(asset)]
+                .into_iter()
+                .map(|n| (n.clone(), format!("http://127.0.0.1:9/{n}")))
+                .collect(),
+            digests: Vec::new(),
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("deno").join("2.9.8").join(PROGRAM);
+        std::fs::create_dir_all(exe.parent().unwrap()).unwrap();
+        std::fs::write(&exe, b"deno").unwrap();
+        let now = make_current(
+            &dir.path().join("deno"),
+            Installed {
+                version: "2.9.8".into(),
+                exe,
+            },
+        )
+        .unwrap();
+        let net = crate::net(mdm_engine::Proxy::None);
+        let wait = std::time::Duration::from_millis(200);
         let held = INSTALLING.lock().await;
         assert!(downloading());
-        let dir = tempfile::tempdir().unwrap();
-        let net = crate::net(mdm_engine::Proxy::None);
-        // It waits for the one under way: it hasn't even asked for the release.
+        // A newer release waits for the download under way.
         let waited = tokio::time::timeout(
-            std::time::Duration::from_millis(200),
-            install_latest(dir.path(), &net, None),
+            wait,
+            install_release(dir.path(), &net, None, asset, &release("v2.9.9")),
         )
         .await;
         assert!(waited.is_err(), "it went ahead beside the other");
+        // The same release: current, said at once.
+        let same = tokio::time::timeout(
+            wait,
+            install_release(dir.path(), &net, None, asset, &release("v2.9.8")),
+        )
+        .await;
+        assert_eq!(same.expect("it waited").unwrap(), now);
         drop(held);
-        assert!(!downloading());
     }
 
     /// Installed as `current.json` names it, only while the program is there.

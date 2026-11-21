@@ -125,6 +125,9 @@ pub struct VideoDialog {
     pref: Subs,
     /// The clipboard's page address, read off the window's thread (#661).
     clip: crate::clipboard::Prefill,
+    /// Deno was downloading at the last frame (here or elsewhere, #1448): the helpers are read
+    /// again once it ends.
+    deno_busy: bool,
 }
 
 /// What is installed in the tools folder: (folder, yt-dlp, ffmpeg, whether MDM's own Deno is).
@@ -228,6 +231,7 @@ impl VideoDialog {
             embed: false,
             pref: Subs::default(),
             clip: Default::default(),
+            deno_busy: false,
         }
     }
 
@@ -434,6 +438,17 @@ impl VideoDialog {
                 }
                 Ok(_) => {}
             }
+        }
+        // Deno downloading anywhere (Helpers, another video window): once it ends, the helpers
+        // are read again, so an Install Deno no longer wanted goes. Nothing wakes this window
+        // then: it looks now and then meanwhile.
+        let deno_busy = mdm_tools::deno::downloading();
+        if self.deno_busy && !deno_busy {
+            self.tools = None;
+        }
+        self.deno_busy = deno_busy;
+        if deno_busy {
+            ctx.request_repaint_after(std::time::Duration::from_millis(250));
         }
         // A playlist's question before adding many (#69): Yes goes ahead in the window's frame.
         if let Some(list) = &mut self.list
@@ -702,20 +717,17 @@ impl VideoDialog {
             // #1448, #1470: YouTube said yt-dlp had no JavaScript runtime, and MDM has a Deno of
             // its own to offer for this processor (looked up again once it is installed). Before
             // ffmpeg: the line says what's missing is the runtime, and without one YouTube may
-            // list nothing ffmpeg could join.
-            // Not while Helpers downloads it (one download of Deno at a time).
-            (Some(_), _)
-                if runtime_note
-                    && mdm_tools::deno::available()
-                    && !own_deno
-                    && !mdm_tools::deno::downloading() =>
-            {
-                Some((
-                    Tool::Deno,
-                    // i18n: button in Download video: download and install Deno, the JavaScript runtime YouTube needs (Deno is a program's name)
-                    crate::i18n::mark("Install Deno"),
-                    js_runtime_note(),
-                ))
+            // list nothing ffmpeg could join. While Deno downloads elsewhere (Helpers; one at a
+            // time), the note alone: no button, not ffmpeg's in its place.
+            (Some(_), _) if runtime_note && mdm_tools::deno::available() && !own_deno => {
+                (!mdm_tools::deno::downloading()).then(|| {
+                    (
+                        Tool::Deno,
+                        // i18n: button in Download video: download and install Deno, the JavaScript runtime YouTube needs (Deno is a program's name)
+                        crate::i18n::mark("Install Deno"),
+                        js_runtime_note(),
+                    )
+                })
             }
             (Some(_), None) => Some((
                 Tool::Ffmpeg,

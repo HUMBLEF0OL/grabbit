@@ -496,7 +496,11 @@ impl Programs {
             let slot: Finding = Arc::new(Mutex::new(None));
             let out = slot.clone();
             std::thread::spawn(move || {
-                *out.lock().unwrap() = Some(mdm_tools::proc::system_js_runtime());
+                // A look that panics finds nothing, rather than leave the card looking for good.
+                let found = std::panic::catch_unwind(mdm_tools::proc::system_js_runtime)
+                    .ok()
+                    .flatten();
+                *out.lock().unwrap() = Some(found);
             });
             self.finding = Some(slot);
         }
