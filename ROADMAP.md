@@ -649,6 +649,9 @@ Done since 1.0.1; ships in the next release.
 - ✅ A refused certificate says why (from upstream issue 762): expired, not valid yet, untrusted,
   for another name, revoked or not for websites, in Download File Info, the progress window and
   the list; the lab server's `--tls-cert` serves the faulty ones for its tests.
+- ✅ A DNS that never answers is "no such host" (a lookup limited to nine tenths of the connect
+  timeout), and a slow disk's next flush is expected by the bytes waiting, not the seconds since
+  the last one (from upstream issue 782); the fault tests ask a DNS server of their own.
 
 ## Being worked on
 
