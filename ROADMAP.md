@@ -603,6 +603,10 @@ Done since 1.0.1; ships in the next release.
 
 - ✅ The notification-area icon's menu, and the title bar's window menu, follow Grabbit's dark or
   light look instead of Windows' app mode (ported from upstream issue 682).
+- ✅ The button over a video opens a menu of its qualities there (Video and Audio tabs, sizes,
+  stream qualities read by Grabbit itself, a look-up shared for 10 minutes); a pick downloads at
+  once with only its progress window. Stream sizes, video duplicates and a smooth progress bar
+  came with it (ported from upstream issue 449).
 - ✅ A smaller button over videos: a 30-pixel round chip in Graphite's colours (dark glass, green
   arrow) that opens to **Download video ⌄** under the pointer, toward the inside of the video,
   and shows the result of a click on itself; its menu no longer repeats **Download video**. The
