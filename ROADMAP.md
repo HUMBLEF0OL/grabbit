@@ -875,3 +875,8 @@ kept on the `archive/multiplatform-i18n` branch.
 
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))
+- 📋 A new download window (plan 13, `design/graphite/plans/13-download-window.md`): one large
+  reading and a strip drawn from the real connections or torrent pieces, details that open to the
+  side, one list of what to do when a download finishes, torrent commands in the window, a way to
+  stop sharing one finished torrent, and a Done window whose Open opens the main file of a
+  download saved as a folder
