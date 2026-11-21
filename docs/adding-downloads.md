@@ -55,6 +55,11 @@ same progress window.
 
 The server's certificate is checked against Windows' trusted certificates, as for `https://`.
 
+An `https://` site whose certificate is refused (expired, self-signed or from an issuer the system doesn't
+trust, made for another site name) isn't downloaded from: Download File Info, the progress window
+and the list say which of these it is, as a browser warns about the same site. Grabbit has no way
+around it.
+
 **Logging in.** Write the login in the address (`ftp://user:password@server/folder/file.iso`),
 tick **Use authorization**, or save it in **Options → Site logins**. Without one, Grabbit logs in as
 `anonymous`. The path is relative to the folder the login starts in; to start from the server's
