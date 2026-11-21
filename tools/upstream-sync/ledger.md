@@ -373,3 +373,7 @@ only to fix a mistake; `sync.py doctor` reports a bad or duplicated row.
 | f81e4b13d906753878d0e99a41c3c84abc8ebcb5 | deferred | 2026-11-21 |  | Refresh download address opens the page the download was started from (fixes #607) (#1060) | wanted fix (Refresh download address opens the download's page); port in a later run |
 | cad1930fcca5dba6e7365be6f4cceda7c64148f0 | deferred | 2026-11-21 |  | The log's flush-count test holds on a slow machine (macOS CI) (#1385) | the log's flush-count test; with a4a13ea459bd's port |
 | e03a3f16e03dfa85eea42ab8484a25abf000cf9b | picked | 2026-11-21 | 614f3538b508 | Torrents start again after a crash left their saved list empty (#1357) (#1372) | left out 2 file(s) |
+| d3134f825ebfd9629145345dd5fd326e01bc7c6f | picked | 2026-11-21 | c9bbbbab0dd5 | Dependencies: Bump the crates group with 8 updates (#1419) |  |
+| 932ea3b02b03e8186e3d6eccc5619b331d830f70 | picked | 2026-11-21 | 2e40ac1c1e51 | Dependencies: Bump toml from 1.2.0+spec-1.1.0 to 1.2.1+spec-1.1.0 in the crates group (#1437) |  |
+| 37870f88fa161bd34cfa824f43b4ae4eeed28128 | picked | 2026-11-21 | 2b734206347b | Dependencies: Bump resvg from 0.45.1 to 0.49.0 (#1438) |  |
+| 0abe3dd46874820c2e67a444e4bff015a3eed4d8 | picked | 2026-11-21 | d2a0aad91c00 | Dependencies: Bump rfd from 0.17.2 to 0.18.0 (#1420) |  |
