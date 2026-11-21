@@ -533,6 +533,7 @@ mod tests {
             hash: "0123456789abcdef0123456789abcdef01234567".into(),
             files: None,
             folder: PathBuf::from("f"),
+            owns_files: true,
             uploaded: 0,
             seeded_secs: 0,
             peers: 0,

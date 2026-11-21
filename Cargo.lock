@@ -3124,6 +3124,7 @@ dependencies = [
 name = "grabbit-torrent"
 version = "1.0.1"
 dependencies = [
+ "anyhow",
  "flate2",
  "grabbit-engine",
  "librqbit",

@@ -626,6 +626,11 @@ Done since 1.0.1; ships in the next release.
   upstream's CI and website, features), 59 deferred with what each waits for (`sync.py
   status`). Three critical ones wait for a PR of their own: live recordings recorded over,
   torrents writing over files that aren't theirs, and a failed way of drawing retried.
+- ✅ Torrents write only into files Grabbit made (from upstream issue 1121): a guarded storage
+  for the torrent engine, a record of each torrent's files by identity, a check before every
+  start, re-add and restore, and Delete with files removing only what Grabbit made. Asking
+  before a start uses a file already there, and a torrent without an outer folder, are not
+  taken.
 
 ## Being worked on
 

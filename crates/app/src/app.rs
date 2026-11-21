@@ -3729,8 +3729,8 @@ impl App {
     }
 
     /// Take a download off the list (not while it runs); with `files`, what of it goes from the
-    /// disk: a finished file, or the data so far (a torrent's files when its session runs, which
-    /// the session deletes). No disk here: the files are handed back, for [`crate::deleter`],
+    /// disk: a finished file, or the data so far (a torrent's: the files Grabbit made for it,
+    /// beside the window, `Host::forget`). No disk here: the files are handed back, for [`crate::deleter`],
     /// their place held from now on.
     fn take_off_list(&mut self, id: u64, files: bool) -> Option<crate::deleter::Doomed> {
         if !self.item(id).is_some_and(|i| i.live.is_none()) {
@@ -3738,7 +3738,11 @@ impl App {
         }
         let mut doomed = None;
         if let Some(spec) = self.item(id).and_then(|i| i.torrent.clone()) {
-            self.torrent_host.forget(&self.rt, &spec.hash, files);
+            let name = self
+                .item(id)
+                .map(|i| i.file_name.clone())
+                .unwrap_or_default();
+            self.torrent_host.forget(&self.rt, &spec, files, &name);
         } else if files
             && let Some(i) = self.items.iter().find(|i| i.id == id)
             // A gallery's folder stays (it may hold other files; #58).
@@ -4807,14 +4811,14 @@ impl App {
     /// The list's finished torrents (what "keep sharing" shares).
     /// The finished torrents to share (Torrent settings' "Keep sharing"): those that haven't
     /// reached a seeding limit.
-    fn complete_torrents(&self) -> Vec<String> {
+    fn complete_torrents(&self) -> Vec<crate::torrents::TorrentSpec> {
         let limits = self.settings.sharing_limits();
         self.items
             .iter()
             .filter(|i| i.status == Status::Complete)
             .filter_map(|i| i.torrent.as_ref().map(|t| (t, i.downloaded)))
             .filter(|(t, done)| crate::torrents::sharing_limit_reached(t, *done, limits).is_none())
-            .map(|(t, _)| t.hash.clone())
+            .map(|(t, _)| t.clone())
             .collect()
     }
 
@@ -5022,6 +5026,15 @@ impl App {
             return;
         }
         let folder = meta.folder_in(&add.dir);
+        // Files of its names already there were asked about (Add torrent's question; RSS and a
+        // paired device add none then): the person agreed to use them. Recorded beside the
+        // window, before it can start (a start reads its .torrent after this).
+        {
+            let (meta, folder) = (meta.clone(), folder.clone());
+            crate::torrents::kept_files().change(&meta.info_hash.clone(), move || {
+                crate::torrents::agree_existing(&meta, &folder);
+            });
+        }
         let dest = crate::torrents::dest_for(meta, &add.dir, add.files.as_deref());
         let size = meta
             .files
@@ -5049,6 +5062,7 @@ impl App {
                 hash: meta.info_hash.clone(),
                 files: add.files.clone(),
                 folder,
+                owns_files: true,
                 uploaded: 0,
                 seeded_secs: 0,
                 peers: 0,

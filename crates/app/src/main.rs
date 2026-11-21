@@ -62,6 +62,7 @@ mod store;
 mod theme;
 mod themefile;
 mod themeicons;
+mod torrent_ownership;
 mod torrentdlg;
 mod torrentfiles;
 mod torrents;
