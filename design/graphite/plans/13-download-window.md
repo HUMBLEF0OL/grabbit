@@ -107,7 +107,7 @@ Order: 13a can land any time. 13b-13d land after 12c (words), so every string is
 - **States (boards 4, 8, 9).** Stopped (grey strip, Resume filled), error (hatched missing part, the
   reason in a line; an expired link offers Refresh download address..., other errors Retry), joining
   picture and sound (percent when known, no time left), size not known (the reading is the amount
-  received, empty strip), waiting ("3rd in Main queue", Stop greyed), finishing, torrent checking
+  received, empty strip), waiting ("Waiting in Main queue", Stop greyed), finishing, torrent checking
   files (bytes checked as a plain fill: piece-by-piece results aren't known until the check ends),
   sharing ("Sent 308 MB, 6 peers connected", "shared for 1 h 12 min"; Close only), the site sent a
   web page (Open in browser filled), at a debrid service (named, as `at_service` gives it: "62% at
@@ -137,11 +137,14 @@ Order: 13a can land any time. 13b-13d land after 12c (words), so every string is
   "Start positions and download progress by connections" caption. Kept: the title bar's percent,
   rounded down as today (`window_title`: 6.7% reads 6%).
 - **Data.** Every value shown comes from what the app already has (`Snapshot`, `ConnView`,
-  `torrents::Details`, `mdm_torrent::Stats`, the item), with two things it must start keeping:
-  - the last 60 s of speed, sampled once a second per open window, for the graph (13c);
-  - a waiting download's place in its queue ("3rd in Main queue"), from the queue's order (13b).
+  `torrents::Details`, `mdm_torrent::Stats`, the item), with one thing it must start keeping: the
+  last 60 s of speed, sampled once a second per open window, for the graph (13c). It answers
+  whether the speed limit is holding a download back, costs 60 numbers per open window, and is
+  never saved.
 
-  Not shown, because the app doesn't have it: a torrent's seeds, each tracker's status, a video's
+  Not shown, because the app doesn't have it: a waiting download's place in its queue (a queue runs
+  several downloads at once and the Scheduler can start or stop it, so "3rd" could mean next or in
+  an hour; the window names the queue instead), a torrent's seeds, each tracker's status, a video's
   separate parts, how long a finished download took. Each could come later with its data.
 - **Tokens.** Hover `#222227` (exists), error track `#3a1b1b`/`#5a2a28`, accent track `#15302a`, plus
   their light values; numbers in the `numbers` family (plan 05).
@@ -171,9 +174,7 @@ Open folder opens its parent, so both "open a folder" (`dialogs.rs`, the Done wi
   field if nothing else uses it).
 - Stop/Stopped (A4); Refresh download address... on an expired link (E2); Show/Hide details (F9);
   the percent and "KB/s" in this window (F8's lines here); the filled-button rule (C3).
-- The can't-resume confirm when Stop is pressed on a download whose server can't resume.
-- A waiting download's place in its queue, from the queue's order, for the Waiting state.
-- The torrent commands (Add trackers..., Ask trackers again, Recheck files, the two order options,
+- The can't-resume confirm when Stop is pressed on a download whose server can't resume.- The torrent commands (Add trackers..., Ask trackers again, Recheck files, the two order options,
   Copy magnet link) call the existing `Cmd::Torrent*` commands.
 - Main window, Torrent submenu: add "Stop sharing" / "Start sharing" for a finished torrent that is
   sharing, kept per torrent (a list of excluded hashes that `set_sharing` honours, saved with the
