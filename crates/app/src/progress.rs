@@ -88,15 +88,31 @@ impl Progress {
     /// status as for a failed download (a sample reason; the download itself is left as it
     /// is), "menu" opens the tab row's right-click menu; for a video (upstream issues 769, 736)
     /// "merging" shows its picture and sound being joined (45 %), "helper" the line saying why
-    /// yt-dlp downloads it itself (an RTMP stream), "mergefail" a failed join's reason.
+    /// yt-dlp downloads it itself (an RTMP stream), "mergefail" a failed join's reason;
+    /// "recording" and "saving" a live stream being recorded (its button "Stop and save") and
+    /// being saved.
     pub fn show_tab(&mut self, name: &str) {
         // One sample state at a time: each one asked for replaces the one before.
-        if matches!(name, "error" | "mergefail" | "merging" | "helper") {
+        if matches!(
+            name,
+            "error" | "mergefail" | "merging" | "helper" | "recording" | "saving"
+        ) {
             self.sample_error = None;
             self.sample_merging = None;
             self.sample_helper = None;
+            self.sample_live = None;
         }
         match name {
+            "recording" | "saving" => {
+                self.sample_live = Some(if name == "recording" {
+                    mdm_tools::video::LiveState::Recording
+                } else {
+                    mdm_tools::video::LiveState::Saving
+                });
+                self.sample_helper = Some(mdm_tools::streams::Helper::Live);
+                self.tab = Tab::Status;
+                return;
+            }
             "error" => {
                 self.sample_error = Some(crate::errors::describe(&mdm_engine::Error::Status(
                     reqwest::StatusCode::NOT_FOUND,
@@ -142,6 +158,7 @@ impl Progress {
             self.sample_error = None;
             self.sample_merging = None;
             self.sample_helper = None;
+            self.sample_live = None;
             self.hidden_tabs.retain(|h| *h != t);
             self.tab = t;
             return;
@@ -221,6 +238,12 @@ pub struct Progress {
     sample_helper: Option<mdm_tools::streams::Helper>,
     /// `/show progress:menu`: the tab row's menu opens at the next frame.
     menu_asked: bool,
+    /// `/show progress:recording` / `progress:saving`: Download status and the Pause button as
+    /// for a live stream being recorded, or saved (a screenshot's state).
+    sample_live: Option<mdm_tools::video::LiveState>,
+    /// A live stream's window, once seen as one: its Pause button is laid out for "Stop and
+    /// save" too, and keeps that size when the label changes back.
+    live_stream: bool,
 }
 
 pub enum Action {
@@ -280,6 +303,8 @@ impl Progress {
             sample_merging: None,
             sample_helper: None,
             menu_asked: false,
+            sample_live: None,
+            live_stream: false,
         }
     }
 
@@ -460,6 +485,7 @@ impl Progress {
                         failed_with: self.sample_error.as_deref(),
                         merging: self.sample_merging,
                         helper: self.sample_helper.as_ref(),
+                        live: self.sample_live,
                     },
                 );
                 false
@@ -506,12 +532,20 @@ impl Progress {
         // i18n: button in a download's progress window when the site sent a web page (a waiting page, a captcha) instead of the file: opens the download's link in the web browser
         let open_label = crate::i18n::mark("Open in browser");
         let web_page = item.got_web_page();
+        // A live stream being recorded or saved (or a screenshot's of one).
+        let live = if self.sample_error.is_some() {
+            None
+        } else {
+            self.sample_live.or_else(|| item.live_state())
+        };
+        self.live_stream |=
+            live.is_some() || matches!(item.video_helper(), Some(mdm_tools::streams::Helper::Live));
         let widths = [
             width(winui::widest_label(
                 &p,
                 &["<< Hide details", "Show details >>"],
             )),
-            width(winui::widest_label(&p, &["Pause", "Resume"])),
+            width(winui::widest_label(&p, pause_labels(self.live_stream))),
             width("Cancel"),
             width(open_label),
         ];
@@ -561,17 +595,8 @@ impl Progress {
             crate::launch::open_page(item.url.as_str());
         }
         let running = state == Status::Downloading;
-        let can_resume = matches!(state, Status::Stopped | Status::Error);
         // Filled as the row's last answer; its look only (no key presses it).
-        let (label, pkind) = if running {
-            // i18n: verb: pause the download
-            (crate::i18n::mark("Pause"), ButtonKind::Accent)
-        } else if can_resume {
-            // i18n: verb: continue the download
-            (crate::i18n::mark("Resume"), ButtonKind::Accent)
-        } else {
-            (crate::i18n::mark("Pause"), ButtonKind::Disabled)
-        };
+        let (label, pkind) = pause_button(state, live);
         if winui::button(
             ui,
             r(o, pause_at.0, BUTTONS_Y, pause_at.1, winui::CONTROL_H),
@@ -582,8 +607,8 @@ impl Progress {
         )
         .clicked()
         {
-            // A screenshot's failed state resumes nothing: the press only ends it.
-            action = if self.sample_error.take().is_some() {
+            // A screenshot's state resumes nothing (nor saves): the press only ends it.
+            action = if self.sample_error.take().is_some() || self.sample_live.take().is_some() {
                 Action::None
             } else if running {
                 Action::Pause
@@ -1102,12 +1127,13 @@ fn status_icon(status: Status) -> &'static str {
 
 /// A screenshot's states for Download status (`/show progress:<state>`, looks only): failed for
 /// this reason, a video's streams joined this far, a video yt-dlp downloads itself for this
-/// reason.
+/// reason, a live stream being recorded or saved.
 #[derive(Clone, Copy, Default)]
 struct Samples<'a> {
     failed_with: Option<&'a str>,
     merging: Option<f64>,
     helper: Option<&'a mdm_tools::streams::Helper>,
+    live: Option<mdm_tools::video::LiveState>,
 }
 
 // The rows sit 7 px inside the page's frame at the top and at the bottom (the Server row's
@@ -1133,7 +1159,15 @@ fn status_page(
         let (rect, cut) = winui::text_fit(p, o.x + x, o.y + base, s, color, o.x + PAGE_TEXT_RIGHT);
         winui::copyable(ui, rect, key, s, cut);
     };
+    // A live stream being recorded or saved (or a screenshot's of one).
+    let live = if failed_with.is_some() {
+        None
+    } else {
+        samples.live.or_else(|| item.live_state())
+    };
     let status = match state {
+        // A live stream being recorded or saved shows no progress of its own: said first.
+        _ if let Some(live) = live_status(live) => live.to_owned(),
         // A torrent reading and checking its files says so, not "Receiving data" (#39).
         _ if let Some(checking) = item.torrent_checking().filter(|_| failed_with.is_none()) => {
             checking
@@ -2094,6 +2128,50 @@ fn tick_span(x: f32, ppp: f32) -> (f32, f32) {
     (a, a + ppp.round().max(1.0) / ppp)
 }
 
+/// The Pause button's label and kind (filled, the row's last answer): a live stream being
+/// recorded is stopped and saved (still `Action::Pause`, the app's `halt` saves it), and while it
+/// is saved the button waits.
+fn pause_button(
+    status: Status,
+    live: Option<mdm_tools::video::LiveState>,
+) -> (&'static str, ButtonKind) {
+    use mdm_tools::video::LiveState;
+    match live {
+        // i18n: button in a live stream's progress window: stop recording it and keep what was recorded as a video file
+        Some(LiveState::Recording) => (crate::i18n::mark("Stop and save"), ButtonKind::Accent),
+        Some(LiveState::Saving) => (crate::i18n::mark("Stop and save"), ButtonKind::Disabled),
+        None => match status {
+            // i18n: verb: pause the download
+            Status::Downloading => (crate::i18n::mark("Pause"), ButtonKind::Accent),
+            // i18n: verb: continue the download
+            Status::Stopped | Status::Error => (crate::i18n::mark("Resume"), ButtonKind::Accent),
+            _ => (crate::i18n::mark("Pause"), ButtonKind::Disabled),
+        },
+    }
+}
+
+/// The labels the Pause button can show for one download, its width the widest's: "Stop and
+/// save" only in a live stream's window, so no other's buttons move.
+fn pause_labels(live_stream: bool) -> &'static [&'static str] {
+    if live_stream {
+        &["Pause", "Resume", "Stop and save"]
+    } else {
+        &["Pause", "Resume"]
+    }
+}
+
+/// A live stream's status (yt-dlp says no progress as it records): being saved, or recording;
+/// before what any other download's says ("Receiving data...", "Connecting...").
+fn live_status(live: Option<mdm_tools::video::LiveState>) -> Option<&'static str> {
+    use mdm_tools::video::LiveState;
+    match live? {
+        // i18n: a live stream's status: stopped, and what was recorded being made into the video file kept
+        LiveState::Saving => Some(crate::i18n::t("Saving...")),
+        // i18n: a live stream's status: yt-dlp records it (it shows no progress, only the size so far)
+        LiveState::Recording => Some(crate::i18n::t("Recording...")),
+    }
+}
+
 /// Why yt-dlp downloads a video itself rather than the engine (upstream issue 769), as one
 /// short line.
 fn helper_line(why: &mdm_tools::streams::Helper) -> String {
@@ -2416,5 +2494,69 @@ mod tests {
         p.show_tab("status");
         assert!(p.sample_error.is_none() && p.sample_merging.is_none());
         assert!(p.sample_helper.is_none());
+        // A live stream recorded, then saved: looks only, each replacing the one before.
+        use mdm_tools::video::LiveState;
+        p.show_tab("error");
+        p.show_tab("recording");
+        assert_eq!(p.sample_live, Some(LiveState::Recording));
+        assert!(p.sample_error.is_none());
+        p.show_tab("saving");
+        assert_eq!(p.sample_live, Some(LiveState::Saving));
+        p.show_tab("merging");
+        assert!(p.sample_live.is_none());
+        p.show_tab("saving");
+        p.show_tab("status");
+        assert!(p.sample_live.is_none() && p.sample_helper.is_none());
+    }
+
+    /// A live stream being recorded: its Pause button stops and saves it; while it is saved
+    /// the button waits; every other download's is Pause or Resume as before. Only a live
+    /// stream's window lays the button out for "Stop and save".
+    #[test]
+    fn a_recording_live_streams_pause_button_stops_and_saves_it() {
+        use mdm_tools::video::LiveState;
+        let label = |status, live| pause_button(status, live).0;
+        let enabled = |status, live| pause_button(status, live).1 != ButtonKind::Disabled;
+        let recording = Some(LiveState::Recording);
+        let saving = Some(LiveState::Saving);
+        assert_eq!(label(Status::Downloading, recording), "Stop and save");
+        assert!(enabled(Status::Downloading, recording));
+        assert_eq!(label(Status::Downloading, saving), "Stop and save");
+        assert!(!enabled(Status::Downloading, saving));
+        assert_eq!(label(Status::Downloading, None), "Pause");
+        assert!(enabled(Status::Downloading, None));
+        for status in [Status::Stopped, Status::Error] {
+            assert_eq!(label(status, None), "Resume");
+            assert!(enabled(status, None));
+        }
+        for status in [Status::Queued, Status::Complete] {
+            assert_eq!(label(status, None), "Pause");
+            assert!(!enabled(status, None));
+        }
+        for status in [
+            Status::Downloading,
+            Status::Stopped,
+            Status::Error,
+            Status::Queued,
+        ] {
+            for live in [None, recording, saving] {
+                assert!(pause_labels(true).contains(&label(status, live)));
+            }
+            assert!(pause_labels(false).contains(&label(status, None)));
+        }
+        assert!(!pause_labels(false).contains(&"Stop and save"));
+    }
+
+    /// A live stream's status says it is saved, else that it records, before anything else
+    /// would ("Receiving data...", "Connecting..."); any other download has none of its own.
+    #[test]
+    fn a_live_stream_says_it_is_saved_or_recorded_first() {
+        use mdm_tools::video::LiveState;
+        assert_eq!(live_status(Some(LiveState::Saving)), Some("Saving..."));
+        assert_eq!(
+            live_status(Some(LiveState::Recording)),
+            Some("Recording...")
+        );
+        assert_eq!(live_status(None), None);
     }
 }
