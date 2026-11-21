@@ -13,7 +13,7 @@ colors:
   ink-2: "#52525b"
   tray-2: "#f1f1f3"
   go-wash: "#f0f6f4"
-  go-tint: "#e2eeea"
+  go-tint: "#e7f1ed"
   go-tint-strong: "#d8e8e3"
   ground-dark: "#121214"
   tray-dark: "#18181b"
@@ -26,7 +26,7 @@ colors:
   ink-2-dark: "#b4b4bc"
   tray-2-dark: "#222227"
   go-wash-dark: "#1a2322"
-  go-tint-dark: "#1d2e29"
+  go-tint-dark: "#1c2a26"
   go-tint-strong-dark: "#1e352d"
 typography:
   display:
@@ -164,7 +164,7 @@ IDM appears only as the benchmark's yardstick (grey bars, plain-weight figures) 
 The app's Graphite green palette (pal.py "graphite", contrast-checked there): zinc neutrals with no tint, and one emerald that does the work and points the way. The site follows the app; when pal.py's "graphite" changes, these values change with it.
 
 ### Primary
-- **Graphite Green** (go / go-dark): the Download pill (nav, hero, close), Grabbit's bar and figures in the benchmark chart, the green words of the benchmark statement, the active walk-through rail segment, the filling connection bars, and the "Complete" state. It sits on On-Green text: white in light mode, near-black green in dark mode. Its tints mark Grabbit's own row and results, never decoration: go-wash (6% on the tray) behind the comparison's own row, go-tint (12%) behind its live strip and table row, go-tint-strong (16%) for the result pills ("Delivered") with ink text.
+- **Graphite Green** (go / go-dark): the Download pill (nav, hero, close), Grabbit's bar and figures in the benchmark chart, the green words of the benchmark statement, the active walk-through rail segment, the filling connection bars, and the "Complete" state. It sits on On-Green text: white in light mode, near-black green in dark mode. Its tints mark Grabbit's own row and results, never decoration: go-wash (6% on the tray) behind the comparison's own row, go-tint (10%) behind its live strip and table row, go-tint-strong (16%) for the result pills ("Delivered") with ink text.
 
 ### Pointing
 - **The same green, as a line** (go / go-dark): inline links (underlined 1px at a 4px offset), the 2px focus ring, and the selection tint (selection / selection-dark), as the app does. As a pointer it is never a fill, a heading or a button.
