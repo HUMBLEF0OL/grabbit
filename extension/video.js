@@ -61,8 +61,9 @@
     video_tab_video: "Video",
     video_tab_audio: "Audio",
   };
-  // Sizes as the browser's language writes them.
-  const lang = ext.i18n.getUILanguage?.() || undefined;
+  // Sizes as the app writes them (English, as its menu's text is): never the browser's own
+  // language, which put "178,8 MB" in an English menu.
+  const lang = "en";
   // To the background. After the extension was updated or removed, this page's copy of the script
   // is cut off from it (calls throw at once): then it takes itself away.
   const send = (m) => {
@@ -508,7 +509,7 @@
     return Math.max(50, Math.round(target - spent));
   }
 
-  // A size as the browser's language writes it ("178.8 MB"); "" when unknown.
+  // A size as `lang` writes it ("178.8 MB" in English, the menu's `lang`); "" when unknown.
   function sizeText(bytes, lang) {
     const n = Number(bytes);
     if (!Number.isFinite(n) || n <= 0) return "";
@@ -785,6 +786,8 @@ button:focus-visible { outline: 2px solid #3ecf8e; outline-offset: -2px; }
    Scrolls when there are many. */
 .picks { min-width: 220px; max-width: 340px; max-height: min(300px, 45vh); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .25) transparent; }
 .picks:focus { outline: none; }
+/* Focused from the keyboard while it looks up: the chip's own ring. */
+.picks:focus-visible { outline: 2px solid #3ecf8e; outline-offset: -2px; }
 .menu .pick { display: flex; align-items: baseline; gap: 16px; }
 .pick .name { overflow-wrap: anywhere; }
 .pick .size { margin-left: auto; color: #b4b4bc; font-variant-numeric: tabular-nums; white-space: nowrap; }

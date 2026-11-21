@@ -2368,7 +2368,10 @@ async function videoLookup(m, page, sender) {
     ...v.ctx,
     private: Boolean(tab.incognito),
   });
-  if (reply.lookup && typeof reply.lookup === "object") return { lookup: reply.lookup };
+  if (reply.lookup && typeof reply.lookup === "object") {
+    lookupTab(reply.lookup.token, tab.id);
+    return { lookup: reply.lookup };
+  }
   // No `lookup`: a host or an app that can't look up after all (an older one refuses the message),
   // or a host that failed. Not kept as able; its rules are asked again, and this click opens
   // the window.
@@ -2380,9 +2383,26 @@ async function videoLookup(m, page, sender) {
 // The token is the app's, from the lookup's answer; it means nothing to anyone else.
 const lookupToken = (token) => typeof token === "string" && token.length > 0 && token.length <= 200;
 
-async function videoPoll(m) {
+// Which tab asked for each lookup (its token's): only that tab may ask how it goes or pick from
+// it, for as long as the app keeps it (10 minutes), or until a pick took it.
+const LOOKUP_KEEP_MS = 10 * 60 * 1000;
+const lookupTabs = new Map();
+function lookupTab(token, tabId) {
+  forget(lookupTabs, LOOKUP_KEEP_MS);
+  if (lookupToken(token) && tabId !== undefined && tabId !== null) lookupTabs.set(token, { tab: tabId, at: Date.now() });
+}
+// Whether `sender`'s tab is the one that asked for lookup `token`.
+function lookupOf(token, sender) {
+  forget(lookupTabs, LOOKUP_KEEP_MS);
+  const kept = lookupTabs.get(token);
+  return Boolean(kept) && kept.tab === (sender.tab || {}).id;
+}
+
+async function videoPoll(m, sender) {
   if (await remoteTarget()) return { fallback: true };
   if (!lookupToken(m.token)) return { lookup: { state: "gone" } };
+  // Another tab's lookup (a token it can't have come by itself): the window, as for a click.
+  if (!lookupOf(m.token, sender)) return { fallback: true };
   const reply = await native({ videoPoll: { token: m.token } });
   return { lookup: reply.lookup && typeof reply.lookup === "object" ? reply.lookup : { state: "gone" } };
 }
@@ -2390,6 +2410,9 @@ async function videoPoll(m) {
 async function videoPick(m, sender) {
   if (await remoteTarget()) return { fallback: true };
   if (!lookupToken(m.token) || !Number.isInteger(m.choice) || m.choice < 0) return { fallback: true };
+  if (!lookupOf(m.token, sender)) return { fallback: true };
+  // Taken once (the app forgets the lookup with its pick).
+  lookupTabs.delete(m.token);
   const tab = sender.tab || {};
   // The token and the row's number from the page, nothing else: private or not and the
   // container are the tab's, as the browser says; the app checks them against the lookup's.
@@ -2428,7 +2451,7 @@ async function pageMessage(m, sender) {
     return { ok: Boolean(reply.ok), why: reply.why };
   }
   if (m.type === "video-lookup" && page) return videoLookup(m, page, sender);
-  if (m.type === "video-poll") return videoPoll(m);
+  if (m.type === "video-poll") return videoPoll(m, sender);
   if (m.type === "video-pick") return videoPick(m, sender);
   if (m.type === "hide-site" && page) {
     const host = new URL(page).hostname;

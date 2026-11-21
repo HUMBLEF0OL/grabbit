@@ -858,14 +858,28 @@ const ok = (what) => {
   // page; private or not and the container from the tab, whatever the page says.
   {
     const ready = { state: "ready", token: "t1", title: "Film", choices: [{ label: "720p MP4", ext: "mp4", size: 187500000 }] };
-    const answers = { videoPoll: { ok: true, lookup: ready }, videoPick: { ok: true, lookup: { state: "started" } } };
-    const { api, calls, listeners } = fakeApi({ firefox: true, rules: { videoLookup: true }, lookup: (m) => answers[m.videoPoll ? "videoPoll" : "videoPick"] });
+    const answers = {
+      videoLookup: { ok: true, lookup: { state: "pending", token: "t1" } },
+      videoPoll: { ok: true, lookup: ready },
+      videoPick: { ok: true, lookup: { state: "started" } },
+    };
+    const kind = (m) => (m.videoLookup ? "videoLookup" : m.videoPoll ? "videoPoll" : "videoPick");
+    const { api, calls, listeners } = fakeApi({ firefox: true, rules: { videoLookup: true }, lookup: (m) => answers[kind(m)] });
     load(api, true);
     await refreshed(listeners);
-    assert.deepEqual(await ask(listeners, { type: "video-poll", token: "t1" }, sender), { lookup: ready });
-    assert.deepEqual(natives(calls).find((x) => x.videoPoll).videoPoll, { token: "t1" });
     const privateTab = { id: 8, url: "https://news.test/story", incognito: true, cookieStoreId: "firefox-private" };
-    const r = await ask(listeners, { type: "video-pick", token: "t1", choice: 0, private: false, storeId: "firefox-default" }, { id: "ours", url: "https://news.test/story", frameId: 0, tab: privateTab });
+    const fromPrivate = { id: "ours", url: "https://news.test/story", frameId: 0, tab: privateTab };
+    // A lookup's token is its own tab's: another tab's question or pick with it gets the window,
+    // and nothing reaches the app.
+    assert.deepEqual(await ask(listeners, { type: "video-poll", token: "t1" }, sender), { fallback: true }, "no lookup from this tab");
+    await ask(listeners, { type: "video-lookup", src: "https://cdn.test/v/clip.mp4" }, fromPrivate);
+    const other = natives(calls).length;
+    assert.deepEqual(await ask(listeners, { type: "video-poll", token: "t1" }, sender), { fallback: true }, "another tab's poll");
+    assert.deepEqual(await ask(listeners, { type: "video-pick", token: "t1", choice: 0 }, sender), { fallback: true }, "another tab's pick");
+    assert.equal(natives(calls).length, other, "nothing to the app for another tab");
+    assert.deepEqual(await ask(listeners, { type: "video-poll", token: "t1" }, fromPrivate), { lookup: ready });
+    assert.deepEqual(natives(calls).find((x) => x.videoPoll).videoPoll, { token: "t1" });
+    const r = await ask(listeners, { type: "video-pick", token: "t1", choice: 0, private: false, storeId: "firefox-default" }, fromPrivate);
     assert.deepEqual(r, { lookup: { state: "started" } });
     const picked = natives(calls).find((x) => x.videoPick);
     assert.deepEqual(
@@ -873,23 +887,30 @@ const ok = (what) => {
       [{ token: "t1", choice: 0, storeId: "firefox-private" }, true, undefined, undefined],
       "the tab's window and container, not the page's say",
     );
+    // Taken once: the same token again from its own tab gets the window, and nothing is sent.
+    const done = natives(calls).length;
+    assert.deepEqual(await ask(listeners, { type: "video-pick", token: "t1", choice: 0 }, fromPrivate), { fallback: true });
+    assert.equal(natives(calls).length, done);
     // An answer without `lookup`: the lookup is gone; a pick gets the window.
+    await ask(listeners, { type: "video-lookup", src: "https://cdn.test/v/clip.mp4" }, fromPrivate);
     answers.videoPoll = { ok: true };
     answers.videoPick = { ok: true };
-    assert.deepEqual(await ask(listeners, { type: "video-poll", token: "t1" }, sender), { lookup: { state: "gone" } });
-    assert.deepEqual(await ask(listeners, { type: "video-pick", token: "t1", choice: 0 }, sender), { fallback: true });
+    assert.deepEqual(await ask(listeners, { type: "video-poll", token: "t1" }, fromPrivate), { lookup: { state: "gone" } });
+    assert.deepEqual(await ask(listeners, { type: "video-pick", token: "t1", choice: 0 }, fromPrivate), { fallback: true });
     // Nothing but a token and a row's number is sent on.
+    await ask(listeners, { type: "video-lookup", src: "https://cdn.test/v/clip.mp4" }, fromPrivate);
     const sent = natives(calls).length;
-    assert.deepEqual(await ask(listeners, { type: "video-poll", token: { x: 1 } }, sender), { lookup: { state: "gone" } });
-    assert.deepEqual(await ask(listeners, { type: "video-pick", token: "t1", choice: "0" }, sender), { fallback: true });
-    assert.deepEqual(await ask(listeners, { type: "video-pick", token: "t1", choice: -1 }, sender), { fallback: true });
+    assert.deepEqual(await ask(listeners, { type: "video-poll", token: { x: 1 } }, fromPrivate), { lookup: { state: "gone" } });
+    assert.deepEqual(await ask(listeners, { type: "video-pick", token: "t1", choice: "0" }, fromPrivate), { fallback: true });
+    assert.deepEqual(await ask(listeners, { type: "video-pick", token: "t1", choice: -1 }, fromPrivate), { fallback: true });
     assert.equal(natives(calls).length, sent);
   }
   // What a lookup comes to is never the connection's status: no "!" on the toolbar button, the
   // rule for PDFs and music untouched, still able.
   {
+    // The first lookup's answer carries a token: this tab's questions about it are its own.
     const states = [
-      { state: "failed", reason: "error", message: "ERROR: Unsupported URL" },
+      { state: "failed", reason: "error", message: "ERROR: Unsupported URL", token: "t1" },
       { state: "failed", reason: "no-ytdlp" },
       { state: "busy" },
       { state: "off" },
@@ -1861,6 +1882,13 @@ function samplePage(html) {
   // A row: the app's name for the quality as it is (set as text), its size in the browser's language.
   const { sizeText, rowText } = make(["sizeText", "rowText"], "{ sizeText, rowText }");
   assert.equal(sizeText(187500000, "en"), "178.8 MB");
+  // In English whatever the browser's language, as the app writes sizes (a German browser's
+  // "178,8 MB" in an English menu otherwise).
+  assert.equal(sizeText(187500000, "de"), "178,8 MB", "what `lang` changes");
+  assert.ok(/const lang = "en";/.test(source) && !/getUILanguage/.test(source), "sizes in English");
+  assert.ok(fn("showRows").includes("rowText(s.choices[i], lang)"), "rows use `lang`");
+  // The menu focused from the keyboard while it looks up shows the chip's ring.
+  assert.ok(/\.picks:focus-visible \{ outline: 2px solid #3ecf8e; outline-offset: -2px; \}/.test(source), "a visible focus");
   assert.equal(sizeText(3 * 2 ** 30, "en"), "3 GB");
   assert.equal(sizeText(null, "en"), "");
   assert.equal(sizeText(undefined, "en"), "");

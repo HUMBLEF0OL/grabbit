@@ -731,22 +731,53 @@ fn ties_are_harmless(formats: &[Format]) -> bool {
 /// DNS and network adapter, as MDM's own requests). None whenever the stream isn't one this
 /// reads exactly as yt-dlp does, or anything goes wrong: within [`BUDGET`] for both requests.
 pub async fn fetch(url: &str, from: &FromBrowser, opts: &mdm_engine::Options) -> Option<Video> {
-    fetch_within(url, from, opts, BUDGET).await
+    fetch_within(url, from, opts, BUDGET, false).await
 }
 
+/// [`fetch`] within `budget`; `local_ok`: this computer's and the local network's own
+/// addresses may be asked ([`local_address`]; the tests' servers only).
 async fn fetch_within(
     url: &str,
     from: &FromBrowser,
     opts: &mdm_engine::Options,
     budget: Duration,
+    local_ok: bool,
 ) -> Option<Video> {
-    tokio::time::timeout(budget, read(url, from, opts))
+    tokio::time::timeout(budget, read(url, from, opts, local_ok))
         .await
         .ok()
         .flatten()
 }
 
-async fn read(url: &str, from: &FromBrowser, opts: &mdm_engine::Options) -> Option<Video> {
+/// Whether `url`'s host is an address written as such that is this computer's own (loopback),
+/// a link's own (link-local: a router's, a cloud's metadata service) or no address at all
+/// (unspecified): a page can name one in its stream's address or redirect to one, and the
+/// browser's cookie and referrer must never go there. yt-dlp asks such a stream itself.
+fn local_address(url: &Url) -> bool {
+    use std::net::{IpAddr, Ipv4Addr};
+    let v4 = |ip: Ipv4Addr| ip.is_loopback() || ip.is_link_local() || ip.is_unspecified();
+    let ip = match url.host() {
+        Some(url::Host::Ipv4(ip)) => IpAddr::V4(ip),
+        Some(url::Host::Ipv6(ip)) => IpAddr::V6(ip),
+        _ => return false,
+    };
+    match ip {
+        IpAddr::V4(ip) => v4(ip),
+        IpAddr::V6(ip) => {
+            ip.is_loopback()
+                || ip.is_unspecified()
+                || (ip.segments()[0] & 0xffc0) == 0xfe80
+                || ip.to_ipv4_mapped().is_some_and(v4)
+        }
+    }
+}
+
+async fn read(
+    url: &str,
+    from: &FromBrowser,
+    opts: &mdm_engine::Options,
+    local_ok: bool,
+) -> Option<Video> {
     // An address yt-dlp and MDM can only read alike: a playlist's on the web, as written.
     let start = Url::parse(url).ok()?;
     if !matches!(start.scheme(), "http" | "https")
@@ -763,6 +794,7 @@ async fn read(url: &str, from: &FromBrowser, opts: &mdm_engine::Options) -> Opti
     let mut hops = Hops {
         origin: origin(&start),
         credentials: true,
+        local_ok,
         from,
         opts: &opts,
     };
@@ -779,6 +811,8 @@ struct Hops<'a> {
     /// The browser's cookie and referrer still go: every hop so far was to the stream's origin.
     /// Once one wasn't, never again, for this request or the next.
     credentials: bool,
+    /// A hop to a local address ([`local_address`]) may be asked (tests only).
+    local_ok: bool,
     from: &'a FromBrowser,
     opts: &'a mdm_engine::Options,
 }
@@ -794,7 +828,8 @@ impl Hops<'_> {
                 .map(str::to_owned)
         };
         for _ in 0..=MAX_REDIRECTS {
-            if !matches!(url.scheme(), "http" | "https") {
+            if !matches!(url.scheme(), "http" | "https") || (!self.local_ok && local_address(&url))
+            {
                 return None;
             }
             if origin(&url) != self.origin {
@@ -1442,7 +1477,57 @@ mod tests {
     fn fetch_now(url: &str, budget: Duration) -> Option<Video> {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let opts = crate::net(mdm_engine::Proxy::None);
-        rt.block_on(fetch_within(url, &browser(), &opts, budget))
+        // The tests' servers are on this computer.
+        rt.block_on(fetch_within(url, &browser(), &opts, budget, true))
+    }
+
+    /// This computer's, a link's own and no address, written as such, are never asked with the
+    /// browser's cookie: not as the stream's address, nor where a redirect leads. A name is
+    /// left to its resolver.
+    #[test]
+    fn local_addresses_are_never_asked() {
+        let local = |s: &str| local_address(&Url::parse(s).unwrap());
+        for s in [
+            "http://127.0.0.1/a.m3u8",
+            "http://127.9.9.9:8080/a.m3u8",
+            "http://169.254.169.254/latest/a.m3u8",
+            "http://0.0.0.0/a.m3u8",
+            "http://[::1]/a.m3u8",
+            "http://[fe80::1]/a.m3u8",
+            "http://[::]/a.m3u8",
+            "http://[::ffff:127.0.0.1]/a.m3u8",
+        ] {
+            assert!(local(s), "{s}");
+        }
+        for s in [
+            "https://cdn.test/a.m3u8",
+            "http://localhost/a.m3u8",
+            "http://10.0.0.1/a.m3u8",
+            "http://93.184.216.34/a.m3u8",
+            "http://[2001:db8::1]/a.m3u8",
+        ] {
+            assert!(!local(s), "{s}");
+        }
+        // A real read: a stream on this computer is never asked, the server sees nothing.
+        let s = Server::start(Arc::new(|path: &str| match path {
+            "/v/master.m3u8" => ok(MASTER),
+            "/v/v720.m3u8" => ok(MEDIA),
+            _ => Answer {
+                status: 404,
+                ..ok("")
+            },
+        }));
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let opts = crate::net(mdm_engine::Proxy::None);
+        let got = rt.block_on(fetch_within(
+            &s.url("/v/master.m3u8"),
+            &browser(),
+            &opts,
+            BUDGET,
+            false,
+        ));
+        assert!(got.is_none());
+        assert!(s.seen().is_empty(), "{:?}", s.seen());
     }
 
     /// The stream as the browser asked for it: its cookie header (never the jar), its page as
