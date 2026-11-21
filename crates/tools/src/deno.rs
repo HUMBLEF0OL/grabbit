@@ -174,9 +174,9 @@ const PROGRAM_MAX: u64 = 512 << 20;
 /// Whether `version` is a release's numbers (`2.9.8`): nothing else names a folder. Digits
 /// alone in each part (`u32`'s parse takes a leading `+` too).
 fn numeric_version(version: &str) -> bool {
-    version.split('.').all(|p| {
-        !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()) && p.parse::<u32>().is_ok()
-    })
+    version
+        .split('.')
+        .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()) && p.parse::<u32>().is_ok())
 }
 
 /// Unpack the zip's one program (`deno.exe`, at its top) into `root/<version>/`, the zip
