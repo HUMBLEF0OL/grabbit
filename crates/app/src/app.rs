@@ -44,6 +44,68 @@ enum Pending {
     Command(Box<ipc::Command>),
     /// From Add URL.
     Url(dialogs::NewUrl),
+    /// A video from Download video from a page, or the browser's quality menu (`true`), with
+    /// the menu's look-up: it goes with the new download only, never to the one already there.
+    Video(Box<crate::videodlg::VideoAdd>, bool),
+}
+
+/// A video already in the list as `page` in quality `selector` (another quality of the same page
+/// is another download, not a duplicate).
+fn same_video(item: &Item, page: &url::Url, selector: &str) -> bool {
+    item.url == *page && item.video.as_ref().is_some_and(|v| v.selector == selector)
+}
+
+/// The quality menu's answer for its choice after the duplicate check (`added`: it went on as a
+/// new download): started or queued; else `sent` (the one already there was opened or resumed,
+/// or the app asks what to do in its Duplicate window, or looks at its finished file first),
+/// which the extension shows as sent to the app.
+fn menu_state(added: bool, start_now: bool) -> &'static str {
+    use ipc::api::lookup;
+    match (added, start_now) {
+        (true, true) => lookup::STARTED,
+        (true, false) => lookup::QUEUED,
+        (false, _) => lookup::SENT,
+    }
+}
+
+/// The menu's look-up for a video being added: it goes with a download started now only, and
+/// only while fresh ([`crate::videolookup::TTL`], as at its start): a question answered long
+/// after, or a download queued, looks the page up afresh.
+fn kept_lookup(
+    preloaded: Option<mdm_tools::video::Preloaded>,
+    goes: VideoGoes,
+    now: Instant,
+) -> Option<mdm_tools::video::Preloaded> {
+    preloaded.filter(|p| {
+        goes == VideoGoes::Start
+            && now.saturating_duration_since(p.slot.born()) < crate::videolookup::TTL
+    })
+}
+
+/// Where a video just added goes ([`video_goes`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum VideoGoes {
+    /// Downloading now, its progress window up.
+    Start,
+    /// Into the queue the selection panel asks for (Options → Downloads).
+    AskQueue,
+    /// Into the main queue, nothing asked.
+    MainQueue,
+}
+
+/// Where a video added goes: Download Now (`start_now`) starts it; Later asks which queue when
+/// Options say so (`queue_panel`). A choice made in the browser's quality menu (`from_menu`,
+/// with Options' "only add to the queue") asks nothing in the app's window, which the browser's
+/// choice doesn't open: it goes into the main queue, as the browser's own downloads do then.
+/// Never in no queue at all, which a cancelled panel would leave it.
+fn video_goes(start_now: bool, from_menu: bool, queue_panel: bool) -> VideoGoes {
+    if start_now {
+        VideoGoes::Start
+    } else if queue_panel && !from_menu {
+        VideoGoes::AskQueue
+    } else {
+        VideoGoes::MainQueue
+    }
 }
 
 /// A finished download's file looked at beside the window for the duplicate check (#342): a
@@ -634,6 +696,10 @@ pub struct App {
     update_checked_this_run: Option<i64>,
     progress: Vec<Progress>,
     complete: Vec<Complete>,
+    /// Downloads just finished whose progress window shows them whole for a moment
+    /// ([`progress::SHOWN_WHOLE`]) before it gives way to Download complete: each one's id, and
+    /// when it finished.
+    finishing: Vec<(u64, Instant)>,
     settings: Settings,
     /// Options, shown in the main window in the panes' place (plan 11a), with the Scheduler
     /// (11b1), Speed Limiter settings, Torrent settings and the browser extension (11b2) as
@@ -683,6 +749,8 @@ pub struct App {
     checksums: Vec<crate::checksum::ChecksumDialog>,
     batch: Option<crate::batch::Batch>,
     video_dlg: Option<crate::videodlg::VideoDialog>,
+    /// The browser's quality menu's look-ups (videolookup.rs).
+    lookups: crate::videolookup::Lookups,
     /// Download a gallery (#58).
     gallery_dlg: Option<crate::gallerydlg::GalleryDialog>,
     torrent_dlg: Option<crate::torrentdlg::TorrentDialog>,
@@ -1146,6 +1214,23 @@ fn drive_file_behind_player(cmd: &ipc::Command) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// What the browser's quality menu leaves to the Download video window (the button's click, as
+/// before it): everything in a run without a window, a Google Drive file's player (#34: the
+/// file itself, as uploaded, which the click's command downloads), and an address not on the
+/// web (the browser's host sends none).
+fn menu_needs_window(cmd: &ipc::Command, headless: bool) -> bool {
+    headless
+        || cmd.video_lookup.as_ref().is_some_and(|ask| {
+            !(ask.address.starts_with("http://") || ask.address.starts_with("https://"))
+                || drive_file_behind_player(&ipc::Command {
+                    video_page: Some(ask.address.clone()),
+                    referer: cmd.referer.clone(),
+                    ..Default::default()
+                })
+                .is_some()
+        })
+}
+
 pub fn auth_headers(login: Option<&(String, String)>) -> HeaderMap {
     let mut h = HeaderMap::new();
     if let Some((user, pass)) = login {
@@ -1511,6 +1596,7 @@ impl App {
             kept_answers: Default::default(),
             progress: Vec::new(),
             complete: Vec::new(),
+            finishing: Vec::new(),
             settings,
             settings_page: None,
             category_dlg: None,
@@ -1539,6 +1625,7 @@ impl App {
             checksums: Vec::new(),
             batch: None,
             video_dlg: None,
+            lookups: Default::default(),
             gallery_dlg: None,
             torrent_dlg: None,
             torrent_waiting: Default::default(),
@@ -4495,8 +4582,10 @@ impl App {
         .with_music_folder(music)
     }
 
-    /// Download video from a page → Download Now / Later.
-    fn add_video(&mut self, add: crate::videodlg::VideoAdd) {
+    /// Download video from a page → Download Now / Later; or the browser's quality menu's
+    /// choice (`from_menu`), which never asks for a queue ([`video_goes`]). Through the
+    /// duplicate check first ([`Self::add_video_checked`]).
+    fn add_video(&mut self, add: crate::videodlg::VideoAdd, from_menu: bool) {
         let folder = add
             .dest
             .parent()
@@ -4528,24 +4617,110 @@ impl App {
             add.context,
             crate::i18n::mark("from a page (yt-dlp)"),
         );
+        let goes = video_goes(add.start_now, from_menu, self.settings.queue_panel_later);
         if let Some(item) = self.item(id) {
             item.video = Some(model::VideoSpec {
                 selector: add.selector,
                 subs: add.subs,
                 parts: Vec::new(),
             });
+            // The quality menu's look-up goes with this new download only, started now and while
+            // fresh: one queued for later, or added on a duplicate question answered late,
+            // starts with a look-up of its own (the links will have expired).
+            item.preloaded = kept_lookup(add.preloaded, goes, Instant::now());
         }
         // The Subtitles choice is offered again for the next video (#68).
         if let Some(subs) = add.remember {
             self.settings.video_subs = subs;
         }
         self.selection.set(id);
-        if add.start_now {
-            self.start(id, true);
-        } else {
-            self.queue_later(vec![id], self.settings.queue_panel_later);
+        match goes {
+            VideoGoes::Start => self.start(id, true),
+            VideoGoes::AskQueue => self.queue_later(vec![id], true),
+            VideoGoes::MainQueue => self.queue_later(vec![id], false),
         }
         self.dirty = true;
+    }
+
+    /// Download video's Download Now / Later, or the browser's quality menu's choice
+    /// (`from_menu`), through the same check as any other download (Options → Downloads → "If a
+    /// duplicate download link is added"): the same page in the same quality is a duplicate,
+    /// another quality is not. A question opens its own window (the main one stays where it
+    /// is). True when it went on as a new download now.
+    fn add_video_checked(&mut self, mut add: crate::videodlg::VideoAdd, from_menu: bool) -> bool {
+        // The Subtitles choice is offered again for the next video (#68), whatever comes of
+        // this one.
+        if let Some(subs) = add.remember.take() {
+            self.settings.video_subs = subs;
+            self.dirty = true;
+        }
+        let (page, selector) = (add.page.clone(), add.selector.clone());
+        // Kept here unless the check keeps it (a question, a look at the finished file): the
+        // menu's look-up goes with the new download only, and is dropped with the choice when
+        // the one already there is opened or resumed.
+        let mut held = Some(add);
+        let goes = self.duplicate_gate_by(
+            |i| same_video(i, &page, &selector),
+            || Pending::Video(Box::new(held.take().expect("taken once")), from_menu),
+        );
+        if goes && let Some(add) = held {
+            self.add_video(add, from_menu);
+        }
+        goes
+    }
+
+    /// The browser's quality menu over a video (crates/nmhost, videolookup.rs): a look-up
+    /// started (answered at once, yt-dlp on a thread of its own), a question about one, or the
+    /// choice made there, added as Download video's Download Now adds it: the main window stays
+    /// where it is, the download's progress window opens (Options' "only add to the queue":
+    /// into the main queue instead, with no queue panel either).
+    fn quality_menu(&mut self, cmd: &ipc::Command) -> ipc::api::VideoLookupAnswer {
+        use ipc::api::{VideoLookupAnswer, lookup};
+        if menu_needs_window(cmd, self.headless) {
+            return VideoLookupAnswer::of(lookup::USE_WINDOW);
+        }
+        let now = Instant::now();
+        if let Some(ask) = &cmd.video_lookup {
+            crate::videodlg::refresh_ytdlp(&self.rt);
+            let Some(tool) = mdm_tools::tools_dir()
+                .as_deref()
+                .and_then(mdm_tools::installed)
+            else {
+                return VideoLookupAnswer::failed(lookup::NO_YTDLP, None);
+            };
+            return self.lookups.start(ask, cmd, tool.exe, self.rt.clone(), now);
+        }
+        if let Some(token) = &cmd.video_poll {
+            return self.lookups.poll(token, now);
+        }
+        let Some(pick) = &cmd.video_pick else {
+            return VideoLookupAnswer::of(lookup::USE_WINDOW);
+        };
+        let folder = self.settings.category_dir(Category::Video, &self.downloads);
+        // A sound-only choice saves in Music, as in the Download video window (upstream 611).
+        let music = (!Category::Music.deleted())
+            .then(|| self.settings.category_dir(Category::Music, &self.downloads));
+        let start_now = !self.settings.only_add_to_queue;
+        let add = self.lookups.pick(pick, cmd.private, now).and_then(|p| {
+            crate::videolookup::video_add(
+                p,
+                &folder,
+                music.as_deref(),
+                start_now,
+                &self.settings.video_subs,
+            )
+        });
+        let Some(add) = add else {
+            return VideoLookupAnswer::of(lookup::USE_WINDOW);
+        };
+        // Its category's folder, made when it isn't there yet (the window asks first; the
+        // choice was made in the browser).
+        if let Some(dir) = add.dest.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        // Already in the list in this quality: Options' "If a duplicate download link is added".
+        let added = self.add_video_checked(add, true);
+        VideoLookupAnswer::of(menu_state(added, start_now))
     }
 
     /// A playlist's videos (#69), one download each, into its folder: names picked with the
@@ -4670,7 +4845,13 @@ impl App {
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_else(|| "video".into());
         let _ = std::fs::create_dir_all(&folder);
-        let started = mdm_tools::video::VideoJob::start(
+        // The quality menu's look-up, for this first run only, while it is fresh (a run started
+        // again, or later than the menu keeps its look-ups, reads the page afresh).
+        let preloaded = item
+            .preloaded
+            .take()
+            .filter(|p| p.slot.born().elapsed() < crate::videolookup::TTL);
+        let started = mdm_tools::video::VideoJob::start_with(
             &tool.exe,
             item.url.as_str(),
             &spec.selector,
@@ -4683,6 +4864,7 @@ impl App {
             &crate::videodlg::from_browser(&item.context),
             &spec.subs,
             engine,
+            preloaded,
         );
         match started {
             Ok(job) => {
@@ -5640,6 +5822,13 @@ impl App {
     /// is on, whatever the automation API's switch: it may list, add and act, nothing else.
     fn answer(&mut self, cmd: &ipc::Command) -> String {
         use ipc::api::{ApiAnswer, DownloadInfo, ErrorAnswer, ListAnswer, line};
+        // The browser's quality menu (its native host asks): whatever the automation API's
+        // switch, and never for a paired device.
+        if !cmd.remote
+            && (cmd.video_lookup.is_some() || cmd.video_poll.is_some() || cmd.video_pick.is_some())
+        {
+            return line(&self.quality_menu(cmd));
+        }
         if cmd.pair && !cmd.remote {
             return self.pair_answer();
         }
@@ -7053,34 +7242,25 @@ impl App {
         // A download started early behind Download File Info stays quiet until the dialog's
         // answer (Start shows its box then; Cancel drops it).
         let early = self.file_info.as_ref().and_then(|f| f.early);
-        for id in finished {
-            // This file's "Show download complete dialog" (its progress window's Options on
-            // completion tab), read before the window closes.
-            let window = self.progress.iter().find(|p| p.id == id);
-            let this_file = window.is_none_or(|p| p.shows_complete());
-            if let Some(w) = window.and_then(Progress::when_done) {
-                self.when_done(w);
-            }
-            self.progress.retain(|p| p.id != id);
-            if Some(id) == early {
-                continue;
-            }
-            if self.settings.show_complete
-                && this_file
-                && let Some(i) = self.items.iter().find(|i| i.id == id)
-            {
-                self.complete.push(Complete {
-                    id,
-                    url: i.url.to_string(),
-                    path: i.dest.clone(),
-                    size: i.size.unwrap_or(i.downloaded),
-                    dont_show: false,
-                    notices: i.notices.clone(),
-                    seen: false,
-                    opening: None,
-                    moved_away: i.moved_away,
-                });
-            }
+        let close = finished_windows(
+            finished,
+            |id| self.progress.iter().any(|p| p.id == id && !p.hidden),
+            |id| {
+                self.items
+                    .iter()
+                    .any(|i| i.id == id && i.status == Status::Complete)
+            },
+            &mut self.finishing,
+            now,
+        );
+        for id in close {
+            self.close_finished(id, early);
+        }
+        // The next one's moment ends without a frame of its own otherwise (nothing runs).
+        if let Some(&(_, at)) = self.finishing.iter().min_by_key(|(_, at)| *at) {
+            ctx.request_repaint_after(
+                crate::progress::SHOWN_WHOLE.saturating_sub(now.duration_since(at)),
+            );
         }
         if any_live {
             ctx.request_repaint_after(Duration::from_millis(250));
@@ -7118,6 +7298,38 @@ impl App {
         }
         if let Some(outcome) = self.saver.outcome() {
             self.report_save(outcome);
+        }
+    }
+
+    /// A finished download's progress window closes, and Download complete opens for it (`early`:
+    /// the download Download File Info started early, which stays quiet).
+    fn close_finished(&mut self, id: u64, early: Option<u64>) {
+        // This file's "Show download complete dialog" (its progress window's Options on
+        // completion tab), read before the window closes.
+        let window = self.progress.iter().find(|p| p.id == id);
+        let this_file = window.is_none_or(|p| p.shows_complete());
+        if let Some(w) = window.and_then(Progress::when_done) {
+            self.when_done(w);
+        }
+        self.progress.retain(|p| p.id != id);
+        if Some(id) == early {
+            return;
+        }
+        if self.settings.show_complete
+            && this_file
+            && let Some(i) = self.items.iter().find(|i| i.id == id)
+        {
+            self.complete.push(Complete {
+                id,
+                url: i.url.to_string(),
+                path: i.dest.clone(),
+                size: i.size.unwrap_or(i.downloaded),
+                dont_show: false,
+                notices: i.notices.clone(),
+                seen: false,
+                opening: None,
+                moved_away: i.moved_away,
+            });
         }
     }
 
@@ -9223,13 +9435,23 @@ impl App {
     /// goes on now. 0 asks (`pending` waits), 1 adds it with a numbered name, 2 replaces the
     /// download already there, 3 opens that one (finished) or resumes it.
     fn duplicate_gate(&mut self, url: &url::Url, pending: impl FnOnce() -> Pending) -> bool {
+        self.duplicate_gate_by(|i| i.url == *url, pending)
+    }
+
+    /// [`Self::duplicate_gate`] for a new download that `same` tells in the list (a video: the
+    /// same page in the same quality, [`same_video`]).
+    fn duplicate_gate_by(
+        &mut self,
+        same: impl Fn(&Item) -> bool,
+        pending: impl FnOnce() -> Pending,
+    ) -> bool {
         if std::mem::take(&mut self.duplicate_cleared) {
             return true;
         }
         let Some((dup, name, status, dest)) = self
             .items
             .iter()
-            .find(|i| i.url == *url)
+            .find(|i| same(i))
             .map(|i| (i.id, i.file_name.clone(), i.status, i.dest.clone()))
         else {
             return true;
@@ -9245,9 +9467,9 @@ impl App {
             }
         };
         // #342: its file was moved or deleted, so there is nothing to duplicate: the old row
-        // goes and this is an ordinary new download.
+        // goes and this is an ordinary new download (what yt-dlp left beside a video stays).
         if gone {
-            self.overwrite(dup);
+            self.replace(dup, false);
             return true;
         }
         match self.settings.duplicate_action {
@@ -9282,8 +9504,15 @@ impl App {
         choice: usize,
         ctx: &egui::Context,
     ) {
+        // The one asked about has left the list meanwhile: checked afresh, as if just added
+        // (never acted on a row that isn't there).
+        if !self.items.iter().any(|i| i.id == dup) {
+            self.duplicate_again(pending, ctx);
+            return;
+        }
         match choice {
             3 => {
+                // What was being added is dropped (a video's menu look-up with it).
                 self.open_or_resume(dup);
                 return;
             }
@@ -9297,6 +9526,7 @@ impl App {
                 self.duplicate_cleared = false;
             }
             Pending::Url(new) => self.open_file_info(new, Default::default(), ctx),
+            Pending::Video(add, from_menu) => self.add_video(*add, from_menu),
         }
     }
 
@@ -9375,6 +9605,9 @@ impl App {
                     self.open_file_info(new, Default::default(), ctx);
                 }
             }
+            Pending::Video(add, from_menu) => {
+                self.add_video_checked(*add, from_menu);
+            }
         }
     }
 
@@ -9383,17 +9616,27 @@ impl App {
     /// window (upstream issues 1170, 1229), in order with the other deletes; the new copy that
     /// comes under its name looks at the folder, and starts writing, once they are gone.
     fn overwrite(&mut self, id: u64) {
+        self.replace(id, true);
+    }
+
+    /// [`Self::overwrite`]; `leftovers`: a video's files left by yt-dlp and the engine go too
+    /// ([`LeftoverSearch`]), so that the new copy takes the same name (Options' overwrite,
+    /// chosen: never #342's automatic one).
+    fn replace(&mut self, id: u64, leftovers: bool) {
         let Some(item) = self.items.iter().find(|i| i.id == id) else {
             return;
         };
         if item.live.is_some() {
             return;
         }
+        let later = LeftoverSearch::of(&self.items, id)
+            .filter(|_| leftovers)
+            .map(|s| Box::new(move || s.find()) as crate::deleter::Later);
         let doomed = crate::deleter::Doomed::clearing(
             item.file_name.clone(),
             item.dest.clone(),
             item.status == Status::Complete,
-            None,
+            later,
         );
         self.deleter.delete(vec![doomed]);
         self.delete(id);
@@ -10216,8 +10459,16 @@ impl App {
 
     fn dialogs(&mut self, ctx: &egui::Context) {
         self.help_dialogs(ctx);
-        if self.duplicate.is_none() {
-            self.duplicate = self.duplicates_waiting.pop_front();
+        // The next question in turn; one about a download that has left the list meanwhile is
+        // checked afresh instead (it may ask again, about another).
+        while self.duplicate.is_none()
+            && let Some((dup, pending, d)) = self.duplicates_waiting.pop_front()
+        {
+            if self.items.iter().any(|i| i.id == dup) {
+                self.duplicate = Some((dup, pending, d));
+            } else {
+                self.duplicate_again(pending, ctx);
+            }
         }
         if let Some((_, _, d)) = &mut self.duplicate {
             match d.show(ctx) {
@@ -10619,7 +10870,9 @@ impl App {
                     }
                     self.video_dlg = None;
                     match out {
-                        crate::videodlg::VideoOut::One(add) => self.add_video(add),
+                        crate::videodlg::VideoOut::One(add) => {
+                            self.add_video_checked(add, false);
+                        }
                         crate::videodlg::VideoOut::Many(add) => self.add_playlist(add),
                     }
                 }
@@ -10730,6 +10983,7 @@ impl App {
             }
             p.tray = tray;
             p.minimize_to_tray = self.settings.minimize_to_tray;
+            p.main_shown = !self.hidden;
             // Hidden: not shown (its window is gone) until the tray or the list brings it back.
             if p.hidden && tray {
                 continue;
@@ -10805,6 +11059,37 @@ impl App {
     }
 }
 
+/// The finished downloads whose progress windows close at `now` (then Download complete opens):
+/// of the ones just `finished`, those without a window on screen (`shown`), at once. A window on
+/// screen first shows its download whole for a moment ([`crate::progress::SHOWN_WHOLE`]; its bar
+/// glides a little behind the figures and would close short of the end): kept in `finishing`
+/// with when it finished, it closes once that moment is over, unless the download was started
+/// again meanwhile (no longer `complete`): its window stays for the new run.
+fn finished_windows(
+    finished: Vec<u64>,
+    shown: impl Fn(u64) -> bool,
+    complete: impl Fn(u64) -> bool,
+    finishing: &mut Vec<(u64, Instant)>,
+    now: Instant,
+) -> Vec<u64> {
+    let mut close = Vec::new();
+    for id in finished {
+        if shown(id) {
+            finishing.push((id, now));
+        } else {
+            close.push(id);
+        }
+    }
+    finishing.retain(|&(id, at)| {
+        let wait = now.duration_since(at) < crate::progress::SHOWN_WHOLE;
+        if !wait && complete(id) {
+            close.push(id);
+        }
+        wait
+    });
+    close
+}
+
 impl eframe::App for App {
     /// What comes in from outside (a second launch, the browser's native host, the automation
     /// API) is handled here, which runs at every frame: `ui` doesn't run while the main window
@@ -10866,6 +11151,7 @@ impl App {
         if handled {
             ctx.request_ui_pass(egui::ViewportId::ROOT);
         }
+        self.lookups.prune(Instant::now());
         crate::crash::step(crate::crash::Step::NetworkSettings);
         // The clock: what must go on whatever the main window's state (#174). Minimized, egui
         // runs no `ui`, and the queues, the Scheduler's starts and stops, the download limits,
@@ -11592,6 +11878,157 @@ mod referrer_tests {
         let folder = "https://drive.google.com/drive/folders/1s52ek_4YTDRt_EOkx1FS53u-vJa0c4nu";
         assert_eq!(drive_file_behind_player(&cmd(folder, None)), None);
     }
+
+    /// The quality menu leaves a Drive file's player to the window's click (the file itself),
+    /// and everything to it in a run without a window.
+    #[test]
+    fn the_quality_menu_leaves_drive_and_headless_to_the_window() {
+        use super::{ipc, menu_needs_window};
+        let page = "https://drive.google.com/file/d/1s52ek_4YTDRt_EOkx1FS53u-vJa0c4nu/view";
+        let look = |address: &str, referer: Option<&str>| ipc::Command {
+            video_lookup: Some(ipc::VideoLookup {
+                address: address.to_owned(),
+                ..Default::default()
+            }),
+            referer: referer.map(str::to_owned),
+            startup: true,
+            ..Default::default()
+        };
+        assert!(menu_needs_window(&look(page, None), false));
+        let stream = "https://abc.c.drive.google.com/videoplayback?id=1";
+        assert!(menu_needs_window(&look(stream, Some(page)), false));
+        let video = look("https://www.youtube.com/watch?v=x", Some(page));
+        assert!(!menu_needs_window(&video, false));
+        assert!(menu_needs_window(&video, true), "no window to show it");
+        assert!(menu_needs_window(&look("file:///C:/v.mp4", None), false));
+        assert!(menu_needs_window(&look("", None), false));
+        let poll = ipc::Command {
+            video_poll: Some("abc".into()),
+            ..Default::default()
+        };
+        assert!(!menu_needs_window(&poll, false));
+        assert!(menu_needs_window(&poll, true));
+    }
+}
+
+#[cfg(test)]
+mod video_menu_tests {
+    use super::*;
+    use mdm_tools::video::{InfoSlot, Preloaded};
+
+    const SELECTOR: &str = "bv*[height=720]+ba/b[height=720]";
+
+    fn page() -> url::Url {
+        url::Url::parse("https://videos.test/watch?v=1").unwrap()
+    }
+
+    /// The browser's quality menu queues a choice (Options: only add to the queue) in the main
+    /// queue, never through the queue panel, which would open in the main window and, cancelled,
+    /// leave it in no queue; the Download video window's Later still asks when Options say so.
+    #[test]
+    fn a_choice_from_the_browser_is_queued_without_asking() {
+        // The quality menu.
+        assert_eq!(video_goes(false, true, true), VideoGoes::MainQueue);
+        assert_eq!(video_goes(false, true, false), VideoGoes::MainQueue);
+        assert_eq!(video_goes(true, true, true), VideoGoes::Start);
+        // The Download video window, as before.
+        assert_eq!(video_goes(false, false, true), VideoGoes::AskQueue);
+        assert_eq!(video_goes(false, false, false), VideoGoes::MainQueue);
+        assert_eq!(video_goes(true, false, true), VideoGoes::Start);
+    }
+
+    /// The browser hears of a new download (started or queued), or `sent`: the app asks, looks
+    /// at the finished file first, or opened or resumed the one already there.
+    #[test]
+    fn what_the_browser_is_told_of_its_choice() {
+        use ipc::api::lookup;
+        assert_eq!(menu_state(true, true), lookup::STARTED);
+        assert_eq!(menu_state(true, false), lookup::QUEUED);
+        assert_eq!(menu_state(false, true), lookup::SENT);
+        assert_eq!(menu_state(false, false), lookup::SENT);
+    }
+
+    /// A video is the same download only on the same page in the same quality; a plain download
+    /// of that address is not a video's duplicate.
+    #[test]
+    fn a_video_is_a_duplicate_in_the_same_quality_only() {
+        let mut item = Item::new(1, page(), PathBuf::from("Clip.mp4"), Category::Video);
+        assert!(!same_video(&item, &page(), SELECTOR), "not a video");
+        item.video = Some(model::VideoSpec {
+            selector: SELECTOR.into(),
+            subs: Default::default(),
+            parts: Vec::new(),
+        });
+        assert!(same_video(&item, &page(), SELECTOR));
+        assert!(!same_video(
+            &item,
+            &page(),
+            "bv*[height=360]+ba/b[height=360]"
+        ));
+        let other = url::Url::parse("https://videos.test/watch?v=2").unwrap();
+        assert!(!same_video(&item, &other, SELECTOR));
+    }
+
+    fn preloaded(slot: &InfoSlot) -> Option<Preloaded> {
+        Some(Preloaded {
+            slot: slot.clone(),
+            selector: SELECTOR.into(),
+            label: "720p".into(),
+            merge: true,
+        })
+    }
+
+    /// The menu's look-up goes with a download started now, while fresh: not with one queued,
+    /// nor one added on a duplicate question answered after the look-ups are forgotten (its
+    /// links will have expired; it looks the page up itself, as at its start).
+    #[test]
+    fn a_late_answer_drops_the_menus_look_up() {
+        let born = Instant::now();
+        let slot = InfoSlot::new(born);
+        let ttl = crate::videolookup::TTL;
+        let pre = || preloaded(&slot);
+        assert!(kept_lookup(pre(), VideoGoes::Start, born).is_some());
+        let just = born + ttl - Duration::from_secs(1);
+        assert!(kept_lookup(pre(), VideoGoes::Start, just).is_some());
+        assert!(kept_lookup(pre(), VideoGoes::Start, born + ttl).is_none());
+        let hours = born + Duration::from_secs(3 * 3600);
+        assert!(kept_lookup(pre(), VideoGoes::Start, hours).is_none());
+        assert!(kept_lookup(pre(), VideoGoes::MainQueue, born).is_none());
+        assert!(kept_lookup(pre(), VideoGoes::AskQueue, born).is_none());
+        assert_eq!(slot.holders(), 1, "every one dropped");
+    }
+}
+
+#[cfg(test)]
+mod finished_window_tests {
+    use super::finished_windows;
+    use crate::progress::SHOWN_WHOLE;
+    use std::time::{Duration, Instant};
+
+    /// A window on screen shows its finished download whole for SHOWN_WHOLE, then closes; one
+    /// not on screen (hidden in the tray, or none) closes at once; one started again meanwhile
+    /// stays for the new run.
+    #[test]
+    fn a_finished_window_shows_it_whole_for_a_moment() {
+        let t0 = Instant::now();
+        let ms = Duration::from_millis;
+        let mut finishing = Vec::new();
+        let close = finished_windows(vec![1, 2], |id| id == 1, |_| true, &mut finishing, t0);
+        assert_eq!(close, [2], "not on screen: at once");
+        assert_eq!(finishing, [(1, t0)]);
+        let soon = t0 + SHOWN_WHOLE - ms(1);
+        let close = finished_windows(vec![], |_| true, |_| true, &mut finishing, soon);
+        assert!(close.is_empty(), "held for the moment");
+        let close = finished_windows(vec![3], |_| true, |_| true, &mut finishing, t0 + ms(100));
+        assert!(close.is_empty());
+        let close = finished_windows(vec![], |_| true, |_| true, &mut finishing, t0 + SHOWN_WHOLE);
+        assert_eq!(close, [1], "then it closes");
+        // 3, started again during its moment: not closed, and no longer waited for.
+        let later = t0 + ms(100) + SHOWN_WHOLE;
+        let close = finished_windows(vec![], |_| true, |id| id != 3, &mut finishing, later);
+        assert!(close.is_empty());
+        assert!(finishing.is_empty());
+    }
 }
 
 #[cfg(test)]
@@ -11842,6 +12279,75 @@ mod window_thread_tests {
         );
         assert!(app.deleter.finish(Duration::from_secs(10)));
         assert!(!a.exists());
+    }
+
+    /// A video added again (the quality menu's choice, or Download video's) follows Options'
+    /// "If a duplicate download link is added" for the same page in the same quality: asked,
+    /// the choice and the menu's look-up wait for the answer; a numbered name adds it, the
+    /// look-up going with it only when it starts now. Another quality is no duplicate.
+    #[test]
+    fn a_video_chosen_again_follows_options_duplicate_answer() {
+        use mdm_tools::video::{InfoSlot, Preloaded};
+        let dir = tempfile::tempdir().unwrap();
+        let page = url::Url::parse("https://videos.test/watch?v=1").unwrap();
+        const SELECTOR: &str = "b[height=720]";
+        let mut there = Item::new(
+            1,
+            page.clone(),
+            dir.path().join("Clip.mp4"),
+            Category::Video,
+        );
+        there.status = Status::Stopped;
+        there.video = Some(model::VideoSpec {
+            selector: SELECTOR.into(),
+            subs: Default::default(),
+            parts: Vec::new(),
+        });
+        let mut app = app(vec![there], dir.path());
+        let slot = InfoSlot::new(Instant::now());
+        let choice = |selector: &str| crate::videodlg::VideoAdd {
+            page: page.clone(),
+            selector: selector.into(),
+            dest: dir.path().join("Clip.mp4"),
+            category: Category::Video,
+            size: None,
+            start_now: false,
+            context: Default::default(),
+            subs: Default::default(),
+            remember: None,
+            preloaded: Some(Preloaded {
+                slot: slot.clone(),
+                selector: selector.into(),
+                label: "720p MP4".into(),
+                merge: false,
+            }),
+        };
+        // Asked: nothing added yet, the choice and its look-up kept for the answer.
+        app.settings.duplicate_action = 0;
+        assert!(!app.add_video_checked(choice(SELECTOR), true));
+        assert_eq!(app.items.len(), 1);
+        assert!(matches!(
+            app.duplicate,
+            Some((1, Pending::Video(_, true), _))
+        ));
+        assert_eq!(slot.holders(), 2, "kept for the answer");
+        app.duplicate = None;
+        assert_eq!(slot.holders(), 1);
+        // A numbered name: added, queued (not started now), its look-up let go.
+        app.settings.duplicate_action = 1;
+        assert!(app.add_video_checked(choice(SELECTOR), true));
+        assert_eq!(app.items.len(), 2);
+        assert_eq!(
+            slot.holders(),
+            1,
+            "a queued download looks the page up itself"
+        );
+        assert_ne!(app.items[1].dest, app.items[0].dest, "a name of its own");
+        // Another quality of the same page: no question.
+        app.settings.duplicate_action = 0;
+        assert!(app.add_video_checked(choice("b[height=360]"), true));
+        assert_eq!(app.items.len(), 3);
+        assert!(app.duplicate.is_none());
     }
 
     /// Upstream issue 1232: Add batch download's links take their names as given, without

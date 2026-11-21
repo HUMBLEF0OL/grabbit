@@ -461,6 +461,10 @@ pub struct Item {
     /// #68), in the interface language; memory only.
     #[serde(skip)]
     pub notices: Vec<String>,
+    /// A video chosen in the browser's quality menu: the menu's look-up, for its first run only
+    /// (taken then); memory only, never written (its links are signed).
+    #[serde(skip)]
+    pub preloaded: Option<mdm_tools::video::Preloaded>,
     /// Whether its resume state is at its place, as read beside the window at start
     /// (resumeread.rs): the place read and the answer. Until that read comes it is taken as there
     /// (the safe side: the row keeps its place, and no other row takes it), and it is forgotten as
@@ -897,6 +901,7 @@ impl Item {
             login: None,
             context: Default::default(),
             notices: Vec::new(),
+            preloaded: None,
             state_here: None,
         }
     }

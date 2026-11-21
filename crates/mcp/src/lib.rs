@@ -268,6 +268,9 @@ fn explain(answer: Result<String, String>) -> Result<String, String> {
                         (ipc.json) is from another start. Ask the user to restart the app."
                 .into());
         }
+        "gone" => {
+            return Err("Grabbit is closing; try again once it has started.".into());
+        }
         _ => {}
     }
     if let Ok(e) = serde_json::from_str::<ErrorAnswer>(&answer) {
@@ -407,6 +410,7 @@ mod tests {
                 .unwrap_err()
                 .contains("restart")
         );
+        assert!(explain(Ok("gone".into())).unwrap_err().contains("closing"));
         let off = r#"{"error":"the automation API is off","code":"api-off"}"#;
         assert_eq!(explain(Ok(off.into())).unwrap_err(), API_OFF);
         let other = r#"{"error":"unknown action \"x\""}"#;
