@@ -10985,6 +10985,8 @@ impl App {
                 crate::theme::apply_mode(&ctx);
                 self.caption_set =
                     crate::win32::caption_dark(crate::MAIN_TITLE, crate::theme::dark_surface());
+                // The menus Windows draws (the tray icon's, the window menu) too (upstream 682).
+                crate::win32::menus_dark(crate::theme::dark_surface());
             }
             if changed {
                 ctx.request_repaint();

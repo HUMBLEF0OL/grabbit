@@ -601,6 +601,8 @@ Released 2026-11-20: the maintainer's first findings with 1.0.0, and what came w
 
 Done since 1.0.1; ships in the next release.
 
+- ✅ The notification-area icon's menu, and the title bar's window menu, follow Grabbit's dark or
+  light look instead of Windows' app mode (ported from upstream issue 682).
 - ✅ A smaller button over videos: a 30-pixel round chip in Graphite's colours (dark glass, green
   arrow) that opens to **Download video ⌄** under the pointer, toward the inside of the video,
   and shows the result of a click on itself; its menu no longer repeats **Download video**. The
