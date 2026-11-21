@@ -631,6 +631,9 @@ Done since 1.0.1; ships in the next release.
   start, re-add and restore, and Delete with files removing only what Grabbit made. Asking
   before a start uses a file already there, and a torrent without an outer folder, are not
   taken.
+- ✅ The update check and the yt-dlp and ffmpeg installs past GitHub's API rate limit: GitHub's
+  release pages when the API refuses (from upstream issue 1337); the update check still asks
+  only this fork's repository.
 
 ## Being worked on
 
