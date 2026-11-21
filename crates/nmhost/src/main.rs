@@ -953,7 +953,8 @@ fn repair() -> Result<(), String> {
     for (key, family) in WINDOWS_HOST_KEYS {
         let entry = format!(r"{key}\{HOST_NAME}");
         let user = holder(false, &entry);
-        match mdm_ipc::browsers::windows_repair(user.as_ref(), holder(true, &entry).as_ref()) {
+        let machine = holder(true, &entry);
+        match mdm_ipc::browsers::windows_repair(user.as_ref(), machine.as_ref()) {
             // The user's own manifest for this copy (Set it up for one installed for everyone):
             // kept as this version writes it (a new extension ID), as the setup does beside the
             // program; it would otherwise hide a newer one of the computer's.
@@ -971,6 +972,18 @@ fn repair() -> Result<(), String> {
                     .map(|v| mdm_ipc::browsers::registered_manifest(&v));
                 match own_manifest(family, true) {
                     Ok(m) if named.as_deref() == Some(m.as_path()) => {}
+                    // The setup has since written the one beside the program and the computer's
+                    // entry names a working copy (upgraded with the box ticked): the user's goes,
+                    // so uninstalling for everyone leaves nothing of it.
+                    Ok(m)
+                        if !mdm_ipc::browsers::is_user_manifest(&m)
+                            && matches!(machine, Some(Holder::Alive(_))) =>
+                    {
+                        match reg(&["delete", &format!(r"HKCU\{entry}"), "/f"]) {
+                            Ok(()) => println!(r"HKCU\{entry}: removed (the computer's works)"),
+                            Err(e) => println!(r"HKCU\{entry}: left as it is: {e}"),
+                        }
+                    }
                     Ok(m) => match reg_point("HKCU", key, &m) {
                         Ok(()) => println!(r"HKCU\{entry}: the user's own, now {}", m.display()),
                         Err(e) => println!(r"HKCU\{entry}: left as it is: {e}"),

@@ -235,7 +235,9 @@ begin
     if RegQueryStringValue(HKCU, 'Software\Classes\Grabbit.Magnet\shell\open\command', '', Value) and (Pos(Lowercase(ExpandConstant('{app}\{#AppExe}')), Lowercase(Value)) > 0) then
       RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\Grabbit.Magnet');
     { Installed for everyone only: a copy installed for one user writes beside itself, and its
-      own --unregister removes only what is its own, so another copy's stays. The keys of
+      own --unregister removes only what is its own, so another copy's stays. HKCU and the
+      user's AppData are the account that approved the uninstall's elevation (as for Default
+      apps above); another user's entry is cleared by a later start's repair. The keys of
       mdm_ipc::browsers::WINDOWS_HOST_KEYS. }
     if IsAdminInstallMode then
     begin

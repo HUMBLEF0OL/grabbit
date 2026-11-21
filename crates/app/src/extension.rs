@@ -374,6 +374,7 @@ impl Extension {
                     "Set it up didn't work. Point at the button to see why, or try it again.",
                 )
             } else {
+                // i18n: in the browser extension's window, beside Set it up: the native host isn't registered with the browsers
                 crate::i18n::t(
                     "Browser integration isn't set up on this computer, so no browser can reach Grabbit yet.",
                 )
