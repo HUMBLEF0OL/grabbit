@@ -1436,13 +1436,14 @@ impl FileInfo {
                         }
                     }
                     Some(Err(reason)) => {
+                        // On the Server row, where the server shows when the look succeeds.
                         let (rect, cut) = winui::text_fit(
                             &p,
-                            o.x + 96.0,
-                            o.y + 193.0 + dy,
+                            o.x + fx,
+                            server_baseline,
                             reason,
                             winui::ERROR(),
-                            o.x + 462.0,
+                            o.x + right,
                         );
                         winui::copyable(ui, rect, "file-info-failed", reason, cut);
                     }
