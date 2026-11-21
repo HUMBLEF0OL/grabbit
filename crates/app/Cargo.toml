@@ -18,6 +18,9 @@ path = "src/main.rs"
 # opens), and MDM_TEST_UPDATE_HOLD (seconds the update waits before it's put in place, to see and
 # close the window meanwhile). tools/lab/update runs them.
 test-update = ["mdm-tools/test-update"]
+# The engine's browser-like connection (upstream issue 668): release builds only
+# (tools/installer/build.ps1), as it builds BoringSSL from source.
+browser-connection = ["mdm-engine/browser-connection"]
 
 [dependencies]
 arboard.workspace = true

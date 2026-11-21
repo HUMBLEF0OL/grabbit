@@ -211,7 +211,11 @@ working, not a copy of anyone's software.
 <details>
 <summary><b>Build from source</b></summary>
 
-Requires Rust stable 1.95 or later (the MSVC toolchain on Windows).
+Requires Rust stable 1.98 or later (the MSVC toolchain on Windows). Release builds
+(`tools/installer/build.ps1`) also build the engine's browser-like connection on BoringSSL from
+source, which needs CMake, NASM and LLVM's libclang (`winget install Kitware.CMake NASM.NASM
+LLVM.LLVM`); everyday builds and tests leave it out (`--features grabbit-app/browser-connection`
+adds it).
 
 ```
 cargo build --release

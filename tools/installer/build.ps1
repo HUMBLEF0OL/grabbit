@@ -26,9 +26,18 @@ if (-not $NoBuild) {
   # C runtime built into the programs (#785: no VCRUNTIME140.dll from Windows) is repeated here.
   $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE ".cargo" }
   $env:CARGO_ENCODED_RUSTFLAGS = "--remap-path-prefix=$cargoHome=cargo" + [char]0x1f + "--remap-path-prefix=$root=mdm" + [char]0x1f + "-Ctarget-feature=+crt-static"
+  # The engine's browser-like connection (upstream issue 668) is built in releases only: BoringSSL
+  # from source, with CMake, NASM and libclang (bindgen finds it through LIBCLANG_PATH).
+  if (-not $env:LIBCLANG_PATH) {
+    $llvm = Join-Path $env:ProgramFiles "LLVM\bin"
+    if (-not (Test-Path (Join-Path $llvm "libclang.dll"))) {
+      throw "libclang.dll not found: install CMake, NASM and LLVM (winget install Kitware.CMake NASM.NASM LLVM.LLVM), or set LIBCLANG_PATH to its folder"
+    }
+    $env:LIBCLANG_PATH = $llvm
+  }
   try {
     # This checkout's workspace, whatever the current folder.
-    & cargo build --release --manifest-path (Join-Path $root "Cargo.toml") -p grabbit-app -p grabbit-nmhost -p grabbit-cli -p grabbit-mcp
+    & cargo build --release --manifest-path (Join-Path $root "Cargo.toml") -p grabbit-app -p grabbit-nmhost -p grabbit-cli -p grabbit-mcp --features grabbit-app/browser-connection
     if ($LASTEXITCODE) { throw "cargo build failed" }
   } finally {
     Remove-Item Env:CARGO_ENCODED_RUSTFLAGS
