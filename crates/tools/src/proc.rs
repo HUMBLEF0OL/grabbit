@@ -1341,6 +1341,26 @@ pub fn output_warned(
     name: &str,
     timeout: Duration,
 ) -> Result<(Vec<u8>, Vec<String>), ProcError> {
+    to_the_end(cmd, name, timeout).map(|(out, s)| (out, s.warnings()))
+}
+
+/// [`output`], with its last lines on stderr ([`Spawned::tail`]): what a tool says of its answer
+/// besides it (ffprobe: a length it only estimated).
+pub fn output_said(
+    cmd: Command,
+    name: &str,
+    timeout: Duration,
+) -> Result<(Vec<u8>, String), ProcError> {
+    to_the_end(cmd, name, timeout).map(|(out, s)| (out, s.tail()))
+}
+
+/// Run `cmd` to the end within `timeout` (killed on timeout): its stdout, and the helper, its
+/// stderr read to the end, when it ended well.
+fn to_the_end(
+    cmd: Command,
+    name: &str,
+    timeout: Duration,
+) -> Result<(Vec<u8>, Spawned), ProcError> {
     let mut s = spawn(cmd, name)?;
     let mut output = Output::read(s.child.stdout.take().expect("piped"), 64 * 1024);
     let deadline = Instant::now() + timeout;
@@ -1365,7 +1385,7 @@ pub fn output_warned(
     match end {
         Ended::Exited(status) if status.success() => {
             s.settle();
-            Ok((stdout, s.warnings()))
+            Ok((stdout, s))
         }
         // `failure` waits for the stderr reader's last lines.
         Ended::Exited(_) => Err(s.failure()),

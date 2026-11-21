@@ -637,6 +637,10 @@ Done since 1.0.1; ships in the next release.
 - ✅ A way of drawing that failed is tried again after a driver update or a while, and at the
   next start when Windows' own start slowed it (from upstream issue 1205); View → Draw with
   says since when and when.
+- ✅ Live recordings kept (from upstream issues 1450, 1491): a stop saves the recording as an
+  MP4, Resume never records over it, and the progress window shows Recording... with what has
+  been recorded and a Stop and save button. Upstream's follow-up (its open PR 1492) waits for
+  its merge there.
 
 ## Being worked on
 
