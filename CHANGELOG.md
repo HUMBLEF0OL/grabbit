@@ -13,7 +13,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ### Fixed
 
-- **Set it up works for Grabbit installed for everyone.** Installed in Program Files with **Set up browser integration** unticked, **Set it up** (Options → Browser extension, or Test browser integration) seemed to do nothing: it couldn't write its file into Program Files, and said so only in the log and in **Options → General → Test browser integration**. It now sets browser integration up for you with that file in your own data folder, which each start keeps up to date and uninstalling removes. When Set it up can't work, the window says why: while it runs, after it fails (point at the button for the reason), and for a portable copy or one started from inside a zip, which it never sets up, what to do instead.
+- **Set it up works for Grabbit installed for everyone.** Installed in Program Files with **Set up browser integration** unticked, **Set it up** (Options → Browser extension, or Test browser integration) seemed to do nothing: it couldn't write its file into Program Files, and said so only in the log and in **Options → General → Test browser integration**. It now sets browser integration up for you with that file in your own data folder, which each start keeps up to date and uninstalling removes (yours, the account that uninstalls). When Set it up can't work, the window says why: while it runs, after it fails (point at the button for the reason), and for a portable copy or one started from inside a zip, which it never sets up, what to do instead.
 
 ## [1.0.1] - 2026-11-20
 

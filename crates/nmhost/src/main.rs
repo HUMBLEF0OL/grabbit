@@ -965,12 +965,19 @@ fn repair() -> Result<(), String> {
                         )
                     }) =>
             {
-                let manifest = own_manifest(family, true)?;
-                reg_point("HKCU", key, &manifest)?;
-                println!(
-                    r"HKCU\{entry}: the user's own, written again at {}",
-                    manifest.display()
-                );
+                // It works as it is: a failure here (the file held by an antivirus) is said,
+                // not the repair's.
+                let named = win32::reg_string(false, &entry)
+                    .map(|v| mdm_ipc::browsers::registered_manifest(&v));
+                match own_manifest(family, true) {
+                    Ok(m) if named.as_deref() == Some(m.as_path()) => {}
+                    Ok(m) => match reg_point("HKCU", key, &m) {
+                        Ok(()) => println!(r"HKCU\{entry}: the user's own, now {}", m.display()),
+                        Err(e) => println!(r"HKCU\{entry}: left as it is: {e}"),
+                    },
+                    Err(e) => println!(r"HKCU\{entry}: the user's own left as it is: {e}"),
+                }
+                continue;
             }
             Repair::Keep => continue,
             Repair::Take => {
@@ -993,8 +1000,22 @@ fn repair() -> Result<(), String> {
 
 fn unregister(all_users: bool) -> Result<(), String> {
     let root = if all_users { "HKLM" } else { "HKCU" };
+    let exe = exe_dir()?;
+    let program = this_program()?;
+    // For one user, only this copy's: a manifest beside it, or the user's own naming it. Another
+    // copy's that works (one for everyone, set up by this user) stays.
+    let ours = |m: &std::path::Path| {
+        m.parent()
+            .is_some_and(|d| d.as_os_str().eq_ignore_ascii_case(exe.as_os_str()))
+            || Holder::of(m) == Holder::Alive(program.clone())
+    };
     for (key, _) in WINDOWS_HOST_KEYS {
-        let _ = reg(&["delete", &format!(r"{root}\{key}\{HOST_NAME}"), "/f"]);
+        let entry = format!(r"{key}\{HOST_NAME}");
+        let named = win32::reg_string(all_users, &entry)
+            .map(|v| mdm_ipc::browsers::registered_manifest(&v));
+        if all_users || named.as_deref().is_some_and(ours) {
+            let _ = reg(&["delete", &format!(r"{root}\{entry}"), "/f"]);
+        }
     }
     drop_original_entry(all_users);
     if let Some(id) = store_id() {
@@ -1005,13 +1026,24 @@ fn unregister(all_users: bool) -> Result<(), String> {
             "/reg:32",
         ]);
     }
-    // Beside this exe, and the user's own copies (`own_manifest`'s fallback).
-    let user_dir = (!all_users)
+    // Beside this exe, and the user's own copies (`own_manifest`'s fallback) naming this one.
+    let names = [
+        format!("{HOST_NAME}.json"),
+        format!("{HOST_NAME}.firefox.json"),
+    ];
+    for name in &names {
+        let _ = std::fs::remove_file(exe.join(name));
+    }
+    if let Some(dir) = (!all_users)
         .then(mdm_ipc::browsers::user_manifest_dir)
-        .flatten();
-    for dir in std::iter::once(exe_dir()?).chain(user_dir) {
-        let _ = std::fs::remove_file(dir.join(format!("{HOST_NAME}.json")));
-        let _ = std::fs::remove_file(dir.join(format!("{HOST_NAME}.firefox.json")));
+        .flatten()
+    {
+        for name in &names {
+            let m = dir.join(name);
+            if Holder::of(&m) == Holder::Alive(program.clone()) {
+                let _ = std::fs::remove_file(m);
+            }
+        }
     }
     println!("unregistered {HOST_NAME}");
     Ok(())

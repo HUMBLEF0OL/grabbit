@@ -234,14 +234,19 @@ begin
     end;
     if RegQueryStringValue(HKCU, 'Software\Classes\Grabbit.Magnet\shell\open\command', '', Value) and (Pos(Lowercase(ExpandConstant('{app}\{#AppExe}')), Lowercase(Value)) > 0) then
       RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\Grabbit.Magnet');
-    { The keys of mdm_ipc::browsers::WINDOWS_HOST_KEYS. }
-    ForgetUserHost('Software\Google\Chrome\NativeMessagingHosts');
-    ForgetUserHost('Software\Chromium\NativeMessagingHosts');
-    ForgetUserHost('Software\Microsoft\Edge\NativeMessagingHosts');
-    ForgetUserHost('Software\BraveSoftware\Brave-Browser\NativeMessagingHosts');
-    ForgetUserHost('Software\Mozilla\NativeMessagingHosts');
-    DeleteFile(ExpandConstant('{userappdata}\grabbit\com.grabbit.host.json'));
-    DeleteFile(ExpandConstant('{userappdata}\grabbit\com.grabbit.host.firefox.json'));
+    { Installed for everyone only: a copy installed for one user writes beside itself, and its
+      own --unregister removes only what is its own, so another copy's stays. The keys of
+      mdm_ipc::browsers::WINDOWS_HOST_KEYS. }
+    if IsAdminInstallMode then
+    begin
+      ForgetUserHost('Software\Google\Chrome\NativeMessagingHosts');
+      ForgetUserHost('Software\Chromium\NativeMessagingHosts');
+      ForgetUserHost('Software\Microsoft\Edge\NativeMessagingHosts');
+      ForgetUserHost('Software\BraveSoftware\Brave-Browser\NativeMessagingHosts');
+      ForgetUserHost('Software\Mozilla\NativeMessagingHosts');
+      DeleteFile(ExpandConstant('{userappdata}\grabbit\com.grabbit.host.json'));
+      DeleteFile(ExpandConstant('{userappdata}\grabbit\com.grabbit.host.firefox.json'));
+    end;
     RemoveData := False;
     if DirExists(Data) and not UninstallSilent() then
       RemoveData := MsgBox(CustomMessage('KeepData'), mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
