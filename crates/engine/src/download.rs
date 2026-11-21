@@ -113,6 +113,16 @@ pub struct Options {
     /// bot checks (Cloudflare, seen on a public PDF), while MDM's own passes. Set when
     /// `user_agent` is the browser's. A later 403 is left to the download.
     pub agent_fallback: Option<String>,
+    /// The download's last try at a site whose bot check refused it (`refused_as_a_program`)
+    /// and the browser-like connection too (upstream issue 668): its first request once more,
+    /// on Grabbit's own connection, with this User-Agent instead (upstream issue 1422).
+    /// Grabbit's own name (`agent::OWN_USER_AGENT`): SourceForge's check lets programs that say
+    /// what they are through, and refuses whatever claims to be a browser without connecting
+    /// like one. The site is then remembered for the session (`agent::own_for`): its next
+    /// downloads ask this way at once. None: no such try (the download's User-Agent is one the
+    /// user chose, or a stream's that must stay its resolver's); a User-Agent in the request's
+    /// own headers is the caller's choice too, never replaced.
+    pub own_agent: Option<String>,
     /// From the browser: the address its own download of this file ended at, its redirects
     /// followed. When the address asked for is refused before any byte (`link_refused`: a
     /// one-time link the browser already spent, a token bound to its session, a site that
@@ -257,6 +267,7 @@ impl Default for Options {
             user_agent: crate::agent::automatic(),
             automatic_agent: true,
             agent_fallback: None,
+            own_agent: None,
             browser_final: None,
             save_interval: Duration::from_secs(2),
             speed_limit: None,
@@ -883,6 +894,9 @@ pub struct KeptAnswer {
     /// The browser-like connection it came through, when only that one got past the site's
     /// bot check (upstream issue 668): the download goes on with it.
     browser: Option<Arc<crate::browserlike::Browser>>,
+    /// The User-Agent it got through with, when only Grabbit's own name got past the site's bot
+    /// check (upstream issue 1422): the download goes on under it.
+    own_agent: Option<String>,
     /// The body's first bytes, read already to tell a web page from the file (`not_a_page`):
     /// they come first. Empty when none were read.
     first: Bytes,
@@ -938,7 +952,14 @@ pub async fn probe_kept(
         None => (url.clone(), headers),
     };
     let seen = Arc::new(crate::server::ServerSeen::default());
-    let client = client(opts, &target, &as_get, &seen)?;
+    // Upstream issue 1422: Grabbit's own name, when the site's bot check let only it through
+    // earlier this session: asked so at once; otherwise the last try, after the browser-like
+    // connection.
+    let own = own_agent(opts, &headers).filter(|_| unlocked.is_none());
+    let remembered = own.clone().filter(|_| crate::agent::own_for(&target));
+    let as_own = remembered.clone().map(|own| speaking_own(opts, own));
+    let first_opts = as_own.as_ref().unwrap_or(opts);
+    let client = client(first_opts, &target, &as_get, &seen)?;
     let expects = expects_other_file(
         opts.expected_type.as_deref(),
         opts.expected_size,
@@ -954,13 +975,13 @@ pub async fn probe_kept(
         target.clone(),
         headers.clone(),
         opts.post.as_ref(),
-        opts.site_agent(),
+        first_opts.site_agent(),
         expects,
         &CancellationToken::new(),
     )
     .await
     {
-        Err(e) if agent_refused(&e) && opts.agent_fallback.is_some() => {
+        Err(e) if agent_refused(&e) && first_opts.agent_fallback.is_some() => {
             let mut plain = opts.clone();
             plain.user_agent = opts.agent_fallback.clone().unwrap_or_default();
             let client = self::client(&plain, &target, &as_get, &seen)?;
@@ -978,6 +999,7 @@ pub async fn probe_kept(
         }
         asked => (client, asked),
     };
+    let (mut client, mut own_agent) = (client, remembered);
     let (head, mut body, browser, headers, took) = match asked {
         Ok((resp, headers, took)) => {
             seen.answered(&resp);
@@ -987,15 +1009,42 @@ pub async fn probe_kept(
         // (`refused_as_a_program`): looked at once more the way a browser connects, its answer
         // kept for the download (which then asks no more).
         Err(e) if refused_as_a_program(&e) && unlocked.is_none() && opts.post.is_none() => {
+            if own_agent.take().is_some() {
+                // Remembered, but no longer let through: learnt again next time.
+                crate::agent::forget_own(&asked_at);
+            }
             let cancel = CancellationToken::new();
-            let (b, (head, body, headers, took)) =
-                browser_ask(opts, &asked_at, &asked_with, expects, &cancel)
-                    .await
-                    .map_err(|other| match other {
-                        Error::Cancelled | Error::Adapter(_) => other,
-                        _ => e,
-                    })?;
-            (head, body, Some(b), headers, took)
+            match browser_ask(opts, &asked_at, &asked_with, expects, &cancel).await {
+                Ok((b, (head, body, headers, took))) => (head, body, Some(b), headers, took),
+                Err(other @ (Error::Cancelled | Error::Adapter(_))) => return Err(other),
+                // Upstream issue 1422: refused that way too; once more under Grabbit's own
+                // name, the last try.
+                Err(_) => match own.filter(|_| as_own.is_none()) {
+                    Some(own) => {
+                        let o = speaking_own(opts, own.clone());
+                        client = self::client(&o, &asked_at, &as_get, &seen)?;
+                        let (resp, headers, took) = get(
+                            &client,
+                            asked_at.clone(),
+                            asked_with,
+                            None,
+                            o.site_agent(),
+                            expects,
+                            &cancel,
+                        )
+                        .await
+                        .map_err(|other| match other {
+                            Error::Cancelled | Error::Adapter(_) => other,
+                            _ => e,
+                        })?;
+                        crate::agent::remember_own(&asked_at);
+                        own_agent = Some(own);
+                        seen.answered(&resp);
+                        (Head::of(&resp), Body::Http(resp), None, headers, took)
+                    }
+                    None => return Err(e),
+                },
+            }
         }
         Err(e) => return Err(e),
     };
@@ -1035,6 +1084,7 @@ pub async fn probe_kept(
         head,
         body,
         browser,
+        own_agent,
         first,
         headers,
         took,
@@ -1950,6 +2000,9 @@ async fn run_fresh(
     let mut opts = opts;
     // The first request had to give up the browser's User-Agent (#372).
     let mut asked_as_mdm = false;
+    // It went under Grabbit's own name, the only one the site's bot check let through
+    // (upstream issue 1422).
+    let mut asked_own = false;
     shared.limiter.set(opts.speed_limit);
     let (shared, cancel) = (&shared, &cancel);
     shared.conn(0, |_| {});
@@ -1985,6 +2038,12 @@ async fn run_fresh(
             let _ = shared.seen.set(k.seen);
             first = k.first;
             browser = k.browser;
+            // The look got through under Grabbit's own name (upstream issue 1422): so does the
+            // rest.
+            if let Some(own) = k.own_agent {
+                opts = speaking_own(&opts, own);
+                asked_own = true;
+            }
             (k.as_get, k.client, (k.head, k.body), k.headers, k.took)
         }
         None => {
@@ -2005,8 +2064,22 @@ async fn run_fresh(
             let as_get = AsGet::default();
             let seen = shared.seen.get_or_init(Default::default).clone();
             // The download's own User-Agent, which the browser-like connection carries
-            // (upstream issue 668), even when Grabbit's connection had to give it up (#372).
+            // (upstream issue 668), even when Grabbit's connection had to give it up (#372,
+            // upstream issue 1422).
             let given_agent = (opts.user_agent.clone(), opts.automatic_agent);
+            // Upstream issue 1422: a site whose bot check let only Grabbit's own name through
+            // earlier this session is asked so at once, not refused twice more first.
+            let own = own_agent(&opts, &asked).filter(|_| unlocked.is_none());
+            if let Some(own) = own.clone().filter(|_| crate::agent::own_for(&target)) {
+                shared.event(format!(
+                    "{}: its bot check let only Grabbit's own name through earlier; asking so",
+                    target.host_str().unwrap_or("?"),
+                ));
+                opts = speaking_own(&opts, own);
+                asked_own = true;
+            }
+            // Its own name tried already: not once more after the browser-like connection.
+            let own_tried = asked_own;
             let as_given = opts.clone();
             let ask = FirstAsk {
                 as_get: &as_get,
@@ -2055,14 +2128,34 @@ async fn run_fresh(
                     (as_get, client0, (head, Body::Http(resp)), headers, ttfb)
                 }
                 Err(e) if refused_as_a_program(&e) && unlocked.is_none() && opts.post.is_none() => {
-                    if asked_as_mdm {
+                    if asked_as_mdm || asked_own {
                         (opts.user_agent, opts.automatic_agent) = given_agent;
-                        asked_as_mdm = false;
+                        (asked_as_mdm, asked_own) = (false, false);
                     }
-                    let (b, head, body, headers, ttfb) =
-                        browser_first(&opts, &target, &asked, e, expects, shared, cancel).await?;
-                    browser = Some(b);
-                    (as_get, client0, (head, body), headers, ttfb)
+                    if own_tried {
+                        // Remembered, but no longer let through: learnt again next time.
+                        crate::agent::forget_own(&target);
+                    }
+                    match browser_first(&opts, &target, &asked, e, expects, shared, cancel).await {
+                        Ok((b, head, body, headers, ttfb)) => {
+                            browser = Some(b);
+                            (as_get, client0, (head, body), headers, ttfb)
+                        }
+                        // Upstream issue 1422: refused the way a browser connects too; once more
+                        // under Grabbit's own name, the last try.
+                        Err(refused) if refused_as_a_program(&refused) && !own_tried => {
+                            let Some(own) = own else {
+                                return Err(refused);
+                            };
+                            let (o, client1, ((resp, headers), ttfb)) =
+                                ask.as_own(&opts, own, &target, &asked, refused).await?;
+                            (opts, asked_own) = (o, true);
+                            seen.answered(&resp);
+                            let head = Head::of(&resp);
+                            (as_get, client1, (head, Body::Http(resp)), headers, ttfb)
+                        }
+                        Err(e) => return Err(e),
+                    }
                 }
                 Err(e) => return Err(e),
             }
@@ -2192,6 +2285,7 @@ async fn run_fresh(
         saved.checksum = checksum.clone();
         saved.final_get = opts.post.is_some() && post.is_none();
         saved.asked_as_mdm = asked_as_mdm;
+        saved.asked_as_own = asked_own;
         saved.browser_like = browser.is_some();
         let ctx = Arc::new(Ctx {
             client: client0.clone(),
@@ -2484,6 +2578,15 @@ async fn run_resume(
         && let Some(agent) = opts.agent_fallback.take()
     {
         opts.user_agent = agent;
+    }
+    // Only Grabbit's own name got past the site's bot check (upstream issue 1422), for this
+    // download or for its site earlier this session: it goes on under it.
+    if !saved.browser_like
+        && (saved.asked_as_own || crate::agent::own_for(&saved.url))
+        && let Some(own) = own_agent(&opts, &headers)
+    {
+        shared.event("Going on under Grabbit's own name, as the site's bot check asked");
+        opts = speaking_own(&opts, own);
     }
     shared.limiter.set(opts.speed_limit);
     let bad = |what: &str| Error::BadState(format!("{}: {what}", state_file.display()));
@@ -3095,6 +3198,45 @@ impl FirstAsk<'_> {
             first => Ok((client0, first, false)),
         }
     }
+
+    /// Upstream issue 1422: the first request once more, after the site's bot check refused
+    /// the download's User-Agent and the browser-like connection too (`refused`, the error told
+    /// if this fails as well): on Grabbit's own connection under `own` (`Options::own_agent`),
+    /// at the same address with the same headers (cookies, Referer, range), once. With the
+    /// answer, the options and client the download goes on with; the site is remembered for
+    /// the session.
+    async fn as_own(
+        &self,
+        opts: &Options,
+        own: String,
+        url: &Url,
+        headers: &HeaderMap,
+        refused: Error,
+    ) -> Result<(Options, Client, ((Response, HeaderMap), Duration)), Error> {
+        let (shared, cancel) = (self.shared, self.cancel);
+        let host = url.host_str().unwrap_or("?");
+        shared.event(format!(
+            "{host}: refused the way a browser connects too; asking once more as Grabbit \
+             itself ({own})"
+        ));
+        let opts = speaking_own(opts, own);
+        let client = client(&opts, url, self.as_get, self.seen)?;
+        match first_get(&client, url, headers, &opts, self.expects, shared, cancel).await {
+            Ok(answer) => {
+                crate::agent::remember_own(url);
+                shared.event(format!(
+                    "{host}: let Grabbit through under its own name; downloading so \
+                     (remembered for this session)"
+                ));
+                Ok((opts, client, answer))
+            }
+            Err(e @ (Error::Cancelled | Error::Adapter(_))) => Err(e),
+            Err(e) => {
+                shared.event(format!("{host}, asked as Grabbit: {e}"));
+                Err(refused)
+            }
+        }
+    }
 }
 
 /// A plain 403, which a browser's User-Agent may have brought on (#372). A site's bot check
@@ -3109,6 +3251,24 @@ fn agent_refused(e: &Error) -> bool {
 /// such a refusal (FileHippo's, #630).
 fn refused_as_a_program(e: &Error) -> bool {
     matches!(e, Error::BotCheck) || matches!(e, Error::Status(s) if s.as_u16() == 412)
+}
+
+/// The User-Agent a download may name itself with at a site whose bot check refused it
+/// (upstream issue 1422, `Options::own_agent`): never in place of one the request's own headers
+/// carry (the caller's choice), nor when it is the download's already.
+fn own_agent(opts: &Options, headers: &HeaderMap) -> Option<String> {
+    opts.own_agent
+        .clone()
+        .filter(|own| *own != opts.user_agent && !headers.contains_key(header::USER_AGENT))
+}
+
+/// `opts` speaking under Grabbit's own name `own` (upstream issue 1422): no other User-Agent is
+/// tried after it.
+fn speaking_own(opts: &Options, own: String) -> Options {
+    let mut opts = opts.clone();
+    opts.speak_as(own);
+    opts.agent_fallback = None;
+    opts
 }
 
 /// Upstream issue 668: the first request once more, after the site refused Grabbit's own
