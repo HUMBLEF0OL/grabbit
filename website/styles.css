@@ -45,7 +45,7 @@
   --surface: var(--paper);
   --bench-idm: #8a8a93;
   --bench-mdm: #0c704d;
-  --bench-startup: #d4d4d8;
+  --bench-startup: #a1a1aa;
   --bench-transfer: #52525b;
   --bench-finish: #8a8a93;
 }
@@ -58,7 +58,7 @@
     --shadow-sheet: inset 0 1px 0 rgb(255 255 255 / .07), 0 0 0 1px #2b2b30;
     --shadow-lift: 0 40px 80px -30px rgb(0 0 0 / .7), 0 2px 6px rgb(0 0 0 / .4);
     --shadow-card: 0 40px 80px -30px rgb(0 0 0 / .7), 0 2px 6px rgb(0 0 0 / .4);
-    --bench-idm: #8e8e98; --bench-mdm: #3ecf8e; --bench-startup: #34343a; --bench-transfer: #b4b4bc; --bench-finish: #71717b;
+    --bench-idm: #8e8e98; --bench-mdm: #3ecf8e; --bench-startup: #5c5c66; --bench-transfer: #b4b4bc; --bench-finish: #71717b;
   }
 }
 :root[data-theme="dark"] {
@@ -69,7 +69,7 @@
   --shadow-sheet: inset 0 1px 0 rgb(255 255 255 / .07), 0 0 0 1px #2b2b30;
   --shadow-lift: 0 40px 80px -30px rgb(0 0 0 / .7), 0 2px 6px rgb(0 0 0 / .4);
   --shadow-card: 0 40px 80px -30px rgb(0 0 0 / .7), 0 2px 6px rgb(0 0 0 / .4);
-  --bench-idm: #8e8e98; --bench-mdm: #3ecf8e; --bench-startup: #34343a; --bench-transfer: #b4b4bc; --bench-finish: #71717b;
+  --bench-idm: #8e8e98; --bench-mdm: #3ecf8e; --bench-startup: #5c5c66; --bench-transfer: #b4b4bc; --bench-finish: #71717b;
 }
 
 /* Screenshots and icons come in a day and a night version. */
@@ -160,7 +160,7 @@ dt, .doc-nav p, th[scope="col"] {
 .split { position: relative; display: inline-flex; }
 .split-main { border-start-end-radius: 0; border-end-end-radius: 0; }
 .split-more { position: relative; }
-.split-more > summary { list-style: none; height: 46px; width: 46px; padding: 0; border-start-start-radius: 0; border-end-start-radius: 0; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .18), inset 1px 0 0 rgba(0, 0, 0, .22), 0 0 0 1.5px rgba(4, 32, 10, .55); }
+.split-more > summary { list-style: none; height: 46px; width: 46px; padding: 0; border-start-start-radius: 0; border-end-start-radius: 0; box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .18), inset 1px 0 0 rgba(0, 0, 0, .22), 0 0 0 1.5px rgb(0 0 0 / .45); }
 .split-more > summary::-webkit-details-marker { display: none; }
 .split-more > summary svg { width: 18px; height: 18px; transition: transform .2s ease; }
 .split-more[open] > summary svg { transform: rotate(180deg); }
@@ -468,7 +468,7 @@ main > .sec:last-child { padding-bottom: var(--gap-section); }
 .prose pre { padding: 16px 18px; overflow-x: auto; border-radius: 8px; background: var(--paper-2); box-shadow: inset 0 0 0 1px var(--line); line-height: 1.55; direction: ltr; text-align: left; }
 .prose pre code { padding: 0; background: none; box-shadow: none; white-space: pre; }
 .prose kbd { display: inline-block; padding: .05em .45em; border-radius: 4px; background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink-3), inset 0 -2px 0 var(--ink-3); font-size: .82em; line-height: 1.5; }
-.prose img { border-radius: 8px; box-shadow: 0 1px 0 var(--line), 0 10px 24px -14px rgba(4, 18, 52, .45); }
+.prose img { border-radius: 8px; box-shadow: 0 1px 0 var(--line), 0 10px 24px -14px rgb(24 24 27 / .45); }
 .prose figure { margin-inline: 0; }
 /* The help pictures (tools/shots/): the real window or the part that matters, at its real size,
    never upscaled; the caption under it in fine print. Width and height come with every picture,
@@ -793,6 +793,8 @@ html.lb-on { overflow: hidden; }
 .decl tbody tr.decl-ours > * { background: color-mix(in srgb, var(--go) 10%, var(--paper)); color: var(--ink); border-top: 2px solid var(--go); border-bottom: 2px solid var(--go); }
 .decl tbody tr.decl-ours:hover > * { background: color-mix(in srgb, var(--go) 16%, var(--paper)); }
 .decl tbody tr.decl-ours th { font-size: 18px; }
+/* On the green row's tint, the small note takes ink-2 so it keeps AA at rest and on hover. */
+.decl tbody tr.decl-ours td small { color: var(--ink-2); }
 .decl tfoot :is(th, td) { border-top: 1.5px solid var(--ink); padding-block: 12px 16px; font-size: 13.5px; color: var(--ink-2); }
 .decl tfoot th { font-size: 12px; font-weight: 750; letter-spacing: .045em; text-transform: uppercase; color: var(--ink-3); }
 .decl tfoot b { margin-inline-end: 3px; font-size: 22px; font-weight: 800; color: var(--ink); }
