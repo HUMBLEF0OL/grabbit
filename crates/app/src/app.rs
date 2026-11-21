@@ -10837,6 +10837,20 @@ impl App {
         let minimized =
             !self.hidden && windows <= 1 && ctx.input(|i| i.viewport().minimized == Some(true));
         crate::crash::hidden(crate::crash::out_of_sight(self.hidden, minimized, windows));
+        // Out of sight (started with Windows, in the notification area, minimized) `ui` doesn't
+        // run, and the tray icon's menu is all there is to see: it follows the mode from here
+        // too. Both calls only read and swap what is cached (lookwatch's last look, an atomic).
+        if !self.headless && (self.hidden || minimized) {
+            if crate::theme::update(
+                self.settings.dark_mode_support,
+                self.settings.always_dark,
+                ctx,
+            ) {
+                // `ui` applies the mode and the caption when the window shows again.
+                self.caption_set = false;
+            }
+            crate::win32::menus_dark(crate::theme::dark_surface());
+        }
         crate::crash::armed();
         crate::crash::step(crate::crash::Step::Commands);
         let mut handled = false;
@@ -10985,6 +10999,8 @@ impl App {
                 crate::theme::apply_mode(&ctx);
                 self.caption_set =
                     crate::win32::caption_dark(crate::MAIN_TITLE, crate::theme::dark_surface());
+                // The menus Windows draws (the tray icon's, the window menu) too (upstream 682).
+                crate::win32::menus_dark(crate::theme::dark_surface());
             }
             if changed {
                 ctx.request_repaint();
