@@ -4259,6 +4259,13 @@ impl App {
         item.description = c.description;
         item.login = c.login;
         item.set_referer(c.referer);
+        // Paused a moment before and still writing to a slow disk (upstream issue 1328): its
+        // last save comes first, so it doesn't write over the state rewritten below. At once
+        // when nothing settles there (the usual case); upstream moved these rewrites off the
+        // window's thread (its `Deleter::rewrite`), which the fork hasn't taken yet.
+        if c.direct.is_some() || c.address.is_some() {
+            mdm_engine::naming::wait_settled(&item.dest);
+        }
         // "Through …" changed (#44): the next start goes the new way. The service's link is
         // dropped from the resume state: directly, it continues from the host's own address;
         // through the account, from a new link the service gives. The size and validators
@@ -10992,6 +10999,16 @@ impl App {
             d.checked_sub(SESSION_END_LIST).unwrap_or(d)
         });
         let unsaved = self.wait_stopped(&stopping, saves_by);
+        // Those paused a moment before, still writing to a slow disk (upstream issue 1328):
+        // their rows say they are stopped already.
+        let settling = mdm_engine::naming::wait_all_settled(saves_by);
+        if settling > 0 {
+            tracing::warn!(
+                "{settling} paused download(s) still saving after {} ms: those resume from their \
+                 last save",
+                began.elapsed().as_millis()
+            );
+        }
         match (stopping.len(), unsaved) {
             (0, _) => {}
             (n, 0) => tracing::info!(

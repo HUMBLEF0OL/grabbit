@@ -108,6 +108,9 @@ const LET_GO: Duration = Duration::from_secs(2);
 /// A file already gone is no failure, and only the finished file's are told: the rest is the
 /// download's own working data.
 fn delete_one(mut d: Doomed, remove: &dyn Fn(&Path) -> io::Result<()>) -> Option<Failure> {
+    // Paused a moment before and still writing to a slow disk (upstream issue 1328): its last
+    // write and its resume state come first, so neither comes back after the delete.
+    naming::wait_settled(&d.place);
     let hold = d.hold.take().or_else(|| {
         let until = Instant::now() + LET_GO;
         loop {
