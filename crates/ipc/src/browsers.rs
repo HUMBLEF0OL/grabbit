@@ -150,6 +150,23 @@ pub fn registered_manifest(value: &str) -> PathBuf {
     PathBuf::from(value.trim().trim_matches('"'))
 }
 
+/// Where a registration for one user keeps its manifests when the program's folder can't be
+/// written (Grabbit installed for everyone, set up later by the user): the profile's
+/// `%APPDATA%\grabbit`, never a test's or screenshot's GRABBIT_DATA_DIR, which would point the
+/// person's browsers at a temporary folder.
+pub fn user_manifest_dir() -> Option<PathBuf> {
+    dirs::data_dir().map(|d| d.join(crate::DATA_FOLDER))
+}
+
+/// Whether `manifest` is one of the user's own ([`user_manifest_dir`]), not one beside a program.
+pub fn is_user_manifest(manifest: &Path) -> bool {
+    user_manifest_dir().is_some_and(|dir| {
+        manifest
+            .parent()
+            .is_some_and(|p| p.as_os_str().eq_ignore_ascii_case(dir.as_os_str()))
+    })
+}
+
 /// What a browser finds where it looks for the native host (upstream issue 818).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Holder {
@@ -315,6 +332,23 @@ fn full_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The user's own manifests are those directly in the profile's data folder (any case), not
+    /// one beside a program nor one in a folder under it; a test's GRABBIT_DATA_DIR isn't it.
+    #[test]
+    fn the_users_own_manifest_is_known_by_its_folder() {
+        let dir = user_manifest_dir().expect("a profile's data folder");
+        assert!(dir.ends_with(crate::DATA_FOLDER));
+        assert!(is_user_manifest(&dir.join("com.grabbit.host.json")));
+        let upper = PathBuf::from(dir.display().to_string().to_uppercase());
+        assert!(is_user_manifest(&upper.join("com.grabbit.host.json")));
+        assert!(!is_user_manifest(
+            &dir.join("sub").join("com.grabbit.host.json")
+        ));
+        assert!(!is_user_manifest(Path::new(
+            r"C:\Program Files\Grabbit\com.grabbit.host.json"
+        )));
+    }
 
     /// #41: Helium installs a chrome.exe; only Chrome's folder makes it Google Chrome.
     #[test]

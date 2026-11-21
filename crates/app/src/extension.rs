@@ -364,7 +364,7 @@ impl Extension {
                 winui::buttons_to_right(&p, W - 18.0, 8.0, &[("Set it up", 110.0)], 180.0)[0];
             // While it runs, then why it failed if it did (the full reason on the button's
             // hover; Options → General → Test browser integration lists it too).
-            let failed = register_error();
+            let failed = SET_UP_ERROR.lock().ok().and_then(|e| e.clone());
             let said = if SETTING_UP.load(Ordering::Acquire) {
                 // i18n: in the browser extension's window, while Set it up runs
                 crate::i18n::t("Setting up browser integration...")
@@ -593,6 +593,9 @@ pub fn repair_at_start() {
 static SET_UP_DONE: AtomicU64 = AtomicU64::new(0);
 /// A Set it up is running (a second press waits for it).
 static SETTING_UP: AtomicBool = AtomicBool::new(false);
+/// Why the last Set it up failed (None: none failed). Its own: a start's `--repair` that failed
+/// isn't the button's failure (REGISTER_ERROR keeps either, for Test browser integration).
+static SET_UP_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 /// How long the native host's `--register` has (it writes a few files, or registry keys).
 pub(crate) const SET_UP_LIMIT: Duration = Duration::from_secs(20);
 
@@ -609,7 +612,11 @@ pub fn set_up(ctx: &egui::Context) {
     let started = std::thread::Builder::new()
         .name("set-up".into())
         .spawn(move || {
-            registered_as(&run_host("--register", SET_UP_LIMIT));
+            let result = run_host("--register", SET_UP_LIMIT);
+            registered_as(&result);
+            if let Ok(mut last) = SET_UP_ERROR.lock() {
+                *last = result.err();
+            }
             SETTING_UP.store(false, Ordering::Release);
             SET_UP_DONE.fetch_add(1, Ordering::AcqRel);
             ctx.request_repaint();
@@ -686,7 +693,12 @@ pub fn checks(settings: &crate::settings::Settings) -> Vec<Check> {
         }
         Registration::Gone(manifest) => {
             tracing::warn!("browser integration: {} is gone", manifest.display());
-            let folder = manifest.parent().unwrap_or(manifest);
+            // The copy's folder; the user's own manifest (in the data folder, no copy's) as it is.
+            let folder = if mdm_ipc::browsers::is_user_manifest(manifest) {
+                manifest
+            } else {
+                manifest.parent().unwrap_or(manifest)
+            };
             Check {
                 ok: false,
                 // i18n: a check of Test browser integration: the browsers are pointed at a copy of Grabbit that was deleted (often one started from inside a zip); that copy's folder shows on the line under it

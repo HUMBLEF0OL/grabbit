@@ -196,6 +196,17 @@ begin
     RegDeleteKeyIncludingSubkeys(HKA, Key);
 end;
 
+{ This user's browser entry for the native host, when it names the user's own manifest in the
+  data folder (Set it up for a copy installed for everyone, which can't write beside it): the
+  uninstall for everyone (--unregister --all-users) clears the computer's entries only. }
+procedure ForgetUserHost(Key: String);
+var
+  Value: String;
+begin
+  if RegQueryStringValue(HKCU, Key + '\com.grabbit.host', '', Value) and (Pos(Lowercase(ExpandConstant('{userappdata}\grabbit\')), Lowercase(Value)) = 1) then
+    RegDeleteKeyIncludingSubkeys(HKCU, Key + '\com.grabbit.host');
+end;
+
 { Asked before the files go (the sign-ins are removed by MDM itself), the list and settings
   removed after. A silent uninstall keeps both. }
 var
@@ -223,6 +234,14 @@ begin
     end;
     if RegQueryStringValue(HKCU, 'Software\Classes\Grabbit.Magnet\shell\open\command', '', Value) and (Pos(Lowercase(ExpandConstant('{app}\{#AppExe}')), Lowercase(Value)) > 0) then
       RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\Grabbit.Magnet');
+    { The keys of mdm_ipc::browsers::WINDOWS_HOST_KEYS. }
+    ForgetUserHost('Software\Google\Chrome\NativeMessagingHosts');
+    ForgetUserHost('Software\Chromium\NativeMessagingHosts');
+    ForgetUserHost('Software\Microsoft\Edge\NativeMessagingHosts');
+    ForgetUserHost('Software\BraveSoftware\Brave-Browser\NativeMessagingHosts');
+    ForgetUserHost('Software\Mozilla\NativeMessagingHosts');
+    DeleteFile(ExpandConstant('{userappdata}\grabbit\com.grabbit.host.json'));
+    DeleteFile(ExpandConstant('{userappdata}\grabbit\com.grabbit.host.firefox.json'));
     RemoveData := False;
     if DirExists(Data) and not UninstallSilent() then
       RemoveData := MsgBox(CustomMessage('KeepData'), mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;

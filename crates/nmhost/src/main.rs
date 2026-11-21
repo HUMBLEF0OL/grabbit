@@ -852,7 +852,7 @@ fn own_manifest(family: Family, per_user: bool) -> Result<PathBuf, String> {
         ),
     };
     let fallback = per_user
-        .then(mdm_ipc::data_dir)
+        .then(mdm_ipc::browsers::user_manifest_dir)
         .flatten()
         .map(|d| d.join(&name));
     place_manifest(&exe_dir()?.join(&name), fallback.as_deref(), &value)
@@ -949,10 +949,29 @@ fn repair() -> Result<(), String> {
             .map(|v| Holder::of(&mdm_ipc::browsers::registered_manifest(&v)))
     };
     let mut repaired = 0;
+    let program = this_program()?;
     for (key, family) in WINDOWS_HOST_KEYS {
         let entry = format!(r"{key}\{HOST_NAME}");
         let user = holder(false, &entry);
         match mdm_ipc::browsers::windows_repair(user.as_ref(), holder(true, &entry).as_ref()) {
+            // The user's own manifest for this copy (Set it up for one installed for everyone):
+            // kept as this version writes it (a new extension ID), as the setup does beside the
+            // program; it would otherwise hide a newer one of the computer's.
+            Repair::Keep
+                if user == Some(Holder::Alive(program.clone()))
+                    && win32::reg_string(false, &entry).is_some_and(|v| {
+                        mdm_ipc::browsers::is_user_manifest(
+                            &mdm_ipc::browsers::registered_manifest(&v),
+                        )
+                    }) =>
+            {
+                let manifest = own_manifest(family, true)?;
+                reg_point("HKCU", key, &manifest)?;
+                println!(
+                    r"HKCU\{entry}: the user's own, written again at {}",
+                    manifest.display()
+                );
+            }
             Repair::Keep => continue,
             Repair::Take => {
                 let manifest = own_manifest(family, true)?;
@@ -987,7 +1006,9 @@ fn unregister(all_users: bool) -> Result<(), String> {
         ]);
     }
     // Beside this exe, and the user's own copies (`own_manifest`'s fallback).
-    let user_dir = (!all_users).then(mdm_ipc::data_dir).flatten();
+    let user_dir = (!all_users)
+        .then(mdm_ipc::browsers::user_manifest_dir)
+        .flatten();
     for dir in std::iter::once(exe_dir()?).chain(user_dir) {
         let _ = std::fs::remove_file(dir.join(format!("{HOST_NAME}.json")));
         let _ = std::fs::remove_file(dir.join(format!("{HOST_NAME}.firefox.json")));
