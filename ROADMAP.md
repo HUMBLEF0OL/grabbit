@@ -652,6 +652,11 @@ Done since 1.0.1; ships in the next release.
 - ✅ A DNS that never answers is "no such host" (a lookup limited to nine tenths of the connect
   timeout), and a slow disk's next flush is expected by the bytes waiting, not the seconds since
   the last one (from upstream issue 782); the fault tests ask a DNS server of their own.
+- ✅ Alt+click past a bot check (from upstream issue 1494): the extension follows an Alt-clicked
+  link as a plain click in every browser, so a site's check runs in the tab and the download
+  after it stays the browser's (a minute for the link's own page); the browser-like connection
+  names the browser's own version in `sec-ch-ua`, sends Chrome's HTTP/2 weight and
+  Accept-Encoding, and one User-Agent.
 
 ## Being worked on
 

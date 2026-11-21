@@ -16,7 +16,7 @@
 // The cases (per browser): link (a .zip link, throttled and not), ask (Firefox set to ask what to
 // do with each new type, as Waterfox is: caught before its dialog, #208), cookie (cookies and referrer
 // forwarded), names (Content-Disposition), redirect, leadon (a page going to the file by script, #374), form (POST, 303), alt (Alt+click leaves it
-// to the browser), opened (a PDF or MP3 the browser would show or play), spot (the video button
+// to the browser: a link, a bot check's page that runs its script first, upstream issue 1494), opened (a PDF or MP3 the browser would show or play), spot (the video button
 // clear of the page's controls, #421), preview (the video button kept over a hover-to-play
 // preview the page stopped as the pointer went to it, #503), steady (the video button keeping one place over
 // a preview that grows and shows its own buttons while hovered, #560), csp (the video button
@@ -1580,32 +1580,46 @@ const CASES = {
     return `posted again with token=abc (${posts.length} request(s)); 303: ${seen.map((e) => `${e.method} ${e.path.split("/")[1]} ${e.status}`).join(", ")}`;
   },
 
-  // Alt+click: the browser keeps the download, MDM gets nothing.
+  // Alt+click: the browser keeps the download, MDM gets nothing. The extension stops the
+  // browser's own Alt+click (Chromium's save of the link without opening it) and follows the
+  // link as a plain click, so its page opens in the tab (upstream issue 1494). A link to the file,
+  // and one to a page behind a bot check whose script must run first (the lab's js_challenge:
+  // "Just a moment...", a cookie set and the address loaded again 3 s later, then the file).
   async alt(t) {
-    const file = `e2e-alt-${t.name}.zip`;
-    const p = `/gen/1M/${file}`;
-    await t.session.navigate(`${LAB}/page?link=${encodeURIComponent(p)}`);
-    const a = await rect(t.session, "#link");
-    await t.session.mouse((a.l + a.r) / 2, (a.t + a.b) / 2, "click", { alt: true });
-    const kept = path.join(t.dl, file);
-    try {
-      await until(`${file} in the browser's folder`, 20000, () => {
-        const names = fs.readdirSync(t.dl);
-        return names.length === 1 && names[0] === file && fs.statSync(kept).size === 1 << 20;
-      });
-    } catch (e) {
+    const kept = async (label, file, query, refused) => {
+      const p = `/gen/1M/${file}`;
+      await t.session.navigate(`${LAB}/page?link=${encodeURIComponent(p + query)}`);
+      const a = await rect(t.session, "#link");
+      await t.session.mouse((a.l + a.r) / 2, (a.t + a.b) / 2, "click", { alt: true });
+      const at = path.join(t.dl, file);
+      try {
+        await until(`${label}: ${file} in the browser's folder`, 30000, () => {
+          const names = fs.readdirSync(t.dl);
+          return names.length === 1 && names[0] === file && fs.statSync(at).size === 1 << 20;
+        });
+      } catch (e) {
+        const item = (await mdmList()).find((d) => d.file === file);
+        const tab = await t.session.evaluate("location.href").catch((x) => x.message);
+        e.message += ` (MDM: ${item ? `${item.status} ${item.path}` : "nothing"}; the tab: ${tab}; requests: ${(await requests(p)).map(brief).join("; ") || "none"}; the browser's folder: ${fs.readdirSync(t.dl).join(", ") || "empty"})`;
+        throw e;
+      }
+      await sleep(1500);
       const item = (await mdmList()).find((d) => d.file === file);
-      const tab = await t.session.evaluate("location.href").catch((x) => x.message);
-      e.message += ` (MDM: ${item ? `${item.status} ${item.path}` : "nothing"}; the tab: ${tab}; requests: ${(await requests(p)).map(brief).join("; ") || "none"}; the browser's folder: ${fs.readdirSync(t.dl).join(", ") || "empty"})`;
-      throw e;
-    }
-    await sleep(1500);
-    const item = (await mdmList()).find((d) => d.file === file);
-    if (item) throw new Error(`MDM got it too: ${item.status} ${item.path}`);
-    const all = await requests(p);
-    if (all.length !== 1) throw new Error(`${all.length} requests for it (only the browser's expected): ${all.map(brief).join("; ")}`);
-    fs.rmSync(kept);
-    return "the browser's own download, MDM untouched";
+      if (item) throw new Error(`${label}: MDM got it too: ${item.status} ${item.path}`);
+      const all = await requests(p);
+      // The check's page first (the browser's page load, refused), then the file, once.
+      const served = all.filter((e) => e.status === 200);
+      const checks = all.filter((e) => e.outcome === "fault:js_challenge");
+      if (served.length !== 1 || checks.length !== refused || all.length !== refused + 1) {
+        throw new Error(`${label}: ${all.length} requests for it (${refused ? "the check's page and " : ""}only the browser's expected): ${all.map(brief).join("; ")}`);
+      }
+      fs.rmSync(at);
+      return label;
+    };
+    const done = [];
+    done.push(await kept("the link", `e2e-alt-${t.name}.zip`, "", 0));
+    done.push(await kept("a bot check's page (3 s)", `e2e-alt-check-${t.name}.zip`, "?js_challenge=3000", 1));
+    return `the browser's own download, MDM untouched: ${done.join(", ")}`;
   },
 
   // Files the browser would show or play, made downloads, MDM's (Chromium 128+, Firefox): typed
