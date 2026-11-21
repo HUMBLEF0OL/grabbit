@@ -935,10 +935,7 @@ mod tests {
     fn each_refusal_has_a_name_and_a_reason() {
         for d in Declined::ALL {
             assert_eq!(Declined::from_code(d.code()), Some(d));
-            assert!(
-                d.reason().contains("Options >"),
-                "{d:?}"
-            );
+            assert!(d.reason().contains("Options >"), "{d:?}");
         }
         assert_eq!(Declined::from_code("FileType"), None);
         let mut r = CaptureRules {

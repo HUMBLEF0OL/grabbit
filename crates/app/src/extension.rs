@@ -333,22 +333,61 @@ impl Extension {
         // Where it stands, then the answer. Not set up at all (the setup's box unticked): no
         // extension could reach the app, so that comes first, with the fix.
         let y = h - 84.0;
-        if !self.registered {
-            // As wide as its label in this language (#192); the paragraph ends 10 px before it.
-            let (fix_x, fix_w) =
-                winui::buttons_to_right(&p, W - 18.0, 8.0, &[("Set it up", 110.0)], 180.0)[0];
+        // A copy Set it up can never register (the native host refuses it): why, and what to
+        // do, in place of a button that would do nothing.
+        let never = if !self.registered && mdm_ipc::portable_dir().is_some() {
+            // i18n: in the browser extension's window, a portable copy (it writes nothing outside its folder)
+            Some(
+                "This portable copy can't be connected to a browser: it writes nothing outside its folder. Install Grabbit to use the extension.",
+            )
+        } else if !self.registered && temporary_copy() {
+            // i18n: in the browser extension's window, Grabbit started from inside a zip (Windows deletes that folder once it quits)
+            Some(
+                "Grabbit runs from inside a zip, a folder Windows deletes once it quits. Extract it to a folder of its own and start it from there.",
+            )
+        } else {
+            None
+        };
+        if let Some(never) = never {
             winui::paragraph(
                 &p,
                 o.x + 18.0,
                 o.y + y,
+                crate::i18n::t(never),
+                winui::ERROR(),
+                o.x + W - 18.0,
+                14.0,
+            );
+        } else if !self.registered {
+            // As wide as its label in this language (#192); the paragraph ends 10 px before it.
+            let (fix_x, fix_w) =
+                winui::buttons_to_right(&p, W - 18.0, 8.0, &[("Set it up", 110.0)], 180.0)[0];
+            // While it runs, then why it failed if it did (the full reason on the button's
+            // hover; Options → General → Test browser integration lists it too).
+            let failed = register_error();
+            let said = if SETTING_UP.load(Ordering::Acquire) {
+                // i18n: in the browser extension's window, while Set it up runs
+                crate::i18n::t("Setting up browser integration...")
+            } else if failed.is_some() {
+                // i18n: in the browser extension's window, after Set it up failed; pointing at the button shows the reason
+                crate::i18n::t(
+                    "Set it up didn't work. Point at the button to see why, or try it again.",
+                )
+            } else {
                 crate::i18n::t(
                     "Browser integration isn't set up on this computer, so no browser can reach Grabbit yet.",
-                ),
+                )
+            };
+            winui::paragraph(
+                &p,
+                o.x + 18.0,
+                o.y + y,
+                said,
                 winui::ERROR(),
                 o.x + fix_x - 10.0,
                 14.0,
             );
-            let fix = winui::button(
+            let mut fix = winui::button(
                 ui,
                 r(o, fix_x, y - 4.0, fix_w, 25.0),
                 // i18n: button in the browser extension's window: register MDM's helper with the browsers
@@ -357,6 +396,9 @@ impl Extension {
                 false,
                 None,
             );
+            if let Some(why) = failed {
+                fix = fix.on_hover_text(why);
+            }
             if fix.clicked() {
                 set_up(ui.ctx());
             }
