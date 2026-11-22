@@ -1960,6 +1960,11 @@ impl Complete {
                 // menu), Alt+F opens the folder.
                 // While the menu is open, Enter and Escape are its (they'd also press the
                 // footer's buttons: the footer reads them before the menu takes them).
+                // Tab moves the keys to the window's controls (egui moved them as the frame
+                // began): the menu closes, as nothing in it answers Tab.
+                if ui.input(|i| i.key_pressed(egui::Key::Tab)) {
+                    ui.ctx().data_mut(|d| d.remove::<Pos2>(menu_key));
+                }
                 let menu_open = ui.ctx().data(|d| d.get_temp::<Pos2>(menu_key)).is_some();
                 let dragging = crate::win32::dragging_out() || menu_open;
                 let off = |on: bool, kind| if on { kind } else { ButtonKind::Disabled };
@@ -2020,6 +2025,13 @@ impl Complete {
                     FooterButton::new("Close", ButtonKind::Normal).escape(!dragging),
                     DoneAct::Close,
                 ));
+                // An open menu's letters are its own (Alt+W: Open with...): the footer's Alt+O and
+                // Alt+F wait until it closes.
+                if menu_open {
+                    for (b, _) in &mut buttons {
+                        b.mnemonic = None;
+                    }
+                }
                 let mut items: Vec<FooterItem> = buttons
                     .iter()
                     .map(|(b, _)| FooterItem::Button(*b))
