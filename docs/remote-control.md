@@ -48,7 +48,8 @@ another. To keep the page one tap away, add it to the phone's home screen (the b
   A torrent is added with all its files, once Grabbit has read them (a magnet link can take a moment).
 - **The list**: every download with its progress, speed and size, with **All**, **Unfinished**
   and **Finished**. **Pause** and **Start** each one; **×** removes it from the list, and with
-  **Delete the file too**, deletes its file from the computer.
+  **Move the file to the Recycle Bin**, moves its finished file to the computer's Recycle Bin
+  (what it had downloaded of an unfinished one is deleted).
 - **The queues**: start and stop each one.
 - The bar at the top shows the total speed and the free space where your downloads go.
 

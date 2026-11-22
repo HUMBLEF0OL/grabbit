@@ -31,25 +31,39 @@ type Remove = dyn Fn(&Path) -> io::Result<()> + Send + Sync;
 
 /// A finished file to the Recycle Bin (`trash`: [`crate::extractq::to_trash`]; a test's folder).
 /// A file already gone is NotFound, as `remove_file` says it; one the shell kept is an error.
+/// Only a file goes: anything else at `path` (a gallery's folder, a link) stays, untouched, and
+/// is said. Only NotFound counts as gone: a file that can't be looked at (access denied, a
+/// network share dropped) is a failure, never taken for deleted.
 fn recycle(path: &Path, trash: impl Fn(&[PathBuf]) -> bool) -> io::Result<()> {
-    let gone = |p: &Path| std::fs::symlink_metadata(p).is_err();
-    if gone(path) {
-        return Err(io::ErrorKind::NotFound.into());
-    }
-    if trash(&[path.to_owned()]) || gone(path) {
-        Ok(())
-    } else {
-        // The shell gives no reason: a file open in another program, or a path longer than
-        // the 260 characters it takes. The file stays; it is never deleted outright instead.
+    if !std::fs::symlink_metadata(path)?.is_file() {
         tracing::warn!(
-            "delete: {} ({} characters) not moved to the Recycle Bin; it stays",
-            path.display(),
-            path.as_os_str().len()
+            "delete: {} is not a file; it stays (never to the Recycle Bin)",
+            path.display()
         );
-        Err(io::Error::other(
-            // i18n: why a deleted download's file stayed (after "{file} could not be moved to the Recycle Bin: "); Windows gives no reason
-            crate::i18n::t("Windows kept it (it may be open in another program)"),
-        ))
+        return Err(io::Error::other(
+            // i18n: why a deleted download's place stayed (after "{file} could not be moved to the Recycle Bin: "); it is a folder or a link
+            crate::i18n::t("It is not a file, so it was left as it is"),
+        ));
+    }
+    if trash(&[path.to_owned()]) {
+        return Ok(());
+    }
+    match std::fs::symlink_metadata(path) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+        Ok(_) => {
+            // The shell gives no reason: a file open in another program, or a path longer than
+            // the 260 characters it takes. The file stays; it is never deleted outright instead.
+            tracing::warn!(
+                "delete: {} ({} characters) not moved to the Recycle Bin; it stays",
+                path.display(),
+                path.as_os_str().len()
+            );
+            Err(io::Error::other(
+                // i18n: why a deleted download's file stayed (after "{file} could not be moved to the Recycle Bin: "); Windows gives no reason
+                crate::i18n::t("Windows kept it (it may be open in another program)"),
+            ))
+        }
     }
 }
 
@@ -572,6 +586,43 @@ mod tests {
         let kept = recycle(&file, |_| false).unwrap_err();
         assert_ne!(kept.kind(), io::ErrorKind::NotFound);
         assert!(file.exists());
+    }
+
+    /// Only a file goes to the Recycle Bin: a folder at a finished download's place (a
+    /// gallery's) stays with all it holds, and is said; a place that can't be looked at (here a
+    /// name Windows refuses) is a failure, not a file already gone.
+    #[test]
+    fn a_folder_or_a_place_that_cannot_be_read_never_goes() {
+        let dir = tempfile::tempdir().unwrap();
+        let folder = dir.path().join("gallery");
+        std::fs::create_dir(&folder).unwrap();
+        std::fs::write(folder.join("1.jpg"), b"x").unwrap();
+        let never = |_: &[PathBuf]| -> bool { panic!("not handed to the Recycle Bin") };
+        let kept = recycle(&folder, never).unwrap_err();
+        assert_ne!(kept.kind(), io::ErrorKind::NotFound);
+        assert!(kept.to_string().contains("not a file"), "{kept}");
+        assert!(folder.join("1.jpg").exists());
+        let unreadable = recycle(&dir.path().join("bad|name.zip"), never).unwrap_err();
+        assert_ne!(unreadable.kind(), io::ErrorKind::NotFound, "{unreadable}");
+        // Through the deleter: said as a failure, the folder untouched.
+        let (tx, rx) = mpsc::channel();
+        let tx = Mutex::new(tx);
+        let deleter = Deleter::with_trash(
+            Arc::new(|p: &Path| std::fs::remove_file(p)),
+            Arc::new(move |p: &Path| recycle(p, never)),
+            move |f| {
+                let _ = tx.lock().unwrap().send(f);
+            },
+        );
+        deleter.delete(vec![Doomed::clearing(
+            "gallery".into(),
+            folder.clone(),
+            true,
+            None,
+        )]);
+        assert!(deleter.finish(Duration::from_secs(10)));
+        assert_eq!(rx.try_recv().unwrap().len(), 1, "said");
+        assert!(folder.join("1.jpg").exists());
     }
 
     /// A place another download holds (for longer than its own run takes to let go) is that

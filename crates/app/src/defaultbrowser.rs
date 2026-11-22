@@ -13,6 +13,9 @@ pub fn start() -> mpsc::Receiver<()> {
     let spawned = std::thread::Builder::new()
         .name("default-browser".into())
         .spawn(move || {
+            // Looked for, however the thread ends: a look that panics leaves the automatic
+            // User-Agent a current Chrome's, and Options' "Looking for..." stops.
+            let _settled = Settled;
             let started = std::time::Instant::now();
             let found = crate::win32::default_browser();
             let browser = found.as_ref().map_or("none Grabbit knows".to_owned(), |f| {
@@ -30,6 +33,18 @@ pub fn start() -> mpsc::Receiver<()> {
         mdm_engine::agent::set_automatic(None);
     }
     rx
+}
+
+/// Marks the default browser looked for (none found) when `start`'s thread ends without
+/// having said what it found.
+struct Settled;
+
+impl Drop for Settled {
+    fn drop(&mut self) {
+        if !mdm_engine::agent::looked_for() {
+            mdm_engine::agent::set_automatic(None);
+        }
+    }
 }
 
 /// Wait at most `limit` for `start`'s search (the command line's downloads begin at once).

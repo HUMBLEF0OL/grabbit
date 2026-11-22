@@ -3910,6 +3910,8 @@ pub struct FooterButton<'a> {
     pub escape: bool,
     /// Its hover text (English, translated here): why it is greyed, …
     pub tip: Option<&'a str>,
+    /// `tip` is translated already, data in it ([`FooterButton::tip_text`]): shown as it is.
+    pub tip_translated: bool,
     /// The dialog's answer, put last: set by a `Default`, `Accent` or `Danger` kind, and kept by
     /// [`FooterButton::primary`] for one greyed for now, so the footer never reshuffles.
     pub primary: bool,
@@ -3928,6 +3930,7 @@ impl<'a> FooterButton<'a> {
             enter: false,
             escape: false,
             tip: None,
+            tip_translated: false,
             primary: matches!(
                 kind,
                 ButtonKind::Default | ButtonKind::Accent | ButtonKind::Danger
@@ -3959,6 +3962,15 @@ impl<'a> FooterButton<'a> {
     pub fn tip(self, on: bool, tip: &'a str) -> Self {
         Self {
             tip: on.then_some(tip),
+            ..self
+        }
+    }
+    /// [`FooterButton::tip`] with a text translated already (one with data in it, as
+    /// `i18n::fmt` makes): it isn't translated again.
+    pub fn tip_text(self, on: bool, text: &'a str) -> Self {
+        Self {
+            tip: on.then_some(text),
+            tip_translated: true,
             ..self
         }
     }
@@ -4145,6 +4157,7 @@ pub fn footer_items(
                     PressFocus::Take,
                 );
                 let resp = match b.tip {
+                    Some(tip) if b.tip_translated => resp.on_hover_text(tip),
                     Some(tip) => resp.on_hover_text(crate::i18n::t(tip)),
                     None => resp,
                 };
@@ -5022,6 +5035,7 @@ pub fn check_box_glyph(p: &Painter, rc: Rect, checked: bool, state: State) {
                     pos2(rc.left() + 5.5, rc.top() + 9.5),
                     pos2(rc.left() + 10.5, rc.top() + 3.0),
                 ],
+                // The Square look's own weight, not `tick.width` (palette.rs says so).
                 Stroke::new(2.0, ink),
             );
         }
@@ -6809,8 +6823,8 @@ mod tests {
         ];
         let x = footer_slots(&items, 300.0);
         assert!(x[1] < x[0] && x[0] < x[2]);
-        // A default greyed for now keeps its place (Download File Info's Start).
-        let start = FooterButton::new("Start Download", ButtonKind::Disabled).primary();
+        // A default greyed for now keeps its place (Download file info's Download now).
+        let start = FooterButton::new("Download now", ButtonKind::Disabled).primary();
         assert!(start.primary && !FooterButton::new("Cancel", ButtonKind::Normal).primary);
         assert!(FooterButton::new("OK", ButtonKind::Default).primary);
         // Plan 12b, C1: Files already there's No, a default that isn't moved last, keeps its
@@ -7874,7 +7888,7 @@ mod tests {
     #[test]
     fn english_lands_where_the_pieces_were() {
         let (texts, rects) = sentence_layout(
-            "Download no more than {mb} MBytes\nevery {hours} hours",
+            "Download no more than {mb} MB\nevery {hours} hours",
             &limits_lines(),
             &BOXES,
             w,
@@ -7885,7 +7899,7 @@ mod tests {
             texts,
             vec![
                 (170.0 - lead, 345.0, "Download no more than".to_owned()),
-                (222.0, 346.0, "MBytes".to_owned()),
+                (222.0, 346.0, "MB".to_owned()),
                 (170.0 - w("every"), 366.0, "every".to_owned()),
                 (225.0, 364.0, "hours".to_owned()),
             ]
@@ -7993,7 +8007,7 @@ mod tests {
         // Download limits as English places them, then mirrored: the lead text starts at the
         // right (its pen is mirrored by `text`), the boxes follow to its left.
         let (texts, rects) = sentence_layout(
-            "Download no more than {mb} MBytes\nevery {hours} hours",
+            "Download no more than {mb} MB\nevery {hours} hours",
             &limits_lines(),
             &BOXES,
             w,
