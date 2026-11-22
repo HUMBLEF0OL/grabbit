@@ -281,7 +281,7 @@ try {
       Start-Sleep -Milliseconds 1200
       Shot $app.Id "" $name -All
       # The menu's windows are ours: closed like any other, with the window it opened over when
-      # that one came with it (progress:menu's progress window), so the next shot opens it anew.
+      # that one came with it, so the next shot opens it anew.
       Close-Ours $app.Id "grabbit menu*"
       @(Titles $app.Id | Where-Object { $before -notcontains $_ }) | ForEach-Object { Close-Ours $app.Id ([WildcardPattern]::Escape($_)) }
       Start-Sleep -Milliseconds 800

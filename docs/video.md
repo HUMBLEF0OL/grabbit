@@ -70,7 +70,7 @@ yt-dlp looks the page up and picks the quality's video and sound. Grabbit's own 
 
 - **Over several connections**: as many as **Options → Connection** gives a file. The progress window's connections table shows each one, and the segment map shows the video and then its sound.
 - **A stream sent in many small pieces** (HLS, DASH, as most sites other than YouTube send theirs) comes down that many pieces at once, each kept on disk as it arrives, then joined in order into one file, as yt-dlp joins them. Pieces encrypted with AES-128 are decrypted with the key the stream's playlist names. When their addresses expire, Grabbit asks yt-dlp for the stream's new list and carries on with the pieces still missing.
-- **Under your speed limits**: the **Speed Limiter**'s, the video's own (its progress window's **Speed Limiter** tab), and the limit for all downloads together. A change applies at once.
+- **Under your speed limits**: the **Speed Limiter**'s, the video's own (its progress window's **Limit**, under **Show details**), and the limit for all downloads together. A change applies at once.
 - **Paused and resumed** like a file, also after quitting Grabbit: it carries on from the bytes already saved.
 - **When an address stops working**: a video's addresses are signed and expire after a few hours (YouTube's after six). Grabbit asks yt-dlp for a fresh one for the same quality and carries on from where it stopped.
 
@@ -137,7 +137,7 @@ A page address that points at one video inside a playlist or a mix (for example 
 
 ## Speed limits
 
-Videos keep to the [Speed Limiter](connections-and-speed.md#speed-limiter): the limit for one file, a video's own limit (the **Speed Limiter** tab of its progress window), and the limit for all downloads together, which they share with every other download. Grabbit's own downloader brings them in, so a change applies at once, as for a file.
+Videos keep to the [Speed Limiter](connections-and-speed.md#speed-limiter): the limit for one file, a video's own limit (the **Limit** row of its progress window's details), and the limit for all downloads together, which they share with every other download. Grabbit's own downloader brings them in, so a change applies at once, as for a file.
 
 A video yt-dlp downloads by itself ([How a video comes down](#how-a-video-comes-down)) takes a limit only as it starts: when you turn the limiter on or off, change its settings or the video's own limit, Grabbit stops it and starts it again with the new limit, and it goes on from where it was (the log says "Stopped: the speed limit changed; starting again with it"). A live stream that is recording is the exception: restarting it would cut the recording, so it keeps recording and takes the limit the next time it starts. Under the limit for all downloads, such videos share it evenly: when another starts, the ones running with more than their share start again with it; when one ends, the others keep theirs. A gallery's pictures that Grabbit brings in follow a change at once; what gallery-dl still fetches itself starts again with the new limit, skipping the files already saved. Other changes (torrents taking more or less of the limit for all downloads, **Only while I'm using the computer**) apply to the next one that starts.
 

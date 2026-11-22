@@ -116,6 +116,18 @@ pub fn sharing_limit_reached(
     None
 }
 
+/// The torrents `set_sharing` acts on: turning sharing on leaves out the ones stopped sharing by
+/// hand (`excluded`, plan 13b); turning it off takes them all.
+pub fn shared_specs(specs: Vec<TorrentSpec>, on: bool, excluded: &[String]) -> Vec<TorrentSpec> {
+    if !on {
+        return specs;
+    }
+    specs
+        .into_iter()
+        .filter(|s| !excluded.contains(&s.hash))
+        .collect()
+}
+
 /// No session is running: nothing is connected and nothing is moving, whatever the list last
 /// showed (#357).
 pub fn clear_live<'a>(specs: impl Iterator<Item = &'a mut TorrentSpec>) {
@@ -786,14 +798,17 @@ impl Host {
     /// Keep sharing (true) or stop sharing (false) finished torrents: `specs` are the list's
     /// complete ones. Sharing starts the session if needed. The session restores nothing when it
     /// starts (the engine opens only what Grabbit checked), so one not in it is checked and added
-    /// as at Start, asking nobody: one with a file Grabbit didn't make stays stopped.
+    /// as at Start, asking nobody: one with a file Grabbit didn't make stays stopped. Turning it
+    /// on skips the torrents stopped sharing by hand (`excluded`, Settings' `torrent_unshared`).
     pub fn set_sharing(
         &self,
         rt: &tokio::runtime::Handle,
         known: HashSet<String>,
         specs: Vec<TorrentSpec>,
         on: bool,
+        excluded: &[String],
     ) {
+        let specs = shared_specs(specs, on, excluded);
         if specs.is_empty() || (!on && self.get().is_none()) {
             return;
         }
@@ -1388,6 +1403,24 @@ mod tests {
             in_order: false,
             ends_first: true,
         }
+    }
+
+    /// Plan 13b: Stop sharing on one torrent keeps "Keep sharing" from sharing it again; turning
+    /// sharing off still reaches it.
+    #[test]
+    fn set_sharing_skips_a_torrent_stopped_by_hand() {
+        let other = TorrentSpec {
+            hash: "other".into(),
+            ..a_spec()
+        };
+        let excluded = vec!["h".to_owned()];
+        let on = shared_specs(vec![a_spec(), other.clone()], true, &excluded);
+        assert_eq!(
+            on.iter().map(|s| s.hash.as_str()).collect::<Vec<_>>(),
+            ["other"]
+        );
+        let off = shared_specs(vec![a_spec(), other], false, &excluded);
+        assert_eq!(off.len(), 2);
     }
 
     /// The app's session always has its engine write only into checked files, whatever

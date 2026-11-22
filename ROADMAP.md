@@ -897,8 +897,9 @@ These ship in a later version, when they're ready.
 - 🔄 A server's refusal page saved under the document's name and shown as complete, where the
   browser had the file (part of [#533](https://github.com/anefzaoui/misterdownloadmanager/issues/533)):
   fix in review
-- 🔄 "Hide tab" in a download's window only going back to Download status, the tab still
-  there ([#326](https://github.com/anefzaoui/misterdownloadmanager/issues/326)): fix in review
+- ⛔ "Hide tab" in a download's window only going back to Download status, the tab still
+  there ([#326](https://github.com/anefzaoui/misterdownloadmanager/issues/326)): the window has no
+  tabs since plan 13b
 - 🔍 A site's bot check refusing MDM's request (testfile.org, a Cloudflare challenge): the\n  message now says so ([#376](https://github.com/anefzaoui/misterdownloadmanager/issues/376)); a way to hand the download back to the browser is still to decide
 - 🔄 A download starting again by itself after Stop, when it is in a running queue\n  ([#341](https://github.com/anefzaoui/misterdownloadmanager/issues/341)): fix in review
 - 🔄 A crash when removing the last feed in the RSS feeds window
@@ -963,4 +964,9 @@ kept on the `archive/multiplatform-i18n` branch.
   reading and a strip drawn from the real connections or torrent pieces, details that open to the
   side, one list of what to do when a download finishes, torrent commands in the window, a way to
   stop sharing one finished torrent, and a Done window whose Open opens the main file of a
-  download saved as a folder (that part done, 13a, see above)
+  download saved as a folder. Done (13a, the Done window's behaviour, see above). Done (13b, the window's structure): no tabs, a compact window and
+  Details that widen it to the right and keep it on the screen, the limit and one When done list
+  in Details, Stopped / Stop, Show / Hide details, the filled-button rule, Refresh download
+  address... on an expired link, Stop asking first where the server can't resume, the torrent
+  commands in the window, and Stop sharing / Start sharing for one finished torrent in the
+  Torrent menu. Left: the window's look (13c) and its states' and the Done window's look (13d)

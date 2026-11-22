@@ -20,11 +20,14 @@ param(
   [int]$TrackerPort = 6969,
   # Only these shots ("video", "torrent"); both when empty.
   [string[]]$Only = @(),
-  # The torrent's other details tabs too ("peers", "trackers", "pieces", "general"), each
-  # as progress-torrent-<tab>.png (/show progress:<tab>).
+  # The torrent's window expanded too ("details", or a tab of its details: "files", "peers",
+  # "trackers"; plan 13b dropped "pieces" and "general"), each as progress-torrent-<tab>.png
+  # (/show progress:<tab>).
   [string[]]$TorrentTabs = @(),
   # The video's sample states too ("merging", "helper", "mergefail": upstream issues 769 and
-  # 736), each as progress-video-<state>.png (/show progress:<state>, looks only).
+  # 736; any of plan 13b's: "stopped", "unknown-size", "waiting", "finishing", "checking",
+  # "sharing", "webpage", "service", "cant-resume"), each as progress-video-<state>.png
+  # (/show progress:<state>, looks only).
   [string[]]$VideoTabs = @(),
   # Dark mode (always_dark, as the status bar's light/dark button sets it, whatever Windows' own
   # mode); the same file names, or with

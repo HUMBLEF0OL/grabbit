@@ -389,8 +389,8 @@ pub struct Item {
     /// added before the column existed have none.
     #[serde(default)]
     pub added: Option<String>,
-    /// Its own speed limit, bytes/s (progress window → Speed Limiter, "Remember Speed Limiter
-    /// settings for this file on download stop/resume"): used again whenever it starts.
+    /// Its own speed limit, bytes/s (progress window → Details → Limit, "Remember for this
+    /// file"): used again whenever it starts.
     #[serde(default)]
     pub own_limit: Option<u64>,
     /// A video from a page, downloaded by yt-dlp (its `url` is the page).
@@ -1452,11 +1452,6 @@ pub fn size(b: u64) -> String {
     }
 }
 
-/// The progress window's sizes: as [`size`] writes them, so a file reads the same everywhere.
-pub fn size3(b: u64) -> String {
-    size(b)
-}
-
 /// `11.623 MB/s`, `512.000 KB/s` (IDM's progress dialog uses three decimals).
 pub fn rate(bps: f64) -> String {
     if bps >= 1024.0 * 1024.0 {
@@ -1482,7 +1477,7 @@ pub fn limit_rate(bps: u64) -> String {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Limit {
     /// At most this many bytes a second for this download: its own limit (its progress
-    /// window's Speed Limiter tab, or remembered for the file), else the Speed Limiter's for one
+    /// window's Limit, or remembered for the file), else the Speed Limiter's for one
     /// file.
     One(u64),
     /// This many bytes a second for all downloads together (Speed Limiter settings, beyond
@@ -1792,7 +1787,6 @@ mod tests {
         assert_eq!(time(82.0), "1 min 22 sec");
         assert_eq!(time(7500.0), "2 hour(s) 5 min");
         assert_eq!(rate(12_187_628.0), "11.623 MB/s");
-        assert_eq!(size3(6 * 1024 * 1024 * 1024), size(6 * 1024 * 1024 * 1024));
         assert_eq!(size_list(7_392_461), "7.05 MB");
     }
 }

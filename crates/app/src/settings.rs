@@ -275,6 +275,10 @@ pub struct Settings {
     /// Torrents keep sharing after they finish (D-018: off; a finished torrent stops, like any
     /// download).
     pub torrent_keep_sharing: bool,
+    /// Finished torrents the user stopped sharing one by one (the row menu's Torrent → Stop
+    /// sharing, plan 13b), by info hash: `TorrentHost::set_sharing` never shares them again until
+    /// Start sharing takes them off.
+    pub torrent_unshared: Vec<String>,
     /// Torrent settings' "Open magnet links and .torrent files with Grabbit": Windows opens them
     /// with Grabbit (D-018: opt-in, current user), and the browser hands a .torrent download over
     /// (upstream issue 1058: off, it stays with the browser for the user's own torrent client).
@@ -476,6 +480,7 @@ impl Default for Settings {
             remote_port: mdm_remote::PORT,
             remote_listen: String::new(),
             torrent_keep_sharing: false,
+            torrent_unshared: Vec::new(),
             torrent_associations: None,
             torrent_associations_before: false,
             torrent_incoming: true,
@@ -1253,6 +1258,20 @@ mod tests {
         };
         let back: Settings = serde_json::from_str(&serde_json::to_string(&off).unwrap()).unwrap();
         assert!(!back.add_ask_where, "kept as left");
+    }
+
+    /// Plan 13b: a torrent stopped sharing by hand stays so across a restart (the list is saved
+    /// with the settings); a settings file from before it has none.
+    #[test]
+    fn stop_sharing_persists_across_a_restart() {
+        let s: Settings = serde_json::from_str("{}").unwrap();
+        assert!(s.torrent_unshared.is_empty());
+        let off = Settings {
+            torrent_unshared: vec!["67675951e26ce50a30ded57b20ef9a3e992dc4d1".into()],
+            ..Default::default()
+        };
+        let back: Settings = serde_json::from_str(&serde_json::to_string(&off).unwrap()).unwrap();
+        assert_eq!(back.torrent_unshared, off.torrent_unshared);
     }
 
     /// Plan 06: a settings file from before the paste bar and the details pane loads with the
