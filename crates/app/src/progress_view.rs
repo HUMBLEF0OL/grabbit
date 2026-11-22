@@ -137,6 +137,16 @@ const fn facts_top(lines: usize) -> f32 {
     FACTS_Y + lines.saturating_sub(1) as f32 * MESSAGE_LINE
 }
 
+/// `phrase` as a sentence: its first letter upper case ("the server answered 404" → "The
+/// server answered 404").
+fn sentence(phrase: &str) -> String {
+    let mut chars = phrase.chars();
+    match chars.next() {
+        Some(c) => c.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
 /// The lines Details keeps for the row under the strip, whatever the state: a message's two at
 /// most (a web page's reason and advice end as low, the strip raised into its reading's place:
 /// the asserts after [`MESSAGE_LINES`]). Every state the same, so Details keeps one height: a
@@ -831,7 +841,9 @@ pub fn state_view(phase: Phase, f: &Facts) -> StateView {
                 }
             } else {
                 Under::Message {
-                    text: f.reason.clone().unwrap_or_else(|| {
+                    // The engine's reasons are phrases written to follow "Error: " (lower case);
+                    // on a line of their own they start a sentence (board 4).
+                    text: f.reason.as_deref().map(sentence).unwrap_or_else(|| {
                         // i18n: a failed download's line when it wasn't told why
                         t("It stopped, and Grabbit wasn't told why.")
                     }),
@@ -3568,6 +3580,11 @@ mod tests {
         // Details' facts make room for a message's two lines, none for a detail row.
         assert_eq!(under_lines(&failed), MESSAGE_LINES);
         assert_eq!(under_lines(&v), MESSAGE_LINES);
+        assert_eq!(
+            sentence("the server answered 404"),
+            "The server answered 404"
+        );
+        assert_eq!(sentence(""), "");
         // One Details height in every state: no jump when a message comes.
         assert_eq!(under_lines(&state_view(Phase::Running, &f)), MESSAGE_LINES);
         // Two lines at most, the rest joined in the last one (cut when drawn).
