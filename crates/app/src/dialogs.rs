@@ -1856,7 +1856,11 @@ impl Complete {
         let can_open = reason.is_none();
         let line_under = reason
             .iter()
-            .chain(&self.picked_gone)
+            .chain(
+                self.picked_gone
+                    .iter()
+                    .filter(|g| Some(*g) != reason.as_ref()),
+            )
             .chain(&self.notices)
             .cloned()
             .collect::<Vec<_>>()
@@ -2025,10 +2029,32 @@ impl Complete {
                         let w = winui::footer_button_width(&p, "", true);
                         (W - winui::EDGE - w, w)
                     } else {
-                        (winui::EDGE, 0.0)
+                        (
+                            winui::EDGE,
+                            winui::footer_button_width(&p, "Open file", true),
+                        )
                     };
-                    let at = r(o, x, top, w, h).left_bottom();
-                    ui.ctx().data_mut(|d| d.insert_temp(menu_key, at));
+                    let button = r(o, x, top, w, h);
+                    // A click on the opener that just closed its menu (the press dismissed it)
+                    // leaves it closed, as the other openers do (`winui::opener_click`).
+                    let dismissed = crate::chrome::dismissed_at_key(ui.ctx());
+                    let closed_by_it = ui
+                        .ctx()
+                        .data(|d| d.get_temp::<Pos2>(dismissed))
+                        .is_some_and(|at| button.contains(at));
+                    if closed_by_it {
+                        ui.ctx().data_mut(|d| d.remove::<Pos2>(dismissed));
+                    } else {
+                        ui.ctx()
+                            .data_mut(|d| d.insert_temp(menu_key, button.left_bottom()));
+                        // Opened by keys (Alt+O, Enter, Space): its first item highlighted.
+                        if !ui.input(|i| i.pointer.any_released()) {
+                            crate::chrome::start_keyboard(
+                                ui.ctx(),
+                                &format!("complete-menu-{}", self.id),
+                            );
+                        }
+                    }
                 }
                 if let Some(at) = ui.ctx().data(|d| d.get_temp::<Pos2>(menu_key)) {
                     use crate::chrome::{MenuEntry, PopupResult};
@@ -2245,6 +2271,7 @@ impl Complete {
                         },
                     );
                     self.opening = Some((target, opening));
+                    self.picked_gone = None;
                 }
                 if opened == Some(Opened::Yes) {
                     Outcome::Done(())
@@ -2275,8 +2302,9 @@ impl Complete {
                 }
             },
         );
-        // A menu left open isn't there when the box opens again.
-        if matches!(out, Outcome::Done(_)) {
+        // A menu left open isn't there when the box opens again (closed any way: a button, the
+        // title bar's ×, Alt+F4).
+        if !matches!(out, Outcome::Open) {
             ctx.data_mut(|d| d.remove::<Pos2>(menu_key));
         }
         out
