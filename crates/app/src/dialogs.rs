@@ -1962,8 +1962,11 @@ impl Complete {
                 // footer's buttons: the footer reads them before the menu takes them).
                 // Tab moves the keys to the window's controls (egui moved them as the frame
                 // began): the menu closes, as nothing in it answers Tab.
-                if ui.input(|i| i.key_pressed(egui::Key::Tab)) {
+                if ui.input(|i| i.key_pressed(egui::Key::Tab))
+                    && ui.ctx().data(|d| d.get_temp::<Pos2>(menu_key)).is_some()
+                {
                     ui.ctx().data_mut(|d| d.remove::<Pos2>(menu_key));
+                    crate::chrome::forget(ui.ctx(), &format!("complete-menu-{}", self.id));
                 }
                 let menu_open = ui.ctx().data(|d| d.get_temp::<Pos2>(menu_key)).is_some();
                 let dragging = crate::win32::dragging_out() || menu_open;
@@ -2340,8 +2343,9 @@ impl Complete {
         );
         // A menu left open isn't there when the box opens again (closed any way: a button, the
         // title bar's ×, Alt+F4).
-        if !matches!(out, Outcome::Open) {
+        if !matches!(out, Outcome::Open) && ctx.data(|d| d.get_temp::<Pos2>(menu_key)).is_some() {
             ctx.data_mut(|d| d.remove::<Pos2>(menu_key));
+            crate::chrome::forget(ctx, &format!("complete-menu-{}", self.id));
         }
         out
     }

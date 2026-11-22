@@ -1235,6 +1235,24 @@ fn runs_on_repeat(key: egui::Key, repeat: bool) -> bool {
     repeat && matches!(key, egui::Key::Enter | egui::Key::Space)
 }
 
+/// What an open menu keeps (its open submenu, its keyboard highlight), forgotten as it closes:
+/// the next opening starts afresh. The one place for it: [`popup`] calls it as it closes itself,
+/// and [`forget`] for a menu its caller closes (Download complete's on Tab).
+fn forget_open(ctx: &egui::Context, sub_key: egui::Id) {
+    ctx.data_mut(|d| {
+        d.remove::<usize>(sub_key);
+        d.remove::<(Option<usize>, Option<usize>)>(sub_key.with("kb"));
+    });
+}
+
+/// Menu `id` was closed by its caller, which stops calling [`popup`] for it: what it kept goes,
+/// as when it closes itself (and the control it would give the keys back to).
+pub fn forget(ctx: &egui::Context, id: &str) {
+    let sub_key = egui::Id::unique(("popup-sub", id));
+    forget_open(ctx, sub_key);
+    ctx.data_mut(|d| d.remove::<egui::Id>(sub_key.with("opener")));
+}
+
 /// Whether a closing menu gives the keys back to the control that had them: it had them, nothing
 /// took them since, and Escape closed it (read before the menu consumed it).
 fn gives_focus_back(had: bool, focused_now: bool, escaped: bool) -> bool {
@@ -1431,10 +1449,7 @@ pub fn popup_with_icons<C: Clone>(
         }
     };
     if let Some(r) = keyboard(ctx, entries, sub_key) {
-        ctx.data_mut(|d| {
-            d.remove::<usize>(sub_key);
-            d.remove::<(Option<usize>, Option<usize>)>(sub_key.with("kb"));
-        });
+        forget_open(ctx, sub_key);
         give_back(ctx);
         return r;
     }
@@ -1459,10 +1474,7 @@ pub fn popup_with_icons<C: Clone>(
         icon,
     );
     if let Some(c) = result {
-        ctx.data_mut(|d| {
-            d.remove::<usize>(sub_key);
-            d.remove::<(Option<usize>, Option<usize>)>(sub_key.with("kb"));
-        });
+        forget_open(ctx, sub_key);
         give_back(ctx);
         return PopupResult::Chosen(c);
     }
@@ -1510,13 +1522,10 @@ pub fn popup_with_icons<C: Clone>(
         // the data lock (asking the context inside it deadlocks).
         let press = ctx.input(|i| i.pointer.press_origin().filter(|_| i.pointer.any_pressed()));
         let dismissed = dismissed_at_key(ctx);
-        ctx.data_mut(|d| {
-            d.remove::<usize>(sub_key);
-            d.remove::<(Option<usize>, Option<usize>)>(sub_key.with("kb"));
-            if let Some(at) = press {
-                d.insert_temp(dismissed, at);
-            }
-        });
+        forget_open(ctx, sub_key);
+        if let Some(at) = press {
+            ctx.data_mut(|d| d.insert_temp(dismissed, at));
+        }
         give_back(ctx);
         return PopupResult::Dismissed;
     }
