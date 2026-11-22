@@ -195,8 +195,8 @@ Open folder opens its parent, so both "open a folder" (`dialogs.rs`, the Done wi
 - Tests: Esc never cancels (`on_escape`); the When done mapping; Stop sharing persists across a
   restart; the window stays on screen when expanded.
 - Audit fix: an open window's When done follows Options' show-complete setting (and "Don't show
-  this window again") while it still holds what the setting gave it
-  (`Progress::follow_show_complete`); a choice changed by hand stays.
+  this window again") until it is chosen by hand in that window (`Progress::when_by_hand`,
+  `follow_show_complete`).
 
 ## 13c · Progress window look (look, about 1,200 lines)
 

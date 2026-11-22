@@ -335,6 +335,8 @@ pub struct Progress {
     pending_choose: Option<Action>,
     /// When done's choice, an index into [`view::WHEN_DONE`] ([`view::when_done_of`]).
     when: usize,
+    /// When done was chosen by hand in this window: it no longer follows Options' setting.
+    pub(crate) when_by_hand: bool,
     /// With Shut down, Sleep or Hibernate: "Force apps to close".
     force: bool,
     /// Stop was pressed on a download whose server can't resume: the window asks first (Keep
@@ -433,6 +435,7 @@ impl Progress {
             pending_upload: None,
             pending_choose: None,
             when: view::when_done_index(show_complete),
+            when_by_hand: false,
             force: false,
             confirm_stop: false,
             keep_sharing: false,
@@ -720,10 +723,10 @@ impl Progress {
     }
 
     /// Options' "Show download complete dialog" went from `from` to `to` (or the Done window's
-    /// "Don't show this window again" was ticked): When done follows it while it still holds what
-    /// the setting gave it; a choice of the user's own here stays.
+    /// "Don't show this window again" was ticked): When done follows it unless it was chosen by
+    /// hand here (`when_by_hand`), whatever it was chosen.
     pub fn follow_show_complete(&mut self, from: bool, to: bool) {
-        if self.when == view::when_done_index(from) {
+        if !self.when_by_hand && self.when == view::when_done_index(from) {
             self.when = view::when_done_index(to);
         }
     }

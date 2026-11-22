@@ -13393,6 +13393,14 @@ mod sharing_and_done_tests {
         assert!(!open[0].shows_complete(), "no change, nothing moves");
         follow_show_complete(&mut open, false, true);
         assert!(open[0].shows_complete());
+        // Chosen by hand (Do nothing, the value the setting off gives): a round trip of the
+        // setting leaves it as chosen.
+        follow_show_complete(&mut open, true, false);
+        open[0].when_by_hand = true;
+        follow_show_complete(&mut open, false, true);
+        assert!(!open[0].shows_complete(), "the hand's choice stays");
+        follow_show_complete(&mut open, true, false);
+        assert!(!open[0].shows_complete());
     }
 }
 
