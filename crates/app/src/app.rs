@@ -11316,6 +11316,10 @@ impl App {
                 .iter()
                 .find(|q| q.items.contains(&p.id))
                 .map(|q| q.name.clone());
+            p.main_queue = self
+                .queues
+                .first()
+                .map(|q| crate::i18n::t(&q.name).to_owned());
             if p.host.is_none() {
                 p.host = Some(self.torrent_host.clone());
             }

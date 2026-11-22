@@ -36,14 +36,17 @@ const _: () = assert!(EDGE + LEFT_W + EDGE == COMPACT_W);
 pub const STRIP_W: f32 = LEFT_W;
 const STRIP_H: f32 = 6.0;
 /// The compact block (boards 1, 6): the name's baseline (13/500), the reading's (28/500), the
-/// strip's top, the detail line's baseline (12), the state's line's (13).
+/// strip's top, the detail line's baseline (12).
 const NAME_BASE: f32 = 21.0;
 const READ_BASE: f32 = 64.0;
 const STRIP_Y: f32 = 80.0;
 const DETAIL_BASE: f32 = 106.0;
-const LINE_BASE: f32 = 132.0;
-/// What the state's line takes in Details, above the facts.
+/// What a state's line of its own takes in Details, above the facts.
 const LINE_ROOM: f32 = 28.0;
+/// Whether a state has a line of its own under the compact block: none since 13d (a state's
+/// messages wrap in two lines in the detail row's place, [`paint_state`]), so the window keeps
+/// one height in every state.
+pub const STATE_LINE: bool = false;
 const COMPACT_FOOTER_Y: f32 = 156.0;
 /// Details' facts under the compact block: a key column of 88, then the values.
 const FACTS_Y: f32 = 130.0;
@@ -452,13 +455,11 @@ impl Look {
     }
 }
 
-/// The state as the window shows it this frame (progress.rs's `show` asks first: the window's
-/// size depends on its line): the phase, what the compact block shows in it (plan 13d), and the
-/// state's own line under the block (a web page's advice), an alert or not.
+/// The state as the window shows it this frame: the phase, and what the compact block shows in
+/// it (plan 13d). Every state's lines fit the compact block's fixed height ([`paint_state`]).
 pub(super) struct Shown {
     pub phase: Phase,
     pub view: StateView,
-    pub line: Option<(String, bool)>,
 }
 
 pub(super) fn shown(
@@ -491,24 +492,7 @@ pub(super) fn shown(
     Shown {
         phase,
         view: state_view(phase, &facts),
-        line: message(phase),
     }
-}
-
-/// The state's line under the compact block, and whether it is an alert (read out at once): a
-/// web page's advice under its reason (board 9). Every other state says what it must in the
-/// block itself ([`state_view`]).
-fn message(phase: Phase) -> Option<(String, bool)> {
-    (phase == Phase::WebPage).then(|| {
-        (
-            // i18n: a download window's line when the site sent a web page instead of the file
-            crate::i18n::t(
-                "Open it in your browser. When the file starts, it comes back to Grabbit.",
-            )
-            .to_owned(),
-            false,
-        )
-    })
 }
 
 /// What a state's look is drawn from ([`state_view`]): the download's figures as the window
@@ -651,7 +635,11 @@ fn facts_of(
         rate,
         speed,
         word,
-        queue: pr.queue.clone(),
+        queue: queue_named(
+            pr.queue.as_deref(),
+            pr.main_queue.as_deref(),
+            look == Some(Look::Waiting),
+        ),
         resumes: item.resumable == Some(true) || item.torrent.is_some(),
         reason: pr.sample_error.clone().or_else(|| item.error.clone()),
         after,
@@ -660,6 +648,12 @@ fn facts_of(
         service,
         sharing,
     }
+}
+
+/// The queue a waiting download names: its own; for the screenshot's state (`sample`) of a
+/// download in no queue, the main queue (board 8: "in Main queue").
+pub fn queue_named(own: Option<&str>, main: Option<&str>, sample: bool) -> Option<String> {
+    own.or(main.filter(|_| sample)).map(str::to_owned)
 }
 
 /// What is beside the reading, at the row's end.
@@ -679,9 +673,14 @@ pub enum Side {
 pub enum Under {
     /// Two small texts, at the start and at the end: "2.38 of 5.80 GB", "18.4 MB/s".
     Detail(String, String),
-    /// The state's message in its place, read out at once (an alert); `error`: in the error
-    /// colour (a failed download's reason).
-    Message { text: String, error: bool },
+    /// The state's message in its place, read out at once (an alert), in two lines at most;
+    /// `error`: in the error colour (a failed download's reason); `advice`: a line of what to do
+    /// under it, in the secondary ink (a web page's, board 9).
+    Message {
+        text: String,
+        error: bool,
+        advice: Option<String>,
+    },
 }
 
 /// What the compact block shows in a state (plan 13d, boards 1, 4, 8, 9): the word beside the
@@ -768,6 +767,7 @@ pub fn state_view(phase: Phase, f: &Facts) -> StateView {
                     "Stop it now and it starts over from 0. This server doesn't allow resuming.",
                 ),
                 error: false,
+                advice: None,
             };
         }
         Phase::Stopped => {
@@ -812,12 +812,27 @@ pub fn state_view(phase: Phase, f: &Facts) -> StateView {
                 v.side = Side::Figure(amount, None);
             }
             v.strip = Some(Strip::Broken(f.frac.unwrap_or(0.0) as f32));
-            v.under = Under::Message {
-                text: f.reason.clone().unwrap_or_else(|| {
-                    // i18n: a failed download's line when it wasn't told why
-                    t("It stopped, and Grabbit wasn't told why.")
-                }),
-                error: true,
+            v.under = if web {
+                Under::Message {
+                    // i18n: a download window's reason line when the site sent a web page instead of the file
+                    text: t(
+                        "The site sent a web page instead of the file, such as a waiting page or a check.",
+                    ),
+                    error: true,
+                    // i18n: a download window's line under the reason when the site sent a web page instead of the file
+                    advice: Some(t(
+                        "Open it in your browser. When the file starts, it comes back to Grabbit.",
+                    )),
+                }
+            } else {
+                Under::Message {
+                    text: f.reason.clone().unwrap_or_else(|| {
+                        // i18n: a failed download's line when it wasn't told why
+                        t("It stopped, and Grabbit wasn't told why.")
+                    }),
+                    error: true,
+                    advice: None,
+                }
             };
         }
         Phase::Finishing => {
@@ -1314,7 +1329,7 @@ fn paint_strip(p: &egui::Painter, o: Pos2, strip: &Strip, grey: bool) {
 }
 
 /// The compact block: the name (the state's word at its end), then the state's look
-/// ([`paint_state`]) and its own line under it.
+/// ([`paint_state`]).
 #[allow(clippy::too_many_arguments)]
 fn compact(
     pr: &Progress,
@@ -1327,7 +1342,6 @@ fn compact(
     shown: &Shown,
     d: Option<&Details>,
 ) {
-    let right = o.x + EDGE + LEFT_W;
     let view = &shown.view;
     paint_name(ui, p, o, &item.file_name, view.word.as_ref());
     let no_size = pr.sample_look == Some(Look::UnknownSize);
@@ -1336,29 +1350,6 @@ fn compact(
         .clone()
         .unwrap_or_else(|| strip_of(item, snap, pr.sample_merging, d, drawn, no_size));
     paint_state(ui, p, o, view, &strip);
-
-    // The state's own line (a web page's advice).
-    if let Some((line, alert)) = &shown.line {
-        let rc = cell(
-            ui,
-            p,
-            face(13.0),
-            o.x + EDGE,
-            o.y + LINE_BASE,
-            right,
-            line,
-            secondary(),
-            "progress-message",
-        );
-        let id = egui::Id::unique(("progress-line", ui.ctx().viewport_id()));
-        let resp = ui.interact(rc, id, Sense::hover());
-        let role = if *alert {
-            egui::Role::Alert
-        } else {
-            egui::Role::Label
-        };
-        winui::expose(&resp, role, line, true, None);
-    }
 }
 
 /// The name (13/500) at the top, the state's `word` at the row's end (in the error colour for
@@ -1507,6 +1498,12 @@ pub(crate) fn paint_state(ui: &Ui, p: &egui::Painter, o: Pos2, view: &StateView,
         Reading::None => {}
     }
 
+    // No reading (board 9): the strip and the lines under it go up into its row's place.
+    let o = if view.reading == Reading::None {
+        o - vec2(0.0, NO_READING_LIFT)
+    } else {
+        o
+    };
     paint_strip(p, o, strip, view.grey);
     let id = egui::Id::unique(("progress-strip", ui.ctx().viewport_id()));
     let resp = ui.interact(r(o, EDGE, STRIP_Y, STRIP_W, STRIP_H), id, Sense::hover());
@@ -1529,17 +1526,11 @@ pub(crate) fn paint_state(ui: &Ui, p: &egui::Painter, o: Pos2, view: &StateView,
         Under::Detail(start, end) => {
             let mut start_right = right;
             if !end.is_empty() {
-                let rc = cell_right(
-                    ui,
-                    p,
-                    figures(12.0),
-                    x + LEFT_W / 2.0,
-                    detail,
-                    right,
-                    end,
-                    muted(),
-                    "progress-rate",
-                );
+                // Cut in the middle, so a file name's end shows ("Naming it ubuntu-...iso").
+                let f = figures(12.0);
+                let shown = winui::ellipsize_middle(p, &f, end, LEFT_W / 2.0);
+                let rc = draw_right(p, f, right, detail, &shown, muted());
+                winui::copyable(ui, rc, "progress-rate", end, shown != *end);
                 start_right = rc.left() - 16.0;
             }
             cell(
@@ -1554,24 +1545,90 @@ pub(crate) fn paint_state(ui: &Ui, p: &egui::Painter, o: Pos2, view: &StateView,
                 "progress-amount",
             );
         }
-        Under::Message { text, error } => {
+        Under::Message {
+            text,
+            error,
+            advice,
+        } => {
             let c = if *error { winui::ERROR() } else { ink() };
-            let rc = cell(
-                ui,
-                p,
-                face(13.0),
-                x,
-                detail + 2.0,
-                right,
-                text,
-                c,
-                "progress-reason",
-            );
+            let base = detail + 2.0;
+            let (rc, n) = message_lines(ui, p, x, base, right, text, c, "progress-reason");
             let id = egui::Id::unique(("progress-reason", ui.ctx().viewport_id()));
             let resp = ui.interact(rc, id, Sense::hover());
             winui::expose(&resp, egui::Role::Alert, text, true, None);
+            if let Some(advice) = advice {
+                // 4 under the reason (board 9).
+                let base = base + n as f32 * MESSAGE_LINE + 4.0;
+                let (rc, _) = message_lines(
+                    ui,
+                    p,
+                    x,
+                    base,
+                    right,
+                    advice,
+                    secondary(),
+                    "progress-advice",
+                );
+                let id = egui::Id::unique(("progress-advice", ui.ctx().viewport_id()));
+                let resp = ui.interact(rc, id, Sense::hover());
+                winui::expose(&resp, egui::Role::Label, advice, true, None);
+            }
         }
     }
+}
+
+/// How far up the strip and the lines under it go without a reading: its row and the room
+/// above it (board 9: the strip 12 under the name).
+const NO_READING_LIFT: f32 = 44.0;
+/// A message's lines (13/20, the boards' `.msg`), two at most.
+const MESSAGE_LINE: f32 = 20.0;
+const MESSAGE_LINES: usize = 2;
+// Two lines of a message fit above the footer; without a reading, two of the reason and two of
+// the advice under it (board 9). Each line's descent is under 8.
+const _: () = assert!(DETAIL_BASE + 2.0 + MESSAGE_LINE + 8.0 <= COMPACT_FOOTER_Y - 16.0);
+const _: () = assert!(
+    DETAIL_BASE - NO_READING_LIFT + 2.0 + 3.0 * MESSAGE_LINE + 4.0 + 8.0 <= COMPACT_FOOTER_Y - 16.0
+);
+
+/// `lines` as a message shows them: as they are when they are few enough; else the first ones
+/// and the rest joined in the last (cut with "..." when drawn, whole on hover).
+pub fn at_most(mut lines: Vec<String>, n: usize) -> Vec<String> {
+    if lines.len() > n && n > 0 {
+        let rest = lines.split_off(n - 1).join(" ");
+        lines.push(rest);
+    }
+    lines
+}
+
+/// A state's message from English `x` to `right`, its first baseline at `base`: wrapped in at
+/// most two lines (the last cut with "..." when it is longer, whole on hover). The rect it
+/// takes and its lines.
+#[allow(clippy::too_many_arguments)]
+fn message_lines(
+    ui: &Ui,
+    p: &egui::Painter,
+    x: f32,
+    base: f32,
+    right: f32,
+    text: &str,
+    c: Color32,
+    salt: &str,
+) -> (Rect, usize) {
+    let f = face(13.0);
+    let lines = at_most(
+        winui::wrap_lines_font(p, f.clone(), text, right - x),
+        MESSAGE_LINES,
+    );
+    let mut rc = Rect::NOTHING;
+    for (k, line) in lines.iter().enumerate() {
+        let y = base + k as f32 * MESSAGE_LINE;
+        let shown = winui::ellipsize(p, &f, line, right - x);
+        rc = rc.union(winui::text_font(p, f.clone(), x, y, &shown, c));
+        if shown != *line {
+            winui::copyable(ui, rc, (salt, k), text, true);
+        }
+    }
+    (rc, lines.len())
 }
 
 // ---- the body --------------------------------------------------------------------------------
@@ -1596,18 +1653,9 @@ pub(super) fn body(
     let mut action = Action::None;
     if pr.details {
         pr.init_limits(item);
-        action = left_details(
-            pr,
-            ui,
-            &p,
-            o,
-            item,
-            snap,
-            d,
-            facts_top(shown.line.is_some()),
-        );
+        action = left_details(pr, ui, &p, o, item, snap, d, facts_top(STATE_LINE));
         // The right column's tables reach down to the left column's end.
-        let bottom = facts_end(kind, facts_top(shown.line.is_some()));
+        let bottom = facts_end(kind, facts_top(STATE_LINE));
         let right = match kind {
             Kind::Torrent => torrent_column(pr, ui, &p, o, item, d, bottom),
             Kind::File => {
@@ -2769,7 +2817,7 @@ fn footer_row(
     shown: &Shown,
     kind: Kind,
 ) -> Action {
-    let y = footer_y(pr.details, kind, shown.line.is_some());
+    let y = footer_y(pr.details, kind, STATE_LINE);
     let w = if pr.details { DETAILS_W } else { COMPACT_W };
     if details_button(ui, p, o, y, pr.details).clicked() {
         pr.details = !pr.details;
@@ -3432,7 +3480,7 @@ mod tests {
             Under::Message { .. } => panic!("a message: {:?}", v.under),
         };
         let message = |v: &StateView| match &v.under {
-            Under::Message { text, error } => (text.clone(), *error),
+            Under::Message { text, error, .. } => (text.clone(), *error),
             Under::Detail(..) => panic!("a detail row: {:?}", v.under),
         };
         // Running (board 1): no word, the percent, the time left, the download's own strip.
@@ -3488,12 +3536,37 @@ mod tests {
         assert_eq!(v.side, Side::None);
         assert_eq!(spoken_reading(&v.reading), None);
         assert!(matches!(v.strip, Some(Strip::Broken(_))));
-        assert!(message(&v).1);
-        assert!(
-            super::message(Phase::WebPage).is_some(),
-            "its advice under it"
+        // Board 9's own sentences, not the engine's reason; the advice under it.
+        assert_eq!(
+            message(&v),
+            (
+                "The site sent a web page instead of the file, such as a waiting page or a check."
+                    .into(),
+                true
+            )
         );
-        assert!(super::message(Phase::Failed { new_address: false }).is_none());
+        assert!(
+            matches!(&v.under, Under::Message { advice: Some(a), .. } if a.starts_with("Open it in your browser"))
+        );
+        let failed = state_view(Phase::Failed { new_address: false }, &f);
+        assert!(matches!(failed.under, Under::Message { advice: None, .. }));
+        // Two lines at most, the rest joined in the last one (cut when drawn).
+        let lines = |n: usize| (1..=n).map(|k| format!("l{k}")).collect::<Vec<_>>();
+        assert_eq!(at_most(lines(1), 2), ["l1"]);
+        assert_eq!(at_most(lines(2), 2), ["l1", "l2"]);
+        assert_eq!(at_most(lines(4), 2), ["l1", "l2 l3 l4"]);
+        assert_eq!(at_most(Vec::new(), 2), Vec::<String>::new());
+        // A waiting download names its own queue; the screenshot's state of one in no queue
+        // the main queue (board 8); a real one in no queue none.
+        assert_eq!(
+            queue_named(Some("Night"), Some("Main download queue"), true).as_deref(),
+            Some("Night")
+        );
+        assert_eq!(
+            queue_named(None, Some("Main download queue"), true).as_deref(),
+            Some("Main download queue")
+        );
+        assert_eq!(queue_named(None, Some("Main download queue"), false), None);
         // Waiting (board 8): a dash, the queue named, the strip grey.
         let v = state_view(Phase::Waiting, &f);
         assert_eq!(v.reading, Reading::Dash);

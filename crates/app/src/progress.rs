@@ -345,6 +345,9 @@ pub struct Progress {
     pub keep_sharing: bool,
     /// The queue it waits in, by name (set by the app each frame): "Waiting in Main queue".
     pub queue: Option<String>,
+    /// The main queue's name (set by the app each frame): `/show progress:waiting` names it for a
+    /// download in no queue.
+    pub main_queue: Option<String>,
     /// The torrent session (the app's), for a finished torrent still shared without a `Run`:
     /// its tabs read the session directly.
     pub host: Option<crate::torrents::Host>,
@@ -434,6 +437,7 @@ impl Progress {
             confirm_stop: false,
             keep_sharing: false,
             queue: None,
+            main_queue: None,
             host: None,
             hidden: false,
             tray: false,
@@ -490,7 +494,7 @@ impl Progress {
             None
         };
         let state = view::shown(self, item, snap, d.as_ref());
-        let body = view::size(self.details, view::Kind::of(item), state.line.is_some());
+        let body = view::size(self.details, view::Kind::of(item), view::STATE_LINE);
         // Windows: the title bar is ours (#63), drawn in the client above IDM's layout, so the
         // hide button sits in it, left of Minimize, as in IDM. Elsewhere the system draws it.
         let client = [body[0], body[1] + TITLE_H];
