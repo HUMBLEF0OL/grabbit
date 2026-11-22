@@ -1693,6 +1693,72 @@ pub struct Complete {
     gone: Option<String>,
     /// Why a file chosen in the menu couldn't open (gone): said, Open left as it is.
     picked_gone: Option<String>,
+    /// What is looked for off the window's thread once the box is made (its files, whether its
+    /// main file and folder are there); None once it came.
+    looking: Option<Arc<Mutex<Option<Looked>>>>,
+    /// The folder Open folder shows isn't there any more: Open folder says so, the box stays.
+    folder_gone: bool,
+}
+
+/// What the Done window learns off its thread once it is made (plan 13a).
+struct Looked {
+    /// Where it looked (the download's place then: a drag out may have moved it since).
+    at: PathBuf,
+    /// A folder download's files (None: `at` is the file).
+    files: Option<Vec<(PathBuf, u64)>>,
+    /// Why the main file (a folder without one: the folder) can't open: it isn't there.
+    gone: Option<String>,
+    /// The folder Open folder would show isn't there either.
+    folder_gone: bool,
+}
+
+/// [`Looked`] for a download at `path` (`files` lists a folder download's files, reading the
+/// disk; None: `path` is the file). On a thread other than the window's.
+fn look(
+    path: PathBuf,
+    moved_away: bool,
+    files: impl FnOnce() -> Option<Vec<(PathBuf, u64)>>,
+) -> Looked {
+    let files = files();
+    let (main, act) = done_targets(&path, files.as_deref());
+    // Only a file surely not there is gone; one that can't be looked at is left to Open.
+    let opens = main.unwrap_or_else(|| path.clone());
+    let gone = matches!(opens.try_exists(), Ok(false)).then(|| {
+        if moved_away {
+            moved_away_here(&opens)
+        } else {
+            gone_text(&opens)
+        }
+    });
+    let (FolderAct::Select(shown) | FolderAct::Open(shown)) = &act;
+    // As `show_in_folder_now` goes: the file, else its folder.
+    let folder_gone = !shown.exists() && shown.parent().is_none_or(|d| !d.is_dir());
+    Looked {
+        at: path,
+        files,
+        gone,
+        folder_gone,
+    }
+}
+
+/// `f`, when it is `from` or under it, moved with it to `to`.
+fn follow(f: &mut PathBuf, from: &Path, to: &Path) {
+    if let Ok(rest) = f.strip_prefix(from) {
+        *f = if rest.as_os_str().is_empty() {
+            to.to_owned()
+        } else {
+            to.join(rest)
+        };
+    }
+}
+
+/// Why Open folder can't show a download: its folder `dir` isn't there any more.
+fn folder_gone_text(dir: &Path) -> String {
+    crate::i18n::fmt(
+        // i18n: Open folder of a download whose folder is gone; {folder} = the folder
+        crate::i18n::t("{folder} isn't there any more. It was moved, renamed or deleted."),
+        &[("folder", &crate::i18n::isolate(&display_path(dir)))],
+    )
 }
 
 /// How a Download complete's Open went, on the thread that looked.
@@ -1759,6 +1825,23 @@ fn gone_text(path: &Path) -> String {
         crate::i18n::t("{file} isn't in {folder} any more. It was moved, renamed or deleted."),
         &[("file", &name), ("folder", &folder)],
     )
+}
+
+/// How the Done window's Open menu names file `f` of a download saved at `dir`: its name, or
+/// its path inside `dir` when another of `listed` has the same name (CD1\01.flac, CD2\01.flac).
+fn menu_name(f: &Path, dir: &Path, listed: &[(PathBuf, u64)]) -> String {
+    let twins = listed
+        .iter()
+        .filter(|(g, _)| g.file_name() == f.file_name())
+        .count();
+    match f.strip_prefix(dir) {
+        Ok(inside) if twins > 1 => inside.display().to_string(),
+        _ => f
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned(),
+    }
 }
 
 /// What a press of Download complete's menu opener (the ▾, or Open file) does: None nothing,
@@ -1880,68 +1963,110 @@ enum DonePick {
 }
 
 impl Complete {
-    /// `files`: a folder download's (path, size), empty when not known; None: `path` is the file.
+    /// `files` lists a folder download's (path, size) and returns None when `path` is the file;
+    /// it may read the disk, so it runs off the window's thread, with the look at whether the
+    /// main file is there: the box shows a file gone from its first frames (plan 13a, board 14).
     pub fn new(
         id: u64,
         path: PathBuf,
         size: u64,
         notices: Vec<String>,
         moved_away: bool,
-        files: Option<Vec<(PathBuf, u64)>>,
+        files: impl FnOnce() -> Option<Vec<(PathBuf, u64)>> + Send + 'static,
     ) -> Self {
-        let (main, folder_act) = done_targets(&path, files.as_deref());
-        let folder = files.is_some();
-        let mut largest = files.unwrap_or_default();
-        largest.sort_by_key(|f| std::cmp::Reverse(f.1));
-        let more = largest.len().saturating_sub(6);
-        largest.truncate(6);
-        Complete {
+        let slot = Arc::new(Mutex::new(None));
+        let (put, at) = (slot.clone(), path.clone());
+        crate::launch::spawn("done window", move || {
+            let looked = look(at, moved_away, files);
+            *put.lock().unwrap_or_else(|e| e.into_inner()) = Some(looked);
+        });
+        let mut c = Complete {
             id,
-            path,
+            path: path.clone(),
             size,
             dont_show: false,
             notices,
             seen: false,
             opening: None,
             moved_away,
-            folder,
-            main,
-            folder_act,
-            largest,
-            more,
+            folder: false,
+            main: None,
+            folder_act: FolderAct::Select(path),
+            largest: Vec::new(),
+            more: 0,
             gone: None,
             picked_gone: None,
+            looking: Some(slot),
+            folder_gone: false,
+        };
+        // Until the look comes: a file alone (the box is hidden its first frame anyway).
+        c.set_files(None);
+        c
+    }
+
+    /// Its files known (`files`: a folder download's; None: `path` is the file): what Open and
+    /// Open folder act on, and the menu's largest files.
+    fn set_files(&mut self, files: Option<Vec<(PathBuf, u64)>>) {
+        let (main, act) = done_targets(&self.path, files.as_deref());
+        self.folder = files.is_some();
+        let mut largest = files.unwrap_or_default();
+        largest.sort_by_key(|f| std::cmp::Reverse(f.1));
+        self.more = largest.len().saturating_sub(6);
+        largest.truncate(6);
+        (self.main, self.folder_act, self.largest) = (main, act, largest);
+    }
+
+    /// The look started by [`Complete::new`] taken in once it came: true then.
+    fn take_look(&mut self) -> bool {
+        let Some(got) = self
+            .looking
+            .as_ref()
+            .and_then(|s| s.lock().unwrap_or_else(|e| e.into_inner()).take())
+        else {
+            return false;
+        };
+        self.looking = None;
+        let mut files = got.files;
+        if got.at == self.path {
+            self.gone = self.gone.take().or(got.gone);
+            self.folder_gone = got.folder_gone;
+        } else if let Some(files) = &mut files {
+            // Dragged out and moved meanwhile: its files went with it (what was there or not
+            // is stale).
+            for (f, _) in files.iter_mut() {
+                follow(f, &got.at, &self.path);
+            }
         }
+        self.set_files(files);
+        true
     }
 
     /// Its file (or folder) was dragged out and moved to `to`: the box follows it.
     pub fn moved_to(&mut self, to: PathBuf) {
         let from = std::mem::replace(&mut self.path, to.clone());
-        let follow = |f: &mut PathBuf| {
-            if let Ok(rest) = f.strip_prefix(&from) {
-                *f = if rest.as_os_str().is_empty() {
-                    to.clone()
-                } else {
-                    to.join(rest)
-                };
-            }
-        };
-        self.largest.iter_mut().for_each(|(f, _)| follow(f));
+        self.largest
+            .iter_mut()
+            .for_each(|(f, _)| follow(f, &from, &to));
         if let Some(m) = &mut self.main {
-            follow(m);
+            follow(m, &from, &to);
         }
         match &mut self.folder_act {
-            FolderAct::Select(f) | FolderAct::Open(f) => follow(f),
+            FolderAct::Select(f) | FolderAct::Open(f) => follow(f, &from, &to),
         }
         self.moved_away = false;
         self.gone = None;
         self.picked_gone = None;
+        self.folder_gone = false;
     }
 
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
         use crate::progress::view;
         let id = format!("complete-{}", self.id);
         self.seen |= notice_seen(ctx, &id);
+        // ponytail: polled, as the look has no window to wake when it is made.
+        if !self.take_look() && self.looking.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(50));
+        }
         // Plan 13d (boards 5, 7, 13, 14): the progress window's layout language. The name row
         // (dragged out, Ctrl+C), "Done" with the size, the strip whole, the number of files, the
         // facts (Saved to, Main file), the check box, the footer.
@@ -1970,7 +2095,18 @@ impl Complete {
                 .to_string_lossy()
                 .into_owned()
         });
-        let (check_y, footer_y, body) = view::done_layout(main_name.is_some(), lines.len());
+        let files = if self.folder {
+            self.largest.len() + self.more
+        } else {
+            1
+        };
+        // The reason and the notices wrap in up to two lines each; the window grows for them.
+        let top = view::done_facts_top(files);
+        let (check_y, footer_y, body) = view::done_layout(
+            top,
+            main_name.is_some(),
+            &view::done_line_counts(ctx, &lines),
+        );
         let name = self
             .path
             .file_name()
@@ -1982,11 +2118,6 @@ impl Complete {
             crate::i18n::t("Done: {name}"),
             &[("name", &crate::i18n::isolate(&name))],
         );
-        let files = if self.folder {
-            self.largest.len() + self.more
-        } else {
-            1
-        };
         // Where it is: a folder download's own folder, a file's folder.
         let saved = display_path(if self.folder {
             &self.path
@@ -2133,8 +2264,10 @@ impl Complete {
                     let mut entries: Vec<MenuEntry<DonePick>> = Vec::new();
                     // A file alone has only Open with... under its arrow.
                     if self.folder {
+                        // A file is picked once the last one opened (or didn't).
+                        let can_pick = self.opening.is_none();
                         for (n, (f, _)) in self.largest.iter().enumerate() {
-                            let name = f.file_name().unwrap_or_default().to_string_lossy();
+                            let name = menu_name(f, &self.path, &self.largest);
                             // Cut in the middle (board 5), so its start and its kind show:
                             // the menu stays about 228 wide.
                             let shown = winui::ellipsize_middle(
@@ -2143,10 +2276,12 @@ impl Complete {
                                 &name,
                                 DONE_MENU_NAME_W,
                             );
+                            // ponytail: `label` keeps each distinct name for the app's life
+                            // (`MenuEntry` takes `&'static str`): six names a box, deduplicated.
                             entries.push(MenuEntry::Item(
                                 crate::chrome::label(&shown.replace('&', "&&")),
                                 DonePick::File(n),
-                                true,
+                                can_pick,
                                 main.as_ref() == Some(f),
                             ));
                         }
@@ -2283,7 +2418,8 @@ impl Complete {
                     view::paint_state(ui, &p, o, &look, strip);
                 }
                 // Saved to shows the download in its folder, as Open folder does.
-                let link = view::done_facts(ui, o, &saved, &lines, main_name.as_deref(), link_id);
+                let link =
+                    view::done_facts(ui, o, top, &saved, &lines, main_name.as_deref(), link_id);
                 folder |= link.clicked() || link_enter;
                 winui::checkbox(
                     ui,
@@ -2362,6 +2498,15 @@ impl Complete {
                 } else if let Some(target) = with_target.as_ref().filter(|_| with) {
                     open_download_with(target, self.moved_away);
                     Outcome::Done(())
+                } else if folder && self.folder_gone {
+                    // Nothing to show: said, and the box stays.
+                    let dir: &Path = match &self.folder_act {
+                        FolderAct::Select(f) => f.parent().unwrap_or(f),
+                        FolderAct::Open(d) => d,
+                    };
+                    // i18n: title of the message when the folder of a downloaded file can't be shown
+                    tell(crate::i18n::mark("Open folder"), folder_gone_text(dir));
+                    Outcome::Open
                 } else if folder {
                     match &self.folder_act {
                         FolderAct::Select(f) => show_download_in_folder(f, self.moved_away),
@@ -3340,8 +3485,13 @@ fn show_in_folder_now(path: &Path) {
     {
         use std::os::windows::process::CommandExt;
         if !path.exists() {
-            if let Some(dir) = path.parent().filter(|d| d.is_dir()) {
-                crate::launch::open(dir);
+            match path.parent().filter(|d| d.is_dir()) {
+                Some(dir) => crate::launch::open(dir),
+                // i18n: title of the message when the folder of a downloaded file can't be shown
+                None => tell(
+                    crate::i18n::mark("Open folder"),
+                    folder_gone_text(path.parent().unwrap_or(path)),
+                ),
             }
             return;
         }
@@ -4292,6 +4442,96 @@ mod tests {
             done_targets(&file, None),
             (Some(file.clone()), FolderAct::Select(file.clone()))
         );
+    }
+
+    /// The box's look (`Complete::new`), waited for.
+    fn looked(c: &mut Complete) {
+        let start = std::time::Instant::now();
+        while !c.take_look() {
+            assert!(
+                start.elapsed() < std::time::Duration::from_secs(10),
+                "no look"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(c.looking.is_none());
+    }
+
+    /// Plan 13 audit: the box looks off its thread, once made, whether its file is there: a
+    /// file gone says why and greys Open before Open is pressed (board 14); a folder's files
+    /// come with the look; a folder gone with its parent makes Open folder say so.
+    #[test]
+    fn the_done_window_knows_a_file_is_gone_from_the_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let gone = dir.path().join("gone.zip");
+        let mut c = Complete::new(1, gone, 3, Vec::new(), false, || None);
+        looked(&mut c);
+        assert!(c.gone.as_deref().is_some_and(|g| g.contains("gone.zip")));
+        assert!(!c.folder_gone, "its folder is there");
+
+        let album = dir.path().join("Album");
+        std::fs::create_dir(&album).unwrap();
+        std::fs::write(album.join("film.mp4"), [0u8; 64]).unwrap();
+        let listed = vec![(album.join("film.mp4"), 64), (album.join("a.srt"), 1)];
+        let mut c = Complete::new(2, album.clone(), 65, Vec::new(), false, move || {
+            Some(listed)
+        });
+        looked(&mut c);
+        assert_eq!(c.gone, None);
+        assert!(c.folder && !c.folder_gone);
+        assert_eq!(c.main, Some(album.join("film.mp4")));
+        assert_eq!(c.largest.len(), 2);
+
+        let lost = dir.path().join("no").join("such").join("f.zip");
+        let mut c = Complete::new(3, lost, 1, Vec::new(), false, || None);
+        looked(&mut c);
+        assert!(c.gone.is_some() && c.folder_gone);
+    }
+
+    /// Plan 13 audit: a download dragged out and moved, its box follows: the main file, Open
+    /// folder's target, the menu's files; what was gone is forgotten. A look that comes after
+    /// the move goes with it too.
+    #[test]
+    fn the_done_window_follows_its_download_moved() {
+        let from = PathBuf::from(r"C:\Demo\Folder");
+        let to = PathBuf::from(r"C:\Elsewhere\Folder");
+        let mut c = Complete::new(1, from.clone(), 0, Vec::new(), true, || None);
+        c.looking = None;
+        c.set_files(Some(files(&[
+            ("cover.jpg", MB / 10),
+            ("film.mp4", 734 * MB),
+        ])));
+        c.gone = Some("gone".into());
+        c.moved_to(to.clone());
+        assert_eq!(c.path, to);
+        assert_eq!(c.main, Some(to.join("film.mp4")));
+        assert_eq!(c.folder_act, FolderAct::Select(to.join("film.mp4")));
+        assert!(c.largest.iter().all(|(f, _)| f.starts_with(&to)));
+        assert!(!c.moved_away && c.gone.is_none());
+
+        let file = from.join("a.zip");
+        let mut c = Complete::new(2, file, 1, Vec::new(), false, || None);
+        c.looking = None;
+        c.moved_to(to.join("b.zip"));
+        assert_eq!(c.main, Some(to.join("b.zip")));
+        assert_eq!(c.folder_act, FolderAct::Select(to.join("b.zip")));
+
+        let listed = files(&[("film.mp4", 734 * MB), ("a.srt", 1)]);
+        let mut c = Complete::new(3, from, 0, Vec::new(), false, move || Some(listed));
+        c.moved_to(to.clone());
+        looked(&mut c);
+        assert_eq!(c.main, Some(to.join("film.mp4")));
+        assert_eq!(c.gone, None, "what the look saw at the old place is stale");
+    }
+
+    /// Plan 13 audit: the Open menu names a file by its path inside the download when another
+    /// listed file has its name.
+    #[test]
+    fn the_open_menu_tells_files_of_one_name_apart() {
+        let dir = PathBuf::from(r"C:\Demo\Folder");
+        let listed = files(&[(r"CD1\01.flac", 30), (r"CD2\01.flac", 30), ("cover.jpg", 1)]);
+        assert_eq!(menu_name(&listed[0].0, &dir, &listed), r"CD1\01.flac");
+        assert_eq!(menu_name(&listed[2].0, &dir, &listed), "cover.jpg");
     }
 
     /// Plan 12b, C1: Files already there's Yes (item 1) uses the files; No (item 0, also

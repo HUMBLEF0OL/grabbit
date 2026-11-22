@@ -3135,11 +3135,40 @@ pub const DONE_BUTTON_H: f32 = BUTTON_H;
 const DONE_ROW: f32 = 16.0;
 const DONE_LINE: f32 = 20.0;
 
-/// The Done window's places (`main`: a Main file row; `lines`: the lines under Saved to): the
-/// check box's top, the footer's, and the body's height.
-pub fn done_layout(main: bool, lines: usize) -> (f32, f32, f32) {
+/// The top of the Done window's facts for a download of `files` files: under the "N files" line,
+/// or in its place when there is none (one file).
+pub fn done_facts_top(files: usize) -> f32 {
+    if files > 1 {
+        FACTS_Y
+    } else {
+        DETAIL_BASE - 12.0
+    }
+}
+
+/// How many lines each of the Done window's `lines` under Saved to takes, wrapped as
+/// [`done_facts`] draws them (at most two each).
+pub fn done_line_counts(ctx: &egui::Context, lines: &[String]) -> Vec<usize> {
+    let p = ctx.layer_painter(egui::LayerId::background());
+    lines
+        .iter()
+        .map(|text| {
+            at_most(
+                winui::wrap_lines_font(&p, face(13.0), text, LEFT_W),
+                MESSAGE_LINES,
+            )
+            .len()
+            .max(1)
+        })
+        .collect()
+}
+
+/// The Done window's places (`top`: [`done_facts_top`]; `main`: a Main file row; `lines`: how
+/// many lines each message under Saved to takes, [`done_line_counts`]): the check box's top,
+/// the footer's, and the body's height.
+pub fn done_layout(top: f32, main: bool, lines: &[usize]) -> (f32, f32, f32) {
     let rows = 1 + usize::from(main);
-    let end = FACTS_Y + rows as f32 * (DONE_ROW + GAP) + lines as f32 * (DONE_LINE + GAP) - GAP;
+    let under: f32 = lines.iter().map(|n| *n as f32 * DONE_LINE + GAP).sum();
+    let end = top + rows as f32 * (DONE_ROW + GAP) + under - GAP;
     let check = end + 16.0;
     let footer = check + DONE_ROW + 16.0;
     (check, footer, footer + BUTTON_H + BOTTOM)
@@ -3223,11 +3252,12 @@ pub(crate) fn name_row(ui: &mut Ui, o: Pos2, name: &str, folder: bool, id: egui:
 
 /// The Done window's facts under its strip (boards 5, 7, 14): Saved to, a link that shows the
 /// download in its folder (`link`: its id); the `lines` under it in the error colour, each read
-/// out at once (why the file can't open, a notice); Main file when there is one. The link's
-/// response.
+/// out at once (why the file can't open, a notice), each wrapped in up to two lines; Main file
+/// when there is one; all from `top` ([`done_facts_top`]). The link's response.
 pub(crate) fn done_facts(
     ui: &mut Ui,
     o: Pos2,
+    top: f32,
     saved: &str,
     lines: &[String],
     main: Option<&str>,
@@ -3236,7 +3266,7 @@ pub(crate) fn done_facts(
     let p = ui.painter().clone();
     let right = o.x + EDGE + LEFT_W;
     let x = o.x + VALUE_X;
-    let mut y = FACTS_Y;
+    let mut y = top;
     key(&p, o, y, false, crate::i18n::mark("Saved to"));
     let f = face(13.0);
     let shown = winui::ellipsize_middle(&p, &f, saved, right - x);
@@ -3275,21 +3305,21 @@ pub(crate) fn done_facts(
     };
     y += DONE_ROW + GAP;
     for (k, line) in lines.iter().enumerate() {
-        let rc = cell(
+        // Wrapped as `done_line_counts` measured it, so the window has room for each line.
+        let (rc, n) = message_lines(
             ui,
             &p,
-            face(13.0),
             o.x + EDGE,
             o.y + y + 15.0,
             right,
             line,
             winui::ERROR(),
-            ("done-line", k),
+            &format!("done-line-{k}"),
         );
         let id = egui::Id::unique(("done-line", k, ui.ctx().viewport_id()));
         let read = ui.interact(rc, id, Sense::hover());
         winui::expose(&read, egui::Role::Alert, line, true, None);
-        y += DONE_LINE + GAP;
+        y += n.max(1) as f32 * DONE_LINE + GAP;
     }
     if let Some(main) = main {
         // i18n: label in the Done window: the file the download is mostly made of (Open opens it)
@@ -4021,15 +4051,26 @@ mod tests {
             "Done, 734.00 MB, 2 files"
         );
         // Board 5: Saved to and Main file, the check box, the footer, 268 high with its 20 under
-        // it; a line under Saved to (board 14) makes room for itself.
-        let (check, footer, height) = done_layout(true, 0);
+        // it; a line under Saved to (board 14) makes room for itself, two when it wraps.
+        let top = done_facts_top(2);
+        assert_eq!(top, FACTS_Y);
+        let (check, footer, height) = done_layout(top, true, &[]);
         assert_eq!(
             (check, footer),
             (FACTS_Y + 16.0 + GAP + 16.0 + 16.0, check + 32.0)
         );
         assert_eq!(height, footer + BUTTON_H + BOTTOM);
-        assert_eq!(done_layout(true, 1).2, height + DONE_LINE + GAP);
-        assert_eq!(done_layout(false, 0).2, height - DONE_ROW - GAP);
+        assert_eq!(done_layout(top, true, &[1]).2, height + DONE_LINE + GAP);
+        // A reason wrapped in two lines (board 14) makes room for both.
+        assert_eq!(
+            done_layout(top, true, &[2, 1]).2,
+            height + 3.0 * DONE_LINE + 2.0 * GAP
+        );
+        assert_eq!(done_layout(top, false, &[]).2, height - DONE_ROW - GAP);
+        // One file: no "N files" line; the facts take its place.
+        let one = done_facts_top(1);
+        assert_eq!(one + 12.0, DETAIL_BASE);
+        assert_eq!(done_layout(one, true, &[]).2, height - (FACTS_Y - one));
         // The footer from the right edge, a split button's parts touching.
         let xs = row_from_right(&[(56.0, false), (30.0, true), (90.0, false), (60.0, false)]);
         assert_eq!(xs[3], DONE_W - EDGE - 60.0);

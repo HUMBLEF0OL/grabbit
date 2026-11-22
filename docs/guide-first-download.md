@@ -11,7 +11,7 @@ From a copied link to an opened file in a minute or two.
 3. Click **Download 1** (or press **Enter**).
 4. **Download file info** shows the file's name, its size and where it will be saved. The folder depends on the file's type: a ZIP goes to `Downloads\Compressed`, a video to `Downloads\Video`, and so on. Change the folder or the category if you like.
 5. Click **Download now**.
-6. The progress window shows the download: its speed, the time left, and what each connection is doing.
+6. The progress window shows the download: how far it is, the time left and the speed. **Show details** lists what each connection is doing.
 7. When it finishes, the **Done** window appears. Click **Open** to open the file, or **Open folder** to see it in Explorer.
 
 <!-- steps -->
@@ -20,7 +20,7 @@ From a copied link to an opened file in a minute or two.
    *Add: Grabbit puts the address you copied in the box (paste it there if it isn't). Click Download 1.*
 2. ![Download file info with the file's name, size and folder](images/help/first-file-info.webp)
    *Check the folder, then Download now.*
-3. ![The progress window: speed, time left and each connection's share of the file](images/help/first-progress.webp)
+3. ![The progress window: how far it is, the time left, a strip of the file's parts and the speed](images/help/first-progress.webp)
    *The progress window shows it coming in.*
 4. ![The Done window with Open and Open folder](images/help/first-complete.webp)
    *Done: Open the file, or Open folder.*

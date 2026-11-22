@@ -737,6 +737,11 @@ Done since 1.0.1; ships in the next release.
   columns fit what they show, the detail line cuts a long speed at its end, an expired link says
   how to carry on, a download stopped before its first byte reads a dash, and the compact window
   reads only a torrent's pieces.
+- ✅ Plan 13's audit fixes: the Done window says a file gone from its first frames (looked for
+  off its thread), lists a gallery's or a debrid folder's files, tells files of one name apart,
+  keeps itself and says why when Open folder's folder is gone, wraps its reason over two lines
+  and drops the empty file-count line of a single file; "Don't show this window again" and
+  Options reach progress windows already open whose When done wasn't changed by hand.
 
 ## Being worked on
 
