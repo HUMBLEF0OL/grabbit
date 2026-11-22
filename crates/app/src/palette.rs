@@ -166,8 +166,8 @@ palette! {
     selection_inactive: "selection.inactive", "A selected row in a list without the focus" = grey(0x4a), grey(0xd9);
     selection_focus: "selection.focus", "The focused row's dotted outline on a selected row" = rgb(0xff, 0x99, 0x33), rgb(0xff, 0x99, 0x33);
     // ---- separators, tabs ----
-    etch_shadow: "etch.shadow", "An etched separator's shadow line" = grey(0x22), grey(0xa0);
-    etch_light: "etch.light", "An etched separator's highlight line" = grey(0x50), grey(0xff);
+    etch_shadow: "etch.shadow", "An etched separator's shadow line (unused since plan 12 G2: separators are one hairline)" = grey(0x22), grey(0xa0);
+    etch_light: "etch.light", "An etched separator's highlight line (unused since plan 12 G2: separators are one hairline)" = grey(0x50), grey(0xff);
     tab_page: "tab.page", "A tab page's body" = grey(0x40), grey(0xf9);
     tab: "tab", "An unselected tab, and the page's shadow" = grey(0x33), grey(0xf3);
     tab_hot: "tab.hot", "A tab under the pointer" = grey(0x46), grey(0xfd);
@@ -365,6 +365,9 @@ metrics! {
     menu_item_radius: "radius.menu-item", "Corner radius of a menu item under the pointer" = 4.0;
     widget_radius: "radius.egui", "Corner radius of egui's own widgets" = 2.0;
     popup_radius: "radius.popup", "Corner radius of tooltips" = 4.0;
+    card_radius: "radius.card", "Corner radius of a card (a file's header, a helper, a sign-in code)" = 8.0;
+    tick_width: "tick.width", "Stroke width of a tick (a check box's, a menu item's, a filter chip's)" = 1.4;
+    line_paragraph: "line.paragraph", "Line height of a wrapped paragraph of dialog text" = 13.0;
     border: "border", "Width of a control's border" = 1.0;
     focus_line: "focus-line", "Height of a focused text box's accent line" = 2.0;
     chevron_width: "chevron.width", "Stroke width of a drop-down's chevron" = 1.2;

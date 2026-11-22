@@ -413,7 +413,7 @@ impl ReportWindow {
         );
         winui::text_font(
             &p,
-            winui::tahoma_bold(),
+            winui::tahoma_title(),
             o.x + 68.0,
             o.y + 30.0,
             self.heading(alive),
@@ -429,7 +429,7 @@ impl ReportWindow {
             ),
             winui::TEXT(),
             o.x + RIGHT,
-            15.0,
+            crate::theme::metrics().line_paragraph,
         );
 
         // What the user was doing.

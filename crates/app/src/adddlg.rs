@@ -275,12 +275,7 @@ impl AddWindow {
             W - 2.0 * winui::EDGE,
             ROW_H * ROWS as f32,
         );
-        p.rect_stroke(
-            list,
-            6.0,
-            egui::Stroke::new(1.0, c.menubar_line),
-            egui::StrokeKind::Inside,
-        );
+        winui::card(&p, list, false);
         if found.is_empty() {
             // i18n: Add: the empty list under the box
             let hint = crate::i18n::t("Type or paste addresses above, or drop them here.");

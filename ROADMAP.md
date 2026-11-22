@@ -693,6 +693,12 @@ Done since 1.0.1; ships in the next release.
   with one space before the unit, **KB/s**, **MB/s** and **MB** (on the phone page too), and the
   list's dates without seconds, and without the year when it is this year. The help pages and the
   mockup name things as the app does.
+- ✅ One visual system (plan 12d): one browse button (a square "…" as tall as a box) everywhere,
+  the 1 pixel hairline for every separator in every theme, focus rings only from the keyboard,
+  the title bar's search box drawn as every text box, one loading look (a spinner and a line),
+  one card frame for cards, one tick stroke and one paragraph line height (theme sizes `radius.card`,
+  `tick.width`, `line.paragraph`), Time left wide enough for "59 min 59 sec", and the RSS feeds
+  and Link grabber forms on the dialogs' label column and control height.
 
 ## Being worked on
 
@@ -939,9 +945,6 @@ kept on the `archive/multiplatform-i18n` branch.
 
 ### Look and performance
 
-- 📋 One way of drawing each thing (plan 12, `design/graphite/plans/12-ui-consistency.md`): the
-  shared pieces (separators, focus rings, the Find box, browse buttons) drawn one way (its delete
-  safety, states and routes, and words, 12a–12c, are done: see Next version)
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))
 - 📋 A new download window (plan 13, `design/graphite/plans/13-download-window.md`): one large

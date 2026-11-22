@@ -126,9 +126,9 @@ impl CategoryDialog {
                     "category-types-hint",
                 );
                 label(122.0, crate::i18n::mark("Folder"));
-                // Browse as wide as its label needs; the box ends 8 px before it.
-                let browse_w = winui::footer_button_width(&p, "Browse...", false);
-                let browse_x = right - browse_w;
+                // The one browse control (plan 12 C5): a square `gx-dots`; the box ends 8 px
+                // before it.
+                let browse_x = right - h;
                 winui::edit_light(
                     ui,
                     r(o, fx, 122.0, browse_x - 8.0 - fx, h),
@@ -136,12 +136,12 @@ impl CategoryDialog {
                     true,
                     false,
                 );
-                if winui::button_light(
+                if winui::icon_only_button(
                     ui,
-                    r(o, browse_x, 122.0, browse_w, h),
-                    "Browse...",
-                    ButtonKind::Normal,
-                    false,
+                    r(o, browse_x, 122.0, h, h),
+                    "gx-dots",
+                    "Browse",
+                    true,
                 )
                 .clicked()
                 {

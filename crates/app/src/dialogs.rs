@@ -1227,7 +1227,7 @@ impl FileInfo {
                 // The file's card: its kind's icon, its name, its size (or why there is none),
                 // and the greyed Preview.
                 let (size, reason) = match &self.info {
-                    None => ("...".to_owned(), None),
+                    None => (String::new(), None),
                     Some(Ok(pi)) => (
                         // i18n: a download's size is not known (the server didn't say)
                         pi.size
@@ -1241,15 +1241,26 @@ impl FileInfo {
                     .file_name()
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_default();
+                let card = r(o, lx, 16.0, right - lx, 66.0);
                 let (preview, size_at) = winui::file_card(
                     ui,
-                    r(o, lx, 16.0, right - lx, 66.0),
+                    card,
                     crate::fileicons::Kind::File(&name),
                     &name,
                     &size,
                     // i18n: verb: open the part already downloaded
                     Some(("Preview", ButtonKind::Disabled)),
                 );
+                // Still asking: the one loading look (plan 12 E4) where the size goes, the
+                // spinner alone, ending before Preview.
+                if self.info.is_none() {
+                    // The card's sub line: 14 under its middle (file_card).
+                    let base = card.center().y + 14.0;
+                    let end = preview
+                        .as_ref()
+                        .map_or(card.right() - 12.0, |b| b.rect.left() - 12.0);
+                    crate::torrentdlg::loading(ui, size_at.left(), base, "", winui::MUTED(), end);
+                }
                 if let Some(preview) = preview {
                     preview.on_hover_text(crate::i18n::t(
                         // i18n: tooltip of the greyed Preview button in Download File Info

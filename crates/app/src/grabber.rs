@@ -21,11 +21,13 @@ use crate::winui::{
 
 const ROW: f32 = 18.0;
 /// Where the window's footer starts (Later, Download now, Cancel), and its width.
-const FOOTER_Y: f32 = 438.0;
+const FOOTER_Y: f32 = 452.0;
 const GRABBER_W: f32 = 680.0;
 /// Where the content ends: the list's and the rows' right edge, and the package's boxes'.
 const RIGHT: f32 = GRABBER_W - 11.0;
-const BOX_RIGHT: f32 = GRABBER_W - 19.0;
+/// The package form's rows (control-height, 8 apart; plan 12 C6), its check boxes under them.
+const NAME_Y: f32 = 344.0;
+const FOLDER_Y: f32 = 382.0;
 /// Links looked up at once, and at once from one host.
 const CHECKS: usize = 8;
 const CHECKS_PER_HOST: usize = 4;
@@ -997,50 +999,32 @@ impl Grabber {
                 &mut blank.4,
             ),
         };
-        let ink = if enabled {
-            LIGHT_TEXT()
-        } else {
-            winui::LIGHT_DISABLED()
-        };
-        // Labels before their boxes: a column as wide as this language's longest (up to 160 px).
+        // A form (plan 12 C6): labels from the caption's x, the boxes from the form's column to
+        // the list's edge, control-height rows 8 apart.
+        let h = winui::CONTROL_H;
         // i18n: Link grabber: the package's name (a label before its box)
-        let name_label = crate::i18n::t("Name");
+        // (English here: form and form_label translate them.)
+        let name_label = "Name";
         // i18n: Link grabber: the folder the package's files go to (a label before its box)
-        let folder_label = crate::i18n::t("Save to");
+        let folder_label = "Save to";
         // i18n: Link grabber: the package's archives' password (a label before its box)
-        let pw_label = crate::i18n::t("Password");
-        let wide = |s: &str| winui::text_width(&p, s);
-        let bx = (21.0 + wide(name_label).max(wide(folder_label)) + 8.0).clamp(80.0, 160.0);
-        let label = |ui: &Ui, x: f32, y: f32, s: &str, right: f32| {
-            winui::fit(
-                ui,
-                &p,
-                o.x + x,
-                o.y + y,
-                s,
-                ink,
-                o.x + right,
-                ("grabber-label", y as i32, x as i32),
-            );
-        };
-        // Row 1: the name, then the password.
-        label(ui, 21.0, 360.0, name_label, bx - 4.0);
+        let pw_label = "Password";
+        let lx = 20.0;
+        let bx = winui::form(&p, lx, &[name_label, folder_label], false);
+        let label = |x: f32, y: f32, s: &str| winui::form_label(&p, o, x, y, h, s, enabled);
+        // Row 1: the name, then the password (its label 12 before its box).
+        label(lx, NAME_Y, name_label);
         let pw_x = 340.0;
-        let pbx = (pw_x + wide(pw_label) + 8.0).min(470.0);
+        let pbx = (pw_x + winui::text_width(&p, crate::i18n::t(pw_label)) + 12.0).ceil();
         let named = winui::edit_light(
             ui,
-            r(o, bx, 345.0, pw_x - 12.0 - bx, 23.0),
+            r(o, bx, NAME_Y, pw_x - 12.0 - bx, h),
             name,
             enabled,
             false,
         );
-        label(ui, pw_x, 360.0, pw_label, pbx - 4.0);
-        let pw = winui::password_light(
-            ui,
-            r(o, pbx, 345.0, BOX_RIGHT - pbx, 23.0),
-            password,
-            enabled,
-        );
+        label(pw_x, NAME_Y, pw_label);
+        let pw = winui::password_light(ui, r(o, pbx, NAME_Y, RIGHT - pbx, h), password, enabled);
         // i18n: what a screen reader calls Link grabber's password box
         let pw_name = crate::i18n::t("Archive password");
         ui.ctx().accesskit_node_builder(pw.id, |n| {
@@ -1049,13 +1033,11 @@ impl Grabber {
             // not read out to them).
             n.set_author_id("grabber-password");
         });
-        // Row 2: the folder, and Browse.
-        label(ui, 21.0, 391.0, folder_label, bx - 4.0);
-        // The "..." browse button, square, at the row's end.
-        let bw = 23.0;
+        // Row 2: the folder, and the one browse control (plan 12 C5) at the row's end.
+        label(lx, FOLDER_Y, folder_label);
         let typed = winui::edit_light(
             ui,
-            r(o, bx, 376.0, BOX_RIGHT - bw - 8.0 - bx, 23.0),
+            r(o, bx, FOLDER_Y, RIGHT - h - 8.0 - bx, h),
             folder,
             enabled,
             false,
@@ -1067,17 +1049,17 @@ impl Grabber {
                 ui,
                 &p,
                 o.x + bx + 5.0,
-                o.y + 391.0,
+                o.y + winui::baseline_in(FOLDER_Y, h),
                 each,
                 winui::MUTED(),
-                o.x + BOX_RIGHT - bw - 12.0,
+                o.x + RIGHT - h - 12.0,
                 "grabber-each",
             );
         }
         // i18n: verb: choose a folder (the "..." button's tooltip)
         let browse = winui::icon_only_button(
             ui,
-            r(o, BOX_RIGHT - bw, 376.0, bw, 23.0),
+            r(o, RIGHT - h, FOLDER_Y, h, h),
             "gx-dots",
             "Browse",
             enabled,
@@ -1099,13 +1081,14 @@ impl Grabber {
         let was = *extract;
         // i18n: Link grabber check box: extract the package's archives once they are downloaded
         let extract_label = crate::i18n::mark("Extract when done");
-        winui::checkbox_light(ui, o + vec2(21.0, 411.0), extract, extract_label, enabled);
+        let check_y = FOLDER_Y + h + 10.0;
+        winui::checkbox_light(ui, o + vec2(lx, check_y), extract, extract_label, enabled);
         let extract_now = *extract;
-        let next = 21.0 + 18.0 + wide(crate::i18n::t(extract_label)) + 24.0;
+        let next = lx + 18.0 + winui::text_width(&p, crate::i18n::t(extract_label)) + 24.0;
         // i18n: Link grabber check box: after extracting, the archives go to the Recycle Bin
         winui::checkbox_light(
             ui,
-            o + vec2(next, 411.0),
+            o + vec2(next, check_y),
             delete,
             "Delete archives after extracting",
             enabled && extract_now,
