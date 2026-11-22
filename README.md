@@ -119,7 +119,7 @@ one:
     <td><img src="docs/images/add-torrent.webp" alt="Add torrent"><br><sub><b>Torrents and magnet links</b>: pick the files you want, skip the rest.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/progress-torrent.webp" alt="A torrent's progress window"><br><sub><b>A torrent's progress</b>: its files, peers, trackers and pieces, in tabs.</sub></td>
+    <td><img src="docs/images/progress-torrent.webp" alt="A torrent's progress window"><br><sub><b>A torrent's progress</b>: its files, peers and trackers in tabs, its pieces in the strip.</sub></td>
     <td><img src="docs/images/progress-video.webp" alt="A video's progress window"><br><sub><b>A video's progress</b>: speed and time left while yt-dlp brings it in.</sub></td>
   </tr>
   <tr>

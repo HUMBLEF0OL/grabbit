@@ -1122,10 +1122,6 @@ fn shortcut_cmd(i: &mut egui::InputState, focused: bool) -> Option<Cmd> {
     }
 }
 
-/// Copy address (plan 12b, B4): the addresses of the chosen downloads that aren't torrents
-/// (a torrent's, local or through a debrid account, is Copy magnet link's), one a line,
-/// without a password written in them (as the Details pane shows them); None when none has
-/// one to copy.
 /// Whether the torrent session keeps or restores a torrent at its start: one not finished
 /// always; a finished one while Keep sharing is on, under its seeding limits, and not stopped
 /// sharing by hand (`unshared`, plan 13b).
@@ -1145,6 +1141,10 @@ fn shows_done_window(setting: bool, window: Option<bool>) -> bool {
     window.unwrap_or(setting)
 }
 
+/// Copy address (plan 12b, B4): the addresses of the chosen downloads that aren't torrents
+/// (a torrent's, local or through a debrid account, is Copy magnet link's), one a line,
+/// without a password written in them (as the Details pane shows them); None when none has
+/// one to copy.
 fn addresses(chosen: &[&Item]) -> Option<String> {
     let lines: Vec<String> = chosen
         .iter()
