@@ -265,3 +265,7 @@ retakes the pictures they name):
   the known differences are in each part's PR: "1 hour(s) 12 min" in the app's own time format,
   Segoe UI Regular for the reading, Details 20 points taller to keep one height in every state)
 - [x] ROADMAP and CHANGELOG lines per part; docs and help pictures updated for the changed names
+- [x] Post-merge audit (2026-11-22): four fresh auditors, one per part, on `dev` e8b6ec46; every
+  finding (8 should-fix, about 20 nits) fixed in one PR, audited until APPROVED (the progress
+  window's fixes in 2 rounds, the Done window's in 4), built and tested together; the "As built"
+  notes above record what was kept on purpose
