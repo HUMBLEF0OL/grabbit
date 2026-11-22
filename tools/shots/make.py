@@ -65,6 +65,7 @@ SS = 4  # supersampling for the annotations
 # by it, and each picture is scaled back down to 1x, so every picture matches whatever the
 # display was.
 K = 1.0
+TAKEN_AT = 1.0  # --scale; K is it for a window taken now, 1 for a picture `from` the repository
 
 
 def load() -> list[dict]:
@@ -263,8 +264,10 @@ def save_webp(img, path: Path, lossy: int = 0) -> None:
 
 def build(shots: list[dict]) -> None:
     from PIL import Image
+    global K
     made = 0
     for s in shots:
+        K = TAKEN_AT if s.get("take") else 1.0
         for mode in ("light", "dark"):
             if s.get("take"):
                 raw = RAW / mode / f"{raw_name(s['take'])}.png"
@@ -446,8 +449,10 @@ def main() -> int:
     ap.add_argument("--scale", type=float, default=1.0,
                     help="the display's scale the raw pictures were taken at (2 at 200 %%); pictures come out at 1x")
     a = ap.parse_args()
-    global K
-    K = a.scale
+    if a.scale <= 0:
+        sys.exit("--scale: the display's scale, above 0 (2 at 200 %)")
+    global TAKEN_AT
+    TAKEN_AT = a.scale
     shots = load()
     if a.step == "check":
         return check(shots)

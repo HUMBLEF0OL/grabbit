@@ -29,13 +29,19 @@ pub type Later = Box<dyn FnOnce() -> Vec<PathBuf> + Send>;
 /// own).
 type Remove = dyn Fn(&Path) -> io::Result<()> + Send + Sync;
 
+/// How a finished file goes ([`recycle`]; the tests' own): with `true`, its place may be a
+/// folder of its own (a debrid torrent's files).
+type Trash = dyn Fn(&Path, bool) -> io::Result<()> + Send + Sync;
+
 /// A finished file to the Recycle Bin (`trash`: [`crate::extractq::to_trash`]; a test's folder).
 /// A file already gone is NotFound, as `remove_file` says it; one the shell kept is an error.
-/// Only a file goes: anything else at `path` (a gallery's folder, a link) stays, untouched, and
-/// is said. Only NotFound counts as gone: a file that can't be looked at (access denied, a
-/// network share dropped) is a failure, never taken for deleted.
-fn recycle(path: &Path, trash: impl Fn(&[PathBuf]) -> bool) -> io::Result<()> {
-    if !std::fs::symlink_metadata(path)?.is_file() {
+/// Only a file goes, or with `own_folder` a folder Grabbit made for the download (a debrid
+/// torrent's): anything else at `path` (a gallery's folder, a link) stays, untouched, and is
+/// said. Only NotFound counts as gone: a file that can't be looked at (access denied, a network
+/// share dropped) is a failure, never taken for deleted.
+fn recycle(path: &Path, own_folder: bool, trash: impl Fn(&[PathBuf]) -> bool) -> io::Result<()> {
+    let meta = std::fs::symlink_metadata(path)?;
+    if !(meta.is_file() || own_folder && meta.is_dir()) {
         tracing::warn!(
             "delete: {} is not a file; it stays (never to the Recycle Bin)",
             path.display()
@@ -85,6 +91,8 @@ pub struct Doomed {
     /// Its files go so that a download starts at `place` afresh ([`Doomed::clearing`]): the
     /// downloads starting in its folder wait for them meanwhile.
     clearing: Option<naming::Clearing>,
+    /// `place` may be a folder Grabbit made for it (a debrid torrent's files), which goes whole.
+    own_folder: bool,
 }
 
 impl Doomed {
@@ -98,7 +106,15 @@ impl Doomed {
             later,
             hold,
             clearing: None,
+            own_folder: false,
         }
+    }
+
+    /// Its place is a folder Grabbit made for it (a debrid torrent's): it goes whole when it is
+    /// a folder.
+    pub fn own_folder(mut self, yes: bool) -> Doomed {
+        self.own_folder = yes;
+        self
     }
 
     /// A download's files deleted for a download that starts at `place` afresh, under the same
@@ -115,6 +131,7 @@ impl Doomed {
             later,
             hold: None,
             clearing,
+            own_folder: false,
         }
     }
 
@@ -152,7 +169,7 @@ const LET_GO: Duration = Duration::from_secs(2);
 /// The working data goes with `remove`, the finished file with `trash` (the Recycle Bin). A file
 /// already gone is no failure, and only the finished file's are told: the rest is the
 /// download's own working data.
-fn delete_one(mut d: Doomed, remove: &Remove, trash: &Remove) -> Option<Failure> {
+fn delete_one(mut d: Doomed, remove: &Remove, trash: &Trash) -> Option<Failure> {
     // Paused a moment before and still writing to a slow disk (upstream issue 1328): its last
     // write and its resume state come first, so neither comes back after the delete.
     naming::wait_settled(&d.place);
@@ -184,7 +201,7 @@ fn delete_one(mut d: Doomed, remove: &Remove, trash: &Remove) -> Option<Failure>
             remove(&f)
         };
     }
-    let failed = finished.and_then(|f| match trash(&f) {
+    let failed = finished.and_then(|f| match trash(&f, d.own_folder) {
         Err(e) if e.kind() != io::ErrorKind::NotFound => Some(Failure {
             name: std::mem::take(&mut d.name),
             error: e.to_string(),
@@ -199,7 +216,7 @@ fn delete_one(mut d: Doomed, remove: &Remove, trash: &Remove) -> Option<Failure>
 }
 
 /// A batch, in order; the finished files that couldn't go.
-fn delete_batch(batch: Vec<Doomed>, remove: &Remove, trash: &Remove) -> Vec<Failure> {
+fn delete_batch(batch: Vec<Doomed>, remove: &Remove, trash: &Trash) -> Vec<Failure> {
     batch
         .into_iter()
         .filter_map(|d| delete_one(d, remove, trash))
@@ -235,7 +252,7 @@ pub struct Deleter {
     /// None when no thread could be made: then each batch goes on the caller's.
     tx: Option<mpsc::Sender<Vec<Doomed>>>,
     remove: Arc<Remove>,
-    trash: Arc<Remove>,
+    trash: Arc<Trash>,
     report: Arc<dyn Fn(Vec<Failure>) + Send + Sync>,
     pending: Arc<(Mutex<usize>, Condvar)>,
 }
@@ -246,10 +263,10 @@ impl Deleter {
     pub fn new(wake: impl Fn() + Send + Sync + 'static) -> Deleter {
         // ponytail: an App's own deleter in the tests deletes outright, so they never fill the
         // real Recycle Bin; the Recycle Bin path is tested with a folder of its own below.
-        let trash: Arc<Remove> = if cfg!(test) {
-            Arc::new(|p: &Path| std::fs::remove_file(p))
+        let trash: Arc<Trash> = if cfg!(test) {
+            Arc::new(|p: &Path, _| std::fs::remove_file(p))
         } else {
-            Arc::new(|p: &Path| recycle(p, crate::extractq::to_trash))
+            Arc::new(|p: &Path, own| recycle(p, own, crate::extractq::to_trash))
         };
         Deleter::with_trash(
             Arc::new(|p: &Path| std::fs::remove_file(p)),
@@ -271,14 +288,15 @@ impl Deleter {
         report: impl Fn(Vec<Failure>) + Send + Sync + 'static,
     ) -> Deleter {
         let remove: Arc<Remove> = Arc::new(remove);
-        Deleter::with_trash(remove.clone(), remove, report)
+        let both = remove.clone();
+        Deleter::with_trash(remove, Arc::new(move |p: &Path, _| both(p)), report)
     }
 
     /// [`Deleter::new`] with its own ways to delete the working data (`remove`) and the
     /// finished file (`trash`), and to say what failed.
     pub(crate) fn with_trash(
         remove: Arc<Remove>,
-        trash: Arc<Remove>,
+        trash: Arc<Trash>,
         report: impl Fn(Vec<Failure>) + Send + Sync + 'static,
     ) -> Deleter {
         let report: Arc<dyn Fn(Vec<Failure>) + Send + Sync> = Arc::new(report);
@@ -558,7 +576,7 @@ mod tests {
             Arc::new(|p: &Path| std::fs::remove_file(p)),
             Arc::new({
                 let bin = bin.clone();
-                move |p: &Path| recycle(p, |f| crate::extractq::into_test_trash(&bin, f))
+                move |p: &Path, own| recycle(p, own, |f| crate::extractq::into_test_trash(&bin, f))
             }),
             move |f| {
                 let _ = tx.lock().unwrap().send(f);
@@ -583,7 +601,7 @@ mod tests {
         );
         // The bin refuses: the file stays, and is said.
         std::fs::write(&file, b"x").unwrap();
-        let kept = recycle(&file, |_| false).unwrap_err();
+        let kept = recycle(&file, false, |_| false).unwrap_err();
         assert_ne!(kept.kind(), io::ErrorKind::NotFound);
         assert!(file.exists());
     }
@@ -598,18 +616,18 @@ mod tests {
         std::fs::create_dir(&folder).unwrap();
         std::fs::write(folder.join("1.jpg"), b"x").unwrap();
         let never = |_: &[PathBuf]| -> bool { panic!("not handed to the Recycle Bin") };
-        let kept = recycle(&folder, never).unwrap_err();
+        let kept = recycle(&folder, false, never).unwrap_err();
         assert_ne!(kept.kind(), io::ErrorKind::NotFound);
         assert!(kept.to_string().contains("not a file"), "{kept}");
         assert!(folder.join("1.jpg").exists());
-        let unreadable = recycle(&dir.path().join("bad|name.zip"), never).unwrap_err();
+        let unreadable = recycle(&dir.path().join("bad|name.zip"), false, never).unwrap_err();
         assert_ne!(unreadable.kind(), io::ErrorKind::NotFound, "{unreadable}");
         // Through the deleter: said as a failure, the folder untouched.
         let (tx, rx) = mpsc::channel();
         let tx = Mutex::new(tx);
         let deleter = Deleter::with_trash(
             Arc::new(|p: &Path| std::fs::remove_file(p)),
-            Arc::new(move |p: &Path| recycle(p, never)),
+            Arc::new(move |p: &Path, own| recycle(p, own, never)),
             move |f| {
                 let _ = tx.lock().unwrap().send(f);
             },
@@ -623,6 +641,14 @@ mod tests {
         assert!(deleter.finish(Duration::from_secs(10)));
         assert_eq!(rx.try_recv().unwrap().len(), 1, "said");
         assert!(folder.join("1.jpg").exists());
+        // A folder Grabbit made for the download (a debrid torrent's files) goes whole.
+        let bin = dir.path().join("bin");
+        recycle(&folder, true, |f| crate::extractq::into_test_trash(&bin, f)).unwrap();
+        assert!(
+            bin.join("gallery").join("1.jpg").exists(),
+            "in the Recycle Bin, whole"
+        );
+        assert!(!folder.exists());
     }
 
     /// A place another download holds (for longer than its own run takes to let go) is that

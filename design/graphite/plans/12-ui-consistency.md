@@ -408,7 +408,8 @@ Changes made at the helper where possible. Costly items are last and can be spli
   `find.rs:528`). Use one metric.
   - **As built:** `tick.width`. The Square check look (another look's own metric) keeps its 2.0,
     as `tick.width`'s description says. The unused `etch.shadow` / `etch.light` roles went with
-    G2 (a theme file that still sets them is fine: unknown keys are skipped).
+    G2 (a theme file that still sets them loads; each of the two keys is skipped with a
+    "not a colour role" warning).
 - **C6 (layout), costly.** Link grabber (`grabber.rs:1035`, `1061`) and RSS feeds (`rssdlg.rs:161`,
   `168`, `631`) place 22–23 px boxes at fixed x. Move them onto `winui::form`, `CONTROL_H` and `EDGE`.
   RSS is cheap (1 upstream commit). The grabber is a re-layout of a medium-churn file: do it last, in

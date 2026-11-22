@@ -2424,11 +2424,13 @@ impl App {
                     // A gallery's folder stays (#58): the deleter takes only a file.
                     let complete = item.status == Status::Complete && item.gallery.is_none();
                     let name = item.file_name.clone();
+                    let own = item.remote.is_some();
                     let doomed = if dest == old {
                         crate::deleter::Doomed::clearing(name, old, complete, None)
                     } else {
                         crate::deleter::Doomed::new(name, old, complete, None)
-                    };
+                    }
+                    .own_folder(own);
                     self.deleter.delete(vec![doomed]);
                     let item = self.item(id).expect("the download just found");
                     if let Some(name) = dest.file_name() {
@@ -4061,12 +4063,16 @@ impl App {
             // player); the row leaves the list all the same.
             let later = LeftoverSearch::of(&self.items, id)
                 .map(|s| Box::new(move || s.find()) as crate::deleter::Later);
-            doomed = Some(crate::deleter::Doomed::new(
-                i.file_name.clone(),
-                i.dest.clone(),
-                i.status == Status::Complete,
-                later,
-            ));
+            // A debrid torrent's folder (its files) is Grabbit's own: it goes whole.
+            doomed = Some(
+                crate::deleter::Doomed::new(
+                    i.file_name.clone(),
+                    i.dest.clone(),
+                    i.status == Status::Complete,
+                    later,
+                )
+                .own_folder(i.remote.is_some()),
+            );
         }
         self.items.retain(|i| i.id != id);
         for q in &mut self.queues {
@@ -9835,7 +9841,9 @@ impl App {
             item.dest.clone(),
             item.status == Status::Complete && item.gallery.is_none(),
             later,
-        );
+        )
+        // A debrid torrent's folder is Grabbit's own: it goes whole.
+        .own_folder(item.remote.is_some());
         self.deleter.delete(vec![doomed]);
         self.delete(id);
     }
