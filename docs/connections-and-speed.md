@@ -8,27 +8,35 @@ Each running download has its own progress window. It opens when the download st
 
 ![The progress window](images/progress.webp)
 
-It shows:
+It shows the file's name (and, when it isn't simply downloading, its state: **Stopped**, **Waiting**, **Error** and so on), then:
 
-- **Status** — **Connecting...**, **Receiving data...**, **Stopped**, **Complete** or the error.
-- **File size**, **Downloaded** and **Transfer rate**.
-- **Time left**.
-- **Resume capability** — **Yes** if the server lets Grabbit continue the download later, **No** if it doesn't.
-- **Server** — where the server is, and how near. See [Where the server is](#where-the-server-is).
-- A bar of the whole file, showing where each connection started and how far it has got.
+- How far it is, large, with the time left beside it.
+- A strip of the whole file. The file is split into parts that download side by side; each part
+  has its own place in the strip, as wide as its share of the file, filled as far as it has come,
+  with a small white mark where it is being written now. With many small parts the strip is one
+  plain fill. A torrent's strip shows its pieces: the brighter a place, the more of its pieces
+  are in. A video's strip is one plain fill.
+- How much has come of the whole (**2.38 of 5.80 GB**), and the speed.
 
 **Show details** widens the window to the right (it moves left if it would run past the screen's edge); **Hide details** makes it narrow again. On the left:
 
 - **Saved to** — the folder; its button shows the download there.
 - **From** — the download's address; its button copies it.
+- **Server** — where the server is, and how near. See [Where the server is](#where-the-server-is).
+- **Can resume** — **Yes** if the server lets Grabbit continue the download later, **No** if it doesn't.
 - **Limit** — a limit for this download only. See [For one download](#for-one-download).
 - **When done** — what happens when this download finishes: **Show the Done window**, **Do nothing**, **Exit Grabbit**, **Shut down**, **Sleep** or **Hibernate**. With the last three, **Force apps to close** keeps other programs from holding it up.
 
-On the right, **Connections**: one row per connection, with its number, how much it has downloaded and what it is doing right now.
+A video shows **Format** and **Downloaded by** in place of **Server** and **Can resume**.
+
+On the right, **Speed, last 60 s**: a graph of the last minute, with the limit as a dashed line,
+so you can see whether the limit holds the download back. It starts empty when the window opens.
+Under it, **Connections**: one row per connection, with its number, how much it has received and
+its speed, or what it is doing (receiving ones first, then those retrying, connecting, and done).
 
 The buttons:
 
-- **Stop** stops the download and keeps what it has; **Resume** continues it. When the server can't resume (**Resume capability: No**), **Stop** asks first, since the download would start over: **Keep downloading** or **Stop anyway**.
+- **Stop** stops the download and keeps what it has; **Resume** continues it. When the server can't resume (**Can resume: No**), **Stop** asks first, since the download would start over: **Keep downloading** or **Stop anyway**.
 - A failed download offers **Retry**, or **Refresh download address...** when its link expired or was refused. When the site sent a web page instead of the file, **Open in browser** gets past it.
 - **Cancel** stops the download and closes the window. The download stays in the list and can be resumed.
 - Closing the window with its close box, or pressing **Esc**, keeps the download running.
@@ -137,7 +145,7 @@ In the download's progress window, click **Show details**:
 
 A video or a gallery takes a limit of its own the same way. For a torrent, the limit is that torrent's alone; the others keep theirs. A torrent can't be held under 16 KB/s: a lower limit gives it 16.
 
-> Some servers drop the connection when the speed is very low. Avoid a tight limit for servers that can't resume (**Resume capability: No**).
+> Some servers drop the connection when the speed is very low. Avoid a tight limit for servers that can't resume (**Can resume: No**).
 
 ## Next steps
 

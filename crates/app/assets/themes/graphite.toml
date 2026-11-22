@@ -118,6 +118,10 @@ button = "#ffffff"
 "pieces.have" = "#0c704d"
 "pieces.partial" = "#92bfaf"
 "pieces.missing" = "#e4e4e7"
+# The download window's strip: missing after an error, a step after the bytes.
+"strip.error" = "#fdecea"
+"strip.error.hatch" = "#f6c9c5"
+"strip.accent" = "#e6f2ec"
 # Lists.
 list = "#fafafa"
 header = "#fafafa"
@@ -215,6 +219,10 @@ button = "#18181b"
 "pieces.have" = "#3ecf8e"
 "pieces.partial" = "#296a4f"
 "pieces.missing" = "#2b2b30"
+# The download window's strip: missing after an error, a step after the bytes.
+"strip.error" = "#3a1b1b"
+"strip.error.hatch" = "#5a2a28"
+"strip.accent" = "#15302a"
 # Lists.
 list = "#121214"
 header = "#121214"

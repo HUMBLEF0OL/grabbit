@@ -138,7 +138,8 @@ focus = "ring"
   `menu.shortcut`, `toolbar.checked`, `button.danger`, `button.danger.text`, `banner.error`,
   `banner.info`, `banner.warning`, `glow`, `button.accent.top` and `progress.bar.end` (`glow`,
   `button.accent.top` and `progress.bar.end` are transparent unless a theme sets them: no glow,
-  a flat face).
+  a flat face). A download window's strip uses `strip.accent` (its track while a file is
+  checked or a video joined), `strip.error` and `strip.error.hatch`.
 - **`font`** — a font Grabbit carries, for every text: `"geist"` (Geist, as the Graphite theme has it).
   Without it, or with a name Grabbit doesn't carry, the windows keep Windows' own fonts.
 - **`contrast = "high"`** — strengthens every edge and text colour on top of the rest.

@@ -68,7 +68,7 @@ The video then downloads like any other file, with its own row in the list and i
 
 yt-dlp looks the page up and picks the quality's video and sound. Grabbit's own downloader then brings each of them in, one after the other, the way it downloads any file:
 
-- **Over several connections**: as many as **Options → Connection** gives a file. The progress window's connections table shows each one, and the segment map shows the video and then its sound.
+- **Over several connections**: as many as **Options → Connection** gives a file. The progress window counts the whole video as one, its strip one plain fill; **Show details** shows its speed over the last minute.
 - **A stream sent in many small pieces** (HLS, DASH, as most sites other than YouTube send theirs) comes down that many pieces at once, each kept on disk as it arrives, then joined in order into one file, as yt-dlp joins them. Pieces encrypted with AES-128 are decrypted with the key the stream's playlist names. When their addresses expire, Grabbit asks yt-dlp for the stream's new list and carries on with the pieces still missing.
 - **Under your speed limits**: the **Speed Limiter**'s, the video's own (its progress window's **Limit**, under **Show details**), and the limit for all downloads together. A change applies at once.
 - **Paused and resumed** like a file, also after quitting Grabbit: it carries on from the bytes already saved.

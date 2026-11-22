@@ -963,5 +963,9 @@ kept on the `archive/multiplatform-i18n` branch.
   in Details, Stopped / Stop, Show / Hide details, the filled-button rule, Refresh download
   address... on an expired link, Stop asking first where the server can't resume, the torrent
   commands in the window, and Stop sharing / Start sharing for one finished torrent in the
-  Torrent menu. Left: the Done window (13a), the window's look (13c) and its states' and the
-  Done window's look (13d)
+  Torrent menu. Done (13c, the window's look): the name, one large reading with the time left, a
+  6-point strip of the file's real segments (or a torrent's pieces, lit by how much is in) and the
+  detail line; in Details, the facts in a key column (Server, Can resume, a video's Format and
+  Downloaded by, a torrent's Peers, Sent, Ratio and an exact Pieces count), a speed graph of the
+  last minute with the limit dashed, and sorted, fixed-height tables under underlined tabs.
+  Left: the Done window (13a) and its states' and the Done window's look (13d)

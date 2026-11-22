@@ -334,6 +334,30 @@ pub fn text_font(
     paint_galley(p, left, baseline, g, color)
 }
 
+/// [`text_font`] for a caption: the text box or drop-down after it takes it as its name for
+/// screen readers, as after [`text`].
+pub fn caption_font(
+    p: &Painter,
+    font: FontId,
+    x: f32,
+    baseline: f32,
+    s: &str,
+    color: Color32,
+) -> Rect {
+    let drawn = text_font(p, font, x, baseline, s, color);
+    note_caption(p, s, drawn);
+    drawn
+}
+
+/// `tip` (translated) as the control's tooltip under the pointer, and while it has the keyboard
+/// focus too: a keyboard user reads what an icon-only button does.
+pub fn tip(resp: Response, tip: &str) -> Response {
+    if resp.has_focus() && !resp.hovered() && keyboard_in_use(&resp.ctx) {
+        resp.show_tooltip_text(tip);
+    }
+    resp.on_hover_text(tip)
+}
+
 /// Like [`text_font`] with its start at screen x `start` (a widget's inside, measured from its
 /// leading edge): the text runs right from it, or left in RTL.
 pub fn text_start(
@@ -5611,11 +5635,6 @@ pub fn etched_v(p: &Painter, x: f32, y: f32, h: f32) {
 pub fn fill_l(p: &Painter, x0: f32, y0: f32, x1: f32, y1: f32, c: Color32) {
     let (a, b) = (mcol(x0), mcol(x1));
     fill(p, a.min(b), y0, a.max(b), y1, c);
-}
-
-/// [`px`] at an English pixel.
-pub fn px_l(p: &Painter, x: f32, y: f32, c: Color32) {
-    px(p, mcol(x), y, c);
 }
 
 /// One tab of a light tab control: its x range (inclusive, from the client origin) when

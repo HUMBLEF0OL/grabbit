@@ -279,6 +279,9 @@ palette! {
     piece: "pieces.have", "A torrent piece that is here" = rgb(0x2e, 0x9d, 0x52), rgb(0x2e, 0x9d, 0x52);
     piece_partial: "pieces.partial", "A square standing for pieces partly here" = rgb(0x3a, 0x6e, 0x4b), rgb(0x9c, 0xd2, 0xae);
     piece_missing: "pieces.missing", "A piece not here yet" = grey(0x45), grey(0xd6);
+    strip_error: "strip.error", "The download window's strip: the part a failed download is missing" = rgb(0x44, 0x27, 0x26), rgb(0xfd, 0xe7, 0xe9);
+    strip_error_hatch: "strip.error.hatch", "That part's hatching" = rgb(0x5e, 0x30, 0x2e), rgb(0xf6, 0xc9, 0xc5);
+    strip_accent: "strip.accent", "The download window's strip while a step after the bytes (a check, a join) goes on: its track" = rgb(0x2d, 0x4a, 0x60), rgb(0xe5, 0xf1, 0xfb);
     // ---- title bars we draw ----
     caption: "caption", "A title bar Grabbit draws itself" = grey(0x20), grey(0xff);
     caption_text: "caption.text", "Its title and glyphs" = grey(0xff), grey(0x00);

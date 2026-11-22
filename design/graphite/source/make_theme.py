@@ -38,6 +38,10 @@ TOOLBAR_HOT = "hover"
 TOOLBAR_PRESSED = "press"
 TOOLBAR_FAINT = ("mix", "surface", "hover", 0.5)
 
+# The download window's failed strip (plan 13): its hatching over `errSoft`, a step deeper
+# (the mockup canvas's #5a2a28; pal.py has no token of its own for it).
+ERR_HATCH = {"light": "#f6c9c5", "dark": "#5a2a28"}
+
 # Faces that must be told apart by eye (pal.STEP), beyond pal.py's own (pal.APART).
 FACES_APART = [
     ("toolbar hot / band", TOOLBAR_HOT, "surface"),
@@ -97,6 +101,11 @@ ROLES = [
         ("meter.fill", "out"), ("segments.done", "out"), ("segments.missing", "track"),
         ("pieces.have", "out"), ("pieces.partial", ("mix", "out", "surface", 0.55)),
         ("pieces.missing", "track"),
+    ]),
+    # Plan 13: the download window's strip, a failed download's missing part (hatched) and the
+    # track while a step after the bytes goes on (a check, a join).
+    ("The download window's strip: missing after an error, a step after the bytes", [
+        ("strip.error", "errSoft"), ("strip.error.hatch", ERR_HATCH), ("strip.accent", "sel"),
     ]),
     ("Lists", [
         ("list", "bg"), ("header", "bg"), ("header.line", "line"), ("grid", "line2"),
@@ -182,6 +191,8 @@ radius = 6
 def colour(tokens: dict, variant: str, token) -> str:
     if token is None:
         return WARNING[variant]
+    if isinstance(token, dict):
+        return token[variant]
     if token == "none" or tokens.get(token) == "transparent":
         return "#00000000"
     if isinstance(token, tuple):
