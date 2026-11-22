@@ -137,14 +137,13 @@ const fn facts_top(lines: usize) -> f32 {
     FACTS_Y + lines.saturating_sub(1) as f32 * MESSAGE_LINE
 }
 
-/// The lines a state's row under the strip takes, for Details' facts under it: none for a
-/// detail row, a message's two at most (a web page's reason and advice end as low, the strip
-/// raised into its reading's place: the asserts after [`MESSAGE_LINES`]).
-pub fn under_lines(view: &StateView) -> usize {
-    match view.under {
-        Under::Detail(..) => 0,
-        Under::Message { .. } => MESSAGE_LINES,
-    }
+/// The lines Details keeps for the row under the strip, whatever the state: a message's two at
+/// most (a web page's reason and advice end as low, the strip raised into its reading's place:
+/// the asserts after [`MESSAGE_LINES`]). Every state the same, so Details keeps one height: a
+/// state with a message (Stop on a server that can't resume) doesn't move the footer under the
+/// pointer. ponytail: a 20-point gap under a detail row is the price.
+pub fn under_lines(_view: &StateView) -> usize {
+    MESSAGE_LINES
 }
 
 fn facts_end(kind: Kind, top: f32) -> f32 {
@@ -3569,7 +3568,8 @@ mod tests {
         // Details' facts make room for a message's two lines, none for a detail row.
         assert_eq!(under_lines(&failed), MESSAGE_LINES);
         assert_eq!(under_lines(&v), MESSAGE_LINES);
-        assert_eq!(under_lines(&state_view(Phase::Running, &f)), 0);
+        // One Details height in every state: no jump when a message comes.
+        assert_eq!(under_lines(&state_view(Phase::Running, &f)), MESSAGE_LINES);
         // Two lines at most, the rest joined in the last one (cut when drawn).
         let lines = |n: usize| (1..=n).map(|k| format!("l{k}")).collect::<Vec<_>>();
         assert_eq!(at_most(lines(1), 2), ["l1"]);
