@@ -96,7 +96,7 @@ Right-click the list's blank space for **Add new download...**, **Select all**, 
 - On a finished download, double-click shows its **Properties**. To open the file instead, right-click any download and choose **On double-click → Open**.
 - **Alt+Enter** always opens **Properties**.
 
-The right-click menu has everything you can do with a download: **Open**, **Open with...**, **Open folder**, **Move/Rename...**, **Redownload**, **Resume**, **Stop**, **Refresh download address**, **Verify checksum...**, **Delete**, **Add to queue** and **Properties**.
+The right-click menu has everything you can do with a download: **Open**, **Open with...**, **Open folder**, **Move/Rename...**, **Redownload**, **Resume**, **Stop**, **Copy address** (**Ctrl+C**; a torrent has **Copy magnet link** instead), **Refresh download address**, **Verify checksum...**, **Delete**, **Add to queue** and **Properties**. **Open folder** is there once the download is finished, or for a torrent while it downloads.
 
 ## Properties
 
@@ -117,7 +117,7 @@ The right-click menu has everything you can do with a download: **Open**, **Open
 
 The pane shows the download's icon and name, how far it is, and 8 cells that fill as each eighth of the file comes in. While it runs, and after it stopped in this session, the cells say how many connections it has (a video or a torrent shows none). When its size is known, they also say how much of it has come, for example 57.96 MB of 92.00 MB. Below them come **Status**, **Transfer rate** and **Time left** (while it runs), **Resume capability**, **Save to**, **Address** (never with its password), **Queue** and **Last try date**, each when it has a value. The figures change as the download runs.
 
-Its buttons are **Resume** or **Stop**, **Open folder** and **Show progress window** (greyed for a finished download).
+Its buttons are **Resume** or **Stop**, **Open folder** (greyed until the download is finished, as in the right-click menu; a torrent's folder is there while it downloads) and **Show progress window** (greyed for a finished download). A download that failed because its link expired, or because the server refused it (403) or says it is gone (410), also gets **Refresh download address...** above them: it opens the page the link came from and **Properties**, where you paste the new address.
 
 With nothing selected the pane says **Select a download to see its details**; with several, how many they are and their total size.
 
@@ -139,7 +139,7 @@ Many sites publish a checksum next to the download. Right-click the download, ch
 
 ## Finding a download
 
-Type in the **Find** field in the title bar (**Ctrl+F** takes you there): the list keeps only the downloads whose name has what you typed, and the status bar says how many it shows. **Enter** or **F3** selects the next match, **Shift+F3** the one before; **Esc** clears the field. Its funnel searches descriptions and addresses too, and shows only some statuses or sources. Step by step in [Find a download in a long list](guide-find-in-long-list.md).
+Type in the **Find** field in the title bar (**Ctrl+F** takes you there): the list keeps only the downloads whose name has what you typed, and the status bar says how many it shows. **Enter** or **F3** selects the next match, **Shift+F3** the one before; **Esc** clears the field. When nothing matches, the list says so and offers **Clear search**. Its funnel searches descriptions and addresses too, and shows only some statuses or sources. Step by step in [Find a download in a long list](guide-find-in-long-list.md).
 
 Typing the start of a name while the list has the focus jumps to the first download whose name starts with it.
 
@@ -150,21 +150,23 @@ Typing the start of a name while the list has the focus jumps to the first downl
 
 Select one or more downloads and press **Delete**, click **Delete** on the toolbar, or choose **File → Delete**. Grabbit asks first:
 
-- **Also delete the file from disk** — unticked every time the question opens. Tick it to delete the files too. For an unfinished download, this deletes the part downloaded so far. When finished downloads are among the ones you delete, the question says how many finished files go with them. Leave it unticked to take the downloads off the list and keep the files.
+- **Also move the file to the Recycle Bin** — unticked every time the question opens. Tick it to remove the files too: a finished download's file goes to the Recycle Bin, where you can restore it from. For an unfinished download (the box then says **Also delete the file from disk**), this deletes the part downloaded so far; with both kinds selected, the box says **Also delete the files (finished ones go to the Recycle Bin)**. When finished downloads are among the ones you delete, the question says how many finished files go to the Recycle Bin. A torrent's files are deleted, not moved, and the question says how many finished torrents' files it deletes. Leave it unticked to take the downloads off the list and keep the files.
+
+  Windows decides what the Recycle Bin takes: on a network or removable drive without one, or for a file too big for it, Windows may delete the file outright. A file Windows won't move (open in another program, or with a path longer than 260 characters) stays where it is, and Grabbit names it.
 - **Don't show this dialog again** — Grabbit stops asking: **Delete** then only takes downloads off the list and keeps their files. To be asked again, tick **Options → General → Confirm before deleting downloads**.
 
 Click **Yes** to delete, or **No** to keep everything.
 
-**Shift+Delete** (or **Delete with files**) opens the same question with **Also delete the file from disk** already ticked, for that time only. It always asks, even after **Don't show this dialog again**: Grabbit never deletes a file from the disk without asking. The box is never remembered: the next **Delete** starts unticked again.
+**Shift+Delete** (or **Delete with files**) opens the same question with the box already ticked, for that time only. It always asks, even after **Don't show this dialog again**: Grabbit never removes a file from the disk without asking. The box is never remembered: the next **Delete** starts unticked again.
 
 After deleting, the next download in the list is selected, so you can press **Delete** again.
 
-A download that is running isn't deleted. Stop it first.
+A download that is running isn't deleted. Stop it first. When running downloads are among the ones you select, the others are deleted and Grabbit says how many running ones it kept: in the question, or in a message when the question is turned off.
 
-**Delete completed** on the toolbar (or **Downloads → Delete completed**) removes every finished download from the list, with the same question. Their files stay unless you tick **Also delete the files from disk** in that question.
+**Delete completed** on the toolbar (or **Downloads → Delete completed**) removes every finished download from the list, with the same question. Their files stay unless you tick **Also move the files to the Recycle Bin** in that question.
 
-![Confirm deletion of downloads, with Also delete the file from disk](images/help/delete-confirm.webp)
-*Tick Also delete the file from disk only if you want the file gone too.*
+![Confirm deletion of downloads, with Also move the file to the Recycle Bin](images/help/delete-confirm.webp)
+*Tick Also move the file to the Recycle Bin only if you want the file gone too.*
 
 ## Next steps
 

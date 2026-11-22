@@ -77,6 +77,8 @@ pub const TITLES: [&str; COLS] = [
     // i18n: column title: what a torrent sends to peers, bytes per second
     "Upload speed",
 ];
+/// The "Transfer rate" column's data slot.
+pub const RATE: usize = 5;
 /// The "Added" column's data slot.
 pub const ADDED: usize = 8;
 /// The "Source" column's data slot: its cell is "Web" or "Torrent", painted as a chip.
@@ -494,6 +496,9 @@ pub struct Row {
     /// In a queue: the Q column shows a queue icon (IDM: stacked files).
     pub queued: bool,
     pub cells: [String; COLS],
+    /// The speed limit holding the download back (upstream issue 1191), said by the Transfer
+    /// rate cell's tip: the column is too narrow for it beside the speed.
+    pub rate_tip: Option<String>,
 }
 
 #[derive(Default)]
@@ -1074,6 +1079,8 @@ pub fn show(
                 {
                     let tip = if *c == 3 {
                         status_tip(idx)
+                    } else if *c == RATE && !row.cells[*c].is_empty() {
+                        row.rate_tip.clone().unwrap_or_default()
                     } else {
                         String::new()
                     };
@@ -2011,6 +2018,7 @@ mod tests {
             icon: IconKey::Themed("ft-generic"),
             queued,
             cells,
+            rate_tip: None,
         }
     }
 

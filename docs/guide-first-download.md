@@ -25,7 +25,7 @@ From a copied link to an opened file in a minute or two.
 4. ![Download complete with Open and Open folder](images/help/first-complete.webp)
    *Done: Open the file, or Open folder.*
 
-The download stays in the list under **Finished**. To get rid of the entry later, select it and press **Delete**; tick **Also delete the file from disk** only if you want the file gone too.
+The download stays in the list under **Finished**. To get rid of the entry later, select it and press **Delete**; tick **Also move the file to the Recycle Bin** only if you want the file gone too.
 
 ## If something goes differently
 

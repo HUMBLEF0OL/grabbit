@@ -233,6 +233,9 @@ pub struct OptionsDialog {
     /// The page the scrolled page pane's offset belongs to (none until the window first
     /// draws): a page chosen, or the window opened again, starts at its top.
     scrolled: Option<usize>,
+    /// The sub-dialog whose first field has had the keys (plan 12b, D1): it takes them once,
+    /// as the dialog opens, or as another kind takes its place; cleared as it closes.
+    sub_focused: Option<std::mem::Discriminant<Sub>>,
 }
 
 impl OptionsDialog {
@@ -348,6 +351,7 @@ impl OptionsDialog {
             cookie_browser: cookie_browser_at(settings),
             ua_auto: settings.own_user_agent().is_none(),
             scrolled: None,
+            sub_focused: None,
         };
         // Its typed fields as read back untouched (a value they clamp differs from `from`).
         d.opened = d.result();
@@ -1370,14 +1374,15 @@ impl OptionsDialog {
         } else {
             ButtonKind::Disabled
         };
-        // i18n: verb: delete the item
-        let del = winui::button_light(ui, r(o, col_x, 221.0, col_w, h), "Delete", kind, false)
-            .clicked()
-            || del_key;
+        // New, Edit, Delete, and Tab in that order (plan 12b, C9).
         let edit =
             // i18n: verb: edit the item
-            winui::button_light(ui, r(o, col_x, 255.0, col_w, h), "Edit", kind, false)
+            winui::button_light(ui, r(o, col_x, 221.0, col_w, h), "Edit", kind, false)
                 .clicked();
+        // i18n: verb: delete the item
+        let del = winui::button_light(ui, r(o, col_x, 255.0, col_w, h), "Delete", kind, false)
+            .clicked()
+            || del_key;
         if new {
             self.sub = Some(Sub::Exception(None, String::new(), "1".into()));
         }
@@ -3141,6 +3146,17 @@ impl OptionsDialog {
 
     fn sub_dialog(&mut self, ctx: &egui::Context) {
         let Some(sub) = self.sub.take() else { return };
+        // The first field takes the keys once, as the dialog opens (plan 12b, D1), and again
+        // when another sub-dialog takes its place.
+        let kind = std::mem::discriminant(&sub);
+        let first = self.sub_focused.replace(kind) != Some(kind);
+        self.sub_dialog_of(ctx, sub, first);
+        if self.sub.is_none() {
+            self.sub_focused = None;
+        }
+    }
+
+    fn sub_dialog_of(&mut self, ctx: &egui::Context, sub: Sub, first: bool) {
         match sub {
             Sub::Pair => {
                 if self.pair_window(ctx) {
@@ -3173,7 +3189,11 @@ impl OptionsDialog {
                         let fx = winui::form(&p, e, &labels, false);
                         let fw = W - e - fx;
                         winui::form_label(&p, o, e, 16.0, h, labels[0], true);
-                        winui::edit_light(ui, r(o, fx, 16.0, fw, h), &mut site, true, false);
+                        let field =
+                            winui::edit_light(ui, r(o, fx, 16.0, fw, h), &mut site, true, false);
+                        if first {
+                            field.request_focus();
+                        }
                         winui::form_label(&p, o, e, 56.0, h, labels[1], true);
                         winui::edit_light(ui, r(o, fx, 56.0, fw, h), &mut user, true, false);
                         winui::form_label(&p, o, e, 96.0, h, labels[2], true);
@@ -3217,13 +3237,16 @@ impl OptionsDialog {
                         let labels = ["Server", "Connections"];
                         let fx = winui::form(&p, e, &labels, false);
                         winui::form_label(&p, o, e, 16.0, h, labels[0], true);
-                        winui::edit_light(
+                        let field = winui::edit_light(
                             ui,
                             r(o, fx, 16.0, W - e - fx, h),
                             &mut server,
                             true,
                             false,
                         );
+                        if first {
+                            field.request_focus();
+                        }
                         winui::form_label(&p, o, e, 56.0, h, labels[1], true);
                         winui::spin_box(
                             ui,
@@ -3413,7 +3436,7 @@ impl OptionsDialog {
                     [DNS_W, DNS_BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
-                    |ui, o| dns_dialog(ui, o, &mut e),
+                    |ui, o| dns_dialog(ui, o, &mut e, first),
                 );
                 match out {
                     Outcome::Open => self.sub = Some(Sub::Dns(e)),
@@ -3432,7 +3455,7 @@ impl OptionsDialog {
                     [ACCOUNT_W, body + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
-                    |ui, o| account_dialog(ui, o, &mut e),
+                    |ui, o| account_dialog(ui, o, &mut e, first),
                 );
                 match out {
                     Outcome::Open => self.sub = Some(Sub::Account(e)),
@@ -3482,13 +3505,16 @@ impl OptionsDialog {
                         );
                         // Under the sentence (one or two lines), down to the footer's room.
                         let top = 16.0 + lines as f32 * LINE + 10.0;
-                        multiline(
+                        let field = winui::multiline_light(
                             ui,
                             r(o, e, top, W - 2.0 * e, BODY - e - top),
                             &mut list,
                             "addresses",
                             true,
                         );
+                        if first {
+                            field.request_focus();
+                        }
                         ok_cancel(ui, o, W, BODY, true)
                     },
                 );
@@ -3531,13 +3557,16 @@ impl OptionsDialog {
                             o.x + W - e,
                             LINE,
                         );
-                        winui::checkbox_light(
+                        let field = winui::checkbox_light(
                             ui,
                             o + vec2(e, 16.0 + lines.max(2) as f32 * LINE + 16.0),
                             &mut opened,
                             "Also take files the browser would open (PDF, music, video)",
                             true,
                         );
+                        if first {
+                            field.request_focus();
+                        }
                         ok_cancel(ui, o, W, BODY, true)
                     },
                 );
@@ -3714,7 +3743,7 @@ fn display_dir(dir: &std::path::Path) -> String {
 }
 
 /// Connection → DNS → Settings...: how it's asked, its servers, the fallback, a test.
-fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
+fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit, first: bool) -> Outcome<()> {
     use mdm_engine::dns::{Mode, Preset};
     let p = ui.painter().clone();
     let (edge, h, w) = (winui::EDGE, winui::CONTROL_H, DNS_W);
@@ -3743,6 +3772,11 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
         }
         clicked.push(r);
         x = winui::checkbox_caption_end(&p, x, caption) + 16.0;
+    }
+    // The chosen way has the keys as the window opens (plan 12b, D1).
+    if first {
+        let at = modes.iter().position(|(n, ..)| *n == e.mode).unwrap_or(0);
+        clicked[at].request_focus();
     }
     if let Some(i) = winui::radio_keys(ui, &clicked) {
         let (n, m, _) = modes[i];
@@ -3946,7 +3980,12 @@ fn account_box(lines: usize) -> (f32, f32) {
 
 /// Accounts → Add...: sign in by code in the browser (Real-Debrid's device flow, AllDebrid's PIN),
 /// or paste the API token (Premiumize: its API key only); the account is checked before it is kept.
-fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings::DebridAccount> {
+fn account_dialog(
+    ui: &mut Ui,
+    o: Pos2,
+    e: &mut AccountEdit,
+    first: bool,
+) -> Outcome<settings::DebridAccount> {
     use crate::debrid::SignInState as S;
     let p = ui.painter().clone();
     let ctx = ui.ctx().clone();
@@ -3961,6 +4000,11 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
     let all = mdm_debrid::ServiceKind::ALL;
     let names: Vec<&str> = all.iter().map(|k| k.name()).collect();
     let at = all.iter().position(|k| *k == e.service).unwrap_or(0);
+    // The service has the keys as the window opens (plan 12b, D1).
+    if first {
+        let id = winui::combo_light_focus(ui, "opt-account-service");
+        ui.memory_mut(|m| m.request_focus(id));
+    }
     if let Some(i) = winui::combo_light(
         ui,
         r(o, fx, 16.0, w - edge - fx, h),

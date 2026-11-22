@@ -332,17 +332,22 @@ pub fn seven_zip() -> Option<PathBuf> {
 /// fills the real (per-user, shared) Recycle Bin or Trash. Never set for users.
 const TEST_TRASH: &str = "MDM_TEST_TRASH_DIR";
 
-/// Move `files` to the Recycle Bin, or into `MDM_TEST_TRASH_DIR` when a test set it.
-fn to_trash(files: &[PathBuf]) -> bool {
+/// Move `files` to the Recycle Bin, or into `MDM_TEST_TRASH_DIR` when a test set it (an
+/// extracted archive; a deleted download's finished file, `deleter`).
+pub(crate) fn to_trash(files: &[PathBuf]) -> bool {
     if let Some(dir) = std::env::var_os(TEST_TRASH).filter(|d| !d.is_empty()) {
-        let dir = PathBuf::from(dir);
-        return std::fs::create_dir_all(&dir).is_ok()
-            && files.iter().all(|f| {
-                let name = f.file_name().unwrap_or_default();
-                std::fs::rename(f, dir.join(name)).is_ok()
-            });
+        return into_test_trash(Path::new(&dir), files);
     }
     crate::win32::to_recycle_bin(files)
+}
+
+/// [`to_trash`]'s test folder: `files` moved into `dir` (tests hand it in directly).
+pub(crate) fn into_test_trash(dir: &Path, files: &[PathBuf]) -> bool {
+    std::fs::create_dir_all(dir).is_ok()
+        && files.iter().all(|f| {
+            let name = f.file_name().unwrap_or_default();
+            std::fs::rename(f, dir.join(name)).is_ok()
+        })
 }
 
 /// Why `name` wasn't extracted, for its download's log.

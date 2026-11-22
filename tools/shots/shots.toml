@@ -67,7 +67,7 @@ id = "view-theme"
 page = "getting-started.md"
 under = "Themes"
 take = "@menu:menu:3:theme"
-crop = { around = ["MenuItem:View", "Font", "Open themes folder"], pad = 12 }
+crop = { around = ["MenuItem:View", "Draw with", "Open themes folder"], pad = 12 }
 alt = "View → Theme open: Graphite, Add a theme file... and Open themes folder"
 caption = "View → Theme switches at once, keeping the layout."
 
@@ -342,9 +342,9 @@ id = "delete-confirm"
 page = "download-list.md"
 under = "Deleting downloads"
 take = "delete"
-ring = ["Also delete the file from disk"]
-alt = "Confirm deletion of downloads, with Also delete the file from disk"
-caption = "Tick Also delete the file from disk only if you want the file gone too."
+ring = ["Also move the file to the Recycle Bin"]
+alt = "Confirm deletion of downloads, with Also move the file to the Recycle Bin"
+caption = "Tick Also move the file to the Recycle Bin only if you want the file gone too."
 
 # ---- Troubleshooting ----------------------------------------------------------------------------
 
@@ -353,8 +353,9 @@ id = "draw-with"
 page = "troubleshooting.md"
 under = "The window freezes or draws wrongly"
 take = "@menu:menu:3:draw"
-# Down to Font: a computer without Direct3D (GitHub's runner) adds why under the choices.
-crop = { around = ["MenuItem:View", "Font", "Direct3D"], pad = 12 }
+# Down to Draw with, the View menu's last item, and its Direct3D choice (a computer without
+# Direct3D, as GitHub's runner, adds why under the choices: below the crop there).
+crop = { around = ["MenuItem:View", "Draw with", "Direct3D"], pad = 12 }
 alt = "View → Draw with open: OpenGL and Direct3D"
 caption = "View → Draw with: the other way of drawing."
 

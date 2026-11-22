@@ -56,8 +56,13 @@ How the rule applies:
 ## Status
 
 Spec locked 2026-11-21. The maintainer approved the mockups: eleven boards of now-vs-proposed
-states, Graphite light and dark, one per area below. Building has not started. 12a–12d need no
-owner answer; 12e waits for the two decisions below.
+states, Graphite light and dark, one per area below. Building started 2026-11-22: 12b is done
+(branch `ui/12b-states-routes`). 12a–12d need no owner answer; 12e waits for the two decisions
+below.
+
+12b left one D1 place out: Link grabber has no address box (its links come by Ctrl+V, Import or
+the browser), and giving one of its boxes (the package's name, password or folder) the keys
+would take Ctrl+V's link pasting, which works only while none of them has them.
 
 Follow-up for the release PR (the website is outside this plan): the website's feature pages
 still quote 12c's old labels (`website/content/features/torrents.md`, `video.md`, `galleries.md`,

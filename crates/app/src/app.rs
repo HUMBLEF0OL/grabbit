@@ -142,7 +142,7 @@ enum Cmd {
     Exit,
     Stop,
     Remove,
-    /// Shift+Delete: Remove with "Also delete the files from disk" ticked.
+    /// Shift+Delete: Remove with its files box ("Also move the file to the Recycle Bin") ticked.
     RemoveWithFiles,
     Resume,
     StopAll,
@@ -236,6 +236,9 @@ enum Cmd {
     RssFeeds(bool),
     /// Right-click → Refresh download address: open the source page, edit the address.
     RefreshAddress,
+    /// Right-click → Copy address (Ctrl+C with nothing focused): the chosen downloads'
+    /// addresses, torrents left out (they have Copy magnet link).
+    CopyAddress,
     /// Right-click → Verify checksum… (beyond IDM).
     VerifyChecksum,
     /// Right-click → Extract (beyond IDM, #37): a finished archive, into its folder.
@@ -251,6 +254,8 @@ enum Cmd {
     Arrange(Option<usize>),
     /// Header right-click → Clear all filters.
     ClearFilters,
+    /// An empty list's "Clear search": the title bar's Find field emptied.
+    ClearSearch,
     /// Every download the list shows (Ctrl+A).
     SelectAll,
     /// The All Downloads view (an empty list's link).
@@ -448,8 +453,7 @@ fn place_to_take(item: &Item, items: &[Item]) -> Option<PathBuf> {
 
 impl Cmd {
     /// The icon a Graphite menu draws at this command's item (plan 05b, the mockup's menus), by
-    /// what it does; `label` tells apart the commands two items share (Pause All and Stop All)
-    /// and names a greyed placeholder's (no command: [`chrome::menu_icon`]).
+    /// what it does; `label` names a greyed placeholder's (no command: [`chrome::menu_icon`]).
     fn menu_icon(&self, label: &str) -> Option<&'static str> {
         Some(match self {
             Cmd::None => return chrome::menu_icon(label),
@@ -462,12 +466,11 @@ impl Cmd {
             Cmd::ToggleDetails => "gx-sidebar",
             Cmd::Options => "tb-options",
             Cmd::Batch(false) => "gx-list-numbers",
-            Cmd::Batch(true) => "gx-copy",
+            Cmd::Batch(true) | Cmd::CopyAddress => "gx-copy",
             Cmd::VideoPage => "ft-video",
             Cmd::RssFeeds(_) => "gx-rss",
             Cmd::Exit => "ui-close",
             Cmd::Stop => "tb-stop",
-            Cmd::StopAll if label == "&Pause All" => "tb-stop",
             Cmd::StopAll => "tb-stop-all",
             Cmd::Remove | Cmd::RemoveWithFiles | Cmd::DeleteCategory(_) | Cmd::DeleteQueue(_) => {
                 "tb-delete"
@@ -512,6 +515,7 @@ impl Cmd {
             Cmd::MoveRename => "Ctrl+M",
             Cmd::Remove => "Delete",
             Cmd::RemoveWithFiles => "Shift+Delete",
+            Cmd::CopyAddress => "Ctrl+C",
             Cmd::Open => "Enter",
             Cmd::SelectAll => "Ctrl+A",
             Cmd::Properties => "Alt+Enter",
@@ -785,6 +789,10 @@ pub struct App {
     torrent_speed: (f64, Instant),
     /// The torrents' share of the global cap as last set, and when (`apply_global_limit`).
     torrent_cap: (Option<u64>, Instant),
+    /// The limit for all downloads together while it applies now (bytes/s; off, or "only while
+    /// I'm at the computer" and the user away: None), as `apply_global_limit` last worked it out:
+    /// what the Transfer rates and the status strip name (upstream issue 1191).
+    global_cap: Option<u64>,
     /// File downloads' smoothed speed, when measured, and the global limiter's byte count
     /// then (`file_speed`).
     file_speed: (f64, Instant, u64),
@@ -1024,6 +1032,7 @@ fn details_cmd(action: crate::panes::DetailsAction) -> Cmd {
         DetailsAction::Stop => Cmd::Stop,
         DetailsAction::OpenFolder => Cmd::OpenFolder,
         DetailsAction::ShowProgress => Cmd::Open,
+        DetailsAction::RefreshAddress => Cmd::RefreshAddress,
     }
 }
 
@@ -1050,7 +1059,8 @@ fn take_menu_text(ctx: &egui::Context, menu_open: bool) {
 /// - Else, while no widget is `focused` (a text box, Find, a filter or the paste field, has the
 ///   keys: Delete deletes its text), Delete removes the selected downloads and Shift+Delete
 ///   with their files (both ask first). They are read, not consumed. On Windows egui reports
-///   Shift+Delete as Cut (Ctrl+X is Cut too, without Shift).
+///   Shift+Delete as Cut (Ctrl+X is Cut too, without Shift). Ctrl+C (egui-winit's Copy event;
+///   Ctrl+Insert too) copies the selected downloads' addresses (Copy address, plan 12b).
 fn shortcut_cmd(i: &mut egui::InputState, focused: bool) -> Option<Cmd> {
     let find = i.consume_key(egui::Modifiers::COMMAND, egui::Key::F);
     // Shift+F3 first: F3's pattern (no modifiers) matches Shift+F3 too.
@@ -1082,13 +1092,35 @@ fn shortcut_cmd(i: &mut egui::InputState, focused: bool) -> Option<Cmd> {
         && !i.modifiers.command
         && (i.events.iter().any(|e| matches!(e, egui::Event::Cut))
             || i.key_pressed(egui::Key::Delete));
+    // Windows reports Ctrl+C (and Ctrl+Insert) as Copy.
+    let copy = i.events.iter().any(|e| matches!(e, egui::Event::Copy));
     if shift_del {
         Some(Cmd::RemoveWithFiles)
     } else if del {
         Some(Cmd::Remove)
+    } else if copy {
+        Some(Cmd::CopyAddress)
     } else {
         None
     }
+}
+
+/// Copy address (plan 12b, B4): the addresses of the chosen downloads that aren't torrents
+/// (a torrent's, local or through a debrid account, is Copy magnet link's), one a line,
+/// without a password written in them (as the Details pane shows them); None when none has
+/// one to copy.
+fn addresses(chosen: &[&Item]) -> Option<String> {
+    let lines: Vec<String> = chosen
+        .iter()
+        .filter(|i| has_address(i))
+        .map(|i| crate::panes::without_password(&i.url).into())
+        .collect();
+    (!lines.is_empty()).then(|| lines.join("\r\n"))
+}
+
+/// Whether Copy address has an address of this download's to copy (not a torrent's).
+fn has_address(i: &Item) -> bool {
+    i.torrent.is_none() && i.remote.is_none()
 }
 
 /// The login written in an address (`ftp://user:pass@host/…`), decoded.
@@ -1644,6 +1676,7 @@ impl App {
             torrent_fetched: HashMap::new(),
             torrent_speed: (0.0, Instant::now()),
             torrent_cap: (None, Instant::now()),
+            global_cap: None,
             file_speed: (0.0, Instant::now(), 0),
             blocklist_busy: Default::default(),
             torrents_started: false,
@@ -1799,13 +1832,28 @@ impl App {
             .collect()
     }
 
-    /// An empty list's message, centred in its rows' area `body` (English): an icon, what is
-    /// empty, why, and the one thing to do about it (clear the filters, show every download,
-    /// add one). Returns that command when it is clicked.
-    fn empty_state(&self, ui: &Ui, body: egui::Rect) -> Option<Cmd> {
-        let p = ui.painter();
+    /// What an empty list says ([`Self::empty_state`]): its title (translated), the reason
+    /// and the link (to translate), the link's command and the tile's glyph. A search that
+    /// matches nothing first (plan 12b, A5): it hides rows as the filters do.
+    fn empty_message(&self) -> (String, &'static str, &'static str, Cmd, &'static str) {
+        if self.find.active() {
+            let title = crate::i18n::fmt(
+                // i18n: title in the empty download list when the search finds nothing; {text} is what was typed in Find
+                crate::i18n::t("No downloads match \"{text}\""),
+                &[("text", &crate::i18n::isolate(self.find.text.trim()))],
+            );
+            return (
+                title,
+                // i18n: in the empty download list, under its title
+                "The search hides every download in this view.",
+                // i18n: link in the empty download list: empties the Find field
+                "Clear search",
+                Cmd::ClearSearch,
+                "gx-search",
+            );
+        }
         let filtered = self.list.filters.iter().any(Option::is_some) && !self.view_ids().is_empty();
-        let (title, why, action, cmd) = if filtered {
+        let (title, why, action, cmd, need) = if filtered {
             (
                 // i18n: title in the empty download list, when the column filters hide every download
                 "No downloads match the filters",
@@ -1813,6 +1861,7 @@ impl App {
                 "The column filters hide every download in this view.",
                 "Clear all filters",
                 Cmd::ClearFilters,
+                "gx-filter",
             )
         } else if !self.items.is_empty() {
             (
@@ -1823,6 +1872,7 @@ impl App {
                 // i18n: link in the empty download list: go to the All Downloads view
                 "Show all downloads",
                 Cmd::ShowAll,
+                "gx-download",
             )
         } else {
             (
@@ -1833,13 +1883,23 @@ impl App {
                 // i18n: link in the empty download list: opens Add URL
                 "Add new download",
                 Cmd::AddUrl,
+                "gx-download",
             )
         };
-        let (title, why) = (crate::i18n::t(title), crate::i18n::t(why));
+        (crate::i18n::t(title).to_owned(), why, action, cmd, need)
+    }
+
+    /// An empty list's message, centred in its rows' area `body` (English): an icon, what is
+    /// empty, why, and the one thing to do about it (clear the search or the filters, show
+    /// every download, add one). Returns that command when it is clicked.
+    fn empty_state(&self, ui: &Ui, body: egui::Rect) -> Option<Cmd> {
+        let p = ui.painter();
+        let (title, why, action, cmd, need) = self.empty_message();
+        let title = title.as_str();
+        let why = crate::i18n::t(why);
         // Graphite's (plan 05b, the mockup's `.empty`): a 56-point tile (radius 14) with
-        // the download or the filter glyph, the title in SemiBold 16, the reason, the
+        // the download, search or filter glyph, the title in SemiBold 16, the reason, the
         // link; 8 apart, centred.
-        let need = if filtered { "gx-filter" } else { "gx-download" };
         let title_font = egui::FontId::new(16.0, egui::FontFamily::Name("tahoma-bold".into()));
         let reason_font = egui::FontId::proportional(crate::theme::metrics().font_body);
         let link_font = egui::FontId::new(
@@ -1938,9 +1998,20 @@ impl App {
                 &[("file", &crate::i18n::isolate(&file))],
             )
         });
-        let right = match (reading, self.activity()) {
-            (Some(r), Some(a)) => Some(format!("{r}   {a}")),
-            (r, a) => r.or(a),
+        // The Speed Limiter while on (upstream issue 1191), left of what runs: forgotten on, it
+        // is why downloads are slow. Left out where the right half (before the light/dark
+        // button) has no room for it; the tray's tip still says it.
+        let join = |parts: [Option<String>; 3]| {
+            let parts: Vec<String> = parts.into_iter().flatten().collect();
+            (!parts.is_empty()).then(|| parts.join("   "))
+        };
+        let activity = self.activity();
+        // Where the strip's text ends, before the light/dark button.
+        let end = w - 8.0 - chrome::MODE_BUTTON.x;
+        let half = end / 2.0 - 18.0;
+        let right = match join([reading.clone(), self.limiter_hint(), activity.clone()]) {
+            Some(all) if winui::text_width_font(p, font.clone(), &all) <= half => Some(all),
+            _ => join([reading, None, activity]),
         };
         let right_w = right
             .as_ref()
@@ -1953,7 +2024,6 @@ impl App {
             ),
             chrome::MODE_BUTTON,
         );
-        let end = w - 8.0 - chrome::MODE_BUTTON.x;
         let shown = winui::ellipsize(p, &font, &left, (end - 24.0 - right_w).max(0.0));
         // The mockup's secondary ink.
         let ink = c.text_secondary;
@@ -2013,17 +2083,20 @@ impl App {
         // The search first, on the downloads themselves (nothing allocated per download), so
         // only its matches get rows built.
         let search = self.find.active();
+        let running = self.running();
         self.view_items()
             .into_iter()
             .filter(|it| !search || self.find.matches(it))
-            .map(|it| (it.id, self.row(it, &queued)))
+            .map(|it| (it.id, self.row(it, &queued, running)))
             .filter(|(_, r)| list::matches(&self.list, r))
             .unzip()
     }
 
     /// One download's row in the list.
     /// `queued`: the downloads in a queue (worked out once for all the rows).
-    fn row(&self, it: &Item, queued: &std::collections::HashSet<u64>) -> list::Row {
+    fn row(&self, it: &Item, queued: &std::collections::HashSet<u64>, running: usize) -> list::Row {
+        // Every byte in (upstream issue 736): no rate, as once it is complete.
+        let receiving = it.live.is_some() && !it.past_last_byte();
         let status = if self.extracts.extracting(it.id) {
             // i18n: a download's status: its archive is being extracted (#37)
             crate::i18n::t("Extracting...").to_owned()
@@ -2047,8 +2120,7 @@ impl App {
                 it.size.map_or(String::new(), model::size_list),
                 status,
                 it.time_left(),
-                // Every byte in (upstream issue 736): no rate, as once it is complete.
-                if it.live.is_some() && !it.past_last_byte() {
+                if receiving {
                     model::rate(it.rate())
                 } else {
                     String::new()
@@ -2079,7 +2151,37 @@ impl App {
                     .as_ref()
                     .map_or(String::new(), |t| model::rate(t.up_speed)),
             ],
+            // The limit holding it back (upstream issue 1191), in the Transfer rate cell's tip.
+            rate_tip: receiving
+                .then(|| self.limit_of(it, running))
+                .flatten()
+                .map(model::Limit::tip),
         }
+    }
+
+    /// How many downloads run now: the ones sharing the limit for all downloads together.
+    fn running(&self) -> usize {
+        self.items.iter().filter(|i| i.live.is_some()).count()
+    }
+
+    /// The speed limit holding a running download back (upstream issue 1191,
+    /// `model::Limit::binding`): its own as its job has it now (a video's or a gallery's as it
+    /// was started with, `helper_limits`), against the limit for all downloads together while
+    /// that applies, shared by `running` downloads ([`Self::running`]).
+    fn limit_of(&self, it: &Item, running: usize) -> Option<model::Limit> {
+        let live = it.live.as_ref()?;
+        let one = if live.dl.is_helper() {
+            self.helper_limits(it.id).0
+        } else {
+            live.dl.speed_limit()
+        };
+        model::Limit::binding(one, self.global_cap, running)
+    }
+
+    /// The Speed Limiter's word for the status strip and the tray's tip (upstream issue 1191),
+    /// while either of its limits is on (`model::limiter_hint`).
+    fn limiter_hint(&self) -> Option<String> {
+        model::limiter_hint(self.settings.speed_limit(), self.global_cap)
     }
 
     /// The view's downloads in the list's order, before the column filters.
@@ -2997,7 +3099,16 @@ impl App {
             }
             "speedlimit" => self.run(Cmd::LimiterSettings, None, ctx),
             "properties" if first.is_some() => self.run(Cmd::Properties, first, ctx),
-            "delete" if first.is_some() => self.run(Cmd::Remove, first, ctx),
+            // A finished download where there is one: its box reads "Also move the file to the
+            // Recycle Bin" (the help's delete-confirm shot, plan 12a).
+            "delete" if first.is_some() => {
+                let done = self
+                    .items
+                    .iter()
+                    .find(|i| i.status == Status::Complete && i.torrent.is_none())
+                    .map(|i| i.id);
+                self.run(Cmd::Remove, done.or(first), ctx);
+            }
             // Remove with files on every download (screenshots: the finished files it counts).
             "delete-files" => {
                 let all = self.items.iter().map(|i| i.id).collect();
@@ -3843,7 +3954,7 @@ impl App {
         ids
     }
 
-    /// Stop All (and Pause All) has something to stop: a download, a queue, or a download that
+    /// Stop All has something to stop: a download, a queue, or a download that
     /// would start again by itself.
     fn can_stop_all(&self) -> bool {
         self.items.iter().any(|i| i.live.is_some())
@@ -3933,8 +4044,13 @@ impl App {
     /// the files too. The box starts unticked every time; `files` ticks it for this once
     /// (Shift+Delete, Remove with files). With "Don't show this dialog again" ticked, a plain
     /// Delete only takes the downloads off the list, never their files; Shift+Delete still asks,
-    /// as nothing leaves the disk unasked (upstream #1563). Running downloads are left alone.
+    /// as nothing leaves the disk unasked (upstream #1563). Running downloads are left alone,
+    /// and said: under the question, or in a notice when it isn't asked (plan 12a).
     fn ask_delete(&mut self, ids: Vec<u64>, files: bool) {
+        let kept = ids
+            .iter()
+            .filter(|id| self.items.iter().any(|i| i.id == **id && i.live.is_some()))
+            .count() as u64;
         let gone: Vec<&Item> = ids
             .iter()
             .filter_map(|id| self.items.iter().find(|i| i.id == *id && i.live.is_none()))
@@ -3943,20 +4059,33 @@ impl App {
         if self.settings.confirm_delete || files {
             let one = gone.len() == 1;
             // A finished file goes with a ticked box: the window says how many (upstream #1563).
-            let finished = gone
-                .iter()
-                .filter(|i| i.status == Status::Complete && i.gallery.is_none())
-                .count() as u64;
-            self.confirm_delete = Some(dialogs::ConfirmDelete::new(
+            // A torrent's files are deleted by its engine, not moved (plan 12, DA1t): counted
+            // apart, each said in red.
+            let done = |torrent: bool| {
+                gone.iter()
+                    .filter(|i| {
+                        i.status == Status::Complete
+                            && i.gallery.is_none()
+                            && i.torrent.is_some() == torrent
+                    })
+                    .count() as u64
+            };
+            let (finished, torrents) = (done(false), done(true));
+            let mut ask = dialogs::ConfirmDelete::new(
                 gone.iter().map(|i| i.id).collect(),
                 first.file_name.clone(),
                 one && first.status != Status::Complete,
                 files,
                 finished,
-            ));
+            );
+            (ask.torrents, ask.kept) = (torrents, kept);
+            self.confirm_delete = Some(ask);
         } else {
             let ids: Vec<u64> = gone.into_iter().map(|i| i.id).collect();
             self.remove_downloads(&ids, false);
+            if kept > 0 {
+                self.notice = Some((crate::i18n::mark("Delete"), dialogs::kept_text(kept)));
+            }
         }
     }
 
@@ -3993,6 +4122,7 @@ impl App {
         let active = crate::win32::idle_seconds() < 60;
         let rate = (s.global_limit_on && (!s.global_only_active || active))
             .then(|| s.global_limit_kb.max(1) * 1024);
+        self.global_cap = rate;
         let torrents = self.torrent_speed();
         let files = self.file_speed();
         // The torrents' limit moves in eighths of the cap, at most every 3 s: librqbit starts
@@ -4211,10 +4341,15 @@ impl App {
             t.set_queue(q.running);
         }
         if let Some(t) = &self.tray {
-            let tip = match self.activity() {
+            let mut tip = match self.activity() {
                 Some(a) => format!("{}\n{a}", crate::MAIN_TITLE),
                 None => crate::MAIN_TITLE.to_owned(),
             };
+            // The Speed Limiter while on (upstream issue 1191).
+            if let Some(hint) = self.limiter_hint() {
+                tip.push('\n');
+                tip.push_str(&hint);
+            }
             t.set_tooltip(&tip);
             // "Downloads in progress": each running download, to show its progress window (#63).
             let running: Vec<(u64, String)> = self
@@ -6960,6 +7095,15 @@ impl App {
                     self.properties(id);
                 }
             }
+            Cmd::CopyAddress => {
+                let chosen: Vec<&Item> = many
+                    .iter()
+                    .filter_map(|id| self.items.iter().find(|i| i.id == *id))
+                    .collect();
+                if let Some(text) = addresses(&chosen) {
+                    crate::copy_text(ctx, text);
+                }
+            }
             Cmd::OpenWith => {
                 if let Some(d) = dest {
                     dialogs::open_download_with(&d, moved_away);
@@ -7178,6 +7322,7 @@ impl App {
             }
             Cmd::Arrange(col) => self.list.sort = col.map(|c| (c, true)),
             Cmd::ClearFilters => self.list.filters = vec![None; list::COLS],
+            Cmd::ClearSearch => self.find.text.clear(),
             Cmd::ResetColumns => self.list.reset_columns(),
             Cmd::ShowAll => self.view = View::All,
             Cmd::SelectAll => {
@@ -7459,7 +7604,6 @@ impl App {
                 ),
             ],
             2 => vec![
-                I("&Pause All", Cmd::StopAll, can_stop_all, false),
                 I("&Stop all", Cmd::StopAll, can_stop_all, false),
                 Sep,
                 I(
@@ -7560,8 +7704,7 @@ impl App {
         zoom: f32,
         themes: &[crate::themefile::Entry],
     ) -> Vec<MenuEntry<Cmd>> {
-        use MenuEntry::{Item as I, Sub};
-        let off = |label| I(label, Cmd::None, false, false);
+        use MenuEntry::Item as I;
         vec![
             I(
                 if show_categories {
@@ -7589,18 +7732,14 @@ impl App {
                 settings.show_details,
             ),
             Self::arrange_menu(sorted),
-            // i18n: noun: the toolbar (submenu of View with its settings)
-            Sub("Toolbar", false, vec![]),
-            Sub("&Tray icon", false, vec![]),
-            off("C&ustomize URL List..."),
+            // Toolbar, Tray icon, Customize URL List and Font, always greyed, are gone (plan
+            // 12b, DB3): each comes back when it works.
             // Light or dark: the status bar's button (1.0.1), no longer two View items.
             // View → Theme (MDM's, #45); then Interface size (#262) and
             // Draw with (#89, renderer.rs).
             Self::theme_menu(&settings.theme, themes),
             Self::interface_size_menu(zoom),
             Self::draw_with_menu(settings.renderer),
-            // i18n: noun: the list's font (submenu)
-            Sub("Font", false, vec![]),
         ]
     }
 
@@ -8021,7 +8160,7 @@ impl App {
             I(
                 "Open folder",
                 Cmd::OpenFolder,
-                done || it.is_some_and(|i| i.torrent.is_some()),
+                it.is_some_and(crate::panes::can_open_folder),
                 false,
             ),
             Sep,
@@ -8033,6 +8172,13 @@ impl App {
             I("Resume", Cmd::Resume, any_resumable, false),
             I("Stop", Cmd::Stop, any_live, false),
             Sep,
+            // i18n: right-click menu: copy the selected downloads' web addresses
+            I(
+                "Copy address",
+                Cmd::CopyAddress,
+                chosen.iter().any(|i| has_address(i)),
+                false,
+            ),
             I(
                 "Refresh download address",
                 Cmd::RefreshAddress,
@@ -9142,7 +9288,7 @@ impl App {
         }
         self.popup_menu(&ctx, &mut chosen);
         // The main window's shortcut keys (Ctrl+F, F3, Ctrl+N, Ctrl+M / F2, Delete,
-        // Shift+Delete), with no menu or popup open.
+        // Shift+Delete, Ctrl+C), with no menu or popup open.
         if chosen.is_none() && self.popup.is_none() && self.open_menu.is_none() {
             let focused = ctx.memory(|m| m.focused().is_some());
             chosen = ctx
@@ -10988,7 +11134,18 @@ impl App {
         // Off-screen test copies have no tray icon: their windows are drawn as if they had one
         // (the captures and the accessibility checks see the hide button).
         let tray = self.tray.is_some() || crate::offscreen();
+        // The limit each one's download is under (upstream issue 1191), for its Transfer rate.
+        let running = self.running();
+        let limits: HashMap<u64, model::Limit> = self
+            .progress
+            .iter()
+            .filter_map(|p| {
+                let it = self.items.iter().find(|i| i.id == p.id)?;
+                Some((p.id, self.limit_of(it, running)?))
+            })
+            .collect();
         for p in &mut self.progress {
+            p.limit = limits.get(&p.id).copied();
             p.keep_sharing = self.settings.torrent_keep_sharing;
             if p.host.is_none() {
                 p.host = Some(self.torrent_host.clone());
@@ -13048,6 +13205,21 @@ mod view_menu_tests {
         assert_eq!(seen.get("p"), Some(&"&Paste bar"));
         assert_eq!(seen.get("n"), Some(&"Details pa&ne"));
     }
+
+    /// Plan 12b, DB3: no item of the View menu is always greyed (Toolbar, Tray icon,
+    /// Customize URL List and Font are gone until they work).
+    #[test]
+    fn the_view_menu_has_no_dead_items() {
+        for e in view(true, true) {
+            match e {
+                MenuEntry::Item(l, _, on, _) | MenuEntry::Radio(l, _, on, _) => {
+                    assert!(on, "{l:?} is greyed")
+                }
+                MenuEntry::Sub(l, on, items) => assert!(on && !items.is_empty(), "{l:?} is dead"),
+                _ => {}
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -13151,10 +13323,84 @@ mod details_cmd_tests {
             (DetailsAction::Stop, Cmd::Stop),
             (DetailsAction::OpenFolder, Cmd::OpenFolder),
             (DetailsAction::ShowProgress, Cmd::Open),
+            (DetailsAction::RefreshAddress, Cmd::RefreshAddress),
         ];
         for (action, cmd) in table {
             assert_eq!(details_cmd(action), cmd, "{action:?}");
         }
+    }
+}
+
+/// Plan 12b: the empty list's search branch (A5) and Copy address (B4).
+#[cfg(test)]
+mod states_routes_tests {
+    use super::*;
+
+    fn item(id: u64, name: &str) -> Item {
+        let url = url::Url::parse(&format!("https://example.com/{name}")).unwrap();
+        let mut i = Item::new(id, url, PathBuf::from(name), Category::Compressed);
+        i.status = Status::Stopped;
+        i
+    }
+
+    /// A search that matches nothing says so, quotes the text, and its link clears the search,
+    /// before the filters' message; without a search, the messages are as before.
+    #[test]
+    fn an_empty_search_offers_clear_search() {
+        let mut app = super::route_new_url_tests::app(vec![item(1, "a.zip")]);
+        app.list.filters[3] = Some(list::Filter::Values(vec!["Complete"]));
+        let (_, _, action, cmd, need) = app.empty_message();
+        assert_eq!(
+            (action, cmd, need),
+            ("Clear all filters", Cmd::ClearFilters, "gx-filter")
+        );
+        app.find.text = "nothing".into();
+        let (title, _, action, cmd, need) = app.empty_message();
+        assert!(title.contains("nothing"), "{title}");
+        assert_eq!(
+            (action, cmd, need),
+            ("Clear search", Cmd::ClearSearch, "gx-search")
+        );
+        let ctx = egui::Context::default();
+        app.run(Cmd::ClearSearch, None, &ctx);
+        assert!(!app.find.active());
+        app.list.filters[3] = None;
+        app.view = View::Finished(None);
+        let (_, _, _, cmd, _) = app.empty_message();
+        assert_eq!(cmd, Cmd::ShowAll);
+    }
+
+    /// Copy address copies the addresses of the downloads that aren't torrents, one a line.
+    #[test]
+    fn copy_address_leaves_torrents_out() {
+        let (a, b) = (item(1, "a.zip"), item(2, "b.iso"));
+        let mut t = item(3, "c.torrent");
+        t.torrent = Some(crate::torrents::TorrentSpec {
+            hash: "0".repeat(40),
+            files: None,
+            folder: PathBuf::from("c"),
+            owns_files: true,
+            uploaded: 0,
+            seeded_secs: 0,
+            peers: 0,
+            up_speed: 0.0,
+            upload_limit: None,
+            in_order: false,
+            ends_first: true,
+        });
+        assert_eq!(
+            addresses(&[&a, &t, &b]).as_deref(),
+            Some("https://example.com/a.zip\r\nhttps://example.com/b.iso")
+        );
+        assert_eq!(addresses(&[&t]), None);
+        assert!(has_address(&a) && !has_address(&t));
+        // A password written in the address stays out, as in the Details pane; the user stays.
+        let mut login = item(4, "d.zip");
+        login.url = url::Url::parse("ftp://user:secret@example.com/d.zip").unwrap();
+        assert_eq!(
+            addresses(&[&login]).as_deref(),
+            Some("ftp://user@example.com/d.zip")
+        );
     }
 }
 
@@ -13553,6 +13799,13 @@ mod old_keys_tests {
                 Some(Cmd::RemoveWithFiles),
             ),
             ("Ctrl+X", ctrl, vec![key(Key::X, ctrl), Event::Cut], None),
+            // Windows: Ctrl+C arrives as Copy (plan 12b: Copy address).
+            (
+                "Ctrl+C as Copy",
+                ctrl,
+                vec![Event::Copy],
+                Some(Cmd::CopyAddress),
+            ),
             (
                 "Ctrl+Shift+Delete",
                 ctrl_shift,
@@ -13631,7 +13884,15 @@ mod old_keys_tests {
             let (cmd, left, text) = frame(mods, &events, Focus::Nothing, new_keys);
             assert_eq!(cmd, expected, "{name}, nothing focused");
             assert_eq!(text, "abc", "{name}: the unfocused field is untouched");
-            // Ctrl+O is new with the universal Add (Open a .torrent file): dev had none.
+            // Ctrl+O is new with the universal Add (Open a .torrent file), Ctrl+C with Copy
+            // address (plan 12b): dev had none. A text box focused keeps Ctrl+C.
+            if name.starts_with("Ctrl+C") {
+                for focus in [Focus::PasteField, Focus::OtherBox] {
+                    let (cmd, ..) = frame(mods, &events, focus, new_keys);
+                    assert_eq!(cmd, None, "{name}, {focus:?}: the box's");
+                }
+                continue;
+            }
             if name == "Ctrl+O" {
                 continue;
             }
@@ -13707,6 +13968,7 @@ mod old_keys_tests {
                 icon: crate::chrome::IconKey::Themed("ft-generic"),
                 queued: false,
                 cells,
+                rate_tip: None,
             }
         };
         let rows = [row("a.zip"), row("b.iso")];
@@ -15074,9 +15336,9 @@ mod settings_page_tests {
     }
 }
 
-/// Upstream #1563: "Also delete the files from disk" is never remembered, and nothing leaves the
-/// disk without the question: a list that remembered the box ticked, with the question turned
-/// off, deleted finished files with every Delete All Completed.
+/// Upstream #1563: the files box ("Also move the files to the Recycle Bin") is never
+/// remembered, and nothing leaves the disk without the question: a list that remembered the box
+/// ticked, with the question turned off, deleted finished files with every Delete All Completed.
 #[cfg(test)]
 mod delete_tests {
     use super::*;
@@ -15203,5 +15465,50 @@ mod delete_tests {
         assert_eq!(ids(&app), [2, 3]);
         assert!(app.deleter.finish(Duration::from_secs(10)));
         assert!(files.iter().all(|f| f.exists()));
+    }
+
+    /// Plan 12a (E3): Delete leaves a running download in the list and says so: counted under
+    /// the question, or in a notice when the question is off.
+    #[test]
+    fn delete_says_how_many_running_downloads_it_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let (items, _) = three(dir.path());
+        let mut app = app_with_saved_tick(items, true);
+        let ctx = egui::Context::default();
+        app.start(3, false);
+        assert!(app.items[2].live.is_some(), "running");
+        app.selection.apply(crate::selection::Pick::All, &[1, 2, 3]);
+        app.run(Cmd::Remove, None, &ctx);
+        let ask = asked(&app);
+        assert_eq!((ask.ids.clone(), ask.kept), (vec![1, 2], 1));
+        app.confirm_delete = None; // No
+        app.settings.confirm_delete = false;
+        app.run(Cmd::Remove, None, &ctx);
+        assert!(app.confirm_delete.is_none(), "not asked");
+        assert_eq!(ids(&app), [3], "the running one stays");
+        let (_, text) = app.notice.take().expect("said in a notice");
+        assert!(text.starts_with("1 running download is kept"), "{text}");
+    }
+
+    /// Plan 12a: a finished torrent's files are deleted by its engine, never moved to the
+    /// Recycle Bin (DA1t), so the question doesn't count them as finished files that move.
+    #[test]
+    fn a_finished_torrent_is_not_counted_as_a_file_that_moves() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut items, _) = three(dir.path());
+        items[0].torrent = Some(
+            serde_json::from_value(serde_json::json!({
+                "hash": "0123456789abcdef0123456789abcdef01234567",
+                "folder": "a",
+            }))
+            .unwrap(),
+        );
+        let mut app = app_with_saved_tick(items, true);
+        let ctx = egui::Context::default();
+        app.selection.set(1);
+        app.run(Cmd::RemoveWithFiles, None, &ctx);
+        let ask = asked(&app);
+        assert_eq!((ask.ids.clone(), ask.finished), (vec![1], 0));
+        assert_eq!(ask.torrents, 1, "said in red: its engine deletes its files");
     }
 }

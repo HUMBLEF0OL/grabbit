@@ -360,6 +360,9 @@ pub struct Progress {
     pub minimize_to_tray: bool,
     /// The main window is shown (set by the app each frame): the glide's frames draw it too.
     pub main_shown: bool,
+    /// The speed limit holding the download back (set by the app each frame, upstream issue
+    /// 1191): its Transfer rate names it.
+    pub limit: Option<crate::model::Limit>,
     /// The bar and the segment map between figures.
     glide: Glide,
     /// Options on completion, used when "Show download complete dialog" is off.
@@ -436,6 +439,7 @@ impl Progress {
             tray: false,
             minimize_to_tray: false,
             main_shown: true,
+            limit: None,
             glide: Glide::default(),
             hang_up: false,
             exit: false,
@@ -659,6 +663,7 @@ impl Progress {
                     item,
                     snap,
                     frac,
+                    self.limit,
                     Samples {
                         failed_with: self.sample_error.as_deref(),
                         merging: self.sample_merging,
@@ -1323,6 +1328,7 @@ fn status_page(
     item: &Item,
     snap: Option<&Snapshot>,
     frac: Option<f64>,
+    limit: Option<model::Limit>,
     samples: Samples,
 ) {
     let failed_with = samples.failed_with;
@@ -1461,7 +1467,12 @@ fn status_page(
             // Every byte in (upstream issue 736): nothing comes in while the file is checked or
             // joined.
             if state == Status::Downloading && !item.past_last_byte() {
-                model::rate(item.rate())
+                // The limit holding it back beside the speed (upstream issue 1191).
+                let rate = model::rate(item.rate());
+                match limit {
+                    Some(limit) => limit.after(&rate),
+                    None => rate,
+                }
             } else {
                 String::new()
             },
