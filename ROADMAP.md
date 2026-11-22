@@ -670,6 +670,14 @@ Done since 1.0.1; ships in the next release.
   after it stays the browser's (a minute for the link's own page); the browser-like connection
   names the browser's own version in `sec-ch-ua`, sends Chrome's HTTP/2 weight and
   Accept-Encoding, and one User-Agent.
+- ✅ One way of saying each thing, its words (plan 12c): one name per command in the menus and
+  the toolbar (**Resume**, **Stop**, **Delete**, **Delete with files**, **Delete completed**,
+  **Remove from queue**, **Ask trackers again**), sentence case in menus, columns, window titles
+  and Options, **Download now** / **Later** at the end of every add window, the same colon,
+  ellipsis and error wording everywhere, sizes written alike in the list and the progress window
+  with one space before the unit, **KB/s**, **MB/s** and **MB** (on the phone page too), and the
+  list's dates without seconds, and without the year when it is this year. The help pages and the
+  mockup name things as the app does.
 
 ## Being worked on
 

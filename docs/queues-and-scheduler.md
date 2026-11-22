@@ -8,22 +8,22 @@ A **queue** is a list of downloads that run in order, a few at a time. The **Sch
 
 Grabbit comes with two queues:
 
-- **Main download queue** — where **Download Later**, batch downloads and imported lists go. A download leaves it when it is finished.
+- **Main download queue** — where **Later**, batch downloads and imported lists go. A download leaves it when it is finished.
 - **Synchronization queue** — finished downloads stay in it instead of leaving. It is the only queue that takes finished downloads.
 
-You can add your own queues in the Scheduler, or with **Create new queue** in a download's right-click menu.
+You can add your own queues in the Scheduler, or with **New queue...** in a download's right-click menu.
 
 ### Put downloads in a queue
 
-- In **Download File Info**, click **Download Later** and pick the queue.
+- In **Download file info**, click **Later** and pick the queue.
 - Or select downloads in the list, right-click and choose **Add to queue**, then the queue. A download that is already in a queue shows **Move to queue** instead.
-- To take a download out of its queue, right-click it and choose **Delete from queue**. The download stays in the list.
+- To take a download out of its queue, right-click it and choose **Remove from queue**. The download stays in the list.
 
 The **Q** column shows which downloads are in a queue. Under **Queues** in the categories pane, select a queue to see only its downloads.
 
 ### Start and stop a queue
 
-- **Start Queue** and **Stop Queue** on the toolbar start and stop the **Main download queue**. The arrow next to each button lists every queue.
+- **Start queue** and **Stop queue** on the toolbar start and stop the **Main download queue**. The arrow next to each button lists every queue.
 - **Downloads → Start queue** and **Downloads → Stop queue** list them too.
 - Or right-click a queue under **Queues** and choose **Start now** or **Stop**.
 
@@ -38,7 +38,7 @@ Open it with **Scheduler** on the toolbar or **Downloads → Scheduler**. Right-
 
 The queues are on the left, with **Download limits** below them. The right side shows the selected queue on two tabs, **Schedule** and **Files in the queue**.
 
-- **New queue** asks for a name and adds a queue. **Delete** removes one of your own queues; the two built-in queues can't be deleted. A deleted queue's downloads stay in the list.
+- **New queue...** asks for a name and adds a queue. **Delete** removes one of your own queues; the two built-in queues can't be deleted. A deleted queue's downloads stay in the list.
 - **Start now** and **Stop**, at the right end of the tabs' row, run or halt the selected queue straight away. **Start now** keeps the Scheduler's changes first.
 - **Save**, at the bottom, keeps your changes, and **Discard** throws them away; both are greyed until you change something. Going back with changes not saved asks first whether to discard them (closing the Scheduler window used to keep them).
 - **Ctrl+Tab** goes to the next section of Options; click a tab, or use **Left** / **Right** on the selected tab, to switch between **Schedule** and **Files in the queue**.
@@ -87,7 +87,7 @@ Windows wakes a computer only if its power plan allows wake timers. If it doesn'
 For an internet plan with a data cap, select **Download limits** on the left:
 
 1. Tick **Download limits**.
-2. Fill in **Download no more than [N] MBytes every [H] hours**. It starts at 200 MBytes every 5 hours.
+2. Fill in **Download no more than [N] MB every [H] hours**. It starts at 200 MB every 5 hours.
 3. Click **Save**.
 
 When the limit is reached, Grabbit stops downloading. New downloads show **Waiting: the download limit is reached (Scheduler)**. Everything resumes on its own when the period is over. **Show warning before stopping downloads** tells you when this happens and when downloads will go on.

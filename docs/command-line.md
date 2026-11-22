@@ -22,7 +22,7 @@ grabbit.exe /d URL [/p folder] [/f name] [/a] [/n] [/s]
 | `/p folder` | Save it in this folder (else the category's folder from **Options → Save to**). |
 | `/f name` | Save it under this name. |
 | `/a` | Add it to the main download queue without starting it. |
-| `/n` | Silent: no **Download File Info** window, the download starts (or is queued, with `/a`) at once. |
+| `/n` | Silent: no **Download file info** window, the download starts (or is queued, with `/a`) at once. |
 | `/s` | Start the main download queue. |
 | `/exit` | Save and close the running app (the installer uses it before an upgrade). |
 | `/startup` | Start in the notification area, the window hidden: what **Launch Grabbit on startup** starts Grabbit with when you sign in. Where no notification area shows Grabbit's icon, Grabbit starts minimized. A running Grabbit stays as it is. |

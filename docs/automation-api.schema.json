@@ -519,7 +519,7 @@
         },
         "silent": {
           "default": false,
-          "description": "`/n`: silent — no Download File Info dialog.",
+          "description": "`/n`: silent — no Download file info dialog.",
           "type": "boolean"
         },
         "size": {

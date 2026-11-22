@@ -8,7 +8,7 @@ Every download keeps a log of its recent events: retries, redirects, the server'
 
 - Hover over the download's **Status** in the list to see them.
 - Or open its progress window (double-click an unfinished download). The connection table shows what each connection is doing, and **Retrying** with the reason when one fails.
-- **File Properties** (**Alt+Enter**) shows **Last try** and its **Result**.
+- **File properties** (**Alt+Enter**) shows **Last try** and its **Result**.
 
 ## A download says Error
 

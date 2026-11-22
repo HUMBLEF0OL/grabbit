@@ -49,7 +49,7 @@ When you click a download, the extension checks Grabbit's Options:
 - **Options → General → Use advanced browser integration** must be on. Turn it off to send nothing to Grabbit.
 - **Options → General → Capture downloads from the following browsers** must have your browser ticked.
 - **Options → File types → Automatically start downloading the following file types** must list the file's type. The list starts with the usual ones: ZIP, RAR, 7Z, EXE, MSI, ISO, DMG, DEB, RPM, APPIMAGE, MP3, MP4, MKV, WEBM, PDF, AI models such as GGUF and SAFETENSORS, 3D files such as GLB and STL, and many more. Anything else can be added to the list.
-- **Options → File types → Don't start downloading automatically from the following sites** must not list the site. Names are separated by spaces, and `*` matches any part, as in `*.update.microsoft.com`. **Edit list ...** below it lists whole addresses to leave alone, one per line (`https://example.com/private/*`).
+- **Options → File types → Don't start downloading automatically from the following sites** must not list the site. Names are separated by spaces, and `*` matches any part, as in `*.update.microsoft.com`. **Edit list...** below it lists whole addresses to leave alone, one per line (`https://example.com/private/*`).
 - **Options → File types → Don't take files smaller than** leaves small files (a receipt, an icon) to the browser. 0 takes any size.
 - A `.torrent` file goes to Grabbit only while **Downloads → Options → Torrents → Open magnet links and .torrent files with Grabbit** is on. Off, the browser keeps it and opens it in your own torrent program. See [Torrents](torrents.md#add-a-torrent).
 - The extension must be allowed to read the site. When you limit it to some sites (or **On click**), it can't pass your sign-in on, so it leaves those sites' downloads to the browser.
@@ -61,16 +61,16 @@ When the browser keeps a download, the extension's button says which of these le
 
 Both the address you clicked and the one its redirects led to are checked, so a site you excluded stays excluded even when it sends you to another server. Everything else stays with the browser. Changes in Options reach the browser within a minute; you don't need to restart it.
 
-When Grabbit takes a download, it gets the browser's file name, size and type with it, so **Download File Info** shows them at once without asking the server again. A download from a form (a button that posts and gets a file back) is posted again by Grabbit with the form's data; a form that sends a file stays with the browser.
+When Grabbit takes a download, it gets the browser's file name, size and type with it, so **Download file info** shows them at once without asking the server again. A download from a form (a button that posts and gets a file back) is posted again by Grabbit with the form's data; a form that sends a file stays with the browser.
 
-When Grabbit takes a download, the browser's own copy is cancelled and removed from the browser's download list. In Firefox and the browsers built on it (Waterfox, Zen, LibreWolf), Grabbit takes it as soon as the server answers, before the browser asks *What should … do with this file?*: for a file Grabbit takes, that question never shows (Waterfox asks it for every new type of file). Files Grabbit doesn't take get the question as before. **Download File Info** opens in Grabbit (unless you turned it off in **Options → Downloads**). Cancelling there doesn't hand the download back to the browser.
+When Grabbit takes a download, the browser's own copy is cancelled and removed from the browser's download list. In Firefox and the browsers built on it (Waterfox, Zen, LibreWolf), Grabbit takes it as soon as the server answers, before the browser asks *What should … do with this file?*: for a file Grabbit takes, that question never shows (Waterfox asks it for every new type of file). Files Grabbit doesn't take get the question as before. **Download file info** opens in Grabbit (unless you turned it off in **Options → Downloads**). Cancelling there doesn't hand the download back to the browser.
 
 <!-- steps -->
 
-1. ![Download File Info in Grabbit for a file clicked in the browser](images/help/catch-file-info.webp)
-   *Click a download link in the browser: Download File Info opens in Grabbit.*
+1. ![Download file info in Grabbit for a file clicked in the browser](images/help/catch-file-info.webp)
+   *Click a download link in the browser: Download file info opens in Grabbit.*
 2. ![The progress window of a download coming in over several connections](images/help/catch-progress.webp)
-   *Start Download: the progress window shows it coming in.*
+   *Download now: the progress window shows it coming in.*
 3. ![Download complete, with Open, Open with..., Open folder and Close](images/help/catch-complete.webp)
    *Download complete: Open the file, or Open folder.*
 

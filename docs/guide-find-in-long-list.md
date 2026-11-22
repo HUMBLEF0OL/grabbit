@@ -33,14 +33,14 @@ Each column title has a faint funnel. Click it to keep only some rows:
 - On **Status**, tick only **Error** to see the downloads that failed.
 - On **Source**, tick only **Torrent**.
 - On **Q**, tick **In a queue** or **Not in a queue**.
-- On **File Name**, **Description** and the other columns, type a word.
+- On **File name**, **Description** and the other columns, type a word.
 
 A filtered column's funnel turns blue. Right-click a column title and choose **Clear all filters**, or **Clear all** in the **Find** field's funnel menu, to see everything again.
 
 ## Narrow it down with categories and sorting
 
 - Click **Unfinished** or **Finished** in the categories, or a category such as **Video**, to see only those downloads.
-- Click a column title to sort: **Added** for the newest, **Size** for the biggest, **File Name** for A to Z. Click again to reverse.
+- Click a column title to sort: **Added** for the newest, **Size** for the biggest, **File name** for A to Z. Click again to reverse.
 - With the list selected, type the first letters of a name to jump straight to it.
 
 ## Next steps

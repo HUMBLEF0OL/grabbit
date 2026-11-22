@@ -28,7 +28,7 @@ pub struct Command {
     pub name: Option<String>,
     /// `/a`: add to the main queue, don't start.
     pub later: bool,
-    /// `/n`: silent — no Download File Info dialog.
+    /// `/n`: silent — no Download file info dialog.
     pub silent: bool,
     /// `/s`: start the main queue.
     pub start_queue: bool,
