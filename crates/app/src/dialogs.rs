@@ -3455,22 +3455,24 @@ impl ExistingFiles {
                     18.0,
                 );
                 // No is the default: a file the user didn't mean to give up stays as it is.
-                // Enter and Escape both answer No, as before.
+                // Enter and Escape both answer No, as before. "No, Yes" as the other
+                // questions read (plan 12b, C1): No isn't moved last, and Tab goes as drawn.
                 match winui::footer(
                     ui,
                     o,
                     W,
                     BODY,
                     &mut [
-                        FooterItem::Button(FooterButton::new("Yes", ButtonKind::Normal)),
                         FooterItem::Button(
                             FooterButton::new("No", ButtonKind::Default)
+                                .not_primary()
                                 .enter(true)
                                 .escape(true),
                         ),
+                        FooterItem::Button(FooterButton::new("Yes", ButtonKind::Normal)),
                     ],
                 ) {
-                    Some(0) => Outcome::Done(()),
+                    Some(1) => Outcome::Done(()),
                     Some(_) => Outcome::Closed,
                     None => Outcome::Open,
                 }

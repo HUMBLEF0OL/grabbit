@@ -60,7 +60,7 @@ From top to bottom:
 - **Menu bar.**
   - **Tasks** — add downloads, torrents, magnet links, batch downloads and videos from a page; **Link grabber**; **RSS feeds**; show the drop target; import and export the list; exit.
   - **File** — the selected download: **Stop Download**, **Remove**, **Download Now**, **Redownload**.
-  - **Downloads** — **Pause All**, **Stop All**, **Delete All Completed**, **Find**, the **Scheduler**, queues, the **Speed Limiter** and **Options** (every setting, torrents' too).
+  - **Downloads** — **Stop All**, **Delete All Completed**, **Find**, the **Scheduler**, queues, the **Speed Limiter** and **Options** (every setting, torrents' too).
   - **View** — show or hide the categories, sort the list (**Arrange files**), **Theme**, **Interface size** (every window larger, 100 % to 200 %; **Ctrl +**, **Ctrl −** and **Ctrl 0** too), **Draw with** (OpenGL or Direct3D) and **Language**.
   - **Help** — help pages and tutorials (on the website), **Keyboard shortcuts**, **Report a problem**, **Check for updates**, **About**, **Tell a friend** and **Support Grabbit** (Grabbit's page on GitHub, to star it: optional, nothing in Grabbit changes).
 - **Toolbar.** **Add**, **Resume**, **Stop**, **Stop All**, **Delete**, **Delete Completed**, **Options**, **Scheduler**, **Start Queue**, **Stop Queue**. **Add** takes links, magnet links, `.torrent` files and video pages alike. The small arrow next to **Add**, **Start Queue** and **Stop Queue** opens more choices.

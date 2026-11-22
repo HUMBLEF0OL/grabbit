@@ -38,6 +38,7 @@ In the paste bar's address box, **Enter** does what its button says, **Esc** lea
 | **Shift+F10** or the **Menu** key | Open the selected download's menu |
 | **Delete** | Delete the selected downloads from the list (asks first, unless you turned the question off; their files stay unless you tick the box) |
 | **Shift+Delete** | Delete the selected downloads and their files; finished files go to the Recycle Bin (always asks first) |
+| **Ctrl+C** | Copy the selected downloads' addresses (a torrent's: right-click → **Torrent** → **Copy magnet link**) |
 
 ## Selecting
 

@@ -674,6 +674,17 @@ Done since 1.0.1; ships in the next release.
   Bin (its working data is still deleted outright; torrents unchanged), the delete question says
   so, Delete says how many running downloads it kept, and the RSS window asks before removing a
   feed, with one verb, **Remove**, for feeds and rules.
+- ✅ States and routes (plan 12b): a search that finds nothing says so, with **Clear search**;
+  **Copy address** in a download's right-click menu and on **Ctrl+C**; a download whose link
+  expired, or that the server refused (403) or says is gone (410), offers **Refresh download
+  address...** in the Details pane; the Details pane's **Open folder** follows the right-click
+  menu's rule; Add trackers' OK and RSS **Add feed** greyed with a tip while they can't work; the
+  first field of more dialogs has the keys as they open; the status strip says while the Speed
+  Limiter is on and the Transfer rate names the limit (ported from upstream issue 1191);
+  **Pause All**, which did what **Stop All** does, and the always-greyed View items (Toolbar,
+  Tray icon, Customize URL List, Font) are gone; **Properties** and **Add** got **Cancel**;
+  Files already there reads **No, Yes**; the exceptions' buttons go New, Edit, Delete; the
+  Scheduler's weekdays read in rows.
 
 ## Being worked on
 
@@ -922,10 +933,9 @@ kept on the `archive/multiplatform-i18n` branch.
 
 - 📋 One way of saying each thing (plan 12, `design/graphite/plans/12-ui-consistency.md`): one
   name per command in menus, toolbar and windows, sentence case throughout, the same buttons at
-  the end of every add window, a search that finds nothing
-  says so, a failed download offers to refresh its address, the status bar says when the Speed
-  Limiter is on, and the shared pieces (separators, focus rings, the Find box, browse buttons)
-  drawn one way
+  the end of every add window, and the shared pieces (separators, focus rings, the Find box,
+  browse buttons) drawn one way (its delete safety, 12a, and states and routes, 12b, are done:
+  see Next version)
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))
 - 📋 A new download window (plan 13, `design/graphite/plans/13-download-window.md`): one large
