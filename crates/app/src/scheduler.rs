@@ -473,7 +473,7 @@ impl Scheduler {
         // Delete has no access letter in the main window: Alt+D opens its Downloads menu.
         let row = winui::button_row_from_left(
             &ui.painter().clone(),
-            &[("&New queue", 11.0, 84.0), ("Delete", 103.0, 81.0)],
+            &[("&New queue...", 11.0, 84.0), ("Delete", 103.0, 81.0)],
             8.0,
             184.0,
             173.0,
@@ -481,7 +481,7 @@ impl Scheduler {
         let new_queue = winui::button_light(
             ui,
             r(o, row[0].0, buttons_y, row[0].1, winui::CONTROL_H),
-            "&New queue",
+            "&New queue...",
             ButtonKind::Normal,
             false,
         )
@@ -854,7 +854,7 @@ impl Scheduler {
             ui,
             at(228.0, 267.0 + dy),
             &mut f.retries_on,
-            "Number of retries for each file if downloading failed :",
+            "Number of retries for each file if downloading failed:",
             true,
             Some(o.x + retries_x),
         );
@@ -1101,7 +1101,7 @@ impl Scheduler {
         );
         // The name takes the width the pages gained.
         let cols = [
-            (crate::i18n::mark("File Name"), 230.0, 421.0 + DX),
+            (crate::i18n::mark("File name"), 230.0, 421.0 + DX),
             // i18n: column title: the file's size
             (crate::i18n::mark("Size"), 421.0 + DX, 488.0 + DX),
             // i18n: column title: the download's state
@@ -1224,7 +1224,7 @@ impl Scheduler {
                 "cross",
                 290.0,
                 sel.is_some(),
-                crate::i18n::mark("Remove from the queue"),
+                crate::i18n::mark("Remove from queue"),
             ),
         ];
         for (icon, x, enabled, tip) in buttons {

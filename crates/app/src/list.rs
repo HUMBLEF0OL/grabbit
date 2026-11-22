@@ -54,7 +54,7 @@ themed! {
 /// older build already meant something else by.
 pub const COLS: usize = 13;
 pub const TITLES: [&str; COLS] = [
-    "File Name",
+    "File name",
     // i18n: column title: one letter for Queue (the column is narrow)
     "Q",
     // i18n: noun: the file's size
@@ -63,7 +63,7 @@ pub const TITLES: [&str; COLS] = [
     "Status",
     "Time left",
     "Transfer rate",
-    "Last Try Date",
+    "Last try date",
     // i18n: noun: the download's description
     "Description",
     // i18n: past participle: when the download was added
@@ -1888,7 +1888,7 @@ mod tests {
         ];
         rows[0].cells[3] = "Complete".into();
         rows[1].cells[3] = "63.00%".into();
-        rows[1].cells[2] = "92.00  MB".into();
+        rows[1].cells[2] = "92.00 MB".into();
         rows[1].progress = Some(0.63);
         let mut st = ListState::default();
         let mut icons = ShellIcons;
@@ -1935,7 +1935,7 @@ mod tests {
             options,
             [
                 ("a.zip, Complete".to_owned(), false),
-                ("b.iso, 63.00%, 92.00  MB".to_owned(), true),
+                ("b.iso, 63.00%, 92.00 MB".to_owned(), true),
             ]
         );
         assert!(
@@ -2040,8 +2040,8 @@ mod tests {
     /// column — the screenshots caught exactly that.
     #[test]
     fn each_titles_slot_names_its_own_column() {
-        assert_eq!(TITLES[0], "File Name");
-        assert_eq!(TITLES[6], "Last Try Date");
+        assert_eq!(TITLES[0], "File name");
+        assert_eq!(TITLES[6], "Last try date");
         assert_eq!(TITLES[7], "Description");
         assert_eq!(TITLES[ADDED], "Added");
         assert_eq!(TITLES[SOURCE], "Source");
@@ -2258,7 +2258,7 @@ mod tests {
             names,
             [
                 "Source",
-                "File Name",
+                "File name",
                 "Size",
                 "Status",
                 "Time left",
@@ -2269,7 +2269,7 @@ mod tests {
         for c in 0..COLS {
             assert_eq!(
                 always_shown(c),
-                matches!(TITLES[c], "File Name" | "Size" | "Status")
+                matches!(TITLES[c], "File name" | "Size" | "Status")
             );
             assert!(!always_shown(c) || DEFAULT_VISIBLE[c]);
         }

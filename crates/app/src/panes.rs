@@ -791,7 +791,7 @@ pub const ROWS: [&str; 8] = [
     crate::i18n::mark("Address"),
     // i18n: the details pane: label before the download queue the download is in
     crate::i18n::mark("Queue"),
-    crate::i18n::mark("Last Try Date"),
+    crate::i18n::mark("Last try date"),
 ];
 
 /// The rows with a value, in [`ROWS`]' order: `values` holds each row's value at its place; a
@@ -2990,7 +2990,7 @@ mod details_tests {
                 "Save to",
                 "Address",
                 "Queue",
-                "Last Try Date"
+                "Last try date"
             ]
         );
         let value = |label: &str| {
@@ -3216,7 +3216,7 @@ mod details_tests {
             let address = value("Address");
             prop_assert!(address.is_some_and(|v| v.contains(host.as_str())), "{address:?}");
             prop_assert_eq!(value("Queue").is_some(), queue.is_some());
-            prop_assert_eq!(value("Last Try Date").is_some(), last_try.is_some());
+            prop_assert_eq!(value("Last try date").is_some(), last_try.is_some());
             if let Some(p) = &password {
                 for (label, v) in &one.rows {
                     prop_assert!(!v.contains(p.as_str()), "{label}: {v}");

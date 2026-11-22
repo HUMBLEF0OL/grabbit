@@ -934,7 +934,7 @@ mod tests {
             (Role::Tab, "Files in the queue"),
             (Role::Button, "Start now"),
             (Role::Button, "Stop"),
-            (Role::Button, "New queue"),
+            (Role::Button, "New queue..."),
             (Role::Button, "Save"),
         ] {
             let (id, n) = tree
@@ -1000,7 +1000,7 @@ mod tests {
             (
                 SPEED_PAGE,
                 "Speed Limiter",
-                &["Always turn on Speed Limiter on Grabbit startup"][..],
+                &["Turn on the Speed Limiter when Grabbit starts"][..],
             ),
             (
                 TORRENTS_PAGE,
