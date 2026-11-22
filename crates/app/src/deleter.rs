@@ -9,6 +9,10 @@
 //! row leaves the list until its files are gone, so a download added meanwhile under that name
 //! (or a video under that stem) is numbered as it would be for a file still there: what is
 //! deleted here is only ever what the deleted download had, never a file of one that came after.
+//!
+//! A finished file goes to the Recycle Bin, where it can be restored from (plan 12a); the
+//! download's working data (its resume state, part file, a video's pieces and leftovers) is
+//! deleted outright.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -21,8 +25,33 @@ use mdm_engine::naming::{self, Reservation};
 /// looking for them reads its folder).
 pub type Later = Box<dyn FnOnce() -> Vec<PathBuf> + Send>;
 
-/// How a file is deleted (`std::fs::remove_file`; the tests' own).
+/// How a file is deleted (`std::fs::remove_file`, [`recycle`] for a finished file; the tests'
+/// own).
 type Remove = dyn Fn(&Path) -> io::Result<()> + Send + Sync;
+
+/// A finished file to the Recycle Bin (`trash`: [`crate::extractq::to_trash`]; a test's folder).
+/// A file already gone is NotFound, as `remove_file` says it; one the shell kept is an error.
+fn recycle(path: &Path, trash: impl Fn(&[PathBuf]) -> bool) -> io::Result<()> {
+    let gone = |p: &Path| std::fs::symlink_metadata(p).is_err();
+    if gone(path) {
+        return Err(io::ErrorKind::NotFound.into());
+    }
+    if trash(&[path.to_owned()]) || gone(path) {
+        Ok(())
+    } else {
+        // The shell gives no reason: a file open in another program, or a path longer than
+        // the 260 characters it takes. The file stays; it is never deleted outright instead.
+        tracing::warn!(
+            "delete: {} ({} characters) not moved to the Recycle Bin; it stays",
+            path.display(),
+            path.as_os_str().len()
+        );
+        Err(io::Error::other(
+            // i18n: why a deleted download's file stayed (after "{file} could not be moved to the Recycle Bin: "); Windows gives no reason
+            crate::i18n::t("Windows kept it (it may be open in another program)"),
+        ))
+    }
+}
 
 /// What goes from the disk with one download taken off the list.
 pub struct Doomed {
@@ -30,7 +59,8 @@ pub struct Doomed {
     name: String,
     /// Where it is saved.
     place: PathBuf,
-    /// It was complete: its finished file at `place` goes, and one that can't is said.
+    /// It was complete: its finished file at `place` goes to the Recycle Bin, and one that
+    /// can't is said.
     finished: bool,
     /// What else it left there, looked for in its turn.
     later: Option<Later>,
@@ -92,7 +122,7 @@ impl Doomed {
     }
 }
 
-/// A finished file that couldn't be deleted.
+/// A finished file that couldn't be moved to the Recycle Bin.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Failure {
     pub name: String,
@@ -105,9 +135,10 @@ const LET_GO: Duration = Duration::from_secs(2);
 
 /// One download's files: its resume state and part file, what it left beside them, then its
 /// finished file, last, so its name stays taken on the disk as long as anything of it is there.
-/// A file already gone is no failure, and only the finished file's are told: the rest is the
+/// The working data goes with `remove`, the finished file with `trash` (the Recycle Bin). A file
+/// already gone is no failure, and only the finished file's are told: the rest is the
 /// download's own working data.
-fn delete_one(mut d: Doomed, remove: &dyn Fn(&Path) -> io::Result<()>) -> Option<Failure> {
+fn delete_one(mut d: Doomed, remove: &Remove, trash: &Remove) -> Option<Failure> {
     // Paused a moment before and still writing to a slow disk (upstream issue 1328): its last
     // write and its resume state come first, so neither comes back after the delete.
     naming::wait_settled(&d.place);
@@ -139,7 +170,7 @@ fn delete_one(mut d: Doomed, remove: &dyn Fn(&Path) -> io::Result<()>) -> Option
             remove(&f)
         };
     }
-    let failed = finished.and_then(|f| match remove(&f) {
+    let failed = finished.and_then(|f| match trash(&f) {
         Err(e) if e.kind() != io::ErrorKind::NotFound => Some(Failure {
             name: std::mem::take(&mut d.name),
             error: e.to_string(),
@@ -154,10 +185,10 @@ fn delete_one(mut d: Doomed, remove: &dyn Fn(&Path) -> io::Result<()>) -> Option
 }
 
 /// A batch, in order; the finished files that couldn't go.
-fn delete_batch(batch: Vec<Doomed>, remove: &dyn Fn(&Path) -> io::Result<()>) -> Vec<Failure> {
+fn delete_batch(batch: Vec<Doomed>, remove: &Remove, trash: &Remove) -> Vec<Failure> {
     batch
         .into_iter()
-        .filter_map(|d| delete_one(d, remove))
+        .filter_map(|d| delete_one(d, remove, trash))
         .collect()
 }
 
@@ -165,8 +196,8 @@ fn delete_batch(batch: Vec<Doomed>, remove: &dyn Fn(&Path) -> io::Result<()>) ->
 pub fn failures_text(failures: &[Failure]) -> Option<String> {
     let first = failures.first()?;
     let mut text = crate::i18n::fmt(
-        // i18n: a message: a deleted download's file stayed on the disk; {file} = its name
-        crate::i18n::t("{file} could not be deleted from the disk: {error}"),
+        // i18n: a message: a deleted download's finished file stayed on the disk; {file} = its name
+        crate::i18n::t("{file} could not be moved to the Recycle Bin: {error}"),
         &[
             ("file", &crate::i18n::isolate(&first.name)),
             ("error", &first.error),
@@ -176,10 +207,10 @@ pub fn failures_text(failures: &[Failure]) -> Option<String> {
     if more > 0 {
         text.push('\n');
         text += &crate::i18n::tn(
-            // i18n: the message's next line: how many more deleted files stayed on the disk
+            // i18n: the message's next line: how many more deleted downloads' files stayed on the disk
             more,
-            "{n} more file could not be deleted either.",
-            "{n} more files could not be deleted either.",
+            "{n} more file could not be moved either.",
+            "{n} more files could not be moved either.",
         );
     }
     Some(text)
@@ -190,16 +221,25 @@ pub struct Deleter {
     /// None when no thread could be made: then each batch goes on the caller's.
     tx: Option<mpsc::Sender<Vec<Doomed>>>,
     remove: Arc<Remove>,
+    trash: Arc<Remove>,
     report: Arc<dyn Fn(Vec<Failure>) + Send + Sync>,
     pending: Arc<(Mutex<usize>, Condvar)>,
 }
 
 impl Deleter {
-    /// Deleting from the disk; a batch's failures told in the main window's notice
-    /// (`dialogs::tell`), which `wake` has drawn.
+    /// Working data deleted from the disk, finished files moved to the Recycle Bin; a batch's
+    /// failures told in the main window's notice (`dialogs::tell`), which `wake` has drawn.
     pub fn new(wake: impl Fn() + Send + Sync + 'static) -> Deleter {
-        Deleter::with(
-            |p| std::fs::remove_file(p),
+        // ponytail: an App's own deleter in the tests deletes outright, so they never fill the
+        // real Recycle Bin; the Recycle Bin path is tested with a folder of its own below.
+        let trash: Arc<Remove> = if cfg!(test) {
+            Arc::new(|p: &Path| std::fs::remove_file(p))
+        } else {
+            Arc::new(|p: &Path| recycle(p, crate::extractq::to_trash))
+        };
+        Deleter::with_trash(
+            Arc::new(|p: &Path| std::fs::remove_file(p)),
+            trash,
             move |failures| {
                 if let Some(text) = failures_text(&failures) {
                     crate::dialogs::tell(crate::i18n::mark("Delete"), text);
@@ -209,23 +249,36 @@ impl Deleter {
         )
     }
 
-    /// [`Deleter::new`] with its own way to delete a file and to say what failed (tests).
+    /// [`Deleter::new`] with its own way to delete a file, finished or not, and to say what
+    /// failed (tests).
+    #[cfg(test)]
     pub(crate) fn with(
         remove: impl Fn(&Path) -> io::Result<()> + Send + Sync + 'static,
         report: impl Fn(Vec<Failure>) + Send + Sync + 'static,
     ) -> Deleter {
         let remove: Arc<Remove> = Arc::new(remove);
+        Deleter::with_trash(remove.clone(), remove, report)
+    }
+
+    /// [`Deleter::new`] with its own ways to delete the working data (`remove`) and the
+    /// finished file (`trash`), and to say what failed.
+    pub(crate) fn with_trash(
+        remove: Arc<Remove>,
+        trash: Arc<Remove>,
+        report: impl Fn(Vec<Failure>) + Send + Sync + 'static,
+    ) -> Deleter {
         let report: Arc<dyn Fn(Vec<Failure>) + Send + Sync> = Arc::new(report);
         let pending: Arc<(Mutex<usize>, Condvar)> = Arc::default();
         let (tx, rx) = mpsc::channel::<Vec<Doomed>>();
         let spawned = std::thread::Builder::new()
             .name("delete files".into())
             .spawn({
-                let (remove, report, pending) = (remove.clone(), report.clone(), pending.clone());
+                let (remove, trash) = (remove.clone(), trash.clone());
+                let (report, pending) = (report.clone(), pending.clone());
                 move || {
                     for batch in rx {
                         let (many, began) = (batch.len(), Instant::now());
-                        let failures = delete_batch(batch, &*remove);
+                        let failures = delete_batch(batch, &*remove, &*trash);
                         // What a disk held, for a report's log.
                         if began.elapsed() >= Duration::from_secs(1) {
                             tracing::info!(
@@ -253,6 +306,7 @@ impl Deleter {
         Deleter {
             tx,
             remove,
+            trash,
             report,
             pending,
         }
@@ -271,7 +325,7 @@ impl Deleter {
             },
             None => batch,
         };
-        let failures = delete_batch(batch, &*self.remove);
+        let failures = delete_batch(batch, &*self.remove, &*self.trash);
         if !failures.is_empty() {
             (self.report)(failures);
         }
@@ -420,7 +474,11 @@ mod tests {
             text.contains("held 1.bin") && text.contains("in use"),
             "{text}"
         );
-        assert!(text.contains("1 more file could not be deleted"), "{text}");
+        assert!(
+            text.contains("could not be moved to the Recycle Bin"),
+            "{text}"
+        );
+        assert!(text.contains("1 more file could not be moved"), "{text}");
         assert!(!failures_text(&told[..1]).unwrap().contains("more"));
         assert_eq!(failures_text(&[]), None);
     }
@@ -462,6 +520,58 @@ mod tests {
         assert!(deleter.finish(Duration::from_secs(10)));
         assert!(!file.exists());
         assert_eq!(naming::unique_path(d, "slow.bin"), d.join("slow.bin"));
+    }
+
+    /// Plan 12a: a deleted download's finished file goes to the Recycle Bin (here a test folder,
+    /// as `MDM_TEST_TRASH_DIR` would make it) and its working data is deleted outright; a
+    /// finished file already gone is no failure, and one the bin refused stays and is said.
+    #[test]
+    fn a_finished_file_goes_to_the_recycle_bin_its_working_data_is_deleted() {
+        let dir = tempfile::tempdir().unwrap();
+        let (d, bin) = (dir.path().join("downloads"), dir.path().join("bin"));
+        std::fs::create_dir(&d).unwrap();
+        let file = d.join("done.zip");
+        let (state, part) = (
+            mdm_engine::state::state_path(&file),
+            naming::part_path(&file),
+        );
+        for f in [&file, &state, &part] {
+            std::fs::write(f, b"x").unwrap();
+        }
+        let (tx, failures) = mpsc::channel();
+        let tx = Mutex::new(tx);
+        let deleter = Deleter::with_trash(
+            Arc::new(|p: &Path| std::fs::remove_file(p)),
+            Arc::new({
+                let bin = bin.clone();
+                move |p: &Path| recycle(p, |f| crate::extractq::into_test_trash(&bin, f))
+            }),
+            move |f| {
+                let _ = tx.lock().unwrap().send(f);
+            },
+        );
+        deleter.delete(vec![doomed(&file, true), doomed(&d.join("gone.zip"), true)]);
+        assert!(deleter.finish(Duration::from_secs(10)));
+        assert!(bin.join("done.zip").exists(), "in the Recycle Bin");
+        assert_eq!(
+            std::fs::read_dir(&bin).unwrap().count(),
+            1,
+            "only the finished file"
+        );
+        assert_eq!(
+            std::fs::read_dir(&d).unwrap().count(),
+            0,
+            "state and part deleted"
+        );
+        assert!(
+            failures.try_recv().is_err(),
+            "a file already gone is no failure"
+        );
+        // The bin refuses: the file stays, and is said.
+        std::fs::write(&file, b"x").unwrap();
+        let kept = recycle(&file, |_| false).unwrap_err();
+        assert_ne!(kept.kind(), io::ErrorKind::NotFound);
+        assert!(file.exists());
     }
 
     /// A place another download holds (for longer than its own run takes to let go) is that

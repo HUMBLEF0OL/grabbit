@@ -83,7 +83,7 @@ Many sites publish their new torrents as an RSS or Atom feed. Grabbit can watch 
 
 - Type a feed's address into **Feed address** and click **Add feed**. Grabbit fetches it at once, then every 30 minutes; change that under **Check feeds every ... minutes**, 5 at the least.
 - Pick a feed on the left to see its articles. An article with a torrent shows a torrent icon and its size when the feed gives it. Double-click one, or select it and click **Download...**, to open **Add torrent** with it, as for any magnet link or `.torrent` address.
-- **Refresh** fetches the selected feed now. **Remove** stops watching it. A feed that can't be read is shown in red, and its line at the bottom says why.
+- **Refresh** fetches the selected feed now. **Remove** (or the **Delete** key) stops watching it, after asking: a rule that watched only that feed is turned off. A feed that can't be read is shown in red, and its line at the bottom says why.
 
 **Download rules** tab: a rule adds the torrents of new articles whose titles it matches, without asking.
 
@@ -93,6 +93,8 @@ Many sites publish their new torrents as an RSS or Atom feed. Grabbit can watch 
 - **Episodes**: which episodes to take, read from `S01E05` or `1x05` in the title. `1x2` is season 1 episode 2, `1x5-8` episodes 5 to 8, `2x1-` everything from season 2 episode 1 on, and `3` all of season 3, separated by `;`. Empty: any article. A rule takes each episode once: a second release of an episode it already added is skipped.
 - **Save to**: the folder its torrents go to; empty, the Torrents category's folder. **Add them without starting them** adds them as **Download Later** would.
 - **Feeds**: the feeds it watches; none ticked, all of them.
+
+**New rule** adds a rule; **Remove** (or the **Delete** key) removes the selected one at once.
 
 Rules only look at articles that are new since the feed was last fetched, and a feed's first fetch only lists what is there. So adding a feed or a rule never downloads a whole backlog. **Matches ... articles now** shows which of the articles the feeds hold now the rule matches, to check it; download those by hand. A torrent the list already has isn't added again, and neither is one whose files are already in the folder: Grabbit never writes into files it didn't make without asking. The bottom line of the tab says what the rules did last, and a torrent a rule added says so in its event log.
 

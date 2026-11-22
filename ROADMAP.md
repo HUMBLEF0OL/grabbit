@@ -670,6 +670,10 @@ Done since 1.0.1; ships in the next release.
   after it stays the browser's (a minute for the link's own page); the browser-like connection
   names the browser's own version in `sec-ch-ua`, sends Chrome's HTTP/2 weight and
   Accept-Encoding, and one User-Agent.
+- ✅ Delete safety (plan 12a): a finished file deleted with its download goes to the Recycle
+  Bin (its working data is still deleted outright; torrents unchanged), the delete question says
+  so, Delete says how many running downloads it kept, and the RSS window asks before removing a
+  feed, with one verb, **Remove**, for feeds and rules.
 
 ## Being worked on
 
@@ -918,7 +922,7 @@ kept on the `archive/multiplatform-i18n` branch.
 
 - 📋 One way of saying each thing (plan 12, `design/graphite/plans/12-ui-consistency.md`): one
   name per command in menus, toolbar and windows, sentence case throughout, the same buttons at
-  the end of every add window, deleted files moved to the Recycle Bin, a search that finds nothing
+  the end of every add window, a search that finds nothing
   says so, a failed download offers to refresh its address, the status bar says when the Speed
   Limiter is on, and the shared pieces (separators, focus rings, the Find box, browse buttons)
   drawn one way

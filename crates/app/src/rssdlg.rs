@@ -7,7 +7,7 @@ use std::collections::HashSet;
 
 use egui::{Pos2, Ui, pos2};
 
-use crate::dialogs::{Outcome, window};
+use crate::dialogs::{Confirm, Outcome, window};
 use crate::rss::{Article, Rule, Store};
 use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r, text};
 
@@ -43,6 +43,8 @@ pub struct RssWindow {
     rule_feeds: winui::RowList,
     preview: winui::RowList,
     minutes: String,
+    /// Remove asked about a feed (its id): it holds rules, so it goes only on Yes (plan 12a).
+    removing: Option<(u64, Confirm)>,
 }
 
 const ROW: f32 = 20.0;
@@ -60,6 +62,7 @@ impl RssWindow {
             rule_feeds: Default::default(),
             preview: Default::default(),
             minutes: store.minutes.to_string(),
+            removing: None,
         };
         w.feeds.selected = (!store.feeds.is_empty()).then_some(0);
         w.rules.selected = (!store.rules.is_empty()).then_some(0);
@@ -130,10 +133,49 @@ impl RssWindow {
                 }
             },
         );
+        if let Some((_, ask)) = &mut self.removing {
+            let answer = ask.show(ctx);
+            asked = self.removal_answered(store, answer).or(asked);
+        }
         match out {
             Outcome::Closed => Outcome::Closed,
             _ => asked.map_or(Outcome::Open, Outcome::Done),
         }
+    }
+
+    /// The Remove feed question's answer: Yes removes the feed (and the store is saved), No or
+    /// Escape forgets the question; still open, nothing.
+    fn removal_answered(&mut self, store: &mut Store, answer: Outcome<()>) -> Option<Act> {
+        let id = self.removing.as_ref()?.0;
+        match answer {
+            Outcome::Open => None,
+            Outcome::Closed => {
+                self.removing = None;
+                None
+            }
+            Outcome::Done(()) => {
+                self.removing = None;
+                self.remove_feed(store, id)
+            }
+        }
+    }
+
+    /// Remove answered Yes: feed `id` goes (if still there); the selection stays on the feed it
+    /// was on, else moves to the row in its place.
+    fn remove_feed(&mut self, store: &mut Store, id: u64) -> Option<Act> {
+        let at = store.feeds.iter().position(|f| f.id == id)?;
+        let on = self
+            .feeds
+            .selected
+            .and_then(|i| store.feeds.get(i))
+            .map(|f| f.id)
+            .filter(|f| *f != id);
+        store.remove_feed(id);
+        self.feeds.selected = on
+            .and_then(|on| store.feeds.iter().position(|f| f.id == on))
+            .or_else(|| (!store.feeds.is_empty()).then(|| at.min(store.feeds.len() - 1)));
+        self.articles = Default::default();
+        Some(Act::Saved)
     }
 
     fn feeds_page(
@@ -270,14 +312,21 @@ impl RssWindow {
             None,
         )
         .clicked();
+        // A feed holds rules: Remove (and the Delete key) asks first (plan 12a).
         if (remove || ev.delete.is_some())
             && let Some(i) = sel
         {
-            let id = store.feeds[i].id;
-            store.remove_feed(id);
-            self.feeds.selected = (!store.feeds.is_empty()).then(|| i.min(store.feeds.len() - 1));
-            self.articles = Default::default();
-            act = Some(Act::Saved);
+            let feed = &store.feeds[i];
+            let text = crate::i18n::fmt(
+                // i18n: RSS feeds window: asked before a feed is removed; {feed} = its name
+                crate::i18n::t(
+                    "Remove the feed \"{feed}\"? A download rule that watches only this feed is turned off.",
+                ),
+                &[("feed", &crate::i18n::isolate(feed.name()))],
+            );
+            // i18n: the title of the question asked before a feed is removed
+            let title = crate::i18n::mark("Remove feed");
+            self.removing = Some((feed.id, Confirm::new(title, text)));
         }
         let sel = self.feeds.selected.filter(|i| *i < store.feeds.len());
         // The selected feed's articles.
@@ -464,7 +513,7 @@ impl RssWindow {
         // short of the rule's box beside it (from 240).
         let [new_at, delete_at] = winui::button_row_from_left(
             &p,
-            &[("New rule", 22.0, 96.0), ("Delete", 126.0, 96.0)],
+            &[("New rule", 22.0, 96.0), ("Remove", 126.0, 96.0)],
             8.0,
             232.0,
             160.0,
@@ -493,7 +542,8 @@ impl RssWindow {
         let delete = winui::button(
             ui,
             r(o, delete_at.0, 414.0, delete_at.1, 21.0),
-            "Delete",
+            // i18n: RSS feeds window, Download rules: remove the selected rule (at once: it holds nothing else)
+            "Remove",
             if sel.is_some() {
                 ButtonKind::Normal
             } else {
@@ -985,15 +1035,34 @@ mod tests {
             )
         };
 
+        // Remove asks first (plan 12a: a feed holds rules); Yes removes it.
+        let yes = |win: &mut RssWindow, store: &mut Store, id: u64| {
+            assert_eq!(click_remove(win, store), None, "asked, not removed");
+            assert_eq!(win.removing.as_ref().map(|r| r.0), Some(id));
+            let feeds = store.feeds.len();
+            // Still open, then No: nothing goes, the question is forgotten.
+            assert_eq!(win.removal_answered(store, Outcome::Open), None);
+            assert_eq!(win.removal_answered(store, Outcome::Closed), None);
+            assert!(win.removing.is_none());
+            assert_eq!(store.feeds.len(), feeds, "No keeps the feed");
+            // Asked again, Yes: it goes, and the store is saved.
+            assert_eq!(click_remove(win, store), None);
+            let act = win.removal_answered(store, Outcome::Done(()));
+            assert!(win.removing.is_none());
+            act
+        };
+
         // Removing the first of two feeds selects the remaining one without indexing out of bounds.
-        assert_eq!(click_remove(&mut win, &mut store), Some(Act::Saved));
+        assert_eq!(yes(&mut win, &mut store, first), Some(Act::Saved));
         assert_eq!(store.feeds.len(), 1);
         assert_eq!(store.feeds[0].id, second);
         assert_eq!(win.feeds.selected, Some(0));
 
         // Removing the last (only) feed leaves no selection and does not panic (#321).
-        assert_eq!(click_remove(&mut win, &mut store), Some(Act::Saved));
+        assert_eq!(yes(&mut win, &mut store, second), Some(Act::Saved));
         assert!(store.feeds.is_empty());
         assert_eq!(win.feeds.selected, None);
+        // A feed gone meanwhile: nothing to do.
+        assert_eq!(win.remove_feed(&mut store, second), None);
     }
 }
