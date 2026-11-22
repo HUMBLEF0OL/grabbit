@@ -8,24 +8,30 @@ Each running download has its own progress window. It opens when the download st
 
 ![The progress window](images/progress.webp)
 
-The **Download status** tab shows:
+It shows:
 
-- **Status** — **Connecting...**, **Receiving data...**, **Paused**, **Complete** or the error.
+- **Status** — **Connecting...**, **Receiving data...**, **Stopped**, **Complete** or the error.
 - **File size**, **Downloaded** and **Transfer rate**.
 - **Time left**.
 - **Resume capability** — **Yes** if the server lets Grabbit continue the download later, **No** if it doesn't.
 - **Server** — where the server is, and how near. See [Where the server is](#where-the-server-is).
+- A bar of the whole file, showing where each connection started and how far it has got.
 
-**Show details >>** (open by default) adds the connection view:
+**Show details** widens the window to the right (it moves left if it would run past the screen's edge); **Hide details** makes it narrow again. On the left:
 
-- A bar of the whole file, showing where each connection started and how far it has got (**Start positions and download progress by connections**).
-- A table with one row per connection: its number, how much it has downloaded, and what it is doing right now.
+- **Saved to** — the folder; its button shows the download there.
+- **From** — the download's address; its button copies it.
+- **Limit** — a limit for this download only. See [For one download](#for-one-download).
+- **When done** — what happens when this download finishes: **Show the Done window**, **Do nothing**, **Exit Grabbit**, **Shut down**, **Sleep** or **Hibernate**. With the last three, **Force apps to close** keeps other programs from holding it up.
+
+On the right, **Connections**: one row per connection, with its number, how much it has downloaded and what it is doing right now.
 
 The buttons:
 
-- **Pause** stops the download and keeps what it has; **Resume** continues it.
+- **Stop** stops the download and keeps what it has; **Resume** continues it. When the server can't resume (**Resume capability: No**), **Stop** asks first, since the download would start over: **Keep downloading** or **Stop anyway**.
+- A failed download offers **Retry**, or **Refresh download address...** when its link expired or was refused. When the site sent a web page instead of the file, **Open in browser** gets past it.
 - **Cancel** stops the download and closes the window. The download stays in the list and can be resumed.
-- Closing the window with its close box keeps the download running.
+- Closing the window with its close box, or pressing **Esc**, keeps the download running.
 - **Hide to the notification area** (a short dash with an arrow down to the corner; on Windows in
   the title bar, left of Minimize) puts the window in the notification area; **Downloads in
   progress** in the tray icon's menu brings it back. See [The tray icon](getting-started.md#the-tray-icon).
@@ -50,13 +56,6 @@ How Grabbit knows:
 - Torrents and galleries have no single server of Grabbit's own (peers, or the many a gallery's pictures come from), so their windows don't show one. A video in one file shows the server it comes from.
 
 **Properties** keeps what the last run saw, so a finished download still shows where it came from.
-
-Two more tabs:
-
-- **Speed Limiter** — a limit for this download only. See below.
-- **Options on completion** — shows where the file will be saved. Untick **Show download complete dialog** to skip the **Download complete** box for this file only.
-
-**Hide tab** takes a tab off this download's window and goes back to **Download status**. To bring the tabs back, right-click the tab row and choose **Show hidden tabs**; closing the window and opening it again brings them back too.
 
 ## When a download finishes
 
@@ -130,11 +129,11 @@ Tick **Only while I'm using the computer** to apply it only while you use the mo
 
 ### For one download
 
-In the download's progress window, open the **Speed Limiter** tab:
+In the download's progress window, click **Show details**:
 
-1. Tick **Use Speed Limiter**.
-2. Set **Maximum download speed** in KB/s. The new limit applies at once.
-3. Tick **Remember Speed Limiter settings for this file on download stop/resume** to keep this limit for the file: it applies again when you resume it later, even after restarting Grabbit.
+1. In the **Limit** row, tick **Limit to**.
+2. Type the speed in KB/s. The new limit applies once typed.
+3. Tick **Remember for this file** to keep this limit for the file: it applies again when you resume it later, even after restarting Grabbit.
 
 A video or a gallery takes a limit of its own the same way. For a torrent, the limit is that torrent's alone; the others keep theirs. A torrent can't be held under 16 KB/s: a lower limit gives it 16.
 

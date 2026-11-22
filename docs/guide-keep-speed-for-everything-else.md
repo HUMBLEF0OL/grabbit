@@ -29,8 +29,8 @@ Each download is then held to that speed. **Downloads → Speed Limiter → Turn
 ## Slow down one download only
 
 1. Double-click the download to open its progress window.
-2. Open the **Speed Limiter** tab.
-3. Tick **Use Speed Limiter** and type the speed in **Maximum download speed**.
+2. Click **Show details**.
+3. In the **Limit** row, tick **Limit to** and type the speed in KB/s.
 
 The other downloads keep their speed.
 

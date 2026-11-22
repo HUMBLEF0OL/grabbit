@@ -135,12 +135,13 @@ jobs:
           # night pictures, and the README's dark main window).
           tools\lab\docs-shots.ps1 -Exe $exe -Server $srv -Torrent $torrent -Work $work -At $at @net -OutDir "$out\docs"
           tools\lab\docs-shots.ps1 -Exe $exe -Server $srv -Torrent $torrent -Work $work -At $at @net -Dark -OutDir "$out\site-dark"
-          # A video's and a torrent's progress window (with the torrent's Pieces tab), light and dark.
+          # A video's and a torrent's progress window (the torrent's expanded too: plan 13b dropped
+          # its Pieces tab; the pictures named for it are retaken after 13d), light and dark.
           $bin = "target\debug"
           # One that fails is reported, and the help pages' pictures are still taken.
           foreach ($mode in "docs", "site-dark") {
             $d = if ($mode -eq "site-dark") { @{ Dark = $true } } else { @{} }
-            try { tools\lab\progress-shots.ps1 -Bin $bin -OutDir "$out\$mode" -YtDlp "$env:RUNNER_TEMP\yt-dlp.exe" -Work "$work\p" -At $at -TorrentTabs pieces @d }
+            try { tools\lab\progress-shots.ps1 -Bin $bin -OutDir "$out\$mode" -YtDlp "$env:RUNNER_TEMP\yt-dlp.exe" -Work "$work\p" -At $at -TorrentTabs details @d }
             catch { Write-Warning "progress-shots ($mode): $_" }
           }
           # The help pages' pictures (tools/shots/shots.toml), light and dark, raw: a person runs

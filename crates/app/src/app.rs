@@ -242,6 +242,9 @@ enum Cmd {
     TorrentAddTrackers,
     TorrentFiles,
     TorrentCopyMagnet,
+    /// Right-click → Torrent → Stop sharing / Start sharing (plan 13b): a finished torrent's
+    /// sharing, kept for it (Settings' `torrent_unshared`).
+    TorrentSharing(bool),
     /// Tasks → RSS feeds… (also the Add Torrent button's arrow), #39: true opens it on its
     /// Download rules tab.
     RssFeeds(bool),
@@ -2694,6 +2697,7 @@ impl App {
             }
             let (hash, up) = (spec.hash.clone(), spec.upload_limit);
             let stop_after_recheck = !self.settings.torrent_keep_sharing
+                || self.settings.torrent_unshared.contains(&spec.hash)
                 || crate::torrents::sharing_limit_reached(spec, st.done, limits).is_some();
             if i.live.is_none() {
                 let _ = t.set_torrent_limits(&hash, None, up);
@@ -3161,7 +3165,8 @@ impl App {
                     self.progress
                         .push(Progress::new(id, self.settings.show_complete));
                 }
-                // progress:peers and so on: a torrent's details tab (the docs' screenshots).
+                // progress:peers, progress:stopped and so on: Details, a torrent's tab, a state
+                // drawn as a look only (the docs' screenshots, Progress::show_tab).
                 if let Some(id) = last
                     && let Some(p) = self.progress.iter_mut().find(|p| p.id == id)
                 {
@@ -5235,6 +5240,7 @@ impl App {
                         && i.torrent.as_ref().is_some_and(|spec| {
                             crate::torrents::sharing_limit_reached(spec, i.downloaded, limits)
                                 .is_none()
+                                && !self.settings.torrent_unshared.contains(&spec.hash)
                         }))
             })
             .filter_map(|i| i.torrent.as_ref().map(|t| t.hash.clone()))
@@ -5568,6 +5574,8 @@ impl App {
         item.error = None;
         item.last_try = Some(model::now_stamp());
         self.dirty = true;
+        // Started again by hand: it is shared as any other (Stop sharing is undone, plan 13b).
+        self.settings.torrent_unshared.retain(|h| *h != spec.hash);
         if show && !self.progress.iter().any(|p| p.id == id) {
             self.progress
                 .push(Progress::new(id, self.settings.show_complete));
@@ -5824,6 +5832,32 @@ impl App {
                 ],
             ));
         }
+    }
+
+    /// Stop sharing (false) or Start sharing (true) one finished torrent (plan 13b): kept for it
+    /// in the settings, so "Keep sharing" (`set_sharing`) leaves it alone across restarts too.
+    fn set_torrent_sharing(&mut self, id: u64, on: bool) {
+        let Some(spec) = self
+            .items
+            .iter()
+            .find(|i| i.id == id && i.status == Status::Complete)
+            .and_then(|i| i.torrent.clone())
+        else {
+            return;
+        };
+        self.settings.torrent_unshared.retain(|h| *h != spec.hash);
+        if !on {
+            self.settings.torrent_unshared.push(spec.hash.clone());
+        }
+        self.dirty = true;
+        // Off it leaves the session; on it is shared again (a stop by hand is lifted first).
+        self.torrent_host.set_sharing(
+            &self.rt,
+            self.session_hashes(),
+            vec![spec],
+            on,
+            &self.settings.torrent_unshared,
+        );
     }
 
     fn torrent_act(&mut self, id: u64, act: crate::torrents::Act) {
@@ -6582,6 +6616,7 @@ impl App {
                 self.session_hashes(),
                 self.complete_torrents(),
                 true,
+                &self.settings.torrent_unshared,
             );
         }
         if share != self.settings.torrent_keep_sharing {
@@ -6591,6 +6626,7 @@ impl App {
                 self.session_hashes(),
                 self.complete_torrents(),
                 share,
+                &self.settings.torrent_unshared,
             );
         }
         if Some(assoc) != self.settings.torrent_associations {
@@ -6837,7 +6873,7 @@ impl App {
         self.when_done(sch.when_done());
     }
 
-    /// A queue's, or a download's (its progress window's Options on completion), "when done":
+    /// A queue's, or a download's (its progress window's When done), "when done":
     /// hang up, turn the computer off (a countdown first), or exit.
     fn when_done(&mut self, w: crate::queue::WhenDone) {
         // Ends dial-up (RAS) connections; nothing happens without one.
@@ -7250,6 +7286,11 @@ impl App {
                     crate::copy_text(ctx, link);
                 }
             }
+            Cmd::TorrentSharing(on) => {
+                if let Some(id) = target {
+                    self.set_torrent_sharing(id, on);
+                }
+            }
             Cmd::OpenTorrentFile => {
                 let kind = crate::i18n::t("Torrent files").to_owned();
                 let title = crate::i18n::t("Open torrent file").to_owned();
@@ -7496,8 +7537,7 @@ impl App {
     /// A finished download's progress window closes, and Download complete opens for it (`early`:
     /// the download Download File Info started early, which stays quiet).
     fn close_finished(&mut self, id: u64, early: Option<u64>) {
-        // This file's "Show download complete dialog" (its progress window's Options on
-        // completion tab), read before the window closes.
+        // This file's When done (its progress window's details), read before the window closes.
         let window = self.progress.iter().find(|p| p.id == id);
         let this_file = window.is_none_or(|p| p.shows_complete());
         if let Some(w) = window.and_then(Progress::when_done) {
@@ -8282,6 +8322,25 @@ impl App {
                 .iter()
                 .position(|e| matches!(e, I(_, Cmd::VerifyChecksum, _, _)))
                 .map_or(entries.len(), |p| p + 1);
+            // A finished torrent sharing now can stop; one stopped by hand can start again
+            // (plan 13b). Neither for one still downloading.
+            let finished = i.status == Status::Complete;
+            let sharing = match (
+                finished,
+                self.settings.torrent_unshared.contains(&spec.hash),
+            ) {
+                (true, true) => vec![
+                    // i18n: right-click → Torrent, on a finished torrent stopped sharing by hand: share it with other peers again
+                    I("Start sharing", Cmd::TorrentSharing(true), !busy, false),
+                    Sep,
+                ],
+                (true, false) if going => vec![
+                    // i18n: right-click → Torrent, on a finished torrent still shared: stop sending it to other peers, kept after a restart
+                    I("Stop sharing", Cmd::TorrentSharing(false), !busy, false),
+                    Sep,
+                ],
+                _ => Vec::new(),
+            };
             entries.insert(
                 at,
                 Sub(
@@ -8292,6 +8351,10 @@ impl App {
                         // i18n: right-click → Torrent submenu: open the selected torrent's file list
                         I("Files...", Cmd::TorrentFiles, true, false),
                         Sep,
+                    ]
+                    .into_iter()
+                    .chain(sharing)
+                    .chain([
                         // i18n: right-click → Torrent: read every piece of the torrent's files again and check it
                         I(
                             "Recheck files",
@@ -8324,7 +8387,8 @@ impl App {
                         ),
                         Sep,
                         I("Copy magnet link", Cmd::TorrentCopyMagnet, true, false),
-                    ],
+                    ])
+                    .collect(),
                 ),
             );
         }
@@ -10936,6 +11000,7 @@ impl App {
                     self.session_hashes(),
                     self.complete_torrents(),
                     true,
+                    &self.settings.torrent_unshared,
                 );
             }
         }
@@ -11195,6 +11260,12 @@ impl App {
         for p in &mut self.progress {
             p.limit = limits.get(&p.id).copied();
             p.keep_sharing = self.settings.torrent_keep_sharing;
+            // The queue it waits in, named in its window (plan 13b).
+            p.queue = self
+                .queues
+                .iter()
+                .find(|q| q.items.contains(&p.id))
+                .map(|q| q.name.clone());
             if p.host.is_none() {
                 p.host = Some(self.torrent_host.clone());
             }
@@ -11257,6 +11328,27 @@ impl App {
                 }
                 progress::Action::Choose { files, all, size } => {
                     self.choose_files(id, files, all, size)
+                }
+                // Details' buttons (plan 13b) run the row menu's commands on this download.
+                progress::Action::RefreshAddress => self.run(Cmd::RefreshAddress, Some(id), ctx),
+                progress::Action::OpenFolder => self.run(Cmd::OpenFolder, Some(id), ctx),
+                progress::Action::CopyAddress => {
+                    let item = self.items.iter().find(|i| i.id == id);
+                    if let Some(text) = item.and_then(|i| addresses(&[i])) {
+                        crate::copy_text(ctx, text);
+                    }
+                }
+                progress::Action::Torrent(c) => {
+                    use progress::TorrentCmd as T;
+                    let cmd = match c {
+                        T::AddTrackers => Cmd::TorrentAddTrackers,
+                        T::AskTrackersAgain => Cmd::TorrentReannounce,
+                        T::Recheck => Cmd::TorrentRecheck,
+                        T::InOrder => Cmd::TorrentInOrder,
+                        T::EndsFirst => Cmd::TorrentEndsFirst,
+                        T::CopyMagnet => Cmd::TorrentCopyMagnet,
+                    };
+                    self.run(cmd, Some(id), ctx);
                 }
             }
         }

@@ -35,17 +35,15 @@ Grabbit refuses a torrent with file names your system can't write safely, says w
 
 ## While it downloads
 
-Double-click the torrent in the list to open its progress window. Besides the usual status, a torrent's window has five tabs:
+Double-click the torrent in the list to open its progress window. Its bar is the torrent's map of pieces, filling in as they come. **Show details** widens the window to the right. On the left are the folder it's saved in, **From** (the copy button copies its magnet link; point at **Magnet link** for its info hash), its peers (connected and known), what it sent and its share ratio, its pieces (how many are here, of how many, and their size), **Limit** and **When done**. What was sent adds up over all of the torrent's runs: it doesn't start again at 0 after a pause or a restart of Grabbit. On the right are three tabs:
 
-- **Files** — each file, its size and how much of it is done. Files you unticked show **Skipped**. Tick or untick a file's box to change what is downloaded, even while the torrent runs. At least one file stays ticked. If you untick everything still missing, the torrent finishes. If a finished torrent that isn't running gets a file back, it waits as stopped until you resume it, so nothing downloads unseen.
+- **Files** — each file, its size and how much of it is done. Files you unticked show **Skipped**. Tick or untick a file's box to change what is downloaded, even while the torrent runs. At least one file stays ticked. If you untick everything still missing, the torrent finishes. If a finished torrent that isn't running gets a file back, it waits as stopped until you resume it, so nothing downloads unseen. Under the list: **Download in order**, **First and last pieces first** and **Recheck files** (see [Torrent commands](#torrent-commands)).
 - **Peers** — the computers you are downloading from, with how much you received from and sent to each.
-- **Trackers** — the torrent's trackers. With none, peers come from the DHT and other peers.
-- **Pieces** — a map of the torrent's pieces: there, partly there, or missing.
-- **General** — the info hash, pieces, peers, how much was sent, the share ratio, how long it has been shared and the folder. What was sent and the time shared add up over all of the torrent's runs: they don't start again at 0 after a pause or a restart of Grabbit.
+- **Trackers** — the torrent's trackers. With none, peers come from the DHT and other peers. Under the list: **Add trackers...** and **Ask trackers again**.
 
-The tabs stay once the torrent has finished, for as long as it is shared.
+The details stay once the torrent has finished, for as long as it is shared.
 
-The **Speed Limiter** tab of a torrent's window has, besides its download limit, **Limit uploading** to a speed of your choice. That limit is kept with the torrent: it applies again whenever the torrent runs or shares. A torrent can't be held under 16 KB/s either way.
+A torrent's **Limit** row has **Down**, its download limit, and **Up**, a limit on what it sends. The upload limit is kept with the torrent: it applies again whenever the torrent runs or shares. A torrent can't be held under 16 KB/s either way. Beside **Show the Done window** and **Do nothing**, **When done** says **Then keeps sharing** when **Keep sharing torrents after they finish** is on.
 
 ## Torrent commands
 
@@ -57,6 +55,9 @@ Right-click a torrent in the list and open **Torrent**:
 - **Download in order** — downloads the torrent's files from their start (see below). Click it again to go back to the rarest pieces first.
 - **First and last pieces first** — with **Download in order**, each file's first and last pieces come before the rest. It's on by default.
 - **Copy magnet link** — copies a magnet link for the torrent, with its trackers.
+- **Stop sharing** — on a finished torrent that is shared: it stops sending to other peers, and stays so after Grabbit restarts, even with **Keep sharing torrents after they finish** on. **Start sharing** (in its place) shares it again; so does resuming it.
+
+The torrent's progress window has the same commands under its **Files** and **Trackers** tabs, and its **From** row's copy button copies the magnet link.
 
 Each command's outcome goes into the torrent's event log; hover its **Status** cell in the list to read it.
 

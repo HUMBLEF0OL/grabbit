@@ -3120,22 +3120,6 @@ pub fn icon_label_button_width(p: &Painter, label: &str) -> f32 {
     (BUTTON_ICON + BUTTON_ICON_GAP + text_width(p, crate::i18n::t(label)) + 2.0 * 14.0).ceil()
 }
 
-/// A button's rect `rc` widened to the left (its right edge stays: a button against the right
-/// side, with room before it) to fit its translated `label` whole, with the room [`button`]
-/// keeps inside the border, at most to `max_width`. English labels fit IDM's buttons, so
-/// English never changes; a label that would still not fit ends in "..." and shows whole on
-/// hover, as on every button. (A row of buttons: [`buttons_to_right`].)
-pub fn button_rect_for(p: &Painter, rc: Rect, label: &str, max_width: f32) -> Rect {
-    let w = button_fit_width(p, label, rc.width(), max_width);
-    // Widened in English, where its right edge stays; on screen in RTL its left edge stays and
-    // it widens to the right, into the room before it (`rect` is its own inverse).
-    let english = rect(rc);
-    rect(Rect::from_min_max(
-        pos2(english.right() - w, english.top()),
-        english.max,
-    ))
-}
-
 /// How wide a [`button`] must be for its translated `label` to show whole, with the room it
 /// keeps inside its border: at least `min` (its English width: English labels fit it, so English
 /// never changes), at most `max` (past it the label ends in "..." and shows whole on hover, as on
@@ -7224,23 +7208,6 @@ mod tests {
         // English 24..400 in a 600 px window, mirrored: on screen 200..576, read from 200.
         let _s = Surface::enter_if(true, 0.0, 600.0);
         assert_eq!(data_left(24.0, 400.0), 200.0);
-    }
-
-    #[test]
-    fn a_widened_button_grows_into_the_room_before_it_in_rtl_too() {
-        with_painter(|p| {
-            let long = "A label much longer than its English button";
-            let english = Rect::from_min_size(pos2(401.0, 135.0), vec2(96.0, 21.0));
-            let ltr = button_rect_for(p, english, long, 300.0);
-            assert_eq!(ltr.right(), 497.0);
-            assert!(ltr.left() < 401.0);
-            // Mirrored: the button is at the window's left, and grows to the right (inwards).
-            let _s = Surface::enter_if(true, 0.0, 600.0);
-            let shown = button_rect_for(p, rect(english), long, 300.0);
-            assert_eq!(shown.left(), 600.0 - 497.0);
-            assert_eq!(shown.width(), ltr.width());
-            assert_eq!(rect(shown), ltr);
-        });
     }
 
     #[test]
