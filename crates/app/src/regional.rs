@@ -148,8 +148,18 @@ fn date_with(f: Formats, t: chrono::NaiveDate) -> String {
 
 /// A time of day: `21:41:00`, or `9:41:00 PM` (AM and PM translated).
 pub fn time_text(h: u32, m: u32, s: u32, clock24: bool) -> String {
+    clock_text(h, &format!("{m:02}:{s:02}"), clock24)
+}
+
+/// A time of day without its seconds: `21:41`, or `9:41 PM`.
+pub fn minutes_text(h: u32, m: u32, clock24: bool) -> String {
+    clock_text(h, &format!("{m:02}"), clock24)
+}
+
+/// The hour on the clock chosen, then `rest` (the minutes, and the seconds if any).
+fn clock_text(h: u32, rest: &str, clock24: bool) -> String {
     if clock24 {
-        format!("{h:02}:{m:02}:{s:02}")
+        format!("{h:02}:{rest}")
     } else {
         let h12 = if h.is_multiple_of(12) { 12 } else { h % 12 };
         let mark = if h < 12 {
@@ -157,7 +167,7 @@ pub fn time_text(h: u32, m: u32, s: u32, clock24: bool) -> String {
         } else {
             crate::i18n::t("PM")
         };
-        format!("{h12}:{m:02}:{s:02} {mark}")
+        format!("{h12}:{rest} {mark}")
     }
 }
 

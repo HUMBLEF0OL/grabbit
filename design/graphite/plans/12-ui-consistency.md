@@ -64,6 +64,10 @@ below.
 the browser), and giving one of its boxes (the package's name, password or folder) the keys
 would take Ctrl+V's link pasting, which works only while none of them has them.
 
+Follow-up for the release PR (the website is outside this plan): the website's feature pages
+still quote 12c's old labels (`website/content/features/torrents.md`, `video.md`, `galleries.md`,
+`link-grabber.md`, `archives.md`, `scheduler.md`, and `dns-proxies.md` for the proxy/SOCKS options).
+
 ## Decisions (owner; default if no answer)
 
 | # | Question | Default | Other option |
@@ -281,6 +285,10 @@ its icon: `chrome::menu_icon` (`chrome.rs:1656-1673`, e.g. "On Double click"), `
 - **F3.** Labels drop their colons, as Options mostly writes them (`options.rs:866`, `1568`, `1583`)
   and the add dialogs do. Remove them at `options.rs:1297`, `1682`, `2688`, `2727`, `3209`, `3764`,
   `3942`, and in the grabber, RSS and Category dialogs.
+  Built (12c): these, and the login, exception, DNS and account windows' labels. Kept with their
+  colons: Options → Regional, the video cookies ("From browser:", "Profile (optional):"), Batch
+  download, Properties and the queue panel's "Add to queue:" (columns of read-outs, or pages in
+  high-churn files).
 - **F4.**
   - "UserName" becomes "User name" (`options.rs:1562`, `1584`).
   - "Get System" becomes "Get system settings" (`1482`).

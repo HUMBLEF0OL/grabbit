@@ -680,9 +680,9 @@ pub fn resolve_path(s: &str) -> PathBuf {
     }
 }
 
-/// IDM's dialog size text, e.g. `60.00  MB` (two spaces, as measured).
+/// The dialogs' size text, e.g. `60.00 MB`: as the list writes it.
 pub fn dialog_size(b: u64) -> String {
-    model::size(b).replacen(' ', "  ", 1)
+    model::size(b)
 }
 
 // ---- An address added (the Add window, the paste bar: `crate::adddlg`) ----------------------
@@ -1205,7 +1205,7 @@ impl FileInfo {
         window(
             ctx,
             "file-info",
-            "Download File Info",
+            "Download file info",
             [W, body + winui::FOOTER_H],
             true,
             winui::BG(),
@@ -1215,7 +1215,7 @@ impl FileInfo {
                 let fx = winui::form(
                     &p,
                     lx,
-                    &["URL", "Category", "Save As", "Description", "Server"],
+                    &["URL", "Category", "Save as", "Description", "Server"],
                     false,
                 );
                 let right = W - winui::EDGE;
@@ -1289,7 +1289,7 @@ impl FileInfo {
                     self.new_category = true;
                 }
 
-                winui::form_label(&p, o, lx, 176.0, h, "Save As", true);
+                winui::form_label(&p, o, lx, 176.0, h, "Save as", true);
                 let save_rc = field(176.0, h + 8.0);
                 let save = winui::combo_edit(ui, save_rc, &mut self.save_as);
                 // Opened, the keys are in Save As (its name is what one changes here).
@@ -1485,8 +1485,8 @@ impl FileInfo {
                 let blocked = if self.url_bad {
                     Some("Invalid address")
                 } else if name_bad {
-                    // i18n: why Start Download is greyed in Download File Info
-                    Some(crate::i18n::mark("Type the file's name in Save As"))
+                    // i18n: why Download now is greyed in Download file info
+                    Some(crate::i18n::mark("Type the file's name in Save as"))
                 } else {
                     None
                 };
@@ -1511,12 +1511,12 @@ impl FileInfo {
                     body,
                     &mut [
                         FooterItem::Button(
-                            FooterButton::new("Download Later", later_kind)
-                                .mnemonic(9)
+                            FooterButton::new("Later", later_kind)
+                                .mnemonic(0)
                                 .tip(blocked.is_some(), why),
                         ),
                         FooterItem::Button(
-                            FooterButton::new("Start Download", start_kind)
+                            FooterButton::new("Download now", start_kind)
                                 .primary()
                                 .ring(true)
                                 .mnemonic(0)
@@ -1967,7 +1967,7 @@ impl SpeedSettings {
                     ui,
                     &p,
                     // i18n: {kb} is an input box (kilobytes per second), drawn where it stands in the translation
-                    crate::i18n::t("Maximum download speed for one file {kb} KBytes/sec"),
+                    crate::i18n::t("Maximum download speed for one file {kb} KB/s"),
                     &[winui::SentenceLine {
                         lead: winui::Lead::Right(o.x + 266.0),
                         lead_baseline: o.y + 21.0,
@@ -2014,7 +2014,7 @@ impl SpeedSettings {
                     ui,
                     o + vec2(11.0, 86.0),
                     &mut self.on_startup,
-                    "Always turn on Speed Limiter on Grabbit startup",
+                    "Turn on the Speed Limiter when Grabbit starts",
                     true,
                 );
                 // Beyond IDM: a limit for all downloads together.
@@ -2044,7 +2044,7 @@ impl SpeedSettings {
                     &p,
                     o.x + 264.0,
                     o.y + 131.0,
-                    crate::i18n::t("KBytes/sec"),
+                    crate::i18n::t("KB/s"),
                     c,
                 );
                 winui::checkbox_light(
@@ -2181,7 +2181,7 @@ impl LimitNotice {
             lines: [
                 crate::i18n::fmt(
                     crate::i18n::t(
-                        "The download limit ({mb} MBytes every {hours} hours) has been reached.",
+                        "The download limit ({mb} MB every {hours} hours) has been reached.",
                     ),
                     &[
                         ("mb", &crate::i18n::integer(u64::from(mb))),
@@ -2752,7 +2752,7 @@ fn moved_away_text(path: &Path) -> String {
     let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
     crate::i18n::fmt(
         crate::i18n::t(
-            "{file} was moved elsewhere by dragging it out of Download complete, and Grabbit couldn't learn where. Look for it where you dropped it.",
+            "{file} was moved elsewhere by dragging it out of Download complete, and Grabbit could not learn where. Look for it where you dropped it.",
         ),
         &[("file", &name)],
     )
@@ -3211,10 +3211,10 @@ impl DeleteCategory {
                     &mut [
                         // i18n: button: deletes the category
                         FooterItem::Button(
-                            FooterButton::new("Delete", ButtonKind::Danger).enter(true),
+                            FooterButton::new("Yes", ButtonKind::Danger).enter(true),
                         ),
                         FooterItem::Button(
-                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                            FooterButton::new("No", ButtonKind::Normal).escape(true),
                         ),
                     ],
                 );

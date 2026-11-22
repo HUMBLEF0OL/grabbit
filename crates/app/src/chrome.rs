@@ -197,13 +197,13 @@ mod a11y_tests {
         (Icon::Add, "Add", true),
         (Icon::Resume, "Resume", false),
         (Icon::Stop, "Stop", false),
-        (Icon::StopAll, "Stop All", false),
+        (Icon::StopAll, "Stop all", false),
         (Icon::Delete, "Delete", true),
-        (Icon::DeleteCompleted, "Delete Completed", true),
+        (Icon::DeleteCompleted, "Delete completed", true),
         (Icon::Options, "Options", true),
         (Icon::Scheduler, "Scheduler", true),
-        (Icon::StartQueue, "Start Queue", true),
-        (Icon::StopQueue, "Stop Queue", false),
+        (Icon::StartQueue, "Start queue", true),
+        (Icon::StopQueue, "Stop queue", false),
     ];
 
     /// The toolbar's 10 buttons (one Add since the universal Add) are buttons for screen
@@ -1662,7 +1662,7 @@ pub fn menu_icon(label: &str) -> Option<&'static str> {
         "S&top queue" | "Stop" => "tb-stop-queue",
         "Speed &Limiter" => "gx-gauge",
         "Add to queue" | "Move to queue" => "cat-queues",
-        "On Double click" => "gx-pointer",
+        "On double-click" => "gx-pointer",
         // A category's and a queue's greyed items.
         "Browse" => "cat-folder-open",
         "Properties" => "gx-info",

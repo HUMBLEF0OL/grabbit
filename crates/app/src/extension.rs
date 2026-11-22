@@ -716,7 +716,7 @@ pub fn checks(settings: &crate::settings::Settings) -> Vec<Check> {
             ok: false,
             text: crate::i18n::fmt(
                 // i18n: a check of Test browser integration: setting it up failed; {error} is the helper program's own message, in English
-                crate::i18n::t("Setting it up failed: {error}"),
+                crate::i18n::t("It could not be set up: {error}"),
                 &[("error", &crate::i18n::ltr(&error))],
             ),
             why: Some("not-installed"),

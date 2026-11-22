@@ -7,7 +7,7 @@ A download manager can fill your whole connection. These steps cap Grabbit so th
 ## Cap Grabbit as a whole (recommended)
 
 1. Choose **Downloads → Speed Limiter → Settings**.
-2. Tick **Limit all downloads together to** and type a speed in KBytes/sec. A good start is about two thirds of your connection's speed. (1 MByte/sec is about 1000 KBytes/sec.)
+2. Tick **Limit all downloads together to** and type a speed in KB/s. A good start is about two thirds of your connection's speed. (1 MB/s is about 1000 KB/s.)
 3. Tick **Only while I'm using the computer** if you want full speed when you're away. Grabbit goes back to full speed after a minute without mouse or keyboard input.
 4. Click **Save**. The settings open in the main window, in place of the download list; **← Downloads** goes back to it.
 
@@ -20,11 +20,11 @@ To remove it, open the same settings and untick **Limit all downloads together t
 
 ## Cap each file instead
 
-1. In the same settings, set **Maximum download speed for one file**. It starts at 10 KBytes/sec, which is very slow, so set it first.
+1. In the same settings, set **Maximum download speed for one file**. It starts at 10 KB/s, which is very slow, so set it first.
 2. Click **Save**.
 3. Choose **Downloads → Speed Limiter → Turn on**.
 
-Each download is then held to that speed. **Downloads → Speed Limiter → Turn off** gives full speed again. Tick **Always turn on Speed Limiter on Grabbit startup** to have it on every time.
+Each download is then held to that speed. **Downloads → Speed Limiter → Turn off** gives full speed again. Tick **Turn on the Speed Limiter when Grabbit starts** to have it on every time.
 
 ## Slow down one download only
 

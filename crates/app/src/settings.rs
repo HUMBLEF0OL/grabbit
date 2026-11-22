@@ -746,7 +746,7 @@ impl Settings {
                     https: self.proxy_https,
                 }
             }
-            // "Use proxy/socks from a browser's request": browsers use Windows' proxy settings,
+            // "Use proxy/SOCKS from a browser's request": browsers use Windows' proxy settings,
             // so with no proxy of our own so do we (none set there: direct, as before).
             _ if self.proxy_from_browser => system(),
             _ => Proxy::None,
@@ -765,7 +765,7 @@ impl Settings {
     }
 
     /// The proxy for a download that came with `context` (#42): the browser's own, when it used
-    /// one for it (a VPN or proxy extension, or its settings) and "Use proxy/socks from a
+    /// one for it (a VPN or proxy extension, or its settings) and "Use proxy/SOCKS from a
     /// browser's request" is on; else [`Self::proxy`]. A proxy the extension logs in to is
     /// refused (`browser_proxy_refused`), never replaced by a direct connection.
     pub fn proxy_for(&self, context: &mdm_ipc::Command) -> mdm_engine::Proxy {

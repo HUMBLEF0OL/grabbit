@@ -480,7 +480,7 @@ impl ReportWindow {
                     o.x + 24.0,
                     o.y + 226.0,
                     // i18n: crash report window: shown while the crash dump is being read
-                    crate::i18n::t("Reading the crash data…"),
+                    crate::i18n::t("Reading the crash data..."),
                     winui::MUTED(),
                 );
             }
@@ -492,7 +492,7 @@ impl ReportWindow {
             Some(crate::i18n::fmt(
                 // i18n: crash report window: downloading the symbols that turn addresses into function names; {done} and {total} are megabytes
                 crate::i18n::t(
-                    "Making the report readable: fetching the symbols ({done} of {total} MB)…",
+                    "Making the report readable: fetching the symbols ({done} of {total} MB)...",
                 ),
                 &[
                     ("done", &mb(done)),
@@ -507,10 +507,10 @@ impl ReportWindow {
             ))
         } else if searching {
             // i18n: crash report window: looking on GitHub for an issue about the same problem
-            Some(crate::i18n::t("Looking for this problem on GitHub…").to_owned())
+            Some(crate::i18n::t("Looking for this problem on GitHub...").to_owned())
         } else if no_symbols.is_some() {
             // i18n: crash report window: the symbols couldn't be downloaded; the report still works
-            Some(crate::i18n::t("The symbols couldn't be fetched: some lines of the report show addresses instead of names (the developers can still read them).").to_owned())
+            Some(crate::i18n::t("The symbols could not be fetched: some lines of the report show addresses instead of names (the developers can still read them).").to_owned())
         } else {
             None
         };

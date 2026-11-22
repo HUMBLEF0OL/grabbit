@@ -359,7 +359,7 @@ impl GalleryDialog {
             &mut [
                 FooterItem::Button(FooterButton::new("Helpers...", ButtonKind::Normal).leading()),
                 FooterItem::Button(
-                    FooterButton::new("Download Now", kind(true))
+                    FooterButton::new("Download now", kind(true))
                         .primary()
                         .enter(ready),
                 ),

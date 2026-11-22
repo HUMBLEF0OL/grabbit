@@ -48,8 +48,8 @@ The box under the list edits the package you selected:
 
 ## Adding the links
 
-- **Start** adds the ticked links to the **Main download queue** and starts the queue. It downloads as many files at once as the queue allows.
-- **Add to queue** adds them to the **Main download queue** without starting them, as IDM's import does.
+- **Download now** adds the ticked links to the **Main download queue** and starts the queue. It downloads as many files at once as the queue allows.
+- **Later** adds them to the **Main download queue** without starting them, as IDM's import does.
 - **Cancel** closes the window and adds nothing.
 
 ## Extracting archives
@@ -75,7 +75,7 @@ Extracted files are marked as coming from the internet, as the archive is, so Wi
 
 Grabbit extracts safely. A name that would lead outside the folder is left out, and so is a link to somewhere else on the disk. An archive that would write far more than its size, or more than the disk has room for, stops before it fills it. When something goes wrong, nothing but the archive is left behind.
 
-The download's log (hover over it in the list) says what happened: **Extracted 12 files to …**, or why not, for example **Couldn't extract movie.7z.001: volume 3 of it is missing**. An encrypted archive without its password opens the **Archive password** window. Type the password and click **Extract**, or **Cancel** to leave the archive as it is.
+The download's log (hover over it in the list) says what happened: **Extracted 12 files to …**, or why not, for example **movie.7z.001 could not be extracted: volume 3 of it is missing**. An encrypted archive without its password opens the **Archive password** window. Type the password and click **Extract**, or **Cancel** to leave the archive as it is.
 
 ## Next steps
 

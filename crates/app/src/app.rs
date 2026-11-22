@@ -150,7 +150,7 @@ enum Cmd {
     /// Start / stop a queue (index into `App::queues`).
     StartQueue(usize),
     StopQueue(usize),
-    /// Queue right-click → Edit queue (its files) / Schedule; Delete; Create new queue.
+    /// Queue right-click → Edit queue (its files) / Schedule; Delete; New queue....
     /// Tasks → Show drop target (shown / hidden); the drop target's Show main window.
     ToggleDropTarget,
     ShowMain,
@@ -175,9 +175,9 @@ enum Cmd {
     NewQueue,
     /// Categories right-click → Browse: open the category's folder.
     Browse(Category),
-    /// List right-click → On Double click → Open (true) / Properties.
+    /// List right-click → On double-click → Open (true) / Properties.
     DoubleClickOpen(bool),
-    /// Right-click → Add to queue → queue index; Delete from queue.
+    /// Right-click → Add to queue → queue index; Remove from queue.
     AddToQueue(usize),
     RemoveFromQueue,
     ToggleCategories,
@@ -245,7 +245,7 @@ enum Cmd {
     Extract,
     /// Tasks → Link grabber… (#37): the window, empty (links pasted in) or as it is.
     LinkGrabber,
-    /// Downloads → Find (Ctrl-F) / Find Next (F3).
+    /// Downloads → Find (Ctrl-F) / Find next (F3).
     Find,
     FindNext,
     /// Shift+F3: the match before the selection.
@@ -2044,7 +2044,7 @@ impl App {
         )
     }
 
-    /// "2 downloading, 1.25 MB/sec" while downloads run (the status strip, the tray's tip).
+    /// "2 downloading, 1.25 MB/s" while downloads run (the status strip, the tray's tip).
     fn activity(&self) -> Option<String> {
         let running: Vec<&Item> = self.items.iter().filter(|i| i.live.is_some()).collect();
         if running.is_empty() {
@@ -2052,7 +2052,7 @@ impl App {
         }
         let speed: f64 = running.iter().map(|i| i.rate()).sum();
         Some(crate::i18n::fmt(
-            // i18n: {count} = "2 downloading"; {speed} = all of them together, like "1.25 MB/sec"
+            // i18n: {count} = "2 downloading"; {speed} = all of them together, like "1.25 MB/s"
             crate::i18n::t("{count}, {speed}"),
             &[
                 (
@@ -5872,9 +5872,11 @@ impl App {
                 (act, Err(e)) => crate::i18n::fmt(
                     match act {
                         // i18n: event log entry: Recheck failed, with the reason
-                        Act::Recheck => crate::i18n::t("Recheck failed: {error}"),
-                        // i18n: event log entry: Reannounce failed, with the reason
-                        Act::Reannounce => crate::i18n::t("Reannounce failed: {error}"),
+                        Act::Recheck => crate::i18n::t("The files could not be checked: {error}"),
+                        // i18n: event log entry: Ask trackers again failed, with the reason
+                        Act::Reannounce => {
+                            crate::i18n::t("The trackers could not be asked again: {error}")
+                        }
                         // i18n: event log entry: Add trackers failed, with the reason
                         Act::AddTrackers(_) => {
                             crate::i18n::t("The trackers could not be added: {error}")
@@ -6835,7 +6837,7 @@ impl App {
                     );
                     item.moved_away = true;
                     item.note(crate::i18n::t(
-                        "Dragged out of Download complete and moved to a place Grabbit couldn't learn",
+                        "Dragged out of Download complete and moved to a place Grabbit could not learn",
                     ));
                 }
             }
@@ -7515,13 +7517,18 @@ impl App {
         let can_stop_all = self.can_stop_all();
         match index {
             0 => vec![
-                I("&Add new download", Cmd::AddUrl, true, false),
-                I("Open &torrent file...", Cmd::OpenTorrentFile, true, false),
+                I("&Add new download...", Cmd::AddUrl, true, false),
+                I(
+                    "Open a .&torrent file...",
+                    Cmd::OpenTorrentFile,
+                    true,
+                    false,
+                ),
                 I("Add &magnet link...", Cmd::AddMagnet, true, false),
                 // Torrent settings: Options → Torrents only (Tasks adds things).
-                I("Add &batch download", Cmd::Batch(false), true, false),
+                I("Add &batch download...", Cmd::Batch(false), true, false),
                 I(
-                    "Add batch download from &clipboard",
+                    "Add batch download from &clipboard...",
                     Cmd::Batch(true),
                     true,
                     false,
@@ -7582,12 +7589,12 @@ impl App {
                 I("&Exit", Cmd::Exit, true, false),
             ],
             1 => vec![
-                I("&Stop Download", Cmd::Stop, running, false),
+                I("&Stop", Cmd::Stop, running, false),
                 // i18n: verb: removes the selected download from the list
-                I("&Remove", Cmd::Remove, deletable, false),
+                I("&Delete", Cmd::Remove, deletable, false),
                 // i18n: verb: removes the selected download from the list and its file from the disk
-                I("Remove with &files", Cmd::RemoveWithFiles, deletable, false),
-                I("&Download Now", Cmd::Resume, resumable, false),
+                I("Delete with &files", Cmd::RemoveWithFiles, deletable, false),
+                I("&Resume", Cmd::Resume, resumable, false),
                 // i18n: verb: download the file again from the start
                 I(
                     "R&edownload",
@@ -7597,19 +7604,19 @@ impl App {
                 ),
             ],
             2 => vec![
-                I("&Stop All", Cmd::StopAll, can_stop_all, false),
+                I("&Stop all", Cmd::StopAll, can_stop_all, false),
                 Sep,
                 I(
-                    "&Delete All Completed",
+                    "&Delete completed",
                     Cmd::DeleteCompleted,
                     self.items.iter().any(|i| i.status == Status::Complete),
                     false,
                 ),
                 Sep,
                 I("Find (Ctrl-F)", Cmd::Find, true, false),
-                I("Find Next (F3)", Cmd::FindNext, true, false),
+                I("Find next (F3)", Cmd::FindNext, true, false),
                 // i18n: Downloads menu: select the match before the selection (Shift+F3)
-                I("Find Previous (Shift+F3)", Cmd::FindPrevious, true, false),
+                I("Find previous (Shift+F3)", Cmd::FindPrevious, true, false),
                 I(
                     "Select &all",
                     Cmd::SelectAll,
@@ -7674,7 +7681,7 @@ impl App {
                 I("&Video downloads", Cmd::HelpPage("video.md"), true, false),
                 I("&Keyboard shortcuts", Cmd::Shortcuts, true, false),
                 Sep,
-                I("Grabbit &Home Page", Cmd::HelpPage(""), true, false),
+                I("Grabbit &home page", Cmd::HelpPage(""), true, false),
                 I("&Report a problem", Cmd::ReportProblem, true, false),
                 Sep,
                 I("Check for &updates...", Cmd::CheckUpdates, true, false),
@@ -7775,7 +7782,7 @@ impl App {
         }
         items.push(Sep);
         // i18n: View → Theme: picks a theme file or a Base16 or pywal colour scheme, copies it into the themes folder and uses it
-        items.push(I("Add a theme file…", Cmd::AddThemeFile, true, false));
+        items.push(I("Add a theme file...", Cmd::AddThemeFile, true, false));
         // i18n: View → Theme: opens the folder where theme files go (TOML or JSON)
         items.push(I("Open themes folder", Cmd::OpenThemesFolder, true, false));
         // i18n: View menu: submenu choosing MDM's look (colours, sizes, icons): Graphite or a theme file
@@ -7992,18 +7999,18 @@ impl App {
         Sub("Arrange files", true, {
             let by = |label, col: Option<usize>| I(label, Cmd::Arrange(col), true, sorted == col);
             vec![
-                by("By &Order Of Addition", None),
-                by("By &File Name", Some(0)),
-                by("By &Size", Some(2)),
-                by("By Stat&us", Some(3)),
-                by("By &Time Left", Some(4)),
-                by("By Transfer &Rate", Some(5)),
-                by("By &Last Try Date", Some(6)),
-                by("By Date &Added", Some(list::ADDED)),
-                by("By &Description", Some(7)),
-                off("By Save &Path"),
-                off("By R&eferer"),
-                off("By Parent &Web Page"),
+                by("By &order of addition", None),
+                by("By &file name", Some(0)),
+                by("By &size", Some(2)),
+                by("By stat&us", Some(3)),
+                by("By &time left", Some(4)),
+                by("By transfer &rate", Some(5)),
+                by("By &last try date", Some(6)),
+                by("By date &added", Some(list::ADDED)),
+                by("By &description", Some(7)),
+                off("By save &path"),
+                off("By r&eferer"),
+                off("By parent &web page"),
             ]
         })
     }
@@ -8058,7 +8065,7 @@ impl App {
             Popup::DropTarget => (
                 vec![
                     MenuEntry::Item("Show Grabbit", Cmd::ShowMain, true, false),
-                    MenuEntry::Item("&Add new download", Cmd::AddUrl, true, false),
+                    MenuEntry::Item("&Add new download...", Cmd::AddUrl, true, false),
                     MenuEntry::Sep,
                     MenuEntry::Item("Hide drop target", Cmd::ToggleDropTarget, true, false),
                 ],
@@ -8089,7 +8096,7 @@ impl App {
             ),
             Sep,
             I(
-                "&Delete All Completed",
+                "&Delete completed",
                 Cmd::DeleteCompleted,
                 self.items.iter().any(|i| i.status == Status::Complete),
                 false,
@@ -8132,7 +8139,7 @@ impl App {
                     false,
                 )
             })
-            .chain([I("Create new queue", Cmd::NewQueue, true, false)])
+            .chain([I("New queue...", Cmd::NewQueue, true, false)])
             .collect();
         let open = self.settings.double_click_open;
         // Several selected: enabled when one of them can go; the others are said to stay (#333).
@@ -8157,13 +8164,13 @@ impl App {
                 false,
             ),
             Sep,
-            I("Move/Rename (Ctrl-M)", Cmd::MoveRename, movable, false),
+            I("Move/Rename... (Ctrl-M)", Cmd::MoveRename, movable, false),
             Sep,
             // i18n: verb: download the file again from the start
             I("Redownload", Cmd::Redownload, redo, false),
             Sep,
-            I("Resume Download", Cmd::Resume, any_resumable, false),
-            I("Stop Download", Cmd::Stop, any_live, false),
+            I("Resume", Cmd::Resume, any_resumable, false),
+            I("Stop", Cmd::Stop, any_live, false),
             Sep,
             // i18n: right-click menu: copy the selected downloads' web addresses
             I(
@@ -8183,9 +8190,9 @@ impl App {
             I("Extract", Cmd::Extract, extractable, false),
             Sep,
             // i18n: verb: removes the download from the list
-            I("Remove", Cmd::Remove, any_idle, false),
+            I("Delete", Cmd::Remove, any_idle, false),
             // i18n: verb: removes the download from the list and its file from the disk
-            I("Remove with files", Cmd::RemoveWithFiles, any_idle, false),
+            I("Delete with files", Cmd::RemoveWithFiles, any_idle, false),
             Sep,
             Sub(
                 if in_queue {
@@ -8196,10 +8203,10 @@ impl App {
                 any,
                 targets,
             ),
-            I("Delete from queue", Cmd::RemoveFromQueue, in_queue, false),
+            I("Remove from queue", Cmd::RemoveFromQueue, in_queue, false),
             Sep,
             Sub(
-                "On Double click",
+                "On double-click",
                 true,
                 vec![
                     // i18n: what double-clicking a download does — verb: open the file
@@ -8248,7 +8255,12 @@ impl App {
                             false,
                         ),
                         // i18n: right-click → Torrent: ask the torrent's trackers for peers again now
-                        I("Reannounce", Cmd::TorrentReannounce, !busy && going, false),
+                        I(
+                            "Ask trackers again",
+                            Cmd::TorrentReannounce,
+                            !busy && going,
+                            false,
+                        ),
                         I("Add trackers...", Cmd::TorrentAddTrackers, !busy, false),
                         Sep,
                         // i18n: right-click → Torrent, a choice with a check mark: download the torrent's files from their start, to watch a video while it downloads
@@ -8302,7 +8314,7 @@ impl App {
                         None => off("Properties"),
                     },
                     Sep,
-                    I("Add category", Cmd::AddCategory, true, false),
+                    I("Add category...", Cmd::AddCategory, true, false),
                     match cat {
                         // i18n: verb: deletes the category
                         Some(c) if c.editable() => I("Delete", Cmd::DeleteCategory(c), true, false),
@@ -8344,7 +8356,7 @@ impl App {
                 _ => off("Delete"),
             },
             Sep,
-            I("Create new queue", Cmd::NewQueue, true, false),
+            I("New queue...", Cmd::NewQueue, true, false),
         ]
     }
 
@@ -8960,12 +8972,12 @@ impl App {
             (Icon::Resume, "Resume", resumable, Cmd::Resume),
             // i18n: verb: stop the selected downloads
             (Icon::Stop, "Stop", running, Cmd::Stop),
-            (Icon::StopAll, "Stop All", can_stop_all, Cmd::StopAll),
+            (Icon::StopAll, "Stop all", can_stop_all, Cmd::StopAll),
             // i18n: verb: delete the selected downloads
             (Icon::Delete, "Delete", deletable, Cmd::Remove),
             (
                 Icon::DeleteCompleted,
-                "Delete Completed",
+                "Delete completed",
                 any_complete,
                 Cmd::DeleteCompleted,
             ),
@@ -8975,14 +8987,14 @@ impl App {
             (Icon::Scheduler, "Scheduler", true, Cmd::Scheduler),
             (
                 Icon::StartQueue,
-                "Start Queue",
+                "Start queue",
                 // The button acts on the main queue (the others: its arrow, the menus).
                 self.queues.first().is_some_and(|q| !q.running),
                 Cmd::StartQueue(0),
             ),
             (
                 Icon::StopQueue,
-                "Stop Queue",
+                "Stop queue",
                 self.queues.first().is_some_and(|q| q.running),
                 Cmd::StopQueue(0),
             ),

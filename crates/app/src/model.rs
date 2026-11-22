@@ -533,7 +533,7 @@ pub(crate) fn merge_failure(error: &str, kept: &[PathBuf]) -> String {
     if kept.is_empty() {
         return crate::i18n::fmt(
             // i18n: why a video download failed: ffmpeg couldn't join its picture and sound into one file; {error} = ffmpeg's reason, in English
-            crate::i18n::t("its picture and sound couldn't be joined into one file ({error})"),
+            crate::i18n::t("its picture and sound could not be joined into one file ({error})"),
             &[("error", &error)],
         );
     }
@@ -546,7 +546,7 @@ pub(crate) fn merge_failure(error: &str, kept: &[PathBuf]) -> String {
     crate::i18n::fmt(
         // i18n: why a video download failed: ffmpeg couldn't join its picture and sound into one file; {error} = ffmpeg's reason, in English; {files} = the downloaded parts' file names, kept in the download folder; "Also delete the file from disk" is the Delete box's choice
         crate::i18n::t(
-            "its picture and sound couldn't be joined into one file ({error}). What was downloaded stays in the folder for Resume to join again ({files}); deleting the download with \"Also delete the file from disk\" removes it",
+            "its picture and sound could not be joined into one file ({error}). What was downloaded stays in the folder for Resume to join again ({files}); deleting the download with \"Also delete the file from disk\" removes it",
         ),
         &[("error", &error), ("files", &files)],
     )
@@ -762,13 +762,13 @@ pub fn sub_notice(p: &mdm_tools::video::SubProblem, site: &str) -> String {
         SubReason::TooManyRequests => crate::i18n::fmt(
             // i18n: after a video download: {language} = a language's name, {site} = a web site's name (youtube.com); the site refused because it was asked too often
             crate::i18n::t(
-                "Subtitles in {language} couldn't be downloaded: {site} refused (too many requests).",
+                "Subtitles in {language} could not be downloaded: {site} refused (too many requests).",
             ),
             &[("language", language), ("site", site)],
         ),
         SubReason::Other(why) => crate::i18n::fmt(
             // i18n: after a video download: {language} = a language's name, {reason} = the helper program's own (English) words
-            crate::i18n::t("Subtitles in {language} couldn't be downloaded: {reason}"),
+            crate::i18n::t("Subtitles in {language} could not be downloaded: {reason}"),
             &[("language", language), ("reason", why)],
         ),
     }
@@ -843,7 +843,7 @@ impl Item {
         push_log(&mut self.log, now, text.into());
     }
 
-    /// The last `n` log entries as tooltip lines ("14:02:11  Connected to …").
+    /// The last `n` log entries as tooltip lines ("Oct 28 14:02:11 2026  Connected to …").
     pub fn log_lines(&self, n: usize) -> String {
         self.log
             .iter()
@@ -854,7 +854,7 @@ impl Item {
                 // In the interface's way (English month names in every language before).
                 // With the offset of now (crate::clock, #536).
                 let t = crate::clock::local_at(*at)
-                    .map(|t| when_text(t.naive_local()))
+                    .map(|t| when_text(t.naive_local(), true))
                     .unwrap_or_default();
                 format!("{t}  {text}")
             })
@@ -1389,29 +1389,39 @@ pub fn date_text(stored: &str) -> String {
     let Some(t) = stamp_time(stored) else {
         return stored.to_owned();
     };
-    when_text(t)
+    when_text(t, false)
 }
 
 /// A local time as the interface writes dates and times (Options → Regional; else IDM's text,
 /// on the system's clock).
-pub fn when_text(t: chrono::NaiveDateTime) -> String {
+/// `seconds`: the download log's whole time, with its seconds and year, as before plan 12c; the
+/// list's columns leave both out where they can (`stamp_text`).
+pub fn when_text(t: chrono::NaiveDateTime, seconds: bool) -> String {
     let formats = crate::regional::current();
     if formats.custom {
         return crate::i18n::ltr(&crate::regional::short_date_time(t));
     }
-    stamp_text(t, formats.clock24)
+    use chrono::Datelike;
+    stamp_text(t, formats.clock24, crate::clock::now().year(), seconds)
 }
 
-/// IDM's text for a time, as stored (`Oct 28 21:44:12 2026`) on a 24-hour clock, and with the
-/// system's 12-hour clock (#392) `Oct 28 9:44:12 PM 2026`.
-fn stamp_text(t: chrono::NaiveDateTime, clock24: bool) -> String {
-    use chrono::Timelike;
-    format!(
-        "{} {} {}",
-        t.format("%b %d"),
-        crate::regional::time_text(t.hour(), t.minute(), t.second(), clock24),
-        t.format("%Y")
-    )
+/// The list's text for a time: `Oct 28 21:44` on a 24-hour clock, `Oct 28 9:44 PM` on the
+/// system's 12-hour clock (#392); no seconds, and the year only when it isn't `this_year`
+/// (`Oct 28 21:44 2026`), so it fits the Added column. With `seconds` (the download log), the
+/// whole time as stored: `Oct 28 21:44:12 2026`, `Oct 28 9:44:12 PM 2026`.
+fn stamp_text(t: chrono::NaiveDateTime, clock24: bool, this_year: i32, seconds: bool) -> String {
+    use chrono::{Datelike, Timelike};
+    let time = if seconds {
+        crate::regional::time_text(t.hour(), t.minute(), t.second(), clock24)
+    } else {
+        crate::regional::minutes_text(t.hour(), t.minute(), clock24)
+    };
+    let day_time = format!("{} {time}", t.format("%b %d"));
+    if t.year() == this_year && !seconds {
+        day_time
+    } else {
+        format!("{day_time} {}", t.year())
+    }
 }
 
 /// `13.38%` (IDM).
@@ -1433,33 +1443,25 @@ pub fn size(b: u64) -> String {
     }
 }
 
-/// `200.000 MB` — the progress dialog uses three decimals (and KB below a kilobyte).
+/// The progress window's sizes: as [`size`] writes them, so a file reads the same everywhere.
 pub fn size3(b: u64) -> String {
-    let v = b as f64;
-    let k = 1024.0;
-    if v >= k * k * k {
-        format!("{:.3} GB", v / (k * k * k)) // not translated: IDM's text
-    } else if v >= k * k {
-        format!("{:.3} MB", v / (k * k)) // not translated: IDM's text
-    } else {
-        format!("{:.3} KB", v / k) // not translated: IDM's text
-    }
+    size(b)
 }
 
-/// `11.623 MB/sec`, `512.000 KB/sec` (IDM's progress dialog uses three decimals).
+/// `11.623 MB/s`, `512.000 KB/s` (IDM's progress dialog uses three decimals).
 pub fn rate(bps: f64) -> String {
     if bps >= 1024.0 * 1024.0 {
-        format!("{:.3} MB/sec", bps / (1024.0 * 1024.0)) // not translated: IDM's text
+        format!("{:.3} MB/s", bps / (1024.0 * 1024.0)) // not translated: a unit
     } else {
-        format!("{:.3} KB/sec", bps / 1024.0) // not translated: IDM's text
+        format!("{:.3} KB/s", bps / 1024.0) // not translated: a unit
     }
 }
 
-/// A speed limit as the user typed it, in whole KBytes/sec: `512 KB/sec`, `2048 KB/sec` (the
-/// Speed Limiter's boxes take KBytes/sec).
+/// A speed limit as the user typed it, in whole KB/s: `512 KB/s`, `2048 KB/s` (the Speed
+/// Limiter's boxes take KB/s).
 pub fn limit_rate(bps: u64) -> String {
     let kb = (bps / 1024).max(1);
-    format!("{kb} KB/sec") // not translated: as `rate` writes it
+    format!("{kb} KB/s") // not translated: as `rate` writes it
 }
 
 /// The speed limit that holds a running download back (upstream issue 1191): what its
@@ -1508,13 +1510,13 @@ impl Limit {
     }
 
     /// The progress window's Transfer rate with the limit after the speed `shown` (a
-    /// [`rate`]): `512.000 KB/sec (limit: 512 KB/sec)`.
+    /// [`rate`]): `512.000 KB/s (limit: 512 KB/s)`.
     pub fn after(self, shown: &str) -> String {
         let limit = limit_rate(self.rate());
         let template = match self {
-            // i18n: the progress window's Transfer rate row while a speed limit applies: {rate} is the download's speed now ("512.000 KB/sec"), {limit} the most this download may take ("512 KB/sec"). The row is narrow: keep it short
+            // i18n: the progress window's Transfer rate row while a speed limit applies: {rate} is the download's speed now ("512.000 KB/s"), {limit} the most this download may take ("512 KB/s"). The row is narrow: keep it short
             Limit::One(_) => crate::i18n::t("{rate} (limit: {limit})"),
-            // i18n: the progress window's Transfer rate row while the limit for all downloads together applies: {rate} is this download's speed now ("512.000 KB/sec"), {limit} the most all downloads together may take ("1024 KB/sec"). The row is narrow: keep it short
+            // i18n: the progress window's Transfer rate row while the limit for all downloads together applies: {rate} is this download's speed now ("512.000 KB/s"), {limit} the most all downloads together may take ("1024 KB/s"). The row is narrow: keep it short
             Limit::All(_) => crate::i18n::t("{rate} (limit for all downloads: {limit})"),
         };
         crate::i18n::fmt(template, &[("rate", shown), ("limit", &limit)])
@@ -1525,9 +1527,9 @@ impl Limit {
     pub fn tip(self) -> String {
         let limit = limit_rate(self.rate());
         let template = match self {
-            // i18n: tip of a download's Transfer rate in the list: {limit} is the most this download may take ("512 KB/sec"), set with the Speed Limiter
+            // i18n: tip of a download's Transfer rate in the list: {limit} is the most this download may take ("512 KB/s"), set with the Speed Limiter
             Limit::One(_) => crate::i18n::t("Speed Limiter: at most {limit} for this download"),
-            // i18n: tip of a download's Transfer rate in the list: {limit} is the most all downloads together may take ("1024 KB/sec"), set in the Speed Limiter's settings
+            // i18n: tip of a download's Transfer rate in the list: {limit} is the most all downloads together may take ("1024 KB/s"), set in the Speed Limiter's settings
             Limit::All(_) => crate::i18n::t("Speed Limiter: {limit} for all downloads together"),
         };
         crate::i18n::fmt(template, &[("limit", &limit)])
@@ -1543,26 +1545,26 @@ pub fn limiter_hint(one: Option<u64>, all: Option<u64>) -> Option<String> {
     Some(match (one, all) {
         (None, None) => return None,
         (Some(one), None) => crate::i18n::fmt(
-            // i18n: the status bar and the tray icon's tip while Downloads → Speed Limiter is turned on: {limit} is the most each download may take ("512 KB/sec")
+            // i18n: the status bar and the tray icon's tip while Downloads → Speed Limiter is turned on: {limit} is the most each download may take ("512 KB/s")
             t("Speed Limiter: {limit} per download"),
             &[("limit", &limit_rate(one))],
         ),
         (None, Some(all)) => crate::i18n::fmt(
-            // i18n: the status bar and the tray icon's tip while the Speed Limiter's limit for all downloads together is on: {limit} is the most they may take together ("1024 KB/sec")
+            // i18n: the status bar and the tray icon's tip while the Speed Limiter's limit for all downloads together is on: {limit} is the most they may take together ("1024 KB/s")
             t("Speed Limiter: {limit} for all downloads"),
             &[("limit", &limit_rate(all))],
         ),
         (Some(one), Some(all)) => crate::i18n::fmt(
-            // i18n: the status bar and the tray icon's tip while both Speed Limiter limits are on: {one} is the most each download may take ("512 KB/sec"), {all} the most all of them together may take ("1024 KB/sec")
+            // i18n: the status bar and the tray icon's tip while both Speed Limiter limits are on: {one} is the most each download may take ("512 KB/s"), {all} the most all of them together may take ("1024 KB/s")
             t("Speed Limiter: {one} per download, {all} for all"),
             &[("one", &limit_rate(one)), ("all", &limit_rate(all))],
         ),
     })
 }
 
-/// The list's Size column: IDM puts two spaces before the unit (`200.00  MB`).
+/// The list's Size column: as [`size`], one space before the unit (`200.00 MB`).
 pub fn size_list(b: u64) -> String {
-    size(b).replacen(' ', "  ", 1)
+    size(b)
 }
 
 /// `14 sec`, `1 min 22 sec`, `2 hour(s) 5 min`.
@@ -1762,7 +1764,9 @@ mod tests {
         assert_eq!(time(14.2), "14 sec");
         assert_eq!(time(82.0), "1 min 22 sec");
         assert_eq!(time(7500.0), "2 hour(s) 5 min");
-        assert_eq!(rate(12_187_628.0), "11.623 MB/sec");
+        assert_eq!(rate(12_187_628.0), "11.623 MB/s");
+        assert_eq!(size3(6 * 1024 * 1024 * 1024), size(6 * 1024 * 1024 * 1024));
+        assert_eq!(size_list(7_392_461), "7.05 MB");
     }
 }
 
@@ -1779,22 +1783,36 @@ mod stamp_tests {
     #[test]
     fn english_stamps_follow_the_clock() {
         let at = |s| super::stamp_time(s).unwrap();
-        // 24-hour: exactly as stored.
-        for s in ["Oct 28 21:44:12 2026", "Jan 01 00:05:09 2027"] {
-            assert_eq!(super::stamp_text(at(s), true), s);
-        }
+        // 24-hour: as stored without the seconds; the year only when it isn't this year.
+        assert_eq!(
+            super::stamp_text(at("Oct 28 21:44:12 2026"), true, 2027, false),
+            "Oct 28 21:44 2026"
+        );
+        assert_eq!(
+            super::stamp_text(at("Jan 01 00:05:09 2027"), true, 2027, false),
+            "Jan 01 00:05"
+        );
         // 12-hour (#392): midnight and noon are 12.
         assert_eq!(
-            super::stamp_text(at("Oct 28 21:44:12 2026"), false),
+            super::stamp_text(at("Oct 28 21:44:12 2026"), false, 2026, false),
+            "Oct 28 9:44 PM"
+        );
+        assert_eq!(
+            super::stamp_text(at("Jan 01 00:05:09 2027"), false, 2026, false),
+            "Jan 01 12:05 AM 2027"
+        );
+        assert_eq!(
+            super::stamp_text(at("Jun 15 12:00:00 2027"), false, 2027, false),
+            "Jun 15 12:00 PM"
+        );
+        // The download log keeps the whole time, its seconds and year: as stored on a 24-hour
+        // clock, this year too.
+        for s in ["Oct 28 21:44:12 2026", "Jan 01 00:05:09 2027"] {
+            assert_eq!(super::stamp_text(at(s), true, 2027, true), s);
+        }
+        assert_eq!(
+            super::stamp_text(at("Oct 28 21:44:12 2026"), false, 2026, true),
             "Oct 28 9:44:12 PM 2026"
-        );
-        assert_eq!(
-            super::stamp_text(at("Jan 01 00:05:09 2027"), false),
-            "Jan 01 12:05:09 AM 2027"
-        );
-        assert_eq!(
-            super::stamp_text(at("Jun 15 12:00:00 2027"), false),
-            "Jun 15 12:00:00 PM 2027"
         );
     }
 }
@@ -2038,42 +2056,42 @@ mod limit_tests {
 
     #[test]
     fn limits_read_as_typed() {
-        assert_eq!(limit_rate(512 * KB), "512 KB/sec");
-        assert_eq!(limit_rate(2048 * KB), "2048 KB/sec");
-        // Below a kilobyte (a share of the limit for all): never "0 KB/sec".
-        assert_eq!(limit_rate(100), "1 KB/sec");
+        assert_eq!(limit_rate(512 * KB), "512 KB/s");
+        assert_eq!(limit_rate(2048 * KB), "2048 KB/s");
+        // Below a kilobyte (a share of the limit for all): never "0 KB/s".
+        assert_eq!(limit_rate(100), "1 KB/s");
     }
 
     #[test]
     fn transfer_rate_tip_and_hint() {
         assert_eq!(
-            Limit::One(512 * KB).after("511.998 KB/sec"),
-            "511.998 KB/sec (limit: 512 KB/sec)"
+            Limit::One(512 * KB).after("511.998 KB/s"),
+            "511.998 KB/s (limit: 512 KB/s)"
         );
         assert_eq!(
-            Limit::All(1024 * KB).after("340.112 KB/sec"),
-            "340.112 KB/sec (limit for all downloads: 1024 KB/sec)"
+            Limit::All(1024 * KB).after("340.112 KB/s"),
+            "340.112 KB/s (limit for all downloads: 1024 KB/s)"
         );
         assert_eq!(
             Limit::One(10 * KB).tip(),
-            "Speed Limiter: at most 10 KB/sec for this download"
+            "Speed Limiter: at most 10 KB/s for this download"
         );
         assert_eq!(
             Limit::All(500 * KB).tip(),
-            "Speed Limiter: 500 KB/sec for all downloads together"
+            "Speed Limiter: 500 KB/s for all downloads together"
         );
         assert_eq!(limiter_hint(None, None), None);
         assert_eq!(
             limiter_hint(Some(10 * KB), None).as_deref(),
-            Some("Speed Limiter: 10 KB/sec per download")
+            Some("Speed Limiter: 10 KB/s per download")
         );
         assert_eq!(
             limiter_hint(None, Some(500 * KB)).as_deref(),
-            Some("Speed Limiter: 500 KB/sec for all downloads")
+            Some("Speed Limiter: 500 KB/s for all downloads")
         );
         assert_eq!(
             limiter_hint(Some(10 * KB), Some(500 * KB)).as_deref(),
-            Some("Speed Limiter: 10 KB/sec per download, 500 KB/sec for all")
+            Some("Speed Limiter: 10 KB/s per download, 500 KB/s for all")
         );
     }
 }

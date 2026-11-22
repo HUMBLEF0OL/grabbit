@@ -685,6 +685,14 @@ Done since 1.0.1; ships in the next release.
   Tray icon, Customize URL List, Font) are gone; **Properties** and **Add** got **Cancel**;
   Files already there reads **No, Yes**; the exceptions' buttons go New, Edit, Delete; the
   Scheduler's weekdays read in rows.
+- ✅ One way of saying each thing, its words (plan 12c): one name per command in the menus and
+  the toolbar (**Resume**, **Stop**, **Delete**, **Delete with files**, **Delete completed**,
+  **Remove from queue**, **Ask trackers again**), sentence case in menus, columns, window titles
+  and Options, **Download now** / **Later** at the end of every add window, the same colon,
+  ellipsis and error wording everywhere, sizes written alike in the list and the progress window
+  with one space before the unit, **KB/s**, **MB/s** and **MB** (on the phone page too), and the
+  list's dates without seconds, and without the year when it is this year. The help pages and the
+  mockup name things as the app does.
 
 ## Being worked on
 
@@ -931,11 +939,9 @@ kept on the `archive/multiplatform-i18n` branch.
 
 ### Look and performance
 
-- 📋 One way of saying each thing (plan 12, `design/graphite/plans/12-ui-consistency.md`): one
-  name per command in menus, toolbar and windows, sentence case throughout, the same buttons at
-  the end of every add window, and the shared pieces (separators, focus rings, the Find box,
-  browse buttons) drawn one way (its delete safety, 12a, and states and routes, 12b, are done:
-  see Next version)
+- 📋 One way of drawing each thing (plan 12, `design/graphite/plans/12-ui-consistency.md`): the
+  shared pieces (separators, focus rings, the Find box, browse buttons) drawn one way (its delete
+  safety, states and routes, and words, 12a–12c, are done: see Next version)
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))
 - 📋 A new download window (plan 13, `design/graphite/plans/13-download-window.md`): one large

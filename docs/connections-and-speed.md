@@ -32,7 +32,7 @@ The buttons:
 
 ## Where the server is
 
-**Download File Info**, the progress window and **Properties** show where a download's server is: its country's flag and name, then the time a round trip to it takes, such as **about 24 ms (near)**.
+**Download file info**, the progress window and **Properties** show where a download's server is: its country's flag and name, then the time a round trip to it takes, such as **about 24 ms (near)**.
 
 - **Near** (green): under 60 ms, usually the same country or the next one.
 - **Medium** (amber): 60 to 150 ms, usually the same continent.
@@ -81,7 +81,7 @@ Each connection writes straight into the file's place on disk, in a part file na
 A download resumes where it stopped: after you stop it, after the connection drops, or after Windows or Grabbit crashes. Grabbit saves how far each part has got as it goes.
 
 - A connection that fails is retried on its own. The progress window's table shows **Retrying** and the reason.
-- To continue a stopped download, select it and click **Resume** on the toolbar (or **File → Download Now**).
+- To continue a stopped download, select it and click **Resume** on the toolbar (or **File → Resume**).
 - Before continuing, Grabbit checks that the file on the server is still the same. If it changed, the download stops with **the file changed on the server**. Use **Redownload** to start again from the beginning.
 - If **Resume capability** is **No**, the server can't send a file in parts. Grabbit then downloads it over one connection, and a download that stops has to start over.
 
@@ -112,11 +112,11 @@ The Speed Limiter keeps Grabbit from using all of your connection.
 ### For every download
 
 1. Choose **Downloads → Speed Limiter → Settings**.
-2. Set **Maximum download speed for one file** in KBytes/sec. It starts at 10, so set it before you turn the limiter on.
+2. Set **Maximum download speed for one file** in KB/s. It starts at 10, so set it before you turn the limiter on.
 3. Click **Save**. (The settings open in the main window, as the **Speed Limiter** section of [Options](options.md), listed under **Tools**; **← Downloads** goes back to the list.)
 4. Choose **Downloads → Speed Limiter → Turn on**. **Turn off** gives full speed again.
 
-**Always turn on Speed Limiter on Grabbit startup** turns it on each time Grabbit starts.
+**Turn on the Speed Limiter when Grabbit starts** turns it on each time Grabbit starts.
 
 A torrent counts as one file here: each torrent gets the limit of its own. So do a video and an image gallery ([Videos](video.md#speed-limits)). A download with a limit of its own (see [For one download](#for-one-download)) keeps that one.
 
@@ -136,7 +136,7 @@ In the download's progress window, open the **Speed Limiter** tab:
 2. Set **Maximum download speed** in KBytes/sec. The new limit applies at once.
 3. Tick **Remember Speed Limiter settings for this file on download stop/resume** to keep this limit for the file: it applies again when you resume it later, even after restarting Grabbit.
 
-A video or a gallery takes a limit of its own the same way. For a torrent, the limit is that torrent's alone; the others keep theirs. A torrent can't be held under 16 KBytes/sec: a lower limit gives it 16.
+A video or a gallery takes a limit of its own the same way. For a torrent, the limit is that torrent's alone; the others keep theirs. A torrent can't be held under 16 KB/s: a lower limit gives it 16.
 
 > Some servers drop the connection when the speed is very low. Avoid a tight limit for servers that can't resume (**Resume capability: No**).
 

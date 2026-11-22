@@ -880,7 +880,7 @@ $A = [System.Windows.Automation.AutomationElement]
 $pid_ = New-Object System.Windows.Automation.PropertyCondition($A::ProcessIdProperty, ${pid})
 $now = New-Object System.Windows.Automation.AndCondition(
   (New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, [System.Windows.Automation.ControlType]::Button)),
-  (New-Object System.Windows.Automation.PropertyCondition($A::NameProperty, 'Download Now')))
+  (New-Object System.Windows.Automation.PropertyCondition($A::NameProperty, 'Download now')))
 $edit = New-Object System.Windows.Automation.AndCondition(
   (New-Object System.Windows.Automation.PropertyCondition($A::ControlTypeProperty, [System.Windows.Automation.ControlType]::Edit)),
   (New-Object System.Windows.Automation.PropertyCondition($A::NameProperty, 'Page address')))

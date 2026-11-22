@@ -14,13 +14,13 @@ branches and the category or queue you were looking at.
 
 ## Columns
 
-![The download list with its columns: Source, File Name, Q, Size and Status, and more to the right](images/help/list-columns.webp)
+![The download list with its columns: Source, File name, Q, Size and Status, and more to the right](images/help/list-columns.webp)
 *Click a column title to sort; its funnel filters.*
 
 | Column | What it shows |
 |---|---|
 | **Source** | **Web** (a web server) or **Torrent**. |
-| **File Name** | The file's name, after its type's icon: Windows Explorer's, or Grabbit's where the system has none. |
+| **File name** | The file's name, after its type's icon: Windows Explorer's, or Grabbit's where the system has none. |
 | **Q** | A queue icon when the download is in a queue. |
 | **Size** | The file's size, when the server told it. |
 | **Status** | How far it is, or **Complete**, **Error** and so on. |
@@ -29,9 +29,9 @@ branches and the category or queue you were looking at.
 | **Upload speed** | A torrent: what it sends to peers, while it runs. |
 | **Peers** | A torrent's connected peers while it runs, seeders and leechers alike. |
 | **Share ratio** | A torrent: what it has sent to peers against what it took. |
-| **Last Try Date** | When it last ran. |
+| **Last try date** | When it last ran. |
 | **Added** | When you added it. |
-| **Description** | Your note from **Download File Info** or **Properties**. |
+| **Description** | Your note from **Download file info** or **Properties**. |
 
 - **Sort:** click a column title. Click again to reverse the order, and a third time to go back to the order of addition. **View → Arrange files** does the same from the menu.
 - **Move a column:** drag its title sideways.
@@ -69,7 +69,7 @@ Right-click a category for:
 
 - **Browse** — open its folder in Explorer.
 - **Properties** — change its name, its file types and its folder. General and Torrents only change their folder. A renamed category keeps its folder; a built-in one keeps its name until you rename it.
-- **Add category** — make your own, for example **Books** for `EPUB MOBI`. Give it a name, the file types (separated by spaces, `*` allowed) and a folder.
+- **Add category...** — make your own, for example **Books** for `EPUB MOBI`. Give it a name, the file types (separated by spaces, `*` allowed) and a folder.
 - **Delete** — remove a category, your own or a built-in one (not General or Torrents). Grabbit asks what happens to its downloads: **Move its downloads to General**, or **Remove its downloads from the list** (a download that is running moves to General instead). Their files stay where they are either way. From then on, files of its types go to another category that has them, or to General.
 
 ![A category's properties: its name, file types and folder](images/help/category-properties.webp)
@@ -83,31 +83,31 @@ the whole window.
 ## Dropping links and files
 
 Drag a link from a browser (or a page's text with links in it) onto the list to add it: one
-link opens **Download File Info**, several open **Link grabber** to choose which to add. Drop a
+link opens **Download file info**, several open **Link grabber** to choose which to add. Drop a
 `.torrent` file to add the torrent, or a list of addresses (`.txt`, `.ef2`) to import it. The
 list is outlined while something you can drop is over it.
 
-Right-click the list's blank space for **Add new download**, **Select all**, **Arrange files**,
-**Clear all filters** and **Delete All Completed**.
+Right-click the list's blank space for **Add new download...**, **Select all**, **Arrange files**,
+**Clear all filters** and **Delete completed**.
 
 ## Opening a download
 
 - **Double-click** or press **Enter** on an unfinished download to see its progress window.
-- On a finished download, double-click shows its **Properties**. To open the file instead, right-click any download and choose **On Double click → Open**.
+- On a finished download, double-click shows its **Properties**. To open the file instead, right-click any download and choose **On double-click → Open**.
 - **Alt+Enter** always opens **Properties**.
 
-The right-click menu has everything you can do with a download: **Open**, **Open with...**, **Open folder**, **Move/Rename**, **Redownload**, **Resume Download**, **Stop Download**, **Copy address** (**Ctrl+C**; a torrent has **Copy magnet link** instead), **Refresh download address**, **Verify checksum...**, **Remove**, **Add to queue** and **Properties**. **Open folder** is there once the download is finished, or for a torrent while it downloads.
+The right-click menu has everything you can do with a download: **Open**, **Open with...**, **Open folder**, **Move/Rename...**, **Redownload**, **Resume**, **Stop**, **Copy address** (**Ctrl+C**; a torrent has **Copy magnet link** instead), **Refresh download address**, **Verify checksum...**, **Delete**, **Add to queue** and **Properties**. **Open folder** is there once the download is finished, or for a torrent while it downloads.
 
 ## Properties
 
-**File Properties** shows a download's type, status, size and folder, its address, your description, the page it came from (**Referer**), where its server is ([country and round trip](connections-and-speed.md#where-the-server-is), as its last run saw them) and a login for the site. **Last try** and **Result** tell you how its last attempt went.
+**File properties** shows a download's type, status, size and folder, its address, your description, the page it came from (**Referer**), where its server is ([country and round trip](connections-and-speed.md#where-the-server-is), as its last run saw them) and a login for the site. **Last try** and **Result** tell you how its last attempt went.
 
 - **Move** — move a finished file to another folder, or choose another folder for a download that hasn't started.
 - **Address** — for an unfinished download, you can paste a new address here. See [Resume a broken download](guide-resume-broken-download.md).
 - **Open** — open the file.
 
-![File Properties: the file's name, address, folder, size, status and description](images/help/properties.webp)
-*File Properties: change the address or the folder of a download.*
+![File properties: the file's name, address, folder, size, status and description](images/help/properties.webp)
+*File properties: change the address or the folder of a download.*
 
 **Move/Rename** (**Ctrl+M**) moves or renames the file of a finished download, or of one that hasn't started yet. With several downloads selected it asks for a folder and moves them all there, each under its own name.
 
@@ -115,7 +115,7 @@ The right-click menu has everything you can do with a download: **Open**, **Open
 
 **View → Details pane**, or **Details** at the end of the toolbar, shows a pane beside the list with the selected download. The same again hides it. It is off at first.
 
-The pane shows the download's icon and name, how far it is, and 8 cells that fill as each eighth of the file comes in. While it runs, and after it stopped in this session, the cells say how many connections it has (a video or a torrent shows none). When its size is known, they also say how much of it has come, for example 57.96 MB of 92.00 MB. Below them come **Status**, **Transfer rate** and **Time left** (while it runs), **Resume capability**, **Save to**, **Address** (never with its password), **Queue** and **Last Try Date**, each when it has a value. The figures change as the download runs.
+The pane shows the download's icon and name, how far it is, and 8 cells that fill as each eighth of the file comes in. While it runs, and after it stopped in this session, the cells say how many connections it has (a video or a torrent shows none). When its size is known, they also say how much of it has come, for example 57.96 MB of 92.00 MB. Below them come **Status**, **Transfer rate** and **Time left** (while it runs), **Resume capability**, **Save to**, **Address** (never with its password), **Queue** and **Last try date**, each when it has a value. The figures change as the download runs.
 
 Its buttons are **Resume** or **Stop**, **Open folder** (greyed until the download is finished, as in the right-click menu; a torrent's folder is there while it downloads) and **Show progress window** (greyed for a finished download). A download that failed because its link expired, or because the server refused it (403) or says it is gone (410), also gets **Refresh download address...** above them: it opens the page the link came from and **Properties**, where you paste the new address.
 
@@ -135,7 +135,7 @@ Many sites publish a checksum next to the download. Right-click the download, ch
 - **Ctrl+A** selects all.
 - **Shift+Up / Shift+Down** makes the selection longer or shorter.
 
-**Resume**, **Stop**, **Remove** and the queue commands then act on all the selected downloads. The other commands need one download. The full list of keys is in [Keyboard shortcuts](keyboard-shortcuts.md).
+**Resume**, **Stop**, **Delete** and the queue commands then act on all the selected downloads. The other commands need one download. The full list of keys is in [Keyboard shortcuts](keyboard-shortcuts.md).
 
 ## Finding a download
 
@@ -148,7 +148,7 @@ Typing the start of a name while the list has the focus jumps to the first downl
 
 ## Deleting downloads
 
-Select one or more downloads and press **Delete**, click **Delete** on the toolbar, or choose **File → Remove**. Grabbit asks first:
+Select one or more downloads and press **Delete**, click **Delete** on the toolbar, or choose **File → Delete**. Grabbit asks first:
 
 - **Also move the file to the Recycle Bin** — unticked every time the question opens. Tick it to remove the files too: a finished download's file goes to the Recycle Bin, where you can restore it from. For an unfinished download (the box then says **Also delete the file from disk**), this deletes the part downloaded so far; with both kinds selected, the box says **Also delete the files (finished ones go to the Recycle Bin)**. When finished downloads are among the ones you delete, the question says how many finished files go to the Recycle Bin. A torrent's files are deleted, not moved, and the question says how many finished torrents' files it deletes. Leave it unticked to take the downloads off the list and keep the files.
 
@@ -157,13 +157,13 @@ Select one or more downloads and press **Delete**, click **Delete** on the toolb
 
 Click **Yes** to delete, or **No** to keep everything.
 
-**Shift+Delete** (or **Remove with files**) opens the same question with the box already ticked, for that time only. It always asks, even after **Don't show this dialog again**: Grabbit never removes a file from the disk without asking. The box is never remembered: the next **Delete** starts unticked again.
+**Shift+Delete** (or **Delete with files**) opens the same question with the box already ticked, for that time only. It always asks, even after **Don't show this dialog again**: Grabbit never removes a file from the disk without asking. The box is never remembered: the next **Delete** starts unticked again.
 
 After deleting, the next download in the list is selected, so you can press **Delete** again.
 
 A download that is running isn't deleted. Stop it first. When running downloads are among the ones you select, the others are deleted and Grabbit says how many running ones it kept: in the question, or in a message when the question is turned off.
 
-**Delete Completed** on the toolbar (or **Downloads → Delete All Completed**) removes every finished download from the list, with the same question. Their files stay unless you tick **Also move the files to the Recycle Bin** in that question.
+**Delete completed** on the toolbar (or **Downloads → Delete completed**) removes every finished download from the list, with the same question. Their files stay unless you tick **Also move the files to the Recycle Bin** in that question.
 
 ![Confirm deletion of downloads, with Also move the file to the Recycle Bin](images/help/delete-confirm.webp)
 *Tick Also move the file to the Recycle Bin only if you want the file gone too.*

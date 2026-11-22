@@ -36,7 +36,7 @@ whose service supports its host. **Up** and **Down** change it.
 
 Tick **Send torrents and magnet links to the first account instead of to peers** in
 **Options → Accounts**. A magnet link (Add, the browser, the clipboard, a drop) or a
-`.torrent` file (Add torrent's **Download Now** or **Later**) then goes to the first account in
+`.torrent` file (Add torrent's **Download now** or **Later**) then goes to the first account in
 the list:
 
 1. The service downloads the torrent on its own servers. The list shows how far it is, such as
@@ -77,11 +77,11 @@ the list:
 
 ## Download one link directly instead
 
-- **Download File Info** says which account a link goes through: **Download through
+- **Download file info** says which account a link goes through: **Download through
   Real-Debrid (your account)**, ticked. Untick it to download that one link directly, without
   the service. Grabbit looks the address up again the new way, so the name and size shown are the
   ones you will get. A download the browser had already started shows it unticked.
-- For a download already in the list, **File Properties** has the same choice beside the login:
+- For a download already in the list, **File properties** has the same choice beside the login:
   **Through Real-Debrid**. It can be changed while the download isn't running. The next start
   goes the new way, and continues from what is already downloaded when the file is the same.
 - Grabbit keeps the choice with the download, after a restart too.

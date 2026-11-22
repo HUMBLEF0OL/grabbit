@@ -435,13 +435,13 @@ impl AddWindow {
 
         // Footer: Ask where to save each one, Later, Cancel, Add N.
         let add_label = if valid > 0 {
-            // i18n: Add: its default button; {n} is how many items it adds
+            // i18n: Add: its default button, which starts them; {n} is how many items it adds
             crate::i18n::fmt(
-                crate::i18n::t("Add {n}"),
+                crate::i18n::t("Download {n}"),
                 &[("n", &crate::i18n::integer(valid as u64))],
             )
         } else {
-            crate::i18n::t("Add").to_owned()
+            crate::i18n::t("Download now").to_owned()
         };
         let kind = if valid > 0 {
             ButtonKind::Default
@@ -881,7 +881,7 @@ mod tests {
         }
         for want in [
             "Addresses, magnet links or video pages, one per line",
-            "Add 2",
+            "Download 2",
             "Later",
             // Plan 12b, DB1.
             "Cancel",

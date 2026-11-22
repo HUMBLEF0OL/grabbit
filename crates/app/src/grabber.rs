@@ -20,7 +20,7 @@ use crate::winui::{
 };
 
 const ROW: f32 = 18.0;
-/// Where the window's footer starts (Add to queue, Start, Cancel), and its width.
+/// Where the window's footer starts (Later, Download now, Cancel), and its width.
 const FOOTER_Y: f32 = 438.0;
 const GRABBER_W: f32 = 680.0;
 /// Where the content ends: the list's and the rows' right edge, and the package's boxes'.
@@ -553,7 +553,7 @@ impl Grabber {
             .collect()
     }
 
-    /// `Done((start, packages))`: Start (`true`) or Add to queue (`false`) with the ticked
+    /// `Done((start, packages))`: Download now (`true`) or Later (`false`) with the ticked
     /// links of each package.
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<(bool, Vec<Picked>)> {
         self.take_answers();
@@ -612,7 +612,7 @@ impl Grabber {
             Rect::from_min_size(o + vec2(11.0, 30.0), vec2(RIGHT - 11.0, 258.0)),
         );
 
-        // Under the list: Hide web pages, the count, Check all / Uncheck all.
+        // Under the list: Hide web pages, the count, Select all / Select none.
         let mut hide = self.hide_pages;
         // i18n: Link grabber check box (IDM's "Hide HTML files"): links to web pages are not shown
         winui::checkbox_light(ui, o + vec2(11.0, 299.0), &mut hide, "Hide web pages", true);
@@ -636,9 +636,9 @@ impl Grabber {
             296.0,
             &[
                 // i18n: Link grabber button (IDM's): tick every link
-                (crate::i18n::mark("Check all"), ButtonKind::Normal),
+                (crate::i18n::mark("Select all"), ButtonKind::Normal),
                 // i18n: Link grabber button (IDM's): untick every link
-                (crate::i18n::mark("Uncheck all"), ButtonKind::Normal),
+                (crate::i18n::mark("Select none"), ButtonKind::Normal),
             ],
         );
         if picks[0].clicked() {
@@ -667,13 +667,10 @@ impl Grabber {
             FOOTER_Y,
             &mut [
                 // i18n: Link grabber button: add the ticked links to the download queue without starting them (IDM's OK)
-                FooterItem::Button(FooterButton::new(
-                    crate::i18n::mark("Add to queue"),
-                    kind(false),
-                )),
+                FooterItem::Button(FooterButton::new(crate::i18n::mark("Later"), kind(false))),
                 // i18n: Link grabber button: download the ticked links now
                 FooterItem::Button(
-                    FooterButton::new(crate::i18n::mark("Start"), kind(true))
+                    FooterButton::new(crate::i18n::mark("Download now"), kind(true))
                         .primary()
                         .enter(any),
                 ),
@@ -1007,11 +1004,11 @@ impl Grabber {
         };
         // Labels before their boxes: a column as wide as this language's longest (up to 160 px).
         // i18n: Link grabber: the package's name (a label before its box)
-        let name_label = crate::i18n::t("Name:");
+        let name_label = crate::i18n::t("Name");
         // i18n: Link grabber: the folder the package's files go to (a label before its box)
-        let folder_label = crate::i18n::t("Save to:");
+        let folder_label = crate::i18n::t("Save to");
         // i18n: Link grabber: the package's archives' password (a label before its box)
-        let pw_label = crate::i18n::t("Password:");
+        let pw_label = crate::i18n::t("Password");
         let wide = |s: &str| winui::text_width(&p, s);
         let bx = (21.0 + wide(name_label).max(wide(folder_label)) + 8.0).clamp(80.0, 160.0);
         let label = |ui: &Ui, x: f32, y: f32, s: &str, right: f32| {

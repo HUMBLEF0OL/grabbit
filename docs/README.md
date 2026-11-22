@@ -13,7 +13,7 @@ These pages explain each part of the program. The tutorials walk through the thi
 
 ## Downloading
 
-- **[Adding downloads](adding-downloads.md)** — Add (links, magnets, torrents and video pages in one window), the paste bar, the clipboard, the drop target, batch downloads and lists of links, and Start Download versus Download Later.
+- **[Adding downloads](adding-downloads.md)** — Add (links, magnets, torrents and video pages in one window), the paste bar, the clipboard, the drop target, batch downloads and lists of links, and Download now versus Later.
 - **[Link grabber and archives](link-grabber.md)** — many links at once, in packages; zip, 7z and rar archives extracted when they are downloaded.
 - **[Browser integration](browser-integration.md)** — the extension for Firefox, Chrome, Edge, Brave, Opera and Vivaldi (from Grabbit's own folder), which downloads it takes, and what happens when Grabbit isn't running.
 - **[Run Grabbit on a server](server.md)** — Grabbit without a window on a Windows PC that stays on, downloading into its folders; send it downloads from your phone or browser.

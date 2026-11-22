@@ -16,7 +16,7 @@ Any other page address that turns out to be a web page, not a file, is offered t
 1. ![Download video from a page, with the Page address box and Look up](images/help/video-lookup.webp)
    *Paste the page's address and click Look up.*
 2. ![The video window after Look up: the qualities with their sizes, Save to, File name and Subtitles](images/help/video-qualities.webp)
-   *Pick a quality, then Download Now.*
+   *Pick a quality, then Download now.*
 3. ![A video's progress window while yt-dlp brings it in](images/help/video-progress.webp)
    *It downloads like any other file, in its own row and window.*
 
@@ -60,7 +60,7 @@ If the list stays short, your own yt-dlp may be too old for YouTube: click **Use
 2. Pick one. Without ffmpeg, only the qualities that come with their sound are listed, and no MP3, Opus or FLAC (ffmpeg makes them).
 3. Check **Save to** (the Video category's folder by default) and **File name**, which comes from the video's title.
 4. Choose **Subtitles** if you want them (see below).
-5. Click **Download Now**, or **Later** to add it to the list without starting.
+5. Click **Download now**, or **Later** to add it to the list without starting.
 
 The video then downloads like any other file, with its own row in the list and its progress window.
 
@@ -91,7 +91,7 @@ For those, a new speed limit starts the download again with it, from where it wa
 A live stream, a broadcast still going on, is recorded by yt-dlp with ffmpeg into an unfinished file, so Grabbit can't know its length. While it records, the progress window says **Recording...**, and **Downloaded** and **Transfer rate** follow the size of what has been recorded so far.
 
 - **Recording... shows from the moment the recorder opens its file**, once it has connected to the stream (a few seconds after the download starts; until then the window says **Connecting...**; a stream that can't be reached never gets there). **Downloaded** shows what has reached the disk, and the recorder writes it in blocks of 256 KB, so it stays at 0 KB until the first block is written (that can take a while on a stream of low bitrate), then grows block by block. **Stop and save** before the first block keeps nothing yet: the download is left stopped, with its empty file, for **Resume** to record anew. An empty unfinished file an earlier run left is removed when the recording starts again (it holds nothing), so a resumed recording shows **Recording...** from the same moment.
-- **Stop and save** is what the progress window's pause button reads for a live stream that is recording. It, **Stop** and **Stop All** in the list (toolbar and menus), a queue's stop (by hand or at its scheduled stop time) and the phone page's pause all end the recording and keep it. Grabbit makes the recording an MP4 itself, as yt-dlp does when a live stream ends: the streams are copied as they are, nothing is converted. The window says **Saving...** meanwhile, and the download is then **Complete**, as when a live stream ends by itself: the queue goes on and the completion notice and actions run.
+- **Stop and save** is what the progress window's pause button reads for a live stream that is recording. It, **Stop** and **Stop all** in the list (toolbar and menus), a queue's stop (by hand or at its scheduled stop time) and the phone page's pause all end the recording and keep it. Grabbit makes the recording an MP4 itself, as yt-dlp does when a live stream ends: the streams are copied as they are, nothing is converted. The window says **Saving...** meanwhile, and the download is then **Complete**, as when a live stream ends by itself: the queue goes on and the completion notice and actions run.
 - **The last moments may be missing:** at most the last 1 MiB the recorder hadn't written yet. That is a few seconds of video, and up to about a minute for a stream with sound only.
 - **If the MP4 can't be made**, the recording is kept as an MPEG-TS file (`.ts`), which most players open. If that can't be done either, the download says so and the unfinished file stays as it is.
 - **The recording is removed only when the MP4 holds all of it**: as long as the recording to within a second, its picture and its sound each too (ffprobe's durations; without them, at least 90 % of the recording's size). A shorter MP4 is kept with the recording beside it, as `My stream (recording 1).ts`, and the download's log says why (if the recording can't be renamed, the log says so: it stays as the unfinished file).
@@ -129,7 +129,7 @@ Paste the address of a playlist (`youtube.com/playlist?list=…`) or a channel's
 - **Quality** applies to every video: **Best quality**, **Up to** a height (each video at that height, or the nearest below it), **Audio only, original**, **Audio only MP3**, **Audio only OPUS** or **Audio only FLAC**. Without ffmpeg, only the qualities that come with their sound are offered, and no MP3, Opus or FLAC.
 - The videos go into a folder named after the list, inside **Save to**, each under its own title.
 
-**Download Now** adds each video as its own download and starts the main queue, which runs as many at once as you set in the [Scheduler](queues-and-scheduler.md) (**Download N files at the same time**). **Later** adds them without starting. Adding more than 500 at once asks first.
+**Download now** adds each video as its own download and starts the main queue, which runs as many at once as you set in the [Scheduler](queues-and-scheduler.md) (**Download N files at the same time**). **Later** adds them without starting. Adding more than 500 at once asks first.
 
 Grabbit lists at most 20,000 videos of one list.
 

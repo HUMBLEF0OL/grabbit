@@ -616,7 +616,7 @@ impl Updates {
                 } else if let Some(status) = &self.status {
                     let line = match status {
                         UpdateStatus::Failed(e) => crate::i18n::fmt(
-                            crate::i18n::t("The update couldn't be installed: {error}"),
+                            crate::i18n::t("The update could not be installed: {error}"),
                             &[("error", e)],
                         ),
                     };

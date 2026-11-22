@@ -68,7 +68,7 @@ page = "getting-started.md"
 under = "Themes"
 take = "@menu:menu:3:theme"
 crop = { around = ["MenuItem:View", "Draw with", "Open themes folder"], pad = 12 }
-alt = "View → Theme open: Graphite, Add a theme file… and Open themes folder"
+alt = "View → Theme open: Graphite, Add a theme file... and Open themes folder"
 caption = "View → Theme switches at once, keeping the layout."
 
 # ---- Adding downloads ---------------------------------------------------------------------------
@@ -79,21 +79,21 @@ page = "adding-downloads.md"
 under = "Add"
 # Lower case: /show's arguments arrive lower-cased (mdm_ipc::parse_args).
 take = "@add:gen/4m/project-report-2026.pdf"
-# The Add window (PR 76): its box, the Found list's caption ("Found 1"), Use authorization, Add.
-# 3 in the box's empty middle (one address on its first line), 5 over the tick box (its right
-# is the Login field).
-marks = [{ at = "Edit:Addresses, magnet links or video pages, one per line", n = 3, side = "center" }, { at = "Found", n = 4, side = "right" }, { at = "CheckBox:Use authorization", n = 5, side = "top" }, { at = "Button:Add", n = 6, side = "corner" }]
-alt = "The Add window: its box, what was found, the drop area, Use authorization and Add"
-caption = "The numbers are the steps above: 3 the addresses, 4 what was found, 5 a login if the server needs one, 6 Add."
+# The Add window (PR 76): its box, the Found list's caption ("Found 1"), Use authorization,
+# Download 1 (plan 12c). 3 in the box's empty middle (one address on its first line), 5 over the
+# tick box (its right is the Login field).
+marks = [{ at = "Edit:Addresses, magnet links or video pages, one per line", n = 3, side = "center" }, { at = "Found", n = 4, side = "right" }, { at = "CheckBox:Use authorization", n = 5, side = "top" }, { at = "Button:Download", n = 6, side = "corner" }]
+alt = "The Add window: its box, what was found, the drop area, Use authorization and Download"
+caption = "The numbers are the steps above: 3 the addresses, 4 what was found, 5 a login if the server needs one, 6 Download."
 
 [[shot]]
 id = "download-file-info"
 page = "adding-downloads.md"
-under = "Download File Info"
+under = "Download file info"
 take = "@download:gen/250M/project-files-2026.zip"
 # 1 and 2 between the labels and their boxes.
-marks = [{ at = "ComboBox:Category", side = "left" }, { at = "Edit:Save As", side = "left" }, { at = "Start Download", side = "corner" }, { at = "Download Later", side = "corner" }]
-alt = "Download File Info for a ZIP file: its address, the Compressed category, the folder it goes to, its size, and the Download Later, Start Download and Cancel buttons"
+marks = [{ at = "ComboBox:Category", side = "left" }, { at = "Edit:Save as", side = "left" }, { at = "Download now", side = "corner" }, { at = "Button:Later", side = "corner" }]
+alt = "Download file info for a ZIP file: its address, the Compressed category, the folder it goes to, its size, and the Later, Download now and Cancel buttons"
 caption = "1 the category, 2 where the file goes, 3 start now, 4 or put it in a queue."
 
 [[shot]]
@@ -110,7 +110,7 @@ page = "adding-downloads.md"
 under = "A list of links"
 take = "grabber"
 alt = "Link grabber listing the links of a page in packages, with their names, sizes and whether they are online"
-caption = "Link grabber: untick what you don't want, then Add to queue."
+caption = "Link grabber: untick what you don't want, then Download now or Later."
 
 # ---- Browser integration ------------------------------------------------------------------------
 
@@ -127,9 +127,9 @@ id = "catch-file-info"
 page = "browser-integration.md"
 under = "What it takes"
 take = "@download:gen/250M/project-files-2026.zip"
-ring = ["Start Download"]
-alt = "Download File Info in Grabbit for a file clicked in the browser"
-caption = "Click a download link in the browser: Download File Info opens in Grabbit."
+ring = ["Download now"]
+alt = "Download file info in Grabbit for a file clicked in the browser"
+caption = "Click a download link in the browser: Download file info opens in Grabbit."
 
 [[shot]]
 id = "catch-progress"
@@ -137,7 +137,7 @@ page = "browser-integration.md"
 under = "What it takes"
 take = "progress"
 alt = "The progress window of a download coming in over several connections"
-caption = "Start Download: the progress window shows it coming in."
+caption = "Download now: the progress window shows it coming in."
 
 [[shot]]
 id = "catch-complete"
@@ -198,7 +198,7 @@ page = "video.md"
 under = "Start a video download"
 take = "video-subs"
 alt = "The video window after Look up: the qualities with their sizes, Save to, File name and Subtitles"
-caption = "Pick a quality, then Download Now."
+caption = "Pick a quality, then Download now."
 
 [[shot]]
 id = "video-progress"
@@ -242,9 +242,9 @@ id = "torrent-add"
 page = "torrents.md"
 under = "Add a torrent"
 take = "@torrent"
-ring = ["Download Now"]
-alt = "Add torrent with a torrent's files as a folder tree, the folder they go to, and Download Now"
-caption = "Untick what you don't want, then Download Now."
+ring = ["Download now"]
+alt = "Add torrent with a torrent's files as a folder tree, the folder they go to, and Download now"
+caption = "Untick what you don't want, then Download now."
 
 [[shot]]
 id = "torrent-files"
@@ -301,7 +301,7 @@ page = "download-list.md"
 under = "Columns"
 take = "@main"
 crop = [224, 148, 0, 310]
-alt = "The download list with its columns: Source, File Name, Q, Size and Status, and more to the right"
+alt = "The download list with its columns: Source, File name, Q, Size and Status, and more to the right"
 caption = "Click a column title to sort; its funnel filters."
 
 [[shot]]
@@ -326,8 +326,8 @@ id = "properties"
 page = "download-list.md"
 under = "Properties"
 take = "properties"
-alt = "File Properties: the file's name, address, folder, size, status and description"
-caption = "File Properties: change the address or the folder of a download."
+alt = "File properties: the file's name, address, folder, size, status and description"
+caption = "File properties: change the address or the folder of a download."
 
 [[shot]]
 id = "find"
@@ -475,18 +475,18 @@ id = "first-add-url"
 page = "guide-first-download.md"
 under = "Steps"
 take = "@add:gen/4m/project-report-2026.pdf"
-ring = ["Button:Add"]
-alt = "The Add window, its Add button ringed"
-caption = "Add: Grabbit puts the address you copied in the box (paste it there if it isn't). Click Add 1."
+ring = ["Button:Download"]
+alt = "The Add window, its Download button ringed"
+caption = "Add: Grabbit puts the address you copied in the box (paste it there if it isn't). Click Download 1."
 
 [[shot]]
 id = "first-file-info"
 page = "guide-first-download.md"
 under = "Steps"
 take = "@download:gen/250M/project-files-2026.zip"
-ring = ["Start Download"]
-alt = "Download File Info with the file's name, size and folder"
-caption = "Check the folder, then Start Download."
+ring = ["Download now"]
+alt = "Download file info with the file's name, size and folder"
+caption = "Check the folder, then Download now."
 
 [[shot]]
 id = "first-progress"
@@ -525,9 +525,9 @@ page = "guide-download-overnight.md"
 under = "1. Put the downloads in a queue"
 take = "@download:gen/250M/project-files-2026.zip"
 crop = [0, 30, 0, 0]
-ring = ["Download Later"]
-alt = "Download File Info with Download Later ringed"
-caption = "Download Later puts it in a queue instead of starting it."
+ring = ["Button:Later"]
+alt = "Download file info with Later ringed"
+caption = "Later puts it in a queue instead of starting it."
 
 [[shot]]
 id = "overnight-start"
@@ -567,7 +567,7 @@ page = "guide-usb-stick.md"
 under = "2. Save downloads to the stick"
 take = "options:saveto+@main"
 crop = { around = ["Pane:Options"], pad = 0 }
-ring = ["Default download directory for"]
+ring = ["Default download folder for"]
 alt = "Options, Save to: a category's folder"
 caption = "Point each category's folder at the stick."
 
@@ -578,7 +578,7 @@ under = "When the link has expired"
 take = "properties"
 # The address box is named by the address itself.
 ring = ["Edit:http"]
-alt = "File Properties with the download's address"
+alt = "File properties with the download's address"
 caption = "Paste the new link into Address, then resume."
 
 [[shot]]
