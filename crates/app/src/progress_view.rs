@@ -2182,6 +2182,7 @@ fn when_done(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent
         "progress-when-done",
     ) {
         pr.when = i;
+        pr.when_by_hand = true;
     }
     if torrent && pr.keep_sharing && pr.when <= 1 {
         winui::fit(
@@ -3184,6 +3185,9 @@ pub fn done_facts_top(files: usize) -> f32 {
 /// How many lines each of the Done window's `lines` under Saved to takes, wrapped as
 /// [`done_facts`] draws them (at most two each).
 pub fn done_line_counts(ctx: &egui::Context, lines: &[String]) -> Vec<usize> {
+    // ponytail: measured with the main viewport's painter (the Done window's isn't made yet);
+    // on a monitor of another scale, a message right at the edge could wrap once more than
+    // measured and crowd the row under it (rare; measure at the Done viewport's scale if seen).
     let p = ctx.layer_painter(egui::LayerId::background());
     lines
         .iter()

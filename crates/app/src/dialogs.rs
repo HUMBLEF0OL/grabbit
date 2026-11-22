@@ -1696,8 +1696,22 @@ pub struct Complete {
     /// What is looked for off the window's thread once the box is made (its files, whether its
     /// main file and folder are there); None once it came.
     looking: Option<Arc<Mutex<Option<Looked>>>>,
-    /// The folder Open folder shows isn't there any more: Open folder says so, the box stays.
+    /// The folder Open folder shows wasn't there when the box was made: Open folder keeps the
+    /// box (it looks again, and says so when it is still gone).
     folder_gone: bool,
+    /// When the box was made: it stays hidden a moment for its look ([`done_shown`]).
+    made: std::time::Instant,
+}
+
+/// How long the Done window waits for its look before it shows without it.
+const DONE_LOOK_WAIT: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Whether the Done window shows, and whether Enter presses its filled button, while its look
+/// is still `looking` after `waited`: hidden until the look came or [`DONE_LOOK_WAIT`] passed
+/// (its stand-in, a file alone, could be the wrong layout); shown without it, Enter waits for it
+/// (it could open the wrong thing).
+fn done_shown(looking: bool, waited: std::time::Duration) -> (bool, bool) {
+    (!looking || waited >= DONE_LOOK_WAIT, !looking)
 }
 
 /// What the Done window learns off its thread once it is made (plan 13a).
@@ -1998,6 +2012,7 @@ impl Complete {
             picked_gone: None,
             looking: Some(slot),
             folder_gone: false,
+            made: std::time::Instant::now(),
         };
         // Until the look comes: a file alone (the box is hidden its first frame anyway).
         c.set_files(None);
@@ -2018,11 +2033,18 @@ impl Complete {
 
     /// The look started by [`Complete::new`] taken in once it came: true then.
     fn take_look(&mut self) -> bool {
-        let Some(got) = self
-            .looking
-            .as_ref()
-            .and_then(|s| s.lock().unwrap_or_else(|e| e.into_inner()).take())
-        else {
+        let Some(slot) = &self.looking else {
+            return false;
+        };
+        // Counted before the take: alone with the slot, the thread is over (it put its answer
+        // there first, or never will: no thread, or it panicked).
+        let over = Arc::strong_count(slot) == 1;
+        let got = slot.lock().unwrap_or_else(|e| e.into_inner()).take();
+        let Some(got) = got else {
+            if over {
+                // Nothing will come: the file-alone stand-in stays.
+                self.looking = None;
+            }
             return false;
         };
         self.looking = None;
@@ -2066,6 +2088,10 @@ impl Complete {
         // ponytail: polled, as the look has no window to wake when it is made.
         if !self.take_look() && self.looking.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(50));
+        }
+        let (shown, enter_ok) = done_shown(self.looking.is_some(), self.made.elapsed());
+        if !shown {
+            return Outcome::Open;
         }
         // Plan 13d (boards 5, 7, 13, 14): the progress window's layout language. The name row
         // (dragged out, Ctrl+C), "Done" with the size, the strip whole, the number of files, the
@@ -2185,7 +2211,7 @@ impl Complete {
                     .zip(xs.iter().zip(&widths))
                     .map(|(b, (x, (w, _)))| {
                         let mut button = FooterButton::new(b.label, b.kind)
-                            .enter(b.enter && !dragging)
+                            .enter(b.enter && enter_ok && !dragging)
                             .escape(b.act == DoneAct::Close && !dragging);
                         if b.label.is_empty() {
                             // The ▾: its menu (screen readers read its tip as its name).
@@ -2498,16 +2524,9 @@ impl Complete {
                 } else if let Some(target) = with_target.as_ref().filter(|_| with) {
                     open_download_with(target, self.moved_away);
                     Outcome::Done(())
-                } else if folder && self.folder_gone {
-                    // Nothing to show: said, and the box stays.
-                    let dir: &Path = match &self.folder_act {
-                        FolderAct::Select(f) => f.parent().unwrap_or(f),
-                        FolderAct::Open(d) => d,
-                    };
-                    // i18n: title of the message when the folder of a downloaded file can't be shown
-                    tell(crate::i18n::mark("Open folder"), folder_gone_text(dir));
-                    Outcome::Open
                 } else if folder {
+                    // Looked at again beside the window (`show_in_folder_now` says when it is
+                    // still gone).
                     match &self.folder_act {
                         FolderAct::Select(f) => show_download_in_folder(f, self.moved_away),
                         // Looked at beside the window: a folder opens, anything else (a file
@@ -2523,7 +2542,12 @@ impl Complete {
                             });
                         }
                     }
-                    Outcome::Done(())
+                    // A folder gone when the box was made: the box stays, in case it still is.
+                    if self.folder_gone {
+                        Outcome::Open
+                    } else {
+                        Outcome::Done(())
+                    }
                 } else if close {
                     Outcome::Done(())
                 } else {
@@ -4522,6 +4546,33 @@ mod tests {
         looked(&mut c);
         assert_eq!(c.main, Some(to.join("film.mp4")));
         assert_eq!(c.gone, None, "what the look saw at the old place is stale");
+    }
+
+    /// Plan 13 audit r2: the Done window stays hidden for its look up to DONE_LOOK_WAIT, then
+    /// shows without it but keeps Enter until it comes; a look that will never come (its
+    /// thread gone) stops being waited for.
+    #[test]
+    fn the_done_window_waits_a_moment_for_its_look() {
+        use std::time::Duration;
+        assert_eq!(done_shown(true, Duration::ZERO), (false, false));
+        assert_eq!(done_shown(true, DONE_LOOK_WAIT), (true, false));
+        assert_eq!(done_shown(false, Duration::ZERO), (true, true));
+        let mut c = Complete::new(
+            1,
+            PathBuf::from(r"C:\Demo\a.zip"),
+            1,
+            Vec::new(),
+            false,
+            || None,
+        );
+        c.looking = Some(Arc::new(Mutex::new(None)));
+        assert!(!c.take_look());
+        assert!(c.looking.is_none(), "nothing will come");
+        assert_eq!(
+            c.main,
+            Some(PathBuf::from(r"C:\Demo\a.zip")),
+            "the stand-in"
+        );
     }
 
     /// Plan 13 audit: the Open menu names a file by its path inside the download when another
