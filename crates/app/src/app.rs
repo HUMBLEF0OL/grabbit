@@ -236,6 +236,9 @@ enum Cmd {
     RssFeeds(bool),
     /// Right-click → Refresh download address: open the source page, edit the address.
     RefreshAddress,
+    /// Right-click → Copy address (Ctrl+C with nothing focused): the chosen downloads'
+    /// addresses, torrents left out (they have Copy magnet link).
+    CopyAddress,
     /// Right-click → Verify checksum… (beyond IDM).
     VerifyChecksum,
     /// Right-click → Extract (beyond IDM, #37): a finished archive, into its folder.
@@ -251,6 +254,8 @@ enum Cmd {
     Arrange(Option<usize>),
     /// Header right-click → Clear all filters.
     ClearFilters,
+    /// An empty list's "Clear search": the title bar's Find field emptied.
+    ClearSearch,
     /// Every download the list shows (Ctrl+A).
     SelectAll,
     /// The All Downloads view (an empty list's link).
@@ -448,8 +453,7 @@ fn place_to_take(item: &Item, items: &[Item]) -> Option<PathBuf> {
 
 impl Cmd {
     /// The icon a Graphite menu draws at this command's item (plan 05b, the mockup's menus), by
-    /// what it does; `label` tells apart the commands two items share (Pause All and Stop All)
-    /// and names a greyed placeholder's (no command: [`chrome::menu_icon`]).
+    /// what it does; `label` names a greyed placeholder's (no command: [`chrome::menu_icon`]).
     fn menu_icon(&self, label: &str) -> Option<&'static str> {
         Some(match self {
             Cmd::None => return chrome::menu_icon(label),
@@ -462,12 +466,11 @@ impl Cmd {
             Cmd::ToggleDetails => "gx-sidebar",
             Cmd::Options => "tb-options",
             Cmd::Batch(false) => "gx-list-numbers",
-            Cmd::Batch(true) => "gx-copy",
+            Cmd::Batch(true) | Cmd::CopyAddress => "gx-copy",
             Cmd::VideoPage => "ft-video",
             Cmd::RssFeeds(_) => "gx-rss",
             Cmd::Exit => "ui-close",
             Cmd::Stop => "tb-stop",
-            Cmd::StopAll if label == "&Pause All" => "tb-stop",
             Cmd::StopAll => "tb-stop-all",
             Cmd::Remove | Cmd::RemoveWithFiles | Cmd::DeleteCategory(_) | Cmd::DeleteQueue(_) => {
                 "tb-delete"
@@ -512,6 +515,7 @@ impl Cmd {
             Cmd::MoveRename => "Ctrl+M",
             Cmd::Remove => "Delete",
             Cmd::RemoveWithFiles => "Shift+Delete",
+            Cmd::CopyAddress => "Ctrl+C",
             Cmd::Open => "Enter",
             Cmd::SelectAll => "Ctrl+A",
             Cmd::Properties => "Alt+Enter",
@@ -1028,6 +1032,7 @@ fn details_cmd(action: crate::panes::DetailsAction) -> Cmd {
         DetailsAction::Stop => Cmd::Stop,
         DetailsAction::OpenFolder => Cmd::OpenFolder,
         DetailsAction::ShowProgress => Cmd::Open,
+        DetailsAction::RefreshAddress => Cmd::RefreshAddress,
     }
 }
 
@@ -1086,13 +1091,34 @@ fn shortcut_cmd(i: &mut egui::InputState, focused: bool) -> Option<Cmd> {
         && !i.modifiers.command
         && (i.events.iter().any(|e| matches!(e, egui::Event::Cut))
             || i.key_pressed(egui::Key::Delete));
+    // Windows reports Ctrl+C (and Ctrl+Insert) as Copy.
+    let copy = i.events.iter().any(|e| matches!(e, egui::Event::Copy));
     if shift_del {
         Some(Cmd::RemoveWithFiles)
     } else if del {
         Some(Cmd::Remove)
+    } else if copy {
+        Some(Cmd::CopyAddress)
     } else {
         None
     }
+}
+
+/// Copy address (plan 12b, B4): the addresses of the chosen downloads that aren't torrents
+/// (a torrent's, local or through a debrid account, is Copy magnet link's), one a line; None
+/// when none has one to copy.
+fn addresses(chosen: &[&Item]) -> Option<String> {
+    let lines: Vec<&str> = chosen
+        .iter()
+        .filter(|i| has_address(i))
+        .map(|i| i.url.as_str())
+        .collect();
+    (!lines.is_empty()).then(|| lines.join("\r\n"))
+}
+
+/// Whether Copy address has an address of this download's to copy (not a torrent's).
+fn has_address(i: &Item) -> bool {
+    i.torrent.is_none() && i.remote.is_none()
 }
 
 /// The login written in an address (`ftp://user:pass@host/…`), decoded.
@@ -1804,13 +1830,28 @@ impl App {
             .collect()
     }
 
-    /// An empty list's message, centred in its rows' area `body` (English): an icon, what is
-    /// empty, why, and the one thing to do about it (clear the filters, show every download,
-    /// add one). Returns that command when it is clicked.
-    fn empty_state(&self, ui: &Ui, body: egui::Rect) -> Option<Cmd> {
-        let p = ui.painter();
+    /// What an empty list says ([`Self::empty_state`]): its title (translated), the reason
+    /// and the link (to translate), the link's command and the tile's glyph. A search that
+    /// matches nothing first (plan 12b, A5): it hides rows as the filters do.
+    fn empty_message(&self) -> (String, &'static str, &'static str, Cmd, &'static str) {
+        if self.find.active() {
+            let title = crate::i18n::fmt(
+                // i18n: title in the empty download list when the search finds nothing; {text} is what was typed in Find
+                crate::i18n::t("No downloads match \"{text}\""),
+                &[("text", &crate::i18n::isolate(self.find.text.trim()))],
+            );
+            return (
+                title,
+                // i18n: in the empty download list, under its title
+                "The search hides every download in this view.",
+                // i18n: link in the empty download list: empties the Find field
+                "Clear search",
+                Cmd::ClearSearch,
+                "gx-search",
+            );
+        }
         let filtered = self.list.filters.iter().any(Option::is_some) && !self.view_ids().is_empty();
-        let (title, why, action, cmd) = if filtered {
+        let (title, why, action, cmd, need) = if filtered {
             (
                 // i18n: title in the empty download list, when the column filters hide every download
                 "No downloads match the filters",
@@ -1818,6 +1859,7 @@ impl App {
                 "The column filters hide every download in this view.",
                 "Clear all filters",
                 Cmd::ClearFilters,
+                "gx-filter",
             )
         } else if !self.items.is_empty() {
             (
@@ -1828,6 +1870,7 @@ impl App {
                 // i18n: link in the empty download list: go to the All Downloads view
                 "Show all downloads",
                 Cmd::ShowAll,
+                "gx-download",
             )
         } else {
             (
@@ -1838,13 +1881,23 @@ impl App {
                 // i18n: link in the empty download list: opens Add URL
                 "Add new download",
                 Cmd::AddUrl,
+                "gx-download",
             )
         };
-        let (title, why) = (crate::i18n::t(title), crate::i18n::t(why));
+        (crate::i18n::t(title).to_owned(), why, action, cmd, need)
+    }
+
+    /// An empty list's message, centred in its rows' area `body` (English): an icon, what is
+    /// empty, why, and the one thing to do about it (clear the search or the filters, show
+    /// every download, add one). Returns that command when it is clicked.
+    fn empty_state(&self, ui: &Ui, body: egui::Rect) -> Option<Cmd> {
+        let p = ui.painter();
+        let (title, why, action, cmd, need) = self.empty_message();
+        let title = title.as_str();
+        let why = crate::i18n::t(why);
         // Graphite's (plan 05b, the mockup's `.empty`): a 56-point tile (radius 14) with
-        // the download or the filter glyph, the title in SemiBold 16, the reason, the
+        // the download, search or filter glyph, the title in SemiBold 16, the reason, the
         // link; 8 apart, centred.
-        let need = if filtered { "gx-filter" } else { "gx-download" };
         let title_font = egui::FontId::new(16.0, egui::FontFamily::Name("tahoma-bold".into()));
         let reason_font = egui::FontId::proportional(crate::theme::metrics().font_body);
         let link_font = egui::FontId::new(
@@ -3889,7 +3942,7 @@ impl App {
         ids
     }
 
-    /// Stop All (and Pause All) has something to stop: a download, a queue, or a download that
+    /// Stop All has something to stop: a download, a queue, or a download that
     /// would start again by itself.
     fn can_stop_all(&self) -> bool {
         self.items.iter().any(|i| i.live.is_some())
@@ -7010,6 +7063,15 @@ impl App {
                     self.properties(id);
                 }
             }
+            Cmd::CopyAddress => {
+                let chosen: Vec<&Item> = many
+                    .iter()
+                    .filter_map(|id| self.items.iter().find(|i| i.id == *id))
+                    .collect();
+                if let Some(text) = addresses(&chosen) {
+                    crate::copy_text(ctx, text);
+                }
+            }
             Cmd::OpenWith => {
                 if let Some(d) = dest {
                     dialogs::open_download_with(&d, moved_away);
@@ -7228,6 +7290,7 @@ impl App {
             }
             Cmd::Arrange(col) => self.list.sort = col.map(|c| (c, true)),
             Cmd::ClearFilters => self.list.filters = vec![None; list::COLS],
+            Cmd::ClearSearch => self.find.text.clear(),
             Cmd::ResetColumns => self.list.reset_columns(),
             Cmd::ShowAll => self.view = View::All,
             Cmd::SelectAll => {
@@ -7504,7 +7567,6 @@ impl App {
                 ),
             ],
             2 => vec![
-                I("&Pause All", Cmd::StopAll, can_stop_all, false),
                 I("&Stop All", Cmd::StopAll, can_stop_all, false),
                 Sep,
                 I(
@@ -7605,8 +7667,7 @@ impl App {
         zoom: f32,
         themes: &[crate::themefile::Entry],
     ) -> Vec<MenuEntry<Cmd>> {
-        use MenuEntry::{Item as I, Sub};
-        let off = |label| I(label, Cmd::None, false, false);
+        use MenuEntry::Item as I;
         vec![
             I(
                 if show_categories {
@@ -7634,18 +7695,14 @@ impl App {
                 settings.show_details,
             ),
             Self::arrange_menu(sorted),
-            // i18n: noun: the toolbar (submenu of View with its settings)
-            Sub("Toolbar", false, vec![]),
-            Sub("&Tray icon", false, vec![]),
-            off("C&ustomize URL List..."),
+            // Toolbar, Tray icon, Customize URL List and Font, always greyed, are gone (plan
+            // 12b, DB3): each comes back when it works.
             // Light or dark: the status bar's button (1.0.1), no longer two View items.
             // View → Theme (MDM's, #45); then Interface size (#262) and
             // Draw with (#89, renderer.rs).
             Self::theme_menu(&settings.theme, themes),
             Self::interface_size_menu(zoom),
             Self::draw_with_menu(settings.renderer),
-            // i18n: noun: the list's font (submenu)
-            Sub("Font", false, vec![]),
         ]
     }
 
@@ -8066,7 +8123,7 @@ impl App {
             I(
                 "Open folder",
                 Cmd::OpenFolder,
-                done || it.is_some_and(|i| i.torrent.is_some()),
+                it.is_some_and(crate::panes::can_open_folder),
                 false,
             ),
             Sep,
@@ -8078,6 +8135,13 @@ impl App {
             I("Resume Download", Cmd::Resume, any_resumable, false),
             I("Stop Download", Cmd::Stop, any_live, false),
             Sep,
+            // i18n: right-click menu: copy the selected downloads' web addresses
+            I(
+                "Copy address",
+                Cmd::CopyAddress,
+                chosen.iter().any(|i| has_address(i)),
+                false,
+            ),
             I(
                 "Refresh download address",
                 Cmd::RefreshAddress,
@@ -9182,7 +9246,7 @@ impl App {
         }
         self.popup_menu(&ctx, &mut chosen);
         // The main window's shortcut keys (Ctrl+F, F3, Ctrl+N, Ctrl+M / F2, Delete,
-        // Shift+Delete), with no menu or popup open.
+        // Shift+Delete, Ctrl+C), with no menu or popup open.
         if chosen.is_none() && self.popup.is_none() && self.open_menu.is_none() {
             let focused = ctx.memory(|m| m.focused().is_some());
             chosen = ctx
@@ -13099,6 +13163,21 @@ mod view_menu_tests {
         assert_eq!(seen.get("p"), Some(&"&Paste bar"));
         assert_eq!(seen.get("n"), Some(&"Details pa&ne"));
     }
+
+    /// Plan 12b, DB3: no item of the View menu is always greyed (Toolbar, Tray icon,
+    /// Customize URL List and Font are gone until they work).
+    #[test]
+    fn the_view_menu_has_no_dead_items() {
+        for e in view(true, true) {
+            match e {
+                MenuEntry::Item(l, _, on, _) | MenuEntry::Radio(l, _, on, _) => {
+                    assert!(on, "{l:?} is greyed")
+                }
+                MenuEntry::Sub(l, on, items) => assert!(on && !items.is_empty(), "{l:?} is dead"),
+                _ => {}
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -13202,10 +13281,77 @@ mod details_cmd_tests {
             (DetailsAction::Stop, Cmd::Stop),
             (DetailsAction::OpenFolder, Cmd::OpenFolder),
             (DetailsAction::ShowProgress, Cmd::Open),
+            (DetailsAction::RefreshAddress, Cmd::RefreshAddress),
         ];
         for (action, cmd) in table {
             assert_eq!(details_cmd(action), cmd, "{action:?}");
         }
+    }
+}
+
+/// Plan 12b: the empty list's search branch (A5) and Copy address (B4).
+#[cfg(test)]
+mod states_routes_tests {
+    use super::*;
+
+    fn item(id: u64, name: &str) -> Item {
+        let url = url::Url::parse(&format!("https://example.com/{name}")).unwrap();
+        let mut i = Item::new(id, url, PathBuf::from(name), Category::Compressed);
+        i.status = Status::Stopped;
+        i
+    }
+
+    /// A search that matches nothing says so, quotes the text, and its link clears the search,
+    /// before the filters' message; without a search, the messages are as before.
+    #[test]
+    fn an_empty_search_offers_clear_search() {
+        let mut app = super::route_new_url_tests::app(vec![item(1, "a.zip")]);
+        app.list.filters[3] = Some(list::Filter::Values(vec!["Complete"]));
+        let (_, _, action, cmd, need) = app.empty_message();
+        assert_eq!(
+            (action, cmd, need),
+            ("Clear all filters", Cmd::ClearFilters, "gx-filter")
+        );
+        app.find.text = "nothing".into();
+        let (title, _, action, cmd, need) = app.empty_message();
+        assert!(title.contains("nothing"), "{title}");
+        assert_eq!(
+            (action, cmd, need),
+            ("Clear search", Cmd::ClearSearch, "gx-search")
+        );
+        let ctx = egui::Context::default();
+        app.run(Cmd::ClearSearch, None, &ctx);
+        assert!(!app.find.active());
+        app.list.filters[3] = None;
+        app.view = View::Finished(None);
+        let (_, _, _, cmd, _) = app.empty_message();
+        assert_eq!(cmd, Cmd::ShowAll);
+    }
+
+    /// Copy address copies the addresses of the downloads that aren't torrents, one a line.
+    #[test]
+    fn copy_address_leaves_torrents_out() {
+        let (a, b) = (item(1, "a.zip"), item(2, "b.iso"));
+        let mut t = item(3, "c.torrent");
+        t.torrent = Some(crate::torrents::TorrentSpec {
+            hash: "0".repeat(40),
+            files: None,
+            folder: PathBuf::from("c"),
+            owns_files: true,
+            uploaded: 0,
+            seeded_secs: 0,
+            peers: 0,
+            up_speed: 0.0,
+            upload_limit: None,
+            in_order: false,
+            ends_first: true,
+        });
+        assert_eq!(
+            addresses(&[&a, &t, &b]).as_deref(),
+            Some("https://example.com/a.zip\r\nhttps://example.com/b.iso")
+        );
+        assert_eq!(addresses(&[&t]), None);
+        assert!(has_address(&a) && !has_address(&t));
     }
 }
 
@@ -13604,6 +13750,13 @@ mod old_keys_tests {
                 Some(Cmd::RemoveWithFiles),
             ),
             ("Ctrl+X", ctrl, vec![key(Key::X, ctrl), Event::Cut], None),
+            // Windows: Ctrl+C arrives as Copy (plan 12b: Copy address).
+            (
+                "Ctrl+C as Copy",
+                ctrl,
+                vec![Event::Copy],
+                Some(Cmd::CopyAddress),
+            ),
             (
                 "Ctrl+Shift+Delete",
                 ctrl_shift,
@@ -13682,7 +13835,15 @@ mod old_keys_tests {
             let (cmd, left, text) = frame(mods, &events, Focus::Nothing, new_keys);
             assert_eq!(cmd, expected, "{name}, nothing focused");
             assert_eq!(text, "abc", "{name}: the unfocused field is untouched");
-            // Ctrl+O is new with the universal Add (Open a .torrent file): dev had none.
+            // Ctrl+O is new with the universal Add (Open a .torrent file), Ctrl+C with Copy
+            // address (plan 12b): dev had none. A text box focused keeps Ctrl+C.
+            if name.starts_with("Ctrl+C") {
+                for focus in [Focus::PasteField, Focus::OtherBox] {
+                    let (cmd, ..) = frame(mods, &events, focus, new_keys);
+                    assert_eq!(cmd, None, "{name}, {focus:?}: the box's");
+                }
+                continue;
+            }
             if name == "Ctrl+O" {
                 continue;
             }

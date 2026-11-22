@@ -721,6 +721,11 @@ pub struct OneDownload {
     pub primary: Option<Primary>,
     /// "Show progress window" is greyed for a finished download (D10).
     pub can_show_progress: bool,
+    /// "Open folder" is greyed without a folder to open ([`can_open_folder`]).
+    pub can_open_folder: bool,
+    /// Its address no longer works (`Item::wants_new_address`): "Refresh download address..."
+    /// shows above the other buttons.
+    pub can_refresh_address: bool,
 }
 
 /// The details pane's default, filled button.
@@ -739,6 +744,15 @@ pub enum DetailsAction {
     Stop,
     OpenFolder,
     ShowProgress,
+    /// Refresh download address... (plan 12b, E2) → `Cmd::RefreshAddress`.
+    RefreshAddress,
+}
+
+/// Open folder has a folder to open (plan 12b, C4: the row menu's rule, the Details pane's
+/// too): the download is finished, or a torrent, whose folder is there while it downloads
+/// (#354).
+pub fn can_open_folder(item: &Item) -> bool {
+    item.status == Status::Complete || item.torrent.is_some()
 }
 
 /// What a selection shows, before its download's details are looked at.
@@ -954,6 +968,8 @@ pub fn one_download(item: &Item, live_rate: Option<f64>, queue: Option<&str>) ->
         rows,
         primary,
         can_show_progress: item.status != Status::Complete,
+        can_open_folder: can_open_folder(item),
+        can_refresh_address: item.wants_new_address(),
     }
 }
 
@@ -1228,9 +1244,18 @@ pub fn details_pane(
     };
 
     let [first, second, third] = details_buttons(rc);
+    // A failed download whose address no longer works (plan 12b, E2): Refresh download
+    // address across the pane, above the other buttons.
+    let refresh = one.can_refresh_address.then(|| {
+        Rect::from_min_size(
+            pos2(third.left(), first.top() - PANE_BUTTON_GAP - PANE_BUTTON_H),
+            third.size(),
+        )
+    });
+    let buttons_top = refresh.map_or(first.top(), |b| b.top());
     // The content above the buttons. A pane too short for it (200 %, a low window) scrolls it
     // there, by the wheel and the shared bar at its end: no row ever sits under the buttons.
-    let content_bottom = (first.top() - PANE_BUTTON_GAP).max(rc.top());
+    let content_bottom = (buttons_top - PANE_BUTTON_GAP).max(rc.top());
     let content = Rect::from_min_max(rc.min, pos2(rc.right(), content_bottom));
     let page = content.height();
     // Per download: another one selected opens at its top, not where the last was scrolled.
@@ -1350,6 +1375,16 @@ pub fn details_pane(
     pane.data_mut(|d| d.insert_temp(scroll_key, (moved, total)));
 
     // The buttons at the bottom.
+    let refresh = refresh.map(|b| {
+        winui::icon_label_button(
+            &mut pane,
+            winui::rect(b),
+            "gx-refresh",
+            // i18n: the details pane's button on a failed download whose link expired or was refused: opens the page it came from and Properties, to give it a new address
+            "Refresh download address...",
+            ButtonKind::Normal,
+        )
+    });
     let (label, need, primary) = match one.primary {
         Some(Primary::Stop) => (
             // i18n: the details pane's button: stop the shown download
@@ -1377,7 +1412,11 @@ pub fn details_pane(
         "cat-folder-open",
         // i18n: the details pane's button: open the folder the shown download is saved in
         "Open folder",
-        ButtonKind::Normal,
+        if one.can_open_folder {
+            ButtonKind::Normal
+        } else {
+            ButtonKind::Disabled
+        },
     );
     let progress = if one.can_show_progress {
         ButtonKind::Normal
@@ -1392,9 +1431,11 @@ pub fn details_pane(
         "Show progress window",
         progress,
     );
-    if first.clicked() {
+    if refresh.is_some_and(|b| b.clicked()) {
+        Some(DetailsAction::RefreshAddress)
+    } else if first.clicked() {
         primary
-    } else if second.clicked() {
+    } else if second.clicked() && one.can_open_folder {
         Some(DetailsAction::OpenFolder)
     } else {
         third.clicked().then_some(DetailsAction::ShowProgress)
@@ -3356,6 +3397,56 @@ mod details_tests {
         }
     }
 
+    /// Plan 12b, E2 and C4: a download that failed for an expired link (or 403 / 410) offers
+    /// Refresh download address above the other buttons, and a click on it asks for it; other
+    /// failures don't. Open folder follows the row menu's rule.
+    #[test]
+    fn a_failed_link_offers_refresh_download_address() {
+        let _fonts = crate::theme::font_tests();
+        let failed = |failure: mdm_engine::Error| {
+            let mut it = item("https://example.org/a.zip", Status::Error);
+            let mut s = snap(1, &[ConnStatus::Receiving]);
+            s.state = State::Failed;
+            s.failure = Some(failure);
+            it.snap = Some(s);
+            it
+        };
+        let expired = one_download(&failed(mdm_engine::Error::LinkExpired), None, None);
+        assert!(expired.can_refresh_address);
+        assert!(!expired.can_open_folder, "unfinished, not a torrent");
+        let gone = mdm_engine::Error::Status(reqwest::StatusCode::GONE);
+        assert!(one_download(&failed(gone), None, None).can_refresh_address);
+        let other = one_download(&failed(mdm_engine::Error::ShortBody), None, None);
+        assert!(!other.can_refresh_address);
+        let done = one_download(
+            &item("https://example.org/a.zip", Status::Complete),
+            None,
+            None,
+        );
+        assert!(done.can_open_folder && !done.can_refresh_address);
+
+        let rc = Rect::from_min_size(pos2(964.0, 58.0), vec2(276.0, 600.0));
+        let [first, _, third] = details_buttons(rc);
+        let refresh = Rect::from_min_size(
+            pos2(third.left(), first.top() - PANE_BUTTON_GAP - PANE_BUTTON_H),
+            third.size(),
+        );
+        let at = crate::winui::rect(refresh).center();
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let click = vec![
+            vec![egui::Event::PointerMoved(at)],
+            vec![button(true)],
+            vec![button(false)],
+        ];
+        let view = DetailsView::One(Box::new(expired));
+        assert_eq!(pane(&view, click), Some(DetailsAction::RefreshAddress));
+    }
+
     /// A short pane, 276 × 150 (09r1): its three buttons fit inside it, and everything it
     /// paints for a running download with a long name and every row is clipped to it (the
     /// content above the buttons, the rest at the pane's edges).
@@ -3483,7 +3574,7 @@ mod details_tests {
     /// label read right before its value, whole even where the value is drawn cut; then
     /// Resume, Open folder and Show progress window as buttons by their labels. Running, the
     /// primary is Stop; complete, Resume and Show progress window are greyed and Open folder is
-    /// not.
+    /// not; unfinished (not a torrent), Open folder is greyed (plan 12b, C4).
     #[test]
     fn the_details_group_reads_each_label_before_its_value_and_the_buttons() {
         let _fonts = crate::theme::font_tests();
@@ -3512,7 +3603,8 @@ mod details_tests {
             }
             want.extend([
                 Read::Button(primary.into(), primary_greyed),
-                Read::Button("Open folder".into(), false),
+                // Plan 12b, C4: the row menu's rule, a folder only once it is finished.
+                Read::Button("Open folder".into(), status != Status::Complete),
                 Read::Button("Show progress window".into(), progress_greyed),
             ]);
             let labels: Vec<&str> = one.rows.iter().map(|(l, _)| *l).collect();

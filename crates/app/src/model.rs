@@ -1147,6 +1147,20 @@ impl Item {
             })
     }
 
+    /// It failed because its address no longer works (`errors::wants_new_address`): the Details
+    /// pane offers Refresh download address (plan 12b, E2). As its last run ended, this session
+    /// only, as [`Self::got_web_page`].
+    pub fn wants_new_address(&self) -> bool {
+        self.status == Status::Error
+            && self.live.is_none()
+            && self.snap.as_ref().is_some_and(|s| {
+                s.state == State::Failed
+                    && s.failure
+                        .as_ref()
+                        .is_some_and(crate::errors::wants_new_address)
+            })
+    }
+
     pub fn rate(&self) -> f64 {
         self.live.as_ref().map_or(0.0, |l| l.rate)
     }

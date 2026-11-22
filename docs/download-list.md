@@ -96,7 +96,7 @@ Right-click the list's blank space for **Add new download**, **Select all**, **A
 - On a finished download, double-click shows its **Properties**. To open the file instead, right-click any download and choose **On Double click → Open**.
 - **Alt+Enter** always opens **Properties**.
 
-The right-click menu has everything you can do with a download: **Open**, **Open with...**, **Open folder**, **Move/Rename**, **Redownload**, **Resume Download**, **Stop Download**, **Refresh download address**, **Verify checksum...**, **Remove**, **Add to queue** and **Properties**.
+The right-click menu has everything you can do with a download: **Open**, **Open with...**, **Open folder**, **Move/Rename**, **Redownload**, **Resume Download**, **Stop Download**, **Copy address** (**Ctrl+C**; a torrent has **Copy magnet link** instead), **Refresh download address**, **Verify checksum...**, **Remove**, **Add to queue** and **Properties**. **Open folder** is there once the download is finished, or for a torrent while it downloads.
 
 ## Properties
 
@@ -117,7 +117,7 @@ The right-click menu has everything you can do with a download: **Open**, **Open
 
 The pane shows the download's icon and name, how far it is, and 8 cells that fill as each eighth of the file comes in. While it runs, and after it stopped in this session, the cells say how many connections it has (a video or a torrent shows none). When its size is known, they also say how much of it has come, for example 57.96 MB of 92.00 MB. Below them come **Status**, **Transfer rate** and **Time left** (while it runs), **Resume capability**, **Save to**, **Address** (never with its password), **Queue** and **Last Try Date**, each when it has a value. The figures change as the download runs.
 
-Its buttons are **Resume** or **Stop**, **Open folder** and **Show progress window** (greyed for a finished download).
+Its buttons are **Resume** or **Stop**, **Open folder** (greyed until the download is finished, as in the right-click menu; a torrent's folder is there while it downloads) and **Show progress window** (greyed for a finished download). A download that failed because its link expired, or because the server refused it (403) or says it is gone (410), also gets **Refresh download address...** above them: it opens the page the link came from and **Properties**, where you paste the new address.
 
 With nothing selected the pane says **Select a download to see its details**; with several, how many they are and their total size.
 
@@ -139,7 +139,7 @@ Many sites publish a checksum next to the download. Right-click the download, ch
 
 ## Finding a download
 
-Type in the **Find** field in the title bar (**Ctrl+F** takes you there): the list keeps only the downloads whose name has what you typed, and the status bar says how many it shows. **Enter** or **F3** selects the next match, **Shift+F3** the one before; **Esc** clears the field. Its funnel searches descriptions and addresses too, and shows only some statuses or sources. Step by step in [Find a download in a long list](guide-find-in-long-list.md).
+Type in the **Find** field in the title bar (**Ctrl+F** takes you there): the list keeps only the downloads whose name has what you typed, and the status bar says how many it shows. **Enter** or **F3** selects the next match, **Shift+F3** the one before; **Esc** clears the field. When nothing matches, the list says so and offers **Clear search**. Its funnel searches descriptions and addresses too, and shows only some statuses or sources. Step by step in [Find a download in a long list](guide-find-in-long-list.md).
 
 Typing the start of a name while the list has the focus jumps to the first download whose name starts with it.
 
