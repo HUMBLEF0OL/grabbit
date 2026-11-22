@@ -360,8 +360,8 @@ pub struct Progress {
     pub minimize_to_tray: bool,
     /// The main window is shown (set by the app each frame): the glide's frames draw it too.
     pub main_shown: bool,
-    /// The speed limit holding the download back (set by the app each frame, #1191): its
-    /// Transfer rate names it.
+    /// The speed limit holding the download back (set by the app each frame, upstream issue
+    /// 1191): its Transfer rate names it.
     pub limit: Option<crate::model::Limit>,
     /// The bar and the segment map between figures.
     glide: Glide,
@@ -1467,7 +1467,7 @@ fn status_page(
             // Every byte in (upstream issue 736): nothing comes in while the file is checked or
             // joined.
             if state == Status::Downloading && !item.past_last_byte() {
-                // The limit holding it back beside the speed (#1191).
+                // The limit holding it back beside the speed (upstream issue 1191).
                 let rate = model::rate(item.rate());
                 match limit {
                     Some(limit) => limit.after(&rate),

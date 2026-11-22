@@ -1379,7 +1379,6 @@ pub struct AddTrackers {
     pub id: u64,
     name: String,
     text: String,
-    error: Option<String>,
     /// The box has had the focus (it takes it once, when the window opens).
     focused: bool,
 }
@@ -1390,7 +1389,6 @@ impl AddTrackers {
             id,
             name: name.to_owned(),
             text: String::new(),
-            error: None,
             focused: false,
         }
     }
@@ -1466,14 +1464,14 @@ impl AddTrackers {
                     field.request_focus();
                 }
                 // OK greys while the box holds no tracker or a line that isn't one (plan 12b,
-                // C7), its tip saying why; a wrong line is named under the box as it is typed.
+                // C7), its tip saying why; a wrong line is named under the box once the box
+                // is left (not from the first key typed).
                 let checked = self.addresses();
-                self.error = match &checked {
-                    Err(e) if !self.text.trim().is_empty() => Some(e.clone()),
-                    _ => None,
-                };
                 let why = checked.as_ref().err().cloned().unwrap_or_default();
-                let (line, color) = match &self.error {
+                let named = (!field.has_focus() && !self.text.trim().is_empty())
+                    .then_some(&why)
+                    .filter(|w| !w.is_empty());
+                let (line, color) = match named {
                     Some(e) => (e.clone(), winui::ERROR()),
                     None => (
                         // i18n: Add trackers: under the box

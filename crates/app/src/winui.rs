@@ -5882,13 +5882,13 @@ pub fn accent() -> Color32 {
     crate::theme::colors().accent
 }
 
-/// Light drop-down list (CBS_DROPDOWNLIST): the chosen item and a chevron; a click opens the
-/// list under it. Returns the item chosen this frame.
 /// The focus id of [`combo_light`] `id`'s button: a dialog that opens on it gives it the keys.
 pub fn combo_light_focus(ui: &Ui, id: &str) -> egui::Id {
     widget_id(ui, ("combo-light", id)).with("button")
 }
 
+/// Light drop-down list (CBS_DROPDOWNLIST): the chosen item and a chevron; a click opens the
+/// list under it. Returns the item chosen this frame.
 pub fn combo_light(
     ui: &mut Ui,
     rc: Rect,

@@ -233,9 +233,9 @@ pub struct OptionsDialog {
     /// The page the scrolled page pane's offset belongs to (none until the window first
     /// draws): a page chosen, or the window opened again, starts at its top.
     scrolled: Option<usize>,
-    /// The open sub-dialog's first field has had the keys (plan 12b, D1): it takes them once,
-    /// as the dialog opens; cleared as it closes.
-    sub_focused: bool,
+    /// The sub-dialog whose first field has had the keys (plan 12b, D1): it takes them once,
+    /// as the dialog opens, or as another kind takes its place; cleared as it closes.
+    sub_focused: Option<std::mem::Discriminant<Sub>>,
 }
 
 impl OptionsDialog {
@@ -351,7 +351,7 @@ impl OptionsDialog {
             cookie_browser: cookie_browser_at(settings),
             ua_auto: settings.own_user_agent().is_none(),
             scrolled: None,
-            sub_focused: false,
+            sub_focused: None,
         };
         // Its typed fields as read back untouched (a value they clamp differs from `from`).
         d.opened = d.result();
@@ -3145,11 +3145,13 @@ impl OptionsDialog {
 
     fn sub_dialog(&mut self, ctx: &egui::Context) {
         let Some(sub) = self.sub.take() else { return };
-        // The first field takes the keys once, as the dialog opens (plan 12b, D1).
-        let first = !std::mem::replace(&mut self.sub_focused, true);
+        // The first field takes the keys once, as the dialog opens (plan 12b, D1), and again
+        // when another sub-dialog takes its place.
+        let kind = std::mem::discriminant(&sub);
+        let first = self.sub_focused.replace(kind) != Some(kind);
         self.sub_dialog_of(ctx, sub, first);
         if self.sub.is_none() {
-            self.sub_focused = false;
+            self.sub_focused = None;
         }
     }
 

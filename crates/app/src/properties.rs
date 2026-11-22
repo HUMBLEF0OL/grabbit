@@ -460,21 +460,32 @@ impl Properties {
         if item.torrent.is_some() && pressed == Some(1) {
             self.files_requested = true;
         }
-        let ok = pressed == Some(ok_at);
         let address_ok = self.address_ok(item);
-        if pressed == Some(cancel_at) || winui::escape_pressed(ui) {
-            Outcome::Closed
-        } else if ok {
-            if address_ok {
-                Outcome::Done(())
-            } else {
-                self.error =
-                    Some(crate::i18n::t("The address must be an http(s) or ftp(s) address").into());
-                Outcome::Open
-            }
-        } else {
-            Outcome::Open
+        let escape = winui::escape_pressed(ui);
+        if pressed == Some(ok_at) && !address_ok && !escape {
+            self.error =
+                Some(crate::i18n::t("The address must be an http(s) or ftp(s) address").into());
         }
+        answer(pressed, ok_at, cancel_at, escape, address_ok)
+    }
+}
+
+/// What Properties' footer answers: Closed on Cancel or Escape, the edits dropped (plan 12b,
+/// DC8); Done on OK with an address it takes; else it stays open (OK with a bad address says
+/// why).
+fn answer(
+    pressed: Option<usize>,
+    ok_at: usize,
+    cancel_at: usize,
+    escape: bool,
+    address_ok: bool,
+) -> Outcome<()> {
+    if pressed == Some(cancel_at) || escape {
+        Outcome::Closed
+    } else if pressed == Some(ok_at) && address_ok {
+        Outcome::Done(())
+    } else {
+        Outcome::Open
     }
 }
 
@@ -569,5 +580,32 @@ mod tests {
         let mut done = item("https://example.com/file.iso");
         done.status = Status::Complete;
         assert!(!address_editable(&done));
+    }
+
+    /// Plan 12b, DC8: Cancel and Escape close Properties without its edits (Closed hands no
+    /// Changes on); OK takes them only with an address it can use.
+    #[test]
+    fn cancel_discards_and_ok_takes_the_edits() {
+        let (ok, cancel) = (1, 2);
+        assert!(matches!(
+            answer(Some(cancel), ok, cancel, false, true),
+            Outcome::Closed
+        ));
+        assert!(matches!(
+            answer(None, ok, cancel, true, true),
+            Outcome::Closed
+        ));
+        assert!(matches!(
+            answer(Some(ok), ok, cancel, false, true),
+            Outcome::Done(())
+        ));
+        assert!(matches!(
+            answer(Some(ok), ok, cancel, false, false),
+            Outcome::Open
+        ));
+        assert!(matches!(
+            answer(None, ok, cancel, false, true),
+            Outcome::Open
+        ));
     }
 }

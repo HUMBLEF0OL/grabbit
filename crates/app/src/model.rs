@@ -1462,8 +1462,8 @@ pub fn limit_rate(bps: u64) -> String {
     format!("{kb} KB/sec") // not translated: as `rate` writes it
 }
 
-/// The speed limit that holds a running download back (#1191): what its Transfer rate says
-/// beside the speed, so a limiter left on is not forgotten.
+/// The speed limit that holds a running download back (upstream issue 1191): what its
+/// Transfer rate says beside the speed, so a limiter left on is not forgotten.
 ///
 /// It names the limit, not that the download is "limited": the speed measured goes a little
 /// above and below a limit it runs at, and a download slower than its limit (a slow server) is
@@ -1534,8 +1534,8 @@ impl Limit {
     }
 }
 
-/// The status strip's and the tray tip's word that the Speed Limiter is on (#1191), whatever
-/// runs: the limit for one download (`one`, Downloads → Speed Limiter → Turn on) and the limit
+/// The status strip's and the tray tip's word that the Speed Limiter is on (upstream issue
+/// 1191), whatever runs: the limit for one download (`one`, Downloads → Speed Limiter → Turn on) and the limit
 /// for all downloads together (`all`, while it applies), bytes/s. None while both are off.
 pub fn limiter_hint(one: Option<u64>, all: Option<u64>) -> Option<String> {
     let t = crate::i18n::t;
@@ -1986,7 +1986,7 @@ mod helper_connection_tests {
     }
 }
 
-/// Which speed limit a download's Transfer rate names, and how (#1191).
+/// Which speed limit a download's Transfer rate names, and how (upstream issue 1191).
 #[cfg(test)]
 mod limit_tests {
     use super::{Limit, limit_rate, limiter_hint};

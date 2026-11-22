@@ -791,7 +791,7 @@ pub struct App {
     torrent_cap: (Option<u64>, Instant),
     /// The limit for all downloads together while it applies now (bytes/s; off, or "only while
     /// I'm at the computer" and the user away: None), as `apply_global_limit` last worked it out:
-    /// what the Transfer rates and the status strip name (#1191).
+    /// what the Transfer rates and the status strip name (upstream issue 1191).
     global_cap: Option<u64>,
     /// File downloads' smoothed speed, when measured, and the global limiter's byte count
     /// then (`file_speed`).
@@ -1059,7 +1059,8 @@ fn take_menu_text(ctx: &egui::Context, menu_open: bool) {
 /// - Else, while no widget is `focused` (a text box, Find, a filter or the paste field, has the
 ///   keys: Delete deletes its text), Delete removes the selected downloads and Shift+Delete
 ///   with their files (both ask first). They are read, not consumed. On Windows egui reports
-///   Shift+Delete as Cut (Ctrl+X is Cut too, without Shift).
+///   Shift+Delete as Cut (Ctrl+X is Cut too, without Shift). Ctrl+C (egui-winit's Copy event;
+///   Ctrl+Insert too) copies the selected downloads' addresses (Copy address, plan 12b).
 fn shortcut_cmd(i: &mut egui::InputState, focused: bool) -> Option<Cmd> {
     let find = i.consume_key(egui::Modifiers::COMMAND, egui::Key::F);
     // Shift+F3 first: F3's pattern (no modifiers) matches Shift+F3 too.
@@ -1105,13 +1106,14 @@ fn shortcut_cmd(i: &mut egui::InputState, focused: bool) -> Option<Cmd> {
 }
 
 /// Copy address (plan 12b, B4): the addresses of the chosen downloads that aren't torrents
-/// (a torrent's, local or through a debrid account, is Copy magnet link's), one a line; None
-/// when none has one to copy.
+/// (a torrent's, local or through a debrid account, is Copy magnet link's), one a line,
+/// without a password written in them (as the Details pane shows them); None when none has
+/// one to copy.
 fn addresses(chosen: &[&Item]) -> Option<String> {
-    let lines: Vec<&str> = chosen
+    let lines: Vec<String> = chosen
         .iter()
         .filter(|i| has_address(i))
-        .map(|i| i.url.as_str())
+        .map(|i| crate::panes::without_password(&i.url).into())
         .collect();
     (!lines.is_empty()).then(|| lines.join("\r\n"))
 }
@@ -2004,7 +2006,9 @@ impl App {
             (!parts.is_empty()).then(|| parts.join("   "))
         };
         let activity = self.activity();
-        let half = (w - 8.0 - chrome::MODE_BUTTON.x) / 2.0 - 18.0;
+        // Where the strip's text ends, before the light/dark button.
+        let end = w - 8.0 - chrome::MODE_BUTTON.x;
+        let half = end / 2.0 - 18.0;
         let right = match join([reading.clone(), self.limiter_hint(), activity.clone()]) {
             Some(all) if winui::text_width_font(p, font.clone(), &all) <= half => Some(all),
             _ => join([reading, None, activity]),
@@ -2020,7 +2024,6 @@ impl App {
             ),
             chrome::MODE_BUTTON,
         );
-        let end = w - 8.0 - chrome::MODE_BUTTON.x;
         let shown = winui::ellipsize(p, &font, &left, (end - 24.0 - right_w).max(0.0));
         // The mockup's secondary ink.
         let ink = c.text_secondary;
@@ -2161,8 +2164,9 @@ impl App {
         self.items.iter().filter(|i| i.live.is_some()).count()
     }
 
-    /// The speed limit holding a running download back (#1191, `model::Limit::binding`): its
-    /// own as its job has it now (a video's or a gallery's as it was started with,
+    /// The speed limit holding a running download back (upstream issue 1191,
+    /// `model::Limit::binding`): its own as its job has it now (a video's or a gallery's as it
+    /// was started with,
     /// `helper_limits`), against the limit for all downloads together while that applies,
     /// shared by `running` downloads ([`Self::running`]).
     fn limit_of(&self, it: &Item, running: usize) -> Option<model::Limit> {
@@ -2175,8 +2179,8 @@ impl App {
         model::Limit::binding(one, self.global_cap, running)
     }
 
-    /// The Speed Limiter's word for the status strip and the tray's tip (#1191), while either
-    /// of its limits is on (`model::limiter_hint`).
+    /// The Speed Limiter's word for the status strip and the tray's tip (upstream issue 1191),
+    /// while either of its limits is on (`model::limiter_hint`).
     fn limiter_hint(&self) -> Option<String> {
         model::limiter_hint(self.settings.speed_limit(), self.global_cap)
     }
@@ -13352,6 +13356,13 @@ mod states_routes_tests {
         );
         assert_eq!(addresses(&[&t]), None);
         assert!(has_address(&a) && !has_address(&t));
+        // A password written in the address stays out, as in the Details pane; the user stays.
+        let mut login = item(4, "d.zip");
+        login.url = url::Url::parse("ftp://user:secret@example.com/d.zip").unwrap();
+        assert_eq!(
+            addresses(&[&login]).as_deref(),
+            Some("ftp://user@example.com/d.zip")
+        );
     }
 }
 

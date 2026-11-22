@@ -892,10 +892,16 @@ pub fn bytes_label(downloaded: u64, size: Option<u64>) -> Option<String> {
 /// address shows elsewhere; "Use authorization"'s login, `Item::login`, is never shown), as
 /// left-to-right data.
 pub fn address_text(url: &url::Url) -> String {
+    crate::i18n::ltr(without_password(url).as_str())
+}
+
+/// The address without its password (a user name stays): what the Address row shows and Copy
+/// address copies (plan 12b, B4).
+pub fn without_password(url: &url::Url) -> url::Url {
     let mut shown = url.clone();
     // An address without a host (a magnet link) has no password to take out.
     let _ = shown.set_password(None);
-    crate::i18n::ltr(shown.as_str())
+    shown
 }
 
 /// The byte ranges that have come, as the progress window's segment bar reads them: the engine
