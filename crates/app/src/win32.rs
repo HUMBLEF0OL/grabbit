@@ -3179,7 +3179,16 @@ pub fn drag_file_out(
 /// DropEffect"), so Paste in a folder copies it there, and a mail or a chat attaches it. Our
 /// window titled `title` owns it (the clipboard needs an owner for its data to be kept). An
 /// off-screen run leaves the clipboard alone and logs it, as `set_clipboard` does.
-pub fn copy_file_to_clipboard(title: &str, file: &std::path::Path) -> Result<(), String> {
+/// Why [`copy_file_to_clipboard`] couldn't copy (for the log): `in_use`, another program (or
+/// another of Grabbit's own uses) kept the clipboard.
+#[derive(Debug)]
+pub struct CopyFailed {
+    pub in_use: bool,
+    pub why: &'static str,
+}
+
+pub fn copy_file_to_clipboard(title: &str, file: &std::path::Path) -> Result<(), CopyFailed> {
+    let fail = |in_use, why| CopyFailed { in_use, why };
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::System::DataExchange::{
         CloseClipboard, EmptyClipboard, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
@@ -3202,7 +3211,7 @@ pub fn copy_file_to_clipboard(title: &str, file: &std::path::Path) -> Result<(),
         return Ok(());
     }
     if !file.exists() {
-        return Err("the file isn't there".into());
+        return Err(fail(false, "the file isn't there"));
     }
     // DROPFILES (20 bytes: where the list starts, a point, fNC, fWide), then the path in
     // UTF-16, ended by two NULs.
@@ -3214,8 +3223,8 @@ pub fn copy_file_to_clipboard(title: &str, file: &std::path::Path) -> Result<(),
         drop.extend_from_slice(&unit.to_le_bytes());
     }
     let effect = DROPEFFECT_COPY.to_le_bytes();
-    let hwnd = find_own_window(title).ok_or("window not found")?;
-    let _lock = crate::clipboard_lock().ok_or("the clipboard is in use")?;
+    let hwnd = find_own_window(title).ok_or(fail(false, "window not found"))?;
+    let _lock = crate::clipboard_lock().ok_or(fail(true, "the clipboard is in use in Grabbit"))?;
     // A movable block holding `bytes`, given to the clipboard (which then owns it) or freed.
     let global = |bytes: &[u8]| -> Option<*mut c_void> {
         // SAFETY: a fresh block as large as `bytes`, filled within its size while locked.
@@ -3244,11 +3253,11 @@ pub fn copy_file_to_clipboard(title: &str, file: &std::path::Path) -> Result<(),
         while OpenClipboard(hwnd) == 0 {
             tries += 1;
             if tries == 10 {
-                return Err("the clipboard is in use by another program".into());
+                return Err(fail(true, "the clipboard is in use by another program"));
             }
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
-        let mut result = Err("the clipboard didn't take the file".to_owned());
+        let mut result = Err(fail(false, "the clipboard didn't take the file"));
         if EmptyClipboard() != 0 {
             let format = RegisterClipboardFormatW(name.as_ptr());
             for (cf, bytes) in [(CF_HDROP, &drop[..]), (format, &effect[..])] {

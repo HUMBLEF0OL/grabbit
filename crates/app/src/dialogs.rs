@@ -2254,18 +2254,24 @@ impl Complete {
                     let (title, file, wake) = (title.clone(), self.path.clone(), ui.ctx().clone());
                     crate::launch::spawn("copy file", move || {
                         if let Err(e) = crate::win32::copy_file_to_clipboard(&title, &file) {
-                            tracing::warn!("copy file: {e}");
+                            // The reason for the log; the person gets one sentence of ours.
+                            tracing::warn!("copy file: {}", e.why);
                             let name = crate::i18n::isolate(
                                 &file.file_name().unwrap_or_default().to_string_lossy(),
                             );
+                            let template = if e.in_use {
+                                // i18n: Ctrl+C in the Done window failed: another program kept the clipboard; {file} the file's name
+                                crate::i18n::t(
+                                    "{file} could not be copied: another program is using the clipboard.",
+                                )
+                            } else {
+                                // i18n: Ctrl+C in the Done window failed; {file} the file's name
+                                crate::i18n::t("{file} could not be copied to the clipboard.")
+                            };
                             tell(
                                 // i18n: title of the message when Ctrl+C in the Done window could not copy the file
                                 crate::i18n::mark("Copy"),
-                                crate::i18n::fmt(
-                                    // i18n: Ctrl+C in the Done window failed; {file} the file's name, {error} why
-                                    crate::i18n::t("{file} could not be copied: {error}"),
-                                    &[("file", &name), ("error", &e)],
-                                ),
+                                crate::i18n::fmt(template, &[("file", &name)]),
                             );
                             wake.request_repaint();
                         }

@@ -621,14 +621,22 @@ fn facts_of(
         }
     };
     let stats = d.and_then(|d| d.stats.as_ref());
-    let sharing = item.torrent.as_ref().map(|spec| {
-        let done = stats.map_or(item.downloaded, |s| s.done);
-        Sharing {
-            sent: crate::model::size(spec.uploaded),
-            ratio: crate::torrents::share_ratio_text(spec.uploaded, done),
-            peers: stats.map(|s| s.peers_live),
-            secs: spec.seeded_secs,
-        }
+    let sample = (look == Some(Look::Sharing)).then(|| Sharing {
+        sent: crate::model::size(308 * 1024 * 1024),
+        ratio: "0.42".to_owned(), // not translated: a number
+        peers: Some(6),
+        secs: 4320,
+    });
+    let sharing = sample.or_else(|| {
+        item.torrent.as_ref().map(|spec| {
+            let done = stats.map_or(item.downloaded, |s| s.done);
+            Sharing {
+                sent: crate::model::size(spec.uploaded),
+                ratio: crate::torrents::share_ratio_text(spec.uploaded, done),
+                peers: stats.map(|s| s.peers_live),
+                secs: spec.seeded_secs,
+            }
+        })
     });
     Facts {
         name: item.file_name.clone(),
@@ -773,7 +781,7 @@ pub fn state_view(phase: Phase, f: &Facts) -> StateView {
         Phase::Waiting => {
             v.reading = Reading::Dash;
             v.grey = true;
-            v.value = Some(0.0);
+            v.value = Some(f.frac.unwrap_or(0.0));
             if let Some(q) = &f.queue {
                 // i18n: beside a waiting download's dash, before the name of the queue it waits in (in the ink): "in Main queue"
                 let before = t("in {queue}");
@@ -3494,7 +3502,12 @@ mod tests {
             "{:?}",
             v.side
         );
-        assert_eq!(v.value, Some(0.0));
+        assert_eq!(v.value, Some(0.41), "what its grey strip shows");
+        let fresh = Facts {
+            frac: None,
+            ..facts()
+        };
+        assert_eq!(state_view(Phase::Waiting, &fresh).value, Some(0.0));
         // Finishing (board 8): every byte in, 100%, the strip whole.
         let v = state_view(Phase::Finishing, &f);
         assert_eq!(v.reading, Reading::Percent(1.0));
