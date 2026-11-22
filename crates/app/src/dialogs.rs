@@ -1659,11 +1659,10 @@ fn start_probe(
     probe
 }
 
-// ---- Download complete (client 540 × 317, 339 with a notice) -------------------------------
+// ---- Download complete: the Done window (plan 13; its layout in progress_view.rs) -----------
 
 pub struct Complete {
     pub id: u64,
-    pub url: String,
     pub path: PathBuf,
     pub size: u64,
     pub dont_show: bool,
@@ -1775,12 +1774,100 @@ fn opener_press(menu_open: bool, by_pointer: bool, closed_it: bool) -> Option<bo
 }
 
 /// A footer button's job in Download complete.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DoneAct {
     Open,
     Menu,
     Folder,
     Close,
+}
+
+/// The ▾ part of a split button: 28 wide (board 5: 8, the 10-point chevron, 8 and its borders),
+/// its chevron centred.
+const DONE_CARET_W: f32 = 28.0;
+/// How wide a file's name may be in the Open menu before it is cut in the middle: the menu
+/// then stays about 228 wide with the sizes (board 5).
+const DONE_MENU_NAME_W: f32 = 120.0;
+
+/// A part of the Done window's footer, left to right (plan 13d, boards 5, 7, 13, 14): its label
+/// (empty: the ▾, named by `tip`), look and job; `joined`: drawn against the part before it, one
+/// split button; `enter`: Enter presses it; its access letter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DonePart {
+    label: &'static str,
+    kind: ButtonKind,
+    act: DoneAct,
+    joined: bool,
+    enter: bool,
+    mnemonic: Option<usize>,
+    tip: &'static str,
+}
+
+/// The Done window's footer (plan 13a's three cases, 13d's look): with a main file (or one
+/// file), Open | ▾ filled, Open folder, Close; the file gone, Open greyed and Open folder filled;
+/// a folder without a main file, Open folder filled, Open file | ▾ (greyed without `files`),
+/// Close. The filled one takes Enter.
+fn done_footer(main: bool, can_open: bool, files: bool) -> Vec<DonePart> {
+    use ButtonKind::{Accent, Disabled, Normal};
+    let on = |yes: bool, kind| if yes { kind } else { Disabled };
+    let part = |label, kind, act| DonePart {
+        label,
+        kind,
+        act,
+        joined: false,
+        enter: false,
+        mnemonic: None,
+        tip: "",
+    };
+    let caret = |kind, tip| DonePart {
+        joined: true,
+        tip,
+        ..part("", kind, DoneAct::Menu)
+    };
+    let folder = |filled: bool| DonePart {
+        enter: filled,
+        mnemonic: Some(5),
+        // i18n: verb: shows the downloaded file in its folder
+        ..part(
+            crate::i18n::mark("Open folder"),
+            if filled { Accent } else { Normal },
+            DoneAct::Folder,
+        )
+    };
+    // i18n: verb: closes this window
+    let close = part(crate::i18n::mark("Close"), Normal, DoneAct::Close);
+    if main {
+        let open = DonePart {
+            enter: can_open,
+            mnemonic: Some(0),
+            // i18n: verb: opens the downloaded file
+            ..part(
+                crate::i18n::mark("Open"),
+                on(can_open, Accent),
+                DoneAct::Open,
+            )
+        };
+        if !can_open {
+            // The file gone (board 14): Open greyed alone, no arrow beside it.
+            return vec![open, folder(true), close];
+        }
+        // i18n: Download complete: the arrow beside Open: the largest files and Open with...
+        let more = crate::i18n::mark("More ways to open");
+        vec![open, caret(Accent, more), folder(false), close]
+    } else {
+        let file = DonePart {
+            mnemonic: Some(0),
+            // i18n: Download complete of a folder without a main file: a menu of its largest files
+            ..part(
+                crate::i18n::mark("Open file"),
+                on(files, Normal),
+                DoneAct::Menu,
+            )
+        };
+        // i18n: the Done window, the arrow beside Open file: a menu of the folder's largest files
+        let choose = crate::i18n::mark("Choose a file to open");
+        vec![folder(true), file, caret(on(files, Normal), choose), close]
+    }
 }
 
 /// A line of Download complete's Open menu: one of the largest files, Open with..., or the
@@ -1796,7 +1883,6 @@ impl Complete {
     /// `files`: a folder download's (path, size), empty when not known; None: `path` is the file.
     pub fn new(
         id: u64,
-        url: String,
         path: PathBuf,
         size: u64,
         notices: Vec<String>,
@@ -1811,7 +1897,6 @@ impl Complete {
         largest.truncate(6);
         Complete {
             id,
-            url,
             path,
             size,
             dont_show: false,
@@ -1854,19 +1939,20 @@ impl Complete {
     }
 
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
+        use crate::progress::view;
         let id = format!("complete-{}", self.id);
         self.seen |= notice_seen(ctx, &id);
-        // The mockup's layout: the file's card, a label column, the drag strip, the footer. A
-        // notice (a video's subtitles refused) takes a line of its own under the card.
-        const W: f32 = 540.0;
+        // Plan 13d (boards 5, 7, 13, 14): the progress window's layout language. The name row
+        // (dragged out, Ctrl+C), "Done" with the size, the strip whole, the number of files, the
+        // facts (Saved to, Main file), the check box, the footer.
         // A file gone since (Open found nothing, or it was dragged out to a place Grabbit can't
-        // follow): why, before the notices, and Open greyed (plan 13a, board 14).
+        // follow): why, under Saved to before the notices, and Open greyed (plan 13a, board 14).
         let reason = self
             .gone
             .clone()
-            .or_else(|| self.moved_away.then(|| moved_away_text(&self.path)));
+            .or_else(|| self.moved_away.then(|| moved_away_here(&self.path)));
         let can_open = reason.is_none();
-        let line_under = reason
+        let lines: Vec<String> = reason
             .iter()
             .chain(
                 self.picked_gone
@@ -1875,11 +1961,38 @@ impl Complete {
             )
             .chain(&self.notices)
             .cloned()
-            .collect::<Vec<_>>()
-            .join(" ");
-        let dy = if line_under.is_empty() { 0.0 } else { 22.0 };
-        let body = 262.0 + dy;
+            .collect();
         let main = self.main.clone();
+        // A folder's Main file row (a file alone is its own main file: no row).
+        let main_name = main.as_ref().filter(|_| self.folder).map(|m| {
+            m.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned()
+        });
+        let (check_y, footer_y, body) = view::done_layout(main_name.is_some(), lines.len());
+        let name = self
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        // The title Win32 finds the window by (its frame, the drag out, the copy).
+        let title = crate::i18n::fmt(
+            // i18n: the Done window's title: {name} the download's file (or folder) name
+            crate::i18n::t("Done: {name}"),
+            &[("name", &crate::i18n::isolate(&name))],
+        );
+        let files = if self.folder {
+            self.largest.len() + self.more
+        } else {
+            1
+        };
+        // Where it is: a folder download's own folder, a file's folder.
+        let saved = display_path(if self.folder {
+            &self.path
+        } else {
+            self.path.parent().unwrap_or(&self.path)
+        });
         // Open with...: the main file, else the largest.
         let with_target = main
             .clone()
@@ -1888,74 +2001,21 @@ impl Complete {
         let out = notice(
             ctx,
             &id,
-            "Download complete",
-            [W, body + winui::FOOTER_H],
+            &title,
+            [view::DONE_W, body],
             true,
             winui::BG(),
             !self.seen,
             |ui, o| {
-                let p = ui.painter().clone();
-                let (lx, right, h) = (winui::EDGE, W - winui::EDGE, winui::CONTROL_H);
-                let line = crate::i18n::fmt(
-                    crate::i18n::t("Downloaded {size}"),
-                    &[("size", &dialog_size(self.size))],
-                );
-                let name = self
-                    .path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                winui::file_card(
-                    ui,
-                    r(o, lx, 16.0, right - lx, 66.0),
-                    crate::fileicons::Kind::File(&name),
-                    crate::i18n::t("Download complete"),
-                    &line,
-                    None,
-                );
-                // Why the file can't open, and what didn't come with it (a video's subtitles the
-                // site refused), shortened to the window and whole on hover.
-                if !line_under.is_empty() {
-                    winui::fit(
-                        ui,
-                        &p,
-                        o.x + lx,
-                        o.y + 100.0,
-                        &line_under,
-                        winui::ERROR(),
-                        o.x + right,
-                        ("complete-notice", self.id),
-                    );
-                }
-                let fx = winui::form(&p, lx, &["Address", "The file saved as"], false);
-                // i18n: noun: the web address (URL)
-                winui::form_label(&p, o, lx, 96.0 + dy, h, "Address", true);
-                // Read-only and copyable (an editable copy let typing seem to work, then reverted).
-                winui::readonly_field(
-                    ui,
-                    r(o, fx, 96.0 + dy, right - fx, h),
-                    &self.url,
-                    winui::BG(),
-                    true,
-                    "complete-url",
-                );
-                winui::form_label(&p, o, lx, 136.0 + dy, h, "The file saved as", true);
-                winui::readonly_field(
-                    ui,
-                    r(o, fx, 136.0 + dy, right - fx, h),
-                    &display_path(&self.path),
-                    winui::BG(),
-                    true,
-                    "complete-saved",
-                );
-
-                // Enter: Open, the default button (as in the other dialogs); Escape: Close. The
-                // keys of a drag out of the grip are the drag's (Escape cancels it), not this
-                // window's (#561: the drag runs beside the window, which sees them too). The
-                // footer comes first so Tab keeps its order: the buttons, the check box, the grip.
+                let h = view::DONE_BUTTON_H;
+                // Enter: the filled button (Open, or Open folder); Escape: Close. The keys of a
+                // drag out of the name row are the drag's (Escape cancels it), not this window's
+                // (#561: the drag runs beside the window, which sees them too). The footer comes
+                // first so Tab keeps its order: the buttons, the name row, Saved to, the check
+                // box.
                 //
-                // Plan 13a, three cases. A main file (or one file): Open (filled) with its ▾
-                // menu, Open folder, Close. No main file: Open file ▾, Open folder (filled),
+                // Plan 13a, three cases ([`done_footer`]). A main file (or one file): Open | ▾
+                // (filled), Open folder, Close. No main file: Open folder (filled), Open file | ▾,
                 // Close. A file gone: Open greyed, Open folder filled. Alt+O opens (or opens the
                 // menu), Alt+F opens the folder.
                 // While the menu is open, Enter and Escape are its (they'd also press the
@@ -1970,77 +2030,63 @@ impl Complete {
                 }
                 let menu_open = ui.ctx().data(|d| d.get_temp::<Pos2>(menu_key)).is_some();
                 let dragging = crate::win32::dragging_out() || menu_open;
-                let off = |on: bool, kind| if on { kind } else { ButtonKind::Disabled };
-                let mut buttons: Vec<(FooterButton, DoneAct)> = Vec::new();
-                if main.is_some() {
-                    buttons.push((
-                        // i18n: verb: opens the downloaded file
-                        FooterButton::new("Open", off(can_open, ButtonKind::Default))
-                            .primary()
-                            .icon("gx-external")
-                            .mnemonic(0)
-                            .enter(!dragging),
-                        DoneAct::Open,
-                    ));
-                    buttons.push((
-                        // The ▾ beside Open: its menu (screen readers read its tip as its name).
-                        FooterButton::new("", off(can_open, ButtonKind::Default))
-                            .primary()
-                            .icon("misc-down")
-                            // i18n: Download complete: the arrow beside Open: the largest files and Open with...
-                            .tip(true, "More ways to open"),
-                        DoneAct::Menu,
-                    ));
-                } else {
-                    buttons.push((
-                        // i18n: Download complete of a folder without a main file: a menu of its largest files
-                        FooterButton::new(
-                            "Open file",
-                            off(!self.largest.is_empty(), ButtonKind::Normal),
-                        )
-                        .icon("misc-down")
-                        .mnemonic(0)
-                        .leading(),
-                        DoneAct::Menu,
-                    ));
-                }
-                // Filled when Open isn't there to be: no main file, or the file gone. Kept on the
-                // left beside a main file, so the footer doesn't reshuffle when it is gone.
-                let folder_default = main.is_none() || !can_open;
-                let folder_button = if main.is_none() {
-                    FooterButton::new("Open folder", ButtonKind::Default)
-                } else if folder_default {
-                    FooterButton::new("Open folder", ButtonKind::Default)
-                        .not_primary()
-                        .leading()
-                } else {
-                    FooterButton::new("Open folder", ButtonKind::Normal).leading()
-                };
-                buttons.push((
-                    folder_button
-                        .icon("cat-folder-open")
-                        .mnemonic(5)
-                        .enter(folder_default && !dragging),
-                    DoneAct::Folder,
-                ));
-                buttons.push((
-                    // i18n: verb: closes this window
-                    FooterButton::new("Close", ButtonKind::Normal).escape(!dragging),
-                    DoneAct::Close,
-                ));
-                // An open menu's letters are its own (Alt+W: Open with...): the footer's Alt+O and
-                // Alt+F wait until it closes.
-                if menu_open {
-                    for (b, _) in &mut buttons {
-                        b.mnemonic = None;
+                // The Saved to link takes Enter while it has the keys (it shows the folder): the
+                // footer's filled button doesn't run as well.
+                let link_id = egui::Id::unique(("complete-saved", self.id));
+                let link_enter = ui.ctx().memory(|m| m.has_focus(link_id))
+                    && winui::take_key(ui, egui::Key::Enter);
+                let p = ui.painter().clone();
+                let parts = done_footer(main.is_some(), can_open, !self.largest.is_empty());
+                let widths: Vec<(f32, bool)> = parts
+                    .iter()
+                    .map(|b| {
+                        let w = if b.label.is_empty() {
+                            DONE_CARET_W
+                        } else {
+                            winui::footer_button_width(&p, b.label, false)
+                        };
+                        (w, b.joined)
+                    })
+                    .collect();
+                let xs = view::row_from_right(&widths);
+                let buttons: Vec<(FooterButton, egui::Rect)> = parts
+                    .iter()
+                    .zip(xs.iter().zip(&widths))
+                    .map(|(b, (x, (w, _)))| {
+                        let mut button = FooterButton::new(b.label, b.kind)
+                            .enter(b.enter && !dragging)
+                            .escape(b.act == DoneAct::Close && !dragging);
+                        if b.label.is_empty() {
+                            // The ▾: its menu (screen readers read its tip as its name).
+                            button = button.tip(true, b.tip);
+                        }
+                        // An open menu's letters are its own (Alt+W: Open with...): the
+                        // footer's Alt+O and Alt+F wait until it closes.
+                        if let Some(at) = b.mnemonic.filter(|_| !menu_open) {
+                            button = button.mnemonic(at);
+                        }
+                        (button, r(o, *x, footer_y, *w, h))
+                    })
+                    .collect();
+                let (pressed, resps) = winui::buttons_at(ui, &buttons);
+                for (i, part) in parts.iter().enumerate().skip(1) {
+                    if part.joined {
+                        winui::join_buttons(
+                            ui,
+                            (&resps[i - 1], parts[i - 1].kind),
+                            (&resps[i], part.kind),
+                        );
+                    }
+                    if part.label.is_empty() {
+                        winui::button_chevron(ui, &resps[i], part.kind);
+                        resps[i].ctx.accesskit_node_builder(resps[i].id, |n| {
+                            n.set_has_popup(egui::accesskit::HasPopup::Menu);
+                            n.set_expanded(menu_open);
+                        });
                     }
                 }
-                let mut items: Vec<FooterItem> = buttons
-                    .iter()
-                    .map(|(b, _)| FooterItem::Button(*b))
-                    .collect();
-                let pressed = winui::footer(ui, o, W, body, &mut items).map(|i| buttons[i].1);
-                let (mut open, folder, close) = (
+                let pressed = pressed.map(|i| parts[i].act);
+                let (mut open, mut folder, close) = (
                     pressed == Some(DoneAct::Open),
                     pressed == Some(DoneAct::Folder),
                     pressed == Some(DoneAct::Close),
@@ -2048,20 +2094,16 @@ impl Complete {
                 let mut with = false;
                 let mut picked: Option<PathBuf> = None;
 
-                // The Open menu (a window of its own: it runs past this one): under the ▾ at the
-                // right edge, or under Open file at the left.
+                // The Open menu (a window of its own: it runs past this one): under the split
+                // button that opens it (the ▾, or Open file | ▾).
                 let menu_id = format!("complete-menu-{}", self.id);
-                let top = body + 1.0 + ((winui::FOOTER_H - 1.0 - h) / 2.0).floor();
-                let (x, w) = if main.is_some() {
-                    let w = winui::footer_button_width(&p, "", true);
-                    (W - winui::EDGE - w, w)
-                } else {
-                    (
-                        winui::EDGE,
-                        winui::footer_button_width(&p, "Open file", true),
-                    )
-                };
-                let opener = r(o, x, top, w, h);
+                let opener = parts
+                    .iter()
+                    .zip(&resps)
+                    .filter(|(b, _)| b.act == DoneAct::Menu)
+                    .map(|(_, resp)| resp.rect)
+                    .reduce(|a, b| a.union(b))
+                    .unwrap_or(egui::Rect::NOTHING);
                 // Where a press closed a menu (`chrome::popup`): a click on the opener that just
                 // closed its menu leaves it closed; between presses the point is forgotten, as
                 // `winui::opener_click` does.
@@ -2078,7 +2120,7 @@ impl Complete {
                     .flatten();
                 if let Some(by_keys) = opened_by_keys {
                     ui.ctx()
-                        .data_mut(|d| d.insert_temp(menu_key, opener.left_bottom()));
+                        .data_mut(|d| d.insert_temp(menu_key, opener.right_bottom()));
                     if by_keys {
                         // Its first item highlighted; the Space that opened it (egui clicks a
                         // focused button on Space) isn't also the menu's, which would run it.
@@ -2093,11 +2135,14 @@ impl Complete {
                     if self.folder {
                         for (n, (f, _)) in self.largest.iter().enumerate() {
                             let name = f.file_name().unwrap_or_default().to_string_lossy();
-                            // ponytail: cut at 48 characters; 13d's look decides the width.
-                            let mut shown: String = name.chars().take(48).collect();
-                            if name.chars().count() > 48 {
-                                shown.push_str("...");
-                            }
+                            // Cut in the middle (board 5), so its start and its kind show:
+                            // the menu stays about 228 wide.
+                            let shown = winui::ellipsize_middle(
+                                &p,
+                                &winui::tahoma(),
+                                &name,
+                                DONE_MENU_NAME_W,
+                            );
                             entries.push(MenuEntry::Item(
                                 crate::chrome::label(&shown.replace('&', "&&")),
                                 DonePick::File(n),
@@ -2138,25 +2183,24 @@ impl Complete {
                         DonePick::File(n) => sizes.get(*n).copied(),
                         DonePick::With | DonePick::Info => None,
                     };
-                    let done = match crate::chrome::popup(
-                        ui.ctx(),
-                        crate::chrome::MenuKind::Context,
-                        &menu_id,
-                        at,
-                        &entries,
-                        &hint,
-                    ) {
-                        PopupResult::Open | PopupResult::Neighbor(_) => false,
-                        PopupResult::Chosen(DonePick::File(n)) => {
-                            picked = self.largest.get(n).map(|f| f.0.clone());
-                            true
-                        }
-                        PopupResult::Chosen(DonePick::With) => {
-                            with = true;
-                            true
-                        }
-                        PopupResult::Chosen(DonePick::Info) | PopupResult::Dismissed => true,
-                    };
+                    // Its right edge under the split button's, 4 below it (board 5): `at` is
+                    // the opener's bottom-right.
+                    let kind = crate::chrome::MenuKind::Context;
+                    let width = crate::chrome::popup_width(ui.ctx(), kind, &entries, &hint);
+                    let at = egui::pos2(at.x - width, at.y + 4.0);
+                    let done =
+                        match crate::chrome::popup(ui.ctx(), kind, &menu_id, at, &entries, &hint) {
+                            PopupResult::Open | PopupResult::Neighbor(_) => false,
+                            PopupResult::Chosen(DonePick::File(n)) => {
+                                picked = self.largest.get(n).map(|f| f.0.clone());
+                                true
+                            }
+                            PopupResult::Chosen(DonePick::With) => {
+                                with = true;
+                                true
+                            }
+                            PopupResult::Chosen(DonePick::Info) | PopupResult::Dismissed => true,
+                        };
                     if done {
                         ui.ctx().data_mut(|d| d.remove::<Pos2>(menu_key));
                     } else if opened_by_keys.is_some() {
@@ -2175,79 +2219,80 @@ impl Complete {
                     picked = main.clone();
                 }
                 open |= picked.is_some();
+
+                // The name row (board 13): drag it to drop the file into Explorer, a mail or a
+                // chat (IDM 5.05), through OLE. The drop target decides, as for a file dragged in
+                // Explorer: moved on the same drive (or with Shift), copied to another (or with
+                // Ctrl), and the download follows a move (upstream issue 869). With the keys,
+                // Ctrl+C copies the file as Explorer's Copy does.
+                let row = view::name_row(
+                    ui,
+                    o,
+                    &name,
+                    self.folder,
+                    egui::Id::unique(("drag-out", self.id)),
+                );
+                // The file is looked for beside the window, with the drag (#743); where a move
+                // took it comes back to the app (`dragged_out`), however late.
+                if row.drag_started() {
+                    let (id, from, wake) = (self.id, self.path.clone(), ui.ctx().clone());
+                    let followed = move |out| {
+                        DRAGGED_OUT
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .push((id, from, out));
+                        wake.request_repaint();
+                    };
+                    if let Err(e) = crate::win32::drag_file_out(&title, &self.path, followed) {
+                        tracing::warn!("drag out: {e}");
+                    }
+                }
+                // Windows reports Ctrl+C (and Ctrl+Insert) as Copy. Beside the window: the
+                // clipboard may wait for its owner.
+                if row.has_focus()
+                    && ui.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Copy)))
+                {
+                    let (title, file, wake) = (title.clone(), self.path.clone(), ui.ctx().clone());
+                    crate::launch::spawn("copy file", move || {
+                        if let Err(e) = crate::win32::copy_file_to_clipboard(&title, &file) {
+                            // The reason for the log; the person gets one sentence of ours.
+                            tracing::warn!("copy file: {}", e.why);
+                            let name = crate::i18n::isolate(
+                                &file.file_name().unwrap_or_default().to_string_lossy(),
+                            );
+                            let template = if e.in_use {
+                                // i18n: Ctrl+C in the Done window failed: another program kept the clipboard; {file} the file's name
+                                crate::i18n::t(
+                                    "{file} could not be copied: another program is using the clipboard.",
+                                )
+                            } else {
+                                // i18n: Ctrl+C in the Done window failed; {file} the file's name
+                                crate::i18n::t("{file} could not be copied to the clipboard.")
+                            };
+                            tell(
+                                // i18n: title of the message when Ctrl+C in the Done window could not copy the file
+                                crate::i18n::mark("Copy"),
+                                crate::i18n::fmt(template, &[("file", &name)]),
+                            );
+                            wake.request_repaint();
+                        }
+                    });
+                }
+                let look = view::done_view(self.size, files);
+                if let Some(strip) = &look.strip {
+                    view::paint_state(ui, &p, o, &look, strip);
+                }
+                // Saved to shows the download in its folder, as Open folder does.
+                let link = view::done_facts(ui, o, &saved, &lines, main_name.as_deref(), link_id);
+                folder |= link.clicked() || link_enter;
                 winui::checkbox(
                     ui,
-                    o + vec2(lx, 229.0 + dy),
+                    o + vec2(view::DONE_EDGE, check_y + 1.0),
                     &mut self.dont_show,
-                    "Don't show this dialog again",
+                    // i18n: the Done window's check box: don't show it when the next download finishes
+                    "Don't show this window again",
                     true,
                 );
-
-                // The drag strip: drag it to drop the file into Explorer, a mail or a chat (IDM
-                // 5.05), through OLE. A dashed box with Graphite's grip and what it does. The drop
-                // target decides, as for a file dragged in Explorer: moved on the same drive (or
-                // with Shift), copied to another (or with Ctrl), and MDM's download follows a move
-                // (upstream issue 869).
-                {
-                    let handle = r(o, lx, 176.0 + dy, right - lx, 40.0);
-                    // Its line says what it does (no tooltip repeating it).
-                    let grip = ui.interact(
-                        handle,
-                        egui::Id::unique(("drag-out", self.id)),
-                        winui::pointer_drag(),
-                    );
-                    if grip.hovered() {
-                        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
-                    }
-                    // The file is looked for beside the window, with the drag (#743); where a move
-                    // took it comes back to the app (`dragged_out`), however late.
-                    if grip.drag_started() {
-                        let (id, from, wake) = (self.id, self.path.clone(), ui.ctx().clone());
-                        let followed = move |out| {
-                            DRAGGED_OUT
-                                .lock()
-                                .unwrap_or_else(|e| e.into_inner())
-                                .push((id, from, out));
-                            wake.request_repaint();
-                        };
-                        if let Err(e) = crate::win32::drag_file_out(
-                            crate::i18n::t("Download complete"),
-                            &self.path,
-                            followed,
-                        ) {
-                            tracing::warn!("drag out: {e}");
-                        }
-                    }
-                    let edge = handle.shrink(0.5);
-                    let corners = [
-                        edge.left_top(),
-                        edge.right_top(),
-                        edge.right_bottom(),
-                        edge.left_bottom(),
-                        edge.left_top(),
-                    ];
-                    p.extend(egui::Shape::dashed_line(
-                        &corners,
-                        egui::Stroke::new(1.0, crate::theme::colors().menubar_line),
-                        4.0,
-                        3.0,
-                    ));
-                    let ink = crate::theme::colors().text_secondary;
-                    let glyph = egui::Rect::from_min_size(
-                        egui::pos2(handle.left() + 12.0, handle.center().y - 9.0),
-                        vec2(18.0, 18.0),
-                    );
-                    crate::themeicons::paint_graphite_in(ui, &p, "gx-grip", glyph, ink);
-                    winui::text_at(
-                        &p,
-                        winui::tahoma(),
-                        glyph.right() + 10.0,
-                        o.y + winui::baseline_in(176.0 + dy, 40.0),
-                        // i18n: Download complete: the drag strip's line: drag it to drop the downloaded file somewhere
-                        crate::i18n::t("Drag the file into a folder or an app"),
-                        ink,
-                    );
-                }
 
                 // A file that can't open says why (the box stays for Open folder). Looked for and
                 // handed over off the window's thread (upstream issue 743): the box closes once it
@@ -2282,7 +2327,7 @@ impl Complete {
                             match p.try_exists() {
                                 Ok(false) => {
                                     return Opened::Gone(if moved_away {
-                                        moved_away_text(p)
+                                        moved_away_here(p)
                                     } else {
                                         gone_text(p)
                                     });
@@ -3204,14 +3249,24 @@ pub fn dragged_out() -> Vec<(u64, PathBuf, DraggedOut)> {
     std::mem::take(&mut *DRAGGED_OUT.lock().unwrap_or_else(|e| e.into_inner()))
 }
 
-/// Why a download's file isn't where MDM saved it, when it was dragged out of Download complete
+/// Why a download's file isn't where MDM saved it, when it was dragged out of the Done window
 /// to a place MDM couldn't learn (upstream issue 869).
 fn moved_away_text(path: &Path) -> String {
     let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
     crate::i18n::fmt(
         crate::i18n::t(
-            "{file} was moved elsewhere by dragging it out of Download complete, and Grabbit could not learn where. Look for it where you dropped it.",
+            "{file} was moved elsewhere by dragging it out of the Done window, and Grabbit could not learn where. Look for it where you dropped it.",
         ),
+        &[("file", &name)],
+    )
+}
+
+/// [`moved_away_text`] as the Done window itself says it, under Saved to (board 14).
+fn moved_away_here(path: &Path) -> String {
+    let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
+    crate::i18n::fmt(
+        // i18n: the Done window, under Saved to: its file was dragged out of it to a place Grabbit can't see; {file} its name
+        crate::i18n::t("{file} was dragged out of this window. Look for it where you dropped it."),
         &[("file", &name)],
     )
 }
@@ -4152,6 +4207,64 @@ mod tests {
         // Keys open it, highlighted, only while closed: an open menu's Enter and Space choose.
         assert_eq!(opener_press(false, false, false), Some(true));
         assert_eq!(opener_press(true, false, false), None);
+    }
+
+    /// Plan 13d (boards 5, 7, 13, 14): the Done window's footer. One filled button, the one
+    /// Enter presses; Open | ▾ and Open file | ▾ joined; Close takes no Enter.
+    #[test]
+    fn the_done_windows_footer_follows_its_three_cases() {
+        let labels = |row: &[DonePart]| row.iter().map(|b| b.label).collect::<Vec<_>>();
+        let filled = |row: &[DonePart]| {
+            row.iter()
+                .filter(|b| b.kind == ButtonKind::Accent)
+                .map(|b| b.act)
+                .collect::<Vec<_>>()
+        };
+        let entered = |row: &[DonePart]| {
+            row.iter()
+                .filter(|b| b.enter)
+                .map(|b| b.act)
+                .collect::<Vec<_>>()
+        };
+        // A main file (or one file): Open | ▾ filled, Open folder, Close.
+        let row = done_footer(true, true, true);
+        assert_eq!(labels(&row), ["Open", "", "Open folder", "Close"]);
+        assert!(row[1].joined && !row[2].joined && !row[0].joined);
+        assert_eq!(row[1].act, DoneAct::Menu);
+        assert_eq!(filled(&row), [DoneAct::Open, DoneAct::Menu]);
+        assert_eq!(entered(&row), [DoneAct::Open]);
+        // The file gone (board 14): Open greyed, Open folder filled and Enter's.
+        let row = done_footer(true, false, true);
+        assert_eq!(labels(&row), ["Open", "Open folder", "Close"], "no arrow");
+        assert_eq!(row[0].kind, ButtonKind::Disabled);
+        assert_eq!(filled(&row), [DoneAct::Folder]);
+        assert_eq!(entered(&row), [DoneAct::Folder]);
+        // No main file (board 7): Open folder filled, Open file | ▾, Close.
+        let row = done_footer(false, true, true);
+        assert_eq!(labels(&row), ["Open folder", "Open file", "", "Close"]);
+        assert!(row[2].joined && !row[1].joined);
+        assert_eq!(row[1].act, DoneAct::Menu);
+        assert_eq!(filled(&row), [DoneAct::Folder]);
+        assert_eq!(entered(&row), [DoneAct::Folder]);
+        // Its files not known: nothing to choose from.
+        let row = done_footer(false, true, false);
+        assert_eq!(row[1].kind, ButtonKind::Disabled);
+        // Alt+O and Alt+F; the ▾ named for screen readers.
+        for row in [
+            done_footer(true, true, true),
+            done_footer(false, true, true),
+        ] {
+            let letter = |act| {
+                row.iter()
+                    .find(|b| b.act == act && !b.label.is_empty())
+                    .and_then(|b| b.mnemonic.map(|m| b.label.chars().nth(m)))
+            };
+            assert_eq!(letter(DoneAct::Folder), Some(Some('f')));
+            assert!(row.iter().all(|b| !b.label.is_empty() || !b.tip.is_empty()));
+            assert!(row.iter().all(|b| b.act != DoneAct::Close || !b.enter));
+        }
+        assert_eq!(done_footer(true, true, true)[0].mnemonic, Some(0));
+        assert_eq!(done_footer(false, true, true)[1].mnemonic, Some(0));
     }
 
     /// Plan 13a: a folder download's Open opens its main file and Open folder selects it inside

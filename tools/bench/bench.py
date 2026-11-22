@@ -121,7 +121,8 @@ class Tidy(threading.Thread):
         ax, ay, aw, ah = self.area
         while not self.stop:
             for hwnd, _, title in windows_of(self.pids):
-                if title.startswith("Download complete"):
+                # IDM's "Download complete", Grabbit's "Done: <name>" (plan 13d).
+                if title.startswith(("Download complete", "Done: ")):
                     user32.PostMessageW(hwnd, 0x0010, 0, 0)  # WM_CLOSE
                     continue
                 r = wt.RECT()

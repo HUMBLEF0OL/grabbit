@@ -3910,8 +3910,6 @@ pub struct FooterButton<'a> {
     pub label: &'a str,
     pub kind: ButtonKind,
     pub side: Side,
-    /// Graphite's icon before the label (a need, as `gx-dots`).
-    pub icon: Option<&'a str>,
     /// The access letter's char index in the English label ([`button`]).
     pub mnemonic: Option<usize>,
     /// Enter presses it (no control took Enter first). A greyed button ignores it.
@@ -3935,7 +3933,6 @@ impl<'a> FooterButton<'a> {
             label,
             kind,
             side: Side::Trailing,
-            icon: None,
             mnemonic: None,
             enter: false,
             escape: false,
@@ -3987,12 +3984,6 @@ impl<'a> FooterButton<'a> {
     pub fn leading(self) -> Self {
         Self {
             side: Side::Leading,
-            ..self
-        }
-    }
-    pub fn icon(self, need: &'a str) -> Self {
-        Self {
-            icon: Some(need),
             ..self
         }
     }
@@ -4127,11 +4118,7 @@ pub fn footer_items(
     let widths: Vec<(f32, Side, bool)> = items
         .iter()
         .map(|item| match item {
-            FooterItem::Button(b) => (
-                footer_button_width(&p, b.label, b.icon.is_some()),
-                b.side,
-                b.primary,
-            ),
+            FooterItem::Button(b) => (footer_button_width(&p, b.label, false), b.side, b.primary),
             FooterItem::Check(caption, _, _) => (
                 checkbox_caption_end(&p, 0.0, caption).ceil(),
                 Side::Leading,
@@ -4150,44 +4137,7 @@ pub fn footer_items(
         let (w, x) = (widths[i].0, xs[i]);
         match item {
             FooterItem::Button(b) => {
-                // The default is filled like an accent one in a footer.
-                let kind = if b.kind == ButtonKind::Default {
-                    ButtonKind::Accent
-                } else {
-                    b.kind
-                };
-                let label = with_mnemonic(b.label, b.mnemonic);
-                let resp = button_face(
-                    ui,
-                    r(o, x, top, w, CONTROL_H),
-                    &label,
-                    kind,
-                    b.ring,
-                    b.icon,
-                    PressFocus::Take,
-                );
-                // An icon alone (Download complete's ▾): its tip is its name for screen readers.
-                if b.label.is_empty()
-                    && let Some(tip) = b.tip
-                {
-                    let name = if b.tip_translated {
-                        tip
-                    } else {
-                        crate::i18n::t(tip)
-                    };
-                    expose(
-                        &resp,
-                        egui::Role::Button,
-                        name,
-                        b.kind != ButtonKind::Disabled,
-                        None,
-                    );
-                }
-                let resp = match b.tip {
-                    Some(tip) if b.tip_translated => resp.on_hover_text(tip),
-                    Some(tip) => resp.on_hover_text(crate::i18n::t(tip)),
-                    None => resp,
-                };
+                let resp = footer_button(ui, r(o, x, top, w, CONTROL_H), b);
                 if resp.clicked() && clicked.is_none() {
                     clicked = Some(i);
                 }
@@ -4201,6 +4151,131 @@ pub fn footer_items(
         }
     }
     clicked.or_else(|| footer_key(&keys, enter, escape).map(|k| at_key[k]))
+}
+
+/// A [`footer`] button's face at `rc` on screen: its look (the default filled like an accent
+/// one), access letter and hover text, and an icon alone's name for screen readers.
+fn footer_button(ui: &mut Ui, rc: Rect, b: &FooterButton) -> Response {
+    // The default is filled like an accent one in a footer.
+    let kind = if b.kind == ButtonKind::Default {
+        ButtonKind::Accent
+    } else {
+        b.kind
+    };
+    let label = with_mnemonic(b.label, b.mnemonic);
+    let resp = button_face(ui, rc, &label, kind, b.ring, None, PressFocus::Take);
+    // No label (the Done window's ▾, its chevron drawn by `button_chevron`): its tip is its
+    // name for screen readers.
+    if b.label.is_empty()
+        && let Some(tip) = b.tip
+    {
+        let name = if b.tip_translated {
+            tip
+        } else {
+            crate::i18n::t(tip)
+        };
+        expose(
+            &resp,
+            egui::Role::Button,
+            name,
+            b.kind != ButtonKind::Disabled,
+            None,
+        );
+    }
+    match b.tip {
+        Some(tip) if b.tip_translated => resp.on_hover_text(tip),
+        Some(tip) => resp.on_hover_text(crate::i18n::t(tip)),
+        None => resp,
+    }
+}
+
+/// [`footer`] buttons at places of the dialog's own, on no band (the Done window's row, plan
+/// 13d): each pressed as in a footer, by a click, its access letter or a key it is marked for.
+/// The index pressed, and each one's response.
+pub fn buttons_at(ui: &mut Ui, buttons: &[(FooterButton, Rect)]) -> (Option<usize>, Vec<Response>) {
+    // Read before the buttons: a focused button takes Enter for itself (button_face).
+    let (enter, escape) = (enter_pressed(ui), escape_pressed(ui));
+    let mut clicked = None;
+    let mut keys = Vec::new();
+    let mut resps = Vec::new();
+    for (i, (b, rc)) in buttons.iter().enumerate() {
+        let resp = footer_button(ui, *rc, b);
+        if resp.clicked() && clicked.is_none() {
+            clicked = Some(i);
+        }
+        keys.push((b.kind != ButtonKind::Disabled, b.enter, b.escape));
+        resps.push(resp);
+    }
+    (clicked.or_else(|| footer_key(&keys, enter, escape)), resps)
+}
+
+/// A split button's ▾ part (board 5): a chevron 6 across, centred, in the part's own text colour
+/// (a down arrow icon read as "download"). After the part is drawn.
+pub fn button_chevron(ui: &Ui, resp: &Response, kind: ButtonKind) {
+    let kind = if kind == ButtonKind::Default {
+        ButtonKind::Accent
+    } else {
+        kind
+    };
+    let state = State::of(resp, kind != ButtonKind::Disabled);
+    let face = button_colors(kind, state, crate::theme::colors());
+    let c = resp.rect.center();
+    ui.painter().line(
+        vec![
+            c + vec2(-3.0, -1.5),
+            c + vec2(0.0, 1.5),
+            c + vec2(3.0, -1.5),
+        ],
+        Stroke::new(1.5, face.text),
+    );
+}
+
+/// Two buttons side by side (`left` ending where `right` starts) drawn as one control, a split
+/// button (the Done window's Open | ▾, plan 13d): square where they meet, a divider between
+/// them, each part in its own state with its own focus ring. After both are drawn.
+pub fn join_buttons(ui: &Ui, left: (&Response, ButtonKind), right: (&Response, ButtonKind)) {
+    let p = ui.painter();
+    let c = crate::theme::colors();
+    let filled = |kind| {
+        if kind == ButtonKind::Default {
+            ButtonKind::Accent
+        } else {
+            kind
+        }
+    };
+    let whole = left.0.rect.union(right.0.rect);
+    let seam = right.0.rect.left();
+    let radius = control_radius();
+    // Each part's face drawn as the whole control's, over its rounded corners at the seam only.
+    for (k, (resp, kind)) in [left, right].into_iter().enumerate() {
+        let kind = filled(kind);
+        let state = State::of(resp, kind != ButtonKind::Disabled);
+        let face = button_colors(kind, state, c);
+        let (x0, x1) = if k == 0 {
+            (seam - radius - 1.0, seam)
+        } else {
+            (seam, seam + radius + 1.0)
+        };
+        let band = Rect::from_min_max(pos2(x0, whole.top()), pos2(x1, whole.bottom()));
+        let clipped = p.with_clip_rect(band.intersect(p.clip_rect()));
+        paint_button(&clipped, whole, kind, state, &face, Shape::Push);
+        if resp.has_focus() {
+            focus_ring_round(p, resp.rect.shrink(2.0), (radius - 2.0).max(0.0));
+        }
+    }
+    // The divider: the face's border, or on a filled one its text faintly.
+    let kind = filled(left.1);
+    let face = button_colors(kind, State::Normal, c);
+    let divider = if kind == ButtonKind::Accent {
+        face.text.gamma_multiply(0.3)
+    } else {
+        face.border
+    };
+    solid(
+        p,
+        Rect::from_min_max(pos2(seam, whole.top()), pos2(seam + 1.0, whole.bottom())),
+        divider,
+    );
 }
 
 /// A form's label column, plan 07a: the English x its fields start at for labels drawn at

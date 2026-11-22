@@ -18,8 +18,8 @@ Grabbit downloads BitTorrent files from magnet links and `.torrent` files. Torre
 
 1. ![Add torrent with a torrent's files as a folder tree, the folder they go to, and Download now](images/help/torrent-add.webp)
    *Untick what you don't want, then Download now.*
-2. ![A torrent's progress window on its Files tab](images/help/torrent-files.webp)
-   *Its progress window: each file and how much of it is here.*
+2. ![A torrent's progress window: how far it is, with its pieces lit in the strip](images/help/torrent-files.webp)
+   *Its progress window: the pieces it has light up in the strip.*
 3. ![A torrent's progress window with its details: its pieces, peers and limits, and its files](images/help/torrent-pieces.webp)
    *Show details: the torrent's numbers, its files, peers and trackers.*
 

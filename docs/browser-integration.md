@@ -71,8 +71,8 @@ When Grabbit takes a download, the browser's own copy is cancelled and removed f
    *Click a download link in the browser: Download file info opens in Grabbit.*
 2. ![The progress window of a download coming in over several connections](images/help/catch-progress.webp)
    *Download now: the progress window shows it coming in.*
-3. ![Download complete, with Open, Open with..., Open folder and Close](images/help/catch-complete.webp)
-   *Download complete: Open the file, or Open folder.*
+3. ![The Done window, with Open and its arrow, Open folder and Close](images/help/catch-complete.webp)
+   *Done: Open the file, or Open folder.*
 
 Downloads from a private window use that window's cookies, never the normal ones, and aren't kept in Grabbit's list after it closes.
 

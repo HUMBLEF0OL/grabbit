@@ -293,14 +293,15 @@ try {
       if (-not (Test-Path $copy)) { Copy-Item (Resolve-Path $Torrent).Path $copy }
       & $Exe $copy
     } elseif ($what -like "@complete:*") {
-      # A small download, silent: the shot is its Download complete window once it's done.
+      # A small download, silent: the shot is its Done window ("Done: <name>", plan 13d) once
+      # it's done.
       & $Exe /d "$base/$($what.Substring(10))" /p "$work\Downloads" /n
       $t = $null
       for ($i = 0; $i -lt 75 -and -not $t; $i++) {
         Start-Sleep -Milliseconds 200
-        $t = @(Titles $app.Id | Where-Object { $before -notcontains $_ -and $_ -like "Download complete*" })[0]
+        $t = @(Titles $app.Id | Where-Object { $before -notcontains $_ -and $_ -like "Done: *" })[0]
       }
-      if (-not $t) { Write-Warning "${name}: no Download complete window"; continue }
+      if (-not $t) { Write-Warning "${name}: no Done window"; continue }
       Start-Sleep -Milliseconds 1500
       Shot $app.Id $t $name
       @(Titles $app.Id | Where-Object { $before -notcontains $_ }) | ForEach-Object { Close-Ours $app.Id ([WildcardPattern]::Escape($_)) }

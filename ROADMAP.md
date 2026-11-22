@@ -711,6 +711,27 @@ Done since 1.0.1; ships in the next release.
   (it opened the folder's parent); **Open**'s arrow lists the largest files and **Open with...**;
   a file moved or deleted is said in the window, Open greyed and Open folder the default; Alt+O
   and Alt+F; the size line drops its byte count.
+- ✅ A new download window (plan 13, `design/graphite/plans/13-download-window.md`): one large
+  reading and a strip drawn from the real connections or torrent pieces, details that open to the
+  side, one list of what to do when a download finishes, torrent commands in the window, a way to
+  stop sharing one finished torrent, and a Done window whose Open opens the main file of a
+  download saved as a folder. 13a, the Done window's behaviour (see above). 13b, the window's
+  structure: no tabs, a compact window and Details that widen it to the right and keep it on the
+  screen, the limit and one When done list in Details, Stopped / Stop, Show / Hide details, the
+  filled-button rule, Refresh download address... on an expired link, Stop asking first where
+  the server can't resume, the torrent commands in the window, and Stop sharing / Start sharing
+  for one finished torrent in the Torrent menu. 13c, the window's look: the name, one large
+  reading with the time left, a 6-point strip of the file's real segments (or a torrent's
+  pieces, lit by how much is in) and the detail line; in Details, the facts in a key column
+  (Server, Can resume, a video's Format and Downloaded by, a torrent's Peers, Sent, Ratio and an
+  exact Pieces count), a speed graph of the last minute with the limit dashed, and sorted,
+  fixed-height tables under underlined tabs. 13d, the states' and the Done window's look: each
+  state drawn from what the download already says (stopped in grey, an error's missing part
+  hatched with its reason in a line of its own, a size not known, waiting in its queue,
+  finishing, joining, a torrent checking its files or sharing, a web page, a debrid service,
+  can't resume), and the Done window in the same layout ("Done" with the size, the files, Saved
+  to as a link, Open | ▾ as one split button) whose name row drags the file out or copies it with
+  Ctrl+C. The help pictures of these two windows are taken again.
 
 ## Being worked on
 
@@ -960,18 +981,3 @@ kept on the `archive/multiplatform-i18n` branch.
 
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))
-- 📋 A new download window (plan 13, `design/graphite/plans/13-download-window.md`): one large
-  reading and a strip drawn from the real connections or torrent pieces, details that open to the
-  side, one list of what to do when a download finishes, torrent commands in the window, a way to
-  stop sharing one finished torrent, and a Done window whose Open opens the main file of a
-  download saved as a folder. Done (13a, the Done window's behaviour, see above). Done (13b, the window's structure): no tabs, a compact window and
-  Details that widen it to the right and keep it on the screen, the limit and one When done list
-  in Details, Stopped / Stop, Show / Hide details, the filled-button rule, Refresh download
-  address... on an expired link, Stop asking first where the server can't resume, the torrent
-  commands in the window, and Stop sharing / Start sharing for one finished torrent in the
-  Torrent menu. Done (13c, the window's look): the name, one large reading with the time left, a
-  6-point strip of the file's real segments (or a torrent's pieces, lit by how much is in) and the
-  detail line; in Details, the facts in a key column (Server, Can resume, a video's Format and
-  Downloaded by, a torrent's Peers, Sent, Ratio and an exact Pieces count), a speed graph of the
-  last minute with the limit dashed, and sorted, fixed-height tables under underlined tabs.
-  Left: its states' and the Done window's look (13d)

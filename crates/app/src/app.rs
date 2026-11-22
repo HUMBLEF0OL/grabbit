@@ -425,7 +425,6 @@ fn take_place(item: &mut Item, target: PathBuf) {
 fn complete_box(i: &Item) -> Complete {
     Complete::new(
         i.id,
-        i.url.to_string(),
         i.dest.clone(),
         i.size.unwrap_or(i.downloaded),
         i.notices.clone(),
@@ -6981,7 +6980,7 @@ impl App {
                     take_place(item, to.clone());
                     let folder = to.parent().unwrap_or(to).display().to_string();
                     item.note(crate::i18n::fmt(
-                        crate::i18n::t("Dragged out of Download complete and moved to {folder}"),
+                        crate::i18n::t("Dragged out of the Done window and moved to {folder}"),
                         &[("folder", &folder)],
                     ));
                 }
@@ -6991,7 +6990,7 @@ impl App {
                     );
                     item.moved_away = true;
                     item.note(crate::i18n::t(
-                        "Dragged out of Download complete and moved to a place Grabbit could not learn",
+                        "Dragged out of the Done window and moved to a place Grabbit could not learn",
                     ));
                 }
             }
@@ -11317,6 +11316,7 @@ impl App {
                 .iter()
                 .find(|q| q.items.contains(&p.id))
                 .map(|q| q.name.clone());
+            p.main_queue = self.queues.first().map(|q| q.name.clone());
             if p.host.is_none() {
                 p.host = Some(self.torrent_host.clone());
             }

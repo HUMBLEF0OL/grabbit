@@ -1422,6 +1422,17 @@ pub fn popup<C: Clone>(
     popup_with_icons(ctx, kind, id, pos, entries, hint, &|_, _| None)
 }
 
+/// How wide [popup] draws `entries` (points): what a caller needs to open it with its right
+/// edge under an opener's (the Done window's split button, plan 13d).
+pub fn popup_width<C>(
+    ctx: &egui::Context,
+    kind: MenuKind,
+    entries: &[MenuEntry<C>],
+    hint: &dyn Fn(&C) -> Option<&'static str>,
+) -> f32 {
+    menu_size(ctx, MenuLook::of(kind), entries, hint).x
+}
+
 /// [popup], with the icon a Graphite menu draws at each item's start: `icon` gives it for an
 /// item from its command and its label (a submenu's from its label, [menu_icon]).
 #[allow(clippy::too_many_arguments)]

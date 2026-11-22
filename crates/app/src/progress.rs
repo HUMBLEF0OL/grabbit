@@ -6,12 +6,12 @@ use egui::{Color32, Pos2, Ui, ViewportBuilder, ViewportId, vec2};
 use mdm_engine::Snapshot;
 use mdm_engine::download::ConnStatus;
 
-use crate::model::{self, Item, Status};
+use crate::model::{Item, Status};
 
 // The layout, a child module so it reads this window's state as its own (crates/app/src/
 // progress_view.rs).
 #[path = "progress_view.rs"]
-mod view;
+pub(crate) mod view;
 // Laid out in English pixels: `fill` makes each one where it is on screen (a right-to-left
 // interface mirrors it), `text` starts at an English pen.
 use crate::winui::{self, fill_l as fill, r, text};
@@ -345,6 +345,9 @@ pub struct Progress {
     pub keep_sharing: bool,
     /// The queue it waits in, by name (set by the app each frame): "Waiting in Main queue".
     pub queue: Option<String>,
+    /// The main queue's name (set by the app each frame): `/show progress:waiting` names it for a
+    /// download in no queue.
+    pub main_queue: Option<String>,
     /// The torrent session (the app's), for a finished torrent still shared without a `Run`:
     /// its tabs read the session directly.
     pub host: Option<crate::torrents::Host>,
@@ -434,6 +437,7 @@ impl Progress {
             confirm_stop: false,
             keep_sharing: false,
             queue: None,
+            main_queue: None,
             host: None,
             hidden: false,
             tray: false,
@@ -490,7 +494,11 @@ impl Progress {
             None
         };
         let state = view::shown(self, item, snap, d.as_ref());
-        let body = view::size(self.details, view::Kind::of(item), state.line.is_some());
+        let body = view::size(
+            self.details,
+            view::Kind::of(item),
+            view::under_lines(&state.view),
+        );
         // Windows: the title bar is ours (#63), drawn in the client above IDM's layout, so the
         // hide button sits in it, left of Minimize, as in IDM. Elsewhere the system draws it.
         let client = [body[0], body[1] + TITLE_H];
@@ -540,7 +548,7 @@ impl Progress {
                     let action = crate::dialogs::scroll(&mut rest, key, body, |ui, o| {
                         let _surface = winui::Surface::enter(o.x, o.x + body[0]);
                         let drawn = (bar, drawn.segments.as_slice());
-                        self.body(ui, o, item, snap, frac, drawn, &state, d.as_ref())
+                        self.body(ui, o, item, snap, drawn, &state, d.as_ref())
                     });
                     // The system menu's "Hide to the notification area" (Alt+Space).
                     if let Some(h) = hwnd
@@ -645,9 +653,8 @@ impl Progress {
         action
     }
 
-    /// `frac`: the download's fraction as it is (the text); `drawn`: the bar's fill and the
-    /// segments as they glide ([`Glide`]); `state`: as [`view::shown`] has it; `d`: a torrent's
-    /// details.
+    /// `drawn`: the bar's fill and the segments as they glide ([`Glide`]); `state`: as
+    /// [`view::shown`] has it (the figures as they are); `d`: a torrent's details.
     #[allow(clippy::too_many_arguments)]
     fn body(
         &mut self,
@@ -655,13 +662,12 @@ impl Progress {
         o: Pos2,
         item: &Item,
         snap: Option<&Snapshot>,
-        frac: Option<f64>,
         drawn: (f64, &[(u64, f64)]),
         state: &view::Shown,
         d: Option<&crate::torrents::Details>,
     ) -> Action {
         // The layout (progress_view.rs); this window's state and data stay here.
-        view::body(self, ui, o, item, snap, frac, drawn, state, d)
+        view::body(self, ui, o, item, snap, drawn, state, d)
     }
 
     /// The torrent's details as the session has them (its files, peers, trackers, pieces,
@@ -827,17 +833,6 @@ fn status_word(item: &Item, snap: Option<&Snapshot>, samples: Samples) -> String
             )],
         ),
     }
-}
-
-/// The sharing state's line: the rate sent and to how many peers ("410.0 KB/s to 6 peers").
-fn sharing_line(s: &mdm_torrent::Stats) -> String {
-    // i18n: how many peers a torrent sends to now
-    let peers = crate::i18n::tn(s.peers_live as u64, "{n} peer", "{n} peers");
-    crate::i18n::fmt(
-        // i18n: a torrent's General tab, under "Complete, sharing": {rate} = what it sends now (such as 410.0 KB/s); {peers} = to how many peers (such as 6 peers)
-        crate::i18n::t("{rate} to {peers}"),
-        &[("rate", &model::rate(s.up_speed)), ("peers", &peers)],
-    )
 }
 
 /// How much of the pieces under column `c` of `cols` are there (a torrent's strip, plan 13c: the
@@ -1153,30 +1148,6 @@ mod tests {
         let lit: Vec<f32> = (0..8).map(|c| piece_column(&pieces, c, 8)).collect();
         assert_eq!(lit, [1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0]);
         assert_eq!(piece_column(&[], 0, 4), 0.0);
-    }
-
-    /// The sharing state's line says the rate sent and to how many peers, counted.
-    #[test]
-    fn sharing_line_says_the_rate_and_the_peers() {
-        let mut s = mdm_torrent::Stats {
-            phase: mdm_torrent::Phase::Finished,
-            checked: None,
-            done: 100,
-            total: 100,
-            uploaded: 0,
-            fetched: 0,
-            down_speed: 0.0,
-            up_speed: 410.0 * 1024.0,
-            file_done: Vec::new(),
-            peers_live: 6,
-            peers_seen: 38,
-            error: None,
-        };
-        let line = sharing_line(&s);
-        assert!(line.contains("6 peers") && line.contains("410"), "{line}");
-        s.peers_live = 1;
-        let line = sharing_line(&s);
-        assert!(line.contains("1 peer") && !line.contains("peers"), "{line}");
     }
 
     /// `/show progress:<state>` (plan 09a's and 13b's screenshots) are looks only: each a sample
