@@ -166,8 +166,8 @@ palette! {
     selection_inactive: "selection.inactive", "A selected row in a list without the focus" = grey(0x4a), grey(0xd9);
     selection_focus: "selection.focus", "The focused row's dotted outline on a selected row" = rgb(0xff, 0x99, 0x33), rgb(0xff, 0x99, 0x33);
     // ---- separators, tabs ----
-    etch_shadow: "etch.shadow", "An etched separator's shadow line (unused since plan 12 G2: separators are one hairline)" =grey(0x22), grey(0xa0);
-    etch_light: "etch.light", "An etched separator's highlight line (unused since plan 12 G2: separators are one hairline)" =grey(0x50), grey(0xff);
+    etch_shadow: "etch.shadow", "An etched separator's shadow line (unused since plan 12 G2: separators are one hairline)" = grey(0x22), grey(0xa0);
+    etch_light: "etch.light", "An etched separator's highlight line (unused since plan 12 G2: separators are one hairline)" = grey(0x50), grey(0xff);
     tab_page: "tab.page", "A tab page's body" = grey(0x40), grey(0xf9);
     tab: "tab", "An unselected tab, and the page's shadow" = grey(0x33), grey(0xf3);
     tab_hot: "tab.hot", "A tab under the pointer" = grey(0x46), grey(0xfd);
