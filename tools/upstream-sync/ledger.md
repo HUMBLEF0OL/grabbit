@@ -14,6 +14,12 @@ only to fix a mistake; `sync.py doctor` reports a bad or duplicated row.
 - **covered**: the fork already fixed it its own way; the ref says where
 - **deferred**: looked at, not now (it shows again); the note says what it waits for
 
+Fork changes a later pick may conflict with (port those picks by hand, naming the part):
+
+- Plan 13d: `dialogs::Complete` has no `url` field and `Complete::new` no `url` argument (the
+  Done window shows no address); its body and footer are painted by `progress_view.rs`
+  (`done_view`, `name_row`, `done_facts`), the drag strip is the name row.
+
 | upstream | status | date | ref | upstream subject | note |
 |---|---|---|---|---|---|
 | f3c11394f3d1260b589d6675777b5af2331c9ec3 | picked | 2026-11-12 | 998ad574c83b | The data folder is worked out once per run, not on every tick (#565) (#582) | left out 2 file(s) |

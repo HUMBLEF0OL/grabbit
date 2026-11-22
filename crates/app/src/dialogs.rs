@@ -1782,8 +1782,12 @@ enum DoneAct {
     Close,
 }
 
-/// The ▾ part of a split button: 30 wide, its 16-point chevron centred.
-const DONE_CARET_W: f32 = 30.0;
+/// The ▾ part of a split button: 28 wide (board 5: 8, the 10-point chevron, 8 and its borders),
+/// its chevron centred.
+const DONE_CARET_W: f32 = 28.0;
+/// How wide a file's name may be in the Open menu before it is cut in the middle: the menu
+/// then stays about 228 wide with the sizes (board 5).
+const DONE_MENU_NAME_W: f32 = 120.0;
 
 /// A part of the Done window's footer, left to right (plan 13d, boards 5, 7, 13, 14): its label
 /// (empty: the ▾, named by `tip`), look and job; `joined`: drawn against the part before it, one
@@ -1843,14 +1847,13 @@ fn done_footer(main: bool, can_open: bool, files: bool) -> Vec<DonePart> {
                 DoneAct::Open,
             )
         };
+        if !can_open {
+            // The file gone (board 14): Open greyed alone, no arrow beside it.
+            return vec![open, folder(true), close];
+        }
         // i18n: Download complete: the arrow beside Open: the largest files and Open with...
         let more = crate::i18n::mark("More ways to open");
-        vec![
-            open,
-            caret(on(can_open, Accent), more),
-            folder(!can_open),
-            close,
-        ]
+        vec![open, caret(Accent, more), folder(false), close]
     } else {
         let file = DonePart {
             mnemonic: Some(0),
@@ -1947,7 +1950,7 @@ impl Complete {
         let reason = self
             .gone
             .clone()
-            .or_else(|| self.moved_away.then(|| moved_away_text(&self.path)));
+            .or_else(|| self.moved_away.then(|| moved_away_here(&self.path)));
         let can_open = reason.is_none();
         let lines: Vec<String> = reason
             .iter()
@@ -2116,7 +2119,7 @@ impl Complete {
                     .flatten();
                 if let Some(by_keys) = opened_by_keys {
                     ui.ctx()
-                        .data_mut(|d| d.insert_temp(menu_key, opener.left_bottom()));
+                        .data_mut(|d| d.insert_temp(menu_key, opener.right_bottom()));
                     if by_keys {
                         // Its first item highlighted; the Space that opened it (egui clicks a
                         // focused button on Space) isn't also the menu's, which would run it.
@@ -2131,11 +2134,14 @@ impl Complete {
                     if self.folder {
                         for (n, (f, _)) in self.largest.iter().enumerate() {
                             let name = f.file_name().unwrap_or_default().to_string_lossy();
-                            // ponytail: cut at 48 characters; 13d's look decides the width.
-                            let mut shown: String = name.chars().take(48).collect();
-                            if name.chars().count() > 48 {
-                                shown.push_str("...");
-                            }
+                            // Cut in the middle (board 5), so its start and its kind show:
+                            // the menu stays about 228 wide.
+                            let shown = winui::ellipsize_middle(
+                                &p,
+                                &winui::tahoma(),
+                                &name,
+                                DONE_MENU_NAME_W,
+                            );
                             entries.push(MenuEntry::Item(
                                 crate::chrome::label(&shown.replace('&', "&&")),
                                 DonePick::File(n),
@@ -2176,25 +2182,24 @@ impl Complete {
                         DonePick::File(n) => sizes.get(*n).copied(),
                         DonePick::With | DonePick::Info => None,
                     };
-                    let done = match crate::chrome::popup(
-                        ui.ctx(),
-                        crate::chrome::MenuKind::Context,
-                        &menu_id,
-                        at,
-                        &entries,
-                        &hint,
-                    ) {
-                        PopupResult::Open | PopupResult::Neighbor(_) => false,
-                        PopupResult::Chosen(DonePick::File(n)) => {
-                            picked = self.largest.get(n).map(|f| f.0.clone());
-                            true
-                        }
-                        PopupResult::Chosen(DonePick::With) => {
-                            with = true;
-                            true
-                        }
-                        PopupResult::Chosen(DonePick::Info) | PopupResult::Dismissed => true,
-                    };
+                    // Its right edge under the split button's, 4 below it (board 5): `at` is
+                    // the opener's bottom-right.
+                    let kind = crate::chrome::MenuKind::Context;
+                    let width = crate::chrome::popup_width(ui.ctx(), kind, &entries, &hint);
+                    let at = egui::pos2(at.x - width, at.y + 4.0);
+                    let done =
+                        match crate::chrome::popup(ui.ctx(), kind, &menu_id, at, &entries, &hint) {
+                            PopupResult::Open | PopupResult::Neighbor(_) => false,
+                            PopupResult::Chosen(DonePick::File(n)) => {
+                                picked = self.largest.get(n).map(|f| f.0.clone());
+                                true
+                            }
+                            PopupResult::Chosen(DonePick::With) => {
+                                with = true;
+                                true
+                            }
+                            PopupResult::Chosen(DonePick::Info) | PopupResult::Dismissed => true,
+                        };
                     if done {
                         ui.ctx().data_mut(|d| d.remove::<Pos2>(menu_key));
                     } else if opened_by_keys.is_some() {
@@ -2219,7 +2224,13 @@ impl Complete {
                 // Explorer: moved on the same drive (or with Shift), copied to another (or with
                 // Ctrl), and the download follows a move (upstream issue 869). With the keys,
                 // Ctrl+C copies the file as Explorer's Copy does.
-                let row = view::name_row(ui, o, &name, egui::Id::unique(("drag-out", self.id)));
+                let row = view::name_row(
+                    ui,
+                    o,
+                    &name,
+                    self.folder,
+                    egui::Id::unique(("drag-out", self.id)),
+                );
                 // The file is looked for beside the window, with the drag (#743); where a move
                 // took it comes back to the app (`dragged_out`), however late.
                 if row.drag_started() {
@@ -2240,10 +2251,23 @@ impl Complete {
                 if row.has_focus()
                     && ui.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Copy)))
                 {
-                    let (title, file) = (title.clone(), self.path.clone());
+                    let (title, file, wake) = (title.clone(), self.path.clone(), ui.ctx().clone());
                     crate::launch::spawn("copy file", move || {
                         if let Err(e) = crate::win32::copy_file_to_clipboard(&title, &file) {
                             tracing::warn!("copy file: {e}");
+                            let name = crate::i18n::isolate(
+                                &file.file_name().unwrap_or_default().to_string_lossy(),
+                            );
+                            tell(
+                                // i18n: title of the message when Ctrl+C in the Done window could not copy the file
+                                crate::i18n::mark("Copy"),
+                                crate::i18n::fmt(
+                                    // i18n: Ctrl+C in the Done window failed; {file} the file's name, {error} why
+                                    crate::i18n::t("{file} could not be copied: {error}"),
+                                    &[("file", &name), ("error", &e)],
+                                ),
+                            );
+                            wake.request_repaint();
                         }
                     });
                 }
@@ -2296,7 +2320,7 @@ impl Complete {
                             match p.try_exists() {
                                 Ok(false) => {
                                     return Opened::Gone(if moved_away {
-                                        moved_away_text(p)
+                                        moved_away_here(p)
                                     } else {
                                         gone_text(p)
                                     });
@@ -3218,14 +3242,24 @@ pub fn dragged_out() -> Vec<(u64, PathBuf, DraggedOut)> {
     std::mem::take(&mut *DRAGGED_OUT.lock().unwrap_or_else(|e| e.into_inner()))
 }
 
-/// Why a download's file isn't where MDM saved it, when it was dragged out of Download complete
+/// Why a download's file isn't where MDM saved it, when it was dragged out of the Done window
 /// to a place MDM couldn't learn (upstream issue 869).
 fn moved_away_text(path: &Path) -> String {
     let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
     crate::i18n::fmt(
         crate::i18n::t(
-            "{file} was moved elsewhere by dragging it out of Download complete, and Grabbit could not learn where. Look for it where you dropped it.",
+            "{file} was moved elsewhere by dragging it out of the Done window, and Grabbit could not learn where. Look for it where you dropped it.",
         ),
+        &[("file", &name)],
+    )
+}
+
+/// [`moved_away_text`] as the Done window itself says it, under Saved to (board 14).
+fn moved_away_here(path: &Path) -> String {
+    let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
+    crate::i18n::fmt(
+        // i18n: the Done window, under Saved to: its file was dragged out of it to a place Grabbit can't see; {file} its name
+        crate::i18n::t("{file} was dragged out of this window. Look for it where you dropped it."),
         &[("file", &name)],
     )
 }
@@ -4194,8 +4228,8 @@ mod tests {
         assert_eq!(entered(&row), [DoneAct::Open]);
         // The file gone (board 14): Open greyed, Open folder filled and Enter's.
         let row = done_footer(true, false, true);
+        assert_eq!(labels(&row), ["Open", "Open folder", "Close"], "no arrow");
         assert_eq!(row[0].kind, ButtonKind::Disabled);
-        assert_eq!(row[1].kind, ButtonKind::Disabled);
         assert_eq!(filled(&row), [DoneAct::Folder]);
         assert_eq!(entered(&row), [DoneAct::Folder]);
         // No main file (board 7): Open folder filled, Open file | ▾, Close.

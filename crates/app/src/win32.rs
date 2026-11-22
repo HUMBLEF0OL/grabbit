@@ -3238,8 +3238,15 @@ pub fn copy_file_to_clipboard(title: &str, file: &std::path::Path) -> Result<(),
     // SAFETY: the clipboard opened for our window and closed on every path; each block handed
     // to SetClipboardData is the clipboard's once it took it, else freed here.
     unsafe {
-        if OpenClipboard(hwnd) == 0 {
-            return Err("the clipboard couldn't be opened".into());
+        // Another program may hold it a moment (a clipboard manager reading it): asked again a
+        // few times, as arboard does.
+        let mut tries = 0;
+        while OpenClipboard(hwnd) == 0 {
+            tries += 1;
+            if tries == 10 {
+                return Err("the clipboard is in use by another program".into());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
         }
         let mut result = Err("the clipboard didn't take the file".to_owned());
         if EmptyClipboard() != 0 {

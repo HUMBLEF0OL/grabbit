@@ -542,9 +542,19 @@ pub struct Facts {
     pub checked: Option<(u64, u64)>,
     /// At a debrid service: its name, how far it is when it says.
     pub service: Option<(String, Option<f64>)>,
-    /// A torrent's sharing: what it sent (all its runs), its ratio, and the rate it sends now
-    /// to how many peers (`sharing_line`).
-    pub sharing: Option<(String, String, String)>,
+    /// A torrent's sharing.
+    pub sharing: Option<Sharing>,
+}
+
+/// A finished torrent's sharing (board 9): what it sent in all its runs, its ratio, the peers
+/// connected now (when the session says), and how long it has been shared
+/// (`TorrentSpec::seeded_secs`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Sharing {
+    pub sent: String,
+    pub ratio: String,
+    pub peers: Option<usize>,
+    pub secs: u64,
 }
 
 /// The step after the last byte ([`Phase::Finishing`]).
@@ -613,11 +623,12 @@ fn facts_of(
     let stats = d.and_then(|d| d.stats.as_ref());
     let sharing = item.torrent.as_ref().map(|spec| {
         let done = stats.map_or(item.downloaded, |s| s.done);
-        (
-            crate::model::size(spec.uploaded),
-            crate::torrents::share_ratio_text(spec.uploaded, done),
-            stats.map(super::sharing_line).unwrap_or_default(),
-        )
+        Sharing {
+            sent: crate::model::size(spec.uploaded),
+            ratio: crate::torrents::share_ratio_text(spec.uploaded, done),
+            peers: stats.map(|s| s.peers_live),
+            secs: spec.seeded_secs,
+        }
     });
     Facts {
         name: item.file_name.clone(),
@@ -651,6 +662,8 @@ pub enum Side {
     Figure(String, Option<String>),
     /// A few words: "Resumes where it stopped".
     Text(String),
+    /// Words before a name in the ink: "in" and "Main queue".
+    Named(String, String),
 }
 
 /// The row under the strip.
@@ -676,6 +689,9 @@ pub struct StateView {
     pub strip: Option<Strip>,
     pub grey: bool,
     pub under: Under,
+    /// The strip's value for screen readers, 0 to 1 (a percent's, or the state's own: whole
+    /// once done or sharing); None: none to say.
+    pub value: Option<f64>,
 }
 
 /// `s` as a figure and its unit: "6.10 MB/s" is 6.10 and MB/s.
@@ -711,6 +727,7 @@ pub fn state_view(phase: Phase, f: &Facts) -> StateView {
         strip: None,
         grey: false,
         under: Under::Detail(amount.clone(), String::new()),
+        value: None,
     };
     match phase {
         // Size not known (board 8): the amount received, its speed beside it, an empty strip.
@@ -756,24 +773,31 @@ pub fn state_view(phase: Phase, f: &Facts) -> StateView {
         Phase::Waiting => {
             v.reading = Reading::Dash;
             v.grey = true;
+            v.value = Some(0.0);
             if let Some(q) = &f.queue {
-                v.side = Side::Text(fmt(
-                    // i18n: beside a waiting download's dash: {queue} the queue it waits in ("in Main queue")
-                    "in {queue}",
-                    &[("queue", &crate::i18n::isolate(q))],
-                ));
+                // i18n: beside a waiting download's dash, before the name of the queue it waits in (in the ink): "in Main queue"
+                let before = t("in {queue}");
+                let before = before
+                    .split("{queue}")
+                    .next()
+                    .unwrap_or_default()
+                    .trim_end();
+                v.side = Side::Named(before.to_owned(), crate::i18n::isolate(q));
             }
         }
         Phase::Failed { .. } | Phase::WebPage => {
             let web = phase == Phase::WebPage;
-            v.word = (!web).then(|| {
+            v.word = Some(if web {
+                // i18n: a download window's word beside the name: the site sent a web page instead of the file
+                (t("Got a web page"), true)
+            } else {
                 // i18n: a download window's word beside the name: the download failed
                 (t("Stopped by an error"), true)
             });
             v.dim = true;
             if web {
-                // i18n: a download window's reading when the site sent a web page instead of the file
-                v.reading = Reading::Word(t("Got a web page"));
+                // Board 9: no reading, the strip, the reason and the advice.
+                v.reading = Reading::None;
             } else if f.frac.is_none() && f.downloaded == 0 {
                 v.reading = Reading::Dash;
             } else if known {
@@ -801,9 +825,15 @@ pub fn state_view(phase: Phase, f: &Facts) -> StateView {
                     // i18n: beside the percent while a video's picture and sound are joined: "45% joined"
                     (t("joined"), String::new())
                 }
-                // i18n: beside the percent while the finished file is checked against its checksum: "45% checked"
-                After::Check => (t("checked"), String::new()),
+                After::Check => {
+                    // i18n: a download window's word beside the name while the finished file is checked against its checksum
+                    v.word = Some((t("Checking the file"), false));
+                    // i18n: beside the percent while the finished file is checked against its checksum: "45% checked"
+                    (t("checked"), String::new())
+                }
                 After::Write => {
+                    // i18n: a download window's word beside the name once every byte is in: the file is written out and named
+                    v.word = Some((t("Finishing"), false));
                     v.reading = Reading::Percent(1.0);
                     v.strip = Some(Strip::Plain {
                         fraction: 1.0,
@@ -820,12 +850,18 @@ pub fn state_view(phase: Phase, f: &Facts) -> StateView {
                     )
                 }
             };
-            if f.after != After::Write
-                && let Some(x) = f.after_frac
-            {
-                v.reading = Reading::Percent(x);
-            }
+            // A join's or a check's percent only when it is known (a dash before that, not the
+            // download's own 100%).
             v.side = Side::Text(side);
+            if f.after != After::Write {
+                match f.after_frac {
+                    Some(x) => v.reading = Reading::Percent(x),
+                    None => {
+                        v.reading = Reading::Dash;
+                        v.side = Side::None;
+                    }
+                }
+            }
             v.under = Under::Detail(all, naming);
         }
         Phase::Checking => {
@@ -880,19 +916,46 @@ pub fn state_view(phase: Phase, f: &Facts) -> StateView {
             v.word = None;
             // i18n: a finished torrent's reading in its download window: it is shared with other peers
             v.reading = Reading::Word(t("Sharing"));
-            let (sent, ratio, now) = f.sharing.clone().unwrap_or_default();
+            let s = f.sharing.clone().unwrap_or_default();
             // i18n: after a torrent's share ratio in its download window, smaller: "0.42 ratio"
-            v.side = Side::Figure(ratio, Some(t("ratio")));
+            v.side = Side::Figure(s.ratio, Some(t("ratio")));
             v.strip = Some(Strip::Plain {
                 fraction: 1.0,
                 after: false,
             });
-            v.under = Under::Detail(
+            v.value = Some(1.0);
+            let sent = match s.peers {
+                Some(n) => fmt(
+                    // i18n: a sharing torrent's line: {size} what it sent to other peers in all; {peers} how many are connected now, as "6 peers connected"
+                    "Sent {size}, {peers}",
+                    &[
+                        ("size", &s.sent),
+                        // i18n: how many peers a finished torrent is connected to now
+                        (
+                            "peers",
+                            &crate::i18n::tn(n as u64, "{n} peer connected", "{n} peers connected"),
+                        ),
+                    ],
+                ),
                 // i18n: a sharing torrent's line: {size} what it sent to other peers in all
-                fmt("Sent {size}", &[("size", &sent)]),
-                now,
-            );
+                None => fmt("Sent {size}", &[("size", &s.sent)]),
+            };
+            let shared = if s.secs > 0 {
+                fmt(
+                    // i18n: a sharing torrent's line: {time} how long it has been shared, as "shared for 1 hour(s) 12 min"
+                    "shared for {time}",
+                    &[("time", &crate::model::time(s.secs as f64))],
+                )
+            } else {
+                String::new()
+            };
+            v.under = Under::Detail(sent, shared);
         }
+    }
+    if v.value.is_none()
+        && let Reading::Percent(x) = v.reading
+    {
+        v.value = Some(x);
     }
     v
 }
@@ -918,6 +981,7 @@ pub fn done_view(size: u64, files: usize) -> StateView {
         }),
         grey: false,
         under: Under::Detail(count, String::new()),
+        value: Some(1.0),
     }
 }
 
@@ -1031,6 +1095,8 @@ pub enum Reading {
     Word(String),
     /// Nothing to say yet (a download waiting its turn): a dash, not read out.
     Dash,
+    /// No reading at all (a web page instead of the file, board 9): its row left empty.
+    None,
 }
 
 /// The reading's figure for a fraction: whole percents, one decimal below 10 (a torrent's 6.7),
@@ -1187,7 +1253,7 @@ fn paint_strip(p: &egui::Painter, o: Pos2, strip: &Strip, grey: bool) {
             let missing = at(x, STRIP_W);
             winui::solid(p, missing, c.strip_error);
             let clip = p.with_clip_rect(missing.intersect(p.clip_rect()));
-            let ink = Stroke::new(1.4, c.strip_error_hatch);
+            let ink = Stroke::new(2.0, c.strip_error_hatch);
             let mut sx = missing.left() - STRIP_H;
             while sx < missing.right() {
                 clip.line_segment(
@@ -1327,7 +1393,7 @@ fn spoken_reading(reading: &Reading) -> Option<String> {
         Reading::Percent(f) => Some(format!("{}%", reading_figure(*f))), // not translated: a percentage
         Reading::Amount(b) => Some(crate::model::size(*b)),
         Reading::Word(w) => Some(w.clone()),
-        Reading::Dash => None,
+        Reading::Dash | Reading::None => None,
     }
 }
 
@@ -1342,6 +1408,7 @@ pub fn spoken(view: &StateView) -> String {
     match &view.side {
         Side::Figure(v, Some(unit)) => parts.push(format!("{v} {unit}")), // not translated: a figure and its unit
         Side::Figure(v, None) | Side::Text(v) => parts.push(v.clone()),
+        Side::Named(before, name) => parts.push(format!("{before} {name}")), // not translated: words and a name
         Side::None => {}
     }
     if let Under::Detail(start, end) = &view.under {
@@ -1380,6 +1447,21 @@ pub(crate) fn paint_state(ui: &Ui, p: &egui::Painter, o: Pos2, view: &StateView,
             "progress-side",
         )
         .left(),
+        // The name in the ink, the words before it in the secondary ink (board 8).
+        Side::Named(before, name) => {
+            let rc = cell_right(
+                ui,
+                p,
+                face(15.0),
+                x + LEFT_W / 2.0,
+                base,
+                right,
+                name,
+                ink(),
+                "progress-side",
+            );
+            draw_right(p, face(15.0), rc.left() - 4.0, base, before, secondary()).left()
+        }
     };
     let (number, unit_ink) = if view.dim {
         (secondary(), secondary())
@@ -1414,6 +1496,7 @@ pub(crate) fn paint_state(ui: &Ui, p: &egui::Painter, o: Pos2, view: &StateView,
         Reading::Dash => {
             winui::text_font(p, figures(28.0), x, base, "-", muted()); // not translated: a dash
         }
+        Reading::None => {}
     }
 
     paint_strip(p, o, strip, view.grey);
@@ -1422,10 +1505,7 @@ pub(crate) fn paint_state(ui: &Ui, p: &egui::Painter, o: Pos2, view: &StateView,
     winui::expose_value(&resp, egui::Role::ProgressIndicator, &spoken(view), true);
     // i18n: the download window's progress strip, for screen readers
     let name = crate::i18n::t("Progress").to_owned();
-    let value = match view.reading {
-        Reading::Percent(f) => Some(f),
-        _ => None,
-    };
+    let value = view.value;
     resp.ctx.accesskit_node_builder(resp.id, |n| {
         n.set_label(name);
         if let Some(f) = value {
@@ -2867,21 +2947,32 @@ pub fn row_from_right(parts: &[(f32, bool)]) -> Vec<f32> {
     xs
 }
 
+/// The name row's name and description for screen readers: "{name}, file" (a folder download's
+/// "{name}, folder") and what it does.
+pub fn name_row_text(name: &str, folder: bool) -> (String, String) {
+    let template = if folder {
+        // i18n: the Done window's name row for screen readers: {file} the downloaded folder's name
+        crate::i18n::t("{file}, folder")
+    } else {
+        // i18n: the Done window's name row for screen readers: {file} the downloaded file's name
+        crate::i18n::t("{file}, file")
+    };
+    let label = crate::i18n::fmt(template, &[("file", &crate::i18n::isolate(name))]);
+    // i18n: the Done window's name row for screen readers: what it does
+    let described = crate::i18n::t("Drag it into a folder or an app, or press Ctrl+C to copy it");
+    (label, described.to_owned())
+}
+
 /// The Done window's name row (board 13): the name; under the pointer or with the keys, the
 /// grip at its start and "Drag out, or Ctrl+C" at its end. A Tab stop the file is dragged out
 /// of, or copied from with Ctrl+C (the caller does both, dialogs.rs). Its response.
-pub(crate) fn name_row(ui: &mut Ui, o: Pos2, name: &str, id: egui::Id) -> Response {
+pub(crate) fn name_row(ui: &mut Ui, o: Pos2, name: &str, folder: bool, id: egui::Id) -> Response {
     let rc = r(o, 0.0, NAME_BASE - 17.0, EDGE + LEFT_W, 28.0);
     let resp = ui.interact(rc, id, Sense::click_and_drag());
     winui::focus_on_press(&resp);
-    let label = crate::i18n::fmt(
-        // i18n: the Done window's name row for screen readers: {file} the downloaded file's name
-        crate::i18n::t("{file}, file"),
-        &[("file", &crate::i18n::isolate(name))],
-    );
-    winui::expose(&resp, egui::Role::ListItem, &label, true, None);
-    // i18n: the Done window's name row for screen readers: what it does
-    let described = crate::i18n::t("Drag it into a folder or an app, or press Ctrl+C to copy it");
+    let (label, described) = name_row_text(name, folder);
+    // A group: it is no list's item, and a click does nothing of its own.
+    winui::expose(&resp, egui::Role::Group, &label, true, None);
     resp.ctx
         .accesskit_node_builder(resp.id, |n| n.set_description(described));
     let p = ui.painter().clone();
@@ -2938,7 +3029,12 @@ pub(crate) fn done_facts(
     let rc = winui::text_font(&p, f, x, o.y + y + 12.0, &shown, ink());
     let resp = ui.interact(rc.expand2(vec2(0.0, 2.0)), link, Sense::click());
     winui::focus_on_press(&resp);
-    winui::expose(&resp, egui::Role::Link, saved, true, None);
+    let spoken = crate::i18n::fmt(
+        // i18n: the Done window's Saved to link for screen readers: {path} the folder
+        crate::i18n::t("Saved to {path}"),
+        &[("path", &crate::i18n::ltr(saved))],
+    );
+    winui::expose(&resp, egui::Role::Link, &spoken, true, None);
     let under = if resp.hovered() {
         ink()
     } else {
@@ -3374,10 +3470,13 @@ mod tests {
         assert!(!message(&v).0.starts_with("Error:"));
         assert_eq!(v.side, Side::Figure(so_far(f.downloaded, f.size), None));
         assert!(v.dim);
-        // A web page (board 9): said in the reading, the strip hatched, the reason read out.
+        // A web page (board 9): said beside the name in the error colour, no reading, the strip
+        // hatched, the reason read out.
         let v = state_view(Phase::WebPage, &f);
-        assert_eq!(v.word, None);
-        assert_eq!(v.reading, Reading::Word("Got a web page".into()));
+        assert_eq!(v.word, Some(("Got a web page".into(), true)));
+        assert_eq!(v.reading, Reading::None);
+        assert_eq!(v.side, Side::None);
+        assert_eq!(spoken_reading(&v.reading), None);
         assert!(matches!(v.strip, Some(Strip::Broken(_))));
         assert!(message(&v).1);
         assert!(
@@ -3390,10 +3489,12 @@ mod tests {
         assert_eq!(v.reading, Reading::Dash);
         assert!(v.grey);
         assert!(
-            matches!(&v.side, Side::Text(s) if craft_i18n::strip_isolates(s) == "in Main queue"),
+            matches!(&v.side, Side::Named(before, q)
+                if before == "in" && craft_i18n::strip_isolates(q) == "Main queue"),
             "{:?}",
             v.side
         );
+        assert_eq!(v.value, Some(0.0));
         // Finishing (board 8): every byte in, 100%, the strip whole.
         let v = state_view(Phase::Finishing, &f);
         assert_eq!(v.reading, Reading::Percent(1.0));
@@ -3411,6 +3512,33 @@ mod tests {
         assert_eq!(v.reading, Reading::Percent(0.45));
         assert_eq!(v.side, Side::Text("joined".into()));
         assert!(v.strip.is_none(), "the join's own fill on its accent track");
+        // How far not known yet: a dash, not the download's own 100% "joined".
+        for after in [After::Join, After::Check] {
+            let unknown = Facts {
+                after,
+                after_frac: None,
+                frac: Some(1.0),
+                ..facts()
+            };
+            let v = state_view(Phase::Finishing, &unknown);
+            assert_eq!(v.reading, Reading::Dash, "{after:?}");
+            assert_eq!(v.side, Side::None, "{after:?}");
+            assert_eq!(v.value, None, "{after:?}");
+        }
+        // The checksum's check says so, its percent only in the reading.
+        let check = Facts {
+            after: After::Check,
+            after_frac: Some(0.3),
+            ..facts()
+        };
+        assert_eq!(
+            state_view(Phase::Finishing, &check).word,
+            Some(("Checking the file".into(), false))
+        );
+        assert_eq!(
+            state_view(Phase::Finishing, &f).word,
+            Some(("Finishing".into(), false))
+        );
         // A torrent checking its files (board 8): the bytes checked, a plain grey fill.
         let checking = Facts {
             checked: Some((37, 100)),
@@ -3442,20 +3570,38 @@ mod tests {
         assert_eq!(state_view(Phase::Service, &unsaid).reading, Reading::Dash);
         // Sharing (board 9): the word in the reading, the ratio beside it, the strip whole.
         let sharing = Facts {
-            sharing: Some((
-                "308.00 MB".into(),
-                "0.42".into(),
-                "410.00 KB/s to 6 peers".into(),
-            )),
+            sharing: Some(Sharing {
+                sent: "308.00 MB".into(),
+                ratio: "0.42".into(),
+                peers: Some(6),
+                secs: 72 * 60,
+            }),
             ..facts()
         };
         let v = state_view(Phase::Sharing, &sharing);
         assert_eq!(v.word, None);
         assert_eq!(v.reading, Reading::Word("Sharing".into()));
         assert_eq!(v.side, Side::Figure("0.42".into(), Some("ratio".into())));
+        assert_eq!(v.value, Some(1.0), "shared whole");
+        let (sent, shared) = detail(&v);
         assert_eq!(
-            detail(&v),
-            ("Sent 308.00 MB".into(), "410.00 KB/s to 6 peers".into())
+            craft_i18n::strip_isolates(&sent),
+            "Sent 308.00 MB, 6 peers connected"
+        );
+        assert_eq!(shared, "shared for 1 hour(s) 12 min");
+        // The session not asked yet, nor shared a second: what it has only.
+        let early = Facts {
+            sharing: Some(Sharing {
+                sent: "0 B".into(),
+                ratio: "0.00".into(),
+                peers: None,
+                secs: 0,
+            }),
+            ..facts()
+        };
+        assert_eq!(
+            detail(&state_view(Phase::Sharing, &early)),
+            ("Sent 0 B".into(), String::new())
         );
         // Can't resume (board 9): the percent and time left, the question read out.
         let v = state_view(Phase::CantResume, &f);
@@ -3477,6 +3623,13 @@ mod tests {
         assert_eq!(v.reading, Reading::Word("Done".into()));
         assert_eq!(v.side, Side::Figure("734.00 MB".into(), None));
         assert!(matches!(v.strip, Some(Strip::Plain { fraction: 1.0, .. })));
+        assert_eq!(v.value, Some(1.0), "its strip says 100 (board 5)");
+        // The name row for screen readers: a file, or a folder download's folder.
+        let (file, what) = name_row_text("a.iso", false);
+        assert_eq!(craft_i18n::strip_isolates(&file), "a.iso, file");
+        assert!(what.contains("Ctrl+C"));
+        let (folder, _) = name_row_text("Album", true);
+        assert_eq!(craft_i18n::strip_isolates(&folder), "Album, folder");
         let count = |v: &StateView| match &v.under {
             Under::Detail(a, _) => craft_i18n::strip_isolates(a),
             Under::Message { .. } => panic!(),

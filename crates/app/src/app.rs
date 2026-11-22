@@ -6980,7 +6980,7 @@ impl App {
                     take_place(item, to.clone());
                     let folder = to.parent().unwrap_or(to).display().to_string();
                     item.note(crate::i18n::fmt(
-                        crate::i18n::t("Dragged out of Download complete and moved to {folder}"),
+                        crate::i18n::t("Dragged out of the Done window and moved to {folder}"),
                         &[("folder", &folder)],
                     ));
                 }
@@ -6990,7 +6990,7 @@ impl App {
                     );
                     item.moved_away = true;
                     item.note(crate::i18n::t(
-                        "Dragged out of Download complete and moved to a place Grabbit could not learn",
+                        "Dragged out of the Done window and moved to a place Grabbit could not learn",
                     ));
                 }
             }

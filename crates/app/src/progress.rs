@@ -6,7 +6,7 @@ use egui::{Color32, Pos2, Ui, ViewportBuilder, ViewportId, vec2};
 use mdm_engine::Snapshot;
 use mdm_engine::download::ConnStatus;
 
-use crate::model::{self, Item, Status};
+use crate::model::{Item, Status};
 
 // The layout, a child module so it reads this window's state as its own (crates/app/src/
 // progress_view.rs).
@@ -827,17 +827,6 @@ fn status_word(item: &Item, snap: Option<&Snapshot>, samples: Samples) -> String
     }
 }
 
-/// The sharing state's line: the rate sent and to how many peers ("410.0 KB/s to 6 peers").
-fn sharing_line(s: &mdm_torrent::Stats) -> String {
-    // i18n: how many peers a torrent sends to now
-    let peers = crate::i18n::tn(s.peers_live as u64, "{n} peer", "{n} peers");
-    crate::i18n::fmt(
-        // i18n: a torrent's General tab, under "Complete, sharing": {rate} = what it sends now (such as 410.0 KB/s); {peers} = to how many peers (such as 6 peers)
-        crate::i18n::t("{rate} to {peers}"),
-        &[("rate", &model::rate(s.up_speed)), ("peers", &peers)],
-    )
-}
-
 /// How much of the pieces under column `c` of `cols` are there (a torrent's strip, plan 13c: the
 /// column lit that much), 0 to 1.
 fn piece_column(pieces: &[bool], c: usize, cols: usize) -> f32 {
@@ -1151,30 +1140,6 @@ mod tests {
         let lit: Vec<f32> = (0..8).map(|c| piece_column(&pieces, c, 8)).collect();
         assert_eq!(lit, [1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0]);
         assert_eq!(piece_column(&[], 0, 4), 0.0);
-    }
-
-    /// The sharing state's line says the rate sent and to how many peers, counted.
-    #[test]
-    fn sharing_line_says_the_rate_and_the_peers() {
-        let mut s = mdm_torrent::Stats {
-            phase: mdm_torrent::Phase::Finished,
-            checked: None,
-            done: 100,
-            total: 100,
-            uploaded: 0,
-            fetched: 0,
-            down_speed: 0.0,
-            up_speed: 410.0 * 1024.0,
-            file_done: Vec::new(),
-            peers_live: 6,
-            peers_seen: 38,
-            error: None,
-        };
-        let line = sharing_line(&s);
-        assert!(line.contains("6 peers") && line.contains("410"), "{line}");
-        s.peers_live = 1;
-        let line = sharing_line(&s);
-        assert!(line.contains("1 peer") && !line.contains("peers"), "{line}");
     }
 
     /// `/show progress:<state>` (plan 09a's and 13b's screenshots) are looks only: each a sample
