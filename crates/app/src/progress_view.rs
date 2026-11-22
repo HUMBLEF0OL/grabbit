@@ -1860,11 +1860,11 @@ fn limits(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent: b
     if torrent {
         let was_up = pr.up_on;
         // Board 3: Up 16 after the Down box, its box 8 after its caption (the check box's
-        // caption is 18 after the box's start).
+        // caption is 16 after the box's start, winui::checkbox_light_until).
         let up_x = box_x + box_w + 16.0;
         // i18n: a torrent's Limit row: the upload limit's check box (a limit for what it sends to others)
         let up_label = crate::i18n::mark("Up");
-        let up_box_x = up_x + 18.0 + winui::text_width(p, crate::i18n::t(up_label)).ceil() + GAP;
+        let up_box_x = up_x + 16.0 + winui::text_width(p, crate::i18n::t(up_label)).ceil() + GAP;
         winui::checkbox_until(
             ui,
             o + vec2(up_x, y + 7.0),
