@@ -84,10 +84,10 @@ pub struct Settings {
     /// Ask before deleting downloads ("Don't show this dialog again" clears it). Off, Delete only
     /// takes downloads off the list: deleting files from the disk always asks (upstream #1563).
     ///
-    /// Its files box ("Also move the files to the Recycle Bin") is never remembered: it starts unticked, or ticked
-    /// for one Shift+Delete. Lists before #1563 saved the last answer as `delete_files_too`,
-    /// which made every later delete (and, with this off, one never asked) take the finished
-    /// files too; that key is no longer read, and goes with the next save.
+    /// Its files box ("Also move the files to the Recycle Bin") is never remembered: it starts
+    /// unticked, or ticked for one Shift+Delete. Lists before #1563 saved the last answer as
+    /// `delete_files_too`, which made every later delete (and, with this off, one never asked)
+    /// take the finished files too; that key is no longer read, and goes with the next save.
     pub confirm_delete: bool,
     /// The Categories pane's width (plan 05b: 224 by default, the mockup's), dragged with the
     /// splitter. IDM's layout's own (`categories_width`) is read no more since plan 05.5c.

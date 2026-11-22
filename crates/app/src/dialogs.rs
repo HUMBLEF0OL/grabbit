@@ -2409,6 +2409,9 @@ pub struct ConfirmDelete {
     pub files: bool,
     /// How many of the downloads are finished: their files go too when `files` is ticked.
     pub finished: u64,
+    /// How many of the downloads are finished torrents: their files are deleted outright by
+    /// the torrent engine when `files` is ticked (plan 12, DA1t), said in red.
+    pub torrents: u64,
     /// How many running downloads of the selection stay (said under the box; plan 12a).
     pub kept: u64,
     dont_show: bool,
@@ -2467,6 +2470,7 @@ impl ConfirmDelete {
             unfinished,
             files,
             finished,
+            torrents: 0,
             kept: 0,
             dont_show: false,
         }
@@ -2566,6 +2570,29 @@ it from Grabbit's list of downloads?",
                 } else {
                     0.0
                 };
+                // A finished torrent's files are deleted outright by its engine (DA1t): said in
+                // red too, as upstream #1563 says every finished file that goes.
+                if self.files && self.torrents > 0 {
+                    let text = crate::i18n::fmt(
+                        // i18n: under the delete box, while it is ticked: how many of the downloads being deleted are finished torrents, whose files are deleted from the disk (not moved to the Recycle Bin)
+                        &crate::i18n::tn(
+                            self.torrents,
+                            "This also deletes {n} finished torrent's files.",
+                            "This also deletes {n} finished torrents' files.",
+                        ),
+                        &[("n", &crate::i18n::integer(self.torrents))],
+                    );
+                    let lines = winui::paragraph(
+                        &p,
+                        o.x + e + 16.0,
+                        o.y + 102.0 + warn,
+                        &text,
+                        crate::theme::colors().error_strong,
+                        o.x + W - e,
+                        13.0,
+                    );
+                    warn += lines as f32 * 13.0 + 6.0;
+                }
                 // The running downloads Delete leaves alone, said under it (plan 12a, E3).
                 if self.kept > 0 {
                     let lines = winui::paragraph(

@@ -3957,13 +3957,18 @@ impl App {
         if self.settings.confirm_delete || files {
             let one = gone.len() == 1;
             // A finished file goes with a ticked box: the window says how many (upstream #1563).
-            let finished = gone
-                .iter()
-                // A torrent's files are deleted by its engine, not moved (plan 12, DA1t).
-                .filter(|i| {
-                    i.status == Status::Complete && i.gallery.is_none() && i.torrent.is_none()
-                })
-                .count() as u64;
+            // A torrent's files are deleted by its engine, not moved (plan 12, DA1t): counted
+            // apart, each said in red.
+            let done = |torrent: bool| {
+                gone.iter()
+                    .filter(|i| {
+                        i.status == Status::Complete
+                            && i.gallery.is_none()
+                            && i.torrent.is_some() == torrent
+                    })
+                    .count() as u64
+            };
+            let (finished, torrents) = (done(false), done(true));
             let mut ask = dialogs::ConfirmDelete::new(
                 gone.iter().map(|i| i.id).collect(),
                 first.file_name.clone(),
@@ -3971,7 +3976,7 @@ impl App {
                 files,
                 finished,
             );
-            ask.kept = kept;
+            (ask.torrents, ask.kept) = (torrents, kept);
             self.confirm_delete = Some(ask);
         } else {
             let ids: Vec<u64> = gone.into_iter().map(|i| i.id).collect();
@@ -15084,9 +15089,9 @@ mod settings_page_tests {
     }
 }
 
-/// Upstream #1563: the files box ("Also move the files to the Recycle Bin") is never remembered, and nothing leaves the
-/// disk without the question: a list that remembered the box ticked, with the question turned
-/// off, deleted finished files with every Delete All Completed.
+/// Upstream #1563: the files box ("Also move the files to the Recycle Bin") is never
+/// remembered, and nothing leaves the disk without the question: a list that remembered the box
+/// ticked, with the question turned off, deleted finished files with every Delete All Completed.
 #[cfg(test)]
 mod delete_tests {
     use super::*;
@@ -15257,5 +15262,6 @@ mod delete_tests {
         app.run(Cmd::RemoveWithFiles, None, &ctx);
         let ask = asked(&app);
         assert_eq!((ask.ids.clone(), ask.finished), (vec![1], 0));
+        assert_eq!(ask.torrents, 1, "said in red: its engine deletes its files");
     }
 }
