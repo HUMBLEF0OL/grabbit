@@ -1714,7 +1714,7 @@ struct Looked {
 
 /// [`Looked`] for a download at `path` (`files` lists a folder download's files, reading the
 /// disk; None: `path` is the file). On a thread other than the window's.
-fn look(
+fn look_done(
     path: PathBuf,
     moved_away: bool,
     files: impl FnOnce() -> Option<Vec<(PathBuf, u64)>>,
@@ -1977,7 +1977,7 @@ impl Complete {
         let slot = Arc::new(Mutex::new(None));
         let (put, at) = (slot.clone(), path.clone());
         crate::launch::spawn("done window", move || {
-            let looked = look(at, moved_away, files);
+            let looked = look_done(at, moved_away, files);
             *put.lock().unwrap_or_else(|e| e.into_inner()) = Some(looked);
         });
         let mut c = Complete {

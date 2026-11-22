@@ -3314,6 +3314,7 @@ pub(crate) fn done_facts(
             right,
             line,
             winui::ERROR(),
+            2,
             &format!("done-line-{k}"),
         );
         let id = egui::Id::unique(("done-line", k, ui.ctx().viewport_id()));
