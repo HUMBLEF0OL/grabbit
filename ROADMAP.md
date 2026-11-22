@@ -692,7 +692,7 @@ Done since 1.0.1; ships in the next release.
   ellipsis and error wording everywhere, sizes written alike in the list and the progress window
   with one space before the unit, **KB/s**, **MB/s** and **MB** (on the phone page too), and the
   list's dates without seconds, and without the year when it is this year. The help pages and the
-  mockup name things as the app does.
+  mockup name things as the app does, and the help pages' pictures were taken again after 12d.
 - ✅ One visual system (plan 12d): one browse button (a square "…" as tall as a box) everywhere,
   the 1 pixel hairline for every separator in every theme, focus rings only from the keyboard,
   the title bar's search box drawn as every text box, one loading look (a spinner and a line),
