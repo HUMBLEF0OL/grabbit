@@ -1401,7 +1401,9 @@ fn limits(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent: b
             &mut pr.up_on,
             up_label,
             true,
-            Some(o.x + up_box_x - 6.0),
+            // Up to its box: checkbox_until keeps 5 before `until` itself, so the caption has
+            // its width and 3 to spare (6 less here cut it to nothing: its room was 3 short).
+            Some(o.x + up_box_x),
         );
         let up_box = winui::edit_right(ui, r(o, up_box_x, y, 56.0, ROW_H), &mut pr.up_kb, pr.up_on);
         pr.up_kb.retain(|c| c.is_ascii_digit());
