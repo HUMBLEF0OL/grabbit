@@ -2407,7 +2407,8 @@ pub struct ConfirmDelete {
     /// The files box ([`files_label`]: "Also move the file to the Recycle Bin", or "Also delete
     /// the file from disk" for unfinished data).
     pub files: bool,
-    /// How many of the downloads are finished: their files go too when `files` is ticked.
+    /// How many of the downloads are finished, torrents and galleries aside: their files go to
+    /// the Recycle Bin when `files` is ticked.
     pub finished: u64,
     /// How many of the downloads are finished torrents: their files are deleted outright by
     /// the torrent engine when `files` is ticked (plan 12, DA1t), said in red.
