@@ -1235,6 +1235,12 @@ fn runs_on_repeat(key: egui::Key, repeat: bool) -> bool {
     repeat && matches!(key, egui::Key::Enter | egui::Key::Space)
 }
 
+/// Whether a menu last drawn in pass `last` opens anew in pass `pass`: it skipped a pass (it was
+/// closed in between), so what it kept from its last opening is stale.
+fn new_opening(last: u64, pass: u64) -> bool {
+    last + 1 < pass
+}
+
 /// What an open menu keeps (its open submenu, its keyboard highlight), forgotten as it closes:
 /// the next opening starts afresh. The one place for it: [`popup`] calls it as it closes itself,
 /// and [`forget`] for a menu its caller closes (Download complete's on Tab).
@@ -1273,8 +1279,8 @@ fn keyboard<C: Clone>(
     // underneath (a dialog's default button on a held Enter).
     ctx.input_mut(|i| {
         i.events.retain(|e| {
-            !matches!(e, egui::Event::Key { key, pressed: true, repeat, .. }
-                if runs_on_repeat(*key, *repeat))
+            !matches!(e, egui::Event::Key { key, pressed: true, repeat, modifiers, .. }
+                if runs_on_repeat(*key, *repeat) && !modifiers.ctrl && !modifiers.command)
         })
     });
     // Pressed in the menu's own windows: popup_level noted them as those windows drew.
@@ -1438,11 +1444,11 @@ pub fn popup_with_icons<C: Clone>(
     // one's control, which may be stale: a menu closed without popup being asked again (the
     // menu bar's hover to another title, a command that closes the bar).
     let pass = ctx.cumulative_pass_nr();
-    let new_opening = ctx
+    let fresh = ctx
         .data(|d| d.get_temp::<(u64, u64, MenuFocus)>(sub_key.with("shown")))
-        .is_none_or(|(_, last, _)| last + 1 < pass);
+        .is_none_or(|(_, last, _)| new_opening(last, pass));
     ctx.data_mut(|d| {
-        if new_opening {
+        if fresh {
             d.remove::<egui::Id>(opener);
         }
         if let Some(f) = focused_now {
@@ -1518,7 +1524,7 @@ pub fn popup_with_icons<C: Clone>(
             pass,
             MenuFocus::default(),
         ));
-        let (first, mut seen) = if last + 1 < pass {
+        let (first, mut seen) = if new_opening(last, pass) {
             (pass, MenuFocus::default())
         } else {
             (first, seen)
@@ -3074,6 +3080,16 @@ mod tests {
 
     /// Audit 13a r4: Escape closing a menu gives the keys back to its opener (Escape was read
     /// after the menu consumed it, so never); a held Enter or Space runs an item once.
+    /// Audit 13a r6: a menu drawn in consecutive passes keeps its state; one that skipped a pass
+    /// opens anew.
+    #[test]
+    fn a_menu_that_skipped_a_pass_opens_anew() {
+        use super::new_opening;
+        assert!(!new_opening(5, 5));
+        assert!(!new_opening(5, 6));
+        assert!(new_opening(5, 7));
+    }
+
     #[test]
     fn escape_gives_the_keys_back_and_held_keys_run_once() {
         use super::{gives_focus_back, runs_on_repeat};
