@@ -732,6 +732,11 @@ Done since 1.0.1; ships in the next release.
   can't resume), and the Done window in the same layout ("Done" with the size, the files, Saved
   to as a link, Open | ▾ as one split button) whose name row drags the file out or copies it with
   Ctrl+C. The help pictures of these two windows are taken again.
+- ✅ Plan 13's audit fixes: the Done window says a file gone from its first frames (looked for
+  off its thread), lists a gallery's or a debrid folder's files, tells files of one name apart,
+  keeps itself and says why when Open folder's folder is gone, wraps its reason over two lines
+  and drops the empty file-count line of a single file; "Don't show this window again" and
+  Options reach progress windows already open whose When done wasn't changed by hand.
 
 ## Being worked on
 
