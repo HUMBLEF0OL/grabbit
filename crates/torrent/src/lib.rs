@@ -962,6 +962,15 @@ impl Torrents {
             .unwrap_or_default()
     }
 
+    /// Its pieces only, as [`Self::seen_swarm`] reads them (no copy of its peers and trackers).
+    pub fn seen_pieces(&self, hash: &str) -> Vec<bool> {
+        self.watch.want(hash);
+        self.watch
+            .get(hash)
+            .and_then(|s| s.swarm.as_ref().map(|w| w.pieces.clone()))
+            .unwrap_or_default()
+    }
+
     /// Its librqbit handle as last read: for what doesn't wait on its state (its limits, its
     /// piece order, its metadata). librqbit's own list waits while an add opens the files.
     fn handle(&self, hash: &str) -> Option<Handle> {
