@@ -466,7 +466,10 @@ mod tests {
             text.contains("held 1.bin") && text.contains("in use"),
             "{text}"
         );
-        assert!(text.contains("could not be moved to the Recycle Bin"), "{text}");
+        assert!(
+            text.contains("could not be moved to the Recycle Bin"),
+            "{text}"
+        );
         assert!(text.contains("1 more file could not be moved"), "{text}");
         assert!(!failures_text(&told[..1]).unwrap().contains("more"));
         assert_eq!(failures_text(&[]), None);
@@ -542,9 +545,20 @@ mod tests {
         deleter.delete(vec![doomed(&file, true), doomed(&d.join("gone.zip"), true)]);
         assert!(deleter.finish(Duration::from_secs(10)));
         assert!(bin.join("done.zip").exists(), "in the Recycle Bin");
-        assert_eq!(std::fs::read_dir(&bin).unwrap().count(), 1, "only the finished file");
-        assert_eq!(std::fs::read_dir(&d).unwrap().count(), 0, "state and part deleted");
-        assert!(failures.try_recv().is_err(), "a file already gone is no failure");
+        assert_eq!(
+            std::fs::read_dir(&bin).unwrap().count(),
+            1,
+            "only the finished file"
+        );
+        assert_eq!(
+            std::fs::read_dir(&d).unwrap().count(),
+            0,
+            "state and part deleted"
+        );
+        assert!(
+            failures.try_recv().is_err(),
+            "a file already gone is no failure"
+        );
         // The bin refuses: the file stays, and is said.
         std::fs::write(&file, b"x").unwrap();
         let kept = recycle(&file, |_| false).unwrap_err();
