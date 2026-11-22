@@ -1218,12 +1218,51 @@ fn menu_keys(i: &egui::InputState) -> Vec<egui::Key> {
             egui::Event::Key {
                 key,
                 pressed: true,
+                repeat,
                 modifiers,
                 ..
-            } if !modifiers.command && !modifiers.ctrl => Some(*key),
+            } if !modifiers.command && !modifiers.ctrl && !runs_on_repeat(*key, *repeat) => {
+                Some(*key)
+            }
             _ => None,
         })
         .collect()
+}
+
+/// A held key's repeats that a menu ignores: Enter and Space run the highlighted item once (a
+/// Space held past the repeat delay ran the item it opened the menu with); the arrows repeat.
+fn runs_on_repeat(key: egui::Key, repeat: bool) -> bool {
+    repeat && matches!(key, egui::Key::Enter | egui::Key::Space)
+}
+
+/// Whether a menu last drawn in pass `last` opens anew in pass `pass`: it skipped a pass (it was
+/// closed in between), so what it kept from its last opening is stale.
+fn new_opening(last: u64, pass: u64) -> bool {
+    last + 1 < pass
+}
+
+/// What an open menu keeps (its open submenu, its keyboard highlight), forgotten as it closes:
+/// the next opening starts afresh. The one place for it: [`popup`] calls it as it closes itself,
+/// and [`forget`] for a menu its caller closes (Download complete's on Tab).
+fn forget_open(ctx: &egui::Context, sub_key: egui::Id) {
+    ctx.data_mut(|d| {
+        d.remove::<usize>(sub_key);
+        d.remove::<(Option<usize>, Option<usize>)>(sub_key.with("kb"));
+    });
+}
+
+/// Menu `id` was closed by its caller, which stops calling [`popup`] for it: what it kept goes,
+/// as when it closes itself (and the control it would give the keys back to).
+pub fn forget(ctx: &egui::Context, id: &str) {
+    let sub_key = egui::Id::unique(("popup-sub", id));
+    forget_open(ctx, sub_key);
+    ctx.data_mut(|d| d.remove::<egui::Id>(sub_key.with("opener")));
+}
+
+/// Whether a closing menu gives the keys back to the control that had them: it had them, nothing
+/// took them since, and Escape closed it (read before the menu consumed it).
+fn gives_focus_back(had: bool, focused_now: bool, escaped: bool) -> bool {
+    had && !focused_now && escaped
 }
 
 /// Keys for an open menu (pressed in the main window or in the menu's own windows): Up and Down
@@ -1236,6 +1275,14 @@ fn keyboard<C: Clone>(
 ) -> Option<PopupResult<C>> {
     let kb_key = sub_key.with("kb");
     let mut keys = ctx.input(menu_keys);
+    // The repeats menu_keys ignores are still the open menu's: they don't reach the controls
+    // underneath (a dialog's default button on a held Enter).
+    ctx.input_mut(|i| {
+        i.events.retain(|e| {
+            !matches!(e, egui::Event::Key { key, pressed: true, repeat, modifiers, .. }
+                if runs_on_repeat(*key, *repeat) && !modifiers.ctrl && !modifiers.command)
+        })
+    });
     // Pressed in the menu's own windows: popup_level noted them as those windows drew.
     keys.extend(
         ctx.data_mut(|d| d.remove_temp::<Vec<egui::Key>>(sub_key.with("window-keys")))
@@ -1393,27 +1440,42 @@ pub fn popup_with_icons<C: Clone>(
     // (Escape drops the focus). Escape closing the menu gives them back.
     let opener = sub_key.with("opener");
     let focused_now = ctx.memory(|m| m.focused());
-    if let Some(f) = focused_now {
-        ctx.data_mut(|d| d.insert_temp(opener, f));
-    }
+    // A new opening (not shown the pass before: the `shown` record below) forgets the last
+    // one's control, which may be stale: a menu closed without popup being asked again (the
+    // menu bar's hover to another title, a command that closes the bar).
+    let pass = ctx.cumulative_pass_nr();
+    let fresh = ctx
+        .data(|d| d.get_temp::<(u64, u64, MenuFocus)>(sub_key.with("shown")))
+        .is_none_or(|(_, last, _)| new_opening(last, pass));
+    ctx.data_mut(|d| {
+        if fresh {
+            d.remove::<egui::Id>(opener);
+        }
+        if let Some(f) = focused_now {
+            d.insert_temp(opener, f);
+        }
+    });
+    // Read before keyboard() consumes it (asked after, it was never there: the keys were never
+    // given back): in this window, or in the menu's own (noted as they drew).
+    let escaped = ctx.input(|i| i.key_pressed(egui::Key::Escape))
+        || ctx.data(|d| {
+            d.get_temp::<Vec<egui::Key>>(sub_key.with("window-keys"))
+                .is_some_and(|k| k.contains(&egui::Key::Escape))
+        });
     let give_back = |ctx: &egui::Context| {
         let had = ctx.data_mut(|d| {
             let had = d.get_temp::<egui::Id>(opener);
             d.remove::<egui::Id>(opener);
             had
         });
-        if let Some(had) = had
-            && focused_now.is_none()
-            && ctx.input(|i| i.key_pressed(egui::Key::Escape))
+        if gives_focus_back(had.is_some(), focused_now.is_some(), escaped)
+            && let Some(had) = had
         {
             ctx.memory_mut(|m| m.request_focus(had));
         }
     };
     if let Some(r) = keyboard(ctx, entries, sub_key) {
-        ctx.data_mut(|d| {
-            d.remove::<usize>(sub_key);
-            d.remove::<(Option<usize>, Option<usize>)>(sub_key.with("kb"));
-        });
+        forget_open(ctx, sub_key);
         give_back(ctx);
         return r;
     }
@@ -1438,17 +1500,13 @@ pub fn popup_with_icons<C: Clone>(
         icon,
     );
     if let Some(c) = result {
-        ctx.data_mut(|d| {
-            d.remove::<usize>(sub_key);
-            d.remove::<(Option<usize>, Option<usize>)>(sub_key.with("kb"));
-        });
+        forget_open(ctx, sub_key);
         give_back(ctx);
         return PopupResult::Chosen(c);
     }
     // The menus are other windows: any press that reaches the main window, Escape, or the
     // app losing focus closes them (as Win32 menus do) — except on the frame the menu opened,
     // whose press may be the very click that opened it.
-    let pass = ctx.cumulative_pass_nr();
     let shown = sub_key.with("shown");
     // Focus in the menu's own windows is still ours: a click in a menu window may give that
     // window the focus, and must not count as clicking away.
@@ -1466,7 +1524,7 @@ pub fn popup_with_icons<C: Clone>(
             pass,
             MenuFocus::default(),
         ));
-        let (first, mut seen) = if last + 1 < pass {
+        let (first, mut seen) = if new_opening(last, pass) {
             (pass, MenuFocus::default())
         } else {
             (first, seen)
@@ -1489,13 +1547,10 @@ pub fn popup_with_icons<C: Clone>(
         // the data lock (asking the context inside it deadlocks).
         let press = ctx.input(|i| i.pointer.press_origin().filter(|_| i.pointer.any_pressed()));
         let dismissed = dismissed_at_key(ctx);
-        ctx.data_mut(|d| {
-            d.remove::<usize>(sub_key);
-            d.remove::<(Option<usize>, Option<usize>)>(sub_key.with("kb"));
-            if let Some(at) = press {
-                d.insert_temp(dismissed, at);
-            }
-        });
+        forget_open(ctx, sub_key);
+        if let Some(at) = press {
+            ctx.data_mut(|d| d.insert_temp(dismissed, at));
+        }
         give_back(ctx);
         return PopupResult::Dismissed;
     }
@@ -3022,6 +3077,40 @@ mod tests {
         SLOT, heading_into, item_at, menu_viewport, menubar_next,
     };
     use egui::{Rect, pos2};
+
+    /// Audit 13a r4: Escape closing a menu gives the keys back to its opener (Escape was read
+    /// after the menu consumed it, so never); a held Enter or Space runs an item once.
+    /// Audit 13a r6: a menu drawn in consecutive passes keeps its state; one that skipped a pass
+    /// opens anew.
+    #[test]
+    fn a_menu_that_skipped_a_pass_opens_anew() {
+        use super::new_opening;
+        assert!(!new_opening(5, 5));
+        assert!(!new_opening(5, 6));
+        assert!(new_opening(5, 7));
+    }
+
+    #[test]
+    fn escape_gives_the_keys_back_and_held_keys_run_once() {
+        use super::{gives_focus_back, runs_on_repeat};
+        assert!(gives_focus_back(true, false, true));
+        assert!(
+            !gives_focus_back(true, false, false),
+            "a click elsewhere keeps its own"
+        );
+        assert!(
+            !gives_focus_back(true, true, true),
+            "something took the keys since"
+        );
+        assert!(!gives_focus_back(false, false, true));
+        assert!(runs_on_repeat(egui::Key::Space, true));
+        assert!(runs_on_repeat(egui::Key::Enter, true));
+        assert!(!runs_on_repeat(egui::Key::Space, false));
+        assert!(
+            !runs_on_repeat(egui::Key::ArrowDown, true),
+            "the arrows repeat"
+        );
+    }
 
     /// #277: on X11 the menu bar's menus share one window per level, so going from title to
     /// title moves it (a compositor has no new window to fade in); elsewhere, and for every
