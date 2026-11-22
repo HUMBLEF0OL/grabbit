@@ -1228,17 +1228,17 @@ impl OptionsDialog {
             };
         }
         let rc = r(o, fx, 359.0, auto_x - 12.0 - fx, h);
-        let looking =
-            mdm_engine::agent::automatic_browser().is_none() && !mdm_engine::agent::looked_for();
+        // A browser found implies looked for: not looked for yet is still looking.
+        let looking = !mdm_engine::agent::looked_for();
         if self.ua_auto && looking {
             // The one loading look (plan 12 E4), in the box until the browser is known.
-            winui::edit_light(ui, rc, &mut String::new(), false, false);
+            winui::edit_light(ui, rc, &mut String::new(), false, false).on_hover_text(tip.as_str());
             crate::torrentdlg::loading(
                 ui,
                 rc.left() + 5.0,
                 o.y + winui::baseline_in(359.0, h),
                 crate::i18n::t("Looking for your default browser..."),
-                LIGHT_TEXT(),
+                LIGHT_DISABLED(),
                 rc.right() - 5.0,
             );
         } else if self.ua_auto {

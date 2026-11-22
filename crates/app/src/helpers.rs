@@ -659,15 +659,18 @@ impl Programs {
                 (None, None) => crate::i18n::t("Not installed yet").to_owned(),
             };
             if checking {
-                // The one loading look (plan 12 E4).
-                crate::torrentdlg::loading(
+                // The one loading look (plan 12 E4); cut, whole on hover as `fit` shows it.
+                let (rc, cut) = crate::torrentdlg::loading(
                     ui,
                     o.x + 20.0,
                     y + 36.0,
                     &status,
-                    winui::TEXT(),
+                    winui::MUTED(),
                     o.x + PROGRAMS_W - 20.0,
                 );
+                if cut {
+                    winui::full_on_hover(ui, rc, ("helper", k), &status);
+                }
             } else {
                 winui::fit(
                     ui,
@@ -848,15 +851,18 @@ impl Programs {
                 .to_owned()
         };
         if downloading || (self.deno.is_none() && self.finding.is_some()) {
-            // The one loading look (plan 12 E4).
-            crate::torrentdlg::loading(
+            // The one loading look (plan 12 E4); cut, whole on hover as `fit` shows it.
+            let (rc, cut) = crate::torrentdlg::loading(
                 ui,
                 o.x + 20.0,
                 y + 36.0,
                 &status,
-                winui::TEXT(),
+                winui::MUTED(),
                 o.x + PROGRAMS_W - 20.0,
             );
+            if cut {
+                winui::full_on_hover(ui, rc, ("helper", k), &status);
+            }
         } else {
             winui::fit(
                 ui,

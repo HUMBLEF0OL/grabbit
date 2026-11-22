@@ -673,7 +673,7 @@ Done since 1.0.1; ships in the next release.
 - ✅ One visual system (plan 12d): one browse button (a square "…" as tall as a box) everywhere,
   the 1 pixel hairline for every separator in every theme, focus rings only from the keyboard,
   the title bar's search box drawn as every text box, one loading look (a spinner and a line),
-  one card frame, one tick stroke and one paragraph line height (theme sizes `radius.card`,
+  one card frame for cards, one tick stroke and one paragraph line height (theme sizes `radius.card`,
   `tick.width`, `line.paragraph`), Time left wide enough for "59 min 59 sec", and the RSS feeds
   and Link grabber forms on the dialogs' label column and control height.
 

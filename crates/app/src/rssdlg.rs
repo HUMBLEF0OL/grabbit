@@ -16,8 +16,8 @@ const RSS_W: f32 = 760.0;
 const RSS_BODY: f32 = 502.0;
 /// The pages' controls' right edge, inside the tabs' pane.
 const RIGHT: f32 = 740.0;
-/// Where the pages' bottom buttons are.
-const BUTTONS_Y: f32 = 454.0;
+/// Where the pages' bottom buttons are (control-height, 12 above the tabs' pane's bottom).
+const BUTTONS_Y: f32 = RSS_BODY - 8.0 - 12.0 - winui::CONTROL_H;
 /// The rule form's rows (Download rules), control-height, 8 apart, with the check boxes and
 /// the hint between them.
 const NAME_Y: f32 = 70.0;
@@ -258,7 +258,7 @@ impl RssWindow {
         let sel = self.feeds.selected.filter(|i| *i < store.feeds.len());
         let refresh = winui::button(
             ui,
-            r(o, 22.0, BUTTONS_Y, 112.0, 21.0),
+            r(o, 22.0, BUTTONS_Y, 112.0, winui::CONTROL_H),
             // i18n: RSS feeds window: fetch the selected feed again now
             "Refresh",
             if sel.is_some() {
@@ -275,7 +275,7 @@ impl RssWindow {
         }
         let remove = winui::button(
             ui,
-            r(o, 140.0, BUTTONS_Y, 112.0, 21.0),
+            r(o, 140.0, BUTTONS_Y, 112.0, winui::CONTROL_H),
             // i18n: RSS feeds window: unsubscribe from the selected feed
             "Remove",
             if sel.is_some() {
@@ -344,7 +344,7 @@ impl RssWindow {
         let can = picked.is_some_and(|a| !a.torrent.is_empty());
         let download = winui::button(
             ui,
-            r(o, 628.0, BUTTONS_Y, 112.0, 21.0),
+            r(o, 628.0, BUTTONS_Y, 112.0, winui::CONTROL_H),
             // i18n: RSS feeds window: add the selected article's torrent (opens Add torrent)
             "Download...",
             if can {
@@ -410,7 +410,7 @@ impl RssWindow {
             ui,
             &p,
             o.x + 264.0,
-            o.y + BUTTONS_Y + 15.0,
+            o.y + winui::baseline_in(BUTTONS_Y, winui::CONTROL_H),
             &line,
             color,
             o.x + 620.0,
@@ -495,7 +495,7 @@ impl RssWindow {
         };
         let new = winui::button(
             ui,
-            r(o, new_at.0, BUTTONS_Y, new_at.1, 21.0),
+            r(o, new_at.0, BUTTONS_Y, new_at.1, winui::CONTROL_H),
             // i18n: RSS feeds window, Download rules: make a new rule
             "New rule",
             ButtonKind::Normal,
@@ -514,7 +514,7 @@ impl RssWindow {
         let sel = self.rules.selected.filter(|i| *i < store.rules.len());
         let delete = winui::button(
             ui,
-            r(o, delete_at.0, BUTTONS_Y, delete_at.1, 21.0),
+            r(o, delete_at.0, BUTTONS_Y, delete_at.1, winui::CONTROL_H),
             "Delete",
             if sel.is_some() {
                 ButtonKind::Normal
@@ -768,7 +768,7 @@ impl RssWindow {
                 240.0,
                 PREVIEW_Y,
                 RIGHT - 240.0,
-                BUTTONS_Y + 21.0 - PREVIEW_Y,
+                BUTTONS_Y + winui::CONTROL_H - PREVIEW_Y,
             ),
             preview.len(),
             17.0,

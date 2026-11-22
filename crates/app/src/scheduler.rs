@@ -188,8 +188,9 @@ const DX: f32 = RIGHT - 627.0;
 const DAYS_UP: f32 = 16.0;
 /// "Hang up modem" and "Exit … when done" on one row.
 const DONE_UP: f32 = 18.0;
-/// The file to open on its caption's row, not under it.
-const OPEN_UP: f32 = 25.0;
+/// The file to open on its caption's row, not under it (18, not 25, since its box and browse
+/// button are control-height: plan 12 C5).
+const OPEN_UP: f32 = 18.0;
 const UP: f32 = DAYS_UP + DONE_UP + OPEN_UP;
 /// Under the pages' last rows, 4 less room than IDM's, so the window fits Windows 11's 48 px
 /// taskbar too (the rows don't move).
@@ -872,7 +873,8 @@ impl Scheduler {
         // The box after its caption, on its row (under it at IDM's 651), and the one browse
         // control after it (plan 12 C5): both control-height, centred on the check box's row.
         let (h, browse_x) = (winui::CONTROL_H, RIGHT - 12.0 - winui::CONTROL_H);
-        let row_top = 291.0 + dy;
+        // 5 clear under the separator (at 288), 6 above the next row's check boxes (OPEN_UP).
+        let row_top = 294.0 + dy;
         let open_x = after(
             228.0,
             "Open the following file when done:",
@@ -881,7 +883,7 @@ impl Scheduler {
         );
         winui::checkbox_light_until(
             ui,
-            at(228.0, 299.0 + dy),
+            at(228.0, 302.0 + dy),
             &mut f.open_on,
             "Open the following file when done:",
             true,

@@ -1408,7 +1408,7 @@ def theme_keys() -> dict[str, list[tuple[str, str]]]:
     the app reads (themefile.rs)."""
     src = (ROOT / "crates" / "app" / "src" / "palette.rs").read_text("utf-8")
     keys = re.findall(r'(?m)^\s+[a-z_0-9]+: "([a-z0-9.-]+)", "([^"]+)" =', src)
-    sizes = [k for k in keys if k[0] in ("border", "focus-line") or k[0].startswith(("radius", "chevron.width", "font.", "list.row", "list.header", "tooltip."))]
+    sizes = [k for k in keys if k[0] in ("border", "focus-line") or k[0].startswith(("radius", "chevron.width", "font.", "list.row", "list.header", "tooltip.", "tick.", "line."))]
     colors = [k for k in keys if k not in sizes]
     styles: dict[str, list[str]] = {}
     for k, v in re.findall(r'\("([a-z-]+)", "([a-z-]+)"\) =>', src):

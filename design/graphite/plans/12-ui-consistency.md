@@ -385,6 +385,11 @@ Changes made at the helper where possible. Costly items are last and can be spli
 - **G9. One card frame, costly-light.** Radii 8 (`helpers.rs:521-527`), 6 (`options.rs:4014-4019`,
   `adddlg.rs:278-283`) and square (`grabber.rs:697`, `torrentdlg.rs:742`). Add `winui::card` (radius
   from metrics) and use it at these five places.
+  - **As built (12d):** `winui::card` (`radius.card`) frames the three cards (Helpers, the
+    sign-in code, Add's list) and `file_card`. Link grabber's and Add torrent's lists stay
+    square: they are `winui::row_list`s, which paint their own square frame and row fills over
+    the box; rounding them means rounding every row list in `winui.rs` (high churn), and the
+    rows' fills would still poke out at the corners.
 - **G7. Paragraph line height: only where the user sees it.** The same 11 pt text uses line heights
   of 13, 14, 15, 16 and 18. `winui.rs:797` takes a raw `line_h`; examples: `dialogs.rs:3279`,
   `helpers.rs:327`, `crashui.rs:432`, `extension.rs:390`. Add one metric (13), and use it in the
