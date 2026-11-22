@@ -2470,17 +2470,17 @@ fn number_col_w(widest: f32, title: f32) -> f32 {
 /// the shown rows only if a torrent's hundreds of peers ever cost a frame.
 fn fit(p: &egui::Painter, title: &str, rows: &[Vec<Cell>], k: usize) -> f32 {
     let title = winui::text_width_font(p, face(12.0), crate::i18n::t(title));
-    rows.iter()
+    let widest = rows
+        .iter()
         .filter_map(|row| row.get(k))
         .map(|(s, _, nums)| {
             let f = if *nums { figures(12.0) } else { face(12.0) };
             winui::text_width_font(p, f, s)
         })
-        .fold(title, f32::max)
-        // ponytail: in steps of 8 points, so a column doesn't shift a digit's width as its
-        // values grow ("9.99 MB" to "10.00 MB").
-        .div_euclid(8.0)
-        .mul_add(8.0, 8.0)
+        .fold(title, f32::max);
+    // ponytail: up to a step of 8 points, so a column doesn't shift a digit's width as its
+    // values grow ("9.99 MB" to "10.00 MB").
+    (widest / 8.0).ceil() * 8.0
 }
 
 /// Where a connection sorts: receiving first, then retrying (or failed), connecting, done.
