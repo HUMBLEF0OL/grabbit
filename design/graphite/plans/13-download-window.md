@@ -218,7 +218,9 @@ two windows are retaken once, after 13d (plan 12's retake skips them).
 
 ## Definition of done
 
-- [ ] 13a-13d merged into `dev`, each audited until APPROVED
-- [ ] Every row of "Done in plan 13" above is done, and plan 12's matching items say so
-- [ ] Every board on the canvas matches the app at 100%, light and dark
-- [ ] ROADMAP and CHANGELOG lines per part; docs and help pictures updated for the changed names
+- [x] 13a-13d merged into `dev`, each audited until APPROVED (PRs 127-130)
+- [x] Every row of "Done in plan 13" above is done, and plan 12's matching items say so
+- [x] Every board on the canvas matches the app at 100%, light and dark (screenshots in PRs 127-130;
+  the known differences are in each part's PR: "1 hour(s) 12 min" in the app's own time format,
+  Segoe UI Regular for the reading, Details 20 points taller to keep one height in every state)
+- [x] ROADMAP and CHANGELOG lines per part; docs and help pictures updated for the changed names

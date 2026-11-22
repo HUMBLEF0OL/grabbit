@@ -731,7 +731,7 @@ Done since 1.0.1; ships in the next release.
   finishing, joining, a torrent checking its files or sharing, a web page, a debrid service,
   can't resume), and the Done window in the same layout ("Done" with the size, the files, Saved
   to as a link, Open | ▾ as one split button) whose name row drags the file out or copies it with
-  Ctrl+C. The help pictures of these two windows are taken again next.
+  Ctrl+C. The help pictures of these two windows are taken again.
 
 ## Being worked on
 
