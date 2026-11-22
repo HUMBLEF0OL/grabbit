@@ -2058,7 +2058,7 @@ impl Complete {
                             .escape(b.act == DoneAct::Close && !dragging);
                         if b.label.is_empty() {
                             // The ▾: its menu (screen readers read its tip as its name).
-                            button = button.icon("misc-down").tip(true, b.tip);
+                            button = button.tip(true, b.tip);
                         }
                         // An open menu's letters are its own (Alt+W: Open with...): the
                         // footer's Alt+O and Alt+F wait until it closes.
@@ -2078,6 +2078,7 @@ impl Complete {
                         );
                     }
                     if part.label.is_empty() {
+                        winui::button_chevron(ui, &resps[i], part.kind);
                         resps[i].ctx.accesskit_node_builder(resps[i].id, |n| {
                             n.set_has_popup(egui::accesskit::HasPopup::Menu);
                             n.set_expanded(menu_open);

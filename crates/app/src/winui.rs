@@ -3990,12 +3990,6 @@ impl<'a> FooterButton<'a> {
             ..self
         }
     }
-    pub fn icon(self, need: &'a str) -> Self {
-        Self {
-            icon: Some(need),
-            ..self
-        }
-    }
     pub fn mnemonic(self, at: usize) -> Self {
         Self {
             mnemonic: Some(at),
@@ -4177,7 +4171,8 @@ fn footer_button(ui: &mut Ui, rc: Rect, b: &FooterButton) -> Response {
     };
     let label = with_mnemonic(b.label, b.mnemonic);
     let resp = button_face(ui, rc, &label, kind, b.ring, b.icon, PressFocus::Take);
-    // An icon alone (the Done window's ▾): its tip is its name for screen readers.
+    // No label (the Done window's ▾, its chevron drawn by `button_chevron`): its tip is its
+    // name for screen readers.
     if b.label.is_empty()
         && let Some(tip) = b.tip
     {
@@ -4219,6 +4214,27 @@ pub fn buttons_at(ui: &mut Ui, buttons: &[(FooterButton, Rect)]) -> (Option<usiz
         resps.push(resp);
     }
     (clicked.or_else(|| footer_key(&keys, enter, escape)), resps)
+}
+
+/// A split button's ▾ part (board 5): a chevron 6 across, centred, in the part's own text colour
+/// (a down arrow icon read as "download"). After the part is drawn.
+pub fn button_chevron(ui: &Ui, resp: &Response, kind: ButtonKind) {
+    let kind = if kind == ButtonKind::Default {
+        ButtonKind::Accent
+    } else {
+        kind
+    };
+    let state = State::of(resp, kind != ButtonKind::Disabled);
+    let face = button_colors(kind, state, crate::theme::colors());
+    let c = resp.rect.center();
+    ui.painter().line(
+        vec![
+            c + vec2(-3.0, -1.5),
+            c + vec2(0.0, 1.5),
+            c + vec2(3.0, -1.5),
+        ],
+        Stroke::new(1.5, face.text),
+    );
 }
 
 /// Two buttons side by side (`left` ending where `right` starts) drawn as one control, a split
