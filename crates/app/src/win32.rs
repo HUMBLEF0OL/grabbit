@@ -3174,11 +3174,6 @@ pub fn drag_file_out(
     started
 }
 
-/// Put `file` (or a folder) on the clipboard as Explorer's Copy does (plan 13d: Ctrl+C on the
-/// Done window's name row): the shell's file list (CF_HDROP) marked as a copy ("Preferred
-/// DropEffect"), so Paste in a folder copies it there, and a mail or a chat attaches it. Our
-/// window titled `title` owns it (the clipboard needs an owner for its data to be kept). An
-/// off-screen run leaves the clipboard alone and logs it, as `set_clipboard` does.
 /// Why [`copy_file_to_clipboard`] couldn't copy (for the log): `in_use`, another program (or
 /// another of Grabbit's own uses) kept the clipboard.
 #[derive(Debug)]
@@ -3187,6 +3182,11 @@ pub struct CopyFailed {
     pub why: &'static str,
 }
 
+/// Put `file` (or a folder) on the clipboard as Explorer's Copy does (plan 13d: Ctrl+C on the
+/// Done window's name row): the shell's file list (CF_HDROP) marked as a copy ("Preferred
+/// DropEffect"), so Paste in a folder copies it there, and a mail or a chat attaches it. Our
+/// window titled `title` owns it (the clipboard needs an owner for its data to be kept). An
+/// off-screen run leaves the clipboard alone and logs it, as `set_clipboard` does.
 pub fn copy_file_to_clipboard(title: &str, file: &std::path::Path) -> Result<(), CopyFailed> {
     let fail = |in_use, why| CopyFailed { in_use, why };
     use std::os::windows::ffi::OsStrExt;
