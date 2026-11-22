@@ -705,6 +705,12 @@ Done since 1.0.1; ships in the next release.
   the search is what hides the downloads, one **Refresh download address...** label, the last
   labels with colons, "Bytes" and "All Downloads" in line, and the loading look in the crash
   window, the Helpers setup and Options' DNS test and account sign-in.
+- ✅ The Done window opens the right thing (plan 13a): a download saved as a folder opens its
+  main file (the largest, when it is at least half the total and four times the next) and **Open
+  folder** shows it selected inside the folder, or opens the folder itself when there is none
+  (it opened the folder's parent); **Open**'s arrow lists the largest files and **Open with...**;
+  a file moved or deleted is said in the window, Open greyed and Open folder the default; Alt+O
+  and Alt+F; the size line drops its byte count.
 
 ## Being worked on
 
@@ -957,4 +963,4 @@ kept on the `archive/multiplatform-i18n` branch.
   reading and a strip drawn from the real connections or torrent pieces, details that open to the
   side, one list of what to do when a download finishes, torrent commands in the window, a way to
   stop sharing one finished torrent, and a Done window whose Open opens the main file of a
-  download saved as a folder
+  download saved as a folder (that part done, 13a, see above)

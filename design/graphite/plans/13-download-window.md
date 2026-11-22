@@ -205,6 +205,9 @@ Open folder opens its parent, so both "open a folder" (`dialogs.rs`, the Done wi
   The error's reason is its own line, replacing "Error: {error}" (E5's lines here).
 - The Done window's layout (boards 5, 7, 13, 14) on top of 13a's behaviour; menus through
   `chrome::popup`, since they run past the window.
+- The Done window's name row (board 13): it takes the keys (Tab) and Ctrl+C copies the file to the
+  clipboard, as a file is copied in Explorer. Today's drag strip only drags (pointer, no focus, no
+  Ctrl+C), so 13a left this for the name row that replaces it.
 
 ## Checks (every part)
 

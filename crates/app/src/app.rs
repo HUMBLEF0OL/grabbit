@@ -418,6 +418,61 @@ fn take_place(item: &mut Item, target: PathBuf) {
     item.moved_away = false;
 }
 
+/// Download complete for finished download `i`.
+fn complete_box(i: &Item) -> Complete {
+    Complete::new(
+        i.id,
+        i.url.to_string(),
+        i.dest.clone(),
+        i.size.unwrap_or(i.downloaded),
+        i.notices.clone(),
+        i.moved_away,
+        done_files(i),
+    )
+}
+
+/// A download saved as a folder: its files (path, size), for Download complete's main file and
+/// menu (plan 13a); empty when they aren't known (a gallery, a debrid torrent's folder). None:
+/// its place is its one file.
+fn done_files(i: &Item) -> Option<Vec<(PathBuf, u64)>> {
+    // ponytail: `is_dir` and the kept .torrent (small, in Grabbit's own data folder) are looked
+    // at on the window's thread once per box; off it if a slow drive ever shows.
+    let Some(t) = &i.torrent else {
+        // A debrid torrent of one file has it straight in the download folder: a file.
+        return (i.gallery.is_some() || (i.owns_folder() && i.dest.is_dir())).then(Vec::new);
+    };
+    let list = crate::torrents::torrent_file(&t.hash)
+        .and_then(|f| mdm_torrent::read_file(&f).ok())
+        .and_then(|b| mdm_torrent::files_from_bytes(&b).ok());
+    match list {
+        Some(list) => folder_files(&list, t.files.as_deref(), &i.dest),
+        // Not readable: a folder is a folder (whatever a drag-out made of its name).
+        None => i.dest.is_dir().then(Vec::new),
+    }
+}
+
+/// A torrent's files (`list`, padding included) as Download complete takes them, saved at `dest`
+/// with the `chosen` ones (None: all): None when it has one file (its place is that file), else
+/// each chosen file's path and size.
+fn folder_files(
+    list: &[mdm_torrent::FileEntry],
+    chosen: Option<&[usize]>,
+    dest: &std::path::Path,
+) -> Option<Vec<(PathBuf, u64)>> {
+    if list.iter().filter(|f| !f.padding).count() <= 1 {
+        return None;
+    }
+    let chosen: Option<std::collections::HashSet<usize>> =
+        chosen.map(|c| c.iter().copied().collect());
+    Some(
+        list.iter()
+            .enumerate()
+            .filter(|(n, f)| !f.padding && chosen.as_ref().is_none_or(|c| c.contains(n)))
+            .map(|(_, f)| (dest.join(&f.path), f.size))
+            .collect(),
+    )
+}
+
 /// The place a download about to start takes instead of its own, when its own belongs to
 /// another row (#442): two can wait under one name (nothing was on the disk when each was added,
 /// and they can start in the same moment, before the engine has reserved anything). None: it
@@ -2368,17 +2423,7 @@ impl App {
                 if self.settings.show_complete
                     && let Some(i) = self.items.iter().find(|i| i.id == id)
                 {
-                    self.complete.push(Complete {
-                        id,
-                        url: i.url.to_string(),
-                        path: i.dest.clone(),
-                        size: i.size.unwrap_or(i.downloaded),
-                        dont_show: false,
-                        notices: i.notices.clone(),
-                        seen: false,
-                        opening: None,
-                        moved_away: i.moved_away,
-                    });
+                    self.complete.push(complete_box(i));
                 }
             } else if !live {
                 self.start(id, true);
@@ -6889,10 +6934,7 @@ impl App {
             for c in &mut self.complete {
                 if c.id == id {
                     match &out {
-                        dialogs::DraggedOut::Moved(to) => {
-                            c.path = to.clone();
-                            c.moved_away = false;
-                        }
+                        dialogs::DraggedOut::Moved(to) => c.moved_to(to.clone()),
                         dialogs::DraggedOut::MovedAway => c.moved_away = true,
                     }
                 }
@@ -7511,17 +7553,7 @@ impl App {
             && this_file
             && let Some(i) = self.items.iter().find(|i| i.id == id)
         {
-            self.complete.push(Complete {
-                id,
-                url: i.url.to_string(),
-                path: i.dest.clone(),
-                size: i.size.unwrap_or(i.downloaded),
-                dont_show: false,
-                notices: i.notices.clone(),
-                seen: false,
-                opening: None,
-                moved_away: i.moved_away,
-            });
+            self.complete.push(complete_box(i));
         }
     }
 
@@ -9855,17 +9887,7 @@ impl App {
         };
         self.selection.set(id);
         if i.status == Status::Complete {
-            self.complete.push(Complete {
-                id,
-                url: i.url.to_string(),
-                path: i.dest.clone(),
-                size: i.size.unwrap_or(i.downloaded),
-                dont_show: false,
-                notices: i.notices.clone(),
-                seen: false,
-                opening: None,
-                moved_away: i.moved_away,
-            });
+            self.complete.push(complete_box(i));
         } else if i.live.is_none() {
             self.start(id, true);
         } else if self.settings.show_progress && !self.progress.iter().any(|p| p.id == id) {
@@ -15576,5 +15598,78 @@ mod delete_tests {
         let ask = asked(&app);
         assert_eq!((ask.ids.clone(), ask.finished), (vec![1], 0));
         assert_eq!(ask.torrents, 1, "said in red: its engine deletes its files");
+    }
+}
+
+#[cfg(test)]
+mod done_files_tests {
+    use super::*;
+
+    fn entry(path: &str, size: u64, padding: bool) -> mdm_torrent::FileEntry {
+        mdm_torrent::FileEntry {
+            path: PathBuf::from(path),
+            size,
+            padding,
+        }
+    }
+
+    /// Plan 13a: Download complete's files of a torrent: padding left out with the chosen
+    /// indexes still the torrent's, deselected files left out, a torrent of one file a file.
+    #[test]
+    fn a_torrents_files_for_download_complete() {
+        let dest = PathBuf::from(r"C:\Demo\Album");
+        // Padding between two real files: index 2 is still the second real file.
+        let list = [
+            entry("a.mp4", 700, false),
+            entry(".pad/1", 12, true),
+            entry("b.jpg", 3, false),
+        ];
+        assert_eq!(
+            folder_files(&list, None, &dest),
+            Some(vec![(dest.join("a.mp4"), 700), (dest.join("b.jpg"), 3)])
+        );
+        assert_eq!(
+            folder_files(&list, Some(&[2]), &dest),
+            Some(vec![(dest.join("b.jpg"), 3)]),
+            "only one chosen: still a folder, that file selected in it"
+        );
+        let (main, act) = dialogs::done_targets(&dest, Some(&[(dest.join("b.jpg"), 3)]));
+        assert_eq!(main, Some(dest.join("b.jpg")));
+        assert_eq!(act, dialogs::FolderAct::Select(dest.join("b.jpg")));
+        // A deselected file is left out.
+        let three = [
+            entry("1.flac", 30, false),
+            entry("2.flac", 30, false),
+            entry("3.flac", 30, false),
+        ];
+        assert_eq!(
+            folder_files(&three, Some(&[0, 2]), &dest),
+            Some(vec![(dest.join("1.flac"), 30), (dest.join("3.flac"), 30)])
+        );
+        // One real file and padding: the place is the file.
+        let one = [entry("only.iso", 5, false), entry(".pad/0", 1, true)];
+        assert_eq!(folder_files(&one, None, &dest), None);
+    }
+
+    /// Audit 13a r1: a debrid torrent of one file has it in the download folder itself: a file,
+    /// not a folder of unknown files; its own folder (several files) is one.
+    #[test]
+    fn a_debrid_downloads_one_file_is_a_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("only.iso");
+        std::fs::write(&file, b"x").unwrap();
+        let url = url::Url::parse("https://example.com/only.iso").unwrap();
+        let mut i = Item::new(1, url, file.clone(), Category::Programs);
+        i.remote = Some(model::RemoteSpec {
+            account: 1,
+            transfer: None,
+            folder: dir.path().to_owned(),
+        });
+        assert!(i.owns_folder());
+        assert_eq!(done_files(&i), None);
+        let own = dir.path().join("Pack");
+        std::fs::create_dir(&own).unwrap();
+        i.dest = own;
+        assert_eq!(done_files(&i), Some(Vec::new()));
     }
 }
