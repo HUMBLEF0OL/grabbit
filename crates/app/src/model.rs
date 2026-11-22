@@ -533,7 +533,7 @@ pub(crate) fn merge_failure(error: &str, kept: &[PathBuf]) -> String {
     if kept.is_empty() {
         return crate::i18n::fmt(
             // i18n: why a video download failed: ffmpeg couldn't join its picture and sound into one file; {error} = ffmpeg's reason, in English
-            crate::i18n::t("its picture and sound couldn't be joined into one file ({error})"),
+            crate::i18n::t("its picture and sound could not be joined into one file ({error})"),
             &[("error", &error)],
         );
     }
@@ -546,7 +546,7 @@ pub(crate) fn merge_failure(error: &str, kept: &[PathBuf]) -> String {
     crate::i18n::fmt(
         // i18n: why a video download failed: ffmpeg couldn't join its picture and sound into one file; {error} = ffmpeg's reason, in English; {files} = the downloaded parts' file names, kept in the download folder; "Also delete the file from disk" is the Delete box's choice
         crate::i18n::t(
-            "its picture and sound couldn't be joined into one file ({error}). What was downloaded stays in the folder for Resume to join again ({files}); deleting the download with \"Also delete the file from disk\" removes it",
+            "its picture and sound could not be joined into one file ({error}). What was downloaded stays in the folder for Resume to join again ({files}); deleting the download with \"Also delete the file from disk\" removes it",
         ),
         &[("error", &error), ("files", &files)],
     )
@@ -762,13 +762,13 @@ pub fn sub_notice(p: &mdm_tools::video::SubProblem, site: &str) -> String {
         SubReason::TooManyRequests => crate::i18n::fmt(
             // i18n: after a video download: {language} = a language's name, {site} = a web site's name (youtube.com); the site refused because it was asked too often
             crate::i18n::t(
-                "Subtitles in {language} couldn't be downloaded: {site} refused (too many requests).",
+                "Subtitles in {language} could not be downloaded: {site} refused (too many requests).",
             ),
             &[("language", language), ("site", site)],
         ),
         SubReason::Other(why) => crate::i18n::fmt(
             // i18n: after a video download: {language} = a language's name, {reason} = the helper program's own (English) words
-            crate::i18n::t("Subtitles in {language} couldn't be downloaded: {reason}"),
+            crate::i18n::t("Subtitles in {language} could not be downloaded: {reason}"),
             &[("language", language), ("reason", why)],
         ),
     }
@@ -1385,19 +1385,25 @@ pub fn when_text(t: chrono::NaiveDateTime) -> String {
     if formats.custom {
         return crate::i18n::ltr(&crate::regional::short_date_time(t));
     }
-    stamp_text(t, formats.clock24)
+    use chrono::Datelike;
+    stamp_text(t, formats.clock24, crate::clock::now().year())
 }
 
-/// IDM's text for a time, as stored (`Oct 28 21:44:12 2026`) on a 24-hour clock, and with the
-/// system's 12-hour clock (#392) `Oct 28 9:44:12 PM 2026`.
-fn stamp_text(t: chrono::NaiveDateTime, clock24: bool) -> String {
-    use chrono::Timelike;
-    format!(
-        "{} {} {}",
+/// The list's text for a time: `Oct 28 21:44` on a 24-hour clock, `Oct 28 9:44 PM` on the
+/// system's 12-hour clock (#392); no seconds, and the year only when it isn't `this_year`
+/// (`Oct 28 21:44 2026`), so it fits the Added column. The stored stamp keeps both.
+fn stamp_text(t: chrono::NaiveDateTime, clock24: bool, this_year: i32) -> String {
+    use chrono::{Datelike, Timelike};
+    let day_time = format!(
+        "{} {}",
         t.format("%b %d"),
-        crate::regional::time_text(t.hour(), t.minute(), t.second(), clock24),
-        t.format("%Y")
-    )
+        crate::regional::minutes_text(t.hour(), t.minute(), clock24),
+    );
+    if t.year() == this_year {
+        day_time
+    } else {
+        format!("{day_time} {}", t.year())
+    }
 }
 
 /// `13.38%` (IDM).
@@ -1419,31 +1425,23 @@ pub fn size(b: u64) -> String {
     }
 }
 
-/// `200.000 MB` — the progress dialog uses three decimals (and KB below a kilobyte).
+/// The progress window's sizes: as [`size`] writes them, so a file reads the same everywhere.
 pub fn size3(b: u64) -> String {
-    let v = b as f64;
-    let k = 1024.0;
-    if v >= k * k * k {
-        format!("{:.3} GB", v / (k * k * k)) // not translated: IDM's text
-    } else if v >= k * k {
-        format!("{:.3} MB", v / (k * k)) // not translated: IDM's text
-    } else {
-        format!("{:.3} KB", v / k) // not translated: IDM's text
-    }
+    size(b)
 }
 
-/// `11.623 MB/sec`, `512.000 KB/sec` (IDM's progress dialog uses three decimals).
+/// `11.623 MB/s`, `512.000 KB/s` (IDM's progress dialog uses three decimals).
 pub fn rate(bps: f64) -> String {
     if bps >= 1024.0 * 1024.0 {
-        format!("{:.3} MB/sec", bps / (1024.0 * 1024.0)) // not translated: IDM's text
+        format!("{:.3} MB/s", bps / (1024.0 * 1024.0)) // not translated: a unit
     } else {
-        format!("{:.3} KB/sec", bps / 1024.0) // not translated: IDM's text
+        format!("{:.3} KB/s", bps / 1024.0) // not translated: a unit
     }
 }
 
-/// The list's Size column: IDM puts two spaces before the unit (`200.00  MB`).
+/// The list's Size column: as [`size`], one space before the unit (`200.00 MB`).
 pub fn size_list(b: u64) -> String {
-    size(b).replacen(' ', "  ", 1)
+    size(b)
 }
 
 /// `14 sec`, `1 min 22 sec`, `2 hour(s) 5 min`.
@@ -1643,7 +1641,9 @@ mod tests {
         assert_eq!(time(14.2), "14 sec");
         assert_eq!(time(82.0), "1 min 22 sec");
         assert_eq!(time(7500.0), "2 hour(s) 5 min");
-        assert_eq!(rate(12_187_628.0), "11.623 MB/sec");
+        assert_eq!(rate(12_187_628.0), "11.623 MB/s");
+        assert_eq!(size3(6 * 1024 * 1024 * 1024), size(6 * 1024 * 1024 * 1024));
+        assert_eq!(size_list(7_392_461), "7.05 MB");
     }
 }
 
@@ -1660,22 +1660,27 @@ mod stamp_tests {
     #[test]
     fn english_stamps_follow_the_clock() {
         let at = |s| super::stamp_time(s).unwrap();
-        // 24-hour: exactly as stored.
-        for s in ["Oct 28 21:44:12 2026", "Jan 01 00:05:09 2027"] {
-            assert_eq!(super::stamp_text(at(s), true), s);
-        }
+        // 24-hour: as stored without the seconds; the year only when it isn't this year.
+        assert_eq!(
+            super::stamp_text(at("Oct 28 21:44:12 2026"), true, 2027),
+            "Oct 28 21:44 2026"
+        );
+        assert_eq!(
+            super::stamp_text(at("Jan 01 00:05:09 2027"), true, 2027),
+            "Jan 01 00:05"
+        );
         // 12-hour (#392): midnight and noon are 12.
         assert_eq!(
-            super::stamp_text(at("Oct 28 21:44:12 2026"), false),
-            "Oct 28 9:44:12 PM 2026"
+            super::stamp_text(at("Oct 28 21:44:12 2026"), false, 2026),
+            "Oct 28 9:44 PM"
         );
         assert_eq!(
-            super::stamp_text(at("Jan 01 00:05:09 2027"), false),
-            "Jan 01 12:05:09 AM 2027"
+            super::stamp_text(at("Jan 01 00:05:09 2027"), false, 2026),
+            "Jan 01 12:05 AM 2027"
         );
         assert_eq!(
-            super::stamp_text(at("Jun 15 12:00:00 2027"), false),
-            "Jun 15 12:00:00 PM 2027"
+            super::stamp_text(at("Jun 15 12:00:00 2027"), false, 2027),
+            "Jun 15 12:00 PM"
         );
     }
 }

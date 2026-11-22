@@ -151,7 +151,7 @@ impl ChecksumDialog {
                             winui::BannerKind::Error,
                             "st-error",
                             crate::i18n::fmt(
-                                crate::i18n::t("Cannot read the file: {error}"),
+                                crate::i18n::t("The file could not be read: {error}"),
                                 &[("error", &err.to_string())],
                             ),
                         )),
