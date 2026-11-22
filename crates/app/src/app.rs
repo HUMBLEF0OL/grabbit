@@ -49,6 +49,17 @@ enum Pending {
     Video(Box<crate::videodlg::VideoAdd>, bool),
 }
 
+/// How long a passing note stays in the status strip (plan 12a, E3).
+const STRIP_NOTE: Duration = Duration::from_secs(6);
+
+/// The status strip's passing note at `now`, with how long it has left; None once its time is
+/// up.
+fn strip_note_now(note: &Option<(String, Instant)>, now: Instant) -> Option<(&str, Duration)> {
+    let (text, until) = note.as_ref()?;
+    let left = until.checked_duration_since(now).filter(|d| !d.is_zero())?;
+    Some((text.as_str(), left))
+}
+
 /// A video already in the list as `page` in quality `selector` (another quality of the same page
 /// is another download, not a duplicate).
 fn same_video(item: &Item, page: &url::Url, selector: &str) -> bool {
@@ -150,7 +161,7 @@ enum Cmd {
     /// Start / stop a queue (index into `App::queues`).
     StartQueue(usize),
     StopQueue(usize),
-    /// Queue right-click → Edit queue (its files) / Schedule; Delete; New queue....
+    /// Queue right-click → Edit queue (its files) / Schedule; Delete; New queue...
     /// Tasks → Show drop target (shown / hidden); the drop target's Show main window.
     ToggleDropTarget,
     ShowMain,
@@ -834,6 +845,9 @@ pub struct App {
     find_bar: crate::find::Bar,
     /// A message with OK: its window title and message: "Cannot find …", an export that failed…
     notice: Option<(&'static str, String)>,
+    /// A passing note in the status strip, shown until its time (plan 12a, E3: what Delete
+    /// kept while the question is off): no window to close.
+    strip_note: Option<(String, Instant)>,
     /// The list files Import is reading, beside the window (upstream issue 805).
     importing: crate::transfer::Importing,
     /// Why the last save of the download list failed (told once per reason).
@@ -1696,6 +1710,7 @@ impl App {
             find: crate::find::Query::default(),
             find_bar: crate::find::Bar::default(),
             notice: None,
+            strip_note: None,
             importing: Default::default(),
             save_failed: None,
             moving: Vec::new(),
@@ -1834,9 +1849,20 @@ impl App {
 
     /// What an empty list says ([`Self::empty_state`]): its title (translated), the reason
     /// and the link (to translate), the link's command and the tile's glyph. A search that
-    /// matches nothing first (plan 12b, A5): it hides rows as the filters do.
+    /// matches nothing first (plan 12b, A5): it hides rows as the filters do. Only when it is
+    /// the search that hides the view's downloads: a view with none says so, and filters that
+    /// hide them all by themselves offer to clear the filters.
     fn empty_message(&self) -> (String, &'static str, &'static str, Cmd, &'static str) {
-        if self.find.active() {
+        let filters = self.list.filters.iter().any(Option::is_some);
+        // ponytail: builds the view's rows without the search, only while the list is empty
+        // and both a search and a filter are on.
+        let search_hides = self.find.active()
+            && if filters {
+                !self.rows_searched(false).0.is_empty()
+            } else {
+                !self.view_ids().is_empty()
+            };
+        if search_hides {
             let title = crate::i18n::fmt(
                 // i18n: title in the empty download list when the search finds nothing; {text} is what was typed in Find
                 crate::i18n::t("No downloads match \"{text}\""),
@@ -1852,7 +1878,7 @@ impl App {
                 "gx-search",
             );
         }
-        let filtered = self.list.filters.iter().any(Option::is_some) && !self.view_ids().is_empty();
+        let filtered = filters && !self.view_ids().is_empty();
         let (title, why, action, cmd, need) = if filtered {
             (
                 // i18n: title in the empty download list, when the column filters hide every download
@@ -1869,7 +1895,7 @@ impl App {
                 "No downloads here",
                 // i18n: in the empty download list, under its title
                 "This category or queue holds no downloads yet.",
-                // i18n: link in the empty download list: go to the All Downloads view
+                // i18n: link in the empty download list: go to the All downloads view
                 "Show all downloads",
                 Cmd::ShowAll,
                 "gx-download",
@@ -1978,6 +2004,12 @@ impl App {
             left += "   ";
             left += &crate::i18n::tn(selected, "{n} selected", "{n} selected");
         }
+        // A passing note (E3), after the counts, until its time; drawn again when it ends.
+        if let Some((note, left_for)) = strip_note_now(&self.strip_note, Instant::now()) {
+            left += "   ";
+            left += note;
+            ui.ctx().request_repaint_after(left_for);
+        }
         // The status bar (plan 05b): on `panel` with a rule above it, 12-point muted text 12 in
         // from each side.
         let c = crate::theme::colors();
@@ -2075,6 +2107,12 @@ impl App {
 
     /// The rows the list draws ([`Self::shown_ids`]) with their cells.
     fn list_rows(&self) -> (Vec<u64>, Vec<list::Row>) {
+        self.rows_searched(self.find.active())
+    }
+
+    /// [`Self::list_rows`], with or without the search (`search`: the empty list asks whether
+    /// the column filters alone would show something).
+    fn rows_searched(&self, search: bool) -> (Vec<u64>, Vec<list::Row>) {
         let queued: std::collections::HashSet<u64> = self
             .queues
             .iter()
@@ -2082,7 +2120,6 @@ impl App {
             .collect();
         // The search first, on the downloads themselves (nothing allocated per download), so
         // only its matches get rows built.
-        let search = self.find.active();
         let running = self.running();
         self.view_items()
             .into_iter()
@@ -2384,13 +2421,16 @@ impl App {
                     // upstream issue 1170), their name held until they are gone. Under the same
                     // name the new start waits for them on its own task (`Doomed::clearing`,
                     // upstream issue 1229).
-                    let complete = item.status == Status::Complete;
+                    // A gallery's folder stays (#58): the deleter takes only a file.
+                    let complete = item.status == Status::Complete && item.gallery.is_none();
                     let name = item.file_name.clone();
+                    let own = item.owns_folder();
                     let doomed = if dest == old {
                         crate::deleter::Doomed::clearing(name, old, complete, None)
                     } else {
                         crate::deleter::Doomed::new(name, old, complete, None)
-                    };
+                    }
+                    .own_folder(own);
                     self.deleter.delete(vec![doomed]);
                     let item = self.item(id).expect("the download just found");
                     if let Some(name) = dest.file_name() {
@@ -4023,12 +4063,16 @@ impl App {
             // player); the row leaves the list all the same.
             let later = LeftoverSearch::of(&self.items, id)
                 .map(|s| Box::new(move || s.find()) as crate::deleter::Later);
-            doomed = Some(crate::deleter::Doomed::new(
-                i.file_name.clone(),
-                i.dest.clone(),
-                i.status == Status::Complete,
-                later,
-            ));
+            // A debrid torrent's folder (its files) is Grabbit's own: it goes whole.
+            doomed = Some(
+                crate::deleter::Doomed::new(
+                    i.file_name.clone(),
+                    i.dest.clone(),
+                    i.status == Status::Complete,
+                    later,
+                )
+                .own_folder(i.owns_folder()),
+            );
         }
         self.items.retain(|i| i.id != id);
         for q in &mut self.queues {
@@ -4084,7 +4128,8 @@ impl App {
             let ids: Vec<u64> = gone.into_iter().map(|i| i.id).collect();
             self.remove_downloads(&ids, false);
             if kept > 0 {
-                self.notice = Some((crate::i18n::mark("Delete"), dialogs::kept_text(kept)));
+                // In the status strip, as the question would have said it (E3).
+                self.strip_note = Some((dialogs::kept_text(kept), Instant::now() + STRIP_NOTE));
             }
         }
     }
@@ -7896,7 +7941,7 @@ impl App {
                         // i18n: View → Draw with: a greyed note under "… didn't start here"; why: the graphics card stopped working twice (a driver update or reset)
                         Why::LostTwice => off("The graphics card was lost twice in 10 minutes"),
                         // i18n: View → Draw with: a greyed note under "… didn't start here"; why: another error, written in MDM's log
-                        _ => off("It couldn't start: the log says why"),
+                        _ => off("It could not start: the log says why"),
                     });
                     notes.extend(again(renderer::gpu_again()));
                 }
@@ -8180,7 +8225,7 @@ impl App {
                 false,
             ),
             I(
-                "Refresh download address",
+                "Refresh download address...",
                 Cmd::RefreshAddress,
                 sel && !live && !done,
                 false,
@@ -8396,7 +8441,7 @@ impl App {
                 }
             };
         branch(
-            "All Downloads",
+            "All downloads",
             self.all_open,
             IconKey::Themed("cat-all"),
             View::All,
@@ -9790,12 +9835,15 @@ impl App {
         let later = LeftoverSearch::of(&self.items, id)
             .filter(|_| leftovers)
             .map(|s| Box::new(move || s.find()) as crate::deleter::Later);
+        // A gallery's folder stays (it may hold other files; #58): only a file is replaced.
         let doomed = crate::deleter::Doomed::clearing(
             item.file_name.clone(),
             item.dest.clone(),
-            item.status == Status::Complete,
+            item.status == Status::Complete && item.gallery.is_none(),
             later,
-        );
+        )
+        // A debrid torrent's folder is Grabbit's own: it goes whole.
+        .own_folder(item.owns_folder());
         self.deleter.delete(vec![doomed]);
         self.delete(id);
     }
@@ -10160,7 +10208,7 @@ impl App {
                     crate::i18n::mark("Add a theme file"),
                     crate::i18n::fmt(
                         // i18n: {error} is why, in English (a file that isn't a theme or a colour scheme, a colour missing)
-                        crate::i18n::t("This file can't be used as a theme: {error}"),
+                        crate::i18n::t("This file could not be used as a theme: {error}"),
                         &[("error", &e)],
                     ),
                 ));
@@ -13344,16 +13392,26 @@ mod states_routes_tests {
     }
 
     /// A search that matches nothing says so, quotes the text, and its link clears the search,
-    /// before the filters' message; without a search, the messages are as before.
+    /// but only when the search is what hides the view's downloads: filters that hide them all
+    /// by themselves offer to clear the filters (even while the search matches), and a view
+    /// with no downloads says so; without a search, the messages are as before.
     #[test]
     fn an_empty_search_offers_clear_search() {
         let mut app = super::route_new_url_tests::app(vec![item(1, "a.zip")]);
+        let cmd_of = |app: &App| app.empty_message().3;
         app.list.filters[3] = Some(list::Filter::Values(vec!["Complete"]));
         let (_, _, action, cmd, need) = app.empty_message();
         assert_eq!(
             (action, cmd, need),
             ("Clear all filters", Cmd::ClearFilters, "gx-filter")
         );
+        // The filters hide it by themselves, with or without a search that matches it.
+        app.find.text = "nothing".into();
+        assert_eq!(cmd_of(&app), Cmd::ClearFilters);
+        app.find.text = "a.zip".into();
+        assert_eq!(cmd_of(&app), Cmd::ClearFilters, "the search matches");
+        // The search alone hides it.
+        app.list.filters[3] = None;
         app.find.text = "nothing".into();
         let (title, _, action, cmd, need) = app.empty_message();
         assert!(title.contains("nothing"), "{title}");
@@ -13361,13 +13419,15 @@ mod states_routes_tests {
             (action, cmd, need),
             ("Clear search", Cmd::ClearSearch, "gx-search")
         );
+        // A view with no downloads: there is nothing for the search to hide.
+        app.view = View::Finished(None);
+        assert_eq!(cmd_of(&app), Cmd::ShowAll, "an empty view, searched");
+        app.view = View::All;
         let ctx = egui::Context::default();
         app.run(Cmd::ClearSearch, None, &ctx);
         assert!(!app.find.active());
-        app.list.filters[3] = None;
         app.view = View::Finished(None);
-        let (_, _, _, cmd, _) = app.empty_message();
-        assert_eq!(cmd, Cmd::ShowAll);
+        assert_eq!(cmd_of(&app), Cmd::ShowAll);
     }
 
     /// Copy address copies the addresses of the downloads that aren't torrents, one a line.
@@ -15021,7 +15081,7 @@ mod settings_page_tests {
         a.run(Cmd::ScheduleQueue(0), None, &ctx);
         assert_eq!(shown(&a), (Some((0, false)), false), "Schedule: when");
         a.run(Cmd::NewQueue, None, &ctx);
-        assert!(shown(&a).1, "Create new queue asks its name");
+        assert!(shown(&a).1, "New queue... asks its name");
         assert!(a.settings_page.as_ref().unwrap().modal());
         // Audit r1: while it asks, the Scheduler's commands and names leave it as it is.
         a.run(Cmd::EditQueue(1), None, &ctx);
@@ -15429,7 +15489,7 @@ mod delete_tests {
         let ctx = egui::Context::default();
         app.run(Cmd::DeleteCompleted, None, &ctx);
         let ask = asked(&app);
-        assert!(!ask.files, "Delete All Completed starts unticked");
+        assert!(!ask.files, "Delete completed starts unticked");
         assert_eq!((ask.ids.clone(), ask.finished), (vec![1, 2], 2));
         // Yes with the box ticked this time: those files go.
         let chosen = app.confirm_delete.take().unwrap().ids;
@@ -15468,7 +15528,7 @@ mod delete_tests {
     }
 
     /// Plan 12a (E3): Delete leaves a running download in the list and says so: counted under
-    /// the question, or in a notice when the question is off.
+    /// the question, or in the status strip for a few seconds when the question is off.
     #[test]
     fn delete_says_how_many_running_downloads_it_kept() {
         let dir = tempfile::tempdir().unwrap();
@@ -15486,8 +15546,14 @@ mod delete_tests {
         app.run(Cmd::Remove, None, &ctx);
         assert!(app.confirm_delete.is_none(), "not asked");
         assert_eq!(ids(&app), [3], "the running one stays");
-        let (_, text) = app.notice.take().expect("said in a notice");
+        assert!(app.notice.is_none(), "no window to close");
+        let now = Instant::now();
+        let (text, left) = strip_note_now(&app.strip_note, now).expect("in the status strip");
         assert!(text.starts_with("1 running download is kept"), "{text}");
+        assert!(left <= STRIP_NOTE, "{left:?}");
+        // Gone once its time is up.
+        assert!(strip_note_now(&app.strip_note, now + STRIP_NOTE).is_none());
+        assert!(strip_note_now(&None, now).is_none());
     }
 
     /// Plan 12a: a finished torrent's files are deleted by its engine, never moved to the

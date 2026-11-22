@@ -56,9 +56,12 @@ How the rule applies:
 ## Status
 
 Spec locked 2026-11-21. The maintainer approved the mockups: eleven boards of now-vs-proposed
-states, Graphite light and dark, one per area below. Building started 2026-11-22: 12b is done
-(branch `ui/12b-states-routes`). 12a–12d need no owner answer; 12e waits for the two decisions
-below.
+states, Graphite light and dark, one per area below. **Done 2026-11-22:** 12a–12d merged into
+`dev` (PRs 120–123), each audited until APPROVED and built and tested together. A critical
+audit of all four parts on `dev` then found gaps and bugs; they were fixed in one PR (audited
+until APPROVED), with the help pictures taken again after 12d (a first retake, PR 124, was
+broken and reverted in PR 125). 12e is not needed: both owner decisions below stayed at their
+defaults (no answer was given); a later "other option" would be its own PR.
 
 12b left one D1 place out: Link grabber has no address box (its links come by Ctrl+V, Import or
 the browser), and giving one of its boxes (the package's name, password or folder) the keys
@@ -66,7 +69,9 @@ would take Ctrl+V's link pasting, which works only while none of them has them.
 
 Follow-up for the release PR (the website is outside this plan): the website's feature pages
 still quote 12c's old labels (`website/content/features/torrents.md`, `video.md`, `galleries.md`,
-`link-grabber.md`, `archives.md`, `scheduler.md`, and `dns-proxies.md` for the proxy/SOCKS options).
+`link-grabber.md`, `archives.md`, `scheduler.md`, and `dns-proxies.md` for the proxy/SOCKS options),
+`speed-limiter.md` (the "KBytes/sec" unit, now "KB/s") and `categories.md` ("All Downloads", now
+"All downloads").
 
 ## Decisions (owner; default if no answer)
 
@@ -89,12 +94,23 @@ still quote 12c's old labels (`website/content/features/torrents.md`, `video.md`
     Partial pieces and temp folders may still be deleted outright. The box's words say where the
     files go: "Also move the {n} files to the Recycle Bin".
   - Torrents per DA1t.
+  - **As built (audit):** only a file goes to the Recycle Bin; a folder at a finished place (a
+    gallery's) stays and is said, except a debrid torrent's own folder inside its download folder
+    (`Item::owns_folder`), which goes whole. Known limit: that folder goes with anything the user
+    had put in it (a torrent named as a folder already there writes into it); sending only the
+    files the job wrote needs a record of them, a later change.
   - **Tests:** the deleter tests inject their own remover (`deleter.rs:347`, `393`, `441`, `473`);
     keep `Deleter::with`. New: a deleted file lands in the test trash (`MDM_TEST_TRASH_DIR`,
     `extractq.rs:331-345`).
 - **E3. Say what Delete left out.** `ask_delete` silently skips running downloads in a mixed
   selection (`app.rs:3765-3770`). Show "N running downloads were kept" in the confirmation, or in
   the status strip when the prompt is off.
+  - **As built:** with the question off, the note stays in the status strip for 6 seconds
+    (`App::strip_note`, `STRIP_NOTE`), after the counts; no window to close.
+- **A1, as built (audit):** only a file goes to the Recycle Bin (`deleter::recycle`): a folder
+  (a gallery's, reached through a replace or a restart) stays untouched and is said, and the
+  replace and restart paths never hand a gallery's folder over as a finished file. Only NotFound
+  counts as "already gone"; a place that can't be read is a failure.
 - **B7. RSS removal.** Feed "Remove" and rule "Delete" act at once, on the Delete key too
   (`rssdlg.rs:263`, `273-281`, `496`, `506-512`). Use one verb ("Remove"). Ask before removing a
   feed (it holds rules); a rule goes at once.
@@ -385,12 +401,23 @@ Changes made at the helper where possible. Costly items are last and can be spli
   - Options' default browser (`options.rs:1208`)
   - the File Info size (`dialogs.rs:1220`)
   - a busy RSS feed (`rssdlg.rs:200`)
+  - **As built (audit):** also the crash window's "Reading the crash data...", its symbols
+    fetch and GitHub search, and Options' DNS test ("Asking...") and account sign-in ("Asking
+    the service..."). The Helpers setup window keeps its meter for the whole run; its waiting
+    lines ("Checking {name}...", "Starting...") take the spinner, the downloading line (with its
+    percent) doesn't. Kept as they are: the status strip's "Reading {file}..." (a status text
+    among others in the strip, not a loading place), and Options' default-browser spinner now
+    stops when the lookup thread ends however it ends (`defaultbrowser::Settled`).
 - **G5.** The crash window's heading beside its icon tile is 13 (`crashui.rs:416`, `tahoma_bold`);
   Options page headings are 16 (`options.rs:4620`, `tahoma_title`). Use `tahoma_title`.
 - **G6.** The pairing code is 26 bold (`options.rs:3063`); the sign-in code is monospace `font_code`
   22 (`options.rs:4021`). Use `font_code` for both.
 - **G10.** Tick strokes are 1.3, 1.4 and 1.5 (`chrome.rs:2249`, `winui.rs:5027`, `5055`,
   `find.rs:528`). Use one metric.
+  - **As built:** `tick.width`. The Square check look (another look's own metric) keeps its 2.0,
+    as `tick.width`'s description says. The unused `etch.shadow` / `etch.light` roles went with
+    G2 (a theme file that still sets them loads; each of the two keys is skipped with a
+    "not a colour role" warning).
 - **C6 (layout), costly.** Link grabber (`grabber.rs:1035`, `1061`) and RSS feeds (`rssdlg.rs:161`,
   `168`, `631`) place 22–23 px boxes at fixed x. Move them onto `winui::form`, `CONTROL_H` and `EDGE`.
   RSS is cheap (1 upstream commit). The grabber is a re-layout of a medium-churn file: do it last, in
@@ -408,6 +435,11 @@ Changes made at the helper where possible. Costly items are last and can be spli
   `helpers.rs:327`, `crashui.rs:432`, `extension.rs:390`. Add one metric (13), and use it in the
   fork's own files and in files you touch anyway. Don't sweep all 44 call sites through high-churn
   files.
+  - **As built (audit):** `line.paragraph` in the fork's files and, in the files plan 12 touched,
+    every paragraph whose line height was 13 (`dialogs.rs`' waiting, Speed Limiter, notice,
+    Confirm deletion, Confirm and Delete category texts; `help.rs`' Tell a friend), with the
+    heights computed from their line counts. The 18 and 16 ones (Files already there, other
+    windows) are different values and stay: making them 13 would re-lay those windows.
 - **Not done** (nothing visible, and they would add churn in shared files): replacing the Details
   pane's literal fonts (`panes.rs:998-1007`, equal to the metrics today), a `"geist-medium"` helper
   (7 places), `help.rs:373`'s hand-written `fit`, `chevron_light`'s literal 1.2, and the 17
@@ -441,7 +473,9 @@ conflicting upstream commit is noted in the PR.
 
 ## Definition of done
 
-- [ ] 12a–12d merged into `dev`, each audited until APPROVED
-- [ ] The owner's decisions recorded in this file; 12e merged if needed
-- [ ] ROADMAP and CHANGELOG lines per part; help pictures, docs and the mockup updated for the
+- [x] 12a–12d merged into `dev`, each audited until APPROVED (PRs 120–123; the audit's fixes
+      after them, also APPROVED)
+- [x] The owner's decisions recorded in this file (DA6 keep, DA1t unchanged: the defaults); 12e
+      not needed
+- [x] ROADMAP and CHANGELOG lines per part; help pictures, docs and the mockup updated for the
       changed names

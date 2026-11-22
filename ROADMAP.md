@@ -692,13 +692,19 @@ Done since 1.0.1; ships in the next release.
   ellipsis and error wording everywhere, sizes written alike in the list and the progress window
   with one space before the unit, **KB/s**, **MB/s** and **MB** (on the phone page too), and the
   list's dates without seconds, and without the year when it is this year. The help pages and the
-  mockup name things as the app does.
+  mockup name things as the app does, and the help pages' pictures were taken again after 12d.
 - ✅ One visual system (plan 12d): one browse button (a square "…" as tall as a box) everywhere,
   the 1 pixel hairline for every separator in every theme, focus rings only from the keyboard,
   the title bar's search box drawn as every text box, one loading look (a spinner and a line),
   one card frame for cards, one tick stroke and one paragraph line height (theme sizes `radius.card`,
   `tick.width`, `line.paragraph`), Time left wide enough for "59 min 59 sec", and the RSS feeds
   and Link grabber forms on the dialogs' label column and control height.
+- ✅ Plan 12's audit fixes: only a file goes to the Recycle Bin (a gallery's folder never does,
+  and a file that can't be read is said, not taken for gone), Delete's kept downloads said in
+  the status strip when the question is off, the empty list offers **Clear search** only when
+  the search is what hides the downloads, one **Refresh download address...** label, the last
+  labels with colons, "Bytes" and "All Downloads" in line, and the loading look in the crash
+  window, the Helpers setup and Options' DNS test and account sign-in.
 
 ## Being worked on
 

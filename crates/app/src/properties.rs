@@ -135,7 +135,7 @@ impl Properties {
         winui::copyable(ui, type_at, "props-type", &kind, false);
         let size = item.size.map_or_else(String::new, |s| {
             crate::i18n::fmt(
-                crate::i18n::t("{size} ({bytes} Bytes)"),
+                crate::i18n::t("{size} ({bytes} bytes)"),
                 &[
                     ("size", &crate::dialogs::dialog_size(s)),
                     ("bytes", &crate::i18n::integer(s)),

@@ -1107,7 +1107,7 @@ impl TellFriend {
                     &message,
                     ink,
                     rect.right() - 6.0,
-                    13.0,
+                    crate::theme::metrics().line_paragraph,
                 );
                 crate::dialogs::grow_to(ui.ctx(), "tell-a-friend", lines, 5);
                 if let Some((said, failed)) = self.said {

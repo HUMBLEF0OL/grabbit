@@ -1203,7 +1203,7 @@ impl TorrentSettings {
                     o.x + 380.0,
                     o.y + 174.0,
                     // i18n: Torrent settings: the port to listen on (empty: any)
-                    crate::i18n::t("Port:"),
+                    crate::i18n::t("Port"),
                     winui::TEXT(),
                 );
                 winui::edit(
@@ -1521,7 +1521,7 @@ impl AddTrackers {
                                 },
                             )
                             .primary()
-                            .tip(checked.is_err(), &why),
+                            .tip_text(checked.is_err(), &why),
                         ),
                         FooterItem::Button(
                             FooterButton::new("Cancel", ButtonKind::Normal).escape(true),

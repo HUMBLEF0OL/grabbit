@@ -223,12 +223,6 @@ pub fn derive(s: &Seeds) -> Palette {
         selection_muted: mix(selection_text, selection, 0.2),
         selection_inactive: toward(surface, 0.14),
         selection_focus: readable(s.warning, selection, 3.0),
-        etch_shadow: toward(bg, 0.3),
-        etch_light: if dark {
-            toward(bg, 0.08)
-        } else {
-            mix(bg, Color32::WHITE, 0.8)
-        },
         tab_page: mix(bg, surface, 0.5),
         tab: toward(bg, 0.03),
         tab_hot: mix(bg, surface, 0.8),

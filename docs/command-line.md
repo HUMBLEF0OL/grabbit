@@ -56,7 +56,7 @@ It comes with every download of Grabbit, next to the app (the installer puts it 
 | `torrent-create PATH -o file.torrent` | Make a `.torrent` of a file or folder (peers find it through the DHT). |
 | `status` | The running app's downloads, as JSON, with their ids (the automation API must be on). |
 | `pause ID...`, `start ID...` | Pause running downloads, or start (resume) stopped, queued or failed ones, in the running app. |
-| `remove ID...`, `delete ID...` | Take downloads off the running app's list: `remove` keeps their files, `delete` deletes them too. A running download is paused first (`pause`). |
+| `remove ID...`, `delete ID...` | Take downloads off the running app's list: `remove` keeps their files, `delete` moves a finished file to the Recycle Bin (and deletes an unfinished one's data). A running download is paused first (`pause`). |
 | `api on`, `api off` | Turn the running app's automation API on or off. |
 
 `grabbit-cli help <command>` shows every option. A command that fails (the app isn't running, it answers with an error, a download breaks) exits with code 1. For example:
@@ -110,7 +110,7 @@ Other programs can ask the running app what it is downloading, and pause, start,
 | Fields (besides `token`) | Answer |
 |---|---|
 | `{"query": "list"}` | Every download and the total speed: `{"downloads": [{"id", "file", "url", "path", "status", "size", "downloaded", "speed", "added", "category", "error"}], "speed": bytes per second, "queues": [{"name", "running", "ids"}], "categories": [{"key", "name"}], "free": bytes}`. `status` is `Queued`, `Downloading`, `Stopped`, `Complete` or `Error`; `size` is `null` while unknown; `error` (why it failed) is there only for a download in `Error`; `category` is a category's `key`; `free` is the free space where downloads go (`null` when unknown). Only while the API is on. |
-| `{"action": "pause", "ids": [3, 4]}` | Acts on downloads by id: `"pause"`, `"start"`, `"remove"` (file kept) or `"delete"` (file deleted too). Answers `{"done": [3], "skipped": [{"id": 4, "why": "not running"}]}`; a running download must be paused before it is removed or deleted. Only while the API is on. |
+| `{"action": "pause", "ids": [3, 4]}` | Acts on downloads by id: `"pause"`, `"start"`, `"remove"` (file kept) or `"delete"` (a finished file to the Recycle Bin). Answers `{"done": [3], "skipped": [{"id": 4, "why": "not running"}]}`; a running download must be paused before it is removed or deleted. Only while the API is on. |
 | `{"action": "start_queue", "queue": "Main download queue"}` | Starts (or with `"stop_queue"`, stops) the queue of that name (a name from the list's `queues`). Answers `{"done": [], "skipped": []}`, or `{"error": …, "code": "unknown-queue"}`. Only while the API is on. |
 | `{"api": true}` / `{"api": false}` | Turns the API on or off: `{"api": true}`. |
 | `{"url": "https://…", "dir": "D:\\Files", "name": "a.zip", "silent": true}` | Adds a download, as the command line's `/d /p /f /n` do (`"later": true` is `/a`); `ok`. `"category"` (a key from the list's `categories`) puts it in that category's folder instead of the one its type picks; `"queue"` (a queue's name) is the queue it waits in with `"later"`. Also with the API off, like the command line. |

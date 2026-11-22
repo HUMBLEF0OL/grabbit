@@ -55,10 +55,10 @@ A filtered column's funnel turns blue. To remove every filter, right-click a col
 
 The pane on the left has four branches:
 
-![The Categories pane: All Downloads with a category per file type, Unfinished, Finished and Queues](images/help/list-categories.webp)
-*All Downloads, Unfinished, Finished and Queues, each by category.*
+![The Categories pane: All downloads with a category per file type, Unfinished, Finished and Queues](images/help/list-categories.webp)
+*All downloads, Unfinished, Finished and Queues, each by category.*
 
-- **All Downloads** — everything, with a node per category below it.
+- **All downloads** — everything, with a node per category below it.
 - **Unfinished** — downloads that aren't complete yet, by category.
 - **Finished** — complete downloads, by category.
 - **Queues** — each queue; select one to see only its downloads.
@@ -96,7 +96,7 @@ Right-click the list's blank space for **Add new download...**, **Select all**, 
 - On a finished download, double-click shows its **Properties**. To open the file instead, right-click any download and choose **On double-click → Open**.
 - **Alt+Enter** always opens **Properties**.
 
-The right-click menu has everything you can do with a download: **Open**, **Open with...**, **Open folder**, **Move/Rename...**, **Redownload**, **Resume**, **Stop**, **Copy address** (**Ctrl+C**; a torrent has **Copy magnet link** instead), **Refresh download address**, **Verify checksum...**, **Delete**, **Add to queue** and **Properties**. **Open folder** is there once the download is finished, or for a torrent while it downloads.
+The right-click menu has everything you can do with a download: **Open**, **Open with...**, **Open folder**, **Move/Rename...**, **Redownload**, **Resume**, **Stop**, **Copy address** (**Ctrl+C**; a torrent has **Copy magnet link** instead), **Refresh download address...**, **Verify checksum...**, **Delete**, **Add to queue** and **Properties**. **Open folder** is there once the download is finished, or for a torrent while it downloads.
 
 ## Properties
 
@@ -161,7 +161,7 @@ Click **Yes** to delete, or **No** to keep everything.
 
 After deleting, the next download in the list is selected, so you can press **Delete** again.
 
-A download that is running isn't deleted. Stop it first. When running downloads are among the ones you select, the others are deleted and Grabbit says how many running ones it kept: in the question, or in a message when the question is turned off.
+A download that is running isn't deleted. Stop it first. When running downloads are among the ones you select, the others are deleted and Grabbit says how many running ones it kept: in the question, or in the status strip for a few seconds when the question is turned off.
 
 **Delete completed** on the toolbar (or **Downloads → Delete completed**) removes every finished download from the list, with the same question. Their files stay unless you tick **Also move the files to the Recycle Bin** in that question.
 

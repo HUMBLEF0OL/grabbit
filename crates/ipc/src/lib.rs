@@ -73,7 +73,8 @@ pub struct Command {
     /// Automation API: turn it on or off.
     pub api: Option<bool>,
     /// Automation API: `"pause"`, `"start"`, `"remove"` (off the list, its file kept) or
-    /// `"delete"` (with its file) the downloads `ids`; answered with what was done and skipped.
+    /// `"delete"` (a finished file to the Recycle Bin) the downloads `ids`; answered with what
+    /// was done and skipped.
     /// `"start_queue"` / `"stop_queue"` start or stop the queue named `queue`.
     pub action: Option<String>,
     pub ids: Vec<u64>,

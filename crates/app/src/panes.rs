@@ -2985,7 +2985,7 @@ mod details_tests {
         );
         assert_eq!(
             bytes_label(0, Some(512)).as_deref(),
-            Some("0 Bytes of 512 Bytes")
+            Some("0 bytes of 512 bytes")
         );
         assert_eq!(bytes_label(60_775_000, None), None);
     }

@@ -60,6 +60,12 @@ BUDGET = 300 * 1024
 MARK = (194, 65, 12, 255)
 EDGE = (255, 255, 255, 255)
 SS = 4  # supersampling for the annotations
+# The capture's scale (--scale): shots.toml's rectangles, pads and marker sizes are 1x pixels,
+# the controls' rects come from the capture (a 200 % display: 2x). Literal sizes are multiplied
+# by it, and each picture is scaled back down to 1x, so every picture matches whatever the
+# display was.
+K = 1.0
+TAKEN_AT = 1.0  # --scale; K is it for a window taken now, 1 for a picture `from` the repository
 
 
 def load() -> list[dict]:
@@ -135,7 +141,7 @@ def find(ctrls: list[dict], what, sid: str) -> tuple[int, int, int, int]:
     """A rectangle: [x, y, w, h], or a control by name ("Start Download"; "Button:OK" by type
     too; "OK#2" for the second of that name)."""
     if isinstance(what, list):
-        return tuple(what)  # type: ignore[return-value]
+        return tuple(round(v * K) for v in what)  # type: ignore[return-value]
     name, _, nth = str(what).partition("#")
     kind = ""
     if name.split(":", 1)[0] in KINDS and ":" in name:
@@ -168,15 +174,15 @@ def crop_box(s: dict, ctrls: list[dict], size: tuple[int, int]) -> tuple[int, in
     if not c:
         return 0, 0, W, H
     if isinstance(c, list):
-        x, y, w, h = c
+        x, y, w, h = (round(v * K) for v in c)
         w = w or W - x
         h = h or H - y
     else:
         x, y, w, h = union([find(ctrls, a, s["id"]) for a in c["around"]])
-        pad = c.get("pad", 16)
+        pad = round(c.get("pad", 16) * K)
         x, y, w, h = x - pad, y - pad, w + 2 * pad, h + 2 * pad
         # Keep whole edges: a crop that comes within `snap` px of a side takes the side too.
-        snap = c.get("snap", 24)
+        snap = round(c.get("snap", 24) * K)
         if x < snap:
             w, x = w + x, 0
         if y < snap:
@@ -212,26 +218,27 @@ def annotate(img, s: dict, ctrls: list[dict], box):
     for r in rings:
         x, y, w, h = find(ctrls, r, s["id"])
         x, y = x - ox, y - oy
-        p = 4
+        p = 4 * K
         a = [(x - p) * SS, (y - p) * SS, (x + w + p) * SS, (y + h + p) * SS]
-        d.rounded_rectangle([a[0] - SS, a[1] - SS, a[2] + SS, a[3] + SS], radius=8 * SS, outline=EDGE, width=5 * SS)
-        d.rounded_rectangle(a, radius=7 * SS, outline=MARK, width=3 * SS)
-    f = font(13 * SS)
+        e = round(SS * K)
+        d.rounded_rectangle([a[0] - e, a[1] - e, a[2] + e, a[3] + e], radius=8 * e, outline=EDGE, width=5 * e)
+        d.rounded_rectangle(a, radius=7 * e, outline=MARK, width=3 * e)
+    f = font(round(13 * SS * K))
     for i, m in enumerate(marks):
         m = m if isinstance(m, dict) else {"at": m}
         n = m.get("n", i + 1)
         x, y, w, h = find(ctrls, m["at"], s["id"])
         x, y = x - ox, y - oy
         side = m.get("side", "left")
-        R = 11
-        cx, cy = {"left": (x - R - 3, y + h / 2), "right": (x + w + R + 3, y + h / 2),
-                  "top": (x + w / 2, y - R - 3), "bottom": (x + w / 2, y + h + R + 3),
+        R, g, o = 11 * K, 2 * K, 3 * K
+        cx, cy = {"left": (x - R - o, y + h / 2), "right": (x + w + R + o, y + h / 2),
+                  "top": (x + w / 2, y - R - o), "bottom": (x + w / 2, y + h + R + o),
                   "center": (x + w / 2, y + h / 2), "corner": (x, y)}[side]
-        cx = min(max(cx, R + 2), W - R - 2)
-        cy = min(max(cy, R + 2), H - R - 2)
-        d.ellipse([(cx - R - 2) * SS, (cy - R - 2) * SS, (cx + R + 2) * SS, (cy + R + 2) * SS], fill=EDGE)
+        cx = min(max(cx, R + g), W - R - g)
+        cy = min(max(cy, R + g), H - R - g)
+        d.ellipse([(cx - R - g) * SS, (cy - R - g) * SS, (cx + R + g) * SS, (cy + R + g) * SS], fill=EDGE)
         d.ellipse([(cx - R) * SS, (cy - R) * SS, (cx + R) * SS, (cy + R) * SS], fill=MARK)
-        d.text((cx * SS, cy * SS + SS), str(n), font=f, fill=EDGE, anchor="mm")
+        d.text((cx * SS, cy * SS + SS * K), str(n), font=f, fill=EDGE, anchor="mm")
     over = over.resize((W, H), Image.LANCZOS)
     base = img.convert("RGBA")
     base.alpha_composite(over)
@@ -257,8 +264,10 @@ def save_webp(img, path: Path, lossy: int = 0) -> None:
 
 def build(shots: list[dict]) -> None:
     from PIL import Image
+    global K
     made = 0
     for s in shots:
+        K = TAKEN_AT if s.get("take") else 1.0
         for mode in ("light", "dark"):
             if s.get("take"):
                 raw = RAW / mode / f"{raw_name(s['take'])}.png"
@@ -277,6 +286,9 @@ def build(shots: list[dict]) -> None:
                 img = annotate(img, s, ctrls, box)
             except LookupError as e:
                 sys.exit(str(e))
+            if K != 1:
+                w, h = img.size
+                img = img.resize((round(w / K), round(h / K)), Image.LANCZOS)
             if s.get("scale"):
                 w, h = img.size
                 img = img.resize((round(w * s["scale"]), round(h * s["scale"])), Image.LANCZOS)
@@ -434,7 +446,13 @@ def main() -> int:
     ap.add_argument("--at", default="", help='docs-shots -At "x,y": on the screen at x,y (a runner\'s software OpenGL)')
     ap.add_argument("--url-host", default="", help="docs-shots -UrlHost: the lab server's name in the addresses")
     ap.add_argument("--port", type=int, default=0, help="docs-shots -Port: the lab server's port")
+    ap.add_argument("--scale", type=float, default=1.0,
+                    help="the display's scale the raw pictures were taken at (2 at 200 %%); pictures come out at 1x")
     a = ap.parse_args()
+    if a.scale <= 0:
+        sys.exit("--scale: the display's scale, above 0 (2 at 200 %)")
+    global TAKEN_AT
+    TAKEN_AT = a.scale
     shots = load()
     if a.step == "check":
         return check(shots)

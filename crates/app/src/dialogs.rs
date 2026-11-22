@@ -1601,7 +1601,7 @@ fn cancel_waiting(ctx: &egui::Context, n: usize) -> Outcome<bool> {
                 &text,
                 winui::TEXT(),
                 o.x + 362.0,
-                13.0,
+                crate::theme::metrics().line_paragraph,
             );
             grow_to(ui.ctx(), "cancel-waiting", lines, 2);
             let o = o + vec2(0.0, extra);
@@ -2017,9 +2017,10 @@ impl SpeedSettings {
                     note,
                     black,
                     o.x + W - winui::EDGE,
-                    13.0,
+                    crate::theme::metrics().line_paragraph,
                 );
-                self.note_extra = lines.saturating_sub(3) as f32 * 13.0;
+                self.note_extra =
+                    lines.saturating_sub(3) as f32 * crate::theme::metrics().line_paragraph;
                 let o = o + vec2(0.0, self.note_extra);
                 winui::checkbox_light(
                     ui,
@@ -2147,7 +2148,7 @@ pub fn message(ctx: &egui::Context, id: &str, title: &str, text: &str) -> Outcom
                 text,
                 winui::LIGHT_TEXT(),
                 o.x + width - winui::EDGE,
-                13.0,
+                crate::theme::metrics().line_paragraph,
             );
             grow_to(ui.ctx(), id, lines, 1);
             // The one centred footer (the mockup's generic notice): the band, then OK in its
@@ -2551,7 +2552,7 @@ it from Grabbit's list of downloads?",
                     &text,
                     black,
                     o.x + W - e,
-                    13.0,
+                    crate::theme::metrics().line_paragraph,
                 );
                 grow_to(ui.ctx(), "confirm-delete", lines, 3);
                 let o = o + vec2(0.0, extra);
@@ -2576,9 +2577,9 @@ it from Grabbit's list of downloads?",
                         &text,
                         crate::theme::colors().error_strong,
                         o.x + W - e,
-                        13.0,
+                        crate::theme::metrics().line_paragraph,
                     );
-                    lines as f32 * 13.0 + 6.0
+                    lines as f32 * crate::theme::metrics().line_paragraph + 6.0
                 } else {
                     0.0
                 };
@@ -2601,9 +2602,9 @@ it from Grabbit's list of downloads?",
                         &text,
                         crate::theme::colors().error_strong,
                         o.x + W - e,
-                        13.0,
+                        crate::theme::metrics().line_paragraph,
                     );
-                    warn += lines as f32 * 13.0 + 6.0;
+                    warn += lines as f32 * crate::theme::metrics().line_paragraph + 6.0;
                 }
                 // The running downloads Delete leaves alone, said under it (plan 12a, E3).
                 if self.kept > 0 {
@@ -2614,9 +2615,9 @@ it from Grabbit's list of downloads?",
                         &kept_text(self.kept),
                         black,
                         o.x + W - e,
-                        13.0,
+                        crate::theme::metrics().line_paragraph,
                     );
-                    warn += lines as f32 * 13.0 + 6.0;
+                    warn += lines as f32 * crate::theme::metrics().line_paragraph + 6.0;
                 }
                 grow_px(ui.ctx(), "confirm-delete-finished", warn);
                 let o = o + vec2(0.0, warn);
@@ -3112,7 +3113,7 @@ impl Confirm {
                     &text,
                     winui::TEXT(),
                     o.x + W - e,
-                    13.0,
+                    crate::theme::metrics().line_paragraph,
                 );
                 grow_to(ui.ctx(), &key, lines, 3);
                 let o = o + vec2(0.0, extra);
@@ -3194,7 +3195,7 @@ impl DeleteCategory {
                     &text,
                     winui::LIGHT_TEXT(),
                     o.x + W - e,
-                    13.0,
+                    crate::theme::metrics().line_paragraph,
                 );
                 grow_to(ui.ctx(), key, lines, 2);
                 let o = o + vec2(0.0, extra);
@@ -3468,7 +3469,7 @@ impl ExistingFiles {
                 // No is the default: a file the user didn't mean to give up stays as it is.
                 // Enter and Escape both answer No, as before. "No, Yes" as the other
                 // questions read (plan 12b, C1): No isn't moved last, and Tab goes as drawn.
-                match winui::footer(
+                existing_files_answer(winui::footer(
                     ui,
                     o,
                     W,
@@ -3482,13 +3483,19 @@ impl ExistingFiles {
                         ),
                         FooterItem::Button(FooterButton::new("Yes", ButtonKind::Normal)),
                     ],
-                ) {
-                    Some(1) => Outcome::Done(()),
-                    Some(_) => Outcome::Closed,
-                    None => Outcome::Open,
-                }
+                ))
             },
         )
+    }
+}
+
+/// Files already there's answer by the footer item pressed: 1 is Yes (use them: `Done`); 0 is
+/// No, which Enter and Escape press too (`Closed`); None stays open.
+fn existing_files_answer(pressed: Option<usize>) -> Outcome<()> {
+    match pressed {
+        Some(1) => Outcome::Done(()),
+        Some(_) => Outcome::Closed,
+        None => Outcome::Open,
     }
 }
 
@@ -3642,6 +3649,15 @@ fn ensure_folder_with<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Plan 12b, C1: Files already there's Yes (item 1) uses the files; No (item 0, also
+    /// Enter and Escape) never does.
+    #[test]
+    fn files_already_there_uses_them_only_on_yes() {
+        assert!(matches!(existing_files_answer(Some(1)), Outcome::Done(())));
+        assert!(matches!(existing_files_answer(Some(0)), Outcome::Closed));
+        assert!(matches!(existing_files_answer(None), Outcome::Open));
+    }
 
     /// Plan 12a: the delete box says where the files go: finished ones to the Recycle Bin,
     /// unfinished data deleted, a mix said as a mix.

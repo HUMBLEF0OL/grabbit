@@ -475,18 +475,22 @@ impl ReportWindow {
                 true,
             ),
             None => {
-                winui::text(
-                    &p,
+                // The one loading look (plan 12 E4).
+                crate::torrentdlg::loading(
+                    ui,
                     o.x + 24.0,
                     o.y + 226.0,
                     // i18n: crash report window: shown while the crash dump is being read
                     crate::i18n::t("Reading the crash data..."),
                     winui::MUTED(),
+                    o.x + RIGHT,
                 );
             }
         }
 
-        // What is happening behind it.
+        // What is happening behind it; while it is still going (the symbols fetched, GitHub
+        // looked at), with the one loading look's spinner (plan 12 E4).
+        let waiting = fetching.is_some() || (found.is_none() && searching);
         let status: Option<String> = if let Some((done, total)) = fetching {
             let mb = |b: u64| crate::i18n::decimal(b as f64 / 1_048_576.0, 1);
             Some(crate::i18n::fmt(
@@ -514,12 +518,17 @@ impl ReportWindow {
         } else {
             None
         };
+        let waiting = waiting && self.told.is_none();
         if let Some(s) = self.told.clone().or(status) {
             // One line between the report and the check box: a long one (the symbols' note, a
             // translation, an issue's title) is cut at the window's right margin with "...",
             // and shown whole under the pointer (#164).
-            let (rc, cut) =
-                winui::text_fit(&p, o.x + 16.0, o.y + 452.0, &s, winui::TEXT(), o.x + RIGHT);
+            let (x, y, ink, right) = (o.x + 16.0, o.y + 452.0, winui::TEXT(), o.x + RIGHT);
+            let (rc, cut) = if waiting {
+                crate::torrentdlg::loading(ui, x, y, &s, ink, right)
+            } else {
+                winui::text_fit(&p, x, y, &s, ink, right)
+            };
             if cut {
                 winui::full_on_hover(ui, rc, "crash-status", &s);
             }
