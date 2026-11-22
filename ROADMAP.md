@@ -732,6 +732,11 @@ Done since 1.0.1; ships in the next release.
   can't resume), and the Done window in the same layout ("Done" with the size, the files, Saved
   to as a link, Open | ▾ as one split button) whose name row drags the file out or copies it with
   Ctrl+C. The help pictures of these two windows are taken again.
+- ✅ The download window's audit fixes (plan 13c, 13b, 13d): the strip keeps its segments to the
+  end of a download (a tiny last part runs on from its neighbour), the tables' size and number
+  columns fit what they show, the detail line cuts a long speed at its end, an expired link says
+  how to carry on, a download stopped before its first byte reads a dash, and the compact window
+  reads only a torrent's pieces.
 
 ## Being worked on
 
