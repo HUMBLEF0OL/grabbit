@@ -64,7 +64,7 @@ From top to bottom:
   - **View** — show or hide the categories, sort the list (**Arrange files**), **Theme**, **Interface size** (every window larger, 100 % to 200 %; **Ctrl +**, **Ctrl −** and **Ctrl 0** too), **Draw with** (OpenGL or Direct3D) and **Language**.
   - **Help** — help pages and tutorials (on the website), **Keyboard shortcuts**, **Report a problem**, **Check for updates**, **About**, **Tell a friend** and **Support Grabbit** (Grabbit's page on GitHub, to star it: optional, nothing in Grabbit changes).
 - **Toolbar.** **Add**, **Resume**, **Stop**, **Stop all**, **Delete**, **Delete completed**, **Options**, **Scheduler**, **Start queue**, **Stop queue**. **Add** takes links, magnet links, `.torrent` files and video pages alike. The small arrow next to **Add**, **Start queue** and **Stop queue** opens more choices.
-- **Categories** (left). Choose what the list shows: **All Downloads**, **Unfinished**, **Finished** and **Queues**, each with its categories. Drag the gap between the pane and the list to make it wider.
+- **Categories** (left). Choose what the list shows: **All downloads**, **Unfinished**, **Finished** and **Queues**, each with its categories. Drag the gap between the pane and the list to make it wider.
 - **Download list** (right). One row per download. See [The download list](download-list.md).
 
 ## Dark mode

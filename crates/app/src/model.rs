@@ -1439,7 +1439,7 @@ pub fn size(b: u64) -> String {
     } else if b >= 1024.0 {
         format!("{:.2} KB", b / 1024.0) // not translated: IDM's text
     } else {
-        format!("{b} Bytes") // not translated: IDM's text
+        format!("{b} bytes") // not translated: IDM's text
     }
 }
 
@@ -1760,7 +1760,7 @@ mod tests {
     #[test]
     fn formatting() {
         assert_eq!(size(7_392_461), "7.05 MB");
-        assert_eq!(size(500), "500 Bytes");
+        assert_eq!(size(500), "500 bytes");
         assert_eq!(time(14.2), "14 sec");
         assert_eq!(time(82.0), "1 min 22 sec");
         assert_eq!(time(7500.0), "2 hour(s) 5 min");

@@ -24,7 +24,7 @@ Grabbit saves each download's progress as it goes, so a Windows crash, a power c
 
 Many sites hand out links that only work for a while, or only while you are signed in. Resuming then fails, because the old address no longer answers.
 
-1. Right-click the download and choose **Refresh download address**.
+1. Right-click the download and choose **Refresh download address...**.
 2. Grabbit opens the web page the link came from (when it knows it), and the download's **File properties**.
 3. On the web page, start the download again, or copy the new download link (right-click → **Copy link**). If the browser hands the new download to Grabbit, cancel it there: you only need the address.
 4. Paste the new link into **Address** in **File properties** and click **OK**.

@@ -192,7 +192,7 @@ pub struct OptionsDialog {
     browser_rows: winui::RowList,
     category: usize,
     cat_dir: String,
-    /// Connection → "Default max. conn. number", as typed.
+    /// Connection → "Default maximum connections", as typed.
     conns: String,
     mb: String,
     /// File types → "Don't take files smaller than", as typed (KB).
@@ -1268,7 +1268,7 @@ impl OptionsDialog {
         let p = ui.painter().clone();
         let (left, right, h) = (PAGE_LEFT, PAGE_RIGHT, winui::CONTROL_H);
         // Titles over the groups, the groups between hairlines (the mock's).
-        let max = "Default max. conn. number";
+        let max = "Default maximum connections";
         // i18n: label before the choice of DNS (the service that turns names into addresses)
         let dns = "DNS";
         let fx = winui::form(&p, left, &[max, dns], false);
@@ -1313,8 +1313,8 @@ impl OptionsDialog {
                 *n = (*n).min(locked);
             }
         }
-        // i18n: plural noun: label before a list of exceptions
-        winui::form_label(&p, o, left, 167.0, 16.0, "Exceptions", true);
+        // i18n: plural noun: title over a list of exceptions
+        Self::group_title(ui, o, left, winui::baseline_in(167.0, 16.0), "Exceptions");
         // The user's exceptions, then the caps the engine learned (read-only "(auto)" rows).
         let rows: Vec<Vec<String>> = self
             .s
@@ -2861,7 +2861,7 @@ impl OptionsDialog {
             o.x + l,
             o.y + devices_y,
             // i18n: Options → Remote: label above the list of paired phones and computers
-            crate::i18n::t("Paired devices:"),
+            crate::i18n::t("Paired devices"),
             LIGHT_TEXT(),
         );
         let devices = self
@@ -3078,7 +3078,7 @@ impl OptionsDialog {
                 match &shown {
                     Some((code, left)) => {
                         // i18n: Options → Remote → Pair a device: label before the 8-digit code
-                        let label = crate::i18n::t("Code:");
+                        let label = crate::i18n::t("Code");
                         let baseline = o.y + winui::baseline_in(300.0, winui::CONTROL_H);
                         // As the sign-in code (plan 12 G6).
                         let big = egui::FontId::monospace(crate::theme::metrics().font_code);
@@ -3932,30 +3932,29 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit, first: bool) -> Outcome<()>
             ctx.request_repaint();
         });
     }
+    // The third: still asking, with the one loading look (plan 12 E4).
     let status = match (&choice, &e.test) {
-        (Err(why), _) => Some((why.clone(), false)),
-        (Ok(_), Some(t)) => Some(t.lock().unwrap().clone().unwrap_or_else(|| {
+        (Err(why), _) => Some((why.clone(), false, false)),
+        (Ok(_), Some(t)) => Some(match t.lock().unwrap().clone() {
+            Some((line, ok)) => (line, ok, false),
             // i18n: Options → DNS settings: the test is running
-            (crate::i18n::t("Asking...").to_owned(), true)
-        })),
+            None => (crate::i18n::t("Asking...").to_owned(), true, true),
+        }),
         _ => None,
     };
-    if let Some((line, ok)) = status {
+    if let Some((line, ok, asking)) = status {
         let color = if ok {
             LIGHT_TEXT()
         } else {
             crate::theme::colors().error_strong
         };
         let x = o.x + edge + test_w + 8.0;
-        let (rect, cut) = winui::label_into(
-            &p,
-            x,
-            o.y + winui::baseline_in(test_y, h),
-            &line,
-            color,
-            o.x + w - edge,
-            x,
-        );
+        let (baseline, right) = (o.y + winui::baseline_in(test_y, h), o.x + w - edge);
+        let (rect, cut) = if asking {
+            crate::torrentdlg::loading(ui, x, baseline, &line, color, right)
+        } else {
+            winui::label_into(&p, x, baseline, &line, color, right, x)
+        };
         if cut {
             winui::full_on_hover(ui, rect, "dns-test", &line);
         }
@@ -4197,17 +4196,15 @@ fn account_dialog(
     } else {
         crate::theme::colors().error_strong
     };
-    // After Find my token, on its line.
+    // After Find my token, on its line; while the service is asked, with the one loading
+    // look (plan 12 E4).
     let x = o.x + edge + find_w + 12.0;
-    let (rect, cut) = winui::label_into(
-        &p,
-        x,
-        o.y + winui::baseline_in(278.0, h),
-        &line,
-        color,
-        o.x + w - edge,
-        x,
-    );
+    let (baseline, right) = (o.y + winui::baseline_in(278.0, h), o.x + w - edge);
+    let (rect, cut) = if matches!(state, S::Starting | S::Checking) {
+        crate::torrentdlg::loading(ui, x, baseline, &line, color, right)
+    } else {
+        winui::label_into(&p, x, baseline, &line, color, right, x)
+    };
     if cut {
         winui::full_on_hover(ui, rect, "opt-account-state", &line);
     }

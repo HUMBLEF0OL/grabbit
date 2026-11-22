@@ -428,7 +428,7 @@ impl AddWindow {
             }
         }
 
-        // Footer: Ask where to save each one, Later, Cancel, Add N.
+        // Footer: Ask where to save each one, Later, Cancel, Download N.
         let add_label = if valid > 0 {
             // i18n: Add: its default button, which starts them; {n} is how many items it adds
             crate::i18n::fmt(

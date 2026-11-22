@@ -39,7 +39,7 @@ pub fn describe(e: &Error) -> String {
         Error::ShortBody => t("the connection closed before the part was complete").to_owned(),
         Error::FileChanged => t("the file changed on the server").to_owned(),
         Error::NoRanges => {
-            t("the server can't send parts of the file, so it can't be resumed").to_owned()
+            t("the server cannot send parts of the file, so it cannot be resumed").to_owned()
         }
         Error::BadState(what) => fmt(t("cannot resume: {detail}"), &[("detail", &ltr(what))]),
         Error::Io(io) => fmt(
@@ -140,7 +140,7 @@ fn certificate(problem: CertProblem) -> &'static str {
     match problem {
         // i18n: why a download failed: the site's security certificate (what proves a secure, HTTPS, site is the one it says) is past its end date. Browsers warn about the same site
         CertProblem::Expired => t(
-            "the site's security certificate has expired, so Grabbit can't be sure it's the real site (your browser warns about it too)",
+            "the site's security certificate has expired, so Grabbit cannot be sure it's the real site (your browser warns about it too)",
         ),
         // i18n: why a download failed: the site's security certificate's validity hasn't begun; usually this computer's date or time is wrong
         CertProblem::NotYetValid => t(
@@ -148,11 +148,11 @@ fn certificate(problem: CertProblem) -> &'static str {
         ),
         // i18n: why a download failed: the site's security certificate was signed by the site itself or by an issuer this computer doesn't trust. Browsers warn about the same site
         CertProblem::Untrusted => t(
-            "the site's security certificate isn't trusted (it's self-signed or from an unknown issuer), so Grabbit can't be sure it's the real site (your browser warns about it too)",
+            "the site's security certificate isn't trusted (it's self-signed or from an unknown issuer), so Grabbit cannot be sure it's the real site (your browser warns about it too)",
         ),
         // i18n: why a download failed: the site's security certificate was made for other site names than the one in the address
         CertProblem::WrongName => t(
-            "the site's security certificate is for another site name, so Grabbit can't be sure it's the real site (your browser warns about it too)",
+            "the site's security certificate is for another site name, so Grabbit cannot be sure it's the real site (your browser warns about it too)",
         ),
         CertProblem::Revoked => {
             // i18n: why a download failed: the issuer of the site's security certificate took it back
@@ -162,11 +162,11 @@ fn certificate(problem: CertProblem) -> &'static str {
         }
         // i18n: why a download failed: the site's security certificate is made for other uses than a website (its "extended key usage" leaves out web servers)
         CertProblem::NotForWebsites => t(
-            "the site's security certificate isn't made for websites, so Grabbit can't be sure it's the real site",
+            "the site's security certificate isn't made for websites, so Grabbit cannot be sure it's the real site",
         ),
         // i18n: why a download failed: the site's security certificate was refused for another reason (a bad signature, a broken certificate)
         CertProblem::Other => t(
-            "the site's security certificate was refused, so Grabbit can't be sure it's the real site",
+            "the site's security certificate was refused, so Grabbit cannot be sure it's the real site",
         ),
     }
 }
@@ -186,7 +186,7 @@ pub fn service(service: &str, fault: &mdm_engine::ServiceFault) -> String {
         F::NotPremium => t("{service}: this needs a premium account"),
         // i18n: a debrid service's error: it can't reach the file's host now; MDM retries later
         F::HostDown => {
-            t("{service} can't reach this file host right now; Grabbit will try again later")
+            t("{service} cannot reach this file host right now; Grabbit will try again later")
         }
         // i18n: a debrid service's error: the account's limit (traffic) for this host is used up
         F::LimitReached => t("{service}: your limit for this file host is used up for now"),
@@ -210,12 +210,12 @@ pub fn service(service: &str, fault: &mdm_engine::ServiceFault) -> String {
         F::ServiceDown => t("{service} is not responding; try again later"),
         // i18n: a debrid service's error: it can't get the torrent sent to it (nobody shares it any more, or its magnet link can't be read)
         F::TorrentUnavailable => {
-            t("{service} can't get this torrent: nobody shares it, or its link can't be read")
+            t("{service} cannot get this torrent: nobody shares it, or its link cannot be read")
         }
         F::UnsafeName(name) => {
             return fmt(
                 // i18n: a torrent through a debrid service: one of its files has a name that would be written outside its folder; nothing was written. {name} the file's name as the service gave it
-                t("A file of this torrent can't be saved safely: {name}"),
+                t("A file of this torrent cannot be saved safely: {name}"),
                 &[("name", &ltr(name))],
             );
         }
@@ -293,7 +293,7 @@ pub fn adapter(e: &mdm_engine::NetError) -> String {
         N::Family { label, ip } => fmt(
             // i18n: an error: the server's address is IPv6 (or IPv4) and the chosen network adapter has none of that kind; {ip} the address, {adapter} the adapter's name
             t(
-                "{ip} can't be reached through {adapter}: it has no address of that kind (IPv4 or IPv6)",
+                "{ip} cannot be reached through {adapter}: it has no address of that kind (IPv4 or IPv6)",
             ),
             &[("ip", &ltr(&ip.to_string())), ("adapter", label)],
         ),
@@ -306,7 +306,7 @@ pub fn adapter(e: &mdm_engine::NetError) -> String {
         ),
         N::NotSupported { label, what } => fmt(
             // i18n: an error: {what} (e.g. "ftps://", "Video pages (yt-dlp)") can't be held to the chosen network adapter yet, so it isn't sent; {adapter} its name
-            t("{what} can't go through a chosen network adapter ({adapter}) yet"),
+            t("{what} cannot go through a chosen network adapter ({adapter}) yet"),
             &[("what", &ltr(what)), ("adapter", label)],
         ),
     }

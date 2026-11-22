@@ -68,7 +68,7 @@ Tick **Don't show this dialog again** to stop seeing it. It can be turned back o
 
 Grabbit splits a file into parts and downloads them over several connections at once:
 
-- It uses **8 connections** by default. You can set 1 to 32 in **Options → Connection → Default max. conn. number**, or up to 128 after ticking **Allow more than 32 connections** there. More connections help only when the server sends each one at a limited speed and allows that many from one address; most servers allow far fewer.
+- It uses **8 connections** by default. You can set 1 to 32 in **Options → Connection → Default maximum connections**, or up to 128 after ticking **Allow more than 32 connections** there. More connections help only when the server sends each one at a limited speed and allows that many from one address; most servers allow far fewer.
 - When a connection finishes its part, it takes over half of the largest part still left, so no connection sits idle while another one is still working.
 - A connection that is far slower than the others is dropped and opened again.
 - Some servers allow only a few connections. Grabbit notices this and stops asking that server for more. What it has learned shows in **Options → Connection** under **Exceptions**, marked **(auto)**.
@@ -133,7 +133,7 @@ Tick **Only while I'm using the computer** to apply it only while you use the mo
 In the download's progress window, open the **Speed Limiter** tab:
 
 1. Tick **Use Speed Limiter**.
-2. Set **Maximum download speed** in KBytes/sec. The new limit applies at once.
+2. Set **Maximum download speed** in KB/s. The new limit applies at once.
 3. Tick **Remember Speed Limiter settings for this file on download stop/resume** to keep this limit for the file: it applies again when you resume it later, even after restarting Grabbit.
 
 A video or a gallery takes a limit of its own the same way. For a torrent, the limit is that torrent's alone; the others keep theirs. A torrent can't be held under 16 KB/s: a lower limit gives it 16.

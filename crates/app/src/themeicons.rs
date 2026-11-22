@@ -112,7 +112,7 @@ pub const EXTRAS: &[(&str, &str)] = &[
     ("gx-filter", "A filtered column, Clear all filters"),
     ("gx-window", "Show progress window, Open Grabbit"),
     ("gx-external", "Open"),
-    ("gx-apps", "Open with…"),
+    ("gx-apps", "Open with..."),
     ("gx-edit", "Move/Rename, Edit queue"),
     ("gx-shield", "Verify checksum, Options: Proxy / SOCKS"),
     ("gx-info", "Properties, Help contents"),

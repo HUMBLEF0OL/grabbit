@@ -310,8 +310,8 @@ page = "download-list.md"
 under = "Categories"
 take = "@main"
 crop = { around = ["Tree:Categories"], pad = 0 }
-alt = "The Categories pane: All Downloads with a category per file type, Unfinished, Finished and Queues"
-caption = "All Downloads, Unfinished, Finished and Queues, each by category."
+alt = "The Categories pane: All downloads with a category per file type, Unfinished, Finished and Queues"
+caption = "All downloads, Unfinished, Finished and Queues, each by category."
 
 [[shot]]
 id = "category-properties"

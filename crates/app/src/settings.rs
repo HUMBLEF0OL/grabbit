@@ -72,7 +72,7 @@ pub struct Settings {
     pub global_limit_on: bool,
     pub global_limit_kb: u64,
     pub global_only_active: bool,
-    /// Options → Connection → "Default max. conn. number" (IDM default 8).
+    /// Options → Connection → "Default maximum connections" (IDM default 8).
     pub max_connections: u32,
     /// Beyond IDM (issue #12): "Allow more than 32 connections" raises the ceiling of that
     /// number and of the exceptions from `MAX_CONNECTIONS` to `MAX_CONNECTIONS_UNLOCKED`.
@@ -128,7 +128,7 @@ pub struct Settings {
     /// View → Interface size (#262), percent: 100, 125, 150, 175 or 200 (crate::scale). Every
     /// window drawn that much larger than the display's own scale makes it.
     pub interface_size: u16,
-    /// Scheduler → Download limits: "Download no more than `limits_mb` MBytes every
+    /// Scheduler → Download limits: "Download no more than `limits_mb` MB every
     /// `limits_hours` hours" (IDM defaults 200 / 5), with a warning before stopping.
     pub limits_on: bool,
     pub limits_mb: u32,

@@ -68,7 +68,7 @@ Grabbit doesn't use a temporary folder: every connection writes straight into th
 ![Options on its Connection page: connections per download, per-server exceptions, download limits and DNS](images/help/options-connection.webp)
 *Connection: how many connections, exceptions per server, download limits and DNS.*
 
-- **Default max. conn. number** — how many connections each download may use, from 1 to 32 (8 by default). Type the number or use the arrows.
+- **Default maximum connections** — how many connections each download may use, from 1 to 32 (8 by default). Type the number or use the arrows.
 - **Allow more than 32 connections** — raises the most to 128, for the number above and for the exceptions. Most servers allow far fewer from one address; Grabbit notices and asks those for fewer. Turned off again, any higher number comes back to 32.
 - **Exceptions** — a different number for some servers. **New** adds one (the server's name and the number of connections); **Edit** and **Delete** change or remove the selected one. Rows marked **(auto)** are limits Grabbit learned by itself from servers that refused more connections. They can't be edited and fade away by themselves.
 - **Download limits** — download no more than a set amount every few hours. The same setting is in the Scheduler; see [Queues and the Scheduler](queues-and-scheduler.md#download-limits).
