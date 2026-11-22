@@ -258,9 +258,10 @@ caption = "Its progress window: each file and how much of it is here."
 id = "torrent-pieces"
 page = "torrents.md"
 under = "Add a torrent"
-from = "docs/images/progress-torrent-pieces.webp"
-alt = "The Pieces tab: a square for each piece, filled once it's here"
-caption = "Pieces: the torrent's map, filling in."
+# Plan 13b: the window's Details (the Pieces tab is gone); retaken after 13d.
+from = "docs/images/progress-torrent-details.webp"
+alt = "A torrent's progress window with its details: its pieces, peers and limits, and its files"
+caption = "Show details: the torrent's numbers, its files, peers and trackers."
 
 [[shot]]
 id = "rss-feeds"

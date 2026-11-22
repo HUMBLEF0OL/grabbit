@@ -171,7 +171,10 @@ pub fn footer(phase: Phase) -> Vec<(&'static str, ButtonKind, Press)> {
             (crate::i18n::mark("Stop and save"), Normal, Press::Stop),
             cancel,
         ],
-        Phase::Saving => vec![("Stop and save", Disabled, Press::Stop), cancel],
+        Phase::Saving => vec![
+            (crate::i18n::mark("Stop and save"), Disabled, Press::Stop),
+            cancel,
+        ],
         Phase::Waiting | Phase::Finishing => vec![stop(Disabled), cancel],
         // i18n: verb: continue the download
         Phase::Stopped => vec![(crate::i18n::mark("Resume"), Accent, Press::Resume), cancel],
@@ -216,6 +219,22 @@ pub fn stop_asks_first(phase: Phase, resumable: Option<bool>, torrent: bool) -> 
     phase == Phase::Running && resumable == Some(false) && !torrent
 }
 
+/// A running torrent checking its files (`checking`; its snapshot then says Verifying too, so
+/// it is asked first, as `Item::status_text` does), or a download past its last byte
+/// (`finishing`: written out, checked, a video joined; `merging`: a screenshot's join). A
+/// stopped torrent being checked stays Stopped (Resume): only a running one stops.
+fn after_the_bytes(running: bool, merging: bool, checking: bool, finishing: bool) -> Option<Phase> {
+    if merging {
+        Some(Phase::Finishing)
+    } else if running && checking {
+        Some(Phase::Checking)
+    } else if running && finishing {
+        Some(Phase::Finishing)
+    } else {
+        None
+    }
+}
+
 /// The download's state as the window draws it.
 fn phase_of(item: &Item, snap: Option<&Snapshot>, pr: &Progress, sharing: bool) -> Phase {
     use mdm_tools::video::LiveState;
@@ -228,17 +247,15 @@ fn phase_of(item: &Item, snap: Option<&Snapshot>, pr: &Progress, sharing: bool) 
         None => {}
     }
     let running = item.status == Status::Downloading;
-    if pr.sample_merging.is_some()
-        || (running
-            && (super::finishing_fraction(snap).is_some()
-                || item.finishing(false).is_some()
-                || item.past_last_byte()))
-    {
-        return Phase::Finishing;
-    }
-    // A stopped torrent being checked stays Stopped (Resume): only a running one stops.
-    if running && item.torrent_checking().is_some() {
-        return Phase::Checking;
+    if let Some(phase) = after_the_bytes(
+        running,
+        pr.sample_merging.is_some(),
+        item.torrent_checking().is_some(),
+        super::finishing_fraction(snap).is_some()
+            || item.finishing(false).is_some()
+            || item.past_last_byte(),
+    ) {
+        return phase;
     }
     match item.status {
         Status::Downloading if item.at_service().is_some() => Phase::Service,
@@ -378,7 +395,16 @@ pub(super) fn body(
             no_size: look == Some(Look::UnknownSize),
         },
     );
-    strip(&p, o, item, snap, pr.sample_merging, d.as_ref(), drawn);
+    strip(
+        &p,
+        o,
+        item,
+        snap,
+        pr.sample_merging,
+        d.as_ref(),
+        drawn,
+        look == Some(Look::UnknownSize),
+    );
     if let Some((line, alert)) = message(pr, phase, d.as_ref()) {
         let (rc, cut) = winui::text_fit(
             &p,
@@ -438,7 +464,9 @@ pub(super) fn body(
 }
 
 /// The strip under the rows: how far the check or the join after the last byte has come (in the
-/// accent), a torrent's pieces, a file's segments, else one plain fill (13c restyles it).
+/// accent), a torrent's pieces, a file's segments, else one plain fill (13c restyles it);
+/// empty for a size not known (`no_size`).
+#[allow(clippy::too_many_arguments)]
 fn strip(
     p: &egui::Painter,
     o: Pos2,
@@ -447,10 +475,14 @@ fn strip(
     merging: Option<f64>,
     d: Option<&Details>,
     drawn: (f64, &[(u64, f64)]),
+    no_size: bool,
 ) {
     let (x0, y0) = (o.x + EDGE, o.y + STRIP_Y);
     let rc = r(o, EDGE, STRIP_Y, LEFT_W, 15.0);
-    if let Some(f) = merging.or(super::finishing_fraction(snap)) {
+    if no_size {
+        // A size not known (a screenshot's): an empty strip.
+        winui::meter(p, rc, 0.0);
+    } else if let Some(f) = merging.or(super::finishing_fraction(snap)) {
         winui::meter_in(p, rc, f as f32, crate::theme::colors().accent);
     } else if let Some(d) = d.filter(|d| !d.pieces.is_empty()) {
         super::piece_bar(p, x0, y0, STRIP_COLS as usize, &d.pieces);
@@ -997,15 +1029,16 @@ fn footer_row(
     let Some(press) = pressed else {
         return Action::None;
     };
-    // A screenshot's state resumes, stops or saves nothing: the press only ends it.
+    // A screenshot's state resumes, stops, saves or cancels nothing: the press only ends it
+    // (Close closes the window, the download going on, as always).
     let sample = pr.sample_look.is_some() || pr.sample_error.is_some() || pr.sample_live.is_some();
     match press {
-        Press::Cancel => Action::Cancel,
         Press::Close => Action::Close,
         _ if sample => {
             pr.clear_samples();
             Action::None
         }
+        Press::Cancel => Action::Cancel,
         Press::Stop if stop_asks_first(phase, item.resumable, item.torrent.is_some()) => {
             pr.confirm_stop = true;
             Action::None
@@ -1040,21 +1073,44 @@ fn chevron(p: &egui::Painter, rc: egui::Rect, open: bool) {
 /// The window, just widened (Details), moved left as far as it must to stay inside its screen's
 /// work area ([`widened_left`]).
 pub(super) fn keep_on_screen(title: &str) {
-    let Some(([left, top, right, _], _)) = crate::win32::window_rect(title) else {
+    let Some(([left, top, right, bottom], _)) = crate::win32::window_rect(title) else {
         return;
     };
     let screens = crate::win32::screens();
-    let on = screens
-        .iter()
-        .find(|(_, w)| left >= w[0] && left < w[2] && top >= w[1] && top < w[3])
-        .or(screens.first());
-    let Some((_, work)) = on else {
+    let monitors: Vec<[i32; 4]> = screens.iter().map(|(m, _)| *m).collect();
+    let Some(on) = screen_for([left, top, right, bottom], &monitors) else {
         return;
     };
+    let work = screens[on].1;
     let x = widened_left(left, right - left, work[0], work[2]);
     if x != left {
         crate::win32::move_window(title, x, top);
     }
+}
+
+/// The screen a window ([left, top, right, bottom], screen pixels) is on: the one it overlaps
+/// most, else the nearest; None without screens.
+pub fn screen_for(window: [i32; 4], screens: &[[i32; 4]]) -> Option<usize> {
+    let overlap = |s: &[i32; 4]| {
+        let w = (window[2].min(s[2]) - window[0].max(s[0])).max(0) as i64;
+        let h = (window[3].min(s[3]) - window[1].max(s[1])).max(0) as i64;
+        w * h
+    };
+    // How far the window's centre is from the screen (0 inside it).
+    let distance = |s: &[i32; 4]| {
+        let (cx, cy) = (
+            (window[0] + window[2]) as i64 / 2,
+            (window[1] + window[3]) as i64 / 2,
+        );
+        let dx = (s[0] as i64 - cx).max(cx - s[2] as i64).max(0);
+        let dy = (s[1] as i64 - cy).max(cy - s[3] as i64).max(0);
+        dx * dx + dy * dy
+    };
+    let most = (0..screens.len()).max_by_key(|&i| overlap(&screens[i]))?;
+    if overlap(&screens[most]) > 0 {
+        return Some(most);
+    }
+    (0..screens.len()).min_by_key(|&i| distance(&screens[i]))
 }
 
 /// Where a window `width` wide whose left edge is at `left` goes so it stays inside a work area
@@ -1176,6 +1232,54 @@ mod tests {
         assert_eq!(widened_left(3500, 760, 1920, 3840), 3080);
         // A screen narrower than the window: its left edge.
         assert_eq!(widened_left(200, 760, 0, 640), 0);
+    }
+
+    /// The screen a widened window keeps to: the one it overlaps most, a secondary one to the
+    /// right or one at negative coordinates on the left too, else the nearest.
+    #[test]
+    fn the_window_keeps_to_its_own_screen() {
+        let primary = [0, 0, 1920, 1080];
+        let right = [1920, 0, 3840, 1080];
+        let left = [-1280, 0, 0, 1024];
+        let screens = [primary, right, left];
+        // On the right screen, its top-left corner just past every screen's top (outside them).
+        assert_eq!(screen_for([3300, -20, 3740, 400], &screens), Some(1));
+        // Mostly on the right one, a little over the primary.
+        assert_eq!(screen_for([1800, 100, 2240, 400], &screens), Some(1));
+        // On the left one, at negative coordinates.
+        assert_eq!(screen_for([-900, 100, -460, 400], &screens), Some(2));
+        // Off every screen: the nearest.
+        assert_eq!(screen_for([4000, 100, 4440, 400], &screens), Some(1));
+        assert_eq!(screen_for([-2000, 100, -1600, 400], &screens), Some(2));
+        assert_eq!(screen_for([0, 0, 10, 10], &[]), None);
+        // Widened there, it moves left inside that screen's work area.
+        let (x, w) = (3300, 760);
+        assert_eq!(widened_left(x, w, right[0], right[2]), 3080);
+    }
+
+    /// A running torrent checking its files is Checking (Stop works), though its snapshot says
+    /// Verifying as a file being finished does; a stopped one being checked keeps Stopped.
+    #[test]
+    fn a_running_torrent_checking_is_not_finishing() {
+        assert_eq!(
+            after_the_bytes(true, false, true, true),
+            Some(Phase::Checking)
+        );
+        assert_eq!(
+            footer(Phase::Checking)[0].1,
+            ButtonKind::Normal,
+            "Stop enabled"
+        );
+        assert_eq!(
+            after_the_bytes(true, false, false, true),
+            Some(Phase::Finishing)
+        );
+        assert_eq!(after_the_bytes(false, false, true, true), None);
+        assert_eq!(
+            after_the_bytes(false, true, false, false),
+            Some(Phase::Finishing)
+        );
+        assert_eq!(after_the_bytes(true, false, false, false), None);
     }
 
     /// Every state name of plan 13b reads back as its look.

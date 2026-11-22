@@ -1219,7 +1219,7 @@ pub(crate) fn files_table(
     checks: &[bool],
     shown: usize,
 ) -> Option<usize> {
-    files_table_w(ui, p, o, id, rows, checks, shown, TABLE_W)
+    files_table_w(ui, p, o, id, rows, checks, shown, FILES_WINDOW_TABLE_W)
 }
 
 /// [`files_table`] `w` wide: narrower than the Files window's, the Size and Done columns keep to
@@ -1236,7 +1236,7 @@ fn files_table_w(
     w: f32,
 ) -> Option<usize> {
     let right = 17.0 + w;
-    let (size_x, done_x) = if w >= TABLE_W {
+    let (size_x, done_x) = if w >= FILES_WINDOW_TABLE_W {
         (335.0, 430.0)
     } else {
         (right - 125.0, right - 55.0)
@@ -1261,7 +1261,7 @@ fn files_table_w(
 }
 
 /// The Files window's table width (and the progress window's before plan 13b): x 17..530.
-const TABLE_W: f32 = 513.0;
+const FILES_WINDOW_TABLE_W: f32 = 513.0;
 
 /// The height of a [`table_sized`] of `shown` rows' body (the progress window's 6: 100 px).
 pub(crate) fn table_body_height(shown: usize) -> f32 {

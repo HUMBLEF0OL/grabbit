@@ -1126,6 +1126,25 @@ fn shortcut_cmd(i: &mut egui::InputState, focused: bool) -> Option<Cmd> {
 /// (a torrent's, local or through a debrid account, is Copy magnet link's), one a line,
 /// without a password written in them (as the Details pane shows them); None when none has
 /// one to copy.
+/// Whether the torrent session keeps or restores a torrent at its start: one not finished
+/// always; a finished one while Keep sharing is on, under its seeding limits, and not stopped
+/// sharing by hand (`unshared`, plan 13b).
+fn kept_in_session(
+    complete: bool,
+    keep_sharing: bool,
+    limit_reached: bool,
+    unshared: bool,
+) -> bool {
+    !complete || (keep_sharing && !limit_reached && !unshared)
+}
+
+/// Whether a finished download's Done window opens: its progress window's When done decides
+/// (which started from Options' "Show download complete dialog", `setting`); without a window,
+/// the setting does (plan 13b).
+fn shows_done_window(setting: bool, window: Option<bool>) -> bool {
+    window.unwrap_or(setting)
+}
+
 fn addresses(chosen: &[&Item]) -> Option<String> {
     let lines: Vec<String> = chosen
         .iter()
@@ -2768,11 +2787,15 @@ impl App {
                 &self.blocklist_busy,
             );
         }
+        // Finished torrents to share (not the ones stopped sharing by hand).
+        let unshared = &self.settings.torrent_unshared;
         let sharing = self.settings.torrent_keep_sharing
-            && self
-                .items
-                .iter()
-                .any(|i| i.torrent.is_some() && i.status == Status::Complete);
+            && self.items.iter().any(|i| {
+                i.status == Status::Complete
+                    && i.torrent
+                        .as_ref()
+                        .is_some_and(|t| !unshared.contains(&t.hash))
+            });
         // A torrent being checked (a Recheck of one that isn't running, its action still going,
         // or its result not read yet) needs the session too: stopped as idle after a minute,
         // the check died where it was and the list said "Checking 17%" for good.
@@ -4057,6 +4080,9 @@ impl App {
                 .map(|i| i.file_name.clone())
                 .unwrap_or_default();
             self.torrent_host.forget(&self.rt, &spec, files, &name);
+            // A torrent stopped sharing by hand, gone from the list: its choice goes too.
+            self.settings.torrent_unshared.retain(|h| *h != spec.hash);
+            self.dirty = true;
         } else if files
             && let Some(i) = self.items.iter().find(|i| i.id == id)
             // A gallery's folder stays (it may hold other files; #58).
@@ -5235,13 +5261,15 @@ impl App {
         self.items
             .iter()
             .filter(|i| {
-                i.status != Status::Complete
-                    || (self.settings.torrent_keep_sharing
-                        && i.torrent.as_ref().is_some_and(|spec| {
-                            crate::torrents::sharing_limit_reached(spec, i.downloaded, limits)
-                                .is_none()
-                                && !self.settings.torrent_unshared.contains(&spec.hash)
-                        }))
+                i.torrent.as_ref().is_some_and(|spec| {
+                    kept_in_session(
+                        i.status == Status::Complete,
+                        self.settings.torrent_keep_sharing,
+                        crate::torrents::sharing_limit_reached(spec, i.downloaded, limits)
+                            .is_some(),
+                        self.settings.torrent_unshared.contains(&spec.hash),
+                    )
+                })
             })
             .filter_map(|i| i.torrent.as_ref().map(|t| t.hash.clone()))
             .collect()
@@ -7539,7 +7567,10 @@ impl App {
     fn close_finished(&mut self, id: u64, early: Option<u64>) {
         // This file's When done (its progress window's details), read before the window closes.
         let window = self.progress.iter().find(|p| p.id == id);
-        let this_file = window.is_none_or(|p| p.shows_complete());
+        let show = shows_done_window(
+            self.settings.show_complete,
+            window.map(Progress::shows_complete),
+        );
         if let Some(w) = window.and_then(Progress::when_done) {
             self.when_done(w);
         }
@@ -7547,10 +7578,7 @@ impl App {
         if Some(id) == early {
             return;
         }
-        if self.settings.show_complete
-            && this_file
-            && let Some(i) = self.items.iter().find(|i| i.id == id)
-        {
+        if show && let Some(i) = self.items.iter().find(|i| i.id == id) {
             self.complete.push(Complete {
                 id,
                 url: i.url.to_string(),
@@ -8323,8 +8351,9 @@ impl App {
                 .position(|e| matches!(e, I(_, Cmd::VerifyChecksum, _, _)))
                 .map_or(entries.len(), |p| p + 1);
             // A finished torrent sharing now can stop; one stopped by hand can start again
-            // (plan 13b). Neither for one still downloading.
-            let finished = i.status == Status::Complete;
+            // (plan 13b). Neither for one still downloading, nor while Keep sharing is off (the
+            // session shares no finished torrent then; the choices made stay for when it's on).
+            let finished = i.status == Status::Complete && self.settings.torrent_keep_sharing;
             let sharing = match (
                 finished,
                 self.settings.torrent_unshared.contains(&spec.hash),
@@ -13244,6 +13273,38 @@ mod show_paste_tests {
         }
     }
 }
+#[cfg(test)]
+mod sharing_and_done_tests {
+    use super::{kept_in_session, shows_done_window};
+
+    /// Plan 13b: at start the session keeps a finished torrent only while Keep sharing is on, it
+    /// is under its limits and it wasn't stopped sharing by hand; one not finished always.
+    #[test]
+    fn the_session_leaves_out_a_torrent_stopped_sharing_by_hand() {
+        assert!(kept_in_session(true, true, false, false));
+        assert!(!kept_in_session(true, true, false, true), "stopped by hand");
+        assert!(
+            !kept_in_session(true, false, false, false),
+            "Keep sharing off"
+        );
+        assert!(!kept_in_session(true, true, true, false), "limit reached");
+        assert!(
+            kept_in_session(false, false, true, true),
+            "still downloading"
+        );
+    }
+
+    /// Plan 13b: the window's When done decides whether the Done window opens, whatever
+    /// Options say; without a window, Options do.
+    #[test]
+    fn when_done_decides_the_done_window() {
+        assert!(shows_done_window(false, Some(true)));
+        assert!(!shows_done_window(true, Some(false)));
+        assert!(shows_done_window(true, None));
+        assert!(!shows_done_window(false, None));
+    }
+}
+
 #[cfg(test)]
 mod show_details_tests {
     use super::{is_show_details, show_details_pick};

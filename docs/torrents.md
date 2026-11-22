@@ -20,8 +20,8 @@ Grabbit downloads BitTorrent files from magnet links and `.torrent` files. Torre
    *Untick what you don't want, then Download now.*
 2. ![A torrent's progress window on its Files tab](images/help/torrent-files.webp)
    *Its progress window: each file and how much of it is here.*
-3. ![The Pieces tab: a square for each piece, filled once it's here](images/help/torrent-pieces.webp)
-   *Pieces: the torrent's map, filling in.*
+3. ![A torrent's progress window with its details: its pieces, peers and limits, and its files](images/help/torrent-pieces.webp)
+   *Show details: the torrent's numbers, its files, peers and trackers.*
 
 You can also paste a magnet link into the paste bar (its button says **Add torrent**), drop a magnet link or a `.torrent` file on the main window, or drop a magnet link or a `.torrent` file on the drop target (**Tasks → Show drop target**). If a torrent is already in the list, Grabbit says so instead of adding it twice.
 
@@ -55,7 +55,7 @@ Right-click a torrent in the list and open **Torrent**:
 - **Download in order** — downloads the torrent's files from their start (see below). Click it again to go back to the rarest pieces first.
 - **First and last pieces first** — with **Download in order**, each file's first and last pieces come before the rest. It's on by default.
 - **Copy magnet link** — copies a magnet link for the torrent, with its trackers.
-- **Stop sharing** — on a finished torrent that is shared: it stops sending to other peers, and stays so after Grabbit restarts, even with **Keep sharing torrents after they finish** on. **Start sharing** (in its place) shares it again; so does resuming it.
+- **Stop sharing** — on a finished torrent shared because **Keep sharing torrents after they finish** is on: it stops sending to other peers, and stays so after Grabbit restarts. **Start sharing** (in its place) shares it again; so does resuming it.
 
 The torrent's progress window has the same commands under its **Files** and **Trackers** tabs, and its **From** row's copy button copies the magnet link.
 

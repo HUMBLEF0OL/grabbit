@@ -306,7 +306,7 @@ IMAGES = ROOT / "docs" / "images"
 # from a Docs screenshots run's docs/ folder; main-dark from its site-dark/ folder.
 DOCS_SHOTS = ["add-torrent", "add-url", "crash-report", "grabber",
               "main-light", "options-connection", "options-remote", "progress", "progress-torrent",
-              "progress-torrent-pieces", "progress-video", "scheduler", "speed-limiter"]
+              "progress-torrent-details", "progress-video", "scheduler", "speed-limiter"]
 DOCS_DARK = ["main-dark"]
 
 
