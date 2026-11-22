@@ -13,7 +13,7 @@ It shows the file's name (and, when it isn't simply downloading, its state: **St
 - How far it is, large, with the time left beside it.
 - A strip of the whole file. The file is split into parts that download side by side; each part
   has its own place in the strip, as wide as its share of the file, filled as far as it has come,
-  with a small white mark where it is being written now. With many small parts the strip is one
+  with a small mark where it is being written now. With many small parts the strip is one
   plain fill. A torrent's strip shows its pieces: the brighter a place, the more of its pieces
   are in. A video's strip is one plain fill.
 - How much has come of the whole (**2.38 of 5.80 GB**), and the speed.
@@ -90,7 +90,7 @@ A download resumes where it stopped: after you stop it, after the connection dro
 - A connection that fails is retried on its own. The progress window's table shows **Retrying** and the reason.
 - To continue a stopped download, select it and click **Resume** on the toolbar (or **File → Resume**).
 - Before continuing, Grabbit checks that the file on the server is still the same. If it changed, the download stops with **the file changed on the server**. Use **Redownload** to start again from the beginning.
-- If **Resume capability** is **No**, the server can't send a file in parts. Grabbit then downloads it over one connection, and a download that stops has to start over.
+- If **Can resume** (under **Show details**) is **No**, the server can't send a file in parts. Grabbit then downloads it over one connection, and a download that stops has to start over.
 
 [Resume a broken download](guide-resume-broken-download.md) covers expired links too.
 

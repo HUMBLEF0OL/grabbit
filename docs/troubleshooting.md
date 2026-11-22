@@ -22,7 +22,7 @@ Every download keeps a log of its recent events: retries, redirects, the server'
 
 ## A download starts over instead of resuming
 
-- Look at **Resume capability** in the progress window. **No** means the server can't send a file in parts, so Grabbit can't continue it later.
+- Look at **Can resume** in the progress window (click **Show details**). **No** means the server can't send a file in parts, so Grabbit can't continue it later.
 - Some servers report a new date for the same file every time. Tick **Options → Downloads → Ignore file modification time changes when resuming a download**.
 
 ## Downloads are slow

@@ -98,7 +98,7 @@ ROLES = [
     ]),
     ("Progress: the outlaw colour on the track", [
         ("progress.track", "track"), ("meter.track", "track"), ("progress.bar", "out"),
-        ("meter.fill", "out"), ("segments.done", "out"), ("segments.missing", "track"),
+        ("meter.fill", "out"),
         ("pieces.have", "out"), ("pieces.partial", ("mix", "out", "surface", 0.55)),
         ("pieces.missing", "track"),
     ]),

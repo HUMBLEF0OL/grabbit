@@ -142,8 +142,18 @@ fn facts_end(kind: Kind, top: f32) -> f32 {
     facts(kind).iter().fold(top, |y, f| y + f.height() + GAP) - GAP
 }
 
+/// A table's height at its fewest rows.
 fn table_height() -> f32 {
     TITLES_H + ROWS_SHOWN as f32 * ROW_H
+}
+
+/// What a torrent's commands take under its table: 12, then two rows of check boxes.
+const COMMANDS_H: f32 = 12.0 + 16.0 + GAP + 16.0;
+
+/// The whole rows a table whose titles start at `y` shows down to `bottom` (the left column's
+/// end), five at the fewest.
+fn rows_down_to(y: f32, bottom: f32) -> usize {
+    (((bottom - y - TITLES_H) / ROW_H).floor().max(0.0) as usize).max(ROWS_SHOWN)
 }
 
 /// The right column's end: the speed graph and the connections, the graph only, or the tabs
@@ -153,7 +163,7 @@ fn right_end(kind: Kind) -> f32 {
     match kind {
         Kind::File => graph + 16.0 + HEAD + table_height(),
         Kind::Video => graph,
-        Kind::Torrent => TOP + HEAD + table_height() + 12.0 + 16.0 + GAP + 16.0,
+        Kind::Torrent => TOP + HEAD + table_height() + COMMANDS_H,
     }
 }
 
@@ -637,11 +647,14 @@ pub enum Reading {
 /// The reading's figure for a fraction: whole percents, one decimal below 10 (a torrent's 6.7),
 /// rounded down so 100 shows only when it is all there.
 pub fn reading_figure(frac: f64) -> String {
-    let pct = (frac * 100.0).clamp(0.0, 100.0);
-    if pct < 10.0 {
+    // A hair over, so 0.29 × 100 (28.999...) reads 29.
+    let pct = (frac * 100.0).clamp(0.0, 100.0) + 1e-9;
+    if frac <= 0.0 {
+        "0".to_owned()
+    } else if pct < 10.0 {
         format!("{:.1}", (pct * 10.0).floor() / 10.0) // not translated: a number
     } else {
-        format!("{}", pct.floor() as u32) // not translated: a number
+        format!("{}", pct.floor().min(100.0) as u32) // not translated: a number
     }
 }
 
@@ -781,11 +794,10 @@ fn paint_strip(p: &egui::Painter, o: Pos2, strip: &Strip) {
                 winui::solid(p, at(part.x0, part.x1), track);
                 winui::solid(p, at(part.x0, part.fill), fill);
             }
-            // The ticks over the fills, 1 point above and below the strip.
+            // The ticks over the fills, as high as the strip (the boards clip them to it).
             for part in parts.iter().filter(|g| g.tick) {
                 let x = part.fill.min(part.x1 - TICK_W).max(part.x0);
-                let rc = r(o, EDGE + x, STRIP_Y - 1.0, TICK_W, STRIP_H + 2.0);
-                winui::solid(p, rc, ink());
+                winui::solid(p, at(x, x + TICK_W), ink());
             }
         }
         Strip::Pieces(cols) => {
@@ -1036,11 +1048,13 @@ pub(super) fn body(
             d,
             facts_top(shown.line.is_some()),
         );
+        // The right column's tables reach down to the left column's end.
+        let bottom = facts_end(kind, facts_top(shown.line.is_some()));
         let right = match kind {
-            Kind::Torrent => torrent_column(pr, ui, &p, o, item, d),
+            Kind::Torrent => torrent_column(pr, ui, &p, o, item, d, bottom),
             Kind::File => {
                 let y = graph(ui, &p, o, pr);
-                connections(ui, &p, o, y + 16.0, snap);
+                connections(ui, &p, o, y + 16.0, snap, bottom);
                 Action::None
             }
             Kind::Video => {
@@ -1137,6 +1151,10 @@ fn left_details(
                     let id = egui::Id::unique(("from-hash", ui.ctx().viewport_id()));
                     let resp = ui.interact(rc, id, Sense::focusable_noninteractive());
                     winui::expose(&resp, egui::Role::Label, label, true, None);
+                    // Its info hash read after its name, as its tooltip shows it.
+                    let described = tip.clone();
+                    resp.ctx
+                        .accesskit_node_builder(resp.id, |n| n.set_description(described));
                     winui::show_focus(ui, &resp, rc.expand(2.0));
                     winui::tip(resp, &tip);
                     let copy = crate::i18n::mark("Copy magnet link");
@@ -1315,7 +1333,10 @@ fn format_of(item: &Item) -> String {
         .extension()
         .map(|e| e.to_string_lossy().to_uppercase())
         .unwrap_or_default();
-    if video.selector.contains('+') {
+    if video.selector.contains('+') && kind.is_empty() {
+        // i18n: a video's Format row when its file's kind isn't known yet: its picture and sound come apart and are joined when both are in
+        crate::i18n::t("Picture and sound joined at the end").to_owned()
+    } else if video.selector.contains('+') {
         crate::i18n::fmt(
             // i18n: a video's Format row: {kind} = its file's kind (MP4); its picture and sound come apart and are joined when both are in
             crate::i18n::t("{kind}, picture and sound joined at the end"),
@@ -1368,28 +1389,27 @@ fn limits(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent: b
     let mut unit_x = box_x + box_w + GAP;
     if torrent {
         let was_up = pr.up_on;
-        let up_x = unit_x + 4.0;
+        // Board 3: Up 16 after the Down box, its box 8 after its caption (the check box's
+        // caption is 18 after the box's start).
+        let up_x = box_x + box_w + 16.0;
+        // i18n: a torrent's Limit row: the upload limit's check box (a limit for what it sends to others)
+        let up_label = crate::i18n::mark("Up");
+        let up_box_x = up_x + 18.0 + winui::text_width(p, crate::i18n::t(up_label)).ceil() + GAP;
         winui::checkbox_until(
             ui,
             o + vec2(up_x, y + 7.0),
             &mut pr.up_on,
-            // i18n: a torrent's Limit row: the upload limit's check box (a limit for what it sends to others)
-            "Up",
+            up_label,
             true,
-            Some(o.x + up_x + 50.0),
+            Some(o.x + up_box_x - 6.0),
         );
-        let up_box = winui::edit_right(
-            ui,
-            r(o, up_x + 56.0, y, 56.0, ROW_H),
-            &mut pr.up_kb,
-            pr.up_on,
-        );
+        let up_box = winui::edit_right(ui, r(o, up_box_x, y, 56.0, ROW_H), &mut pr.up_kb, pr.up_on);
         pr.up_kb.retain(|c| c.is_ascii_digit());
         let kb: u64 = pr.up_kb.parse().unwrap_or(0);
         if (was_up != pr.up_on || (pr.up_on && typed(ui, &up_box))) && !(pr.up_on && kb == 0) {
             pr.pending_upload = Some(pr.up_on.then_some(kb * 1024));
         }
-        unit_x = up_x + 56.0 + 56.0 + GAP;
+        unit_x = up_box_x + 56.0 + GAP;
     }
     winui::text_font(
         p,
@@ -1485,16 +1505,30 @@ impl Sampler {
     pub const KEPT: usize = 60;
 
     /// The download's `rate` (bytes a second) at `now` (seconds): kept when a second has gone
-    /// since the last reading.
+    /// since the last reading. The seconds missed in between (the window hidden in the
+    /// notification area, no frames while stopped) read 0; the clock moves by whole seconds, so
+    /// the readings don't drift.
     pub fn feed(&mut self, now: f64, rate: f64) {
-        if self.last.is_some_and(|t| now - t < 1.0) {
-            return;
+        if let Some(last) = self.last {
+            let gone = (now - last).floor();
+            if gone < 1.0 {
+                return;
+            }
+            for _ in 0..((gone as usize) - 1).min(Self::KEPT) {
+                self.push(0.0);
+            }
+            self.last = Some(last + gone);
+        } else {
+            self.last = Some(now);
         }
-        self.last = Some(now);
+        self.push(rate.max(0.0));
+    }
+
+    fn push(&mut self, rate: f64) {
         if self.readings.len() == Self::KEPT {
             self.readings.pop_front();
         }
-        self.readings.push_back(rate.max(0.0));
+        self.readings.push_back(rate);
     }
 
     /// Oldest first.
@@ -1607,14 +1641,16 @@ struct Col {
 type Cell = (String, Color32, bool);
 
 /// A table of the right column at `y` (boards 2, 3, 10, 12): its column titles in a 24-point
-/// row, then rows 26 high each with a line under it, five at once, scrolled by the wheel and a
-/// thin bar at its end (room kept for it). `checks`: a box before each row (a torrent's Files,
-/// the first column's); the row whose box was clicked.
+/// row, then rows 26 high each with a line under it, `shown` at once, scrolled by the wheel and
+/// a thin bar at its end (room kept for it). `checks`: a box before each row (a torrent's
+/// Files, the first column's); the row whose box was clicked.
+#[allow(clippy::too_many_arguments)]
 fn table(
     ui: &mut Ui,
     p: &egui::Painter,
     o: Pos2,
     y: f32,
+    shown: usize,
     id: &str,
     cols: &[Col],
     rows: &[Vec<Cell>],
@@ -1646,13 +1682,13 @@ fn table(
     }
     winui::solid(p, r(o, RIGHT_X, y + TITLES_H - 1.0, RIGHT_W, 1.0), grid);
     let top = y + TITLES_H;
-    let body_h = ROWS_SHOWN as f32 * ROW_H;
+    let body_h = shown as f32 * ROW_H;
     let body = r(o, RIGHT_X, top, RIGHT_W, body_h);
     let key = egui::Id::unique(("progress-table", id, ui.ctx().viewport_id()));
-    let first = super::first_row(ui, key, body, rows.len(), ROWS_SHOWN);
+    let first = super::first_row(ui, key, body, rows.len(), shown);
     let clip = p.with_clip_rect(body);
     let mut clicked = None;
-    for (k, row) in rows.iter().enumerate().skip(first).take(ROWS_SHOWN) {
+    for (k, row) in rows.iter().enumerate().skip(first).take(shown) {
         let row_top = top + (k - first) as f32 * ROW_H;
         let base = o.y + row_top + 17.0;
         let mut cells = row.iter();
@@ -1686,8 +1722,17 @@ fn table(
             grid,
         );
     }
-    let track = r(o, RIGHT_X + RIGHT_W - 6.0, top, 6.0, body_h);
-    super::rows_bar(ui, key, track, rows.len(), ROWS_SHOWN, first);
+    // A thin bar inside the room kept at the column's end.
+    if rows.len() > shown {
+        let track = r(o, RIGHT_X + RIGHT_W - 6.0, top, 6.0, body_h);
+        let mut pos = first as f32;
+        let (total, page) = (rows.len() as f32, shown as f32);
+        if crate::scrollbar::thin(ui, key.with("bar"), track, total, page, &mut pos) {
+            let last = super::last_first_row(rows.len(), shown);
+            let first = (pos.round().max(0.0) as usize).min(last);
+            ui.ctx().data_mut(|d| d.insert_temp(key, first));
+        }
+    }
     clicked
 }
 
@@ -1702,17 +1747,21 @@ fn conn_rank(s: &ConnStatus) -> u8 {
 }
 
 /// The connections at `y` under the speed graph (boards 2, 10): number, received, speed or
-/// what it is doing; receiving ones first, the fastest first.
-fn connections(ui: &mut Ui, p: &egui::Painter, o: Pos2, y: f32, snap: Option<&Snapshot>) {
+/// what it is doing; receiving ones first ([`conn_rank`]), by number within each group. As many
+/// whole rows as reach down to `bottom`.
+fn connections(
+    ui: &mut Ui,
+    p: &egui::Painter,
+    o: Pos2,
+    y: f32,
+    snap: Option<&Snapshot>,
+    bottom: f32,
+) {
     let mut conns: Vec<_> = snap
         .map(|s| s.connections.iter().collect())
         .unwrap_or_default();
-    conns.sort_by(|a, b| {
-        conn_rank(&a.status)
-            .cmp(&conn_rank(&b.status))
-            .then(b.speed.cmp(&a.speed))
-            .then(a.id.cmp(&b.id))
-    });
+    // By number within each group: rows that don't move as speeds change.
+    conns.sort_by_key(|c| (conn_rank(&c.status), c.id));
     let receiving = conns
         .iter()
         .filter(|c| matches!(c.status, ConnStatus::Receiving))
@@ -1787,7 +1836,9 @@ fn connections(ui: &mut Ui, p: &egui::Painter, o: Pos2, y: f32, snap: Option<&Sn
             end: true,
         },
     ];
-    table(ui, p, o, y + HEAD, "connections", &cols, &rows, None);
+    let y = y + HEAD;
+    let shown = rows_down_to(y, bottom);
+    table(ui, p, o, y, shown, "connections", &cols, &rows, None);
 }
 
 /// A row of tabs at the right column's `y`, underlined (board 3): the chosen one in the ink with
@@ -1862,7 +1913,9 @@ fn tabs(
 }
 
 /// A torrent's right column (boards 3, 12): Files, Peers and Trackers over their table, Recheck
-/// files at the tabs' end on Files, each tab's commands under its table. The command asked for.
+/// files at the tabs' end on Files, each tab's commands under its table; the tables as long as
+/// they can be with their commands under them by `bottom`. The command asked for.
+#[allow(clippy::too_many_arguments)]
 fn torrent_column(
     pr: &mut Progress,
     ui: &mut Ui,
@@ -1870,6 +1923,7 @@ fn torrent_column(
     o: Pos2,
     item: &Item,
     d: Option<&Details>,
+    bottom: f32,
 ) -> Action {
     let tabs_list = [
         // i18n: tab title: the torrent's files
@@ -1884,8 +1938,10 @@ fn torrent_column(
     if let Some(i) = tabs(ui, p, o, TOP, &labels, current) {
         pr.ttab = tabs_list[i].0;
     }
-    let action = torrent_commands(pr, ui, o, item, d);
     let y = TOP + HEAD;
+    let shown = rows_down_to(y, bottom - COMMANDS_H);
+    let under = y + TITLES_H + shown as f32 * ROW_H + 12.0;
+    let action = torrent_commands(pr, ui, o, item, d, under);
     let Some(d) = d else {
         winui::text_font(
             p,
@@ -1944,7 +2000,8 @@ fn torrent_column(
             ];
             // A box ticked or unticked (#39): the torrent downloads those files from now on;
             // the last one ticked can't be unticked (a torrent of nothing).
-            if let Some(row) = table(ui, p, o, y, "t-files", &cols, &rows, Some(&ticks)) {
+            let clicked = table(ui, p, o, y, shown, "t-files", &cols, &rows, Some(&ticks));
+            if let Some(row) = clicked {
                 let mut on = ticks.clone();
                 on[row] = !on[row];
                 if on.iter().any(|b| *b) {
@@ -1996,7 +2053,7 @@ fn torrent_column(
                     end: true,
                 },
             ];
-            table(ui, p, o, y, "t-peers", &cols, &rows, None);
+            table(ui, p, o, y, shown, "t-peers", &cols, &rows, None);
         }
         TTab::Trackers => {
             let rows: Vec<Vec<Cell>> = if d.trackers.is_empty() {
@@ -2018,7 +2075,7 @@ fn torrent_column(
                 w: 0.0,
                 end: false,
             }];
-            table(ui, p, o, y, "t-trackers", &cols, &rows, None);
+            table(ui, p, o, y, shown, "t-trackers", &cols, &rows, None);
         }
     }
     action
@@ -2026,13 +2083,15 @@ fn torrent_column(
 
 /// A torrent's commands (plan 13b) on its tabs: Recheck files at the tabs' end on Files, Download
 /// in order and First and last pieces first under its table; Add trackers... and Ask trackers
-/// again under the Trackers table. The one pressed.
+/// again under the Trackers table; `under`: where the commands under a table go. The one
+/// pressed.
 fn torrent_commands(
     pr: &mut Progress,
     ui: &mut Ui,
     o: Pos2,
     item: &Item,
     d: Option<&Details>,
+    under: f32,
 ) -> Action {
     let Some(spec) = &item.torrent else {
         return Action::None;
@@ -2054,7 +2113,6 @@ fn torrent_commands(
         }
     };
     let width = |label: &str| (winui::text_width(&p, crate::i18n::t(label)) + 24.0).ceil();
-    let under = TOP + HEAD + table_height() + 12.0;
     let mut action = Action::None;
     match pr.ttab {
         TTab::Files => {
@@ -2481,6 +2539,16 @@ mod tests {
             size(true, Kind::File, true)[1],
             size(true, Kind::File, false)[1] + LINE_ROOM
         );
+        // The right column's tables take the whole rows down to the left column's end, five
+        // at the fewest; it never runs past the left one.
+        assert_eq!(rows_down_to(0.0, TITLES_H + 8.0 * ROW_H + 20.0), 8);
+        assert_eq!(rows_down_to(0.0, 10.0), ROWS_SHOWN);
+        for kind in [Kind::File, Kind::Torrent, Kind::Video] {
+            assert!(
+                right_end(kind) <= facts_end(kind, facts_top(false)),
+                "{kind:?}"
+            );
+        }
     }
 
     /// Plan 13c: the speed graph's sampler starts empty, keeps one reading a second (fed twice
@@ -2502,6 +2570,30 @@ mod tests {
         assert_eq!(s.readings().len(), Sampler::KEPT);
         assert_eq!(s.readings().back(), Some(&99.0), "the newest last");
         assert_eq!(s.readings().front(), Some(&40.0), "the oldest dropped");
+    }
+
+    /// Seconds without a frame (the window in the notification area) read 0, so a pause shows
+    /// as one; the clock moves by whole seconds, not to the frame's time.
+    #[test]
+    fn the_sampler_fills_missed_seconds_with_nothing() {
+        let mut s = Sampler::default();
+        s.feed(0.0, 5.0);
+        s.feed(3.5, 7.0);
+        let got: Vec<f64> = s.readings().iter().copied().collect();
+        assert_eq!(got, [5.0, 0.0, 0.0, 7.0]);
+        s.feed(3.9, 9.0);
+        assert_eq!(
+            s.readings().len(),
+            4,
+            "3.5 counted as second 3: 3.9 is in it"
+        );
+        s.feed(4.0, 9.0);
+        assert_eq!(s.readings().len(), 5, "no drift: second 4 starts at 4.0");
+        // A long gap: the last minute is all zeros but the reading.
+        s.feed(1000.2, 1.0);
+        assert_eq!(s.readings().len(), Sampler::KEPT);
+        assert_eq!(s.readings().back(), Some(&1.0));
+        assert!(s.readings().iter().rev().skip(1).all(|r| *r == 0.0));
     }
 
     /// Plan 13c: each segment is as wide as its byte range's share of the file, filled as far
@@ -2554,6 +2646,8 @@ mod tests {
         assert_eq!(reading_figure(0.067), "6.7");
         assert_eq!(reading_figure(0.9999), "99");
         assert_eq!(reading_figure(1.0), "100");
+        assert_eq!(reading_figure(0.29), "29");
+        assert_eq!(reading_figure(0.0), "0");
         let gb = 1024 * 1024 * 1024;
         assert_eq!(so_far(2 * gb + gb / 2, Some(6 * gb)), "2.50 of 6.00 GB");
         assert_eq!(so_far(1024 * 1024, Some(2 * gb)), "1.00 MB of 2.00 GB");

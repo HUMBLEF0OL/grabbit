@@ -266,6 +266,77 @@ pub fn bar(
     *pos != before
 }
 
+/// A thin vertical bar over `track` (any width; the download window's tables, 6 points): no
+/// arrows, a rounded thumb as wide as the track, in the bar's inks (hot, pressed). Dragging the
+/// thumb moves it; a press on the track pages, again while held. `total`, `page` and `pos` as
+/// [`bar`]'s; true when `pos` changed.
+pub fn thin(ui: &mut Ui, id: egui::Id, track: Rect, total: f32, page: f32, pos: &mut f32) -> bool {
+    let len = track.height();
+    let max = (total - page).max(0.0);
+    let thumb = if total > 0.0 {
+        (len * page / total).round().clamp(8.0_f32.min(len), len)
+    } else {
+        len
+    };
+    let start = |pos: f32| {
+        if max > 0.0 {
+            ((len - thumb) * pos / max).round()
+        } else {
+            0.0
+        }
+    };
+    let resp = ui.interact(track, id, crate::winui::pointer_drag());
+    let along = |q: Pos2| q.y - track.top();
+    let before = *pos;
+    let grab_id = id.with("grab");
+    if resp.is_pointer_button_down_on()
+        && ui.input(|i| i.pointer.any_pressed())
+        && let Some(q) = ui.input(|i| i.pointer.press_origin())
+    {
+        let (u, s) = (along(q), start(*pos));
+        if u >= s && u < s + thumb {
+            ui.ctx().data_mut(|d| d.insert_temp(grab_id, u - s));
+        }
+    }
+    let grab = ui.ctx().data(|d| d.get_temp::<f32>(grab_id));
+    if resp.is_pointer_button_down_on()
+        && let Some(grab) = grab
+        && let Some(q) = resp.interact_pointer_pos()
+        && len > thumb
+    {
+        *pos = (along(q) - grab) / (len - thumb) * max;
+    }
+    if !resp.is_pointer_button_down_on() {
+        ui.ctx().data_mut(|d| d.remove::<f32>(grab_id));
+    }
+    if grab.is_none()
+        && crate::winui::auto_repeat(ui, &resp)
+        && let Some(q) = resp.interact_pointer_pos()
+    {
+        let (u, s) = (along(q), start(*pos));
+        if u < s {
+            *pos -= page;
+        } else if u >= s + thumb {
+            *pos += page;
+        }
+    }
+    *pos = pos.clamp(0.0, max);
+    let ink = if resp.is_pointer_button_down_on() || resp.dragged() {
+        INK_PRESSED()
+    } else if resp.hovered() {
+        INK_HOT()
+    } else {
+        INK_C()
+    };
+    let s = start(*pos);
+    let rc = Rect::from_min_size(
+        pos2(track.left(), track.top() + s),
+        egui::vec2(track.width(), thumb),
+    );
+    ui.painter().rect_filled(rc, track.width() / 2.0, ink);
+    *pos != before
+}
+
 /// The 17 × 17 square where a vertical and a horizontal bar meet, its top-left at English
 /// (`x`, `y`) — at the bottom-left in RTL, where the vertical bar is.
 pub fn corner(ui: &Ui, x: f32, y: f32) {

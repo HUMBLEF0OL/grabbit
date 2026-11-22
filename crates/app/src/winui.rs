@@ -350,9 +350,11 @@ pub fn caption_font(
 }
 
 /// `tip` (translated) as the control's tooltip under the pointer, and while it has the keyboard
-/// focus too: a keyboard user reads what an icon-only button does.
+/// focus too: a keyboard user reads what an icon-only button does. The focus tip goes when the
+/// window is no longer the active one.
 pub fn tip(resp: Response, tip: &str) -> Response {
-    if resp.has_focus() && !resp.hovered() && keyboard_in_use(&resp.ctx) {
+    let window_active = resp.ctx.input(|i| i.focused);
+    if window_active && resp.has_focus() && !resp.hovered() && keyboard_in_use(&resp.ctx) {
         resp.show_tooltip_text(tip);
     }
     resp.on_hover_text(tip)

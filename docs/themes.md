@@ -127,7 +127,7 @@ focus = "ring"
 - **`[seeds]`** — a handful of colours (`background`, `surface`, `header`, `text`, `accent`,
   `selection`, `error`, `warning`, `success`) that Grabbit spreads over every control.
   `[seeds.light]` and `[seeds.dark]` give each side its own.
-- **`[colors]`** — single colour roles (such as `window`, `accent` or `"segments.done"`) on both
+- **`[colors]`** — single colour roles (such as `window`, `accent` or `"progress.bar"`) on both
   sides; **`[light]`** and **`[dark]`** on one side only. A colour is `#rrggbb`, or `#rrggbbaa`
   with transparency. The roles a file sets win over its seeds.
 - **`[sizes]`** — corner radii, border widths, font sizes and row heights, in pixels.

@@ -12,8 +12,8 @@ use crate::model::{self, Item, Status};
 // progress_view.rs).
 #[path = "progress_view.rs"]
 mod view;
-// Laid out in English pixels: `fill` and `px` make each one where it is on screen (bars fill
-// from the right in a right-to-left interface), `text` starts at an English pen.
+// Laid out in English pixels: `fill` makes each one where it is on screen (a right-to-left
+// interface mirrors it), `text` starts at an English pen.
 use crate::winui::{self, fill_l as fill, r, text};
 
 use crate::winui::caption::CaptionButton;
@@ -213,8 +213,9 @@ impl Progress {
     /// torrent's tab in it; any other name a state, each a look only (plan 09a, 13b): drawn for
     /// the screenshot, the download itself left as it is. "error" a failed download (a sample
     /// reason), "mergefail" a failed join's reason; for a video (upstream issues 769, 736)
-    /// "merging" its picture and sound being joined (45 %), "helper" the line saying why yt-dlp
-    /// downloads it itself (an RTMP stream); "recording" and "saving" a live stream being
+    /// "merging" its picture and sound being joined (45 %), "helper" Details' "Downloaded by"
+    /// row saying why yt-dlp downloads it itself (an RTMP stream; shown for a video only, so
+    /// ask it of a video's window); "recording" and "saving" a live stream being
     /// recorded (its button "Stop and save") and being saved; and [`view::Look`]'s ("stopped",
     /// "unknown-size", "waiting", "finishing", "checking", "sharing", "webpage", "service",
     /// "cant-resume"). Unknown names leave it as it is.
@@ -263,6 +264,8 @@ impl Progress {
             "merging" => self.sample_merging = Some(0.45),
             "helper" => {
                 self.sample_helper = Some(mdm_tools::streams::Helper::Protocol("rtmp".into()));
+                // Its row is in Details.
+                self.details = true;
             }
             // The download as it is, compact.
             "status" => self.details = false,
@@ -355,26 +358,26 @@ pub struct Progress {
     /// The main window is shown (set by the app each frame): the glide's frames draw it too.
     pub main_shown: bool,
     /// The speed limit holding the download back (set by the app each frame, upstream issue
-    /// 1191): its Transfer rate names it.
+    /// 1191): the detail line names it after the speed, the speed graph draws it dashed.
     pub limit: Option<crate::model::Limit>,
     /// The bar and the segment map between figures.
     glide: Glide,
     /// The last minute of its speed for Details' graph (plan 13c): kept while the window is
     /// open, gone with it, never saved.
     speed: view::Sampler,
-    /// `/show progress:error`: Download status painted as failed with this reason, the
-    /// download left as it is (a screenshot's state).
+    /// `/show progress:error`: the window drawn as failed with this reason, the download left
+    /// as it is (a screenshot's state).
     sample_error: Option<String>,
-    /// `/show progress:merging`: Download status and the bar as while a video's streams are
+    /// `/show progress:merging`: the status word and the strip as while a video's streams are
     /// joined, this far (a screenshot's state).
     sample_merging: Option<f64>,
-    /// `/show progress:helper`: the Server row as for a video yt-dlp downloads itself, for this
-    /// reason (a screenshot's state).
+    /// `/show progress:helper`: Details' "Downloaded by" row as for a video yt-dlp downloads
+    /// itself, for this reason (a screenshot's state; a video's row only).
     sample_helper: Option<mdm_tools::streams::Helper>,
     /// `/show progress:stopped` and the other states of plan 13b (a screenshot's state).
     sample_look: Option<view::Look>,
-    /// `/show progress:recording` / `progress:saving`: Download status and the Pause button as
-    /// for a live stream being recorded, or saved (a screenshot's state).
+    /// `/show progress:recording` / `progress:saving`: the status word and the Stop and save
+    /// button as for a live stream being recorded, or saved (a screenshot's state).
     sample_live: Option<mdm_tools::video::LiveState>,
 }
 
@@ -473,10 +476,13 @@ impl Progress {
             (Some(f), Some(t)) => (drawn.done / t as f64).clamp(0.0, 1.0).min(f),
             _ => 0.0,
         };
-        // The speed graph's reading, one a second while it downloads.
-        if item.status == Status::Downloading {
-            self.speed.feed(ctx.input(|i| i.time), item.rate());
-        }
+        // The speed graph's reading, one a second (0 while it doesn't download).
+        let rate = if item.status == Status::Downloading {
+            item.rate()
+        } else {
+            0.0
+        };
+        self.speed.feed(ctx.input(|i| i.time), rate);
         // The torrent's details, and the state as drawn: its line takes room in Details.
         let d = if item.torrent.is_some() {
             self.torrent_data(item)
