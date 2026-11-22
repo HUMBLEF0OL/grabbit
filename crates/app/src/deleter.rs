@@ -251,6 +251,7 @@ impl Deleter {
 
     /// [`Deleter::new`] with its own way to delete a file, finished or not, and to say what
     /// failed (tests).
+    #[cfg(test)]
     pub(crate) fn with(
         remove: impl Fn(&Path) -> io::Result<()> + Send + Sync + 'static,
         report: impl Fn(Vec<Failure>) + Send + Sync + 'static,
