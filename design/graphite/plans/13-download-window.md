@@ -163,6 +163,16 @@ Open folder opens its parent, so both "open a folder" (`dialogs.rs`, the Done wi
 - Tests: the main-file rule (one big file, an album of equal files, a 60 MB + 50 MB pair, one file);
   Open and Open folder targets for a folder download.
 - Boards 5, 7, 13, 14 (behaviour only here; their look lands in 13d).
+- Beyond the spec, kept on purpose: with no main file, the menu still ends in **Open with...**, on
+  the largest file (a folder can't be opened with a program; the largest is the likeliest one
+  wanted). Recorded in the plan-13 audit.
+- Audit fixes (after 13d): the box looks off its thread, as it is made, at its files (a torrent's
+  kept .torrent; a gallery's or a debrid torrent's folder walked, at most 5,000 files) and at
+  whether its main file and folder are there, so a file gone shows from the start (board 14),
+  not only after Open; Open folder on a folder that is gone says so and keeps the box; a file
+  picked while another opens waits greyed; the menu names files of one name by their path
+  inside the download. Menu labels still go through `chrome::label`'s app-lifetime cache
+  (`MenuEntry` takes `&'static str`; no other way in), six names a box.
 
 ## 13b · Progress window structure (behaviour, about 900 lines)
 
@@ -184,6 +194,9 @@ Open folder opens its parent, so both "open a folder" (`dialogs.rs`, the Done wi
   service, cant-resume, details.
 - Tests: Esc never cancels (`on_escape`); the When done mapping; Stop sharing persists across a
   restart; the window stays on screen when expanded.
+- Audit fix: an open window's When done follows Options' show-complete setting (and "Don't show
+  this window again") until it is chosen by hand in that window (`Progress::when_by_hand`,
+  `follow_show_complete`).
 
 ## 13c · Progress window look (look, about 1,200 lines)
 
@@ -198,6 +211,24 @@ Open folder opens its parent, so both "open a folder" (`dialogs.rs`, the Done wi
 - Accessibility: the strip as one progress value with a spoken text (`winui::expose_value` with a
   progress role), the graph's summary, tabs with their selected state, tooltips on keyboard focus
   as well as hover, 24 px icon buttons.
+- As built (audit fixes after PR 129):
+  - A segment narrower than 3 px no longer turns the whole strip into one fill: it runs on from
+    its neighbour (no gap, no tick). The planner splits the last range near the end and the
+    segments stay, so the old rule flattened nearly every multi-connection download's strip at
+    its end. Only more than 48 segments (and a video, a gallery) give the plain fill.
+  - Tab order follows the visual order on a torrent's Files tab: Recheck files (at the tabs'
+    end) comes before Download in order and First and last pieces first (under the table).
+    The tabs' arrows go the reading way (`winui::rtl()`), as `tabs_light` does.
+  - The From row of a magnet torrent reads "Magnet link" (board: "Magnet link, 2 trackers"):
+    the trackers are on the Trackers tab.
+  - The Pieces row reads "512.00 KB each" (board: "512 KB each"): the app's own size format
+    (`model::size`), as every other size in the window.
+  - Connections sort by number within their groups (receiving, retrying, connecting, done), so
+    rows don't jump as speeds change (the board's rows are in speed order).
+  - The tables' size and Done columns are as wide as the widest value shown (their title at
+    the least); a torrent's Peers tab gives Address and Client the rest, Address 90 at the
+    least; the connections table's "#" column is as wide as its widest number (upstream issue
+    1101). Tab goes Recheck files, the table's boxes, then the commands under it.
 
 ## 13d · States and the Done window's look (look, about 900 lines)
 
@@ -216,6 +247,16 @@ state before and after, light and dark. After each part, `python tools/upstream-
 --fetch`: any newly conflicting upstream commit is noted in the PR. Help pictures that show these
 two windows are retaken once, after 13d (plan 12's retake skips them).
 
+## Website follow-up (not in this plan's scope)
+
+The website still describes the old window in a few places; a website PR changes them (and
+retakes the pictures they name):
+
+- `website/content/features/torrents.md:12`: the shot's alt text names the Pieces tab, gone since
+  13b (the strip and the Pieces row replace it).
+- `website/content/features/acceleration.md:53` and `website/content/features/speed-limiter.md:40`:
+  "Resume capability" is **Can resume** in Details since 13c.
+
 ## Definition of done
 
 - [x] 13a-13d merged into `dev`, each audited until APPROVED (PRs 127-130)
@@ -224,3 +265,7 @@ two windows are retaken once, after 13d (plan 12's retake skips them).
   the known differences are in each part's PR: "1 hour(s) 12 min" in the app's own time format,
   Segoe UI Regular for the reading, Details 20 points taller to keep one height in every state)
 - [x] ROADMAP and CHANGELOG lines per part; docs and help pictures updated for the changed names
+- [x] Post-merge audit (2026-11-22): four fresh auditors, one per part, on `dev` e8b6ec46; every
+  finding (8 should-fix, about 20 nits) fixed in one PR, audited until APPROVED (the progress
+  window's fixes in 2 rounds, the Done window's in 4), built and tested together; the "As built"
+  notes above record what was kept on purpose

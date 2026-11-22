@@ -1322,9 +1322,10 @@ impl Run {
         t.seen(&self.hash).map(|s| s.fetched)
     }
 
-    pub fn details(&self) -> Details {
+    /// Its [`Details`] ([`details_of`]; `full`: with its files, peers and trackers).
+    pub fn details(&self, full: bool) -> Details {
         self.session()
-            .and_then(|t| details_of(&t, &self.hash))
+            .and_then(|t| details_of(&t, &self.hash, full))
             .unwrap_or(Details {
                 files: Vec::new(),
                 piece_length: 0,
@@ -1338,9 +1339,20 @@ impl Run {
 
 /// What the progress window's torrent tabs show for `hash`, from the session: a `Run`'s
 /// torrent, or a finished one still shared without a `Run` (None: not in the session). As last
-/// read: the window's thread never waits on librqbit (#693).
-pub fn details_of(t: &Torrents, hash: &str) -> Option<Details> {
+/// read: the window's thread never waits on librqbit (#693). Not `full` (the compact window):
+/// its pieces and numbers only, not a copy of its files, peers and trackers every frame.
+pub fn details_of(t: &Torrents, hash: &str, full: bool) -> Option<Details> {
     let stats = t.seen(hash)?;
+    if !full {
+        return Some(Details {
+            files: Vec::new(),
+            piece_length: 0,
+            peers: Vec::new(),
+            trackers: Vec::new(),
+            pieces: t.seen_pieces(hash),
+            stats: Some(stats),
+        });
+    }
     let done = stats.file_done.clone();
     let (entries, chosen, piece_length) = t.seen_files(hash).unwrap_or_default();
     let swarm = t.seen_swarm(hash);

@@ -433,25 +433,59 @@ fn complete_box(i: &Item) -> Complete {
     )
 }
 
-/// A download saved as a folder: its files (path, size), for Download complete's main file and
-/// menu (plan 13a); empty when they aren't known (a gallery, a debrid torrent's folder). None:
-/// its place is its one file.
-fn done_files(i: &Item) -> Option<Vec<(PathBuf, u64)>> {
-    // ponytail: `is_dir` and the kept .torrent (small, in Grabbit's own data folder) are looked
-    // at on the window's thread once per box; off it if a slow drive ever shows.
-    let Some(t) = &i.torrent else {
-        // A debrid torrent of one file has it straight in the download folder: a file.
-        return (i.gallery.is_some() || (i.owns_folder() && i.dest.is_dir())).then(Vec::new);
-    };
-    let list = crate::torrents::torrent_file(&t.hash)
-        .and_then(|f| mdm_torrent::read_file(&f).ok())
-        .and_then(|b| mdm_torrent::files_from_bytes(&b).ok());
-    match list {
-        Some(list) => folder_files(&list, t.files.as_deref(), &i.dest),
-        // Not readable: a folder is a folder (whatever a drag-out made of its name).
-        None => i.dest.is_dir().then(Vec::new),
+/// What lists a download's files for Download complete's main file and menu (plan 13a), run
+/// off the window's thread by [`Complete::new`]: a torrent's from its kept .torrent, a gallery's
+/// or a debrid torrent's folder walked. Its None: the download's place is its one file.
+fn done_files(i: &Item) -> impl FnOnce() -> Option<Vec<(PathBuf, u64)>> + Send + use<> {
+    let dest = i.dest.clone();
+    let torrent = i
+        .torrent
+        .as_ref()
+        .map(|t| (t.hash.clone(), t.files.clone()));
+    let (gallery, own_folder) = (i.gallery.is_some(), i.owns_folder());
+    move || {
+        let Some((hash, chosen)) = torrent else {
+            // A debrid torrent of one file has it straight in the download folder: a file.
+            return (gallery || (own_folder && dest.is_dir())).then(|| walk_files(&dest));
+        };
+        let list = crate::torrents::torrent_file(&hash)
+            .and_then(|f| mdm_torrent::read_file(&f).ok())
+            .and_then(|b| mdm_torrent::files_from_bytes(&b).ok());
+        match list {
+            Some(list) => folder_files(&list, chosen.as_deref(), &dest),
+            // Not readable: a folder is a folder (whatever a drag-out made of its name).
+            None => dest.is_dir().then(|| walk_files(&dest)),
+        }
     }
 }
+
+/// The files under `dir` (path, size), its subfolders' too: at most [`WALK_MAX`] of them.
+fn walk_files(dir: &std::path::Path) -> Vec<(PathBuf, u64)> {
+    let (mut out, mut dirs) = (Vec::new(), vec![dir.to_owned()]);
+    while let Some(d) = dirs.pop() {
+        let Ok(entries) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        for e in entries.flatten() {
+            match e.file_type() {
+                Ok(t) if t.is_dir() => dirs.push(e.path()),
+                Ok(t) if t.is_file() => {
+                    out.push((e.path(), e.metadata().map_or(0, |m| m.len())));
+                    if out.len() >= WALK_MAX {
+                        return out;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    out
+}
+
+/// How many files Download complete looks at in a folder it walks.
+// ponytail: past it, "N more in the folder" counts only these; a full count if a bigger
+// gallery ever shows.
+const WALK_MAX: usize = 5_000;
 
 /// A torrent's files (`list`, padding included) as Download complete takes them, saved at `dest`
 /// with the `chosen` ones (None: all): None when it has one file (its place is that file), else
@@ -1193,6 +1227,14 @@ fn kept_in_session(
 /// the setting does (plan 13b).
 fn shows_done_window(setting: bool, window: Option<bool>) -> bool {
     window.unwrap_or(setting)
+}
+
+/// The show-complete setting went from `from` to `to`: the progress windows already open follow
+/// it, unless their When done was changed by hand.
+fn follow_show_complete(progress: &mut [Progress], from: bool, to: bool) {
+    for p in progress {
+        p.follow_show_complete(from, to);
+    }
 }
 
 /// Copy address (plan 12b, B4): the addresses of the chosen downloads that aren't torrents
@@ -6620,6 +6662,11 @@ impl App {
         {
             crate::win32::set_run_at_startup(new.launch_on_startup);
         }
+        follow_show_complete(
+            &mut self.progress,
+            self.settings.show_complete,
+            new.show_complete,
+        );
         self.settings = new;
         crate::regional::set(&self.settings.regional);
         crate::webmark::set(self.settings.mark_downloads);
@@ -11409,6 +11456,11 @@ impl App {
                 Outcome::Open => keep.push(c),
                 Outcome::Done(()) | Outcome::Closed => {
                     if c.dont_show {
+                        follow_show_complete(
+                            &mut self.progress,
+                            self.settings.show_complete,
+                            false,
+                        );
                         self.settings.show_complete = false;
                         self.dirty = true;
                     }
@@ -13324,6 +13376,31 @@ mod sharing_and_done_tests {
         assert!(!shows_done_window(true, Some(false)));
         assert!(shows_done_window(true, None));
         assert!(!shows_done_window(false, None));
+    }
+
+    /// "Don't show this window again" (or Options) reaches the progress windows already open:
+    /// two open, the first finishes and its Done window turns the setting off; the second's
+    /// Done window then doesn't open. Turned on again, it follows back.
+    #[test]
+    fn open_windows_follow_the_show_complete_setting() {
+        use super::{Progress, follow_show_complete};
+        let mut open = vec![Progress::new(1, true), Progress::new(2, true)];
+        assert!(shows_done_window(true, Some(open[0].shows_complete())));
+        open.remove(0);
+        follow_show_complete(&mut open, true, false);
+        assert!(!shows_done_window(false, Some(open[0].shows_complete())));
+        follow_show_complete(&mut open, false, false);
+        assert!(!open[0].shows_complete(), "no change, nothing moves");
+        follow_show_complete(&mut open, false, true);
+        assert!(open[0].shows_complete());
+        // Chosen by hand (Do nothing, the value the setting off gives): a round trip of the
+        // setting leaves it as chosen.
+        follow_show_complete(&mut open, true, false);
+        open[0].when_by_hand = true;
+        follow_show_complete(&mut open, false, true);
+        assert!(!open[0].shows_complete(), "the hand's choice stays");
+        follow_show_complete(&mut open, true, false);
+        assert!(!open[0].shows_complete());
     }
 }
 
@@ -15819,10 +15896,20 @@ mod done_files_tests {
             folder: dir.path().to_owned(),
         });
         assert!(i.owns_folder());
-        assert_eq!(done_files(&i), None);
+        assert_eq!(done_files(&i)(), None);
         let own = dir.path().join("Pack");
         std::fs::create_dir(&own).unwrap();
-        i.dest = own;
-        assert_eq!(done_files(&i), Some(Vec::new()));
+        i.dest = own.clone();
+        assert_eq!(done_files(&i)(), Some(Vec::new()));
+        // Its files are walked (plan 13 audit): subfolders too, with their sizes.
+        std::fs::create_dir(own.join("CD2")).unwrap();
+        std::fs::write(own.join("a.bin"), b"abc").unwrap();
+        std::fs::write(own.join("CD2").join("b.bin"), b"x").unwrap();
+        let mut found = done_files(&i)().unwrap();
+        found.sort();
+        assert_eq!(
+            found,
+            vec![(own.join("CD2").join("b.bin"), 1), (own.join("a.bin"), 3)]
+        );
     }
 }

@@ -19,6 +19,12 @@ Fork changes a later pick may conflict with (port those picks by hand, naming th
 - Plan 13d: `dialogs::Complete` has no `url` field and `Complete::new` no `url` argument (the
   Done window shows no address); its body and footer are painted by `progress_view.rs`
   (`done_view`, `name_row`, `done_facts`), the drag strip is the name row.
+- Plan 13a: `Complete::new` takes a job that lists the files (run off the window's thread, with
+  the look at whether the main file is there) instead of the list; `Complete`'s fields past
+  `moved_away` are private (`folder`, `main`, `folder_act`, `largest`, `more`, `gone`,
+  `picked_gone`, `looking`, `folder_gone`), and `opening` keeps the file being opened with its
+  `launch::Asked<PathBuf, Opened>`. `chrome.rs`'s popup gives the keys back to its opener on
+  Escape, holds the Enter or Space that opened it, and resets on a fresh opening.
 
 | upstream | status | date | ref | upstream subject | note |
 |---|---|---|---|---|---|
@@ -326,7 +332,7 @@ Fork changes a later pick may conflict with (port those picks by hand, naming th
 | 1d35256f1bcfc14565ad45d744b6e9856025a0f6 | deferred | 2026-11-21 |  | Small windows: as large as what's in them, no scroll bars (fixes #1495) (#1498) | wanted fix (small windows with scroll bars at 125 % scale): check Graphite's small windows, port if they have it |
 | 34e55b5af05e6f932baec5b74b5900674cb9615a | deferred | 2026-11-21 |  | The menu bar with a screen reader: Alt opens it again, and each item is said as it is highlighted (fixes #328) (#1047) | wanted fix (Alt opens the menu bar, screen readers): port with the keyboard and screen-reader group |
 | 53d3e336beffb6257d4690618affaf0dfcb94b96 | deferred | 2026-11-21 |  | Screen readers reach the download list, the Categories tree and the toolbar, and follow the keys there (#1197) | wanted fix (screen readers reach the list, tree, toolbar): port with the keyboard and screen-reader group |
-| 85f2c92b375f67f6e1ba81271a774f37ee645cb8 | deferred | 2026-11-21 |  | A menu's underlined letter runs its item without typing that letter into the text box under it (#1231) | wanted fix (a menu's letter no longer types into the box under it): port with the keyboard group |
+| 85f2c92b375f67f6e1ba81271a774f37ee645cb8 | deferred | 2026-11-21 |  | A menu's underlined letter runs its item without typing that letter into the text box under it (#1231) | wanted fix (a menu's letter no longer types into the box under it): port with the keyboard group; touches `chrome.rs`'s popup keys, which plan 13a changed (focus give-back, held Enter/Space, fresh-opening reset): port by hand, upstream issue 1231 |
 | bfe186fde1440cb1051a9a04808000f0ac09255f | deferred | 2026-11-21 |  | Alt and a button's underlined letter press the button (the Scheduler's Apply, Close...), and Alt shows the letters in dialogs (#1296) | wanted fix (Alt and a button's letter press it): port with the keyboard group |
 | 5625eddb68929dee56d5e27cf34d2ad1eed0d745 | deferred | 2026-11-21 |  | a11y: name the glyph and shared-label controls screen readers can't (#1407) (#1506) | wanted fix (screen readers name glyph buttons): port with the keyboard and screen-reader group |
 | 9d5ed587875fbc8aaf6d8743a051f6fa5956f091 | deferred | 2026-11-21 |  | Excluded sites take their subdomains and the files their pages link to (#1054) | wanted fix (excluded sites take subdomains): port with 5c20ba044ed1 |

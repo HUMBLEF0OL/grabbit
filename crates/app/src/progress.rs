@@ -335,6 +335,8 @@ pub struct Progress {
     pending_choose: Option<Action>,
     /// When done's choice, an index into [`view::WHEN_DONE`] ([`view::when_done_of`]).
     when: usize,
+    /// When done was chosen by hand in this window: it no longer follows Options' setting.
+    pub(crate) when_by_hand: bool,
     /// With Shut down, Sleep or Hibernate: "Force apps to close".
     force: bool,
     /// Stop was pressed on a download whose server can't resume: the window asks first (Keep
@@ -433,6 +435,7 @@ impl Progress {
             pending_upload: None,
             pending_choose: None,
             when: view::when_done_index(show_complete),
+            when_by_hand: false,
             force: false,
             confirm_stop: false,
             keep_sharing: false,
@@ -671,14 +674,15 @@ impl Progress {
     }
 
     /// The torrent's details as the session has them (its files, peers, trackers, pieces,
-    /// numbers): from its `Run`, or for a finished torrent still shared without one, from the
-    /// session all the same.
+    /// numbers; only its pieces and numbers while Details is closed): from its `Run`, or for a
+    /// finished torrent still shared without one, from the session all the same.
     fn torrent_data(&self, item: &Item) -> Option<crate::torrents::Details> {
+        let full = self.details;
         match &item.live {
             Some(crate::model::Live {
                 dl: crate::model::Job::Torrent(run),
                 ..
-            }) => Some(run.details()),
+            }) => Some(run.details(full)),
             // Finished and still shared (no Run): the session has it all the same, so the
             // tabs stay.
             _ => self
@@ -686,7 +690,7 @@ impl Progress {
                 .as_ref()
                 .and_then(|h| h.get())
                 .zip(item.torrent.as_ref())
-                .and_then(|(t, spec)| crate::torrents::details_of(&t, &spec.hash)),
+                .and_then(|(t, spec)| crate::torrents::details_of(&t, &spec.hash, full)),
         }
     }
 }
@@ -717,6 +721,15 @@ impl Progress {
     /// When done → "Show the Done window" for this file.
     pub fn shows_complete(&self) -> bool {
         view::when_done_of(self.when, self.force).0
+    }
+
+    /// Options' "Show download complete dialog" went from `from` to `to` (or the Done window's
+    /// "Don't show this window again" was ticked): When done follows it unless it was chosen by
+    /// hand here (`when_by_hand`), whatever it was chosen.
+    pub fn follow_show_complete(&mut self, from: bool, to: bool) {
+        if !self.when_by_hand && self.when == view::when_done_index(from) {
+            self.when = view::when_done_index(to);
+        }
     }
 
     /// When done's other choices, when one is chosen (Exit Grabbit, Shut down, Sleep, Hibernate).
@@ -857,28 +870,7 @@ pub(crate) fn files_table(
     checks: &[bool],
     shown: usize,
 ) -> Option<usize> {
-    files_table_w(ui, p, o, id, rows, checks, shown, FILES_WINDOW_TABLE_W)
-}
-
-/// [`files_table`] `w` wide: narrower than the Files window's, the Size and Done columns keep to
-/// the right (the progress window's Details, plan 13b).
-#[allow(clippy::too_many_arguments)]
-fn files_table_w(
-    ui: &mut Ui,
-    p: &egui::Painter,
-    o: Pos2,
-    id: &str,
-    rows: &[Vec<String>],
-    checks: &[bool],
-    shown: usize,
-    w: f32,
-) -> Option<usize> {
-    let right = 17.0 + w;
-    let (size_x, done_x) = if w >= FILES_WINDOW_TABLE_W {
-        (335.0, 430.0)
-    } else {
-        (right - 125.0, right - 55.0)
-    };
+    let (size_x, done_x) = (335.0, 430.0);
     table_sized(
         ui,
         p,
@@ -894,11 +886,11 @@ fn files_table_w(
         true,
         Some(checks),
         shown,
-        w,
+        FILES_WINDOW_TABLE_W,
     )
 }
 
-/// The Files window's table width (and the progress window's before plan 13b): x 17..530.
+/// The Files window's table width: x 17..530.
 const FILES_WINDOW_TABLE_W: f32 = 513.0;
 
 /// The height of a [`table_sized`] of `shown` rows' body (the progress window's 6: 100 px).
