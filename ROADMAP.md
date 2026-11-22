@@ -670,6 +670,10 @@ Done since 1.0.1; ships in the next release.
   after it stays the browser's (a minute for the link's own page); the browser-like connection
   names the browser's own version in `sec-ch-ua`, sends Chrome's HTTP/2 weight and
   Accept-Encoding, and one User-Agent.
+- ✅ Delete safety (plan 12a): a finished file deleted with its download goes to the Recycle
+  Bin (its working data is still deleted outright; torrents unchanged), the delete question says
+  so, Delete says how many running downloads it kept, and the RSS window asks before removing a
+  feed, with one verb, **Remove**, for feeds and rules.
 - ✅ States and routes (plan 12b): a search that finds nothing says so, with **Clear search**;
   **Copy address** in a download's right-click menu and on **Ctrl+C**; a download whose link
   expired, or that the server refused (403) or says is gone (410), offers **Refresh download
@@ -929,9 +933,9 @@ kept on the `archive/multiplatform-i18n` branch.
 
 - 📋 One way of saying each thing (plan 12, `design/graphite/plans/12-ui-consistency.md`): one
   name per command in menus, toolbar and windows, sentence case throughout, the same buttons at
-  the end of every add window, deleted files moved to the Recycle Bin, and the shared pieces
-  (separators, focus rings, the Find box, browse buttons) drawn one way (its states and routes,
-  12b, are done: see Next version)
+  the end of every add window, and the shared pieces (separators, focus rings, the Find box,
+  browse buttons) drawn one way (its delete safety, 12a, and states and routes, 12b, are done:
+  see Next version)
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))
 - 📋 A new download window (plan 13, `design/graphite/plans/13-download-window.md`): one large

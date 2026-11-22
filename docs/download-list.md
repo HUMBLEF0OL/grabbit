@@ -150,21 +150,23 @@ Typing the start of a name while the list has the focus jumps to the first downl
 
 Select one or more downloads and press **Delete**, click **Delete** on the toolbar, or choose **File → Remove**. Grabbit asks first:
 
-- **Also delete the file from disk** — unticked every time the question opens. Tick it to delete the files too. For an unfinished download, this deletes the part downloaded so far. When finished downloads are among the ones you delete, the question says how many finished files go with them. Leave it unticked to take the downloads off the list and keep the files.
+- **Also move the file to the Recycle Bin** — unticked every time the question opens. Tick it to remove the files too: a finished download's file goes to the Recycle Bin, where you can restore it from. For an unfinished download (the box then says **Also delete the file from disk**), this deletes the part downloaded so far; with both kinds selected, the box says **Also delete the files (finished ones go to the Recycle Bin)**. When finished downloads are among the ones you delete, the question says how many finished files go to the Recycle Bin. A torrent's files are deleted, not moved, and the question says how many finished torrents' files it deletes. Leave it unticked to take the downloads off the list and keep the files.
+
+  Windows decides what the Recycle Bin takes: on a network or removable drive without one, or for a file too big for it, Windows may delete the file outright. A file Windows won't move (open in another program, or with a path longer than 260 characters) stays where it is, and Grabbit names it.
 - **Don't show this dialog again** — Grabbit stops asking: **Delete** then only takes downloads off the list and keeps their files. To be asked again, tick **Options → General → Confirm before deleting downloads**.
 
 Click **Yes** to delete, or **No** to keep everything.
 
-**Shift+Delete** (or **Remove with files**) opens the same question with **Also delete the file from disk** already ticked, for that time only. It always asks, even after **Don't show this dialog again**: Grabbit never deletes a file from the disk without asking. The box is never remembered: the next **Delete** starts unticked again.
+**Shift+Delete** (or **Remove with files**) opens the same question with the box already ticked, for that time only. It always asks, even after **Don't show this dialog again**: Grabbit never removes a file from the disk without asking. The box is never remembered: the next **Delete** starts unticked again.
 
 After deleting, the next download in the list is selected, so you can press **Delete** again.
 
-A download that is running isn't deleted. Stop it first.
+A download that is running isn't deleted. Stop it first. When running downloads are among the ones you select, the others are deleted and Grabbit says how many running ones it kept: in the question, or in a message when the question is turned off.
 
-**Delete Completed** on the toolbar (or **Downloads → Delete All Completed**) removes every finished download from the list, with the same question. Their files stay unless you tick **Also delete the files from disk** in that question.
+**Delete Completed** on the toolbar (or **Downloads → Delete All Completed**) removes every finished download from the list, with the same question. Their files stay unless you tick **Also move the files to the Recycle Bin** in that question.
 
-![Confirm deletion of downloads, with Also delete the file from disk](images/help/delete-confirm.webp)
-*Tick Also delete the file from disk only if you want the file gone too.*
+![Confirm deletion of downloads, with Also move the file to the Recycle Bin](images/help/delete-confirm.webp)
+*Tick Also move the file to the Recycle Bin only if you want the file gone too.*
 
 ## Next steps
 
