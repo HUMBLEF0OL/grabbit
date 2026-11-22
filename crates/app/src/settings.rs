@@ -84,10 +84,10 @@ pub struct Settings {
     /// Ask before deleting downloads ("Don't show this dialog again" clears it). Off, Delete only
     /// takes downloads off the list: deleting files from the disk always asks (upstream #1563).
     ///
-    /// Its "Also delete the files from disk" is never remembered: it starts unticked, or ticked
-    /// for one Shift+Delete. Lists before #1563 saved the last answer as `delete_files_too`,
-    /// which made every later delete (and, with this off, one never asked) take the finished
-    /// files too; that key is no longer read, and goes with the next save.
+    /// Its files box ("Also move the files to the Recycle Bin") is never remembered: it starts
+    /// unticked, or ticked for one Shift+Delete. Lists before #1563 saved the last answer as
+    /// `delete_files_too`, which made every later delete (and, with this off, one never asked)
+    /// take the finished files too; that key is no longer read, and goes with the next save.
     pub confirm_delete: bool,
     /// The Categories pane's width (plan 05b: 224 by default, the mockup's), dragged with the
     /// splitter. IDM's layout's own (`categories_width`) is read no more since plan 05.5c.
@@ -746,7 +746,7 @@ impl Settings {
                     https: self.proxy_https,
                 }
             }
-            // "Use proxy/socks from a browser's request": browsers use Windows' proxy settings,
+            // "Use proxy/SOCKS from a browser's request": browsers use Windows' proxy settings,
             // so with no proxy of our own so do we (none set there: direct, as before).
             _ if self.proxy_from_browser => system(),
             _ => Proxy::None,
@@ -765,7 +765,7 @@ impl Settings {
     }
 
     /// The proxy for a download that came with `context` (#42): the browser's own, when it used
-    /// one for it (a VPN or proxy extension, or its settings) and "Use proxy/socks from a
+    /// one for it (a VPN or proxy extension, or its settings) and "Use proxy/SOCKS from a
     /// browser's request" is on; else [`Self::proxy`]. A proxy the extension logs in to is
     /// refused (`browser_proxy_refused`), never replaced by a direct connection.
     pub fn proxy_for(&self, context: &mdm_ipc::Command) -> mdm_engine::Proxy {
@@ -1124,7 +1124,7 @@ pub fn own_net() -> mdm_engine::Options {
 mod tests {
     use std::path::Path;
 
-    /// Upstream #1563: a list that remembered "Also delete the files from disk" ticked (and the
+    /// Upstream #1563: a list that remembered the delete question's files box ticked (and the
     /// question turned off) loads as before otherwise, and its next save drops the tick.
     #[test]
     fn a_remembered_files_tick_is_dropped() {

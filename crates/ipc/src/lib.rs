@@ -28,7 +28,7 @@ pub struct Command {
     pub name: Option<String>,
     /// `/a`: add to the main queue, don't start.
     pub later: bool,
-    /// `/n`: silent — no Download File Info dialog.
+    /// `/n`: silent — no Download file info dialog.
     pub silent: bool,
     /// `/s`: start the main queue.
     pub start_queue: bool,
@@ -62,7 +62,7 @@ pub struct Command {
     /// From the browser (#42): the proxy it uses for this address ("http://host:port",
     /// "https://…", "socks5h://…", "socks4://…"), set by a VPN or proxy extension or its
     /// settings; or its proxy auto-config script's text. The app downloads through the same
-    /// one (Options → Proxy / SOCKS → "Use proxy/socks from a browser's request").
+    /// one (Options → Proxy / SOCKS → "Use proxy/SOCKS from a browser's request").
     pub proxy: Option<String>,
     pub proxy_pac: Option<String>,
     /// That proxy asked the browser for a login, which the extension that set it answers with

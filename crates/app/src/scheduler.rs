@@ -422,7 +422,8 @@ impl Scheduler {
         if self.naming.is_some() {
             self.name_prompt(ctx);
         }
-        // Delete asks first: a queue's schedule can't be had back.
+        // Delete asks first: once saved, the queue and its schedule are gone (until then,
+        // Options' Discard builds the Scheduler again with it).
         if let Some((q, ask)) = &mut self.deleting {
             match ask.show(ctx) {
                 Outcome::Open => {}
@@ -474,7 +475,7 @@ impl Scheduler {
         // Delete has no access letter in the main window: Alt+D opens its Downloads menu.
         let row = winui::button_row_from_left(
             &ui.painter().clone(),
-            &[("&New queue", 11.0, 84.0), ("Delete", 103.0, 81.0)],
+            &[("&New queue...", 11.0, 84.0), ("Delete", 103.0, 81.0)],
             8.0,
             184.0,
             173.0,
@@ -482,7 +483,7 @@ impl Scheduler {
         let new_queue = winui::button_light(
             ui,
             r(o, row[0].0, buttons_y, row[0].1, winui::CONTROL_H),
-            "&New queue",
+            "&New queue...",
             ButtonKind::Normal,
             false,
         )
@@ -753,7 +754,7 @@ impl Scheduler {
         );
         // The week's columns move right together after a longer "Daily", while the last one
         // still fits the page.
-        let last_day = 16.0 + winui::text_width(&p, crate::i18n::t(WEEKDAYS[6])).ceil() + 4.0;
+        let last_day = 16.0 + winui::text_width(&p, crate::i18n::t(WEEKDAYS[3])).ceil() + 4.0;
         let shift = after(235.0, "Daily", 310.0, RIGHT - last_day - 332.0) - 310.0;
         // i18n: adverb: every day (the other choice is once, on a date)
         let daily = winui::radio_light_until(
@@ -771,16 +772,9 @@ impl Scheduler {
         if let Some(i) = winui::radio_keys(ui, &[once, daily]) {
             f.once = i == 0;
         }
-        // Four columns of two rows at 800 (three of three at IDM's 651), in the same order.
-        let days = [
-            (WEEKDAYS[0], 310.0, 173.0),
-            (WEEKDAYS[1], 310.0, 189.0),
-            (WEEKDAYS[2], 420.0, 173.0),
-            (WEEKDAYS[3], 420.0, 189.0),
-            (WEEKDAYS[4], 531.0, 173.0),
-            (WEEKDAYS[5], 531.0, 189.0),
-            (WEEKDAYS[6], 642.0, 173.0),
-        ];
+        // Four columns of two rows at 800, read in rows (plan 12b, D5): Sunday to Wednesday,
+        // then Thursday to Saturday; Tab goes the same way.
+        let days = weekday_slots();
         for (i, (day, x, y)) in days.iter().enumerate() {
             // A long day name stops before the next column.
             let next = match *x as i32 {
@@ -855,7 +849,7 @@ impl Scheduler {
             ui,
             at(228.0, 267.0 + dy),
             &mut f.retries_on,
-            "Number of retries for each file if downloading failed :",
+            "Number of retries for each file if downloading failed:",
             true,
             Some(o.x + retries_x),
         );
@@ -1105,7 +1099,7 @@ impl Scheduler {
         );
         // The name takes the width the pages gained.
         let cols = [
-            (crate::i18n::mark("File Name"), 230.0, 421.0 + DX),
+            (crate::i18n::mark("File name"), 230.0, 421.0 + DX),
             // i18n: column title: the file's size
             (crate::i18n::mark("Size"), 421.0 + DX, 488.0 + DX),
             // i18n: column title: the download's state
@@ -1228,7 +1222,7 @@ impl Scheduler {
                 "cross",
                 290.0,
                 sel.is_some(),
-                crate::i18n::mark("Remove from the queue"),
+                crate::i18n::mark("Remove from queue"),
             ),
         ];
         for (icon, x, enabled, tip) in buttons {
@@ -1802,6 +1796,14 @@ const WEEKDAYS: [&str; 7] = [
     crate::i18n::mark("Friday"),
     crate::i18n::mark("Saturday"),
 ];
+/// The Scheduler's weekday boxes, each `(name, x, y)` on the page, in `WEEKDAYS`' order (the
+/// index of `days`) and in reading order: four in the first row, three under them (plan 12b,
+/// D5). Drawn in this order, which is the Tab order.
+fn weekday_slots() -> [(&'static str, f32, f32); 7] {
+    const XS: [f32; 4] = [310.0, 420.0, 531.0, 642.0];
+    std::array::from_fn(|i| (WEEKDAYS[i], XS[i % 4], if i < 4 { 173.0 } else { 189.0 }))
+}
+
 const MONTHS: [&str; 12] = [
     crate::i18n::mark("January"),
     crate::i18n::mark("February"),
@@ -2257,6 +2259,19 @@ fn merge_items(base: &[u64], draft: &[u64], live: &[u64]) -> Vec<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Plan 12b, D5: the weekdays read in rows, Sunday to Wednesday then Thursday to Saturday,
+    /// each box in its day's place of `days`.
+    #[test]
+    fn the_weekdays_read_in_rows() {
+        let slots = weekday_slots();
+        for (i, (day, ..)) in slots.iter().enumerate() {
+            assert_eq!(*day, WEEKDAYS[i]);
+        }
+        let (rows, xs): (Vec<f32>, Vec<f32>) = slots.iter().map(|s| (s.2, s.1)).unzip();
+        assert_eq!(rows, [173.0, 173.0, 173.0, 173.0, 189.0, 189.0, 189.0]);
+        assert_eq!(xs, [310.0, 420.0, 531.0, 642.0, 310.0, 420.0, 531.0]);
+    }
 
     #[test]
     fn the_draft_keeps_its_order_and_the_lists_changes() {

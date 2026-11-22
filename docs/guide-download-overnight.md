@@ -9,7 +9,7 @@ Queue big files during the day and let Grabbit download them at night, when nobo
 For new downloads:
 
 1. Add the download as usual (**Add**, or from the browser).
-2. In **Download File Info**, click **Download Later**.
+2. In **Download file info**, click **Later**.
 3. Under **Add to queue**, pick **Main download queue**. Leave **Start the queue now** unticked. Click **OK**.
 
 For downloads already in the list:
@@ -19,8 +19,8 @@ For downloads already in the list:
 
 The **Q** column now shows a queue icon for each of them.
 
-![Download File Info with Download Later ringed](images/help/overnight-later.webp)
-*Download Later puts it in a queue instead of starting it.*
+![Download file info with Later ringed](images/help/overnight-later.webp)
+*Later puts it in a queue instead of starting it.*
 
 ## 2. Set the start time
 

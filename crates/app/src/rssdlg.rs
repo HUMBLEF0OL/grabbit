@@ -7,7 +7,7 @@ use std::collections::HashSet;
 
 use egui::{Pos2, Rect, Ui, pos2, vec2};
 
-use crate::dialogs::{Outcome, window};
+use crate::dialogs::{Confirm, Outcome, window};
 use crate::rss::{Article, Rule, Store};
 use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r, text};
 
@@ -57,6 +57,11 @@ pub struct RssWindow {
     rule_feeds: winui::RowList,
     preview: winui::RowList,
     minutes: String,
+    /// Remove asked about a feed (its id): it holds rules, so it goes only on Yes (plan 12a).
+    removing: Option<(u64, Confirm)>,
+    /// The Feed address box has had the focus (it takes it once, when the Feeds tab first
+    /// shows).
+    focused: bool,
 }
 
 const ROW: f32 = 20.0;
@@ -74,6 +79,8 @@ impl RssWindow {
             rule_feeds: Default::default(),
             preview: Default::default(),
             minutes: store.minutes.to_string(),
+            removing: None,
+            focused: false,
         };
         w.feeds.selected = (!store.feeds.is_empty()).then_some(0);
         w.rules.selected = (!store.rules.is_empty()).then_some(0);
@@ -148,10 +155,49 @@ impl RssWindow {
                 }
             },
         );
+        if let Some((_, ask)) = &mut self.removing {
+            let answer = ask.show(ctx);
+            asked = self.removal_answered(store, answer).or(asked);
+        }
         match out {
             Outcome::Closed => Outcome::Closed,
             _ => asked.map_or(Outcome::Open, Outcome::Done),
         }
+    }
+
+    /// The Remove feed question's answer: Yes removes the feed (and the store is saved), No or
+    /// Escape forgets the question; still open, nothing.
+    fn removal_answered(&mut self, store: &mut Store, answer: Outcome<()>) -> Option<Act> {
+        let id = self.removing.as_ref()?.0;
+        match answer {
+            Outcome::Open => None,
+            Outcome::Closed => {
+                self.removing = None;
+                None
+            }
+            Outcome::Done(()) => {
+                self.removing = None;
+                self.remove_feed(store, id)
+            }
+        }
+    }
+
+    /// Remove answered Yes: feed `id` goes (if still there); the selection stays on the feed it
+    /// was on, else moves to the row in its place.
+    fn remove_feed(&mut self, store: &mut Store, id: u64) -> Option<Act> {
+        let at = store.feeds.iter().position(|f| f.id == id)?;
+        let on = self
+            .feeds
+            .selected
+            .and_then(|i| store.feeds.get(i))
+            .map(|f| f.id)
+            .filter(|f| *f != id);
+        store.remove_feed(id);
+        self.feeds.selected = on
+            .and_then(|on| store.feeds.iter().position(|f| f.id == on))
+            .or_else(|| (!store.feeds.is_empty()).then(|| at.min(store.feeds.len() - 1)));
+        self.articles = Default::default();
+        Some(Act::Saved)
     }
 
     fn feeds_page(
@@ -166,30 +212,45 @@ impl RssWindow {
         let h = winui::CONTROL_H;
         // A form's row (plan 12 C6): its label, the box from the form's column, Add feed.
         // i18n: RSS feeds window: label before the box where a feed's web address is typed
-        let address_label = "Feed address:";
+        let address_label = "Feed address";
         winui::form_label(&p, o, 22.0, 42.0, h, address_label, true);
         let fx = winui::form(&p, 22.0, &[address_label], false);
         // Add feed as wide as its label in this language (#192); the box ends 8 px before it.
         let (add_x, add_w) =
             winui::buttons_to_right(&p, RIGHT, 8.0, &[("Add feed", 120.0)], 200.0)[0];
-        winui::edit(
+        let field = winui::edit(
             ui,
             r(o, fx, 42.0, add_x - 8.0 - fx, h),
             &mut self.address,
             true,
             false,
         );
-        let add = winui::button(
-            ui,
-            r(o, add_x, 42.0, add_w, h),
-            // i18n: RSS feeds window: button that subscribes to the feed whose address is typed
-            "Add feed",
-            ButtonKind::Normal,
-            false,
-            None,
+        // The first field has the keys (plan 12b, D1).
+        if !std::mem::replace(&mut self.focused, true) {
+            field.request_focus();
+        }
+        // Greyed with nothing typed, its tip saying why (plan 12b, C7).
+        let empty = self.address.trim().is_empty();
+        let add = winui::why_disabled(
+            winui::button(
+                ui,
+                r(o, add_x, 42.0, add_w, h),
+                // i18n: RSS feeds window: button that subscribes to the feed whose address is typed
+                "Add feed",
+                if empty {
+                    ButtonKind::Disabled
+                } else {
+                    ButtonKind::Normal
+                },
+                false,
+                None,
+            ),
+            empty,
+            // i18n: tooltip of the greyed Add feed button in the RSS feeds window
+            "Type the feed's address",
         )
         .clicked();
-        if add && !self.address.trim().is_empty() {
+        if add && !empty {
             match store.add_feed(&self.address) {
                 Ok(id) => {
                     self.error = None;
@@ -287,14 +348,21 @@ impl RssWindow {
             None,
         )
         .clicked();
+        // A feed holds rules: Remove (and the Delete key) asks first (plan 12a).
         if (remove || ev.delete.is_some())
             && let Some(i) = sel
         {
-            let id = store.feeds[i].id;
-            store.remove_feed(id);
-            self.feeds.selected = (!store.feeds.is_empty()).then(|| i.min(store.feeds.len() - 1));
-            self.articles = Default::default();
-            act = Some(Act::Saved);
+            let feed = &store.feeds[i];
+            let text = crate::i18n::fmt(
+                // i18n: RSS feeds window: asked before a feed is removed; {feed} = its name
+                crate::i18n::t(
+                    "Remove the feed \"{feed}\"? A download rule that watches only this feed is turned off.",
+                ),
+                &[("feed", &crate::i18n::isolate(feed.name()))],
+            );
+            // i18n: the title of the question asked before a feed is removed
+            let title = crate::i18n::mark("Remove feed");
+            self.removing = Some((feed.id, Confirm::new(title, text)));
         }
         let sel = self.feeds.selected.filter(|i| *i < store.feeds.len());
         // The selected feed's articles.
@@ -486,7 +554,7 @@ impl RssWindow {
         // short of the rule's box beside it (from 240).
         let [new_at, delete_at] = winui::button_row_from_left(
             &p,
-            &[("New rule", 22.0, 96.0), ("Delete", 126.0, 96.0)],
+            &[("New rule", 22.0, 96.0), ("Remove", 126.0, 96.0)],
             8.0,
             232.0,
             160.0,
@@ -515,7 +583,8 @@ impl RssWindow {
         let delete = winui::button(
             ui,
             r(o, delete_at.0, BUTTONS_Y, delete_at.1, winui::CONTROL_H),
-            "Delete",
+            // i18n: RSS feeds window, Download rules: remove the selected rule (at once: it holds nothing else)
+            "Remove",
             if sel.is_some() {
                 ButtonKind::Normal
             } else {
@@ -564,17 +633,18 @@ impl RssWindow {
         // edge, control-height rows 8 apart.
         let h = winui::CONTROL_H;
         // i18n: RSS feeds window, Download rules: the rule's name
-        let name_l = "Name:";
+        // (English here: form and form_label translate them.)
+        let name_l = "Name";
         // i18n: RSS feeds window, Download rules: words the article's title must contain
-        let must_l = "Must contain:";
+        let must_l = "Must contain";
         // i18n: RSS feeds window, Download rules: words that make the rule skip an article
-        let must_not_l = "Must not contain:";
+        let must_not_l = "Must not contain";
         // i18n: RSS feeds window, Download rules: which episodes to take (season x episode)
-        let episodes_l = "Episodes:";
+        let episodes_l = "Episodes";
         // i18n: RSS feeds window, Download rules: the folder the rule's torrents go to
-        let save_l = "Save to:";
+        let save_l = "Save to";
         // i18n: RSS feeds window, Download rules: the feeds the rule watches
-        let feeds_l = "Feeds:";
+        let feeds_l = "Feeds";
         let fx = winui::form(
             &p,
             240.0,
@@ -945,7 +1015,7 @@ mod tests {
 
         let mut win = RssWindow::new(&store, false);
         let busy = HashSet::new();
-        let remove_at = pos2(196.0, 424.0);
+        let remove_at = pos2(196.0, BUTTONS_Y + 10.0);
         let click_remove = |win: &mut RssWindow, store: &mut Store| -> Option<Act> {
             let mut run = |events: Vec<egui::Event>, store: &mut Store| -> Option<Act> {
                 let mut act = None;
@@ -984,15 +1054,34 @@ mod tests {
             )
         };
 
+        // Remove asks first (plan 12a: a feed holds rules); Yes removes it.
+        let yes = |win: &mut RssWindow, store: &mut Store, id: u64| {
+            assert_eq!(click_remove(win, store), None, "asked, not removed");
+            assert_eq!(win.removing.as_ref().map(|r| r.0), Some(id));
+            let feeds = store.feeds.len();
+            // Still open, then No: nothing goes, the question is forgotten.
+            assert_eq!(win.removal_answered(store, Outcome::Open), None);
+            assert_eq!(win.removal_answered(store, Outcome::Closed), None);
+            assert!(win.removing.is_none());
+            assert_eq!(store.feeds.len(), feeds, "No keeps the feed");
+            // Asked again, Yes: it goes, and the store is saved.
+            assert_eq!(click_remove(win, store), None);
+            let act = win.removal_answered(store, Outcome::Done(()));
+            assert!(win.removing.is_none());
+            act
+        };
+
         // Removing the first of two feeds selects the remaining one without indexing out of bounds.
-        assert_eq!(click_remove(&mut win, &mut store), Some(Act::Saved));
+        assert_eq!(yes(&mut win, &mut store, first), Some(Act::Saved));
         assert_eq!(store.feeds.len(), 1);
         assert_eq!(store.feeds[0].id, second);
         assert_eq!(win.feeds.selected, Some(0));
 
         // Removing the last (only) feed leaves no selection and does not panic (#321).
-        assert_eq!(click_remove(&mut win, &mut store), Some(Act::Saved));
+        assert_eq!(yes(&mut win, &mut store, second), Some(Act::Saved));
         assert!(store.feeds.is_empty());
         assert_eq!(win.feeds.selected, None);
+        // A feed gone meanwhile: nothing to do.
+        assert_eq!(win.remove_feed(&mut store, second), None);
     }
 }

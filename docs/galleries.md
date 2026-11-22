@@ -9,7 +9,7 @@ Grabbit downloads the pictures of a gallery (a Wikimedia Commons category, a Fli
 3. gallery-dl checks the address on your computer, without going online. When the line reads **gallery-dl can download this gallery's files**, you're ready.
 4. Check **Save to** (the General category's folder by default). The pictures go into a folder of their own there, named after the gallery.
 5. Optionally, type a number in **Files at most** to download only the first ones the site lists. On most sites those are the newest. Leave it empty for all of them.
-6. Click **Download Now**, or **Later** to add it to the list without starting.
+6. Click **Download now**, or **Later** to add it to the list without starting.
 
 The gallery gets one row in the list. Its size grows as the pictures arrive, and its log says how many were saved. Each picture is marked as downloaded from the internet, as any download is.
 

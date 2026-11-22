@@ -6,18 +6,18 @@ Grabbit downloads BitTorrent files from magnet links and `.torrent` files. Torre
 
 ## Add a torrent
 
-1. Click **Add** on the toolbar and paste a magnet link (or drop a `.torrent` file on the window), then click **Add**. Or click the arrow next to **Add** and choose **Open a .torrent file...** (**Ctrl+O**). **Tasks** has **Open torrent file...** and **Add magnet link...** too.
+1. Click **Add** on the toolbar and paste a magnet link (or drop a `.torrent` file on the window), then click **Download 1**. Or click the arrow next to **Add** and choose **Open a .torrent file...** (**Ctrl+O**). **Tasks** has **Open a .torrent file...** and **Add magnet link...** too.
 2. **Add torrent** opens. Paste a magnet link into **Torrent**, or click **...** to choose a `.torrent` file, then click **Look up**.
 3. Grabbit reads the torrent and shows its files as a folder tree. A `.torrent` file is read at once. A magnet link first has to get the file list from other peers, usually within seconds. While it waits, **Add torrent** shows how many peers it found, from the trackers, the DHT or your local network, and how many answered. After 30 seconds without an answer, it says what may be in the way: a link with no trackers while the DHT is off, or a firewall, a VPN or a network that blocks BitTorrent.
 4. Untick the folders or files you don't want. **Select all** and **Select none** help with big torrents. **Selected** shows how many files and how much data you picked.
 5. Check **Save to**. **Files go to** shows the exact folder. Torrents have their own category, so by default this is `Downloads\Torrents`.
 6. To watch a video while it downloads, tick **Download in order** (see [Download in order](#download-in-order)).
-7. Click **Download Now**, or **Later** to add it to the list without starting.
+7. Click **Download now**, or **Later** to add it to the list without starting.
 
 <!-- steps -->
 
-1. ![Add torrent with a torrent's files as a folder tree, the folder they go to, and Download Now](images/help/torrent-add.webp)
-   *Untick what you don't want, then Download Now.*
+1. ![Add torrent with a torrent's files as a folder tree, the folder they go to, and Download now](images/help/torrent-add.webp)
+   *Untick what you don't want, then Download now.*
 2. ![A torrent's progress window on its Files tab](images/help/torrent-files.webp)
    *Its progress window: each file and how much of it is here.*
 3. ![The Pieces tab: a square for each piece, filled once it's here](images/help/torrent-pieces.webp)
@@ -29,7 +29,7 @@ A `.torrent` file's web address works too: paste it into **Add**, the paste bar 
 
 If some of the torrent's files are already in the folder, Grabbit asks before using them. **Yes** keeps them for the torrent: Grabbit checks them, keeps what matches the torrent and downloads the rest, which is how you continue a download started elsewhere or share files you already have. **No** (the default) goes back, so you can choose another folder and nothing of yours is overwritten.
 
-Before a torrent starts, Grabbit makes each of its files itself, empty, unticked ones too (they can hold part of a piece a ticked file needs), and the torrent writes only into those files and the ones you agreed to use, however it starts: **Download Now**, **Resume**, the Files tab, **Recheck**, or sharing again when Grabbit opens. If a file Grabbit didn't make is at one of its paths (saved there after the torrent was added, or put in a stopped torrent's place), the torrent doesn't start, the file isn't touched, and the download says which file: move or rename it, then start the torrent again. **Also delete the file from disk** removes only the files Grabbit made, each recognised as the very file it made (not by its name), and then the empty folders it made. Files that were already there, files you agreed to use and a file that took the name of one of its files later stay, and Grabbit lists them. A torrent added before this version takes the files in its place as its own once, the first time it starts, and is deleted as before until then.
+Before a torrent starts, Grabbit makes each of its files itself, empty, unticked ones too (they can hold part of a piece a ticked file needs), and the torrent writes only into those files and the ones you agreed to use, however it starts: **Download now**, **Resume**, the Files tab, **Recheck**, or sharing again when Grabbit opens. If a file Grabbit didn't make is at one of its paths (saved there after the torrent was added, or put in a stopped torrent's place), the torrent doesn't start, the file isn't touched, and the download says which file: move or rename it, then start the torrent again. **Also delete the file from disk** removes only the files Grabbit made, each recognised as the very file it made (not by its name), and then the empty folders it made. Files that were already there, files you agreed to use and a file that took the name of one of its files later stay, and Grabbit lists them. A torrent added before this version takes the files in its place as its own once, the first time it starts, and is deleted as before until then.
 
 Grabbit refuses a torrent with file names your system can't write safely, says which name, and writes nothing. What others can see, the network switches in **Torrent settings**, blocklists and proxies: [Torrents and your security](torrent-security.md).
 
@@ -45,15 +45,15 @@ Double-click the torrent in the list to open its progress window. Besides the us
 
 The tabs stay once the torrent has finished, for as long as it is shared.
 
-The **Speed Limiter** tab of a torrent's window has, besides its download limit, **Limit uploading** to a speed of your choice. That limit is kept with the torrent: it applies again whenever the torrent runs or shares. A torrent can't be held under 16 KBytes/sec either way.
+The **Speed Limiter** tab of a torrent's window has, besides its download limit, **Limit uploading** to a speed of your choice. That limit is kept with the torrent: it applies again whenever the torrent runs or shares. A torrent can't be held under 16 KB/s either way.
 
 ## Torrent commands
 
 Right-click a torrent in the list and open **Torrent**:
 
 - **Recheck files** — reads every piece of the torrent's files and checks it, for example after you moved files in or a disk had errors. A running torrent goes on afterwards and fetches what is missing. A stopped one stays stopped. Its event log says how much was found: a finished torrent with a damaged piece becomes stopped, and resuming it fetches the piece again.
-- **Reannounce** — asks the torrent's trackers for peers again now, instead of waiting for their next round. It works while the torrent runs or is shared.
-- **Add trackers...** — adds trackers, one address a line (`http`, `https` or `udp`). They are kept with the torrent, after the ones it has, and the **Trackers** tab shows them. A tracker on your computer or your local network is refused: Grabbit never contacts those ([why](torrent-security.md)).
+- **Ask trackers again** — asks the torrent's trackers for peers again now, instead of waiting for their next round. It works while the torrent runs or is shared.
+- **Add trackers...** — adds trackers, one address a line (`http`, `https` or `udp`). They are kept with the torrent, after the ones it has, and the **Trackers** tab shows them. A tracker on your computer or your local network is refused: Grabbit never contacts those ([why](torrent-security.md)). **OK** stays greyed until every line is a tracker it can add (point at it to see why); once you leave the box, the line that isn't is named under it.
 - **Download in order** — downloads the torrent's files from their start (see below). Click it again to go back to the rarest pieces first.
 - **First and last pieces first** — with **Download in order**, each file's first and last pieces come before the rest. It's on by default.
 - **Copy magnet link** — copies a magnet link for the torrent, with its trackers.
@@ -83,7 +83,7 @@ Many sites publish their new torrents as an RSS or Atom feed. Grabbit can watch 
 
 - Type a feed's address into **Feed address** and click **Add feed**. Grabbit fetches it at once, then every 30 minutes; change that under **Check feeds every ... minutes**, 5 at the least.
 - Pick a feed on the left to see its articles. An article with a torrent shows a torrent icon and its size when the feed gives it. Double-click one, or select it and click **Download...**, to open **Add torrent** with it, as for any magnet link or `.torrent` address.
-- **Refresh** fetches the selected feed now. **Remove** stops watching it. A feed that can't be read is shown in red, and its line at the bottom says why.
+- **Refresh** fetches the selected feed now. **Remove** (or the **Delete** key) stops watching it, after asking: a rule that watched only that feed is turned off. A feed that can't be read is shown in red, and its line at the bottom says why.
 
 **Download rules** tab: a rule adds the torrents of new articles whose titles it matches, without asking.
 
@@ -91,8 +91,10 @@ Many sites publish their new torrents as an RSS or Atom feed. Grabbit can watch 
 - **Must not contain**: words that make the rule skip an article, written the same way.
 - **Regular expressions**: the two boxes hold regular expressions instead.
 - **Episodes**: which episodes to take, read from `S01E05` or `1x05` in the title. `1x2` is season 1 episode 2, `1x5-8` episodes 5 to 8, `2x1-` everything from season 2 episode 1 on, and `3` all of season 3, separated by `;`. Empty: any article. A rule takes each episode once: a second release of an episode it already added is skipped.
-- **Save to**: the folder its torrents go to; empty, the Torrents category's folder. **Add them without starting them** adds them as **Download Later** would.
+- **Save to**: the folder its torrents go to; empty, the Torrents category's folder. **Add them without starting them** adds them as **Later** would.
 - **Feeds**: the feeds it watches; none ticked, all of them.
+
+**New rule** adds a rule; **Remove** (or the **Delete** key) removes the selected one at once.
 
 Rules only look at articles that are new since the feed was last fetched, and a feed's first fetch only lists what is there. So adding a feed or a rule never downloads a whole backlog. **Matches ... articles now** shows which of the articles the feeds hold now the rule matches, to check it; download those by hand. A torrent the list already has isn't added again, and neither is one whose files are already in the folder: Grabbit never writes into files it didn't make without asking. The bottom line of the tab says what the rules did last, and a torrent a rule added says so in its event log.
 

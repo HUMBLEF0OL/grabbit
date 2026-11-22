@@ -680,9 +680,9 @@ pub fn resolve_path(s: &str) -> PathBuf {
     }
 }
 
-/// IDM's dialog size text, e.g. `60.00  MB` (two spaces, as measured).
+/// The dialogs' size text, e.g. `60.00 MB`: as the list writes it.
 pub fn dialog_size(b: u64) -> String {
-    model::size(b).replacen(' ', "  ", 1)
+    model::size(b)
 }
 
 // ---- An address added (the Add window, the paste bar: `crate::adddlg`) ----------------------
@@ -1205,7 +1205,7 @@ impl FileInfo {
         window(
             ctx,
             "file-info",
-            "Download File Info",
+            "Download file info",
             [W, body + winui::FOOTER_H],
             true,
             winui::BG(),
@@ -1215,7 +1215,7 @@ impl FileInfo {
                 let fx = winui::form(
                     &p,
                     lx,
-                    &["URL", "Category", "Save As", "Description", "Server"],
+                    &["URL", "Category", "Save as", "Description", "Server"],
                     false,
                 );
                 let right = W - winui::EDGE;
@@ -1300,7 +1300,7 @@ impl FileInfo {
                     self.new_category = true;
                 }
 
-                winui::form_label(&p, o, lx, 176.0, h, "Save As", true);
+                winui::form_label(&p, o, lx, 176.0, h, "Save as", true);
                 let save_rc = field(176.0, h + 8.0);
                 let save = winui::combo_edit(ui, save_rc, &mut self.save_as);
                 // Opened, the keys are in Save As (its name is what one changes here).
@@ -1496,8 +1496,8 @@ impl FileInfo {
                 let blocked = if self.url_bad {
                     Some("Invalid address")
                 } else if name_bad {
-                    // i18n: why Start Download is greyed in Download File Info
-                    Some(crate::i18n::mark("Type the file's name in Save As"))
+                    // i18n: why Download now is greyed in Download file info
+                    Some(crate::i18n::mark("Type the file's name in Save as"))
                 } else {
                     None
                 };
@@ -1522,12 +1522,12 @@ impl FileInfo {
                     body,
                     &mut [
                         FooterItem::Button(
-                            FooterButton::new("Download Later", later_kind)
-                                .mnemonic(9)
+                            FooterButton::new("Later", later_kind)
+                                .mnemonic(0)
                                 .tip(blocked.is_some(), why),
                         ),
                         FooterItem::Button(
-                            FooterButton::new("Start Download", start_kind)
+                            FooterButton::new("Download now", start_kind)
                                 .primary()
                                 .ring(true)
                                 .mnemonic(0)
@@ -1978,7 +1978,7 @@ impl SpeedSettings {
                     ui,
                     &p,
                     // i18n: {kb} is an input box (kilobytes per second), drawn where it stands in the translation
-                    crate::i18n::t("Maximum download speed for one file {kb} KBytes/sec"),
+                    crate::i18n::t("Maximum download speed for one file {kb} KB/s"),
                     &[winui::SentenceLine {
                         lead: winui::Lead::Right(o.x + 266.0),
                         lead_baseline: o.y + 21.0,
@@ -2025,7 +2025,7 @@ impl SpeedSettings {
                     ui,
                     o + vec2(11.0, 86.0),
                     &mut self.on_startup,
-                    "Always turn on Speed Limiter on Grabbit startup",
+                    "Turn on the Speed Limiter when Grabbit starts",
                     true,
                 );
                 // Beyond IDM: a limit for all downloads together.
@@ -2055,7 +2055,7 @@ impl SpeedSettings {
                     &p,
                     o.x + 264.0,
                     o.y + 131.0,
-                    crate::i18n::t("KBytes/sec"),
+                    crate::i18n::t("KB/s"),
                     c,
                 );
                 winui::checkbox_light(
@@ -2192,7 +2192,7 @@ impl LimitNotice {
             lines: [
                 crate::i18n::fmt(
                     crate::i18n::t(
-                        "The download limit ({mb} MBytes every {hours} hours) has been reached.",
+                        "The download limit ({mb} MB every {hours} hours) has been reached.",
                     ),
                     &[
                         ("mb", &crate::i18n::integer(u64::from(mb))),
@@ -2415,11 +2415,62 @@ pub struct ConfirmDelete {
     name: String,
     /// One download, not complete (IDM's wording).
     unfinished: bool,
-    /// "Also delete the files from disk".
+    /// The files box ([`files_label`]: "Also move the file to the Recycle Bin", or "Also delete
+    /// the file from disk" for unfinished data).
     pub files: bool,
-    /// How many of the downloads are finished: their files go too when `files` is ticked.
+    /// How many of the downloads are finished, torrents and galleries aside: their files go to
+    /// the Recycle Bin when `files` is ticked.
     pub finished: u64,
+    /// How many of the downloads are finished torrents: their files are deleted outright by
+    /// the torrent engine when `files` is ticked (plan 12, DA1t), said in red.
+    pub torrents: u64,
+    /// How many running downloads of the selection stay (said under the box; plan 12a).
+    pub kept: u64,
     dont_show: bool,
+}
+
+/// "1 running download is kept…": what Delete left out of a selection (plan 12a, E3), under
+/// the question, or in a notice when it isn't asked.
+pub fn kept_text(n: u64) -> String {
+    crate::i18n::fmt(
+        // i18n: Delete with running downloads among the selected ones: those stay in the list
+        &crate::i18n::tn(
+            n,
+            "{n} running download is kept: stop it to delete it.",
+            "{n} running downloads are kept: stop them to delete them.",
+        ),
+        &[("n", &crate::i18n::integer(n))],
+    )
+}
+
+/// The Confirm deletion box's label for `n` downloads, `finished` of them finished: a finished
+/// file goes to the Recycle Bin (plan 12a), other data is deleted outright, and the label says
+/// which.
+pub fn files_label(n: u64, finished: u64) -> String {
+    let n_is = |s: &str| crate::i18n::fmt(s, &[("n", &crate::i18n::integer(n))]);
+    match (n, finished) {
+        (1, 0) => crate::i18n::t("Also delete the file from disk").to_owned(),
+        // i18n: the Confirm deletion box for one finished download: its file goes to the Recycle Bin
+        (1, _) => crate::i18n::t("Also move the file to the Recycle Bin").to_owned(),
+        // i18n: never shown for a single file; none of them is finished
+        (_, 0) => n_is(&crate::i18n::tn(
+            n,
+            "Also delete the {n} file from disk",
+            "Also delete the {n} files from disk",
+        )),
+        // i18n: never shown for a single file; all of them are finished, their files go to the Recycle Bin
+        _ if finished >= n => n_is(&crate::i18n::tn(
+            n,
+            "Also move the {n} file to the Recycle Bin",
+            "Also move the {n} files to the Recycle Bin",
+        )),
+        // i18n: never shown for a single file; some are finished (their files go to the Recycle Bin), the others' data is deleted
+        _ => n_is(&crate::i18n::tn(
+            n,
+            "Also delete the {n} file (finished ones go to the Recycle Bin)",
+            "Also delete the {n} files (finished ones go to the Recycle Bin)",
+        )),
+    }
 }
 
 impl ConfirmDelete {
@@ -2431,6 +2482,8 @@ impl ConfirmDelete {
             unfinished,
             files,
             finished,
+            torrents: 0,
+            kept: 0,
             dont_show: false,
         }
     }
@@ -2502,29 +2555,17 @@ it from Grabbit's list of downloads?",
                 );
                 grow_to(ui.ctx(), "confirm-delete", lines, 3);
                 let o = o + vec2(0.0, extra);
-                let files = if n == 1 {
-                    crate::i18n::t("Also delete the file from disk").to_owned()
-                } else {
-                    crate::i18n::fmt(
-                        // i18n: never shown for a single file
-                        &crate::i18n::tn(
-                            n,
-                            "Also delete the {n} file from disk",
-                            "Also delete the {n} files from disk",
-                        ),
-                        &[("n", &crate::i18n::integer(n))],
-                    )
-                };
+                let files = files_label(n, self.finished);
                 winui::checkbox_light(ui, o + vec2(e, 74.0), &mut self.files, &files, true);
                 // Ticked, the finished downloads' files go too: said, so none is lost by
                 // surprise (upstream #1563); under the box, beside its caption.
-                let warn = if self.files && self.finished > 0 {
+                let mut warn = if self.files && self.finished > 0 {
                     let text = crate::i18n::fmt(
-                        // i18n: under "Also delete the files from disk", while it is ticked: how many of the downloads being deleted are finished, whose complete files are deleted from the disk too
+                        // i18n: under "Also move the files to the Recycle Bin", while it is ticked: how many of the downloads being deleted are finished, whose complete files go to the Recycle Bin too
                         &crate::i18n::tn(
                             self.finished,
-                            "This also deletes {n} finished file.",
-                            "This also deletes {n} finished files.",
+                            "This also moves {n} finished file to the Recycle Bin.",
+                            "This also moves {n} finished files to the Recycle Bin.",
                         ),
                         &[("n", &crate::i18n::integer(self.finished))],
                     );
@@ -2541,6 +2582,42 @@ it from Grabbit's list of downloads?",
                 } else {
                     0.0
                 };
+                // A finished torrent's files are deleted outright by its engine (DA1t): said in
+                // red too, as upstream #1563 says every finished file that goes.
+                if self.files && self.torrents > 0 {
+                    let text = crate::i18n::fmt(
+                        // i18n: under the delete box, while it is ticked: how many of the downloads being deleted are finished torrents, whose files are deleted from the disk (not moved to the Recycle Bin)
+                        &crate::i18n::tn(
+                            self.torrents,
+                            "This also deletes {n} finished torrent's files.",
+                            "This also deletes {n} finished torrents' files.",
+                        ),
+                        &[("n", &crate::i18n::integer(self.torrents))],
+                    );
+                    let lines = winui::paragraph(
+                        &p,
+                        o.x + e + 16.0,
+                        o.y + 102.0 + warn,
+                        &text,
+                        crate::theme::colors().error_strong,
+                        o.x + W - e,
+                        13.0,
+                    );
+                    warn += lines as f32 * 13.0 + 6.0;
+                }
+                // The running downloads Delete leaves alone, said under it (plan 12a, E3).
+                if self.kept > 0 {
+                    let lines = winui::paragraph(
+                        &p,
+                        o.x + e + 16.0,
+                        o.y + 102.0 + warn,
+                        &kept_text(self.kept),
+                        black,
+                        o.x + W - e,
+                        13.0,
+                    );
+                    warn += lines as f32 * 13.0 + 6.0;
+                }
                 grow_px(ui.ctx(), "confirm-delete-finished", warn);
                 let o = o + vec2(0.0, warn);
                 // Enter Yes, Escape No, as before; Tab: the files box, Yes, No, then "Don't
@@ -2686,7 +2763,7 @@ fn moved_away_text(path: &Path) -> String {
     let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
     crate::i18n::fmt(
         crate::i18n::t(
-            "{file} was moved elsewhere by dragging it out of Download complete, and Grabbit couldn't learn where. Look for it where you dropped it.",
+            "{file} was moved elsewhere by dragging it out of Download complete, and Grabbit could not learn where. Look for it where you dropped it.",
         ),
         &[("file", &name)],
     )
@@ -3145,10 +3222,10 @@ impl DeleteCategory {
                     &mut [
                         // i18n: button: deletes the category
                         FooterItem::Button(
-                            FooterButton::new("Delete", ButtonKind::Danger).enter(true),
+                            FooterButton::new("Yes", ButtonKind::Danger).enter(true),
                         ),
                         FooterItem::Button(
-                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                            FooterButton::new("No", ButtonKind::Normal).escape(true),
                         ),
                     ],
                 );
@@ -3389,22 +3466,24 @@ impl ExistingFiles {
                     18.0,
                 );
                 // No is the default: a file the user didn't mean to give up stays as it is.
-                // Enter and Escape both answer No, as before.
+                // Enter and Escape both answer No, as before. "No, Yes" as the other
+                // questions read (plan 12b, C1): No isn't moved last, and Tab goes as drawn.
                 match winui::footer(
                     ui,
                     o,
                     W,
                     BODY,
                     &mut [
-                        FooterItem::Button(FooterButton::new("Yes", ButtonKind::Normal)),
                         FooterItem::Button(
                             FooterButton::new("No", ButtonKind::Default)
+                                .not_primary()
                                 .enter(true)
                                 .escape(true),
                         ),
+                        FooterItem::Button(FooterButton::new("Yes", ButtonKind::Normal)),
                     ],
                 ) {
-                    Some(0) => Outcome::Done(()),
+                    Some(1) => Outcome::Done(()),
                     Some(_) => Outcome::Closed,
                     None => Outcome::Open,
                 }
@@ -3563,6 +3642,23 @@ fn ensure_folder_with<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Plan 12a: the delete box says where the files go: finished ones to the Recycle Bin,
+    /// unfinished data deleted, a mix said as a mix.
+    #[test]
+    fn the_delete_box_says_where_the_files_go() {
+        assert_eq!(files_label(1, 0), "Also delete the file from disk");
+        assert_eq!(files_label(1, 1), "Also move the file to the Recycle Bin");
+        assert_eq!(files_label(3, 0), "Also delete the 3 files from disk");
+        assert_eq!(
+            files_label(3, 3),
+            "Also move the 3 files to the Recycle Bin"
+        );
+        assert_eq!(
+            files_label(3, 2),
+            "Also delete the 3 files (finished ones go to the Recycle Bin)"
+        );
+    }
 
     /// #440: Download File Info behind the Create folder question ended without a closing pass,
     /// and the next one opened as a new, hidden window that was never told to show: later

@@ -32,12 +32,13 @@ In the paste bar's address box, **Enter** does what its button says, **Esc** lea
 
 | Keys | What they do |
 |---|---|
-| **Enter** | Open the selected download (a double-click follows right-click → **On Double click**) |
+| **Enter** | Open the selected download (a double-click follows right-click → **On double-click**) |
 | **Alt+Enter** | **Properties** of the selected download |
 | **Ctrl+M** or **F2** | Move or rename the selected download |
 | **Shift+F10** or the **Menu** key | Open the selected download's menu |
 | **Delete** | Delete the selected downloads from the list (asks first, unless you turned the question off; their files stay unless you tick the box) |
-| **Shift+Delete** | Delete the selected downloads and their files (always asks first) |
+| **Shift+Delete** | Delete the selected downloads and their files; finished files go to the Recycle Bin (always asks first) |
+| **Ctrl+C** | Copy the selected downloads' addresses (a torrent's: right-click → **Torrent** → **Copy magnet link**) |
 
 ## Selecting
 
@@ -71,10 +72,10 @@ a branch, and **Home** / **End** go to the first / last node.
 | **Left** / **Right** | The menu before / after; in a submenu, **Left** closes it |
 | **Enter**, or an item's underlined letter | Run the highlighted item |
 | **Esc** | Close a menu or dialog (an open drop-down list first) |
-| **Enter** | In **Download File Info**: **Start Download** |
+| **Enter** | In **Download file info**: **Download now** |
 | **Tab** | Move between the paste bar, the categories and the download list |
 | **Up** / **Down**, **Left** / **Right** | In the **Categories** pane: the next category; close or open a branch |
-| **Shift+F10** or the **Menu** key | In the **Categories** pane: the selected category's menu (**Properties**, **Add category**, **Delete**) |
+| **Shift+F10** or the **Menu** key | In the **Categories** pane: the selected category's menu (**Properties**, **Add category...**, **Delete**) |
 | **Ctrl++** / **Ctrl+−** | Make everything larger / smaller, in every window (**View → Interface size**, 100 % to 200 %) |
 | **Ctrl+0** | Everything at its normal size (100 %) |
 
@@ -108,7 +109,7 @@ A window larger than the screen at a big interface size scrolls.
 | Type a name | Jump to the item that starts with it, in a list or a drop-down |
 | **Delete** | Remove the selected item of a list (a login, an exception, a queue: asks first) |
 
-In the paste bar's address and **Download File Info**'s **Save As**, **Up** / **Down** go through
+In the paste bar's address and **Download file info**'s **Save as**, **Up** / **Down** go through
 the addresses and folders used before.
 
 Right-click any text box for **Undo**, **Cut**, **Copy**, **Paste**, **Delete** and **Select

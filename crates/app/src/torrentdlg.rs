@@ -718,7 +718,7 @@ impl TorrentDialog {
                     has,
                 ),
                 FooterItem::Button(
-                    FooterButton::new("Download Now", kind(ready, true))
+                    FooterButton::new("Download now", kind(ready, true))
                         .primary()
                         .enter(ready),
                 ),
@@ -1312,7 +1312,7 @@ impl TorrentSettings {
                     &p,
                     o.x + 396.0,
                     o.y + 352.0,
-                    crate::i18n::t("KBytes/sec"),
+                    crate::i18n::t("KB/s"),
                     if self.upload_on {
                         winui::TEXT()
                     } else {
@@ -1393,7 +1393,6 @@ pub struct AddTrackers {
     pub id: u64,
     name: String,
     text: String,
-    error: Option<String>,
     /// The box has had the focus (it takes it once, when the window opens).
     focused: bool,
 }
@@ -1404,7 +1403,6 @@ impl AddTrackers {
             id,
             name: name.to_owned(),
             text: String::new(),
-            error: None,
             focused: false,
         }
     }
@@ -1469,7 +1467,6 @@ impl AddTrackers {
                     o.x + TRACKERS_W - winui::EDGE,
                     ("add-trackers", 1),
                 );
-                let before = self.text.clone();
                 let field = winui::multiline_light(
                     ui,
                     r(o, winui::EDGE, 42.0, TRACKERS_W - 2.0 * winui::EDGE, 120.0),
@@ -1480,10 +1477,15 @@ impl AddTrackers {
                 if !std::mem::replace(&mut self.focused, true) {
                     field.request_focus();
                 }
-                if self.text != before {
-                    self.error = None;
-                }
-                let (line, color) = match &self.error {
+                // OK greys while the box holds no tracker or a line that isn't one (plan 12b,
+                // C7), its tip saying why; a wrong line is named under the box once the box
+                // is left (not from the first key typed).
+                let checked = self.addresses();
+                let why = checked.as_ref().err().cloned().unwrap_or_default();
+                let named = (!field.has_focus() && !self.text.trim().is_empty())
+                    .then_some(&why)
+                    .filter(|w| !w.is_empty());
+                let (line, color) = match named {
                     Some(e) => (e.clone(), winui::ERROR()),
                     None => (
                         // i18n: Add trackers: under the box
@@ -1509,7 +1511,18 @@ impl AddTrackers {
                     TRACKERS_W,
                     TRACKERS_BODY,
                     &mut [
-                        FooterItem::Button(FooterButton::new("OK", ButtonKind::Default)),
+                        FooterItem::Button(
+                            FooterButton::new(
+                                "OK",
+                                if checked.is_ok() {
+                                    ButtonKind::Default
+                                } else {
+                                    ButtonKind::Disabled
+                                },
+                            )
+                            .primary()
+                            .tip(checked.is_err(), &why),
+                        ),
                         FooterItem::Button(
                             FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
                         ),
@@ -1517,14 +1530,8 @@ impl AddTrackers {
                 );
                 if pressed == Some(1) {
                     Outcome::Closed
-                } else if pressed == Some(0) {
-                    match self.addresses() {
-                        Ok(list) => Outcome::Done(list),
-                        Err(e) => {
-                            self.error = Some(e);
-                            Outcome::Open
-                        }
-                    }
+                } else if let (Some(0), Ok(list)) = (pressed, checked) {
+                    Outcome::Done(list)
                 } else {
                     Outcome::Open
                 }

@@ -33,7 +33,7 @@ it gives itself. After you edit a file, pick it again in **View → Theme** to s
 A theme can be one file (`harbour.toml`) or a folder of its own (`harbour/theme.toml`) when it
 brings icons.
 
-**View → Theme → Add a theme file…** does it for you: pick a file anywhere, and Grabbit copies it into
+**View → Theme → Add a theme file...** does it for you: pick a file anywhere, and Grabbit copies it into
 the themes folder and uses it at once. A file that isn't a theme stays out, and Grabbit says why.
 
 ## Base16 and pywal colour schemes
@@ -46,7 +46,7 @@ Colour schemes made for other programs are themes too, with nothing to convert:
   `palette:` block). A Base24 scheme reads as its first 16 colours.
 - **pywal's `colors.json`**, or any program's file in pywal's shape (wallust's pywal template).
 
-Add it with **View → Theme → Add a theme file…**, or put it in the themes folder yourself. It
+Add it with **View → Theme → Add a theme file...**, or put it in the themes folder yourself. It
 shows in **View → Theme** under the scheme's name (`name:` or `scheme:`; pywal's is named after
 the wallpaper).
 
@@ -55,7 +55,7 @@ pywal writes its colours: `~/.cache/wal/colors.json` (on Windows
 `%USERPROFILE%\.cache\wal\colors.json`, where winwal and pywal write it; `$PYWAL_CACHE_DIR` or
 `$XDG_CACHE_HOME/wal` when you set them). Pick it and Grabbit follows your wallpaper: each time `wal`
 writes new colours, Grabbit takes them within two seconds. It looks only at the file's date and size,
-every two seconds, and only while pywal is the theme. A copy added with **Add a theme file…**
+every two seconds, and only while pywal is the theme. A copy added with **Add a theme file...**
 keeps the colours it had.
 
 A scheme changes colours only, on Graphite: every window, button and menu stays where it

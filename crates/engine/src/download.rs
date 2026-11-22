@@ -231,12 +231,12 @@ impl std::fmt::Debug for FileHook {
 /// Which proxy downloads go through (Options → Proxy / SOCKS).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Proxy {
-    /// "No proxy/socks" (IDM's default): direct connections.
+    /// "No proxy/SOCKS" (IDM's default): direct connections.
     #[default]
     None,
     /// "Use system settings": Windows' proxy (and the environment's).
     System,
-    /// "Manual proxy/socks configuration": `http://host:port` (or `socks5://…`), with an
+    /// "Manual proxy/SOCKS configuration": `http://host:port` (or `socks5://…`), with an
     /// optional login, for the listed schemes.
     Manual {
         url: String,

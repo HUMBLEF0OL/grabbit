@@ -486,7 +486,7 @@ fn through_proxy(cmd: &mut Command, url: Option<&str>) -> Vec<String> {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if said.as_ref() != Some(&proxy) {
             tracing::info!(
-                "Options → Proxy / Socks: the manual proxy isn't ticked for {scheme}, so yt-dlp and gallery-dl go straight to {scheme} addresses"
+                "Options → Proxy / SOCKS: the manual proxy isn't ticked for {scheme}, so yt-dlp and gallery-dl go straight to {scheme} addresses"
             );
             *said = Some(proxy.clone());
         }

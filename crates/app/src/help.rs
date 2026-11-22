@@ -619,7 +619,7 @@ impl Updates {
                 } else if let Some(status) = &self.status {
                     let line = match status {
                         UpdateStatus::Failed(e) => crate::i18n::fmt(
-                            crate::i18n::t("The update couldn't be installed: {error}"),
+                            crate::i18n::t("The update could not be installed: {error}"),
                             &[("error", e)],
                         ),
                     };
@@ -912,7 +912,7 @@ impl About {
 // Keyboard shortcuts
 
 /// Every shortcut the main window answers (keep in step with `app.rs` and `list.rs`).
-const SHORTCUTS: [(&str, &str); 28] = [
+const SHORTCUTS: [(&str, &str); 29] = [
     (
         "Ctrl+N",
         "Add links, magnets or video pages (the Add window)",
@@ -942,6 +942,7 @@ const SHORTCUTS: [(&str, &str); 28] = [
         "Shift+Delete",
         "Delete the selected downloads and their files (asks first)",
     ),
+    ("Ctrl+C", "Copy the selected downloads' addresses"),
     ("Ctrl+A", "Select all downloads"),
     ("Ctrl+click", "Select or unselect one more download"),
     ("Shift+click", "Select every download up to this one"),

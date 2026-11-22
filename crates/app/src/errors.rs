@@ -7,6 +7,17 @@ use mdm_engine::{CertProblem, Error, NetKind, Refusal};
 
 use crate::i18n::{fmt, ltr, t};
 
+/// A failure a new address mends (plan 12b, E2): the link expired, or the server refused it
+/// (HTTP 403) or says it is gone (410). The Details pane's Refresh download address, and the
+/// progress window's (plan 13), are offered for these.
+pub fn wants_new_address(e: &Error) -> bool {
+    match e {
+        Error::LinkExpired => true,
+        Error::Status(s) => matches!(s.as_u16(), 403 | 410),
+        _ => false,
+    }
+}
+
 /// The sentence the list, the progress window and Properties show for `e`.
 pub fn describe(e: &Error) -> String {
     match e {
@@ -538,6 +549,18 @@ fn os_text(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Plan 12b, E2: Refresh download address is offered for an expired link, 403 and 410.
+    #[test]
+    fn a_new_address_mends_an_expired_refused_or_gone_link() {
+        use reqwest::StatusCode as S;
+        assert!(wants_new_address(&Error::LinkExpired));
+        assert!(wants_new_address(&Error::Status(S::FORBIDDEN)));
+        assert!(wants_new_address(&Error::Status(S::GONE)));
+        assert!(!wants_new_address(&Error::Status(S::NOT_FOUND)));
+        assert!(!wants_new_address(&Error::Status(S::INTERNAL_SERVER_ERROR)));
+        assert!(!wants_new_address(&Error::ShortBody));
+    }
 
     #[test]
     fn messages_carry_their_data() {

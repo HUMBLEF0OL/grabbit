@@ -1039,7 +1039,7 @@ impl VideoDialog {
                 // i18n: button in Download video: where MDM takes yt-dlp and ffmpeg from
                 FooterItem::Button(FooterButton::new("Helpers...", ButtonKind::Normal).leading()),
                 FooterItem::Button(
-                    FooterButton::new("Download Now", kind(true))
+                    FooterButton::new("Download now", kind(true))
                         .primary()
                         .enter(ready)
                         .tip(!why.is_empty(), &why),
@@ -1395,7 +1395,7 @@ pub(crate) fn lookup_error(
         } else {
             crate::i18n::fmt(
                 // i18n: the Download video window: yt-dlp couldn't read the cookies of the browser chosen in Options; {browser} = its name, {error} = yt-dlp's words
-                crate::i18n::t("yt-dlp couldn't read {browser}'s cookies: {error}"),
+                crate::i18n::t("yt-dlp could not read {browser}'s cookies: {error}"),
                 &[("browser", browser), ("error", e)],
             )
         };

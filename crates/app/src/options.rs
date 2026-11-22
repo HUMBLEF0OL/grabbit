@@ -233,6 +233,9 @@ pub struct OptionsDialog {
     /// The page the scrolled page pane's offset belongs to (none until the window first
     /// draws): a page chosen, or the window opened again, starts at its top.
     scrolled: Option<usize>,
+    /// The sub-dialog whose first field has had the keys (plan 12b, D1): it takes them once,
+    /// as the dialog opens, or as another kind takes its place; cleared as it closes.
+    sub_focused: Option<std::mem::Discriminant<Sub>>,
 }
 
 impl OptionsDialog {
@@ -348,6 +351,7 @@ impl OptionsDialog {
             cookie_browser: cookie_browser_at(settings),
             ua_auto: settings.own_user_agent().is_none(),
             scrolled: None,
+            sub_focused: None,
         };
         // Its typed fields as read back untouched (a value they clamp differs from `from`).
         d.opened = d.result();
@@ -516,7 +520,7 @@ impl OptionsDialog {
             ),
             (
                 &mut s.mv2_extensions,
-                crate::i18n::mark("Extend the availability of Manifest 2 Chrome extensions"),
+                crate::i18n::mark("Extend the availability of Manifest V2 Chrome extensions"),
             ),
             (
                 &mut s.advanced_integration,
@@ -698,7 +702,7 @@ impl OptionsDialog {
         caption(
             ui,
             panels_y,
-            crate::i18n::t("Customize Grabbit Download panels in browsers"),
+            crate::i18n::t("Customize Grabbit's download panels in browsers"),
             LIGHT_TEXT(),
         );
         if winui::button_light(
@@ -803,13 +807,13 @@ impl OptionsDialog {
         };
         let label =
             crate::i18n::t("Don't start downloading automatically from the following addresses:");
-        let list_w = winui::button_fit_width(&p, "Edit list ...", 73.0, 260.0);
+        let list_w = winui::button_fit_width(&p, "Edit list...", 73.0, 260.0);
         let list_x = after(label, list_w);
         lead(ui, 336.0, label, list_x);
         if winui::button_light(
             ui,
             r(o, list_x, 336.0, list_w, h),
-            "Edit list ...",
+            "Edit list...",
             ButtonKind::Normal,
             false,
         )
@@ -842,7 +846,7 @@ impl OptionsDialog {
         let label = cat.shown();
         let with_category = |template: &str| crate::i18n::fmt(template, &[("category", &label)]);
         let dir_line = with_category(crate::i18n::t(
-            "Default download directory for \"{category}\" category",
+            "Default download folder for \"{category}\" category",
         ));
         // New / Edit... (D-021): a category of the user's; a built-in one's folder. One width for
         // both, as wide as the longer label in this language (#192), after the list.
@@ -856,15 +860,10 @@ impl OptionsDialog {
         // The mock's wide form (240): Category, the folder, the temporary directory. A long
         // category name widens the folder's label only so far: the list keeps 120, the label is
         // cut with "..." (whole on hover).
-        let fx = winui::form(
-            &p,
-            left,
-            &["Category", &dir_line, "Temporary directory"],
-            true,
-        )
-        .min(new_x - 8.0 - 120.0);
+        let fx = winui::form(&p, left, &["Category", &dir_line, "Temporary folder"], true)
+            .min(new_x - 8.0 - 120.0);
         // The page's title over its rows.
-        winui::form_label(&p, o, left, 88.0, 16.0, "Save To...", true);
+        winui::form_label(&p, o, left, 88.0, 16.0, "Save to", true);
         // i18n: noun: label before the list of categories
         winui::form_label(&p, o, left, 110.0, h, "Category", true);
         let names: Vec<String> = cats.iter().map(|c| c.label().into_owned()).collect();
@@ -928,7 +927,7 @@ impl OptionsDialog {
         let types = cat.types_text();
         readonly(ui, r(o, left, 170.0, right - left, h), &types);
         let dir_line = with_category(crate::i18n::t(
-            "Default download directory for \"{category}\" category",
+            "Default download folder for \"{category}\" category",
         ));
         let (rect, cut) = winui::text_fit(
             &p,
@@ -1004,7 +1003,7 @@ impl OptionsDialog {
         ));
         // The temporary directory under a hairline, a row of the form (down by the row above).
         winui::rule(&p, o, left, 319.0, right - left);
-        winui::form_label(&p, o, left, 327.0, h, "Temporary directory", true);
+        winui::form_label(&p, o, left, 327.0, h, "Temporary folder", true);
         // D-004: no temporary directory — parts are written next to the file, so there is
         // nothing to assemble at the end.
         let none = crate::i18n::t("Not used: file parts are written next to the file");
@@ -1149,18 +1148,18 @@ impl OptionsDialog {
             &p,
             o.x + left,
             o.y + winui::baseline_in(190.0, 16.0),
-            crate::i18n::t("Note: These settings don't relate to queue processing"),
+            crate::i18n::t("Note: these settings don't relate to queue processing"),
             LIGHT_TEXT(),
         );
         winui::rule(&p, o, left, 214.0, w);
         let checks: [(&mut bool, &str); 4] = [
             (
                 &mut s.start_immediately,
-                "Start downloading immediately while displaying \"Download File Info\" dialog",
+                "Start downloading immediately while displaying \"Download file info\" dialog",
             ),
             (
                 &mut s.queue_panel_later,
-                "Show queue selection panel on pressing \"Download Later\" button",
+                "Show queue selection panel on pressing \"Later\" button",
             ),
             (
                 &mut s.queue_panel_batch,
@@ -1271,9 +1270,15 @@ impl OptionsDialog {
         // Titles over the groups, the groups between hairlines (the mock's).
         let max = "Default max. conn. number";
         // i18n: label before the choice of DNS (the service that turns names into addresses)
-        let dns = "DNS:";
+        let dns = "DNS";
         let fx = winui::form(&p, left, &[max, dns], false);
-        winui::form_label(&p, o, left, 88.0, 16.0, "Max. connections number", true);
+        Self::group_title(
+            ui,
+            o,
+            left,
+            winui::baseline_in(88.0, 16.0),
+            "Maximum connections",
+        );
         winui::form_label(&p, o, left, 108.0, h, max, true);
         // Typed, or stepped with the arrows (IDM's drop-down offered 1 to 32; issue #12).
         winui::spin_box(
@@ -1309,7 +1314,7 @@ impl OptionsDialog {
             }
         }
         // i18n: plural noun: label before a list of exceptions
-        winui::form_label(&p, o, left, 167.0, 16.0, "Exceptions:", true);
+        winui::form_label(&p, o, left, 167.0, 16.0, "Exceptions", true);
         // The user's exceptions, then the caps the engine learned (read-only "(auto)" rows).
         let rows: Vec<Vec<String>> = self
             .s
@@ -1381,14 +1386,15 @@ impl OptionsDialog {
         } else {
             ButtonKind::Disabled
         };
-        // i18n: verb: delete the item
-        let del = winui::button_light(ui, r(o, col_x, 221.0, col_w, h), "Delete", kind, false)
-            .clicked()
-            || del_key;
+        // New, Edit, Delete, and Tab in that order (plan 12b, C9).
         let edit =
             // i18n: verb: edit the item
-            winui::button_light(ui, r(o, col_x, 255.0, col_w, h), "Edit", kind, false)
+            winui::button_light(ui, r(o, col_x, 221.0, col_w, h), "Edit", kind, false)
                 .clicked();
+        // i18n: verb: delete the item
+        let del = winui::button_light(ui, r(o, col_x, 255.0, col_w, h), "Delete", kind, false)
+            .clicked()
+            || del_key;
         if new {
             self.sub = Some(Sub::Exception(None, String::new(), "1".into()));
         }
@@ -1483,7 +1489,7 @@ impl OptionsDialog {
         // (the heading is the window's, `heading`).
         let (get_x, get_w) = winui::button_row(
             &p,
-            &[("Get System", PROXY_GET_X, 93.0)],
+            &[("Get system settings", PROXY_GET_X, 93.0)],
             0.0,
             PROXY_GET_X,
             160.0,
@@ -1494,7 +1500,7 @@ impl OptionsDialog {
         if winui::button_light(
             ui,
             r(o, get_x, get_y, get_w, 21.0),
-            "Get System",
+            "Get system settings",
             ButtonKind::Normal,
             false,
         )
@@ -1521,7 +1527,7 @@ impl OptionsDialog {
             o.x + PAGE_LEFT + 16.0,
             o.y + PAGE_TOP + 8.0,
             crate::i18n::t(
-                "Use proxy/socks from a browser's request if there are download errors /\nfor the downloads intercepted from the browser",
+                "Use proxy/SOCKS from a browser's request if there are download errors /\nfor the downloads intercepted from the browser",
             ),
             LIGHT_TEXT(),
             o.x + PAGE_RIGHT,
@@ -1543,13 +1549,13 @@ impl OptionsDialog {
         // The four ways, 22 apart; the script's address after the third, the manual rows after
         // the fourth (mock: no rules between them).
         let modes = [
-            (124.0, crate::i18n::mark("No proxy/socks")),
+            (124.0, crate::i18n::mark("No proxy/SOCKS")),
             (146.0, crate::i18n::mark("Use system settings")),
             (
                 168.0,
                 crate::i18n::mark("Use automatic configuration script"),
             ),
-            (228.0, crate::i18n::mark("Manual proxy/socks configuration")),
+            (228.0, crate::i18n::mark("Manual proxy/SOCKS configuration")),
         ];
         let was = s.proxy_mode;
         let mut group = Vec::new();
@@ -1578,7 +1584,7 @@ impl OptionsDialog {
             &p,
             lx,
             // i18n: noun: the web address (URL)
-            &["Address", "Proxy server address", "UserName"],
+            &["Address", "Proxy server address", "User name"],
             false,
         );
         // The script's address (http, https or file): MDM fetches and runs it (pacfetch.rs,
@@ -1600,7 +1606,7 @@ impl OptionsDialog {
         let (row1, row2) = (248.0, 286.0);
         winui::form_label(&p, o, lx, row1, h, "Proxy server address", manual);
         winui::form_label(&p, o, x2, row1, h, "Port", manual);
-        winui::form_label(&p, o, lx, row2, h, "UserName", manual);
+        winui::form_label(&p, o, lx, row2, h, "User name", manual);
         winui::form_label(&p, o, x2, row2, h, "Password", manual);
         winui::edit_light_on(
             ui,
@@ -1652,7 +1658,7 @@ impl OptionsDialog {
         // Socks settings: with the proxy work in M10. PASV beside it, as the mock has them.
         let (adv_x, adv_w) = winui::button_row_from_left(
             &p,
-            &[("Advanced / Socks...", lx, 159.0)],
+            &[("Advanced / SOCKS...", lx, 159.0)],
             8.0,
             PAGE_RIGHT,
             240.0,
@@ -1661,7 +1667,7 @@ impl OptionsDialog {
         winui::button_light(
             ui,
             r(o, adv_x, row3, adv_w, h),
-            "Advanced / Socks...",
+            "Advanced / SOCKS...",
             ButtonKind::Disabled,
             false,
         );
@@ -1697,8 +1703,8 @@ impl OptionsDialog {
         // Under Proxy's rule (at 388): the adapter's row, then what it does now.
         let (h, y) = (winui::CONTROL_H, 398.0);
         // i18n: label before the choice of network adapter (Ethernet, Wi-Fi, a VPN's) every connection must go through
-        let fx = winui::form(&p, PAGE_LEFT, &["Network adapter:"], false);
-        winui::form_label(&p, o, PAGE_LEFT, y, h, "Network adapter:", true);
+        let fx = winui::form(&p, PAGE_LEFT, &["Network adapter"], false);
+        winui::form_label(&p, o, PAGE_LEFT, y, h, "Network adapter", true);
         // The choices: any, then each adapter with its address (the ones with none too: a VPN
         // switched off), the chosen one kept when it's gone.
         let chosen = self.s.net_adapter.trim().to_owned();
@@ -2698,8 +2704,8 @@ impl OptionsDialog {
         // Listen on and Port on the form.
         let (listen_y, port_y) = (108.0, 146.0);
         // i18n: Options → Remote: label before the choice of the address MDM listens on
-        let fx = winui::form(&p, l, &["Listen on:", "Port:"], false);
-        winui::form_label(&p, o, l, listen_y, h, "Listen on:", on);
+        let fx = winui::form(&p, l, &["Listen on", "Port"], false);
+        winui::form_label(&p, o, l, listen_y, h, "Listen on", on);
         let chosen = self.s.remote_listen.trim().to_owned();
         let mut values = vec![String::new(), mdm_remote::addrs::THIS_COMPUTER.to_owned()];
         let mut labels = vec![
@@ -2738,7 +2744,7 @@ impl OptionsDialog {
             self.s.remote_listen = values[i].clone();
         }
         // i18n: Options → Remote: label before the port number box
-        winui::form_label(&p, o, l, port_y, h, "Port:", on);
+        winui::form_label(&p, o, l, port_y, h, "Port", on);
         winui::spin_box(
             ui,
             r(o, fx, port_y, 110.0, h),
@@ -3148,6 +3154,17 @@ impl OptionsDialog {
 
     fn sub_dialog(&mut self, ctx: &egui::Context) {
         let Some(sub) = self.sub.take() else { return };
+        // The first field takes the keys once, as the dialog opens (plan 12b, D1), and again
+        // when another sub-dialog takes its place.
+        let kind = std::mem::discriminant(&sub);
+        let first = self.sub_focused.replace(kind) != Some(kind);
+        self.sub_dialog_of(ctx, sub, first);
+        if self.sub.is_none() {
+            self.sub_focused = None;
+        }
+    }
+
+    fn sub_dialog_of(&mut self, ctx: &egui::Context, sub: Sub, first: bool) {
         match sub {
             Sub::Pair => {
                 if self.pair_window(ctx) {
@@ -3176,11 +3193,15 @@ impl OptionsDialog {
                         let p = ui.painter().clone();
                         let (e, h) = (winui::EDGE, winui::CONTROL_H);
                         // i18n: Site/path: label before a web address (site and folder); User: noun, label before the user name
-                        let labels = ["Site/path:", "User:", "Password:"];
+                        let labels = ["Site/path", "User", "Password"];
                         let fx = winui::form(&p, e, &labels, false);
                         let fw = W - e - fx;
                         winui::form_label(&p, o, e, 16.0, h, labels[0], true);
-                        winui::edit_light(ui, r(o, fx, 16.0, fw, h), &mut site, true, false);
+                        let field =
+                            winui::edit_light(ui, r(o, fx, 16.0, fw, h), &mut site, true, false);
+                        if first {
+                            field.request_focus();
+                        }
                         winui::form_label(&p, o, e, 56.0, h, labels[1], true);
                         winui::edit_light(ui, r(o, fx, 56.0, fw, h), &mut user, true, false);
                         winui::form_label(&p, o, e, 96.0, h, labels[2], true);
@@ -3221,16 +3242,19 @@ impl OptionsDialog {
                         let p = ui.painter().clone();
                         let (e, h) = (winui::EDGE, winui::CONTROL_H);
                         // i18n: Server: noun, label before a server name; Connections: label before the number of connections allowed
-                        let labels = ["Server:", "Connections:"];
+                        let labels = ["Server", "Connections"];
                         let fx = winui::form(&p, e, &labels, false);
                         winui::form_label(&p, o, e, 16.0, h, labels[0], true);
-                        winui::edit_light(
+                        let field = winui::edit_light(
                             ui,
                             r(o, fx, 16.0, W - e - fx, h),
                             &mut server,
                             true,
                             false,
                         );
+                        if first {
+                            field.request_focus();
+                        }
                         winui::form_label(&p, o, e, 56.0, h, labels[1], true);
                         winui::spin_box(
                             ui,
@@ -3420,7 +3444,7 @@ impl OptionsDialog {
                     [DNS_W, DNS_BODY + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
-                    |ui, o| dns_dialog(ui, o, &mut e),
+                    |ui, o| dns_dialog(ui, o, &mut e, first),
                 );
                 match out {
                     Outcome::Open => self.sub = Some(Sub::Dns(e)),
@@ -3439,7 +3463,7 @@ impl OptionsDialog {
                     [ACCOUNT_W, body + winui::FOOTER_H],
                     false,
                     LIGHT_BG(),
-                    |ui, o| account_dialog(ui, o, &mut e),
+                    |ui, o| account_dialog(ui, o, &mut e, first),
                 );
                 match out {
                     Outcome::Open => self.sub = Some(Sub::Account(e)),
@@ -3489,13 +3513,16 @@ impl OptionsDialog {
                         );
                         // Under the sentence (one or two lines), down to the footer's room.
                         let top = 16.0 + lines as f32 * LINE + 10.0;
-                        multiline(
+                        let field = winui::multiline_light(
                             ui,
                             r(o, e, top, W - 2.0 * e, BODY - e - top),
                             &mut list,
                             "addresses",
                             true,
                         );
+                        if first {
+                            field.request_focus();
+                        }
                         ok_cancel(ui, o, W, BODY, true)
                     },
                 );
@@ -3538,13 +3565,16 @@ impl OptionsDialog {
                             o.x + W - e,
                             LINE,
                         );
-                        winui::checkbox_light(
+                        let field = winui::checkbox_light(
                             ui,
                             o + vec2(e, 16.0 + lines.max(2) as f32 * LINE + 16.0),
                             &mut opened,
                             "Also take files the browser would open (PDF, music, video)",
                             true,
                         );
+                        if first {
+                            field.request_focus();
+                        }
                         ok_cancel(ui, o, W, BODY, true)
                     },
                 );
@@ -3687,7 +3717,7 @@ impl OptionsDialog {
 
 // ---- pieces -----------------------------------------------------------------------------
 
-/// Proxy / Socks → Manual proxy/socks configuration with no protocol ticked uses the proxy for
+/// Proxy / SOCKS → Manual proxy/SOCKS configuration with no protocol ticked uses the proxy for
 /// nothing, and the boxes start unticked (#1448: yt-dlp went straight to YouTube): chosen, or
 /// found so when Options opens, it is ticked for http and https, as Get System ticks it.
 fn tick_manual_protocols(s: &mut Settings) {
@@ -3721,7 +3751,7 @@ fn display_dir(dir: &std::path::Path) -> String {
 }
 
 /// Connection → DNS → Settings...: how it's asked, its servers, the fallback, a test.
-fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
+fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit, first: bool) -> Outcome<()> {
     use mdm_engine::dns::{Mode, Preset};
     let p = ui.painter().clone();
     let (edge, h, w) = (winui::EDGE, winui::CONTROL_H, DNS_W);
@@ -3751,6 +3781,11 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
         clicked.push(r);
         x = winui::checkbox_caption_end(&p, x, caption) + 16.0;
     }
+    // The chosen way has the keys as the window opens (plan 12b, D1).
+    if first {
+        let at = modes.iter().position(|(n, ..)| *n == e.mode).unwrap_or(0);
+        clicked[at].request_focus();
+    }
     if let Some(i) = winui::radio_keys(ui, &clicked) {
         let (n, m, _) = modes[i];
         if preset.is_none_or(|p| p.offers(m)) {
@@ -3762,12 +3797,12 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
         &p,
         edge,
         &[
-            "Server:",
-            "Configuration ID:",
-            "Servers:",
-            "Certificate name:",
-            "Address:",
-            "IP addresses (optional):",
+            "Server",
+            "Configuration ID",
+            "Servers",
+            "Certificate name",
+            "Address",
+            "IP addresses (optional)",
         ],
         false,
     );
@@ -3786,7 +3821,7 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
                 Mode::Https => pr.doh.to_owned(),
             };
             // i18n: Options → DNS settings: label before the chosen service's server (an address)
-            winui::form_label(&p, o, edge, row1, h, "Server:", true);
+            winui::form_label(&p, o, edge, row1, h, "Server", true);
             let (rect, cut) = winui::label_into(
                 &p,
                 o.x + fx,
@@ -3804,7 +3839,7 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
                 field(
                     ui,
                     row2,
-                    "Configuration ID:",
+                    "Configuration ID",
                     &mut e.nextdns_id,
                     mode != Mode::Plain,
                 );
@@ -3813,17 +3848,17 @@ fn dns_dialog(ui: &mut Ui, o: Pos2, e: &mut DnsEdit) -> Outcome<()> {
         // The user's own DNS.
         None => match mode {
             // i18n: Options → DNS settings: label before the DNS servers' addresses, as IP addresses
-            Mode::Plain => field(ui, row1, "Servers:", &mut e.servers, true),
+            Mode::Plain => field(ui, row1, "Servers", &mut e.servers, true),
             Mode::Tls => {
-                field(ui, row1, "Servers:", &mut e.servers, true);
+                field(ui, row1, "Servers", &mut e.servers, true);
                 // i18n: Options → DNS over TLS: label before the name the server's certificate shows
-                field(ui, row2, "Certificate name:", &mut e.tls_name, true);
+                field(ui, row2, "Certificate name", &mut e.tls_name, true);
             }
             Mode::Https => {
                 // i18n: Options → DNS over HTTPS: label before the server's https:// address
-                field(ui, row1, "Address:", &mut e.doh_url, true);
+                field(ui, row1, "Address", &mut e.doh_url, true);
                 // i18n: Options → DNS over HTTPS: label before the server's IP addresses, which may be left empty
-                field(ui, row2, "IP addresses (optional):", &mut e.servers, true);
+                field(ui, row2, "IP addresses (optional)", &mut e.servers, true);
             }
         },
     }
@@ -3953,7 +3988,12 @@ fn account_box(lines: usize) -> (f32, f32) {
 
 /// Accounts → Add...: sign in by code in the browser (Real-Debrid's device flow, AllDebrid's PIN),
 /// or paste the API token (Premiumize: its API key only); the account is checked before it is kept.
-fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings::DebridAccount> {
+fn account_dialog(
+    ui: &mut Ui,
+    o: Pos2,
+    e: &mut AccountEdit,
+    first: bool,
+) -> Outcome<settings::DebridAccount> {
     use crate::debrid::SignInState as S;
     let p = ui.painter().clone();
     let ctx = ui.ctx().clone();
@@ -3963,11 +4003,16 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
     // line, Find my token with how the sign-in went, the footer.
     let (edge, h, w) = (winui::EDGE, winui::CONTROL_H, ACCOUNT_W);
     // i18n: Options → Add an account: label before the choice of debrid service
-    let fx = winui::form(&p, edge, &["Service:"], false);
-    winui::form_label(&p, o, edge, 16.0, h, "Service:", true);
+    let fx = winui::form(&p, edge, &["Service"], false);
+    winui::form_label(&p, o, edge, 16.0, h, "Service", true);
     let all = mdm_debrid::ServiceKind::ALL;
     let names: Vec<&str> = all.iter().map(|k| k.name()).collect();
     let at = all.iter().position(|k| *k == e.service).unwrap_or(0);
+    // The service has the keys as the window opens (plan 12b, D1).
+    if first {
+        let id = winui::combo_light_focus(ui, "opt-account-service");
+        ui.memory_mut(|m| m.request_focus(id));
+    }
     if let Some(i) = winui::combo_light(
         ui,
         r(o, fx, 16.0, w - edge - fx, h),
@@ -4320,7 +4365,7 @@ const PAGES: [(usize, &str, &str, &str); 12] = [
         0,
         crate::i18n::mark("General"),
         "gx-adjust",
-        crate::i18n::mark("Browser/System Integration"),
+        crate::i18n::mark("Browser and system integration"),
     ),
     // i18n: Options page name
     (
@@ -4844,7 +4889,7 @@ mod tests {
     use super::*;
     use egui::accesskit::{NodeId, Role, TreeUpdate};
 
-    /// #1448: Manual proxy/socks configuration with no protocol ticked gets http and https
+    /// #1448: Manual proxy/SOCKS configuration with no protocol ticked gets http and https
     /// ticked, when Options opens on it as when it is chosen; a choice of one is kept, and the
     /// change is the dialog's (Save keeps it, Discard doesn't).
     #[test]

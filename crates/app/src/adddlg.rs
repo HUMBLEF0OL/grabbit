@@ -428,15 +428,15 @@ impl AddWindow {
             }
         }
 
-        // Footer: Ask where to save each one, Later, Add N.
+        // Footer: Ask where to save each one, Later, Cancel, Add N.
         let add_label = if valid > 0 {
-            // i18n: Add: its default button; {n} is how many items it adds
+            // i18n: Add: its default button, which starts them; {n} is how many items it adds
             crate::i18n::fmt(
-                crate::i18n::t("Add {n}"),
+                crate::i18n::t("Download {n}"),
                 &[("n", &crate::i18n::integer(valid as u64))],
             )
         } else {
-            crate::i18n::t("Add").to_owned()
+            crate::i18n::t("Download now").to_owned()
         };
         let kind = if valid > 0 {
             ButtonKind::Default
@@ -458,25 +458,41 @@ impl AddWindow {
                 FooterItem::Check("Ask where to save each one", &mut self.ask, true),
                 // i18n: Add: add without starting (links wait in a queue)
                 FooterItem::Button(FooterButton::new("Later", later_kind)),
+                // Cancel (Escape), as Add torrent and Download video have (plan 12b, DB1):
+                // Later, Cancel, Add as drawn and as Tab goes.
+                FooterItem::Button(FooterButton::new("Cancel", ButtonKind::Normal).escape(true)),
                 FooterItem::Button(FooterButton::new(&add_label, kind).enter(true).primary()),
             ],
         );
-        if winui::escape_pressed(ui) {
-            return Outcome::Closed;
-        }
-        let later = pressed == Some(1);
-        if (submit || pressed == Some(2) || later) && valid > 0 {
+        match footer_answer(pressed, winui::escape_pressed(ui), submit, valid > 0) {
+            Some(None) => Outcome::Closed,
             // Every line found, not only the rows shown.
-            let items = addkind::valid(self.found());
-            return Outcome::Done(AddOut {
-                items,
+            Some(Some(later)) => Outcome::Done(AddOut {
+                items: addkind::valid(self.found()),
                 login: self.typed_login(),
                 ask: self.ask,
                 later,
-            });
+            }),
+            None => Outcome::Open,
         }
-        Outcome::Open
     }
+}
+
+/// What Add's footer answers, by the item `pressed` (0 is the check box, then Later, Cancel,
+/// Add; plan 12b, DB1), Escape, Enter in the box (`submit`) and whether a line is valid:
+/// `Some(None)` closes with nothing added (Cancel, Escape), `Some(Some(later))` adds them,
+/// now or later; None stays open.
+fn footer_answer(
+    pressed: Option<usize>,
+    escape: bool,
+    submit: bool,
+    valid: bool,
+) -> Option<Option<bool>> {
+    if pressed == Some(2) || escape {
+        return Some(None);
+    }
+    let later = pressed == Some(1);
+    ((submit || pressed == Some(3) || later) && valid).then_some(Some(later))
 }
 
 /// The disk asked whether a .torrent file is there (a share isn't waited for: it shows as
@@ -604,6 +620,26 @@ mod tests {
     use super::*;
 
     const HASH: &str = "0123456789abcdef0123456789abcdef01234567";
+
+    /// Plan 12b, DB1: the footer is the check box, Later, Cancel, Add. Cancel (and Escape)
+    /// closes without adding; Add and Enter add now, Later later; nothing adds without a valid
+    /// line.
+    #[test]
+    fn cancel_closes_and_add_adds() {
+        let (later, cancel, add) = (Some(1), Some(2), Some(3));
+        assert_eq!(footer_answer(cancel, false, false, true), Some(None));
+        assert_eq!(footer_answer(None, true, false, true), Some(None));
+        assert_eq!(footer_answer(add, false, false, true), Some(Some(false)));
+        assert_eq!(footer_answer(None, false, true, true), Some(Some(false)));
+        assert_eq!(footer_answer(later, false, false, true), Some(Some(true)));
+        assert_eq!(footer_answer(add, false, false, false), None);
+        assert_eq!(
+            footer_answer(Some(0), false, false, true),
+            None,
+            "the check box"
+        );
+        assert_eq!(footer_answer(None, false, false, true), None);
+    }
 
     /// Frames of the window with `events` in the last one, as `App` handles its outcome.
     fn frames(dlg: &mut AddWindow, events: Vec<Vec<egui::Event>>) -> Option<Outcome<AddOut>> {
@@ -840,8 +876,10 @@ mod tests {
         }
         for want in [
             "Addresses, magnet links or video pages, one per line",
-            "Add 2",
+            "Download 2",
             "Later",
+            // Plan 12b, DB1.
+            "Cancel",
             "Open a .torrent file...",
             "Ask where to save each one",
             // Painted lines read too (PR 76's audit; the help's shot finds "Found" by name).
