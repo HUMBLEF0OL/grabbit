@@ -53,7 +53,7 @@ Right-click a torrent in the list and open **Torrent**:
 
 - **Recheck files** — reads every piece of the torrent's files and checks it, for example after you moved files in or a disk had errors. A running torrent goes on afterwards and fetches what is missing. A stopped one stays stopped. Its event log says how much was found: a finished torrent with a damaged piece becomes stopped, and resuming it fetches the piece again.
 - **Reannounce** — asks the torrent's trackers for peers again now, instead of waiting for their next round. It works while the torrent runs or is shared.
-- **Add trackers...** — adds trackers, one address a line (`http`, `https` or `udp`). They are kept with the torrent, after the ones it has, and the **Trackers** tab shows them. A tracker on your computer or your local network is refused: Grabbit never contacts those ([why](torrent-security.md)).
+- **Add trackers...** — adds trackers, one address a line (`http`, `https` or `udp`). They are kept with the torrent, after the ones it has, and the **Trackers** tab shows them. A tracker on your computer or your local network is refused: Grabbit never contacts those ([why](torrent-security.md)). **OK** stays greyed until every line is a tracker it can add; the line that isn't is named under the box.
 - **Download in order** — downloads the torrent's files from their start (see below). Click it again to go back to the rarest pieces first.
 - **First and last pieces first** — with **Download in order**, each file's first and last pieces come before the rest. It's on by default.
 - **Copy magnet link** — copies a magnet link for the torrent, with its trackers.

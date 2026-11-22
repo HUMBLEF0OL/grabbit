@@ -3946,6 +3946,14 @@ impl<'a> FooterButton<'a> {
             ..self
         }
     }
+    /// A default that isn't the dialog's answer (Files already there's No, plan 12b C1): it
+    /// keeps its look and its Enter and Escape, and its declared place, not the last.
+    pub fn not_primary(self) -> Self {
+        Self {
+            primary: false,
+            ..self
+        }
+    }
     /// Its focus ring shows while no control has the keys, as the dialog's default did.
     pub fn ring(self, on: bool) -> Self {
         Self { ring: on, ..self }
@@ -5876,6 +5884,11 @@ pub fn accent() -> Color32 {
 
 /// Light drop-down list (CBS_DROPDOWNLIST): the chosen item and a chevron; a click opens the
 /// list under it. Returns the item chosen this frame.
+/// The focus id of [`combo_light`] `id`'s button: a dialog that opens on it gives it the keys.
+pub fn combo_light_focus(ui: &Ui, id: &str) -> egui::Id {
+    widget_id(ui, ("combo-light", id)).with("button")
+}
+
 pub fn combo_light(
     ui: &mut Ui,
     rc: Rect,
@@ -6799,6 +6812,19 @@ mod tests {
         let start = FooterButton::new("Start Download", ButtonKind::Disabled).primary();
         assert!(start.primary && !FooterButton::new("Cancel", ButtonKind::Normal).primary);
         assert!(FooterButton::new("OK", ButtonKind::Default).primary);
+        // Plan 12b, C1: Files already there's No, a default that isn't moved last, keeps its
+        // Enter and Escape: "No, Yes" as declared.
+        let no = FooterButton::new("No", ButtonKind::Default)
+            .not_primary()
+            .enter(true)
+            .escape(true);
+        assert!(!no.primary && no.enter && no.escape && no.kind == ButtonKind::Default);
+        let items = [
+            (50.0, Side::Trailing, no.primary),
+            (50.0, Side::Trailing, false),
+        ];
+        let x = footer_slots(&items, 300.0);
+        assert!(x[0] < x[1], "No, then Yes");
         // A line before two trailing buttons ends a gap before them.
         assert_eq!(
             footer_trailing_left(400.0, &[60.0, 70.0]),

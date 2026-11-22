@@ -1455,7 +1455,6 @@ impl AddTrackers {
                     o.x + TRACKERS_W - winui::EDGE,
                     ("add-trackers", 1),
                 );
-                let before = self.text.clone();
                 let field = winui::multiline_light(
                     ui,
                     r(o, winui::EDGE, 42.0, TRACKERS_W - 2.0 * winui::EDGE, 120.0),
@@ -1466,9 +1465,14 @@ impl AddTrackers {
                 if !std::mem::replace(&mut self.focused, true) {
                     field.request_focus();
                 }
-                if self.text != before {
-                    self.error = None;
-                }
+                // OK greys while the box holds no tracker or a line that isn't one (plan 12b,
+                // C7), its tip saying why; a wrong line is named under the box as it is typed.
+                let checked = self.addresses();
+                self.error = match &checked {
+                    Err(e) if !self.text.trim().is_empty() => Some(e.clone()),
+                    _ => None,
+                };
+                let why = checked.as_ref().err().cloned().unwrap_or_default();
                 let (line, color) = match &self.error {
                     Some(e) => (e.clone(), winui::ERROR()),
                     None => (
@@ -1495,7 +1499,18 @@ impl AddTrackers {
                     TRACKERS_W,
                     TRACKERS_BODY,
                     &mut [
-                        FooterItem::Button(FooterButton::new("OK", ButtonKind::Default)),
+                        FooterItem::Button(
+                            FooterButton::new(
+                                "OK",
+                                if checked.is_ok() {
+                                    ButtonKind::Default
+                                } else {
+                                    ButtonKind::Disabled
+                                },
+                            )
+                            .primary()
+                            .tip(checked.is_err(), &why),
+                        ),
                         FooterItem::Button(
                             FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
                         ),
@@ -1503,14 +1518,8 @@ impl AddTrackers {
                 );
                 if pressed == Some(1) {
                     Outcome::Closed
-                } else if pressed == Some(0) {
-                    match self.addresses() {
-                        Ok(list) => Outcome::Done(list),
-                        Err(e) => {
-                            self.error = Some(e);
-                            Outcome::Open
-                        }
-                    }
+                } else if let (Some(0), Ok(list)) = (pressed, checked) {
+                    Outcome::Done(list)
                 } else {
                     Outcome::Open
                 }

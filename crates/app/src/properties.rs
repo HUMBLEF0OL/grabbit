@@ -421,7 +421,7 @@ impl Properties {
             }
         }
         // The footer (plan 07): Open and a torrent's Files... at the start, OK last; Enter
-        // presses OK, as before. Escape closes the window (it has no Cancel), as before. The
+        // presses OK, as before; Cancel and Escape close it without the edits. The
         // leading buttons keep their Tab order (Open, then Files...), so Open comes first on
         // screen too: the kit places them in Tab order (the plan's table notes it).
         let mut items = vec![winui::FooterItem::Button(
@@ -448,6 +448,11 @@ impl Properties {
             winui::FooterButton::new("OK", ButtonKind::Default).enter(true),
         ));
         let ok_at = items.len() - 1;
+        // Cancel (Escape) discards the edits, as every other editing dialog's (plan 12b, DC8).
+        items.push(winui::FooterItem::Button(
+            winui::FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+        ));
+        let cancel_at = items.len() - 1;
         let pressed = winui::footer(ui, o, WIDTH, BODY, &mut items);
         if pressed == Some(0) && complete {
             crate::dialogs::open_download(&item.dest, item.moved_away);
@@ -457,7 +462,7 @@ impl Properties {
         }
         let ok = pressed == Some(ok_at);
         let address_ok = self.address_ok(item);
-        if winui::escape_pressed(ui) {
+        if pressed == Some(cancel_at) || winui::escape_pressed(ui) {
             Outcome::Closed
         } else if ok {
             if address_ok {

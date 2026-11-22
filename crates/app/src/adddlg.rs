@@ -433,7 +433,7 @@ impl AddWindow {
             }
         }
 
-        // Footer: Ask where to save each one, Later, Add N.
+        // Footer: Ask where to save each one, Later, Cancel, Add N.
         let add_label = if valid > 0 {
             // i18n: Add: its default button; {n} is how many items it adds
             crate::i18n::fmt(
@@ -463,14 +463,17 @@ impl AddWindow {
                 FooterItem::Check("Ask where to save each one", &mut self.ask, true),
                 // i18n: Add: add without starting (links wait in a queue)
                 FooterItem::Button(FooterButton::new("Later", later_kind)),
+                // Cancel (Escape), as Add torrent and Download video have (plan 12b, DB1):
+                // Later, Cancel, Add as drawn and as Tab goes.
+                FooterItem::Button(FooterButton::new("Cancel", ButtonKind::Normal).escape(true)),
                 FooterItem::Button(FooterButton::new(&add_label, kind).enter(true).primary()),
             ],
         );
-        if winui::escape_pressed(ui) {
+        if pressed == Some(2) || winui::escape_pressed(ui) {
             return Outcome::Closed;
         }
         let later = pressed == Some(1);
-        if (submit || pressed == Some(2) || later) && valid > 0 {
+        if (submit || pressed == Some(3) || later) && valid > 0 {
             // Every line found, not only the rows shown.
             let items = addkind::valid(self.found());
             return Outcome::Done(AddOut {
@@ -847,6 +850,8 @@ mod tests {
             "Addresses, magnet links or video pages, one per line",
             "Add 2",
             "Later",
+            // Plan 12b, DB1.
+            "Cancel",
             "Open a .torrent file...",
             "Ask where to save each one",
             // Painted lines read too (PR 76's audit; the help's shot finds "Found" by name).

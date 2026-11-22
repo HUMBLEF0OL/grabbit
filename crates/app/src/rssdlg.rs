@@ -43,6 +43,9 @@ pub struct RssWindow {
     rule_feeds: winui::RowList,
     preview: winui::RowList,
     minutes: String,
+    /// The Feed address box has had the focus (it takes it once, when the Feeds tab first
+    /// shows).
+    focused: bool,
 }
 
 const ROW: f32 = 20.0;
@@ -60,6 +63,7 @@ impl RssWindow {
             rule_feeds: Default::default(),
             preview: Default::default(),
             minutes: store.minutes.to_string(),
+            focused: false,
         };
         w.feeds.selected = (!store.feeds.is_empty()).then_some(0);
         w.rules.selected = (!store.rules.is_empty()).then_some(0);
@@ -156,24 +160,39 @@ impl RssWindow {
         // Add feed as wide as its label in this language (#192); the box ends 10 px before it.
         let (add_x, add_w) =
             winui::buttons_to_right(&p, 740.0, 10.0, &[("Add feed", 120.0)], 200.0)[0];
-        winui::edit(
+        let field = winui::edit(
             ui,
             r(o, 140.0, 42.0, add_x - 10.0 - 140.0, 22.0),
             &mut self.address,
             true,
             false,
         );
-        let add = winui::button(
-            ui,
-            r(o, add_x, 42.0, add_w, 22.0),
-            // i18n: RSS feeds window: button that subscribes to the feed whose address is typed
-            "Add feed",
-            ButtonKind::Normal,
-            false,
-            None,
+        // The first field has the keys (plan 12b, D1).
+        if !std::mem::replace(&mut self.focused, true) {
+            field.request_focus();
+        }
+        // Greyed with nothing typed, its tip saying why (plan 12b, C7).
+        let empty = self.address.trim().is_empty();
+        let add = winui::why_disabled(
+            winui::button(
+                ui,
+                r(o, add_x, 42.0, add_w, 22.0),
+                // i18n: RSS feeds window: button that subscribes to the feed whose address is typed
+                "Add feed",
+                if empty {
+                    ButtonKind::Disabled
+                } else {
+                    ButtonKind::Normal
+                },
+                false,
+                None,
+            ),
+            empty,
+            // i18n: tooltip of the greyed Add feed button in the RSS feeds window
+            "Type the feed's address",
         )
         .clicked();
-        if add && !self.address.trim().is_empty() {
+        if add && !empty {
             match store.add_feed(&self.address) {
                 Ok(id) => {
                     self.error = None;
