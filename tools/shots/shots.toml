@@ -145,8 +145,8 @@ page = "browser-integration.md"
 under = "What it takes"
 take = "@complete:gen/2M/release-notes-2026.pdf"
 ring = ["Open"]
-alt = "Download complete, with Open, Open with..., Open folder and Close"
-caption = "Download complete: Open the file, or Open folder."
+alt = "The Done window, with Open and its arrow, Open folder and Close"
+caption = "Done: Open the file, or Open folder."
 
 [[shot]]
 id = "options-integration"
@@ -503,7 +503,7 @@ page = "guide-first-download.md"
 under = "Steps"
 take = "@complete:gen/2M/release-notes-2026.pdf"
 ring = ["Open", "Open folder"]
-alt = "Download complete with Open and Open folder"
+alt = "The Done window with Open and Open folder"
 caption = "Done: Open the file, or Open folder."
 
 [[shot]]

@@ -453,11 +453,11 @@ impl Look {
 }
 
 /// The state as the window shows it this frame (progress.rs's `show` asks first: the window's
-/// size depends on its line): the phase, the status word beside the name (none while it simply
-/// downloads), and the state's line under the strip (an alert or not).
+/// size depends on its line): the phase, what the compact block shows in it (plan 13d), and the
+/// state's own line under the block (a web page's advice), an alert or not.
 pub(super) struct Shown {
     pub phase: Phase,
-    pub word: Option<String>,
+    pub view: StateView,
     pub line: Option<(String, bool)>,
 }
 
@@ -487,50 +487,437 @@ pub(super) fn shown(
             word: look_word.as_deref(),
         },
     );
-    let failed = matches!(phase, Phase::Failed { .. });
-    // A failed download's reason is its line ("Error: ..."; 13d words it), the word says Error.
-    let line = if failed {
-        Some((status.clone(), true))
-    } else {
-        message(pr, phase, d)
-    };
-    let word = match phase {
-        Phase::Running => None,
-        // i18n: a download's status (state it is in, not a command): it failed
-        Phase::Failed { .. } | Phase::WebPage => Some(crate::i18n::t("Error").to_owned()),
-        _ => Some(status),
-    };
-    Shown { phase, word, line }
+    let facts = facts_of(pr, item, snap, d, status);
+    Shown {
+        phase,
+        view: state_view(phase, &facts),
+        line: message(phase),
+    }
 }
 
-/// The state's line under the strip, and whether it is an alert (read out at once).
-fn message(pr: &Progress, phase: Phase, d: Option<&Details>) -> Option<(String, bool)> {
-    let t = |s: &str| crate::i18n::t(s).to_owned();
-    match phase {
-        Phase::CantResume => Some((
-            // i18n: a download window's line after Stop on a download whose server can't resume
-            t("Stop it now and it starts over from 0. This server doesn't allow resuming."),
-            true,
-        )),
-        Phase::WebPage => Some((
+/// The state's line under the compact block, and whether it is an alert (read out at once): a
+/// web page's advice under its reason (board 9). Every other state says what it must in the
+/// block itself ([`state_view`]).
+fn message(phase: Phase) -> Option<(String, bool)> {
+    (phase == Phase::WebPage).then(|| {
+        (
             // i18n: a download window's line when the site sent a web page instead of the file
-            t("Open it in your browser. When the file starts, it comes back to Grabbit."),
-            false,
-        )),
-        Phase::Waiting => pr.queue.as_deref().map(|q| {
-            (
-                crate::i18n::fmt(
-                    // i18n: a waiting download's line: {queue} the queue it waits in ("Main queue")
-                    crate::i18n::t("Waiting in {queue}"),
-                    &[("queue", &crate::i18n::isolate(q))],
-                ),
-                false,
+            crate::i18n::t(
+                "Open it in your browser. When the file starts, it comes back to Grabbit.",
             )
+            .to_owned(),
+            false,
+        )
+    })
+}
+
+/// What a state's look is drawn from ([`state_view`]): the download's figures as the window
+/// shows them, each read from what the app already has (plan 13: no new engine states).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Facts {
+    /// The file's name ("Naming it ..." while it is written out).
+    pub name: String,
+    /// How far, with a size to take a share of.
+    pub frac: Option<f64>,
+    pub downloaded: u64,
+    pub size: Option<u64>,
+    /// The time left ("3 min 10 sec"), empty when there is none.
+    pub left: String,
+    /// The detail line's speed while bytes come (the limit holding it back beside it), and the
+    /// speed alone (a size not known reads it beside the amount).
+    pub rate: Option<String>,
+    pub speed: Option<String>,
+    /// The download's status word ("Stopped", "Receiving data...").
+    pub word: String,
+    /// The queue it waits in, by name.
+    pub queue: Option<String>,
+    /// Stopped, it goes on where it stopped (its server said so, or a torrent).
+    pub resumes: bool,
+    /// Why it failed, as `errors::describe` says it.
+    pub reason: Option<String>,
+    /// After the last byte: which step, and how far it is when known.
+    pub after: After,
+    pub after_frac: Option<f64>,
+    /// A torrent checking its files: bytes checked, of all.
+    pub checked: Option<(u64, u64)>,
+    /// At a debrid service: its name, how far it is when it says.
+    pub service: Option<(String, Option<f64>)>,
+    /// A torrent's sharing: what it sent (all its runs), its ratio, and the rate it sends now
+    /// to how many peers (`sharing_line`).
+    pub sharing: Option<(String, String, String)>,
+}
+
+/// The step after the last byte ([`Phase::Finishing`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum After {
+    /// A video's picture and sound joined (ffmpeg).
+    Join,
+    /// The file checked against its checksum.
+    Check,
+    /// The file written out and named.
+    #[default]
+    Write,
+}
+
+/// The facts of this download for its state's look; a screenshot's state (`/show progress:`)
+/// gets the figures its board shows where the download has none of its own.
+fn facts_of(
+    pr: &Progress,
+    item: &Item,
+    snap: Option<&Snapshot>,
+    d: Option<&Details>,
+    word: String,
+) -> Facts {
+    use mdm_engine::download::State;
+    let look = pr.sample_look;
+    let no_size = look == Some(Look::UnknownSize);
+    let bytes_come = item.status == Status::Downloading && !item.past_last_byte();
+    let speed = bytes_come.then(|| crate::model::rate(item.rate()));
+    // The limit holding it back beside the speed (upstream issue 1191).
+    let rate = speed.clone().map(|rate| match pr.limit {
+        Some(limit) => limit.after(&rate),
+        None => rate,
+    });
+    let state = snap.map(|s| s.state);
+    let after = if pr.sample_merging.is_some() {
+        After::Join
+    } else if look.is_some() {
+        After::Write
+    } else if state == Some(State::Merging) {
+        After::Join
+    } else if state == Some(State::Verifying) {
+        After::Check
+    } else {
+        After::Write
+    };
+    let checked = if look == Some(Look::Checking) {
+        let total = item.size.filter(|s| *s > 0).unwrap_or(1 << 30);
+        Some((total / 100 * 37, total))
+    } else {
+        snap.filter(|s| item.torrent.is_some() && s.state == State::Verifying)
+            .map(|s| (s.downloaded, s.size.unwrap_or(0)))
+    };
+    let service = if look == Some(Look::Service) {
+        Some(("Real-Debrid".to_owned(), Some(0.62)))
+    } else {
+        match &item.live {
+            Some(crate::model::Live {
+                dl: crate::model::Job::Remote(r),
+                ..
+            }) => r
+                .at_service()
+                .map(|(s, p)| (s.to_owned(), p.map(f64::from))),
+            _ => None,
+        }
+    };
+    let stats = d.and_then(|d| d.stats.as_ref());
+    let sharing = item.torrent.as_ref().map(|spec| {
+        let done = stats.map_or(item.downloaded, |s| s.done);
+        (
+            crate::model::size(spec.uploaded),
+            crate::torrents::share_ratio_text(spec.uploaded, done),
+            stats.map(super::sharing_line).unwrap_or_default(),
+        )
+    });
+    Facts {
+        name: item.file_name.clone(),
+        frac: if no_size { None } else { item.fraction() },
+        downloaded: item.downloaded,
+        size: if no_size { None } else { item.size },
+        left: if no_size {
+            String::new()
+        } else {
+            item.time_left()
+        },
+        rate,
+        speed,
+        word,
+        queue: pr.queue.clone(),
+        resumes: item.resumable == Some(true) || item.torrent.is_some(),
+        reason: pr.sample_error.clone().or_else(|| item.error.clone()),
+        after,
+        after_frac: pr.sample_merging.or(super::finishing_fraction(snap)),
+        checked,
+        service,
+        sharing,
+    }
+}
+
+/// What is beside the reading, at the row's end.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Side {
+    None,
+    /// A figure (in the numbers face) and its unit after it, smaller: "3 min 10 sec left".
+    Figure(String, Option<String>),
+    /// A few words: "Resumes where it stopped".
+    Text(String),
+}
+
+/// The row under the strip.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Under {
+    /// Two small texts, at the start and at the end: "2.38 of 5.80 GB", "18.4 MB/s".
+    Detail(String, String),
+    /// The state's message in its place, read out at once (an alert); `error`: in the error
+    /// colour (a failed download's reason).
+    Message { text: String, error: bool },
+}
+
+/// What the compact block shows in a state (plan 13d, boards 1, 4, 8, 9): the word beside the
+/// name (in the error colour, or not), the reading greyed or not, what is beside it, the strip
+/// (the download's own, or the state's) drawn grey or in the accent, the row under it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StateView {
+    pub word: Option<(String, bool)>,
+    pub reading: Reading,
+    pub dim: bool,
+    pub side: Side,
+    /// None: the download's own strip ([`strip_of`]).
+    pub strip: Option<Strip>,
+    pub grey: bool,
+    pub under: Under,
+}
+
+/// `s` as a figure and its unit: "6.10 MB/s" is 6.10 and MB/s.
+fn figure(s: &str) -> Side {
+    match s.rsplit_once(' ') {
+        Some((n, unit)) => Side::Figure(n.to_owned(), Some(unit.to_owned())),
+        None => Side::Figure(s.to_owned(), None),
+    }
+}
+
+/// A state's look (plan 13d, boards 1, 4, 8, 9) from its facts.
+pub fn state_view(phase: Phase, f: &Facts) -> StateView {
+    let t = |s: &str| crate::i18n::t(s).to_owned();
+    let fmt = |s: &str, args: &[(&str, &str)]| crate::i18n::fmt(crate::i18n::t(s), args);
+    let amount = so_far(f.downloaded, f.size);
+    let known = f.size.is_some_and(|s| s > 0);
+    let reading = match f.frac {
+        Some(x) => Reading::Percent(x),
+        None if f.downloaded > 0 => Reading::Amount(f.downloaded),
+        None => Reading::Word(f.word.clone()),
+    };
+    let left = if f.left.is_empty() {
+        Side::None
+    } else {
+        // i18n: after the time left in the download window, smaller: "3 min 10 sec left"
+        Side::Figure(f.left.clone(), Some(t("left")))
+    };
+    let mut v = StateView {
+        word: Some((f.word.clone(), false)),
+        reading,
+        dim: false,
+        side: Side::None,
+        strip: None,
+        grey: false,
+        under: Under::Detail(amount.clone(), String::new()),
+    };
+    match phase {
+        // Size not known (board 8): the amount received, its speed beside it, an empty strip.
+        Phase::Running if !known && f.downloaded > 0 => {
+            // i18n: a download window's word beside the name: the server didn't say the file's size
+            v.word = Some((t("Size not known"), false));
+            v.side = f.speed.as_deref().map_or(Side::None, figure);
+            v.strip = Some(Strip::Empty);
+            v.under = Under::Detail(
+                // i18n: a download window's line when the server didn't say the file's size
+                t("The server didn't say how big it is"),
+                // i18n: a download window's line when the file's size isn't known: no time left can be worked out
+                t("No time estimate"),
+            );
+        }
+        Phase::Running | Phase::Recording | Phase::Saving | Phase::Done => {
+            if phase == Phase::Running {
+                v.word = None;
+            }
+            v.side = left;
+            v.under = Under::Detail(amount, f.rate.clone().unwrap_or_default());
+        }
+        Phase::CantResume => {
+            // i18n: a download window's word beside the name after Stop on a download its server can't resume
+            v.word = Some((t("Can't resume"), false));
+            v.side = left;
+            v.under = Under::Message {
+                // i18n: a download window's line after Stop on a download whose server can't resume
+                text: t(
+                    "Stop it now and it starts over from 0. This server doesn't allow resuming.",
+                ),
+                error: false,
+            };
+        }
+        Phase::Stopped => {
+            v.dim = true;
+            v.grey = true;
+            if f.resumes {
+                // i18n: beside a stopped download's percent: Resume goes on from there
+                v.side = Side::Text(t("Resumes where it stopped"));
+            }
+        }
+        Phase::Waiting => {
+            v.reading = Reading::Dash;
+            v.grey = true;
+            if let Some(q) = &f.queue {
+                v.side = Side::Text(fmt(
+                    // i18n: beside a waiting download's dash: {queue} the queue it waits in ("in Main queue")
+                    "in {queue}",
+                    &[("queue", &crate::i18n::isolate(q))],
+                ));
+            }
+        }
+        Phase::Failed { .. } | Phase::WebPage => {
+            let web = phase == Phase::WebPage;
+            v.word = (!web).then(|| {
+                // i18n: a download window's word beside the name: the download failed
+                (t("Stopped by an error"), true)
+            });
+            v.dim = true;
+            if web {
+                // i18n: a download window's reading when the site sent a web page instead of the file
+                v.reading = Reading::Word(t("Got a web page"));
+            } else if f.frac.is_none() && f.downloaded == 0 {
+                v.reading = Reading::Dash;
+            } else if known {
+                v.side = Side::Figure(amount, None);
+            }
+            v.strip = Some(Strip::Broken(f.frac.unwrap_or(0.0) as f32));
+            v.under = Under::Message {
+                text: f.reason.clone().unwrap_or_else(|| {
+                    // i18n: a failed download's line when it wasn't told why
+                    t("It stopped, and Grabbit wasn't told why.")
+                }),
+                error: true,
+            };
+        }
+        Phase::Finishing => {
+            let all = fmt(
+                // i18n: a download window's line once every byte is in: {size} the whole size, as "All 5.80 GB received"
+                "All {size} received",
+                &[("size", &crate::model::size(f.size.unwrap_or(f.downloaded)))],
+            );
+            let (side, naming) = match f.after {
+                After::Join => {
+                    // i18n: a download window's word beside the name while a video's picture and sound are joined into one file
+                    v.word = Some((t("Joining picture and sound"), false));
+                    // i18n: beside the percent while a video's picture and sound are joined: "45% joined"
+                    (t("joined"), String::new())
+                }
+                // i18n: beside the percent while the finished file is checked against its checksum: "45% checked"
+                After::Check => (t("checked"), String::new()),
+                After::Write => {
+                    v.reading = Reading::Percent(1.0);
+                    v.strip = Some(Strip::Plain {
+                        fraction: 1.0,
+                        after: false,
+                    });
+                    (
+                        // i18n: beside "100%" once every byte is in: the file is being written out
+                        t("Writing the file"),
+                        fmt(
+                            // i18n: a download window's line while the finished file is written out: {file} its name
+                            "Naming it {file}",
+                            &[("file", &crate::i18n::isolate(&f.name))],
+                        ),
+                    )
+                }
+            };
+            if f.after != After::Write
+                && let Some(x) = f.after_frac
+            {
+                v.reading = Reading::Percent(x);
+            }
+            v.side = Side::Text(side);
+            v.under = Under::Detail(all, naming);
+        }
+        Phase::Checking => {
+            // i18n: a torrent's status while it reads its files and checks every piece
+            v.word = Some((t("Checking files"), false));
+            let (done, total) = f.checked.unwrap_or((0, 0));
+            let x = if total > 0 {
+                (done as f64 / total as f64).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            v.reading = Reading::Percent(x);
+            v.side = Side::Text(t("checked"));
+            v.strip = Some(Strip::Plain {
+                fraction: x as f32,
+                after: false,
+            });
+            v.grey = true;
+            v.under = Under::Detail(
+                fmt(
+                    // i18n: a torrent's line while it checks its files: {amount} how much is checked, as "272 of 734.60 MB checked"
+                    "{amount} checked",
+                    &[("amount", &so_far(done, Some(total)))],
+                ),
+                // i18n: a torrent's line while it checks its files: after the check it downloads the pieces it lacks
+                t("Then it downloads what's missing"),
+            );
+        }
+        Phase::Service => {
+            let (service, x) = f.service.clone().unwrap_or_default();
+            let service = crate::i18n::isolate(&service);
+            v.word = Some((
+                // i18n: a download window's word beside the name: {service} the debrid service downloading the torrent first ("At Real-Debrid")
+                fmt("At {service}", &[("service", &service)]),
+                false,
+            ));
+            v.reading = x.map_or(Reading::Dash, Reading::Percent);
+            v.side = Side::Text(fmt(
+                // i18n: beside the percent while a debrid service downloads the torrent: "62% at Real-Debrid"
+                "at {service}",
+                &[("service", &service)],
+            ));
+            v.strip = Some(Strip::Striped(x.unwrap_or(0.0) as f32));
+            v.under = Under::Detail(
+                // i18n: a download window's line while a debrid service downloads the torrent first
+                t("The service downloads it first"),
+                // i18n: a download window's line while a debrid service downloads the torrent: then Grabbit gets the files from it, fast
+                t("Then it comes here at full speed"),
+            );
+        }
+        Phase::Sharing => {
+            v.word = None;
+            // i18n: a finished torrent's reading in its download window: it is shared with other peers
+            v.reading = Reading::Word(t("Sharing"));
+            let (sent, ratio, now) = f.sharing.clone().unwrap_or_default();
+            // i18n: after a torrent's share ratio in its download window, smaller: "0.42 ratio"
+            v.side = Side::Figure(ratio, Some(t("ratio")));
+            v.strip = Some(Strip::Plain {
+                fraction: 1.0,
+                after: false,
+            });
+            v.under = Under::Detail(
+                // i18n: a sharing torrent's line: {size} what it sent to other peers in all
+                fmt("Sent {size}", &[("size", &sent)]),
+                now,
+            );
+        }
+    }
+    v
+}
+
+/// The Done window's look (plan 13d, boards 5, 7): "Done" with the size at the row's end, the
+/// strip whole, the number of files under it (nothing for one file).
+pub fn done_view(size: u64, files: usize) -> StateView {
+    let count = if files > 1 {
+        // i18n: under the Done window's strip: how many files the download saved
+        crate::i18n::tn(files as u64, "{n} file", "{n} files")
+    } else {
+        String::new()
+    };
+    StateView {
+        word: None,
+        // i18n: the Done window's reading: the download finished
+        reading: Reading::Word(crate::i18n::t("Done").to_owned()),
+        dim: false,
+        side: Side::Figure(crate::model::size(size), None),
+        strip: Some(Strip::Plain {
+            fraction: 1.0,
+            after: false,
         }),
-        Phase::Sharing => d
-            .and_then(|d| d.stats.as_ref())
-            .map(|s| (super::sharing_line(s), false)),
-        _ => None,
+        grey: false,
+        under: Under::Detail(count, String::new()),
     }
 }
 
@@ -633,15 +1020,17 @@ fn icon_button(ui: &mut Ui, rc: Rect, icon: &str, tip: &str) -> Response {
 
 // ---- the reading and the strip ---------------------------------------------------------------
 
-/// The large reading (13d adds the states' own).
+/// The large reading.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Reading {
     /// How far, with a size to take a share of.
     Percent(f64),
     /// No size: how much has come.
     Amount(u64),
-    /// Nothing yet: the status word.
+    /// Nothing yet: the status word; or the state's own ("Sharing", "Done").
     Word(String),
+    /// Nothing to say yet (a download waiting its turn): a dash, not read out.
+    Dash,
 }
 
 /// The reading's figure for a fraction: whole percents, one decimal below 10 (a torrent's 6.7),
@@ -686,9 +1075,14 @@ pub struct Part {
     pub tick: bool,
 }
 
-/// What the strip shows (13d adds the states' kinds: stopped, failed...).
+/// What the strip shows.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Strip {
+    /// A failed download (board 4): what came this far, the part missing hatched in the error
+    /// colours.
+    Broken(f32),
+    /// At a debrid service (board 9): its progress this far, striped (it comes later).
+    Striped(f32),
     /// Nothing known to show (a size not known).
     Empty,
     /// One fill this far: a video, a gallery, segments too narrow to tell apart; `after`: a
@@ -777,12 +1171,46 @@ fn strip_of(
     }
 }
 
-/// The strip at the compact block's place.
-fn paint_strip(p: &egui::Painter, o: Pos2, strip: &Strip) {
+/// The strip at the compact block's place, filled in the accent, or `grey` (stopped, waiting, a
+/// torrent's check: nothing moving, or nothing downloaded yet).
+fn paint_strip(p: &egui::Painter, o: Pos2, strip: &Strip, grey: bool) {
     let c = crate::theme::colors();
-    let (track, fill) = (c.meter_track, c.progress_bar);
+    let track = c.meter_track;
+    let fill = if grey { muted() } else { c.progress_bar };
     let at = |x0: f32, x1: f32| r(o, EDGE + x0, STRIP_Y, (x1 - x0).max(0.0), STRIP_H);
     match strip {
+        Strip::Broken(fraction) => {
+            let x = STRIP_W * fraction.clamp(0.0, 1.0);
+            winui::solid(p, at(0.0, x), fill);
+            // The missing part: the error track, hatched at 135° (5 points a stripe, 2 of them
+            // the hatch's), as the board's repeating gradient.
+            let missing = at(x, STRIP_W);
+            winui::solid(p, missing, c.strip_error);
+            let clip = p.with_clip_rect(missing.intersect(p.clip_rect()));
+            let ink = Stroke::new(1.4, c.strip_error_hatch);
+            let mut sx = missing.left() - STRIP_H;
+            while sx < missing.right() {
+                clip.line_segment(
+                    [
+                        pos2(sx, missing.bottom()),
+                        pos2(sx + STRIP_H, missing.top()),
+                    ],
+                    ink,
+                );
+                sx += 7.0;
+            }
+        }
+        Strip::Striped(fraction) => {
+            winui::solid(p, at(0.0, STRIP_W), track);
+            // 4 points of the accent, 2 of its track, as far as the service has come.
+            let end = STRIP_W * fraction.clamp(0.0, 1.0);
+            let mut x = 0.0;
+            while x < end {
+                winui::solid(p, at(x, (x + 4.0).min(end)), fill);
+                winui::solid(p, at(x + 4.0, (x + 6.0).min(end)), c.strip_accent);
+                x += 6.0;
+            }
+        }
         Strip::Empty => winui::solid(p, at(0.0, STRIP_W), track),
         Strip::Plain { fraction, after } => {
             let back = if *after { c.strip_accent } else { track };
@@ -811,9 +1239,8 @@ fn paint_strip(p: &egui::Painter, o: Pos2, strip: &Strip) {
     }
 }
 
-/// The compact block: the name (the status word at its end in a state), the reading with the
-/// time left, the strip (one progress value for screen readers), the detail line and the
-/// state's line.
+/// The compact block: the name (the state's word at its end), then the state's look
+/// ([`paint_state`]) and its own line under it.
 #[allow(clippy::too_many_arguments)]
 fn compact(
     pr: &Progress,
@@ -822,26 +1249,51 @@ fn compact(
     o: Pos2,
     item: &Item,
     snap: Option<&Snapshot>,
-    frac: Option<f64>,
     drawn: (f64, &[(u64, f64)]),
     shown: &Shown,
     d: Option<&Details>,
 ) {
     let right = o.x + EDGE + LEFT_W;
+    let view = &shown.view;
+    paint_name(ui, p, o, &item.file_name, view.word.as_ref());
     let no_size = pr.sample_look == Some(Look::UnknownSize);
-    let (size, frac) = if no_size {
-        (None, None)
-    } else {
-        (item.size, frac)
-    };
-    // The name, and the status word at the row's end.
-    let mut name_right = right;
-    if let Some(word) = &shown.word {
-        let c = if matches!(shown.phase, Phase::Failed { .. } | Phase::WebPage) {
-            winui::ERROR()
+    let strip = view
+        .strip
+        .clone()
+        .unwrap_or_else(|| strip_of(item, snap, pr.sample_merging, d, drawn, no_size));
+    paint_state(ui, p, o, view, &strip);
+
+    // The state's own line (a web page's advice).
+    if let Some((line, alert)) = &shown.line {
+        let rc = cell(
+            ui,
+            p,
+            face(13.0),
+            o.x + EDGE,
+            o.y + LINE_BASE,
+            right,
+            line,
+            secondary(),
+            "progress-message",
+        );
+        let id = egui::Id::unique(("progress-line", ui.ctx().viewport_id()));
+        let resp = ui.interact(rc, id, Sense::hover());
+        let role = if *alert {
+            egui::Role::Alert
         } else {
-            muted()
+            egui::Role::Label
         };
+        winui::expose(&resp, role, line, true, None);
+    }
+}
+
+/// The name (13/500) at the top, the state's `word` at the row's end (in the error colour for
+/// a failure).
+fn paint_name(ui: &Ui, p: &egui::Painter, o: Pos2, name: &str, word: Option<&(String, bool)>) {
+    let right = o.x + EDGE + LEFT_W;
+    let mut name_right = right;
+    if let Some((word, error)) = word {
+        let c = if *error { winui::ERROR() } else { muted() };
         let room = LEFT_W / 2.0;
         let rc = cell_right(
             ui,
@@ -863,37 +1315,88 @@ fn compact(
         o.x + EDGE,
         o.y + NAME_BASE,
         name_right,
-        &item.file_name,
+        name,
         ink(),
         "progress-name",
     );
+}
 
-    // The reading, and the time left at the right.
-    let reading = match frac {
-        Some(f) => Reading::Percent(f),
-        None if item.downloaded > 0 => Reading::Amount(item.downloaded),
-        None => Reading::Word(
-            shown
-                .word
-                .clone()
-                .unwrap_or_else(|| super::status_word(item, snap, Samples::default())),
-        ),
-    };
+/// The reading as it is read out: "41%", "214.00 MB", a word; nothing for a dash.
+fn spoken_reading(reading: &Reading) -> Option<String> {
+    match reading {
+        Reading::Percent(f) => Some(format!("{}%", reading_figure(*f))), // not translated: a percentage
+        Reading::Amount(b) => Some(crate::model::size(*b)),
+        Reading::Word(w) => Some(w.clone()),
+        Reading::Dash => None,
+    }
+}
+
+/// What the strip says to a screen reader in a state: its word, the reading, what is beside it
+/// and the row under it (a message is read out on its own, as an alert).
+pub fn spoken(view: &StateView) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if let Some((w, _)) = &view.word {
+        parts.push(w.clone());
+    }
+    parts.extend(spoken_reading(&view.reading));
+    match &view.side {
+        Side::Figure(v, Some(unit)) => parts.push(format!("{v} {unit}")), // not translated: a figure and its unit
+        Side::Figure(v, None) | Side::Text(v) => parts.push(v.clone()),
+        Side::None => {}
+    }
+    if let Under::Detail(start, end) = &view.under {
+        parts.extend([start, end].into_iter().filter(|s| !s.is_empty()).cloned());
+    }
+    parts.join(", ") // not translated: a list
+}
+
+/// A state's look under the name (plan 13d; the Done window's too): the reading (greyed for a
+/// download that isn't moving) with what is beside it at the row's end, the strip (one progress
+/// value for screen readers, its parts hidden from them) and the row under it, a detail line or
+/// the state's message in its place.
+pub(crate) fn paint_state(ui: &Ui, p: &egui::Painter, o: Pos2, view: &StateView, strip: &Strip) {
+    let right = o.x + EDGE + LEFT_W;
     let base = o.y + READ_BASE;
     let x = o.x + EDGE;
-    let spoken_reading = match &reading {
+    // What is beside the reading first: the reading ends before it.
+    let side_left = match &view.side {
+        Side::None => right,
+        Side::Figure(v, unit) => {
+            let end = match unit {
+                Some(u) => draw_right(p, face(12.0), right, base, u, muted()).left() - 4.0,
+                None => right,
+            };
+            draw_right(p, figures(15.0), end, base, v, secondary()).left()
+        }
+        Side::Text(s) => cell_right(
+            ui,
+            p,
+            face(15.0),
+            x + LEFT_W / 2.0,
+            base,
+            right,
+            s,
+            secondary(),
+            "progress-side",
+        )
+        .left(),
+    };
+    let (number, unit_ink) = if view.dim {
+        (secondary(), secondary())
+    } else {
+        (ink(), secondary())
+    };
+    match &view.reading {
         Reading::Percent(f) => {
             let n = reading_figure(*f);
-            let rc = winui::text_font(p, figures(28.0), x, base, &n, ink());
-            winui::text_font(p, figures(16.0), rc.right(), base, "%", secondary());
-            format!("{n}%") // not translated: a percentage
+            let rc = winui::text_font(p, figures(28.0), x, base, &n, number);
+            winui::text_font(p, figures(16.0), rc.right(), base, "%", unit_ink);
         }
         Reading::Amount(b) => {
             let s = crate::model::size(*b);
             let (n, unit) = s.rsplit_once(' ').unwrap_or((&s, ""));
-            let rc = winui::text_font(p, figures(28.0), x, base, n, ink());
-            winui::text_font(p, figures(16.0), rc.right() + 4.0, base, unit, secondary());
-            s.clone()
+            let rc = winui::text_font(p, figures(28.0), x, base, n, number);
+            winui::text_font(p, figures(16.0), rc.right() + 4.0, base, unit, unit_ink);
         }
         Reading::Word(w) => {
             cell(
@@ -902,116 +1405,84 @@ fn compact(
                 medium(28.0),
                 x,
                 base,
-                right,
+                side_left - 16.0,
                 w,
-                ink(),
+                number,
                 "progress-reading",
             );
-            w.clone()
         }
-    };
-    let left = if no_size {
-        String::new()
-    } else {
-        item.time_left()
-    };
-    if !left.is_empty() {
-        // i18n: after the time left in the download window, smaller: "3 min 10 sec left"
-        let unit = crate::i18n::t("left");
-        let rc = draw_right(p, face(12.0), right, base, unit, muted());
-        draw_right(p, figures(15.0), rc.left() - 4.0, base, &left, secondary());
+        Reading::Dash => {
+            winui::text_font(p, figures(28.0), x, base, "-", muted()); // not translated: a dash
+        }
     }
 
-    // The strip: one progress value for screen readers, its parts hidden from them.
-    let strip = strip_of(item, snap, pr.sample_merging, d, drawn, no_size);
-    paint_strip(p, o, &strip);
-    let amount = so_far(item.downloaded, size);
-    let mut spoken = vec![spoken_reading, amount.clone()];
-    if !left.is_empty() {
-        spoken.push(crate::i18n::fmt(
-            // i18n: the download window's progress for screen readers: {time} left, as "3 min 10 sec left"
-            crate::i18n::t("{time} left"),
-            &[("time", &left)],
-        ));
-    }
+    paint_strip(p, o, strip, view.grey);
     let id = egui::Id::unique(("progress-strip", ui.ctx().viewport_id()));
     let resp = ui.interact(r(o, EDGE, STRIP_Y, STRIP_W, STRIP_H), id, Sense::hover());
-    winui::expose_value(
-        &resp,
-        egui::Role::ProgressIndicator,
-        &spoken.join(", "), // not translated: a list
-        true,
-    );
+    winui::expose_value(&resp, egui::Role::ProgressIndicator, &spoken(view), true);
     // i18n: the download window's progress strip, for screen readers
     let name = crate::i18n::t("Progress").to_owned();
+    let value = match view.reading {
+        Reading::Percent(f) => Some(f),
+        _ => None,
+    };
     resp.ctx.accesskit_node_builder(resp.id, |n| {
         n.set_label(name);
-        if let Some(f) = frac {
+        if let Some(f) = value {
             n.set_numeric_value((f * 100.0).clamp(0.0, 100.0));
             n.set_min_numeric_value(0.0);
             n.set_max_numeric_value(100.0);
         }
     });
 
-    // The detail line: how much so far, and the speed (the limit holding it back beside it,
-    // upstream issue 1191) while bytes come.
+    // The row under the strip.
     let detail = o.y + DETAIL_BASE;
-    cell(
-        ui,
-        p,
-        figures(12.0),
-        x,
-        detail,
-        right - 160.0,
-        &amount,
-        muted(),
-        "progress-amount",
-    );
-    if item.status == Status::Downloading && !item.past_last_byte() {
-        let rate = crate::model::rate(item.rate());
-        let rate = match pr.limit {
-            Some(limit) => limit.after(&rate),
-            None => rate,
-        };
-        cell_right(
-            ui,
-            p,
-            figures(12.0),
-            right - 230.0,
-            detail,
-            right,
-            &rate,
-            muted(),
-            "progress-rate",
-        );
-    }
-
-    // The state's line.
-    if let Some((line, alert)) = &shown.line {
-        let c = if matches!(shown.phase, Phase::Failed { .. }) {
-            winui::ERROR()
-        } else {
-            ink()
-        };
-        let rc = cell(
-            ui,
-            p,
-            face(13.0),
-            x,
-            o.y + LINE_BASE,
-            right,
-            line,
-            c,
-            "progress-message",
-        );
-        let id = egui::Id::unique(("progress-line", ui.ctx().viewport_id()));
-        let resp = ui.interact(rc, id, Sense::hover());
-        let role = if *alert {
-            egui::Role::Alert
-        } else {
-            egui::Role::Label
-        };
-        winui::expose(&resp, role, line, true, None);
+    match &view.under {
+        Under::Detail(start, end) => {
+            let mut start_right = right;
+            if !end.is_empty() {
+                let rc = cell_right(
+                    ui,
+                    p,
+                    figures(12.0),
+                    x + LEFT_W / 2.0,
+                    detail,
+                    right,
+                    end,
+                    muted(),
+                    "progress-rate",
+                );
+                start_right = rc.left() - 16.0;
+            }
+            cell(
+                ui,
+                p,
+                figures(12.0),
+                x,
+                detail,
+                start_right,
+                start,
+                muted(),
+                "progress-amount",
+            );
+        }
+        Under::Message { text, error } => {
+            let c = if *error { winui::ERROR() } else { ink() };
+            let rc = cell(
+                ui,
+                p,
+                face(13.0),
+                x,
+                detail + 2.0,
+                right,
+                text,
+                c,
+                "progress-reason",
+            );
+            let id = egui::Id::unique(("progress-reason", ui.ctx().viewport_id()));
+            let resp = ui.interact(rc, id, Sense::hover());
+            winui::expose(&resp, egui::Role::Alert, text, true, None);
+        }
     }
 }
 
@@ -1026,14 +1497,13 @@ pub(super) fn body(
     o: Pos2,
     item: &Item,
     snap: Option<&Snapshot>,
-    frac: Option<f64>,
     drawn: (f64, &[(u64, f64)]),
     shown: &Shown,
     d: Option<&Details>,
 ) -> Action {
     let p = ui.painter().clone();
     let kind = Kind::of(item);
-    compact(pr, ui, &p, o, item, snap, frac, drawn, shown, d);
+    compact(pr, ui, &p, o, item, snap, drawn, shown, d);
 
     let mut action = Action::None;
     if pr.details {
@@ -2356,6 +2826,179 @@ pub fn widened_left(left: i32, width: i32, work_left: i32, work_right: i32) -> i
     }
 }
 
+// ---- the Done window (plan 13d, boards 5, 7, 13, 14) -----------------------------------------
+//
+// The progress window's layout language (dialogs.rs's `Complete` keeps what it does): the name
+// row, "Done" with the size, the strip whole, the number of files, the facts (Saved to, Main
+// file), "Don't show this window again", the footer.
+
+/// The Done window's width (the compact progress window's) and its edges.
+pub const DONE_W: f32 = COMPACT_W;
+pub const DONE_EDGE: f32 = EDGE;
+/// The footer's buttons' height.
+pub const DONE_BUTTON_H: f32 = BUTTON_H;
+/// A facts row, and a line under Saved to (why the file can't open, a notice).
+const DONE_ROW: f32 = 16.0;
+const DONE_LINE: f32 = 20.0;
+
+/// The Done window's places (`main`: a Main file row; `lines`: the lines under Saved to): the
+/// check box's top, the footer's, and the body's height.
+pub fn done_layout(main: bool, lines: usize) -> (f32, f32, f32) {
+    let rows = 1 + usize::from(main);
+    let end = FACTS_Y + rows as f32 * (DONE_ROW + GAP) + lines as f32 * (DONE_LINE + GAP) - GAP;
+    let check = end + 16.0;
+    let footer = check + DONE_ROW + 16.0;
+    (check, footer, footer + BUTTON_H + BOTTOM)
+}
+
+/// Where a row of buttons ending at the window's right edge puts each, of the widths given
+/// left to right (`joined`: drawn against the one before it, as one split button): each one's
+/// English x.
+pub fn row_from_right(parts: &[(f32, bool)]) -> Vec<f32> {
+    let mut x = DONE_W - EDGE;
+    let mut xs = vec![0.0; parts.len()];
+    for i in (0..parts.len()).rev() {
+        x -= parts[i].0;
+        xs[i] = x;
+        if !parts[i].1 {
+            x -= GAP;
+        }
+    }
+    xs
+}
+
+/// The Done window's name row (board 13): the name; under the pointer or with the keys, the
+/// grip at its start and "Drag out, or Ctrl+C" at its end. A Tab stop the file is dragged out
+/// of, or copied from with Ctrl+C (the caller does both, dialogs.rs). Its response.
+pub(crate) fn name_row(ui: &mut Ui, o: Pos2, name: &str, id: egui::Id) -> Response {
+    let rc = r(o, 0.0, NAME_BASE - 17.0, EDGE + LEFT_W, 28.0);
+    let resp = ui.interact(rc, id, Sense::click_and_drag());
+    winui::focus_on_press(&resp);
+    let label = crate::i18n::fmt(
+        // i18n: the Done window's name row for screen readers: {file} the downloaded file's name
+        crate::i18n::t("{file}, file"),
+        &[("file", &crate::i18n::isolate(name))],
+    );
+    winui::expose(&resp, egui::Role::ListItem, &label, true, None);
+    // i18n: the Done window's name row for screen readers: what it does
+    let described = crate::i18n::t("Drag it into a folder or an app, or press Ctrl+C to copy it");
+    resp.ctx
+        .accesskit_node_builder(resp.id, |n| n.set_description(described));
+    let p = ui.painter().clone();
+    let mut name_right = o.x + EDGE + LEFT_W;
+    if resp.hovered() || resp.has_focus() {
+        p.rect_filled(rc, 4.0, crate::theme::colors().button_hot);
+        let grip = Rect::from_min_size(pos2(rc.left(), rc.center().y - 6.0), vec2(12.0, 12.0));
+        crate::themeicons::paint_graphite_in(ui, &p, "gx-grip", grip, muted());
+        // i18n: the Done window's name row, under the pointer or with the keys: what it does
+        let hint = crate::i18n::t("Drag out, or Ctrl+C");
+        let at = draw_right(
+            &p,
+            face(12.0),
+            rc.right() - 8.0,
+            o.y + NAME_BASE,
+            hint,
+            muted(),
+        );
+        name_right = at.left() - 16.0;
+    }
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+    }
+    let f = medium(13.0);
+    let shown = winui::ellipsize(&p, &f, name, (name_right - o.x - EDGE).max(0.0));
+    winui::text_font(&p, f, o.x + EDGE, o.y + NAME_BASE, &shown, ink());
+    winui::show_focus(ui, &resp, rc);
+    if shown != name {
+        resp.on_hover_text(name)
+    } else {
+        resp
+    }
+}
+
+/// The Done window's facts under its strip (boards 5, 7, 14): Saved to, a link that shows the
+/// download in its folder (`link`: its id); the `lines` under it in the error colour, each read
+/// out at once (why the file can't open, a notice); Main file when there is one. The link's
+/// response.
+pub(crate) fn done_facts(
+    ui: &mut Ui,
+    o: Pos2,
+    saved: &str,
+    lines: &[String],
+    main: Option<&str>,
+    link: egui::Id,
+) -> Response {
+    let p = ui.painter().clone();
+    let right = o.x + EDGE + LEFT_W;
+    let x = o.x + VALUE_X;
+    let mut y = FACTS_Y;
+    key(&p, o, y, false, crate::i18n::mark("Saved to"));
+    let f = face(13.0);
+    let shown = winui::ellipsize_middle(&p, &f, saved, right - x);
+    let rc = winui::text_font(&p, f, x, o.y + y + 12.0, &shown, ink());
+    let resp = ui.interact(rc.expand2(vec2(0.0, 2.0)), link, Sense::click());
+    winui::focus_on_press(&resp);
+    winui::expose(&resp, egui::Role::Link, saved, true, None);
+    let under = if resp.hovered() {
+        ink()
+    } else {
+        winui::TEXT_DISABLED()
+    };
+    winui::solid(
+        &p,
+        Rect::from_min_max(
+            pos2(rc.left(), o.y + y + 15.0),
+            pos2(rc.right(), o.y + y + 16.0),
+        ),
+        under,
+    );
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    winui::show_focus(ui, &resp, rc.expand(2.0));
+    // i18n: tooltip of the Done window's Saved to link
+    let tip = crate::i18n::t("Show it in its folder");
+    let resp = if shown != saved {
+        winui::tip(resp, &format!("{saved}\n{tip}")) // not translated: a path and a sentence
+    } else {
+        winui::tip(resp, tip)
+    };
+    y += DONE_ROW + GAP;
+    for (k, line) in lines.iter().enumerate() {
+        let rc = cell(
+            ui,
+            &p,
+            face(13.0),
+            o.x + EDGE,
+            o.y + y + 15.0,
+            right,
+            line,
+            winui::ERROR(),
+            ("done-line", k),
+        );
+        let id = egui::Id::unique(("done-line", k, ui.ctx().viewport_id()));
+        let read = ui.interact(rc, id, Sense::hover());
+        winui::expose(&read, egui::Role::Alert, line, true, None);
+        y += DONE_LINE + GAP;
+    }
+    if let Some(main) = main {
+        // i18n: label in the Done window: the file the download is mostly made of (Open opens it)
+        key(&p, o, y, false, crate::i18n::mark("Main file"));
+        cell(
+            ui,
+            &p,
+            face(13.0),
+            x,
+            o.y + y + 12.0,
+            right,
+            main,
+            secondary(),
+            "done-main",
+        );
+    }
+    resp
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2652,5 +3295,214 @@ mod tests {
         assert_eq!(so_far(2 * gb + gb / 2, Some(6 * gb)), "2.50 of 6.00 GB");
         assert_eq!(so_far(1024 * 1024, Some(2 * gb)), "1.00 MB of 2.00 GB");
         assert_eq!(so_far(1024 * 1024, None), "1.00 MB");
+    }
+
+    /// A download 41% in, 2.38 of 5.80 GB, as the boards show it.
+    fn facts() -> Facts {
+        let mb = 1024 * 1024;
+        Facts {
+            name: "ubuntu.iso".into(),
+            frac: Some(0.41),
+            downloaded: 2437 * mb,
+            size: Some(5939 * mb),
+            left: "3 min 10 sec".into(),
+            rate: Some("18.40 MB/s".into()),
+            speed: Some("18.40 MB/s".into()),
+            word: "Receiving data...".into(),
+            queue: Some("Main queue".into()),
+            resumes: true,
+            reason: Some("The download link has expired (HTTP 403).".into()),
+            ..Facts::default()
+        }
+    }
+
+    /// Plan 13d: each state's look from the existing state data (boards 1, 4, 8, 9): the
+    /// reading, greyed or not, what is beside it, the strip and the row under it.
+    #[test]
+    fn each_state_gets_its_boards_look() {
+        let f = facts();
+        let detail = |v: &StateView| match &v.under {
+            Under::Detail(a, b) => (a.clone(), b.clone()),
+            Under::Message { .. } => panic!("a message: {:?}", v.under),
+        };
+        let message = |v: &StateView| match &v.under {
+            Under::Message { text, error } => (text.clone(), *error),
+            Under::Detail(..) => panic!("a detail row: {:?}", v.under),
+        };
+        // Running (board 1): no word, the percent, the time left, the download's own strip.
+        let v = state_view(Phase::Running, &f);
+        assert_eq!(v.word, None);
+        assert_eq!(v.reading, Reading::Percent(0.41));
+        assert_eq!(
+            v.side,
+            Side::Figure("3 min 10 sec".into(), Some("left".into()))
+        );
+        assert!(v.strip.is_none() && !v.grey && !v.dim);
+        assert_eq!(
+            detail(&v),
+            (so_far(f.downloaded, f.size), "18.40 MB/s".into())
+        );
+        // Size not known (board 8): the amount, its speed, an empty strip.
+        let unknown = Facts {
+            frac: None,
+            size: None,
+            left: String::new(),
+            ..facts()
+        };
+        let v = state_view(Phase::Running, &unknown);
+        assert_eq!(v.word, Some(("Size not known".into(), false)));
+        assert_eq!(v.reading, Reading::Amount(unknown.downloaded));
+        assert_eq!(v.side, Side::Figure("18.40".into(), Some("MB/s".into())));
+        assert_eq!(v.strip, Some(Strip::Empty));
+        assert_eq!(detail(&v).1, "No time estimate");
+        // Stopped (board 4): the percent greyed, the strip grey, Resume goes on from there.
+        let v = state_view(Phase::Stopped, &f);
+        assert!(v.dim && v.grey && v.strip.is_none());
+        assert_eq!(v.side, Side::Text("Resumes where it stopped".into()));
+        assert_eq!(detail(&v).1, "");
+        let restarts = Facts {
+            resumes: false,
+            ..facts()
+        };
+        assert_eq!(state_view(Phase::Stopped, &restarts).side, Side::None);
+        // An error (board 4): the reason in its own line (no "Error: ..."), the missing part
+        // hatched, the amount beside the greyed percent.
+        let v = state_view(Phase::Failed { new_address: true }, &f);
+        assert_eq!(v.word, Some(("Stopped by an error".into(), true)));
+        assert_eq!(v.strip, Some(Strip::Broken(0.41)));
+        assert_eq!(message(&v), (f.reason.clone().unwrap(), true));
+        assert!(!message(&v).0.starts_with("Error:"));
+        assert_eq!(v.side, Side::Figure(so_far(f.downloaded, f.size), None));
+        assert!(v.dim);
+        // A web page (board 9): said in the reading, the strip hatched, the reason read out.
+        let v = state_view(Phase::WebPage, &f);
+        assert_eq!(v.word, None);
+        assert_eq!(v.reading, Reading::Word("Got a web page".into()));
+        assert!(matches!(v.strip, Some(Strip::Broken(_))));
+        assert!(message(&v).1);
+        assert!(
+            super::message(Phase::WebPage).is_some(),
+            "its advice under it"
+        );
+        assert!(super::message(Phase::Failed { new_address: false }).is_none());
+        // Waiting (board 8): a dash, the queue named, the strip grey.
+        let v = state_view(Phase::Waiting, &f);
+        assert_eq!(v.reading, Reading::Dash);
+        assert!(v.grey);
+        assert!(
+            matches!(&v.side, Side::Text(s) if craft_i18n::strip_isolates(s) == "in Main queue"),
+            "{:?}",
+            v.side
+        );
+        // Finishing (board 8): every byte in, 100%, the strip whole.
+        let v = state_view(Phase::Finishing, &f);
+        assert_eq!(v.reading, Reading::Percent(1.0));
+        assert_eq!(v.side, Side::Text("Writing the file".into()));
+        assert!(matches!(v.strip, Some(Strip::Plain { fraction: 1.0, .. })));
+        assert!(detail(&v).0.starts_with("All ") && detail(&v).1.starts_with("Naming it "));
+        // Joining picture and sound (board 4): the percent joined, no time left.
+        let join = Facts {
+            after: After::Join,
+            after_frac: Some(0.45),
+            ..facts()
+        };
+        let v = state_view(Phase::Finishing, &join);
+        assert_eq!(v.word, Some(("Joining picture and sound".into(), false)));
+        assert_eq!(v.reading, Reading::Percent(0.45));
+        assert_eq!(v.side, Side::Text("joined".into()));
+        assert!(v.strip.is_none(), "the join's own fill on its accent track");
+        // A torrent checking its files (board 8): the bytes checked, a plain grey fill.
+        let checking = Facts {
+            checked: Some((37, 100)),
+            ..facts()
+        };
+        let v = state_view(Phase::Checking, &checking);
+        assert_eq!(v.reading, Reading::Percent(0.37));
+        assert_eq!(
+            v.strip,
+            Some(Strip::Plain {
+                fraction: 0.37,
+                after: false
+            })
+        );
+        assert!(v.grey);
+        // At a debrid service (board 9): named, its percent, a striped fill.
+        let service = Facts {
+            service: Some(("Real-Debrid".into(), Some(0.62))),
+            ..facts()
+        };
+        let v = state_view(Phase::Service, &service);
+        assert_eq!(v.reading, Reading::Percent(0.62));
+        assert_eq!(v.strip, Some(Strip::Striped(0.62)));
+        assert!(matches!(&v.side, Side::Text(s) if s.contains("Real-Debrid")));
+        let unsaid = Facts {
+            service: Some(("Real-Debrid".into(), None)),
+            ..facts()
+        };
+        assert_eq!(state_view(Phase::Service, &unsaid).reading, Reading::Dash);
+        // Sharing (board 9): the word in the reading, the ratio beside it, the strip whole.
+        let sharing = Facts {
+            sharing: Some((
+                "308.00 MB".into(),
+                "0.42".into(),
+                "410.00 KB/s to 6 peers".into(),
+            )),
+            ..facts()
+        };
+        let v = state_view(Phase::Sharing, &sharing);
+        assert_eq!(v.word, None);
+        assert_eq!(v.reading, Reading::Word("Sharing".into()));
+        assert_eq!(v.side, Side::Figure("0.42".into(), Some("ratio".into())));
+        assert_eq!(
+            detail(&v),
+            ("Sent 308.00 MB".into(), "410.00 KB/s to 6 peers".into())
+        );
+        // Can't resume (board 9): the percent and time left, the question read out.
+        let v = state_view(Phase::CantResume, &f);
+        assert_eq!(v.reading, Reading::Percent(0.41));
+        assert!(!message(&v).1);
+        assert!(message(&v).0.contains("starts over"));
+        // The strip says the state too, its parts hidden.
+        let said = spoken(&state_view(Phase::Stopped, &f));
+        assert!(said.contains("41%"), "{said}");
+        assert!(said.contains("Resumes where it stopped"), "{said}");
+        assert_eq!(spoken_reading(&Reading::Dash), None);
+    }
+
+    /// Plan 13d (boards 5, 7): "Done" with the size, the strip whole, the number of files
+    /// (nothing for one); its places from the facts down.
+    #[test]
+    fn the_done_window_reads_done_with_its_size_and_files() {
+        let v = done_view(734 * 1024 * 1024, 2);
+        assert_eq!(v.reading, Reading::Word("Done".into()));
+        assert_eq!(v.side, Side::Figure("734.00 MB".into(), None));
+        assert!(matches!(v.strip, Some(Strip::Plain { fraction: 1.0, .. })));
+        let count = |v: &StateView| match &v.under {
+            Under::Detail(a, _) => craft_i18n::strip_isolates(a),
+            Under::Message { .. } => panic!(),
+        };
+        assert_eq!(count(&v), "2 files");
+        assert_eq!(count(&done_view(1, 248)), "248 files");
+        assert_eq!(count(&done_view(1, 1)), "");
+        assert_eq!(
+            craft_i18n::strip_isolates(&spoken(&v)),
+            "Done, 734.00 MB, 2 files"
+        );
+        // Board 5: Saved to and Main file, the check box, the footer, 268 high with its 20 under
+        // it; a line under Saved to (board 14) makes room for itself.
+        let (check, footer, height) = done_layout(true, 0);
+        assert_eq!(
+            (check, footer),
+            (FACTS_Y + 16.0 + GAP + 16.0 + 16.0, check + 32.0)
+        );
+        assert_eq!(height, footer + BUTTON_H + BOTTOM);
+        assert_eq!(done_layout(true, 1).2, height + DONE_LINE + GAP);
+        assert_eq!(done_layout(false, 0).2, height - DONE_ROW - GAP);
+        // The footer from the right edge, a split button's parts touching.
+        let xs = row_from_right(&[(56.0, false), (30.0, true), (90.0, false), (60.0, false)]);
+        assert_eq!(xs[3], DONE_W - EDGE - 60.0);
+        assert_eq!(xs[2], xs[3] - GAP - 90.0);
+        assert_eq!(xs[1], xs[2] - GAP - 30.0);
+        assert_eq!(xs[0], xs[1] - 56.0, "joined: no gap");
     }
 }

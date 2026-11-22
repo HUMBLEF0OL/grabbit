@@ -425,7 +425,6 @@ fn take_place(item: &mut Item, target: PathBuf) {
 fn complete_box(i: &Item) -> Complete {
     Complete::new(
         i.id,
-        i.url.to_string(),
         i.dest.clone(),
         i.size.unwrap_or(i.downloaded),
         i.notices.clone(),

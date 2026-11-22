@@ -53,9 +53,9 @@ Grabbit doesn't use a temporary folder: every connection writes straight into th
 ![Options on its Downloads page: the start download dialog, Download complete and duplicate links](images/help/options-downloads.webp)
 *Downloads: which windows show, and what a duplicate link does.*
 
-- **Customize "Download progress" dialog → Edit...** — **Show download progress dialog when a download starts**: on by default. Untick it and a download no longer opens its progress window when it starts, from the browser, a link you add or a video; it goes on in the main window's list, where a double-click opens its progress window. **Download complete** still shows when it finishes, as **Show download complete dialog** below says.
+- **Customize "Download progress" dialog → Edit...** — **Show download progress dialog when a download starts**: on by default. Untick it and a download no longer opens its progress window when it starts, from the browser, a link you add or a video; it goes on in the main window's list, where a double-click opens its progress window. the **Done** window still shows when it finishes, as **Show download complete dialog** below says.
 - **Show start download dialog** — show **Download file info** for each new download. With it off, downloads start at once, or only join the queue if you tick **Do not start downloading, only add files to the queue**.
-- **Show download complete dialog** — show **Download complete** when a file finishes.
+- **Show download complete dialog** — show the **Done** window when a file finishes.
 - **Start downloading immediately while displaying "Download file info" dialog** — off by default: nothing starts until you answer the dialog. Turn it on to have the download already under way while you choose a folder.
 - **Show queue selection panel on pressing "Later" button** — ask which queue; off puts it in the **Main download queue**.
 - **Show queue selection panel on closing batch download dialogs** — the same for batch downloads.

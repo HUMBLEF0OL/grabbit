@@ -47,8 +47,8 @@ try {
     & $exe /d "http://127.0.0.1:$Port/gen/$($f[1])/$($f[0])$($f[2])" /p "$work\dl" /n
     Start-Sleep -Milliseconds 400
   }
-  # Let the small ones finish; close their "Download complete" dialogs.
-  for ($i = 0; $i -lt 30; $i++) { Start-Sleep 1; Close-Titled "Download complete" }
+  # Let the small ones finish; close their Done windows ("Done: <name>").
+  for ($i = 0; $i -lt 30; $i++) { Start-Sleep 1; Close-Titled "Done: *" }
   Close-Titled "*ubuntu-26.04*"   # its progress window, for a clean main-window shot
   # Dark whatever Windows' own mode (the status bar's light/dark button, set to one side).
   & $exe /show mode:dark

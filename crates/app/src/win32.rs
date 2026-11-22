@@ -3174,6 +3174,93 @@ pub fn drag_file_out(
     started
 }
 
+/// Put `file` (or a folder) on the clipboard as Explorer's Copy does (plan 13d: Ctrl+C on the
+/// Done window's name row): the shell's file list (CF_HDROP) marked as a copy ("Preferred
+/// DropEffect"), so Paste in a folder copies it there, and a mail or a chat attaches it. Our
+/// window titled `title` owns it (the clipboard needs an owner for its data to be kept). An
+/// off-screen run leaves the clipboard alone and logs it, as `set_clipboard` does.
+pub fn copy_file_to_clipboard(title: &str, file: &std::path::Path) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::System::DataExchange::{
+        CloseClipboard, EmptyClipboard, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
+    };
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GlobalAlloc(flags: u32, bytes: usize) -> *mut c_void;
+        fn GlobalLock(h: *mut c_void) -> *mut c_void;
+        fn GlobalUnlock(h: *mut c_void) -> i32;
+        fn GlobalFree(h: *mut c_void) -> *mut c_void;
+    }
+    const GMEM_MOVEABLE: u32 = 2;
+    const CF_HDROP: u32 = 15;
+    const DROPEFFECT_COPY: u32 = 1;
+    if crate::offscreen() {
+        tracing::info!(
+            "clipboard (off-screen, not copied): the file {}",
+            file.display()
+        );
+        return Ok(());
+    }
+    if !file.exists() {
+        return Err("the file isn't there".into());
+    }
+    // DROPFILES (20 bytes: where the list starts, a point, fNC, fWide), then the path in
+    // UTF-16, ended by two NULs.
+    let mut drop: Vec<u8> = Vec::with_capacity(20 + 2 * (file.as_os_str().len() + 2));
+    drop.extend_from_slice(&20u32.to_le_bytes());
+    drop.extend_from_slice(&[0; 12]);
+    drop.extend_from_slice(&1u32.to_le_bytes());
+    for unit in file.as_os_str().encode_wide().chain([0, 0]) {
+        drop.extend_from_slice(&unit.to_le_bytes());
+    }
+    let effect = DROPEFFECT_COPY.to_le_bytes();
+    let hwnd = find_own_window(title).ok_or("window not found")?;
+    let _lock = crate::clipboard_lock().ok_or("the clipboard is in use")?;
+    // A movable block holding `bytes`, given to the clipboard (which then owns it) or freed.
+    let global = |bytes: &[u8]| -> Option<*mut c_void> {
+        // SAFETY: a fresh block as large as `bytes`, filled within its size while locked.
+        unsafe {
+            let h = GlobalAlloc(GMEM_MOVEABLE, bytes.len());
+            if h.is_null() {
+                return None;
+            }
+            let to = GlobalLock(h) as *mut u8;
+            if to.is_null() {
+                GlobalFree(h);
+                return None;
+            }
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), to, bytes.len());
+            GlobalUnlock(h);
+            Some(h)
+        }
+    };
+    let name: Vec<u16> = "Preferred DropEffect\0".encode_utf16().collect();
+    // SAFETY: the clipboard opened for our window and closed on every path; each block handed
+    // to SetClipboardData is the clipboard's once it took it, else freed here.
+    unsafe {
+        if OpenClipboard(hwnd) == 0 {
+            return Err("the clipboard couldn't be opened".into());
+        }
+        let mut result = Err("the clipboard didn't take the file".to_owned());
+        if EmptyClipboard() != 0 {
+            let format = RegisterClipboardFormatW(name.as_ptr());
+            for (cf, bytes) in [(CF_HDROP, &drop[..]), (format, &effect[..])] {
+                if cf == 0 {
+                    continue;
+                }
+                let Some(h) = global(bytes) else { continue };
+                if SetClipboardData(cf, h).is_null() {
+                    GlobalFree(h);
+                } else if cf == CF_HDROP {
+                    result = Ok(());
+                }
+            }
+        }
+        CloseClipboard();
+        result
+    }
+}
+
 /// Tell `hwnd` the left button is up, at the pointer, as Windows would have done had OLE's
 /// drag loop not taken the release. A move first: the pointer left the window during the drag,
 /// and a release with no pointer position is dropped before it reaches the interface.

@@ -335,7 +335,7 @@ its icon: `chrome::menu_icon` (`chrome.rs:1656-1673`, e.g. "On Double click"), `
   - `extension.rs:664` "Setting it up failed:"
   - `app.rs:5445`, `5447` "Recheck failed:" / "Reannounce failed:" (the second names the renamed
     command: "The trackers could not be asked again: {error}")
-  - `progress.rs:1192`, `2221` "Error: {error}": moved to 13, which writes the reason as its own line
+  - `progress.rs:1192`, `2221` "Error: {error}": moved to 13, which writes the reason as its own line (done in 13d)
 - **F8.** Numbers say the same thing the same way:
   - Sizes: one precision for a given quantity. `size` (2 decimals, `model.rs:1359-1371`) and `size3`
     (3 decimals, `model.rs:1373-1384`) show the same file as "6.00 GB" in the list and "6.000 GB" in

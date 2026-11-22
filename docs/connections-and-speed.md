@@ -8,7 +8,7 @@ Each running download has its own progress window. It opens when the download st
 
 ![The progress window](images/progress.webp)
 
-It shows the file's name (and, when it isn't simply downloading, its state: **Stopped**, **Waiting**, **Error** and so on), then:
+It shows the file's name (and, when it isn't simply downloading, its state: **Stopped**, **Waiting**, **Stopped by an error** and so on), then:
 
 - How far it is, large, with the time left beside it.
 - A strip of the whole file. The file is split into parts that download side by side; each part
@@ -17,6 +17,24 @@ It shows the file's name (and, when it isn't simply downloading, its state: **St
   plain fill. A torrent's strip shows its pieces: the brighter a place, the more of its pieces
   are in. A video's strip is one plain fill.
 - How much has come of the whole (**2.38 of 5.80 GB**), and the speed.
+
+Each state has its own look:
+
+- **Stopped**: the strip turns grey and the percent dims; **Resumes where it stopped** when the
+  server allows it.
+- **Stopped by an error**: the part still missing is hatched in red, and the reason is in its
+  own line under the strip, such as **The download link has expired (HTTP 403).**
+- **Size not known**: the server didn't say how big the file is, so the reading is how much has
+  come, with the speed beside it, and there is no time estimate.
+- **Waiting**: the queue it waits in, such as **in Main queue**.
+- **Finishing** once every byte is in (**Writing the file**), **Joining picture and sound** for
+  a video, or **Checking files** for a torrent (the bytes checked, then it downloads what's
+  missing).
+- **At Real-Debrid** (or your service): how far your debrid service has come; then the files
+  come here at full speed.
+- **Sharing**, for a finished torrent: its ratio, what it sent and to how many peers.
+- **Got a web page**: the site sent a page (a waiting page, a check) instead of the file; open it
+  in your browser.
 
 **Show details** widens the window to the right (it moves left if it would run past the screen's edge); **Hide details** makes it narrow again. On the left:
 
@@ -67,9 +85,12 @@ How Grabbit knows:
 
 ## When a download finishes
 
-**Download complete** shows the file's size, its address and where it was saved. Choose **Open** (its arrow has **Open with...**), **Open folder** or **Close**. A download saved as a folder, such as a torrent of several files, opens its main file, the one it is mostly made of, and **Open folder** shows that file in the folder; when there is no main file, **Open folder** opens the folder and **Open file** lists its largest files. If the file was moved or deleted since, the window says so and **Open folder** becomes the default. On Windows you can also drag the small box at the bottom right into Explorer, an email or a chat to drop the file there. As when you drag a file in Explorer, a folder on the same drive gets the file moved there and another drive gets a copy (hold **Shift** to move it, **Ctrl** to copy it). The download follows a moved file: the list and **Open** find it in its new place. The window shows above your other programs until you click it, without taking the keyboard from the one you're typing in.
+The **Done** window shows the file's name, its size, how many files it saved (when there are
+several) and where: click the folder under **Saved to** to see it there. Choose **Open** (its
+arrow has **Open with...**), **Open folder** or **Close**; **Enter** runs the filled one, **Esc**
+closes the window. A download saved as a folder, such as a torrent of several files, opens its main file, the one it is mostly made of, and **Open folder** shows that file in the folder; when there is no main file, **Open folder** opens the folder and **Open file** lists its largest files. If the file was moved or deleted since, the window says so under **Saved to** and **Open folder** becomes the default. You can also drag the file's name at the top of the window into Explorer, an email or a chat to drop the file there, or reach it with **Tab** and press **Ctrl+C** to copy the file, then paste it in a folder. As when you drag a file in Explorer, a folder on the same drive gets the file moved there and another drive gets a copy (hold **Shift** to move it, **Ctrl** to copy it). The download follows a moved file: the list and **Open** find it in its new place. The window shows above your other programs until you click it, without taking the keyboard from the one you're typing in.
 
-Tick **Don't show this dialog again** to stop seeing it. It can be turned back on in **Options → Downloads → Show download complete dialog**.
+Tick **Don't show this window again** to stop seeing it. It can be turned back on in **Options → Downloads → Show download complete dialog**.
 
 ## How Grabbit uses connections
 

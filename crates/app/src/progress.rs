@@ -11,7 +11,7 @@ use crate::model::{self, Item, Status};
 // The layout, a child module so it reads this window's state as its own (crates/app/src/
 // progress_view.rs).
 #[path = "progress_view.rs"]
-mod view;
+pub(crate) mod view;
 // Laid out in English pixels: `fill` makes each one where it is on screen (a right-to-left
 // interface mirrors it), `text` starts at an English pen.
 use crate::winui::{self, fill_l as fill, r, text};
@@ -540,7 +540,7 @@ impl Progress {
                     let action = crate::dialogs::scroll(&mut rest, key, body, |ui, o| {
                         let _surface = winui::Surface::enter(o.x, o.x + body[0]);
                         let drawn = (bar, drawn.segments.as_slice());
-                        self.body(ui, o, item, snap, frac, drawn, &state, d.as_ref())
+                        self.body(ui, o, item, snap, drawn, &state, d.as_ref())
                     });
                     // The system menu's "Hide to the notification area" (Alt+Space).
                     if let Some(h) = hwnd
@@ -645,9 +645,8 @@ impl Progress {
         action
     }
 
-    /// `frac`: the download's fraction as it is (the text); `drawn`: the bar's fill and the
-    /// segments as they glide ([`Glide`]); `state`: as [`view::shown`] has it; `d`: a torrent's
-    /// details.
+    /// `drawn`: the bar's fill and the segments as they glide ([`Glide`]); `state`: as
+    /// [`view::shown`] has it (the figures as they are); `d`: a torrent's details.
     #[allow(clippy::too_many_arguments)]
     fn body(
         &mut self,
@@ -655,13 +654,12 @@ impl Progress {
         o: Pos2,
         item: &Item,
         snap: Option<&Snapshot>,
-        frac: Option<f64>,
         drawn: (f64, &[(u64, f64)]),
         state: &view::Shown,
         d: Option<&crate::torrents::Details>,
     ) -> Action {
         // The layout (progress_view.rs); this window's state and data stay here.
-        view::body(self, ui, o, item, snap, frac, drawn, state, d)
+        view::body(self, ui, o, item, snap, drawn, state, d)
     }
 
     /// The torrent's details as the session has them (its files, peers, trackers, pieces,

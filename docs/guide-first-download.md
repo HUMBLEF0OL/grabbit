@@ -12,7 +12,7 @@ From a copied link to an opened file in a minute or two.
 4. **Download file info** shows the file's name, its size and where it will be saved. The folder depends on the file's type: a ZIP goes to `Downloads\Compressed`, a video to `Downloads\Video`, and so on. Change the folder or the category if you like.
 5. Click **Download now**.
 6. The progress window shows the download: its speed, the time left, and what each connection is doing.
-7. When it finishes, **Download complete** appears. Click **Open** to open the file, or **Open folder** to see it in Explorer.
+7. When it finishes, the **Done** window appears. Click **Open** to open the file, or **Open folder** to see it in Explorer.
 
 <!-- steps -->
 
@@ -22,7 +22,7 @@ From a copied link to an opened file in a minute or two.
    *Check the folder, then Download now.*
 3. ![The progress window: speed, time left and each connection's share of the file](images/help/first-progress.webp)
    *The progress window shows it coming in.*
-4. ![Download complete with Open and Open folder](images/help/first-complete.webp)
+4. ![The Done window with Open and Open folder](images/help/first-complete.webp)
    *Done: Open the file, or Open folder.*
 
 The download stays in the list under **Finished**. To get rid of the entry later, select it and press **Delete**; tick **Also move the file to the Recycle Bin** only if you want the file gone too.

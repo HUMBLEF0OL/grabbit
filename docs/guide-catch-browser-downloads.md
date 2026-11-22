@@ -18,8 +18,8 @@ Once it is set up, a download link goes like this:
    *Click a download link in the browser: Download file info opens in Grabbit.*
 2. ![The progress window of a download coming in over several connections](images/help/catch-progress.webp)
    *Download now: the progress window shows it coming in.*
-3. ![Download complete, with Open, Open with..., Open folder and Close](images/help/catch-complete.webp)
-   *Download complete: Open the file, or Open folder.*
+3. ![The Done window, with Open and its arrow, Open folder and Close](images/help/catch-complete.webp)
+   *Done: Open the file, or Open folder.*
 
 ## In Chrome, Edge, Brave, Opera or Vivaldi {#chromium}
 
