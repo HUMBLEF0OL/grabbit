@@ -2408,7 +2408,23 @@ pub struct ConfirmDelete {
     pub files: bool,
     /// How many of the downloads are finished: their files go too when `files` is ticked.
     pub finished: u64,
+    /// How many running downloads of the selection stay (said under the box; plan 12a).
+    pub kept: u64,
     dont_show: bool,
+}
+
+/// "1 running download is kept…": what Delete left out of a selection (plan 12a, E3), under
+/// the question, or in a notice when it isn't asked.
+pub fn kept_text(n: u64) -> String {
+    crate::i18n::fmt(
+        // i18n: Delete with running downloads among the selected ones: those stay in the list
+        &crate::i18n::tn(
+            n,
+            "{n} running download is kept: stop it to delete it.",
+            "{n} running downloads are kept: stop them to delete them.",
+        ),
+        &[("n", &crate::i18n::integer(n))],
+    )
 }
 
 impl ConfirmDelete {
@@ -2420,6 +2436,7 @@ impl ConfirmDelete {
             unfinished,
             files,
             finished,
+            kept: 0,
             dont_show: false,
         }
     }
@@ -2491,10 +2508,13 @@ it from Grabbit's list of downloads?",
                 );
                 grow_to(ui.ctx(), "confirm-delete", lines, 3);
                 let o = o + vec2(0.0, extra);
-                let files = if n == 1 {
-                    crate::i18n::t("Also delete the file from disk").to_owned()
-                } else {
-                    crate::i18n::fmt(
+                // Finished files go to the Recycle Bin (plan 12a); only unfinished downloads'
+                // data, deleted outright, keeps "delete from disk".
+                let files = match (n, self.finished) {
+                    (1, 0) => crate::i18n::t("Also delete the file from disk").to_owned(),
+                    // i18n: the Confirm deletion box for one finished download: its file goes to the Recycle Bin
+                    (1, _) => crate::i18n::t("Also move the file to the Recycle Bin").to_owned(),
+                    (_, 0) => crate::i18n::fmt(
                         // i18n: never shown for a single file
                         &crate::i18n::tn(
                             n,
@@ -2502,18 +2522,27 @@ it from Grabbit's list of downloads?",
                             "Also delete the {n} files from disk",
                         ),
                         &[("n", &crate::i18n::integer(n))],
-                    )
+                    ),
+                    _ => crate::i18n::fmt(
+                        // i18n: never shown for a single file; some of them are finished, whose files go to the Recycle Bin
+                        &crate::i18n::tn(
+                            n,
+                            "Also move the {n} file to the Recycle Bin",
+                            "Also move the {n} files to the Recycle Bin",
+                        ),
+                        &[("n", &crate::i18n::integer(n))],
+                    ),
                 };
                 winui::checkbox_light(ui, o + vec2(e, 74.0), &mut self.files, &files, true);
                 // Ticked, the finished downloads' files go too: said, so none is lost by
                 // surprise (upstream #1563); under the box, beside its caption.
-                let warn = if self.files && self.finished > 0 {
+                let mut warn = if self.files && self.finished > 0 {
                     let text = crate::i18n::fmt(
-                        // i18n: under "Also delete the files from disk", while it is ticked: how many of the downloads being deleted are finished, whose complete files are deleted from the disk too
+                        // i18n: under "Also move the files to the Recycle Bin", while it is ticked: how many of the downloads being deleted are finished, whose complete files go to the Recycle Bin too
                         &crate::i18n::tn(
                             self.finished,
-                            "This also deletes {n} finished file.",
-                            "This also deletes {n} finished files.",
+                            "This also moves {n} finished file to the Recycle Bin.",
+                            "This also moves {n} finished files to the Recycle Bin.",
                         ),
                         &[("n", &crate::i18n::integer(self.finished))],
                     );
@@ -2530,6 +2559,19 @@ it from Grabbit's list of downloads?",
                 } else {
                     0.0
                 };
+                // The running downloads Delete leaves alone, said under it (plan 12a, E3).
+                if self.kept > 0 {
+                    let lines = winui::paragraph(
+                        &p,
+                        o.x + e + 16.0,
+                        o.y + 102.0 + warn,
+                        &kept_text(self.kept),
+                        black,
+                        o.x + W - e,
+                        13.0,
+                    );
+                    warn += lines as f32 * 13.0 + 6.0;
+                }
                 grow_px(ui.ctx(), "confirm-delete-finished", warn);
                 let o = o + vec2(0.0, warn);
                 // Enter Yes, Escape No, as before; Tab: the files box, Yes, No, then "Don't

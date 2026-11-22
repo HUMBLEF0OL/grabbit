@@ -19,7 +19,7 @@ The assistant starts the server itself; you only tell the assistant where it is,
 | `add_download` | Adds an http, https, ftp or ftps address and starts it, or only queues it. It can say which folder and file name to use. A magnet link opens **Add torrent** in Grabbit, for you to choose the files. |
 | `pause_downloads` | Pauses running downloads. |
 | `resume_downloads` | Starts or resumes stopped, queued or failed downloads. |
-| `remove_downloads` | Removes downloads from the list and keeps their files, or deletes the files too when asked. A running download must be paused first. |
+| `remove_downloads` | Removes downloads from the list and keeps their files, or deletes the files too when asked (a finished file goes to the Recycle Bin). A running download must be paused first. |
 | `start_queue` | Starts the main download queue. |
 
 The assistant can't change Grabbit's options, see your browser, or turn the automation API on by itself.

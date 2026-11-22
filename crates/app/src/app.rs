@@ -3933,8 +3933,13 @@ impl App {
     /// the files too. The box starts unticked every time; `files` ticks it for this once
     /// (Shift+Delete, Remove with files). With "Don't show this dialog again" ticked, a plain
     /// Delete only takes the downloads off the list, never their files; Shift+Delete still asks,
-    /// as nothing leaves the disk unasked (upstream #1563). Running downloads are left alone.
+    /// as nothing leaves the disk unasked (upstream #1563). Running downloads are left alone,
+    /// and said: under the question, or in a notice when it isn't asked (plan 12a).
     fn ask_delete(&mut self, ids: Vec<u64>, files: bool) {
+        let kept = ids
+            .iter()
+            .filter(|id| self.items.iter().any(|i| i.id == **id && i.live.is_some()))
+            .count() as u64;
         let gone: Vec<&Item> = ids
             .iter()
             .filter_map(|id| self.items.iter().find(|i| i.id == *id && i.live.is_none()))
@@ -3947,16 +3952,21 @@ impl App {
                 .iter()
                 .filter(|i| i.status == Status::Complete && i.gallery.is_none())
                 .count() as u64;
-            self.confirm_delete = Some(dialogs::ConfirmDelete::new(
+            let mut ask = dialogs::ConfirmDelete::new(
                 gone.iter().map(|i| i.id).collect(),
                 first.file_name.clone(),
                 one && first.status != Status::Complete,
                 files,
                 finished,
-            ));
+            );
+            ask.kept = kept;
+            self.confirm_delete = Some(ask);
         } else {
             let ids: Vec<u64> = gone.into_iter().map(|i| i.id).collect();
             self.remove_downloads(&ids, false);
+            if kept > 0 {
+                self.notice = Some((crate::i18n::mark("Delete"), dialogs::kept_text(kept)));
+            }
         }
     }
 
@@ -15191,5 +15201,28 @@ mod delete_tests {
         assert_eq!(ids(&app), [2, 3]);
         assert!(app.deleter.finish(Duration::from_secs(10)));
         assert!(files.iter().all(|f| f.exists()));
+    }
+
+    /// Plan 12a (E3): Delete leaves a running download in the list and says so: counted under
+    /// the question, or in a notice when the question is off.
+    #[test]
+    fn delete_says_how_many_running_downloads_it_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let (items, _) = three(dir.path());
+        let mut app = app_with_saved_tick(items, true);
+        let ctx = egui::Context::default();
+        app.start(3, false);
+        assert!(app.items[2].live.is_some(), "running");
+        app.selection.apply(crate::selection::Pick::All, &[1, 2, 3]);
+        app.run(Cmd::Remove, None, &ctx);
+        let ask = asked(&app);
+        assert_eq!((ask.ids.clone(), ask.kept), (vec![1, 2], 1));
+        app.confirm_delete = None; // No
+        app.settings.confirm_delete = false;
+        app.run(Cmd::Remove, None, &ctx);
+        assert!(app.confirm_delete.is_none(), "not asked");
+        assert_eq!(ids(&app), [3], "the running one stays");
+        let (_, text) = app.notice.take().expect("said in a notice");
+        assert!(text.starts_with("1 running download is kept"), "{text}");
     }
 }

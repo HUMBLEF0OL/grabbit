@@ -342,9 +342,9 @@ id = "delete-confirm"
 page = "download-list.md"
 under = "Deleting downloads"
 take = "delete"
-ring = ["Also delete the file from disk"]
-alt = "Confirm deletion of downloads, with Also delete the file from disk"
-caption = "Tick Also delete the file from disk only if you want the file gone too."
+ring = ["Also move the file to the Recycle Bin"]
+alt = "Confirm deletion of downloads, with Also move the file to the Recycle Bin"
+caption = "Tick Also move the file to the Recycle Bin only if you want the file gone too."
 
 # ---- Troubleshooting ----------------------------------------------------------------------------
 
