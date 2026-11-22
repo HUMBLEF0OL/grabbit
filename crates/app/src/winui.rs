@@ -3910,8 +3910,6 @@ pub struct FooterButton<'a> {
     pub label: &'a str,
     pub kind: ButtonKind,
     pub side: Side,
-    /// Graphite's icon before the label (a need, as `gx-dots`).
-    pub icon: Option<&'a str>,
     /// The access letter's char index in the English label ([`button`]).
     pub mnemonic: Option<usize>,
     /// Enter presses it (no control took Enter first). A greyed button ignores it.
@@ -3935,7 +3933,6 @@ impl<'a> FooterButton<'a> {
             label,
             kind,
             side: Side::Trailing,
-            icon: None,
             mnemonic: None,
             enter: false,
             escape: false,
@@ -4121,11 +4118,7 @@ pub fn footer_items(
     let widths: Vec<(f32, Side, bool)> = items
         .iter()
         .map(|item| match item {
-            FooterItem::Button(b) => (
-                footer_button_width(&p, b.label, b.icon.is_some()),
-                b.side,
-                b.primary,
-            ),
+            FooterItem::Button(b) => (footer_button_width(&p, b.label, false), b.side, b.primary),
             FooterItem::Check(caption, _, _) => (
                 checkbox_caption_end(&p, 0.0, caption).ceil(),
                 Side::Leading,
@@ -4170,7 +4163,7 @@ fn footer_button(ui: &mut Ui, rc: Rect, b: &FooterButton) -> Response {
         b.kind
     };
     let label = with_mnemonic(b.label, b.mnemonic);
-    let resp = button_face(ui, rc, &label, kind, b.ring, b.icon, PressFocus::Take);
+    let resp = button_face(ui, rc, &label, kind, b.ring, None, PressFocus::Take);
     // No label (the Done window's ▾, its chevron drawn by `button_chevron`): its tip is its
     // name for screen readers.
     if b.label.is_empty()

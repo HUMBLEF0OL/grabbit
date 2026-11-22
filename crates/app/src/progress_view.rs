@@ -41,12 +41,6 @@ const NAME_BASE: f32 = 21.0;
 const READ_BASE: f32 = 64.0;
 const STRIP_Y: f32 = 80.0;
 const DETAIL_BASE: f32 = 106.0;
-/// What a state's line of its own takes in Details, above the facts.
-const LINE_ROOM: f32 = 28.0;
-/// Whether a state has a line of its own under the compact block: none since 13d (a state's
-/// messages wrap in two lines in the detail row's place, [`paint_state`]), so the window keeps
-/// one height in every state.
-pub const STATE_LINE: bool = false;
 const COMPACT_FOOTER_Y: f32 = 156.0;
 /// Details' facts under the compact block: a key column of 88, then the values.
 const FACTS_Y: f32 = 130.0;
@@ -136,9 +130,21 @@ fn facts(kind: Kind) -> Vec<Fact> {
         .collect()
 }
 
-/// Where the facts start: under the state's line when there is one.
-fn facts_top(line: bool) -> f32 {
-    FACTS_Y + if line { LINE_ROOM } else { 0.0 }
+/// Where the facts start under a state's message of `lines` lines in the detail row's place
+/// ([`under_lines`]): where they always do for one line or none, a message line lower for each
+/// line after the first (the compact window keeps its height: its footer is under them all).
+const fn facts_top(lines: usize) -> f32 {
+    FACTS_Y + lines.saturating_sub(1) as f32 * MESSAGE_LINE
+}
+
+/// The lines a state's row under the strip takes, for Details' facts under it: none for a
+/// detail row, a message's two at most (a web page's reason and advice end as low, the strip
+/// raised into its reading's place: the asserts after [`MESSAGE_LINES`]).
+pub fn under_lines(view: &StateView) -> usize {
+    match view.under {
+        Under::Detail(..) => 0,
+        Under::Message { .. } => MESSAGE_LINES,
+    }
 }
 
 fn facts_end(kind: Kind, top: f32) -> f32 {
@@ -170,19 +176,19 @@ fn right_end(kind: Kind) -> f32 {
     }
 }
 
-fn footer_y(details: bool, kind: Kind, line: bool) -> f32 {
+fn footer_y(details: bool, kind: Kind, lines: usize) -> f32 {
     if details {
-        facts_end(kind, facts_top(line)).max(right_end(kind)) + 12.0
+        facts_end(kind, facts_top(lines)).max(right_end(kind)) + 12.0
     } else {
         COMPACT_FOOTER_Y
     }
 }
 
-/// The window's body (under the title bar), compact or with Details; `line`: the state has a
-/// line of its own under the strip.
-pub fn size(details: bool, kind: Kind, line: bool) -> [f32; 2] {
+/// The window's body (under the title bar), compact or with Details; `lines`: the state's
+/// message lines under the strip ([`under_lines`]).
+pub fn size(details: bool, kind: Kind, lines: usize) -> [f32; 2] {
     let w = if details { DETAILS_W } else { COMPACT_W };
-    [w, footer_y(details, kind, line) + BUTTON_H + BOTTOM]
+    [w, footer_y(details, kind, lines) + BUTTON_H + BOTTOM]
 }
 
 /// When done (plan 13b): one list for every download, torrents too.
@@ -1589,6 +1595,16 @@ const _: () = assert!(DETAIL_BASE + 2.0 + MESSAGE_LINE + 8.0 <= COMPACT_FOOTER_Y
 const _: () = assert!(
     DETAIL_BASE - NO_READING_LIFT + 2.0 + 3.0 * MESSAGE_LINE + 4.0 + 8.0 <= COMPACT_FOOTER_Y - 16.0
 );
+// In Details the facts start under the message's last line (its descent 8; a fact's folder
+// button reaches 4 above its row): two lines, and a web page's reason and advice raised.
+const _: () =
+    assert!(DETAIL_BASE + 2.0 + MESSAGE_LINE + 8.0 <= facts_top(MESSAGE_LINES) - FACT_BUTTON_UP);
+const _: () = assert!(
+    DETAIL_BASE - NO_READING_LIFT + 2.0 + 3.0 * MESSAGE_LINE + 4.0 + 8.0
+        <= facts_top(MESSAGE_LINES) - FACT_BUTTON_UP
+);
+/// How far above its row a fact's 24-point button starts (Saved to's, From's).
+const FACT_BUTTON_UP: f32 = 4.0;
 
 /// `lines` as a message shows them: as they are when they are few enough; else the first ones
 /// and the rest joined in the last (cut with "..." when drawn, whole on hover).
@@ -1653,9 +1669,10 @@ pub(super) fn body(
     let mut action = Action::None;
     if pr.details {
         pr.init_limits(item);
-        action = left_details(pr, ui, &p, o, item, snap, d, facts_top(STATE_LINE));
+        let top = facts_top(under_lines(&shown.view));
+        action = left_details(pr, ui, &p, o, item, snap, d, top);
         // The right column's tables reach down to the left column's end.
-        let bottom = facts_end(kind, facts_top(STATE_LINE));
+        let bottom = facts_end(kind, top);
         let right = match kind {
             Kind::Torrent => torrent_column(pr, ui, &p, o, item, d, bottom),
             Kind::File => {
@@ -2817,7 +2834,7 @@ fn footer_row(
     shown: &Shown,
     kind: Kind,
 ) -> Action {
-    let y = footer_y(pr.details, kind, STATE_LINE);
+    let y = footer_y(pr.details, kind, under_lines(&shown.view));
     let w = if pr.details { DETAILS_W } else { COMPACT_W };
     if details_button(ui, p, o, y, pr.details).clicked() {
         pr.details = !pr.details;
@@ -3325,26 +3342,25 @@ mod tests {
     /// torrent's details are taller (its rows), and a state's line makes room for itself there.
     #[test]
     fn details_widen_the_window() {
-        assert_eq!(size(false, Kind::File, false), [COMPACT_W, 204.0]);
-        assert_eq!(size(true, Kind::File, false)[0], DETAILS_W);
-        assert!(size(true, Kind::Torrent, false)[1] > size(true, Kind::File, false)[1]);
+        assert_eq!(size(false, Kind::File, 0), [COMPACT_W, 204.0]);
+        assert_eq!(size(true, Kind::File, 0)[0], DETAILS_W);
+        assert!(size(true, Kind::Torrent, 0)[1] > size(true, Kind::File, 0)[1]);
+        // A message's lines keep the compact window's height; in Details the facts go under
+        // them (plan 13d): one line or none where they always start, a line lower for two.
+        assert_eq!(size(false, Kind::Torrent, 2), size(false, Kind::File, 0));
+        assert_eq!(facts_top(0), FACTS_Y);
+        assert_eq!(facts_top(1), FACTS_Y);
+        assert_eq!(facts_top(2), FACTS_Y + MESSAGE_LINE);
         assert_eq!(
-            size(false, Kind::Torrent, true),
-            size(false, Kind::File, false)
-        );
-        assert_eq!(
-            size(true, Kind::File, true)[1],
-            size(true, Kind::File, false)[1] + LINE_ROOM
+            size(true, Kind::File, 2)[1],
+            size(true, Kind::File, 0)[1] + MESSAGE_LINE
         );
         // The right column's tables take the whole rows down to the left column's end, five
         // at the fewest; it never runs past the left one.
         assert_eq!(rows_down_to(0.0, TITLES_H + 8.0 * ROW_H + 20.0), 8);
         assert_eq!(rows_down_to(0.0, 10.0), ROWS_SHOWN);
         for kind in [Kind::File, Kind::Torrent, Kind::Video] {
-            assert!(
-                right_end(kind) <= facts_end(kind, facts_top(false)),
-                "{kind:?}"
-            );
+            assert!(right_end(kind) <= facts_end(kind, facts_top(0)), "{kind:?}");
         }
     }
 
@@ -3550,6 +3566,10 @@ mod tests {
         );
         let failed = state_view(Phase::Failed { new_address: false }, &f);
         assert!(matches!(failed.under, Under::Message { advice: None, .. }));
+        // Details' facts make room for a message's two lines, none for a detail row.
+        assert_eq!(under_lines(&failed), MESSAGE_LINES);
+        assert_eq!(under_lines(&v), MESSAGE_LINES);
+        assert_eq!(under_lines(&state_view(Phase::Running, &f)), 0);
         // Two lines at most, the rest joined in the last one (cut when drawn).
         let lines = |n: usize| (1..=n).map(|k| format!("l{k}")).collect::<Vec<_>>();
         assert_eq!(at_most(lines(1), 2), ["l1"]);

@@ -494,7 +494,11 @@ impl Progress {
             None
         };
         let state = view::shown(self, item, snap, d.as_ref());
-        let body = view::size(self.details, view::Kind::of(item), view::STATE_LINE);
+        let body = view::size(
+            self.details,
+            view::Kind::of(item),
+            view::under_lines(&state.view),
+        );
         // Windows: the title bar is ours (#63), drawn in the client above IDM's layout, so the
         // hide button sits in it, left of Minimize, as in IDM. Elsewhere the system draws it.
         let client = [body[0], body[1] + TITLE_H];
