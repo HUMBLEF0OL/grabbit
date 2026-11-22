@@ -3680,7 +3680,7 @@ impl OptionsDialog {
 
 // ---- pieces -----------------------------------------------------------------------------
 
-/// Proxy / Socks → Manual proxy/socks configuration with no protocol ticked uses the proxy for
+/// Proxy / SOCKS → Manual proxy/SOCKS configuration with no protocol ticked uses the proxy for
 /// nothing, and the boxes start unticked (#1448: yt-dlp went straight to YouTube): chosen, or
 /// found so when Options opens, it is ticked for http and https, as Get System ticks it.
 fn tick_manual_protocols(s: &mut Settings) {
@@ -4845,7 +4845,7 @@ mod tests {
     use super::*;
     use egui::accesskit::{NodeId, Role, TreeUpdate};
 
-    /// #1448: Manual proxy/socks configuration with no protocol ticked gets http and https
+    /// #1448: Manual proxy/SOCKS configuration with no protocol ticked gets http and https
     /// ticked, when Options opens on it as when it is chosen; a choice of one is kept, and the
     /// change is the dialog's (Save keeps it, Discard doesn't).
     #[test]

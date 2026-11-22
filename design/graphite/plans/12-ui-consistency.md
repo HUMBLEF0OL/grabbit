@@ -61,7 +61,7 @@ owner answer; 12e waits for the two decisions below.
 
 Follow-up for the release PR (the website is outside this plan): the website's feature pages
 still quote 12c's old labels (`website/content/features/torrents.md`, `video.md`, `galleries.md`,
-`link-grabber.md`, `archives.md`, `scheduler.md`).
+`link-grabber.md`, `archives.md`, `scheduler.md`, and `dns-proxies.md` for the proxy/SOCKS options).
 
 ## Decisions (owner; default if no answer)
 
