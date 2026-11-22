@@ -699,6 +699,12 @@ Done since 1.0.1; ships in the next release.
   one card frame for cards, one tick stroke and one paragraph line height (theme sizes `radius.card`,
   `tick.width`, `line.paragraph`), Time left wide enough for "59 min 59 sec", and the RSS feeds
   and Link grabber forms on the dialogs' label column and control height.
+- ✅ Plan 12's audit fixes: only a file goes to the Recycle Bin (a gallery's folder never does,
+  and a file that can't be read is said, not taken for gone), Delete's kept downloads said in
+  the status strip when the question is off, the empty list offers **Clear search** only when
+  the search is what hides the downloads, one **Refresh download address...** label, the last
+  labels with colons, "Bytes" and "All Downloads" in line, and the loading look in the crash
+  window, the Helpers setup and Options' DNS test and account sign-in.
 
 ## Being worked on
 

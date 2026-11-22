@@ -251,7 +251,9 @@ impl Helpers {
         if let Some(job) = &self.job {
             let st = job.state.lock().unwrap();
             let f = job.progress.fraction().unwrap_or(0.0);
-            let (fraction, line, color) = if let Some((name, error, _)) = &st.error {
+            // `waiting`: a line with no amount of its own (checking, starting) takes the one
+            // loading look's spinner (plan 12 E4); the bar stays for the whole run.
+            let (fraction, line, color, waiting) = if let Some((name, error, _)) = &st.error {
                 (
                     st.ready.len() as f32 / (st.ready.len() + 1) as f32,
                     crate::i18n::fmt(
@@ -260,6 +262,7 @@ impl Helpers {
                         &[("name", name), ("error", error)],
                     ),
                     winui::ERROR(),
+                    false,
                 )
             } else if st.done {
                 let list = st
@@ -276,6 +279,7 @@ impl Helpers {
                         &[("list", &list)],
                     ),
                     winui::SUCCESS(),
+                    false,
                 )
             } else if let Some((name, k, total)) = st.current
                 && f >= 1.0
@@ -292,6 +296,7 @@ impl Helpers {
                         ],
                     ),
                     ink,
+                    true,
                 )
             } else if let Some((name, k, total)) = st.current {
                 (
@@ -307,9 +312,10 @@ impl Helpers {
                         ],
                     ),
                     ink,
+                    false,
                 )
             } else {
-                (0.0, crate::i18n::t("Starting...").to_owned(), ink)
+                (0.0, crate::i18n::t("Starting...").to_owned(), ink, true)
             };
             drop(st);
             let bar_w = 320.0;
@@ -331,17 +337,18 @@ impl Helpers {
                 );
                 more = lh * n.saturating_sub(1) as f32;
             } else {
-                // Centred on screen (the same place in both directions); cut to the window.
-                let shown = winui::ellipsize(&p, &winui::tahoma(), &line, room);
+                // Centred on screen (the same place in both directions); cut to the window. A
+                // spinner before a waiting line, centred with it.
+                let spin = if waiting { 20.0 } else { 0.0 };
+                let shown = winui::ellipsize(&p, &winui::tahoma(), &line, room - spin);
                 let tw = winui::text_width(&p, &shown);
-                let rc = winui::text_at(
-                    &p,
-                    winui::tahoma(),
-                    (o.x + (w - tw) / 2.0).round(),
-                    o.y + 340.0,
-                    &shown,
-                    color,
-                );
+                let x = (o.x + (w - tw - spin) / 2.0).round();
+                let rc = if waiting {
+                    let right = o.x + w - 20.0;
+                    crate::torrentdlg::loading(ui, x, o.y + 340.0, &shown, color, right).0
+                } else {
+                    winui::text_at(&p, winui::tahoma(), x, o.y + 340.0, &shown, color)
+                };
                 if shown != line {
                     winui::full_on_hover(ui, rc, "helpers-status", &line);
                 }
