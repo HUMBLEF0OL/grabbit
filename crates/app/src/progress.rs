@@ -719,6 +719,15 @@ impl Progress {
         view::when_done_of(self.when, self.force).0
     }
 
+    /// Options' "Show download complete dialog" went from `from` to `to` (or the Done window's
+    /// "Don't show this window again" was ticked): When done follows it while it still holds what
+    /// the setting gave it; a choice of the user's own here stays.
+    pub fn follow_show_complete(&mut self, from: bool, to: bool) {
+        if self.when == view::when_done_index(from) {
+            self.when = view::when_done_index(to);
+        }
+    }
+
     /// When done's other choices, when one is chosen (Exit Grabbit, Shut down, Sleep, Hibernate).
     pub fn when_done(&self) -> Option<crate::queue::WhenDone> {
         view::when_done_of(self.when, self.force).1
