@@ -2424,7 +2424,7 @@ impl App {
                     // A gallery's folder stays (#58): the deleter takes only a file.
                     let complete = item.status == Status::Complete && item.gallery.is_none();
                     let name = item.file_name.clone();
-                    let own = item.remote.is_some();
+                    let own = item.owns_folder();
                     let doomed = if dest == old {
                         crate::deleter::Doomed::clearing(name, old, complete, None)
                     } else {
@@ -4071,7 +4071,7 @@ impl App {
                     i.status == Status::Complete,
                     later,
                 )
-                .own_folder(i.remote.is_some()),
+                .own_folder(i.owns_folder()),
             );
         }
         self.items.retain(|i| i.id != id);
@@ -9843,7 +9843,7 @@ impl App {
             later,
         )
         // A debrid torrent's folder is Grabbit's own: it goes whole.
-        .own_folder(item.remote.is_some());
+        .own_folder(item.owns_folder());
         self.deleter.delete(vec![doomed]);
         self.delete(id);
     }

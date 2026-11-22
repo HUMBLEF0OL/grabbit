@@ -56,9 +56,12 @@ How the rule applies:
 ## Status
 
 Spec locked 2026-11-21. The maintainer approved the mockups: eleven boards of now-vs-proposed
-states, Graphite light and dark, one per area below. Building started 2026-11-22: 12b is done
-(branch `ui/12b-states-routes`). 12a–12d need no owner answer; 12e waits for the two decisions
-below.
+states, Graphite light and dark, one per area below. **Done 2026-11-22:** 12a–12d merged into
+`dev` (PRs 120–123), each audited until APPROVED and built and tested together. A critical
+audit of all four parts on `dev` then found gaps and bugs; they were fixed in one PR (audited
+until APPROVED), with the help pictures taken again after 12d (a first retake, PR 124, was
+broken and reverted in PR 125). 12e is not needed: both owner decisions below stayed at their
+defaults (no answer was given); a later "other option" would be its own PR.
 
 12b left one D1 place out: Link grabber has no address box (its links come by Ctrl+V, Import or
 the browser), and giving one of its boxes (the package's name, password or folder) the keys
@@ -91,6 +94,11 @@ still quote 12c's old labels (`website/content/features/torrents.md`, `video.md`
     Partial pieces and temp folders may still be deleted outright. The box's words say where the
     files go: "Also move the {n} files to the Recycle Bin".
   - Torrents per DA1t.
+  - **As built (audit):** only a file goes to the Recycle Bin; a folder at a finished place (a
+    gallery's) stays and is said, except a debrid torrent's own folder inside its download folder
+    (`Item::owns_folder`), which goes whole. Known limit: that folder goes with anything the user
+    had put in it (a torrent named as a folder already there writes into it); sending only the
+    files the job wrote needs a record of them, a later change.
   - **Tests:** the deleter tests inject their own remover (`deleter.rs:347`, `393`, `441`, `473`);
     keep `Deleter::with`. New: a deleted file lands in the test trash (`MDM_TEST_TRASH_DIR`,
     `extractq.rs:331-345`).
@@ -465,7 +473,9 @@ conflicting upstream commit is noted in the PR.
 
 ## Definition of done
 
-- [ ] 12a–12d merged into `dev`, each audited until APPROVED
-- [ ] The owner's decisions recorded in this file; 12e merged if needed
-- [ ] ROADMAP and CHANGELOG lines per part; help pictures, docs and the mockup updated for the
+- [x] 12a–12d merged into `dev`, each audited until APPROVED (PRs 120–123; the audit's fixes
+      after them, also APPROVED)
+- [x] The owner's decisions recorded in this file (DA6 keep, DA1t unchanged: the defaults); 12e
+      not needed
+- [x] ROADMAP and CHANGELOG lines per part; help pictures, docs and the mockup updated for the
       changed names

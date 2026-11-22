@@ -1147,6 +1147,15 @@ impl Item {
             })
     }
 
+    /// Its place may be a folder Grabbit made for it, which a delete with its files sends to the
+    /// Recycle Bin whole: a debrid torrent's own folder inside its download folder, never that
+    /// download folder itself.
+    pub fn owns_folder(&self) -> bool {
+        self.remote
+            .as_ref()
+            .is_some_and(|r| self.dest != r.folder && self.dest.starts_with(&r.folder))
+    }
+
     /// It failed because its address no longer works (`errors::wants_new_address`): the Details
     /// pane offers Refresh download address (plan 12b, E2). As its last run ended, this session
     /// only, as [`Self::got_web_page`].
@@ -1618,6 +1627,24 @@ mod tests {
     }
 
     use super::*;
+
+    /// A debrid torrent's own folder may go whole to the Recycle Bin; its download folder
+    /// itself, or a place outside it, never; nor anything not a debrid torrent.
+    #[test]
+    fn only_a_folder_grabbit_made_is_its_own() {
+        let url = Url::parse("https://example.org/t.torrent").unwrap();
+        let mut it = Item::new(1, url, PathBuf::from("/d/Torrents/Show"), Category::General);
+        assert!(!it.owns_folder(), "not a debrid torrent");
+        it.remote = Some(RemoteSpec {
+            folder: PathBuf::from("/d/Torrents"),
+            ..Default::default()
+        });
+        assert!(it.owns_folder());
+        it.dest = PathBuf::from("/d/Torrents");
+        assert!(!it.owns_folder(), "the download folder itself");
+        it.dest = PathBuf::from("/elsewhere/Show");
+        assert!(!it.owns_folder(), "outside it");
+    }
 
     /// Joining a video's streams failed: why, and that what was downloaded stays for Resume,
     /// by name; without anything kept, only why (upstream `6196f9ad`).
