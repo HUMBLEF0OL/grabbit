@@ -882,15 +882,21 @@ pub fn state_view(phase: Phase, f: &Facts) -> StateView {
                         t("It stopped, and Grabbit wasn't told why.")
                     }),
                     error: true,
-                    // The link expired (board 4): a new address carries it on.
+                    // The link expired (board 4): a new address carries it on where it can
+                    // resume and something shows as in; else it starts over.
                     advice: (phase == Phase::Failed { new_address: true }).then(|| {
-                        match f.frac.filter(|x| *x > 0.0) {
-                            Some(x) => fmt(
+                        let figure = f
+                            .frac
+                            .filter(|_| f.resumes)
+                            .map(reading_figure)
+                            .filter(|n| n != "0" && n != "0.0");
+                        match figure {
+                            Some(n) => fmt(
                                 // i18n: a download window's line under the reason when the download's link expired: {percent} how far it is, as "63%"
                                 "Refresh the download address and it carries on from {percent}.",
-                                &[("percent", &format!("{}%", reading_figure(x)))], // not translated: a percentage
+                                &[("percent", &format!("{n}%"))], // not translated: a percentage
                             ),
-                            // i18n: a download window's line under the reason when the download's link expired and nothing is in yet
+                            // i18n: a download window's line under the reason when the download's link expired and it starts over (nothing in yet, or its server can't resume)
                             None => t("Refresh the download address to start it again."),
                         }
                     }),
@@ -2458,22 +2464,20 @@ fn number_col_w(widest: f32, title: f32) -> f32 {
     widest.max(title).max(20.0).ceil().min(60.0)
 }
 
-/// A column as wide as its title and the widest of `samples` (each in the figures face or
-/// not), at 12 points.
-fn fit(p: &egui::Painter, title: &str, samples: &[(&str, bool)]) -> f32 {
+/// Column `k` of `rows` as wide as its title and its widest cell (each in its own face), at 12
+/// points. ponytail: measures every row each frame (egui caches the text's layout); measure
+/// the shown rows only if a torrent's hundreds of peers ever cost a frame.
+fn fit(p: &egui::Painter, title: &str, rows: &[Vec<Cell>], k: usize) -> f32 {
     let title = winui::text_width_font(p, face(12.0), crate::i18n::t(title));
-    samples
-        .iter()
-        .map(|(s, nums)| {
+    rows.iter()
+        .filter_map(|row| row.get(k))
+        .map(|(s, _, nums)| {
             let f = if *nums { figures(12.0) } else { face(12.0) };
             winui::text_width_font(p, f, s)
         })
         .fold(title, f32::max)
         .ceil()
 }
-
-/// The widest size [`crate::model::size`] writes ("1023.99 MB": it moves to GB at 1024).
-const WIDEST_SIZE: &str = "1023.99 MB"; // not translated: a sample to measure
 
 /// Where a connection sorts: receiving first, then retrying (or failed), connecting, done.
 fn conn_rank(s: &ConnStatus) -> u8 {
@@ -2690,8 +2694,12 @@ fn torrent_column(
     let y = TOP + HEAD;
     let shown = rows_down_to(y, bottom - COMMANDS_H);
     let under = y + TITLES_H + shown as f32 * ROW_H + 12.0;
-    let action = torrent_commands(pr, ui, o, item, d, under);
-    let Some(d) = d else {
+    // In the order they are seen, for Tab: Recheck files at the tabs' end, the table, the
+    // commands under it.
+    let recheck = recheck_files(pr, ui, o, item);
+    if let Some(d) = d {
+        tab_table(pr, ui, p, o, d, y, shown);
+    } else {
         winui::text_font(
             p,
             face(12.0),
@@ -2700,8 +2708,25 @@ fn torrent_column(
             crate::i18n::t("Shown while the torrent is downloading."),
             muted(),
         );
-        return action;
-    };
+    }
+    match torrent_commands(pr, ui, o, item, d, under) {
+        Action::None => recheck,
+        action => action,
+    }
+}
+
+/// The chosen tab's table of a torrent at `y`, `shown` rows (a box ticked on Files waits in
+/// `pending_choose`).
+#[allow(clippy::too_many_arguments)]
+fn tab_table(
+    pr: &mut Progress,
+    ui: &mut Ui,
+    p: &egui::Painter,
+    o: Pos2,
+    d: &Details,
+    y: f32,
+    shown: usize,
+) {
     match pr.ttab {
         TTab::Files => {
             // i18n: a torrent file the user chose not to download
@@ -2740,15 +2765,15 @@ fn torrent_column(
                     w: 0.0,
                     end: false,
                 },
+                // As wide as the widest size and percent (or "Skipped") shown.
                 Col {
                     title: size,
-                    w: fit(p, size, &[(WIDEST_SIZE, true)]),
+                    w: fit(p, size, &rows, 1),
                     end: true,
                 },
-                // Wide enough for "100.0%" and "Skipped".
                 Col {
                     title: done,
-                    w: fit(p, done, &[("100.0%", true), (skipped, false)]), // not translated: a sample to measure
+                    w: fit(p, done, &rows, 2),
                     end: true,
                 },
             ];
@@ -2785,10 +2810,12 @@ fn torrent_column(
             let received = crate::i18n::mark("Received");
             // i18n: column title: how much went to the peer
             let sent = crate::i18n::mark("Sent");
-            // The sizes as wide as the widest one; Address and Client share the rest.
-            let received_w = fit(p, received, &[(WIDEST_SIZE, true)]);
-            let sent_w = fit(p, sent, &[(WIDEST_SIZE, true)]);
+            // The sizes as wide as the widest one shown; Address and Client share the rest,
+            // Address 90 at the least (an IPv4 address and its port).
+            let received_w = fit(p, received, &rows, 2);
+            let sent_w = fit(p, sent, &rows, 3);
             let rest = TABLE_W - received_w - sent_w - 3.0 * COL_GAP;
+            let client_w = (rest * 0.45).min(rest - 90.0).max(24.0).floor();
             let cols = [
                 // i18n: column title: the web address (URL)
                 Col {
@@ -2799,7 +2826,7 @@ fn torrent_column(
                 // i18n: column title: the peer's torrent program
                 Col {
                     title: crate::i18n::mark("Client"),
-                    w: (rest * 0.45).floor(),
+                    w: client_w,
                     end: false,
                 },
                 Col {
@@ -2838,13 +2865,41 @@ fn torrent_column(
             table(ui, p, o, y, shown, "t-trackers", &cols, &rows, None);
         }
     }
+}
+
+/// Recheck files (plan 13b) at the tabs' end on a torrent's Files tab; pressed, its command.
+fn recheck_files(pr: &Progress, ui: &mut Ui, o: Pos2, item: &Item) -> Action {
+    let Some(spec) = item.torrent.as_ref().filter(|_| pr.ttab == TTab::Files) else {
+        return Action::None;
+    };
+    let busy = pr.host.as_ref().is_some_and(|h| h.busy(&spec.hash));
+    // i18n: a torrent's Files tab, a button: read every piece of the torrent's files again and check it
+    let label = crate::i18n::mark("Recheck files");
+    let w = (winui::text_width(ui.painter(), crate::i18n::t(label)) + 24.0).ceil();
+    let on = !busy && item.status != Status::Queued;
+    let rc = r(o, RIGHT_X + RIGHT_W - w, TOP, w, HEAD - 1.0);
+    let look = if on {
+        ButtonKind::Ghost
+    } else {
+        ButtonKind::Disabled
+    };
+    let resp = winui::button(ui, rc, label, look, false, None);
+    let action = if on && resp.clicked() {
+        Action::Torrent(TorrentCmd::Recheck)
+    } else {
+        Action::None
+    };
+    // i18n: tooltip of a torrent's Recheck files button
+    winui::tip(
+        resp,
+        crate::i18n::t("Reads every piece again and checks it"),
+    );
     action
 }
 
-/// A torrent's commands (plan 13b) on its tabs: Recheck files at the tabs' end on Files, Download
-/// in order and First and last pieces first under its table; Add trackers... and Ask trackers
-/// again under the Trackers table; `under`: where the commands under a table go. The one
-/// pressed.
+/// A torrent's commands (plan 13b) under its tab's table: Download in order and First and last
+/// pieces first on Files; Add trackers... and Ask trackers again on Trackers; `under`: where
+/// they go. The one pressed.
 fn torrent_commands(
     pr: &mut Progress,
     ui: &mut Ui,
@@ -2876,25 +2931,6 @@ fn torrent_commands(
     let mut action = Action::None;
     match pr.ttab {
         TTab::Files => {
-            // i18n: a torrent's Files tab, a button: read every piece of the torrent's files again and check it
-            let label = crate::i18n::mark("Recheck files");
-            let w = width(label);
-            let on = !busy && item.status != Status::Queued;
-            let rc = r(o, RIGHT_X + RIGHT_W - w, TOP, w, HEAD - 1.0);
-            let look = if on {
-                ButtonKind::Ghost
-            } else {
-                ButtonKind::Disabled
-            };
-            let resp = winui::button(ui, rc, label, look, false, None);
-            if on && resp.clicked() {
-                action = Action::Torrent(TorrentCmd::Recheck);
-            }
-            // i18n: tooltip of a torrent's Recheck files button
-            winui::tip(
-                resp,
-                crate::i18n::t("Reads every piece again and checks it"),
-            );
             // The boxes show the torrent's own choices; a click asks the app to change them.
             let mut in_order = spec.in_order;
             // i18n: a torrent's Files tab, a check box: download its files from their start, to watch a video while it downloads
@@ -3684,6 +3720,25 @@ mod tests {
         assert!(parts[1].tick, "the large one still ticks");
         assert!(!parts[2].tick, "the tail has no tick");
         assert_eq!(parts[2].x1, 400.0);
+        // A tiny first segment: no gap after it; a tiny middle one: no gap on either side.
+        let parts = segment_parts(&[(0, 0.0), (5, 0.0), (1000, 0.0)], 2000, 400.0).unwrap();
+        assert_eq!(parts[0].x1, parts[1].x0, "no gap after the tiny first");
+        assert!(!parts[0].tick && parts[1].tick);
+        assert_eq!(
+            parts[1].x1,
+            200.0 - PART_GAP,
+            "a gap between the large ones"
+        );
+        let parts = segment_parts(&[(0, 0.0), (1000, 0.0), (1005, 0.0)], 2000, 400.0).unwrap();
+        assert_eq!(parts[0].x1, parts[1].x0, "no gap before the tiny middle");
+        assert_eq!(parts[1].x1, parts[2].x0, "no gap after it");
+        assert!(!parts[1].tick);
+        // Exactly 48 segments: still segmented.
+        let most: Vec<(u64, f64)> = (0..48).map(|k| (k * 1000, 0.0)).collect();
+        assert_eq!(
+            segment_parts(&most, 48_000, 400.0).map(|p| p.len()),
+            Some(48)
+        );
         // 49 segments: one plain fill too.
         let many: Vec<(u64, f64)> = (0..49).map(|k| (k * 1000, 0.0)).collect();
         assert_eq!(segment_parts(&many, 49_000, 400.0), None);
@@ -3831,15 +3886,29 @@ mod tests {
             "{:?}",
             v.under
         );
+        // It starts over: nothing in, a server that can't resume, a share that shows as 0.
         let none_in = Facts {
             frac: None,
             downloaded: 0,
             ..facts()
         };
-        assert!(matches!(
-            state_view(Phase::Failed { new_address: true }, &none_in).under,
-            Under::Message { advice: Some(a), .. } if a == "Refresh the download address to start it again."
-        ));
+        let restarts = Facts {
+            resumes: false,
+            ..facts()
+        };
+        let tiny = Facts {
+            frac: Some(0.0004),
+            ..facts()
+        };
+        for over in [none_in, restarts, tiny] {
+            assert!(
+                matches!(
+                    &state_view(Phase::Failed { new_address: true }, &over).under,
+                    Under::Message { advice: Some(a), .. } if a == "Refresh the download address to start it again."
+                ),
+                "{over:?}"
+            );
+        }
         // A web page (board 9): said beside the name in the error colour, no reading, the strip
         // hatched, the reason read out.
         let v = state_view(Phase::WebPage, &f);
