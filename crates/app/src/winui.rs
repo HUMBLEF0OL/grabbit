@@ -3471,9 +3471,6 @@ crate::theme::themed! {
     /// Grid lines between a list's rows, and header dividers.
     pub GRID => grid;
     pub HEADER_LINE => header_line;
-    /// Etched separators: the shadow line and the highlight beside it.
-    pub ETCH_SHADOW => etch_shadow;
-    pub ETCH_LIGHT => etch_light;
     /// A selected row in a focused list ([`row_list`]; the download list's colours), white
     /// text on it.
     pub ROW_SELECTED => selection;
@@ -4192,6 +4189,22 @@ pub fn rule(p: &Painter, o: Pos2, x: f32, y: f32, w: f32) {
     fill_l(p, o.x + x, o.y + y, o.x + x + w - 1.0, o.y + y, line);
 }
 
+/// The one card frame (plan 12 G9), `rc` on screen: a hairline border on the theme's card
+/// corners (`radius.card`), on the `panel` colour when `filled` (else what is under it shows).
+pub fn card(p: &Painter, rc: Rect, filled: bool) {
+    let c = crate::theme::colors();
+    let radius = crate::theme::metrics().card_radius;
+    if filled {
+        p.rect_filled(rc, radius, c.panel);
+    }
+    p.rect_stroke(
+        rc,
+        radius,
+        Stroke::new(1.0, c.menubar_line),
+        StrokeKind::Inside,
+    );
+}
+
 /// A file's header (Download File Info, Download complete, File Properties, Verify checksum):
 /// a bordered card (`rc` on screen) with the file's icon on a 40-point tile, its `name` in bold
 /// (cut with "...", whole on hover) over its `sub` line (a size), and an optional `action`
@@ -4206,13 +4219,7 @@ pub fn file_card(
 ) -> (Option<Response>, Rect) {
     let c = crate::theme::colors();
     let p = ui.painter().clone();
-    p.rect_filled(rc, 8.0, c.panel);
-    p.rect_stroke(
-        rc,
-        8.0,
-        Stroke::new(1.0, c.menubar_line),
-        StrokeKind::Inside,
-    );
+    card(&p, rc, true);
     let tile = Rect::from_min_size(
         pos2(rc.left() + 12.0, (rc.center().y - 20.0).round()),
         vec2(40.0, 40.0),
@@ -5024,7 +5031,7 @@ pub fn check_box_glyph(p: &Painter, rc: Rect, checked: bool, state: State) {
                 pos2(rc.left() + 5.5, rc.top() + 9.0),
                 pos2(rc.left() + 10.0, rc.top() + 3.5),
             ],
-            Stroke::new(1.4, fluent_mark()),
+            Stroke::new(crate::theme::metrics().tick_width, fluent_mark()),
         );
     } else {
         let (fill_c, border) = fluent_box(state);
@@ -5052,7 +5059,7 @@ pub fn check_box_mixed(p: &Painter, rc: Rect, state: State) {
     let y = rc.center().y.floor() + 0.5;
     p.line_segment(
         [pos2(rc.left() + 3.0, y), pos2(rc.right() - 3.0, y)],
-        Stroke::new(1.4, fluent_mark()),
+        Stroke::new(crate::theme::metrics().tick_width, fluent_mark()),
     );
 }
 
@@ -5583,21 +5590,15 @@ pub fn radio_keys(ui: &Ui, group: &[Response]) -> Option<usize> {
     Some(next)
 }
 
-/// Etched horizontal separator in English rect `x, y, w × 2`: `#a0a0a0` over `#ffffff`, the
-/// white line 1 px longer so it covers the far end.
+/// A separator across English `x`..`x + w` at `y` (absolute): the 1 px hairline [`rule`]
+/// draws (plan 12 G2; it was a 2 px etched line).
 pub fn etched_h(p: &Painter, x: f32, y: f32, w: f32) {
-    let x = rect(Rect::from_min_size(pos2(x, y), vec2(w, 2.0))).left();
-    hline(p, x, x + w - 2.0, y, ETCH_SHADOW());
-    px(p, x + w - 1.0, y, ETCH_LIGHT());
-    hline(p, x, x + w - 1.0, y + 1.0, ETCH_LIGHT());
+    fill_l(p, x, y, x + w - 1.0, y, crate::theme::colors().menubar_line);
 }
 
-/// Etched vertical separator in English rect `x, y, 2 × h`.
+/// A separator down English `y`..`y + h` at `x` (absolute): the 1 px hairline.
 pub fn etched_v(p: &Painter, x: f32, y: f32, h: f32) {
-    let x = rect(Rect::from_min_size(pos2(x, y), vec2(2.0, h))).left();
-    vline(p, x, y, y + h - 2.0, ETCH_SHADOW());
-    px(p, x, y + h - 1.0, ETCH_LIGHT());
-    vline(p, x + 1.0, y, y + h - 1.0, ETCH_LIGHT());
+    fill_l(p, x, y, x, y + h - 1.0, crate::theme::colors().menubar_line);
 }
 
 /// [`fill`] in English pixels (inclusive): on screen in a mirrored surface.

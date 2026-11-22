@@ -941,9 +941,8 @@ impl OptionsDialog {
         if cut {
             winui::full_on_hover(ui, rect, "save-to-dir", &dir_line);
         }
-        // Browse as wide as its label in this language (#192); the box ends 8 px before it.
-        let (browse_x, browse_w) =
-            winui::buttons_to_right(&p, right, 0.0, &[("Browse", 73.0)], 160.0)[0];
+        // The one browse control (plan 12 C5): a square `gx-dots`; the box ends 8 px before it.
+        let (browse_x, browse_w) = (right - h, h);
         winui::edit_light_on(
             ui,
             r(o, fx, 210.0, browse_x - 8.0 - fx, h),
@@ -952,13 +951,13 @@ impl OptionsDialog {
             false,
             LIGHT_PAGE(),
         );
-        if winui::button_light(
+        if winui::icon_only_button(
             ui,
             r(o, browse_x, 210.0, browse_w, h),
+            "gx-dots",
             // i18n: verb: choose a folder
             "Browse",
-            ButtonKind::Normal,
-            false,
+            true,
         )
         .clicked()
         {
@@ -1010,12 +1009,12 @@ impl OptionsDialog {
         // nothing to assemble at the end.
         let none = crate::i18n::t("Not used: file parts are written next to the file");
         readonly(ui, r(o, fx, 327.0, browse_x - 8.0 - fx, h), none);
-        winui::button_light(
+        winui::icon_only_button(
             ui,
             r(o, browse_x, 327.0, browse_w, h),
+            "gx-dots",
             // i18n: verb: choose a folder
             "Browse",
-            ButtonKind::Disabled,
             false,
         );
         winui::paragraph(
@@ -1229,7 +1228,20 @@ impl OptionsDialog {
             };
         }
         let rc = r(o, fx, 359.0, auto_x - 12.0 - fx, h);
-        if self.ua_auto {
+        let looking =
+            mdm_engine::agent::automatic_browser().is_none() && !mdm_engine::agent::looked_for();
+        if self.ua_auto && looking {
+            // The one loading look (plan 12 E4), in the box until the browser is known.
+            winui::edit_light(ui, rc, &mut String::new(), false, false);
+            crate::torrentdlg::loading(
+                ui,
+                rc.left() + 5.0,
+                o.y + winui::baseline_in(359.0, h),
+                crate::i18n::t("Looking for your default browser..."),
+                LIGHT_TEXT(),
+                rc.right() - 5.0,
+            );
+        } else if self.ua_auto {
             let mut shown = agent;
             winui::edit_light(ui, rc, &mut shown, false, false).on_hover_text(tip.as_str());
         } else {
@@ -2564,21 +2576,16 @@ impl OptionsDialog {
             winui::take_key(ui, egui::Key::Enter);
         }
         let sel = self.sound_rows.selected;
-        let kind = if sel.is_some() {
-            ButtonKind::Normal
-        } else {
-            ButtonKind::Disabled
-        };
-        // Both as wide as their labels in this language (#192), from the list's left (the mock's).
-        let browse_at = winui::button_around(&p, "Browse...", l, 90.0, l, PAGE_RIGHT);
-        let play_x = browse_at.0 + browse_at.1 + 8.0;
+        // From the list's left (the mock's): the one browse control (plan 12 C5), a square
+        // `gx-dots`, then Play as wide as its label in this language (#192).
+        let play_x = l + h + 8.0;
         let play_at = winui::button_around(&p, "Play", play_x, 90.0, play_x, PAGE_RIGHT);
-        let browse = winui::button_light(
+        let browse = winui::icon_only_button(
             ui,
-            r(o, browse_at.0, buttons_y, browse_at.1, h),
-            "Browse...",
-            kind,
-            false,
+            r(o, l, buttons_y, h, h),
+            "gx-dots",
+            "Browse",
+            sel.is_some(),
         )
         .clicked();
         let has_file = sel.is_some_and(|i| !self.s.sounds[i].1.is_empty());
@@ -3067,7 +3074,8 @@ impl OptionsDialog {
                         // i18n: Options → Remote → Pair a device: label before the 8-digit code
                         let label = crate::i18n::t("Code:");
                         let baseline = o.y + winui::baseline_in(300.0, winui::CONTROL_H);
-                        let big = egui::FontId::new(26.0, winui::tahoma_bold().family);
+                        // As the sign-in code (plan 12 G6).
+                        let big = egui::FontId::monospace(crate::theme::metrics().font_code);
                         let shown_code =
                             crate::i18n::ltr(&format!("{} {}", &code[..4], &code[4..]));
                         // The label and the code, centred as one line.
@@ -4008,7 +4016,6 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
     if let S::Waiting { code, page, until } = &state {
         // In a box, as the mockup's: the code, large, to type at the service's page, its
         // buttons beside it, and what to do with it.
-        let c = crate::theme::colors();
         let (x, row) = (edge + 12.0, 116.0);
         let left = until
             .saturating_duration_since(std::time::Instant::now())
@@ -4027,14 +4034,7 @@ fn account_dialog(ui: &mut Ui, o: Pos2, e: &mut AccountEdit) -> Outcome<settings
         let lines = winui::wrap_lines(&p, &what, hint_right - x).len();
         let (box_h, extra) = account_box(lines);
         grown = extra;
-        let rc = r(o, edge, 104.0, w - 2.0 * edge, box_h);
-        p.rect_filled(rc, 6.0, c.panel);
-        p.rect_stroke(
-            rc,
-            6.0,
-            egui::Stroke::new(1.0, c.menubar_line),
-            egui::StrokeKind::Inside,
-        );
+        winui::card(&p, r(o, edge, 104.0, w - 2.0 * edge, box_h), true);
         let code_font = egui::FontId::monospace(crate::theme::metrics().font_code);
         let drawn = p.text(
             o + vec2(x, row + h / 2.0),

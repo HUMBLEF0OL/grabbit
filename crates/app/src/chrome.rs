@@ -906,13 +906,9 @@ pub fn mode_button(ui: &mut Ui, rc: Rect, dark: bool, ink: egui::Color32, enable
     } else if resp.hovered() {
         p.rect_filled(screen, radius, winui::caption::CAPTION_HOVER());
     }
+    // Only from the keyboard, as every control's ring (plan 12 G3).
     if resp.has_focus() {
-        p.rect_stroke(
-            screen,
-            radius,
-            Stroke::new(1.0, crate::theme::colors().accent),
-            egui::StrokeKind::Inside,
-        );
+        winui::focus_ring_round(&p, screen, radius);
     }
     crate::themeicons::paint_in(ui, &p, need, winui::rect(icon), ink, true);
     resp.on_hover_text(label).clicked()
@@ -2246,7 +2242,7 @@ fn popup_level<C: Clone>(
                         pos2(gx(o.x + 15.5), gy + 14.5),
                         pos2(gx(o.x + 20.5), gy + 8.5),
                     ],
-                    Stroke::new(1.3, glyph),
+                    Stroke::new(crate::theme::metrics().tick_width, glyph),
                 );
             }
             match e {

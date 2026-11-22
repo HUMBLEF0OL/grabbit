@@ -125,6 +125,20 @@ pub(crate) fn spinner(ui: &Ui, center: Pos2, radius: f32) {
     ui.ctx().request_repaint();
 }
 
+/// The one loading look (plan 12 E4): the [`spinner`] at `x` (on screen), then `line` after
+/// it on `baseline` in `color`, cut with "..." at `right`. The line's rect, and whether it was cut.
+pub(crate) fn loading(
+    ui: &Ui,
+    x: f32,
+    baseline: f32,
+    line: &str,
+    color: egui::Color32,
+    right: f32,
+) -> (egui::Rect, bool) {
+    spinner(ui, pos2(x + 7.0, baseline - 4.0), 6.0);
+    winui::text_fit(ui.painter(), x + 20.0, baseline, line, color, right)
+}
+
 /// How long a magnet's lookup goes on before it says what may be wrong (#92).
 const HINT_AFTER: u64 = 30;
 

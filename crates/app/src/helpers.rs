@@ -242,7 +242,7 @@ impl Helpers {
                 what,
                 muted,
                 o.x + w - 18.0,
-                14.0,
+                crate::theme::metrics().line_paragraph,
             );
         }
 
@@ -319,6 +319,7 @@ impl Helpers {
             if failed && winui::text_width(&p, &line) > room {
                 // A failure is read whole (upstream issue 816): wrapped, the window growing by
                 // its lines past the first.
+                let lh = crate::theme::metrics().line_paragraph;
                 let n = winui::paragraph(
                     &p,
                     o.x + 20.0,
@@ -326,9 +327,9 @@ impl Helpers {
                     &line,
                     color,
                     o.x + w - 20.0,
-                    16.0,
+                    lh,
                 );
-                more = 16.0 * n.saturating_sub(1) as f32;
+                more = lh * n.saturating_sub(1) as f32;
             } else {
                 // Centred on screen (the same place in both directions); cut to the window.
                 let shown = winui::ellipsize(&p, &winui::tahoma(), &line, room);
@@ -372,6 +373,7 @@ impl Helpers {
             crate::i18n::t("Not now? Get them later from Tasks → Download video from a page.")
         };
         // Wrapped: the window grows by the lines past the first.
+        let lh = crate::theme::metrics().line_paragraph;
         let lines = winui::paragraph(
             &p,
             o.x + 16.0,
@@ -379,9 +381,9 @@ impl Helpers {
             later,
             muted,
             o.x + w - 16.0,
-            16.0,
+            lh,
         );
-        let more = 16.0 * lines.saturating_sub(1) as f32;
+        let more = lh * lines.saturating_sub(1) as f32;
         crate::dialogs::grow_px(ui.ctx(), "helpers-advice", more);
         // The footer under it ([`OFFER_FOOTER`]); Escape is the window's (show).
         let top = y + OFFER_FOOTER + more;
@@ -656,16 +658,28 @@ impl Programs {
                 // i18n: Video helpers: no copy of this helper yet
                 (None, None) => crate::i18n::t("Not installed yet").to_owned(),
             };
-            winui::fit(
-                ui,
-                &p,
-                o.x + 20.0,
-                y + 36.0,
-                &status,
-                winui::MUTED(),
-                o.x + PROGRAMS_W - 20.0,
-                ("helper", k),
-            );
+            if checking {
+                // The one loading look (plan 12 E4).
+                crate::torrentdlg::loading(
+                    ui,
+                    o.x + 20.0,
+                    y + 36.0,
+                    &status,
+                    winui::TEXT(),
+                    o.x + PROGRAMS_W - 20.0,
+                );
+            } else {
+                winui::fit(
+                    ui,
+                    &p,
+                    o.x + 20.0,
+                    y + 36.0,
+                    &status,
+                    winui::MUTED(),
+                    o.x + PROGRAMS_W - 20.0,
+                    ("helper", k),
+                );
+            }
             let busy = self.busy();
             // As wide as their labels in this language (#192), side by side from the left.
             let [other_at, own_at] = winui::button_row_from_left(
@@ -833,16 +847,28 @@ impl Programs {
             crate::i18n::t("Grabbit has no copy for this system: install Deno or Node.js")
                 .to_owned()
         };
-        winui::fit(
-            ui,
-            p,
-            o.x + 20.0,
-            y + 36.0,
-            &status,
-            winui::MUTED(),
-            o.x + PROGRAMS_W - 20.0,
-            ("helper", k),
-        );
+        if downloading || (self.deno.is_none() && self.finding.is_some()) {
+            // The one loading look (plan 12 E4).
+            crate::torrentdlg::loading(
+                ui,
+                o.x + 20.0,
+                y + 36.0,
+                &status,
+                winui::TEXT(),
+                o.x + PROGRAMS_W - 20.0,
+            );
+        } else {
+            winui::fit(
+                ui,
+                p,
+                o.x + 20.0,
+                y + 36.0,
+                &status,
+                winui::MUTED(),
+                o.x + PROGRAMS_W - 20.0,
+                ("helper", k),
+            );
+        }
         let [own_at] = winui::button_row_from_left(
             p,
             &[("Use Grabbit's own copy", 20.0, 180.0)],
@@ -885,13 +911,5 @@ impl Programs {
 /// One of Helpers' cards at `y` (the mockup's box), its parts 12 inside (its buttons end at 67
 /// of its 79).
 fn card(p: &egui::Painter, o: Pos2, y: f32) {
-    let c = crate::theme::colors();
-    let card = r(o, 8.0, y - o.y, PROGRAMS_W - 16.0, 79.0);
-    p.rect_filled(card, 8.0, c.panel);
-    p.rect_stroke(
-        card,
-        8.0,
-        egui::Stroke::new(1.0, c.menubar_line),
-        egui::StrokeKind::Inside,
-    );
+    winui::card(p, r(o, 8.0, y - o.y, PROGRAMS_W - 16.0, 79.0), true);
 }

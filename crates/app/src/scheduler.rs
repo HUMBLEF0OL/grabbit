@@ -869,12 +869,15 @@ impl Scheduler {
             LIGHT_PAGE(),
         );
         winui::etched_h(&p, o.x + 228.0, o.y + 288.0 + dy, RIGHT - 228.0);
-        // The box after its caption, on its row (under it at IDM's 651), ending where it did.
+        // The box after its caption, on its row (under it at IDM's 651), and the one browse
+        // control after it (plan 12 C5): both control-height, centred on the check box's row.
+        let (h, browse_x) = (winui::CONTROL_H, RIGHT - 12.0 - winui::CONTROL_H);
+        let row_top = 291.0 + dy;
         let open_x = after(
             228.0,
             "Open the following file when done:",
             228.0,
-            RIGHT - 43.0 - 120.0,
+            browse_x - 8.0 - 120.0,
         );
         winui::checkbox_light_until(
             ui,
@@ -886,16 +889,15 @@ impl Scheduler {
         );
         winui::edit_light_on(
             ui,
-            r(o, open_x, 294.0 + dy, RIGHT - 43.0 - open_x, 23.0),
+            r(o, open_x, row_top, browse_x - 8.0 - open_x, h),
             &mut f.open_file,
             f.open_on,
             false,
             LIGHT_PAGE(),
         );
-        // Graphite's browse button (plan 07: `gx-dots` on every "..."), as tall as its box.
         let browse = winui::icon_only_button(
             ui,
-            r(o, RIGHT - 35.0, 294.0 + dy, 23.0, 23.0),
+            r(o, browse_x, row_top, h, h),
             "gx-dots",
             // i18n: tooltip of the "..." after the Scheduler's file to open: choose the file
             "Browse",

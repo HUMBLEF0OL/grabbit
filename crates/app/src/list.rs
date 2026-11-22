@@ -92,9 +92,9 @@ pub const UPLOAD: usize = 12;
 /// Graphite's (plan 05b, the mockup's), narrowed in 1.0.1 so the default columns
 /// ([`DEFAULT_VISIBLE`]) fit the window's first size (crate::MAIN_SIZE) without scrolling
 /// sideways: Status keeps room for Geist's "Stopped" with its percentage (its bar where it fits). Kept apart from IDM's, as the Categories
-/// pane's width is.
+/// pane's width is. Plan 12 D4: Time left takes 16 from Status so "59 min 59 sec" isn't cut.
 pub const GRAPHITE_WIDTHS: [f32; COLS] = [
-    216.0, 34.0, 84.0, 160.0, 84.0, 100.0, 160.0, 160.0, 140.0, 64.0, 80.0, 100.0, 110.0,
+    216.0, 34.0, 84.0, 144.0, 100.0, 100.0, 160.0, 160.0, 140.0, 64.0, 80.0, 100.0, 110.0,
 ];
 /// Default display order: Source first, then IDM's, a torrent's three columns after its rate, and
 /// Added after Last Try Date.

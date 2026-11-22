@@ -365,6 +365,9 @@ metrics! {
     menu_item_radius: "radius.menu-item", "Corner radius of a menu item under the pointer" = 4.0;
     widget_radius: "radius.egui", "Corner radius of egui's own widgets" = 2.0;
     popup_radius: "radius.popup", "Corner radius of tooltips" = 4.0;
+    card_radius: "radius.card", "Corner radius of a card (a file's header, a helper, a sign-in code)" = 8.0;
+    tick_width: "tick.width", "Stroke width of a tick (a check box's, a menu item's, a filter chip's)" = 1.4;
+    line_paragraph: "line.paragraph", "Line height of a wrapped paragraph of dialog text" = 13.0;
     border: "border", "Width of a control's border" = 1.0;
     focus_line: "focus-line", "Height of a focused text box's accent line" = 2.0;
     chevron_width: "chevron.width", "Stroke width of a drop-down's chevron" = 1.2;

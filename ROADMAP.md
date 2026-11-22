@@ -670,6 +670,12 @@ Done since 1.0.1; ships in the next release.
   after it stays the browser's (a minute for the link's own page); the browser-like connection
   names the browser's own version in `sec-ch-ua`, sends Chrome's HTTP/2 weight and
   Accept-Encoding, and one User-Agent.
+- ✅ One visual system (plan 12d): one browse button (a square "…" as tall as a box) everywhere,
+  the 1 pixel hairline for every separator in every theme, focus rings only from the keyboard,
+  the title bar's search box drawn as every text box, one loading look (a spinner and a line),
+  one card frame, one tick stroke and one paragraph line height (theme sizes `radius.card`,
+  `tick.width`, `line.paragraph`), Time left wide enough for "59 min 59 sec", and the RSS feeds
+  and Link grabber forms on the dialogs' label column and control height.
 
 ## Being worked on
 
@@ -920,8 +926,7 @@ kept on the `archive/multiplatform-i18n` branch.
   name per command in menus, toolbar and windows, sentence case throughout, the same buttons at
   the end of every add window, deleted files moved to the Recycle Bin, a search that finds nothing
   says so, a failed download offers to refresh its address, the status bar says when the Speed
-  Limiter is on, and the shared pieces (separators, focus rings, the Find box, browse buttons)
-  drawn one way
+  Limiter is on (the shared pieces drawn one way are done, 12d, above)
 - 📋 Benchmarks against other download managers
   ([#71](https://github.com/anefzaoui/misterdownloadmanager/issues/71))
 - 📋 A new download window (plan 13, `design/graphite/plans/13-download-window.md`): one large

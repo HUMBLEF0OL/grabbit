@@ -1227,7 +1227,7 @@ impl FileInfo {
                 // The file's card: its kind's icon, its name, its size (or why there is none),
                 // and the greyed Preview.
                 let (size, reason) = match &self.info {
-                    None => ("...".to_owned(), None),
+                    None => (String::new(), None),
                     Some(Ok(pi)) => (
                         // i18n: a download's size is not known (the server didn't say)
                         pi.size
@@ -1255,6 +1255,20 @@ impl FileInfo {
                         // i18n: tooltip of the greyed Preview button in Download File Info
                         "Preview isn't available yet",
                     ));
+                }
+                // Still asking: the one loading look (plan 12 E4) where the size goes.
+                if self.info.is_none() {
+                    // The card's sub line: 14 under its middle (file_card).
+                    let base = o.y + 16.0 + 66.0 / 2.0 + 14.0;
+                    let end = o.x + right - 12.0;
+                    crate::torrentdlg::loading(
+                        ui,
+                        size_at.left(),
+                        base,
+                        "...",
+                        winui::MUTED(),
+                        end,
+                    );
                 }
                 // Why the address didn't answer (not found, sign-in needed…): on hover, copyable.
                 if let Some(reason) = reason {

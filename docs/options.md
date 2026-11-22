@@ -41,7 +41,7 @@ See [Browser integration](browser-integration.md).
 - **New** — make your own category. **Edit...** changes the selected one: its name, file types and folder. The built-in categories (Compressed, Documents, Music, Programs, Video) can be renamed, given other file types and deleted like your own; a renamed one keeps its folder. General and Torrents change only their folder.
 - **Restore the built-in categories** — brings the built-in categories back as they came, after you renamed, retyped or deleted them.
 - **Automatically put in "…" category the following file types** — the file types that go to this category.
-- **Default download directory for "…" category** — the category's folder. Type a path or click **Browse**.
+- **Default download directory for "…" category** — the category's folder. Type a path or click the browse button (**…**) after it.
 - **Change folder for "…" category on last selected** — when you pick another folder in **Download File Info**, it becomes the category's folder from then on. On by default. (It sets the first state of **Remember this path** in that window.)
 - **Set file creation date as provided by the server** — give finished files the date the server reports, not the date you downloaded them.
 - **Mark downloaded files as coming from the internet** — on by default. Every file Grabbit downloads (from the browser, a link you add, a video, a gallery, a torrent) carries the Mark of the Web a browser's downloads carry: SmartScreen checks a program before it first runs, and Office opens a document in Protected View. Unticked, no download is marked. Grabbit also follows Windows' Group Policy **Do not preserve zone information in file attachments**, as browsers do: when it is on (for the computer or for you), no download is marked, whatever this box says.
@@ -131,7 +131,7 @@ Your debrid service accounts (Real-Debrid, AllDebrid, Premiumize; experimental):
 ![Options on its Sounds page: a sound for each event](images/help/options-sounds.webp)
 *Sounds: a sound for each event.*
 
-Play a sound for **Download complete**, **Download failed**, **Queue processing started** and **Queue processing stopped/finished**. Tick an event, select it, click **Browse...** to choose a `.wav` file, and **Play** to hear it.
+Play a sound for **Download complete**, **Download failed**, **Queue processing started** and **Queue processing stopped/finished**. Tick an event, select it, click the browse button (**…**) under the list to choose a `.wav` file, and **Play** to hear it.
 
 ## Regional
 

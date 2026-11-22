@@ -191,7 +191,18 @@ impl ChecksumDialog {
                         LIGHT_TEXT(),
                     ),
                 };
-                if !line.is_empty() {
+                let checking = banner.is_none() && hash.is_some() && self.check.is_some();
+                if checking {
+                    // The one loading look (plan 12 E4).
+                    crate::torrentdlg::loading(
+                        ui,
+                        o.x + e,
+                        o.y + status_y + 14.0,
+                        &line,
+                        LIGHT_TEXT(),
+                        o.x + W - e,
+                    );
+                } else if !line.is_empty() {
                     winui::fit(
                         ui,
                         &p,

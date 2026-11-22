@@ -483,12 +483,14 @@ impl Updates {
                 let mut download = None;
                 match &result {
                     None => {
-                        winui::text(
-                            &p,
+                        // The one loading look (plan 12 E4).
+                        crate::torrentdlg::loading(
+                            ui,
                             tx,
                             o.y + 31.0,
                             crate::i18n::t("Checking for updates..."),
                             ink,
+                            right,
                         );
                     }
                     Some(Ok(Found::Latest)) => {
@@ -496,7 +498,8 @@ impl Updates {
                             crate::i18n::t("You have the latest version of Grabbit ({version})."),
                             &[("version", VERSION)],
                         );
-                        winui::paragraph(&p, tx, o.y + 31.0, &line, ink, right, 13.0);
+                        let lh = crate::theme::metrics().line_paragraph;
+                        winui::paragraph(&p, tx, o.y + 31.0, &line, ink, right, lh);
                     }
                     Some(Err(e)) => {
                         let line = crate::i18n::fmt(

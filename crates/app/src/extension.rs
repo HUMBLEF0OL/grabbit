@@ -356,7 +356,7 @@ impl Extension {
                 crate::i18n::t(never),
                 winui::ERROR(),
                 o.x + W - 18.0,
-                14.0,
+                crate::theme::metrics().line_paragraph,
             );
         } else if !self.registered {
             // As wide as its label in this language (#192); the paragraph ends 10 px before it.
@@ -386,7 +386,7 @@ impl Extension {
                 said,
                 winui::ERROR(),
                 o.x + fix_x - 10.0,
-                14.0,
+                crate::theme::metrics().line_paragraph,
             );
             let mut fix = winui::button(
                 ui,
@@ -430,7 +430,8 @@ impl Extension {
             )
         };
         if !line.is_empty() {
-            winui::paragraph(&p, o.x + 18.0, o.y + y, &line, color, o.x + W - 18.0, 14.0);
+            let lh = crate::theme::metrics().line_paragraph;
+            winui::paragraph(&p, o.x + 18.0, o.y + y, &line, color, o.x + W - 18.0, lh);
         }
         // The fallback, when a store can't be used (a managed browser, a store turned off): the
         // tutorial, which adds it by hand.
