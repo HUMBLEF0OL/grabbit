@@ -364,41 +364,71 @@ fn after_the_bytes(running: bool, merging: bool, checking: bool, finishing: bool
     }
 }
 
-/// The download's state as the window draws it.
-fn phase_of(item: &Item, snap: Option<&Snapshot>, pr: &Progress, sharing: bool) -> Phase {
+/// What a download's [`Phase`] is told from ([`phase`]), as `phase_of` reads it.
+#[derive(Clone, Copy)]
+struct PhaseFacts {
+    status: Status,
+    /// A screenshot's failure (`/show progress:error`).
+    sample_error: bool,
+    live: Option<mdm_tools::video::LiveState>,
+    /// A step after the bytes ([`after_the_bytes`]).
+    after: Option<Phase>,
+    at_service: bool,
+    confirm_stop: bool,
+    web_page: bool,
+    new_address: bool,
+    sharing: bool,
+}
+
+/// The download's state as the window draws it, from its facts.
+fn phase(f: PhaseFacts) -> Phase {
     use mdm_tools::video::LiveState;
-    if pr.sample_error.is_some() {
+    if f.sample_error {
         return Phase::Failed { new_address: false };
     }
-    match pr.sample_live.or_else(|| item.live_state()) {
+    match f.live {
         Some(LiveState::Recording) => return Phase::Recording,
         Some(LiveState::Saving) => return Phase::Saving,
         None => {}
     }
-    let running = item.status == Status::Downloading;
-    if let Some(phase) = after_the_bytes(
-        running,
-        pr.sample_merging.is_some(),
-        item.torrent_checking().is_some(),
-        super::finishing_fraction(snap).is_some()
-            || item.finishing(false).is_some()
-            || item.past_last_byte(),
-    ) {
+    if let Some(phase) = f.after {
         return phase;
     }
-    match item.status {
-        Status::Downloading if item.at_service().is_some() => Phase::Service,
-        Status::Downloading if pr.confirm_stop => Phase::CantResume,
+    match f.status {
+        Status::Downloading if f.at_service => Phase::Service,
+        Status::Downloading if f.confirm_stop => Phase::CantResume,
         Status::Downloading => Phase::Running,
         Status::Stopped => Phase::Stopped,
         Status::Queued => Phase::Waiting,
-        Status::Error if item.got_web_page() => Phase::WebPage,
+        Status::Error if f.web_page => Phase::WebPage,
         Status::Error => Phase::Failed {
-            new_address: item.wants_new_address(),
+            new_address: f.new_address,
         },
-        Status::Complete if sharing => Phase::Sharing,
+        Status::Complete if f.sharing => Phase::Sharing,
         Status::Complete => Phase::Done,
     }
+}
+
+/// The download's state as the window draws it.
+fn phase_of(item: &Item, snap: Option<&Snapshot>, pr: &Progress, sharing: bool) -> Phase {
+    phase(PhaseFacts {
+        status: item.status,
+        sample_error: pr.sample_error.is_some(),
+        live: pr.sample_live.or_else(|| item.live_state()),
+        after: after_the_bytes(
+            item.status == Status::Downloading,
+            pr.sample_merging.is_some(),
+            item.torrent_checking().is_some(),
+            super::finishing_fraction(snap).is_some()
+                || item.finishing(false).is_some()
+                || item.past_last_byte(),
+        ),
+        at_service: item.at_service().is_some(),
+        confirm_stop: pr.confirm_stop,
+        web_page: item.got_web_page(),
+        new_address: item.wants_new_address(),
+        sharing,
+    })
 }
 
 /// Plan 13b's screenshot states (`/show progress:<name>`): looks only, drawn over the download.
@@ -788,6 +818,10 @@ pub fn state_view(phase: Phase, f: &Facts) -> StateView {
         Phase::Stopped => {
             v.dim = true;
             v.grey = true;
+            // Nothing in yet: a dash, not the word beside the name again.
+            if f.frac.is_none() && f.downloaded == 0 {
+                v.reading = Reading::Dash;
+            }
             if f.resumes {
                 // i18n: beside a stopped download's percent: Resume goes on from there
                 v.side = Side::Text(t("Resumes where it stopped"));
@@ -848,7 +882,18 @@ pub fn state_view(phase: Phase, f: &Facts) -> StateView {
                         t("It stopped, and Grabbit wasn't told why.")
                     }),
                     error: true,
-                    advice: None,
+                    // The link expired (board 4): a new address carries it on.
+                    advice: (phase == Phase::Failed { new_address: true }).then(|| {
+                        match f.frac.filter(|x| *x > 0.0) {
+                            Some(x) => fmt(
+                                // i18n: a download window's line under the reason when the download's link expired: {percent} how far it is, as "63%"
+                                "Refresh the download address and it carries on from {percent}.",
+                                &[("percent", &format!("{}%", reading_figure(x)))], // not translated: a percentage
+                            ),
+                            // i18n: a download window's line under the reason when the download's link expired and nothing is in yet
+                            None => t("Refresh the download address to start it again."),
+                        }
+                    }),
                 }
             };
         }
@@ -998,6 +1043,17 @@ pub fn state_view(phase: Phase, f: &Facts) -> StateView {
         v.value = Some(x);
     }
     v
+}
+
+/// The words before the name in the finishing line ("Naming it "), which the detail line cuts in
+/// the middle so the name's end shows; never empty (nothing else is cut that way).
+fn naming_lead() -> &'static str {
+    // i18n: a download window's line while the finished file is written out: {file} its name
+    let s = crate::i18n::t("Naming it {file}");
+    s.split("{file}")
+        .next()
+        .filter(|l| !l.is_empty())
+        .unwrap_or("\u{0}")
 }
 
 /// The Done window's look (plan 13d, boards 5, 7): "Done" with the size at the row's end, the
@@ -1191,7 +1247,7 @@ pub enum Strip {
     Striped(f32),
     /// Nothing known to show (a size not known).
     Empty,
-    /// One fill this far: a video, a gallery, segments too narrow to tell apart; `after`: a
+    /// One fill this far: a video, a gallery, more than 48 segments; `after`: a
     /// step after the bytes (a check, a join) on its accent track.
     Plain { fraction: f32, after: bool },
     /// A file's segments.
@@ -1200,8 +1256,9 @@ pub enum Strip {
     Pieces(Vec<f32>),
 }
 
-/// A segment narrower than this, and more segments than this, make the strip one plain fill.
+/// A segment narrower than this has no gap and no tick: it runs on from its neighbour.
 const MIN_PART: f32 = 3.0;
+/// More segments than this make the strip one plain fill.
 const MAX_PARTS: usize = 48;
 /// The gap between segments, and the cursor's tick.
 const PART_GAP: f32 = 1.0;
@@ -1210,8 +1267,9 @@ const TICK_W: f32 = 2.0;
 /// A file's segments (`segments`: each one's start and bytes done, as drawn) across `width`
 /// points of a file of `total` bytes: each as wide as its share of the file (from its start to
 /// the next one's, as the engine splits the file), filled from its start as far as it has
-/// come, a tick at its cursor while it is still being written. None when one would be narrower
-/// than 3 points or there are more than 48: one plain fill then.
+/// come, a tick at its cursor while it is still being written. One narrower than 3 points (the
+/// planner splits the last range near the end) has no gap on either side and no tick: it runs
+/// on from its neighbour. None for more than 48: one plain fill then.
 pub fn segment_parts(segments: &[(u64, f64)], total: u64, width: f32) -> Option<Vec<Part>> {
     if total == 0 || segments.is_empty() || segments.len() > MAX_PARTS {
         return None;
@@ -1219,22 +1277,24 @@ pub fn segment_parts(segments: &[(u64, f64)], total: u64, width: f32) -> Option<
     let mut s = segments.to_vec();
     s.sort_by_key(|g| g.0);
     let x = |b: u64| (b.min(total) as f64 / total as f64 * f64::from(width)) as f32;
-    let mut parts = Vec::with_capacity(s.len());
-    for (i, &(start, done)) in s.iter().enumerate() {
-        let end = s.get(i + 1).map_or(total, |n| n.0);
-        let (a, b) = (x(start), x(end));
-        if b - a < MIN_PART {
-            return None;
-        }
-        let x1 = if i + 1 == s.len() { b } else { b - PART_GAP };
-        let share = (done / end.saturating_sub(start).max(1) as f64).clamp(0.0, 1.0) as f32;
-        parts.push(Part {
-            x0: a,
-            x1,
-            fill: a + (x1 - a) * share,
-            tick: share < 1.0,
-        });
-    }
+    let end = |i: usize| s.get(i + 1).map_or(total, |n| n.0);
+    let narrow = |i: usize| x(end(i)) - x(s[i].0) < MIN_PART;
+    let parts = s
+        .iter()
+        .enumerate()
+        .map(|(i, &(start, done))| {
+            let (a, b) = (x(start), x(end(i)));
+            let gap = i + 1 < s.len() && !narrow(i) && !narrow(i + 1);
+            let x1 = if gap { b - PART_GAP } else { b };
+            let share = (done / end(i).saturating_sub(start).max(1) as f64).clamp(0.0, 1.0) as f32;
+            Part {
+                x0: a,
+                x1,
+                fill: a + (x1 - a) * share,
+                tick: share < 1.0 && !narrow(i),
+            }
+        })
+        .collect();
     Some(parts)
 }
 
@@ -1543,9 +1603,14 @@ pub(crate) fn paint_state(ui: &Ui, p: &egui::Painter, o: Pos2, view: &StateView,
         Under::Detail(start, end) => {
             let mut start_right = right;
             if !end.is_empty() {
-                // Cut in the middle, so a file name's end shows ("Naming it ubuntu-...iso").
+                // A file's name cut in the middle, so its end shows ("Naming it ubuntu-...iso");
+                // the rest (a speed and its limit) from the end.
                 let f = figures(12.0);
-                let shown = winui::ellipsize_middle(p, &f, end, LEFT_W / 2.0);
+                let shown = if end.starts_with(naming_lead()) {
+                    winui::ellipsize_middle(p, &f, end, LEFT_W / 2.0)
+                } else {
+                    winui::ellipsize(p, &f, end, LEFT_W / 2.0)
+                };
                 let rc = draw_right(p, f, right, detail, &shown, muted());
                 winui::copyable(ui, rc, "progress-rate", end, shown != *end);
                 start_right = rc.left() - 16.0;
@@ -1569,7 +1634,14 @@ pub(crate) fn paint_state(ui: &Ui, p: &egui::Painter, o: Pos2, view: &StateView,
         } => {
             let c = if *error { winui::ERROR() } else { ink() };
             let base = detail + 2.0;
-            let (rc, n) = message_lines(ui, p, x, base, right, text, c, "progress-reason");
+            // Under a reading, a reason with advice and the advice take a line each (an
+            // expired link, board 4); without one, two each (board 9).
+            let max = if advice.is_some() && view.reading != Reading::None {
+                1
+            } else {
+                MESSAGE_LINES
+            };
+            let (rc, n) = message_lines(ui, p, x, base, right, text, c, max, "progress-reason");
             let id = egui::Id::unique(("progress-reason", ui.ctx().viewport_id()));
             let resp = ui.interact(rc, id, Sense::hover());
             winui::expose(&resp, egui::Role::Alert, text, true, None);
@@ -1584,6 +1656,7 @@ pub(crate) fn paint_state(ui: &Ui, p: &egui::Painter, o: Pos2, view: &StateView,
                     right,
                     advice,
                     secondary(),
+                    max,
                     "progress-advice",
                 );
                 let id = egui::Id::unique(("progress-advice", ui.ctx().viewport_id()));
@@ -1603,6 +1676,11 @@ const MESSAGE_LINES: usize = 2;
 // Two lines of a message fit above the footer; without a reading, two of the reason and two of
 // the advice under it (board 9). Each line's descent is under 8.
 const _: () = assert!(DETAIL_BASE + 2.0 + MESSAGE_LINE + 8.0 <= COMPACT_FOOTER_Y - 16.0);
+// Under a reading, a reason's line and its advice's (an expired link, board 4).
+const _: () = assert!(DETAIL_BASE + 2.0 + MESSAGE_LINE + 4.0 + 8.0 <= COMPACT_FOOTER_Y - 16.0);
+const _: () = assert!(
+    DETAIL_BASE + 2.0 + MESSAGE_LINE + 4.0 + 8.0 <= facts_top(MESSAGE_LINES) - FACT_BUTTON_UP
+);
 const _: () = assert!(
     DETAIL_BASE - NO_READING_LIFT + 2.0 + 3.0 * MESSAGE_LINE + 4.0 + 8.0 <= COMPACT_FOOTER_Y - 16.0
 );
@@ -1628,7 +1706,7 @@ pub fn at_most(mut lines: Vec<String>, n: usize) -> Vec<String> {
 }
 
 /// A state's message from English `x` to `right`, its first baseline at `base`: wrapped in at
-/// most two lines (the last cut with "..." when it is longer, whole on hover). The rect it
+/// most `max` lines (the last cut with "..." when it is longer, whole on hover). The rect it
 /// takes and its lines.
 #[allow(clippy::too_many_arguments)]
 fn message_lines(
@@ -1639,13 +1717,11 @@ fn message_lines(
     right: f32,
     text: &str,
     c: Color32,
+    max: usize,
     salt: &str,
 ) -> (Rect, usize) {
     let f = face(13.0);
-    let lines = at_most(
-        winui::wrap_lines_font(p, f.clone(), text, right - x),
-        MESSAGE_LINES,
-    );
+    let lines = at_most(winui::wrap_lines_font(p, f.clone(), text, right - x), max);
     let mut rc = Rect::NOTHING;
     for (k, line) in lines.iter().enumerate() {
         let y = base + k as f32 * MESSAGE_LINE;
@@ -2276,6 +2352,12 @@ struct Col {
 /// A table's cell: its text, its colour, in figures or not.
 type Cell = (String, Color32, bool);
 
+/// The room between a table's columns, and the room its scroll bar keeps at its end.
+const COL_GAP: f32 = 12.0;
+const BAR: f32 = 8.0;
+/// What a table's columns share.
+const TABLE_W: f32 = RIGHT_W - BAR;
+
 /// A table of the right column at `y` (boards 2, 3, 10, 12): its column titles in a 24-point
 /// row, then rows 26 high each with a line under it, `shown` at once, scrolled by the wheel and
 /// a thin bar at its end (room kept for it). `checks`: a box before each row (a torrent's
@@ -2292,9 +2374,7 @@ fn table(
     rows: &[Vec<Cell>],
     checks: Option<&[bool]>,
 ) -> Option<usize> {
-    const COL_GAP: f32 = 12.0;
-    const BAR: f32 = 8.0;
-    let width = RIGHT_W - BAR;
+    let width = TABLE_W;
     let fixed: f32 = cols.iter().map(|c| c.w).sum::<f32>() + COL_GAP * (cols.len() - 1) as f32;
     let mut x = RIGHT_X;
     let spans: Vec<(f32, f32)> = cols
@@ -2371,6 +2451,29 @@ fn table(
     }
     clicked
 }
+
+/// The connections table's "#" column: as wide as its widest number (`widest`) and its title
+/// (`title`), 20 at the least, never past 60 (the Received column keeps its room).
+fn number_col_w(widest: f32, title: f32) -> f32 {
+    widest.max(title).max(20.0).ceil().min(60.0)
+}
+
+/// A column as wide as its title and the widest of `samples` (each in the figures face or
+/// not), at 12 points.
+fn fit(p: &egui::Painter, title: &str, samples: &[(&str, bool)]) -> f32 {
+    let title = winui::text_width_font(p, face(12.0), crate::i18n::t(title));
+    samples
+        .iter()
+        .map(|(s, nums)| {
+            let f = if *nums { figures(12.0) } else { face(12.0) };
+            winui::text_width_font(p, f, s)
+        })
+        .fold(title, f32::max)
+        .ceil()
+}
+
+/// The widest size [`crate::model::size`] writes ("1023.99 MB": it moves to GB at 1024).
+const WIDEST_SIZE: &str = "1023.99 MB"; // not translated: a sample to measure
 
 /// Where a connection sorts: receiving first, then retrying (or failed), connecting, done.
 fn conn_rank(s: &ConnStatus) -> u8 {
@@ -2453,11 +2556,19 @@ fn connections(
             ]
         })
         .collect();
+    // i18n: column title: connection number
+    let number = crate::i18n::mark("#");
+    // As wide as the widest number shown (upstream issue 1101: "100" to "128" were cut).
+    let widest = rows
+        .iter()
+        .filter_map(|row| row.first())
+        .map(|c| winui::text_width_font(p, figures(12.0), &c.0))
+        .fold(0.0, f32::max);
+    let title = winui::text_width_font(p, face(12.0), crate::i18n::t(number));
     let cols = [
-        // i18n: column title: connection number
         Col {
-            title: crate::i18n::mark("#"),
-            w: 20.0,
+            title: number,
+            w: number_col_w(widest, title),
             end: false,
         },
         Col {
@@ -2514,10 +2625,12 @@ fn tabs(
             winui::keep_keys(ui, &resp, true, false, false);
             if resp.has_focus() {
                 let last = labels.len().saturating_sub(1) as isize;
+                // The arrows go the reading way (right to left in such an interface).
+                let fwd = if winui::rtl() { -1 } else { 1 };
                 let to = if winui::take_key(ui, egui::Key::ArrowRight) {
-                    Some(i as isize + 1)
+                    Some(i as isize + fwd)
                 } else if winui::take_key(ui, egui::Key::ArrowLeft) {
-                    Some(i as isize - 1)
+                    Some(i as isize - fwd)
                 } else if winui::take_key(ui, egui::Key::Home) {
                     Some(0)
                 } else if winui::take_key(ui, egui::Key::End) {
@@ -2591,26 +2704,30 @@ fn torrent_column(
     };
     match pr.ttab {
         TTab::Files => {
+            // i18n: a torrent file the user chose not to download
+            let skipped = crate::i18n::t("Skipped");
             let rows: Vec<Vec<Cell>> = d
                 .files
                 .iter()
                 .map(|(_, f, on, done)| {
+                    // A word in the plain face, a percent in the figures.
                     let pct = if !on {
-                        // i18n: a torrent file the user chose not to download
-                        crate::i18n::t("Skipped").to_owned()
+                        (skipped.to_owned(), false)
                     } else if f.size == 0 {
-                        crate::i18n::percent(1.0, 0)
+                        (crate::i18n::percent(1.0, 0), true)
                     } else {
-                        crate::i18n::percent(*done as f64 / f.size as f64, 1)
+                        (crate::i18n::percent(*done as f64 / f.size as f64, 1), true)
                     };
                     vec![
                         (f.path.display().to_string(), ink(), false),
                         (crate::model::size(f.size), ink(), true),
-                        (pct, secondary(), true),
+                        (pct.0, secondary(), pct.1),
                     ]
                 })
                 .collect();
             let ticks: Vec<bool> = d.files.iter().map(|f| f.2).collect();
+            let size = crate::i18n::mark("Size");
+            let done = crate::i18n::mark("Done");
             let cols = [
                 Col {
                     title: "",
@@ -2624,13 +2741,14 @@ fn torrent_column(
                     end: false,
                 },
                 Col {
-                    title: crate::i18n::mark("Size"),
-                    w: 64.0,
+                    title: size,
+                    w: fit(p, size, &[(WIDEST_SIZE, true)]),
                     end: true,
                 },
+                // Wide enough for "100.0%" and "Skipped".
                 Col {
-                    title: crate::i18n::mark("Done"),
-                    w: 40.0,
+                    title: done,
+                    w: fit(p, done, &[("100.0%", true), (skipped, false)]), // not translated: a sample to measure
                     end: true,
                 },
             ];
@@ -2663,6 +2781,14 @@ fn torrent_column(
                     ]
                 })
                 .collect();
+            // i18n: column title: how much came from the peer
+            let received = crate::i18n::mark("Received");
+            // i18n: column title: how much went to the peer
+            let sent = crate::i18n::mark("Sent");
+            // The sizes as wide as the widest one; Address and Client share the rest.
+            let received_w = fit(p, received, &[(WIDEST_SIZE, true)]);
+            let sent_w = fit(p, sent, &[(WIDEST_SIZE, true)]);
+            let rest = TABLE_W - received_w - sent_w - 3.0 * COL_GAP;
             let cols = [
                 // i18n: column title: the web address (URL)
                 Col {
@@ -2673,19 +2799,17 @@ fn torrent_column(
                 // i18n: column title: the peer's torrent program
                 Col {
                     title: crate::i18n::mark("Client"),
-                    w: 72.0,
+                    w: (rest * 0.45).floor(),
                     end: false,
                 },
-                // i18n: column title: how much came from the peer
                 Col {
-                    title: crate::i18n::mark("Received"),
-                    w: 52.0,
+                    title: received,
+                    w: received_w,
                     end: true,
                 },
-                // i18n: column title: how much went to the peer
                 Col {
-                    title: crate::i18n::mark("Sent"),
-                    w: 44.0,
+                    title: sent,
+                    w: sent_w,
                     end: true,
                 },
             ];
@@ -2875,7 +2999,11 @@ fn footer_row(
     };
     // A screenshot's state resumes, stops, saves or cancels nothing: the press only ends it
     // (Close closes the window, the download going on, as always).
-    let sample = pr.sample_look.is_some() || pr.sample_error.is_some() || pr.sample_live.is_some();
+    let sample = pr.sample_look.is_some()
+        || pr.sample_error.is_some()
+        || pr.sample_live.is_some()
+        || pr.sample_merging.is_some()
+        || pr.sample_helper.is_some();
     match press {
         Press::Close => Action::Close,
         _ if sample => {
@@ -3339,6 +3467,78 @@ mod tests {
         assert_eq!(after_the_bytes(true, false, false, false), None);
     }
 
+    /// The state drawn from the download's facts: an error that got a web page is WebPage, a
+    /// running download asked to stop on a server that can't resume is CantResume, a finished
+    /// torrent still shared is Sharing; a step after the bytes and a live stream go first.
+    #[test]
+    fn the_phase_follows_the_downloads_facts() {
+        let base = PhaseFacts {
+            status: Status::Downloading,
+            sample_error: false,
+            live: None,
+            after: None,
+            at_service: false,
+            confirm_stop: false,
+            web_page: false,
+            new_address: false,
+            sharing: false,
+        };
+        let at = |status, f: PhaseFacts| phase(PhaseFacts { status, ..f });
+        assert_eq!(phase(base), Phase::Running);
+        assert_eq!(at(Status::Stopped, base), Phase::Stopped);
+        assert_eq!(at(Status::Queued, base), Phase::Waiting);
+        assert_eq!(at(Status::Complete, base), Phase::Done);
+        let web = PhaseFacts {
+            web_page: true,
+            ..base
+        };
+        assert_eq!(at(Status::Error, web), Phase::WebPage);
+        let expired = PhaseFacts {
+            new_address: true,
+            ..base
+        };
+        assert_eq!(
+            at(Status::Error, expired),
+            Phase::Failed { new_address: true }
+        );
+        assert_eq!(
+            at(Status::Error, base),
+            Phase::Failed { new_address: false }
+        );
+        let asked = PhaseFacts {
+            confirm_stop: true,
+            ..base
+        };
+        assert_eq!(phase(asked), Phase::CantResume);
+        let shared = PhaseFacts {
+            sharing: true,
+            ..base
+        };
+        assert_eq!(at(Status::Complete, shared), Phase::Sharing);
+        let service = PhaseFacts {
+            at_service: true,
+            confirm_stop: true,
+            ..base
+        };
+        assert_eq!(phase(service), Phase::Service);
+        let after = PhaseFacts {
+            after: Some(Phase::Finishing),
+            confirm_stop: true,
+            ..base
+        };
+        assert_eq!(phase(after), Phase::Finishing);
+        let live = PhaseFacts {
+            live: Some(mdm_tools::video::LiveState::Recording),
+            ..after
+        };
+        assert_eq!(phase(live), Phase::Recording);
+        let sample = PhaseFacts {
+            sample_error: true,
+            ..live
+        };
+        assert_eq!(phase(sample), Phase::Failed { new_address: false });
+    }
+
     /// Every state name of plan 13b reads back as its look.
     #[test]
     fn looks_are_named() {
@@ -3422,7 +3622,7 @@ mod tests {
 
     /// Plan 13c: each segment is as wide as its byte range's share of the file, filled as far
     /// as it has come with a tick at its cursor while it is written; one narrower than 3 points
-    /// (or more than 48 of them) makes the strip one plain fill.
+    /// runs on from its neighbour (no gap, no tick); more than 48 make the strip one plain fill.
     #[test]
     fn segment_widths_follow_byte_ranges() {
         // A quarter and three quarters of 1000 bytes across 400 points, given out of order.
@@ -3439,13 +3639,40 @@ mod tests {
         let parts = segment_parts(&[(0, 0.0)], 1000, 400.0).unwrap();
         assert_eq!(parts[0].fill, 0.0);
         assert!(parts[0].tick);
-        // A segment of 5 bytes in 1000 is 2 points wide: one plain fill.
-        assert_eq!(segment_parts(&[(0, 0.0), (995, 0.0)], 1000, 400.0), None);
+        // A tail of 5 bytes in 1000 is 2 points wide (the planner split the last range): the
+        // strip stays segmented, the tail runs on from its neighbour, no gap, no tick.
+        let parts = segment_parts(&[(0, 1000.0), (1000, 500.0), (1995, 0.0)], 2000, 400.0)
+            .expect("still segmented");
+        assert_eq!(parts.len(), 3);
+        assert_eq!(
+            parts[0].x1,
+            200.0 - PART_GAP,
+            "a gap between the large ones"
+        );
+        assert_eq!(parts[1].x1, parts[2].x0, "no gap before the tail");
+        assert!(parts[1].tick, "the large one still ticks");
+        assert!(!parts[2].tick, "the tail has no tick");
+        assert_eq!(parts[2].x1, 400.0);
         // 49 segments: one plain fill too.
         let many: Vec<(u64, f64)> = (0..49).map(|k| (k * 1000, 0.0)).collect();
         assert_eq!(segment_parts(&many, 49_000, 400.0), None);
         assert_eq!(segment_parts(&[], 1000, 400.0), None);
         assert_eq!(segment_parts(&[(0, 0.0)], 0, 400.0), None);
+    }
+
+    /// The connections table's "#" column (upstream issue 1101) is 20 for one and two digits
+    /// and widens for "100" to "128" or a longer title, never past 60.
+    #[test]
+    fn the_number_column_fits_its_widest_number() {
+        assert_eq!(number_col_w(7.0, 8.0), 20.0, "1 to 9, \"#\"");
+        assert_eq!(number_col_w(14.0, 8.0), 20.0, "10 to 99");
+        assert_eq!(number_col_w(21.3, 8.0), 22.0, "100 to 128");
+        assert_eq!(number_col_w(7.0, 31.0), 31.0, "a longer title");
+        assert_eq!(
+            number_col_w(500.0, 8.0),
+            60.0,
+            "the Received column keeps its room"
+        );
     }
 
     /// Plan 13c: the Pieces row counts the pieces that are in, of all of them, with one piece's
@@ -3546,6 +3773,17 @@ mod tests {
             ..facts()
         };
         assert_eq!(state_view(Phase::Stopped, &restarts).side, Side::None);
+        // Stopped before a byte came: a dash, not "Stopped" a second time.
+        let nothing = Facts {
+            frac: None,
+            downloaded: 0,
+            word: "Stopped".into(),
+            ..facts()
+        };
+        let v = state_view(Phase::Stopped, &nothing);
+        assert_eq!(v.reading, Reading::Dash);
+        assert_eq!(v.word, Some(("Stopped".into(), false)));
+        assert!(!spoken(&v).contains("Stopped, Stopped"), "{}", spoken(&v));
         // An error (board 4): the reason in its own line (no "Error: ..."), the missing part
         // hatched, the amount beside the greyed percent.
         let v = state_view(Phase::Failed { new_address: true }, &f);
@@ -3555,6 +3793,22 @@ mod tests {
         assert!(!message(&v).0.starts_with("Error:"));
         assert_eq!(v.side, Side::Figure(so_far(f.downloaded, f.size), None));
         assert!(v.dim);
+        // The expired link's advice under its reason (board 4), from where it is.
+        assert!(
+            matches!(&v.under, Under::Message { advice: Some(a), .. }
+                if craft_i18n::strip_isolates(a) == "Refresh the download address and it carries on from 41%."),
+            "{:?}",
+            v.under
+        );
+        let none_in = Facts {
+            frac: None,
+            downloaded: 0,
+            ..facts()
+        };
+        assert!(matches!(
+            state_view(Phase::Failed { new_address: true }, &none_in).under,
+            Under::Message { advice: Some(a), .. } if a == "Refresh the download address to start it again."
+        ));
         // A web page (board 9): said beside the name in the error colour, no reading, the strip
         // hatched, the reason read out.
         let v = state_view(Phase::WebPage, &f);

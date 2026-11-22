@@ -198,6 +198,23 @@ Open folder opens its parent, so both "open a folder" (`dialogs.rs`, the Done wi
 - Accessibility: the strip as one progress value with a spoken text (`winui::expose_value` with a
   progress role), the graph's summary, tabs with their selected state, tooltips on keyboard focus
   as well as hover, 24 px icon buttons.
+- As built (audit fixes after PR 129):
+  - A segment narrower than 3 px no longer turns the whole strip into one fill: it runs on from
+    its neighbour (no gap, no tick). The planner splits the last range near the end and the
+    segments stay, so the old rule flattened nearly every multi-connection download's strip at
+    its end. Only more than 48 segments (and a video, a gallery) give the plain fill.
+  - Tab order follows the visual order on a torrent's Files tab: Recheck files (at the tabs'
+    end) comes before Download in order and First and last pieces first (under the table).
+    The tabs' arrows go the reading way (`winui::rtl()`), as `tabs_light` does.
+  - The From row of a magnet torrent reads "Magnet link" (board: "Magnet link, 2 trackers"):
+    the trackers are on the Trackers tab.
+  - The Pieces row reads "512.00 KB each" (board: "512 KB each"): the app's own size format
+    (`model::size`), as every other size in the window.
+  - Connections sort by number within their groups (receiving, retrying, connecting, done), so
+    rows don't jump as speeds change (the board's rows are in speed order).
+  - The tables' size columns are measured for the widest size the app writes ("1023.99 MB");
+    a torrent's Peers tab gives Address and Client the rest; the connections table's "#"
+    column is as wide as its widest number (upstream issue 1101).
 
 ## 13d · States and the Done window's look (look, about 900 lines)
 
