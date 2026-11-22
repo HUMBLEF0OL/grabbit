@@ -2219,7 +2219,8 @@ impl Complete {
                         }
                         // An open menu's letters are its own (Alt+W: Open with...): the
                         // footer's Alt+O and Alt+F wait until it closes.
-                        if let Some(at) = b.mnemonic.filter(|_| !menu_open) {
+                        // Its look still pending (after the short wait): held as Enter is.
+                        if let Some(at) = b.mnemonic.filter(|_| !menu_open && enter_ok) {
                             button = button.mnemonic(at);
                         }
                         (button, r(o, *x, footer_y, *w, h))

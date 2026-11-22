@@ -2477,7 +2477,10 @@ fn fit(p: &egui::Painter, title: &str, rows: &[Vec<Cell>], k: usize) -> f32 {
             winui::text_width_font(p, f, s)
         })
         .fold(title, f32::max)
-        .ceil()
+        // ponytail: in steps of 8 points, so a column doesn't shift a digit's width as its
+        // values grow ("9.99 MB" to "10.00 MB").
+        .div_euclid(8.0)
+        .mul_add(8.0, 8.0)
 }
 
 /// Where a connection sorts: receiving first, then retrying (or failed), connecting, done.
@@ -3354,7 +3357,7 @@ pub(crate) fn done_facts(
             right,
             line,
             winui::ERROR(),
-            2,
+            MESSAGE_LINES,
             &format!("done-line-{k}"),
         );
         let id = egui::Id::unique(("done-line", k, ui.ctx().viewport_id()));
