@@ -704,7 +704,7 @@ impl TorrentDialog {
                     has,
                 ),
                 FooterItem::Button(
-                    FooterButton::new("Download Now", kind(ready, true))
+                    FooterButton::new("Download now", kind(ready, true))
                         .primary()
                         .enter(ready),
                 ),
@@ -1298,7 +1298,7 @@ impl TorrentSettings {
                     &p,
                     o.x + 396.0,
                     o.y + 352.0,
-                    crate::i18n::t("KBytes/sec"),
+                    crate::i18n::t("KB/s"),
                     if self.upload_on {
                         winui::TEXT()
                     } else {

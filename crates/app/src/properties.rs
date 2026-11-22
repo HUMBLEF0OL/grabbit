@@ -69,7 +69,7 @@ impl Properties {
         let outcome = window(
             ctx,
             &format!("properties-{}", self.id),
-            "File Properties",
+            "File properties",
             [WIDTH, BODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
@@ -147,7 +147,7 @@ impl Properties {
         let col = [
             "Status:",
             "Size:",
-            "Save To:",
+            "Save to:",
             "Address:",
             "Description:",
             "Referer:",
@@ -212,7 +212,7 @@ impl Properties {
             &p,
             o.x + 11.0,
             o.y + 155.0,
-            crate::i18n::t("Save To:"),
+            crate::i18n::t("Save to:"),
             LIGHT_TEXT(),
         );
         let dest = match &self.move_to {

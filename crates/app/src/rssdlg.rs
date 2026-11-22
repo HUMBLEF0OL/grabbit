@@ -150,7 +150,7 @@ impl RssWindow {
             o.x + 22.0,
             o.y + 57.0,
             // i18n: RSS feeds window: label before the box where a feed's web address is typed
-            crate::i18n::t("Feed address:"),
+            crate::i18n::t("Feed address"),
             winui::TEXT(),
         );
         // Add feed as wide as its label in this language (#192); the box ends 10 px before it.
@@ -551,7 +551,7 @@ impl RssWindow {
             );
         };
         // i18n: RSS feeds window, Download rules: the rule's name
-        label(ui, 88.0, crate::i18n::t("Name:"));
+        label(ui, 88.0, crate::i18n::t("Name"));
         winui::edit(
             ui,
             r(o, 380.0, 74.0, 360.0, 22.0),
@@ -560,7 +560,7 @@ impl RssWindow {
             false,
         );
         // i18n: RSS feeds window, Download rules: words the article's title must contain
-        label(ui, 116.0, crate::i18n::t("Must contain:"));
+        label(ui, 116.0, crate::i18n::t("Must contain"));
         winui::edit(
             ui,
             r(o, 380.0, 102.0, 360.0, 22.0),
@@ -569,7 +569,7 @@ impl RssWindow {
             false,
         );
         // i18n: RSS feeds window, Download rules: words that make the rule skip an article
-        label(ui, 144.0, crate::i18n::t("Must not contain:"));
+        label(ui, 144.0, crate::i18n::t("Must not contain"));
         winui::edit(
             ui,
             r(o, 380.0, 130.0, 360.0, 22.0),
@@ -586,7 +586,7 @@ impl RssWindow {
             true,
         );
         // i18n: RSS feeds window, Download rules: which episodes to take (season x episode)
-        label(ui, 198.0, crate::i18n::t("Episodes:"));
+        label(ui, 198.0, crate::i18n::t("Episodes"));
         winui::edit(
             ui,
             r(o, 380.0, 184.0, 360.0, 22.0),
@@ -625,7 +625,7 @@ impl RssWindow {
             14.0,
         );
         // i18n: RSS feeds window, Download rules: the folder the rule's torrents go to
-        label(ui, 262.0, crate::i18n::t("Save to:"));
+        label(ui, 262.0, crate::i18n::t("Save to"));
         winui::edit(
             ui,
             r(o, 380.0, 248.0, 330.0, 22.0),
@@ -670,8 +670,8 @@ impl RssWindow {
             true,
         );
         // i18n: RSS feeds window, Download rules: the feeds the rule watches
-        label(ui, 318.0, crate::i18n::t("Feeds:"));
-        self.rule_feeds.name = crate::i18n::t("Feeds:");
+        label(ui, 318.0, crate::i18n::t("Feeds"));
+        self.rule_feeds.name = crate::i18n::t("Feeds");
         let ticked: Vec<bool> = feeds
             .iter()
             .map(|(id, _)| rule.feeds.contains(id))
