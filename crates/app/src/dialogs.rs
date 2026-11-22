@@ -1680,12 +1680,20 @@ pub struct Complete {
     /// The file was dragged out of the box to a place MDM couldn't learn (upstream issue 869):
     /// Open and Open folder say so.
     pub moved_away: bool,
-    /// A download saved as a folder (a torrent of several files, a gallery): its files, each
-    /// with its size (empty when they aren't known). None: `path` is the one file.
-    files: Option<Vec<(PathBuf, u64)>>,
-    /// Why Open found nothing (the file was moved or deleted): said under the card, Open greyed
-    /// and Open folder the default (plan 13a, board 14).
+    /// Saved as a folder (a torrent of several files, a gallery): its Open menu lists files.
+    folder: bool,
+    /// What Open opens: the main file (a file alone is its own); None: a folder without one.
+    main: Option<PathBuf>,
+    /// What Open folder does.
+    folder_act: FolderAct,
+    /// A folder's 6 largest files (path, size), largest first, and how many more it has.
+    largest: Vec<(PathBuf, u64)>,
+    more: usize,
+    /// Why Open found nothing (the main file was moved or deleted): said under the card, Open
+    /// greyed and Open folder the default (plan 13a, board 14).
     gone: Option<String>,
+    /// Why a file chosen in the menu couldn't open (gone): said, Open left as it is.
+    picked_gone: Option<String>,
 }
 
 /// How a Download complete's Open went, on the thread that looked.
@@ -1763,14 +1771,17 @@ enum DoneAct {
     Close,
 }
 
-/// A line of Download complete's Open menu: one of the largest files, or Open with...
+/// A line of Download complete's Open menu: one of the largest files, Open with..., or the
+/// greyed "N more in the folder".
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum DonePick {
     File(usize),
     With,
+    Info,
 }
 
 impl Complete {
+    /// `files`: a folder download's (path, size), empty when not known; None: `path` is the file.
     pub fn new(
         id: u64,
         url: String,
@@ -1780,6 +1791,12 @@ impl Complete {
         moved_away: bool,
         files: Option<Vec<(PathBuf, u64)>>,
     ) -> Self {
+        let (main, folder_act) = done_targets(&path, files.as_deref());
+        let folder = files.is_some();
+        let mut largest = files.unwrap_or_default();
+        largest.sort_by(|a, b| b.1.cmp(&a.1));
+        let more = largest.len().saturating_sub(6);
+        largest.truncate(6);
         Complete {
             id,
             url,
@@ -1790,23 +1807,38 @@ impl Complete {
             seen: false,
             opening: None,
             moved_away,
-            files,
+            folder,
+            main,
+            folder_act,
+            largest,
+            more,
             gone: None,
+            picked_gone: None,
         }
     }
 
     /// Its file (or folder) was dragged out and moved to `to`: the box follows it.
     pub fn moved_to(&mut self, to: PathBuf) {
-        if let Some(files) = &mut self.files {
-            for (f, _) in files.iter_mut() {
-                if let Ok(rest) = f.strip_prefix(&self.path) {
-                    *f = to.join(rest);
-                }
+        let from = std::mem::replace(&mut self.path, to.clone());
+        let follow = |f: &mut PathBuf| {
+            if let Ok(rest) = f.strip_prefix(&from) {
+                *f = if rest.as_os_str().is_empty() {
+                    to.clone()
+                } else {
+                    to.join(rest)
+                };
             }
+        };
+        self.largest.iter_mut().for_each(|(f, _)| follow(f));
+        if let Some(m) = &mut self.main {
+            follow(m);
         }
-        self.path = to;
+        match &mut self.folder_act {
+            FolderAct::Select(f) | FolderAct::Open(f) => follow(f),
+        }
         self.moved_away = false;
         self.gone = None;
+        self.picked_gone = None;
     }
 
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
@@ -1821,26 +1853,23 @@ impl Complete {
             .gone
             .clone()
             .or_else(|| self.moved_away.then(|| moved_away_text(&self.path)));
+        let can_open = reason.is_none();
         let line_under = reason
             .iter()
+            .chain(&self.picked_gone)
             .chain(&self.notices)
             .cloned()
             .collect::<Vec<_>>()
             .join(" ");
         let dy = if line_under.is_empty() { 0.0 } else { 22.0 };
         let body = 262.0 + dy;
-        let (main, folder_act) = done_targets(&self.path, self.files.as_deref());
-        // The menu's files: the 6 largest, largest first.
-        let mut largest: Vec<&(PathBuf, u64)> = self.files.iter().flatten().collect();
-        largest.sort_by(|a, b| b.1.cmp(&a.1));
-        let more = largest.len().saturating_sub(6);
-        largest.truncate(6);
+        let main = self.main.clone();
         // Open with...: the main file, else the largest.
         let with_target = main
             .clone()
-            .or_else(|| largest.first().map(|f| f.0.clone()));
-        let can_open = reason.is_none();
-        notice(
+            .or_else(|| self.largest.first().map(|f| f.0.clone()));
+        let menu_key = egui::Id::unique(("complete-menu", self.id));
+        let out = notice(
             ctx,
             &id,
             "Download complete",
@@ -1913,7 +1942,10 @@ impl Complete {
                 // menu, Open folder, Close. No main file: Open file ▾, Open folder (filled),
                 // Close. A file gone: Open greyed, Open folder filled. Alt+O opens (or opens the
                 // menu), Alt+F opens the folder.
-                let dragging = crate::win32::dragging_out();
+                // While the menu is open, Enter and Escape are its (they'd also press the
+                // footer's buttons: the footer reads them before the menu takes them).
+                let menu_open = ui.ctx().data(|d| d.get_temp::<Pos2>(menu_key)).is_some();
+                let dragging = crate::win32::dragging_out() || menu_open;
                 let off = |on: bool, kind| if on { kind } else { ButtonKind::Disabled };
                 let mut buttons: Vec<(FooterButton, DoneAct)> = Vec::new();
                 if main.is_some() {
@@ -1940,7 +1972,7 @@ impl Complete {
                         // i18n: Download complete of a folder without a main file: a menu of its largest files
                         FooterButton::new(
                             "Open file",
-                            off(!largest.is_empty(), ButtonKind::Normal),
+                            off(!self.largest.is_empty(), ButtonKind::Normal),
                         )
                         .icon("misc-down")
                         .mnemonic(0)
@@ -1987,7 +2019,6 @@ impl Complete {
 
                 // The Open menu (a window of its own: it runs past this one): under the ▾ at the
                 // right edge, or under Open file at the left.
-                let menu_key = egui::Id::unique(("complete-menu", self.id));
                 if pressed == Some(DoneAct::Menu) {
                     let top = body + 1.0 + ((winui::FOOTER_H - 1.0 - h) / 2.0).floor();
                     let (x, w) = if main.is_some() {
@@ -2003,8 +2034,8 @@ impl Complete {
                     use crate::chrome::{MenuEntry, PopupResult};
                     let mut entries: Vec<MenuEntry<DonePick>> = Vec::new();
                     // A file alone has only Open with... under its arrow.
-                    if self.files.is_some() {
-                        for (n, (f, _)) in largest.iter().enumerate() {
+                    if self.folder {
+                        for (n, (f, _)) in self.largest.iter().enumerate() {
                             let name = f.file_name().unwrap_or_default().to_string_lossy();
                             // ponytail: cut at 48 characters; 13d's look decides the width.
                             let mut shown: String = name.chars().take(48).collect();
@@ -2018,15 +2049,15 @@ impl Complete {
                                 main.as_ref() == Some(f),
                             ));
                         }
-                        if more > 0 {
+                        if self.more > 0 {
                             let line = crate::i18n::fmt(
                                 // i18n: Download complete's Open file menu: the files not listed; {count} = how many
                                 crate::i18n::t("{count} more in the folder"),
-                                &[("count", &crate::i18n::integer(more as u64))],
+                                &[("count", &crate::i18n::integer(self.more as u64))],
                             );
                             entries.push(MenuEntry::Item(
                                 crate::chrome::label(&line.replace('&', "&&")),
-                                DonePick::With,
+                                DonePick::Info,
                                 false,
                                 false,
                             ));
@@ -2042,13 +2073,14 @@ impl Complete {
                         false,
                     ));
                     // Each file's size at the line's end.
-                    let sizes: Vec<&'static str> = largest
+                    let sizes: Vec<&'static str> = self
+                        .largest
                         .iter()
                         .map(|f| crate::chrome::label(&dialog_size(f.1)))
                         .collect();
                     let hint = |c: &DonePick| match c {
                         DonePick::File(n) => sizes.get(*n).copied(),
-                        DonePick::With => None,
+                        DonePick::With | DonePick::Info => None,
                     };
                     let id = format!("complete-menu-{}", self.id);
                     let done = match crate::chrome::popup(
@@ -2061,20 +2093,20 @@ impl Complete {
                     ) {
                         PopupResult::Open | PopupResult::Neighbor(_) => false,
                         PopupResult::Chosen(DonePick::File(n)) => {
-                            picked = largest.get(n).map(|f| f.0.clone());
+                            picked = self.largest.get(n).map(|f| f.0.clone());
                             true
                         }
                         PopupResult::Chosen(DonePick::With) => {
                             with = true;
                             true
                         }
-                        PopupResult::Dismissed => true,
+                        PopupResult::Chosen(DonePick::Info) | PopupResult::Dismissed => true,
                     };
                     if done {
                         ui.ctx().data_mut(|d| d.remove::<Pos2>(menu_key));
                     }
                 }
-                if open {
+                if open && picked.is_none() {
                     picked = main.clone();
                 }
                 open |= picked.is_some();
@@ -2155,13 +2187,22 @@ impl Complete {
                 // A file that can't open says why (the box stays for Open folder). Looked for and
                 // handed over off the window's thread (upstream issue 743): the box closes once it
                 // opened.
-                let opened = self.opening.as_ref().and_then(|(k, a)| a.answer(k));
+                let opened = self
+                    .opening
+                    .as_ref()
+                    .and_then(|(k, a)| a.answer(k).map(|v| (k.clone(), v)));
                 if opened.is_some() {
                     self.opening = None;
                 }
-                if let Some(Opened::Gone(why)) = &opened {
-                    self.gone = Some(why.clone());
+                // The main file gone greys Open; another file of the menu gone is only said.
+                if let Some((k, Opened::Gone(why))) = &opened {
+                    if main.as_ref() == Some(k) {
+                        self.gone = Some(why.clone());
+                    } else {
+                        self.picked_gone = Some(why.clone());
+                    }
                 }
+                let opened = opened.map(|(_, v)| v);
                 if let Some(target) = picked.filter(|_| open && self.opening.is_none()) {
                     let opening = crate::launch::Asked::default();
                     let moved_away = self.moved_away;
@@ -2171,12 +2212,30 @@ impl Complete {
                         std::time::Duration::ZERO,
                         Some(ui.ctx()),
                         move |p: &PathBuf| {
-                            if !p.exists() {
-                                return Opened::Gone(if moved_away {
-                                    moved_away_text(p)
-                                } else {
-                                    gone_text(p)
-                                });
+                            // Only a file surely not there is "gone"; one that can't be looked at
+                            // (access denied, a share that dropped) says why.
+                            match p.try_exists() {
+                                Ok(false) => {
+                                    return Opened::Gone(if moved_away {
+                                        moved_away_text(p)
+                                    } else {
+                                        gone_text(p)
+                                    });
+                                }
+                                Err(e) => {
+                                    let name = crate::i18n::isolate(
+                                        &p.file_name().unwrap_or_default().to_string_lossy(),
+                                    );
+                                    tell(
+                                        crate::i18n::mark("Open"),
+                                        crate::i18n::fmt(
+                                            crate::i18n::t("{file} could not be opened: {error}"),
+                                            &[("file", &name), ("error", &e.to_string())],
+                                        ),
+                                    );
+                                    return Opened::Failed;
+                                }
+                                Ok(true) => {}
                             }
                             if open_download_now(p, moved_away) {
                                 Opened::Yes
@@ -2193,9 +2252,20 @@ impl Complete {
                     open_download_with(target, self.moved_away);
                     Outcome::Done(())
                 } else if folder {
-                    match &folder_act {
+                    match &self.folder_act {
                         FolderAct::Select(f) => show_download_in_folder(f, self.moved_away),
-                        FolderAct::Open(dir) => crate::launch::open(dir),
+                        // Looked at beside the window: a folder opens, anything else (a file
+                        // after all) is shown selected in its own.
+                        FolderAct::Open(dir) => {
+                            let (dir, moved_away) = (dir.clone(), self.moved_away);
+                            crate::launch::spawn("open folder", move || {
+                                if dir.is_dir() {
+                                    crate::launch::open(dir);
+                                } else {
+                                    show_download_in_folder(&dir, moved_away);
+                                }
+                            });
+                        }
                     }
                     Outcome::Done(())
                 } else if close {
@@ -2204,7 +2274,12 @@ impl Complete {
                     Outcome::Open
                 }
             },
-        )
+        );
+        // A menu left open isn't there when the box opens again.
+        if matches!(out, Outcome::Done(_)) {
+            ctx.data_mut(|d| d.remove::<Pos2>(menu_key));
+        }
+        out
     }
 }
 
