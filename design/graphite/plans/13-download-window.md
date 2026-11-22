@@ -163,6 +163,16 @@ Open folder opens its parent, so both "open a folder" (`dialogs.rs`, the Done wi
 - Tests: the main-file rule (one big file, an album of equal files, a 60 MB + 50 MB pair, one file);
   Open and Open folder targets for a folder download.
 - Boards 5, 7, 13, 14 (behaviour only here; their look lands in 13d).
+- Beyond the spec, kept on purpose: with no main file, the menu still ends in **Open with...**, on
+  the largest file (a folder can't be opened with a program; the largest is the likeliest one
+  wanted). Recorded in the plan-13 audit.
+- Audit fixes (after 13d): the box looks off its thread, as it is made, at its files (a torrent's
+  kept .torrent; a gallery's or a debrid torrent's folder walked, at most 5,000 files) and at
+  whether its main file and folder are there, so a file gone shows from the start (board 14),
+  not only after Open; Open folder on a folder that is gone says so and keeps the box; a file
+  picked while another opens waits greyed; the menu names files of one name by their path
+  inside the download. Menu labels still go through `chrome::label`'s app-lifetime cache
+  (`MenuEntry` takes `&'static str`; no other way in), six names a box.
 
 ## 13b · Progress window structure (behaviour, about 900 lines)
 
@@ -184,6 +194,9 @@ Open folder opens its parent, so both "open a folder" (`dialogs.rs`, the Done wi
   service, cant-resume, details.
 - Tests: Esc never cancels (`on_escape`); the When done mapping; Stop sharing persists across a
   restart; the window stays on screen when expanded.
+- Audit fix: an open window's When done follows Options' show-complete setting (and "Don't show
+  this window again") while it still holds what the setting gave it
+  (`Progress::follow_show_complete`); a choice changed by hand stays.
 
 ## 13c · Progress window look (look, about 1,200 lines)
 
@@ -215,6 +228,16 @@ Open folder opens its parent, so both "open a folder" (`dialogs.rs`, the Done wi
 state before and after, light and dark. After each part, `python tools/upstream-sync/sync.py status
 --fetch`: any newly conflicting upstream commit is noted in the PR. Help pictures that show these
 two windows are retaken once, after 13d (plan 12's retake skips them).
+
+## Website follow-up (not in this plan's scope)
+
+The website still describes the old window in a few places; a website PR changes them (and
+retakes the pictures they name):
+
+- `website/content/features/torrents.md:12`: the shot's alt text names the Pieces tab, gone since
+  13b (the strip and the Pieces row replace it).
+- `website/content/features/acceleration.md:53` and `website/content/features/speed-limiter.md:40`:
+  "Resume capability" is **Can resume** in Details since 13c.
 
 ## Definition of done
 

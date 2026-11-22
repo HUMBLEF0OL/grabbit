@@ -9,7 +9,7 @@
 #            ("options:connection"), "@main", "@menu:<show argument>" (a menu, over the main
 #            window), "@download:<lab server path>" (Download File Info, as a browser hands a
 #            download over), "@add:<lab server path>" (the Add window holding that address, never
-#            the clipboard's), "@complete:<path>" (Download complete), "@torrent" (Add torrent for
+#            the clipboard's), "@complete:<path>" (the Done window), "@torrent" (Add torrent for
 #            tools/lab/Open Movie Night.torrent); "a+b" runs /show a first ("theme:graphite+@main").
 #            Shots with the same take share one capture.
 #   from     instead of take: a picture already in the repository (the browser's, made by
@@ -494,7 +494,7 @@ id = "first-progress"
 page = "guide-first-download.md"
 under = "Steps"
 take = "progress"
-alt = "The progress window: speed, time left and each connection's share of the file"
+alt = "The progress window: how far it is, the time left, a strip of the file's parts and the speed"
 caption = "The progress window shows it coming in."
 
 [[shot]]
