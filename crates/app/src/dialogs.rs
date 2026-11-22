@@ -1889,7 +1889,7 @@ impl Complete {
         let (main, folder_act) = done_targets(&path, files.as_deref());
         let folder = files.is_some();
         let mut largest = files.unwrap_or_default();
-        largest.sort_by(|a, b| b.1.cmp(&a.1));
+        largest.sort_by_key(|f| std::cmp::Reverse(f.1));
         let more = largest.len().saturating_sub(6);
         largest.truncate(6);
         Complete {
