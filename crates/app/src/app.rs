@@ -2166,9 +2166,8 @@ impl App {
 
     /// The speed limit holding a running download back (upstream issue 1191,
     /// `model::Limit::binding`): its own as its job has it now (a video's or a gallery's as it
-    /// was started with,
-    /// `helper_limits`), against the limit for all downloads together while that applies,
-    /// shared by `running` downloads ([`Self::running`]).
+    /// was started with, `helper_limits`), against the limit for all downloads together while
+    /// that applies, shared by `running` downloads ([`Self::running`]).
     fn limit_of(&self, it: &Item, running: usize) -> Option<model::Limit> {
         let live = it.live.as_ref()?;
         let one = if live.dl.is_helper() {

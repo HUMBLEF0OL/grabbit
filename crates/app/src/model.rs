@@ -1535,8 +1535,9 @@ impl Limit {
 }
 
 /// The status strip's and the tray tip's word that the Speed Limiter is on (upstream issue
-/// 1191), whatever runs: the limit for one download (`one`, Downloads → Speed Limiter → Turn on) and the limit
-/// for all downloads together (`all`, while it applies), bytes/s. None while both are off.
+/// 1191), whatever runs: the limit for one download (`one`, Downloads → Speed Limiter → Turn
+/// on) and the limit for all downloads together (`all`, while it applies), bytes/s. None while
+/// both are off.
 pub fn limiter_hint(one: Option<u64>, all: Option<u64>) -> Option<String> {
     let t = crate::i18n::t;
     Some(match (one, all) {
