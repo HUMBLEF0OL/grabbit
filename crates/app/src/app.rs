@@ -142,7 +142,7 @@ enum Cmd {
     Exit,
     Stop,
     Remove,
-    /// Shift+Delete: Remove with "Also delete the files from disk" ticked.
+    /// Shift+Delete: Remove with its files box ("Also move the file to the Recycle Bin") ticked.
     RemoveWithFiles,
     Resume,
     StopAll,
@@ -2997,7 +2997,16 @@ impl App {
             }
             "speedlimit" => self.run(Cmd::LimiterSettings, None, ctx),
             "properties" if first.is_some() => self.run(Cmd::Properties, first, ctx),
-            "delete" if first.is_some() => self.run(Cmd::Remove, first, ctx),
+            // A finished download where there is one: its box reads "Also move the file to the
+            // Recycle Bin" (the help's delete-confirm shot, plan 12a).
+            "delete" if first.is_some() => {
+                let done = self
+                    .items
+                    .iter()
+                    .find(|i| i.status == Status::Complete && i.torrent.is_none())
+                    .map(|i| i.id);
+                self.run(Cmd::Remove, done.or(first), ctx);
+            }
             // Remove with files on every download (screenshots: the finished files it counts).
             "delete-files" => {
                 let all = self.items.iter().map(|i| i.id).collect();
@@ -3950,7 +3959,10 @@ impl App {
             // A finished file goes with a ticked box: the window says how many (upstream #1563).
             let finished = gone
                 .iter()
-                .filter(|i| i.status == Status::Complete && i.gallery.is_none())
+                // A torrent's files are deleted by its engine, not moved (plan 12, DA1t).
+                .filter(|i| {
+                    i.status == Status::Complete && i.gallery.is_none() && i.torrent.is_none()
+                })
                 .count() as u64;
             let mut ask = dialogs::ConfirmDelete::new(
                 gone.iter().map(|i| i.id).collect(),
@@ -15072,7 +15084,7 @@ mod settings_page_tests {
     }
 }
 
-/// Upstream #1563: "Also delete the files from disk" is never remembered, and nothing leaves the
+/// Upstream #1563: the files box ("Also move the files to the Recycle Bin") is never remembered, and nothing leaves the
 /// disk without the question: a list that remembered the box ticked, with the question turned
 /// off, deleted finished files with every Delete All Completed.
 #[cfg(test)]
@@ -15224,5 +15236,26 @@ mod delete_tests {
         assert_eq!(ids(&app), [3], "the running one stays");
         let (_, text) = app.notice.take().expect("said in a notice");
         assert!(text.starts_with("1 running download is kept"), "{text}");
+    }
+
+    /// Plan 12a: a finished torrent's files are deleted by its engine, never moved to the
+    /// Recycle Bin (DA1t), so the question doesn't count them as finished files that move.
+    #[test]
+    fn a_finished_torrent_is_not_counted_as_a_file_that_moves() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut items, _) = three(dir.path());
+        items[0].torrent = Some(
+            serde_json::from_value(serde_json::json!({
+                "hash": "0123456789abcdef0123456789abcdef01234567",
+                "folder": "a",
+            }))
+            .unwrap(),
+        );
+        let mut app = app_with_saved_tick(items, true);
+        let ctx = egui::Context::default();
+        app.selection.set(1);
+        app.run(Cmd::RemoveWithFiles, None, &ctx);
+        let ask = asked(&app);
+        assert_eq!((ask.ids.clone(), ask.finished), (vec![1], 0));
     }
 }

@@ -133,20 +133,30 @@ impl RssWindow {
                 }
             },
         );
-        if let Some((id, ask)) = &mut self.removing {
-            match ask.show(ctx) {
-                Outcome::Open => {}
-                Outcome::Closed => self.removing = None,
-                Outcome::Done(()) => {
-                    let id = *id;
-                    self.removing = None;
-                    asked = self.remove_feed(store, id).or(asked);
-                }
-            }
+        if let Some((_, ask)) = &mut self.removing {
+            let answer = ask.show(ctx);
+            asked = self.removal_answered(store, answer).or(asked);
         }
         match out {
             Outcome::Closed => Outcome::Closed,
             _ => asked.map_or(Outcome::Open, Outcome::Done),
+        }
+    }
+
+    /// The Remove feed question's answer: Yes removes the feed (and the store is saved), No or
+    /// Escape forgets the question; still open, nothing.
+    fn removal_answered(&mut self, store: &mut Store, answer: Outcome<()>) -> Option<Act> {
+        let id = self.removing.as_ref()?.0;
+        match answer {
+            Outcome::Open => None,
+            Outcome::Closed => {
+                self.removing = None;
+                None
+            }
+            Outcome::Done(()) => {
+                self.removing = None;
+                self.remove_feed(store, id)
+            }
         }
     }
 
@@ -1029,8 +1039,17 @@ mod tests {
         let yes = |win: &mut RssWindow, store: &mut Store, id: u64| {
             assert_eq!(click_remove(win, store), None, "asked, not removed");
             assert_eq!(win.removing.as_ref().map(|r| r.0), Some(id));
-            win.removing = None;
-            win.remove_feed(store, id)
+            let feeds = store.feeds.len();
+            // Still open, then No: nothing goes, the question is forgotten.
+            assert_eq!(win.removal_answered(store, Outcome::Open), None);
+            assert_eq!(win.removal_answered(store, Outcome::Closed), None);
+            assert!(win.removing.is_none());
+            assert_eq!(store.feeds.len(), feeds, "No keeps the feed");
+            // Asked again, Yes: it goes, and the store is saved.
+            assert_eq!(click_remove(win, store), None);
+            let act = win.removal_answered(store, Outcome::Done(()));
+            assert!(win.removing.is_none());
+            act
         };
 
         // Removing the first of two feeds selects the remaining one without indexing out of bounds.

@@ -84,7 +84,7 @@ pub struct Settings {
     /// Ask before deleting downloads ("Don't show this dialog again" clears it). Off, Delete only
     /// takes downloads off the list: deleting files from the disk always asks (upstream #1563).
     ///
-    /// Its "Also delete the files from disk" is never remembered: it starts unticked, or ticked
+    /// Its files box ("Also move the files to the Recycle Bin") is never remembered: it starts unticked, or ticked
     /// for one Shift+Delete. Lists before #1563 saved the last answer as `delete_files_too`,
     /// which made every later delete (and, with this off, one never asked) take the finished
     /// files too; that key is no longer read, and goes with the next save.
@@ -1124,7 +1124,7 @@ pub fn own_net() -> mdm_engine::Options {
 mod tests {
     use std::path::Path;
 
-    /// Upstream #1563: a list that remembered "Also delete the files from disk" ticked (and the
+    /// Upstream #1563: a list that remembered the delete question's files box ticked (and the
     /// question turned off) loads as before otherwise, and its next save drops the tick.
     #[test]
     fn a_remembered_files_tick_is_dropped() {

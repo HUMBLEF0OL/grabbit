@@ -150,7 +150,9 @@ Typing the start of a name while the list has the focus jumps to the first downl
 
 Select one or more downloads and press **Delete**, click **Delete** on the toolbar, or choose **File → Remove**. Grabbit asks first:
 
-- **Also move the file to the Recycle Bin** — unticked every time the question opens. Tick it to remove the files too: a finished download's file goes to the Recycle Bin, where you can restore it from. For an unfinished download (the box then says **Also delete the file from disk**), this deletes the part downloaded so far. When finished downloads are among the ones you delete, the question says how many finished files go to the Recycle Bin. Leave it unticked to take the downloads off the list and keep the files.
+- **Also move the file to the Recycle Bin** — unticked every time the question opens. Tick it to remove the files too: a finished download's file goes to the Recycle Bin, where you can restore it from. For an unfinished download (the box then says **Also delete the file from disk**), this deletes the part downloaded so far; with both kinds selected, the box says **Also delete the files (finished ones go to the Recycle Bin)**. When finished downloads are among the ones you delete, the question says how many finished files go to the Recycle Bin. A torrent's files are deleted, not moved. Leave it unticked to take the downloads off the list and keep the files.
+
+  Windows decides what the Recycle Bin takes: on a network or removable drive without one, or for a file too big for it, Windows may delete the file outright. A file Windows won't move (open in another program, or with a path longer than 260 characters) stays where it is, and Grabbit names it.
 - **Don't show this dialog again** — Grabbit stops asking: **Delete** then only takes downloads off the list and keeps their files. To be asked again, tick **Options → General → Confirm before deleting downloads**.
 
 Click **Yes** to delete, or **No** to keep everything.

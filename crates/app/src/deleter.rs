@@ -39,6 +39,13 @@ fn recycle(path: &Path, trash: impl Fn(&[PathBuf]) -> bool) -> io::Result<()> {
     if trash(&[path.to_owned()]) || gone(path) {
         Ok(())
     } else {
+        // The shell gives no reason: a file open in another program, or a path longer than
+        // the 260 characters it takes. The file stays; it is never deleted outright instead.
+        tracing::warn!(
+            "delete: {} ({} characters) not moved to the Recycle Bin; it stays",
+            path.display(),
+            path.as_os_str().len()
+        );
         Err(io::Error::other(
             // i18n: why a deleted download's file stayed (after "{file} could not be moved to the Recycle Bin: "); Windows gives no reason
             crate::i18n::t("Windows kept it (it may be open in another program)"),
