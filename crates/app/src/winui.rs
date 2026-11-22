@@ -4156,6 +4156,23 @@ pub fn footer_items(
                     b.icon,
                     PressFocus::Take,
                 );
+                // An icon alone (Download complete's ▾): its tip is its name for screen readers.
+                if b.label.is_empty()
+                    && let Some(tip) = b.tip
+                {
+                    let name = if b.tip_translated {
+                        tip
+                    } else {
+                        crate::i18n::t(tip)
+                    };
+                    expose(
+                        &resp,
+                        egui::Role::Button,
+                        name,
+                        b.kind != ButtonKind::Disabled,
+                        None,
+                    );
+                }
                 let resp = match b.tip {
                     Some(tip) if b.tip_translated => resp.on_hover_text(tip),
                     Some(tip) => resp.on_hover_text(crate::i18n::t(tip)),

@@ -418,6 +418,47 @@ fn take_place(item: &mut Item, target: PathBuf) {
     item.moved_away = false;
 }
 
+/// Download complete for finished download `i`.
+fn complete_box(i: &Item) -> Complete {
+    Complete::new(
+        i.id,
+        i.url.to_string(),
+        i.dest.clone(),
+        i.size.unwrap_or(i.downloaded),
+        i.notices.clone(),
+        i.moved_away,
+        done_files(i),
+    )
+}
+
+/// A download saved as a folder: its files (path, size), for Download complete's main file and
+/// menu (plan 13a); empty when they aren't known (a gallery, a debrid torrent's folder). None:
+/// its place is its one file.
+fn done_files(i: &Item) -> Option<Vec<(PathBuf, u64)>> {
+    let Some(t) = &i.torrent else {
+        return (i.gallery.is_some() || i.owns_folder()).then(Vec::new);
+    };
+    // ponytail: the kept .torrent (small, in Grabbit's own data folder) read on the window's
+    // thread once per box; off it if a slow profile folder ever shows.
+    let list = crate::torrents::torrent_file(&t.hash)
+        .and_then(|f| std::fs::read(f).ok())
+        .and_then(|b| mdm_torrent::files_from_bytes(&b).ok());
+    let Some(list) = list else {
+        // Not readable: a torrent's own folder is its place when it has several files.
+        return (i.dest == t.folder).then(Vec::new);
+    };
+    if list.iter().filter(|f| !f.padding).count() <= 1 {
+        return None;
+    }
+    Some(
+        list.into_iter()
+            .enumerate()
+            .filter(|(n, f)| !f.padding && t.files.as_ref().is_none_or(|c| c.contains(n)))
+            .map(|(_, f)| (i.dest.join(f.path), f.size))
+            .collect(),
+    )
+}
+
 /// The place a download about to start takes instead of its own, when its own belongs to
 /// another row (#442): two can wait under one name (nothing was on the disk when each was added,
 /// and they can start in the same moment, before the engine has reserved anything). None: it
@@ -2368,17 +2409,7 @@ impl App {
                 if self.settings.show_complete
                     && let Some(i) = self.items.iter().find(|i| i.id == id)
                 {
-                    self.complete.push(Complete {
-                        id,
-                        url: i.url.to_string(),
-                        path: i.dest.clone(),
-                        size: i.size.unwrap_or(i.downloaded),
-                        dont_show: false,
-                        notices: i.notices.clone(),
-                        seen: false,
-                        opening: None,
-                        moved_away: i.moved_away,
-                    });
+                    self.complete.push(complete_box(i));
                 }
             } else if !live {
                 self.start(id, true);
@@ -6889,10 +6920,7 @@ impl App {
             for c in &mut self.complete {
                 if c.id == id {
                     match &out {
-                        dialogs::DraggedOut::Moved(to) => {
-                            c.path = to.clone();
-                            c.moved_away = false;
-                        }
+                        dialogs::DraggedOut::Moved(to) => c.moved_to(to.clone()),
                         dialogs::DraggedOut::MovedAway => c.moved_away = true,
                     }
                 }
@@ -7511,17 +7539,7 @@ impl App {
             && this_file
             && let Some(i) = self.items.iter().find(|i| i.id == id)
         {
-            self.complete.push(Complete {
-                id,
-                url: i.url.to_string(),
-                path: i.dest.clone(),
-                size: i.size.unwrap_or(i.downloaded),
-                dont_show: false,
-                notices: i.notices.clone(),
-                seen: false,
-                opening: None,
-                moved_away: i.moved_away,
-            });
+            self.complete.push(complete_box(i));
         }
     }
 
@@ -9855,17 +9873,7 @@ impl App {
         };
         self.selection.set(id);
         if i.status == Status::Complete {
-            self.complete.push(Complete {
-                id,
-                url: i.url.to_string(),
-                path: i.dest.clone(),
-                size: i.size.unwrap_or(i.downloaded),
-                dont_show: false,
-                notices: i.notices.clone(),
-                seen: false,
-                opening: None,
-                moved_away: i.moved_away,
-            });
+            self.complete.push(complete_box(i));
         } else if i.live.is_none() {
             self.start(id, true);
         } else if self.settings.show_progress && !self.progress.iter().any(|p| p.id == id) {
