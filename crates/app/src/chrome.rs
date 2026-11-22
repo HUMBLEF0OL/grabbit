@@ -1269,6 +1269,14 @@ fn keyboard<C: Clone>(
 ) -> Option<PopupResult<C>> {
     let kb_key = sub_key.with("kb");
     let mut keys = ctx.input(menu_keys);
+    // The repeats menu_keys ignores are still the open menu's: they don't reach the controls
+    // underneath (a dialog's default button on a held Enter).
+    ctx.input_mut(|i| {
+        i.events.retain(|e| {
+            !matches!(e, egui::Event::Key { key, pressed: true, repeat, .. }
+                if runs_on_repeat(*key, *repeat))
+        })
+    });
     // Pressed in the menu's own windows: popup_level noted them as those windows drew.
     keys.extend(
         ctx.data_mut(|d| d.remove_temp::<Vec<egui::Key>>(sub_key.with("window-keys")))
@@ -1426,9 +1434,21 @@ pub fn popup_with_icons<C: Clone>(
     // (Escape drops the focus). Escape closing the menu gives them back.
     let opener = sub_key.with("opener");
     let focused_now = ctx.memory(|m| m.focused());
-    if let Some(f) = focused_now {
-        ctx.data_mut(|d| d.insert_temp(opener, f));
-    }
+    // A new opening (not shown the pass before: the `shown` record below) forgets the last
+    // one's control, which may be stale: a menu closed without popup being asked again (the
+    // menu bar's hover to another title, a command that closes the bar).
+    let pass = ctx.cumulative_pass_nr();
+    let new_opening = ctx
+        .data(|d| d.get_temp::<(u64, u64, MenuFocus)>(sub_key.with("shown")))
+        .is_none_or(|(_, last, _)| last + 1 < pass);
+    ctx.data_mut(|d| {
+        if new_opening {
+            d.remove::<egui::Id>(opener);
+        }
+        if let Some(f) = focused_now {
+            d.insert_temp(opener, f);
+        }
+    });
     // Read before keyboard() consumes it (asked after, it was never there: the keys were never
     // given back): in this window, or in the menu's own (noted as they drew).
     let escaped = ctx.input(|i| i.key_pressed(egui::Key::Escape))
@@ -1481,7 +1501,6 @@ pub fn popup_with_icons<C: Clone>(
     // The menus are other windows: any press that reaches the main window, Escape, or the
     // app losing focus closes them (as Win32 menus do) — except on the frame the menu opened,
     // whose press may be the very click that opened it.
-    let pass = ctx.cumulative_pass_nr();
     let shown = sub_key.with("shown");
     // Focus in the menu's own windows is still ours: a click in a menu window may give that
     // window the focus, and must not count as clicking away.
