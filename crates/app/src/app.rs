@@ -785,6 +785,10 @@ pub struct App {
     torrent_speed: (f64, Instant),
     /// The torrents' share of the global cap as last set, and when (`apply_global_limit`).
     torrent_cap: (Option<u64>, Instant),
+    /// The limit for all downloads together while it applies now (bytes/s; off, or "only while
+    /// I'm at the computer" and the user away: None), as `apply_global_limit` last worked it out:
+    /// what the Transfer rates and the status strip name (#1191).
+    global_cap: Option<u64>,
     /// File downloads' smoothed speed, when measured, and the global limiter's byte count
     /// then (`file_speed`).
     file_speed: (f64, Instant, u64),
@@ -1644,6 +1648,7 @@ impl App {
             torrent_fetched: HashMap::new(),
             torrent_speed: (0.0, Instant::now()),
             torrent_cap: (None, Instant::now()),
+            global_cap: None,
             file_speed: (0.0, Instant::now(), 0),
             blocklist_busy: Default::default(),
             torrents_started: false,
@@ -1938,9 +1943,18 @@ impl App {
                 &[("file", &crate::i18n::isolate(&file))],
             )
         });
-        let right = match (reading, self.activity()) {
-            (Some(r), Some(a)) => Some(format!("{r}   {a}")),
-            (r, a) => r.or(a),
+        // The Speed Limiter while on (upstream issue 1191), left of what runs: forgotten on, it
+        // is why downloads are slow. Left out where the right half (before the light/dark
+        // button) has no room for it; the tray's tip still says it.
+        let join = |parts: [Option<String>; 3]| {
+            let parts: Vec<String> = parts.into_iter().flatten().collect();
+            (!parts.is_empty()).then(|| parts.join("   "))
+        };
+        let activity = self.activity();
+        let half = (w - 8.0 - chrome::MODE_BUTTON.x) / 2.0 - 18.0;
+        let right = match join([reading.clone(), self.limiter_hint(), activity.clone()]) {
+            Some(all) if winui::text_width_font(p, font.clone(), &all) <= half => Some(all),
+            _ => join([reading, None, activity]),
         };
         let right_w = right
             .as_ref()
@@ -2013,17 +2027,20 @@ impl App {
         // The search first, on the downloads themselves (nothing allocated per download), so
         // only its matches get rows built.
         let search = self.find.active();
+        let running = self.running();
         self.view_items()
             .into_iter()
             .filter(|it| !search || self.find.matches(it))
-            .map(|it| (it.id, self.row(it, &queued)))
+            .map(|it| (it.id, self.row(it, &queued, running)))
             .filter(|(_, r)| list::matches(&self.list, r))
             .unzip()
     }
 
     /// One download's row in the list.
     /// `queued`: the downloads in a queue (worked out once for all the rows).
-    fn row(&self, it: &Item, queued: &std::collections::HashSet<u64>) -> list::Row {
+    fn row(&self, it: &Item, queued: &std::collections::HashSet<u64>, running: usize) -> list::Row {
+        // Every byte in (upstream issue 736): no rate, as once it is complete.
+        let receiving = it.live.is_some() && !it.past_last_byte();
         let status = if self.extracts.extracting(it.id) {
             // i18n: a download's status: its archive is being extracted (#37)
             crate::i18n::t("Extracting...").to_owned()
@@ -2047,8 +2064,7 @@ impl App {
                 it.size.map_or(String::new(), model::size_list),
                 status,
                 it.time_left(),
-                // Every byte in (upstream issue 736): no rate, as once it is complete.
-                if it.live.is_some() && !it.past_last_byte() {
+                if receiving {
                     model::rate(it.rate())
                 } else {
                     String::new()
@@ -2079,7 +2095,37 @@ impl App {
                     .as_ref()
                     .map_or(String::new(), |t| model::rate(t.up_speed)),
             ],
+            // The limit holding it back (upstream issue 1191), in the Transfer rate cell's tip.
+            rate_tip: receiving
+                .then(|| self.limit_of(it, running))
+                .flatten()
+                .map(model::Limit::tip),
         }
+    }
+
+    /// How many downloads run now: the ones sharing the limit for all downloads together.
+    fn running(&self) -> usize {
+        self.items.iter().filter(|i| i.live.is_some()).count()
+    }
+
+    /// The speed limit holding a running download back (#1191, `model::Limit::binding`): its
+    /// own as its job has it now (a video's or a gallery's as it was started with,
+    /// `helper_limits`), against the limit for all downloads together while that applies,
+    /// shared by `running` downloads ([`Self::running`]).
+    fn limit_of(&self, it: &Item, running: usize) -> Option<model::Limit> {
+        let live = it.live.as_ref()?;
+        let one = if live.dl.is_helper() {
+            self.helper_limits(it.id).0
+        } else {
+            live.dl.speed_limit()
+        };
+        model::Limit::binding(one, self.global_cap, running)
+    }
+
+    /// The Speed Limiter's word for the status strip and the tray's tip (#1191), while either
+    /// of its limits is on (`model::limiter_hint`).
+    fn limiter_hint(&self) -> Option<String> {
+        model::limiter_hint(self.settings.speed_limit(), self.global_cap)
     }
 
     /// The view's downloads in the list's order, before the column filters.
@@ -3993,6 +4039,7 @@ impl App {
         let active = crate::win32::idle_seconds() < 60;
         let rate = (s.global_limit_on && (!s.global_only_active || active))
             .then(|| s.global_limit_kb.max(1) * 1024);
+        self.global_cap = rate;
         let torrents = self.torrent_speed();
         let files = self.file_speed();
         // The torrents' limit moves in eighths of the cap, at most every 3 s: librqbit starts
@@ -4211,10 +4258,15 @@ impl App {
             t.set_queue(q.running);
         }
         if let Some(t) = &self.tray {
-            let tip = match self.activity() {
+            let mut tip = match self.activity() {
                 Some(a) => format!("{}\n{a}", crate::MAIN_TITLE),
                 None => crate::MAIN_TITLE.to_owned(),
             };
+            // The Speed Limiter while on (upstream issue 1191).
+            if let Some(hint) = self.limiter_hint() {
+                tip.push('\n');
+                tip.push_str(&hint);
+            }
             t.set_tooltip(&tip);
             // "Downloads in progress": each running download, to show its progress window (#63).
             let running: Vec<(u64, String)> = self
@@ -10976,7 +11028,18 @@ impl App {
         // Off-screen test copies have no tray icon: their windows are drawn as if they had one
         // (the captures and the accessibility checks see the hide button).
         let tray = self.tray.is_some() || crate::offscreen();
+        // The limit each one's download is under (upstream issue 1191), for its Transfer rate.
+        let running = self.running();
+        let limits: HashMap<u64, model::Limit> = self
+            .progress
+            .iter()
+            .filter_map(|p| {
+                let it = self.items.iter().find(|i| i.id == p.id)?;
+                Some((p.id, self.limit_of(it, running)?))
+            })
+            .collect();
         for p in &mut self.progress {
+            p.limit = limits.get(&p.id).copied();
             p.keep_sharing = self.settings.torrent_keep_sharing;
             if p.host.is_none() {
                 p.host = Some(self.torrent_host.clone());
@@ -13695,6 +13758,7 @@ mod old_keys_tests {
                 icon: crate::chrome::IconKey::Themed("ft-generic"),
                 queued: false,
                 cells,
+                rate_tip: None,
             }
         };
         let rows = [row("a.zip"), row("b.iso")];
