@@ -34,7 +34,7 @@ Each download is then held to that speed. **Downloads → Speed Limiter → Turn
 
 The other downloads keep their speed.
 
-> Some servers drop the connection when the speed is very low. Don't set a tight limit for a server that can't resume (**Resume capability: No** in the progress window).
+> Some servers drop the connection when the speed is very low. Don't set a tight limit for a server that can't resume (**Can resume: No** in the progress window's details).
 
 ## Next steps
 

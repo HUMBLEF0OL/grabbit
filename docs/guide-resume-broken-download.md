@@ -41,7 +41,7 @@ If the site replaced the file with a new version, the parts Grabbit has don't fi
 
 ## When resuming isn't possible
 
-Look at **Resume capability** in the progress window. **No** means the server can't send a file in parts. Grabbit then uses one connection, and a download that stops has to start over. For such servers, avoid stopping the download, and avoid a very low speed limit, which can make the server drop the connection.
+Look at **Can resume** in the progress window (click **Show details**). **No** means the server can't send a file in parts. Grabbit then uses one connection, and a download that stops has to start over. For such servers, avoid stopping the download, and avoid a very low speed limit, which can make the server drop the connection.
 
 ## Next steps
 

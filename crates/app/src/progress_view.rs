@@ -1,18 +1,25 @@
-//! The progress window's layout (plan 13b), a child module of progress.rs: the compact view,
-//! 440 points wide, and Details, which widens the window to 760 to the right (the compact block
-//! stays at the left in a column of 400, the details in a right column of 288). What it shows
-//! comes from progress.rs (`status_page`'s status, `finishing_fraction`, the torrent details),
-//! so upstream fixes there still apply as they are; the look is 13c's and 13d's to restyle.
-//! Coordinates are English client points from the body's origin.
+//! The progress window's layout and look (plan 13b's structure, 13c's look), a child module of
+//! progress.rs: the compact view, 440 points wide, and Details, which widens the window to 760 to
+//! the right (the compact block stays at the left in a column of 400, the details in a right
+//! column of 288). What it shows comes from progress.rs (`status_word`, `finishing_fraction`, the
+//! torrent details), so upstream fixes there still apply as they are.
+//!
+//! The look is the mockup canvas's (boards 1, 2, 3, 6, 10-12): two edges only (x 20 and the
+//! right edge), steps of the 4 px scale; the name, one large reading with the time left, a 6 px
+//! strip drawn from the real data (a file's segments, a torrent's pieces, else one plain fill),
+//! a detail line and the footer. Coordinates are English client points from the body's origin.
 
-use egui::{Pos2, Ui, vec2};
+use std::collections::VecDeque;
+
+use egui::{Color32, FontFamily, FontId, Pos2, Rect, Response, Sense, Stroke, Ui, pos2, vec2};
 use mdm_engine::Snapshot;
+use mdm_engine::download::ConnStatus;
 
 use super::{Action, Progress, Samples, TTab, TorrentCmd};
 use crate::model::{Item, Status};
 use crate::queue::{TurnOff, WhenDone};
 use crate::torrents::Details;
-use crate::winui::{self, ButtonKind, r, text};
+use crate::winui::{self, ButtonKind, r};
 
 /// The compact window's width and Details'.
 pub const COMPACT_W: f32 = 440.0;
@@ -25,50 +32,154 @@ const RIGHT_X: f32 = EDGE + LEFT_W + 32.0;
 const RIGHT_W: f32 = 288.0;
 const _: () = assert!(RIGHT_X + RIGHT_W + EDGE == DETAILS_W);
 const _: () = assert!(EDGE + LEFT_W + EDGE == COMPACT_W);
-/// A torrent's tables in the right column (their tab pane a few points wider), and the pane's
-/// height (the tables and their commands).
-pub const TABLE_W: f32 = RIGHT_W - 6.0;
-pub const PANE_H: f32 = 250.0;
-/// The tab strip's top in the right column.
-const TABS_Y: f32 = 8.0;
-/// The strip's columns (its frame takes one more): the left column's width.
-pub const STRIP_COLS: f32 = LEFT_W - 1.0;
-const STRIP_Y: f32 = 168.0;
-/// The state's line under the strip (its baseline).
-const MSG_BASE: f32 = 202.0;
-const COMPACT_FOOTER_Y: f32 = 214.0;
-/// Details' rows in the left column: Saved to, From, a torrent's Peers, Sent and Pieces, then
-/// Limit, Remember for this file and its note, When done, Force apps to close.
-const ROW: f32 = 22.0;
-const SAVED_Y: f32 = 222.0;
-const LIMIT_Y: f32 = 270.0;
-const REMEMBER_Y: f32 = 300.0;
-const NOTE_BASE: f32 = 330.0;
-const WHEN_Y: f32 = 342.0;
-const FORCE_Y: f32 = 372.0;
-const DETAILS_FOOTER_Y: f32 = 398.0;
-/// Where the values start after their labels.
-const VALUE_X: f32 = 108.0;
+/// The strip: as wide as the left column, 6 high.
+pub const STRIP_W: f32 = LEFT_W;
+const STRIP_H: f32 = 6.0;
+/// The compact block (boards 1, 6): the name's baseline (13/500), the reading's (28/500), the
+/// strip's top, the detail line's baseline (12), the state's line's (13).
+const NAME_BASE: f32 = 21.0;
+const READ_BASE: f32 = 64.0;
+const STRIP_Y: f32 = 80.0;
+const DETAIL_BASE: f32 = 106.0;
+const LINE_BASE: f32 = 132.0;
+/// What the state's line takes in Details, above the facts.
+const LINE_ROOM: f32 = 28.0;
+const COMPACT_FOOTER_Y: f32 = 156.0;
+/// Details' facts under the compact block: a key column of 88, then the values.
+const FACTS_Y: f32 = 130.0;
+const VALUE_X: f32 = EDGE + 88.0;
+/// The footer's buttons, and the room under them.
+const BUTTON_H: f32 = 28.0;
 const BOTTOM: f32 = 20.0;
 const GAP: f32 = 8.0;
+/// The right column's top, a header's height (its text, 8 and its line), the speed graph's.
+const TOP: f32 = 8.0;
+const HEAD: f32 = 25.0;
+const GRAPH_H: f32 = 44.0;
+/// A table's rows (each with its line under it), its column titles' row, rows shown at once.
+const ROW_H: f32 = 26.0;
+const TITLES_H: f32 = 24.0;
+const ROWS_SHOWN: usize = 5;
+/// An icon-only button.
+const ICON_BUTTON: f32 = 24.0;
 
-/// How much lower a torrent's rows from Limit down sit: its Peers, Sent and Pieces rows.
-fn facts_drop(torrent: bool) -> f32 {
-    if torrent { 3.0 * ROW } else { 0.0 }
+/// What a download is, for the window's rows and right column.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    /// A file the engine downloads: its segments, Server, Can resume, the connections.
+    File,
+    Torrent,
+    /// A video or a gallery, one progress for the whole job: Format and Downloaded by.
+    Video,
 }
 
-fn footer_y(details: bool, torrent: bool) -> f32 {
+impl Kind {
+    pub fn of(item: &Item) -> Kind {
+        if item.torrent.is_some() {
+            Kind::Torrent
+        } else if item.video.is_some() || item.gallery.is_some() {
+            Kind::Video
+        } else {
+            Kind::File
+        }
+    }
+}
+
+/// Details' rows in the left column, in order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Fact {
+    Saved,
+    Source,
+    Server,
+    CanResume,
+    Format,
+    By,
+    Peers,
+    Sent,
+    Pieces,
+    Limit,
+    Remember,
+    Note,
+    WhenDone,
+    Force,
+}
+
+impl Fact {
+    /// A row of text is 16 high; one with a text box or a drop-down 26.
+    fn height(self) -> f32 {
+        match self {
+            Fact::Limit | Fact::WhenDone => ROW_H,
+            _ => 16.0,
+        }
+    }
+}
+
+fn facts(kind: Kind) -> Vec<Fact> {
+    let middle: &[Fact] = match kind {
+        Kind::File => &[Fact::Server, Fact::CanResume],
+        Kind::Torrent => &[Fact::Peers, Fact::Sent, Fact::Pieces],
+        Kind::Video => &[Fact::Format, Fact::By],
+    };
+    [Fact::Saved, Fact::Source]
+        .into_iter()
+        .chain(middle.iter().copied())
+        .chain([
+            Fact::Limit,
+            Fact::Remember,
+            Fact::Note,
+            Fact::WhenDone,
+            Fact::Force,
+        ])
+        .collect()
+}
+
+/// Where the facts start: under the state's line when there is one.
+fn facts_top(line: bool) -> f32 {
+    FACTS_Y + if line { LINE_ROOM } else { 0.0 }
+}
+
+fn facts_end(kind: Kind, top: f32) -> f32 {
+    facts(kind).iter().fold(top, |y, f| y + f.height() + GAP) - GAP
+}
+
+/// A table's height at its fewest rows.
+fn table_height() -> f32 {
+    TITLES_H + ROWS_SHOWN as f32 * ROW_H
+}
+
+/// What a torrent's commands take under its table: 12, then two rows of check boxes.
+const COMMANDS_H: f32 = 12.0 + 16.0 + GAP + 16.0;
+
+/// The whole rows a table whose titles start at `y` shows down to `bottom` (the left column's
+/// end), five at the fewest.
+fn rows_down_to(y: f32, bottom: f32) -> usize {
+    (((bottom - y - TITLES_H) / ROW_H).floor().max(0.0) as usize).max(ROWS_SHOWN)
+}
+
+/// The right column's end: the speed graph and the connections, the graph only, or the tabs
+/// with their table and commands.
+fn right_end(kind: Kind) -> f32 {
+    let graph = TOP + HEAD + GAP + GRAPH_H;
+    match kind {
+        Kind::File => graph + 16.0 + HEAD + table_height(),
+        Kind::Video => graph,
+        Kind::Torrent => TOP + HEAD + table_height() + COMMANDS_H,
+    }
+}
+
+fn footer_y(details: bool, kind: Kind, line: bool) -> f32 {
     if details {
-        DETAILS_FOOTER_Y + facts_drop(torrent)
+        facts_end(kind, facts_top(line)).max(right_end(kind)) + 12.0
     } else {
         COMPACT_FOOTER_Y
     }
 }
 
-/// The window's body (under the title bar), compact or with Details.
-pub fn size(details: bool, torrent: bool) -> [f32; 2] {
+/// The window's body (under the title bar), compact or with Details; `line`: the state has a
+/// line of its own under the strip.
+pub fn size(details: bool, kind: Kind, line: bool) -> [f32; 2] {
     let w = if details { DETAILS_W } else { COMPACT_W };
-    [w, footer_y(details, torrent) + winui::CONTROL_H + BOTTOM]
+    [w, footer_y(details, kind, line) + BUTTON_H + BOTTOM]
 }
 
 /// When done (plan 13b): one list for every download, torrents too.
@@ -341,160 +452,55 @@ impl Look {
     }
 }
 
-/// The window's body (progress.rs's `Progress::body`): the compact block, Details when shown,
-/// and the footer. The action asked for.
-pub(super) fn body(
+/// The state as the window shows it this frame (progress.rs's `show` asks first: the window's
+/// size depends on its line): the phase, the status word beside the name (none while it simply
+/// downloads), and the state's line under the strip (an alert or not).
+pub(super) struct Shown {
+    pub phase: Phase,
+    pub word: Option<String>,
+    pub line: Option<(String, bool)>,
+}
+
+pub(super) fn shown(
     pr: &mut Progress,
-    ui: &mut Ui,
-    o: Pos2,
     item: &Item,
     snap: Option<&Snapshot>,
-    frac: Option<f64>,
-    drawn: (f64, &[(u64, f64)]),
-) -> Action {
-    let p = ui.painter().clone();
-    let torrent = item.torrent.is_some();
-    let d = if torrent { pr.torrent_data(item) } else { None };
+    d: Option<&Details>,
+) -> Shown {
     // Stop's question is asked only while it downloads.
     if item.status != Status::Downloading {
         pr.confirm_stop = false;
     }
     let sharing = item.status == Status::Complete
-        && d.as_ref()
-            .and_then(|d| d.stats.as_ref())
+        && d.and_then(|d| d.stats.as_ref())
             .is_some_and(|s| s.phase == mdm_torrent::Phase::Finished);
     let look = pr.sample_look;
     let phase = look.map_or_else(|| phase_of(item, snap, pr, sharing), Look::phase);
-
-    // The name, then the download's rows (status_page's labels at the window's edge).
-    winui::fit(
-        ui,
-        &p,
-        o.x + EDGE,
-        o.y + 22.0,
-        &item.file_name,
-        winui::TEXT(),
-        o.x + EDGE + LEFT_W,
-        "progress-name",
-    );
-    let word = look.and_then(Look::word);
-    super::status_page(
-        ui,
-        o + vec2(EDGE - 33.0, -4.0),
-        33.0 + LEFT_W,
+    let look_word = look.and_then(Look::word);
+    let status = super::status_word(
         item,
         snap,
-        frac,
-        pr.limit,
         Samples {
             failed_with: pr.sample_error.as_deref(),
             merging: pr.sample_merging,
-            helper: pr.sample_helper.as_ref(),
             live: pr.sample_live,
-            word: word.as_deref(),
-            no_size: look == Some(Look::UnknownSize),
+            word: look_word.as_deref(),
         },
     );
-    strip(
-        &p,
-        o,
-        item,
-        snap,
-        pr.sample_merging,
-        d.as_ref(),
-        drawn,
-        look == Some(Look::UnknownSize),
-    );
-    if let Some((line, alert)) = message(pr, phase, d.as_ref()) {
-        let (rc, cut) = winui::text_fit(
-            &p,
-            o.x + EDGE,
-            o.y + MSG_BASE,
-            &line,
-            winui::TEXT(),
-            o.x + EDGE + LEFT_W,
-        );
-        let resp = winui::copyable(ui, rc, "progress-message", &line, cut);
-        let role = if alert {
-            egui::Role::Alert
-        } else {
-            egui::Role::Label
-        };
-        winui::expose(&resp, role, &line, true, None);
-    }
-
-    let mut action = Action::None;
-    if pr.details {
-        pr.init_limits(item);
-        action = left_details(pr, ui, &p, o, item, d.as_ref());
-        let right = if torrent {
-            pr.torrent_details(
-                ui,
-                &p,
-                o + vec2(RIGHT_X - 17.0, TABS_Y - 226.0),
-                item,
-                d.as_ref(),
-            )
-        } else {
-            if item.video.is_none() && item.gallery.is_none() {
-                // i18n: caption over a download's connections table in its window's details
-                let caption = crate::i18n::t("Connections");
-                text(&p, o.x + RIGHT_X, o.y + 22.0, caption, winui::TEXT());
-                super::connections(
-                    ui,
-                    &p,
-                    o + vec2(RIGHT_X - 17.0, 30.0 - 273.0),
-                    snap,
-                    RIGHT_W,
-                );
-            }
-            // A video's speed graph comes with 13c.
-            Action::None
-        };
-        if matches!(action, Action::None) {
-            action = right;
-        }
-    }
-    let footer = footer_row(pr, ui, &p, o, item, phase);
-    if matches!(action, Action::None) {
-        footer
+    let failed = matches!(phase, Phase::Failed { .. });
+    // A failed download's reason is its line ("Error: ..."; 13d words it), the word says Error.
+    let line = if failed {
+        Some((status.clone(), true))
     } else {
-        action
-    }
-}
-
-/// The strip under the rows: how far the check or the join after the last byte has come (in the
-/// accent), a torrent's pieces, a file's segments, else one plain fill (13c restyles it);
-/// empty for a size not known (`no_size`).
-#[allow(clippy::too_many_arguments)]
-fn strip(
-    p: &egui::Painter,
-    o: Pos2,
-    item: &Item,
-    snap: Option<&Snapshot>,
-    merging: Option<f64>,
-    d: Option<&Details>,
-    drawn: (f64, &[(u64, f64)]),
-    no_size: bool,
-) {
-    let (x0, y0) = (o.x + EDGE, o.y + STRIP_Y);
-    let rc = r(o, EDGE, STRIP_Y, LEFT_W, 15.0);
-    if no_size {
-        // A size not known (a screenshot's): an empty strip.
-        winui::meter(p, rc, 0.0);
-    } else if let Some(f) = merging.or(super::finishing_fraction(snap)) {
-        winui::meter_in(p, rc, f as f32, crate::theme::colors().accent);
-    } else if let Some(d) = d.filter(|d| !d.pieces.is_empty()) {
-        super::piece_bar(p, x0, y0, STRIP_COLS as usize, &d.pieces);
-    } else if item.torrent.is_none()
-        && item.video.is_none()
-        && item.gallery.is_none()
-        && item.size.is_some_and(|s| s > 0)
-    {
-        super::segment_bar(p, x0, y0, STRIP_COLS, item, drawn.1);
-    } else {
-        winui::meter(p, rc, drawn.0 as f32);
-    }
+        message(pr, phase, d)
+    };
+    let word = match phase {
+        Phase::Running => None,
+        // i18n: a download's status (state it is in, not a command): it failed
+        Phase::Failed { .. } | Phase::WebPage => Some(crate::i18n::t("Error").to_owned()),
+        _ => Some(status),
+    };
+    Shown { phase, word, line }
 }
 
 /// The state's line under the strip, and whether it is an alert (read out at once).
@@ -528,194 +534,825 @@ fn message(pr: &Progress, phase: Phase, d: Option<&Details>) -> Option<(String, 
     }
 }
 
-/// Details' left column under the compact block: Saved to, From, a torrent's Peers, Sent and
-/// Pieces, Limit (with Remember for this file and its note; a torrent's upload limit too), When
-/// done. The action asked for (the folder or copy buttons).
+// ---- the look's parts ------------------------------------------------------------------------
+
+fn font(size: f32, family: &str) -> FontId {
+    FontId::new(size, FontFamily::Name(family.into()))
+}
+
+/// The interface's face (Geist under Graphite), at `size`.
+fn face(size: f32) -> FontId {
+    font(size, "tahoma")
+}
+
+/// Its Medium: the name, the tabs.
+fn medium(size: f32) -> FontId {
+    font(size, "geist-medium")
+}
+
+/// Figures that line up as they change (plan 05's `numbers` family).
+fn figures(size: f32) -> FontId {
+    font(size, crate::theme::NUMBERS)
+}
+
+fn ink() -> Color32 {
+    winui::TEXT()
+}
+
+fn muted() -> Color32 {
+    crate::theme::colors().muted
+}
+
+fn secondary() -> Color32 {
+    crate::theme::colors().text_secondary
+}
+
+/// `s` with its ink ending at English x `right`.
+fn draw_right(p: &egui::Painter, f: FontId, right: f32, base: f32, s: &str, c: Color32) -> Rect {
+    let w = winui::text_width_font(p, f.clone(), s);
+    winui::text_font(p, f, right - w, base, s, c)
+}
+
+/// `s` from `x` to at most `right` (English x), cut with "..." and then whole on hover; its
+/// right-click menu copies it.
+#[allow(clippy::too_many_arguments)]
+fn cell(
+    ui: &Ui,
+    p: &egui::Painter,
+    f: FontId,
+    x: f32,
+    base: f32,
+    right: f32,
+    s: &str,
+    c: Color32,
+    salt: impl std::hash::Hash + std::fmt::Debug,
+) -> Rect {
+    let shown = winui::ellipsize(p, &f, s, (right - x).max(0.0));
+    let rc = winui::text_font(p, f, x, base, &shown, c);
+    winui::copyable(ui, rc, salt, s, shown != s);
+    rc
+}
+
+/// [`cell`] with its ink ending at `right`, starting no further out than `left`.
+#[allow(clippy::too_many_arguments)]
+fn cell_right(
+    ui: &Ui,
+    p: &egui::Painter,
+    f: FontId,
+    left: f32,
+    base: f32,
+    right: f32,
+    s: &str,
+    c: Color32,
+    salt: impl std::hash::Hash + std::fmt::Debug,
+) -> Rect {
+    let shown = winui::ellipsize(p, &f, s, (right - left).max(0.0));
+    let rc = draw_right(p, f, right, base, &shown, c);
+    winui::copyable(ui, rc, salt, s, shown != s);
+    rc
+}
+
+/// A flat 24-point button showing only Graphite's `icon` in the muted ink, its face under the
+/// pointer (the hover token); `tip` (English) its name and its tooltip, under the pointer and on
+/// keyboard focus.
+fn icon_button(ui: &mut Ui, rc: Rect, icon: &str, tip: &str) -> Response {
+    let id = egui::Id::unique(("progress-icon-button", ui.ctx().viewport_id(), icon));
+    let resp = ui.interact(rc, id, Sense::click());
+    winui::focus_on_press(&resp);
+    let tip = crate::i18n::t(tip);
+    winui::expose(&resp, egui::Role::Button, tip, true, None);
+    let p = ui.painter();
+    if resp.hovered() || resp.has_focus() {
+        p.rect_filled(rc, 4.0, crate::theme::colors().button_hot);
+    }
+    let glyph = Rect::from_center_size(rc.center(), vec2(13.0, 13.0));
+    crate::themeicons::paint_graphite_in(ui, p, icon, glyph, muted());
+    winui::show_focus(ui, &resp, rc);
+    winui::tip(resp, tip)
+}
+
+// ---- the reading and the strip ---------------------------------------------------------------
+
+/// The large reading (13d adds the states' own).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Reading {
+    /// How far, with a size to take a share of.
+    Percent(f64),
+    /// No size: how much has come.
+    Amount(u64),
+    /// Nothing yet: the status word.
+    Word(String),
+}
+
+/// The reading's figure for a fraction: whole percents, one decimal below 10 (a torrent's 6.7),
+/// rounded down so 100 shows only when it is all there.
+pub fn reading_figure(frac: f64) -> String {
+    // A hair over, so 0.29 × 100 (28.999...) reads 29.
+    let pct = (frac * 100.0).clamp(0.0, 100.0) + 1e-9;
+    if frac <= 0.0 {
+        "0".to_owned()
+    } else if pct < 10.0 {
+        format!("{:.1}", (pct * 10.0).floor() / 10.0) // not translated: a number
+    } else {
+        format!("{}", pct.floor().min(100.0) as u32) // not translated: a number
+    }
+}
+
+/// "2.38 of 5.80 GB": the amount so far and the size (the app's sizes), the unit said once when
+/// both have it; the amount alone without a size.
+pub fn so_far(done: u64, total: Option<u64>) -> String {
+    let d = crate::model::size(done);
+    let Some(t) = total.filter(|t| *t > 0).map(crate::model::size) else {
+        return d;
+    };
+    let d = match (d.rsplit_once(' '), t.rsplit_once(' ')) {
+        (Some((n, u)), Some((_, v))) if u == v => n.to_owned(),
+        _ => d,
+    };
+    crate::i18n::fmt(
+        // i18n: the download window's detail line: {done} so far of {total}, as "2.38 of 5.80 GB"
+        crate::i18n::t("{done} of {total}"),
+        &[("done", &d), ("total", &t)],
+    )
+}
+
+/// One segment of a file's strip, from the strip's start: its room from `x0` to `x1`, filled
+/// to `fill`, with a tick there while it is still being written.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Part {
+    pub x0: f32,
+    pub x1: f32,
+    pub fill: f32,
+    pub tick: bool,
+}
+
+/// What the strip shows (13d adds the states' kinds: stopped, failed...).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Strip {
+    /// Nothing known to show (a size not known).
+    Empty,
+    /// One fill this far: a video, a gallery, segments too narrow to tell apart; `after`: a
+    /// step after the bytes (a check, a join) on its accent track.
+    Plain { fraction: f32, after: bool },
+    /// A file's segments.
+    Segments(Vec<Part>),
+    /// A torrent's pieces in columns, each lit by how much of it is in (0 to 1).
+    Pieces(Vec<f32>),
+}
+
+/// A segment narrower than this, and more segments than this, make the strip one plain fill.
+const MIN_PART: f32 = 3.0;
+const MAX_PARTS: usize = 48;
+/// The gap between segments, and the cursor's tick.
+const PART_GAP: f32 = 1.0;
+const TICK_W: f32 = 2.0;
+
+/// A file's segments (`segments`: each one's start and bytes done, as drawn) across `width`
+/// points of a file of `total` bytes: each as wide as its share of the file (from its start to
+/// the next one's, as the engine splits the file), filled from its start as far as it has
+/// come, a tick at its cursor while it is still being written. None when one would be narrower
+/// than 3 points or there are more than 48: one plain fill then.
+pub fn segment_parts(segments: &[(u64, f64)], total: u64, width: f32) -> Option<Vec<Part>> {
+    if total == 0 || segments.is_empty() || segments.len() > MAX_PARTS {
+        return None;
+    }
+    let mut s = segments.to_vec();
+    s.sort_by_key(|g| g.0);
+    let x = |b: u64| (b.min(total) as f64 / total as f64 * f64::from(width)) as f32;
+    let mut parts = Vec::with_capacity(s.len());
+    for (i, &(start, done)) in s.iter().enumerate() {
+        let end = s.get(i + 1).map_or(total, |n| n.0);
+        let (a, b) = (x(start), x(end));
+        if b - a < MIN_PART {
+            return None;
+        }
+        let x1 = if i + 1 == s.len() { b } else { b - PART_GAP };
+        let share = (done / end.saturating_sub(start).max(1) as f64).clamp(0.0, 1.0) as f32;
+        parts.push(Part {
+            x0: a,
+            x1,
+            fill: a + (x1 - a) * share,
+            tick: share < 1.0,
+        });
+    }
+    Some(parts)
+}
+
+/// What the strip shows for this download (`drawn`: the fraction and the segments as they
+/// glide, progress.rs's `Glide`).
+fn strip_of(
+    item: &Item,
+    snap: Option<&Snapshot>,
+    merging: Option<f64>,
+    d: Option<&Details>,
+    drawn: (f64, &[(u64, f64)]),
+    no_size: bool,
+) -> Strip {
+    if no_size {
+        return Strip::Empty;
+    }
+    if let Some(f) = merging.or(super::finishing_fraction(snap)) {
+        return Strip::Plain {
+            fraction: f as f32,
+            after: true,
+        };
+    }
+    if let Some(d) = d.filter(|d| !d.pieces.is_empty()) {
+        let cols = d.pieces.len().min(STRIP_W as usize);
+        return Strip::Pieces(
+            (0..cols)
+                .map(|c| super::piece_column(&d.pieces, c, cols))
+                .collect(),
+        );
+    }
+    if Kind::of(item) == Kind::File
+        && let Some(total) = item.size.filter(|s| *s > 0)
+        && let Some(parts) = segment_parts(drawn.1, total, STRIP_W)
+    {
+        return Strip::Segments(parts);
+    }
+    Strip::Plain {
+        fraction: drawn.0 as f32,
+        after: false,
+    }
+}
+
+/// The strip at the compact block's place.
+fn paint_strip(p: &egui::Painter, o: Pos2, strip: &Strip) {
+    let c = crate::theme::colors();
+    let (track, fill) = (c.meter_track, c.progress_bar);
+    let at = |x0: f32, x1: f32| r(o, EDGE + x0, STRIP_Y, (x1 - x0).max(0.0), STRIP_H);
+    match strip {
+        Strip::Empty => winui::solid(p, at(0.0, STRIP_W), track),
+        Strip::Plain { fraction, after } => {
+            let back = if *after { c.strip_accent } else { track };
+            winui::solid(p, at(0.0, STRIP_W), back);
+            winui::solid(p, at(0.0, STRIP_W * fraction.clamp(0.0, 1.0)), fill);
+        }
+        Strip::Segments(parts) => {
+            for part in parts {
+                winui::solid(p, at(part.x0, part.x1), track);
+                winui::solid(p, at(part.x0, part.fill), fill);
+            }
+            // The ticks over the fills, as high as the strip (the boards clip them to it).
+            for part in parts.iter().filter(|g| g.tick) {
+                let x = part.fill.min(part.x1 - TICK_W).max(part.x0);
+                winui::solid(p, at(x, x + TICK_W), ink());
+            }
+        }
+        Strip::Pieces(cols) => {
+            winui::solid(p, at(0.0, STRIP_W), track);
+            let w = STRIP_W / cols.len().max(1) as f32;
+            for (i, lit) in cols.iter().enumerate().filter(|(_, l)| **l > 0.0) {
+                let x = i as f32 * w;
+                winui::solid(p, at(x, x + w), fill.gamma_multiply(*lit));
+            }
+        }
+    }
+}
+
+/// The compact block: the name (the status word at its end in a state), the reading with the
+/// time left, the strip (one progress value for screen readers), the detail line and the
+/// state's line.
+#[allow(clippy::too_many_arguments)]
+fn compact(
+    pr: &Progress,
+    ui: &mut Ui,
+    p: &egui::Painter,
+    o: Pos2,
+    item: &Item,
+    snap: Option<&Snapshot>,
+    frac: Option<f64>,
+    drawn: (f64, &[(u64, f64)]),
+    shown: &Shown,
+    d: Option<&Details>,
+) {
+    let right = o.x + EDGE + LEFT_W;
+    let no_size = pr.sample_look == Some(Look::UnknownSize);
+    let (size, frac) = if no_size {
+        (None, None)
+    } else {
+        (item.size, frac)
+    };
+    // The name, and the status word at the row's end.
+    let mut name_right = right;
+    if let Some(word) = &shown.word {
+        let c = if matches!(shown.phase, Phase::Failed { .. } | Phase::WebPage) {
+            winui::ERROR()
+        } else {
+            muted()
+        };
+        let room = LEFT_W / 2.0;
+        let rc = cell_right(
+            ui,
+            p,
+            face(12.0),
+            right - room,
+            o.y + NAME_BASE,
+            right,
+            word,
+            c,
+            "progress-word",
+        );
+        name_right = rc.left() - 16.0;
+    }
+    cell(
+        ui,
+        p,
+        medium(13.0),
+        o.x + EDGE,
+        o.y + NAME_BASE,
+        name_right,
+        &item.file_name,
+        ink(),
+        "progress-name",
+    );
+
+    // The reading, and the time left at the right.
+    let reading = match frac {
+        Some(f) => Reading::Percent(f),
+        None if item.downloaded > 0 => Reading::Amount(item.downloaded),
+        None => Reading::Word(
+            shown
+                .word
+                .clone()
+                .unwrap_or_else(|| super::status_word(item, snap, Samples::default())),
+        ),
+    };
+    let base = o.y + READ_BASE;
+    let x = o.x + EDGE;
+    let spoken_reading = match &reading {
+        Reading::Percent(f) => {
+            let n = reading_figure(*f);
+            let rc = winui::text_font(p, figures(28.0), x, base, &n, ink());
+            winui::text_font(p, figures(16.0), rc.right(), base, "%", secondary());
+            format!("{n}%") // not translated: a percentage
+        }
+        Reading::Amount(b) => {
+            let s = crate::model::size(*b);
+            let (n, unit) = s.rsplit_once(' ').unwrap_or((&s, ""));
+            let rc = winui::text_font(p, figures(28.0), x, base, n, ink());
+            winui::text_font(p, figures(16.0), rc.right() + 4.0, base, unit, secondary());
+            s.clone()
+        }
+        Reading::Word(w) => {
+            cell(
+                ui,
+                p,
+                medium(28.0),
+                x,
+                base,
+                right,
+                w,
+                ink(),
+                "progress-reading",
+            );
+            w.clone()
+        }
+    };
+    let left = if no_size {
+        String::new()
+    } else {
+        item.time_left()
+    };
+    if !left.is_empty() {
+        // i18n: after the time left in the download window, smaller: "3 min 10 sec left"
+        let unit = crate::i18n::t("left");
+        let rc = draw_right(p, face(12.0), right, base, unit, muted());
+        draw_right(p, figures(15.0), rc.left() - 4.0, base, &left, secondary());
+    }
+
+    // The strip: one progress value for screen readers, its parts hidden from them.
+    let strip = strip_of(item, snap, pr.sample_merging, d, drawn, no_size);
+    paint_strip(p, o, &strip);
+    let amount = so_far(item.downloaded, size);
+    let mut spoken = vec![spoken_reading, amount.clone()];
+    if !left.is_empty() {
+        spoken.push(crate::i18n::fmt(
+            // i18n: the download window's progress for screen readers: {time} left, as "3 min 10 sec left"
+            crate::i18n::t("{time} left"),
+            &[("time", &left)],
+        ));
+    }
+    let id = egui::Id::unique(("progress-strip", ui.ctx().viewport_id()));
+    let resp = ui.interact(r(o, EDGE, STRIP_Y, STRIP_W, STRIP_H), id, Sense::hover());
+    winui::expose_value(
+        &resp,
+        egui::Role::ProgressIndicator,
+        &spoken.join(", "), // not translated: a list
+        true,
+    );
+    // i18n: the download window's progress strip, for screen readers
+    let name = crate::i18n::t("Progress").to_owned();
+    resp.ctx.accesskit_node_builder(resp.id, |n| {
+        n.set_label(name);
+        if let Some(f) = frac {
+            n.set_numeric_value((f * 100.0).clamp(0.0, 100.0));
+            n.set_min_numeric_value(0.0);
+            n.set_max_numeric_value(100.0);
+        }
+    });
+
+    // The detail line: how much so far, and the speed (the limit holding it back beside it,
+    // upstream issue 1191) while bytes come.
+    let detail = o.y + DETAIL_BASE;
+    cell(
+        ui,
+        p,
+        figures(12.0),
+        x,
+        detail,
+        right - 160.0,
+        &amount,
+        muted(),
+        "progress-amount",
+    );
+    if item.status == Status::Downloading && !item.past_last_byte() {
+        let rate = crate::model::rate(item.rate());
+        let rate = match pr.limit {
+            Some(limit) => limit.after(&rate),
+            None => rate,
+        };
+        cell_right(
+            ui,
+            p,
+            figures(12.0),
+            right - 230.0,
+            detail,
+            right,
+            &rate,
+            muted(),
+            "progress-rate",
+        );
+    }
+
+    // The state's line.
+    if let Some((line, alert)) = &shown.line {
+        let c = if matches!(shown.phase, Phase::Failed { .. }) {
+            winui::ERROR()
+        } else {
+            ink()
+        };
+        let rc = cell(
+            ui,
+            p,
+            face(13.0),
+            x,
+            o.y + LINE_BASE,
+            right,
+            line,
+            c,
+            "progress-message",
+        );
+        let id = egui::Id::unique(("progress-line", ui.ctx().viewport_id()));
+        let resp = ui.interact(rc, id, Sense::hover());
+        let role = if *alert {
+            egui::Role::Alert
+        } else {
+            egui::Role::Label
+        };
+        winui::expose(&resp, role, line, true, None);
+    }
+}
+
+// ---- the body --------------------------------------------------------------------------------
+
+/// The window's body (progress.rs's `Progress::body`): the compact block, Details when shown,
+/// and the footer. The action asked for.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn body(
+    pr: &mut Progress,
+    ui: &mut Ui,
+    o: Pos2,
+    item: &Item,
+    snap: Option<&Snapshot>,
+    frac: Option<f64>,
+    drawn: (f64, &[(u64, f64)]),
+    shown: &Shown,
+    d: Option<&Details>,
+) -> Action {
+    let p = ui.painter().clone();
+    let kind = Kind::of(item);
+    compact(pr, ui, &p, o, item, snap, frac, drawn, shown, d);
+
+    let mut action = Action::None;
+    if pr.details {
+        pr.init_limits(item);
+        action = left_details(
+            pr,
+            ui,
+            &p,
+            o,
+            item,
+            snap,
+            d,
+            facts_top(shown.line.is_some()),
+        );
+        // The right column's tables reach down to the left column's end.
+        let bottom = facts_end(kind, facts_top(shown.line.is_some()));
+        let right = match kind {
+            Kind::Torrent => torrent_column(pr, ui, &p, o, item, d, bottom),
+            Kind::File => {
+                let y = graph(ui, &p, o, pr);
+                connections(ui, &p, o, y + 16.0, snap, bottom);
+                Action::None
+            }
+            Kind::Video => {
+                graph(ui, &p, o, pr);
+                Action::None
+            }
+        };
+        if matches!(action, Action::None) {
+            action = right;
+        }
+    }
+    let footer = footer_row(pr, ui, &p, o, item, shown, kind);
+    if matches!(action, Action::None) {
+        footer
+    } else {
+        action
+    }
+}
+
+/// A fact's key at the start of its row (12, muted), naming the box or list after it.
+fn key(p: &egui::Painter, o: Pos2, y: f32, tall: bool, label: &str) {
+    let base = if tall { 17.0 } else { 12.0 };
+    winui::caption_font(
+        p,
+        face(12.0),
+        o.x + EDGE,
+        o.y + y + base,
+        crate::i18n::t(label),
+        muted(),
+    );
+}
+
+/// Details' left column under the compact block, from `top`: the facts of `kind` ([`facts`]).
+/// The action asked for (the folder or copy buttons).
+#[allow(clippy::too_many_arguments)]
 fn left_details(
     pr: &mut Progress,
     ui: &mut Ui,
     p: &egui::Painter,
     o: Pos2,
     item: &Item,
+    snap: Option<&Snapshot>,
     d: Option<&Details>,
+    top: f32,
 ) -> Action {
     let mut action = Action::None;
-    let label = |y: f32, s: &str| {
-        text(
-            p,
-            o.x + EDGE,
-            o.y + y + 14.0,
-            crate::i18n::t(s),
-            winui::TEXT(),
-        );
+    let right = o.x + EDGE + LEFT_W;
+    let x = o.x + VALUE_X;
+    let st = d.and_then(|d| d.stats.as_ref());
+    // A value with a 24-point button right after it (2 apart).
+    let button_after = |rc: Rect, y: f32| {
+        let bx = (rc.right() + 2.0).min(right - ICON_BUTTON) - o.x;
+        r(o, bx, y - 4.0, ICON_BUTTON, ICON_BUTTON)
     };
-    // Values stop before a row's 24-point button at the column's end.
-    let value_right = o.x + EDGE + LEFT_W - 28.0;
-    let button_at = |y: f32| r(o, EDGE + LEFT_W - 24.0, y - 4.0, 24.0, 24.0);
-
-    // Saved to: its folder (plan 12's F2: "Save To:" left with the Options on completion tab).
-    let y = SAVED_Y;
-    // i18n: label in a download window's details: the folder the download is saved in
-    label(y, crate::i18n::mark("Saved to"));
-    let folder = match &item.torrent {
-        Some(spec) => spec.folder.clone(),
-        None => item
-            .dest
-            .parent()
-            .map(|f| f.to_path_buf())
-            .unwrap_or_default(),
-    };
-    winui::fit_middle(
-        ui,
-        p,
-        o.x + VALUE_X,
-        o.y + y + 14.0,
-        &crate::dialogs::display_path(&folder),
-        winui::TEXT(),
-        value_right,
-        "saved-to",
-    );
-    // i18n: a download window's button beside its folder: shows the download in its folder
-    if winui::icon_only_button(
-        ui,
-        button_at(y),
-        "cat-folder-open",
-        crate::i18n::mark("Open folder"),
-        true,
-    )
-    .clicked()
-    {
-        action = Action::OpenFolder;
-    }
-
-    // From: its address, copied by the button (a torrent's magnet link, its info hash on hover).
-    let y = SAVED_Y + ROW;
-    // i18n: label in a download window's details: where the download comes from (its address)
-    label(y, crate::i18n::mark("From"));
-    if let Some(spec) = &item.torrent {
-        // i18n: a torrent's From row in its download window: it comes from a magnet link (the button beside it copies it)
-        let rc = text(
-            p,
-            o.x + VALUE_X,
-            o.y + y + 14.0,
-            crate::i18n::t("Magnet link"),
-            winui::TEXT(),
-        );
-        let tip = crate::i18n::fmt(
-            // i18n: tooltip on a torrent's From row: {hash} = the torrent's info hash
-            crate::i18n::t("Info hash {hash}"),
-            &[("hash", &crate::i18n::ltr(&spec.hash))],
-        );
-        winui::full_on_hover(ui, rc, "from-hash", &tip);
-        if winui::icon_only_button(
-            ui,
-            button_at(y),
-            "gx-copy",
-            crate::i18n::mark("Copy magnet link"),
-            true,
-        )
-        .clicked()
-        {
-            action = Action::Torrent(TorrentCmd::CopyMagnet);
+    let mut y = top;
+    for fact in facts(Kind::of(item)) {
+        let base = o.y + y + 12.0;
+        match fact {
+            Fact::Saved => {
+                // i18n: label in a download window's details: the folder the download is saved in
+                key(p, o, y, false, crate::i18n::mark("Saved to"));
+                let folder = match &item.torrent {
+                    Some(spec) => spec.folder.clone(),
+                    None => item
+                        .dest
+                        .parent()
+                        .map(|f| f.to_path_buf())
+                        .unwrap_or_default(),
+                };
+                let path = crate::dialogs::display_path(&folder);
+                let f = face(13.0);
+                let shown = winui::ellipsize_middle(p, &f, &path, right - ICON_BUTTON - 2.0 - x);
+                let rc = winui::text_font(p, f, x, base, &shown, ink());
+                winui::copyable(ui, rc, "saved-to", &path, shown != path);
+                // i18n: a download window's button beside its folder: shows the download in its folder
+                let tip = crate::i18n::mark("Open folder");
+                if icon_button(ui, button_after(rc, y), "cat-folder-open", tip).clicked() {
+                    action = Action::OpenFolder;
+                }
+            }
+            Fact::Source => {
+                // i18n: label in a download window's details: where the download comes from (its address)
+                key(p, o, y, false, crate::i18n::mark("From"));
+                if let Some(spec) = &item.torrent {
+                    // i18n: a torrent's From row in its download window: it comes from a magnet link (the button beside it copies it)
+                    let label = crate::i18n::t("Magnet link");
+                    let rc = winui::text_font(p, face(13.0), x, base, label, secondary());
+                    let tip = crate::i18n::fmt(
+                        // i18n: tooltip on a torrent's From row: {hash} = the torrent's info hash
+                        crate::i18n::t("Info hash {hash}"),
+                        &[("hash", &crate::i18n::ltr(&spec.hash))],
+                    );
+                    // A Tab stop of its own, so the keyboard reads its info hash too.
+                    let id = egui::Id::unique(("from-hash", ui.ctx().viewport_id()));
+                    let resp = ui.interact(rc, id, Sense::focusable_noninteractive());
+                    winui::expose(&resp, egui::Role::Label, label, true, None);
+                    // Its info hash read after its name, as its tooltip shows it.
+                    let described = tip.clone();
+                    resp.ctx
+                        .accesskit_node_builder(resp.id, |n| n.set_description(described));
+                    winui::show_focus(ui, &resp, rc.expand(2.0));
+                    winui::tip(resp, &tip);
+                    let copy = crate::i18n::mark("Copy magnet link");
+                    if icon_button(ui, button_after(rc, y), "gx-copy", copy).clicked() {
+                        action = Action::Torrent(TorrentCmd::CopyMagnet);
+                    }
+                } else {
+                    let url = crate::i18n::ltr(item.url.as_str());
+                    let rc = cell(
+                        ui,
+                        p,
+                        figures(13.0),
+                        x,
+                        base,
+                        right - ICON_BUTTON - 2.0,
+                        &url,
+                        secondary(),
+                        "from-url",
+                    );
+                    let copy = crate::i18n::mark("Copy address");
+                    if icon_button(ui, button_after(rc, y), "gx-copy", copy).clicked() {
+                        action = Action::CopyAddress;
+                    }
+                }
+            }
+            Fact::Server => {
+                // i18n: label before where a download's server is (its country and round trip)
+                key(p, o, y, false, crate::i18n::mark("Server"));
+                // Where its server is (#140), as the running download sees it, else as its
+                // last run did.
+                let seen = snap
+                    .and_then(|s| s.server.as_ref())
+                    .map(crate::whereis::Seen::from)
+                    .or_else(|| item.server.clone());
+                crate::whereis::line(
+                    ui,
+                    x,
+                    base,
+                    right,
+                    seen.as_ref(),
+                    &format!("progress-{}", item.id),
+                );
+            }
+            Fact::CanResume => {
+                // i18n: label in a download window's details: whether the server lets a stopped download continue (Yes / No)
+                key(p, o, y, false, crate::i18n::mark("Can resume"));
+                let v = match item.resumable {
+                    Some(true) => crate::i18n::t("Yes"),
+                    Some(false) => crate::i18n::t("No"),
+                    None => "",
+                };
+                winui::text_font(p, face(13.0), x, base, v, ink());
+            }
+            Fact::Format => {
+                // i18n: label in a video's download window details: the kind of file it makes
+                key(p, o, y, false, crate::i18n::mark("Format"));
+                cell(
+                    ui,
+                    p,
+                    face(13.0),
+                    x,
+                    base,
+                    right,
+                    &format_of(item),
+                    ink(),
+                    "format",
+                );
+            }
+            Fact::By => {
+                // i18n: label in a video's download window details: the program that downloads it
+                key(p, o, y, false, crate::i18n::mark("Downloaded by"));
+                let why = pr.sample_helper.clone().or_else(|| item.video_helper());
+                let by = match (&why, item.gallery.is_some()) {
+                    (Some(why), _) => super::helper_line(why),
+                    // i18n: a gallery's "Downloaded by" row: the helper program that downloads it
+                    (None, true) => crate::i18n::t("gallery-dl").to_owned(),
+                    // i18n: a video's "Downloaded by" row: Grabbit downloads its streams itself
+                    (None, false) => crate::i18n::t("Grabbit").to_owned(),
+                };
+                cell(ui, p, face(13.0), x, base, right, &by, secondary(), "by");
+            }
+            Fact::Peers => {
+                key(p, o, y, false, crate::i18n::mark("Peers"));
+                let peers = st.map_or(String::new(), |s| {
+                    crate::i18n::fmt(
+                        // i18n: {live} = peers connected now; {known} = peers heard of
+                        crate::i18n::t("{live} connected, {known} known"),
+                        &[
+                            ("live", &crate::i18n::grouped(s.peers_live as u64)),
+                            ("known", &crate::i18n::grouped(s.peers_seen as u64)),
+                        ],
+                    )
+                });
+                cell(ui, p, figures(13.0), x, base, right, &peers, ink(), "peers");
+            }
+            Fact::Sent => {
+                // What it sent in all its runs (#39; librqbit counts only this one), against
+                // what it has; Ratio beside it (the boards' 88 | 1fr | 56 | 1fr).
+                // i18n: how much was sent to other peers
+                key(p, o, y, false, crate::i18n::mark("Sent"));
+                if let Some(spec) = &item.torrent {
+                    let half = (LEFT_W - 88.0 - 56.0) / 2.0;
+                    let ratio_x = VALUE_X + half;
+                    let sent = crate::model::size(spec.uploaded);
+                    let end = o.x + ratio_x - GAP;
+                    cell(ui, p, figures(13.0), x, base, end, &sent, ink(), "sent");
+                    // i18n: label in a torrent's download window details: sent divided by received
+                    let ratio_label = crate::i18n::t("Ratio");
+                    winui::text_font(p, face(12.0), o.x + ratio_x, base, ratio_label, muted());
+                    let done = st.map_or(item.downloaded, |s| s.done);
+                    let ratio = crate::torrents::share_ratio_text(spec.uploaded, done);
+                    let rx = o.x + ratio_x + 56.0;
+                    cell(
+                        ui,
+                        p,
+                        figures(13.0),
+                        rx,
+                        base,
+                        right,
+                        &ratio,
+                        ink(),
+                        "ratio",
+                    );
+                }
+            }
+            Fact::Pieces => {
+                key(p, o, y, false, crate::i18n::mark("Pieces"));
+                let pieces = d.map_or(String::new(), |d| pieces_line(&d.pieces, d.piece_length));
+                cell(
+                    ui,
+                    p,
+                    figures(13.0),
+                    x,
+                    base,
+                    right,
+                    &pieces,
+                    ink(),
+                    "pieces",
+                );
+            }
+            Fact::Limit => limits(pr, ui, p, o, item.torrent.is_some(), y),
+            Fact::WhenDone => when_done(pr, ui, p, o, item.torrent.is_some(), y),
+            // Drawn with Limit and with When done.
+            Fact::Remember | Fact::Note | Fact::Force => {}
         }
-    } else {
-        let url = crate::i18n::ltr(item.url.as_str());
-        let (rc, cut) = winui::text_fit(
-            p,
-            o.x + VALUE_X,
-            o.y + y + 14.0,
-            &url,
-            winui::TEXT(),
-            value_right,
-        );
-        winui::copyable(ui, rc, "from-url", &url, cut);
-        if winui::icon_only_button(
-            ui,
-            button_at(y),
-            "gx-copy",
-            crate::i18n::mark("Copy address"),
-            true,
-        )
-        .clicked()
-        {
-            action = Action::CopyAddress;
-        }
+        y += fact.height() + GAP;
     }
-
-    // A torrent's numbers (its General tab's, plan 13b; 13c lays them out as the boards do).
-    if let Some(spec) = &item.torrent {
-        let st = d.and_then(|d| d.stats.as_ref());
-        let value = |y: f32, s: &str, x: f32, right: f32| {
-            let (rc, cut) =
-                winui::text_fit(p, o.x + x, o.y + y + 14.0, s, winui::TEXT(), o.x + right);
-            winui::copyable(ui, rc, ("torrent-fact", x as i32, y as i32), s, cut);
-        };
-        let y = SAVED_Y + 2.0 * ROW;
-        label(y, crate::i18n::mark("Peers"));
-        let peers = st.map_or(String::new(), |s| {
-            crate::i18n::fmt(
-                // i18n: {live} = peers connected now; {known} = peers heard of
-                crate::i18n::t("{live} connected, {known} known"),
-                &[
-                    ("live", &crate::i18n::integer(s.peers_live as u64)),
-                    ("known", &crate::i18n::integer(s.peers_seen as u64)),
-                ],
-            )
-        });
-        value(y, &peers, VALUE_X, EDGE + LEFT_W);
-        // What it sent in all its runs (#39; librqbit counts only this one), against what it has.
-        let y = y + ROW;
-        // i18n: how much was sent to other peers
-        label(y, crate::i18n::mark("Sent"));
-        let done = st.map_or(item.downloaded, |s| s.done);
-        value(y, &crate::model::size(spec.uploaded), VALUE_X, 210.0);
-        // i18n: sent divided by received
-        let ratio_label = crate::i18n::t("Share ratio");
-        text(p, o.x + 220.0, o.y + y + 14.0, ratio_label, winui::TEXT());
-        let ratio_x = 220.0 + winui::text_width(p, ratio_label).ceil() + 8.0;
-        value(
-            y,
-            &crate::torrents::share_ratio_text(spec.uploaded, done),
-            ratio_x,
-            EDGE + LEFT_W,
-        );
-        let y = y + ROW;
-        label(y, crate::i18n::mark("Pieces"));
-        let pieces = d.map_or(String::new(), |d| {
-            crate::i18n::fmt(
-                // i18n: {have} and {total} = numbers of pieces; {size} = one piece's size
-                crate::i18n::t("{have} of {total} ({size} each)"),
-                &[
-                    (
-                        "have",
-                        &crate::i18n::integer(d.pieces.iter().filter(|b| **b).count() as u64),
-                    ),
-                    ("total", &crate::i18n::integer(d.pieces.len() as u64)),
-                    ("size", &crate::model::size(u64::from(d.piece_length))),
-                ],
-            )
-        });
-        value(y, &pieces, VALUE_X, EDGE + LEFT_W);
-    }
-
-    let drop = facts_drop(item.torrent.is_some());
-    limits(pr, ui, p, o, item.torrent.is_some(), drop);
-    when_done(pr, ui, p, o, item.torrent.is_some(), drop);
     action
 }
 
-/// The Limit row (the old Speed Limiter tab's, plan 13b): this download's limit, a torrent's upload
-/// limit beside it, Remember for this file and its note. Reported to the app as typed.
-fn limits(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent: bool, drop: f32) {
-    let y = LIMIT_Y + drop;
+/// The Pieces row: "98 of 1,470, 512.00 KB each", the exact count the strip can't show (a
+/// torrent stuck on its last piece shows it).
+pub fn pieces_line(pieces: &[bool], piece_length: u32) -> String {
+    crate::i18n::fmt(
+        // i18n: a torrent's Pieces row: {have} and {total} = numbers of pieces; {size} = one piece's size
+        crate::i18n::t("{have} of {total}, {size} each"),
+        &[
+            (
+                "have",
+                &crate::i18n::grouped(pieces.iter().filter(|b| **b).count() as u64),
+            ),
+            ("total", &crate::i18n::grouped(pieces.len() as u64)),
+            ("size", &crate::model::size(u64::from(piece_length))),
+        ],
+    )
+}
+
+/// A video's Format row: its file's kind, and whether its picture and sound are joined at the
+/// end (a selector of two streams); a gallery's pictures.
+fn format_of(item: &Item) -> String {
+    let Some(video) = &item.video else {
+        // i18n: a gallery's Format row in its download window
+        return crate::i18n::t("Pictures").to_owned();
+    };
+    let kind = std::path::Path::new(&item.file_name)
+        .extension()
+        .map(|e| e.to_string_lossy().to_uppercase())
+        .unwrap_or_default();
+    if video.selector.contains('+') && kind.is_empty() {
+        // i18n: a video's Format row when its file's kind isn't known yet: its picture and sound come apart and are joined when both are in
+        crate::i18n::t("Picture and sound joined at the end").to_owned()
+    } else if video.selector.contains('+') {
+        crate::i18n::fmt(
+            // i18n: a video's Format row: {kind} = its file's kind (MP4); its picture and sound come apart and are joined when both are in
+            crate::i18n::t("{kind}, picture and sound joined at the end"),
+            &[("kind", &kind)],
+        )
+    } else {
+        kind
+    }
+}
+
+/// The Limit row (the old Speed Limiter tab's, plan 13b) at `y`: this download's limit, a
+/// torrent's upload limit beside it; Remember for this file and its note under it. Reported to
+/// the app as typed.
+fn limits(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent: bool, y: f32) {
     // i18n: label in a download window's details: its speed limit
-    text(
-        p,
-        o.x + EDGE,
-        o.y + y + 16.0,
-        crate::i18n::t("Limit"),
-        winui::TEXT(),
-    );
+    key(p, o, y, true, crate::i18n::mark("Limit"));
     // A typed rate applies once typed (focus leaves, Enter), not at each digit (typing 100 would
     // throttle to 1, then 10 KB/s on the way). A rate a screen reader or UI Automation sets (Set
     // value) applies at once: there is no typing to wait for, and often no focus to leave.
@@ -724,7 +1361,7 @@ fn limits(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent: b
             || (rate_box.has_focus() && winui::enter_pressed(ui))
             || winui::value_set_by_assistive(rate_box)
     };
-    let off = |on: bool| if on { winui::TEXT() } else { super::disabled() };
+    let off = |on: bool| if on { muted() } else { super::disabled() };
     let was_on = pr.limiter;
     let (down_label, box_x, box_w) = if torrent {
         // i18n: a torrent's Limit row: the download limit's check box (then the upload one, "Up")
@@ -735,7 +1372,7 @@ fn limits(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent: b
     };
     winui::checkbox_until(
         ui,
-        o + vec2(VALUE_X, y + 5.0),
+        o + vec2(VALUE_X, y + 7.0),
         &mut pr.limiter,
         down_label,
         true,
@@ -743,62 +1380,66 @@ fn limits(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent: b
     );
     let rate_box = winui::edit_right(
         ui,
-        r(o, box_x, y, box_w, 23.0),
+        r(o, box_x, y, box_w, ROW_H),
         &mut pr.limit_kb,
         pr.limiter,
     );
     pr.limit_kb.retain(|c| c.is_ascii_digit());
     let down_typed = typed(ui, &rate_box);
-    let mut unit_x = box_x + box_w + 8.0;
+    let mut unit_x = box_x + box_w + GAP;
     if torrent {
         let was_up = pr.up_on;
-        let up_x = unit_x + 4.0;
+        // Board 3: Up 16 after the Down box, its box 8 after its caption (the check box's
+        // caption is 16 after the box's start, winui::checkbox_light_until).
+        let up_x = box_x + box_w + 16.0;
+        // i18n: a torrent's Limit row: the upload limit's check box (a limit for what it sends to others)
+        let up_label = crate::i18n::mark("Up");
+        let up_box_x = up_x + 16.0 + winui::text_width(p, crate::i18n::t(up_label)).ceil() + GAP;
         winui::checkbox_until(
             ui,
-            o + vec2(up_x, y + 5.0),
+            o + vec2(up_x, y + 7.0),
             &mut pr.up_on,
-            // i18n: a torrent's Limit row: the upload limit's check box (a limit for what it sends to others)
-            "Up",
+            up_label,
             true,
-            Some(o.x + up_x + 50.0),
+            // Up to its box: checkbox_until keeps 5 before `until` itself, so the caption has
+            // its width and 3 to spare (6 less here cut it to nothing: its room was 3 short).
+            Some(o.x + up_box_x),
         );
-        let up_box = winui::edit_right(
-            ui,
-            r(o, up_x + 56.0, y, 56.0, 23.0),
-            &mut pr.up_kb,
-            pr.up_on,
-        );
+        let up_box = winui::edit_right(ui, r(o, up_box_x, y, 56.0, ROW_H), &mut pr.up_kb, pr.up_on);
         pr.up_kb.retain(|c| c.is_ascii_digit());
         let kb: u64 = pr.up_kb.parse().unwrap_or(0);
         if (was_up != pr.up_on || (pr.up_on && typed(ui, &up_box))) && !(pr.up_on && kb == 0) {
             pr.pending_upload = Some(pr.up_on.then_some(kb * 1024));
         }
-        unit_x = up_x + 56.0 + 56.0 + 8.0;
+        unit_x = up_box_x + 56.0 + GAP;
     }
-    // i18n: unit after a speed limit box: kilobytes per second
-    text(
+    winui::text_font(
         p,
+        face(12.0),
         o.x + unit_x,
-        o.y + y + 16.0,
+        o.y + y + 17.0,
+        // i18n: unit after a speed limit box: kilobytes per second
         crate::i18n::t("KB/s"),
         off(pr.limiter || pr.up_on),
     );
     let remembered = pr.remember;
+    let y = y + ROW_H + GAP;
     winui::checkbox(
         ui,
-        o + vec2(VALUE_X, REMEMBER_Y + drop),
+        o + vec2(VALUE_X, y + 2.0),
         &mut pr.remember,
         // i18n: a download window's check box under its speed limit: keep the limit when the download stops and resumes
         "Remember for this file",
         true,
     );
-    text(
+    winui::text_font(
         p,
+        face(12.0),
         o.x + VALUE_X,
-        o.y + NOTE_BASE + drop,
+        o.y + y + 16.0 + GAP + 12.0,
         // i18n: the note under "Remember for this file" in a download window
         crate::i18n::t("Keeps this limit when the download stops and resumes."),
-        crate::theme::colors().text_secondary,
+        muted(),
     );
     // An empty or zero rate isn't "unlimited" while the box is ticked: the limit stays as it was
     // until a rate is typed.
@@ -810,21 +1451,15 @@ fn limits(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent: b
     }
 }
 
-/// When done's list, "Then keeps sharing" beside its first two choices for a torrent that will,
-/// and "Force apps to close" under Shut down, Sleep and Hibernate.
-fn when_done(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent: bool, drop: f32) {
-    let y = WHEN_Y + drop;
+/// When done's list at `y`, "Then keeps sharing" beside its first two choices for a torrent
+/// that will, and "Force apps to close" under Shut down, Sleep and Hibernate.
+fn when_done(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent: bool, y: f32) {
     // i18n: label in a download window's details: what happens when the download finishes
-    text(
-        p,
-        o.x + EDGE,
-        o.y + y + 15.0,
-        crate::i18n::t("When done"),
-        winui::TEXT(),
-    );
+    key(p, o, y, true, crate::i18n::mark("When done"));
+    let w = if torrent { 184.0 } else { 200.0 };
     if let Some(i) = winui::combo_light(
         ui,
-        r(o, VALUE_X, y, 200.0, 21.0),
+        r(o, VALUE_X, y, w, ROW_H),
         &WHEN_DONE,
         pr.when,
         true,
@@ -836,11 +1471,11 @@ fn when_done(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent
         winui::fit(
             ui,
             p,
-            o.x + VALUE_X + 212.0,
-            o.y + y + 15.0,
+            o.x + VALUE_X + w + 12.0,
+            o.y + y + 17.0,
             // i18n: beside a torrent's When done choice: it goes on sharing after it finishes
             crate::i18n::t("Then keeps sharing"),
-            crate::theme::colors().text_secondary,
+            muted(),
             o.x + EDGE + LEFT_W,
             "keeps-sharing",
         );
@@ -848,7 +1483,7 @@ fn when_done(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent
     if pr.when >= 3 {
         winui::checkbox(
             ui,
-            o + vec2(VALUE_X, FORCE_Y + drop),
+            o + vec2(VALUE_X, y + ROW_H + GAP + 2.0),
             &mut pr.force,
             // i18n: under When done's Shut down, Sleep or Hibernate: don't let other programs delay it
             "Force apps to close",
@@ -857,15 +1492,608 @@ fn when_done(pr: &mut Progress, ui: &mut Ui, p: &egui::Painter, o: Pos2, torrent
     }
 }
 
-/// A torrent's commands under its tab's table (plan 13b), at `at`: Files has Download in order,
-/// First and last pieces first and Recheck files; Trackers has Add trackers... and Ask trackers
-/// again. The one pressed.
-pub(super) fn torrent_commands(
+// ---- the right column ------------------------------------------------------------------------
+
+/// The last minute of a download's speed for its window's graph (plan 13): one reading a
+/// second, 60 at most, kept while the window is open and never saved.
+#[derive(Default)]
+pub struct Sampler {
+    readings: VecDeque<f64>,
+    /// When the last reading was taken (egui's clock, seconds).
+    last: Option<f64>,
+}
+
+impl Sampler {
+    pub const KEPT: usize = 60;
+
+    /// The download's `rate` (bytes a second) at `now` (seconds): kept when a second has gone
+    /// since the last reading. The seconds missed in between (the window hidden in the
+    /// notification area, no frames while stopped) read 0; the clock moves by whole seconds, so
+    /// the readings don't drift.
+    pub fn feed(&mut self, now: f64, rate: f64) {
+        if let Some(last) = self.last {
+            let gone = (now - last).floor();
+            if gone < 1.0 {
+                return;
+            }
+            for _ in 0..((gone as usize) - 1).min(Self::KEPT) {
+                self.push(0.0);
+            }
+            self.last = Some(last + gone);
+        } else {
+            self.last = Some(now);
+        }
+        self.push(rate.max(0.0));
+    }
+
+    fn push(&mut self, rate: f64) {
+        if self.readings.len() == Self::KEPT {
+            self.readings.pop_front();
+        }
+        self.readings.push_back(rate);
+    }
+
+    /// Oldest first.
+    pub fn readings(&self) -> &VecDeque<f64> {
+        &self.readings
+    }
+}
+
+/// A header over a part of the right column at `y`: its title, a figure at its end, a line
+/// under it.
+fn header(p: &egui::Painter, o: Pos2, y: f32, title: &str, end: &str, end_color: Color32) {
+    let base = o.y + y + 12.0;
+    winui::text_font(p, face(12.0), o.x + RIGHT_X, base, title, muted());
+    draw_right(
+        p,
+        figures(12.0),
+        o.x + RIGHT_X + RIGHT_W,
+        base,
+        end,
+        end_color,
+    );
+    let line = crate::theme::colors().header_line;
+    winui::solid(p, r(o, RIGHT_X, y + HEAD - 1.0, RIGHT_W, 1.0), line);
+}
+
+/// The speed graph at the right column's top (boards 2, 11): the last 60 s with the limit as a
+/// dashed line; its summary for screen readers. Where it ends.
+fn graph(ui: &Ui, p: &egui::Painter, o: Pos2, pr: &Progress) -> f32 {
+    let limit = pr.limit.map(|l| l.rate() as f64);
+    let limit_text = limit.map_or(String::new(), |l| {
+        crate::i18n::fmt(
+            // i18n: at the end of the speed graph's header: {rate} = the speed limit
+            crate::i18n::t("limit {rate}"),
+            &[("rate", &crate::model::limit_rate(l as u64))],
+        )
+    });
+    // i18n: the speed graph's header in a download window's details
+    header(
+        p,
+        o,
+        TOP,
+        crate::i18n::t("Speed, last 60 s"),
+        &limit_text,
+        muted(),
+    );
+    let top = TOP + HEAD + GAP;
+    let rc = r(o, RIGHT_X, top, RIGHT_W, GRAPH_H);
+    let readings = pr.speed.readings();
+    let peak = readings.iter().copied().fold(0.0, f64::max);
+    // The higher of the peak and the limit 4 points under the graph's top.
+    let scale = peak.max(limit.unwrap_or(0.0));
+    let y_of = |v: f64| {
+        if scale > 0.0 {
+            rc.bottom() - (v / scale) as f32 * (GRAPH_H - 4.0)
+        } else {
+            rc.bottom() - 1.0
+        }
+    };
+    if let Some(l) = limit {
+        let y = y_of(l);
+        p.extend(egui::Shape::dashed_line(
+            &[pos2(rc.left(), y), pos2(rc.right(), y)],
+            Stroke::new(1.0, muted()),
+            3.0,
+            3.0,
+        ));
+    }
+    let n = readings.len();
+    if n > 1 {
+        let step = RIGHT_W / (Sampler::KEPT - 1) as f32;
+        let points: Vec<Pos2> = readings
+            .iter()
+            .enumerate()
+            .map(|(k, v)| pos2(rc.right() - (n - 1 - k) as f32 * step, y_of(*v)))
+            .collect();
+        p.add(egui::Shape::line(points, Stroke::new(1.0, secondary())));
+    }
+    let now = crate::model::rate(readings.back().copied().unwrap_or(0.0));
+    let peak_s = crate::model::rate(peak);
+    let summary = match limit {
+        Some(l) => crate::i18n::fmt(
+            // i18n: the speed graph for screen readers: {now} the speed now, {peak} the fastest in the last minute, {limit} the speed limit
+            crate::i18n::t("Speed, last minute: {now} now, peak {peak}, limit {limit}"),
+            &[
+                ("now", &now),
+                ("peak", &peak_s),
+                ("limit", &crate::model::limit_rate(l as u64)),
+            ],
+        ),
+        None => crate::i18n::fmt(
+            // i18n: the speed graph for screen readers: {now} the speed now, {peak} the fastest in the last minute
+            crate::i18n::t("Speed, last minute: {now} now, peak {peak}"),
+            &[("now", &now), ("peak", &peak_s)],
+        ),
+    };
+    let id = egui::Id::unique(("progress-graph", ui.ctx().viewport_id()));
+    let resp = ui.interact(rc, id, Sense::hover());
+    winui::expose(&resp, egui::Role::Image, &summary, true, None);
+    top + GRAPH_H
+}
+
+/// A table's column: its title (English), its width (0: the room left), its text at its end.
+struct Col {
+    title: &'static str,
+    w: f32,
+    end: bool,
+}
+
+/// A table's cell: its text, its colour, in figures or not.
+type Cell = (String, Color32, bool);
+
+/// A table of the right column at `y` (boards 2, 3, 10, 12): its column titles in a 24-point
+/// row, then rows 26 high each with a line under it, `shown` at once, scrolled by the wheel and
+/// a thin bar at its end (room kept for it). `checks`: a box before each row (a torrent's
+/// Files, the first column's); the row whose box was clicked.
+#[allow(clippy::too_many_arguments)]
+fn table(
+    ui: &mut Ui,
+    p: &egui::Painter,
+    o: Pos2,
+    y: f32,
+    shown: usize,
+    id: &str,
+    cols: &[Col],
+    rows: &[Vec<Cell>],
+    checks: Option<&[bool]>,
+) -> Option<usize> {
+    const COL_GAP: f32 = 12.0;
+    const BAR: f32 = 8.0;
+    let width = RIGHT_W - BAR;
+    let fixed: f32 = cols.iter().map(|c| c.w).sum::<f32>() + COL_GAP * (cols.len() - 1) as f32;
+    let mut x = RIGHT_X;
+    let spans: Vec<(f32, f32)> = cols
+        .iter()
+        .map(|c| {
+            let w = if c.w > 0.0 { c.w } else { width - fixed };
+            let span = (x, x + w);
+            x += w + COL_GAP;
+            span
+        })
+        .collect();
+    let grid = crate::theme::colors().grid;
+    for (c, &(a, b)) in cols.iter().zip(&spans) {
+        let title = crate::i18n::t(c.title);
+        let base = o.y + y + 16.0;
+        if c.end {
+            draw_right(p, face(12.0), o.x + b, base, title, muted());
+        } else {
+            winui::text_font(p, face(12.0), o.x + a, base, title, muted());
+        }
+    }
+    winui::solid(p, r(o, RIGHT_X, y + TITLES_H - 1.0, RIGHT_W, 1.0), grid);
+    let top = y + TITLES_H;
+    let body_h = shown as f32 * ROW_H;
+    let body = r(o, RIGHT_X, top, RIGHT_W, body_h);
+    let key = egui::Id::unique(("progress-table", id, ui.ctx().viewport_id()));
+    let first = super::first_row(ui, key, body, rows.len(), shown);
+    let clip = p.with_clip_rect(body);
+    let mut clicked = None;
+    for (k, row) in rows.iter().enumerate().skip(first).take(shown) {
+        let row_top = top + (k - first) as f32 * ROW_H;
+        let base = o.y + row_top + 17.0;
+        let mut cells = row.iter();
+        for (c, &(a, b)) in cols.iter().zip(&spans) {
+            if c.title.is_empty()
+                && let Some(&ticked) = checks.and_then(|t| t.get(k))
+            {
+                // The box, named by its row's first text.
+                let mut on = ticked;
+                let label = row.first().map_or("", |c| c.0.as_str());
+                let at = pos2(o.x + a, o.y + row_top + 6.5);
+                if winui::row_check(ui, &clip, at, &mut on, label, (id, k)) {
+                    clicked = Some(k);
+                }
+                continue;
+            }
+            let Some((s, color, nums)) = cells.next() else {
+                break;
+            };
+            let f = if *nums { figures(12.0) } else { face(12.0) };
+            let salt = (id, k, a as i32);
+            if c.end {
+                cell_right(ui, &clip, f, o.x + a, base, o.x + b, s, *color, salt);
+            } else {
+                cell(ui, &clip, f, o.x + a, base, o.x + b, s, *color, salt);
+            }
+        }
+        winui::solid(
+            &clip,
+            r(o, RIGHT_X, row_top + ROW_H - 1.0, RIGHT_W, 1.0),
+            grid,
+        );
+    }
+    // A thin bar inside the room kept at the column's end.
+    if rows.len() > shown {
+        let track = r(o, RIGHT_X + RIGHT_W - 6.0, top, 6.0, body_h);
+        let mut pos = first as f32;
+        let (total, page) = (rows.len() as f32, shown as f32);
+        if crate::scrollbar::thin(ui, key.with("bar"), track, total, page, &mut pos) {
+            let last = super::last_first_row(rows.len(), shown);
+            let first = (pos.round().max(0.0) as usize).min(last);
+            ui.ctx().data_mut(|d| d.insert_temp(key, first));
+        }
+    }
+    clicked
+}
+
+/// Where a connection sorts: receiving first, then retrying (or failed), connecting, done.
+fn conn_rank(s: &ConnStatus) -> u8 {
+    match s {
+        ConnStatus::Receiving => 0,
+        ConnStatus::Retrying(_) | ConnStatus::Failed(_) => 1,
+        ConnStatus::Connecting => 2,
+        ConnStatus::Finished | ConnStatus::Retired { .. } => 3,
+    }
+}
+
+/// The connections at `y` under the speed graph (boards 2, 10): number, received, speed or
+/// what it is doing; receiving ones first ([`conn_rank`]), by number within each group. As many
+/// whole rows as reach down to `bottom`.
+fn connections(
+    ui: &mut Ui,
+    p: &egui::Painter,
+    o: Pos2,
+    y: f32,
+    snap: Option<&Snapshot>,
+    bottom: f32,
+) {
+    let mut conns: Vec<_> = snap
+        .map(|s| s.connections.iter().collect())
+        .unwrap_or_default();
+    // By number within each group: rows that don't move as speeds change.
+    conns.sort_by_key(|c| (conn_rank(&c.status), c.id));
+    let receiving = conns
+        .iter()
+        .filter(|c| matches!(c.status, ConnStatus::Receiving))
+        .count();
+    let count = crate::i18n::fmt(
+        // i18n: at the end of the connections table's header: {n} connections, {receiving} of them receiving
+        crate::i18n::t("{n}, {receiving} receiving"),
+        &[
+            ("n", &crate::i18n::grouped(conns.len() as u64)),
+            ("receiving", &crate::i18n::grouped(receiving as u64)),
+        ],
+    );
+    // i18n: caption over a download's connections table in its window's details
+    header(p, o, y, crate::i18n::t("Connections"), &count, muted());
+    let rows: Vec<Vec<Cell>> = conns
+        .iter()
+        .map(|c| {
+            let (info, color, nums) = match &c.status {
+                ConnStatus::Receiving => (crate::model::rate(c.speed as f64), secondary(), true),
+                ConnStatus::Connecting => {
+                    (crate::i18n::t("Connecting...").to_owned(), muted(), false)
+                }
+                ConnStatus::Retrying(e) => (
+                    crate::i18n::fmt(
+                        // i18n: a connection's state: it failed and tries again, with the reason
+                        crate::i18n::t("Retrying: {error}"),
+                        &[("error", &crate::errors::describe(e))],
+                    ),
+                    muted(),
+                    false,
+                ),
+                // i18n: a connection's state: it has received all of its part
+                ConnStatus::Finished => (crate::i18n::t("Done").to_owned(), muted(), false),
+                ConnStatus::Failed(e) => (crate::errors::describe(e), winui::ERROR(), false),
+                ConnStatus::Retired { host, cap } => (
+                    crate::i18n::fmt(
+                        // i18n: a connection closed because the server allows only that many
+                        &crate::i18n::tn(
+                            u64::from(*cap),
+                            "{host} allows {n} connection",
+                            "{host} allows {n} connections",
+                        ),
+                        &[("host", &crate::i18n::ltr(host))],
+                    ),
+                    muted(),
+                    false,
+                ),
+            };
+            vec![
+                ((c.id + 1).to_string(), muted(), true),
+                (crate::model::size(c.downloaded), ink(), true),
+                (info, color, nums),
+            ]
+        })
+        .collect();
+    let cols = [
+        // i18n: column title: connection number
+        Col {
+            title: crate::i18n::mark("#"),
+            w: 20.0,
+            end: false,
+        },
+        Col {
+            title: crate::i18n::mark("Received"),
+            w: 0.0,
+            end: true,
+        },
+        // i18n: column title: how fast a connection receives, or what it is doing
+        Col {
+            title: crate::i18n::mark("Speed"),
+            w: 116.0,
+            end: true,
+        },
+    ];
+    let y = y + HEAD;
+    let shown = rows_down_to(y, bottom);
+    table(ui, p, o, y, shown, "connections", &cols, &rows, None);
+}
+
+/// A row of tabs at the right column's `y`, underlined (board 3): the chosen one in the ink with
+/// the accent under it; one Tab stop, the chosen tab; the arrows, Home and End choose. The tab
+/// chosen this frame.
+fn tabs(
+    ui: &mut Ui,
+    p: &egui::Painter,
+    o: Pos2,
+    y: f32,
+    labels: &[&str],
+    current: usize,
+) -> Option<usize> {
+    let line = crate::theme::colors().header_line;
+    winui::solid(p, r(o, RIGHT_X, y + HEAD - 1.0, RIGHT_W, 1.0), line);
+    let id_of = |ui: &Ui, k: usize| egui::Id::unique(("progress-tab", ui.ctx().viewport_id(), k));
+    let mut chosen = None;
+    let mut x = RIGHT_X;
+    for (i, label) in labels.iter().enumerate() {
+        let label = crate::i18n::t(label);
+        let w = winui::text_width_font(p, medium(12.0), label).ceil();
+        let rc = r(o, x, y, w, HEAD - 1.0);
+        let sel = i == current;
+        let sense = if sel {
+            Sense::click()
+        } else {
+            winui::pointer_only()
+        };
+        let resp = ui.interact(rc, id_of(ui, i), sense);
+        winui::focus_on_press(&resp);
+        winui::expose(&resp, egui::Role::Tab, label, true, Some(sel));
+        let resp = winui::enter_is_not_a_click(ui, resp);
+        if resp.clicked() && !sel {
+            chosen = Some(i);
+        }
+        if sel {
+            winui::keep_keys(ui, &resp, true, false, false);
+            if resp.has_focus() {
+                let last = labels.len().saturating_sub(1) as isize;
+                let to = if winui::take_key(ui, egui::Key::ArrowRight) {
+                    Some(i as isize + 1)
+                } else if winui::take_key(ui, egui::Key::ArrowLeft) {
+                    Some(i as isize - 1)
+                } else if winui::take_key(ui, egui::Key::Home) {
+                    Some(0)
+                } else if winui::take_key(ui, egui::Key::End) {
+                    Some(last)
+                } else {
+                    None
+                };
+                if let Some(to) = to.map(|t| t.clamp(0, last) as usize).filter(|t| *t != i) {
+                    chosen = Some(to);
+                    let next = id_of(ui, to);
+                    ui.memory_mut(|m| m.request_focus(next));
+                }
+            }
+        }
+        let c = if sel || resp.hovered() {
+            ink()
+        } else {
+            muted()
+        };
+        winui::text_font(p, medium(12.0), o.x + x, o.y + y + 15.0, label, c);
+        if sel {
+            let accent = crate::theme::colors().accent;
+            winui::solid(p, r(o, x, y + HEAD - 3.0, w, 2.0), accent);
+        }
+        winui::show_focus(ui, &resp, rc.expand(2.0));
+        x += w + 20.0;
+    }
+    chosen
+}
+
+/// A torrent's right column (boards 3, 12): Files, Peers and Trackers over their table, Recheck
+/// files at the tabs' end on Files, each tab's commands under its table; the tables as long as
+/// they can be with their commands under them by `bottom`. The command asked for.
+#[allow(clippy::too_many_arguments)]
+fn torrent_column(
     pr: &mut Progress,
     ui: &mut Ui,
-    at: Pos2,
+    p: &egui::Painter,
+    o: Pos2,
     item: &Item,
     d: Option<&Details>,
+    bottom: f32,
+) -> Action {
+    let tabs_list = [
+        // i18n: tab title: the torrent's files
+        (TTab::Files, crate::i18n::mark("Files")),
+        // i18n: tab title: the other computers sharing the torrent
+        (TTab::Peers, crate::i18n::mark("Peers")),
+        // i18n: tab title: the servers that list the peers
+        (TTab::Trackers, crate::i18n::mark("Trackers")),
+    ];
+    let labels: Vec<&str> = tabs_list.iter().map(|t| t.1).collect();
+    let current = tabs_list.iter().position(|t| t.0 == pr.ttab).unwrap_or(0);
+    if let Some(i) = tabs(ui, p, o, TOP, &labels, current) {
+        pr.ttab = tabs_list[i].0;
+    }
+    let y = TOP + HEAD;
+    let shown = rows_down_to(y, bottom - COMMANDS_H);
+    let under = y + TITLES_H + shown as f32 * ROW_H + 12.0;
+    let action = torrent_commands(pr, ui, o, item, d, under);
+    let Some(d) = d else {
+        winui::text_font(
+            p,
+            face(12.0),
+            o.x + RIGHT_X,
+            o.y + y + TITLES_H + 17.0,
+            crate::i18n::t("Shown while the torrent is downloading."),
+            muted(),
+        );
+        return action;
+    };
+    match pr.ttab {
+        TTab::Files => {
+            let rows: Vec<Vec<Cell>> = d
+                .files
+                .iter()
+                .map(|(_, f, on, done)| {
+                    let pct = if !on {
+                        // i18n: a torrent file the user chose not to download
+                        crate::i18n::t("Skipped").to_owned()
+                    } else if f.size == 0 {
+                        crate::i18n::percent(1.0, 0)
+                    } else {
+                        crate::i18n::percent(*done as f64 / f.size as f64, 1)
+                    };
+                    vec![
+                        (f.path.display().to_string(), ink(), false),
+                        (crate::model::size(f.size), ink(), true),
+                        (pct, secondary(), true),
+                    ]
+                })
+                .collect();
+            let ticks: Vec<bool> = d.files.iter().map(|f| f.2).collect();
+            let cols = [
+                Col {
+                    title: "",
+                    w: 16.0,
+                    end: false,
+                },
+                // i18n: column title: a torrent file's name
+                Col {
+                    title: crate::i18n::mark("Name"),
+                    w: 0.0,
+                    end: false,
+                },
+                Col {
+                    title: crate::i18n::mark("Size"),
+                    w: 64.0,
+                    end: true,
+                },
+                Col {
+                    title: crate::i18n::mark("Done"),
+                    w: 40.0,
+                    end: true,
+                },
+            ];
+            // A box ticked or unticked (#39): the torrent downloads those files from now on;
+            // the last one ticked can't be unticked (a torrent of nothing).
+            let clicked = table(ui, p, o, y, shown, "t-files", &cols, &rows, Some(&ticks));
+            if let Some(row) = clicked {
+                let mut on = ticks.clone();
+                on[row] = !on[row];
+                if on.iter().any(|b| *b) {
+                    let chosen = d.files.iter().zip(&on).filter(|(_, b)| **b);
+                    pr.pending_choose = Some(Action::Choose {
+                        files: chosen.clone().map(|(f, _)| f.0).collect(),
+                        all: on.iter().all(|b| *b),
+                        size: chosen.map(|(f, _)| f.1.size).sum(),
+                    });
+                }
+            }
+        }
+        TTab::Peers => {
+            let rows: Vec<Vec<Cell>> = d
+                .peers
+                .iter()
+                .map(|q| {
+                    vec![
+                        (q.addr.clone(), ink(), true),
+                        (q.client.clone().unwrap_or_default(), secondary(), false),
+                        (crate::model::size(q.fetched), ink(), true),
+                        (crate::model::size(q.uploaded), secondary(), true),
+                    ]
+                })
+                .collect();
+            let cols = [
+                // i18n: column title: the web address (URL)
+                Col {
+                    title: crate::i18n::mark("Address"),
+                    w: 0.0,
+                    end: false,
+                },
+                // i18n: column title: the peer's torrent program
+                Col {
+                    title: crate::i18n::mark("Client"),
+                    w: 72.0,
+                    end: false,
+                },
+                // i18n: column title: how much came from the peer
+                Col {
+                    title: crate::i18n::mark("Received"),
+                    w: 52.0,
+                    end: true,
+                },
+                // i18n: column title: how much went to the peer
+                Col {
+                    title: crate::i18n::mark("Sent"),
+                    w: 44.0,
+                    end: true,
+                },
+            ];
+            table(ui, p, o, y, shown, "t-peers", &cols, &rows, None);
+        }
+        TTab::Trackers => {
+            let rows: Vec<Vec<Cell>> = if d.trackers.is_empty() {
+                vec![vec![(
+                    // i18n: a torrent's Trackers tab without trackers
+                    crate::i18n::t("None. Grabbit still finds peers without trackers.").into(),
+                    muted(),
+                    false,
+                )]]
+            } else {
+                d.trackers
+                    .iter()
+                    .map(|t| vec![(t.clone(), ink(), true)])
+                    .collect()
+            };
+            // i18n: column title: a server that lists the peers
+            let cols = [Col {
+                title: crate::i18n::mark("Tracker"),
+                w: 0.0,
+                end: false,
+            }];
+            table(ui, p, o, y, shown, "t-trackers", &cols, &rows, None);
+        }
+    }
+    action
+}
+
+/// A torrent's commands (plan 13b) on its tabs: Recheck files at the tabs' end on Files, Download
+/// in order and First and last pieces first under its table; Add trackers... and Ask trackers
+/// again under the Trackers table; `under`: where the commands under a table go. The one
+/// pressed.
+fn torrent_commands(
+    pr: &mut Progress,
+    ui: &mut Ui,
+    o: Pos2,
+    item: &Item,
+    d: Option<&Details>,
+    under: f32,
 ) -> Action {
     let Some(spec) = &item.torrent else {
         return Action::None;
@@ -886,20 +2114,35 @@ pub(super) fn torrent_commands(
             ButtonKind::Disabled
         }
     };
-    let width = |label: &str| {
-        (winui::text_width(&p, crate::i18n::t(label)) + 28.0)
-            .ceil()
-            .max(73.0)
-    };
+    let width = |label: &str| (winui::text_width(&p, crate::i18n::t(label)) + 24.0).ceil();
     let mut action = Action::None;
     match pr.ttab {
         TTab::Files => {
+            // i18n: a torrent's Files tab, a button: read every piece of the torrent's files again and check it
+            let label = crate::i18n::mark("Recheck files");
+            let w = width(label);
+            let on = !busy && item.status != Status::Queued;
+            let rc = r(o, RIGHT_X + RIGHT_W - w, TOP, w, HEAD - 1.0);
+            let look = if on {
+                ButtonKind::Ghost
+            } else {
+                ButtonKind::Disabled
+            };
+            let resp = winui::button(ui, rc, label, look, false, None);
+            if on && resp.clicked() {
+                action = Action::Torrent(TorrentCmd::Recheck);
+            }
+            // i18n: tooltip of a torrent's Recheck files button
+            winui::tip(
+                resp,
+                crate::i18n::t("Reads every piece again and checks it"),
+            );
             // The boxes show the torrent's own choices; a click asks the app to change them.
             let mut in_order = spec.in_order;
             // i18n: a torrent's Files tab, a check box: download its files from their start, to watch a video while it downloads
             if winui::checkbox(
                 ui,
-                at + vec2(0.0, 4.0),
+                o + vec2(RIGHT_X, under + 2.0),
                 &mut in_order,
                 "Download in order",
                 true,
@@ -911,7 +2154,7 @@ pub(super) fn torrent_commands(
             let mut ends = spec.in_order && spec.ends_first;
             if winui::checkbox(
                 ui,
-                at + vec2(22.0, 26.0),
+                o + vec2(RIGHT_X + 22.0, under + 16.0 + GAP + 2.0),
                 &mut ends,
                 // i18n: a torrent's Files tab, a check box under Download in order: each file's first and last pieces first, which a video player needs to start
                 "First and last pieces first",
@@ -921,21 +2164,6 @@ pub(super) fn torrent_commands(
             {
                 action = Action::Torrent(TorrentCmd::EndsFirst);
             }
-            // i18n: a torrent's Files tab, a button: read every piece of the torrent's files again and check it
-            let label = crate::i18n::mark("Recheck files");
-            let resp = winui::button(
-                ui,
-                r(at, 0.0, 48.0, width(label), winui::CONTROL_H),
-                label,
-                kind(!busy && item.status != Status::Queued),
-                false,
-                None,
-            );
-            if resp.clicked() {
-                action = Action::Torrent(TorrentCmd::Recheck);
-            }
-            // i18n: tooltip of a torrent's Recheck files button
-            resp.on_hover_text(crate::i18n::t("Reads every piece again and checks it"));
         }
         TTab::Trackers => {
             let add = crate::i18n::mark("Add trackers...");
@@ -944,7 +2172,7 @@ pub(super) fn torrent_commands(
             let add_w = width(add);
             if winui::button(
                 ui,
-                r(at, 0.0, 0.0, add_w, winui::CONTROL_H),
+                r(o, RIGHT_X, under, add_w, BUTTON_H),
                 add,
                 kind(!busy),
                 false,
@@ -956,7 +2184,7 @@ pub(super) fn torrent_commands(
             }
             if winui::button(
                 ui,
-                r(at, add_w + GAP, 0.0, width(again), winui::CONTROL_H),
+                r(o, RIGHT_X + add_w + GAP, under, width(again), BUTTON_H),
                 again,
                 kind(!busy && going),
                 false,
@@ -980,25 +2208,16 @@ fn footer_row(
     p: &egui::Painter,
     o: Pos2,
     item: &Item,
-    phase: Phase,
+    shown: &Shown,
+    kind: Kind,
 ) -> Action {
-    let y = footer_y(pr.details, item.torrent.is_some());
+    let y = footer_y(pr.details, kind, shown.line.is_some());
     let w = if pr.details { DETAILS_W } else { COMPACT_W };
-    // Plan 12's F9: "Show details" / "Hide details", a chevron after it (down: it opens).
-    let details_label = if pr.details {
-        // i18n: button at a download window's footer: hide the details (the window gets narrow again)
-        crate::i18n::mark("Hide details")
-    } else {
-        // i18n: button at a download window's footer: show the details (the window widens to the right)
-        crate::i18n::mark("Show details")
-    };
-    let dw = (winui::text_width(p, crate::i18n::t(details_label)) + 40.0).ceil();
-    let rc = r(o, EDGE, y, dw, winui::CONTROL_H);
-    if winui::button(ui, rc, details_label, ButtonKind::Ghost, false, None).clicked() {
+    if details_button(ui, p, o, y, pr.details).clicked() {
         pr.details = !pr.details;
     }
-    chevron(p, rc, pr.details);
 
+    let phase = shown.phase;
     let buttons = footer(phase);
     let widths: Vec<f32> = buttons
         .iter()
@@ -1012,16 +2231,7 @@ fn footer_row(
     let mut x = w - EDGE - total;
     let mut pressed = None;
     for ((label, kind, press), bw) in buttons.iter().zip(&widths) {
-        if winui::button(
-            ui,
-            r(o, x, y, *bw, winui::CONTROL_H),
-            label,
-            *kind,
-            false,
-            None,
-        )
-        .clicked()
-        {
+        if winui::button(ui, r(o, x, y, *bw, BUTTON_H), label, *kind, false, None).clicked() {
             pressed = Some(*press);
         }
         x += bw + GAP;
@@ -1060,14 +2270,38 @@ fn footer_row(
     }
 }
 
-/// The details button's chevron in its room at the end: down while closed, up while open.
-fn chevron(p: &egui::Painter, rc: egui::Rect, open: bool) {
-    let c = egui::pos2(rc.right() - 13.0, rc.center().y);
+/// Plan 12's F9: "Show details" / "Hide details" as a link at the footer's start (its text at
+/// the window's edge, 6 of face round it under the pointer), a chevron after it (down: it
+/// opens); its expanded state for screen readers.
+fn details_button(ui: &mut Ui, p: &egui::Painter, o: Pos2, y: f32, open: bool) -> Response {
+    let label = if open {
+        // i18n: button at a download window's footer: hide the details (the window gets narrow again)
+        crate::i18n::t("Hide details")
+    } else {
+        // i18n: button at a download window's footer: show the details (the window widens to the right)
+        crate::i18n::t("Show details")
+    };
+    let text_w = winui::text_width_font(p, face(12.0), label).ceil();
+    let rc = r(o, EDGE - 6.0, y, 6.0 + text_w + 4.0 + 10.0 + 6.0, BUTTON_H);
+    let id = egui::Id::unique(("progress-details", ui.ctx().viewport_id()));
+    let resp = ui.interact(rc, id, Sense::click());
+    winui::focus_on_press(&resp);
+    winui::expose(&resp, egui::Role::Button, label, true, None);
+    resp.ctx
+        .accesskit_node_builder(resp.id, |n| n.set_expanded(open));
+    if resp.hovered() {
+        p.rect_filled(rc, 4.0, crate::theme::colors().button_hot);
+    }
+    let base = o.y + y + 18.0;
+    winui::text_font(p, face(12.0), o.x + EDGE, base, label, secondary());
+    let c = pos2(o.x + EDGE + text_w + 4.0 + 5.0, o.y + y + BUTTON_H / 2.0);
     let (a, b) = if open { (2.0, -2.0) } else { (-2.0, 2.0) };
     p.line(
-        vec![c + vec2(-3.5, a), c + vec2(0.0, b), c + vec2(3.5, a)],
-        egui::Stroke::new(1.4, winui::TEXT()),
+        vec![c + vec2(-3.0, a), c + vec2(0.0, b), c + vec2(3.0, a)],
+        Stroke::new(1.4, secondary()),
     );
+    winui::show_focus(ui, &resp, rc);
+    resp
 }
 
 /// The window, just widened (Details), moved left as far as it must to stay inside its screen's
@@ -1292,12 +2526,133 @@ mod tests {
         assert_eq!(Look::named("menu"), None);
     }
 
-    /// The compact window is 440 wide, Details 760; a torrent's details are taller (its rows).
+    /// The compact window is 440 wide (board 1: 204 under its title bar), Details 760; a
+    /// torrent's details are taller (its rows), and a state's line makes room for itself there.
     #[test]
     fn details_widen_the_window() {
-        assert_eq!(size(false, false)[0], COMPACT_W);
-        assert_eq!(size(true, false)[0], DETAILS_W);
-        assert!(size(true, true)[1] > size(true, false)[1]);
-        assert_eq!(size(false, true), size(false, false));
+        assert_eq!(size(false, Kind::File, false), [COMPACT_W, 204.0]);
+        assert_eq!(size(true, Kind::File, false)[0], DETAILS_W);
+        assert!(size(true, Kind::Torrent, false)[1] > size(true, Kind::File, false)[1]);
+        assert_eq!(
+            size(false, Kind::Torrent, true),
+            size(false, Kind::File, false)
+        );
+        assert_eq!(
+            size(true, Kind::File, true)[1],
+            size(true, Kind::File, false)[1] + LINE_ROOM
+        );
+        // The right column's tables take the whole rows down to the left column's end, five
+        // at the fewest; it never runs past the left one.
+        assert_eq!(rows_down_to(0.0, TITLES_H + 8.0 * ROW_H + 20.0), 8);
+        assert_eq!(rows_down_to(0.0, 10.0), ROWS_SHOWN);
+        for kind in [Kind::File, Kind::Torrent, Kind::Video] {
+            assert!(
+                right_end(kind) <= facts_end(kind, facts_top(false)),
+                "{kind:?}"
+            );
+        }
+    }
+
+    /// Plan 13c: the speed graph's sampler starts empty, keeps one reading a second (fed twice
+    /// within a second it keeps one) and the last 60 only.
+    #[test]
+    fn the_sampler_keeps_60_readings_and_starts_empty() {
+        let mut s = Sampler::default();
+        assert!(s.readings().is_empty());
+        s.feed(10.0, 100.0);
+        s.feed(10.4, 200.0);
+        s.feed(10.9, 300.0);
+        assert_eq!(s.readings().len(), 1, "one a second");
+        assert_eq!(s.readings()[0], 100.0);
+        s.feed(11.0, 400.0);
+        assert_eq!(s.readings().len(), 2);
+        for k in 0..100 {
+            s.feed(12.0 + k as f64, k as f64);
+        }
+        assert_eq!(s.readings().len(), Sampler::KEPT);
+        assert_eq!(s.readings().back(), Some(&99.0), "the newest last");
+        assert_eq!(s.readings().front(), Some(&40.0), "the oldest dropped");
+    }
+
+    /// Seconds without a frame (the window in the notification area) read 0, so a pause shows
+    /// as one; the clock moves by whole seconds, not to the frame's time.
+    #[test]
+    fn the_sampler_fills_missed_seconds_with_nothing() {
+        let mut s = Sampler::default();
+        s.feed(0.0, 5.0);
+        s.feed(3.5, 7.0);
+        let got: Vec<f64> = s.readings().iter().copied().collect();
+        assert_eq!(got, [5.0, 0.0, 0.0, 7.0]);
+        s.feed(3.9, 9.0);
+        assert_eq!(
+            s.readings().len(),
+            4,
+            "3.5 counted as second 3: 3.9 is in it"
+        );
+        s.feed(4.0, 9.0);
+        assert_eq!(s.readings().len(), 5, "no drift: second 4 starts at 4.0");
+        // A long gap: the last minute is all zeros but the reading.
+        s.feed(1000.2, 1.0);
+        assert_eq!(s.readings().len(), Sampler::KEPT);
+        assert_eq!(s.readings().back(), Some(&1.0));
+        assert!(s.readings().iter().rev().skip(1).all(|r| *r == 0.0));
+    }
+
+    /// Plan 13c: each segment is as wide as its byte range's share of the file, filled as far
+    /// as it has come with a tick at its cursor while it is written; one narrower than 3 points
+    /// (or more than 48 of them) makes the strip one plain fill.
+    #[test]
+    fn segment_widths_follow_byte_ranges() {
+        // A quarter and three quarters of 1000 bytes across 400 points, given out of order.
+        let parts = segment_parts(&[(250, 375.0), (0, 250.0)], 1000, 400.0).unwrap();
+        assert_eq!(parts.len(), 2);
+        let (a, b) = (parts[0], parts[1]);
+        assert_eq!((a.x0, a.x1), (0.0, 100.0 - PART_GAP));
+        assert_eq!(a.fill, a.x1, "a finished segment fills its room");
+        assert!(!a.tick, "no tick once it is all in");
+        assert_eq!((b.x0, b.x1), (100.0, 400.0), "the last one reaches the end");
+        assert_eq!(b.fill, 250.0, "half of its 750 bytes");
+        assert!(b.tick, "still being written");
+        // Nothing yet: its tick at its start.
+        let parts = segment_parts(&[(0, 0.0)], 1000, 400.0).unwrap();
+        assert_eq!(parts[0].fill, 0.0);
+        assert!(parts[0].tick);
+        // A segment of 5 bytes in 1000 is 2 points wide: one plain fill.
+        assert_eq!(segment_parts(&[(0, 0.0), (995, 0.0)], 1000, 400.0), None);
+        // 49 segments: one plain fill too.
+        let many: Vec<(u64, f64)> = (0..49).map(|k| (k * 1000, 0.0)).collect();
+        assert_eq!(segment_parts(&many, 49_000, 400.0), None);
+        assert_eq!(segment_parts(&[], 1000, 400.0), None);
+        assert_eq!(segment_parts(&[(0, 0.0)], 0, 400.0), None);
+    }
+
+    /// Plan 13c: the Pieces row counts the pieces that are in, of all of them, with one piece's
+    /// size; numbers grouped as counts are.
+    #[test]
+    fn the_pieces_row_counts_pieces() {
+        let pieces = [true, false, true, true];
+        assert_eq!(pieces_line(&pieces, 512 * 1024), "3 of 4, 512.00 KB each");
+        let mut many = vec![false; 1470];
+        many[..98].iter_mut().for_each(|b| *b = true);
+        let line = pieces_line(&many, 512 * 1024);
+        let digits: String = line.chars().filter(char::is_ascii_digit).collect();
+        assert!(digits.starts_with("981470"), "{line}");
+        assert!(line.ends_with("512.00 KB each"), "{line}");
+    }
+
+    /// The reading: whole percents rounded down, one decimal under 10; the detail line says the
+    /// unit once when both sizes share it.
+    #[test]
+    fn the_reading_and_the_detail_line() {
+        assert_eq!(reading_figure(0.4199), "41");
+        assert_eq!(reading_figure(0.067), "6.7");
+        assert_eq!(reading_figure(0.9999), "99");
+        assert_eq!(reading_figure(1.0), "100");
+        assert_eq!(reading_figure(0.29), "29");
+        assert_eq!(reading_figure(0.0), "0");
+        let gb = 1024 * 1024 * 1024;
+        assert_eq!(so_far(2 * gb + gb / 2, Some(6 * gb)), "2.50 of 6.00 GB");
+        assert_eq!(so_far(1024 * 1024, Some(2 * gb)), "1.00 MB of 2.00 GB");
+        assert_eq!(so_far(1024 * 1024, None), "1.00 MB");
     }
 }

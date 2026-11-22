@@ -12,9 +12,9 @@ use crate::model::{self, Item, Status};
 // progress_view.rs).
 #[path = "progress_view.rs"]
 mod view;
-// Laid out in English pixels: `fill` and `px` make each one where it is on screen (bars fill
-// from the right in a right-to-left interface), `text` starts at an English pen.
-use crate::winui::{self, fill_l as fill, px_l as px, r, text};
+// Laid out in English pixels: `fill` makes each one where it is on screen (a right-to-left
+// interface mirrors it), `text` starts at an English pen.
+use crate::winui::{self, fill_l as fill, r, text};
 
 use crate::winui::caption::CaptionButton;
 
@@ -34,8 +34,8 @@ const GLIDE_FRAME_MAIN: std::time::Duration = std::time::Duration::from_millis(8
 /// The app's own frames while a download runs (app.rs): a bar slower than a pixel in this long
 /// needs no frames of its own.
 const APP_FRAME: f64 = 0.25;
-/// The strip's width in columns ([`view::STRIP_COLS`]).
-const BAR_WIDTH: f64 = view::STRIP_COLS as f64;
+/// The strip's width ([`view::STRIP_W`]).
+const BAR_WIDTH: f64 = view::STRIP_W as f64;
 /// A figure reached in about the time the last one took to come, a quarter more (seconds): the
 /// next one comes before the bar has stopped, so it never halts between figures that keep
 /// coming. Within these bounds (a figure after a long pause glides in half a second).
@@ -207,22 +207,15 @@ fn disabled() -> Color32 {
     crate::theme::colors().progress_label_disabled
 }
 
-/// The segment / piece bar's 13 rows, top to bottom: (not here yet, here, a connection's
-/// start), from the theme (IDM's gradients in the classic look; its dark variant dims the
-/// "not here yet" rows, a bright white strip in the dark window).
-fn seg_rows() -> impl Iterator<Item = (Color32, Color32, Color32)> {
-    let s = &crate::theme::colors().segments;
-    (0..13).map(|i| (s.missing[i], s.done[i], s.start[i]))
-}
-
 impl Progress {
     /// `/show progress:<name>` (the docs' screenshots and the fit audit): "status" the compact
     /// view as the download is, "details" the expanded one, "files", "peers", "trackers" a
     /// torrent's tab in it; any other name a state, each a look only (plan 09a, 13b): drawn for
     /// the screenshot, the download itself left as it is. "error" a failed download (a sample
     /// reason), "mergefail" a failed join's reason; for a video (upstream issues 769, 736)
-    /// "merging" its picture and sound being joined (45 %), "helper" the line saying why yt-dlp
-    /// downloads it itself (an RTMP stream); "recording" and "saving" a live stream being
+    /// "merging" its picture and sound being joined (45 %), "helper" Details' "Downloaded by"
+    /// row saying why yt-dlp downloads it itself (an RTMP stream; shown for a video only, so
+    /// ask it of a video's window); "recording" and "saving" a live stream being
     /// recorded (its button "Stop and save") and being saved; and [`view::Look`]'s ("stopped",
     /// "unknown-size", "waiting", "finishing", "checking", "sharing", "webpage", "service",
     /// "cant-resume"). Unknown names leave it as it is.
@@ -271,6 +264,8 @@ impl Progress {
             "merging" => self.sample_merging = Some(0.45),
             "helper" => {
                 self.sample_helper = Some(mdm_tools::streams::Helper::Protocol("rtmp".into()));
+                // Its row is in Details.
+                self.details = true;
             }
             // The download as it is, compact.
             "status" => self.details = false,
@@ -363,23 +358,26 @@ pub struct Progress {
     /// The main window is shown (set by the app each frame): the glide's frames draw it too.
     pub main_shown: bool,
     /// The speed limit holding the download back (set by the app each frame, upstream issue
-    /// 1191): its Transfer rate names it.
+    /// 1191): the detail line names it after the speed, the speed graph draws it dashed.
     pub limit: Option<crate::model::Limit>,
     /// The bar and the segment map between figures.
     glide: Glide,
-    /// `/show progress:error`: Download status painted as failed with this reason, the
-    /// download left as it is (a screenshot's state).
+    /// The last minute of its speed for Details' graph (plan 13c): kept while the window is
+    /// open, gone with it, never saved.
+    speed: view::Sampler,
+    /// `/show progress:error`: the window drawn as failed with this reason, the download left
+    /// as it is (a screenshot's state).
     sample_error: Option<String>,
-    /// `/show progress:merging`: Download status and the bar as while a video's streams are
+    /// `/show progress:merging`: the status word and the strip as while a video's streams are
     /// joined, this far (a screenshot's state).
     sample_merging: Option<f64>,
-    /// `/show progress:helper`: the Server row as for a video yt-dlp downloads itself, for this
-    /// reason (a screenshot's state).
+    /// `/show progress:helper`: Details' "Downloaded by" row as for a video yt-dlp downloads
+    /// itself, for this reason (a screenshot's state; a video's row only).
     sample_helper: Option<mdm_tools::streams::Helper>,
     /// `/show progress:stopped` and the other states of plan 13b (a screenshot's state).
     sample_look: Option<view::Look>,
-    /// `/show progress:recording` / `progress:saving`: Download status and the Pause button as
-    /// for a live stream being recorded, or saved (a screenshot's state).
+    /// `/show progress:recording` / `progress:saving`: the status word and the Stop and save
+    /// button as for a live stream being recorded, or saved (a screenshot's state).
     sample_live: Option<mdm_tools::video::LiveState>,
 }
 
@@ -443,6 +441,7 @@ impl Progress {
             main_shown: true,
             limit: None,
             glide: Glide::default(),
+            speed: view::Sampler::default(),
             sample_error: None,
             sample_merging: None,
             sample_helper: None,
@@ -477,7 +476,21 @@ impl Progress {
             (Some(f), Some(t)) => (drawn.done / t as f64).clamp(0.0, 1.0).min(f),
             _ => 0.0,
         };
-        let body = view::size(self.details, item.torrent.is_some());
+        // The speed graph's reading, one a second (0 while it doesn't download).
+        let rate = if item.status == Status::Downloading {
+            item.rate()
+        } else {
+            0.0
+        };
+        self.speed.feed(ctx.input(|i| i.time), rate);
+        // The torrent's details, and the state as drawn: its line takes room in Details.
+        let d = if item.torrent.is_some() {
+            self.torrent_data(item)
+        } else {
+            None
+        };
+        let state = view::shown(self, item, snap, d.as_ref());
+        let body = view::size(self.details, view::Kind::of(item), state.line.is_some());
         // Windows: the title bar is ours (#63), drawn in the client above IDM's layout, so the
         // hide button sits in it, left of Minimize, as in IDM. Elsewhere the system draws it.
         let client = [body[0], body[1] + TITLE_H];
@@ -526,7 +539,8 @@ impl Progress {
                     let mut rest = ui.new_child(egui::UiBuilder::new().max_rect(below));
                     let action = crate::dialogs::scroll(&mut rest, key, body, |ui, o| {
                         let _surface = winui::Surface::enter(o.x, o.x + body[0]);
-                        self.body(ui, o, item, snap, frac, (bar, &drawn.segments))
+                        let drawn = (bar, drawn.segments.as_slice());
+                        self.body(ui, o, item, snap, frac, drawn, &state, d.as_ref())
                     });
                     // The system menu's "Hide to the notification area" (Alt+Space).
                     if let Some(h) = hwnd
@@ -632,7 +646,9 @@ impl Progress {
     }
 
     /// `frac`: the download's fraction as it is (the text); `drawn`: the bar's fill and the
-    /// segments as they glide ([`Glide`]).
+    /// segments as they glide ([`Glide`]); `state`: as [`view::shown`] has it; `d`: a torrent's
+    /// details.
+    #[allow(clippy::too_many_arguments)]
     fn body(
         &mut self,
         ui: &mut Ui,
@@ -641,9 +657,11 @@ impl Progress {
         snap: Option<&Snapshot>,
         frac: Option<f64>,
         drawn: (f64, &[(u64, f64)]),
+        state: &view::Shown,
+        d: Option<&crate::torrents::Details>,
     ) -> Action {
         // The layout (progress_view.rs); this window's state and data stay here.
-        view::body(self, ui, o, item, snap, frac, drawn)
+        view::body(self, ui, o, item, snap, frac, drawn, state, d)
     }
 
     /// The torrent's details as the session has them (its files, peers, trackers, pieces,
@@ -712,62 +730,26 @@ fn on_escape(action: Action, escape: bool) -> Action {
     }
 }
 
-/// The Graphite status icon (`st-*`) for a download's state, before its status word.
-fn status_icon(status: Status) -> &'static str {
-    match status {
-        Status::Downloading => "st-downloading",
-        Status::Stopped => "st-paused",
-        Status::Queued => "st-queued",
-        Status::Complete => "st-complete",
-        Status::Error => "st-error",
-    }
-}
-
-/// A screenshot's states for Download status (`/show progress:<state>`, looks only): failed for
-/// this reason, a video's streams joined this far, a video yt-dlp downloads itself for this
-/// reason, a live stream being recorded or saved; plan 13b's states as their status word says
-/// them (`word`), a download whose size isn't known (`no_size`).
+/// A screenshot's states for the status word (`/show progress:<state>`, looks only): failed for
+/// this reason, a video's streams joined this far, a live stream being recorded or saved; plan
+/// 13b's states as their status word says them (`word`).
 #[derive(Clone, Copy, Default)]
 struct Samples<'a> {
     failed_with: Option<&'a str>,
     merging: Option<f64>,
-    helper: Option<&'a mdm_tools::streams::Helper>,
     live: Option<mdm_tools::video::LiveState>,
     word: Option<&'a str>,
-    no_size: bool,
 }
 
-// The rows sit 7 px inside the page's frame at the top and at the bottom (the Server row's
-// descent included), with a slightly wider break after Status, as before.
-/// `samples`: a screenshot's state painted instead of the download's own. Values end at English
-/// x `right` (from `o`).
-#[allow(clippy::too_many_arguments)]
-fn status_page(
-    ui: &Ui,
-    o: Pos2,
-    right: f32,
-    item: &Item,
-    snap: Option<&Snapshot>,
-    frac: Option<f64>,
-    limit: Option<model::Limit>,
-    samples: Samples,
-) {
-    let (size, frac) = if samples.no_size {
-        (None, None)
-    } else {
-        (item.size, frac)
-    };
+/// The download's status word ("Receiving data...", "Stopped", "Error: {error}"): beside its
+/// name and in its line (progress_view.rs). `samples`: a screenshot's state said instead of the
+/// download's own.
+fn status_word(item: &Item, snap: Option<&Snapshot>, samples: Samples) -> String {
     let failed_with = samples.failed_with;
-    let p = &ui.painter().clone();
     let state = if failed_with.is_some() {
         Status::Error
     } else {
         item.status
-    };
-    // Long values are cut with "..." at the page edge and shown whole on hover.
-    let fit = |key: &str, x: f32, base: f32, s: &str, color| {
-        let (rect, cut) = winui::text_fit(p, o.x + x, o.y + base, s, color, o.x + right);
-        winui::copyable(ui, rect, key, s, cut);
     };
     // A live stream being recorded or saved (or a screenshot's of one).
     let live = if failed_with.is_some() {
@@ -775,7 +757,7 @@ fn status_page(
     } else {
         samples.live.or_else(|| item.live_state())
     };
-    let status = match state {
+    match state {
         // A screenshot's state (plan 13b), as its status word says it.
         _ if let Some(word) = samples.word => word.to_owned(),
         // A live stream being recorded or saved shows no progress of its own: said first.
@@ -844,320 +826,8 @@ fn status_page(
                     .unwrap_or(crate::i18n::t("unknown")),
             )],
         ),
-    };
-    fit(
-        "url",
-        33.0,
-        44.0,
-        &crate::i18n::ltr(item.url.as_str()),
-        winui::TEXT(),
-    );
-    // A failed download (the mock's error state): its reason in an error banner between the
-    // address and Status, whole and copyable on hover; Status then says only "Error". The rows
-    // move down under it, without Transfer rate and Time left (both blank unless it is
-    // downloading), so they end where they end in every other state.
-    let failed = state == Status::Error;
-    let status = if failed {
-        let at = r(o, 33.0, 50.0, right - 33.0, 30.0);
-        winui::status_banner(ui, at, winui::BannerKind::Error, "st-error", &status, "");
-        winui::copyable(ui, at, "error-banner", &status, true);
-        // i18n: a download's status (state it is in, not a command): it failed
-        crate::i18n::t("Error").to_owned()
-    } else {
-        status
-    };
-    let rows: Vec<(&str, f32, f32, String)> = vec![
-        // i18n: noun: label before the download's state
-        (crate::i18n::mark("Status"), 61.0, 102.0, status),
-        (
-            crate::i18n::mark("File size"),
-            80.0,
-            135.0,
-            size.map_or(String::new(), model::size),
-        ),
-        (
-            // i18n: label before the amount received so far
-            crate::i18n::mark("Downloaded"),
-            96.0,
-            135.0,
-            // The list's size and percent (plan 12's F8).
-            match frac {
-                // No size: only how much has come, no 0 % that never moves.
-                None => model::size(item.downloaded),
-                Some(frac) => {
-                    format!(
-                        "{} ({})",
-                        model::size(item.downloaded),
-                        model::percent(frac)
-                    ) // not translated: two values
-                }
-            },
-        ),
-        (
-            crate::i18n::mark("Transfer rate"),
-            112.0,
-            135.0,
-            // Every byte in (upstream issue 736): nothing comes in while the file is checked or
-            // joined.
-            if state == Status::Downloading && !item.past_last_byte() {
-                // The limit holding it back beside the speed (upstream issue 1191).
-                let rate = model::rate(item.rate());
-                match limit {
-                    Some(limit) => limit.after(&rate),
-                    None => rate,
-                }
-            } else {
-                String::new()
-            },
-        ),
-        (
-            crate::i18n::mark("Time left"),
-            128.0,
-            135.0,
-            item.time_left(),
-        ),
-        (
-            // i18n: label: whether the server lets a stopped download continue (Yes / No)
-            crate::i18n::mark("Resume capability"),
-            145.0,
-            135.0,
-            match item.resumable {
-                Some(true) => crate::i18n::t("Yes"),
-                Some(false) => crate::i18n::t("No"),
-                None => "",
-            }
-            .to_owned(),
-        ),
-    ];
-    // Under the banner: Status, File size, Downloaded and Resume capability 16 apart from 96,
-    // and Server at 160.
-    let (rows, server_base) = if failed {
-        let kept = rows
-            .into_iter()
-            .filter(|r| r.0 != "Transfer rate" && r.0 != "Time left")
-            .enumerate()
-            .map(|(i, (label, _, vx, value))| (label, 96.0 + 16.0 * i as f32, vx, value))
-            .collect();
-        (kept, 160.0)
-    } else {
-        (rows, 161.0)
-    };
-    // A value starts 6 px after its label at the least (a long translation); the rows that share
-    // the column at 135 (all but Status) keep sharing one.
-    let after = |label: &str| 33.0 + winui::text_width(p, crate::i18n::t(label)).ceil() + 6.0;
-    let column = rows
-        .iter()
-        .filter(|r| r.2 == 135.0)
-        .map(|r| after(r.0))
-        .fold(135.0, f32::max);
-    for (label, base, vx, value) in rows {
-        let vx = if vx == 135.0 {
-            column
-        } else {
-            vx.max(after(label))
-        };
-        text(
-            p,
-            o.x + 33.0,
-            o.y + base,
-            crate::i18n::t(label),
-            winui::TEXT(),
-        );
-        if label == "Status" {
-            // The status word after its state's icon (plan 07: status as icon + word), in the
-            // status colour, or the error colour for a failed download.
-            let vc = if failed {
-                winui::ERROR()
-            } else {
-                crate::theme::colors().status_value
-            };
-            let icon = winui::r(o, vx, base - 12.0, 16.0, 16.0);
-            crate::themeicons::paint_graphite_in(ui, p, status_icon(state), icon, vc);
-            fit(label, vx + 20.0, base, &value, vc);
-        } else {
-            fit(label, vx, base, &value, winui::TEXT());
-        }
-    }
-    // Where its server is (#140): a file download's, and a video's whose streams the engine
-    // downloads (upstream issue 769; a torrent or a gallery has no single server of our own). As
-    // the running download sees it, else as its last run did.
-    let seen = snap
-        .and_then(|s| s.server.as_ref())
-        .map(crate::whereis::Seen::from)
-        .or_else(|| item.server.clone());
-    // A video yt-dlp downloads itself (upstream issue 769): why, in that row.
-    if let Some(why) = samples.helper.cloned().or_else(|| item.video_helper()) {
-        fit(
-            "helper",
-            33.0,
-            server_base,
-            &helper_line(&why),
-            winui::TEXT(),
-        );
-    } else if item.torrent.is_none()
-        && item.gallery.is_none()
-        && (item.video.is_none() || seen.is_some())
-    {
-        // i18n: label before where a download's server is (its country and round trip)
-        let label = crate::i18n::t("Server");
-        text(p, o.x + 33.0, o.y + server_base, label, winui::TEXT());
-        crate::whereis::line(
-            ui,
-            o.x + column.max(33.0 + winui::text_width(p, label).ceil() + 6.0),
-            o.y + server_base,
-            o.x + right,
-            seen.as_ref(),
-            &format!("progress-{}", item.id),
-        );
     }
 }
-
-impl Progress {
-    /// A torrent's tabs in Details' right column (plan 13b): Files, Peers and Trackers over their
-    /// table, each with its torrent's commands under it. `t`: where the tables' old origin is
-    /// (their x 17 the column's start, their tab strip's top at 226). The command pressed.
-    fn torrent_details(
-        &mut self,
-        ui: &mut Ui,
-        p: &egui::Painter,
-        t: Pos2,
-        item: &Item,
-        d: Option<&crate::torrents::Details>,
-    ) -> Action {
-        let w = view::TABLE_W;
-        let tabs = [
-            // i18n: tab title: the torrent's files
-            (TTab::Files, crate::i18n::mark("Files")),
-            // i18n: tab title: the other computers sharing the torrent
-            (TTab::Peers, crate::i18n::mark("Peers")),
-            // i18n: tab title: the servers that list the peers
-            (TTab::Trackers, crate::i18n::mark("Trackers")),
-        ];
-        // The usual tab control (the Scheduler's and Options' look): tabs sized to their
-        // labels from the leading edge, one Tab stop, the arrows move between them.
-        let english: Vec<&str> = tabs.iter().map(|t| t.1).collect();
-        let light: Vec<winui::LightTab> = winui::tab_row(p, &english, 16.0, 17.0 + w, 2.0, 8.0)
-            .into_iter()
-            .zip(tabs.iter())
-            .map(|((x0, x1, _), (_, label))| winui::LightTab {
-                label,
-                sel: (x0 - 2.0, x1 + 2.0),
-                unsel: (x0, x1),
-            })
-            .collect();
-        let current = tabs.iter().position(|t| t.0 == self.ttab).unwrap_or(0);
-        if let Some(i) = winui::tabs_light(
-            ui,
-            t,
-            r(t, 14.0, 226.0, w + 8.0, view::PANE_H),
-            &light,
-            current,
-        ) {
-            self.ttab = tabs[i].0;
-        }
-        // The tables right under the strip (no piece map in the page any more: the strip is it).
-        let o = t - vec2(0.0, TABLE_RISE);
-        let commands =
-            view::torrent_commands(self, ui, o + vec2(17.0, 273.0 + 128.0 + 8.0), item, d);
-        let Some(d) = d else {
-            table(ui, p, o, "t-none", &[(25.0, "")], &[], &[], false, None, w);
-            text(
-                p,
-                o.x + 25.0,
-                o.y + 312.0,
-                crate::i18n::t("Shown while the torrent is downloading."),
-                winui::TEXT(),
-            );
-            return commands;
-        };
-        match self.ttab {
-            TTab::Files => {
-                let rows: Vec<Vec<String>> = d
-                    .files
-                    .iter()
-                    .map(|(_, f, on, done)| {
-                        let pct = if !on {
-                            // i18n: a torrent file the user chose not to download
-                            crate::i18n::t("Skipped").to_owned()
-                        } else if f.size == 0 {
-                            crate::i18n::percent(1.0, 0)
-                        } else {
-                            crate::i18n::percent(*done as f64 / f.size as f64, 1)
-                        };
-                        vec![f.path.display().to_string(), model::size(f.size), pct]
-                    })
-                    .collect();
-                let ticks: Vec<bool> = d.files.iter().map(|f| f.2).collect();
-                let clicked = files_table_w(ui, p, o, "t-files", &rows, &ticks, 6, w);
-                // A box ticked or unticked (#39): the torrent downloads those files from now
-                // on; the last one ticked can't be unticked (a torrent of nothing).
-                if let Some(row) = clicked {
-                    let mut on: Vec<bool> = ticks.clone();
-                    on[row] = !on[row];
-                    if on.iter().any(|b| *b) {
-                        let chosen = d.files.iter().zip(&on).filter(|(_, b)| **b);
-                        self.pending_choose = Some(Action::Choose {
-                            files: chosen.clone().map(|(f, _)| f.0).collect(),
-                            all: on.iter().all(|b| *b),
-                            size: chosen.map(|(f, _)| f.1.size).sum(),
-                        });
-                    }
-                }
-            }
-            TTab::Peers => {
-                let rows: Vec<Vec<String>> = d
-                    .peers
-                    .iter()
-                    .map(|q| {
-                        vec![
-                            q.addr.clone(),
-                            q.client.clone().unwrap_or_default(),
-                            model::size(q.fetched),
-                            model::size(q.uploaded),
-                        ]
-                    })
-                    .collect();
-                table(
-                    ui,
-                    p,
-                    o,
-                    "t-peers",
-                    &[
-                        // i18n: column title: the web address (URL)
-                        (25.0, crate::i18n::mark("Address")),
-                        // i18n: column title: the peer's torrent program
-                        (120.0, crate::i18n::mark("Client")),
-                        // i18n: column title: how much came from the peer
-                        (185.0, crate::i18n::mark("Received")),
-                        // i18n: column title: how much went to the peer
-                        (245.0, crate::i18n::mark("Sent")),
-                    ],
-                    &[115.0, 180.0, 240.0],
-                    &rows,
-                    false,
-                    None,
-                    w,
-                );
-            }
-            TTab::Trackers => {
-                let rows: Vec<Vec<String>> = if d.trackers.is_empty() {
-                    vec![vec![
-                        crate::i18n::t("None: peers come from the DHT and other peers").into(),
-                    ]]
-                } else {
-                    d.trackers.iter().map(|t| vec![t.clone()]).collect()
-                };
-                // i18n: column title: a server that lists the peers
-                let head = [(25.0, crate::i18n::mark("Tracker"))];
-                table(ui, p, o, "t-trackers", &head, &[], &rows, false, None, w);
-            }
-        }
-        commands
-    }
-}
-
-/// How much higher Details' torrent tables sit than they did under the piece map (plan 13b).
-const TABLE_RISE: f32 = 21.0;
 
 /// The sharing state's line: the rate sent and to how many peers ("410.0 KB/s to 6 peers").
 fn sharing_line(s: &mdm_torrent::Stats) -> String {
@@ -1170,42 +840,15 @@ fn sharing_line(s: &mdm_torrent::Stats) -> String {
     )
 }
 
-/// The pieces under column `c` of `cols` (a torrent's strip): every one there.
-fn piece_column(pieces: &[bool], c: usize, cols: usize) -> bool {
+/// How much of the pieces under column `c` of `cols` are there (a torrent's strip, plan 13c: the
+/// column lit that much), 0 to 1.
+fn piece_column(pieces: &[bool], c: usize, cols: usize) -> f32 {
     if pieces.is_empty() || cols == 0 {
-        return false;
+        return 0.0;
     }
     let a = c * pieces.len() / cols;
     let b = ((c + 1) * pieces.len() / cols).max(a + 1).min(pieces.len());
-    pieces[a..b].iter().all(|x| *x)
-}
-
-/// The strip as a piece map, `cols` columns from English (`x0`, `y0`) in its frame: a column
-/// is filled when the pieces under it are there.
-fn piece_bar(p: &egui::Painter, x0: f32, y0: f32, cols: usize, pieces: &[bool]) {
-    let right = x0 + cols as f32 + 1.0;
-    let border = crate::theme::colors().segment_border;
-    fill(p, x0, y0, right, y0, border);
-    fill(p, x0, y0 + 14.0, right, y0 + 14.0, border);
-    fill(p, x0, y0, x0, y0 + 14.0, border);
-    fill(p, right, y0, right, y0 + 14.0, border);
-    let ix = x0 + 1.0;
-    // Runs of equal columns, painted as one rectangle per row.
-    let have = |c: usize| piece_column(pieces, c, cols);
-    let mut c = 0usize;
-    while c < cols {
-        let on = have(c);
-        let mut e = c;
-        while e + 1 < cols && have(e + 1) == on {
-            e += 1;
-        }
-        for (row, cols) in seg_rows().enumerate() {
-            let v = if on { cols.1 } else { cols.0 };
-            let y = y0 + 1.0 + row as f32;
-            fill(p, ix + c as f32, y, ix + e as f32, y, v);
-        }
-        c = e + 1;
-    }
+    pieces[a..b].iter().filter(|x| **x).count() as f32 / (b - a) as f32
 }
 
 /// The Files tab's table of a torrent's files, ticked or not: the Files window's (torrentfiles.rs,
@@ -1268,27 +911,10 @@ pub(crate) fn table_body_height(shown: usize) -> f32 {
     17.0 * shown as f32 - 2.0
 }
 
-/// A table in the connections table's frame, `w` wide from x 17: headers at x, column lines at
-/// `seps`, rows of text cut to their column (whole on hover), scrolled by the wheel. `checks`: a
-/// check box before each row's icon, ticked or not (the Files tab); the row whose box was
-/// clicked.
-#[allow(clippy::too_many_arguments)]
-fn table(
-    ui: &mut Ui,
-    p: &egui::Painter,
-    o: Pos2,
-    id: &str,
-    heads: &[(f32, &str)],
-    seps: &[f32],
-    rows: &[Vec<String>],
-    icons: bool,
-    checks: Option<&[bool]>,
-    w: f32,
-) -> Option<usize> {
-    table_sized(ui, p, o, id, heads, seps, rows, icons, checks, 6, w)
-}
-
-/// [`table`] showing `shown` rows: it grows down from the same top.
+/// A table in the Files window's frame (torrentfiles.rs), `w` wide from x 17, showing `shown`
+/// rows: headers at x, column lines at `seps`, rows of text cut to their column (whole on hover),
+/// scrolled by the wheel. `checks`: a check box before each row's icon, ticked or not; the row
+/// whose box was clicked.
 #[allow(clippy::too_many_arguments)]
 fn table_sized(
     ui: &mut Ui,
@@ -1436,122 +1062,12 @@ fn rows_bar(
     }
 }
 
-/// How much wider than IDM's the connections table's number column is drawn (#1101): its
-/// numbers (`widest`, the widest one's width) have 13 px before the column's line, its title
-/// (`title`'s width) 25 px; the columns after it move over by the rest. 0 when both fit (one
-/// and two digits in the classic look).
-fn number_column_extra(widest: f32, title: f32) -> f32 {
-    (widest - 13.0).max(title - 25.0).max(0.0).ceil().min(60.0)
-}
-
-/// The custom-drawn segment bar (spec "Segment bar"): 13-row gradients, red start columns;
-/// `segments`: each one's start and bytes done, as drawn ([`Glide`]); `width` columns from
-/// English (`x0`, `y0`) in its frame.
-fn segment_bar(
-    p: &egui::Painter,
-    x0: f32,
-    y0: f32,
-    width: f32,
-    item: &Item,
-    segments: &[(u64, f64)],
-) {
-    let right = x0 + width + 1.0;
-    let border = crate::theme::colors().segment_border;
-    fill(p, x0, y0, right, y0, border);
-    fill(p, x0, y0 + 14.0, right, y0 + 14.0, border);
-    fill(p, x0, y0, x0, y0 + 14.0, border);
-    fill(p, right, y0, right, y0 + 14.0, border);
-    for (x, y) in [(x0, y0), (right, y0), (x0, y0 + 14.0), (right, y0 + 14.0)] {
-        px(p, x, y, crate::theme::colors().segment_corner);
-    }
-    // Paint a run of columns [a, b] with one of the three row profiles.
-    let run = |a: f32, b: f32, which: usize| {
-        if b < a {
-            return;
-        }
-        for (row, cols) in seg_rows().enumerate() {
-            let c = match which {
-                0 => cols.0,
-                1 => cols.1,
-                _ => cols.2,
-            };
-            fill(p, a, y0 + 1.0 + row as f32, b, y0 + 1.0 + row as f32, c);
-        }
-    };
-    let ix = x0 + 1.0;
-    run(ix, ix + width - 1.0, 0);
-    let Some(total) = item.size.filter(|t| *t > 0) else {
-        return;
-    };
-    let col = |v: u64| (v as f64 / total as f64 * f64::from(width)).floor() as f32;
-    let ppp = p.pixels_per_point();
-    for &(start, done) in segments {
-        let sx = ix + col(start);
-        if let Some((a, b)) = segment_columns(start, done, total, f64::from(width)) {
-            run(ix + a, ix + b, 1);
-        }
-        // The start's tick, as wide in whole pixels wherever it falls (a 1-point column at
-        // 150 % came out 2 pixels or 1 by its place, the 1-pixel ones all but gone).
-        let column = egui::Rect::from_min_size(egui::pos2(sx, y0), vec2(1.0, 1.0));
-        let (a, b) = tick_span(winui::rect(column).left(), ppp);
-        for (row, cols) in seg_rows().enumerate() {
-            let y = y0 + 1.0 + row as f32;
-            winui::solid(
-                p,
-                egui::Rect::from_min_max(egui::pos2(a, y), egui::pos2(b, y + 1.0)),
-                cols.2,
-            );
-        }
-    }
-}
-
 /// How far the check or the merge after the last byte has come (upstream issue 736), when it
 /// is under way and that is known.
 fn finishing_fraction(snap: Option<&Snapshot>) -> Option<f64> {
     use mdm_engine::download::State;
     let s = snap.filter(|s| matches!(s.state, State::Verifying | State::Merging))?;
     s.finishing.map(|f| f.clamp(0.0, 1.0))
-}
-
-/// The columns a segment fills in the segment bar, from its start column's right to its end's
-/// left, `total` bytes across `width` columns: a finished segment reaches the next one's start
-/// column, so a finished download leaves no gap (upstream issue 736). None when it fills none.
-fn segment_columns(start: u64, done: f64, total: u64, width: f64) -> Option<(f32, f32)> {
-    let col = |v: f64| (v / total as f64 * width).floor();
-    let first = col(start as f64);
-    let end = col((start as f64 + done).min(total as f64));
-    let last = (end - 1.0).min(width - 1.0);
-    (last > first).then_some(((first + 1.0) as f32, last as f32))
-}
-
-#[cfg(test)]
-mod segment_tests {
-    use super::segment_columns;
-
-    /// Upstream issue 736: two finished halves fill every column up to the next one's start, and
-    /// the last one to the bar's end: no gap at 100 %.
-    #[test]
-    fn finished_segments_leave_no_gap() {
-        let (total, width) = (1000, 511.0);
-        assert_eq!(segment_columns(0, 500.0, total, width), Some((1.0, 254.0)));
-        // The second one's start column is 255 (drawn red), its fill runs to the end.
-        assert_eq!(
-            segment_columns(500, 500.0, total, width),
-            Some((256.0, 510.0))
-        );
-        // Under way: up to where it has come.
-        assert_eq!(segment_columns(0, 100.0, total, width), Some((1.0, 50.0)));
-        // Nothing yet, or less than a column: no fill.
-        assert_eq!(segment_columns(0, 0.0, total, width), None);
-        assert_eq!(segment_columns(500, 1.0, total, width), None);
-    }
-}
-
-/// The start tick's columns from point `x` at `ppp` pixels a point: from `x`'s nearest pixel,
-/// one point rounded to whole pixels (at least one) wide, so every tick is the same width.
-fn tick_span(x: f32, ppp: f32) -> (f32, f32) {
-    let a = (x * ppp).round() / ppp;
-    (a, a + ppp.round().max(1.0) / ppp)
 }
 
 /// A live stream's status (yt-dlp says no progress as it records): being saved, or recording;
@@ -1594,142 +1110,6 @@ fn helper_line(why: &mdm_tools::streams::Helper) -> String {
     }
 }
 
-/// The connections table (spec "Connections table"): N. · Downloaded · Info, `w` wide from x 17
-/// (Details' right column, plan 13b).
-fn connections(ui: &mut Ui, p: &egui::Painter, o: Pos2, snap: Option<&Snapshot>, w: f32) {
-    // Its right edge (530 when it was 513 wide).
-    let re = 17.0 + w;
-    let outer = r(o, 17.0, 273.0, w, 128.0);
-    winui::solid(p, outer, winui::FIELD_EDGE());
-    fill(
-        p,
-        o.x + 18.0,
-        o.y + 274.0,
-        o.x + re - 2.0,
-        o.y + 399.0,
-        // Every list's background (IDM's light one is mauve, #beb4be: the only one of its kind).
-        winui::FIELD(),
-    );
-    fill(
-        p,
-        o.x + 19.0,
-        o.y + 275.0,
-        o.x + re - 20.0,
-        o.y + 298.0,
-        winui::LIST_HEADER(),
-    );
-    // Listed by connection number, like IDM (the engine reports them in arrival order).
-    let mut conns: Vec<_> = snap
-        .map(|s| s.connections.iter().collect())
-        .unwrap_or_default();
-    conns.sort_by_key(|c| c.id);
-    // i18n: column title: connection number (abbreviation of Number)
-    let number = crate::i18n::t("N.");
-    // The number column is as wide as its widest number and its title (#1101: with 16
-    // connections, 10 to 16 were cut to "..."); the other columns move over.
-    let widest = conns
-        .iter()
-        .map(|c| winui::text_width(p, &(c.id + 1).to_string()))
-        .fold(0.0, f32::max);
-    let dx = number_column_extra(widest, winui::text_width(p, number));
-    for x in [48.0 + dx, 148.0 + dx, re - 32.0] {
-        fill(
-            p,
-            o.x + x,
-            o.y + 275.0,
-            o.x + x,
-            o.y + 298.0,
-            crate::theme::colors().header_sep,
-        );
-    }
-    // Column titles end in "..." before their column's line, whole on hover; a long "N." starts
-    // at the list's edge.
-    let head = |x: f32, right: f32, label: &str| {
-        let (rc, cut) = winui::text_fit(p, o.x + x, o.y + 290.0, label, winui::TEXT(), o.x + right);
-        if cut {
-            winui::full_on_hover(ui, rc, ("connections-head", x as i32), label);
-        }
-    };
-    let x = if winui::text_width(p, number) > 21.0 {
-        21.0
-    } else {
-        25.0
-    };
-    head(x, 46.0 + dx, number);
-    // i18n: column title: bytes this connection received
-    head(55.0 + dx, 146.0 + dx, crate::i18n::t("Downloaded"));
-    // i18n: column title: what the connection is doing
-    head(155.0 + dx, re - 34.0, crate::i18n::t("Info"));
-    let key = egui::Id::unique(("conn-scroll", ui.ctx().viewport_id()));
-    let visible = 6usize;
-    let body = r(o, 19.0, 299.0, w - 21.0, 100.0);
-    let first = first_row(ui, key, body, conns.len(), visible);
-    let clip = p.with_clip_rect(body);
-    for (k, c) in conns.iter().skip(first).take(visible + 1).enumerate() {
-        let top = o.y + 299.0 + 17.0 * k as f32;
-        // Its room starts at the list's edge, not 6 px into it as a window's text does.
-        winui::text_right_within(
-            &clip,
-            o.x + 33.0 + dx,
-            top + 12.0,
-            &(c.id + 1).to_string(),
-            winui::TEXT(),
-            o.x + 21.0,
-        );
-        text(
-            &clip,
-            o.x + 56.0 + dx,
-            top + 12.0,
-            &model::size(c.downloaded),
-            winui::TEXT(),
-        );
-        let info = match &c.status {
-            ConnStatus::Connecting => crate::i18n::t("Connecting...").to_owned(),
-            ConnStatus::Receiving => crate::i18n::t("Receiving data...").to_owned(),
-            ConnStatus::Retrying(e) => crate::i18n::fmt(
-                // i18n: a connection's state: it failed and tries again, with the reason
-                crate::i18n::t("Retrying: {error}"),
-                &[("error", &crate::errors::describe(e))],
-            ),
-            ConnStatus::Finished => String::new(),
-            ConnStatus::Failed(e) => crate::i18n::fmt(
-                crate::i18n::t("Error: {error}"),
-                &[("error", &crate::errors::describe(e))],
-            ),
-            ConnStatus::Retired { host, cap } => crate::i18n::fmt(
-                // i18n: a connection closed because the server allows only that many
-                &crate::i18n::tn(
-                    u64::from(*cap),
-                    "{host} allows {n} connection",
-                    "{host} allows {n} connections",
-                ),
-                &[("host", &crate::i18n::ltr(host))],
-            ),
-        };
-        // The Info column ends at the scrollbar.
-        let (rect, cut) = winui::text_fit(
-            &clip,
-            o.x + 155.0 + dx,
-            top + 12.0,
-            &info,
-            winui::TEXT(),
-            o.x + re - 23.0,
-        );
-        if cut {
-            winui::full_on_hover(ui, rect.intersect(body), ("conn", c.id), &info);
-        }
-    }
-    // The shared scroll bar, the main list's.
-    rows_bar(
-        ui,
-        key,
-        r(o, re - 19.0, 275.0, 17.0, 124.0),
-        conns.len(),
-        visible,
-        first,
-    );
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1746,45 +1126,11 @@ mod tests {
         assert_eq!(last_first_row(0, 6), 0);
     }
 
-    /// #1101: the number column keeps IDM's width while its numbers and title fit (one or two
-    /// digits, 6 px each in the classic look), and widens by what a wider one needs.
-    #[test]
-    fn the_number_column_fits_its_widest_number() {
-        assert_eq!(number_column_extra(6.0, 11.0), 0.0, "1 to 9, \"N.\"");
-        assert_eq!(number_column_extra(12.0, 11.0), 0.0, "10 to 99");
-        assert_eq!(number_column_extra(18.0, 11.0), 5.0, "100 to 128");
-        assert_eq!(number_column_extra(14.5, 11.0), 2.0, "wider digits");
-        assert_eq!(number_column_extra(6.0, 31.0), 6.0, "a longer title");
-        assert_eq!(
-            number_column_extra(500.0, 11.0),
-            60.0,
-            "never past the Info column"
-        );
-    }
-
     /// A download of unknown size has no percentage in its title (from #384).
     #[test]
     fn the_title_has_a_percentage_only_with_a_size() {
         assert!(!window_title(None, "clip.mp4").contains('%'));
         assert!(window_title(Some(0.445), "clip.mp4").starts_with("44% "));
-    }
-
-    /// Every start tick of the connection bar is the same whole number of pixels wide wherever
-    /// it falls: 1 at 100 and 125 %, 2 at 150 and 200 % (at 150 % it was 1 or 2 by its place).
-    #[test]
-    fn start_ticks_are_equally_wide_at_any_scale() {
-        for (ppp, want) in [(1.0, 1.0), (1.25, 1.0), (1.5, 2.0), (1.75, 2.0), (2.0, 2.0)] {
-            for k in 0..64 {
-                let x = 17.5 + k as f32 * 63.875;
-                let (a, b) = tick_span(x, ppp);
-                let pixels = (b * ppp).round() - (a * ppp).round();
-                assert_eq!(pixels, want, "x {x} at {ppp}");
-                assert!(
-                    ((a * ppp) - (a * ppp).round()).abs() < 1e-3,
-                    "on a pixel edge"
-                );
-            }
-        }
     }
 
     /// Escape in the progress window hides it and leaves the download running (plan 07a): it
@@ -1797,16 +1143,16 @@ mod tests {
         assert!(matches!(on_escape(Action::Cancel, true), Action::Cancel));
     }
 
-    /// A torrent's strip: a column is lit when every piece under it is there; more columns than
-    /// pieces repeat a piece, none lit without pieces.
+    /// A torrent's strip: a column is lit by how much of the pieces under it are there; more
+    /// columns than pieces repeat a piece, none lit without pieces.
     #[test]
     fn piece_columns_bucket_the_pieces() {
         let pieces = [true, true, false, true];
-        let lit: Vec<bool> = (0..2).map(|c| piece_column(&pieces, c, 2)).collect();
-        assert_eq!(lit, [true, false]);
-        let lit: Vec<bool> = (0..8).map(|c| piece_column(&pieces, c, 8)).collect();
-        assert_eq!(lit, [true, true, true, true, false, false, true, true]);
-        assert!(!piece_column(&[], 0, 4));
+        let lit: Vec<f32> = (0..2).map(|c| piece_column(&pieces, c, 2)).collect();
+        assert_eq!(lit, [1.0, 0.5]);
+        let lit: Vec<f32> = (0..8).map(|c| piece_column(&pieces, c, 8)).collect();
+        assert_eq!(lit, [1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0]);
+        assert_eq!(piece_column(&[], 0, 4), 0.0);
     }
 
     /// The sharing state's line says the rate sent and to how many peers, counted.
@@ -1935,7 +1281,7 @@ mod tests {
 
 #[cfg(test)]
 mod glide_tests {
-    use super::{GLIDE_HOLD, GLIDE_MAX, Glide, glide_frame};
+    use super::{BAR_WIDTH, GLIDE_HOLD, GLIDE_MAX, Glide, glide_frame};
 
     /// Figures every quarter second (`delta` bytes more each), read by frames every 40 ms that
     /// don't fall on them, as the app reads them: (time, the figure, what is drawn) a frame.
@@ -2072,7 +1418,7 @@ mod glide_tests {
         use std::time::Duration;
         let mb = 1024.0 * 1024.0;
         let total = Some(100 * 1024 * 1024);
-        // 100 MB at 10 MB/s: 51 pixels a second, at the cap.
+        // 100 MB at 10 MB/s: 40 pixels a second of the 400-point strip, at the cap.
         assert_eq!(
             glide_frame(10.0 * mb, total, 1.0, false),
             Some(Duration::from_millis(40))
@@ -2081,13 +1427,13 @@ mod glide_tests {
             glide_frame(10.0 * mb, total, 1.0, true),
             Some(Duration::from_millis(80))
         );
-        // At 2 MB/s: 10 pixels a second (15 at 150 %).
+        // At 2 MB/s: 8 pixels a second (12 at 150 %).
         let every = glide_frame(2.0 * mb, total, 1.0, false).unwrap();
-        assert!((every.as_secs_f64() - 1.0 / (0.02 * 511.0)).abs() < 1e-3);
+        assert!((every.as_secs_f64() - 1.0 / (0.02 * BAR_WIDTH)).abs() < 1e-3);
         assert_eq!(glide_frame(2.0 * mb, total, 1.0, true), Some(every));
         let every = glide_frame(2.0 * mb, total, 1.5, false).unwrap();
-        assert!((every.as_secs_f64() - 1.0 / (0.03 * 511.0)).abs() < 1e-3);
-        // At 0.5 MB/s: 2.6 pixels a second, the app's 4 frames do.
+        assert!((every.as_secs_f64() - 1.0 / (0.03 * BAR_WIDTH)).abs() < 1e-3);
+        // At 0.5 MB/s: 2 pixels a second, the app's 4 frames do.
         for main in [false, true] {
             assert_eq!(glide_frame(0.5 * mb, total, 1.0, main), None);
             assert_eq!(glide_frame(0.0, total, 1.0, main), None);
