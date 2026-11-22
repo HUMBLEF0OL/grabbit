@@ -1762,6 +1762,18 @@ fn gone_text(path: &Path) -> String {
     )
 }
 
+/// What a press of Download complete's menu opener (the ▾, or Open file) does: None nothing,
+/// Some(by_keys) opens the menu. A pointer click opens it, unless that press just closed it
+/// (`closed_it`: it toggles off); keys (Alt+O, Enter, Space) open it only while it is closed
+/// (an open menu's keys are its own).
+fn opener_press(menu_open: bool, by_pointer: bool, closed_it: bool) -> Option<bool> {
+    if by_pointer {
+        (!closed_it).then_some(false)
+    } else {
+        (!menu_open).then_some(true)
+    }
+}
+
 /// A footer button's job in Download complete.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum DoneAct {
@@ -2023,37 +2035,40 @@ impl Complete {
 
                 // The Open menu (a window of its own: it runs past this one): under the ▾ at the
                 // right edge, or under Open file at the left.
-                if pressed == Some(DoneAct::Menu) {
-                    let top = body + 1.0 + ((winui::FOOTER_H - 1.0 - h) / 2.0).floor();
-                    let (x, w) = if main.is_some() {
-                        let w = winui::footer_button_width(&p, "", true);
-                        (W - winui::EDGE - w, w)
-                    } else {
-                        (
-                            winui::EDGE,
-                            winui::footer_button_width(&p, "Open file", true),
-                        )
-                    };
-                    let button = r(o, x, top, w, h);
-                    // A click on the opener that just closed its menu (the press dismissed it)
-                    // leaves it closed, as the other openers do (`winui::opener_click`).
-                    let dismissed = crate::chrome::dismissed_at_key(ui.ctx());
-                    let closed_by_it = ui
-                        .ctx()
-                        .data(|d| d.get_temp::<Pos2>(dismissed))
-                        .is_some_and(|at| button.contains(at));
-                    if closed_by_it {
-                        ui.ctx().data_mut(|d| d.remove::<Pos2>(dismissed));
-                    } else {
-                        ui.ctx()
-                            .data_mut(|d| d.insert_temp(menu_key, button.left_bottom()));
-                        // Opened by keys (Alt+O, Enter, Space): its first item highlighted.
-                        if !ui.input(|i| i.pointer.any_released()) {
-                            crate::chrome::start_keyboard(
-                                ui.ctx(),
-                                &format!("complete-menu-{}", self.id),
-                            );
-                        }
+                let menu_id = format!("complete-menu-{}", self.id);
+                let top = body + 1.0 + ((winui::FOOTER_H - 1.0 - h) / 2.0).floor();
+                let (x, w) = if main.is_some() {
+                    let w = winui::footer_button_width(&p, "", true);
+                    (W - winui::EDGE - w, w)
+                } else {
+                    (
+                        winui::EDGE,
+                        winui::footer_button_width(&p, "Open file", true),
+                    )
+                };
+                let opener = r(o, x, top, w, h);
+                // Where a press closed a menu (`chrome::popup`): a click on the opener that just
+                // closed its menu leaves it closed; between presses the point is forgotten, as
+                // `winui::opener_click` does.
+                let dismissed = crate::chrome::dismissed_at_key(ui.ctx());
+                let (down, released) =
+                    ui.input(|i| (i.pointer.any_down(), i.pointer.any_released()));
+                let dismissed_at = ui.ctx().data(|d| d.get_temp::<Pos2>(dismissed));
+                let closed_it = released && dismissed_at.is_some_and(|at| opener.contains(at));
+                if closed_it || (dismissed_at.is_some() && !down && !released) {
+                    ui.ctx().data_mut(|d| d.remove::<Pos2>(dismissed));
+                }
+                let opened_by_keys = (pressed == Some(DoneAct::Menu))
+                    .then(|| opener_press(menu_open, released, closed_it))
+                    .flatten();
+                if let Some(by_keys) = opened_by_keys {
+                    ui.ctx()
+                        .data_mut(|d| d.insert_temp(menu_key, opener.left_bottom()));
+                    if by_keys {
+                        // Its first item highlighted; the Space that opened it (egui clicks a
+                        // focused button on Space) isn't also the menu's, which would run it.
+                        crate::chrome::start_keyboard(ui.ctx(), &menu_id);
+                        winui::take_key(ui, egui::Key::Space);
                     }
                 }
                 if let Some(at) = ui.ctx().data(|d| d.get_temp::<Pos2>(menu_key)) {
@@ -2108,11 +2123,10 @@ impl Complete {
                         DonePick::File(n) => sizes.get(*n).copied(),
                         DonePick::With | DonePick::Info => None,
                     };
-                    let id = format!("complete-menu-{}", self.id);
                     let done = match crate::chrome::popup(
                         ui.ctx(),
                         crate::chrome::MenuKind::Context,
-                        &id,
+                        &menu_id,
                         at,
                         &entries,
                         &hint,
@@ -2130,6 +2144,16 @@ impl Complete {
                     };
                     if done {
                         ui.ctx().data_mut(|d| d.remove::<Pos2>(menu_key));
+                    } else if opened_by_keys.is_some() {
+                        // The opener lets go of the keys while its menu is open: Enter, Space
+                        // and the arrows are the menu's (a focused button would take Enter and
+                        // click again on Space). The popup noted it above and gives it back on
+                        // Escape.
+                        ui.ctx().memory_mut(|m| {
+                            if let Some(f) = m.focused() {
+                                m.surrender_focus(f);
+                            }
+                        });
                     }
                 }
                 if open && picked.is_none() {
@@ -4099,6 +4123,19 @@ mod tests {
         many.extend(files(&[("s5", 9 * MB)]));
         assert_eq!(main_file(&many), None);
         assert_eq!(main_file(&[]), None);
+    }
+
+    /// Audit 13a r3: the Open menu's opener, as the app's other openers behave.
+    #[test]
+    fn the_open_menus_opener_toggles_by_pointer_and_opens_by_keys_once() {
+        // A click opens it (closed, or opened another way); the click whose press closed it
+        // leaves it closed.
+        assert_eq!(opener_press(false, true, false), Some(false));
+        assert_eq!(opener_press(true, true, true), None);
+        assert_eq!(opener_press(false, true, true), None);
+        // Keys open it, highlighted, only while closed: an open menu's Enter and Space choose.
+        assert_eq!(opener_press(false, false, false), Some(true));
+        assert_eq!(opener_press(true, false, false), None);
     }
 
     /// Plan 13a: a folder download's Open opens its main file and Open folder selects it inside
