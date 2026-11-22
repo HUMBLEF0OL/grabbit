@@ -181,7 +181,7 @@ To add every link in a text file:
 3. Untick the addresses you don't want (**Select all** and **Select none** help), then click **Later**.
 
 ![Link grabber listing the links of a page in packages, with their names, sizes and whether they are online](images/help/link-grabber.webp)
-*Link grabber: untick what you don't want, then Later.*
+*Link grabber: untick what you don't want, then Download now or Later.*
 
 The downloads join the **Main download queue**, ready to start (**Download now** starts them too). **Tasks → Import → From IDM export file** reads an `.ef2` file, with each download's referrer and cookies.
 

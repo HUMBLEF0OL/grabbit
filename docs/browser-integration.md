@@ -96,7 +96,7 @@ The extension's button shows whether the browser reaches Grabbit. A red **!** me
 A VPN or proxy extension is a proxy for the browser only. Switch on **Send downloads through this
 browser's proxy or VPN extension** in the extension's toolbar popup (it's off as installed), and
 Grabbit downloads what it takes from the browser through the same proxy (with **Options → Proxy /
-Socks → Use proxy/socks from a browser's request**, on by default; see
+SOCKS → Use proxy/SOCKS from a browser's request**, on by default; see
 [Options](options.md#proxy--socks)). Switched off, the extension reads nothing of the browser's
 proxy.
 

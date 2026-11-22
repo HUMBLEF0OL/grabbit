@@ -1510,7 +1510,7 @@ impl OptionsDialog {
             o.x + PAGE_LEFT + 16.0,
             o.y + PAGE_TOP + 8.0,
             crate::i18n::t(
-                "Use proxy/socks from a browser's request if there are download errors /\nfor the downloads intercepted from the browser",
+                "Use proxy/SOCKS from a browser's request if there are download errors /\nfor the downloads intercepted from the browser",
             ),
             LIGHT_TEXT(),
             o.x + PAGE_RIGHT,
@@ -1532,13 +1532,13 @@ impl OptionsDialog {
         // The four ways, 22 apart; the script's address after the third, the manual rows after
         // the fourth (mock: no rules between them).
         let modes = [
-            (124.0, crate::i18n::mark("No proxy/socks")),
+            (124.0, crate::i18n::mark("No proxy/SOCKS")),
             (146.0, crate::i18n::mark("Use system settings")),
             (
                 168.0,
                 crate::i18n::mark("Use automatic configuration script"),
             ),
-            (228.0, crate::i18n::mark("Manual proxy/socks configuration")),
+            (228.0, crate::i18n::mark("Manual proxy/SOCKS configuration")),
         ];
         let was = s.proxy_mode;
         let mut group = Vec::new();

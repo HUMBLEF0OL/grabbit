@@ -843,7 +843,7 @@ impl Item {
         push_log(&mut self.log, now, text.into());
     }
 
-    /// The last `n` log entries as tooltip lines ("14:02:11  Connected to …").
+    /// The last `n` log entries as tooltip lines ("Oct 28 14:02:11 2026  Connected to …").
     pub fn log_lines(&self, n: usize) -> String {
         self.log
             .iter()
@@ -854,7 +854,7 @@ impl Item {
                 // In the interface's way (English month names in every language before).
                 // With the offset of now (crate::clock, #536).
                 let t = crate::clock::local_at(*at)
-                    .map(|t| when_text(t.naive_local()))
+                    .map(|t| when_text(t.naive_local(), true))
                     .unwrap_or_default();
                 format!("{t}  {text}")
             })
@@ -1375,31 +1375,35 @@ pub fn date_text(stored: &str) -> String {
     let Some(t) = stamp_time(stored) else {
         return stored.to_owned();
     };
-    when_text(t)
+    when_text(t, false)
 }
 
 /// A local time as the interface writes dates and times (Options → Regional; else IDM's text,
 /// on the system's clock).
-pub fn when_text(t: chrono::NaiveDateTime) -> String {
+/// `seconds`: the download log's whole time, with its seconds and year, as before plan 12c; the
+/// list's columns leave both out where they can (`stamp_text`).
+pub fn when_text(t: chrono::NaiveDateTime, seconds: bool) -> String {
     let formats = crate::regional::current();
     if formats.custom {
         return crate::i18n::ltr(&crate::regional::short_date_time(t));
     }
     use chrono::Datelike;
-    stamp_text(t, formats.clock24, crate::clock::now().year())
+    stamp_text(t, formats.clock24, crate::clock::now().year(), seconds)
 }
 
 /// The list's text for a time: `Oct 28 21:44` on a 24-hour clock, `Oct 28 9:44 PM` on the
 /// system's 12-hour clock (#392); no seconds, and the year only when it isn't `this_year`
-/// (`Oct 28 21:44 2026`), so it fits the Added column. The stored stamp keeps both.
-fn stamp_text(t: chrono::NaiveDateTime, clock24: bool, this_year: i32) -> String {
+/// (`Oct 28 21:44 2026`), so it fits the Added column. With `seconds` (the download log), the
+/// whole time as stored: `Oct 28 21:44:12 2026`, `Oct 28 9:44:12 PM 2026`.
+fn stamp_text(t: chrono::NaiveDateTime, clock24: bool, this_year: i32, seconds: bool) -> String {
     use chrono::{Datelike, Timelike};
-    let day_time = format!(
-        "{} {}",
-        t.format("%b %d"),
-        crate::regional::minutes_text(t.hour(), t.minute(), clock24),
-    );
-    if t.year() == this_year {
+    let time = if seconds {
+        crate::regional::time_text(t.hour(), t.minute(), t.second(), clock24)
+    } else {
+        crate::regional::minutes_text(t.hour(), t.minute(), clock24)
+    };
+    let day_time = format!("{} {time}", t.format("%b %d"));
+    if t.year() == this_year && !seconds {
         day_time
     } else {
         format!("{day_time} {}", t.year())
@@ -1662,25 +1666,34 @@ mod stamp_tests {
         let at = |s| super::stamp_time(s).unwrap();
         // 24-hour: as stored without the seconds; the year only when it isn't this year.
         assert_eq!(
-            super::stamp_text(at("Oct 28 21:44:12 2026"), true, 2027),
+            super::stamp_text(at("Oct 28 21:44:12 2026"), true, 2027, false),
             "Oct 28 21:44 2026"
         );
         assert_eq!(
-            super::stamp_text(at("Jan 01 00:05:09 2027"), true, 2027),
+            super::stamp_text(at("Jan 01 00:05:09 2027"), true, 2027, false),
             "Jan 01 00:05"
         );
         // 12-hour (#392): midnight and noon are 12.
         assert_eq!(
-            super::stamp_text(at("Oct 28 21:44:12 2026"), false, 2026),
+            super::stamp_text(at("Oct 28 21:44:12 2026"), false, 2026, false),
             "Oct 28 9:44 PM"
         );
         assert_eq!(
-            super::stamp_text(at("Jan 01 00:05:09 2027"), false, 2026),
+            super::stamp_text(at("Jan 01 00:05:09 2027"), false, 2026, false),
             "Jan 01 12:05 AM 2027"
         );
         assert_eq!(
-            super::stamp_text(at("Jun 15 12:00:00 2027"), false, 2027),
+            super::stamp_text(at("Jun 15 12:00:00 2027"), false, 2027, false),
             "Jun 15 12:00 PM"
+        );
+        // The download log keeps the whole time, its seconds and year: as stored on a 24-hour
+        // clock, this year too.
+        for s in ["Oct 28 21:44:12 2026", "Jan 01 00:05:09 2027"] {
+            assert_eq!(super::stamp_text(at(s), true, 2027, true), s);
+        }
+        assert_eq!(
+            super::stamp_text(at("Oct 28 21:44:12 2026"), false, 2026, true),
+            "Oct 28 9:44:12 PM 2026"
         );
     }
 }

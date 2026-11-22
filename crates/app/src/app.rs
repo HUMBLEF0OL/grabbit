@@ -150,7 +150,7 @@ enum Cmd {
     /// Start / stop a queue (index into `App::queues`).
     StartQueue(usize),
     StopQueue(usize),
-    /// Queue right-click → Edit queue (its files) / Schedule; Delete; Create new queue.
+    /// Queue right-click → Edit queue (its files) / Schedule; Delete; New queue....
     /// Tasks → Show drop target (shown / hidden); the drop target's Show main window.
     ToggleDropTarget,
     ShowMain,
@@ -175,9 +175,9 @@ enum Cmd {
     NewQueue,
     /// Categories right-click → Browse: open the category's folder.
     Browse(Category),
-    /// List right-click → On Double click → Open (true) / Properties.
+    /// List right-click → On double-click → Open (true) / Properties.
     DoubleClickOpen(bool),
-    /// Right-click → Add to queue → queue index; Delete from queue.
+    /// Right-click → Add to queue → queue index; Remove from queue.
     AddToQueue(usize),
     RemoveFromQueue,
     ToggleCategories,
@@ -242,7 +242,7 @@ enum Cmd {
     Extract,
     /// Tasks → Link grabber… (#37): the window, empty (links pasted in) or as it is.
     LinkGrabber,
-    /// Downloads → Find (Ctrl-F) / Find Next (F3).
+    /// Downloads → Find (Ctrl-F) / Find next (F3).
     Find,
     FindNext,
     /// Shift+F3: the match before the selection.
@@ -6702,7 +6702,7 @@ impl App {
                     );
                     item.moved_away = true;
                     item.note(crate::i18n::t(
-                        "Dragged out of Download complete and moved to a place Grabbit couldn't learn",
+                        "Dragged out of Download complete and moved to a place Grabbit could not learn",
                     ));
                 }
             }

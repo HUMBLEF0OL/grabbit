@@ -2675,7 +2675,7 @@ fn moved_away_text(path: &Path) -> String {
     let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
     crate::i18n::fmt(
         crate::i18n::t(
-            "{file} was moved elsewhere by dragging it out of Download complete, and Grabbit couldn't learn where. Look for it where you dropped it.",
+            "{file} was moved elsewhere by dragging it out of Download complete, and Grabbit could not learn where. Look for it where you dropped it.",
         ),
         &[("file", &name)],
     )

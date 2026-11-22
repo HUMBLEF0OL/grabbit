@@ -110,7 +110,7 @@ page = "adding-downloads.md"
 under = "A list of links"
 take = "grabber"
 alt = "Link grabber listing the links of a page in packages, with their names, sizes and whether they are online"
-caption = "Link grabber: untick what you don't want, then Later."
+caption = "Link grabber: untick what you don't want, then Download now or Later."
 
 # ---- Browser integration ------------------------------------------------------------------------
 
@@ -566,7 +566,7 @@ page = "guide-usb-stick.md"
 under = "2. Save downloads to the stick"
 take = "options:saveto+@main"
 crop = { around = ["Pane:Options"], pad = 0 }
-ring = ["Default download directory for"]
+ring = ["Default download folder for"]
 alt = "Options, Save to: a category's folder"
 caption = "Point each category's folder at the stick."
 

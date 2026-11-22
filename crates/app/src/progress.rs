@@ -1877,12 +1877,12 @@ impl Progress {
 const GENERAL_BANNER_DROP: f32 = 19.0;
 const GENERAL_BANNER_ROWS: usize = 5;
 
-/// The sharing banner's line: the rate sent and to how many peers ("410.0 KB/sec to 6 peers").
+/// The sharing banner's line: the rate sent and to how many peers ("410.0 KB/s to 6 peers").
 fn sharing_line(s: &mdm_torrent::Stats) -> String {
     // i18n: how many peers a torrent sends to now
     let peers = crate::i18n::tn(s.peers_live as u64, "{n} peer", "{n} peers");
     crate::i18n::fmt(
-        // i18n: a torrent's General tab, under "Complete, sharing": {rate} = what it sends now (such as 410.0 KB/sec); {peers} = to how many peers (such as 6 peers)
+        // i18n: a torrent's General tab, under "Complete, sharing": {rate} = what it sends now (such as 410.0 KB/s); {peers} = to how many peers (such as 6 peers)
         crate::i18n::t("{rate} to {peers}"),
         &[("rate", &model::rate(s.up_speed)), ("peers", &peers)],
     )

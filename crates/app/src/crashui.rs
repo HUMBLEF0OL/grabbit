@@ -510,7 +510,7 @@ impl ReportWindow {
             Some(crate::i18n::t("Looking for this problem on GitHub...").to_owned())
         } else if no_symbols.is_some() {
             // i18n: crash report window: the symbols couldn't be downloaded; the report still works
-            Some(crate::i18n::t("The symbols couldn't be fetched: some lines of the report show addresses instead of names (the developers can still read them).").to_owned())
+            Some(crate::i18n::t("The symbols could not be fetched: some lines of the report show addresses instead of names (the developers can still read them).").to_owned())
         } else {
             None
         };
