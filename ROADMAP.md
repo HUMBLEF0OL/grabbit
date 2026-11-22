@@ -736,7 +736,7 @@ Done since 1.0.1; ships in the next release.
   end of a download (a tiny last part runs on from its neighbour), the tables' size and number
   columns fit what they show, the detail line cuts a long speed at its end, an expired link says
   how to carry on, a download stopped before its first byte reads a dash, and the compact window
-  reads only a torrent's pieces.
+  no longer copies a torrent's files, peers and trackers every frame.
 
 ## Being worked on
 

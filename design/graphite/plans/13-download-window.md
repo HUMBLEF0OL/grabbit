@@ -212,9 +212,10 @@ Open folder opens its parent, so both "open a folder" (`dialogs.rs`, the Done wi
     (`model::size`), as every other size in the window.
   - Connections sort by number within their groups (receiving, retrying, connecting, done), so
     rows don't jump as speeds change (the board's rows are in speed order).
-  - The tables' size columns are measured for the widest size the app writes ("1023.99 MB");
-    a torrent's Peers tab gives Address and Client the rest; the connections table's "#"
-    column is as wide as its widest number (upstream issue 1101).
+  - The tables' size and Done columns are as wide as the widest value shown (their title at
+    the least); a torrent's Peers tab gives Address and Client the rest, Address 90 at the
+    least; the connections table's "#" column is as wide as its widest number (upstream issue
+    1101). Tab goes Recheck files, the table's boxes, then the commands under it.
 
 ## 13d · States and the Done window's look (look, about 900 lines)
 
