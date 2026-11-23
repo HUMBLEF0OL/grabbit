@@ -49,6 +49,6 @@ together, the links of one page together, the rest in **Various files**. Each li
 for its real name, its size and whether the server still has it, and the ones that are gone come
 unticked. A link already in your list goes under **Already in the list**, unticked.
 
-**Add to queue** adds the ticked links to the **Main download queue**, as the import always did,
-and **Start** starts the queue as well. An `.ef2` file still brings each download's referrer and
+**Later** adds the ticked links to the **Main download queue**, as the import always did,
+and **Download now** starts the queue as well. An `.ef2` file still brings each download's referrer and
 cookies. See [Link grabber and archives](link-grabber.md).

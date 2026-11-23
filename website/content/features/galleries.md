@@ -10,7 +10,7 @@ order: 40
 since: 0.5
 shot: images/help/site-gallery.webp
 shot_alt: Download a gallery: a gallery's address, gallery-dl offered for install, the folder its files go to and how many at most
-where: Tasks → Add new download, with a gallery's address
+where: Tasks → Add new download..., with a gallery's address
 help: galleries.md
 ---
 
@@ -18,7 +18,7 @@ help: galleries.md
 
 Click **Add** and paste a gallery's address. Instead of saving the page as a file, Grabbit opens
 **Download a gallery**. When its line reads **gallery-dl can download this gallery's files**,
-check **Save to** and click **Download Now**, or **Later** to add it without starting.
+check **Save to** and click **Download now**, or **Later** to add it without starting.
 
 The pictures go into a folder of their own, named after the gallery. Want only a few? Type a
 number in **Files at most** to take the first ones the site lists, on most sites the newest.

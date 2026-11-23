@@ -9,17 +9,17 @@ group: network
 order: 220
 since: 0.1.0
 shot: images/help/options-proxy.webp
-shot_alt: Options on its Proxy / SOCKS page: No proxy/socks, Use system settings, Use automatic configuration script and Manual proxy/socks configuration
+shot_alt: Options on its Proxy / SOCKS page: No proxy/SOCKS, Use system settings, Use automatic configuration script and Manual proxy/SOCKS configuration
 where: Options → Proxy / SOCKS
 help: options.md#proxy-socks
 ---
 
 ## The proxy you already use
 
-**No proxy/socks** connects directly; it is the default. **Use system settings** takes the proxy
-set in Windows. **Manual proxy/socks configuration** takes the proxy's address and **Port**, a
-**UserName** and **Password** if it needs them, and the protocols it is for. Write a SOCKS proxy
-as `socks5://host`. **Get System** fills the fields in from Windows' settings, to adjust from
+**No proxy/SOCKS** connects directly; it is the default. **Use system settings** takes the proxy
+set in Windows. **Manual proxy/SOCKS configuration** takes the proxy's address and **Port**, a
+**User name** and **Password** if it needs them, and the protocols it is for. Write a SOCKS proxy
+as `socks5://host`. **Get system settings** fills the fields in from Windows' settings, to adjust from
 there.
 
 If your network gives a proxy auto-config (PAC) script, type its address, or pick the file,
@@ -33,7 +33,7 @@ FTP never goes through the proxy, so the proxy's **ftp** box stays greyed.
 
 <!--@coming 0.5-->
 
-With **Use proxy/socks from a browser's request** (on by default), a download Grabbit takes from the
+With **Use proxy/SOCKS from a browser's request** (on by default), a download Grabbit takes from the
 browser goes through the proxy the browser used for it: a VPN or proxy extension's, the browser's
 own manual proxy, or its auto-config script. Content limited to the VPN's country keeps working.
 In Firefox, switch on **Send downloads through this browser's proxy or VPN extension** in the

@@ -21,8 +21,8 @@ Connection**. When a connection finishes its part, it takes over half of the lar
 left, so the work is shared out again and again until the file is done. A connection that falls
 far behind the others is dropped and opened again.
 
-The progress window draws it as it happens: a bar of the whole file with each connection's
-start and progress, and a table with what every connection is doing right now.
+The progress window draws it as it happens: a strip of the whole file with each part's place
+and progress, and, under **Show details**, what every connection is doing right now.
 
 ## Measured, not claimed
 
@@ -46,11 +46,11 @@ download, for server exceptions too. The command line's `-c` takes 1 to 128.
 
 Grabbit saves how far each part has got as it goes. A download picks up where it stopped after you
 pause it, after the connection drops, or after Windows or Grabbit itself crashes. A connection that
-fails is retried on its own, and the table shows **Retrying** with the reason.
+fails is retried on its own, and its row shows **Retrying** with the reason.
 
 Before it continues, Grabbit checks that the file on the server is still the same one, so a changed
 file never gets stitched onto an old half. When a server can't send a file in parts, the
-progress window says **Resume capability: No** before you rely on it.
+progress window's details say **Can resume: No** before you rely on it.
 
 ## Straight to disk
 

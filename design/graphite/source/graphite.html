@@ -428,7 +428,7 @@ function mainWin(state){
  const details=det?`<div class="details">
    <div class="hd"><div class="ficon">${i(r.ft)}</div><div style="min-width:0"><b>${r.n}</b><div class="muted" style="font-size:12px;margin-top:2px"><span>Stopped, 63.00%</span></div></div></div>
    <div><div class="lab"><span>8 connections</span><span>57.96 of 92.00 MB</span></div><div class="segs">${[100,100,90,70,60,40,30,14].map(p=>`<i><b style="width:${p}%"></b></i>`).join("")}</div></div>
-   <dl class="kv"><dt>Status</dt><dd>Stopped</dd><dt>Resume capability</dt><dd>Yes</dd><dt>Save to</dt><dd><span dir="ltr">D:\\Downloads\\Programs</span></dd><dt>Address</dt><dd><span dir="ltr">static.rust-lang.org/dist/</span></dd><dt>Queue</dt><dd>Main download queue</dd><dt>Last try date</dt><dd>Nov 10 08:41</dd></dl>
+   <dl class="kv"><dt>Status</dt><dd>Stopped</dd><dt>Can resume</dt><dd>Yes</dd><dt>Save to</dt><dd><span dir="ltr">D:\\Downloads\\Programs</span></dd><dt>Address</dt><dd><span dir="ltr">static.rust-lang.org/dist/</span></dd><dt>Queue</dt><dd>Main download queue</dd><dt>Last try date</dt><dd>Nov 10 08:41</dd></dl>
    <div class="acts">${btn("Resume","primary","tb-resume")}${btn("Open folder","","cat-folder-open")}<span class="btn" style="grid-column:span 2">${i("x-window")}Show progress window</span></div></div>`:"";
  let overlay="";
  if(state==="empty")overlay=`<div class="empty"><div class="big">${i("x-download")}</div><h5>No downloads yet</h5><p>The downloads you add, or drop on this window, show here.</p><span class="lnk">Add new download</span></div>`;
@@ -473,7 +473,7 @@ function progress(tab0){
  const tabs=`<div class="tabs"><span class="${tab==="status"?"on":""}">Download status</span><span class="${tab==="limit"?"on":""}">Speed Limiter</span><span class="${tab==="done"?"on":""}">Options on completion</span></div>`;
  let body;
  if(tab==="status")body=`<div class="pad"><div class="mono muted trunc" dir="ltr">https://releases.ubuntu.com/26.04/ubuntu-26.04-desktop-amd64.iso</div>
- <dl class="kv"><dt>Status</dt><dd class="lnk" style="font-weight:400">Receiving data...</dd><dt>File size</dt><dd>6.00 GB</dd><dt>Downloaded</dt><dd>2.50 GB ( 41.60 % )</dd><dt>Transfer rate</dt><dd>2.710 MB/s</dd><dt>Time left</dt><dd>22 min 40 sec</dd><dt>Resume capability</dt><dd>Yes</dd><dt>Server</dt><dd>Germany, about 28 ms</dd></dl>
+ <dl class="kv"><dt>Status</dt><dd class="lnk" style="font-weight:400">Receiving data...</dd><dt>File size</dt><dd>6.00 GB</dd><dt>Downloaded</dt><dd>2.50 GB ( 41.60 % )</dd><dt>Transfer rate</dt><dd>2.710 MB/s</dd><dt>Time left</dt><dd>22 min 40 sec</dd><dt>Can resume</dt><dd>Yes</dd><dt>Server</dt><dd>Germany, about 28 ms</dd></dl>
  <div class="meter" style="height:8px"><i style="width:41.6%"></i></div>
  <div class="line">${btn("&lt;&lt; Hide details")}<span class="sp" style="margin-inline-start:auto"></span>${btn("Pause","primary")}${btn("Cancel")}</div>
  <div><div class="hint" style="margin-bottom:6px">Start positions and download progress by connections</div><div class="segs">${SEGS.map(p=>`<i><b style="width:${p}%"></b></i>`).join("")}</div></div>
@@ -627,7 +627,7 @@ const redl=()=>`${cap("Redownload")}<div class="pad"><div class="line" style="ga
 const error=()=>`${cap("12% conference-keynote-2026.webm",{logo:1,tray:1,min:1,maxoff:1})}<div class="tabs"><span class="on">Download status</span><span>Speed Limiter</span><span>Options on completion</span></div>
  <div class="pad"><div class="mono muted trunc" dir="ltr">https://media.example.org/talks/conference-keynote-2026.webm</div>
  <div class="banner">${i("st-error")}<div><b style="font-weight:600">Error: the server cannot send parts of the file, so it cannot be resumed</b></div></div>
- <dl class="kv"><dt>Status</dt><dd class="err">Error</dd><dt>File size</dt><dd>1.20 GB</dd><dt>Downloaded</dt><dd>152.00 MB ( 12.40 % )</dd><dt>Resume capability</dt><dd>No</dd><dt>Server</dt><dd>United States, about 96 ms</dd></dl>
+ <dl class="kv"><dt>Status</dt><dd class="err">Error</dd><dt>File size</dt><dd>1.20 GB</dd><dt>Downloaded</dt><dd>152.00 MB ( 12.40 % )</dd><dt>Can resume</dt><dd>No</dd><dt>Server</dt><dd>United States, about 96 ms</dd></dl>
  <div class="meter" style="height:8px"><i style="width:12.4%;background:var(--err)"></i></div></div>
  ${foot(btn("Show details &gt;&gt;"),btn("Resume","primary")+btn("Cancel"))}`;
 

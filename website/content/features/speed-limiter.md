@@ -9,7 +9,7 @@ group: organising
 order: 120
 since: 0.1.0
 shot: images/help/speed-limiter.webp
-shot_alt: Speed Limiter settings: Maximum download speed for one file, Always turn on Speed Limiter on startup, and Limit all downloads together to, with Only while I'm using the computer
+shot_alt: Speed Limiter settings: Maximum download speed for one file, Turn on the Speed Limiter when Grabbit starts, and Limit all downloads together to, with Only while I'm using the computer
 where: Downloads → Speed Limiter → Settings
 help: connections-and-speed.md#speed-limiter
 ---
@@ -17,7 +17,7 @@ help: connections-and-speed.md#speed-limiter
 ## One cap for all of Grabbit
 
 In **Downloads → Speed Limiter → Settings**, tick **Limit all downloads together to** and type
-a speed in KBytes/sec. However many files are downloading, together they stay under it. It works
+a speed in KB/s. However many files are downloading, together they stay under it. It works
 on its own: there is nothing else to turn on. About two thirds of your connection's speed is a
 good start.
 
@@ -27,17 +27,17 @@ keyboard. After a minute without input, Grabbit goes back to full speed.
 ## A limit per file, or for one download
 
 **Maximum download speed for one file** holds each download to the same speed. Set it first,
-since it starts at a very slow 10 KBytes/sec, then choose **Downloads → Speed Limiter → Turn
-on**. **Turn off** gives full speed back, and **Always turn on Speed Limiter on Mister Download
-Manager startup** keeps it on from the start.
+since it starts at a very slow 10 KB/s, then choose **Downloads → Speed Limiter → Turn
+on**. **Turn off** gives full speed back, and **Turn on the Speed Limiter when Grabbit starts**
+keeps it on from the start.
 
-To slow down a single download, open its progress window and the **Speed Limiter** tab. The new
-limit applies at once, and the other downloads keep their speed. With **Remember Speed Limiter
-settings for this file on download stop/resume**, the limit comes back when you resume the file,
-even after restarting Grabbit.
+To slow down a single download, open its progress window, click **Show details** and tick
+**Limit to**. The new limit applies at once, and the other downloads keep their speed. With
+**Remember for this file**, the limit comes back when you resume the file, even after restarting
+Grabbit.
 
 Some servers drop the connection when the speed is very low. Avoid a tight limit for a server
-that can't resume: the progress window shows **Resume capability: No** for those.
+that can't resume: the progress window's details show **Can resume: No** for those.
 
 ## Torrents share the cap fairly
 
@@ -46,7 +46,7 @@ that can't resume: the progress window shows **Resume capability: No** for those
 Each torrent gets a limit of its own, like any other download, and a remembered limit applies
 again when it resumes. Under **Limit all downloads together to**, torrents and other downloads
 share the cap: each side gets at least half, and more when the other side needs less. A torrent
-can't be held under 16 KBytes/sec, because a lower limit made torrents drop their peers and
+can't be held under 16 KB/s, because a lower limit made torrents drop their peers and
 stall.
 
 ## Capped by data, not by speed

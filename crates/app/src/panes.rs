@@ -798,7 +798,7 @@ pub const ROWS: [&str; 8] = [
     crate::i18n::mark("Transfer rate"),
     crate::i18n::mark("Time left"),
     // i18n: label: whether the server lets a stopped download continue (Yes / No)
-    crate::i18n::mark("Resume capability"),
+    crate::i18n::mark("Can resume"),
     // i18n: the details pane: label before the folder the download is saved in
     crate::i18n::mark("Save to"),
     // i18n: noun: the web address (URL) the download comes from
@@ -918,7 +918,7 @@ pub fn done_ranges(item: &Item) -> Vec<(u64, u64)> {
 /// The details of one download (`App::one_download`): `live_rate` is its live transfer's rate
 /// while it runs (`Item::rate`; None: not running), `queue` the name of the queue it is in.
 /// The rows (Requirement 12.3): Status always; Transfer rate while it runs (the list's
-/// column); Time left while it runs and is known; Resume capability while known ("Yes" /
+/// column); Time left while it runs and is known; Can resume while known ("Yes" /
 /// "No"); Save to (the folder, as the progress window writes it); the Address; Queue in a
 /// queue (its name as the Categories tree shows it); Last Try Date when it was tried (the
 /// list's column).
@@ -3033,7 +3033,7 @@ mod details_tests {
             labels,
             [
                 "Status",
-                "Resume capability",
+                "Can resume",
                 "Save to",
                 "Address",
                 "Queue",
@@ -3048,7 +3048,7 @@ mod details_tests {
                 .unwrap()
         };
         assert_eq!(value("Status"), "Stopped");
-        assert_eq!(value("Resume capability"), "Yes");
+        assert_eq!(value("Can resume"), "Yes");
         assert!(value("Save to").contains(r"D:\Downloads\Compressed"));
         assert_eq!(value("Queue"), "Main download queue");
         for (_, v) in &one.rows {
@@ -3256,7 +3256,7 @@ mod details_tests {
                 rate.is_some_and(|r| r > 1.0) && status == Status::Downloading && size.is_some()
             );
             prop_assert_eq!(
-                value("Resume capability"),
+                value("Can resume"),
                 resumable.map(|r| if r { "Yes" } else { "No" })
             );
             prop_assert!(value("Save to").is_some_and(|v| v.contains(folder.as_str())));
@@ -3614,7 +3614,7 @@ mod details_tests {
                 Read::Button("Show progress window".into(), progress_greyed),
             ]);
             let labels: Vec<&str> = one.rows.iter().map(|(l, _)| *l).collect();
-            for wanted in ["Status", "Resume capability", "Save to", "Address", "Queue"] {
+            for wanted in ["Status", "Can resume", "Save to", "Address", "Queue"] {
                 assert!(labels.contains(&wanted), "{status:?}: {labels:?}");
             }
             let reads = details_group(&DetailsView::One(Box::new(one)));

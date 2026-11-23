@@ -19,11 +19,11 @@ help: video.md
 Give a video's page address to **Add** (**Ctrl+N**) and Grabbit sees that it is a video page:
 **Download video from a page** opens and looks it up. YouTube, Vimeo, Dailymotion, Twitch,
 TikTok, Instagram, Reddit and well over a thousand other sites work. With the
-[browser extension](/features/browser-extension.html), the button over a video opens the same
-window.
+[browser extension](/features/browser-extension.html), the button over a video lists the same
+qualities right over it, and **Open in Grabbit...** opens this window.
 
 The list shows each quality with its size, best first, and the sound alone at the end. Check
-**Save to** and **File name**, then click **Download Now**, or **Later** to put it in the list
+**Save to** and **File name**, then click **Download now**, or **Later** to put it in the list
 for later. The video gets its own row and progress window, like any other download.
 
 ## Two helpers, checked before use
@@ -40,9 +40,10 @@ Without ffmpeg you still get the qualities that come with their sound.
 Videos protected with DRM, as most paid streaming services use, can't be downloaded, and Grabbit
 doesn't try. Downloading may be against some sites' terms: checking that is up to you.
 
-Sites change often, and a newer yt-dlp usually fixes a video that stopped working. Grabbit doesn't
-update yt-dlp on its own yet; [the help](video.md#if-a-video-wont-download) shows how to get the
-newest one.
+Sites change often, and a newer yt-dlp usually fixes a video that stopped working. Grabbit keeps
+its own yt-dlp up to date: once a session, when the video window opens, it fetches the newest
+release, checked against yt-dlp's own signature ([the help](video.md#if-a-video-wont-download)
+says more).
 
 ## Playlists, subtitles and MP3
 

@@ -10,20 +10,20 @@ order: 80
 since: 0.1.0
 shot: images/help/batch.webp
 shot_alt: Batch download: an address with an asterisk, what replaces it, and the first, second and last file
-where: Tasks → Add batch download
+where: Tasks → Add batch download...
 help: adding-downloads.md#batch-download-many-numbered-files
 ---
 
 ## One asterisk, a whole series
 
-Choose **Tasks → Add batch download** and write the address with one asterisk where the files
+Choose **Tasks → Add batch download...** and write the address with one asterisk where the files
 differ: `https://example.com/photo*.jpg`. Under **Replace asterisk to**, choose **Numbers** or
 **Letters**, then **From** and **To**. For numbers, **Wildcard size** sets the number of digits:
 with 3, the files are `photo001.jpg`, `photo002.jpg` and so on.
 
 Before you click **OK**, the window shows the **First file**, **Second file** and **Last file**,
 so a typo shows up before anything downloads. If the server needs a login, tick **Use
-authorization**. Copied the address already? **Tasks → Add batch download from clipboard** fills
+authorization**. Copied the address already? **Tasks → Add batch download from clipboard...** fills
 it in.
 
 ## Straight into a queue

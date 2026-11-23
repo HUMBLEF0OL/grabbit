@@ -16,8 +16,8 @@ help: queues-and-scheduler.md
 
 ## Downloads that wait their turn
 
-A queue is a list of downloads that run in order, a few at a time. Click **Download Later** in
-**Download File Info**, or right-click downloads in the list and choose **Add to queue**. The
+A queue is a list of downloads that run in order, a few at a time. Click **Later** in
+**Download file info**, or right-click downloads in the list and choose **Add to queue**. The
 **Q** column marks them, and **Queues** in the categories pane shows each queue on its own.
 
 A queue runs four downloads at once by default. Set another number on its **Files in the
