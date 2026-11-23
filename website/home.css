@@ -97,7 +97,7 @@ html{scrollbar-color:var(--line) transparent}
 .view .core{height:100%;padding:0;position:relative}
 .shot{position:absolute;left:50%;top:56px;transform:translate(-50%,14px) scale(.97);opacity:0;transition:opacity .6s,transform .9s cubic-bezier(.16,1,.3,1);border-radius:8px;overflow:hidden;box-shadow:var(--lift);border:1px solid var(--line)}
 .shot.on{opacity:1;transform:translate(-50%,0)}
-.shot{max-width:calc(100% - 48px)}
+.shot{width:max-content;max-width:calc(100% - 48px)}
 .shot img{width:auto;max-width:100%;height:auto}
 .mshot{display:none}
 .steps{position:absolute;inset:0;pointer-events:none}
