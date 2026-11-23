@@ -1,4 +1,4 @@
-//! Options → Proxy / Socks → Network adapter (#35): every connection MDM opens goes out through
+//! Options → Proxy / SOCKS → Network adapter (#35): every connection MDM opens goes out through
 //! the chosen adapter (a VPN's, usually), or not at all.
 //!
 //! A socket bound to the adapter before it connects can't leave through another one: the
@@ -105,7 +105,7 @@ impl Binding {
     }
 
     /// The one address a Windows client binds: IPv4 when the adapter has one.
-    fn windows_local(&self) -> Option<IpAddr> {
+    pub(crate) fn windows_local(&self) -> Option<IpAddr> {
         self.v4.map(IpAddr::V4).or(self.v6.map(IpAddr::V6))
     }
 

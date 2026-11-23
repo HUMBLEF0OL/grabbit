@@ -2,7 +2,7 @@
 
 [← Back to docs index](README.md)
 
-Open **Downloads → Options**, click **Options** on the toolbar, or choose **Options** from Grabbit's icon in the notification area. Options opens inside the main window, in place of the download list; the toolbar, the paste bar and the status bar stay, and downloads keep running. Its twelve pages are listed down its left side, and under **Tools** the settings that used to be windows of their own: the [Scheduler](queues-and-scheduler.md#the-scheduler), the [Speed limiter](connections-and-speed.md#speed-limiter), [Torrents](torrents.md#torrent-settings) and the [Browser extension](browser-integration.md#set-it-up); click one to show it. With a page's name selected, **Up** / **Down** (or **Left** / **Right**) move to the page before or after it, **Home** / **End** to the first or last; **Ctrl+Tab** / **Ctrl+Shift+Tab** go to the next / previous page from anywhere in the window, round the list. Where the window is too small for a page, the page scrolls.
+Open **Downloads → Options**, click **Options** on the toolbar, or choose **Options** from Grabbit's icon in the notification area. Options opens inside the main window, in place of the download list; the toolbar, the paste bar and the status bar stay, and downloads keep running. Its twelve pages are listed down its left side, and under **Tools** the settings that used to be windows of their own: the [Scheduler](queues-and-scheduler.md#the-scheduler), the [Speed Limiter](connections-and-speed.md#speed-limiter), [Torrents](torrents.md#torrent-settings) and the [Browser extension](browser-integration.md#set-it-up); click one to show it. With a page's name selected, **Up** / **Down** (or **Left** / **Right**) move to the page before or after it, **Home** / **End** to the first or last; **Ctrl+Tab** / **Ctrl+Shift+Tab** go to the next / previous page from anywhere in the window, round the list. Where the window is too small for a page, the page scrolls.
 
 At the bottom, **Save** keeps your changes and **Discard** throws them away; both are greyed until you change something, and **Unsaved changes** shows beside **Help** meanwhile. **Enter** is Save. **Help** opens this page (on a section under **Tools**, that section's help). One **Save** keeps the changes of every page and section; the Browser extension has nothing to save. **← Downloads** above the list, **Esc** or **Alt+Left** go back to the download list; with changes not saved yet, Grabbit asks first whether to discard them. The smaller windows a page opens (**DNS settings**, **Add an account**, **New login**…) have their own **OK** and **Cancel**: **Enter** is OK once what you typed can be used, **Esc** is Cancel.
 
@@ -14,13 +14,13 @@ Some buttons are greyed. They belong to features that aren't built yet.
 *General: how Grabbit starts, and what it takes from the clipboard and the browsers.*
 
 - **Launch Grabbit on startup** — start Grabbit when you sign in to Windows. It starts in the notification area, its window hidden, with its downloads, queues and Scheduler running; click its icon (or start Grabbit again) to show the window. Where no notification area shows Grabbit's icon, it starts minimized, and the option's tooltip says so. Grabbit waits for the notification area up to 30 seconds after making its icon, its window hidden, as a desktop's can come up after Grabbit at sign-in. Off by default. Greyed in a [portable copy](portable.md), which writes nothing to the registry.
-- **Offer to download links copied to the clipboard** — when you copy a link whose file type is on the **File types** page, **Download File Info** opens with it, ready to start (or the download starts at once, with **Show start download dialog** off). It keeps to archives, programs, music, videos, PDF and any type you added yourself, so copying the address of a picture, a font or a 3D model to use somewhere else never starts a download. On by default.
+- **Offer to download links copied to the clipboard** — when you copy a link whose file type is on the **File types** page, **Download file info** opens with it, ready to start (or the download starts at once, with **Show start download dialog** off). It keeps to archives, programs, music, videos, PDF and any type you added yourself, so copying the address of a picture, a font or a 3D model to use somewhere else never starts a download. On by default.
 - **Use advanced browser integration** — let the browser extension hand downloads to Grabbit. Turn it off to keep every download in the browser.
-- **Confirm before deleting downloads** — ask before taking downloads off the list. On by default; **Don't show this dialog again** in that question turns it off, and ticking it here turns it back on.
+- **Confirm before deleting downloads** — ask before taking downloads off the list. On by default; **Don't show this dialog again** in that question turns it off, and ticking it here turns it back on. Turned off, **Delete** only takes downloads off the list and keeps their files; **Shift+Delete** still asks, as deleting files from the disk always does.
 - **Keep running when closing the window** — closing the main window hides it in the notification area instead of quitting, and downloads, queues and schedules go on. On by default; unticked, closing quits Grabbit (so a [portable copy](portable.md)'s folder can then be deleted). If there is no icon for Grabbit at all — not even behind the ^ hidden icons — the window minimizes to the taskbar instead, so downloads continue and the window stays reachable; an icon behind ^ can be clicked to bring it back, or start Grabbit again. Greyed where no tray shows Grabbit's icon: closing quits there.
 - **Minimize to the notification area** — Minimize hides the main window, and a download's progress window, in the notification area; downloads go on. On by default. Where the tray has no icon, the main window minimizes to the taskbar instead. The close setting above is separate; when it is on, closing hides there too (or minimizes to the taskbar if there is no icon at all). Greyed where no tray shows Grabbit's icon.
 - **Capture downloads from the following browsers** — untick a browser to leave its downloads alone.
-- **Customize Grabbit Download panels in browsers → Edit...** — the download button over videos on web pages: turn it off, or list the sites it never shows on (separate them by spaces; `*.example.com` covers its subdomains). See [Browser integration](browser-integration.md#the-download-button-over-videos).
+- **Customize Grabbit's download panels in browsers → Edit...** — the download button over videos on web pages: turn it off, or list the sites it never shows on (separate them by spaces; `*.example.com` covers its subdomains). See [Browser integration](browser-integration.md#the-download-button-over-videos).
 
 See [Browser integration](browser-integration.md).
 
@@ -41,8 +41,8 @@ See [Browser integration](browser-integration.md).
 - **New** — make your own category. **Edit...** changes the selected one: its name, file types and folder. The built-in categories (Compressed, Documents, Music, Programs, Video) can be renamed, given other file types and deleted like your own; a renamed one keeps its folder. General and Torrents change only their folder.
 - **Restore the built-in categories** — brings the built-in categories back as they came, after you renamed, retyped or deleted them.
 - **Automatically put in "…" category the following file types** — the file types that go to this category.
-- **Default download directory for "…" category** — the category's folder. Type a path or click **Browse**.
-- **Change folder for "…" category on last selected** — when you pick another folder in **Download File Info**, it becomes the category's folder from then on. On by default. (It sets the first state of **Remember this path** in that window.)
+- **Default download folder for "…" category** — the category's folder. Type a path or click the browse button (**…**) after it.
+- **Change folder for "…" category on last selected** — when you pick another folder in **Download file info**, it becomes the category's folder from then on. On by default. (It sets the first state of **Remember this path** in that window.)
 - **Set file creation date as provided by the server** — give finished files the date the server reports, not the date you downloaded them.
 - **Mark downloaded files as coming from the internet** — on by default. Every file Grabbit downloads (from the browser, a link you add, a video, a gallery, a torrent) carries the Mark of the Web a browser's downloads carry: SmartScreen checks a program before it first runs, and Office opens a document in Protected View. Unticked, no download is marked. Grabbit also follows Windows' Group Policy **Do not preserve zone information in file attachments**, as browsers do: when it is on (for the computer or for you), no download is marked, whatever this box says.
 
@@ -53,22 +53,22 @@ Grabbit doesn't use a temporary folder: every connection writes straight into th
 ![Options on its Downloads page: the start download dialog, Download complete and duplicate links](images/help/options-downloads.webp)
 *Downloads: which windows show, and what a duplicate link does.*
 
-- **Customize "Download progress" dialog → Edit...** — **Show download progress dialog when a download starts**: on by default. Untick it and a download no longer opens its progress window when it starts, from the browser, a link you add or a video; it goes on in the main window's list, where a double-click opens its progress window. **Download complete** still shows when it finishes, as **Show download complete dialog** below says.
-- **Show start download dialog** — show **Download File Info** for each new download. With it off, downloads start at once, or only join the queue if you tick **Do not start downloading, only add files to the queue**.
-- **Show download complete dialog** — show **Download complete** when a file finishes.
-- **Start downloading immediately while displaying "Download File Info" dialog** — off by default: nothing starts until you answer the dialog. Turn it on to have the download already under way while you choose a folder.
-- **Show queue selection panel on pressing "Download Later" button** — ask which queue; off puts it in the **Main download queue**.
+- **Customize "Download progress" dialog → Edit...** — **Show download progress dialog when a download starts**: on by default. Untick it and a download no longer opens its progress window when it starts, from the browser, a link you add or a video; it goes on in the main window's list, where a double-click opens its progress window. The **Done** window still shows when it finishes, as **Show download complete dialog** below says.
+- **Show start download dialog** — show **Download file info** for each new download. With it off, downloads start at once, or only join the queue if you tick **Do not start downloading, only add files to the queue**.
+- **Show download complete dialog** — show the **Done** window when a file finishes.
+- **Start downloading immediately while displaying "Download file info" dialog** — off by default: nothing starts until you answer the dialog. Turn it on to have the download already under way while you choose a folder.
+- **Show queue selection panel on pressing "Later" button** — ask which queue; off puts it in the **Main download queue**.
 - **Show queue selection panel on closing batch download dialogs** — the same for batch downloads.
 - **Ignore file modification time changes when resuming a download** — for servers that report a new date for the same file each time. Without it, such a server makes every resume start over.
 - **If a duplicate download link is added** — ask, add it with a numbered name, overwrite the old one, or open the finished one / resume the unfinished one.
-- **User-Agent for manually added downloads** — how Grabbit names itself to servers for downloads you add yourself. With **Automatic** ticked (the default), Grabbit introduces itself as your default browser: the User-Agent that browser sends, at the version you have installed (Chrome, Edge, Brave, Opera, Vivaldi or Firefox). The box shows it, and pointing at it names the browser. When Grabbit doesn't recognise your default browser, it sends a current Chrome's. Untick **Automatic** to type your own; tick it again to go back. Downloads from the browser use that browser's own User-Agent. If a site turns a browser's User-Agent away, Grabbit asks once more with its own.
+- **User-Agent for manually added downloads** — how Grabbit names itself to servers for downloads you add yourself. With **Automatic** ticked (the default), Grabbit introduces itself as your default browser: the User-Agent that browser sends, at the version you have installed (Chrome, Edge, Brave, Opera, Vivaldi or Firefox). The box shows it, and pointing at it names the browser. When Grabbit doesn't recognise your default browser, it sends a current Chrome's. Untick **Automatic** to type your own; tick it again to go back. Downloads from the browser use that browser's own User-Agent, the one your sign-in and the site's checks know; the one typed here doesn't replace it. If a site turns a browser's User-Agent away, Grabbit asks once more with the one typed here (with **Automatic**, with Internet Explorer's). If a site's bot check refuses it, and the way a browser connects too, Grabbit asks once more under its own name, `Grabbit/` and its version (or the one typed here), and remembers that site until Grabbit closes. A User-Agent typed here for the downloads you add yourself is the only one they send.
 
 ## Connection
 
 ![Options on its Connection page: connections per download, per-server exceptions, download limits and DNS](images/help/options-connection.webp)
 *Connection: how many connections, exceptions per server, download limits and DNS.*
 
-- **Default max. conn. number** — how many connections each download may use, from 1 to 32 (8 by default). Type the number or use the arrows.
+- **Default maximum connections** — how many connections each download may use, from 1 to 32 (8 by default). Type the number or use the arrows.
 - **Allow more than 32 connections** — raises the most to 128, for the number above and for the exceptions. Most servers allow far fewer from one address; Grabbit notices and asks those for fewer. Turned off again, any higher number comes back to 32.
 - **Exceptions** — a different number for some servers. **New** adds one (the server's name and the number of connections); **Edit** and **Delete** change or remove the selected one. Rows marked **(auto)** are limits Grabbit learned by itself from servers that refused more connections. They can't be edited and fade away by themselves.
 - **Download limits** — download no more than a set amount every few hours. The same setting is in the Scheduler; see [Queues and the Scheduler](queues-and-scheduler.md#download-limits).
@@ -83,20 +83,20 @@ Grabbit doesn't use a temporary folder: every connection writes straight into th
 
 More in [Connections and speed](connections-and-speed.md).
 
-## Proxy / Socks
+## Proxy / SOCKS
 
-![Options on its Proxy / Socks page](images/help/options-proxy.webp)
-*Proxy / Socks: no proxy, the system's, or your own.*
+![Options on its Proxy / SOCKS page](images/help/options-proxy.webp)
+*Proxy / SOCKS: no proxy, the system's, or your own.*
 
-- **No proxy/socks** — connect directly. This is the default.
+- **No proxy/SOCKS** — connect directly. This is the default.
 - **Use system settings** — use Windows' proxy settings.
 - **Use automatic configuration script** — the proxy auto-config (PAC) script your network gives: type its address (`http://…/proxy.pac`, or a file). Grabbit fetches it and asks it which proxy each download goes through (`PROXY`, `SOCKS` or `DIRECT`), as browsers do. Until it has been fetched, or if it can't be, Grabbit uses the system's settings.
-- **Manual proxy/socks configuration** — type the proxy's address, **Port**, and a **UserName** and **Password** if it needs them, then tick the protocols it is for (**http**, **https**). For a SOCKS proxy, write the address as `socks5://host`.
-- **Get System** — fill in the manual fields from Windows' proxy settings.
-- **Use proxy/socks from a browser's request…** — on by default. A download Grabbit takes from the browser goes through the proxy the browser used for it. That's the one a VPN or proxy extension set, the browser's own manual proxy, or its proxy auto-config script. Without it, the download would leave from your own address, and content limited to the VPN's country, or to its address, would fail. The browser extension reads that proxy and hands it to Grabbit with each download, once you switch on **Send downloads through this browser's proxy or VPN extension** in the extension's toolbar popup (Firefox asks you once; Chrome, Edge, Brave, Opera and Vivaldi ask nothing more: see [A VPN or proxy extension](browser-integration.md#a-vpn-or-proxy-extension)).
+- **Manual proxy/SOCKS configuration** — type the proxy's address, **Port**, and a **User name** and **Password** if it needs them, then tick the protocols it is for (**http**, **https**). For a SOCKS proxy, write the address as `socks5://host`.
+- **Get system settings** — fill in the manual fields from Windows' proxy settings.
+- **Use proxy/SOCKS from a browser's request…** — on by default. A download Grabbit takes from the browser goes through the proxy the browser used for it. That's the one a VPN or proxy extension set, the browser's own manual proxy, or its proxy auto-config script. Without it, the download would leave from your own address, and content limited to the VPN's country, or to its address, would fail. The browser extension reads that proxy and hands it to Grabbit with each download, once you switch on **Send downloads through this browser's proxy or VPN extension** in the extension's toolbar popup (Firefox asks you once; Chrome, Edge, Brave, Opera and Vivaldi ask nothing more: see [A VPN or proxy extension](browser-integration.md#a-vpn-or-proxy-extension)).
   - A proxy that asks for a login the VPN extension gives itself can't be shared: no other program has that login. The download then stops and says so, rather than going without the proxy. Use the VPN's own app, or choose its adapter under **Network adapter**.
   - In Firefox, Grabbit sees the proxy the browser's own request for the file took, including the ones a VPN extension picks for each request. In Chrome and the other Chromium browsers, it sees the browser's proxy settings: the server for the download's scheme (honouring their bypass list) or their proxy auto-config script.
-  - When the browser used no proxy, and **No proxy/socks** is chosen, Grabbit uses Windows' proxy settings, as browsers do.
+  - When the browser used no proxy, and **No proxy/SOCKS** is chosen, Grabbit uses Windows' proxy settings, as browsers do.
 - **Network adapter** — **Any (the system chooses)** is the default. Pick an adapter, usually your VPN's, and every connection Grabbit opens goes out through it, or not at all. That covers downloads, FTP, torrents, video pages and image galleries, the DNS you chose, Grabbit's own downloads and the update check. It works as a kill switch: when the adapter disconnects, or the VPN is switched off, nothing goes out through your normal connection. Running downloads stop with "… is not connected" and start again when the adapter is back. The line under the list shows the adapter's address, or that it isn't connected.
   - How it holds: Windows binds the adapter's own address. Windows then sends those packets only through that adapter (its strong host model). An address of a kind the adapter doesn't have (IPv6 on an IPv4-only VPN) is refused, not sent around it.
   - The system's DNS asks the names in its own way, and Windows may ask over every adapter. To keep the names inside the adapter too, choose a DNS under [Connection](#connection) → **DNS**: Grabbit then asks it through the adapter.
@@ -105,10 +105,10 @@ More in [Connections and speed](connections-and-speed.md).
   - Connections to this computer itself (`localhost`) aren't bound. A proxy on this computer carries the downloads, and where it sends them is up to it.
 - **Use FTP in PASV mode** — on by default: for FTP downloads Grabbit opens the data connections itself (passive mode), which works through routers and firewalls. Turn it off only for a server that needs active mode (the server connects back to you). FTP never goes through the proxy above, so its **ftp** box stays greyed. See [FTP and FTPS](adding-downloads.md#ftp-and-ftps).
 
-## Sites Logins
+## Site logins
 
-![Options on its Sites Logins page, before any site is added: the list of sites with their user names](images/help/options-logins.webp)
-*Sites Logins: a user name and password per site.*
+![Options on its Site logins page, before any site is added: the list of sites with their user names](images/help/options-logins.webp)
+*Site logins: a user name and password per site.*
 
 User names and passwords for sites that ask for them. **New** adds a row: the site (with a path if the login is only for part of it), the user name and the password. **Edit** and **Remove** change or delete the selected row. Grabbit uses the login for every download from that site. A login typed in **Add** (**Use authorization**) takes priority for that one download.
 
@@ -131,7 +131,7 @@ Your debrid service accounts (Real-Debrid, AllDebrid, Premiumize; experimental):
 ![Options on its Sounds page: a sound for each event](images/help/options-sounds.webp)
 *Sounds: a sound for each event.*
 
-Play a sound for **Download complete**, **Download failed**, **Queue processing started** and **Queue processing stopped/finished**. Tick an event, select it, click **Browse...** to choose a `.wav` file, and **Play** to hear it.
+Play a sound for **Download complete**, **Download failed**, **Queue processing started** and **Queue processing stopped/finished**. Tick an event, select it, click the browse button (**…**) under the list to choose a `.wav` file, and **Play** to hear it.
 
 ## Regional
 
@@ -176,8 +176,8 @@ Control Grabbit from your phone or another computer on the local network: see
 
 A few settings live outside Options' twelve pages:
 
-- **Downloads → Speed Limiter → Settings...** — speed limits, the **Speed limiter** section under **Tools**. See [Connections and speed](connections-and-speed.md#speed-limiter).
-- **Tasks → Torrent settings...** — sharing and file associations, and whether the browser hands `.torrent` downloads to Grabbit, the **Torrents** section under **Tools**. See [Torrents](torrents.md#torrent-settings).
+- **Downloads → Speed Limiter → Settings** — speed limits, the **Speed Limiter** section under **Tools**. See [Connections and speed](connections-and-speed.md#speed-limiter).
+- The **Torrents** section under **Tools** — sharing and file associations, and whether the browser hands `.torrent` downloads to Grabbit. See [Torrents](torrents.md#torrent-settings).
 - The status bar's light/dark button, **View → Theme**, **Draw with**, and **Interface size**. See [Getting started](getting-started.md#themes) and [Troubleshooting](troubleshooting.md).
 - **Help → Check for updates...** — **Check for updates at every start** is in that window.
 

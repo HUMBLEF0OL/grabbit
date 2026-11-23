@@ -235,15 +235,11 @@ pub fn field(
     if std::mem::take(&mut bar.focus) {
         winui::select_all_in(&ctx, id, q.text.chars().count());
     }
-    let radius = crate::theme::metrics().part_radius;
-    p.rect_filled(screen, radius, c.window);
-    let border = if had { c.accent } else { c.button_border };
-    p.rect_stroke(
-        screen,
-        radius,
-        Stroke::new(1.0, border),
-        egui::StrokeKind::Inside,
-    );
+    // Like every text box: the field roles, and the theme's focus look (plan 12 G4).
+    winui::field_frame(&p, screen, winui::FieldLook::Editable);
+    if had {
+        winui::focus_bottom(&p, screen);
+    }
     let mid = rc.center().y;
     let icon = Rect::from_min_size(pos2(rc.left() + 9.0, (mid - 7.0).round()), vec2(14.0, 14.0));
     crate::themeicons::paint_in(
@@ -357,6 +353,7 @@ pub fn field(
     winui::expose(&f, egui::Role::Button, label, true, None);
     ctx.accesskit_node_builder(f.id, |n| n.set_expanded(bar.open));
     if f.hovered() || bar.open {
+        let radius = crate::theme::metrics().part_radius;
         p.rect_filled(winui::rect(funnel.shrink(3.0)), radius, c.button_hot);
     }
     let ink = if active {
@@ -525,16 +522,12 @@ fn dropdown(ui: &mut Ui, funnel: Rect, bar: &mut Bar, q: &mut Query, list: &mut 
                             m + vec2(-1.0, 2.5),
                             m + vec2(3.5, -2.5),
                         ],
-                        Stroke::new(1.5, look.ink),
+                        Stroke::new(crate::theme::metrics().tick_width, look.ink),
                     ));
                 }
+                // Only from the keyboard, as every control's ring (plan 12 G3).
                 if resp.has_focus() {
-                    p.rect_stroke(
-                        at(r.expand(2.0)),
-                        radius + 2.0,
-                        Stroke::new(1.0, c.accent),
-                        egui::StrokeKind::Inside,
-                    );
+                    winui::focus_ring_round(&p, at(r.expand(2.0)), radius + 2.0);
                 }
                 winui::text_font(
                     &p,

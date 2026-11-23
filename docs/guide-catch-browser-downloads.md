@@ -14,12 +14,12 @@ Once it is set up, a download link goes like this:
 
 <!-- steps -->
 
-1. ![Download File Info in Grabbit for a file clicked in the browser](images/help/catch-file-info.webp)
-   *Click a download link in the browser: Download File Info opens in Grabbit.*
+1. ![Download file info in Grabbit for a file clicked in the browser](images/help/catch-file-info.webp)
+   *Click a download link in the browser: Download file info opens in Grabbit.*
 2. ![The progress window of a download coming in over several connections](images/help/catch-progress.webp)
-   *Start Download: the progress window shows it coming in.*
-3. ![Download complete, with Open, Open with..., Open folder and Close](images/help/catch-complete.webp)
-   *Download complete: Open the file, or Open folder.*
+   *Download now: the progress window shows it coming in.*
+3. ![The Done window, with Open and its arrow, Open folder and Close](images/help/catch-complete.webp)
+   *Done: Open the file, or Open folder.*
 
 ## In Chrome, Edge, Brave, Opera or Vivaldi {#chromium}
 
@@ -28,7 +28,7 @@ Once it is set up, a download link goes like this:
 3. Click **Load unpacked**.
 4. Choose the `extension\chromium` folder inside Grabbit's folder. If you installed Grabbit for yourself, that is `%LOCALAPPDATA%\Programs\Grabbit\extension\chromium`; if you installed it for everyone, `C:\Program Files\Grabbit\extension\chromium`. You can paste the path into the folder box.
 5. **Grabbit** appears in the list. Make sure it is turned on. The browser keeps it from then on, and Grabbit's updates bring its new version: the browser picks it up at its next start.
-6. Go to a web page and click a download link, for example a ZIP or an EXE: Grabbit opens **Download File Info** instead of the browser downloading the file. Click **Start Download**.
+6. Go to a web page and click a download link, for example a ZIP or an EXE: Grabbit opens **Download file info** instead of the browser downloading the file. Click **Download now**.
 
 Chrome may show a reminder about extensions in developer mode at its start: that is this copy, and you can close it.
 
@@ -39,7 +39,7 @@ Firefox installs for good only add-ons that Mozilla has signed, and Grabbit's is
 - **Firefox, for this session:** open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on...** and choose `mdm-firefox.xpi` in the `extension` folder inside Grabbit's folder (`%LOCALAPPDATA%\Programs\Grabbit\extension\mdm-firefox.xpi` if you installed Grabbit for yourself). It works until Firefox closes; load it again after a restart.
 - **For good, in Firefox Developer Edition or Nightly** (or ESR), which may install an unsigned add-on: open `about:config`, set `xpinstall.signatures.required` to `false`, then open `about:addons`, click the gear button, **Install Add-on From File...**, and choose the same `mdm-firefox.xpi`. Release Firefox ignores that setting.
 
-Then go to a web page and click a download link: Grabbit opens **Download File Info**. Click **Start Download**. Zen and LibreWolf take the add-on the same way.
+Then go to a web page and click a download link: Grabbit opens **Download file info**. Click **Download now**. Zen and LibreWolf take the add-on the same way.
 
 You don't need to start Grabbit first: if it isn't running, it starts by itself.
 
@@ -56,7 +56,7 @@ Everything Grabbit doesn't take stays with the browser.
 
 ## Download a link the browser would open
 
-Links to a PDF or a video file, which the browser would open itself, go to Grabbit too when their type is listed. To leave one to the browser, hold **Alt** while clicking it (Firefox opens it; Chrome and Edge download it themselves). Any other link: right-click it and choose **Download with Grabbit**, which takes any type.
+Links to a PDF or a video file, which the browser would open itself, go to Grabbit too when their type is listed. To leave one to the browser, hold **Alt** while clicking it: the browser opens it as a plain click would. Any other link: right-click it and choose **Download with Grabbit**, which takes any type.
 
 ## Next steps
 

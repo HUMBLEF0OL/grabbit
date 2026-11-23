@@ -483,7 +483,7 @@ pub fn bar_of(st: &PasteBar) -> crate::addkind::Bar {
 
 /// A submit's outcome (Enter or the button) from what the field holds ([`bar_of`]). One
 /// address or several: the field empties and they go on (one into its flow as Add URL's OK
-/// sent it, without a login: Sites Logins still applies, D3; several, their text kept in
+/// sent it, without a login: Site logins still applies, D3; several, their text kept in
 /// `pending`, to the Add window). Nothing: the text stays, "Invalid address" takes the chip's
 /// place (D2) and the field keeps the keys.
 pub fn submit(st: &mut PasteBar) -> Option<crate::addkind::Bar> {
@@ -721,6 +721,11 @@ pub struct OneDownload {
     pub primary: Option<Primary>,
     /// "Show progress window" is greyed for a finished download (D10).
     pub can_show_progress: bool,
+    /// "Open folder" is greyed without a folder to open ([`can_open_folder`]).
+    pub can_open_folder: bool,
+    /// Its address no longer works (`Item::wants_new_address`): "Refresh download address..."
+    /// shows above the other buttons.
+    pub can_refresh_address: bool,
 }
 
 /// The details pane's default, filled button.
@@ -739,6 +744,15 @@ pub enum DetailsAction {
     Stop,
     OpenFolder,
     ShowProgress,
+    /// Refresh download address... (plan 12b, E2) → `Cmd::RefreshAddress`.
+    RefreshAddress,
+}
+
+/// Open folder has a folder to open (plan 12b, C4: the row menu's rule, the Details pane's
+/// too): the download is finished, or a torrent, whose folder is there while it downloads
+/// (#354).
+pub fn can_open_folder(item: &Item) -> bool {
+    item.status == Status::Complete || item.torrent.is_some()
 }
 
 /// What a selection shows, before its download's details are looked at.
@@ -784,14 +798,14 @@ pub const ROWS: [&str; 8] = [
     crate::i18n::mark("Transfer rate"),
     crate::i18n::mark("Time left"),
     // i18n: label: whether the server lets a stopped download continue (Yes / No)
-    crate::i18n::mark("Resume capability"),
+    crate::i18n::mark("Can resume"),
     // i18n: the details pane: label before the folder the download is saved in
     crate::i18n::mark("Save to"),
     // i18n: noun: the web address (URL) the download comes from
     crate::i18n::mark("Address"),
     // i18n: the details pane: label before the download queue the download is in
     crate::i18n::mark("Queue"),
-    crate::i18n::mark("Last Try Date"),
+    crate::i18n::mark("Last try date"),
 ];
 
 /// The rows with a value, in [`ROWS`]' order: `values` holds each row's value at its place; a
@@ -878,10 +892,16 @@ pub fn bytes_label(downloaded: u64, size: Option<u64>) -> Option<String> {
 /// address shows elsewhere; "Use authorization"'s login, `Item::login`, is never shown), as
 /// left-to-right data.
 pub fn address_text(url: &url::Url) -> String {
+    crate::i18n::ltr(without_password(url).as_str())
+}
+
+/// The address without its password (a user name stays): what the Address row shows and Copy
+/// address copies (plan 12b, B4).
+pub fn without_password(url: &url::Url) -> url::Url {
     let mut shown = url.clone();
     // An address without a host (a magnet link) has no password to take out.
     let _ = shown.set_password(None);
-    crate::i18n::ltr(shown.as_str())
+    shown
 }
 
 /// The byte ranges that have come, as the progress window's segment bar reads them: the engine
@@ -898,7 +918,7 @@ pub fn done_ranges(item: &Item) -> Vec<(u64, u64)> {
 /// The details of one download (`App::one_download`): `live_rate` is its live transfer's rate
 /// while it runs (`Item::rate`; None: not running), `queue` the name of the queue it is in.
 /// The rows (Requirement 12.3): Status always; Transfer rate while it runs (the list's
-/// column); Time left while it runs and is known; Resume capability while known ("Yes" /
+/// column); Time left while it runs and is known; Can resume while known ("Yes" /
 /// "No"); Save to (the folder, as the progress window writes it); the Address; Queue in a
 /// queue (its name as the Categories tree shows it); Last Try Date when it was tried (the
 /// list's column).
@@ -954,6 +974,8 @@ pub fn one_download(item: &Item, live_rate: Option<f64>, queue: Option<&str>) ->
         rows,
         primary,
         can_show_progress: item.status != Status::Complete,
+        can_open_folder: can_open_folder(item),
+        can_refresh_address: item.wants_new_address(),
     }
 }
 
@@ -1228,9 +1250,18 @@ pub fn details_pane(
     };
 
     let [first, second, third] = details_buttons(rc);
+    // A failed download whose address no longer works (plan 12b, E2): Refresh download
+    // address across the pane, above the other buttons.
+    let refresh = one.can_refresh_address.then(|| {
+        Rect::from_min_size(
+            pos2(third.left(), first.top() - PANE_BUTTON_GAP - PANE_BUTTON_H),
+            third.size(),
+        )
+    });
+    let buttons_top = refresh.map_or(first.top(), |b| b.top());
     // The content above the buttons. A pane too short for it (200 %, a low window) scrolls it
     // there, by the wheel and the shared bar at its end: no row ever sits under the buttons.
-    let content_bottom = (first.top() - PANE_BUTTON_GAP).max(rc.top());
+    let content_bottom = (buttons_top - PANE_BUTTON_GAP).max(rc.top());
     let content = Rect::from_min_max(rc.min, pos2(rc.right(), content_bottom));
     let page = content.height();
     // Per download: another one selected opens at its top, not where the last was scrolled.
@@ -1350,6 +1381,16 @@ pub fn details_pane(
     pane.data_mut(|d| d.insert_temp(scroll_key, (moved, total)));
 
     // The buttons at the bottom.
+    let refresh = refresh.map(|b| {
+        winui::icon_label_button(
+            &mut pane,
+            winui::rect(b),
+            "gx-refresh",
+            // i18n: the details pane's button on a failed download whose link expired or was refused: opens the page it came from and Properties, to give it a new address
+            "Refresh download address...",
+            ButtonKind::Normal,
+        )
+    });
     let (label, need, primary) = match one.primary {
         Some(Primary::Stop) => (
             // i18n: the details pane's button: stop the shown download
@@ -1377,7 +1418,11 @@ pub fn details_pane(
         "cat-folder-open",
         // i18n: the details pane's button: open the folder the shown download is saved in
         "Open folder",
-        ButtonKind::Normal,
+        if one.can_open_folder {
+            ButtonKind::Normal
+        } else {
+            ButtonKind::Disabled
+        },
     );
     let progress = if one.can_show_progress {
         ButtonKind::Normal
@@ -1392,9 +1437,11 @@ pub fn details_pane(
         "Show progress window",
         progress,
     );
-    if first.clicked() {
+    if refresh.is_some_and(|b| b.clicked()) {
+        Some(DetailsAction::RefreshAddress)
+    } else if first.clicked() {
         primary
-    } else if second.clicked() {
+    } else if second.clicked() && one.can_open_folder {
         Some(DetailsAction::OpenFolder)
     } else {
         third.clicked().then_some(DetailsAction::ShowProgress)
@@ -2938,7 +2985,7 @@ mod details_tests {
         );
         assert_eq!(
             bytes_label(0, Some(512)).as_deref(),
-            Some("0 Bytes of 512 Bytes")
+            Some("0 bytes of 512 bytes")
         );
         assert_eq!(bytes_label(60_775_000, None), None);
     }
@@ -2986,11 +3033,11 @@ mod details_tests {
             labels,
             [
                 "Status",
-                "Resume capability",
+                "Can resume",
                 "Save to",
                 "Address",
                 "Queue",
-                "Last Try Date"
+                "Last try date"
             ]
         );
         let value = |label: &str| {
@@ -3001,7 +3048,7 @@ mod details_tests {
                 .unwrap()
         };
         assert_eq!(value("Status"), "Stopped");
-        assert_eq!(value("Resume capability"), "Yes");
+        assert_eq!(value("Can resume"), "Yes");
         assert!(value("Save to").contains(r"D:\Downloads\Compressed"));
         assert_eq!(value("Queue"), "Main download queue");
         for (_, v) in &one.rows {
@@ -3209,14 +3256,14 @@ mod details_tests {
                 rate.is_some_and(|r| r > 1.0) && status == Status::Downloading && size.is_some()
             );
             prop_assert_eq!(
-                value("Resume capability"),
+                value("Can resume"),
                 resumable.map(|r| if r { "Yes" } else { "No" })
             );
             prop_assert!(value("Save to").is_some_and(|v| v.contains(folder.as_str())));
             let address = value("Address");
             prop_assert!(address.is_some_and(|v| v.contains(host.as_str())), "{address:?}");
             prop_assert_eq!(value("Queue").is_some(), queue.is_some());
-            prop_assert_eq!(value("Last Try Date").is_some(), last_try.is_some());
+            prop_assert_eq!(value("Last try date").is_some(), last_try.is_some());
             if let Some(p) = &password {
                 for (label, v) in &one.rows {
                     prop_assert!(!v.contains(p.as_str()), "{label}: {v}");
@@ -3356,6 +3403,56 @@ mod details_tests {
         }
     }
 
+    /// Plan 12b, E2 and C4: a download that failed for an expired link (or 403 / 410) offers
+    /// Refresh download address above the other buttons, and a click on it asks for it; other
+    /// failures don't. Open folder follows the row menu's rule.
+    #[test]
+    fn a_failed_link_offers_refresh_download_address() {
+        let _fonts = crate::theme::font_tests();
+        let failed = |failure: mdm_engine::Error| {
+            let mut it = item("https://example.org/a.zip", Status::Error);
+            let mut s = snap(1, &[ConnStatus::Receiving]);
+            s.state = State::Failed;
+            s.failure = Some(failure);
+            it.snap = Some(s);
+            it
+        };
+        let expired = one_download(&failed(mdm_engine::Error::LinkExpired), None, None);
+        assert!(expired.can_refresh_address);
+        assert!(!expired.can_open_folder, "unfinished, not a torrent");
+        let gone = mdm_engine::Error::Status(reqwest::StatusCode::GONE);
+        assert!(one_download(&failed(gone), None, None).can_refresh_address);
+        let other = one_download(&failed(mdm_engine::Error::ShortBody), None, None);
+        assert!(!other.can_refresh_address);
+        let done = one_download(
+            &item("https://example.org/a.zip", Status::Complete),
+            None,
+            None,
+        );
+        assert!(done.can_open_folder && !done.can_refresh_address);
+
+        let rc = Rect::from_min_size(pos2(964.0, 58.0), vec2(276.0, 600.0));
+        let [first, _, third] = details_buttons(rc);
+        let refresh = Rect::from_min_size(
+            pos2(third.left(), first.top() - PANE_BUTTON_GAP - PANE_BUTTON_H),
+            third.size(),
+        );
+        let at = crate::winui::rect(refresh).center();
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        let click = vec![
+            vec![egui::Event::PointerMoved(at)],
+            vec![button(true)],
+            vec![button(false)],
+        ];
+        let view = DetailsView::One(Box::new(expired));
+        assert_eq!(pane(&view, click), Some(DetailsAction::RefreshAddress));
+    }
+
     /// A short pane, 276 × 150 (09r1): its three buttons fit inside it, and everything it
     /// paints for a running download with a long name and every row is clipped to it (the
     /// content above the buttons, the rest at the pane's edges).
@@ -3483,7 +3580,7 @@ mod details_tests {
     /// label read right before its value, whole even where the value is drawn cut; then
     /// Resume, Open folder and Show progress window as buttons by their labels. Running, the
     /// primary is Stop; complete, Resume and Show progress window are greyed and Open folder is
-    /// not.
+    /// not; unfinished (not a torrent), Open folder is greyed (plan 12b, C4).
     #[test]
     fn the_details_group_reads_each_label_before_its_value_and_the_buttons() {
         let _fonts = crate::theme::font_tests();
@@ -3512,11 +3609,12 @@ mod details_tests {
             }
             want.extend([
                 Read::Button(primary.into(), primary_greyed),
-                Read::Button("Open folder".into(), false),
+                // Plan 12b, C4: the row menu's rule, a folder only once it is finished.
+                Read::Button("Open folder".into(), status != Status::Complete),
                 Read::Button("Show progress window".into(), progress_greyed),
             ]);
             let labels: Vec<&str> = one.rows.iter().map(|(l, _)| *l).collect();
-            for wanted in ["Status", "Resume capability", "Save to", "Address", "Queue"] {
+            for wanted in ["Status", "Can resume", "Save to", "Address", "Queue"] {
                 assert!(labels.contains(&wanted), "{status:?}: {labels:?}");
             }
             let reads = details_group(&DetailsView::One(Box::new(one)));

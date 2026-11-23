@@ -31,8 +31,8 @@ function size(n) {
   return unit('{n} GB', num(n / 1073741824, 2));
 }
 function speed(n) {
-  if (n < 1048576) return unit('{n} KB/sec', num(n / 1024, 1));
-  return unit('{n} MB/sec', num(n / 1048576, 1));
+  if (n < 1048576) return unit('{n} KB/s', num(n / 1024, 1));
+  return unit('{n} MB/s', num(n / 1048576, 1));
 }
 
 async function loadTexts() {

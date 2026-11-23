@@ -91,10 +91,10 @@ impl CategoryDialog {
             |ui, o| {
                 let p = ui.painter().clone();
                 let (e, h) = (winui::EDGE, winui::CONTROL_H);
-                let fx = winui::form(&p, e, &["Name:", "File types:", "Folder:"], false);
+                let fx = winui::form(&p, e, &["Name", "File types", "Folder"], false);
                 let right = W - e;
                 let label = |y: f32, s: &str| winui::form_label(&p, o, e, y, h, s, true);
-                label(16.0, crate::i18n::mark("Name:"));
+                label(16.0, crate::i18n::mark("Name"));
                 let name_box = winui::edit_light(
                     ui,
                     r(o, fx, 16.0, right - fx, h),
@@ -107,7 +107,7 @@ impl CategoryDialog {
                     name_box.request_focus();
                     self.focused = true;
                 }
-                label(56.0, crate::i18n::mark("File types:"));
+                label(56.0, crate::i18n::mark("File types"));
                 winui::edit_light(
                     ui,
                     r(o, fx, 56.0, right - fx, h),
@@ -125,10 +125,10 @@ impl CategoryDialog {
                     o.x + right,
                     "category-types-hint",
                 );
-                label(122.0, crate::i18n::mark("Folder:"));
-                // Browse as wide as its label needs; the box ends 8 px before it.
-                let browse_w = winui::footer_button_width(&p, "Browse...", false);
-                let browse_x = right - browse_w;
+                label(122.0, crate::i18n::mark("Folder"));
+                // The one browse control (plan 12 C5): a square `gx-dots`; the box ends 8 px
+                // before it.
+                let browse_x = right - h;
                 winui::edit_light(
                     ui,
                     r(o, fx, 122.0, browse_x - 8.0 - fx, h),
@@ -136,12 +136,12 @@ impl CategoryDialog {
                     true,
                     false,
                 );
-                if winui::button_light(
+                if winui::icon_only_button(
                     ui,
-                    r(o, browse_x, 122.0, browse_w, h),
-                    "Browse...",
-                    ButtonKind::Normal,
-                    false,
+                    r(o, browse_x, 122.0, h, h),
+                    "gx-dots",
+                    "Browse",
+                    true,
                 )
                 .clicked()
                 {

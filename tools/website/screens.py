@@ -39,7 +39,7 @@ ASSETS = WEB / "assets"
 SHOTS = [
     ("main-light", "screens/main-light.webp", None),
     ("progress", "screens/progress-light.webp", "screens/progress-dark.webp"),
-    ("progress-torrent-pieces", "screens/torrent-light.webp", "screens/torrent-dark.webp"),
+    ("progress-torrent-details", "screens/torrent-light.webp", "screens/torrent-dark.webp"),
     ("add-torrent", "screens/add-torrent-light.webp", "screens/add-torrent-dark.webp"),
     ("scheduler", "screens/scheduler-light.webp", "screens/scheduler-dark.webp"),
     ("options-connection", "screens/options-light.webp", "screens/options-dark.webp"),

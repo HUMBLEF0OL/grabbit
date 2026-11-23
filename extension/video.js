@@ -1,8 +1,11 @@
 // Mister Download Manager's download button over videos (a content script, in every page and
 // frame). Our own design: a small pill at the video's edge that appears while the pointer is
 // over the video (or it has the keyboard's focus) and fades when the pointer rests or leaves.
-// Clicking it opens the app's Download video window for this page (an embedded player's own
-// address, which yt-dlp understands), with the video's own address when it has a plain one. It can be dragged along the video's edge, and stays where
+// Clicking it has the app look the video up (an embedded player's own address, which yt-dlp
+// understands, with the video's own address when it has a plain one) and lists its qualities in a
+// menu over the page; the one picked downloads without the app's window. An app that can't look
+// up (an older one, another Grabbit chosen) opens its Download video window for this page instead,
+// as does the menu's last command. It can be dragged along the video's edge, and stays where
 // it was put on that site. Its menu hides it on this video, keeps it off the site (the app's
 // Options → General → Download panels lists those sites), or opens those settings. The app
 // decides where it may show at all (the native host: integration on, this browser captured,
@@ -30,8 +33,8 @@
   const IDLE_MS = 2600;
   const INSET = 10;
   const DRAG_PX = 4;
-  // Our app icon (extension/icons/icon-48.png, as data: no extension file is exposed to pages).
-  const LOGO = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAM6ElEQVR42uVZfXBdxXX/nd2970uSDQw1Aw4f9kAoUoAMKtDSFNlpQ2KgNJA8JaQkg7GQCZgQG4NxIb26dUMLU0wMRo7cIeXDBvvdOiFDgPARbDUU2hpDmwwqYNNCm9R1jW3Z0tN7993dc/rH+/CTJVlPGP/R6Z25s3f37r17ztlzfudjCVO5RCgbhgoIcSRXmM0xiAT/py8R+jh+YxpejEgu2nbPSaapeSYPFti5kiKjy1KMUWlqD+NcMZxoSbQkdH7X4PZfEu2D7ysEAR91BrIIVQg4Zel3ladylhgq4UEEgAjECCCAFlPue5VxkUoLiBgQM1yRkUik3rjgWX/uP10aHDhSJlRDOkudLpvL6lcuvD0s7Rx8wDSn4KI45lIsHFnhkhWOYuEoFhfZSlt+50pWyvNiEevEDo04SnnnxSRPteb8xJGqk2rc8EL2xVevfmb5LfHgyE9NS9pjFicQAguJgAQgoPwMgARCkLo+CwGk4/15qzKJuYmM3Ygg4GzYqVCec/QYAEGCnrK0RkqFq22++I5OJQw7dmVNEoAFwgIIl9tKv3ZL5T3IxPtHYtWU+uI5Ty3/m7AzdB1bfA1MnQk9pdn9/ZJtG9AvX95bOCH7mZdI09eJVEqsEwAkh+j9QTvAmHGIaFeMY9OSbj/+ivOnb73s7uc6Nvvmg0f7+ejsQFWVOkPXsdk3274QvO3yhauhiYSImVlG7cKh0h9nHCxePDhsdUt6cVvutrv65wa2va/bmwo9B7dMfNWxpTGG+ucGtmOzb/rnBrb9ef9b5pjMqniwYAExY6V/+N0QFhGI05mkifePLHr7aysfau/r9rYtXBtPjYEpOyJQxxZfV5jo1dMy34z3DVkQmSqRZX2vEM2VFlU7qWOMRaDAlDDaDkd//M419z9RFdCkDGRzWR12hu6iV+7+ij6m+TK7L59nEq+8kkAYABjMIsozJJb3bp171zKIEHp6KNvWRuFbb8l5vyMvqEzy9+MDI5ZAZnLpH9JnFigSaAU7XLxi+/zVzzTCBEF8BfTIhf/wFxdobfrN9KakGy4CWtVJqtI6ASUNSnuGHt32B/612VxOhwiBbMit4eJjEy0t/0hGne5GIiYiVU/kWILL21izGwDCzKQUCVFRRgqXvLug95UO3zf9wcRMUFX/QQFf8JLfqpszLwnLCVyMrShS4kYzAYD1tHQi3je85s15K27s8H0zo6dNQup052xa/imV8V4V5iaOLSBQ4yHQaA99qDoxk9FKgH0YKc559/o1v0Auq9EZusPaQHW7zn/B/y3VlHoRIse4omUiKBm7aGxa0p4dzP/Vm5f9+W0dm31TNe5zfnjH5SqdeNpFJStOdBVep2TcThwljGZ2vy4Nxxf/x41r/m0iJtShyLL1kuD1OF+cJyx58pRix1zb5iqGs3jxYN6qlvTSc5++s6eqp+193d4vrvrLn8TDxdt0JmVE2NVDJ5gPC7G1G9CuUHKk1EwvZZ6b9b0FJ6AzdPB9NSkKVXfi089+p8Nkks+BOc2lmAFSoyRWXsjqppSJ9w8t++WV995bxfBtC9fGreHtf21aUl12MG9BjRj12HFhtiqVNC4qbUtQce47XT8YOjT4UxNh/D9fuqKfh6IrQRRBaRJmri4gUjM6bYdGrG7K3HP2pmU3bVu4Ni4ceyJlczk9IP9+gx0q9qumlGHLDiKNSb/e0YGMyxesSnjtkU0+1epnxwR/aiJH1d7X7b3xhyued0OFLDQxFIEdyyiVEJA40W6k6CidWN264db5A51B6c2dPzfoDLl0oJB1heh9lTS6rIr1iNRAywyAjB0uWJXyPjs849gNCAJGXfB3WEdW9Yjn/Hj5VTqd3MRxzGJZKhFmvVELFDFppbkQfXXgqyvD6rdnPLboXJ1MvQrmFJeclKPVBtSnfg4E4sSqplTCDRce/s9bHu6q0j6pJ67axNk/Wv41nUmsr6nCoTDoBFAEKMDmo6vf/sp9G1tD3xvoDEpnPPKtK3Um+UOxrqIB44QUEyJVHVOWoVpSsHuHvj9tcPiWgQG4hkKJGhOblnVRJrFYCiUrLGWjRmVRZhIRR57WXHKD+5tbLtl5RVBo7+s22xaujc945OalKpW80RWKeVTVr+LtufYfHhV21BiohevlvYBWLc7a7M4lj7zRcCxUZeKTjy2alZo+HYiKKNZPKAJIAboEtuT09nenv19DizrkmN17www9PdVcKhVYYo9qHxcnISACosrcpPYocvGuXbetyzeUE7f3dXv9c4P4U7nb51ParLbFEgBShuuclAakxE48k6AI7514Es7bKVIAkaBtgABg1tquT5KX+BkX7fE6VmBYKktZA1ogqPM3qKhlVfok0CAh8pwjpInpQgCv60aI37Zwbdy2YemXVNpbL7HzhMUDyFSKAgYgIyyGPOPBcR5O/uj9Bfd8AEBhzhzCol4++cHrTjLpzMuk1alSsgbq4PdU+QfV+uV3ROVxCAwIBsxKZZJJHom++993PL4e2azWk6nNa19eac968tZ5KpPYJLGDWFdJXBi1OMm5ciQJKrlCfOn2+Q+8VvOaQcCnP37zNK28F8mYs9xIZAEocSyjkx8e47GrzygbsKV00nC+sG7nHY/fDN9X6O2duBpQ1fmzNtx6sU55z4vlJFsrAKlDY3khYmWUdvniVdsXPPSjjs2+6Z8TOPT41IoBU/zEjJ+qdGKuGxope2UeizgTeWgAYMdOpRLaFUt/f9xI4bMDA3DIhQyCqMMR37bh1vN10ntanKQ4tgIhNcpbOhEBnEoYbfNR1yjiw6xCEHBh5m88qTIV4suqdtCb193jOzSAnWPytOYo/oBt6UsDQVhCa6uAIOMm9R2+b/rnB/bMdYvPVqnEC4Acy1HMqMX3MgrSVCZp7IHCsh0LVq9u7+v2XvvySgf4Got63ay+b/bp5tQ1dn8hBpF3SByFmk9BXQY3KhYSgVYAY8QW3ed2f+eJ95DLaizq5XGrEtlcVj+7qNe1Prb4dJ1J/AyKTuBi7EDQwodsORDrppTnhgv37rhudVCxF9fe1212Ll1pT1uz8LumOf1te6AQA+Id3mGNk6mxCAgOWmtXiLO7/3T938HvMFj0rBs/Gq3E220/WHIyppstUGq2G4kciPQ4br5K/MPbr32wq6Jyruq0Zn//hm9TJnW/yxcsGEYwecgwajfKamZVOmFsvrDkf+584n74vsE4mRnVEz/7sRtmpNItW8gzZ7nhooMijTqdBQBxbHVzyth88akd1z54JXJZjWzI1QR/1kPd16hM8nFXjC2YtQhoMkMdM85sqSlpeDjq3XXnupsmIr6SE5crz62rb2yWGU0vK0+f7/JRJIABRISF6qTldCaZ4EKpX/bL53fsPS5GT4+gp0cjCOypvdfPU4nETyR2Is6pcjbWePxf2QVLqYThQvT8rjvXz0Muq9AZcrm8MX5lTp258IITVYvX7x3X8mkulEBJz5DRqnybcquV0k1J7fLRv3BU/Px7N63JY84cwu5ehUW97tRVXb+tUslnxDlPnAMAVSulNJzAiKOEMVyK/zXWpS8UXxyIEGaB/n45bFJ/5pNLLjLpxF02XxyGoFwcryzOYIABEAkIkY7d0ne6Hvov+L5C2wChM3SnPtD9m5QyP4fI8VKKWWq+okGpl9WGoRUJyz6JcOHuYN0OZLMa4fjJ/JEVtgSEHp8QBPyJ+74x0zQ3vUKKTnOFMmJVDXKMU5pwN0RAxCAFW7Kf2+M/sRl+h0HQbxs74KicfYWNnH1lc4yeHkIQ8Oy+7ulO1DOk1WkuH1XgtsFC1mgv7ChhDPKFrj09Gxsm/iADRBICrmHpA2jNZRP5D+nHKmnOdfmiBcFMCI+jQ49yC1QiT4kpk/TccOGeD3s2Pozudg9Bf4yjUl4XEMIBhUW9nO74vZxOJ+a54YIVIgOems6XW7aUTnouH/3th/6GhfA7DFa+5vCRqtONzPX9Mlw+eP1a1Zy63h4YiYG6EGEyQ61/duwo5WmJ4teT++zFv5rWGqEnqMU4H//5QF+3QRDYUx7oupuakmXiBZ7Uhb6TlU0OvnNMRmkp2V+7ov3ir+4PC1WvNFU8oQaJ97BwbXzyqq4luil5n8sXLQRTKlbV1T4FikSIShLZi/esyG09XO3zyI9Zc1mNzrXxKauu+zqlvPtcvmiFRaOCfpPA45i+gBxpbbgYf2PvitxW+B0GnaEFjsYppe8rdIbulO91XQ7Pe5SLsQiLqZ1AonwyKZDKCeXo8THzWEApz7iR0p/s/bONYQVxPjLxh1ehciVBZq7qmqlI3gIow9ZxuWTeoLqMfufgGSNR/MieFbmuqWD9EdnA6atuThb1yMlxIXJJ7VExAlKoVkGisR9MUB4hEwvbpN4drNsBAVVPJvD//WoMhcapy3/kKwjk45T8/wIw2IhP4FOI0AAAAABJRU5ErkJggg==";
+  // The chip's size at rest (it opens wider on hover, keyboard focus, menu and a result).
+  const CHIP = 30;
 
   const t = (key, ...subs) => ext.i18n.getMessage(key, subs) || FALLBACK[key] || key;
   const FALLBACK = {
@@ -46,7 +49,21 @@
     video_unnamed: "Can't tell which video this is: open its own page and try there",
     video_open_post: "Open the post, then use the button there",
     video_drag: "Drag to move it along the video's edge",
+    video_looking: "Looking up the qualities...",
+    video_open_app: "Open in Grabbit...",
+    video_no_choices: "No video to download here",
+    video_playlist: "A list of videos: choose them in Grabbit",
+    video_no_ytdlp: "Grabbit needs yt-dlp for this video",
+    video_too_long: "Looking up took too long",
+    video_busy: "Grabbit is busy with other videos",
+    video_queued: "Added to the queue",
+    video_failed_lookup: "Could not look it up",
+    video_tab_video: "Video",
+    video_tab_audio: "Audio",
   };
+  // Sizes as the app writes them (English, as its menu's text is): never the browser's own
+  // language, which put "178,8 MB" in an English menu.
+  const lang = "en";
   // To the background. After the extension was updated or removed, this page's copy of the script
   // is cut off from it (calls throw at once): then it takes itself away.
   const send = (m) => {
@@ -474,6 +491,152 @@
   ];
   // ---- the video's own address: end.
 
+  // ---- the qualities: the app looks the video up (yt-dlp), the user picks one here ------------
+  // How long a lookup is followed, from the click.
+  const LOOKUP_MS = 60000;
+
+  // The wait before asking how a lookup is going: 100 ms before the first question. An app that
+  // held the last question while it looked (a newer one, up to ~1.5 s: `took` ms of HELD_MS or
+  // more) is asked again at once (50 ms), so the answer reaches the page as soon as it is ready.
+  // One that answers at once (an older one) is asked as seldom as ever: the old backoff's target
+  // (1 s, a little longer each time, 2 s at most) less the time the question took, 50 ms at least.
+  function pollDelay(n, took) {
+    const HELD_MS = 1000;
+    if (n <= 0) return 100;
+    const spent = Number.isFinite(took) ? Math.max(0, took) : 0;
+    if (spent >= HELD_MS) return 50;
+    const target = Math.min(2000, Math.round(1000 * 1.25 ** n));
+    return Math.max(50, Math.round(target - spent));
+  }
+
+  // A size as `lang` writes it ("178.8 MB" in English, the menu's `lang`); "" when unknown.
+  function sizeText(bytes, lang) {
+    const n = Number(bytes);
+    if (!Number.isFinite(n) || n <= 0) return "";
+    const units = [["gigabyte", 2 ** 30], ["megabyte", 2 ** 20], ["kilobyte", 2 ** 10]];
+    const [unit, per] = units.find(([, u]) => n >= u) || ["byte", 1];
+    try {
+      return new Intl.NumberFormat(lang, { style: "unit", unit, unitDisplay: "short", maximumFractionDigits: 1 }).format(n / per);
+    } catch {
+      return `${(n / per).toFixed(1)} ${unit}`;
+    }
+  }
+
+  // What a quality's row says: the app's name for it and its size. Only ever set as text, never
+  // as markup.
+  function rowText(choice, lang) {
+    const c = choice && typeof choice === "object" ? choice : {};
+    return { name: String(c.label ?? "").slice(0, 200), size: sizeText(c.size, lang) };
+  }
+
+  // Which of the app's qualities go in which tab: `choice.audio === true` is sound only, anything
+  // else (an app that doesn't say, an older one) is video. Tabs only when both kinds are there;
+  // otherwise one list (`all`) in the app's order. Every number is the quality's place in the
+  // app's own list (what a pick sends), never its place in a tab.
+  function groupChoices(choices, max) {
+    const list = Array.isArray(choices) ? choices.slice(0, Math.max(0, Number.isFinite(max) ? max : 100)) : [];
+    const video = [];
+    const audio = [];
+    list.forEach((c, i) => (c && typeof c === "object" && c.audio === true ? audio : video).push(i));
+    return {
+      tabbed: video.length > 0 && audio.length > 0,
+      video,
+      audio,
+      all: list.map((_, i) => i),
+      start: video.length || !audio.length ? "video" : "audio",
+    };
+  }
+
+  // Follows a lookup the app is running, from its first answer: asks again only once the last
+  // question was answered (never on a timer of its own), pollDelay later, until it is no longer
+  // pending (that answer, with its token), the minute is up ({state: "late"}) or it is no longer
+  // wanted (null: the menu closed, the video or the page changed). `ask(token, ms)`: the
+  // background's answer, or {late: true} after `ms`; `sleep(ms)` may end early when dropped.
+  async function followLookup(first, { ask, alive, sleep, now, end }) {
+    let s = first;
+    let token = "";
+    let took = 0;
+    for (let n = 0; ; n += 1) {
+      if (!alive()) return null;
+      if (!s || typeof s !== "object") return { state: "gone" };
+      if (typeof s.token === "string" && s.token) token = s.token;
+      if (s.state !== "pending") return { ...s, token };
+      if (!token) return { state: "gone" };
+      const left = end - now();
+      if (left <= 0) return { state: "late" };
+      await sleep(Math.min(pollDelay(n, took), left));
+      if (!alive()) return null;
+      if (end - now() <= 0) return { state: "late" };
+      const asked = now();
+      const r = await ask(token, end - asked);
+      took = now() - asked;
+      if (!alive() || !r || r.gone) return null;
+      if (r.late) return { state: "late" };
+      // Another Grabbit chosen meanwhile: the window, as for a click.
+      s = r.fallback ? { state: "use-window" } : r.lookup;
+    }
+  }
+
+  // The background's answer to a lookup or to a choice, as a lookup's state: null when there is
+  // nothing to show (the extension gone); "late" past the minute, "unnamed" for a video it can't
+  // tell, "feed" for a video in a feed no post names (upstream issue 689), and "use-window" for no
+  // lookups here (another Grabbit, an older one) or an answer that isn't one.
+  function replyState(r) {
+    if (r && r.gone) return null;
+    if (r && r.late) return { state: "late" };
+    if (r && (r.why === "unnamed" || r.why === "feed")) return { state: r.why };
+    if (!r || r.fallback || !r.lookup || typeof r.lookup !== "object") return { state: "use-window" };
+    return r.lookup;
+  }
+
+  // What a lookup's state (or replyState's) comes to, as the menu does it: "follow" it while the
+  // app looks, "offer" its qualities, "say" a message in the menu (with the app's own words under
+  // it), "flash" a word on the button (the menu closed), or "window": the click as it always was,
+  // the app's Download video window. `t`: the texts. `picked`: the answer to a choice, which only
+  // a download confirms; anything else there is the window's.
+  function lookupAction(s, t, picked) {
+    const state = s && typeof s === "object" && typeof s.state === "string" ? s.state : "";
+    // A choice taken: downloading, in the queue, or handed to the app, which didn't say in time
+    // what became of it ("sent": it will download it; the window would download it again).
+    if (state === "started" || state === "sent") return { act: "flash", kind: "ok", text: t("video_sent") };
+    if (state === "queued") return { act: "flash", kind: "ok", text: t("video_queued") };
+    if (!picked) {
+      if (state === "pending") return { act: "follow" };
+      if (state === "ready" && Array.isArray(s.choices) && s.choices.length) return { act: "offer" };
+      if (state === "ready" || (state === "failed" && s.reason === "no-choices")) return { act: "say", text: t("video_no_choices") };
+      if (state === "failed" && s.reason === "no-ytdlp") return { act: "say", text: t("video_no_ytdlp") };
+      if (state === "failed") return { act: "say", text: t("video_failed_lookup"), detail: typeof s.message === "string" ? s.message : "" };
+      if (state === "late") return { act: "say", text: t("video_too_long") };
+      if (state === "list") return { act: "say", text: t("video_playlist") };
+      if (state === "busy") return { act: "say", text: t("video_busy") };
+      if (state === "off") return { act: "flash", kind: "err", text: t("video_off") };
+      if (state === "unnamed") return { act: "flash", kind: "err", text: t("video_unnamed") };
+      if (state === "feed") return { act: "flash", kind: "err", text: t("video_open_post") };
+    }
+    // "use-window", "gone" (the app forgot it: restarted), a choice the app didn't take, and
+    // anything newer: the window.
+    return { act: "window" };
+  }
+
+  // The click's window at most once, whichever way the click comes to it (an answer that isn't a
+  // lookup, the lookup's end, a choice the app didn't take, "Open in…"): true the first time for
+  // `j`, the click's lookup.
+  function firstWindow(j) {
+    if (!j || j.windowed) return false;
+    j.windowed = true;
+    return true;
+  }
+
+  // The video the pointer takes the button to: the one under it (`found`), but not another than
+  // its own (`shown`) while the qualities' menu is open (`picking`): the menu reaches over the
+  // videos around its own (a feed's), and the pointer crosses them on its way to a row. The menu
+  // still closes when its video plays something else or the page changes (tick), or on a click
+  // elsewhere.
+  function pointerTarget(found, shown, picking) {
+    if (!found || (picking && found !== shown)) return null;
+    return found;
+  }
+
   // The address this page first loaded at (`download`: a page that moves in place keeps its first
   // page's og:title).
   const landedAt = location.href;
@@ -516,6 +679,8 @@
   let menuOpen = false;
   let dragging = null;
   let busy = false;
+  // The lookup the qualities menu is for (one at a time), until the menu closes.
+  let job = null;
   let flashing = false;
   let raf = 0;
   let scan = 0;
@@ -530,59 +695,111 @@
 
   // ---- the button: a closed shadow tree the page's styles and scripts can't reach ----------
   const root = document.createElement("mdm-video-button");
-  // Each with !important: a page's own rules can't hide or move it.
+  // Each with !important: a page's own rules can't hide or move it. The chip at rest: its box,
+  // whatever width the pill opens to inside it.
   for (const [k, v] of Object.entries({
     all: "initial", position: "fixed", "z-index": "2147483647", left: "0", top: "0", display: "none",
+    width: `${CHIP}px`, height: `${CHIP}px`,
     contain: "layout style", opacity: "1", visibility: "visible", "pointer-events": "auto",
   })) root.style.setProperty(k, v, "important");
   const shadow = root.attachShadow({ mode: "closed" });
   const CSS = `
 :host { all: initial; }
 * { box-sizing: border-box; }
-/* A light, glossy panel that stands out over a dark video, with our icon: the classic download
-   button's feel, made modern (rounded, crisp type, soft shadow and motion). */
+/* A small dark glass chip with a green arrow, in Grabbit's Graphite colours: little of the video
+   at rest, open to "Download ⌄" under the pointer, with the keyboard on it, its menu open or a
+   result to show. Its arrow stays where it is: on the video's right half (.end) it opens to the
+   left, mirrored, so the pointer that reached the arrow is still on it. */
 .pill {
-  display: flex; align-items: stretch; height: 34px; border-radius: 9px;
-  background: linear-gradient(#ffffff, #f1f4f8 48%, #e3e8ef 52%, #eef2f6);
-  color: #17324d; border: 1px solid rgba(23, 50, 77, .28);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .32), 0 1px 0 rgba(255, 255, 255, .9) inset;
-  font: 600 13px/1 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  /* max-content: its own width, not the 30px host's (a result would wrap at every word). */
+  position: absolute; top: 0; left: 0; width: max-content;
+  display: flex; align-items: stretch; height: 30px; border-radius: 15px; overflow: hidden;
+  background: rgba(24, 24, 27, .84); color: #f4f4f5; border: 1px solid rgba(255, 255, 255, .16);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .35);
+  font: 600 12.5px/1 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
   opacity: 0; transform: translateY(-3px) scale(.98);
-  transition: opacity .16s ease-out, transform .16s ease-out, filter .12s;
+  transition: opacity .16s ease-out, transform .16s ease-out;
   user-select: none; -webkit-user-select: none; touch-action: none; white-space: nowrap;
 }
+.pill.end { left: auto; right: 0; flex-direction: row-reverse; }
+/* On the video's bottom edge a result on two lines grows upward, into the video. */
+.pill.low { top: auto; bottom: 0; }
 .pill.shown { opacity: 1; transform: none; }
-.pill.dragging { cursor: grabbing; box-shadow: 0 10px 28px rgba(0, 0, 0, .45); transition: none; }
+.pill.dragging { cursor: grabbing; box-shadow: 0 8px 22px rgba(0, 0, 0, .5); transition: none; }
 .pill.dragging .go { cursor: grabbing; }
-.pill.ok { background: linear-gradient(#f2fff6, #d4f3df); border-color: #2f9a5b; color: #135c33; }
-.pill.err { background: linear-gradient(#fff4f4, #f6d6d6); border-color: #c24848; color: #7d1f1f; }
+.pill.err { border-color: rgba(255, 139, 128, .55); }
 button {
   /* all: unset resets box-sizing too, past the rule above: without it a menu item's 100 % width
      plus its padding ran past the menu's edge (#81). */
-  all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px;
+  all: unset; box-sizing: border-box; display: flex; align-items: center;
   color: inherit; cursor: pointer; font: inherit;
 }
-.go { padding: 0 12px 0 8px; border-radius: 8px 0 0 8px; cursor: grab; }
-.more { padding: 0 9px; border-left: 1px solid rgba(23, 50, 77, .18); border-radius: 0 8px 8px 0; }
-.go:hover, .more:hover { background: linear-gradient(rgba(214, 232, 255, .9), rgba(182, 212, 250, .9)); }
-.go:active, .more:active { background: rgba(160, 196, 242, .9); }
-button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
-.go img { width: 22px; height: 22px; flex: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .25)); }
-.more svg { width: 12px; height: 12px; color: #3b5876; }
-.compact .label { display: none; }
-.compact .go { padding: 0 6px; border-radius: 8px 0 0 8px; }
+.go { gap: 0; padding: 0 6px; color: #3ecf8e; cursor: grab; }
+.end .go { flex-direction: row-reverse; }
+.err .go { color: #ff8b80; }
+.go svg { width: 16px; height: 16px; flex: none; }
+.ic-ok, .ic-err, .ok .ic-dl, .err .ic-dl { display: none; }
+.ok .ic-ok, .err .ic-err { display: block; }
+.label, .more { max-width: 0; opacity: 0; overflow: hidden; transition: max-width .18s ease-out, opacity .14s; }
+.label { color: #f4f4f5; text-overflow: ellipsis; }
+.more { padding: 0; color: #b4b4bc; }
+.more svg { width: 11px; height: 11px; flex: none; }
+/* Open: the keyboard's focus only (:focus-visible), not a mouse click's, which would keep it
+   open after the pointer left. A result (.ok, .err) has its own rules below. */
+.pill:is(:hover, :has(:focus-visible), .open):not(.dragging, .ok, .err) .go { gap: 6px; padding: 0 4px 0 7px; }
+.end:is(:hover, :has(:focus-visible), .open):not(.dragging, .ok, .err) .go { padding: 0 7px 0 4px; }
+.pill:is(:hover, :has(:focus-visible), .open):not(.dragging, .ok, .err) .label {
+  max-width: min(120px, var(--label, 120px)); opacity: 1;
+}
+.pill:is(:hover, :has(:focus-visible), .open):not(.dragging, .ok, .err) .more, .pill .more:focus-visible {
+  max-width: 32px; opacity: 1; padding: 0 8px 0 6px; border-left: 1px solid rgba(255, 255, 255, .14);
+}
+.end:is(:hover, :has(:focus-visible), .open):not(.dragging, .ok, .err) .more, .end .more:focus-visible {
+  padding: 0 6px 0 8px; border-left: 0; border-right: 1px solid rgba(255, 255, 255, .14);
+}
+/* A result: whole, on as many lines as the room left on the video (--label) takes. */
+.pill:is(.ok, .err) { height: auto; min-height: 30px; }
+.pill:is(.ok, .err) .go { gap: 6px; padding: 6px 11px 6px 7px; }
+.end:is(.ok, .err) .go { padding: 6px 7px 6px 11px; }
+.pill:is(.ok, .err) .label {
+  max-width: var(--label, 300px); opacity: 1; white-space: normal; line-height: 1.3; text-overflow: clip;
+}
+.status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.go:hover, .more:hover { background: rgba(255, 255, 255, .09); }
+.go:active, .more:active { background: rgba(255, 255, 255, .16); }
+button:focus-visible { outline: 2px solid #3ecf8e; outline-offset: -2px; }
 .menu {
-  position: absolute; min-width: 210px; padding: 4px; border-radius: 9px;
-  background: #fbfcfe; color: #17324d; border: 1px solid rgba(23, 50, 77, .22);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .35);
-  font: 400 13px/1.2 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  position: absolute; min-width: 200px; padding: 4px; border-radius: 10px;
+  background: rgba(24, 24, 27, .95); color: #f4f4f5; border: 1px solid rgba(255, 255, 255, .14);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .45);
+  font: 400 12.5px/1.2 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
   display: none;
 }
 .menu.open { display: block; }
-.menu button { display: block; width: 100%; padding: 8px 12px; border-radius: 6px; cursor: default; }
-.menu button:hover, .menu button:focus-visible { background: #dceafb; outline: none; }
-.menu hr { border: 0; border-top: 1px solid rgba(23, 50, 77, .12); margin: 4px 2px; }
-@media (prefers-reduced-motion: reduce) { .pill { transition: none; transform: none; } }
+.menu button { display: block; width: 100%; padding: 7px 10px; border-radius: 6px; cursor: default; }
+.menu button:hover, .menu button:focus-visible { background: rgba(62, 207, 142, .16); outline: none; }
+.menu hr { border: 0; border-top: 1px solid rgba(255, 255, 255, .12); margin: 4px 2px; }
+/* The qualities, in the same dark glass as the button's menu: a row each (the app's name for it,
+   its size at the end), a message while it looks or when it found none, "Open in Grabbit" last.
+   Scrolls when there are many. */
+.picks { min-width: 220px; max-width: 340px; max-height: min(300px, 45vh); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .25) transparent; }
+.picks:focus { outline: none; }
+/* Focused from the keyboard while it looks up: the chip's own ring. */
+.picks:focus-visible { outline: 2px solid #3ecf8e; outline-offset: -2px; }
+.menu .pick { display: flex; align-items: baseline; gap: 16px; }
+.pick .name { overflow-wrap: anywhere; }
+.pick .size { margin-left: auto; color: #b4b4bc; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Video / Audio tabs over the rows, when the video has both: the chosen one underlined in green. */
+.tabs { display: flex; gap: 4px; padding: 0 0 4px; }
+.tabs[hidden] { display: none; }
+.menu .tab { flex: 1 1 0; width: auto; justify-content: center; text-align: center; font-weight: 600; color: #b4b4bc; border-radius: 6px 6px 0 0; border-bottom: 2px solid transparent; }
+.menu .tab[aria-selected="true"] { color: #f4f4f5; border-bottom-color: #3ecf8e; }
+.note { padding: 7px 10px; color: #d4d4d8; overflow-wrap: anywhere; }
+.note[hidden] { display: none; }
+.note .why { display: block; margin-top: 4px; font-size: 11.5px; color: #a1a1aa; }
+@media (prefers-reduced-motion: reduce) { .pill, .label, .more { transition: none; } .pill { transform: none; } }
 `;
   // A constructed sheet: a page whose Content-Security-Policy refuses inline styles can't strip
   // it (Firefox applies the page's policy to what a content script adds).
@@ -598,41 +815,72 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   shadow.innerHTML += `
 <div class="pill" part="pill">
   <button class="go" type="button">
-    <img alt="" draggable="false">
+    <svg class="ic-dl" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13.5h10"/></svg>
+    <svg class="ic-ok" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2"
+      stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 8.5 6.5 11.5 12.5 4.5"/></svg>
+    <svg class="ic-err" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"
+      stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 4.8v3.6M8 11.1v.1"/></svg>
     <span class="label"></span>
   </button>
   <button class="more" type="button" aria-haspopup="menu" aria-expanded="false">
-    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"
+    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7"
       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5 6 7.5l3-3"/></svg>
   </button>
 </div>
+<span class="status" role="status"></span>
 <div class="menu" role="menu">
-  <button role="menuitem" data-act="download"></button>
-  <hr>
   <button role="menuitem" data-act="hide"></button>
   <button role="menuitem" data-act="never"></button>
   <hr>
   <button role="menuitem" data-act="settings"></button>
+</div>
+<div class="menu picks" role="group" tabindex="-1" aria-describedby="said">
+  <div class="note" id="said" role="status"></div>
+  <div class="tabs" role="tablist" hidden>
+    <button type="button" class="tab" role="tab" id="tab-video" aria-controls="qualities" data-tab="video"></button>
+    <button type="button" class="tab" role="tab" id="tab-audio" aria-controls="qualities" data-tab="audio"></button>
+  </div>
+  <div class="qualities" id="qualities" role="none">
+    <div class="rows" role="menu"></div>
+  </div>
+  <hr>
+  <button data-act="window"></button>
 </div>`;
-  shadow.querySelector(".go img").src = LOGO;
   const pill = shadow.querySelector(".pill");
   const go = shadow.querySelector(".go");
   const label = shadow.querySelector(".label");
   const more = shadow.querySelector(".more");
   const menu = shadow.querySelector(".menu");
+  const status = shadow.querySelector(".status");
   const item = (act) => menu.querySelector(`[data-act="${act}"]`);
+  // The qualities' menu: its message, its rows, "Open in Grabbit".
+  const picks = shadow.querySelector(".picks");
+  const note = picks.querySelector(".note");
+  const rows = picks.querySelector(".rows");
+  const tabs = picks.querySelector(".tabs");
+  const tabList = [...tabs.querySelectorAll("[data-tab]")];
+  const qualities = picks.querySelector(".qualities");
+  const openRow = picks.querySelector('[data-act="window"]');
+  // Which of the two menus is open (`menuOpen`).
+  let panel = menu;
   pill.dir = "ltr";
   menu.dir = "ltr";
+  picks.dir = "ltr";
   const idleLabel = t("video_download");
   label.textContent = idleLabel;
   go.title = `${idleLabel} — ${t("video_drag")}`;
   go.setAttribute("aria-label", idleLabel);
   more.title = t("video_more");
   more.setAttribute("aria-label", t("video_more"));
-  item("download").textContent = idleLabel;
   item("hide").textContent = t("video_hide_here");
   item("never").textContent = ext.i18n.getMessage("video_never_site", [host]) || `Never on ${host}`;
   item("settings").textContent = t("video_settings");
+  picks.setAttribute("aria-label", idleLabel);
+  rows.setAttribute("aria-label", idleLabel);
+  tabs.setAttribute("aria-label", idleLabel);
+  for (const b of tabList) b.textContent = t(b.dataset.tab === "audio" ? "video_tab_audio" : "video_tab_video");
+  openRow.textContent = t("video_open_app");
 
   // ---- which video ----------------------------------------------------------------------------
   const videos = document.getElementsByTagName("video");
@@ -691,8 +939,9 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   // them 0 or 1 (on an edge).
   function rects() {
     const r = held ? held.r : (lastRect = video.getBoundingClientRect());
-    const w = pill.offsetWidth || 150;
-    const h = pill.offsetHeight || 32;
+    // Placed by its size at rest: opening never moves it.
+    const w = CHIP;
+    const h = CHIP;
     return { r, w, h, roomX: Math.max(0, r.width - w - 2 * INSET), roomY: Math.max(0, r.height - h - 2 * INSET) };
   }
 
@@ -731,6 +980,9 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   const CORNERS = [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }];
   function spot(r, w, h, roomX, roomY) {
     if (chosen) return place;
+    // Still while its menu is open: the player's own controls come and go as the pointer moves
+    // over the video, and the menu's rows would move away from under it.
+    if (menuOpen && auto.v === video && auto.at) return auto.at;
     const now = Date.now();
     const same = auto.v === video;
     if (same && now - auto.t < AUTO_MS) return auto.at;
@@ -759,14 +1011,21 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
       if (menuOpen) placeMenu(pinned.top, pinned.left, w);
       return;
     }
-    // A narrow video gets the icon only.
-    pill.classList.toggle("compact", r.width < 360);
     // Held for a video gone (#503): where it was, not a corner found anew over what the page
     // shows there now.
-    const at = dragging ? dragging.at : held && !chosen ? held.at : spot(r, w, pill.offsetHeight || 32, roomX, roomY);
+    const at = dragging ? dragging.at : held && !chosen ? held.at : spot(r, w, CHIP, roomX, roomY);
     const left = r.left + INSET + at.x * roomX;
+    // On the video's right half it opens to the left, into the video.
+    const end = left + w / 2 > r.left + r.width / 2;
+    pill.classList.toggle("end", end);
+    pill.classList.toggle("low", at.y > 0.5);
+    // Its text's room: to the video's far edge, in the window (the arrow and padding take 40px).
+    const room = end
+      ? left + w - Math.max(r.left + INSET, 4)
+      : Math.min(r.right - INSET, innerWidth - 4) - left;
+    pill.style.setProperty("--label", `${Math.max(80, Math.round(room - 40))}px`);
     // In the part of the video on screen: one scrolled half out keeps its button in view.
-    const h = pill.offsetHeight || 32;
+    const h = CHIP;
     const visTop = Math.max(r.top, 0) + INSET;
     const visBottom = Math.min(r.bottom, innerHeight) - INSET - h;
     const top = Math.min(Math.max(r.top + INSET + at.y * roomY, visTop), Math.max(visTop, visBottom));
@@ -775,16 +1034,16 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
     if (menuOpen) placeMenu(top, left, w);
   }
 
-  // The menu opens below the button, or above it near the bottom of the window; aligned with
-  // whichever of its sides is nearer the video's middle.
+  // The open menu opens below the button, or above it near the bottom of the window; aligned
+  // with whichever of its sides is nearer the video's middle.
   function placeMenu(top, left, w) {
-    const h = menu.offsetHeight;
+    const h = panel.offsetHeight;
     const below = top + 36 + h < innerHeight;
-    menu.style.top = below ? "36px" : `${-h - 4}px`;
+    panel.style.top = below ? "36px" : `${-h - 4}px`;
     const { r } = rects();
     const rightHalf = left + w / 2 > r.left + r.width / 2;
-    menu.style.left = rightHalf ? "" : "0";
-    menu.style.right = rightHalf ? "0" : "";
+    panel.style.left = rightHalf ? "" : "0";
+    panel.style.right = rightHalf ? "0" : "";
   }
 
   // Snap a free spot (fractions, after a drag) to the nearest edge.
@@ -894,6 +1153,8 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
     const r = video.getBoundingClientRect();
     const over =
       pointer.x >= r.left && pointer.x <= r.right && pointer.y >= r.top && pointer.y <= r.bottom;
+    // The qualities' menu for a video this element no longer plays, or a page left: it goes.
+    if (menuOpen && panel === picks && !(job && current(job))) closeMenu();
     if (!onButton && !menuOpen && !dragging && !keyboardOn() && (!over || Date.now() - lastMove > IDLE_MS)) {
       return hide();
     }
@@ -911,7 +1172,8 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   function look() {
     scan = 0;
     if (dragging || never || (allowed === false && answered())) return;
-    const v = videoAt(pointer.x, pointer.y);
+    // Kept on its video while the qualities' menu is open (pointerTarget).
+    const v = pointerTarget(videoAt(pointer.x, pointer.y), video, menuOpen && panel === picks);
     if (!v) return;
     if (!answered()) return void ask().then(() => allowed && look());
     show(v);
@@ -949,7 +1211,25 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   }
 
   // ---- acting ---------------------------------------------------------------------------------
+  // The middle of the video: where the background asks the page's own player what it plays.
+  function middle(v) {
+    const box = v.getBoundingClientRect();
+    return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+  }
+
+  // A promise's answer, or {late: true} once `ms` is up.
+  const within = (promise, ms) => {
+    let timer = 0;
+    const late = new Promise((done) => (timer = setTimeout(() => done({ late: true }), Math.max(0, ms))));
+    return Promise.race([promise, late]).finally(() => clearTimeout(timer));
+  };
+
+  // The click: the app looks the video up and its qualities open in a menu here. An app that can't
+  // (an older one, another Grabbit chosen) gets the click as it always was: its Download video
+  // window.
   async function download() {
+    // The button again while its qualities are open: they close.
+    if (menuOpen && panel === picks) return closeMenu();
     if (busy || !video) return;
     busy = true;
     try {
@@ -962,13 +1242,237 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
       // A page that moved in place keeps its first page's og:title; its document title follows.
       const og = location.href === landedAt ? document.querySelector('meta[property="og:title"]')?.content : "";
       const title = (og || document.title || "").trim();
-      const r = await send({ type: "video", src, title, url, at });
-      if (r.gone) return;
-      const why = { options: "video_off", unnamed: "video_unnamed", feed: "video_open_post" }[r.why];
-      flash(r.ok ? "ok" : "err", t(r.ok ? "video_sent" : why || "video_failed"));
+      const j = { video, src: video.currentSrc || "", href: location.href, asked: { src, title, url, at }, started: Date.now(), token: "", count: 0 };
+      job = j;
+      // The menu opens at once, saying it is looking; an answer that needs none and comes first
+      // (no lookups here: the window) shows none.
+      const opening = setTimeout(() => openPicks(j), 100);
+      const s = replyState(await within(send({ type: "video-lookup", ...j.asked }), LOOKUP_MS));
+      clearTimeout(opening);
+      if (!s || !current(j)) return;
+      const a = lookupAction(s, t);
+      // No lookups here, or an answer that isn't one: the click as it was, once.
+      if (a.act === "window") return await useWindow(j);
+      // A video it can't tell, or the button off here: a word on the button, no menu.
+      if (a.act === "flash") {
+        closeMenu();
+        dropLookup();
+        return flash(a.kind, a.text);
+      }
+      openPicks(j);
+      follow(j, s);
     } finally {
       busy = false;
     }
+  }
+
+  // Still the lookup the menu is for: the menu open on the same video (the same element playing
+  // the same thing) on the same page. Whatever answers a lookup after that is dropped.
+  const current = (j) =>
+    job === j && video === j.video && (!j.src || video.currentSrc === j.src) && location.href === j.href;
+
+  function openPicks(j) {
+    if (!current(j) || (menuOpen && panel === picks)) return;
+    closeMenu();
+    panel = picks;
+    menuOpen = true;
+    clearRows();
+    said(t("video_looking"));
+    picks.setAttribute("aria-busy", "true");
+    picks.classList.add("open");
+    pill.classList.add("open");
+    go.setAttribute("aria-expanded", "true");
+    lastMove = Date.now();
+    position();
+    picks.focus({ preventScroll: true });
+  }
+
+  // No rows, no tabs.
+  function clearRows() {
+    rows.replaceChildren();
+    tabs.hidden = true;
+    qualities.setAttribute("role", "none");
+    qualities.removeAttribute("aria-labelledby");
+  }
+
+  // The menu's message (plain text), with the app's own words under it.
+  function said(text, detail) {
+    note.textContent = text;
+    if (detail) {
+      const why = document.createElement("span");
+      why.className = "why";
+      why.textContent = String(detail).slice(0, 400);
+      note.append(why);
+    }
+    note.hidden = !text;
+  }
+
+  // The keyboard's focus goes to the menu's new rows while it is in the menu or on the button
+  // (not when it was taken elsewhere meanwhile).
+  const focusHere = () => {
+    const a = shadow.activeElement;
+    return Boolean(a) && (a === go || picks.contains(a));
+  };
+
+  // A message instead of qualities, "Open in Grabbit" under it.
+  function say(j, text, detail) {
+    if (!current(j)) return;
+    picks.setAttribute("aria-busy", "false");
+    clearRows();
+    said(text, detail);
+    position();
+    if (focusHere()) openRow.focus();
+  }
+
+  // The lookup's end, in the menu (lookupAction).
+  function settle(j, s) {
+    if (!current(j)) return;
+    const a = lookupAction(s, t);
+    if (a.act === "offer") return offer(j, s);
+    if (a.act === "say") return say(j, a.text, a.detail);
+    if (a.act === "flash") {
+      closeMenu();
+      dropLookup();
+      return flash(a.kind, a.text);
+    }
+    // "use-window", "gone" (the app forgot it: restarted) and anything newer: the window.
+    return useWindow(j);
+  }
+
+  // The rows for these qualities of the app's list (their numbers), a row each: the app's name
+  // for it and its size, as text. The row keeps the quality's number in the app's list.
+  function showRows(s, numbers) {
+    rows.replaceChildren(
+      ...numbers.map((i) => {
+        const { name, size } = rowText(s.choices[i], lang);
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "pick";
+        b.setAttribute("role", "menuitem");
+        b.dataset.choice = String(i);
+        const n = document.createElement("span");
+        n.className = "name";
+        n.textContent = name;
+        b.append(n);
+        if (size) {
+          const z = document.createElement("span");
+          z.className = "size";
+          z.textContent = size;
+          b.append(z);
+        }
+        return b;
+      }),
+    );
+  }
+
+  // One of the two tabs shown: it is the selected one (the only one in the tab order), its
+  // qualities are the rows.
+  function showTab(j, s, kind) {
+    for (const b of tabList) {
+      const on = b.dataset.tab === kind;
+      b.setAttribute("aria-selected", String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
+    qualities.setAttribute("aria-labelledby", `tab-${kind}`);
+    j.tab = kind;
+    showRows(s, j.groups[kind]);
+    position();
+  }
+
+  // The qualities: in one list, or in the Video and Audio tabs when there are both.
+  function offer(j, s) {
+    j.count = Math.min(s.choices.length, 100);
+    j.token = s.token;
+    j.groups = groupChoices(s.choices, j.count);
+    j.s = s;
+    if (j.groups.tabbed) {
+      tabs.hidden = false;
+      qualities.setAttribute("role", "tabpanel");
+      showTab(j, s, j.groups.start);
+    } else {
+      clearRows();
+      showRows(s, j.groups.all);
+    }
+    said("");
+    picks.setAttribute("aria-busy", "false");
+    // Rows that just pushed "Open in Grabbit" down under the pointer aren't picked by a click
+    // meant for it.
+    j.armed = Date.now() + 300;
+    position();
+    if (focusHere()) (rows.firstElementChild || openRow).focus();
+  }
+
+  // Asks how the lookup is going until it ends (followLookup), then shows what it came to.
+  async function follow(j, first) {
+    const s = await followLookup(first, {
+      ask: (token, ms) => within(send({ type: "video-poll", token }), ms),
+      alive: () => current(j),
+      sleep: (ms) =>
+        new Promise((wake) => {
+          j.wake = wake;
+          j.timer = setTimeout(wake, ms);
+        }),
+      now: Date.now,
+      end: j.started + LOOKUP_MS,
+    });
+    if (!s || !current(j)) return;
+    settle(j, s);
+  }
+
+  // The lookup is no longer wanted (its menu closed): no more questions about it.
+  function dropLookup() {
+    const j = job;
+    job = null;
+    if (!j) return;
+    clearTimeout(j.timer);
+    if (j.wake) j.wake();
+  }
+
+  // A quality picked: the app downloads it (its own choice of it, with what it looked the video
+  // up with) without its window. Only the token and the row's number go.
+  async function pick(j, i) {
+    if (!current(j) || !j.count || j.picked || !(i >= 0 && i < j.count) || Date.now() < j.armed) return;
+    j.picked = true;
+    closeMenu();
+    busy = true;
+    try {
+      const s = replyState(await send({ type: "video-pick", token: j.token, choice: i }));
+      if (!s) return;
+      // Downloading, queued, or handed to the app ("sent"): a word on the button. Anything else
+      // (the lookup forgotten or another window's, an older app): the window.
+      const a = lookupAction(s, t, true);
+      if (a.act === "flash") return flash(a.kind, a.text);
+      return await useWindow(j);
+    } finally {
+      busy = false;
+    }
+  }
+
+  // The click as it always was: the app's Download video window for this video. Once per click.
+  async function useWindow(j) {
+    if (job === j) {
+      closeMenu();
+      dropLookup();
+    }
+    if (!firstWindow(j)) return;
+    // Where the video is now, for the background to ask the page's player there.
+    const r = await send({ type: "video", ...j.asked, ...(j.video.isConnected ? { at: middle(j.video) } : {}) });
+    if (r.gone) return;
+    const why = { options: "video_off", unnamed: "video_unnamed", feed: "video_open_post" }[r.why];
+    flash(r.ok ? "ok" : "err", t(r.ok ? "video_sent" : why || "video_failed"));
+  }
+
+  // A row of the qualities' menu, clicked or by key.
+  function choosePick(b) {
+    const j = job;
+    if (!j || !b) return;
+    if (b.dataset.act === "window") return useWindow(j);
+    // A tab: its qualities are the rows now (the keyboard stays on the tab).
+    if (b.dataset.tab !== undefined) {
+      if (j.groups && j.groups.tabbed && j.groups[b.dataset.tab] && j.s) showTab(j, j.s, b.dataset.tab);
+      return;
+    }
+    if (b.dataset.choice !== undefined) return pick(j, Number(b.dataset.choice));
   }
 
   // A short confirmation on the button itself, then back to normal.
@@ -977,29 +1481,45 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
     pill.classList.remove("ok", "err");
     pill.classList.add(kind);
     label.textContent = text;
+    go.setAttribute("aria-label", text);
+    status.textContent = text;
     lastMove = Date.now();
     position();
     setTimeout(() => {
       flashing = false;
       pill.classList.remove(kind);
       label.textContent = idleLabel;
+      go.setAttribute("aria-label", idleLabel);
+      status.textContent = "";
       if (video) position();
     }, 2200);
   }
 
   function openMenu() {
+    closeMenu();
+    panel = menu;
     menuOpen = true;
     menu.classList.add("open");
+    pill.classList.add("open");
     more.setAttribute("aria-expanded", "true");
     position();
     menu.querySelector("button").focus();
   }
 
+  // Closes whichever menu is open; the qualities' takes its lookup with it.
   function closeMenu() {
     if (!menuOpen) return;
+    const back = panel === picks && picks.contains(shadow.activeElement);
     menuOpen = false;
-    menu.classList.remove("open");
+    panel.classList.remove("open");
+    pill.classList.remove("open");
     more.setAttribute("aria-expanded", "false");
+    if (panel !== picks) return;
+    go.setAttribute("aria-expanded", "false");
+    picks.setAttribute("aria-busy", "false");
+    dropLookup();
+    // The keyboard's focus back on the button, not lost with the menu.
+    if (back) go.focus();
   }
 
   menu.addEventListener("click", (e) => {
@@ -1009,7 +1529,6 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   });
 
   async function run(act) {
-    if (act === "download") return download();
     closeMenu();
     if (act === "hide") {
       held = null;
@@ -1028,7 +1547,13 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
     if (act === "settings") send({ type: "options" });
   }
 
-  more.addEventListener("click", () => (menuOpen ? closeMenu() : openMenu()));
+  more.addEventListener("click", () => (menuOpen && panel === menu ? closeMenu() : openMenu()));
+
+  // The qualities' rows: only the user's own clicks.
+  picks.addEventListener("click", (e) => {
+    if (!e.isTrusted) return;
+    choosePick(e.target.closest("button"));
+  });
 
   // The pointer reached the button: what the video plays now, kept in case the page stops it for
   // that (a hover-to-play preview, #503).
@@ -1038,21 +1563,51 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
     }
   });
 
-  // Keys: Escape closes the menu, arrows move through it.
+  // Keys (only the user's own, never ones a page script makes up): Escape closes the open menu
+  // (the keyboard's focus back on its button), arrows move through it, Enter and Space run the
+  // focused command. Each stops there: a key the open menu used is not the page's too (a player's
+  // Space and arrows would pause it and change its volume behind the menu).
   shadow.addEventListener("keydown", (e) => {
+    if (!e.isTrusted) return;
+    const focused = shadow.activeElement;
     if (e.key === "Escape" && menuOpen) {
+      const opener = panel === picks ? go : more;
       closeMenu();
-      more.focus();
+      opener.focus();
       e.stopPropagation();
-    } else if (menuOpen && (e.key === "Enter" || e.key === " ") && menu.contains(shadow.activeElement)) {
+    } else if (menuOpen && (e.key === "Enter" || e.key === " ") && focused && focused !== panel && panel.contains(focused)) {
       // The focused command, whatever the browser does with a key on a button.
-      run(shadow.activeElement.dataset.act);
+      if (panel === picks) choosePick(focused);
+      else run(focused.dataset.act);
       e.preventDefault();
+      e.stopPropagation();
+    } else if (menuOpen && panel === picks && !tabs.hidden && focused && focused.dataset.tab !== undefined && ["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) {
+      // Between the tabs (not on to the rows).
+      const i = tabList.indexOf(focused);
+      const step = e.key === "ArrowRight" ? 1 : -1;
+      const next = e.key === "Home" ? 0 : e.key === "End" ? tabList.length - 1 : (i + step + tabList.length) % tabList.length;
+      tabList[next].focus();
+      e.preventDefault();
+      e.stopPropagation();
+    } else if (menuOpen && panel === picks && !tabs.hidden && focused && (e.key === "ArrowDown" || e.key === "ArrowUp") && (focused.dataset.tab !== undefined || (e.key === "ArrowUp" && focused === rows.firstElementChild))) {
+      // From a tab down to the rows; up from the first row to the selected tab.
+      if (focused.dataset.tab !== undefined) {
+        if (e.key === "ArrowDown") (rows.firstElementChild || openRow).focus();
+      } else {
+        (tabList.find((b) => b.tabIndex === 0) || tabList[0]).focus();
+      }
+      e.preventDefault();
+      e.stopPropagation();
     } else if (menuOpen && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-      const items = [...menu.querySelectorAll("button")];
-      const i = items.indexOf(shadow.activeElement);
-      items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus();
+      // The rows (and "Open in Grabbit"), never the tabs.
+      const items = [...panel.querySelectorAll("button:not([data-tab])")];
+      const i = items.indexOf(focused);
+      const down = e.key === "ArrowDown";
+      // From the menu itself (the qualities' while it looks): the first, or the last.
+      const next = i < 0 ? (down ? 0 : items.length - 1) : (i + (down ? 1 : items.length - 1)) % items.length;
+      items[next]?.focus();
       e.preventDefault();
+      e.stopPropagation();
     }
   });
 
@@ -1061,13 +1616,15 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   go.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || !video || !e.isTrusted) return;
     const { r, roomX, roomY } = rects();
+    // Where in the chip it was taken: within the chip at rest, which it shrinks to while dragged
+    // (taken by its open label, it would trail that far behind the pointer).
+    const inChip = (n) => Math.min(Math.max(n, 0), CHIP);
     dragging = {
       id: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
-      // Where in the button it was taken.
-      dx: e.clientX - (r.left + INSET + (chosen ? place : auto.at || place).x * roomX),
-      dy: e.clientY - (r.top + INSET + (chosen ? place : auto.at || place).y * roomY),
+      dx: inChip(e.clientX - (r.left + INSET + (chosen ? place : auto.at || place).x * roomX)),
+      dy: inChip(e.clientY - (r.top + INSET + (chosen ? place : auto.at || place).y * roomY)),
       at: chosen ? place : auto.at || place,
       moved: false,
     };
@@ -1135,6 +1692,7 @@ button:focus-visible { outline: 2px solid #2a78d6; outline-offset: -2px; }
   // The extension updated or removed under this page: the button and its listeners go (a fresh
   // copy of this script comes with the new extension).
   function teardown() {
+    dropLookup();
     cancelAnimationFrame(raf);
     cancelAnimationFrame(scan);
     removeEventListener("pointermove", onMove, true);

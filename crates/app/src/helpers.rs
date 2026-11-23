@@ -16,7 +16,9 @@ use crate::winui::{self, ButtonKind, FooterButton, FooterItem, r};
 const OFFER_FOOTER: f32 = 30.0;
 /// Helpers' width, and where its footer starts (under the error line).
 const PROGRAMS_W: f32 = 500.0;
-const PROGRAMS_BODY: f32 = 280.0;
+const PROGRAMS_BODY: f32 = 364.0;
+/// Each card's step down Helpers (a card is 79 high).
+const CARD_STEP: f32 = 84.0;
 
 /// The helpers' download, one after the other (user decision 2026-11-01: one at a time, one
 /// progress bar for both).
@@ -240,7 +242,7 @@ impl Helpers {
                 what,
                 muted,
                 o.x + w - 18.0,
-                14.0,
+                crate::theme::metrics().line_paragraph,
             );
         }
 
@@ -249,7 +251,9 @@ impl Helpers {
         if let Some(job) = &self.job {
             let st = job.state.lock().unwrap();
             let f = job.progress.fraction().unwrap_or(0.0);
-            let (fraction, line, color) = if let Some((name, error, _)) = &st.error {
+            // `waiting`: a line with no amount of its own (checking, starting) takes the one
+            // loading look's spinner (plan 12 E4); the bar stays for the whole run.
+            let (fraction, line, color, waiting) = if let Some((name, error, _)) = &st.error {
                 (
                     st.ready.len() as f32 / (st.ready.len() + 1) as f32,
                     crate::i18n::fmt(
@@ -258,6 +262,7 @@ impl Helpers {
                         &[("name", name), ("error", error)],
                     ),
                     winui::ERROR(),
+                    false,
                 )
             } else if st.done {
                 let list = st
@@ -274,6 +279,7 @@ impl Helpers {
                         &[("list", &list)],
                     ),
                     winui::SUCCESS(),
+                    false,
                 )
             } else if let Some((name, k, total)) = st.current
                 && f >= 1.0
@@ -290,6 +296,7 @@ impl Helpers {
                         ],
                     ),
                     ink,
+                    true,
                 )
             } else if let Some((name, k, total)) = st.current {
                 (
@@ -305,9 +312,10 @@ impl Helpers {
                         ],
                     ),
                     ink,
+                    false,
                 )
             } else {
-                (0.0, crate::i18n::t("Starting...").to_owned(), ink)
+                (0.0, crate::i18n::t("Starting...").to_owned(), ink, true)
             };
             drop(st);
             let bar_w = 320.0;
@@ -317,6 +325,7 @@ impl Helpers {
             if failed && winui::text_width(&p, &line) > room {
                 // A failure is read whole (upstream issue 816): wrapped, the window growing by
                 // its lines past the first.
+                let lh = crate::theme::metrics().line_paragraph;
                 let n = winui::paragraph(
                     &p,
                     o.x + 20.0,
@@ -324,21 +333,22 @@ impl Helpers {
                     &line,
                     color,
                     o.x + w - 20.0,
-                    16.0,
+                    lh,
                 );
-                more = 16.0 * n.saturating_sub(1) as f32;
+                more = lh * n.saturating_sub(1) as f32;
             } else {
-                // Centred on screen (the same place in both directions); cut to the window.
-                let shown = winui::ellipsize(&p, &winui::tahoma(), &line, room);
+                // Centred on screen (the same place in both directions); cut to the window. A
+                // spinner before a waiting line, centred with it.
+                let spin = if waiting { 20.0 } else { 0.0 };
+                let shown = winui::ellipsize(&p, &winui::tahoma(), &line, room - spin);
                 let tw = winui::text_width(&p, &shown);
-                let rc = winui::text_at(
-                    &p,
-                    winui::tahoma(),
-                    (o.x + (w - tw) / 2.0).round(),
-                    o.y + 340.0,
-                    &shown,
-                    color,
-                );
+                let x = (o.x + (w - tw - spin) / 2.0).round();
+                let rc = if waiting {
+                    let right = o.x + w - 20.0;
+                    crate::torrentdlg::loading(ui, x, o.y + 340.0, &shown, color, right).0
+                } else {
+                    winui::text_at(&p, winui::tahoma(), x, o.y + 340.0, &shown, color)
+                };
                 if shown != line {
                     winui::full_on_hover(ui, rc, "helpers-status", &line);
                 }
@@ -370,6 +380,7 @@ impl Helpers {
             crate::i18n::t("Not now? Get them later from Tasks → Download video from a page.")
         };
         // Wrapped: the window grows by the lines past the first.
+        let lh = crate::theme::metrics().line_paragraph;
         let lines = winui::paragraph(
             &p,
             o.x + 16.0,
@@ -377,9 +388,9 @@ impl Helpers {
             later,
             muted,
             o.x + w - 16.0,
-            16.0,
+            lh,
         );
-        let more = 16.0 * lines.saturating_sub(1) as f32;
+        let more = lh * lines.saturating_sub(1) as f32;
         crate::dialogs::grow_px(ui.ctx(), "helpers-advice", more);
         // The footer under it ([`OFFER_FOOTER`]); Escape is the window's (show).
         let top = y + OFFER_FOOTER + more;
@@ -432,15 +443,31 @@ use mdm_tools::chosen::Helper;
 
 /// Helpers (Download video from a page or a gallery → Helpers...): for yt-dlp, ffmpeg and
 /// gallery-dl (#58), where MDM takes it from (its own copy, or a program of the person's), and the
-/// way to choose another: one copy of each for every program that uses them (#51).
+/// way to choose another: one copy of each for every program that uses them (#51). Then the
+/// JavaScript runtime yt-dlp needs for YouTube (#1448, #1470): the computer's own (Node.js, Deno),
+/// else Deno, MDM's own copy, downloaded and checked here.
 pub struct Programs {
     dir: Option<std::path::PathBuf>,
     /// The helpers as found (read again after each change, not every frame: it reads files).
     found: [Option<mdm_tools::Installed>; 3],
+    /// MDM's own Deno, read with `found`.
+    deno: Option<mdm_tools::Installed>,
+    /// The computer's own runtime (`proc::system_js_runtime`), and the look for it under way,
+    /// off the window's thread (the PATH's folders may be on a share that doesn't answer).
+    runtime: Option<std::path::PathBuf>,
+    finding: Option<Finding>,
     /// A chosen program being checked (`--version`), and what it answered.
     checking: Option<(Helper, Answer)>,
+    /// MDM's own Deno being downloaded, and how that went.
+    installing_deno: Option<Answer>,
+    /// A download of Deno started elsewhere (Download video, the session's update) was under
+    /// way at the last frame: the card is read again once it ends.
+    elsewhere: bool,
     error: Option<String>,
 }
+
+/// The computer's own JavaScript runtime, once looked for.
+type Finding = Arc<Mutex<Option<Option<std::path::PathBuf>>>>;
 
 const HELPERS: [Helper; 3] = [Helper::YtDlp, Helper::Ffmpeg, Helper::GalleryDl];
 
@@ -452,7 +479,12 @@ impl Programs {
         let mut p = Programs {
             dir: mdm_tools::tools_dir(),
             found: [None, None, None],
+            deno: None,
+            runtime: None,
+            finding: None,
             checking: None,
+            installing_deno: None,
+            elsewhere: false,
             error: None,
         };
         p.look();
@@ -468,10 +500,51 @@ impl Programs {
             mdm_tools::ffmpeg::installed(dir),
             mdm_tools::gallery::installed(dir),
         ];
+        self.deno = mdm_tools::deno::installed(dir);
+        if self.finding.is_none() {
+            let slot: Finding = Arc::new(Mutex::new(None));
+            let out = slot.clone();
+            std::thread::spawn(move || {
+                // A look that panics finds nothing, rather than leave the card looking for good.
+                let found = std::panic::catch_unwind(mdm_tools::proc::system_js_runtime)
+                    .ok()
+                    .flatten();
+                *out.lock().unwrap() = Some(found);
+            });
+            self.finding = Some(slot);
+        }
+    }
+
+    /// MDM's own Deno (#1448): downloaded and checked against its release's checksums, from then
+    /// on the runtime yt-dlp is told of (`mdm_tools::proc`). It goes on if the window is closed.
+    fn install_deno(
+        &mut self,
+        dir: std::path::PathBuf,
+        rt: &tokio::runtime::Handle,
+        ctx: &egui::Context,
+    ) {
+        let slot: Answer = Arc::new(Mutex::new(None));
+        let (out, wake) = (slot.clone(), ctx.clone());
+        let net = crate::settings::own_net();
+        rt.spawn(async move {
+            let res = mdm_tools::deno::install_latest(&dir, &net, None).await;
+            if let Err(e) = &res {
+                tracing::warn!("Deno download failed: {e}");
+            }
+            *out.lock().unwrap() = Some(res.map(|_| ()).map_err(|e| crate::errors::tools(&e)));
+            wake.request_repaint();
+        });
+        self.installing_deno = Some(slot);
+        self.error = None;
+    }
+
+    /// A check or a download is under way: the buttons wait.
+    fn busy(&self) -> bool {
+        self.checking.is_some() || self.installing_deno.is_some()
     }
 
     /// Open until Close.
-    pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
+    pub fn show(&mut self, ctx: &egui::Context, rt: &tokio::runtime::Handle) -> Outcome<()> {
         let answered = self
             .checking
             .as_ref()
@@ -480,6 +553,33 @@ impl Programs {
             self.error = res.err();
             self.checking = None;
             self.look();
+        }
+        let deno = self
+            .installing_deno
+            .as_ref()
+            .and_then(|slot| slot.lock().unwrap().take());
+        if let Some(res) = deno {
+            self.error = res.err();
+            self.installing_deno = None;
+            self.look();
+        }
+        // A download of Deno started elsewhere: read again once it ends.
+        let elsewhere = self.installing_deno.is_none() && mdm_tools::deno::downloading();
+        if self.elsewhere && !elsewhere {
+            self.look();
+        }
+        self.elsewhere = elsewhere;
+        let found = self
+            .finding
+            .as_ref()
+            .and_then(|slot| slot.lock().unwrap().take());
+        if let Some(found) = found {
+            self.runtime = found;
+            self.finding = None;
+        }
+        // Nothing wakes the window when these end: it looks again now and then meanwhile.
+        if elsewhere || self.finding.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(250));
         }
         for h in HELPERS {
             if let Some(path) = winui::picked(ctx, &format!("helper-{}", h.name()))
@@ -506,25 +606,15 @@ impl Programs {
             [PROGRAMS_W, PROGRAMS_BODY + winui::FOOTER_H],
             false,
             winui::BG(),
-            |ui, o| self.body(ui, o),
+            |ui, o| self.body(ui, o, rt),
         )
     }
 
-    fn body(&mut self, ui: &mut Ui, o: Pos2) -> Outcome<()> {
+    fn body(&mut self, ui: &mut Ui, o: Pos2, rt: &tokio::runtime::Handle) -> Outcome<()> {
         let p = ui.painter().clone();
-        let c = crate::theme::colors();
         for (k, h) in HELPERS.into_iter().enumerate() {
-            let y = o.y + 8.0 + k as f32 * 84.0;
-            // Each helper in a box of its own (the mockup's), its parts 12 inside (its buttons
-            // end at 67 of its 79).
-            let card = r(o, 8.0, y - o.y, PROGRAMS_W - 16.0, 79.0);
-            p.rect_filled(card, 8.0, c.panel);
-            p.rect_stroke(
-                card,
-                8.0,
-                egui::Stroke::new(1.0, c.menubar_line),
-                egui::StrokeKind::Inside,
-            );
+            let y = o.y + 8.0 + k as f32 * CARD_STEP;
+            card(&p, o, y);
             winui::text_font(
                 &p,
                 winui::tahoma_bold(),
@@ -575,17 +665,32 @@ impl Programs {
                 // i18n: Video helpers: no copy of this helper yet
                 (None, None) => crate::i18n::t("Not installed yet").to_owned(),
             };
-            winui::fit(
-                ui,
-                &p,
-                o.x + 20.0,
-                y + 36.0,
-                &status,
-                winui::MUTED(),
-                o.x + PROGRAMS_W - 20.0,
-                ("helper", k),
-            );
-            let busy = self.checking.is_some();
+            if checking {
+                // The one loading look (plan 12 E4); cut, whole on hover as `fit` shows it.
+                let (rc, cut) = crate::torrentdlg::loading(
+                    ui,
+                    o.x + 20.0,
+                    y + 36.0,
+                    &status,
+                    winui::MUTED(),
+                    o.x + PROGRAMS_W - 20.0,
+                );
+                if cut {
+                    winui::full_on_hover(ui, rc, ("helper", k), &status);
+                }
+            } else {
+                winui::fit(
+                    ui,
+                    &p,
+                    o.x + 20.0,
+                    y + 36.0,
+                    &status,
+                    winui::MUTED(),
+                    o.x + PROGRAMS_W - 20.0,
+                    ("helper", k),
+                );
+            }
+            let busy = self.busy();
             // As wide as their labels in this language (#192), side by side from the left.
             let [other_at, own_at] = winui::button_row_from_left(
                 &p,
@@ -657,13 +762,14 @@ impl Programs {
                 self.look();
             }
         }
+        self.runtime_row(ui, &p, o, HELPERS.len(), rt);
         if let Some(e) = &self.error {
             winui::fit(
                 ui,
                 &p,
-                // In the cards' text column, under the last card (it ends at 255).
+                // In the cards' text column, under the last card (it ends at 339).
                 o.x + 20.0,
-                o.y + 272.0,
+                o.y + 356.0,
                 e,
                 winui::ERROR(),
                 o.x + 486.0,
@@ -686,4 +792,137 @@ impl Programs {
             None => Outcome::Open,
         }
     }
+
+    /// The JavaScript runtime's card, the `k`th (#1448, #1470): YouTube makes yt-dlp solve a
+    /// JavaScript challenge, and without a runtime its look-ups are slow, list few qualities or
+    /// fail. The computer's own (Node.js, Deno) is said and used; else MDM's own Deno, which
+    /// "Use Grabbit's own copy" downloads (where Deno builds one for this processor).
+    fn runtime_row(
+        &mut self,
+        ui: &mut Ui,
+        p: &egui::Painter,
+        o: Pos2,
+        k: usize,
+        rt: &tokio::runtime::Handle,
+    ) {
+        let y = o.y + 8.0 + k as f32 * CARD_STEP;
+        card(p, o, y);
+        // i18n: Video helpers: the row of the JavaScript runtime yt-dlp needs for YouTube (Deno is a program's name)
+        let title = crate::i18n::t("JavaScript runtime (Deno)");
+        winui::text_font(
+            p,
+            winui::tahoma_bold(),
+            o.x + 20.0,
+            y + 16.0,
+            title,
+            winui::TEXT(),
+        );
+        // What it is for, in one line after its name.
+        let after = winui::text_width_font(p, winui::tahoma_bold(), title) + 8.0;
+        winui::fit(
+            ui,
+            p,
+            o.x + 20.0 + after,
+            y + 16.0,
+            // i18n: Video helpers: what the JavaScript runtime is for, after its name (yt-dlp is a program's name)
+            crate::i18n::t("lets yt-dlp list all of YouTube's qualities"),
+            winui::MUTED(),
+            o.x + PROGRAMS_W - 20.0,
+            ("helper-what", k),
+        );
+        let available = mdm_tools::deno::available();
+        // One download of Deno at a time: one started from Download video shows here too.
+        let downloading = self.installing_deno.is_some() || mdm_tools::deno::downloading();
+        let status = if downloading {
+            // i18n: Video helpers: MDM's own copy of a helper is being downloaded
+            crate::i18n::t("Downloading Grabbit's own copy...").to_owned()
+        } else if let Some(own) = &self.deno {
+            crate::i18n::fmt(
+                crate::i18n::t("Grabbit's own copy, version {version}"),
+                &[("version", &own.version)],
+            )
+        } else if self.finding.is_some() {
+            // i18n: Video helpers: looking for a JavaScript runtime (Node.js, Deno) on this computer
+            crate::i18n::t("Looking for one on this computer...").to_owned()
+        } else if let Some(path) = &self.runtime {
+            crate::i18n::fmt(
+                // i18n: Video helpers: {path} = the computer's own JavaScript runtime (node.exe, deno.exe), used as it is: MDM needn't download one
+                crate::i18n::t("Your system's, nothing to download: {path}"),
+                &[("path", &crate::i18n::ltr(&path.display().to_string()))],
+            )
+        } else if available {
+            crate::i18n::t("Not installed yet").to_owned()
+        } else {
+            // i18n: Video helpers: MDM can't download Deno on this system (32-bit Windows, an unusual processor); Deno and Node.js are program names
+            crate::i18n::t("Grabbit has no copy for this system: install Deno or Node.js")
+                .to_owned()
+        };
+        if downloading || (self.deno.is_none() && self.finding.is_some()) {
+            // The one loading look (plan 12 E4); cut, whole on hover as `fit` shows it.
+            let (rc, cut) = crate::torrentdlg::loading(
+                ui,
+                o.x + 20.0,
+                y + 36.0,
+                &status,
+                winui::MUTED(),
+                o.x + PROGRAMS_W - 20.0,
+            );
+            if cut {
+                winui::full_on_hover(ui, rc, ("helper", k), &status);
+            }
+        } else {
+            winui::fit(
+                ui,
+                p,
+                o.x + 20.0,
+                y + 36.0,
+                &status,
+                winui::MUTED(),
+                o.x + PROGRAMS_W - 20.0,
+                ("helper", k),
+            );
+        }
+        let [own_at] = winui::button_row_from_left(
+            p,
+            &[("Use Grabbit's own copy", 20.0, 180.0)],
+            8.0,
+            PROGRAMS_W - 20.0,
+            260.0,
+        )[..] else {
+            unreachable!("one button")
+        };
+        let own = winui::button(
+            ui,
+            r(o, own_at.0, y - o.y + 46.0, own_at.1, 21.0),
+            "Use Grabbit's own copy",
+            if available && self.deno.is_none() && !self.busy() && !downloading {
+                ButtonKind::Normal
+            } else {
+                ButtonKind::Disabled
+            },
+            false,
+            None,
+        );
+        // A screen reader hears which program it is for, as the helpers' buttons say theirs.
+        let name = crate::i18n::fmt(
+            crate::i18n::t("{label} for {what}"),
+            &[
+                ("label", crate::i18n::t("Use Grabbit's own copy")),
+                ("what", &crate::i18n::ltr("Deno")),
+            ],
+        );
+        own.ctx
+            .accesskit_node_builder(own.id, |n| n.set_label(name));
+        if own.clicked()
+            && let Some(dir) = self.dir.clone()
+        {
+            self.install_deno(dir, rt, ui.ctx());
+        }
+    }
+}
+
+/// One of Helpers' cards at `y` (the mockup's box), its parts 12 inside (its buttons end at 67
+/// of its 79).
+fn card(p: &egui::Painter, o: Pos2, y: f32) {
+    winui::card(p, r(o, 8.0, y - o.y, PROGRAMS_W - 16.0, 79.0), true);
 }

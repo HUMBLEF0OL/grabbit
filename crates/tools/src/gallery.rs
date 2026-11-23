@@ -17,7 +17,6 @@
 //! browser's sign-in (its cookies passed, [`engine_may_fetch`]), downloads them all itself, as
 //! before.
 
-use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime};
@@ -310,17 +309,15 @@ impl ByEngine<'_> {
             }
         };
         let mut files: Vec<(url::Url, PathBuf)> = Vec::new();
-        let mut reader = BufReader::new(stdout);
-        let mut buf = Vec::new();
-        loop {
-            buf.clear();
-            match std::io::Read::take(&mut reader, 64 * 1024).read_until(b'\n', &mut buf) {
-                Ok(0) | Err(_) => break,
-                Ok(_) => {}
-            }
+        // To gallery-dl's end (#1521: not to that of whatever it started).
+        let mut output = proc::Output::read(stdout, MAX_LINE);
+        while let Some(buf) = output.next_line(|| proc::ended(child)) {
             if let Some(f) = listed(&String::from_utf8_lossy(&buf), self.folder) {
                 files.push(f);
             }
+        }
+        if output.held_open() {
+            proc::note_held_open("gallery-dl");
         }
         // Its end, and its words if it listed nothing.
         let failure = {
@@ -376,6 +373,7 @@ impl ByEngine<'_> {
             token.clone(),
             pieces_shared.clone(),
             relist,
+            None,
         ));
         let mut cancelled = false;
         while !task.is_finished() {
@@ -432,6 +430,8 @@ impl Default for Progress {
             helper: None,
             merging: None,
             merge_failed: None,
+            recorded: 0,
+            recording: false,
         }
     }
 }
@@ -588,7 +588,12 @@ impl GalleryJob {
                     }
                 }
             };
-            read(stdout, &sh);
+            // To gallery-dl's end (#1521: not to that of whatever it started).
+            let mut output = proc::Output::read(stdout, MAX_LINE);
+            read(|| output.next_line(|| proc::ended(&ch)), &sh);
+            if output.held_open() {
+                proc::note_held_open("gallery-dl");
+            }
             finish(&sh, &ch, folder);
         });
         Ok(GalleryJob {
@@ -696,18 +701,14 @@ fn parse_line(line: &str) -> Option<Line> {
     p.is_absolute().then(|| Line::Saved(p.to_owned()))
 }
 
-/// Count gallery-dl's files as it prints them. Lines are read whole but kept short: a path is
-/// at most a few thousand bytes, and a longer line is no path.
-fn read(stdout: impl std::io::Read, shared: &Mutex<Shared>) {
+/// The longest piece of a gallery-dl line read as one ([`proc::Output`]): a path is at most a
+/// few thousand bytes, and a longer line is no path.
+const MAX_LINE: usize = 64 * 1024;
+
+/// Count gallery-dl's files as it prints them (`next`: its next line, [`MAX_LINE`] at most).
+fn read(mut next: impl FnMut() -> Option<Vec<u8>>, shared: &Mutex<Shared>) {
     let started = Instant::now();
-    let mut reader = BufReader::new(stdout);
-    let mut buf = Vec::new();
-    loop {
-        buf.clear();
-        match std::io::Read::take(&mut reader, 64 * 1024).read_until(b'\n', &mut buf) {
-            Ok(0) | Err(_) => return,
-            Ok(_) => {}
-        }
+    while let Some(buf) = next() {
         let text = String::from_utf8_lossy(&buf);
         let Some(line) = parse_line(&text) else {
             continue;
@@ -780,6 +781,12 @@ fn finish(shared: &Mutex<Shared>, child: &Mutex<Option<Spawned>>, folder: PathBu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `text` read as gallery-dl's output is ([`proc::Output`]).
+    fn read_text(text: impl Into<Vec<u8>>, shared: &Mutex<Shared>) {
+        let mut output = proc::Output::read(std::io::Cursor::new(text.into()), MAX_LINE);
+        read(|| output.next_line(|| false), shared);
+    }
 
     /// A listed file is taken only inside the gallery's folder, by its components, not its
     /// spelling: `..` that leads out of it is refused.
@@ -981,7 +988,7 @@ mod tests {
         text.push_str(&"x".repeat(200_000));
         text.push('\n');
         let shared = Mutex::new(Shared::default());
-        read(text.as_bytes(), &shared);
+        read_text(text, &shared);
         let sh = shared.lock().unwrap();
         assert_eq!((sh.saved, sh.there), (5000, 5000));
         assert_eq!(sh.progress.downloaded, 5_000_000);

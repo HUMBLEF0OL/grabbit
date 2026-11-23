@@ -15,7 +15,7 @@ help: command-line.md
 ## IDM's switches, unchanged
 
 The app understands the same switches as IDM: `/d` for the address, `/p` for the folder, `/f`
-for the file name, `/a` to queue it without starting, `/n` to skip the **Download File Info**
+for the file name, `/a` to queue it without starting, `/n` to skip the **Download file info**
 window, and `/s` to start the main download queue. A batch file or another program that drives
 IDM this way can drive Grabbit by changing the program's name.
 

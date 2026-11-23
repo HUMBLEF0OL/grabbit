@@ -18,6 +18,9 @@ path = "src/main.rs"
 # opens), and MDM_TEST_UPDATE_HOLD (seconds the update waits before it's put in place, to see and
 # close the window meanwhile). tools/lab/update runs them.
 test-update = ["mdm-tools/test-update"]
+# The engine's browser-like connection (upstream issue 668): release builds only
+# (tools/installer/build.ps1), as it builds BoringSSL from source.
+browser-connection = ["mdm-engine/browser-connection"]
 
 [dependencies]
 arboard.workspace = true
@@ -49,7 +52,7 @@ toml.workspace = true
 tokio.workspace = true
 url.workspace = true
 percent-encoding.workspace = true
-rfd = "0.17.2"
+rfd = "0.18.0"
 # Options → Remote → Pair a device's QR code of the address (#141; Nayuki's, no dependencies).
 qrcodegen = "1.8.0"
 # Line breaks between characters keep a letter and its marks together (Thai, Khmer, Indic).
@@ -76,8 +79,9 @@ wgpu = { version = "30.0", default-features = false, features = ["dx12", "wgsl"]
 raw-window-handle = "0.6"
 # Latin, Greek and Cyrillic text drawn by DirectWrite as Windows' classic controls draw it
 # (win32.rs `text_rasterizer`): its COM interfaces, which windows-sys doesn't have. The windows
-# 0.62 wgpu-hal already builds.
-windows = { version = "0.62", default-features = false, features = ["Win32_Graphics_DirectWrite"] }
+# 0.62 wgpu-hal already builds. DXGI: the graphics drivers' versions, read before Direct3D 12 starts
+# (win32.rs `graphics_drivers`, upstream issue 1205; wgpu-hal builds it too).
+windows = { version = "0.62", default-features = false, features = ["Win32_Graphics_DirectWrite", "Win32_Graphics_Dxgi"] }
 
 # The notification-area icon and its menu (tray.rs).
 tray-icon = "0.26.1"

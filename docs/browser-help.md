@@ -61,13 +61,13 @@ The extension is connected, but Grabbit's own settings leave this download to th
 2. The file's type is listed in **Options → File types**.
 3. The site isn't in **Don't start downloading automatically from the following sites**, nor the address in **Don't start downloading automatically from the following addresses**.
 4. The file isn't smaller than **Don't take files smaller than** in **Options → File types**.
-5. For a `.torrent` file: **Open magnet links and .torrent files with Grabbit** is on in **Tasks → Torrent settings**.
+5. For a `.torrent` file: **Open magnet links and .torrent files with Grabbit** is on in **Downloads → Options → Torrents**.
 
 Also check the extension's toolbar button: with **Take downloads from this browser** off, everything stays with the browser.
 
 ## The browser opens PDFs and music instead of sending them {#opened}
 
-Grabbit also takes the file types the browser would show or play itself (a PDF, an MP3), when they're listed in **Options → File types** and **Also take files the browser would open** is ticked in **Options → General → Keys...**. This needs a Chromium browser (Chrome, Edge, Brave, Opera, Vivaldi) version 128 or later, or Firefox. Sites in Grabbit's excluded sites keep opening them in the browser. Hold **Alt** while clicking a link to leave it to the browser: Firefox then follows it as a plain click does, while Chromium browsers download it themselves (Alt+click is their own "download link").
+Grabbit also takes the file types the browser would show or play itself (a PDF, an MP3), when they're listed in **Options → File types** and **Also take files the browser would open** is ticked in **Options → General → Keys...**. This needs a Chromium browser (Chrome, Edge, Brave, Opera, Vivaldi) version 128 or later, or Firefox. Sites in Grabbit's excluded sites keep opening them in the browser. Hold **Alt** while clicking a link to leave it to the browser: the extension follows it as a plain click does (the browser opens or downloads it, and a site's bot check runs in the tab first), instead of the browser's own Alt+click, which saves the link without opening it in Chromium browsers.
 
 ## No Download video button on YouTube in Chrome, Edge or Brave {#store-youtube}
 

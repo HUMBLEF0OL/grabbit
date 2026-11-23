@@ -58,13 +58,13 @@ window offers them when you first need them. More in [Videos](video.md).
 From top to bottom:
 
 - **Menu bar.**
-  - **Tasks** — add downloads, torrents, magnet links, batch downloads and videos from a page; **Torrent settings**; **Link grabber**; **RSS feeds**; show the drop target; import and export the list; exit.
-  - **File** — the selected download: **Stop Download**, **Remove**, **Download Now**, **Redownload**.
-  - **Downloads** — **Pause All**, **Stop All**, **Delete All Completed**, **Find**, the **Scheduler**, queues, the **Speed Limiter** and **Options**.
+  - **Tasks** — add downloads, torrents, magnet links, batch downloads and videos from a page; **Link grabber**; **RSS feeds**; show the drop target; import and export the list; exit.
+  - **File** — the selected download: **Stop**, **Delete**, **Delete with files**, **Resume**, **Redownload**.
+  - **Downloads** — **Stop all**, **Delete completed**, **Find**, the **Scheduler**, queues, the **Speed Limiter** and **Options** (every setting, torrents' too).
   - **View** — show or hide the categories, sort the list (**Arrange files**), **Theme**, **Interface size** (every window larger, 100 % to 200 %; **Ctrl +**, **Ctrl −** and **Ctrl 0** too), **Draw with** (OpenGL or Direct3D) and **Language**.
   - **Help** — help pages and tutorials (on the website), **Keyboard shortcuts**, **Report a problem**, **Check for updates**, **About**, **Tell a friend** and **Support Grabbit** (Grabbit's page on GitHub, to star it: optional, nothing in Grabbit changes).
-- **Toolbar.** **Add**, **Resume**, **Stop**, **Stop All**, **Delete**, **Delete Completed**, **Options**, **Scheduler**, **Start Queue**, **Stop Queue**. **Add** takes links, magnet links, `.torrent` files and video pages alike. The small arrow next to **Add**, **Start Queue** and **Stop Queue** opens more choices.
-- **Categories** (left). Choose what the list shows: **All Downloads**, **Unfinished**, **Finished** and **Queues**, each with its categories. Drag the gap between the pane and the list to make it wider.
+- **Toolbar.** **Add**, **Resume**, **Stop**, **Stop all**, **Delete**, **Delete completed**, **Options**, **Scheduler**, **Start queue**, **Stop queue**. **Add** takes links, magnet links, `.torrent` files and video pages alike. The small arrow next to **Add**, **Start queue** and **Stop queue** opens more choices.
+- **Categories** (left). Choose what the list shows: **All downloads**, **Unfinished**, **Finished** and **Queues**, each with its categories. Drag the gap between the pane and the list to make it wider.
 - **Download list** (right). One row per download. See [The download list](download-list.md).
 
 ## Dark mode
@@ -85,13 +85,13 @@ the only built-in theme; [theme files](themes.md) of your own build on it.
 **View → Theme** lists Graphite and the theme files you add, and changes Grabbit's look at once,
 keeping its layout.
 
-![View → Theme open: Graphite, Add a theme file… and Open themes folder](images/help/view-theme.webp)
+![View → Theme open: Graphite, Add a theme file... and Open themes folder](images/help/view-theme.webp)
 *View → Theme switches at once, keeping the layout.*
 
 Graphite has a light and a dark side, and so does every theme file: the status bar's light/dark
 button chooses between them. Theme files you put in the themes folder (**View → Theme →
 Open themes folder**) build on Graphite, and so do Base16 and pywal colour schemes (**View →
-Theme → Add a theme file…**; **pywal** follows `wal` as it runs): [Themes](themes.md) says where
+Theme → Add a theme file...**; **pywal** follows `wal` as it runs): [Themes](themes.md) says where
 that folder is, what a theme file holds (colours, sizes, control shapes, a font, icons), how a
 scheme's colours are used, and how to make and share one.
 
@@ -100,7 +100,7 @@ scheme's colours are used, and how to make and share one.
 Closing the main window doesn't quit Grabbit. It hides in the notification area, and downloads, queues and schedules carry on. To make closing quit (a portable copy's folder can then be deleted), untick **Options → General → Keep running when closing the window**. If there is no icon for Grabbit at all — not in the notification area, nor behind the ^ hidden icons — the window minimizes to the taskbar instead, so downloads continue and there is a way back. An icon behind ^ can be clicked to bring the window back, and starting Grabbit again always does.
 
 - Click the tray icon to bring the window back.
-- Right-click it for **Add new download**, **Add batch download**, **Downloads in progress**, **Speed Limiter**, **Scheduler**, the main download queue, **Options** and **Exit**.
+- Right-click it for **Add new download...**, **Add batch download...**, **Downloads in progress**, **Speed Limiter**, **Scheduler**, the main download queue, **Options** and **Exit**.
 - **Downloads in progress** lists the running downloads. Choose one to see its progress window.
 
 Minimize hides the main window there too, while **Minimize to the notification area** is on in **Options → General**. It is on by default; where the tray has no icon, Minimize sends the window to the taskbar instead.

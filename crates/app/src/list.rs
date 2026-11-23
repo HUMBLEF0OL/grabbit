@@ -54,7 +54,7 @@ themed! {
 /// older build already meant something else by.
 pub const COLS: usize = 13;
 pub const TITLES: [&str; COLS] = [
-    "File Name",
+    "File name",
     // i18n: column title: one letter for Queue (the column is narrow)
     "Q",
     // i18n: noun: the file's size
@@ -63,7 +63,7 @@ pub const TITLES: [&str; COLS] = [
     "Status",
     "Time left",
     "Transfer rate",
-    "Last Try Date",
+    "Last try date",
     // i18n: noun: the download's description
     "Description",
     // i18n: past participle: when the download was added
@@ -77,6 +77,8 @@ pub const TITLES: [&str; COLS] = [
     // i18n: column title: what a torrent sends to peers, bytes per second
     "Upload speed",
 ];
+/// The "Transfer rate" column's data slot.
+pub const RATE: usize = 5;
 /// The "Added" column's data slot.
 pub const ADDED: usize = 8;
 /// The "Source" column's data slot: its cell is "Web" or "Torrent", painted as a chip.
@@ -92,9 +94,9 @@ pub const UPLOAD: usize = 12;
 /// Graphite's (plan 05b, the mockup's), narrowed in 1.0.1 so the default columns
 /// ([`DEFAULT_VISIBLE`]) fit the window's first size (crate::MAIN_SIZE) without scrolling
 /// sideways: Status keeps room for Geist's "Stopped" with its percentage (its bar where it fits). Kept apart from IDM's, as the Categories
-/// pane's width is.
+/// pane's width is. Plan 12 D4: Time left takes 16 from Status so "59 min 59 sec" isn't cut.
 pub const GRAPHITE_WIDTHS: [f32; COLS] = [
-    216.0, 34.0, 84.0, 160.0, 84.0, 100.0, 160.0, 160.0, 140.0, 64.0, 80.0, 100.0, 110.0,
+    216.0, 34.0, 84.0, 144.0, 100.0, 100.0, 160.0, 160.0, 140.0, 64.0, 80.0, 100.0, 110.0,
 ];
 /// Default display order: Source first, then IDM's, a torrent's three columns after its rate, and
 /// Added after Last Try Date.
@@ -494,6 +496,9 @@ pub struct Row {
     /// In a queue: the Q column shows a queue icon (IDM: stacked files).
     pub queued: bool,
     pub cells: [String; COLS],
+    /// The speed limit holding the download back (upstream issue 1191), said by the Transfer
+    /// rate cell's tip: the column is too narrow for it beside the speed.
+    pub rate_tip: Option<String>,
 }
 
 #[derive(Default)]
@@ -1074,6 +1079,8 @@ pub fn show(
                 {
                     let tip = if *c == 3 {
                         status_tip(idx)
+                    } else if *c == RATE && !row.cells[*c].is_empty() {
+                        row.rate_tip.clone().unwrap_or_default()
                     } else {
                         String::new()
                     };
@@ -1888,7 +1895,7 @@ mod tests {
         ];
         rows[0].cells[3] = "Complete".into();
         rows[1].cells[3] = "63.00%".into();
-        rows[1].cells[2] = "92.00  MB".into();
+        rows[1].cells[2] = "92.00 MB".into();
         rows[1].progress = Some(0.63);
         let mut st = ListState::default();
         let mut icons = ShellIcons;
@@ -1935,7 +1942,7 @@ mod tests {
             options,
             [
                 ("a.zip, Complete".to_owned(), false),
-                ("b.iso, 63.00%, 92.00  MB".to_owned(), true),
+                ("b.iso, 63.00%, 92.00 MB".to_owned(), true),
             ]
         );
         assert!(
@@ -2011,6 +2018,7 @@ mod tests {
             icon: IconKey::Themed("ft-generic"),
             queued,
             cells,
+            rate_tip: None,
         }
     }
 
@@ -2040,8 +2048,8 @@ mod tests {
     /// column — the screenshots caught exactly that.
     #[test]
     fn each_titles_slot_names_its_own_column() {
-        assert_eq!(TITLES[0], "File Name");
-        assert_eq!(TITLES[6], "Last Try Date");
+        assert_eq!(TITLES[0], "File name");
+        assert_eq!(TITLES[6], "Last try date");
         assert_eq!(TITLES[7], "Description");
         assert_eq!(TITLES[ADDED], "Added");
         assert_eq!(TITLES[SOURCE], "Source");
@@ -2258,7 +2266,7 @@ mod tests {
             names,
             [
                 "Source",
-                "File Name",
+                "File name",
                 "Size",
                 "Status",
                 "Time left",
@@ -2269,7 +2277,7 @@ mod tests {
         for c in 0..COLS {
             assert_eq!(
                 always_shown(c),
-                matches!(TITLES[c], "File Name" | "Size" | "Status")
+                matches!(TITLES[c], "File name" | "Size" | "Status")
             );
             assert!(!always_shown(c) || DEFAULT_VISIBLE[c]);
         }

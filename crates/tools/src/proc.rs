@@ -32,7 +32,7 @@ pub enum ProcError {
     Adapter(#[from] mdm_engine::NetError),
 }
 
-/// Options → Proxy / Socks → Network adapter (#35) for the helpers and the media-server checks;
+/// Options → Proxy / SOCKS → Network adapter (#35) for the helpers and the media-server checks;
 /// the app shares it as it changes ([`set_route`]).
 static ROUTE: std::sync::RwLock<mdm_engine::Route> = std::sync::RwLock::new(mdm_engine::Route::Any);
 /// Options → Connection → DNS (#36): what the relay looks the helpers' servers up with.
@@ -78,7 +78,7 @@ pub fn cookie_browsers() -> Vec<&'static str> {
     COOKIE_BROWSERS.to_vec()
 }
 
-/// Options → Sites Logins → Cookies for video sites (#229): the browser whose cookies yt-dlp
+/// Options → Site logins → Cookies for video sites (#229): the browser whose cookies yt-dlp
 /// reads on this computer, and its profile (a name, or a profile folder: a Chromium fork's
 /// `chromium:<its profile folder>`), for the runs the browser's extension passed no cookies to.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -111,7 +111,7 @@ impl BrowserCookies {
 /// The browser yt-dlp reads cookies from, as the app shares it ([`set_browser_cookies`]).
 static BROWSER_COOKIES: std::sync::RwLock<Option<BrowserCookies>> = std::sync::RwLock::new(None);
 
-/// Options → Sites Logins → Cookies for video sites (the app's setting; None: off).
+/// Options → Site logins → Cookies for video sites (the app's setting; None: off).
 pub fn set_browser_cookies(chosen: Option<BrowserCookies>) {
     if *BROWSER_COOKIES.read().unwrap() != chosen {
         *BROWSER_COOKIES.write().unwrap() = chosen;
@@ -376,7 +376,7 @@ pub fn cookie_trouble(line: &str) -> bool {
     .any(|k| l.contains(k))
 }
 
-/// Options -> Proxy / Socks for the helpers (#363): yt-dlp and gallery-dl go through the same proxy
+/// Options -> Proxy / SOCKS for the helpers (#363): yt-dlp and gallery-dl go through the same proxy
 /// as MDM's downloads. The app shares it as it changes ([`set_proxy`]).
 static PROXY: std::sync::RwLock<mdm_engine::Proxy> =
     std::sync::RwLock::new(mdm_engine::Proxy::None);
@@ -457,10 +457,41 @@ fn proxy_given(proxy: &mdm_engine::Proxy, url: Option<&url::Url>) -> ProxyGiven 
     }
 }
 
+/// The scheme (`http`, `https`) of `url` that Options' manual proxy, set with an address, isn't
+/// ticked for: a helper's run for it goes straight to the site.
+fn manual_skips(proxy: &mdm_engine::Proxy, url: Option<&url::Url>) -> Option<&'static str> {
+    let mdm_engine::Proxy::Manual {
+        url: address,
+        http,
+        https,
+        ..
+    } = proxy
+    else {
+        return None;
+    };
+    let https_page = url.is_none_or(|u| u.scheme() == "https");
+    let ticked = if https_page { *https } else { *http };
+    (!ticked && !address.trim().is_empty()).then_some(if https_page { "https" } else { "http" })
+}
+
 /// Give `helper` the proxy for `url`: returns the arguments to pass (before `--`).
 fn through_proxy(cmd: &mut Command, url: Option<&str>) -> Vec<String> {
     let page = url.and_then(|u| url::Url::parse(u).ok());
-    match proxy_given(&PROXY.read().unwrap(), page.as_ref()) {
+    let proxy = PROXY.read().unwrap().clone();
+    // Said in MDM's log once for each setting (#1448: it went straight to YouTube unsaid).
+    if let Some(scheme) = manual_skips(&proxy, page.as_ref()) {
+        static SAID: Mutex<Option<mdm_engine::Proxy>> = Mutex::new(None);
+        let mut said = SAID
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if said.as_ref() != Some(&proxy) {
+            tracing::info!(
+                "Options → Proxy / SOCKS: the manual proxy isn't ticked for {scheme}, so yt-dlp and gallery-dl go straight to {scheme} addresses"
+            );
+            *said = Some(proxy.clone());
+        }
+    }
+    match proxy_given(&proxy, page.as_ref()) {
         ProxyGiven::Nothing => Vec::new(),
         ProxyGiven::Argument(p) => vec!["--proxy".into(), p],
         ProxyGiven::Environment(p) => {
@@ -520,7 +551,7 @@ fn through_adapter(
     url: Option<&str>,
 ) -> Result<Vec<String>, ProcError> {
     match route() {
-        // No adapter: Options -> Proxy / Socks (#363).
+        // No adapter: Options -> Proxy / SOCKS (#363).
         mdm_engine::Route::Any => Ok(through_proxy(cmd, url)),
         mdm_engine::Route::Down { label } => Err(mdm_engine::NetError::Down { label }.into()),
         mdm_engine::Route::Bound(_) => {
@@ -965,40 +996,161 @@ fn with_usable_path(cmd: &mut Command) {
     }
 }
 
-/// This computer's JavaScript runtime for yt-dlp ([`js_runtime`]): `Some` with the arguments
-/// that tell yt-dlp of it (none for Deno on the PATH, which it finds itself), in the PATH
-/// folders a helper gets ([`usable_dirs`]: a node.exe behind a junction is named by its real
-/// folder). Kept once found; while there is none it is looked for again at each run, so one
-/// installed meanwhile counts at the next look-up (upstream issue 852).
+/// The folders of MDM's PATH a helper gets ([`usable_dirs`]: a node.exe behind a junction is
+/// named by its real folder).
+fn path_dirs() -> Vec<PathBuf> {
+    std::env::var_os("PATH")
+        .map(|p| usable_dirs(&p))
+        .unwrap_or_default()
+}
+
+/// The person's home folder (`HOME`, else Windows' `USERPROFILE`).
+fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+}
+
+/// `--js-runtimes name:path`.
+fn runtime_args(name: &str, path: &Path) -> Vec<String> {
+    vec![
+        "--js-runtimes".to_owned(),
+        format!("{name}:{}", path.display()),
+    ]
+}
+
+/// This computer's own JavaScript runtime for yt-dlp, MDM's aside (#1448): Deno on the PATH, else
+/// the one [`js_runtime`] finds (Deno where its installer puts it, Node.js, Bun). What Helpers
+/// shows, so that nothing is downloaded that is already here. Looked for afresh.
+pub fn system_js_runtime() -> Option<PathBuf> {
+    let dirs = path_dirs();
+    program_in(&dirs, "deno")
+        .or_else(|| js_runtime(&dirs, &runtime_dirs(), home_dir().as_deref()).map(|(_, path)| path))
+}
+
+/// This computer's JavaScript runtime for yt-dlp: MDM's own Deno first (Helpers, #1448, #1470),
+/// named to yt-dlp; else [`js_runtime`]: `Some` with the arguments that tell yt-dlp of it (none
+/// for Deno on the PATH, which it finds itself), in the PATH folders a helper gets
+/// ([`path_dirs`]). Kept once found; while there is none it is looked for again at each run, so
+/// one installed meanwhile counts at the next look-up (upstream issue 852). MDM's own Deno is
+/// read at each run, so the one Helpers just installed is used from the next look-up on.
 fn js_runtime_found() -> Option<Vec<String>> {
+    let own = crate::tools_dir()
+        .as_deref()
+        .and_then(crate::deno::installed);
+    own_deno_first(own.as_ref().map(|i| i.exe.as_path()), system_runtime_found)
+}
+
+/// MDM's own Deno (`own`) named to yt-dlp, the computer's (`system`) not even looked for;
+/// without one, the computer's.
+fn own_deno_first(
+    own: Option<&Path>,
+    system: impl FnOnce() -> Option<Vec<String>>,
+) -> Option<Vec<String>> {
+    match own {
+        Some(deno) => Some(runtime_args("deno", deno)),
+        None => system(),
+    }
+}
+
+/// The computer's own runtime for yt-dlp ([`js_runtime_found`] without MDM's Deno), kept once
+/// found.
+fn system_runtime_found() -> Option<Vec<String>> {
     static FOUND: Mutex<Option<Vec<String>>> = Mutex::new(None);
     let mut found = FOUND
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     if found.is_none() {
-        let dirs: Vec<PathBuf> = std::env::var_os("PATH")
-            .map(|p| usable_dirs(&p))
-            .unwrap_or_default();
-        let home = std::env::var_os("HOME")
-            .or_else(|| std::env::var_os("USERPROFILE"))
-            .map(PathBuf::from);
+        let dirs = path_dirs();
         *found = if program_in(&dirs, "deno").is_some() {
             Some(Vec::new())
         } else {
-            js_runtime(&dirs, &runtime_dirs(), home.as_deref()).map(|(name, path)| {
-                vec![
-                    "--js-runtimes".to_owned(),
-                    format!("{name}:{}", path.display()),
-                ]
-            })
+            js_runtime(&dirs, &runtime_dirs(), home_dir().as_deref())
+                .map(|(name, path)| runtime_args(name, &path))
         };
     }
     found.clone()
 }
 
-/// `--js-runtimes` for this computer's runtime, when yt-dlp must be told of it.
-fn js_runtime_args() -> Vec<String> {
-    js_runtime_found().unwrap_or_default()
+/// The first yt-dlp that has `--js-runtimes` (2025.11.12, when YouTube came to need a
+/// JavaScript runtime): an older one stops at an option it doesn't know, on every site.
+const JS_RUNTIMES_SINCE: &str = "2025.11.12";
+
+/// Whether yt-dlp `version` has `--js-runtimes` ([`JS_RUNTIMES_SINCE`]); a version that isn't a
+/// date (a build of the person's own) is taken to have it, as before.
+fn knows_js_runtimes(version: &str) -> bool {
+    let dated = version
+        .split('.')
+        .filter(|p| p.parse::<u64>().is_ok())
+        .count()
+        >= 3;
+    !dated || !crate::newer(JS_RUNTIMES_SINCE, version)
+}
+
+/// Whether a yt-dlp has `--js-runtimes`: the version it was installed or chosen with (`saved`)
+/// when that says so; else (none saved, or an old one, which a chosen yt-dlp updated in place
+/// with `yt-dlp -U` no longer is) the version it answers now (`ask`). Not known (it didn't
+/// answer): taken to have it, as before.
+fn takes_with(saved: Option<&str>, ask: impl FnOnce() -> Option<String>) -> bool {
+    if saved.is_some_and(knows_js_runtimes) {
+        return true;
+    }
+    let version = ask();
+    let takes = version.as_deref().is_none_or(knows_js_runtimes);
+    if !takes {
+        tracing::warn!(
+            "yt-dlp {} is older than {JS_RUNTIMES_SINCE}: not told of a JavaScript runtime",
+            version.unwrap_or_default()
+        );
+    }
+    takes
+}
+
+/// Whether the yt-dlp at `exe` has `--js-runtimes` ([`takes_with`]), found once a session.
+fn takes_js_runtimes(exe: &Path) -> bool {
+    static KNOWN: Mutex<Vec<(PathBuf, bool)>> = Mutex::new(Vec::new());
+    let known = KNOWN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .iter()
+        .find(|(p, _)| p == exe)
+        .map(|(_, t)| *t);
+    if let Some(takes) = known {
+        return takes;
+    }
+    let saved = crate::tools_dir()
+        .as_deref()
+        .and_then(crate::installed)
+        .filter(|i| i.exe == exe)
+        .map(|i| i.version);
+    let takes = takes_with(saved.as_deref(), || {
+        crate::chosen::ask(crate::chosen::Helper::YtDlp, exe)
+            .ok()
+            .map(|i| i.version)
+    });
+    KNOWN
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .push((exe.to_owned(), takes));
+    takes
+}
+
+/// `--js-runtimes` for this computer's runtime, when yt-dlp must be told of it and knows how to
+/// hear it ([`takes_js_runtimes`]). Said in MDM's log each time it changes.
+fn js_runtime_args(exe: &Path) -> Vec<String> {
+    let args = js_runtime_found().unwrap_or_default();
+    if args.is_empty() || !takes_js_runtimes(exe) {
+        return Vec::new();
+    }
+    static SAID: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    let mut said = SAID
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if *said != args {
+        tracing::info!("yt-dlp's JavaScript runtime: {}", args.join(" "));
+        said.clone_from(&args);
+    }
+    args
 }
 
 /// `yt-dlp` with arguments in layers: `user` extras, then `ours` (then the chosen browser's
@@ -1015,7 +1167,7 @@ pub fn ytdlp(
     let route = through_adapter(&mut cmd, Helper::YtDlp, Some(url))?;
     layers(&mut cmd, user, ours)?;
     cmd.args(["--ignore-config", "--no-exec", "--no-update"]);
-    cmd.args(js_runtime_args());
+    cmd.args(js_runtime_args(exe));
     cmd.args(cert_args(SYSTEM_CERTS.load(Ordering::Relaxed)));
     cmd.args(UTF8);
     cmd.args(route);
@@ -1025,18 +1177,21 @@ pub fn ytdlp(
 }
 
 /// `yt-dlp` working from a looked-up page (`-J` output, maybe edited) instead of an address:
-/// the same layers, then `--load-info-json` and the file.
+/// the same layers, then `--load-info-json` and the file. `url` is the page's address, which
+/// the proxy is chosen for as for its look-up ([`through_proxy`]; #1448: Options' automatic
+/// configuration script was asked about no address, and yt-dlp's download went around it).
 pub fn ytdlp_info(
     exe: &Path,
     user: &[String],
     ours: &[String],
     info: &Path,
+    url: &str,
 ) -> Result<Command, ProcError> {
     let mut cmd = helper_command(exe);
-    let route = through_adapter(&mut cmd, Helper::YtDlp, None)?;
+    let route = through_adapter(&mut cmd, Helper::YtDlp, Some(url))?;
     layers(&mut cmd, user, ours)?;
     cmd.args(["--ignore-config", "--no-exec", "--no-update"]);
-    cmd.args(js_runtime_args());
+    cmd.args(js_runtime_args(exe));
     cmd.args(cert_args(SYSTEM_CERTS.load(Ordering::Relaxed)));
     cmd.args(UTF8);
     cmd.args(route);
@@ -1203,40 +1358,198 @@ pub fn output(cmd: Command, name: &str, timeout: Duration) -> Result<Vec<u8>, Pr
     output_warned(cmd, name, timeout).map(|(out, _)| out)
 }
 
-/// [`output`], with the `WARNING:` lines it wrote ([`Spawned::warnings`]).
+/// How long a helper's output is still read once the helper itself has ended (#1521). What it
+/// started (yt-dlp's ffmpeg, a one-file build's own process) can hold that output open after it:
+/// a reading that waited for the output's end waited for as long as that process ran, the
+/// download over but shown running. Its last lines come well within this, even on a busy
+/// computer.
+pub const AFTER_END: Duration = Duration::from_secs(2);
+
+/// How often a reading asks whether the helper has ended ([`Output::next_line`]).
+const ASK_EVERY: Duration = Duration::from_millis(100);
+
+/// A helper's stdout, read a line at a time on a thread of its own (#1521): the reading ends
+/// when every process holding the output has closed it, or [`AFTER_END`] after the helper
+/// itself ended, whichever comes first. A line is given as it came, bytes (#79: not always
+/// UTF-8), its `\n` kept, at most `max_line` bytes at a time (the rest of a longer one comes
+/// next).
+///
+/// The reading thread ends with the output: once the helper's job is ended
+/// ([`Spawned::kill`]), with whatever held it.
+pub struct Output {
+    lines: std::sync::mpsc::Receiver<Vec<u8>>,
+    /// When the helper was first seen ended, and when it was last asked.
+    ended: Option<Instant>,
+    asked: Option<Instant>,
+    held_open: bool,
+}
+
+impl Output {
+    /// Start reading `out`.
+    pub fn read(out: impl Read + Send + 'static, max_line: usize) -> Output {
+        // A few lines ahead at most: a helper that writes faster than it is read waits, as it
+        // did on the pipe.
+        let (tx, lines) = std::sync::mpsc::sync_channel(64);
+        std::thread::spawn(move || {
+            let mut reader = BufReader::new(out);
+            loop {
+                let mut line = Vec::new();
+                match (&mut reader)
+                    .take(max_line as u64)
+                    .read_until(b'\n', &mut line)
+                {
+                    Ok(0) | Err(_) => break,
+                    Ok(_) => {}
+                }
+                // Nobody reads any more.
+                if tx.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+        Output {
+            lines,
+            ended: None,
+            asked: None,
+            held_open: false,
+        }
+    }
+
+    /// The next line, `None` at the end. `ended` says whether the helper has ended (asked every
+    /// [`ASK_EVERY`] at most, until it says so): from then on lines are taken for [`AFTER_END`]
+    /// more, then the reading ends even if the output is still open ([`Output::held_open`]).
+    pub fn next_line(&mut self, mut ended: impl FnMut() -> bool) -> Option<Vec<u8>> {
+        use std::sync::mpsc::RecvTimeoutError;
+        loop {
+            let now = Instant::now();
+            if self.ended.is_none() && self.asked.is_none_or(|at| now >= at + ASK_EVERY) {
+                self.asked = Some(now);
+                if ended() {
+                    self.ended = Some(now);
+                }
+            }
+            let wait = match self.ended {
+                None => ASK_EVERY,
+                Some(at) => match (at + AFTER_END).checked_duration_since(now) {
+                    Some(left) if !left.is_zero() => left,
+                    _ => {
+                        self.held_open = true;
+                        return None;
+                    }
+                },
+            };
+            match self.lines.recv_timeout(wait) {
+                Ok(line) => return Some(line),
+                Err(RecvTimeoutError::Disconnected) => return None,
+                Err(RecvTimeoutError::Timeout) => {}
+            }
+        }
+    }
+
+    /// The reading ended with the output still open [`AFTER_END`] after the helper ended:
+    /// something it started holds it.
+    pub fn held_open(&self) -> bool {
+        self.held_open
+    }
+}
+
+/// Whether the helper in `slot` has ended, or isn't there any more (stopped). For
+/// [`Output::next_line`]; the lock is held only to look.
+pub fn ended(slot: &Mutex<Option<Spawned>>) -> bool {
+    slot.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .as_mut()
+        .is_none_or(|s| !matches!(s.child.try_wait(), Ok(None)))
+}
+
+/// Grabbit's log, when a helper's output was still open [`AFTER_END`] after it ended (#1521).
+pub fn note_held_open(name: &str) {
+    tracing::warn!(
+        "{name} ended, but something it started kept its output open; its output was read for {} s more (#1521)",
+        AFTER_END.as_secs()
+    );
+}
+
+/// How a helper run to the end ([`output_warned`]) ended.
+enum Ended {
+    Exited(std::process::ExitStatus),
+    /// Past its time.
+    Late,
+    Unknown(std::io::Error),
+}
+
+/// Whether `child` has ended, or run past `deadline`.
+fn ended_by(child: &mut Child, deadline: Instant) -> Option<Ended> {
+    match child.try_wait() {
+        Ok(Some(status)) => Some(Ended::Exited(status)),
+        Ok(None) if Instant::now() >= deadline => Some(Ended::Late),
+        Ok(None) => None,
+        Err(e) => Some(Ended::Unknown(e)),
+    }
+}
+
+/// [`output`], with the `WARNING:` lines it wrote ([`Spawned::warnings`]). Its stdout is read to
+/// its end, or for [`AFTER_END`] after the helper ended (#1521: what it started may hold it
+/// open).
 pub fn output_warned(
     cmd: Command,
     name: &str,
     timeout: Duration,
 ) -> Result<(Vec<u8>, Vec<String>), ProcError> {
+    to_the_end(cmd, name, timeout).map(|(out, s)| (out, s.warnings()))
+}
+
+/// [`output`], with its last lines on stderr ([`Spawned::tail`]): what a tool says of its answer
+/// besides it (ffprobe: a length it only estimated).
+pub fn output_said(
+    cmd: Command,
+    name: &str,
+    timeout: Duration,
+) -> Result<(Vec<u8>, String), ProcError> {
+    to_the_end(cmd, name, timeout).map(|(out, s)| (out, s.tail()))
+}
+
+/// Run `cmd` to the end within `timeout` (killed on timeout): its stdout, and the helper, its
+/// stderr read to the end, when it ended well.
+fn to_the_end(
+    cmd: Command,
+    name: &str,
+    timeout: Duration,
+) -> Result<(Vec<u8>, Spawned), ProcError> {
     let mut s = spawn(cmd, name)?;
-    let mut out = s.child.stdout.take().expect("piped");
-    let reader = std::thread::spawn(move || {
-        let mut buf = Vec::new();
-        let _ = out.read_to_end(&mut buf);
-        buf
-    });
+    let mut output = Output::read(s.child.stdout.take().expect("piped"), 64 * 1024);
     let deadline = Instant::now() + timeout;
-    loop {
-        match s.child.try_wait() {
-            Ok(Some(status)) => {
-                let stdout = reader.join().unwrap_or_default();
-                return if status.success() {
-                    s.settle();
-                    Ok((stdout, s.warnings()))
-                } else {
-                    // `failure` waits for the stderr reader's last lines.
-                    Err(s.failure())
-                };
-            }
-            Ok(None) if Instant::now() >= deadline => {
-                s.kill();
-                let _ = s.child.wait();
-                return Err(ProcError::Timeout(name.to_owned()));
-            }
-            Ok(None) => std::thread::sleep(Duration::from_millis(50)),
-            Err(e) => return Err(ProcError::Start(name.to_owned(), e)),
+    let mut stdout = Vec::new();
+    let mut end = None;
+    while let Some(chunk) = output.next_line(|| {
+        end = end.take().or_else(|| ended_by(&mut s.child, deadline));
+        end.is_some()
+    }) {
+        stdout.extend(chunk);
+    }
+    if output.held_open() && matches!(end, Some(Ended::Exited(_))) {
+        note_held_open(name);
+    }
+    // Its output closed before it ended: waited for, within its time.
+    let end = loop {
+        if let Some(end) = end.take().or_else(|| ended_by(&mut s.child, deadline)) {
+            break end;
         }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    match end {
+        Ended::Exited(status) if status.success() => {
+            s.settle();
+            Ok((stdout, s))
+        }
+        // `failure` waits for the stderr reader's last lines.
+        Ended::Exited(_) => Err(s.failure()),
+        Ended::Late => {
+            s.kill();
+            let _ = s.child.wait();
+            Err(ProcError::Timeout(name.to_owned()))
+        }
+        Ended::Unknown(e) => Err(ProcError::Start(name.to_owned(), e)),
     }
 }
 
@@ -1564,7 +1877,7 @@ mod tests {
             .and_then(|(_, v)| v.map(|v| v.to_string_lossy().into_owned()))
     }
 
-    /// #363: Options -> Proxy / Socks reaches yt-dlp: the address on the command line, a login
+    /// #363: Options -> Proxy / SOCKS reaches yt-dlp: the address on the command line, a login
     /// only in the environment, never as an argument; a manual proxy only for its ticked
     /// schemes; "no proxy" and a script's DIRECT: nothing added, so yt-dlp's own default stays.
     #[test]
@@ -1590,6 +1903,21 @@ mod tests {
             ProxyGiven::Nothing,
             "https unticked: this https page isn't covered"
         );
+        // #1448: and that is said (MDM's log), for the scheme left out only.
+        assert_eq!(
+            manual_skips(&manual(None, true, false), Some(&youtube)),
+            Some("https")
+        );
+        assert_eq!(
+            manual_skips(&manual(None, true, true), Some(&youtube)),
+            None
+        );
+        let plain = url::Url::parse("http://videos.test/v").unwrap();
+        assert_eq!(
+            manual_skips(&manual(None, false, true), Some(&plain)),
+            Some("http")
+        );
+        assert_eq!(manual_skips(&Proxy::None, Some(&youtube)), None);
         // A login: in the environment, encoded, never an argument.
         assert_eq!(
             proxy_given(&manual(Some(("u@me", "p:ss")), true, true), Some(&youtube)),
@@ -1642,6 +1970,24 @@ mod tests {
             proxied(&cmd).as_deref(),
             Some("http://me:secret@127.0.0.1:10808/")
         );
+        // #1448: a run from the looked-up page (the download, the choice of formats) asks the
+        // automatic configuration script about the page, as its look-up did: it went straight
+        // to the site when the script was asked about no address.
+        set_proxy(Proxy::Pac {
+            script: std::sync::Arc::from(
+                "function FindProxyForURL(u,h){return h=='www.youtube.com'?'PROXY 10.0.0.1:3128':'DIRECT';}",
+            ),
+        });
+        let info = std::path::Path::new("/info.json");
+        for args in [
+            args_of(&ytdlp(exe, &[], &["-J".into()], url).unwrap()),
+            args_of(&ytdlp_info(exe, &[], &[], info, url).unwrap()),
+        ] {
+            let at = args.iter().position(|a| a == "--proxy").expect("--proxy");
+            assert_eq!(args[at + 1], "http://10.0.0.1:3128");
+        }
+        let elsewhere = args_of(&ytdlp_info(exe, &[], &[], info, "https://other.test/v").unwrap());
+        assert!(!elsewhere.iter().any(|a| a == "--proxy"), "DIRECT for it");
         set_proxy(Proxy::None);
         let none = args_of(&ytdlp(exe, &[], &["-J".into()], url).unwrap());
         assert!(!none.iter().any(|a| a == "--proxy"));
@@ -1752,6 +2098,60 @@ mod tests {
         // Deno on the PATH: yt-dlp finds it itself.
         touch(&path, "deno");
         assert_eq!(js_runtime(&dirs, &[], Some(&home)), None);
+    }
+
+    /// #1448: MDM's own Deno is named to yt-dlp by its path, as one argument after the option
+    /// (a Windows path's `C:` stays whole: yt-dlp splits at the first colon only).
+    #[test]
+    fn mdms_own_deno_is_named_to_yt_dlp() {
+        let deno = Path::new(r"C:\Users\A B\AppData\Roaming\Grabbit\tools\deno\2.9.8\deno.exe");
+        assert_eq!(
+            runtime_args("deno", deno),
+            [
+                "--js-runtimes".to_owned(),
+                format!("deno:{}", deno.display())
+            ]
+        );
+        // It wins over the computer's own, which isn't even looked for.
+        assert_eq!(
+            own_deno_first(Some(deno), || panic!("looked for the system's")),
+            Some(runtime_args("deno", deno))
+        );
+        let node = runtime_args("node", Path::new(r"C:\Program Files\nodejs\node.exe"));
+        assert_eq!(own_deno_first(None, || Some(node.clone())), Some(node));
+        assert_eq!(own_deno_first(None, || None), None);
+    }
+
+    /// yt-dlp before 2025.11.12 has no `--js-runtimes`, and stops at it: it isn't told of a
+    /// runtime. A version that isn't a date (a build of the person's own) is, as before.
+    #[test]
+    fn only_a_yt_dlp_that_has_the_option_is_told_of_a_runtime() {
+        for old in ["2025.10.22", "2025.11.11", "2024.12.23", "2023.03.04.1"] {
+            assert!(!knows_js_runtimes(old), "{old}");
+        }
+        for new in [
+            "2025.11.12",
+            "2025.11.12.232521",
+            "2025.12.8",
+            "2026.10.26",
+            "2026.10.26.1",
+        ] {
+            assert!(knows_js_runtimes(new), "{new}");
+        }
+        for unknown in ["", "system", "master", "1.0"] {
+            assert!(knows_js_runtimes(unknown), "{unknown}");
+        }
+        // The version saved when it was chosen is trusted when it has the option, without
+        // asking; an old one is asked again (updated in place with `yt-dlp -U`).
+        assert!(takes_with(Some("2026.10.26"), || panic!("asked")));
+        assert!(takes_with(Some("2025.10.22"), || Some("2026.10.26".into())));
+        assert!(!takes_with(Some("2025.10.22"), || Some(
+            "2025.10.22".into()
+        )));
+        assert!(!takes_with(None, || Some("2024.12.23".into())));
+        // No answer: as before, taken to have it.
+        assert!(takes_with(Some("2025.10.22"), || None));
+        assert!(takes_with(None, || None));
     }
 
     /// Upstream issue 852: what yt-dlp 2026.10.26 wrote looking a YouTube video up (`-J`, its
@@ -2151,7 +2551,7 @@ foreach ($d in $env:PATH.Split(';')) {
         };
         let built = [
             ytdlp(exe, &[], &["-J".into()], "https://x.test/v").unwrap(),
-            ytdlp_info(exe, &[], &[], Path::new("/info.json")).unwrap(),
+            ytdlp_info(exe, &[], &[], Path::new("/info.json"), "https://x.test/v").unwrap(),
             gallery_dl(&tool, &[], "https://x.test/g").unwrap(),
         ];
         for cmd in &built {
@@ -2202,5 +2602,49 @@ foreach ($d in $env:PATH.Split(';')) {
         let after_kill = size();
         std::thread::sleep(Duration::from_secs(3));
         assert_eq!(size(), after_kill, "the child ended with the helper");
+    }
+
+    /// #1521: a helper's output is read to its end while the helper runs, and once the helper
+    /// has ended, for [`AFTER_END`] more at most: an output something else still holds open
+    /// ends the reading then, said; one closed ends it at once.
+    #[test]
+    fn an_output_held_open_is_read_only_a_while_after_the_end() {
+        use std::io::Write;
+        // Held open: its writer kept.
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        writer.write_all(b"one\ntwo\n").unwrap();
+        let mut output = Output::read(reader, 1024);
+        let running = || false;
+        assert_eq!(output.next_line(running).as_deref(), Some(&b"one\n"[..]));
+        assert_eq!(output.next_line(running).as_deref(), Some(&b"two\n"[..]));
+        // Lines written after the end, within the time, still come.
+        writer.write_all(b"last\n").unwrap();
+        let start = Instant::now();
+        assert_eq!(output.next_line(|| true).as_deref(), Some(&b"last\n"[..]));
+        assert_eq!(output.next_line(|| true), None);
+        let waited = start.elapsed();
+        assert!(output.held_open());
+        assert!(
+            waited >= AFTER_END && waited < AFTER_END * 5,
+            "read for {waited:?} after the end"
+        );
+        drop(writer);
+        // Closed: the end, at once and not said, whether the helper is seen ended or not.
+        let (reader, mut writer) = std::io::pipe().unwrap();
+        writer.write_all(b"only").unwrap();
+        drop(writer);
+        let mut output = Output::read(reader, 1024);
+        let start = Instant::now();
+        assert_eq!(output.next_line(running).as_deref(), Some(&b"only"[..]));
+        assert_eq!(output.next_line(running), None);
+        assert!(!output.held_open());
+        assert!(start.elapsed() < AFTER_END, "{:?}", start.elapsed());
+        // A line longer than the most read at once comes in pieces.
+        let mut output = Output::read(std::io::Cursor::new(b"abcdefgh\n".to_vec()), 4);
+        let mut pieces = Vec::new();
+        while let Some(piece) = output.next_line(running) {
+            pieces.push(piece);
+        }
+        assert_eq!(pieces, [&b"abcd"[..], b"efgh", b"\n"]);
     }
 }

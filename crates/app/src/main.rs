@@ -62,6 +62,7 @@ mod store;
 mod theme;
 mod themefile;
 mod themeicons;
+mod torrent_ownership;
 mod torrentdlg;
 mod torrentfiles;
 mod torrents;
@@ -69,6 +70,7 @@ mod transfer;
 mod tray;
 mod update;
 mod videodlg;
+mod videolookup;
 mod wake;
 mod webmark;
 mod whereis;
@@ -110,7 +112,10 @@ pub fn offscreen() -> bool {
 /// address came from it, and was fetched). It may wait for the clipboard's owner for ever:
 /// never called on the window's thread, only by `clipboard`'s reader (#418, #661).
 pub fn clipboard_text() -> Option<String> {
-    read_clipboard(offscreen(), || {
+    // Nor in unit tests: the person's clipboard isn't theirs, and tests opening a window that
+    // reads it (Download video's) on parallel threads corrupted the heap (Windows' clipboard,
+    // opened from two threads at once).
+    read_clipboard(offscreen() || cfg!(test), || {
         arboard::Clipboard::new().ok()?.get_text().ok()
     })
 }
@@ -409,6 +414,9 @@ fn app() -> eframe::Result {
     }
     // OpenGL or Direct3D (View → Draw with, #89), the next way when one can't start (Direct3D on
     // WARP before OpenGL, #847).
+    // A first frame late in a start with the session is the busy login's first (upstream issue
+    // 1205).
+    renderer::started_with_session(start == Start::Session);
     let plan = renderer::plan(
         loaded.settings.renderer,
         renderer::overridden(&args).as_deref(),

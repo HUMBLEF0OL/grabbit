@@ -25,12 +25,12 @@ Grabbit is free, open-source software made by HUMBLEF0OL and contributors. Becau
 
 ### What stays on your computer
 
-Your download list, settings, logins you save in **Sites Logins**, the history of each download and the files you download are stored only on your computer: in `%APPDATA%\grabbit` on Windows (or the `data` folder of the portable copy). Nothing is uploaded anywhere. Uninstalling offers to delete them. From version 0.5.0, the passwords of Sites Logins, the proxy and debrid accounts go into the system's keychain instead (Windows Credential Manager), still on your computer, when one is there and unlocked.
+Your download list, settings, logins you save in **Site logins**, the history of each download and the files you download are stored only on your computer: in `%APPDATA%\grabbit` on Windows (or the `data` folder of the portable copy). Nothing is uploaded anywhere. Uninstalling offers to delete them. From version 0.5.0, the passwords of Site logins, the proxy and debrid accounts go into the system's keychain instead (Windows Credential Manager), still on your computer, when one is there and unlocked.
 
 ### Who the app talks to, and why
 
 - **The servers you download from.** To download a file, Grabbit connects to the server that holds it and sends what any browser would: the request, and the cookies, referrer and browser identification the extension passed along, so downloads that need you to be signed in keep working. Those servers see your IP address, as they would if your browser downloaded the file.
-- **Your proxy**, if you set one in **Options → Proxy / Socks**, and your network's proxy auto-config script, if you point Grabbit at one.
+- **Your proxy**, if you set one in **Options → Proxy / SOCKS**, and your network's proxy auto-config script, if you point Grabbit at one.
 - **GitHub, to check for updates.** Each time it starts, and once a day while it stays open, Grabbit asks GitHub's public API for the latest release of Grabbit (`api.github.com/repos/HUMBLEF0OL/grabbit/releases/latest`). The request carries Grabbit's version in its User-Agent and nothing else. Turn the check off in **Help → Check for updates** (**Check for updates at every start**). If you choose **Update now**, Grabbit downloads the new version's file and its signed checksum list from the same GitHub release. GitHub's own privacy statement applies to these requests.
 - **GitHub, for video helpers.** If you use **Download video from a page**, Grabbit downloads yt-dlp (and ffmpeg, if you want merged qualities) from their official GitHub releases, checks them, and once per session asks GitHub whether yt-dlp has a newer release. yt-dlp then talks to the video site you asked for, as your browser would.
 - **Torrent peers and trackers.** When you download a torrent, Grabbit connects to the trackers listed in the torrent, to the BitTorrent DHT network and to other peers, who see your IP address and which pieces you have. To accept connections it may ask your router to open a port (UPnP). This is how BitTorrent works; it ends when the torrent stops.
@@ -44,7 +44,7 @@ From version 0.5.0, only if you choose them:
 - **A torrent IP blocklist**, if you give one: Grabbit fetches it from the address you entered, again every 7 days.
 - **Your own devices, for the remote control.** Off until you turn it on in **Options → Remote**: then Grabbit answers, over HTTPS on your local network, only the phones and computers you paired with its code.
 
-The server's country that **Download File Info** and the progress window show comes from a table inside Grabbit: no address is sent anywhere to look it up.
+The server's country that **Download file info** and the progress window show comes from a table inside Grabbit: no address is sent anywhere to look it up.
 
 Grabbit has **no analytics, no automatic crash reporting, no telemetry and no advertising** (a crash report goes only where you send it yourself). It never sends us your download list, the addresses you download, or anything else.
 

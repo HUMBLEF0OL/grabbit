@@ -1,6 +1,6 @@
 # Roadmap
 
-What's done for version 1.0.1, what's being built, and what's planned.
+What's done for version 1.1.0, what's being built, and what's planned.
 Each item links to its issue, where the details and the discussion are. Released changes are in
 [CHANGELOG.md](CHANGELOG.md). Ideas and bug reports are welcome in
 [Issues](https://github.com/HUMBLEF0OL/grabbit/issues).
@@ -597,13 +597,153 @@ Released 2026-11-20: the maintainer's first findings with 1.0.0, and what came w
   sections of it, under **Tools**; the help pages' pictures show the new page. The look's
   settings stay in the View menu.
 
-## Next version
+## Version 1.1.0
 
-Done since 1.0.1; ships in the next release.
+Released 2026-11-23: the download window and the Done window redesigned (plan 13), the app made
+consistent in its words, states and look (plan 12), deleted files to the Recycle Bin, and the
+upstream fixes and features of 2026-11-21.
 
+- ✅ The notification-area icon's menu, and the title bar's window menu, follow Grabbit's dark or
+  light look instead of Windows' app mode (ported from upstream issue 682).
+- ✅ The button over a video opens a menu of its qualities there (Video and Audio tabs, sizes,
+  stream qualities read by Grabbit itself, a look-up shared for 10 minutes); a pick downloads at
+  once with only its progress window. Stream sizes, video duplicates and a smooth progress bar
+  came with it (ported from upstream issue 449).
+- ✅ Deno for YouTube: Helpers downloads Deno's official build (checked against its release's
+  SHA-256 and GitHub's digest) and yt-dlp uses it, or a runtime already on the computer; Install
+  Deno in Download video, `install-deno` on the command line. yt-dlp gets the proxy on every run,
+  and Use system settings follows Windows' setup script (ported from upstream issue 1448).
+- ✅ A smaller button over videos: a 30-pixel round chip in Graphite's colours (dark glass, green
+  arrow) that opens to **Download video ⌄** under the pointer, toward the inside of the video,
+  and shows the result of a click on itself; its menu no longer repeats **Download video**. The
+  help's and the README's pictures show it, taken again with a test host of their own, so an
+  installed Grabbit no longer stops the picture script.
 - ✅ Grabbit names its maintainer, HUMBLEF0OL, as its author and publisher: the website's footer,
   privacy and terms pages and metadata, the app's file details and the installer. The copyright
   notices keep Mister Download Manager's author alongside, as the GPL asks.
+- ✅ One way into each setting: Torrent settings left the Tasks menu (Options → Torrents), menu
+  items that open a section of Options lost their "...", and Options' names are written one
+  way (**Speed Limiter**, **Proxy / SOCKS**, **Site logins**, **Browser extension**); each
+  section under **Tools** is headed with its row's name; the command the old menu item used,
+  and a screenshot-only menu hook, are removed.
+- ✅ **Set it up** works for a copy installed for everyone (Program Files, the setup's browser
+  box unticked), and the browser extension's window says why when it can't.
+- ✅ The original MDM's fixes looked at up to upstream `7ebd5b42f7bc` (2026-11-21): 119 commits
+  decided. Eight critical ones taken (one picked, seven ported by hand): a delete question that
+  remembered deleting finished files (upstream issue 1563), a few kilobytes saved as a browser's
+  file (1460), Pause waiting for a slow disk (1328), the log waiting for the disk (1354),
+  torrents that couldn't start after a crash (1357), a video job held by ffmpeg (1521), a false
+  freeze report while minimized (1481) and an OpenGL crash on some drivers (1448, with egui
+  moved three commits); four dependency bumps picked. 44 skipped (translations, Linux, macOS,
+  upstream's CI and website, features), 59 deferred with what each waits for (`sync.py
+  status`). Three critical ones wait for a PR of their own: live recordings recorded over,
+  torrents writing over files that aren't theirs, and a failed way of drawing retried. The last
+  three: two screen-reader fixes deferred to the keyboard and screen-reader port, and LuluStream
+  site support skipped as a feature.
+- ✅ Torrents write only into files Grabbit made (from upstream issue 1121): a guarded storage
+  for the torrent engine, a record of each torrent's files by identity, a check before every
+  start, re-add and restore, and Delete with files removing only what Grabbit made. Asking
+  before a start uses a file already there, and a torrent without an outer folder, are not
+  taken.
+- ✅ The update check and the yt-dlp and ffmpeg installs past GitHub's API rate limit: GitHub's
+  release pages when the API refuses (from upstream issue 1337); the update check still asks
+  only this fork's repository.
+- ✅ Sites that let only browsers through (from upstream issues 668, 771, 1289, 1422): one more
+  try connecting the way the browser does (`wreq` on BoringSSL), on all of a download's
+  connections and a stream's pieces, then once more under Grabbit's own name. Built into
+  release builds only (the `browser-connection` feature, `tools/installer/build.ps1`), so
+  everyday builds and tests don't compile BoringSSL; the program grows about 4 MB.
+- ✅ A way of drawing that failed is tried again after a driver update or a while, and at the
+  next start when Windows' own start slowed it (from upstream issue 1205); View → Draw with
+  says since when and when.
+- ✅ Live recordings kept (from upstream issues 1450, 1491): a stop saves the recording as an
+  MP4, Resume never records over it, and the progress window shows Recording... with what has
+  been recorded and a Stop and save button. Upstream's follow-up (its open PR 1492) waits for
+  its merge there.
+- ✅ A refused certificate says why (from upstream issue 762): expired, not valid yet, untrusted,
+  for another name, revoked or not for websites, in Download File Info (on its Server row, as a
+  sentence), the progress window and the list; the lab server's `--tls-cert` serves the faulty
+  ones for its tests.
+- ✅ A DNS that never answers is "no such host" (a lookup limited to nine tenths of the connect
+  timeout), and a slow disk's next flush is expected by the bytes waiting, not the seconds since
+  the last one (from upstream issue 782); the fault tests ask a DNS server of their own.
+- ✅ Alt+click past a bot check (from upstream issue 1494): the extension follows an Alt-clicked
+  link as a plain click in every browser, so a site's check runs in the tab and the download
+  after it stays the browser's (a minute for the link's own page); the browser-like connection
+  names the browser's own version in `sec-ch-ua`, sends Chrome's HTTP/2 weight and
+  Accept-Encoding, and one User-Agent.
+- ✅ Delete safety (plan 12a): a finished file deleted with its download goes to the Recycle
+  Bin (its working data is still deleted outright; torrents unchanged), the delete question says
+  so, Delete says how many running downloads it kept, and the RSS window asks before removing a
+  feed, with one verb, **Remove**, for feeds and rules.
+- ✅ States and routes (plan 12b): a search that finds nothing says so, with **Clear search**;
+  **Copy address** in a download's right-click menu and on **Ctrl+C**; a download whose link
+  expired, or that the server refused (403) or says is gone (410), offers **Refresh download
+  address...** in the Details pane; the Details pane's **Open folder** follows the right-click
+  menu's rule; Add trackers' OK and RSS **Add feed** greyed with a tip while they can't work; the
+  first field of more dialogs has the keys as they open; the status strip says while the Speed
+  Limiter is on and the Transfer rate names the limit (ported from upstream issue 1191);
+  **Pause All**, which did what **Stop All** does, and the always-greyed View items (Toolbar,
+  Tray icon, Customize URL List, Font) are gone; **Properties** and **Add** got **Cancel**;
+  Files already there reads **No, Yes**; the exceptions' buttons go New, Edit, Delete; the
+  Scheduler's weekdays read in rows.
+- ✅ One way of saying each thing, its words (plan 12c): one name per command in the menus and
+  the toolbar (**Resume**, **Stop**, **Delete**, **Delete with files**, **Delete completed**,
+  **Remove from queue**, **Ask trackers again**), sentence case in menus, columns, window titles
+  and Options, **Download now** / **Later** at the end of every add window, the same colon,
+  ellipsis and error wording everywhere, sizes written alike in the list and the progress window
+  with one space before the unit, **KB/s**, **MB/s** and **MB** (on the phone page too), and the
+  list's dates without seconds, and without the year when it is this year. The help pages and the
+  mockup name things as the app does, and the help pages' pictures were taken again after 12d.
+- ✅ One visual system (plan 12d): one browse button (a square "…" as tall as a box) everywhere,
+  the 1 pixel hairline for every separator in every theme, focus rings only from the keyboard,
+  the title bar's search box drawn as every text box, one loading look (a spinner and a line),
+  one card frame for cards, one tick stroke and one paragraph line height (theme sizes `radius.card`,
+  `tick.width`, `line.paragraph`), Time left wide enough for "59 min 59 sec", and the RSS feeds
+  and Link grabber forms on the dialogs' label column and control height.
+- ✅ Plan 12's audit fixes: only a file goes to the Recycle Bin (a gallery's folder never does,
+  and a file that can't be read is said, not taken for gone), Delete's kept downloads said in
+  the status strip when the question is off, the empty list offers **Clear search** only when
+  the search is what hides the downloads, one **Refresh download address...** label, the last
+  labels with colons, "Bytes" and "All Downloads" in line, and the loading look in the crash
+  window, the Helpers setup and Options' DNS test and account sign-in.
+- ✅ The Done window opens the right thing (plan 13a): a download saved as a folder opens its
+  main file (the largest, when it is at least half the total and four times the next) and **Open
+  folder** shows it selected inside the folder, or opens the folder itself when there is none
+  (it opened the folder's parent); **Open**'s arrow lists the largest files and **Open with...**;
+  a file moved or deleted is said in the window, Open greyed and Open folder the default; Alt+O
+  and Alt+F; the size line drops its byte count.
+- ✅ A new download window (plan 13, `design/graphite/plans/13-download-window.md`): one large
+  reading and a strip drawn from the real connections or torrent pieces, details that open to the
+  side, one list of what to do when a download finishes, torrent commands in the window, a way to
+  stop sharing one finished torrent, and a Done window whose Open opens the main file of a
+  download saved as a folder. 13a, the Done window's behaviour (see above). 13b, the window's
+  structure: no tabs, a compact window and Details that widen it to the right and keep it on the
+  screen, the limit and one When done list in Details, Stopped / Stop, Show / Hide details, the
+  filled-button rule, Refresh download address... on an expired link, Stop asking first where
+  the server can't resume, the torrent commands in the window, and Stop sharing / Start sharing
+  for one finished torrent in the Torrent menu. 13c, the window's look: the name, one large
+  reading with the time left, a 6-point strip of the file's real segments (or a torrent's
+  pieces, lit by how much is in) and the detail line; in Details, the facts in a key column
+  (Server, Can resume, a video's Format and Downloaded by, a torrent's Peers, Sent, Ratio and an
+  exact Pieces count), a speed graph of the last minute with the limit dashed, and sorted,
+  fixed-height tables under underlined tabs. 13d, the states' and the Done window's look: each
+  state drawn from what the download already says (stopped in grey, an error's missing part
+  hatched with its reason in a line of its own, a size not known, waiting in its queue,
+  finishing, joining, a torrent checking its files or sharing, a web page, a debrid service,
+  can't resume), and the Done window in the same layout ("Done" with the size, the files, Saved
+  to as a link, Open | ▾ as one split button) whose name row drags the file out or copies it with
+  Ctrl+C. The help pictures of these two windows are taken again.
+- ✅ The download window's audit fixes (plan 13c, 13b, 13d): the strip keeps its segments to the
+  end of a download (a tiny last part runs on from its neighbour), the tables' size and number
+  columns fit what they show, the detail line cuts a long speed at its end, an expired link says
+  how to carry on, a download stopped before its first byte reads a dash, and the compact window
+  no longer copies a torrent's files, peers and trackers every frame.
+- ✅ Plan 13's audit fixes: the Done window says a file gone from its first frames (looked for
+  off its thread), lists a gallery's or a debrid folder's files, tells files of one name apart,
+  keeps itself and says why when Open folder's folder is gone, wraps its reason over two lines
+  and drops the empty file-count line of a single file; "Don't show this window again" and
+  Options reach progress windows already open whose When done wasn't changed by hand.
 
 ## Being worked on
 
@@ -711,7 +851,8 @@ These ship in a later version, when they're ready.
   the icon script now writes it with the other icons
 - ✅ The website in Graphite green, the app's own colours: zinc greys and one emerald green for
   Download, Grabbit's own numbers, links, focus and selection, in place of cyan and amethyst, on
-  every page, light and dark (and the browser's bar colour with them)
+  every page, light and dark (and the browser's bar colour with them); live on the website since
+  2026-11-21, ahead of the next release
 
 ### Looking into
 
@@ -789,8 +930,9 @@ These ship in a later version, when they're ready.
 - 🔄 A server's refusal page saved under the document's name and shown as complete, where the
   browser had the file (part of [#533](https://github.com/anefzaoui/misterdownloadmanager/issues/533)):
   fix in review
-- 🔄 "Hide tab" in a download's window only going back to Download status, the tab still
-  there ([#326](https://github.com/anefzaoui/misterdownloadmanager/issues/326)): fix in review
+- ⛔ "Hide tab" in a download's window only going back to Download status, the tab still
+  there ([#326](https://github.com/anefzaoui/misterdownloadmanager/issues/326)): the window has no
+  tabs since plan 13b
 - 🔍 A site's bot check refusing MDM's request (testfile.org, a Cloudflare challenge): the\n  message now says so ([#376](https://github.com/anefzaoui/misterdownloadmanager/issues/376)); a way to hand the download back to the browser is still to decide
 - 🔄 A download starting again by itself after Stop, when it is in a running queue\n  ([#341](https://github.com/anefzaoui/misterdownloadmanager/issues/341)): fix in review
 - 🔄 A crash when removing the last feed in the RSS feeds window

@@ -7,6 +7,8 @@
 //!   for a form post that carries `FIELD=VALUE`
 //! - `GET /files/{name}` — a real file from `--files DIR` (Range too; 404 without it): archives
 //!   for the link grabber's tests
+//! - `GET /gh/*` — a fake GitHub (#1337, `github`): its API refusing for its rate limit, its
+//!   release pages, releases from `--files DIR/gh/`
 //! - `GET /redirect?to=URL[&ttl_ms=N][&uses=N][&code=3xx]` — a redirect (302 unless `code` says)
 //!   to `URL` (cross-host redirects, credential scoping); with `ttl_ms` the target gets
 //!   `expires=<unix ms>` and answers 403 after it (signed CDN links); with `uses` it is a link of
@@ -46,7 +48,7 @@ use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 
 use crate::content;
-use crate::faults::{Faults, every, has_cookie, parse_flag};
+use crate::faults::{CLEARANCE, Faults, challenge_page, every, has_cookie, parse_flag};
 use crate::{debrid, drive, pages, streams};
 
 const CHUNK: u64 = 64 * 1024;
@@ -81,6 +83,17 @@ pub struct LogEntry {
     /// The `Referer` header.
     #[serde(default)]
     pub referer: Option<String>,
+    /// The `Sec-Fetch-Mode` header, which browsers send and programs don't (`browser_only`).
+    #[serde(default)]
+    pub sec_fetch_mode: Option<String>,
+    /// The `Accept-Encoding` header.
+    #[serde(default)]
+    pub accept_encoding: Option<String>,
+    /// Over HTTPS (`Config::tls`): whether the connection's TLS ClientHello was a browser's as
+    /// `browser_only` tells it, with GREASE values among its cipher suites (as Chrome's and
+    /// every Chromium browser's are; programs' TLS libraries send none). None over plain HTTP.
+    #[serde(default)]
+    pub browser_tls: Option<bool>,
     /// The request's `Content-Type` (a form post's encoding).
     #[serde(default)]
     pub req_content_type: Option<String>,
@@ -172,6 +185,43 @@ pub struct Config {
     pub files: Option<std::path::PathBuf>,
     /// The folder whose .torrent files /rss/dir.xml lists (`feeds`).
     pub rss_dir: Option<std::path::PathBuf>,
+    /// Serve HTTPS instead of HTTP, as `localhost`, with a certificate from a test CA made at
+    /// start (`LabServer::ca_der`): `browser_only` then looks at the TLS handshake too (#668).
+    pub tls: bool,
+    /// Over HTTPS: offer HTTP/2 as well (ALPN `h2`, then `http/1.1`), as most sites do: a client
+    /// that speaks it (a browser's, the browser-like connection's) then carries its requests at
+    /// the same time on one connection unless it opens others (#668).
+    pub http2: bool,
+    /// Over HTTPS: the certificate the server shows (a faulty one for the certificate errors'
+    /// tests). A connection's fault, before any request: it can't be a URL's.
+    pub cert: Cert,
+}
+
+/// The certificate the HTTPS server shows (`Config::cert`, `--tls-cert`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Cert {
+    /// `localhost`'s, from the test CA: trusted by a client told to trust that CA.
+    #[default]
+    TestCa,
+    /// The test CA's, for `localhost`, expired (2020 to 2021).
+    Expired,
+    /// `localhost`'s, signed by itself: no CA vouches for it.
+    SelfSigned,
+    /// The test CA's, for another name than `localhost`.
+    WrongName,
+}
+
+impl Cert {
+    /// From `--tls-cert`'s words.
+    pub fn parse(s: &str) -> Option<Cert> {
+        Some(match s {
+            "test-ca" => Cert::TestCa,
+            "expired" => Cert::Expired,
+            "self-signed" => Cert::SelfSigned,
+            "wrong-name" => Cert::WrongName,
+            _ => return None,
+        })
+    }
 }
 
 impl Default for Config {
@@ -182,6 +232,9 @@ impl Default for Config {
             on_log: None,
             files: None,
             rss_dir: None,
+            tls: false,
+            http2: false,
+            cert: Cert::TestCa,
         }
     }
 }
@@ -212,6 +265,9 @@ pub(crate) struct Shared {
     /// The fake Drive's virus-scan pages' `uuid`s handed out (`drive`).
     pub(crate) drive_uuids: Mutex<HashSet<String>>,
     files: Option<std::path::PathBuf>,
+    /// Over HTTPS: each connection's ClientHello, browser-like or not (`LogEntry::browser_tls`),
+    /// by the client's address.
+    browser_tls: Mutex<HashMap<SocketAddr, bool>>,
 }
 
 impl Shared {
@@ -271,6 +327,9 @@ impl Shared {
             authorization: header_str(headers, header::AUTHORIZATION)
                 .map(|a| a.chars().take(11).collect::<String>() + "…"),
             referer: header_str(headers, header::REFERER),
+            sec_fetch_mode: header_str(headers, header::HeaderName::from_static("sec-fetch-mode")),
+            accept_encoding: header_str(headers, header::ACCEPT_ENCODING),
+            browser_tls: self.browser_tls.lock().unwrap().get(&peer).copied(),
             req_content_type: header_str(headers, header::CONTENT_TYPE),
             req_body_len: has_body.then_some(body.len() as u64),
             req_body_sha256: has_body.then(|| hex::encode(Sha256::digest(body))),
@@ -307,12 +366,15 @@ pub struct LabServer {
     addr: SocketAddr,
     shared: Arc<Shared>,
     task: JoinHandle<()>,
+    /// Over HTTPS (`Config::tls`): the test CA's certificate (DER).
+    ca: Option<Vec<u8>>,
 }
 
 impl LabServer {
     pub async fn start(cfg: Config) -> io::Result<Self> {
         let listener = TcpListener::bind(cfg.bind).await?;
         let addr = listener.local_addr()?;
+        let http2 = cfg.http2;
         let shared = Arc::new(Shared {
             faults: RwLock::new(cfg.faults),
             faults_changed: Notify::new(),
@@ -329,7 +391,12 @@ impl LabServer {
             on_log: cfg.on_log,
             drive_uuids: Mutex::default(),
             files: cfg.files,
+            browser_tls: Mutex::default(),
         });
+        let tls = match cfg.tls {
+            true => Some(crate::ftp::certificate_of(cfg.cert).map_err(io::Error::other)?),
+            false => None,
+        };
         // Routes answered from memory, logged by `log_simple`.
         let simple = Router::new()
             .route("/page", get(pages::page))
@@ -359,6 +426,18 @@ impl LabServer {
             .route("/form/{size}", any(form))
             .route("/form/{size}/{*name}", any(form))
             .route("/files/{*name}", get(files))
+            // A fake GitHub: its API rate limited, its release pages (#1337, `github`).
+            .route("/gh/api/{*rest}", get(crate::github::api))
+            .route(
+                "/gh/web/{owner}/{repo}/releases",
+                get(crate::github::releases),
+            )
+            .route(
+                "/gh/web/{owner}/{repo}/releases/{*rest}",
+                get(crate::github::release),
+            )
+            .route("/gh/assets/{*name}", get(crate::github::asset))
+            .route("/gh/raw/{*name}", get(crate::github::raw))
             .route("/redirect", get(redirect))
             .route("/hop", get(hop))
             .route("/_log", get(get_log).delete(clear_log))
@@ -441,13 +520,33 @@ impl LabServer {
             // Every other address: the fake Google Drive's, by the Host header (`drive`).
             .fallback(drive::handle)
             .with_state(shared.clone());
-        let task = tokio::spawn(async move {
-            let svc = app.into_make_service_with_connect_info::<SocketAddr>();
-            if let Err(e) = axum::serve(listener, svc).await {
-                eprintln!("labserver: {e}");
+        let ca = tls.as_ref().map(|(_, ca)| ca.clone());
+        let task = match tls {
+            None => tokio::spawn(async move {
+                let svc = app.into_make_service_with_connect_info::<SocketAddr>();
+                if let Err(e) = axum::serve(listener, svc).await {
+                    eprintln!("labserver: {e}");
+                }
+            }),
+            Some((mut config, _)) => {
+                if http2 {
+                    config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+                }
+                tokio::spawn(serve_tls(listener, app, Arc::new(config), shared.clone()))
             }
-        });
-        Ok(LabServer { addr, shared, task })
+        };
+        Ok(LabServer {
+            addr,
+            shared,
+            task,
+            ca,
+        })
+    }
+
+    /// Over HTTPS (`Config::tls`): the test CA's certificate (DER); a client trusting it trusts
+    /// this server as `localhost`.
+    pub fn ca_der(&self) -> Option<Vec<u8>> {
+        self.ca.clone()
     }
 
     pub fn addr(&self) -> SocketAddr {
@@ -455,8 +554,13 @@ impl LabServer {
     }
 
     /// `http://<addr><path>`; `path` starts with `/`.
+    /// The address of `path` (starting with `/`): `http://127.0.0.1:port`, or over HTTPS
+    /// `https://localhost:port` (the certificate's name).
     pub fn url(&self, path: &str) -> String {
-        format!("http://{}{}", self.addr, path)
+        match self.ca {
+            None => format!("http://{}{}", self.addr, path),
+            Some(_) => format!("https://localhost:{}{}", self.addr.port(), path),
+        }
     }
 
     pub fn log(&self) -> Vec<LogEntry> {
@@ -541,6 +645,10 @@ GET|HEAD /gen/{size}[/{name}]?seed=N&<file params>&<faults>   size: 12345, 64K, 
     html_after=N   the first N requests for this path and query get the file, every later one
                    the page (as html=1 with html_type and html_cd): a link that leads to a
                    waiting page once the download is resumed; vary seed= for a fresh link
+    html_body=challenge|json|text  with html=1 or html_after=N: a bot check's script page
+                   (text/html), a JSON error (application/json) or a line of text (text/plain)
+                   instead of the waiting page: a one-time link asked a second time
+    html_chunked=1 with html=1 or html_after=N: the page chunked, without a Content-Length
     etag=weak|per-request|none latency_ms=N range_latency_ms=N (only requests with a Range)
     range_rate=SIZE  the rate of answers to requests with a Range (instead of rate)
     burst=SIZE     with a rate, a link: a response the client stopped reading catches up with
@@ -552,6 +660,20 @@ GET|HEAD /gen/{size}[/{name}]?seed=N&<file params>&<faults>   size: 12345, 64K, 
     refuse_agent=TEXT                403 when the User-Agent contains TEXT
     refuse=STATUS  every request answered with that 4xx or 5xx status, before any byte (a site
                    that turns away whatever isn't a browser: FileHippo's 412, #630)
+    browser_only=1 a bot check: 403 with cf-mitigated: challenge and a challenge page unless the
+                   request carries a browser's Sec-Fetch-Mode header and, over HTTPS (--tls),
+                   came on a TLS handshake with GREASE, as Chrome's has (#668)
+    refuse_programs=STATUS  the same check answering STATUS, empty (FileHippo's 412, #630)
+    refuse_browsers=1  a bot check that refuses whatever claims to be a browser (a User-Agent with
+                   Mozilla/) on any connection, the browser-like one too, and lets programs that
+                   say what they are through: 403 with cf-mitigated: challenge (SourceForge's, #1422)
+    js_challenge=MS  a bot check passed by running its script (Cloudflare's "Just a moment...",
+                   #1494): 403 with cf-mitigated: challenge and a page whose script, after MS ms,
+                   sets the cookie mdm_lab_clearance=1 and loads the address again; with that
+                   cookie, the file
+    refuse_ranges=STATUS    every request with a Range answered with STATUS (the whole file
+                   still served): with browser_only=1, a site that lets the browser-like
+                   connection download a file only whole (#668)
     once=1         a one-time link: the first request for this path and query is served, every
                    later one (HEAD and ranges too) gets 410 Gone; vary seed= for a fresh link
   "every Nth" counts file requests (/gen and /form) only.
@@ -560,6 +682,11 @@ POST /form/{size}[/{name}]?need=FIELD=VALUE&see_other=1&<as /gen>
     (default need=token=abc): 405 to other methods, 403 to a form without it;
     see_other=1: 303 to /gen/{size}/{name}?<the rest of the query> instead
 GET /files/{name}   a real file from --files DIR (Range too; 404 without --files)
+GET /gh/api/*       a fake GitHub API, always refusing: 403, x-ratelimit-remaining: 0 (#1337)
+GET /gh/web/OWNER/REPO/releases/latest   302 to .../releases/tag/TAG (TAG: --files DIR/gh/OWNER/REPO/LATEST)
+GET /gh/web/OWNER/REPO/releases/download/TAG/FILE   302 to /gh/assets/OWNER/REPO/TAG/FILE (--files
+                    DIR/gh/OWNER/REPO/TAG/FILE, with Last-Modified), 404 when not there
+GET /gh/raw/OWNER/REPO/TAG/PATH   --files DIR/gh/OWNER/REPO/TAG/PATH (raw.githubusercontent.com's)
 GET /redirect?to=URL[&ttl_ms=N][&uses=N][&code=3xx]   302 (or code) to URL (not logged); ttl_ms: a signed link expiring after N ms; uses: a new link each time, expiring after N requests
 /rd/rest/1.0/{user,hosts/domains,unrestrict/link,disable_access_token}, /rd/oauth/v2/{device/code,device/credentials,token}
                                               a fake Real-Debrid (#44): tokens good (premium), free; links http://hoster.test/file/SIZE/NAME[?gone=1&down=1&chunks=N&ttl_ms=N&rate=SIZE]
@@ -637,6 +764,13 @@ GOOGLE DRIVE  a fake one for the engine's tests, on Google's host names (resolve
                             (307 to doc-0.docs.googleusercontent.com/export/tok/ID: chunked, no
                             length, ranges ignored)
   accounts.google.com       /ServiceLogin   the sign-in page
+
+HTTPS  --tls serves all of it over HTTPS as localhost, its certificate from a test CA made at start
+  (written next to the log, or printed); --tls-cert picks a faulty one (a connection's fault,
+  before any request, so a server's, never a URL's):
+    expired        the test CA's, expired (2020 to 2021)
+    self-signed    signed by itself, no CA's
+    wrong-name     the test CA's, for another-site.invalid
 
 LOG
 GET /_log   the request log as JSON: method, path, query, range, if_range, user_agent, cookie,
@@ -852,17 +986,49 @@ async fn files(
     Path(name): Path<String>,
     headers: HeaderMap,
 ) -> Response {
-    let entry = shared.begin(peer, &method, format!("/files/{name}"), None, &headers, &[]);
-    let inside = !name
-        .split(['/', '\\'])
-        .any(|c| c == ".." || c.contains(':'));
-    let data = match shared.files.as_ref().filter(|_| inside) {
-        Some(dir) => tokio::fs::read(dir.join(&name)).await.ok(),
+    let path = shared.file_path(&name);
+    let logged = format!("/files/{name}");
+    serve_file(&shared, peer, &method, &headers, logged, path, false).await
+}
+
+impl Shared {
+    /// `name` (a relative path, `/`-separated) in `Config::files`; None without one, or for a
+    /// name that would leave it.
+    pub(crate) fn file_path(&self, name: &str) -> Option<std::path::PathBuf> {
+        let inside = !name
+            .split(['/', '\\'])
+            .any(|c| c == ".." || c.contains(':'));
+        self.files.as_ref().filter(|_| inside).map(|d| d.join(name))
+    }
+}
+
+/// The file at `path` (None: 404), whole or one range of it, logged as `logged`; with
+/// `last_modified`, its modification time in a `Last-Modified` header (as a file host sends it).
+pub(crate) async fn serve_file(
+    shared: &Shared,
+    peer: SocketAddr,
+    method: &Method,
+    headers: &HeaderMap,
+    logged: String,
+    path: Option<std::path::PathBuf>,
+    last_modified: bool,
+) -> Response {
+    let entry = shared.begin(peer, method, logged, None, headers, &[]);
+    let data = match &path {
+        Some(path) => tokio::fs::read(path).await.ok(),
         None => None,
     };
     let Some(data) = data else {
         shared.record(entry, 404, "error");
         return (StatusCode::NOT_FOUND, "no such file\n").into_response();
+    };
+    let modified = match (&path, last_modified) {
+        (Some(path), true) => tokio::fs::metadata(path)
+            .await
+            .and_then(|m| m.modified())
+            .ok()
+            .map(httpdate::fmt_http_date),
+        _ => None,
     };
     let size = data.len() as u64;
     let range = entry
@@ -887,8 +1053,11 @@ async fn files(
             format!("bytes {start}-{}/{size}", end - 1),
         );
     }
+    if let Some(modified) = modified {
+        builder = builder.header(header::LAST_MODIFIED, modified);
+    }
     shared.record(entry, status.as_u16(), "files");
-    if method == Method::HEAD {
+    if *method == Method::HEAD {
         return builder.body(Body::empty()).unwrap();
     }
     builder
@@ -1032,6 +1201,53 @@ struct FileQuery {
     faults: Faults,
 }
 
+/// The lab server over HTTPS (`Config::tls`): each connection's ClientHello is read first, and
+/// whether it is a browser's noted for `browser_only` (`LogEntry::browser_tls`), then its
+/// requests are served as over HTTP (HTTP/1.1; HTTP/2 too with `Config::http2`).
+async fn serve_tls(
+    listener: TcpListener,
+    app: Router,
+    config: Arc<tokio_rustls::rustls::ServerConfig>,
+    shared: Arc<Shared>,
+) {
+    use hyper_util::rt::{TokioExecutor, TokioIo};
+    loop {
+        let Ok((tcp, peer)) = listener.accept().await else {
+            continue;
+        };
+        let (app, config, shared) = (app.clone(), config.clone(), shared.clone());
+        tokio::spawn(async move {
+            let accepting = tokio_rustls::LazyConfigAcceptor::new(
+                tokio_rustls::rustls::server::Acceptor::default(),
+                tcp,
+            );
+            let Ok(start) = accepting.await else {
+                return;
+            };
+            let grease = start
+                .client_hello()
+                .cipher_suites()
+                .iter()
+                .any(|c| is_grease(u16::from(*c)));
+            shared.browser_tls.lock().unwrap().insert(peer, grease);
+            let Ok(tls) = start.into_stream(config).await else {
+                return;
+            };
+            let svc = app.layer(axum::Extension(ConnectInfo(peer)));
+            let svc = hyper_util::service::TowerToHyperService::new(svc);
+            let _ = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new())
+                .serve_connection(TokioIo::new(tls), svc)
+                .await;
+        });
+    }
+}
+
+/// A GREASE value (RFC 8701: 0x0A0A, 0x1A1A … 0xFAFA), which Chrome's TLS puts among its
+/// cipher suites and extensions so that servers keep tolerating unknown ones.
+fn is_grease(v: u16) -> bool {
+    v & 0x0f0f == 0x0a0a && v >> 8 == v & 0xff
+}
+
 /// Serves the generated file `size`/`name` for a request whose log entry is `entry`.
 pub(crate) async fn serve(
     shared: Arc<Shared>,
@@ -1070,6 +1286,58 @@ pub(crate) async fn serve(
     }
     let f = shared.faults().overridden_by(&q.faults);
 
+    // The bot check stands in front of the site, as Cloudflare's does: before its own checks.
+    let a_program = entry.sec_fetch_mode.is_none() || entry.browser_tls == Some(false);
+    if let Some(status) = f
+        .refuse_programs
+        .and_then(|c| StatusCode::from_u16(c).ok())
+        .filter(|s| a_program && (s.is_client_error() || s.is_server_error()))
+    {
+        shared.record(entry, status.as_u16(), "fault:refuse_programs");
+        return (status, [(header::RETRY_AFTER, "0")]).into_response();
+    }
+    let challenge = || {
+        (
+            StatusCode::FORBIDDEN,
+            [
+                ("cf-mitigated", "challenge"),
+                ("content-type", "text/html; charset=UTF-8"),
+            ],
+            "<!DOCTYPE html><title>Just a moment...</title>\n",
+        )
+            .into_response()
+    };
+    if f.browser_only == Some(true) && a_program {
+        shared.record(entry, 403, "fault:browser_only");
+        return challenge();
+    }
+    // SourceForge's (#1422): a browser's name on whatever connection, refused.
+    if f.refuse_browsers == Some(true)
+        && entry
+            .user_agent
+            .as_deref()
+            .is_some_and(|ua| ua.contains("Mozilla/"))
+    {
+        shared.record(entry, 403, "fault:refuse_browsers");
+        return challenge();
+    }
+    // A challenge a browser passes by running its script (#1494), whatever the connection: a
+    // program that runs none never gets the cookie it sets.
+    if let Some(wait) = f.js_challenge
+        && !has_cookie(entry.cookie.as_deref(), CLEARANCE)
+    {
+        shared.record(entry, 403, "fault:js_challenge");
+        return (
+            StatusCode::FORBIDDEN,
+            [
+                ("cf-mitigated", "challenge"),
+                ("content-type", "text/html; charset=UTF-8"),
+                ("cache-control", "no-store"),
+            ],
+            challenge_page(wait),
+        )
+            .into_response();
+    }
     if let Some(want) = &f.require_cookie
         && !has_cookie(entry.cookie.as_deref(), want)
     {
@@ -1100,6 +1368,14 @@ pub(crate) async fn serve(
         .filter(|s| s.is_client_error() || s.is_server_error())
     {
         shared.record(entry, status.as_u16(), "fault:refuse");
+        return status.into_response();
+    }
+    if let Some(status) = f
+        .refuse_ranges
+        .and_then(|c| StatusCode::from_u16(c).ok())
+        .filter(|s| entry.range.is_some() && (s.is_client_error() || s.is_server_error()))
+    {
+        shared.record(entry, status.as_u16(), "fault:refuse_ranges");
         return status.into_response();
     }
     if let Some(ms) = f.latency_ms {
@@ -1279,18 +1555,38 @@ const ATTR_CHAR: &AsciiSet = &NON_ALPHANUMERIC
 /// `html=1`'s page: a sign-in wall, or (with `html_type` or `html_cd`) a file host's waiting page
 /// as it comes, its blank lines first (upstream issue 701).
 fn web_page(f: &Faults, name: Option<&str>, size: u64) -> Response {
-    if f.html_type.is_none() && f.html_cd != Some(true) {
-        return (
-            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
-            "<!doctype html><title>Sign in</title><form>Please sign in</form>\n",
-        )
-            .into_response();
+    // Upstream issue 1460: a one-time link's host's answer to a second request, instead of a
+    // page.
+    let other = match f.html_body.as_deref() {
+        Some("challenge") => Some((
+            "text/html; charset=utf-8",
+            "<html><script>var arg1='5C95CC7557DB4053192CC0CE9891F2B874A9E345';\
+             document.cookie='acw_sc__v2='+arg1;location.reload();</script></html>",
+        )),
+        Some("json") => Some((
+            "application/json",
+            "{\"zt\":0,\"info\":\"\\u94fe\\u63a5\\u5df2\\u5931\\u6548\"}",
+        )),
+        Some("text") => Some(("text/plain; charset=utf-8", "Access denied\n")),
+        _ => None,
+    };
+    if other.is_none() && f.html_type.is_none() && f.html_cd != Some(true) {
+        return page_body(
+            Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "text/html; charset=utf-8"),
+            "<!doctype html><title>Sign in</title><form>Please sign in</form>\n".to_owned(),
+            f,
+        );
     }
     let mut builder = Response::builder().status(StatusCode::OK);
     match f.html_type.as_deref() {
         Some("none") => {}
         Some(t) => builder = builder.header(header::CONTENT_TYPE, t),
-        None => builder = builder.header(header::CONTENT_TYPE, "text/html; charset=utf-8"),
+        None => {
+            let t = other.map_or("text/html; charset=utf-8", |(t, _)| t);
+            builder = builder.header(header::CONTENT_TYPE, t);
+        }
     }
     if f.html_cd == Some(true) {
         let name = name.unwrap_or("file.zip").replace(['"', '\\'], "_");
@@ -1298,6 +1594,9 @@ fn web_page(f: &Faults, name: Option<&str>, size: u64) -> Response {
             header::CONTENT_DISPOSITION,
             format!("attachment; filename=\"{name}\""),
         );
+    }
+    if let Some((_, body)) = other {
+        return page_body(builder, body.to_owned(), f);
     }
     let mut page = String::from(
         "\r\n\r\n<!DOCTYPE html>\n<html><head><title>Your file is almost ready</title></head>\
@@ -1311,6 +1610,16 @@ fn web_page(f: &Faults, name: Option<&str>, size: u64) -> Response {
         page.push_str("<!--");
         page.push_str(&" ".repeat(want - page.len() - 8));
         page.push_str("-->\n");
+    }
+    page_body(builder, page, f)
+}
+
+/// `web_page`'s answer with `page` as its body: with its length, or chunked without one
+/// (`html_chunked`).
+fn page_body(builder: axum::http::response::Builder, page: String, f: &Faults) -> Response {
+    if f.html_chunked == Some(true) {
+        let chunks = futures::stream::iter([Ok::<_, io::Error>(Bytes::from(page))]);
+        return builder.body(Body::from_stream(chunks)).unwrap();
     }
     builder.body(Body::from(page)).unwrap()
 }

@@ -46,6 +46,8 @@ pub struct GalleryDialog {
     helpers: Option<crate::helpers::Programs>,
     /// The helper as found (read again after an install or Helpers, not every frame).
     tool: Option<Option<mdm_tools::Installed>>,
+    /// The address box has had the focus (it takes it once, when the window opens).
+    focused: bool,
 }
 
 #[cfg(not(test))]
@@ -75,6 +77,7 @@ impl GalleryDialog {
             asking: Default::default(),
             helpers: None,
             tool: None,
+            focused: false,
         }
     }
 
@@ -119,7 +122,7 @@ impl GalleryDialog {
             |ui, o| self.body(ui, o, rt),
         );
         if let Some(h) = &mut self.helpers
-            && !matches!(h.show(ctx), Outcome::Open)
+            && !matches!(h.show(ctx, rt), Outcome::Open)
         {
             self.helpers = None;
             self.tool = None;
@@ -161,13 +164,17 @@ impl GalleryDialog {
             false,
         );
         winui::form_label(&p, o, LX, 16.0, h, "Page address", true);
-        winui::edit(
+        let field = winui::edit(
             ui,
             r(o, fx, 16.0, RIGHT - fx, h),
             &mut self.page,
             true,
             false,
         );
+        // The first field has the keys as the window opens (plan 12b, D1).
+        if !std::mem::replace(&mut self.focused, true) {
+            field.request_focus();
+        }
         let page = self.page.trim().to_owned();
         let page_ok = url::Url::parse(&page).is_ok_and(|u| matches!(u.scheme(), "http" | "https"));
         // The address checked as soon as gallery-dl is there, and again when it changes.
@@ -352,7 +359,7 @@ impl GalleryDialog {
             &mut [
                 FooterItem::Button(FooterButton::new("Helpers...", ButtonKind::Normal).leading()),
                 FooterItem::Button(
-                    FooterButton::new("Download Now", kind(true))
+                    FooterButton::new("Download now", kind(true))
                         .primary()
                         .enter(ready),
                 ),

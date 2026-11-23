@@ -80,6 +80,10 @@ enum Cmd {
     /// Install (or update) gallery-dl for image galleries: its checksum list is verified against
     /// its author's signing key, the program against that list.
     InstallGalleryDl,
+    /// Install (or update) Deno, the JavaScript runtime yt-dlp needs for YouTube's qualities:
+    /// Deno's official Windows build, checked against its release's SHA-256 (x64 and ARM64).
+    /// yt-dlp is told of it from then on.
+    InstallDeno,
     /// Download an image gallery's files with gallery-dl (needs `install-gallery-dl`).
     GalleryGet {
         /// The gallery's address (a Wikimedia Commons category, a Flickr album, ...).
@@ -507,6 +511,21 @@ async fn run(cmd: Cmd, json: bool, accounts: Option<&dyn Accounts>) -> anyhow::R
             } else {
                 println!(
                     "ffmpeg {} verified and installed: {}",
+                    i.version,
+                    i.exe.display()
+                );
+            }
+            Ok(())
+        }
+        Cmd::InstallDeno => {
+            let dir = mdm_tools::tools_dir().ok_or_else(|| anyhow::anyhow!("no data folder"))?;
+            let i =
+                mdm_tools::deno::install_latest(&dir, &mdm_tools::net(Proxy::System), None).await?;
+            if json {
+                emit(json!({ "tool": "deno", "version": i.version, "path": i.exe }));
+            } else {
+                println!(
+                    "Deno {} verified and installed: {}",
                     i.version,
                     i.exe.display()
                 );
@@ -1115,11 +1134,14 @@ fn video_engine(connections: u32, route: Option<mdm_engine::Route>) -> mdm_tools
 }
 
 /// A download's options: the app's defaults (the default browser's User-Agent, upstream issue
-/// 668, and MDM's former one once if a site refuses it, #372).
+/// 668, MDM's former one once if a site refuses it, #372, and Grabbit's own name once if a
+/// site's bot check refuses the browser's and the browser-like connection too, upstream issue
+/// 1422; a `--user-agent` or a `User-Agent` header given is the only one sent).
 fn opts(connections: u32) -> Options {
     Options {
         max_connections: connections,
         agent_fallback: Some(mdm_engine::agent::IE11_USER_AGENT.to_owned()),
+        own_agent: Some(mdm_engine::agent::OWN_USER_AGENT.to_owned()),
         ..Options::default()
     }
 }

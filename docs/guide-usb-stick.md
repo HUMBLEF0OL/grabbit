@@ -17,7 +17,7 @@ By default, downloads go to the Downloads folder of the computer you're using. T
 
 1. Open **Downloads → Options** and its **Save to** page.
 2. Under **Category**, choose **General**.
-3. In **Default download directory for "General" category**, click **Browse** and choose a folder on the stick, for example `E:\Downloads`.
+3. In **Default download folder for "General" category**, click the browse button (**…**) and choose a folder on the stick, for example `E:\Downloads`.
 4. Choose the next category (**Compressed**, **Documents**, **Music**, **Programs**, **Video**, **Torrents**) and do the same, for example `E:\Downloads\Video`.
 5. Click **Save**.
 

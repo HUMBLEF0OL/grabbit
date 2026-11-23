@@ -114,7 +114,11 @@ from the next start (`crates/app/src/renderer.rs`): when the chosen one can't st
 tried, so the windows always open. A watched start with the system's API leaves a marker until
 its first frame is drawn: a start that ends before it (a crash inside the driver), one whose
 first frame doesn't come within 10 seconds (Grabbit then starts again with OpenGL), or a graphics
-card lost twice in 10 minutes is remembered with its reason, which the menu shows.
+card lost twice in 10 minutes is remembered with its reason, its date, the adapter and the
+computer's graphics drivers then, which the menu shows. It is tried again after a driver update
+or another card, after a wait that depends on the reason (a week for a late first frame, twice as
+long after each try that fails again), at the next start for a late first frame just after
+login, or when chosen again.
 
 View → Interface size (`scale.rs`, #262) is egui's zoom factor over the display's own scale:
 every window is laid out in points, so it opens that much larger; one larger than the screen
@@ -127,7 +131,7 @@ The download list and settings are saved atomically to the data folder (`downloa
 copy, or `GRABBIT_DATA_DIR` (`mdm_ipc::data_dir`). The browser host reads the same file for the
 capture rules, so a change in Options applies to the next captured download.
 
-Sign-in secrets (debrid accounts, Sites Logins' and the proxy's passwords) live in Windows
+Sign-in secrets (debrid accounts, Site logins' and the proxy's passwords) live in Windows
 Credential Manager (`secrets.rs`, `win32.rs`, #44). The settings keep a `keychain:<service>/<scope>/<key>`
 reference in their place, written only once Credential Manager has confirmed the secret; without
 it the secret stays in the settings as

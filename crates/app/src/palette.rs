@@ -24,63 +24,6 @@ const fn rgba(r: u8, g: u8, b: u8, a: u8) -> Color32 {
     Color32::from_rgba_unmultiplied_const(r, g, b, a)
 }
 
-/// The progress window's segment bar: 13 rows top to bottom, each row's colour for the parts
-/// not downloaded yet, downloaded, and a connection's start marker.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Segments {
-    pub missing: [Color32; 13],
-    pub done: [Color32; 13],
-    pub start: [Color32; 13],
-}
-
-/// The classic bar, measured from IDM's (spec "Segment bar"), as (missing, done, start) rows.
-const SEG_ROWS: [(u32, u32, u32); 13] = [
-    (0xfafafc, 0xbfc6f3, 0xf67566),
-    (0xf7f8fa, 0xa4aae7, 0xf46a5e),
-    (0xf5f6fa, 0x898edd, 0xf25e56),
-    (0xf2f4f9, 0x7176d3, 0xef514c),
-    (0xecf0f6, 0x686bcf, 0xea4240),
-    (0xdbe0ee, 0x1a3cb7, 0xbb0205),
-    (0xdce1f0, 0x0f43b8, 0xbe0205),
-    (0xdee3f1, 0x1155bf, 0xc60b09),
-    (0xdfe4f1, 0x1267c7, 0xd21913),
-    (0xe1e5f1, 0x117acd, 0xde281b),
-    (0xe2e7f3, 0x128ed6, 0xeb3724),
-    (0xe4e8f4, 0x1aafe3, 0xf1462c),
-    (0xe6e9f5, 0x2dd3f1, 0xf64f30),
-];
-
-const fn hex(v: u32) -> Color32 {
-    rgb((v >> 16) as u8, (v >> 8) as u8, v as u8)
-}
-
-/// The classic segment bar; in dark mode its "not here yet" rows are the same gradient dimmed
-/// (they were a bright white strip in the dark window).
-const fn classic_segments(dark: bool) -> Segments {
-    const fn dim(x: u8) -> u8 {
-        (x as f32 * 0.22 + 22.0) as u8
-    }
-    let mut s = Segments {
-        missing: [Color32::BLACK; 13],
-        done: [Color32::BLACK; 13],
-        start: [Color32::BLACK; 13],
-    };
-    let mut i = 0;
-    while i < 13 {
-        let (m, d, st) = SEG_ROWS[i];
-        let m = hex(m);
-        s.missing[i] = if dark {
-            rgb(dim(m.r()), dim(m.g()), dim(m.b()))
-        } else {
-            m
-        };
-        s.done[i] = hex(d);
-        s.start[i] = hex(st);
-        i += 1;
-    }
-    s
-}
-
 /// Declares [`Palette`]: one `Color32` field per role, its theme-file key and what it colours,
 /// with the classic dark and light values.
 macro_rules! palette {
@@ -97,8 +40,6 @@ macro_rules! palette {
             /// Access letters are always underlined (IDM's dark look), not only once the keyboard
             /// is in use (Windows' rule).
             pub access_keys_always: bool,
-            /// The progress window's segment bar.
-            pub segments: Segments,
             $(#[doc = $doc] pub $field: Color32,)*
         }
 
@@ -131,7 +72,6 @@ macro_rules! palette {
                     dark,
                     focus_line_straight: dark,
                     access_keys_always: dark,
-                    segments: classic_segments(dark),
                     $($field: if dark { $dark } else { $light },)*
                 }
             }
@@ -166,8 +106,6 @@ palette! {
     selection_inactive: "selection.inactive", "A selected row in a list without the focus" = grey(0x4a), grey(0xd9);
     selection_focus: "selection.focus", "The focused row's dotted outline on a selected row" = rgb(0xff, 0x99, 0x33), rgb(0xff, 0x99, 0x33);
     // ---- separators, tabs ----
-    etch_shadow: "etch.shadow", "An etched separator's shadow line" = grey(0x22), grey(0xa0);
-    etch_light: "etch.light", "An etched separator's highlight line" = grey(0x50), grey(0xff);
     tab_page: "tab.page", "A tab page's body" = grey(0x40), grey(0xf9);
     tab: "tab", "An unselected tab, and the page's shadow" = grey(0x33), grey(0xf3);
     tab_hot: "tab.hot", "A tab under the pointer" = grey(0x46), grey(0xfd);
@@ -274,13 +212,13 @@ palette! {
     // ---- categories tree ----
     tree_expander: "tree.expander", "The tree's chevrons, where the variant draws them" = grey(0xff), grey(0x1a);
     // ---- progress window ----
-    status_value: "progress.status", "The progress window's Status value" = grey(0xff), rgb(0x00, 0x00, 0xff);
     progress_label_disabled: "progress.label.disabled", "A greyed label in the progress window" = grey(0x80), grey(0x80);
-    segment_border: "segments.border", "The segment bar's frame" = rgb(0x65, 0x6b, 0x7b), rgb(0x65, 0x6b, 0x7b);
-    segment_corner: "segments.corner", "The segment bar's corner pixels" = rgb(0xa2, 0xa5, 0xaf), rgb(0xa2, 0xa5, 0xaf);
     piece: "pieces.have", "A torrent piece that is here" = rgb(0x2e, 0x9d, 0x52), rgb(0x2e, 0x9d, 0x52);
     piece_partial: "pieces.partial", "A square standing for pieces partly here" = rgb(0x3a, 0x6e, 0x4b), rgb(0x9c, 0xd2, 0xae);
     piece_missing: "pieces.missing", "A piece not here yet" = grey(0x45), grey(0xd6);
+    strip_error: "strip.error", "The download window's strip: the part a failed download is missing" = rgb(0x44, 0x27, 0x26), rgb(0xfd, 0xe7, 0xe9);
+    strip_error_hatch: "strip.error.hatch", "That part's hatching" = rgb(0x5e, 0x30, 0x2e), rgb(0xf6, 0xc9, 0xc5);
+    strip_accent: "strip.accent", "The download window's strip while a step after the bytes (a check, a join) goes on: its track" = rgb(0x2d, 0x4a, 0x60), rgb(0xe5, 0xf1, 0xfb);
     // ---- title bars we draw ----
     caption: "caption", "A title bar Grabbit draws itself" = grey(0x20), grey(0xff);
     caption_text: "caption.text", "Its title and glyphs" = grey(0xff), grey(0x00);
@@ -365,6 +303,9 @@ metrics! {
     menu_item_radius: "radius.menu-item", "Corner radius of a menu item under the pointer" = 4.0;
     widget_radius: "radius.egui", "Corner radius of egui's own widgets" = 2.0;
     popup_radius: "radius.popup", "Corner radius of tooltips" = 4.0;
+    card_radius: "radius.card", "Corner radius of a card (a file's header, a helper, a sign-in code)" = 8.0;
+    tick_width: "tick.width", "Stroke width of a tick (a check box's, a menu item's, a filter chip's; the Square check look keeps its own 2.0)" = 1.4;
+    line_paragraph: "line.paragraph", "Line height of a wrapped paragraph of dialog text" = 13.0;
     border: "border", "Width of a control's border" = 1.0;
     focus_line: "focus-line", "Height of a focused text box's accent line" = 2.0;
     chevron_width: "chevron.width", "Stroke width of a drop-down's chevron" = 1.2;
@@ -679,8 +620,6 @@ mod tests {
             (l.field_readonly, d.field_readonly),
             (grey(0xf3), grey(0x30))
         );
-        assert_eq!(l.segments.missing[0], hex(0xfafafc));
-        assert_eq!(d.segments.missing[0], rgb(77, 77, 77));
         assert!(d.dark && !l.dark);
         assert_eq!(BASE.metrics.control_radius, 3.0);
         assert_eq!(BASE.metrics.list_row, 17.0);
@@ -783,7 +722,6 @@ mod tests {
                     ("error / error banner", p.error, p.banner_error),
                     ("warning / window", p.warning, p.window),
                     ("success / window", p.success, p.window),
-                    ("progress status / window", p.status_value, p.window),
                     ("link / panel", p.link, p.panel),
                     ("tooltip text", p.egui_text, p.egui_window),
                 ] {

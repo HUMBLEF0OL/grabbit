@@ -2,7 +2,7 @@
 
 [← Back to docs index](README.md)
 
-With the Grabbit extension, clicking a download link in your browser hands the download to Grabbit. Grabbit gets the address together with the page it came from (the referrer), your cookies for the site and the browser's User-Agent, so downloads that need you to be signed in still work. It also gets the address the browser's own download had reached: when a site refuses Grabbit the link itself (a one-time link the browser has already used, or a site that lets only browsers ask for its links), Grabbit goes on from there once, without your cookies if it is another site.
+With the Grabbit extension, clicking a download link in your browser hands the download to Grabbit. Grabbit gets the address together with the page it came from (the referrer), your cookies for the site and the browser's User-Agent, so downloads that need you to be signed in still work. It also gets the address the browser's own download had reached: when a site refuses Grabbit the link itself (a one-time link the browser has already used, or a site that lets only browsers ask for its links), Grabbit goes on from there once, without your cookies if it is another site. When a site's bot check (Cloudflare's, for one) or its refusal of programs (FileHippo's *412 Precondition Failed*) turns Grabbit's own connection away, Grabbit asks once more connecting the way your browser does (the same handshake, settings and order of headers), with your browser's User-Agent and its cookies for that site only, and downloads on it with as many connections as any download, each asking for its part of the file (on one connection when the site refuses parts there); your proxy, network adapter and speed limits apply as usual. The pieces of a video stream (HLS, DASH) go the same way when the site's check refuses them. Some checks (SourceForge's) refuse anything that calls itself a browser without connecting exactly like one, and let a program that says what it is through: when that connection is refused too, Grabbit asks once more under its own name (`Grabbit/` and its version, or the User-Agent you typed in **Options → Downloads**), with the same cookies and referrer, and remembers the site until Grabbit closes, so its next downloads, and a paused one when it resumes, go that way at once. It solves no challenge: a site that still wants one answered (some Cloudflare checks ask it of every visitor, for the site's pages too) refuses again, and Grabbit says *this site lets only browsers through*; Alt+click the link to leave the download to the browser, which opens the link, passes the check and keeps the file.
 
 The extension works in **Google Chrome**, **Microsoft Edge**, **Brave**, **Opera** and **Vivaldi**, and in **Firefox** 140 or later.
 
@@ -49,9 +49,9 @@ When you click a download, the extension checks Grabbit's Options:
 - **Options → General → Use advanced browser integration** must be on. Turn it off to send nothing to Grabbit.
 - **Options → General → Capture downloads from the following browsers** must have your browser ticked.
 - **Options → File types → Automatically start downloading the following file types** must list the file's type. The list starts with the usual ones: ZIP, RAR, 7Z, EXE, MSI, ISO, DMG, DEB, RPM, APPIMAGE, MP3, MP4, MKV, WEBM, PDF, AI models such as GGUF and SAFETENSORS, 3D files such as GLB and STL, and many more. Anything else can be added to the list.
-- **Options → File types → Don't start downloading automatically from the following sites** must not list the site. Names are separated by spaces, and `*` matches any part, as in `*.update.microsoft.com`. **Edit list ...** below it lists whole addresses to leave alone, one per line (`https://example.com/private/*`).
+- **Options → File types → Don't start downloading automatically from the following sites** must not list the site. Names are separated by spaces, and `*` matches any part, as in `*.update.microsoft.com`. **Edit list...** below it lists whole addresses to leave alone, one per line (`https://example.com/private/*`).
 - **Options → File types → Don't take files smaller than** leaves small files (a receipt, an icon) to the browser. 0 takes any size.
-- A `.torrent` file goes to Grabbit only while **Tasks → Torrent settings → Open magnet links and .torrent files with Grabbit** is on. Off, the browser keeps it and opens it in your own torrent program. See [Torrents](torrents.md#add-a-torrent).
+- A `.torrent` file goes to Grabbit only while **Downloads → Options → Torrents → Open magnet links and .torrent files with Grabbit** is on. Off, the browser keeps it and opens it in your own torrent program. See [Torrents](torrents.md#add-a-torrent).
 - The extension must be allowed to read the site. When you limit it to some sites (or **On click**), it can't pass your sign-in on, so it leaves those sites' downloads to the browser.
 
 ![Options, General: Use advanced browser integration and the list of browsers Grabbit takes downloads from](images/help/options-integration.webp)
@@ -61,18 +61,18 @@ When the browser keeps a download, the extension's button says which of these le
 
 Both the address you clicked and the one its redirects led to are checked, so a site you excluded stays excluded even when it sends you to another server. Everything else stays with the browser. Changes in Options reach the browser within a minute; you don't need to restart it.
 
-When Grabbit takes a download, it gets the browser's file name, size and type with it, so **Download File Info** shows them at once without asking the server again. A download from a form (a button that posts and gets a file back) is posted again by Grabbit with the form's data; a form that sends a file stays with the browser.
+When Grabbit takes a download, it gets the browser's file name, size and type with it, so **Download file info** shows them at once without asking the server again. A download from a form (a button that posts and gets a file back) is posted again by Grabbit with the form's data; a form that sends a file stays with the browser.
 
-When Grabbit takes a download, the browser's own copy is cancelled and removed from the browser's download list. In Firefox and the browsers built on it (Waterfox, Zen, LibreWolf), Grabbit takes it as soon as the server answers, before the browser asks *What should … do with this file?*: for a file Grabbit takes, that question never shows (Waterfox asks it for every new type of file). Files Grabbit doesn't take get the question as before. **Download File Info** opens in Grabbit (unless you turned it off in **Options → Downloads**). Cancelling there doesn't hand the download back to the browser.
+When Grabbit takes a download, the browser's own copy is cancelled and removed from the browser's download list. In Firefox and the browsers built on it (Waterfox, Zen, LibreWolf), Grabbit takes it as soon as the server answers, before the browser asks *What should … do with this file?*: for a file Grabbit takes, that question never shows (Waterfox asks it for every new type of file). Files Grabbit doesn't take get the question as before. **Download file info** opens in Grabbit (unless you turned it off in **Options → Downloads**). Cancelling there doesn't hand the download back to the browser.
 
 <!-- steps -->
 
-1. ![Download File Info in Grabbit for a file clicked in the browser](images/help/catch-file-info.webp)
-   *Click a download link in the browser: Download File Info opens in Grabbit.*
+1. ![Download file info in Grabbit for a file clicked in the browser](images/help/catch-file-info.webp)
+   *Click a download link in the browser: Download file info opens in Grabbit.*
 2. ![The progress window of a download coming in over several connections](images/help/catch-progress.webp)
-   *Start Download: the progress window shows it coming in.*
-3. ![Download complete, with Open, Open with..., Open folder and Close](images/help/catch-complete.webp)
-   *Download complete: Open the file, or Open folder.*
+   *Download now: the progress window shows it coming in.*
+3. ![The Done window, with Open and its arrow, Open folder and Close](images/help/catch-complete.webp)
+   *Done: Open the file, or Open folder.*
 
 Downloads from a private window use that window's cookies, never the normal ones, and aren't kept in Grabbit's list after it closes.
 
@@ -96,7 +96,7 @@ The extension's button shows whether the browser reaches Grabbit. A red **!** me
 A VPN or proxy extension is a proxy for the browser only. Switch on **Send downloads through this
 browser's proxy or VPN extension** in the extension's toolbar popup (it's off as installed), and
 Grabbit downloads what it takes from the browser through the same proxy (with **Options → Proxy /
-Socks → Use proxy/socks from a browser's request**, on by default; see
+SOCKS → Use proxy/SOCKS from a browser's request**, on by default; see
 [Options](options.md#proxy--socks)). Switched off, the extension reads nothing of the browser's
 proxy.
 
@@ -161,12 +161,12 @@ If Grabbit can't be reached when you choose one of these, the help page opens at
 ![The Download video button over a YouTube video in Chrome](images/help/video-button.webp)
 *The button over a video. Drag it where you like; it stays there.*
 
-Point at a video on a web page and a small **Download video** button appears at its edge. Click it and Grabbit's **Download video from a page** window opens and looks up the qualities it can download. It takes the video you clicked: its own file when it plays one, or the stream the player loaded (HLS or DASH), else the page. When the button can't tell which one you mean, the toolbar button's [Media on this page](#media-on-this-page) lists them all. Embedded players work too, and your sign-in for the site, the page that embeds the player and your browser's User-Agent go with it, so videos for members, or that play only on the site that embeds them, can be downloaded. A stream goes with what the browser sent when the player asked for it, its referrer, its origin and its cookies (a player embedded from another site may have cookies the browser keeps for that page only), and they are sent again with its playlists and pieces: a site's video server that serves its own pages' players only lets Grabbit through as well. Sound players get the button too.
+Point at a video on a web page and a small round button with a green arrow appears in its corner; point at the button and it opens to **Download video**. Click it and a menu opens over the video: Grabbit looks up the qualities it can download and lists them with their sizes, the videos and the sounds in their own **Video** and **Audio** tabs. Pick one and it downloads at once, with only its progress window; Grabbit's main window stays where it is (with **Do not start downloading, only add files to the queue** on in Options, it goes in the queue instead). A quality already in the list follows Options' **If a duplicate download link is added**. **Open in Grabbit...** at the bottom of the menu opens the **Download video from a page** window instead. Grabbit must be running for the menu: when it isn't, or for another Grabbit you send downloads to, a click opens that window directly. It takes the video you clicked: its own file when it plays one, or the stream the player loaded (HLS or DASH), else the page. When the button can't tell which one you mean, the toolbar button's [Media on this page](#media-on-this-page) lists them all. Embedded players work too, and your sign-in for the site, the page that embeds the player and your browser's User-Agent go with it, so videos for members, or that play only on the site that embeds them, can be downloaded. A stream goes with what the browser sent when the player asked for it, its referrer, its origin and its cookies (a player embedded from another site may have cookies the browser keeps for that page only), and they are sent again with its playlists and pieces: a site's video server that serves its own pages' players only lets Grabbit through as well. Sound players get the button too.
 
-It stays out of the way: it shows only while you point at a video (or the player has the keyboard's focus; **Tab** then moves to the button), fades when the pointer rests, and leaves out small videos and short muted loops (animated pictures, backgrounds). In fullscreen it follows the video when the player allows it. On a copy-protected video (DRM) it says that the video can't be saved.
+It stays out of the way: it shows only while you point at a video (or the player has the keyboard's focus; **Tab** then moves to the button), fades when the pointer rests, and leaves out small videos and short muted loops (animated pictures, backgrounds). In fullscreen it follows the video when the player allows it. After a click it says for a moment what happened (**Sent to Grabbit**, or why not). On a copy-protected video (DRM) it says that the video can't be saved.
 
 - **Move it**: drag it anywhere along the video's edge; it snaps to the nearest edge and stays there on that site.
-- **Its menu** (the arrow next to it): **Hide on this video**, **Never on** the site (Grabbit remembers the site), and **Button settings...**, which opens Grabbit's Options.
+- **Its menu** (the small ⌄ at its end, shown while you point at it): **Hide on this video**, **Never on** the site (Grabbit remembers the site), and **Button settings...**, which opens Grabbit's Options.
 - **Turn it off, or see the sites it stays off**: **Options → General → Customize Grabbit Download panels in browsers → Edit...**.
 
 ![The Download panels settings: the button on or off, and the sites it never shows on](images/help/download-panels.webp)
@@ -176,7 +176,7 @@ The button follows the rest of the integration: it doesn't show when **Use advan
 
 ## Keys to force or prevent capture
 
-Hold **Alt** while clicking a link to let the browser download it instead of Grabbit. Chromium browsers download such a link themselves. Firefox does nothing with that click, so the extension follows the link for it, as a plain click would, and the browser keeps what comes of it. When the link redirects, or the page it leads to starts the download by script ("your download starts in 5 seconds"), that download stays with the browser too when it starts within ten seconds. **Options → General → Keys...** says so, and holds **Also take files the browser would open**.
+Hold **Alt** while clicking a link to let the browser download it instead of Grabbit. The extension follows the link as a plain click would, in every browser, and the browser keeps what comes of it: the link opens in the tab, so a site's bot check (Cloudflare's "Just a moment...") runs there first. Without the extension in the way, Chromium browsers would save the link without opening it, which saves the check's page instead of the file; Firefox would do nothing. When the link redirects, or the page it leads to starts the download by script ("your download starts in 5 seconds"), that download stays with the browser too when it starts within ten seconds; the link's own address, and a download its own page starts (a bot check's page once its check is passed), within a minute. **Alt** with **Ctrl** or **Shift**, and the middle button, keep their meaning (a new tab or window). **Options → General → Keys...** says so, and holds **Also take files the browser would open**.
 
 To keep a site's downloads in the browser for good, use the toolbar button's **Never take downloads from**, or add the site to **Don't start downloading automatically from the following sites**. To keep a file type in the browser, take it off the file types list.
 

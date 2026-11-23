@@ -389,8 +389,8 @@ pub struct Item {
     /// added before the column existed have none.
     #[serde(default)]
     pub added: Option<String>,
-    /// Its own speed limit, bytes/s (progress window → Speed Limiter, "Remember Speed Limiter
-    /// settings for this file on download stop/resume"): used again whenever it starts.
+    /// Its own speed limit, bytes/s (progress window → Details → Limit, "Remember for this
+    /// file"): used again whenever it starts.
     #[serde(default)]
     pub own_limit: Option<u64>,
     /// A video from a page, downloaded by yt-dlp (its `url` is the page).
@@ -461,6 +461,10 @@ pub struct Item {
     /// #68), in the interface language; memory only.
     #[serde(skip)]
     pub notices: Vec<String>,
+    /// A video chosen in the browser's quality menu: the menu's look-up, for its first run only
+    /// (taken then); memory only, never written (its links are signed).
+    #[serde(skip)]
+    pub preloaded: Option<mdm_tools::video::Preloaded>,
     /// Whether its resume state is at its place, as read beside the window at start
     /// (resumeread.rs): the place read and the answer. Until that read comes it is taken as there
     /// (the safe side: the row keeps its place, and no other row takes it), and it is forgotten as
@@ -529,7 +533,7 @@ pub(crate) fn merge_failure(error: &str, kept: &[PathBuf]) -> String {
     if kept.is_empty() {
         return crate::i18n::fmt(
             // i18n: why a video download failed: ffmpeg couldn't join its picture and sound into one file; {error} = ffmpeg's reason, in English
-            crate::i18n::t("its picture and sound couldn't be joined into one file ({error})"),
+            crate::i18n::t("its picture and sound could not be joined into one file ({error})"),
             &[("error", &error)],
         );
     }
@@ -542,7 +546,7 @@ pub(crate) fn merge_failure(error: &str, kept: &[PathBuf]) -> String {
     crate::i18n::fmt(
         // i18n: why a video download failed: ffmpeg couldn't join its picture and sound into one file; {error} = ffmpeg's reason, in English; {files} = the downloaded parts' file names, kept in the download folder; "Also delete the file from disk" is the Delete box's choice
         crate::i18n::t(
-            "its picture and sound couldn't be joined into one file ({error}). What was downloaded stays in the folder for Resume to join again ({files}); deleting the download with \"Also delete the file from disk\" removes it",
+            "its picture and sound could not be joined into one file ({error}). What was downloaded stays in the folder for Resume to join again ({files}); deleting the download with \"Also delete the file from disk\" removes it",
         ),
         &[("error", &error), ("files", &files)],
     )
@@ -601,18 +605,23 @@ fn tool_snapshot(p: mdm_tools::video::Progress, url: &Url) -> mdm_engine::Snapsh
         V::Stopped => (State::Cancelled, None, None),
     };
     let size = p.total;
+    // A live stream yt-dlp records says no progress: what it has recorded is what's downloaded,
+    // so Downloaded and the rate (from its growth) follow the recording.
+    let downloaded = p.downloaded.max(p.recorded);
     let by_engine = p.engine.is_some();
     let engine = p.engine.unwrap_or_default();
     // yt-dlp's one connection while it looks the page up or downloads, not an empty table
-    // (#793); the engine's own while it downloads the streams.
+    // (#793); the engine's own while it downloads the streams. Receiving once a live stream's
+    // recorder has opened its file (it is connected: `recording`, its file still 0 bytes until
+    // its first block) or its recording grows, though yt-dlp gives it no speed.
     let connections = if by_engine {
         engine.connections
     } else {
         matches!(state, State::Downloading)
             .then(|| ConnView {
                 id: 0,
-                downloaded: p.downloaded,
-                status: if p.speed > 0.0 {
+                downloaded,
+                status: if p.speed > 0.0 || p.recorded > 0 || p.recording {
                     ConnStatus::Receiving
                 } else {
                     ConnStatus::Connecting
@@ -626,7 +635,7 @@ fn tool_snapshot(p: mdm_tools::video::Progress, url: &Url) -> mdm_engine::Snapsh
         size.map(|t| {
             vec![mdm_engine::download::SegmentView {
                 start: 0,
-                cursor: p.downloaded.min(t),
+                cursor: downloaded.min(t),
                 end: t,
             }]
         })
@@ -639,7 +648,7 @@ fn tool_snapshot(p: mdm_tools::video::Progress, url: &Url) -> mdm_engine::Snapsh
         url: url.clone(),
         file,
         size,
-        downloaded: p.downloaded,
+        downloaded,
         resumable: Some(true),
         segments,
         connections,
@@ -684,6 +693,23 @@ impl Job {
         }
     }
 
+    /// Stop and save: a live stream yt-dlp records is stopped and what it recorded kept
+    /// as a video, the download then done; anything else is cancelled as [`Job::cancel`] does.
+    pub fn save(&self) {
+        match self {
+            Job::Video { job, .. } => job.save(),
+            _ => self.cancel(),
+        }
+    }
+
+    /// A live stream's download: recording, being saved, or neither (`None`: every other job).
+    pub fn live_state(&self) -> Option<mdm_tools::video::LiveState> {
+        match self {
+            Job::Video { job, .. } => job.live_state(),
+            _ => None,
+        }
+    }
+
     /// A helper program downloads it, and takes a speed limit only as it starts, so a new limit
     /// starts it again (#708, `App::reapply_helper_limits`): gallery-dl, and yt-dlp for a video
     /// MDM's engine doesn't download (#769: a live stream, RTMP…).
@@ -714,7 +740,7 @@ impl Job {
             Job::Torrent(t) => t.speed_limit(),
             Job::Video { job, .. } => job.speed_limit(),
             Job::Gallery { job, .. } => job.speed_limit(),
-            Job::Remote(_) => None,
+            Job::Remote(r) => r.speed_limit(),
         }
     }
 }
@@ -736,13 +762,13 @@ pub fn sub_notice(p: &mdm_tools::video::SubProblem, site: &str) -> String {
         SubReason::TooManyRequests => crate::i18n::fmt(
             // i18n: after a video download: {language} = a language's name, {site} = a web site's name (youtube.com); the site refused because it was asked too often
             crate::i18n::t(
-                "Subtitles in {language} couldn't be downloaded: {site} refused (too many requests).",
+                "Subtitles in {language} could not be downloaded: {site} refused (too many requests).",
             ),
             &[("language", language), ("site", site)],
         ),
         SubReason::Other(why) => crate::i18n::fmt(
             // i18n: after a video download: {language} = a language's name, {reason} = the helper program's own (English) words
-            crate::i18n::t("Subtitles in {language} couldn't be downloaded: {reason}"),
+            crate::i18n::t("Subtitles in {language} could not be downloaded: {reason}"),
             &[("language", language), ("reason", why)],
         ),
     }
@@ -817,7 +843,7 @@ impl Item {
         push_log(&mut self.log, now, text.into());
     }
 
-    /// The last `n` log entries as tooltip lines ("14:02:11  Connected to …").
+    /// The last `n` log entries as tooltip lines ("Oct 28 14:02:11 2026  Connected to …").
     pub fn log_lines(&self, n: usize) -> String {
         self.log
             .iter()
@@ -828,7 +854,7 @@ impl Item {
                 // In the interface's way (English month names in every language before).
                 // With the offset of now (crate::clock, #536).
                 let t = crate::clock::local_at(*at)
-                    .map(|t| when_text(t.naive_local()))
+                    .map(|t| when_text(t.naive_local(), true))
                     .unwrap_or_default();
                 format!("{t}  {text}")
             })
@@ -875,6 +901,7 @@ impl Item {
             login: None,
             context: Default::default(),
             notices: Vec::new(),
+            preloaded: None,
             state_here: None,
         }
     }
@@ -916,6 +943,11 @@ impl Item {
         let Some(live) = &mut self.live else {
             return false;
         };
+        // Before the snapshot, not after: a live stream recording or being saved as this is read
+        // can only show, in the snapshot taken next, more recorded, 0 (its run over, being
+        // saved) or its file's size (saved). Read after, a save begun or ended in between would
+        // show 0 for one look, unheld, and its file's size counted again by the download limit.
+        let live_now = live.dl.live_state();
         let s = live.dl.snapshot();
         // The service's id for a torrent sent to it (#44), kept to continue after a restart.
         if let (Job::Remote(r), Some(spec)) = (&live.dl, self.remote.as_mut())
@@ -926,7 +958,7 @@ impl Item {
         if let Some(server) = &s.server {
             self.server = Some(crate::whereis::Seen::from(server));
         }
-        self.downloaded = s.downloaded;
+        self.downloaded = shown_downloaded(live_now, s.downloaded, self.downloaded);
         self.size = size_after(s.state, s.size, s.downloaded, self.size);
         self.resumable = s.resumable.or(self.resumable);
         if let Some(f) = &s.file {
@@ -952,15 +984,15 @@ impl Item {
             // Every byte in (#736): nothing comes in while the last of it is written out, the
             // file checked, joined or named; the rate the download ended on isn't one any more.
             live.rate = 0.0;
-            live.sample = (Instant::now(), s.downloaded);
+            live.sample = (Instant::now(), self.downloaded);
         } else if dt >= 0.5 {
-            let inst = s.downloaded.saturating_sub(live.sample.1) as f64 / dt;
+            let inst = self.downloaded.saturating_sub(live.sample.1) as f64 / dt;
             live.rate = if live.rate == 0.0 {
                 inst
             } else {
                 0.6 * live.rate + 0.4 * inst
             };
-            live.sample = (Instant::now(), s.downloaded);
+            live.sample = (Instant::now(), self.downloaded);
         }
         let seen = live.seen;
         for e in s.events.iter().filter(|e| e.seq > seen) {
@@ -978,7 +1010,9 @@ impl Item {
             | State::Merging
             | State::Completing => None,
             State::Done => Some(Status::Complete),
-            State::Cancelled => Some(Status::Stopped),
+            // Stopped, its last bytes and state still being written (upstream issue 1328):
+            // stopped for the list now; a start at its place waits for them in the engine.
+            State::Stopping | State::Cancelled => Some(Status::Stopped),
             State::Failed => Some(Status::Error),
         };
         match ended {
@@ -1085,6 +1119,12 @@ impl Item {
         }
     }
 
+    /// A running live stream's download: recording, or its recording being saved
+    /// ([`Job::live_state`]); `None` when nothing runs.
+    pub fn live_state(&self) -> Option<mdm_tools::video::LiveState> {
+        self.live.as_ref().and_then(|l| l.dl.live_state())
+    }
+
     /// Resume / Download Now may start it: not running, and not finished (a gallery finished
     /// may start again: it fetches the files not there yet, #58).
     pub fn can_start(&self) -> bool {
@@ -1104,6 +1144,29 @@ impl Item {
             && self.live.is_none()
             && self.snap.as_ref().is_some_and(|s| {
                 s.state == State::Failed && matches!(s.failure, Some(mdm_engine::Error::GotWebPage))
+            })
+    }
+
+    /// Its place may be a folder Grabbit made for it, which a delete with its files sends to the
+    /// Recycle Bin whole: a debrid torrent's own folder inside its download folder, never that
+    /// download folder itself.
+    pub fn owns_folder(&self) -> bool {
+        self.remote
+            .as_ref()
+            .is_some_and(|r| self.dest != r.folder && self.dest.starts_with(&r.folder))
+    }
+
+    /// It failed because its address no longer works (`errors::wants_new_address`): the Details
+    /// pane offers Refresh download address (plan 12b, E2). As its last run ended, this session
+    /// only, as [`Self::got_web_page`].
+    pub fn wants_new_address(&self) -> bool {
+        self.status == Status::Error
+            && self.live.is_none()
+            && self.snap.as_ref().is_some_and(|s| {
+                s.state == State::Failed
+                    && s.failure
+                        .as_ref()
+                        .is_some_and(crate::errors::wants_new_address)
             })
     }
 
@@ -1269,6 +1332,15 @@ impl Item {
     }
 }
 
+/// What a running download shows as downloaded: `now`, its job's; a live stream recording or
+/// being saved (`live`, read before `now`) never less than `shown`. Its recording being saved, its
+/// run is over and what it recorded no longer counts in its progress (0 until its file is
+/// there): what it got stays, for the window and for the download limit, which counts only what
+/// is more than before (`Quota::record`) and would count the recording again as it came back.
+fn shown_downloaded(live: Option<mdm_tools::video::LiveState>, now: u64, shown: u64) -> u64 {
+    if live.is_some() { now.max(shown) } else { now }
+}
+
 /// Every byte of a download is in (#736): the last of it is written out (its whole size
 /// received and no connection receiving or connecting, as the progress window's "Finishing..."),
 /// the file checked, a video's streams joined, or the file named. Nothing comes in any more.
@@ -1326,29 +1398,39 @@ pub fn date_text(stored: &str) -> String {
     let Some(t) = stamp_time(stored) else {
         return stored.to_owned();
     };
-    when_text(t)
+    when_text(t, false)
 }
 
 /// A local time as the interface writes dates and times (Options → Regional; else IDM's text,
 /// on the system's clock).
-pub fn when_text(t: chrono::NaiveDateTime) -> String {
+/// `seconds`: the download log's whole time, with its seconds and year, as before plan 12c; the
+/// list's columns leave both out where they can (`stamp_text`).
+pub fn when_text(t: chrono::NaiveDateTime, seconds: bool) -> String {
     let formats = crate::regional::current();
     if formats.custom {
         return crate::i18n::ltr(&crate::regional::short_date_time(t));
     }
-    stamp_text(t, formats.clock24)
+    use chrono::Datelike;
+    stamp_text(t, formats.clock24, crate::clock::now().year(), seconds)
 }
 
-/// IDM's text for a time, as stored (`Oct 28 21:44:12 2026`) on a 24-hour clock, and with the
-/// system's 12-hour clock (#392) `Oct 28 9:44:12 PM 2026`.
-fn stamp_text(t: chrono::NaiveDateTime, clock24: bool) -> String {
-    use chrono::Timelike;
-    format!(
-        "{} {} {}",
-        t.format("%b %d"),
-        crate::regional::time_text(t.hour(), t.minute(), t.second(), clock24),
-        t.format("%Y")
-    )
+/// The list's text for a time: `Oct 28 21:44` on a 24-hour clock, `Oct 28 9:44 PM` on the
+/// system's 12-hour clock (#392); no seconds, and the year only when it isn't `this_year`
+/// (`Oct 28 21:44 2026`), so it fits the Added column. With `seconds` (the download log), the
+/// whole time as stored: `Oct 28 21:44:12 2026`, `Oct 28 9:44:12 PM 2026`.
+fn stamp_text(t: chrono::NaiveDateTime, clock24: bool, this_year: i32, seconds: bool) -> String {
+    use chrono::{Datelike, Timelike};
+    let time = if seconds {
+        crate::regional::time_text(t.hour(), t.minute(), t.second(), clock24)
+    } else {
+        crate::regional::minutes_text(t.hour(), t.minute(), clock24)
+    };
+    let day_time = format!("{} {time}", t.format("%b %d"));
+    if t.year() == this_year && !seconds {
+        day_time
+    } else {
+        format!("{day_time} {}", t.year())
+    }
 }
 
 /// `13.38%` (IDM).
@@ -1366,35 +1448,127 @@ pub fn size(b: u64) -> String {
     } else if b >= 1024.0 {
         format!("{:.2} KB", b / 1024.0) // not translated: IDM's text
     } else {
-        format!("{b} Bytes") // not translated: IDM's text
+        format!("{b} bytes") // not translated: IDM's text
     }
 }
 
-/// `200.000 MB` — the progress dialog uses three decimals (and KB below a kilobyte).
-pub fn size3(b: u64) -> String {
-    let v = b as f64;
-    let k = 1024.0;
-    if v >= k * k * k {
-        format!("{:.3} GB", v / (k * k * k)) // not translated: IDM's text
-    } else if v >= k * k {
-        format!("{:.3} MB", v / (k * k)) // not translated: IDM's text
-    } else {
-        format!("{:.3} KB", v / k) // not translated: IDM's text
-    }
-}
-
-/// `11.623 MB/sec`, `512.000 KB/sec` (IDM's progress dialog uses three decimals).
+/// `11.623 MB/s`, `512.000 KB/s` (IDM's progress dialog uses three decimals).
 pub fn rate(bps: f64) -> String {
     if bps >= 1024.0 * 1024.0 {
-        format!("{:.3} MB/sec", bps / (1024.0 * 1024.0)) // not translated: IDM's text
+        format!("{:.3} MB/s", bps / (1024.0 * 1024.0)) // not translated: a unit
     } else {
-        format!("{:.3} KB/sec", bps / 1024.0) // not translated: IDM's text
+        format!("{:.3} KB/s", bps / 1024.0) // not translated: a unit
     }
 }
 
-/// The list's Size column: IDM puts two spaces before the unit (`200.00  MB`).
+/// A speed limit as the user typed it, in whole KB/s: `512 KB/s`, `2048 KB/s` (the Speed
+/// Limiter's boxes take KB/s).
+pub fn limit_rate(bps: u64) -> String {
+    let kb = (bps / 1024).max(1);
+    format!("{kb} KB/s") // not translated: as `rate` writes it
+}
+
+/// The speed limit that holds a running download back (upstream issue 1191): what its
+/// Transfer rate says beside the speed, so a limiter left on is not forgotten.
+///
+/// It names the limit, not that the download is "limited": the speed measured goes a little
+/// above and below a limit it runs at, and a download slower than its limit (a slow server) is
+/// under that limit all the same, so comparing the two would flicker or claim too much.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Limit {
+    /// At most this many bytes a second for this download: its own limit (its progress
+    /// window's Limit, or remembered for the file), else the Speed Limiter's for one
+    /// file.
+    One(u64),
+    /// This many bytes a second for all downloads together (Speed Limiter settings, beyond
+    /// IDM), the tighter one for this download.
+    All(u64),
+}
+
+impl Limit {
+    /// The limit that binds a download whose own limit is `one`, while the limit for all
+    /// downloads together is `all` (both bytes/s, None: off) and `running` downloads share it
+    /// (this one among them). Its own binds unless that many downloads, each at it, would go
+    /// over the shared one: then each gets less than its own, and the shared one binds.
+    pub fn binding(one: Option<u64>, all: Option<u64>, running: usize) -> Option<Limit> {
+        match (one, all) {
+            (None, None) => None,
+            (Some(one), None) => Some(Limit::One(one)),
+            (None, Some(all)) => Some(Limit::All(all)),
+            (Some(one), Some(all)) => {
+                let together = one.saturating_mul(running.max(1) as u64);
+                Some(if together <= all {
+                    Limit::One(one)
+                } else {
+                    Limit::All(all)
+                })
+            }
+        }
+    }
+
+    /// Bytes a second.
+    pub fn rate(self) -> u64 {
+        match self {
+            Limit::One(r) | Limit::All(r) => r,
+        }
+    }
+
+    /// The progress window's Transfer rate with the limit after the speed `shown` (a
+    /// [`rate`]): `512.000 KB/s (limit: 512 KB/s)`.
+    pub fn after(self, shown: &str) -> String {
+        let limit = limit_rate(self.rate());
+        let template = match self {
+            // i18n: the progress window's Transfer rate row while a speed limit applies: {rate} is the download's speed now ("512.000 KB/s"), {limit} the most this download may take ("512 KB/s"). The row is narrow: keep it short
+            Limit::One(_) => crate::i18n::t("{rate} (limit: {limit})"),
+            // i18n: the progress window's Transfer rate row while the limit for all downloads together applies: {rate} is this download's speed now ("512.000 KB/s"), {limit} the most all downloads together may take ("1024 KB/s"). The row is narrow: keep it short
+            Limit::All(_) => crate::i18n::t("{rate} (limit for all downloads: {limit})"),
+        };
+        crate::i18n::fmt(template, &[("rate", shown), ("limit", &limit)])
+    }
+
+    /// The tip of a download's Transfer rate cell in the list (the column is too narrow for
+    /// the limit beside the speed).
+    pub fn tip(self) -> String {
+        let limit = limit_rate(self.rate());
+        let template = match self {
+            // i18n: tip of a download's Transfer rate in the list: {limit} is the most this download may take ("512 KB/s"), set with the Speed Limiter
+            Limit::One(_) => crate::i18n::t("Speed Limiter: at most {limit} for this download"),
+            // i18n: tip of a download's Transfer rate in the list: {limit} is the most all downloads together may take ("1024 KB/s"), set in the Speed Limiter's settings
+            Limit::All(_) => crate::i18n::t("Speed Limiter: {limit} for all downloads together"),
+        };
+        crate::i18n::fmt(template, &[("limit", &limit)])
+    }
+}
+
+/// The status strip's and the tray tip's word that the Speed Limiter is on (upstream issue
+/// 1191), whatever runs: the limit for one download (`one`, Downloads → Speed Limiter → Turn
+/// on) and the limit for all downloads together (`all`, while it applies), bytes/s. None while
+/// both are off.
+pub fn limiter_hint(one: Option<u64>, all: Option<u64>) -> Option<String> {
+    let t = crate::i18n::t;
+    Some(match (one, all) {
+        (None, None) => return None,
+        (Some(one), None) => crate::i18n::fmt(
+            // i18n: the status bar and the tray icon's tip while Downloads → Speed Limiter is turned on: {limit} is the most each download may take ("512 KB/s")
+            t("Speed Limiter: {limit} per download"),
+            &[("limit", &limit_rate(one))],
+        ),
+        (None, Some(all)) => crate::i18n::fmt(
+            // i18n: the status bar and the tray icon's tip while the Speed Limiter's limit for all downloads together is on: {limit} is the most they may take together ("1024 KB/s")
+            t("Speed Limiter: {limit} for all downloads"),
+            &[("limit", &limit_rate(all))],
+        ),
+        (Some(one), Some(all)) => crate::i18n::fmt(
+            // i18n: the status bar and the tray icon's tip while both Speed Limiter limits are on: {one} is the most each download may take ("512 KB/s"), {all} the most all of them together may take ("1024 KB/s")
+            t("Speed Limiter: {one} per download, {all} for all"),
+            &[("one", &limit_rate(one)), ("all", &limit_rate(all))],
+        ),
+    })
+}
+
+/// The list's Size column: as [`size`], one space before the unit (`200.00 MB`).
 pub fn size_list(b: u64) -> String {
-    size(b).replacen(' ', "  ", 1)
+    size(b)
 }
 
 /// `14 sec`, `1 min 22 sec`, `2 hour(s) 5 min`.
@@ -1448,6 +1622,24 @@ mod tests {
     }
 
     use super::*;
+
+    /// A debrid torrent's own folder may go whole to the Recycle Bin; its download folder
+    /// itself, or a place outside it, never; nor anything not a debrid torrent.
+    #[test]
+    fn only_a_folder_grabbit_made_is_its_own() {
+        let url = Url::parse("https://example.org/t.torrent").unwrap();
+        let mut it = Item::new(1, url, PathBuf::from("/d/Torrents/Show"), Category::General);
+        assert!(!it.owns_folder(), "not a debrid torrent");
+        it.remote = Some(RemoteSpec {
+            folder: PathBuf::from("/d/Torrents"),
+            ..Default::default()
+        });
+        assert!(it.owns_folder());
+        it.dest = PathBuf::from("/d/Torrents");
+        assert!(!it.owns_folder(), "the download folder itself");
+        it.dest = PathBuf::from("/elsewhere/Show");
+        assert!(!it.owns_folder(), "outside it");
+    }
 
     /// Joining a video's streams failed: why, and that what was downloaded stays for Resume,
     /// by name; without anything kept, only why (upstream `6196f9ad`).
@@ -1590,11 +1782,12 @@ mod tests {
     #[test]
     fn formatting() {
         assert_eq!(size(7_392_461), "7.05 MB");
-        assert_eq!(size(500), "500 Bytes");
+        assert_eq!(size(500), "500 bytes");
         assert_eq!(time(14.2), "14 sec");
         assert_eq!(time(82.0), "1 min 22 sec");
         assert_eq!(time(7500.0), "2 hour(s) 5 min");
-        assert_eq!(rate(12_187_628.0), "11.623 MB/sec");
+        assert_eq!(rate(12_187_628.0), "11.623 MB/s");
+        assert_eq!(size_list(7_392_461), "7.05 MB");
     }
 }
 
@@ -1611,22 +1804,36 @@ mod stamp_tests {
     #[test]
     fn english_stamps_follow_the_clock() {
         let at = |s| super::stamp_time(s).unwrap();
-        // 24-hour: exactly as stored.
-        for s in ["Oct 28 21:44:12 2026", "Jan 01 00:05:09 2027"] {
-            assert_eq!(super::stamp_text(at(s), true), s);
-        }
+        // 24-hour: as stored without the seconds; the year only when it isn't this year.
+        assert_eq!(
+            super::stamp_text(at("Oct 28 21:44:12 2026"), true, 2027, false),
+            "Oct 28 21:44 2026"
+        );
+        assert_eq!(
+            super::stamp_text(at("Jan 01 00:05:09 2027"), true, 2027, false),
+            "Jan 01 00:05"
+        );
         // 12-hour (#392): midnight and noon are 12.
         assert_eq!(
-            super::stamp_text(at("Oct 28 21:44:12 2026"), false),
+            super::stamp_text(at("Oct 28 21:44:12 2026"), false, 2026, false),
+            "Oct 28 9:44 PM"
+        );
+        assert_eq!(
+            super::stamp_text(at("Jan 01 00:05:09 2027"), false, 2026, false),
+            "Jan 01 12:05 AM 2027"
+        );
+        assert_eq!(
+            super::stamp_text(at("Jun 15 12:00:00 2027"), false, 2027, false),
+            "Jun 15 12:00 PM"
+        );
+        // The download log keeps the whole time, its seconds and year: as stored on a 24-hour
+        // clock, this year too.
+        for s in ["Oct 28 21:44:12 2026", "Jan 01 00:05:09 2027"] {
+            assert_eq!(super::stamp_text(at(s), true, 2027, true), s);
+        }
+        assert_eq!(
+            super::stamp_text(at("Oct 28 21:44:12 2026"), false, 2026, true),
             "Oct 28 9:44:12 PM 2026"
-        );
-        assert_eq!(
-            super::stamp_text(at("Jan 01 00:05:09 2027"), false),
-            "Jan 01 12:05:09 AM 2027"
-        );
-        assert_eq!(
-            super::stamp_text(at("Jun 15 12:00:00 2027"), false),
-            "Jun 15 12:00:00 PM 2027"
         );
     }
 }
@@ -1711,6 +1918,8 @@ mod helper_connection_tests {
             helper: None,
             merging: None,
             merge_failed: None,
+            recorded: 0,
+            recording: false,
         };
         // Looking the page up: connecting.
         let s = tool_snapshot(p.clone(), &page);
@@ -1734,5 +1943,176 @@ mod helper_connection_tests {
         // Done: no connection left.
         p.state = mdm_tools::video::State::Done("Clip.mp4".into());
         assert!(tool_snapshot(p, &page).connections.is_empty());
+    }
+
+    fn live_progress() -> mdm_tools::video::Progress {
+        mdm_tools::video::Progress {
+            helper: Some(mdm_tools::streams::Helper::Live),
+            ..Default::default()
+        }
+    }
+
+    /// A live stream yt-dlp records says no progress: what it has recorded is what's downloaded
+    /// (Downloaded, and the rate from its growth); a progress of its own counts when larger.
+    #[test]
+    fn a_recording_counts_as_downloaded() {
+        let page: Url = "https://www.example.com/live".parse().unwrap();
+        let mut p = live_progress();
+        p.recorded = 3 << 20;
+        let s = tool_snapshot(p.clone(), &page);
+        assert_eq!(s.downloaded, 3 << 20);
+        assert_eq!(s.connections[0].downloaded, 3 << 20);
+        assert!(matches!(s.connections[0].status, ConnStatus::Receiving));
+        p.downloaded = 4 << 20;
+        assert_eq!(tool_snapshot(p.clone(), &page).downloaded, 4 << 20);
+        p.recorded = 0;
+        p.downloaded = 0;
+        assert_eq!(tool_snapshot(p, &page).downloaded, 0);
+    }
+
+    /// A live stream whose recorder has opened its file is receiving, though nothing is written
+    /// yet (the file stays 0 bytes until its first block): not "Connecting". Before that, it is
+    /// connecting.
+    #[test]
+    fn a_recorder_that_opened_its_file_is_receiving() {
+        let page: Url = "https://www.example.com/live".parse().unwrap();
+        let mut p = live_progress();
+        let s = tool_snapshot(p.clone(), &page);
+        assert!(matches!(s.connections[0].status, ConnStatus::Connecting));
+        p.recording = true;
+        let s = tool_snapshot(p, &page);
+        assert_eq!((s.downloaded, s.connections[0].downloaded), (0, 0));
+        assert!(matches!(s.connections[0].status, ConnStatus::Receiving));
+    }
+
+    /// A live stream recorded, stopped and saved: what it shows as downloaded never drops while
+    /// it is saved (its run over, its progress 0), and the download limit counts the recording
+    /// once, not again as its file comes. A live stream started anew shows its new recording.
+    #[test]
+    fn a_saved_recording_is_counted_once() {
+        use mdm_tools::video::LiveState::{Recording, Saving};
+        const M: u64 = 1 << 20;
+        // (live_state read before the snapshot, the snapshot's downloaded)
+        let looks = [
+            // Started: nothing recorded yet.
+            (None, 0),
+            (Some(Recording), 4 * M),
+            (Some(Recording), 10 * M),
+            // Stop and save: read as recording, its run over in the snapshot.
+            (Some(Recording), 0),
+            (Some(Saving), 0),
+            // Saved as the snapshot was taken: its file's size.
+            (Some(Saving), 10 * M - 1000),
+            (None, 10 * M - 1000),
+        ];
+        let start = std::time::Instant::now();
+        let mut quota = crate::quota::Quota::default();
+        let mut shown = 0;
+        for (n, (live, now)) in looks.into_iter().enumerate() {
+            let before = shown;
+            shown = shown_downloaded(live, now, shown);
+            if live.is_some() {
+                assert!(shown >= before, "look {n}: {shown} < {before}");
+            }
+            quota.record(start, std::iter::once((7, shown)));
+        }
+        assert_eq!(shown, 10 * M - 1000);
+        assert_eq!(
+            quota.used(start, std::time::Duration::from_secs(3600)),
+            10 * M
+        );
+        // Not a live stream, or one not recording (yet, again): its job's own figure.
+        assert_eq!(shown_downloaded(None, 0, 10 * M), 0);
+    }
+}
+
+/// Which speed limit a download's Transfer rate names, and how (upstream issue 1191).
+#[cfg(test)]
+mod limit_tests {
+    use super::{Limit, limit_rate, limiter_hint};
+
+    const KB: u64 = 1024;
+
+    #[test]
+    fn its_own_limit_binds_until_the_shared_one_is_tighter() {
+        assert_eq!(Limit::binding(None, None, 1), None);
+        assert_eq!(
+            Limit::binding(Some(10 * KB), None, 3),
+            Some(Limit::One(10 * KB))
+        );
+        assert_eq!(
+            Limit::binding(None, Some(500 * KB), 3),
+            Some(Limit::All(500 * KB))
+        );
+        // One download at 10 KB/s under 500 KB/s for all: its own limit holds it.
+        assert_eq!(
+            Limit::binding(Some(10 * KB), Some(500 * KB), 1),
+            Some(Limit::One(10 * KB))
+        );
+        // 50 of them at 10 KB/s fill 500 KB/s exactly: still their own.
+        assert_eq!(
+            Limit::binding(Some(10 * KB), Some(500 * KB), 50),
+            Some(Limit::One(10 * KB))
+        );
+        // 51 would take more than 500 KB/s together: the shared limit holds them.
+        assert_eq!(
+            Limit::binding(Some(10 * KB), Some(500 * KB), 51),
+            Some(Limit::All(500 * KB))
+        );
+        // Its own above the shared one: the shared one, even alone.
+        assert_eq!(
+            Limit::binding(Some(800 * KB), Some(500 * KB), 1),
+            Some(Limit::All(500 * KB))
+        );
+        // No count (asked before it runs) counts it alone; no overflow at the top.
+        assert_eq!(
+            Limit::binding(Some(10 * KB), Some(500 * KB), 0),
+            Some(Limit::One(10 * KB))
+        );
+        assert_eq!(
+            Limit::binding(Some(u64::MAX), Some(500 * KB), 2),
+            Some(Limit::All(500 * KB))
+        );
+    }
+
+    #[test]
+    fn limits_read_as_typed() {
+        assert_eq!(limit_rate(512 * KB), "512 KB/s");
+        assert_eq!(limit_rate(2048 * KB), "2048 KB/s");
+        // Below a kilobyte (a share of the limit for all): never "0 KB/s".
+        assert_eq!(limit_rate(100), "1 KB/s");
+    }
+
+    #[test]
+    fn transfer_rate_tip_and_hint() {
+        assert_eq!(
+            Limit::One(512 * KB).after("511.998 KB/s"),
+            "511.998 KB/s (limit: 512 KB/s)"
+        );
+        assert_eq!(
+            Limit::All(1024 * KB).after("340.112 KB/s"),
+            "340.112 KB/s (limit for all downloads: 1024 KB/s)"
+        );
+        assert_eq!(
+            Limit::One(10 * KB).tip(),
+            "Speed Limiter: at most 10 KB/s for this download"
+        );
+        assert_eq!(
+            Limit::All(500 * KB).tip(),
+            "Speed Limiter: 500 KB/s for all downloads together"
+        );
+        assert_eq!(limiter_hint(None, None), None);
+        assert_eq!(
+            limiter_hint(Some(10 * KB), None).as_deref(),
+            Some("Speed Limiter: 10 KB/s per download")
+        );
+        assert_eq!(
+            limiter_hint(None, Some(500 * KB)).as_deref(),
+            Some("Speed Limiter: 500 KB/s for all downloads")
+        );
+        assert_eq!(
+            limiter_hint(Some(10 * KB), Some(500 * KB)).as_deref(),
+            Some("Speed Limiter: 10 KB/s per download, 500 KB/s for all")
+        );
     }
 }

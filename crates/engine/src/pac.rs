@@ -1,4 +1,4 @@
-//! Proxy auto-config (Options → Proxy / Socks → "Use automatic configuration script"): the
+//! Proxy auto-config (Options → Proxy / SOCKS → "Use automatic configuration script"): the
 //! script's `FindProxyForURL(url, host)` decides the proxy for each address. It runs in a small
 //! JavaScript engine (QuickJS), with the helper functions PAC scripts expect written here (our
 //! own, from the PAC definition) and DNS answered by the system. An answer is kept per script and

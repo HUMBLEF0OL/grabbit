@@ -6,6 +6,175 @@
 use std::ffi::c_void;
 use std::mem::{size_of, zeroed};
 
+/// Who an opened file is, beyond its name (torrent_ownership.rs): its volume, its file index and
+/// its creation time. A file that took the same name later has another index or another
+/// creation time. FAT and exFAT make the index from the entry's place in its folder, so there
+/// only the volume and creation time count, and a drive that gives no index (some network ones)
+/// counts the creation time alone. No creation time at all: no identity.
+// ponytail: FAT can give a file saved under a deleted file's name, within about 15 s, its
+// creation time back ("tunnelling"); upstream refuses an identity there, which would ask before
+// every start. Ask instead if that case shows up.
+pub fn torrent_file_identity(file: &std::fs::File) -> std::io::Result<[u64; 4]> {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_BASIC_INFO, FILE_ID_INFO, FileBasicInfo, FileIdInfo, GetFileInformationByHandleEx,
+    };
+    // SAFETY: every field of this output structure admits zero.
+    let mut basic: FILE_BASIC_INFO = unsafe { zeroed() };
+    // SAFETY: the file owns a live handle; `basic` is a writable structure of the size given.
+    if unsafe {
+        GetFileInformationByHandleEx(
+            file.as_raw_handle(),
+            FileBasicInfo,
+            (&mut basic as *mut FILE_BASIC_INFO).cast(),
+            size_of::<FILE_BASIC_INFO>() as u32,
+        )
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error());
+    }
+    if basic.CreationTime <= 0 {
+        return Err(std::io::ErrorKind::Unsupported.into());
+    }
+    let created = basic.CreationTime as u64;
+    // SAFETY: every field of this output structure admits zero.
+    let mut id: FILE_ID_INFO = unsafe { zeroed() };
+    // SAFETY: as above, for FILE_ID_INFO.
+    if unsafe {
+        GetFileInformationByHandleEx(
+            file.as_raw_handle(),
+            FileIdInfo,
+            (&mut id as *mut FILE_ID_INFO).cast(),
+            size_of::<FILE_ID_INFO>() as u32,
+        )
+    } == 0
+    {
+        return Ok([0, 0, 0, created]);
+    }
+    if id.FileId.Identifier == [0; 16] || !keeps_file_ids(file) {
+        return Ok([id.VolumeSerialNumber, 0, 0, created]);
+    }
+    Ok([
+        id.VolumeSerialNumber,
+        u64::from_le_bytes(id.FileId.Identifier[..8].try_into().unwrap()),
+        u64::from_le_bytes(id.FileId.Identifier[8..].try_into().unwrap()),
+        created,
+    ])
+}
+
+/// Whether the file's volume is NTFS or ReFS, where a file's index is its own and a recreated
+/// file gets a new one.
+fn keeps_file_ids(file: &std::fs::File) -> bool {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::GetVolumeInformationByHandleW;
+    let mut name = [0u16; 32];
+    // SAFETY: the file owns a live handle; `name` is a writable buffer of the length given, and
+    // the other outputs are not asked for.
+    let ok = unsafe {
+        GetVolumeInformationByHandleW(
+            file.as_raw_handle(),
+            std::ptr::null_mut(),
+            0,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            name.as_mut_ptr(),
+            name.len() as u32,
+        )
+    };
+    if ok == 0 {
+        return false;
+    }
+    let end = name.iter().position(|c| *c == 0).unwrap_or(name.len());
+    let name = String::from_utf16_lossy(&name[..end]);
+    name.eq_ignore_ascii_case("NTFS") || name.eq_ignore_ascii_case("ReFS")
+}
+
+/// Delete the file at `path` only if it is still the object `expected` names
+/// ([`torrent_file_identity`]): checked and deleted through one handle, so a file that took the
+/// name meanwhile stays. Ok(false): another file is there now. The handle shares read, write and
+/// delete, so a program that has the file open (the torrent engine on its way out, an antivirus
+/// scanning it) does not stop it; the name goes at once where the system can (POSIX semantics,
+/// Windows 10 1709 and later), else when the last handle closes. A moment's contention is tried
+/// again a few times.
+pub fn remove_owned_torrent_file(
+    path: &std::path::Path,
+    expected: [u64; 4],
+) -> std::io::Result<bool> {
+    use std::os::windows::{fs::OpenOptionsExt, io::AsRawHandle};
+    use windows_sys::Win32::Storage::FileSystem::{
+        DELETE, FILE_DISPOSITION_FLAG_DELETE, FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE,
+        FILE_DISPOSITION_FLAG_POSIX_SEMANTICS, FILE_DISPOSITION_INFO, FILE_DISPOSITION_INFO_EX,
+        FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
+        FILE_SHARE_WRITE, FileDispositionInfo, FileDispositionInfoEx, SetFileInformationByHandle,
+    };
+    let mut last = None;
+    for attempt in 0..4 {
+        if attempt > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(100 * attempt));
+        }
+        let file = match std::fs::OpenOptions::new()
+            .access_mode(DELETE | FILE_READ_ATTRIBUTES)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+            .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+            .open(path)
+        {
+            Ok(file) => file,
+            // Access denied, or a sharing violation: may pass, look again.
+            Err(e) if matches!(e.raw_os_error(), Some(5 | 32)) => {
+                last = Some(e);
+                continue;
+            }
+            Err(e) => return Err(e),
+        };
+        if torrent_file_identity(&file)? != expected {
+            return Ok(false);
+        }
+        let handle = file.as_raw_handle();
+        let ex = FILE_DISPOSITION_INFO_EX {
+            Flags: FILE_DISPOSITION_FLAG_DELETE
+                | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS
+                | FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE,
+        };
+        // SAFETY: the live handle permits deletion; the structure and its size are the ones
+        // the information class names.
+        if unsafe {
+            SetFileInformationByHandle(
+                handle,
+                FileDispositionInfoEx,
+                (&ex as *const FILE_DISPOSITION_INFO_EX).cast(),
+                size_of::<FILE_DISPOSITION_INFO_EX>() as u32,
+            )
+        } != 0
+        {
+            return Ok(true);
+        }
+        let first = std::io::Error::last_os_error();
+        let info = FILE_DISPOSITION_INFO { DeleteFile: true };
+        // SAFETY: as above, for the older structure.
+        if unsafe {
+            SetFileInformationByHandle(
+                handle,
+                FileDispositionInfo,
+                (&info as *const FILE_DISPOSITION_INFO).cast(),
+                size_of::<FILE_DISPOSITION_INFO>() as u32,
+            )
+        } != 0
+        {
+            return Ok(true);
+        }
+        let second = std::io::Error::last_os_error();
+        if matches!(second.raw_os_error(), Some(5 | 32))
+            || matches!(first.raw_os_error(), Some(5 | 32))
+        {
+            last = Some(second);
+            continue;
+        }
+        return Err(second);
+    }
+    Err(last.unwrap_or_else(|| std::io::ErrorKind::PermissionDenied.into()))
+}
+
 use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows_sys::Win32::Graphics::Gdi::{GetDC, ReleaseDC};
 use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_NORMAL;
@@ -2826,6 +2995,97 @@ pub fn caption_dark(title: &str, dark: bool) -> bool {
     true
 }
 
+/// The popup menus Windows draws for us — the notification-area icon's (tray-icon's), the
+/// window menu of a drawn title bar — in the app's mode, not Windows' (upstream 682): dark on a
+/// dark surface, light otherwise, whatever Windows' own app mode says. Windows has no documented
+/// way: uxtheme's SetPreferredAppMode (ordinal 135, ForceDark 2 / ForceLight 3) sets the
+/// process's mode and FlushMenuThemes (ordinal 136) makes menus read it again, as the
+/// win32-darkmode project and the apps built on it do. They exist from Windows 10 1903 (build
+/// 18362) on; 1809 has another function at 135 and older builds no dark menus, so there menus
+/// stay as Windows draws them. Called when the mode changes; asks uxtheme only when it is news.
+pub fn menus_dark(dark: bool) {
+    use std::sync::atomic::{AtomicU8, Ordering};
+    static TOLD: AtomicU8 = AtomicU8::new(u8::MAX);
+    let mode: i32 = if dark { 2 } else { 3 };
+    if TOLD.swap(mode as u8, Ordering::Relaxed) == mode as u8 {
+        return;
+    }
+    let Some(f) = menu_mode_fns() else {
+        return;
+    };
+    // SAFETY: the functions behind these ordinals on build 18362 and later (menu_mode_fns),
+    // SetPreferredAppMode(int) -> int and FlushMenuThemes(void); process-wide, any thread.
+    unsafe {
+        (f.set_preferred_app_mode)(mode);
+        (f.flush_menu_themes)();
+    }
+}
+
+/// uxtheme's functions that set the mode of the menus Windows draws ([`menus_dark`]).
+#[derive(Clone, Copy)]
+struct MenuModeFns {
+    set_preferred_app_mode: unsafe extern "system" fn(i32) -> i32,
+    flush_menu_themes: unsafe extern "system" fn(),
+}
+
+/// [`MenuModeFns`], looked up once: None before Windows 10 1903 or if uxtheme lacks them.
+fn menu_mode_fns() -> Option<MenuModeFns> {
+    use windows_sys::Win32::System::LibraryLoader::{
+        GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
+    };
+    use windows_sys::Win32::System::Registry::HKEY_LOCAL_MACHINE;
+    static FNS: std::sync::OnceLock<Option<MenuModeFns>> = std::sync::OnceLock::new();
+    *FNS.get_or_init(|| {
+        let build = reg_string_in(
+            HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+            "CurrentBuild",
+        )
+        .and_then(|b| b.parse::<u32>().ok())?;
+        if build < 18362 {
+            return None;
+        }
+        let name: Vec<u16> = "uxtheme.dll\0".encode_utf16().collect();
+        // SAFETY: a NUL-terminated name, loaded from System32 only; the module stays loaded for
+        // the process's life (never freed), so the pointers taken from it stay valid. An ordinal
+        // goes as the name pointer's low word (MAKEINTRESOURCEA).
+        unsafe {
+            let module = LoadLibraryExW(
+                name.as_ptr(),
+                std::ptr::null_mut(),
+                LOAD_LIBRARY_SEARCH_SYSTEM32,
+            );
+            if module.is_null() {
+                return None;
+            }
+            let set = GetProcAddress(module, 135usize as *const u8)?;
+            let flush = GetProcAddress(module, 136usize as *const u8)?;
+            Some(MenuModeFns {
+                set_preferred_app_mode: std::mem::transmute::<
+                    unsafe extern "system" fn() -> isize,
+                    unsafe extern "system" fn(i32) -> i32,
+                >(set),
+                flush_menu_themes: std::mem::transmute::<
+                    unsafe extern "system" fn() -> isize,
+                    unsafe extern "system" fn(),
+                >(flush),
+            })
+        }
+    })
+}
+
+#[cfg(test)]
+mod menus_dark_tests {
+    /// Upstream 682: uxtheme has the menu mode functions on every Windows the app is tested on
+    /// (10 1903 and later), and setting the mode either way returns.
+    #[test]
+    fn the_menu_mode_functions_are_found_and_answer() {
+        assert!(super::menu_mode_fns().is_some());
+        super::menus_dark(true);
+        super::menus_dark(false);
+    }
+}
+
 /// A drag out of Download complete is under way ([`drag_file_out`]): one at a time, the mouse
 /// holds only one.
 static DRAGGING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -2912,6 +3172,109 @@ pub fn drag_file_out(
         DRAGGING.store(false, Ordering::Release);
     }
     started
+}
+
+/// Why [`copy_file_to_clipboard`] couldn't copy (for the log): `in_use`, another program (or
+/// another of Grabbit's own uses) kept the clipboard.
+#[derive(Debug)]
+pub struct CopyFailed {
+    pub in_use: bool,
+    pub why: &'static str,
+}
+
+/// Put `file` (or a folder) on the clipboard as Explorer's Copy does (plan 13d: Ctrl+C on the
+/// Done window's name row): the shell's file list (CF_HDROP) marked as a copy ("Preferred
+/// DropEffect"), so Paste in a folder copies it there, and a mail or a chat attaches it. Our
+/// window titled `title` owns it (the clipboard needs an owner for its data to be kept). An
+/// off-screen run leaves the clipboard alone and logs it, as `set_clipboard` does.
+pub fn copy_file_to_clipboard(title: &str, file: &std::path::Path) -> Result<(), CopyFailed> {
+    let fail = |in_use, why| CopyFailed { in_use, why };
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::System::DataExchange::{
+        CloseClipboard, EmptyClipboard, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
+    };
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GlobalAlloc(flags: u32, bytes: usize) -> *mut c_void;
+        fn GlobalLock(h: *mut c_void) -> *mut c_void;
+        fn GlobalUnlock(h: *mut c_void) -> i32;
+        fn GlobalFree(h: *mut c_void) -> *mut c_void;
+    }
+    const GMEM_MOVEABLE: u32 = 2;
+    const CF_HDROP: u32 = 15;
+    const DROPEFFECT_COPY: u32 = 1;
+    if crate::offscreen() {
+        tracing::info!(
+            "clipboard (off-screen, not copied): the file {}",
+            file.display()
+        );
+        return Ok(());
+    }
+    if !file.exists() {
+        return Err(fail(false, "the file isn't there"));
+    }
+    // DROPFILES (20 bytes: where the list starts, a point, fNC, fWide), then the path in
+    // UTF-16, ended by two NULs.
+    let mut drop: Vec<u8> = Vec::with_capacity(20 + 2 * (file.as_os_str().len() + 2));
+    drop.extend_from_slice(&20u32.to_le_bytes());
+    drop.extend_from_slice(&[0; 12]);
+    drop.extend_from_slice(&1u32.to_le_bytes());
+    for unit in file.as_os_str().encode_wide().chain([0, 0]) {
+        drop.extend_from_slice(&unit.to_le_bytes());
+    }
+    let effect = DROPEFFECT_COPY.to_le_bytes();
+    let hwnd = find_own_window(title).ok_or(fail(false, "window not found"))?;
+    let _lock = crate::clipboard_lock().ok_or(fail(true, "the clipboard is in use in Grabbit"))?;
+    // A movable block holding `bytes`, given to the clipboard (which then owns it) or freed.
+    let global = |bytes: &[u8]| -> Option<*mut c_void> {
+        // SAFETY: a fresh block as large as `bytes`, filled within its size while locked.
+        unsafe {
+            let h = GlobalAlloc(GMEM_MOVEABLE, bytes.len());
+            if h.is_null() {
+                return None;
+            }
+            let to = GlobalLock(h) as *mut u8;
+            if to.is_null() {
+                GlobalFree(h);
+                return None;
+            }
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), to, bytes.len());
+            GlobalUnlock(h);
+            Some(h)
+        }
+    };
+    let name: Vec<u16> = "Preferred DropEffect\0".encode_utf16().collect();
+    // SAFETY: the clipboard opened for our window and closed on every path; each block handed
+    // to SetClipboardData is the clipboard's once it took it, else freed here.
+    unsafe {
+        // Another program may hold it a moment (a clipboard manager reading it): asked again a
+        // few times, as arboard does.
+        let mut tries = 0;
+        while OpenClipboard(hwnd) == 0 {
+            tries += 1;
+            if tries == 10 {
+                return Err(fail(true, "the clipboard is in use by another program"));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let mut result = Err(fail(false, "the clipboard didn't take the file"));
+        if EmptyClipboard() != 0 {
+            let format = RegisterClipboardFormatW(name.as_ptr());
+            for (cf, bytes) in [(CF_HDROP, &drop[..]), (format, &effect[..])] {
+                if cf == 0 {
+                    continue;
+                }
+                let Some(h) = global(bytes) else { continue };
+                if SetClipboardData(cf, h).is_null() {
+                    GlobalFree(h);
+                } else if cf == CF_HDROP {
+                    result = Ok(());
+                }
+            }
+        }
+        CloseClipboard();
+        result
+    }
 }
 
 /// Tell `hwnd` the left button is up, at the pointer, as Windows would have done had OLE's
@@ -4275,6 +4638,46 @@ pub fn system_proxy() -> Option<(String, String)> {
         })?;
     let (host, port) = pick.rsplit_once(':')?;
     Some((host.to_owned(), port.to_owned()))
+}
+
+/// Windows' "Use setup script" (Settings → Network → Proxy; Internet Options' "Use automatic
+/// configuration script"): the script's address, when it is on. Proxy programs (Clash, v2rayN)
+/// set it in their PAC mode (#1448). As WinHTTP reads this user's settings.
+pub fn system_proxy_script() -> Option<String> {
+    use windows_sys::Win32::Foundation::GlobalFree;
+    use windows_sys::Win32::Networking::WinHttp::{
+        WINHTTP_CURRENT_USER_IE_PROXY_CONFIG, WinHttpGetIEProxyConfigForCurrentUser,
+    };
+    let mut config = WINHTTP_CURRENT_USER_IE_PROXY_CONFIG::default();
+    // SAFETY: the struct is ours to fill; on success its strings are WinHTTP's, each freed
+    // below with GlobalFree as its documentation says, once read.
+    if unsafe { WinHttpGetIEProxyConfigForCurrentUser(&mut config) } == 0 {
+        return None;
+    }
+    let read = |p: windows_sys::core::PWSTR| -> Option<String> {
+        if p.is_null() {
+            return None;
+        }
+        // SAFETY: a NUL-terminated string WinHTTP allocated, read up to its NUL.
+        let len = (0..).take_while(|&i| unsafe { *p.add(i) } != 0).count();
+        // SAFETY: `len` units were just read at `p`.
+        let units = unsafe { std::slice::from_raw_parts(p, len) };
+        Some(String::from_utf16_lossy(units))
+    };
+    let script = read(config.lpszAutoConfigUrl);
+    for p in [
+        config.lpszAutoConfigUrl,
+        config.lpszProxy,
+        config.lpszProxyBypass,
+    ] {
+        if !p.is_null() {
+            // SAFETY: WinHTTP's own allocation, freed once.
+            unsafe { GlobalFree(p.cast()) };
+        }
+    }
+    script
+        .map(|s| s.trim().to_owned())
+        .filter(|s| !s.is_empty())
 }
 
 /// Play a .wav file without waiting (Options → Sounds).
@@ -5659,6 +6062,52 @@ pub fn gl_driver(gl: &eframe::glow::Context) -> String {
     format!("{renderer} ({version})")
 }
 
+/// The graphics adapters and their drivers' versions, as Direct3D 12 sees them (DXGI; the
+/// version as wgpu writes it, "32.0.15.6224"), and whether each is a software renderer (WARP):
+/// a remembered failure is tried again once they change (renderer.rs, upstream issue 1205). Read
+/// without starting Direct3D 12 on any of them. None when DXGI can't say.
+pub fn graphics_drivers() -> Option<Vec<(String, String, bool)>> {
+    use windows::Win32::Graphics::Dxgi::{
+        CreateDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE, IDXGIDevice, IDXGIFactory1,
+    };
+    use windows::core::Interface as _;
+    // SAFETY: a DXGI factory and its adapters, asked for their descriptions and their drivers'
+    // versions only; each COM object is released when dropped.
+    unsafe {
+        let factory: IDXGIFactory1 = CreateDXGIFactory1().ok()?;
+        let mut list = Vec::new();
+        // EnumAdapters1 fails past the last one (DXGI_ERROR_NOT_FOUND).
+        for i in 0..32 {
+            let Ok(adapter) = factory.EnumAdapters1(i) else {
+                break;
+            };
+            let Ok(desc) = adapter.GetDesc1() else {
+                continue;
+            };
+            let end = desc.Description.iter().position(|&c| c == 0);
+            let name = String::from_utf16_lossy(&desc.Description[..end.unwrap_or(128)]);
+            let version = adapter
+                .CheckInterfaceSupport(&IDXGIDevice::IID)
+                .map_or_else(
+                    |_| String::new(),
+                    |v| {
+                        let v = v as u64;
+                        format!(
+                            "{}.{}.{}.{}",
+                            (v >> 48) as u16,
+                            (v >> 32) as u16,
+                            (v >> 16) as u16,
+                            v as u16
+                        )
+                    },
+                );
+            let software = desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32 != 0;
+            list.push((name.trim().to_owned(), version, software));
+        }
+        Some(list)
+    }
+}
+
 /// Windows' clipboard sequence number: it changes each time the clipboard does, and asking for
 /// it neither opens the clipboard nor waits for its owner (clipboard.rs: the watch for copied
 /// links reads the clipboard only when it changed).
@@ -5901,12 +6350,27 @@ pub fn host_registration() -> crate::extension::Registration {
 /// copy run from inside a zip whose temporary folder was deleted), the native host's `--repair`
 /// points it at this copy, for this user. Nothing runs while every one works or there is none:
 /// one that works naming another copy is that copy's, and none is the setup's box unticked.
+/// It also runs while the user's entries name their own manifest in the data folder, which
+/// only `--repair` keeps up to date.
 pub fn repair_browsers() {
     use mdm_ipc::browsers::{Repair, windows_repair};
     crate::launch::spawn("repair-browsers", || {
+        use mdm_ipc::browsers::{
+            HOST_NAME, WINDOWS_HOST_KEYS, is_user_manifest, registered_manifest,
+        };
+        use windows_sys::Win32::System::Registry::HKEY_CURRENT_USER;
+        // Or the user's own manifest (Set it up for a copy installed for everyone): `--repair`
+        // writes it again as this version does.
+        let own = || {
+            WINDOWS_HOST_KEYS.iter().any(|(key, _)| {
+                reg_string_in(HKEY_CURRENT_USER, &format!(r"{key}\{HOST_NAME}"), "")
+                    .is_some_and(|v| is_user_manifest(&registered_manifest(&v)))
+            })
+        };
         let needed = host_holders()
             .iter()
-            .any(|(user, machine)| windows_repair(user.as_ref(), machine.as_ref()) != Repair::Keep);
+            .any(|(user, machine)| windows_repair(user.as_ref(), machine.as_ref()) != Repair::Keep)
+            || own();
         if needed {
             crate::extension::registered_as(&crate::extension::run_host(
                 "--repair",
@@ -5923,7 +6387,7 @@ pub fn no_console(cmd: &mut std::process::Command) {
     cmd.creation_flags(0x0800_0000);
 }
 
-/// Options → Sites Logins' passwords, encrypted for this Windows account (DPAPI) before the list
+/// Options → Site logins' passwords, encrypted for this Windows account (DPAPI) before the list
 /// is written: another account, or a copy of the file, can't read them.
 #[allow(unsafe_code)]
 pub fn protect(plain: &str) -> Option<Vec<u8>> {

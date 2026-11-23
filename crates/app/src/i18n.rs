@@ -186,6 +186,11 @@ pub fn integer(n: u64) -> String {
     n.to_string()
 }
 
+/// A whole number grouped as counts write it (`1,470`, the region's separator, #128).
+pub fn grouped(n: u64) -> String {
+    i18n().format().integer(n)
+}
+
 /// `v` with `decimals` digits after the decimal point: `1234.50`, as IDM.
 pub fn decimal(v: f64, decimals: usize) -> String {
     format!("{v:.decimals$}")

@@ -332,40 +332,45 @@ pub fn seven_zip() -> Option<PathBuf> {
 /// fills the real (per-user, shared) Recycle Bin or Trash. Never set for users.
 const TEST_TRASH: &str = "MDM_TEST_TRASH_DIR";
 
-/// Move `files` to the Recycle Bin, or into `MDM_TEST_TRASH_DIR` when a test set it.
-fn to_trash(files: &[PathBuf]) -> bool {
+/// Move `files` to the Recycle Bin, or into `MDM_TEST_TRASH_DIR` when a test set it (an
+/// extracted archive; a deleted download's finished file, `deleter`).
+pub(crate) fn to_trash(files: &[PathBuf]) -> bool {
     if let Some(dir) = std::env::var_os(TEST_TRASH).filter(|d| !d.is_empty()) {
-        let dir = PathBuf::from(dir);
-        return std::fs::create_dir_all(&dir).is_ok()
-            && files.iter().all(|f| {
-                let name = f.file_name().unwrap_or_default();
-                std::fs::rename(f, dir.join(name)).is_ok()
-            });
+        return into_test_trash(Path::new(&dir), files);
     }
     crate::win32::to_recycle_bin(files)
+}
+
+/// [`to_trash`]'s test folder: `files` moved into `dir` (tests hand it in directly).
+pub(crate) fn into_test_trash(dir: &Path, files: &[PathBuf]) -> bool {
+    std::fs::create_dir_all(dir).is_ok()
+        && files.iter().all(|f| {
+            let name = f.file_name().unwrap_or_default();
+            std::fs::rename(f, dir.join(name)).is_ok()
+        })
 }
 
 /// Why `name` wasn't extracted, for its download's log.
 fn failed(name: &str, e: &Error) -> String {
     let why = match e {
-        // i18n: why an archive wasn't extracted (after "Couldn't extract {name}: ")
+        // i18n: why an archive wasn't extracted (after "{name} could not be extracted: ")
         Error::NeedsPassword => crate::i18n::t("it needs a password").to_owned(),
-        // i18n: why an archive wasn't extracted (after "Couldn't extract {name}: ")
+        // i18n: why an archive wasn't extracted (after "{name} could not be extracted: ")
         Error::WrongPassword => crate::i18n::t("the password is wrong").to_owned(),
-        // i18n: why an archive wasn't extracted (after "Couldn't extract {name}: ")
+        // i18n: why an archive wasn't extracted (after "{name} could not be extracted: ")
         Error::MissingVolume(0) => crate::i18n::t("a volume of it is missing").to_owned(),
         Error::MissingVolume(n) => crate::i18n::fmt(
-            // i18n: why an archive wasn't extracted (after "Couldn't extract {name}: "); {n} is the volume's number
+            // i18n: why an archive wasn't extracted (after "{name} could not be extracted: "); {n} is the volume's number
             crate::i18n::t("volume {n} of it is missing"),
             &[("n", &crate::i18n::integer(u64::from(*n)))],
         ),
         Error::Damaged(why) => {
             tracing::info!("extract: {name}: {why}");
-            // i18n: why an archive wasn't extracted (after "Couldn't extract {name}: ")
+            // i18n: why an archive wasn't extracted (after "{name} could not be extracted: ")
             crate::i18n::t("it is damaged, or not the archive its name says").to_owned()
         }
         Error::TooBig { would, limit } => crate::i18n::fmt(
-            // i18n: why an archive wasn't extracted (after "Couldn't extract {name}: "); sizes like "4.00 GB"
+            // i18n: why an archive wasn't extracted (after "{name} could not be extracted: "); sizes like "4.00 GB"
             crate::i18n::t(
                 "it would write {size}, more than the {limit} there is room or reason for",
             ),
@@ -374,15 +379,15 @@ fn failed(name: &str, e: &Error) -> String {
                 ("limit", &crate::model::size(*limit)),
             ],
         ),
-        // i18n: why an archive wasn't extracted (after "Couldn't extract {name}: ")
+        // i18n: why an archive wasn't extracted (after "{name} could not be extracted: ")
         Error::TooMany => crate::i18n::t("it holds too many files or folders").to_owned(),
-        // i18n: why an archive wasn't extracted (after "Couldn't extract {name}: "); 7-Zip is a program's name
+        // i18n: why an archive wasn't extracted (after "{name} could not be extracted: "); 7-Zip is a program's name
         Error::NoTool => {
             crate::i18n::t("7z and RAR archives need 7-Zip, which isn't installed").to_owned()
         }
-        // i18n: why an archive wasn't extracted (after "Couldn't extract {name}: ")
+        // i18n: why an archive wasn't extracted (after "{name} could not be extracted: ")
         Error::Unsupported => crate::i18n::t("it is not an archive Grabbit extracts").to_owned(),
-        // i18n: why an archive wasn't extracted (after "Couldn't extract {name}: ")
+        // i18n: why an archive wasn't extracted (after "{name} could not be extracted: ")
         Error::Cancelled => crate::i18n::t("it was stopped").to_owned(),
         Error::Io(e) => crate::errors::describe(&mdm_engine::Error::Io(Arc::new(
             std::io::Error::new(e.kind(), e.to_string()),
@@ -390,7 +395,7 @@ fn failed(name: &str, e: &Error) -> String {
     };
     crate::i18n::fmt(
         // i18n: in a download's log: {name} is the archive's file name, {why} the reason
-        crate::i18n::t("Couldn't extract {name}: {why}"),
+        crate::i18n::t("{name} could not be extracted: {why}"),
         &[("name", &crate::i18n::isolate(name)), ("why", &why)],
     )
 }

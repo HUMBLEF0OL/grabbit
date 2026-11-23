@@ -324,7 +324,7 @@
       "properties": {
         "action": {
           "default": null,
-          "description": "Automation API: `\"pause\"`, `\"start\"`, `\"remove\"` (off the list, its file kept) or\n`\"delete\"` (with its file) the downloads `ids`; answered with what was done and skipped.\n`\"start_queue\"` / `\"stop_queue\"` start or stop the queue named `queue`.",
+          "description": "Automation API: `\"pause\"`, `\"start\"`, `\"remove\"` (off the list, its file kept) or\n`\"delete\"` (a finished file to the Recycle Bin) the downloads `ids`; answered with what\nwas done and skipped.\n`\"start_queue\"` / `\"stop_queue\"` start or stop the queue named `queue`.",
           "type": [
             "string",
             "null"
@@ -467,7 +467,7 @@
         },
         "proxy": {
           "default": null,
-          "description": "From the browser (#42): the proxy it uses for this address (\"http://host:port\",\n\"https://…\", \"socks5h://…\", \"socks4://…\"), set by a VPN or proxy extension or its\nsettings; or its proxy auto-config script's text. The app downloads through the same\none (Options → Proxy / Socks → \"Use proxy/socks from a browser's request\").",
+          "description": "From the browser (#42): the proxy it uses for this address (\"http://host:port\",\n\"https://…\", \"socks5h://…\", \"socks4://…\"), set by a VPN or proxy extension or its\nsettings; or its proxy auto-config script's text. The app downloads through the same\none (Options → Proxy / SOCKS → \"Use proxy/SOCKS from a browser's request\").",
           "type": [
             "string",
             "null"
@@ -519,7 +519,7 @@
         },
         "silent": {
           "default": false,
-          "description": "`/n`: silent — no Download File Info dialog.",
+          "description": "`/n`: silent — no Download file info dialog.",
           "type": "boolean"
         },
         "size": {
@@ -561,9 +561,41 @@
             "null"
           ]
         },
+        "video_lookup": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VideoLookup"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "From the browser's quality menu over a video (the button's click): look this video up\nwith yt-dlp, off the window, and answer at once with a token to ask about it\n([`api::VideoLookupAnswer`], `pending`). The browser's request context (`referer`,\n`cookies`, `cookie_jar`, `user_agent`, `private`) goes with it and stays the look-up's."
+        },
         "video_page": {
           "default": null,
           "description": "From the browser's download button over a video: open the Download video window for this\npage (its address; an embedded player's own).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "video_pick": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/VideoPick"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The quality menu: download the choice made there, with the look-up's own selector and\ncontext (`private` must be the look-up's); answered `started` or `queued`, or\n`use-window` when it can't be (the Download video window then does it)."
+        },
+        "video_poll": {
+          "default": null,
+          "description": "The quality menu: how is the look-up of this token going (`pending`, `ready` with the\nchoices, `failed`, `list`, `gone`)?",
           "type": [
             "string",
             "null"
@@ -600,11 +632,141 @@
         "why"
       ],
       "type": "object"
+    },
+    "VideoChoice": {
+      "description": "One quality the browser's quality menu offers.",
+      "properties": {
+        "audio": {
+          "default": false,
+          "description": "Only the sound (an audio file, a conversion to MP3, Opus or FLAC): the menu lists these\napart from the videos. False from an app older than the field.",
+          "type": "boolean"
+        },
+        "ext": {
+          "default": "",
+          "description": "The file's type (`mp4`, `mp3`).",
+          "type": "string"
+        },
+        "label": {
+          "default": "",
+          "description": "What the menu shows (\"720p mp4\"), in the app's language.",
+          "type": "string"
+        },
+        "size": {
+          "default": null,
+          "description": "Bytes, exact or estimated; null when unknown.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "VideoLookup": {
+      "description": "The video the browser's quality menu asks about ([`Command::video_lookup`]).",
+      "properties": {
+        "address": {
+          "default": "",
+          "description": "What yt-dlp looks up: the video's own file or its stream's manifest when the page plays\none, else the page.",
+          "type": "string"
+        },
+        "store_id": {
+          "default": null,
+          "description": "The browser's cookie store the page is in (Firefox's containers): a choice is only taken\nfrom the same one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "default": null,
+          "description": "The title of the page the button was clicked on: a video yt-dlp knows only by its address\nis named by it (as [`Command::video_title`]).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "VideoLookupAnswer": {
+      "description": "The browser's quality menu (`video_lookup`, `video_poll`, `video_pick`): where a look-up is,\nor what became of a choice. Answered whatever the automation API's switch (the browser's\nhost asks, not a program).",
+      "properties": {
+        "choices": {
+          "description": "`ready`: the qualities to choose from, labelled in the app's language; `video_pick` takes\na place in this list.",
+          "items": {
+            "$ref": "#/$defs/VideoChoice"
+          },
+          "type": "array"
+        },
+        "message": {
+          "description": "`failed` with [`lookup::ERROR`]: why, in the app's words and language.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "description": "`failed`: [`lookup::NO_YTDLP`], [`lookup::NO_CHOICES`] or [`lookup::ERROR`].",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "state": {
+          "default": "",
+          "description": "One of [`lookup`]'s states.",
+          "type": "string"
+        },
+        "title": {
+          "description": "`ready`: the video's title, the file's name: the page's when yt-dlp knows the video only\nby its address, as the Download video window names it ([`crate::Command::video_title`]).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "token": {
+          "description": "`pending` and `ready`: the look-up's token, to ask about it and to pick from it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "VideoPick": {
+      "description": "A choice made in the browser's quality menu ([`Command::video_pick`]).",
+      "properties": {
+        "choice": {
+          "default": 0,
+          "description": "The choice's place in the look-up's `choices`.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "store_id": {
+          "default": null,
+          "description": "The cookie store the choice was made in: the look-up's, or it isn't taken.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "token": {
+          "default": "",
+          "description": "The look-up's token.",
+          "type": "string"
+        }
+      },
+      "type": "object"
     }
   },
   "$id": "https://humblef0ol.github.io/grabbit/automation-api.schema.json",
   "$ref": "#/$defs/Request",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "One JSON line to the port in ipc.json (on 127.0.0.1), one line back. A request is `Request`. A command (an address to add, start_queue) is answered `ok`; a question is answered with the JSON object for it (`ListAnswer`, `ActAnswer`, `ApiAnswer`) or an `ErrorAnswer`. A wrong token is answered `denied`, an app that doesn't answer within 2 seconds `timeout`. Guide: https://humblef0ol.github.io/grabbit/help/command-line.html#the-automation-api",
+  "description": "One JSON line to the port in ipc.json (on 127.0.0.1), one line back. A request is `Request`. A command (an address to add, start_queue) is answered `ok`; a question is answered with the JSON object for it (`ListAnswer`, `ActAnswer`, `ApiAnswer`) or an `ErrorAnswer`. A wrong token is answered `denied`, an app that doesn't answer within 2 seconds `timeout`. The browser's quality menu (`video_lookup`, `video_poll`, `video_pick`, sent by its native host) is answered with a `VideoLookupAnswer`. Guide: https://humblef0ol.github.io/grabbit/help/command-line.html#the-automation-api",
   "title": "Grabbit automation API"
 }

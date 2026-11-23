@@ -151,7 +151,7 @@ impl Declined {
                 "it is smaller than Options > File types > Don't take files smaller than"
             }
             Declined::Torrents => {
-                "it is a .torrent and Tasks > Torrent settings > Open magnet links and .torrent files with Grabbit is off"
+                "it is a .torrent and Options > Torrents > Open magnet links and .torrent files with Grabbit is off"
             }
         }
     }
@@ -701,7 +701,7 @@ mod tests {
                 .unwrap();
         assert_eq!(before.torrent_handler, None);
         assert!(before.takes_torrents());
-        assert!(Declined::Torrents.reason().contains("Torrent settings"));
+        assert!(Declined::Torrents.reason().contains("Options > Torrents"));
     }
 
     #[test]
@@ -935,10 +935,7 @@ mod tests {
     fn each_refusal_has_a_name_and_a_reason() {
         for d in Declined::ALL {
             assert_eq!(Declined::from_code(d.code()), Some(d));
-            assert!(
-                d.reason().contains("Options >") || d.reason().contains("Torrent settings >"),
-                "{d:?}"
-            );
+            assert!(d.reason().contains("Options >"), "{d:?}");
         }
         assert_eq!(Declined::from_code("FileType"), None);
         let mut r = CaptureRules {

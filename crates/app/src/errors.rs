@@ -3,9 +3,20 @@
 //! event log. Every engine error is named here, so a new one can't reach the list untranslated.
 //! Data inside a message (status codes, paths, sizes) goes in as isolates (crate::i18n::fmt).
 
-use mdm_engine::{Error, NetKind, Refusal};
+use mdm_engine::{CertProblem, Error, NetKind, Refusal};
 
 use crate::i18n::{fmt, ltr, t};
+
+/// A failure a new address mends (plan 12b, E2): the link expired, or the server refused it
+/// (HTTP 403) or says it is gone (410). The Details pane's Refresh download address, and the
+/// progress window's (plan 13), are offered for these.
+pub fn wants_new_address(e: &Error) -> bool {
+    match e {
+        Error::LinkExpired => true,
+        Error::Status(s) => matches!(s.as_u16(), 403 | 410),
+        _ => false,
+    }
+}
 
 /// The sentence the list, the progress window and Properties show for `e`.
 pub fn describe(e: &Error) -> String {
@@ -28,7 +39,7 @@ pub fn describe(e: &Error) -> String {
         Error::ShortBody => t("the connection closed before the part was complete").to_owned(),
         Error::FileChanged => t("the file changed on the server").to_owned(),
         Error::NoRanges => {
-            t("the server can't send parts of the file, so it can't be resumed").to_owned()
+            t("the server cannot send parts of the file, so it cannot be resumed").to_owned()
         }
         Error::BadState(what) => fmt(t("cannot resume: {detail}"), &[("detail", &ltr(what))]),
         Error::Io(io) => fmt(
@@ -70,6 +81,16 @@ pub fn describe(e: &Error) -> String {
             "the site sent a web page instead of the file (a waiting page, a captcha or a sign-in): open the link in your browser, finish there, and the download comes back to Grabbit",
         )
         .to_owned(),
+        Error::NotTheFile { size, sent } => fmt(
+            // i18n: why a download failed (upstream issue 1460): the browser's own download of the link was a file of {size} (such as 117.65 MB), but when Grabbit asked the server for it, it sent only {sent} (such as 4.65 KB): an error or a notice, not the file. Some links work only once, or only in the browser. Alt+click: the link clicked with the Alt key held, which leaves the download to the browser
+            t(
+                "the server sent only {sent} where the browser's file is {size} (a link that works once, or only in the browser): Alt+click the link to let the browser download it",
+            ),
+            &[
+                ("sent", &crate::model::size(*sent)),
+                ("size", &crate::model::size(*size)),
+            ],
+        ),
         Error::RangesUnavailable => t("the server did not send the requested part").to_owned(),
         Error::LinkExpired => {
             t("the download link has expired (refresh the download address)").to_owned()
@@ -91,6 +112,7 @@ pub fn describe(e: &Error) -> String {
             // i18n: a download's error on a computer (a minimal Linux) without the certificates that secure connections check servers with; "ca-certificates" is the package's name, left as is
             t("this computer has no certificates to check the server with: install the ca-certificates package, then try again").to_owned()
         }
+        Error::Certificate(problem) => certificate(*problem).to_owned(),
         Error::Net { kind, cause } => {
             let what = match kind {
                 NetKind::Connect => t("cannot connect to the server"),
@@ -112,6 +134,43 @@ pub fn describe(e: &Error) -> String {
     }
 }
 
+/// Why the server's certificate was refused (#762), in words a user can act on: a browser
+/// warns about the same, and Grabbit has no way around it.
+fn certificate(problem: CertProblem) -> &'static str {
+    match problem {
+        // i18n: why a download failed: the site's security certificate (what proves a secure, HTTPS, site is the one it says) is past its end date. Browsers warn about the same site
+        CertProblem::Expired => t(
+            "the site's security certificate has expired, so Grabbit cannot be sure it's the real site (your browser warns about it too)",
+        ),
+        // i18n: why a download failed: the site's security certificate's validity hasn't begun; usually this computer's date or time is wrong
+        CertProblem::NotYetValid => t(
+            "the site's security certificate isn't valid yet: check this computer's date and time",
+        ),
+        // i18n: why a download failed: the site's security certificate was signed by the site itself or by an issuer this computer doesn't trust. Browsers warn about the same site
+        CertProblem::Untrusted => t(
+            "the site's security certificate isn't trusted (it's self-signed or from an unknown issuer), so Grabbit cannot be sure it's the real site (your browser warns about it too)",
+        ),
+        // i18n: why a download failed: the site's security certificate was made for other site names than the one in the address
+        CertProblem::WrongName => t(
+            "the site's security certificate is for another site name, so Grabbit cannot be sure it's the real site (your browser warns about it too)",
+        ),
+        CertProblem::Revoked => {
+            // i18n: why a download failed: the issuer of the site's security certificate took it back
+            t(
+                "the site's security certificate was revoked by its issuer, so Grabbit won't trust it",
+            )
+        }
+        // i18n: why a download failed: the site's security certificate is made for other uses than a website (its "extended key usage" leaves out web servers)
+        CertProblem::NotForWebsites => t(
+            "the site's security certificate isn't made for websites, so Grabbit cannot be sure it's the real site",
+        ),
+        // i18n: why a download failed: the site's security certificate was refused for another reason (a bad signature, a broken certificate)
+        CertProblem::Other => t(
+            "the site's security certificate was refused, so Grabbit cannot be sure it's the real site",
+        ),
+    }
+}
+
 /// A site's refusal to give the file (Google Drive, #34), with what to do about it.
 /// A debrid service's refusal (#44), `{service}` its name ("Real-Debrid").
 pub fn service(service: &str, fault: &mdm_engine::ServiceFault) -> String {
@@ -127,7 +186,7 @@ pub fn service(service: &str, fault: &mdm_engine::ServiceFault) -> String {
         F::NotPremium => t("{service}: this needs a premium account"),
         // i18n: a debrid service's error: it can't reach the file's host now; MDM retries later
         F::HostDown => {
-            t("{service} can't reach this file host right now; Grabbit will try again later")
+            t("{service} cannot reach this file host right now; Grabbit will try again later")
         }
         // i18n: a debrid service's error: the account's limit (traffic) for this host is used up
         F::LimitReached => t("{service}: your limit for this file host is used up for now"),
@@ -151,12 +210,12 @@ pub fn service(service: &str, fault: &mdm_engine::ServiceFault) -> String {
         F::ServiceDown => t("{service} is not responding; try again later"),
         // i18n: a debrid service's error: it can't get the torrent sent to it (nobody shares it any more, or its magnet link can't be read)
         F::TorrentUnavailable => {
-            t("{service} can't get this torrent: nobody shares it, or its link can't be read")
+            t("{service} cannot get this torrent: nobody shares it, or its link cannot be read")
         }
         F::UnsafeName(name) => {
             return fmt(
                 // i18n: a torrent through a debrid service: one of its files has a name that would be written outside its folder; nothing was written. {name} the file's name as the service gave it
-                t("A file of this torrent can't be saved safely: {name}"),
+                t("A file of this torrent cannot be saved safely: {name}"),
                 &[("name", &ltr(name))],
             );
         }
@@ -234,7 +293,7 @@ pub fn adapter(e: &mdm_engine::NetError) -> String {
         N::Family { label, ip } => fmt(
             // i18n: an error: the server's address is IPv6 (or IPv4) and the chosen network adapter has none of that kind; {ip} the address, {adapter} the adapter's name
             t(
-                "{ip} can't be reached through {adapter}: it has no address of that kind (IPv4 or IPv6)",
+                "{ip} cannot be reached through {adapter}: it has no address of that kind (IPv4 or IPv6)",
             ),
             &[("ip", &ltr(&ip.to_string())), ("adapter", label)],
         ),
@@ -247,7 +306,7 @@ pub fn adapter(e: &mdm_engine::NetError) -> String {
         ),
         N::NotSupported { label, what } => fmt(
             // i18n: an error: {what} (e.g. "ftps://", "Video pages (yt-dlp)") can't be held to the chosen network adapter yet, so it isn't sent; {adapter} its name
-            t("{what} can't go through a chosen network adapter ({adapter}) yet"),
+            t("{what} cannot go through a chosen network adapter ({adapter}) yet"),
             &[("what", &ltr(what)), ("adapter", label)],
         ),
     }
@@ -361,7 +420,7 @@ fn connecting(fault: mdm_engine::fault::Fault) -> bool {
     )
 }
 
-/// The address (`host:port`) of the proxy Options → Proxy / Socks sets by hand for secure
+/// The address (`host:port`) of the proxy Options → Proxy / SOCKS sets by hand for secure
 /// connections, which the helpers' all are.
 fn own_proxy() -> Option<String> {
     match crate::settings::own_net().proxy {
@@ -405,7 +464,7 @@ pub fn tools_advice(e: &mdm_tools::Error, name: &str) -> Option<String> {
         _ => e.network()?.1,
     };
     let text = match fault {
-        // i18n: what to do when the proxy set in Options didn't let a helper's download connect; {proxy} = the Options tab Proxy / Socks; {name} = yt-dlp, ffmpeg or gallery-dl; {helpers} and {other} = the buttons Helpers and Use another program
+        // i18n: what to do when the proxy set in Options didn't let a helper's download connect; {proxy} = the Options tab Proxy / SOCKS; {name} = yt-dlp, ffmpeg or gallery-dl; {helpers} and {other} = the buttons Helpers and Use another program
         f if connecting(f) && own_proxy().is_some() => t(
             "Check the proxy in Options → {proxy}, or download {name} yourself and choose it in {helpers} → {other}.",
         ),
@@ -417,7 +476,7 @@ pub fn tools_advice(e: &mdm_tools::Error, name: &str) -> Option<String> {
         F::Status(_) | F::CutShort => {
             t("Try again later, or download {name} yourself and choose it in {helpers} → {other}.")
         }
-        // i18n: what to do when a helper's server couldn't be reached; {proxy} = the Options tab Proxy / Socks; {name} = yt-dlp, ffmpeg or gallery-dl; {helpers} and {other} = the buttons Helpers and Use another program
+        // i18n: what to do when a helper's server couldn't be reached; {proxy} = the Options tab Proxy / SOCKS; {name} = yt-dlp, ffmpeg or gallery-dl; {helpers} and {other} = the buttons Helpers and Use another program
         _ => t(
             "If you use a proxy, set it in Options → {proxy}. Or download {name} yourself and choose it in {helpers} → {other}.",
         ),
@@ -427,7 +486,7 @@ pub fn tools_advice(e: &mdm_tools::Error, name: &str) -> Option<String> {
         text,
         &[
             ("name", name),
-            ("proxy", &label("Proxy / Socks")),
+            ("proxy", &label("Proxy / SOCKS")),
             ("helpers", &label("Helpers...")),
             ("other", &label("Use another program...")),
         ],
@@ -491,6 +550,18 @@ fn os_text(s: &str) -> String {
 mod tests {
     use super::*;
 
+    /// Plan 12b, E2: Refresh download address is offered for an expired link, 403 and 410.
+    #[test]
+    fn a_new_address_mends_an_expired_refused_or_gone_link() {
+        use reqwest::StatusCode as S;
+        assert!(wants_new_address(&Error::LinkExpired));
+        assert!(wants_new_address(&Error::Status(S::FORBIDDEN)));
+        assert!(wants_new_address(&Error::Status(S::GONE)));
+        assert!(!wants_new_address(&Error::Status(S::NOT_FOUND)));
+        assert!(!wants_new_address(&Error::Status(S::INTERNAL_SERVER_ERROR)));
+        assert!(!wants_new_address(&Error::ShortBody));
+    }
+
     #[test]
     fn messages_carry_their_data() {
         assert!(describe(&Error::Status(reqwest::StatusCode::NOT_FOUND)).contains("404"));
@@ -498,10 +569,44 @@ mod tests {
             message: "Too many users".into(),
         });
         assert!(describe(&quota).contains("Too many users"));
+        // Upstream issue 1460: both sizes, the server's answer's and the browser's file's.
+        let short = describe(&Error::NotTheFile {
+            size: 123_365_000,
+            sent: 4_762,
+        });
+        assert!(short.contains("117.65 MB") && short.contains("4.65 KB"));
         assert_eq!(
             os_text("Access is denied. (os error 5)"),
             "Access is denied"
         );
+    }
+
+    /// #762: a refused certificate says it is the certificate, and what is wrong with it.
+    #[test]
+    fn a_refused_certificate_is_named() {
+        use mdm_engine::CertProblem as P;
+        let all = [
+            P::Expired,
+            P::NotYetValid,
+            P::Untrusted,
+            P::WrongName,
+            P::Revoked,
+            P::NotForWebsites,
+            P::Other,
+        ];
+        let said: Vec<String> = all
+            .iter()
+            .map(|p| describe(&Error::Certificate(*p)))
+            .collect();
+        for (p, s) in all.iter().zip(&said) {
+            assert!(s.contains("certificate"), "{p:?}: {s}");
+        }
+        assert!(said[0].contains("expired"));
+        assert!(said[2].contains("self-signed"));
+        assert!(said[3].contains("another site name"));
+        assert!(said[5].contains("isn't made for websites"));
+        let distinct: std::collections::HashSet<_> = said.iter().collect();
+        assert_eq!(distinct.len(), all.len());
     }
 
     /// Upstream issue 816: a helper that couldn't be downloaded names the server and why, and

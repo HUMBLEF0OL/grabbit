@@ -8,7 +8,7 @@
 
 use egui::Color32;
 
-use crate::palette::{Palette, Segments};
+use crate::palette::Palette;
 
 /// The colours a derived palette starts from.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -182,26 +182,12 @@ pub fn derive(s: &Seeds) -> Palette {
         mix(surface, bg, 0.15)
     };
     let tint = |c: Color32, t: f32| mix(c, accent, t);
-    let missing = |i: usize| mix(surface, text, 0.04 + i as f32 * 0.006);
-    let done = |i: usize| shade(accent, 0.12 - i as f32 * 0.018);
-    let start = |i: usize| shade(s.error, 0.08 - i as f32 * 0.012);
-    let mut segments = Segments {
-        missing: [Color32::BLACK; 13],
-        done: [Color32::BLACK; 13],
-        start: [Color32::BLACK; 13],
-    };
-    for i in 0..13 {
-        segments.missing[i] = missing(i);
-        segments.done[i] = done(i);
-        segments.start[i] = start(i);
-    }
     let scroll_track = mix(bg, surface, 0.5);
     let thumb = readable(toward(scroll_track, 0.45), scroll_track, 3.0);
     Palette {
         dark,
         focus_line_straight: false,
         access_keys_always: false,
-        segments,
         window: bg,
         text,
         text_disabled: disabled,
@@ -223,12 +209,6 @@ pub fn derive(s: &Seeds) -> Palette {
         selection_muted: mix(selection_text, selection, 0.2),
         selection_inactive: toward(surface, 0.14),
         selection_focus: readable(s.warning, selection, 3.0),
-        etch_shadow: toward(bg, 0.3),
-        etch_light: if dark {
-            toward(bg, 0.08)
-        } else {
-            mix(bg, Color32::WHITE, 0.8)
-        },
         tab_page: mix(bg, surface, 0.5),
         tab: toward(bg, 0.03),
         tab_hot: mix(bg, surface, 0.8),
@@ -323,13 +303,13 @@ pub fn derive(s: &Seeds) -> Palette {
         toolbar_text_disabled: disabled,
         icon_disabled: disabled,
         tree_expander: text,
-        status_value: text,
         progress_label_disabled: disabled,
-        segment_border: toward(surface, 0.4),
-        segment_corner: toward(surface, 0.25),
         piece: readable(s.success, surface, 3.0),
         piece_partial: mix(s.success, surface, 0.55),
         piece_missing: toward(surface, 0.12),
+        strip_error: mix(bg, s.error, 0.12),
+        strip_error_hatch: mix(bg, s.error, 0.22),
+        strip_accent: tint(bg, 0.12),
         caption: s.header,
         caption_text: text,
         caption_text_inactive: mix(text, s.header, 0.45),
@@ -386,7 +366,6 @@ pub fn strengthen(p: &mut Palette) {
         &mut p.header_sep,
         &mut p.header_line,
         &mut p.meter_edge,
-        &mut p.segment_border,
         &mut p.menubar_line,
         &mut p.egui_window_border,
     ] {

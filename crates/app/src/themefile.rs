@@ -17,7 +17,7 @@
 //!
 //! [dark]                    # the dark variant only
 //! window = "#202020"
-//! "segments.done" = "#3fa864"   # one colour, or a list of 13 (top to bottom)
+//! "progress.bar" = "#3fa864"
 //! ```
 //!
 //! Unknown keys and values that can't be read are skipped and reported as warnings, so a file
@@ -662,20 +662,6 @@ fn colors(table_name: &str, v: &Value, pal: &mut Palette, warnings: &mut Vec<Str
             }
             continue;
         }
-        let rows = match key.as_str() {
-            "segments.missing" => Some(&mut pal.segments.missing),
-            "segments.done" => Some(&mut pal.segments.done),
-            "segments.start" => Some(&mut pal.segments.start),
-            _ => None,
-        };
-        if let Some(rows) = rows {
-            if !gradient(value, rows) {
-                warnings.push(format!(
-                    "{table_name}.{key}: one colour or a list of 13 colours"
-                ));
-            }
-            continue;
-        }
         match value.as_str().and_then(palette::parse_hex) {
             Some(c) => {
                 if !pal.set_role(key, c) {
@@ -686,28 +672,6 @@ fn colors(table_name: &str, v: &Value, pal: &mut Palette, warnings: &mut Vec<Str
                 "{table_name}.{key}: {value} is not a colour (#rrggbb or #rrggbbaa)"
             )),
         }
-    }
-}
-
-/// One colour for every row, or 13 colours top to bottom.
-fn gradient(v: &Value, rows: &mut [egui::Color32; 13]) -> bool {
-    if let Some(c) = v.as_str().and_then(palette::parse_hex) {
-        *rows = [c; 13];
-        return true;
-    }
-    let Some(list) = v.as_array().filter(|l| l.len() == 13) else {
-        return false;
-    };
-    let parsed: Option<Vec<_>> = list
-        .iter()
-        .map(|c| c.as_str().and_then(palette::parse_hex))
-        .collect();
-    match parsed {
-        Some(cs) => {
-            rows.copy_from_slice(&cs);
-            true
-        }
-        None => false,
     }
 }
 
@@ -745,7 +709,7 @@ mod tests {
             accent = "#2f7d32"
             [dark]
             window = "202020"
-            "segments.done" = "#3fa864"
+            "progress.bar" = "#3fa864"
             "##,
         )
         .unwrap();
@@ -759,10 +723,7 @@ mod tests {
         assert_eq!((t.light.accent, t.dark.accent), (green, green));
         assert_eq!(t.dark.window, Color32::from_gray(0x20));
         assert_eq!(t.light.window, graphite().light.window);
-        assert_eq!(
-            t.dark.segments.done,
-            [Color32::from_rgb(0x3f, 0xa8, 0x64); 13]
-        );
+        assert_eq!(t.dark.progress_bar, Color32::from_rgb(0x3f, 0xa8, 0x64));
         assert_eq!(t.dark.text, graphite().dark.text);
     }
 
@@ -806,7 +767,7 @@ mod tests {
             [light]
             "no.such.role" = "#000000"
             text = "black"
-            "segments.missing" = ["#000000"]
+            "progress.bar" = ["#000000"]
             dark = "yes"
             "##,
         )

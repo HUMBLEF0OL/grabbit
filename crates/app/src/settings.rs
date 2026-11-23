@@ -72,7 +72,7 @@ pub struct Settings {
     pub global_limit_on: bool,
     pub global_limit_kb: u64,
     pub global_only_active: bool,
-    /// Options → Connection → "Default max. conn. number" (IDM default 8).
+    /// Options → Connection → "Default maximum connections" (IDM default 8).
     pub max_connections: u32,
     /// Beyond IDM (issue #12): "Allow more than 32 connections" raises the ceiling of that
     /// number and of the exceptions from `MAX_CONNECTIONS` to `MAX_CONNECTIONS_UNLOCKED`.
@@ -81,11 +81,14 @@ pub struct Settings {
     pub show_complete: bool,
     /// List right-click → On Double click: Open (true) or Properties (IDM default).
     pub double_click_open: bool,
-    /// Ask before deleting downloads ("Don't show this dialog again" clears it).
+    /// Ask before deleting downloads ("Don't show this dialog again" clears it). Off, Delete only
+    /// takes downloads off the list: deleting files from the disk always asks (upstream #1563).
+    ///
+    /// Its files box ("Also move the files to the Recycle Bin") is never remembered: it starts
+    /// unticked, or ticked for one Shift+Delete. Lists before #1563 saved the last answer as
+    /// `delete_files_too`, which made every later delete (and, with this off, one never asked)
+    /// take the finished files too; that key is no longer read, and goes with the next save.
     pub confirm_delete: bool,
-    /// The confirmation's "Also delete the files from disk", as last answered (IDM keeps it):
-    /// its first state next time, and what happens when it no longer asks.
-    pub delete_files_too: bool,
     /// The Categories pane's width (plan 05b: 224 by default, the mockup's), dragged with the
     /// splitter. IDM's layout's own (`categories_width`) is read no more since plan 05.5c.
     pub graphite_categories_width: u32,
@@ -125,7 +128,7 @@ pub struct Settings {
     /// View → Interface size (#262), percent: 100, 125, 150, 175 or 200 (crate::scale). Every
     /// window drawn that much larger than the display's own scale makes it.
     pub interface_size: u16,
-    /// Scheduler → Download limits: "Download no more than `limits_mb` MBytes every
+    /// Scheduler → Download limits: "Download no more than `limits_mb` MB every
     /// `limits_hours` hours" (IDM defaults 200 / 5), with a warning before stopping.
     pub limits_on: bool,
     pub limits_mb: u32,
@@ -209,14 +212,14 @@ pub struct Settings {
     pub user_agent: String,
     /// Connection: per-server connection limits (server, number).
     pub conn_exceptions: Vec<(String, u32)>,
-    /// Proxy / Socks: 0 none, 1 system, 2 automatic script, 3 manual.
+    /// Proxy / SOCKS: 0 none, 1 system, 2 automatic script, 3 manual.
     pub proxy_from_browser: bool,
     pub proxy_mode: u8,
     pub proxy_script: String,
     pub proxy_host: String,
     pub proxy_port: String,
     pub proxy_user: String,
-    /// Sealed on disk like Sites Logins' passwords (`sealed`); a plain one from before still reads.
+    /// Sealed on disk like Site logins' passwords (`sealed`); a plain one from before still reads.
     #[serde(with = "sealed")]
     pub proxy_pass: String,
     pub proxy_http: bool,
@@ -236,7 +239,7 @@ pub struct Settings {
     pub dns_nextdns_id: String,
     /// When the chosen DNS can't be reached, ask the system's (off: strict).
     pub dns_fallback: bool,
-    /// Options → Proxy / Socks → Network adapter (#35): every connection goes through this
+    /// Options → Proxy / SOCKS → Network adapter (#35): every connection goes through this
     /// adapter (its name as the system shows it, or one of its addresses), or none at all; ""
     /// lets the system choose.
     pub net_adapter: String,
@@ -244,7 +247,7 @@ pub struct Settings {
     /// NAT), else active. Named anew when FTP arrived: `ftp_pasv` was saved as false while
     /// the box was greyed.
     pub ftp_passive: bool,
-    /// Sites Logins: (site/path, user, password). The passwords are written sealed for this
+    /// Site logins: (site/path, user, password). The passwords are written sealed for this
     /// Windows account (`sealed_logins`).
     #[serde(with = "sealed_logins")]
     pub site_logins: Vec<(String, String, String)>,
@@ -272,6 +275,10 @@ pub struct Settings {
     /// Torrents keep sharing after they finish (D-018: off; a finished torrent stops, like any
     /// download).
     pub torrent_keep_sharing: bool,
+    /// Finished torrents the user stopped sharing one by one (the row menu's Torrent → Stop
+    /// sharing, plan 13b), by info hash: `TorrentHost::set_sharing` never shares them again until
+    /// Start sharing takes them off.
+    pub torrent_unshared: Vec<String>,
     /// Torrent settings' "Open magnet links and .torrent files with Grabbit": Windows opens them
     /// with Grabbit (D-018: opt-in, current user), and the browser hands a .torrent download over
     /// (upstream issue 1058: off, it stays with the browser for the user's own torrent client).
@@ -293,7 +300,7 @@ pub struct Settings {
     pub torrent_port: u16,
     pub torrent_dht: bool,
     pub torrent_lsd: bool,
-    /// Torrents go through Proxy / Socks' SOCKS5 proxy (a manual `socks5://` one only).
+    /// Torrents go through Proxy / SOCKS' SOCKS5 proxy (a manual `socks5://` one only).
     pub torrent_proxy: bool,
     /// A blocklist's address (empty: none), fetched again every `BLOCKLIST_DAYS`.
     pub torrent_blocklist: String,
@@ -326,7 +333,7 @@ pub struct Settings {
     /// Download video from a page: the subtitles last chosen (#68), offered again for the
     /// next video when it has that language (none at first).
     pub video_subs: mdm_tools::video::Subs,
-    /// Options → Sites Logins → Cookies for video sites (#229): the browser whose cookies
+    /// Options → Site logins → Cookies for video sites (#229): the browser whose cookies
     /// yt-dlp reads on this computer when the extension passed none (yt-dlp's name: `firefox`,
     /// `chrome`...; empty: off, the default), and its profile (a name or a folder; empty: the
     /// browser's last used). A settings file from before has neither: off.
@@ -392,7 +399,6 @@ impl Default for Settings {
             show_complete: true,
             double_click_open: false,
             confirm_delete: true,
-            delete_files_too: false,
             graphite_categories_width: 224,
             window: None,
             window_maximized: false,
@@ -474,6 +480,7 @@ impl Default for Settings {
             remote_port: mdm_remote::PORT,
             remote_listen: String::new(),
             torrent_keep_sharing: false,
+            torrent_unshared: Vec::new(),
             torrent_associations: None,
             torrent_associations_before: false,
             torrent_incoming: true,
@@ -666,9 +673,9 @@ impl Settings {
         crate::model::category_folder(cat, downloads, &self.category_dirs)
     }
 
-    /// Options → Proxy / Socks for the engine. An automatic configuration script (PAC) is run
+    /// Options → Proxy / SOCKS for the engine. An automatic configuration script (PAC) is run
     /// once it has been fetched (pacfetch.rs); until then, the system's settings.
-    /// The SOCKS5 proxy torrents may use: Proxy / Socks' manual one when its address is a
+    /// The SOCKS5 proxy torrents may use: Proxy / SOCKS' manual one when its address is a
     /// `socks5://` (or `socks5h://`) one, with its login; librqbit takes no other kind.
     pub fn socks5_proxy(&self) -> Option<String> {
         let host = self.proxy_host.trim();
@@ -690,7 +697,7 @@ impl Settings {
     }
 
     /// The torrent engine as Torrent settings say (#40), its data in `state_dir`. None when they
-    /// say to use the proxy and Proxy / Socks has no SOCKS5 one: torrents then don't start, never
+    /// say to use the proxy and Proxy / SOCKS has no SOCKS5 one: torrents then don't start, never
     /// going around the proxy unasked.
     pub fn torrent_config(&self, state_dir: std::path::PathBuf) -> Option<mdm_torrent::Config> {
         let proxy = match (self.torrent_proxy, self.socks5_proxy()) {
@@ -716,8 +723,13 @@ impl Settings {
 
     pub fn proxy(&self) -> mdm_engine::Proxy {
         use mdm_engine::Proxy;
+        // The system's settings, with its automatic configuration script when one is on and
+        // has been fetched (#1448: a proxy program's PAC mode, `pacfetch::watch_system`).
+        let system = || {
+            crate::pacfetch::system_script().map_or(Proxy::System, |script| Proxy::Pac { script })
+        };
         match self.proxy_mode {
-            1 => Proxy::System,
+            1 => system(),
             2 => crate::pacfetch::script(&self.proxy_script)
                 .map_or(Proxy::System, |script| Proxy::Pac { script }),
             3 if !self.proxy_host.trim().is_empty() => {
@@ -739,15 +751,26 @@ impl Settings {
                     https: self.proxy_https,
                 }
             }
-            // "Use proxy/socks from a browser's request": browsers use Windows' proxy settings,
+            // "Use proxy/SOCKS from a browser's request": browsers use Windows' proxy settings,
             // so with no proxy of our own so do we (none set there: direct, as before).
-            _ if self.proxy_from_browser => Proxy::System,
+            _ if self.proxy_from_browser => system(),
             _ => Proxy::None,
         }
     }
 
+    /// Whether [`Self::proxy`] is the system's settings ("Use system settings", or the
+    /// browser's proxy with no proxy of MDM's own): the system's script is then watched for.
+    pub fn follows_system(&self) -> bool {
+        match self.proxy_mode {
+            1 => true,
+            2 => false,
+            3 if !self.proxy_host.trim().is_empty() => false,
+            _ => self.proxy_from_browser,
+        }
+    }
+
     /// The proxy for a download that came with `context` (#42): the browser's own, when it used
-    /// one for it (a VPN or proxy extension, or its settings) and "Use proxy/socks from a
+    /// one for it (a VPN or proxy extension, or its settings) and "Use proxy/SOCKS from a
     /// browser's request" is on; else [`Self::proxy`]. A proxy the extension logs in to is
     /// refused (`browser_proxy_refused`), never replaced by a direct connection.
     pub fn proxy_for(&self, context: &mdm_ipc::Command) -> mdm_engine::Proxy {
@@ -775,9 +798,9 @@ impl Settings {
     /// user's own address, so the download stops and says so.
     pub fn browser_proxy_refused(&self, context: &mdm_ipc::Command) -> Option<String> {
         (self.proxy_from_browser && context.proxy_login).then(|| {
-            // i18n: an error: the browser's VPN or proxy extension logs in to its proxy itself, and MDM can't; Options → Proxy / Socks → Network adapter is where an adapter can be chosen
+            // i18n: an error: the browser's VPN or proxy extension logs in to its proxy itself, and MDM can't; Options → Proxy / SOCKS → Network adapter is where an adapter can be chosen
             crate::i18n::t(
-                "the browser's proxy (a VPN or proxy extension) asks for a login only that extension has: use the VPN's own app, or choose its network adapter in Options → Proxy / Socks",
+                "the browser's proxy (a VPN or proxy extension) asks for a login only that extension has: use the VPN's own app, or choose its network adapter in Options → Proxy / SOCKS",
             )
             .to_owned()
         })
@@ -819,7 +842,7 @@ impl Settings {
             .clamp(1, self.connection_limit())
     }
 
-    /// The Sites Logins entry for `url`: its site/path is a prefix of the address (without the
+    /// The Site logins entry for `url`: its site/path is a prefix of the address (without the
     /// scheme); `*.` matches subdomains.
     pub fn site_login(&self, url: &url::Url) -> Option<(String, String)> {
         let host = url.host_str()?.to_ascii_lowercase();
@@ -1032,7 +1055,7 @@ pub fn dns_choice(
 }
 
 /// The proxy MDM's own downloads go through (its helpers, its updates, a crash report's
-/// symbols): Options → Proxy / Socks, kept in step by the app ([`share_proxy`]); Windows' own
+/// symbols): Options → Proxy / SOCKS, kept in step by the app ([`share_proxy`]); Windows' own
 /// settings in a process without them (the crash monitor).
 static OWN_PROXY: std::sync::RwLock<Option<mdm_engine::Proxy>> = std::sync::RwLock::new(None);
 /// The same for Options → Connection → DNS ([`share_dns`]).
@@ -1070,7 +1093,7 @@ pub fn share_route(route: mdm_engine::Route) {
 }
 
 impl Settings {
-    /// Options → Sites Logins → Cookies for video sites, as yt-dlp is given it (None: off, or
+    /// Options → Site logins → Cookies for video sites, as yt-dlp is given it (None: off, or
     /// a browser yt-dlp doesn't read).
     pub fn video_cookies(&self) -> Option<mdm_tools::proc::BrowserCookies> {
         mdm_tools::proc::BrowserCookies::new(&self.video_cookies, &self.video_cookies_profile)
@@ -1105,6 +1128,23 @@ pub fn own_net() -> mdm_engine::Options {
 #[cfg(test)]
 mod tests {
     use std::path::Path;
+
+    /// Upstream #1563: a list that remembered the delete question's files box ticked (and the
+    /// question turned off) loads as before otherwise, and its next save drops the tick.
+    #[test]
+    fn a_remembered_files_tick_is_dropped() {
+        let old: super::Settings = serde_json::from_value(serde_json::json!({
+            "confirm_delete": false,
+            "delete_files_too": true,
+            "max_connections": 3,
+        }))
+        .unwrap();
+        assert!(!old.confirm_delete);
+        assert_eq!(old.max_connections, 3, "the rest is read as before");
+        let saved = serde_json::to_value(&old).unwrap();
+        assert!(saved.get("delete_files_too").is_none(), "{saved}");
+        assert!(saved.get("confirm_delete").is_some());
+    }
 
     /// Plan 11a (audit r2): a category's folder set again as Options' box shows it (with a
     /// trailing separator) is no change, for a category of the user's as for a built-in one.
@@ -1218,6 +1258,20 @@ mod tests {
         };
         let back: Settings = serde_json::from_str(&serde_json::to_string(&off).unwrap()).unwrap();
         assert!(!back.add_ask_where, "kept as left");
+    }
+
+    /// Plan 13b: a torrent stopped sharing by hand stays so across a restart (the list is saved
+    /// with the settings); a settings file from before it has none.
+    #[test]
+    fn stop_sharing_persists_across_a_restart() {
+        let s: Settings = serde_json::from_str("{}").unwrap();
+        assert!(s.torrent_unshared.is_empty());
+        let off = Settings {
+            torrent_unshared: vec!["67675951e26ce50a30ded57b20ef9a3e992dc4d1".into()],
+            ..Default::default()
+        };
+        let back: Settings = serde_json::from_str(&serde_json::to_string(&off).unwrap()).unwrap();
+        assert_eq!(back.torrent_unshared, off.torrent_unshared);
     }
 
     /// Plan 06: a settings file from before the paste bar and the details pane loads with the
@@ -1599,8 +1653,15 @@ mod tests {
         // IDM's default: no proxy, but "use the browser's proxy" ticked — the browser's is
         // Windows' (none set there: direct).
         assert_eq!(s.proxy(), mdm_engine::Proxy::System);
+        // #1448: the system's settings are followed, its automatic configuration script too.
+        assert!(s.follows_system());
         s.proxy_from_browser = false;
         assert_eq!(s.proxy(), mdm_engine::Proxy::None);
+        assert!(!s.follows_system());
+        s.proxy_mode = 1;
+        assert!(s.follows_system());
+        s.proxy_mode = 2;
+        assert!(!s.follows_system());
         s.proxy_mode = 3;
         s.proxy_host = "10.0.0.1".into();
         s.proxy_port = "3128".into();
@@ -1610,10 +1671,11 @@ mod tests {
             mdm_engine::Proxy::Manual { ref url, https: true, http: false, .. }
                 if url == "http://10.0.0.1:3128"
         ));
+        assert!(!s.follows_system());
     }
 }
 
-/// Sites Logins' passwords on disk: in the system's keychain once it holds them (secrets.rs),
+/// Site logins' passwords on disk: in the system's keychain once it holds them (secrets.rs),
 /// else sealed as `sealed` seals them. A list from before reads as before, and a password that
 /// can't be opened (the list copied to another account) reads as none.
 mod sealed_logins {

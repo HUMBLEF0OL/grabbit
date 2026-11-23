@@ -32,7 +32,7 @@ tree answers the arrow keys.
 
 In dialogs, **Tab** moves between controls, the arrows go through radio groups and tab strips,
 **Ctrl+Tab** changes tabs, and typing a name jumps to it in any list or drop-down. The paste
-bar's address and **Save As** keep a history you can walk with **Up** and **Down**, and the Scheduler's
+bar's address and **Save as** keep a history you can walk with **Up** and **Down**, and the Scheduler's
 calendar works from the keyboard.
 
 ## The keys are written down

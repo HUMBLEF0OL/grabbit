@@ -8,27 +8,28 @@ Every download keeps a log of its recent events: retries, redirects, the server'
 
 - Hover over the download's **Status** in the list to see them.
 - Or open its progress window (double-click an unfinished download). The connection table shows what each connection is doing, and **Retrying** with the reason when one fails.
-- **File Properties** (**Alt+Enter**) shows **Last try** and its **Result**.
+- **File properties** (**Alt+Enter**) shows **Last try** and its **Result**.
 
 ## A download says Error
 
 1. Read the reason (hover over **Status**).
 2. Select the download and click **Resume**. Many errors are a server or connection having a bad moment.
-3. If the link has expired (common for links from sites you sign in to, or links with a time limit in them), get a new one: right-click → **Refresh download address**. See [Resume a broken download](guide-resume-broken-download.md).
+3. If the link has expired (common for links from sites you sign in to, or links with a time limit in them), get a new one: right-click → **Refresh download address...**. See [Resume a broken download](guide-resume-broken-download.md).
 4. If it says **the file changed on the server**, the file isn't the one Grabbit started with. Right-click → **Redownload** to start again from the beginning.
 5. If it says **Google Drive won't give this file now**, Drive's download limit for that file was reached. See [Google Drive links](adding-downloads.md#google-drive-links).
 6. If it says **the site sent a web page instead of the file**, the link led to the site's own page: a file host's countdown, a captcha, a **Download** button to press, or a sign-in. Grabbit never saves that page as your file. Click **Open in browser** in the download's progress window (or open the link yourself), finish there, and when the browser starts the real download, Grabbit's extension hands it to Grabbit. Without the extension, let the browser download it.
+7. If it says **this site lets only browsers through**, the site's bot check (Cloudflare's, for one) turned Grabbit away. Grabbit has already asked once more connecting the way your browser does, with your browser's cookies for that site, and once under its own name (some checks let a program that says what it is through), and the site still wants its check answered in a browser. Hold **Alt** as you click the link: the browser opens it in the tab, runs the site's check there ("Just a moment...", sometimes a box to tick), and keeps the download that comes after it. Grabbit leaves that download alone for a minute after your click. See [Browser integration](browser-integration.md#keys-to-force-or-prevent-capture).
 
 ## A download starts over instead of resuming
 
-- Look at **Resume capability** in the progress window. **No** means the server can't send a file in parts, so Grabbit can't continue it later.
+- Look at **Can resume** in the progress window (click **Show details**). **No** means the server can't send a file in parts, so Grabbit can't continue it later.
 - Some servers report a new date for the same file every time. Tick **Options → Downloads → Ignore file modification time changes when resuming a download**.
 
 ## Downloads are slow
 
-- Check that the Speed Limiter is off: **Downloads → Speed Limiter → Turn off**. Also look at **Downloads → Speed Limiter → Settings... → Limit all downloads together to**, which applies even with the limiter off.
-- Check the download's own **Speed Limiter** tab in its progress window.
-- Check **Options → Connection**. A low **Default max. conn. number**, or an exception for the server, means fewer connections. Rows marked **(auto)** are servers that refused more connections; Grabbit can't do more there.
+- Check that the Speed Limiter is off: **Downloads → Speed Limiter → Turn off**. Also look at **Downloads → Speed Limiter → Settings → Limit all downloads together to**, which applies even with the limiter off.
+- Check the download's own **Limit** in its progress window (**Show details**).
+- Check **Options → Connection**. A low **Default maximum connections**, or an exception for the server, means fewer connections. Rows marked **(auto)** are servers that refused more connections; Grabbit can't do more there.
 - Check **Download limits** in the Scheduler. When the limit is reached, downloads wait with **Waiting: the download limit is reached (Scheduler)**.
 
 ## The browser doesn't send downloads to Grabbit
@@ -81,9 +82,9 @@ Grabbit draws its windows with Direct3D 12. A graphics driver can still misbehav
 ![View → Draw with open: OpenGL and Direct3D](images/help/draw-with.webp)
 *View → Draw with: the other way of drawing.*
 
-- If Direct3D can't start on your computer (no driver for it, some virtual machines), or its first window doesn't show within 10 seconds of its own (the time Grabbit spends loading your list and its icons doesn't count, however slow the computer is just after it starts), Grabbit draws with OpenGL, and **View → Draw with** says so and why. Choosing it again tries it again at the next start.
+- If Direct3D can't start on your computer (no driver for it, some virtual machines), or its first window doesn't show within 10 seconds of its own (the time Grabbit spends loading your list and its icons doesn't count, however slow the computer is just after it starts), Grabbit draws with OpenGL, and **View → Draw with** says so, why, since when and when Grabbit tries it again: after a graphics driver update, after a while (a week for a window that was slow to show, a month for one that couldn't start; twice as long each time it fails again), or at the next start when the slow window came just after you signed in to Windows. Choosing it again tries it again at the next start.
 - If neither can start, Grabbit draws with a software renderer (Microsoft's), so the window still opens (Remote Desktop, a virtual machine without a graphics driver). It works, but keeps the processor busier while a window changes.
-- When OpenGL fails on a card without Direct3D 12, Grabbit draws with Direct3D on Microsoft's software renderer (WARP) from the next start, and **View → Draw with** says why: OpenGL couldn't start, it is too old to draw Grabbit (older than 3.0, such as Intel's first HD Graphics, whose OpenGL 2.1 drew Grabbit's windows as garbage), its first window didn't show within 10 seconds, or Grabbit froze inside the graphics driver while OpenGL showed a frame (the older Intel HD Graphics and AMD Radeon cards' drivers did). Choosing **OpenGL** there tries it again.
+- When OpenGL fails on a card without Direct3D 12, Grabbit draws with Direct3D on Microsoft's software renderer (WARP) from the next start, and **View → Draw with** says why: OpenGL couldn't start, it is too old to draw Grabbit (older than 3.0, such as Intel's first HD Graphics, whose OpenGL 2.1 drew Grabbit's windows as garbage), its first window didn't show within 10 seconds, or Grabbit froze inside the graphics driver while OpenGL showed a frame (the older Intel HD Graphics and AMD Radeon cards' drivers did). Grabbit tries OpenGL again after a driver update or a while (never by time for one too old), and choosing **OpenGL** there tries it again at the next start.
 - If the graphics card is reset while Grabbit runs (a driver update), Grabbit starts again by itself. Lost twice in 10 minutes, it goes back to OpenGL, and **View → Draw with** says why.
 - Updating the graphics driver from the card maker's site (Intel, AMD or NVIDIA) fixes many of these problems.
 - A freeze whose report shows the window thread inside the graphics driver as it shows a frame (`ig4icd64.dll` or `ig9icd64.dll` for Intel, `nvoglv64.dll` for NVIDIA, `atio6axx.dll` for AMD, under `opengl32.dll`) is the driver's OpenGL stuck, not Grabbit: choose **View → Draw with → Direct3D** (the default) and restart Grabbit, and update the graphics driver. If **Draw with** says Direct3D didn't start there, the line under it says why; Grabbit then remembers the freeze and draws with WARP from the next start.
@@ -112,7 +113,7 @@ If your antivirus quarantined Grabbit, restore it and add an exception for its f
 
 - Installed or the plain zip: `%APPDATA%\grabbit`. The list and settings are in `downloads.json`.
 - Portable: the `data` folder next to `grabbit.exe`.
-- Passwords (Sites Logins, the proxy, debrid accounts) are in Windows Credential Manager, not in `downloads.json`; see [Options → Sites Logins](options.md#sites-logins).
+- Passwords (Site logins, the proxy, debrid accounts) are in Windows Credential Manager, not in `downloads.json`; see [Options → Site logins](options.md#site-logins).
 
 To back up your list, quit Grabbit (**Tasks → Exit**) and copy `downloads.json`.
 
@@ -128,6 +129,8 @@ When there is one, **Update now** downloads it, checks it, puts it in place and 
 | The portable or plain zip | Replaces the programs in their folder (a portable copy's `data` folder is kept). |
 
 Grabbit installs an update only when the release's list of checksums is signed by Grabbit's release key and the file matches it; anything else is refused, and **Download** opens the [Releases](https://github.com/HUMBLEF0OL/grabbit/releases) page instead. Updating this way starts with version 0.2.1: earlier versions open the Releases page.
+
+Grabbit asks GitHub's API for the newest version (of Grabbit, and of yt-dlp and ffmpeg). GitHub answers 60 such questions an hour for each internet address, so on a network many people share (a mobile or home internet provider that puts many customers behind one address, a campus, an office) others can use them up. Grabbit then reads GitHub's ordinary release pages instead, with the same checks of what it downloads. If GitHub refuses those too, the window says **api.github.com refused the request (403 Forbidden): too many requests from your network for now**: try again in an hour, or from another network.
 
 **Help → About Grabbit** shows the version you have.
 

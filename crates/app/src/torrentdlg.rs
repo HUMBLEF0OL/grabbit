@@ -125,6 +125,20 @@ pub(crate) fn spinner(ui: &Ui, center: Pos2, radius: f32) {
     ui.ctx().request_repaint();
 }
 
+/// The one loading look (plan 12 E4): the [`spinner`] at `x` (on screen), then `line` after
+/// it on `baseline` in `color`, cut with "..." at `right`. The line's rect, and whether it was cut.
+pub(crate) fn loading(
+    ui: &Ui,
+    x: f32,
+    baseline: f32,
+    line: &str,
+    color: egui::Color32,
+    right: f32,
+) -> (egui::Rect, bool) {
+    spinner(ui, pos2(x + 7.0, baseline - 4.0), 6.0);
+    winui::text_fit(ui.painter(), x + 20.0, baseline, line, color, right)
+}
+
 /// How long a magnet's lookup goes on before it says what may be wrong (#92).
 const HINT_AFTER: u64 = 30;
 
@@ -704,7 +718,7 @@ impl TorrentDialog {
                     has,
                 ),
                 FooterItem::Button(
-                    FooterButton::new("Download Now", kind(ready, true))
+                    FooterButton::new("Download now", kind(ready, true))
                         .primary()
                         .enter(ready),
                 ),
@@ -955,7 +969,7 @@ pub struct TorrentSettings {
     net: Net,
     /// The port box's text (digits; empty: any).
     port: String,
-    /// Proxy / Socks has a SOCKS5 proxy torrents can use.
+    /// Proxy / SOCKS has a SOCKS5 proxy torrents can use.
     socks: bool,
     /// "Limit uploading to": on, and the KBytes/sec box's text.
     upload_on: bool,
@@ -1189,7 +1203,7 @@ impl TorrentSettings {
                     o.x + 380.0,
                     o.y + 174.0,
                     // i18n: Torrent settings: the port to listen on (empty: any)
-                    crate::i18n::t("Port:"),
+                    crate::i18n::t("Port"),
                     winui::TEXT(),
                 );
                 winui::edit(
@@ -1238,22 +1252,22 @@ impl TorrentSettings {
                     o.x + 456.0,
                     ("torrent-settings", 3),
                 );
-                // Asked for once and since gone from Proxy / Socks: it stays on (and torrents
+                // Asked for once and since gone from Proxy / SOCKS: it stays on (and torrents
                 // don't start) until turned off here.
                 let can_proxy = self.socks || n.proxy;
                 let proxy = winui::checkbox(
                     ui,
                     pos2(o.x + 14.0, o.y + 274.0),
                     &mut n.proxy,
-                    // i18n: Torrent settings: use the SOCKS5 proxy set in Options → Proxy / Socks
-                    "Use the proxy (Options → Proxy / Socks, SOCKS5)",
+                    // i18n: Torrent settings: use the SOCKS5 proxy set in Options → Proxy / SOCKS
+                    "Use the proxy (Options → Proxy / SOCKS, SOCKS5)",
                     can_proxy,
                 );
                 winui::why_disabled(
                     proxy,
                     !can_proxy,
                     // i18n: why "Use the proxy" is greyed in Torrent settings
-                    "Set a socks5:// proxy in Options → Proxy / Socks first",
+                    "Set a socks5:// proxy in Options → Proxy / SOCKS first",
                 );
                 winui::fit(
                     ui,
@@ -1298,7 +1312,7 @@ impl TorrentSettings {
                     &p,
                     o.x + 396.0,
                     o.y + 352.0,
-                    crate::i18n::t("KBytes/sec"),
+                    crate::i18n::t("KB/s"),
                     if self.upload_on {
                         winui::TEXT()
                     } else {
@@ -1379,7 +1393,6 @@ pub struct AddTrackers {
     pub id: u64,
     name: String,
     text: String,
-    error: Option<String>,
     /// The box has had the focus (it takes it once, when the window opens).
     focused: bool,
 }
@@ -1390,7 +1403,6 @@ impl AddTrackers {
             id,
             name: name.to_owned(),
             text: String::new(),
-            error: None,
             focused: false,
         }
     }
@@ -1455,7 +1467,6 @@ impl AddTrackers {
                     o.x + TRACKERS_W - winui::EDGE,
                     ("add-trackers", 1),
                 );
-                let before = self.text.clone();
                 let field = winui::multiline_light(
                     ui,
                     r(o, winui::EDGE, 42.0, TRACKERS_W - 2.0 * winui::EDGE, 120.0),
@@ -1466,10 +1477,15 @@ impl AddTrackers {
                 if !std::mem::replace(&mut self.focused, true) {
                     field.request_focus();
                 }
-                if self.text != before {
-                    self.error = None;
-                }
-                let (line, color) = match &self.error {
+                // OK greys while the box holds no tracker or a line that isn't one (plan 12b,
+                // C7), its tip saying why; a wrong line is named under the box once the box
+                // is left (not from the first key typed).
+                let checked = self.addresses();
+                let why = checked.as_ref().err().cloned().unwrap_or_default();
+                let named = (!field.has_focus() && !self.text.trim().is_empty())
+                    .then_some(&why)
+                    .filter(|w| !w.is_empty());
+                let (line, color) = match named {
                     Some(e) => (e.clone(), winui::ERROR()),
                     None => (
                         // i18n: Add trackers: under the box
@@ -1495,7 +1511,18 @@ impl AddTrackers {
                     TRACKERS_W,
                     TRACKERS_BODY,
                     &mut [
-                        FooterItem::Button(FooterButton::new("OK", ButtonKind::Default)),
+                        FooterItem::Button(
+                            FooterButton::new(
+                                "OK",
+                                if checked.is_ok() {
+                                    ButtonKind::Default
+                                } else {
+                                    ButtonKind::Disabled
+                                },
+                            )
+                            .primary()
+                            .tip_text(checked.is_err(), &why),
+                        ),
                         FooterItem::Button(
                             FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
                         ),
@@ -1503,14 +1530,8 @@ impl AddTrackers {
                 );
                 if pressed == Some(1) {
                     Outcome::Closed
-                } else if pressed == Some(0) {
-                    match self.addresses() {
-                        Ok(list) => Outcome::Done(list),
-                        Err(e) => {
-                            self.error = Some(e);
-                            Outcome::Open
-                        }
-                    }
+                } else if let (Some(0), Ok(list)) = (pressed, checked) {
+                    Outcome::Done(list)
                 } else {
                     Outcome::Open
                 }

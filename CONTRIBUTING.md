@@ -5,7 +5,11 @@ welcome.
 
 ## Getting set up
 
-You need Windows 10 or 11 and Rust stable 1.95 or later (the MSVC toolchain).
+You need Windows 10 or 11 and Rust stable 1.98 or later (the MSVC toolchain). A release build
+(`tools/installer/build.ps1`) also needs CMake, NASM and LLVM's libclang (`winget install
+Kitware.CMake NASM.NASM LLVM.LLVM`, or `LIBCLANG_PATH` set to a folder with `libclang.dll`): it
+turns on the engine's browser-like connection (`browser-connection`), built on BoringSSL from
+source. Everyday builds and tests leave it out.
 
 ```
 cargo build

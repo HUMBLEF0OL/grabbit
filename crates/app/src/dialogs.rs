@@ -680,9 +680,9 @@ pub fn resolve_path(s: &str) -> PathBuf {
     }
 }
 
-/// IDM's dialog size text, e.g. `60.00  MB` (two spaces, as measured).
+/// The dialogs' size text, e.g. `60.00 MB`: as the list writes it.
 pub fn dialog_size(b: u64) -> String {
-    model::size(b).replacen(' ', "  ", 1)
+    model::size(b)
 }
 
 // ---- An address added (the Add window, the paste bar: `crate::adddlg`) ----------------------
@@ -1172,10 +1172,20 @@ impl FileInfo {
         if self.info.is_none()
             && let Some(res) = self.probe.lock().unwrap().take()
         {
-            let res = res.map(|(pi, kept)| {
-                self.kept = kept;
-                pi
-            });
+            let res = res
+                .map(|(pi, kept)| {
+                    self.kept = kept;
+                    pi
+                })
+                // Worded to follow "Error: "; this window shows it alone (the Server row, the
+                // size's hover), so it starts upper case.
+                .map_err(|e| {
+                    let mut chars = e.chars();
+                    chars
+                        .next()
+                        .map(|c| c.to_uppercase().chain(chars).collect())
+                        .unwrap_or_default()
+                });
             if let (Ok(pi), false) = (&res, self.edited) {
                 self.category = Category::of(&pi.file_name);
                 let dir = crate::model::category_folder(self.category, &self.downloads, &self.dirs);
@@ -1195,7 +1205,7 @@ impl FileInfo {
         window(
             ctx,
             "file-info",
-            "Download File Info",
+            "Download file info",
             [W, body + winui::FOOTER_H],
             true,
             winui::BG(),
@@ -1205,7 +1215,7 @@ impl FileInfo {
                 let fx = winui::form(
                     &p,
                     lx,
-                    &["URL", "Category", "Save As", "Description", "Server"],
+                    &["URL", "Category", "Save as", "Description", "Server"],
                     false,
                 );
                 let right = W - winui::EDGE;
@@ -1217,7 +1227,7 @@ impl FileInfo {
                 // The file's card: its kind's icon, its name, its size (or why there is none),
                 // and the greyed Preview.
                 let (size, reason) = match &self.info {
-                    None => ("...".to_owned(), None),
+                    None => (String::new(), None),
                     Some(Ok(pi)) => (
                         // i18n: a download's size is not known (the server didn't say)
                         pi.size
@@ -1231,15 +1241,26 @@ impl FileInfo {
                     .file_name()
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_default();
+                let card = r(o, lx, 16.0, right - lx, 66.0);
                 let (preview, size_at) = winui::file_card(
                     ui,
-                    r(o, lx, 16.0, right - lx, 66.0),
+                    card,
                     crate::fileicons::Kind::File(&name),
                     &name,
                     &size,
                     // i18n: verb: open the part already downloaded
                     Some(("Preview", ButtonKind::Disabled)),
                 );
+                // Still asking: the one loading look (plan 12 E4) where the size goes, the
+                // spinner alone, ending before Preview.
+                if self.info.is_none() {
+                    // The card's sub line: 14 under its middle (file_card).
+                    let base = card.center().y + 14.0;
+                    let end = preview
+                        .as_ref()
+                        .map_or(card.right() - 12.0, |b| b.rect.left() - 12.0);
+                    crate::torrentdlg::loading(ui, size_at.left(), base, "", winui::MUTED(), end);
+                }
                 if let Some(preview) = preview {
                     preview.on_hover_text(crate::i18n::t(
                         // i18n: tooltip of the greyed Preview button in Download File Info
@@ -1279,7 +1300,7 @@ impl FileInfo {
                     self.new_category = true;
                 }
 
-                winui::form_label(&p, o, lx, 176.0, h, "Save As", true);
+                winui::form_label(&p, o, lx, 176.0, h, "Save as", true);
                 let save_rc = field(176.0, h + 8.0);
                 let save = winui::combo_edit(ui, save_rc, &mut self.save_as);
                 // Opened, the keys are in Save As (its name is what one changes here).
@@ -1408,7 +1429,8 @@ impl FileInfo {
                 }
 
                 // Where the server is (#140), as the look saw it: "..." while it looks; blank when
-                // nothing was asked (the browser had the answer) or the look failed.
+                // nothing was asked (the browser had the answer). When the look failed, why, in
+                // words (#762: a refused certificate said so), where the size says "Error".
                 // i18n: label before where a download's server is (its country and round trip)
                 winui::form_label(&p, o, lx, 326.0 + dy, 20.0, "Server", true);
                 let server_baseline = o.y + winui::baseline_in(326.0 + dy, 20.0);
@@ -1434,7 +1456,18 @@ impl FileInfo {
                             );
                         }
                     }
-                    Some(Err(_)) => {}
+                    Some(Err(reason)) => {
+                        // On the Server row, where the server shows when the look succeeds.
+                        let (rect, cut) = winui::text_fit(
+                            &p,
+                            o.x + fx,
+                            server_baseline,
+                            reason,
+                            winui::ERROR(),
+                            o.x + right,
+                        );
+                        winui::copyable(ui, rect, "file-info-failed", reason, cut);
+                    }
                 }
 
                 // Held back while the address or the file's name can't be downloaded to (an
@@ -1463,8 +1496,8 @@ impl FileInfo {
                 let blocked = if self.url_bad {
                     Some("Invalid address")
                 } else if name_bad {
-                    // i18n: why Start Download is greyed in Download File Info
-                    Some(crate::i18n::mark("Type the file's name in Save As"))
+                    // i18n: why Download now is greyed in Download file info
+                    Some(crate::i18n::mark("Type the file's name in Save as"))
                 } else {
                     None
                 };
@@ -1489,12 +1522,12 @@ impl FileInfo {
                     body,
                     &mut [
                         FooterItem::Button(
-                            FooterButton::new("Download Later", later_kind)
-                                .mnemonic(9)
+                            FooterButton::new("Later", later_kind)
+                                .mnemonic(0)
                                 .tip(blocked.is_some(), why),
                         ),
                         FooterItem::Button(
-                            FooterButton::new("Start Download", start_kind)
+                            FooterButton::new("Download now", start_kind)
                                 .primary()
                                 .ring(true)
                                 .mnemonic(0)
@@ -1568,7 +1601,7 @@ fn cancel_waiting(ctx: &egui::Context, n: usize) -> Outcome<bool> {
                 &text,
                 winui::TEXT(),
                 o.x + 362.0,
-                13.0,
+                crate::theme::metrics().line_paragraph,
             );
             grow_to(ui.ctx(), "cancel-waiting", lines, 2);
             let o = o + vec2(0.0, extra);
@@ -1626,11 +1659,10 @@ fn start_probe(
     probe
 }
 
-// ---- Download complete (client 540 × 317, 339 with a notice) -------------------------------
+// ---- Download complete: the Done window (plan 13; its layout in progress_view.rs) -----------
 
 pub struct Complete {
     pub id: u64,
-    pub url: String,
     pub path: PathBuf,
     pub size: u64,
     pub dont_show: bool,
@@ -1640,241 +1672,903 @@ pub struct Complete {
     /// Clicked (or activated) once: from then on a window like any other, no longer above every
     /// program's (it shows above them until then, as IDM's does: #77).
     pub seen: bool,
-    /// Open was pressed: the file is looked for and handed to its program off the window's
-    /// thread (#743); the box closes when it opened, and stays (for Open folder) when it didn't.
-    pub opening: Option<crate::launch::Asked<PathBuf, bool>>,
+    /// Open was pressed (or a file chosen in its menu): that file is looked for and handed to its
+    /// program off the window's thread (#743); the box closes when it opened, says why under the
+    /// card when the file is gone, and stays (for Open folder) when it didn't open.
+    opening: Option<(PathBuf, crate::launch::Asked<PathBuf, Opened>)>,
     /// The file was dragged out of the box to a place MDM couldn't learn (upstream issue 869):
     /// Open and Open folder say so.
     pub moved_away: bool,
+    /// Saved as a folder (a torrent of several files, a gallery): its Open menu lists files.
+    folder: bool,
+    /// What Open opens: the main file (a file alone is its own); None: a folder without one.
+    main: Option<PathBuf>,
+    /// What Open folder does.
+    folder_act: FolderAct,
+    /// A folder's 6 largest files (path, size), largest first, and how many more it has.
+    largest: Vec<(PathBuf, u64)>,
+    more: usize,
+    /// Why Open found nothing (the main file was moved or deleted): said under the card, Open
+    /// greyed and Open folder the default (plan 13a, board 14).
+    gone: Option<String>,
+    /// Why a file chosen in the menu couldn't open (gone): said, Open left as it is.
+    picked_gone: Option<String>,
+    /// What is looked for off the window's thread once the box is made (its files, whether its
+    /// main file and folder are there); None once it came.
+    looking: Option<Arc<Mutex<Option<Looked>>>>,
+    /// The folder Open folder shows wasn't there when the box was made: Open folder keeps the
+    /// box (it looks again, and says so when it is still gone).
+    folder_gone: bool,
+    /// When the box was made: it stays hidden a moment for its look ([`done_shown`]).
+    made: std::time::Instant,
+}
+
+/// How long the Done window waits for its look before it shows without it.
+const DONE_LOOK_WAIT: std::time::Duration = std::time::Duration::from_millis(300);
+
+/// Whether the Done window shows, and whether Enter presses its filled button, while its look
+/// is still `looking` after `waited`: hidden until the look came or [`DONE_LOOK_WAIT`] passed
+/// (its stand-in, a file alone, could be the wrong layout); shown without it, Enter waits for it
+/// (it could open the wrong thing).
+fn done_shown(looking: bool, waited: std::time::Duration) -> (bool, bool) {
+    (!looking || waited >= DONE_LOOK_WAIT, !looking)
+}
+
+/// What the Done window learns off its thread once it is made (plan 13a).
+struct Looked {
+    /// Where it looked (the download's place then: a drag out may have moved it since).
+    at: PathBuf,
+    /// A folder download's files (None: `at` is the file).
+    files: Option<Vec<(PathBuf, u64)>>,
+    /// Why the main file (a folder without one: the folder) can't open: it isn't there.
+    gone: Option<String>,
+    /// The folder Open folder would show isn't there either.
+    folder_gone: bool,
+}
+
+/// [`Looked`] for a download at `path` (`files` lists a folder download's files, reading the
+/// disk; None: `path` is the file). On a thread other than the window's.
+fn look_done(
+    path: PathBuf,
+    moved_away: bool,
+    files: impl FnOnce() -> Option<Vec<(PathBuf, u64)>>,
+) -> Looked {
+    let files = files();
+    let (main, act) = done_targets(&path, files.as_deref());
+    // Only a file surely not there is gone; one that can't be looked at is left to Open.
+    let opens = main.unwrap_or_else(|| path.clone());
+    let gone = matches!(opens.try_exists(), Ok(false)).then(|| {
+        if moved_away {
+            moved_away_here(&opens)
+        } else {
+            gone_text(&opens)
+        }
+    });
+    let (FolderAct::Select(shown) | FolderAct::Open(shown)) = &act;
+    // As `show_in_folder_now` goes: the file, else its folder.
+    let folder_gone = !shown.exists() && shown.parent().is_none_or(|d| !d.is_dir());
+    Looked {
+        at: path,
+        files,
+        gone,
+        folder_gone,
+    }
+}
+
+/// `f`, when it is `from` or under it, moved with it to `to`.
+fn follow(f: &mut PathBuf, from: &Path, to: &Path) {
+    if let Ok(rest) = f.strip_prefix(from) {
+        *f = if rest.as_os_str().is_empty() {
+            to.to_owned()
+        } else {
+            to.join(rest)
+        };
+    }
+}
+
+/// Why Open folder can't show a download: its folder `dir` isn't there any more.
+fn folder_gone_text(dir: &Path) -> String {
+    crate::i18n::fmt(
+        // i18n: Open folder of a download whose folder is gone; {folder} = the folder
+        crate::i18n::t("{folder} isn't there any more. It was moved, renamed or deleted."),
+        &[("folder", &crate::i18n::isolate(&display_path(dir)))],
+    )
+}
+
+/// How a Download complete's Open went, on the thread that looked.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Opened {
+    Yes,
+    /// The file isn't where it was saved: why, in the interface language.
+    Gone(String),
+    /// It is there but didn't open (the reason was told).
+    Failed,
+}
+
+/// What Open folder does (plan 13a).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FolderAct {
+    /// The file shown selected in its folder.
+    Select(PathBuf),
+    /// The folder itself opened.
+    Open(PathBuf),
+}
+
+/// Of a folder download's files (path, size), the one it is mostly made of (plan 13a): the
+/// largest, when it is at least half the total and at least 4 times the second largest.
+pub fn main_file(files: &[(PathBuf, u64)]) -> Option<&PathBuf> {
+    let (mut big, mut second): (Option<&(PathBuf, u64)>, u64) = (None, 0);
+    for f in files {
+        match big {
+            Some(b) if f.1 <= b.1 => second = second.max(f.1),
+            _ => {
+                second = big.map_or(0, |b| b.1);
+                big = Some(f);
+            }
+        }
+    }
+    let (path, size) = big?;
+    let total: u128 = files.iter().map(|f| u128::from(f.1)).sum();
+    let (size, second) = (u128::from(*size), u128::from(second));
+    // ponytail: size only; a folder of empty files has none.
+    (2 * size >= total && size >= 4 * second && (size > 0 || files.len() == 1)).then_some(path)
+}
+
+/// What Open and Open folder act on for a download saved at `path` (`files`: a folder
+/// download's, [`Complete::files`]): the main file, opened by Open, and Open folder's act. A file
+/// alone is its own main file; a folder without one opens itself (not its parent, plan 13a).
+pub fn done_targets(path: &Path, files: Option<&[(PathBuf, u64)]>) -> (Option<PathBuf>, FolderAct) {
+    let main = match files {
+        None => Some(path.to_owned()),
+        Some(files) => main_file(files).cloned(),
+    };
+    let act = match &main {
+        Some(m) => FolderAct::Select(m.clone()),
+        None => FolderAct::Open(path.to_owned()),
+    };
+    (main, act)
+}
+
+/// Why a download's file can't open in Download complete: it isn't where it was saved (plan 13a,
+/// board 14).
+fn gone_text(path: &Path) -> String {
+    let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
+    let folder = crate::i18n::isolate(&display_path(path.parent().unwrap_or(path)));
+    crate::i18n::fmt(
+        // i18n: Download complete, under the folder: the downloaded file is gone; {file} = its name, {folder} = where it was saved
+        crate::i18n::t("{file} isn't in {folder} any more. It was moved, renamed or deleted."),
+        &[("file", &name), ("folder", &folder)],
+    )
+}
+
+/// How the Done window's Open menu names file `f` of a download saved at `dir`: its name, or
+/// its path inside `dir` when another of `listed` has the same name (CD1\01.flac, CD2\01.flac).
+fn menu_name(f: &Path, dir: &Path, listed: &[(PathBuf, u64)]) -> String {
+    let twins = listed
+        .iter()
+        .filter(|(g, _)| g.file_name() == f.file_name())
+        .count();
+    match f.strip_prefix(dir) {
+        Ok(inside) if twins > 1 => inside.display().to_string(),
+        _ => f
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned(),
+    }
+}
+
+/// What a press of Download complete's menu opener (the ▾, or Open file) does: None nothing,
+/// Some(by_keys) opens the menu. A pointer click opens it, unless that press just closed it
+/// (`closed_it`: it toggles off); keys (Alt+O, Enter, Space) open it only while it is closed
+/// (an open menu's keys are its own).
+fn opener_press(menu_open: bool, by_pointer: bool, closed_it: bool) -> Option<bool> {
+    if by_pointer {
+        (!closed_it).then_some(false)
+    } else {
+        (!menu_open).then_some(true)
+    }
+}
+
+/// A footer button's job in Download complete.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DoneAct {
+    Open,
+    Menu,
+    Folder,
+    Close,
+}
+
+/// The ▾ part of a split button: 28 wide (board 5: 8, the 10-point chevron, 8 and its borders),
+/// its chevron centred.
+const DONE_CARET_W: f32 = 28.0;
+/// How wide a file's name may be in the Open menu before it is cut in the middle: the menu
+/// then stays about 228 wide with the sizes (board 5).
+const DONE_MENU_NAME_W: f32 = 120.0;
+
+/// A part of the Done window's footer, left to right (plan 13d, boards 5, 7, 13, 14): its label
+/// (empty: the ▾, named by `tip`), look and job; `joined`: drawn against the part before it, one
+/// split button; `enter`: Enter presses it; its access letter.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DonePart {
+    label: &'static str,
+    kind: ButtonKind,
+    act: DoneAct,
+    joined: bool,
+    enter: bool,
+    mnemonic: Option<usize>,
+    tip: &'static str,
+}
+
+/// The Done window's footer (plan 13a's three cases, 13d's look): with a main file (or one
+/// file), Open | ▾ filled, Open folder, Close; the file gone, Open greyed and Open folder filled;
+/// a folder without a main file, Open folder filled, Open file | ▾ (greyed without `files`),
+/// Close. The filled one takes Enter.
+fn done_footer(main: bool, can_open: bool, files: bool) -> Vec<DonePart> {
+    use ButtonKind::{Accent, Disabled, Normal};
+    let on = |yes: bool, kind| if yes { kind } else { Disabled };
+    let part = |label, kind, act| DonePart {
+        label,
+        kind,
+        act,
+        joined: false,
+        enter: false,
+        mnemonic: None,
+        tip: "",
+    };
+    let caret = |kind, tip| DonePart {
+        joined: true,
+        tip,
+        ..part("", kind, DoneAct::Menu)
+    };
+    let folder = |filled: bool| DonePart {
+        enter: filled,
+        mnemonic: Some(5),
+        // i18n: verb: shows the downloaded file in its folder
+        ..part(
+            crate::i18n::mark("Open folder"),
+            if filled { Accent } else { Normal },
+            DoneAct::Folder,
+        )
+    };
+    // i18n: verb: closes this window
+    let close = part(crate::i18n::mark("Close"), Normal, DoneAct::Close);
+    if main {
+        let open = DonePart {
+            enter: can_open,
+            mnemonic: Some(0),
+            // i18n: verb: opens the downloaded file
+            ..part(
+                crate::i18n::mark("Open"),
+                on(can_open, Accent),
+                DoneAct::Open,
+            )
+        };
+        if !can_open {
+            // The file gone (board 14): Open greyed alone, no arrow beside it.
+            return vec![open, folder(true), close];
+        }
+        // i18n: Download complete: the arrow beside Open: the largest files and Open with...
+        let more = crate::i18n::mark("More ways to open");
+        vec![open, caret(Accent, more), folder(false), close]
+    } else {
+        let file = DonePart {
+            mnemonic: Some(0),
+            // i18n: Download complete of a folder without a main file: a menu of its largest files
+            ..part(
+                crate::i18n::mark("Open file"),
+                on(files, Normal),
+                DoneAct::Menu,
+            )
+        };
+        // i18n: the Done window, the arrow beside Open file: a menu of the folder's largest files
+        let choose = crate::i18n::mark("Choose a file to open");
+        vec![folder(true), file, caret(on(files, Normal), choose), close]
+    }
+}
+
+/// A line of Download complete's Open menu: one of the largest files, Open with..., or the
+/// greyed "N more in the folder".
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DonePick {
+    File(usize),
+    With,
+    Info,
 }
 
 impl Complete {
+    /// `files` lists a folder download's (path, size) and returns None when `path` is the file;
+    /// it may read the disk, so it runs off the window's thread, with the look at whether the
+    /// main file is there: the box shows a file gone from its first frames (plan 13a, board 14).
+    pub fn new(
+        id: u64,
+        path: PathBuf,
+        size: u64,
+        notices: Vec<String>,
+        moved_away: bool,
+        files: impl FnOnce() -> Option<Vec<(PathBuf, u64)>> + Send + 'static,
+    ) -> Self {
+        let slot = Arc::new(Mutex::new(None));
+        let (put, at) = (slot.clone(), path.clone());
+        crate::launch::spawn("done window", move || {
+            let looked = look_done(at, moved_away, files);
+            *put.lock().unwrap_or_else(|e| e.into_inner()) = Some(looked);
+        });
+        let mut c = Complete {
+            id,
+            path: path.clone(),
+            size,
+            dont_show: false,
+            notices,
+            seen: false,
+            opening: None,
+            moved_away,
+            folder: false,
+            main: None,
+            folder_act: FolderAct::Select(path),
+            largest: Vec::new(),
+            more: 0,
+            gone: None,
+            picked_gone: None,
+            looking: Some(slot),
+            folder_gone: false,
+            made: std::time::Instant::now(),
+        };
+        // Until the look comes: a file alone (the box is hidden its first frame anyway).
+        c.set_files(None);
+        c
+    }
+
+    /// Its files known (`files`: a folder download's; None: `path` is the file): what Open and
+    /// Open folder act on, and the menu's largest files.
+    fn set_files(&mut self, files: Option<Vec<(PathBuf, u64)>>) {
+        let (main, act) = done_targets(&self.path, files.as_deref());
+        self.folder = files.is_some();
+        let mut largest = files.unwrap_or_default();
+        largest.sort_by_key(|f| std::cmp::Reverse(f.1));
+        self.more = largest.len().saturating_sub(6);
+        largest.truncate(6);
+        (self.main, self.folder_act, self.largest) = (main, act, largest);
+    }
+
+    /// The look started by [`Complete::new`] taken in once it came: true then.
+    fn take_look(&mut self) -> bool {
+        let Some(slot) = &self.looking else {
+            return false;
+        };
+        // Counted before the take: alone with the slot, the thread is over (it put its answer
+        // there first, or never will: no thread, or it panicked).
+        let over = Arc::strong_count(slot) == 1;
+        let got = slot.lock().unwrap_or_else(|e| e.into_inner()).take();
+        let Some(got) = got else {
+            if over {
+                // Nothing will come: the file-alone stand-in stays.
+                self.looking = None;
+            }
+            return false;
+        };
+        self.looking = None;
+        let mut files = got.files;
+        if got.at == self.path {
+            self.gone = self.gone.take().or(got.gone);
+            self.folder_gone = got.folder_gone;
+        } else if let Some(files) = &mut files {
+            // Dragged out and moved meanwhile: its files went with it (what was there or not
+            // is stale).
+            for (f, _) in files.iter_mut() {
+                follow(f, &got.at, &self.path);
+            }
+        }
+        self.set_files(files);
+        true
+    }
+
+    /// Its file (or folder) was dragged out and moved to `to`: the box follows it.
+    pub fn moved_to(&mut self, to: PathBuf) {
+        let from = std::mem::replace(&mut self.path, to.clone());
+        self.largest
+            .iter_mut()
+            .for_each(|(f, _)| follow(f, &from, &to));
+        if let Some(m) = &mut self.main {
+            follow(m, &from, &to);
+        }
+        match &mut self.folder_act {
+            FolderAct::Select(f) | FolderAct::Open(f) => follow(f, &from, &to),
+        }
+        self.moved_away = false;
+        self.gone = None;
+        self.picked_gone = None;
+        self.folder_gone = false;
+    }
+
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<()> {
+        use crate::progress::view;
         let id = format!("complete-{}", self.id);
         self.seen |= notice_seen(ctx, &id);
-        // The mockup's layout: the file's card, a label column, the drag strip, the footer. A
-        // notice (a video's subtitles refused) takes a line of its own under the card.
-        const W: f32 = 540.0;
-        let dy = if self.notices.is_empty() { 0.0 } else { 22.0 };
-        let body = 262.0 + dy;
-        notice(
+        // ponytail: polled, as the look has no window to wake when it is made.
+        if !self.take_look() && self.looking.is_some() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(50));
+        }
+        let (shown, enter_ok) = done_shown(self.looking.is_some(), self.made.elapsed());
+        if !shown {
+            return Outcome::Open;
+        }
+        // Plan 13d (boards 5, 7, 13, 14): the progress window's layout language. The name row
+        // (dragged out, Ctrl+C), "Done" with the size, the strip whole, the number of files, the
+        // facts (Saved to, Main file), the check box, the footer.
+        // A file gone since (Open found nothing, or it was dragged out to a place Grabbit can't
+        // follow): why, under Saved to before the notices, and Open greyed (plan 13a, board 14).
+        let reason = self
+            .gone
+            .clone()
+            .or_else(|| self.moved_away.then(|| moved_away_here(&self.path)));
+        let can_open = reason.is_none();
+        let lines: Vec<String> = reason
+            .iter()
+            .chain(
+                self.picked_gone
+                    .iter()
+                    .filter(|g| Some(*g) != reason.as_ref()),
+            )
+            .chain(&self.notices)
+            .cloned()
+            .collect();
+        let main = self.main.clone();
+        // A folder's Main file row (a file alone is its own main file: no row).
+        let main_name = main.as_ref().filter(|_| self.folder).map(|m| {
+            m.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned()
+        });
+        let files = if self.folder {
+            self.largest.len() + self.more
+        } else {
+            1
+        };
+        // The reason and the notices wrap in up to two lines each; the window grows for them.
+        let top = view::done_facts_top(files);
+        let (check_y, footer_y, body) = view::done_layout(
+            top,
+            main_name.is_some(),
+            &view::done_line_counts(ctx, &lines),
+        );
+        let name = self
+            .path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        // The title Win32 finds the window by (its frame, the drag out, the copy).
+        let title = crate::i18n::fmt(
+            // i18n: the Done window's title: {name} the download's file (or folder) name
+            crate::i18n::t("Done: {name}"),
+            &[("name", &crate::i18n::isolate(&name))],
+        );
+        // Where it is: a folder download's own folder, a file's folder.
+        let saved = display_path(if self.folder {
+            &self.path
+        } else {
+            self.path.parent().unwrap_or(&self.path)
+        });
+        // Open with...: the main file, else the largest.
+        let with_target = main
+            .clone()
+            .or_else(|| self.largest.first().map(|f| f.0.clone()));
+        let menu_key = egui::Id::unique(("complete-menu", self.id));
+        let out = notice(
             ctx,
             &id,
-            "Download complete",
-            [W, body + winui::FOOTER_H],
+            &title,
+            [view::DONE_W, body],
             true,
             winui::BG(),
             !self.seen,
             |ui, o| {
-                let p = ui.painter().clone();
-                let (lx, right, h) = (winui::EDGE, W - winui::EDGE, winui::CONTROL_H);
-                let line = crate::i18n::fmt(
-                    crate::i18n::t("Downloaded {size} ({bytes} Bytes)"),
-                    &[
-                        ("size", &dialog_size(self.size)),
-                        ("bytes", &crate::i18n::integer(self.size)),
-                    ],
-                );
-                let name = self
-                    .path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                winui::file_card(
-                    ui,
-                    r(o, lx, 16.0, right - lx, 66.0),
-                    crate::fileicons::Kind::File(&name),
-                    crate::i18n::t("Download complete"),
-                    &line,
-                    None,
-                );
-                // What didn't come with it (a video's subtitles the site refused), shortened to
-                // the window and whole on hover.
-                if !self.notices.is_empty() {
-                    winui::fit(
-                        ui,
-                        &p,
-                        o.x + lx,
-                        o.y + 100.0,
-                        &self.notices.join(" "),
-                        winui::ERROR(),
-                        o.x + right,
-                        ("complete-notice", self.id),
-                    );
-                }
-                let fx = winui::form(&p, lx, &["Address", "The file saved as"], false);
-                // i18n: noun: the web address (URL)
-                winui::form_label(&p, o, lx, 96.0 + dy, h, "Address", true);
-                // Read-only and copyable (an editable copy let typing seem to work, then reverted).
-                winui::readonly_field(
-                    ui,
-                    r(o, fx, 96.0 + dy, right - fx, h),
-                    &self.url,
-                    winui::BG(),
-                    true,
-                    "complete-url",
-                );
-                winui::form_label(&p, o, lx, 136.0 + dy, h, "The file saved as", true);
-                winui::readonly_field(
-                    ui,
-                    r(o, fx, 136.0 + dy, right - fx, h),
-                    &display_path(&self.path),
-                    winui::BG(),
-                    true,
-                    "complete-saved",
-                );
-
-                // Enter: Open, the default button (as in the other dialogs); Escape: Close. The
-                // keys of a drag out of the grip are the drag's (Escape cancels it), not this
-                // window's (#561: the drag runs beside the window, which sees them too). The
-                // footer comes first so Tab keeps its order: the buttons, the check box, the grip.
-                let dragging = crate::win32::dragging_out();
-                let pressed = winui::footer(
-                    ui,
-                    o,
-                    W,
-                    body,
-                    &mut [
-                        // i18n: verb: opens the downloaded file
-                        FooterItem::Button(
-                            FooterButton::new("Open", ButtonKind::Default)
-                                .icon("gx-external")
-                                .enter(!dragging),
-                        ),
-                        FooterItem::Button(
-                            FooterButton::new("Open with...", ButtonKind::Normal).leading(),
-                        ),
-                        FooterItem::Button(
-                            FooterButton::new("Open folder", ButtonKind::Normal)
-                                .icon("cat-folder-open")
-                                .leading(),
-                        ),
-                        // i18n: verb: closes this window
-                        FooterItem::Button(
-                            FooterButton::new("Close", ButtonKind::Normal).escape(!dragging),
-                        ),
-                    ],
-                );
-                let (open, with, folder, close) = (
-                    pressed == Some(0),
-                    pressed == Some(1),
-                    pressed == Some(2),
-                    pressed == Some(3),
-                );
-                winui::checkbox(
-                    ui,
-                    o + vec2(lx, 229.0 + dy),
-                    &mut self.dont_show,
-                    "Don't show this dialog again",
-                    true,
-                );
-
-                // The drag strip: drag it to drop the file into Explorer, a mail or a chat (IDM
-                // 5.05), through OLE. A dashed box with Graphite's grip and what it does. The drop
-                // target decides, as for a file dragged in Explorer: moved on the same drive (or
-                // with Shift), copied to another (or with Ctrl), and MDM's download follows a move
-                // (upstream issue 869).
+                let h = view::DONE_BUTTON_H;
+                // Enter: the filled button (Open, or Open folder); Escape: Close. The keys of a
+                // drag out of the name row are the drag's (Escape cancels it), not this window's
+                // (#561: the drag runs beside the window, which sees them too). The footer comes
+                // first so Tab keeps its order: the buttons, the name row, Saved to, the check
+                // box.
+                //
+                // Plan 13a, three cases ([`done_footer`]). A main file (or one file): Open | ▾
+                // (filled), Open folder, Close. No main file: Open folder (filled), Open file | ▾,
+                // Close. A file gone: Open greyed, Open folder filled. Alt+O opens (or opens the
+                // menu), Alt+F opens the folder.
+                // While the menu is open, Enter and Escape are its (they'd also press the
+                // footer's buttons: the footer reads them before the menu takes them).
+                // Tab moves the keys to the window's controls (egui moved them as the frame
+                // began): the menu closes, as nothing in it answers Tab.
+                if ui.input(|i| i.key_pressed(egui::Key::Tab))
+                    && ui.ctx().data(|d| d.get_temp::<Pos2>(menu_key)).is_some()
                 {
-                    let handle = r(o, lx, 176.0 + dy, right - lx, 40.0);
-                    // Its line says what it does (no tooltip repeating it).
-                    let grip = ui.interact(
-                        handle,
-                        egui::Id::unique(("drag-out", self.id)),
-                        winui::pointer_drag(),
-                    );
-                    if grip.hovered() {
-                        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
-                    }
-                    // The file is looked for beside the window, with the drag (#743); where a move
-                    // took it comes back to the app (`dragged_out`), however late.
-                    if grip.drag_started() {
-                        let (id, from, wake) = (self.id, self.path.clone(), ui.ctx().clone());
-                        let followed = move |out| {
-                            DRAGGED_OUT
-                                .lock()
-                                .unwrap_or_else(|e| e.into_inner())
-                                .push((id, from, out));
-                            wake.request_repaint();
+                    ui.ctx().data_mut(|d| d.remove::<Pos2>(menu_key));
+                    crate::chrome::forget(ui.ctx(), &format!("complete-menu-{}", self.id));
+                }
+                let menu_open = ui.ctx().data(|d| d.get_temp::<Pos2>(menu_key)).is_some();
+                let dragging = crate::win32::dragging_out() || menu_open;
+                // The Saved to link takes Enter while it has the keys (it shows the folder): the
+                // footer's filled button doesn't run as well.
+                let link_id = egui::Id::unique(("complete-saved", self.id));
+                let link_enter = ui.ctx().memory(|m| m.has_focus(link_id))
+                    && winui::take_key(ui, egui::Key::Enter);
+                let p = ui.painter().clone();
+                let parts = done_footer(main.is_some(), can_open, !self.largest.is_empty());
+                let widths: Vec<(f32, bool)> = parts
+                    .iter()
+                    .map(|b| {
+                        let w = if b.label.is_empty() {
+                            DONE_CARET_W
+                        } else {
+                            winui::footer_button_width(&p, b.label, false)
                         };
-                        if let Err(e) = crate::win32::drag_file_out(
-                            crate::i18n::t("Download complete"),
-                            &self.path,
-                            followed,
-                        ) {
-                            tracing::warn!("drag out: {e}");
+                        (w, b.joined)
+                    })
+                    .collect();
+                let xs = view::row_from_right(&widths);
+                let buttons: Vec<(FooterButton, egui::Rect)> = parts
+                    .iter()
+                    .zip(xs.iter().zip(&widths))
+                    .map(|(b, (x, (w, _)))| {
+                        let mut button = FooterButton::new(b.label, b.kind)
+                            .enter(b.enter && enter_ok && !dragging)
+                            .escape(b.act == DoneAct::Close && !dragging);
+                        if b.label.is_empty() {
+                            // The ▾: its menu (screen readers read its tip as its name).
+                            button = button.tip(true, b.tip);
+                        }
+                        // An open menu's letters are its own (Alt+W: Open with...): the
+                        // footer's Alt+O and Alt+F wait until it closes.
+                        // Its look still pending (after the short wait): held as Enter is.
+                        if let Some(at) = b.mnemonic.filter(|_| !menu_open && enter_ok) {
+                            button = button.mnemonic(at);
+                        }
+                        (button, r(o, *x, footer_y, *w, h))
+                    })
+                    .collect();
+                let (pressed, resps) = winui::buttons_at(ui, &buttons);
+                for (i, part) in parts.iter().enumerate().skip(1) {
+                    if part.joined {
+                        winui::join_buttons(
+                            ui,
+                            (&resps[i - 1], parts[i - 1].kind),
+                            (&resps[i], part.kind),
+                        );
+                    }
+                    if part.label.is_empty() {
+                        winui::button_chevron(ui, &resps[i], part.kind);
+                        resps[i].ctx.accesskit_node_builder(resps[i].id, |n| {
+                            n.set_has_popup(egui::accesskit::HasPopup::Menu);
+                            n.set_expanded(menu_open);
+                        });
+                    }
+                }
+                let pressed = pressed.map(|i| parts[i].act);
+                let (mut open, mut folder, close) = (
+                    pressed == Some(DoneAct::Open),
+                    pressed == Some(DoneAct::Folder),
+                    pressed == Some(DoneAct::Close),
+                );
+                let mut with = false;
+                let mut picked: Option<PathBuf> = None;
+
+                // The Open menu (a window of its own: it runs past this one): under the split
+                // button that opens it (the ▾, or Open file | ▾).
+                let menu_id = format!("complete-menu-{}", self.id);
+                let opener = parts
+                    .iter()
+                    .zip(&resps)
+                    .filter(|(b, _)| b.act == DoneAct::Menu)
+                    .map(|(_, resp)| resp.rect)
+                    .reduce(|a, b| a.union(b))
+                    .unwrap_or(egui::Rect::NOTHING);
+                // Where a press closed a menu (`chrome::popup`): a click on the opener that just
+                // closed its menu leaves it closed; between presses the point is forgotten, as
+                // `winui::opener_click` does.
+                let dismissed = crate::chrome::dismissed_at_key(ui.ctx());
+                let (down, released) =
+                    ui.input(|i| (i.pointer.any_down(), i.pointer.any_released()));
+                let dismissed_at = ui.ctx().data(|d| d.get_temp::<Pos2>(dismissed));
+                let closed_it = released && dismissed_at.is_some_and(|at| opener.contains(at));
+                if closed_it || (dismissed_at.is_some() && !down && !released) {
+                    ui.ctx().data_mut(|d| d.remove::<Pos2>(dismissed));
+                }
+                let opened_by_keys = (pressed == Some(DoneAct::Menu))
+                    .then(|| opener_press(menu_open, released, closed_it))
+                    .flatten();
+                if let Some(by_keys) = opened_by_keys {
+                    ui.ctx()
+                        .data_mut(|d| d.insert_temp(menu_key, opener.right_bottom()));
+                    if by_keys {
+                        // Its first item highlighted; the Space that opened it (egui clicks a
+                        // focused button on Space) isn't also the menu's, which would run it.
+                        crate::chrome::start_keyboard(ui.ctx(), &menu_id);
+                        winui::take_key(ui, egui::Key::Space);
+                    }
+                }
+                if let Some(at) = ui.ctx().data(|d| d.get_temp::<Pos2>(menu_key)) {
+                    use crate::chrome::{MenuEntry, PopupResult};
+                    let mut entries: Vec<MenuEntry<DonePick>> = Vec::new();
+                    // A file alone has only Open with... under its arrow.
+                    if self.folder {
+                        // A file is picked once the last one opened (or didn't).
+                        let can_pick = self.opening.is_none();
+                        for (n, (f, _)) in self.largest.iter().enumerate() {
+                            let name = menu_name(f, &self.path, &self.largest);
+                            // Cut in the middle (board 5), so its start and its kind show:
+                            // the menu stays about 228 wide.
+                            let shown = winui::ellipsize_middle(
+                                &p,
+                                &winui::tahoma(),
+                                &name,
+                                DONE_MENU_NAME_W,
+                            );
+                            // ponytail: `label` keeps each distinct name for the app's life
+                            // (`MenuEntry` takes `&'static str`): six names a box, deduplicated.
+                            entries.push(MenuEntry::Item(
+                                crate::chrome::label(&shown.replace('&', "&&")),
+                                DonePick::File(n),
+                                can_pick,
+                                main.as_ref() == Some(f),
+                            ));
+                        }
+                        if self.more > 0 {
+                            let line = crate::i18n::fmt(
+                                // i18n: Download complete's Open file menu: the files not listed; {count} = how many
+                                crate::i18n::t("{count} more in the folder"),
+                                &[("count", &crate::i18n::integer(self.more as u64))],
+                            );
+                            entries.push(MenuEntry::Item(
+                                crate::chrome::label(&line.replace('&', "&&")),
+                                DonePick::Info,
+                                false,
+                                false,
+                            ));
+                        }
+                        if !entries.is_empty() {
+                            entries.push(MenuEntry::Sep);
                         }
                     }
-                    let edge = handle.shrink(0.5);
-                    let corners = [
-                        edge.left_top(),
-                        edge.right_top(),
-                        edge.right_bottom(),
-                        edge.left_bottom(),
-                        edge.left_top(),
-                    ];
-                    p.extend(egui::Shape::dashed_line(
-                        &corners,
-                        egui::Stroke::new(1.0, crate::theme::colors().menubar_line),
-                        4.0,
-                        3.0,
+                    entries.push(MenuEntry::Item(
+                        "Open &with...",
+                        DonePick::With,
+                        can_open && with_target.is_some(),
+                        false,
                     ));
-                    let ink = crate::theme::colors().text_secondary;
-                    let glyph = egui::Rect::from_min_size(
-                        egui::pos2(handle.left() + 12.0, handle.center().y - 9.0),
-                        vec2(18.0, 18.0),
-                    );
-                    crate::themeicons::paint_graphite_in(ui, &p, "gx-grip", glyph, ink);
-                    winui::text_at(
-                        &p,
-                        winui::tahoma(),
-                        glyph.right() + 10.0,
-                        o.y + winui::baseline_in(176.0 + dy, 40.0),
-                        // i18n: Download complete: the drag strip's line: drag it to drop the downloaded file somewhere
-                        crate::i18n::t("Drag the file into a folder or an app"),
-                        ink,
-                    );
+                    // Each file's size at the line's end.
+                    let sizes: Vec<&'static str> = self
+                        .largest
+                        .iter()
+                        .map(|f| crate::chrome::label(&dialog_size(f.1)))
+                        .collect();
+                    let hint = |c: &DonePick| match c {
+                        DonePick::File(n) => sizes.get(*n).copied(),
+                        DonePick::With | DonePick::Info => None,
+                    };
+                    // Its right edge under the split button's, 4 below it (board 5): `at` is
+                    // the opener's bottom-right.
+                    let kind = crate::chrome::MenuKind::Context;
+                    let width = crate::chrome::popup_width(ui.ctx(), kind, &entries, &hint);
+                    let at = egui::pos2(at.x - width, at.y + 4.0);
+                    let done =
+                        match crate::chrome::popup(ui.ctx(), kind, &menu_id, at, &entries, &hint) {
+                            PopupResult::Open | PopupResult::Neighbor(_) => false,
+                            PopupResult::Chosen(DonePick::File(n)) => {
+                                picked = self.largest.get(n).map(|f| f.0.clone());
+                                true
+                            }
+                            PopupResult::Chosen(DonePick::With) => {
+                                with = true;
+                                true
+                            }
+                            PopupResult::Chosen(DonePick::Info) | PopupResult::Dismissed => true,
+                        };
+                    if done {
+                        ui.ctx().data_mut(|d| d.remove::<Pos2>(menu_key));
+                    } else if opened_by_keys.is_some() {
+                        // The opener lets go of the keys while its menu is open: Enter, Space
+                        // and the arrows are the menu's (a focused button would take Enter and
+                        // click again on Space). The popup noted it above and gives it back on
+                        // Escape.
+                        ui.ctx().memory_mut(|m| {
+                            if let Some(f) = m.focused() {
+                                m.surrender_focus(f);
+                            }
+                        });
+                    }
                 }
+                if open && picked.is_none() {
+                    picked = main.clone();
+                }
+                open |= picked.is_some();
+
+                // The name row (board 13): drag it to drop the file into Explorer, a mail or a
+                // chat (IDM 5.05), through OLE. The drop target decides, as for a file dragged in
+                // Explorer: moved on the same drive (or with Shift), copied to another (or with
+                // Ctrl), and the download follows a move (upstream issue 869). With the keys,
+                // Ctrl+C copies the file as Explorer's Copy does.
+                let row = view::name_row(
+                    ui,
+                    o,
+                    &name,
+                    self.folder,
+                    egui::Id::unique(("drag-out", self.id)),
+                );
+                // The file is looked for beside the window, with the drag (#743); where a move
+                // took it comes back to the app (`dragged_out`), however late.
+                if row.drag_started() {
+                    let (id, from, wake) = (self.id, self.path.clone(), ui.ctx().clone());
+                    let followed = move |out| {
+                        DRAGGED_OUT
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner())
+                            .push((id, from, out));
+                        wake.request_repaint();
+                    };
+                    if let Err(e) = crate::win32::drag_file_out(&title, &self.path, followed) {
+                        tracing::warn!("drag out: {e}");
+                    }
+                }
+                // Windows reports Ctrl+C (and Ctrl+Insert) as Copy. Beside the window: the
+                // clipboard may wait for its owner.
+                if row.has_focus()
+                    && ui.input(|i| i.events.iter().any(|e| matches!(e, egui::Event::Copy)))
+                {
+                    let (title, file, wake) = (title.clone(), self.path.clone(), ui.ctx().clone());
+                    crate::launch::spawn("copy file", move || {
+                        if let Err(e) = crate::win32::copy_file_to_clipboard(&title, &file) {
+                            // The reason for the log; the person gets one sentence of ours.
+                            tracing::warn!("copy file: {}", e.why);
+                            let name = crate::i18n::isolate(
+                                &file.file_name().unwrap_or_default().to_string_lossy(),
+                            );
+                            let template = if e.in_use {
+                                // i18n: Ctrl+C in the Done window failed: another program kept the clipboard; {file} the file's name
+                                crate::i18n::t(
+                                    "{file} could not be copied: another program is using the clipboard.",
+                                )
+                            } else {
+                                // i18n: Ctrl+C in the Done window failed; {file} the file's name
+                                crate::i18n::t("{file} could not be copied to the clipboard.")
+                            };
+                            tell(
+                                // i18n: title of the message when Ctrl+C in the Done window could not copy the file
+                                crate::i18n::mark("Copy"),
+                                crate::i18n::fmt(template, &[("file", &name)]),
+                            );
+                            wake.request_repaint();
+                        }
+                    });
+                }
+                let look = view::done_view(self.size, files);
+                if let Some(strip) = &look.strip {
+                    view::paint_state(ui, &p, o, &look, strip);
+                }
+                // Saved to shows the download in its folder, as Open folder does.
+                let link =
+                    view::done_facts(ui, o, top, &saved, &lines, main_name.as_deref(), link_id);
+                folder |= link.clicked() || link_enter;
+                winui::checkbox(
+                    ui,
+                    o + vec2(view::DONE_EDGE, check_y + 1.0),
+                    &mut self.dont_show,
+                    // i18n: the Done window's check box: don't show it when the next download finishes
+                    "Don't show this window again",
+                    true,
+                );
 
                 // A file that can't open says why (the box stays for Open folder). Looked for and
                 // handed over off the window's thread (upstream issue 743): the box closes once it
                 // opened.
-                let opened = self.opening.as_ref().and_then(|a| a.answer(&self.path));
+                let opened = self
+                    .opening
+                    .as_ref()
+                    .and_then(|(k, a)| a.answer(k).map(|v| (k.clone(), v)));
                 if opened.is_some() {
                     self.opening = None;
                 }
-                if open && self.opening.is_none() {
+                // The main file gone greys Open; another file of the menu gone is only said.
+                if let Some((k, Opened::Gone(why))) = &opened {
+                    if main.as_ref() == Some(k) {
+                        self.gone = Some(why.clone());
+                    } else {
+                        self.picked_gone = Some(why.clone());
+                    }
+                }
+                let opened = opened.map(|(_, v)| v);
+                if let Some(target) = picked.filter(|_| open && self.opening.is_none()) {
                     let opening = crate::launch::Asked::default();
                     let moved_away = self.moved_away;
                     let _ = opening.get(
-                        &self.path,
+                        &target,
                         std::time::Duration::MAX,
                         std::time::Duration::ZERO,
                         Some(ui.ctx()),
-                        move |p| open_download_now(p, moved_away),
+                        move |p: &PathBuf| {
+                            // Only a file surely not there is "gone"; one that can't be looked at
+                            // (access denied, a share that dropped) says why.
+                            match p.try_exists() {
+                                Ok(false) => {
+                                    return Opened::Gone(if moved_away {
+                                        moved_away_here(p)
+                                    } else {
+                                        gone_text(p)
+                                    });
+                                }
+                                Err(e) => {
+                                    let name = crate::i18n::isolate(
+                                        &p.file_name().unwrap_or_default().to_string_lossy(),
+                                    );
+                                    tell(
+                                        crate::i18n::mark("Open"),
+                                        crate::i18n::fmt(
+                                            crate::i18n::t("{file} could not be opened: {error}"),
+                                            &[("file", &name), ("error", &e.to_string())],
+                                        ),
+                                    );
+                                    return Opened::Failed;
+                                }
+                                Ok(true) => {}
+                            }
+                            if open_download_now(p, moved_away) {
+                                Opened::Yes
+                            } else {
+                                Opened::Failed
+                            }
+                        },
                     );
-                    self.opening = Some(opening);
+                    self.opening = Some((target, opening));
+                    self.picked_gone = None;
                 }
-                if opened == Some(true) {
+                if opened == Some(Opened::Yes) {
                     Outcome::Done(())
-                } else if with {
-                    open_download_with(&self.path, self.moved_away);
+                } else if let Some(target) = with_target.as_ref().filter(|_| with) {
+                    open_download_with(target, self.moved_away);
                     Outcome::Done(())
                 } else if folder {
-                    show_download_in_folder(&self.path, self.moved_away);
-                    Outcome::Done(())
+                    // Looked at again beside the window (`show_in_folder_now` says when it is
+                    // still gone).
+                    match &self.folder_act {
+                        FolderAct::Select(f) => show_download_in_folder(f, self.moved_away),
+                        // Looked at beside the window: a folder opens, anything else (a file
+                        // after all) is shown selected in its own.
+                        FolderAct::Open(dir) => {
+                            let (dir, moved_away) = (dir.clone(), self.moved_away);
+                            crate::launch::spawn("open folder", move || {
+                                if dir.is_dir() {
+                                    crate::launch::open(dir);
+                                } else {
+                                    show_download_in_folder(&dir, moved_away);
+                                }
+                            });
+                        }
+                    }
+                    // A folder gone when the box was made: the box stays, in case it still is.
+                    if self.folder_gone {
+                        Outcome::Open
+                    } else {
+                        Outcome::Done(())
+                    }
                 } else if close {
                     Outcome::Done(())
                 } else {
                     Outcome::Open
                 }
             },
-        )
+        );
+        // A menu left open isn't there when the box opens again (closed any way: a button, the
+        // title bar's ×, Alt+F4).
+        if !matches!(out, Outcome::Open) && ctx.data(|d| d.get_temp::<Pos2>(menu_key)).is_some() {
+            ctx.data_mut(|d| d.remove::<Pos2>(menu_key));
+            crate::chrome::forget(ctx, &format!("complete-menu-{}", self.id));
+        }
+        out
     }
 }
 
 // ---- Speed Limiter settings (client 453 × 145, light) --------------------------------------
 
-/// Downloads → Speed Limiter → Settings... (notes/ui-spec/scheduler-and-misc.md §2).
+/// Downloads → Speed Limiter → Settings (notes/ui-spec/scheduler-and-misc.md §2).
 pub struct SpeedSettings {
     pub kb: String,
     pub on_startup: bool,
@@ -1889,7 +2583,7 @@ pub struct SpeedSettings {
     opened: SpeedChoice,
 }
 
-/// The Speed limiter section's width (the window's mockup width) and its rows' height.
+/// The Speed Limiter section's width (the window's mockup width) and its rows' height.
 const SPEED_W: f32 = 480.0;
 const SPEED_BODY: f32 = 172.0;
 
@@ -1925,7 +2619,7 @@ impl SpeedSettings {
         d
     }
 
-    /// The Speed limiter as a section of Options' page (plan 11b2): its rows at `o`, as the
+    /// The Speed Limiter as a section of Options' page (plan 11b2): its rows at `o`, as the
     /// window's client had them, [`SpeedSettings::size`] points; OK and Cancel are the page's
     /// Save and Discard.
     #[rustfmt::skip]
@@ -1945,7 +2639,7 @@ impl SpeedSettings {
                     ui,
                     &p,
                     // i18n: {kb} is an input box (kilobytes per second), drawn where it stands in the translation
-                    crate::i18n::t("Maximum download speed for one file {kb} KBytes/sec"),
+                    crate::i18n::t("Maximum download speed for one file {kb} KB/s"),
                     &[winui::SentenceLine {
                         lead: winui::Lead::Right(o.x + 266.0),
                         lead_baseline: o.y + 21.0,
@@ -1984,15 +2678,16 @@ impl SpeedSettings {
                     note,
                     black,
                     o.x + W - winui::EDGE,
-                    13.0,
+                    crate::theme::metrics().line_paragraph,
                 );
-                self.note_extra = lines.saturating_sub(3) as f32 * 13.0;
+                self.note_extra =
+                    lines.saturating_sub(3) as f32 * crate::theme::metrics().line_paragraph;
                 let o = o + vec2(0.0, self.note_extra);
                 winui::checkbox_light(
                     ui,
                     o + vec2(11.0, 86.0),
                     &mut self.on_startup,
-                    "Always turn on Speed Limiter on Grabbit startup",
+                    "Turn on the Speed Limiter when Grabbit starts",
                     true,
                 );
                 // Beyond IDM: a limit for all downloads together.
@@ -2022,7 +2717,7 @@ impl SpeedSettings {
                     &p,
                     o.x + 264.0,
                     o.y + 131.0,
-                    crate::i18n::t("KBytes/sec"),
+                    crate::i18n::t("KB/s"),
                     c,
                 );
                 winui::checkbox_light(
@@ -2114,7 +2809,7 @@ pub fn message(ctx: &egui::Context, id: &str, title: &str, text: &str) -> Outcom
                 text,
                 winui::LIGHT_TEXT(),
                 o.x + width - winui::EDGE,
-                13.0,
+                crate::theme::metrics().line_paragraph,
             );
             grow_to(ui.ctx(), id, lines, 1);
             // The one centred footer (the mockup's generic notice): the band, then OK in its
@@ -2159,7 +2854,7 @@ impl LimitNotice {
             lines: [
                 crate::i18n::fmt(
                     crate::i18n::t(
-                        "The download limit ({mb} MBytes every {hours} hours) has been reached.",
+                        "The download limit ({mb} MB every {hours} hours) has been reached.",
                     ),
                     &[
                         ("mb", &crate::i18n::integer(u64::from(mb))),
@@ -2373,35 +3068,93 @@ impl TurnOffCountdown {
 
 /// "Confirm deletion of downloads": Delete / Remove / Delete All Completed. Asks whether the
 /// files go too (user, 2026-10-29: IDM's checkbox; for an unfinished download its data so far),
-/// for one download or several. `Done((files, dont_show_again))` on Yes.
+/// for one download or several. `Done((files, dont_show_again))` on Yes. The box is never
+/// remembered (upstream #1563): unticked, or ticked by Shift+Delete for this once; ticked, the
+/// window says how many finished files go with it.
 pub struct ConfirmDelete {
     pub ids: Vec<u64>,
     /// The file name when there is one download.
     name: String,
     /// One download, not complete (IDM's wording).
     unfinished: bool,
-    files: bool,
+    /// The files box ([`files_label`]: "Also move the file to the Recycle Bin", or "Also delete
+    /// the file from disk" for unfinished data).
+    pub files: bool,
+    /// How many of the downloads are finished, torrents and galleries aside: their files go to
+    /// the Recycle Bin when `files` is ticked.
+    pub finished: u64,
+    /// How many of the downloads are finished torrents: their files are deleted outright by
+    /// the torrent engine when `files` is ticked (plan 12, DA1t), said in red.
+    pub torrents: u64,
+    /// How many running downloads of the selection stay (said under the box; plan 12a).
+    pub kept: u64,
     dont_show: bool,
-    /// The files box's answer becomes the next one's default (not after Shift+Delete).
-    pub remember: bool,
+}
+
+/// "1 running download is kept…": what Delete left out of a selection (plan 12a, E3), under
+/// the question, or in a notice when it isn't asked.
+pub fn kept_text(n: u64) -> String {
+    crate::i18n::fmt(
+        // i18n: Delete with running downloads among the selected ones: those stay in the list
+        &crate::i18n::tn(
+            n,
+            "{n} running download is kept: stop it to delete it.",
+            "{n} running downloads are kept: stop them to delete them.",
+        ),
+        &[("n", &crate::i18n::integer(n))],
+    )
+}
+
+/// The Confirm deletion box's label for `n` downloads, `finished` of them finished: a finished
+/// file goes to the Recycle Bin (plan 12a), other data is deleted outright, and the label says
+/// which.
+pub fn files_label(n: u64, finished: u64) -> String {
+    let n_is = |s: &str| crate::i18n::fmt(s, &[("n", &crate::i18n::integer(n))]);
+    match (n, finished) {
+        (1, 0) => crate::i18n::t("Also delete the file from disk").to_owned(),
+        // i18n: the Confirm deletion box for one finished download: its file goes to the Recycle Bin
+        (1, _) => crate::i18n::t("Also move the file to the Recycle Bin").to_owned(),
+        // i18n: never shown for a single file; none of them is finished
+        (_, 0) => n_is(&crate::i18n::tn(
+            n,
+            "Also delete the {n} file from disk",
+            "Also delete the {n} files from disk",
+        )),
+        // i18n: never shown for a single file; all of them are finished, their files go to the Recycle Bin
+        _ if finished >= n => n_is(&crate::i18n::tn(
+            n,
+            "Also move the {n} file to the Recycle Bin",
+            "Also move the {n} files to the Recycle Bin",
+        )),
+        // i18n: never shown for a single file; some are finished (their files go to the Recycle Bin), the others' data is deleted
+        _ => n_is(&crate::i18n::tn(
+            n,
+            "Also delete the {n} file (finished ones go to the Recycle Bin)",
+            "Also delete the {n} files (finished ones go to the Recycle Bin)",
+        )),
+    }
 }
 
 impl ConfirmDelete {
-    /// `files`: the checkbox's first state (the last answer, or Shift+Delete).
-    pub fn new(ids: Vec<u64>, name: String, unfinished: bool, files: bool) -> Self {
+    /// `files`: the checkbox's first state (ticked only by Shift+Delete / Remove with files).
+    pub fn new(ids: Vec<u64>, name: String, unfinished: bool, files: bool, finished: u64) -> Self {
         ConfirmDelete {
             ids,
             name,
             unfinished,
             files,
+            finished,
+            torrents: 0,
+            kept: 0,
             dont_show: false,
-            remember: true,
         }
     }
 
     pub fn show(&mut self, ctx: &egui::Context) -> Outcome<(bool, bool)> {
         let n = self.ids.len() as u64;
         let extra = grow_extra(ctx, "confirm-delete");
+        // The finished files' line under the box, while it is ticked (upstream #1563).
+        let warned = grow_extra(ctx, "confirm-delete-finished");
         // The mockup's layout: a delete tile, the question beside it, the files box, the
         // footer with "Don't show this dialog again" at its start.
         const W: f32 = 480.0;
@@ -2410,7 +3163,7 @@ impl ConfirmDelete {
             ctx,
             "confirm-delete",
             "Confirm deletion of downloads",
-            [W, BODY + extra + winui::FOOTER_H],
+            [W, BODY + extra + warned + winui::FOOTER_H],
             false,
             winui::LIGHT_BG(),
             |ui, o| {
@@ -2460,24 +3213,75 @@ it from Grabbit's list of downloads?",
                     &text,
                     black,
                     o.x + W - e,
-                    13.0,
+                    crate::theme::metrics().line_paragraph,
                 );
                 grow_to(ui.ctx(), "confirm-delete", lines, 3);
                 let o = o + vec2(0.0, extra);
-                let files = if n == 1 {
-                    crate::i18n::t("Also delete the file from disk").to_owned()
-                } else {
-                    crate::i18n::fmt(
-                        // i18n: never shown for a single file
-                        &crate::i18n::tn(
-                            n,
-                            "Also delete the {n} file from disk",
-                            "Also delete the {n} files from disk",
-                        ),
-                        &[("n", &crate::i18n::integer(n))],
-                    )
-                };
+                let files = files_label(n, self.finished);
                 winui::checkbox_light(ui, o + vec2(e, 74.0), &mut self.files, &files, true);
+                // Ticked, the finished downloads' files go too: said, so none is lost by
+                // surprise (upstream #1563); under the box, beside its caption.
+                let mut warn = if self.files && self.finished > 0 {
+                    let text = crate::i18n::fmt(
+                        // i18n: under "Also move the files to the Recycle Bin", while it is ticked: how many of the downloads being deleted are finished, whose complete files go to the Recycle Bin too
+                        &crate::i18n::tn(
+                            self.finished,
+                            "This also moves {n} finished file to the Recycle Bin.",
+                            "This also moves {n} finished files to the Recycle Bin.",
+                        ),
+                        &[("n", &crate::i18n::integer(self.finished))],
+                    );
+                    let lines = winui::paragraph(
+                        &p,
+                        o.x + e + 16.0,
+                        o.y + 102.0,
+                        &text,
+                        crate::theme::colors().error_strong,
+                        o.x + W - e,
+                        crate::theme::metrics().line_paragraph,
+                    );
+                    lines as f32 * crate::theme::metrics().line_paragraph + 6.0
+                } else {
+                    0.0
+                };
+                // A finished torrent's files are deleted outright by its engine (DA1t): said in
+                // red too, as upstream #1563 says every finished file that goes.
+                if self.files && self.torrents > 0 {
+                    let text = crate::i18n::fmt(
+                        // i18n: under the delete box, while it is ticked: how many of the downloads being deleted are finished torrents, whose files are deleted from the disk (not moved to the Recycle Bin)
+                        &crate::i18n::tn(
+                            self.torrents,
+                            "This also deletes {n} finished torrent's files.",
+                            "This also deletes {n} finished torrents' files.",
+                        ),
+                        &[("n", &crate::i18n::integer(self.torrents))],
+                    );
+                    let lines = winui::paragraph(
+                        &p,
+                        o.x + e + 16.0,
+                        o.y + 102.0 + warn,
+                        &text,
+                        crate::theme::colors().error_strong,
+                        o.x + W - e,
+                        crate::theme::metrics().line_paragraph,
+                    );
+                    warn += lines as f32 * crate::theme::metrics().line_paragraph + 6.0;
+                }
+                // The running downloads Delete leaves alone, said under it (plan 12a, E3).
+                if self.kept > 0 {
+                    let lines = winui::paragraph(
+                        &p,
+                        o.x + e + 16.0,
+                        o.y + 102.0 + warn,
+                        &kept_text(self.kept),
+                        black,
+                        o.x + W - e,
+                        crate::theme::metrics().line_paragraph,
+                    );
+                    warn += lines as f32 * crate::theme::metrics().line_paragraph + 6.0;
+                }
+                grow_px(ui.ctx(), "confirm-delete-finished", warn);
+                let o = o + vec2(0.0, warn);
                 // Enter Yes, Escape No, as before; Tab: the files box, Yes, No, then "Don't
                 // show this dialog again".
                 let pressed = winui::footer(
@@ -2615,14 +3419,24 @@ pub fn dragged_out() -> Vec<(u64, PathBuf, DraggedOut)> {
     std::mem::take(&mut *DRAGGED_OUT.lock().unwrap_or_else(|e| e.into_inner()))
 }
 
-/// Why a download's file isn't where MDM saved it, when it was dragged out of Download complete
+/// Why a download's file isn't where MDM saved it, when it was dragged out of the Done window
 /// to a place MDM couldn't learn (upstream issue 869).
 fn moved_away_text(path: &Path) -> String {
     let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
     crate::i18n::fmt(
         crate::i18n::t(
-            "{file} was moved elsewhere by dragging it out of Download complete, and Grabbit couldn't learn where. Look for it where you dropped it.",
+            "{file} was moved elsewhere by dragging it out of the Done window, and Grabbit could not learn where. Look for it where you dropped it.",
         ),
+        &[("file", &name)],
+    )
+}
+
+/// [`moved_away_text`] as the Done window itself says it, under Saved to (board 14).
+fn moved_away_here(path: &Path) -> String {
+    let name = crate::i18n::isolate(&path.file_name().unwrap_or_default().to_string_lossy());
+    crate::i18n::fmt(
+        // i18n: the Done window, under Saved to: its file was dragged out of it to a place Grabbit can't see; {file} its name
+        crate::i18n::t("{file} was dragged out of this window. Look for it where you dropped it."),
         &[("file", &name)],
     )
 }
@@ -2696,8 +3510,13 @@ fn show_in_folder_now(path: &Path) {
     {
         use std::os::windows::process::CommandExt;
         if !path.exists() {
-            if let Some(dir) = path.parent().filter(|d| d.is_dir()) {
-                crate::launch::open(dir);
+            match path.parent().filter(|d| d.is_dir()) {
+                Some(dir) => crate::launch::open(dir),
+                // i18n: title of the message when the folder of a downloaded file can't be shown
+                None => tell(
+                    crate::i18n::mark("Open folder"),
+                    folder_gone_text(path.parent().unwrap_or(path)),
+                ),
             }
             return;
         }
@@ -2970,7 +3789,7 @@ impl Confirm {
                     &text,
                     winui::TEXT(),
                     o.x + W - e,
-                    13.0,
+                    crate::theme::metrics().line_paragraph,
                 );
                 grow_to(ui.ctx(), &key, lines, 3);
                 let o = o + vec2(0.0, extra);
@@ -3052,7 +3871,7 @@ impl DeleteCategory {
                     &text,
                     winui::LIGHT_TEXT(),
                     o.x + W - e,
-                    13.0,
+                    crate::theme::metrics().line_paragraph,
                 );
                 grow_to(ui.ctx(), key, lines, 2);
                 let o = o + vec2(0.0, extra);
@@ -3080,10 +3899,10 @@ impl DeleteCategory {
                     &mut [
                         // i18n: button: deletes the category
                         FooterItem::Button(
-                            FooterButton::new("Delete", ButtonKind::Danger).enter(true),
+                            FooterButton::new("Yes", ButtonKind::Danger).enter(true),
                         ),
                         FooterItem::Button(
-                            FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+                            FooterButton::new("No", ButtonKind::Normal).escape(true),
                         ),
                     ],
                 );
@@ -3324,27 +4143,35 @@ impl ExistingFiles {
                     18.0,
                 );
                 // No is the default: a file the user didn't mean to give up stays as it is.
-                // Enter and Escape both answer No, as before.
-                match winui::footer(
+                // Enter and Escape both answer No, as before. "No, Yes" as the other
+                // questions read (plan 12b, C1): No isn't moved last, and Tab goes as drawn.
+                existing_files_answer(winui::footer(
                     ui,
                     o,
                     W,
                     BODY,
                     &mut [
-                        FooterItem::Button(FooterButton::new("Yes", ButtonKind::Normal)),
                         FooterItem::Button(
                             FooterButton::new("No", ButtonKind::Default)
+                                .not_primary()
                                 .enter(true)
                                 .escape(true),
                         ),
+                        FooterItem::Button(FooterButton::new("Yes", ButtonKind::Normal)),
                     ],
-                ) {
-                    Some(0) => Outcome::Done(()),
-                    Some(_) => Outcome::Closed,
-                    None => Outcome::Open,
-                }
+                ))
             },
         )
+    }
+}
+
+/// Files already there's answer by the footer item pressed: 1 is Yes (use them: `Done`); 0 is
+/// No, which Enter and Escape press too (`Closed`); None stays open.
+fn existing_files_answer(pressed: Option<usize>) -> Outcome<()> {
+    match pressed {
+        Some(1) => Outcome::Done(()),
+        Some(_) => Outcome::Closed,
+        None => Outcome::Open,
     }
 }
 
@@ -3498,6 +4325,292 @@ fn ensure_folder_with<T>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const MB: u64 = 1_000_000;
+
+    fn files(sizes: &[(&str, u64)]) -> Vec<(PathBuf, u64)> {
+        sizes
+            .iter()
+            .map(|(n, s)| (PathBuf::from(r"C:\Demo\Folder").join(n), *s))
+            .collect()
+    }
+
+    /// Plan 13a: a main file is the largest, at least half the total and 4 times the second.
+    #[test]
+    fn the_main_file_is_the_one_a_download_is_mostly_made_of() {
+        // One big file and small extras.
+        let movie = files(&[
+            ("cover.jpg", MB / 10),
+            ("film.mp4", 734 * MB),
+            ("a.srt", 80_000),
+        ]);
+        assert_eq!(main_file(&movie), Some(&movie[1].0));
+        // An album of equal files.
+        let album = files(&[
+            ("1.flac", 30 * MB),
+            ("2.flac", 30 * MB),
+            ("3.flac", 30 * MB),
+        ]);
+        assert_eq!(main_file(&album), None);
+        // A 60 MB + 50 MB pair: not 4 times.
+        let pair = files(&[("a.bin", 60 * MB), ("b.bin", 50 * MB)]);
+        assert_eq!(main_file(&pair), None);
+        // One file.
+        let one = files(&[("only.iso", 5 * MB)]);
+        assert_eq!(main_file(&one), Some(&one[0].0));
+        // Largest but under half the total (many small ones besides).
+        let mut many = files(&[("big.bin", 40 * MB)]);
+        many.extend(files(&[
+            ("s1", 9 * MB),
+            ("s2", 9 * MB),
+            ("s3", 9 * MB),
+            ("s4", 9 * MB),
+        ]));
+        many.extend(files(&[("s5", 9 * MB)]));
+        assert_eq!(main_file(&many), None);
+        assert_eq!(main_file(&[]), None);
+    }
+
+    /// Audit 13a r3: the Open menu's opener, as the app's other openers behave.
+    #[test]
+    fn the_open_menus_opener_toggles_by_pointer_and_opens_by_keys_once() {
+        // A click opens it (closed, or opened another way); the click whose press closed it
+        // leaves it closed.
+        assert_eq!(opener_press(false, true, false), Some(false));
+        assert_eq!(opener_press(true, true, true), None);
+        assert_eq!(opener_press(false, true, true), None);
+        // Keys open it, highlighted, only while closed: an open menu's Enter and Space choose.
+        assert_eq!(opener_press(false, false, false), Some(true));
+        assert_eq!(opener_press(true, false, false), None);
+    }
+
+    /// Plan 13d (boards 5, 7, 13, 14): the Done window's footer. One filled button, the one
+    /// Enter presses; Open | ▾ and Open file | ▾ joined; Close takes no Enter.
+    #[test]
+    fn the_done_windows_footer_follows_its_three_cases() {
+        let labels = |row: &[DonePart]| row.iter().map(|b| b.label).collect::<Vec<_>>();
+        let filled = |row: &[DonePart]| {
+            row.iter()
+                .filter(|b| b.kind == ButtonKind::Accent)
+                .map(|b| b.act)
+                .collect::<Vec<_>>()
+        };
+        let entered = |row: &[DonePart]| {
+            row.iter()
+                .filter(|b| b.enter)
+                .map(|b| b.act)
+                .collect::<Vec<_>>()
+        };
+        // A main file (or one file): Open | ▾ filled, Open folder, Close.
+        let row = done_footer(true, true, true);
+        assert_eq!(labels(&row), ["Open", "", "Open folder", "Close"]);
+        assert!(row[1].joined && !row[2].joined && !row[0].joined);
+        assert_eq!(row[1].act, DoneAct::Menu);
+        assert_eq!(filled(&row), [DoneAct::Open, DoneAct::Menu]);
+        assert_eq!(entered(&row), [DoneAct::Open]);
+        // The file gone (board 14): Open greyed, Open folder filled and Enter's.
+        let row = done_footer(true, false, true);
+        assert_eq!(labels(&row), ["Open", "Open folder", "Close"], "no arrow");
+        assert_eq!(row[0].kind, ButtonKind::Disabled);
+        assert_eq!(filled(&row), [DoneAct::Folder]);
+        assert_eq!(entered(&row), [DoneAct::Folder]);
+        // No main file (board 7): Open folder filled, Open file | ▾, Close.
+        let row = done_footer(false, true, true);
+        assert_eq!(labels(&row), ["Open folder", "Open file", "", "Close"]);
+        assert!(row[2].joined && !row[1].joined);
+        assert_eq!(row[1].act, DoneAct::Menu);
+        assert_eq!(filled(&row), [DoneAct::Folder]);
+        assert_eq!(entered(&row), [DoneAct::Folder]);
+        // Its files not known: nothing to choose from.
+        let row = done_footer(false, true, false);
+        assert_eq!(row[1].kind, ButtonKind::Disabled);
+        // Alt+O and Alt+F; the ▾ named for screen readers.
+        for row in [
+            done_footer(true, true, true),
+            done_footer(false, true, true),
+        ] {
+            let letter = |act| {
+                row.iter()
+                    .find(|b| b.act == act && !b.label.is_empty())
+                    .and_then(|b| b.mnemonic.map(|m| b.label.chars().nth(m)))
+            };
+            assert_eq!(letter(DoneAct::Folder), Some(Some('f')));
+            assert!(row.iter().all(|b| !b.label.is_empty() || !b.tip.is_empty()));
+            assert!(row.iter().all(|b| b.act != DoneAct::Close || !b.enter));
+        }
+        assert_eq!(done_footer(true, true, true)[0].mnemonic, Some(0));
+        assert_eq!(done_footer(false, true, true)[1].mnemonic, Some(0));
+    }
+
+    /// Plan 13a: a folder download's Open opens its main file and Open folder selects it inside
+    /// the folder; without one Open folder opens the folder itself, never its parent; a file
+    /// alone is selected in its folder.
+    #[test]
+    fn open_and_open_folder_target_a_folder_downloads_files() {
+        let folder = PathBuf::from(r"C:\Demo\Folder");
+        let movie = files(&[("cover.jpg", MB / 10), ("film.mp4", 734 * MB)]);
+        let (main, act) = done_targets(&folder, Some(&movie));
+        assert_eq!(main.as_ref(), Some(&folder.join("film.mp4")));
+        assert_eq!(act, FolderAct::Select(folder.join("film.mp4")));
+        let album = files(&[("1.flac", 30 * MB), ("2.flac", 30 * MB)]);
+        assert_eq!(
+            done_targets(&folder, Some(&album)),
+            (None, FolderAct::Open(folder.clone()))
+        );
+        // Files not known (a gallery): the folder itself.
+        assert_eq!(
+            done_targets(&folder, Some(&[])),
+            (None, FolderAct::Open(folder.clone()))
+        );
+        let file = PathBuf::from(r"C:\Demo\only.iso");
+        assert_eq!(
+            done_targets(&file, None),
+            (Some(file.clone()), FolderAct::Select(file.clone()))
+        );
+    }
+
+    /// The box's look (`Complete::new`), waited for.
+    fn looked(c: &mut Complete) {
+        let start = std::time::Instant::now();
+        while !c.take_look() {
+            assert!(
+                start.elapsed() < std::time::Duration::from_secs(10),
+                "no look"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(c.looking.is_none());
+    }
+
+    /// Plan 13 audit: the box looks off its thread, once made, whether its file is there: a
+    /// file gone says why and greys Open before Open is pressed (board 14); a folder's files
+    /// come with the look; a folder gone with its parent makes Open folder say so.
+    #[test]
+    fn the_done_window_knows_a_file_is_gone_from_the_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let gone = dir.path().join("gone.zip");
+        let mut c = Complete::new(1, gone, 3, Vec::new(), false, || None);
+        looked(&mut c);
+        assert!(c.gone.as_deref().is_some_and(|g| g.contains("gone.zip")));
+        assert!(!c.folder_gone, "its folder is there");
+
+        let album = dir.path().join("Album");
+        std::fs::create_dir(&album).unwrap();
+        std::fs::write(album.join("film.mp4"), [0u8; 64]).unwrap();
+        let listed = vec![(album.join("film.mp4"), 64), (album.join("a.srt"), 1)];
+        let mut c = Complete::new(2, album.clone(), 65, Vec::new(), false, move || {
+            Some(listed)
+        });
+        looked(&mut c);
+        assert_eq!(c.gone, None);
+        assert!(c.folder && !c.folder_gone);
+        assert_eq!(c.main, Some(album.join("film.mp4")));
+        assert_eq!(c.largest.len(), 2);
+
+        let lost = dir.path().join("no").join("such").join("f.zip");
+        let mut c = Complete::new(3, lost, 1, Vec::new(), false, || None);
+        looked(&mut c);
+        assert!(c.gone.is_some() && c.folder_gone);
+    }
+
+    /// Plan 13 audit: a download dragged out and moved, its box follows: the main file, Open
+    /// folder's target, the menu's files; what was gone is forgotten. A look that comes after
+    /// the move goes with it too.
+    #[test]
+    fn the_done_window_follows_its_download_moved() {
+        let from = PathBuf::from(r"C:\Demo\Folder");
+        let to = PathBuf::from(r"C:\Elsewhere\Folder");
+        let mut c = Complete::new(1, from.clone(), 0, Vec::new(), true, || None);
+        c.looking = None;
+        c.set_files(Some(files(&[
+            ("cover.jpg", MB / 10),
+            ("film.mp4", 734 * MB),
+        ])));
+        c.gone = Some("gone".into());
+        c.moved_to(to.clone());
+        assert_eq!(c.path, to);
+        assert_eq!(c.main, Some(to.join("film.mp4")));
+        assert_eq!(c.folder_act, FolderAct::Select(to.join("film.mp4")));
+        assert!(c.largest.iter().all(|(f, _)| f.starts_with(&to)));
+        assert!(!c.moved_away && c.gone.is_none());
+
+        let file = from.join("a.zip");
+        let mut c = Complete::new(2, file, 1, Vec::new(), false, || None);
+        c.looking = None;
+        c.moved_to(to.join("b.zip"));
+        assert_eq!(c.main, Some(to.join("b.zip")));
+        assert_eq!(c.folder_act, FolderAct::Select(to.join("b.zip")));
+
+        let listed = files(&[("film.mp4", 734 * MB), ("a.srt", 1)]);
+        let mut c = Complete::new(3, from, 0, Vec::new(), false, move || Some(listed));
+        c.moved_to(to.clone());
+        looked(&mut c);
+        assert_eq!(c.main, Some(to.join("film.mp4")));
+        assert_eq!(c.gone, None, "what the look saw at the old place is stale");
+    }
+
+    /// Plan 13 audit r2: the Done window stays hidden for its look up to DONE_LOOK_WAIT, then
+    /// shows without it but keeps Enter until it comes; a look that will never come (its
+    /// thread gone) stops being waited for.
+    #[test]
+    fn the_done_window_waits_a_moment_for_its_look() {
+        use std::time::Duration;
+        assert_eq!(done_shown(true, Duration::ZERO), (false, false));
+        assert_eq!(done_shown(true, DONE_LOOK_WAIT), (true, false));
+        assert_eq!(done_shown(false, Duration::ZERO), (true, true));
+        let mut c = Complete::new(
+            1,
+            PathBuf::from(r"C:\Demo\a.zip"),
+            1,
+            Vec::new(),
+            false,
+            || None,
+        );
+        c.looking = Some(Arc::new(Mutex::new(None)));
+        assert!(!c.take_look());
+        assert!(c.looking.is_none(), "nothing will come");
+        assert_eq!(
+            c.main,
+            Some(PathBuf::from(r"C:\Demo\a.zip")),
+            "the stand-in"
+        );
+    }
+
+    /// Plan 13 audit: the Open menu names a file by its path inside the download when another
+    /// listed file has its name.
+    #[test]
+    fn the_open_menu_tells_files_of_one_name_apart() {
+        let dir = PathBuf::from(r"C:\Demo\Folder");
+        let listed = files(&[(r"CD1\01.flac", 30), (r"CD2\01.flac", 30), ("cover.jpg", 1)]);
+        assert_eq!(menu_name(&listed[0].0, &dir, &listed), r"CD1\01.flac");
+        assert_eq!(menu_name(&listed[2].0, &dir, &listed), "cover.jpg");
+    }
+
+    /// Plan 12b, C1: Files already there's Yes (item 1) uses the files; No (item 0, also
+    /// Enter and Escape) never does.
+    #[test]
+    fn files_already_there_uses_them_only_on_yes() {
+        assert!(matches!(existing_files_answer(Some(1)), Outcome::Done(())));
+        assert!(matches!(existing_files_answer(Some(0)), Outcome::Closed));
+        assert!(matches!(existing_files_answer(None), Outcome::Open));
+    }
+
+    /// Plan 12a: the delete box says where the files go: finished ones to the Recycle Bin,
+    /// unfinished data deleted, a mix said as a mix.
+    #[test]
+    fn the_delete_box_says_where_the_files_go() {
+        assert_eq!(files_label(1, 0), "Also delete the file from disk");
+        assert_eq!(files_label(1, 1), "Also move the file to the Recycle Bin");
+        assert_eq!(files_label(3, 0), "Also delete the 3 files from disk");
+        assert_eq!(
+            files_label(3, 3),
+            "Also move the 3 files to the Recycle Bin"
+        );
+        assert_eq!(
+            files_label(3, 2),
+            "Also delete the 3 files (finished ones go to the Recycle Bin)"
+        );
+    }
 
     /// #440: Download File Info behind the Create folder question ended without a closing pass,
     /// and the next one opened as a new, hidden window that was never told to show: later

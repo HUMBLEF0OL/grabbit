@@ -188,8 +188,9 @@ const DX: f32 = RIGHT - 627.0;
 const DAYS_UP: f32 = 16.0;
 /// "Hang up modem" and "Exit … when done" on one row.
 const DONE_UP: f32 = 18.0;
-/// The file to open on its caption's row, not under it.
-const OPEN_UP: f32 = 25.0;
+/// The file to open on its caption's row, not under it (18, not 25, since its box and browse
+/// button are control-height: plan 12 C5).
+const OPEN_UP: f32 = 18.0;
 const UP: f32 = DAYS_UP + DONE_UP + OPEN_UP;
 /// Under the pages' last rows, 4 less room than IDM's, so the window fits Windows 11's 48 px
 /// taskbar too (the rows don't move).
@@ -421,7 +422,8 @@ impl Scheduler {
         if self.naming.is_some() {
             self.name_prompt(ctx);
         }
-        // Delete asks first: a queue's schedule can't be had back.
+        // Delete asks first: once saved, the queue and its schedule are gone (until then,
+        // Options' Discard builds the Scheduler again with it).
         if let Some((q, ask)) = &mut self.deleting {
             match ask.show(ctx) {
                 Outcome::Open => {}
@@ -473,7 +475,7 @@ impl Scheduler {
         // Delete has no access letter in the main window: Alt+D opens its Downloads menu.
         let row = winui::button_row_from_left(
             &ui.painter().clone(),
-            &[("&New queue", 11.0, 84.0), ("Delete", 103.0, 81.0)],
+            &[("&New queue...", 11.0, 84.0), ("Delete", 103.0, 81.0)],
             8.0,
             184.0,
             173.0,
@@ -481,7 +483,7 @@ impl Scheduler {
         let new_queue = winui::button_light(
             ui,
             r(o, row[0].0, buttons_y, row[0].1, winui::CONTROL_H),
-            "&New queue",
+            "&New queue...",
             ButtonKind::Normal,
             false,
         )
@@ -752,7 +754,7 @@ impl Scheduler {
         );
         // The week's columns move right together after a longer "Daily", while the last one
         // still fits the page.
-        let last_day = 16.0 + winui::text_width(&p, crate::i18n::t(WEEKDAYS[6])).ceil() + 4.0;
+        let last_day = 16.0 + winui::text_width(&p, crate::i18n::t(WEEKDAYS[3])).ceil() + 4.0;
         let shift = after(235.0, "Daily", 310.0, RIGHT - last_day - 332.0) - 310.0;
         // i18n: adverb: every day (the other choice is once, on a date)
         let daily = winui::radio_light_until(
@@ -770,16 +772,9 @@ impl Scheduler {
         if let Some(i) = winui::radio_keys(ui, &[once, daily]) {
             f.once = i == 0;
         }
-        // Four columns of two rows at 800 (three of three at IDM's 651), in the same order.
-        let days = [
-            (WEEKDAYS[0], 310.0, 173.0),
-            (WEEKDAYS[1], 310.0, 189.0),
-            (WEEKDAYS[2], 420.0, 173.0),
-            (WEEKDAYS[3], 420.0, 189.0),
-            (WEEKDAYS[4], 531.0, 173.0),
-            (WEEKDAYS[5], 531.0, 189.0),
-            (WEEKDAYS[6], 642.0, 173.0),
-        ];
+        // Four columns of two rows at 800, read in rows (plan 12b, D5): Sunday to Wednesday,
+        // then Thursday to Saturday; Tab goes the same way.
+        let days = weekday_slots();
         for (i, (day, x, y)) in days.iter().enumerate() {
             // A long day name stops before the next column.
             let next = match *x as i32 {
@@ -854,7 +849,7 @@ impl Scheduler {
             ui,
             at(228.0, 267.0 + dy),
             &mut f.retries_on,
-            "Number of retries for each file if downloading failed :",
+            "Number of retries for each file if downloading failed:",
             true,
             Some(o.x + retries_x),
         );
@@ -869,16 +864,20 @@ impl Scheduler {
             LIGHT_PAGE(),
         );
         winui::etched_h(&p, o.x + 228.0, o.y + 288.0 + dy, RIGHT - 228.0);
-        // The box after its caption, on its row (under it at IDM's 651), ending where it did.
+        // The box after its caption, on its row (under it at IDM's 651), and the one browse
+        // control after it (plan 12 C5): both control-height, centred on the check box's row.
+        let (h, browse_x) = (winui::CONTROL_H, RIGHT - 12.0 - winui::CONTROL_H);
+        // 5 clear under the separator (at 288), 6 above the next row's check boxes (OPEN_UP).
+        let row_top = 294.0 + dy;
         let open_x = after(
             228.0,
             "Open the following file when done:",
             228.0,
-            RIGHT - 43.0 - 120.0,
+            browse_x - 8.0 - 120.0,
         );
         winui::checkbox_light_until(
             ui,
-            at(228.0, 299.0 + dy),
+            at(228.0, 302.0 + dy),
             &mut f.open_on,
             "Open the following file when done:",
             true,
@@ -886,16 +885,15 @@ impl Scheduler {
         );
         winui::edit_light_on(
             ui,
-            r(o, open_x, 294.0 + dy, RIGHT - 43.0 - open_x, 23.0),
+            r(o, open_x, row_top, browse_x - 8.0 - open_x, h),
             &mut f.open_file,
             f.open_on,
             false,
             LIGHT_PAGE(),
         );
-        // Graphite's browse button (plan 07: `gx-dots` on every "..."), as tall as its box.
         let browse = winui::icon_only_button(
             ui,
-            r(o, RIGHT - 35.0, 294.0 + dy, 23.0, 23.0),
+            r(o, browse_x, row_top, h, h),
             "gx-dots",
             // i18n: tooltip of the "..." after the Scheduler's file to open: choose the file
             "Browse",
@@ -1101,7 +1099,7 @@ impl Scheduler {
         );
         // The name takes the width the pages gained.
         let cols = [
-            (crate::i18n::mark("File Name"), 230.0, 421.0 + DX),
+            (crate::i18n::mark("File name"), 230.0, 421.0 + DX),
             // i18n: column title: the file's size
             (crate::i18n::mark("Size"), 421.0 + DX, 488.0 + DX),
             // i18n: column title: the download's state
@@ -1224,7 +1222,7 @@ impl Scheduler {
                 "cross",
                 290.0,
                 sel.is_some(),
-                crate::i18n::mark("Remove from the queue"),
+                crate::i18n::mark("Remove from queue"),
             ),
         ];
         for (icon, x, enabled, tip) in buttons {
@@ -1798,6 +1796,14 @@ const WEEKDAYS: [&str; 7] = [
     crate::i18n::mark("Friday"),
     crate::i18n::mark("Saturday"),
 ];
+/// The Scheduler's weekday boxes, each `(name, x, y)` on the page, in `WEEKDAYS`' order (the
+/// index of `days`) and in reading order: four in the first row, three under them (plan 12b,
+/// D5). Drawn in this order, which is the Tab order.
+fn weekday_slots() -> [(&'static str, f32, f32); 7] {
+    const XS: [f32; 4] = [310.0, 420.0, 531.0, 642.0];
+    std::array::from_fn(|i| (WEEKDAYS[i], XS[i % 4], if i < 4 { 173.0 } else { 189.0 }))
+}
+
 const MONTHS: [&str; 12] = [
     crate::i18n::mark("January"),
     crate::i18n::mark("February"),
@@ -2253,6 +2259,19 @@ fn merge_items(base: &[u64], draft: &[u64], live: &[u64]) -> Vec<u64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Plan 12b, D5: the weekdays read in rows, Sunday to Wednesday then Thursday to Saturday,
+    /// each box in its day's place of `days`.
+    #[test]
+    fn the_weekdays_read_in_rows() {
+        let slots = weekday_slots();
+        for (i, (day, ..)) in slots.iter().enumerate() {
+            assert_eq!(*day, WEEKDAYS[i]);
+        }
+        let (rows, xs): (Vec<f32>, Vec<f32>) = slots.iter().map(|s| (s.2, s.1)).unzip();
+        assert_eq!(rows, [173.0, 173.0, 173.0, 173.0, 189.0, 189.0, 189.0]);
+        assert_eq!(xs, [310.0, 420.0, 531.0, 642.0, 310.0, 420.0, 531.0]);
+    }
 
     #[test]
     fn the_draft_keeps_its_order_and_the_lists_changes() {

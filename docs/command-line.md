@@ -22,7 +22,7 @@ grabbit.exe /d URL [/p folder] [/f name] [/a] [/n] [/s]
 | `/p folder` | Save it in this folder (else the category's folder from **Options → Save to**). |
 | `/f name` | Save it under this name. |
 | `/a` | Add it to the main download queue without starting it. |
-| `/n` | Silent: no **Download File Info** window, the download starts (or is queued, with `/a`) at once. |
+| `/n` | Silent: no **Download file info** window, the download starts (or is queued, with `/a`) at once. |
 | `/s` | Start the main download queue. |
 | `/exit` | Save and close the running app (the installer uses it before an upgrade). |
 | `/startup` | Start in the notification area, the window hidden: what **Launch Grabbit on startup** starts Grabbit with when you sign in. Where no notification area shows Grabbit's icon, Grabbit starts minimized. A running Grabbit stays as it is. |
@@ -50,13 +50,13 @@ It comes with every download of Grabbit, next to the app (the installer puts it 
 | `playlist-info URL [--from N] [--count N]` | A playlist's or channel's videos, one line each as they're listed: its place, length, title and address. |
 | `playlist-get URL [-f selector] [-o folder] [-c pieces] [--from N] [--count N]` | Download a playlist's or channel's videos one after another, into a folder named after the list inside `-o`. `-f` is one quality for all, as for `video-get` (by default each video's best; `bv*[height<=720]+ba/b[height<=720]` = up to 720p; `ba` = the original sound; `mp3:320`, `opus:`, `flac:` as for `video-get`). `-c` as for `video-get`. |
 | `video-get URL [-f selector] [-o folder] [-c pieces] [--subs langs] [--auto-subs] [--embed-subs] [--adapter name]` | Download a video; `-f` takes a quality's selector from `video-info` (`b` = the best single file; `ba` = the sound alone as the site has it, not converted; `mp3:320`, `mp3:256`, `mp3:192` or `mp3:128` = the sound as an MP3 at that bitrate, `mp3:0` at its best variable one; `opus:` = as Opus; `flac:` = as FLAC, lossless but no better than the site's sound; conversions need ffmpeg). `-c`: a video the site sends in pieces (HLS, DASH) comes down this many pieces at once (8 by default, 1 to 128); a video in one file is one connection whatever it says. `--subs` saves subtitles beside it: language codes from `video-info` (`en,fr`), or `all` for every one the uploader gave; `--auto-subs` takes the site's automatic captions instead; `--embed-subs` puts them into the video (needs ffmpeg, MP4 or MKV). `--adapter` sends yt-dlp's connections (and ffmpeg's) through one network adapter, as for `get`; when it isn't connected, nothing starts. |
-| `install-ytdlp`, `install-ffmpeg` | Install or update the helpers videos need: yt-dlp (checked against its signing key) and ffmpeg. |
+| `install-ytdlp`, `install-ffmpeg`, `install-deno` | Install or update the helpers videos need: yt-dlp (checked against its signing key), ffmpeg, and Deno, the JavaScript runtime yt-dlp needs for YouTube's qualities (checked against its release's SHA-256; x64 and ARM64 Windows; a Node.js or Deno of your own works too). |
 | `torrent-info SOURCE` | A torrent's name, files (numbered) and size; `SOURCE` is a magnet link or a `.torrent` file. |
 | `torrent-get SOURCE [-o folder] [--files 0,2] [--use-existing]` | Download a torrent, or only some of its files. If some of its files are already in the folder, it stops and names them; `--use-existing` uses them instead (what matches is kept, the rest downloaded). |
 | `torrent-create PATH -o file.torrent` | Make a `.torrent` of a file or folder (peers find it through the DHT). |
 | `status` | The running app's downloads, as JSON, with their ids (the automation API must be on). |
 | `pause ID...`, `start ID...` | Pause running downloads, or start (resume) stopped, queued or failed ones, in the running app. |
-| `remove ID...`, `delete ID...` | Take downloads off the running app's list: `remove` keeps their files, `delete` deletes them too. A running download is paused first (`pause`). |
+| `remove ID...`, `delete ID...` | Take downloads off the running app's list: `remove` keeps their files, `delete` moves a finished file to the Recycle Bin (and deletes an unfinished one's data). A running download is paused first (`pause`). |
 | `api on`, `api off` | Turn the running app's automation API on or off. |
 
 `grabbit-cli help <command>` shows every option. A command that fails (the app isn't running, it answers with an error, a download breaks) exits with code 1. For example:
@@ -79,7 +79,7 @@ With `--json` (before or after the command), every command prints JSON instead o
 | `video-info` | `{"title", "choices": [{"label", "format", "size"}], "subtitles": [{"code", "name", "automatic"}], "needs_js_runtime"}` (`needs_js_runtime`: yt-dlp had no JavaScript runtime, so YouTube listed only some qualities); a choice's `format` is what `video-get -f` takes, a subtitle's `code` what `--subs` takes. |
 | `torrent-info` | `{"name", "info_hash", "size", "files": [{"index", "size", "path"}]}`. |
 | `torrent-create` | `{"info_hash", "path"}`. |
-| `install-ytdlp`, `install-ffmpeg` | `{"tool", "version", "path"}`. |
+| `install-ytdlp`, `install-ffmpeg`, `install-deno` | `{"tool", "version", "path"}`. |
 | `status`, `pause`, `start`, `remove`, `delete`, `api` | The app's answer, which is JSON already (see below). |
 
 Sizes are in bytes (`null` while unknown), speeds in bytes per second. A failure prints `{"error": "…"}` and exits with code 1. For example:
@@ -110,7 +110,7 @@ Other programs can ask the running app what it is downloading, and pause, start,
 | Fields (besides `token`) | Answer |
 |---|---|
 | `{"query": "list"}` | Every download and the total speed: `{"downloads": [{"id", "file", "url", "path", "status", "size", "downloaded", "speed", "added", "category", "error"}], "speed": bytes per second, "queues": [{"name", "running", "ids"}], "categories": [{"key", "name"}], "free": bytes}`. `status` is `Queued`, `Downloading`, `Stopped`, `Complete` or `Error`; `size` is `null` while unknown; `error` (why it failed) is there only for a download in `Error`; `category` is a category's `key`; `free` is the free space where downloads go (`null` when unknown). Only while the API is on. |
-| `{"action": "pause", "ids": [3, 4]}` | Acts on downloads by id: `"pause"`, `"start"`, `"remove"` (file kept) or `"delete"` (file deleted too). Answers `{"done": [3], "skipped": [{"id": 4, "why": "not running"}]}`; a running download must be paused before it is removed or deleted. Only while the API is on. |
+| `{"action": "pause", "ids": [3, 4]}` | Acts on downloads by id: `"pause"`, `"start"`, `"remove"` (file kept) or `"delete"` (a finished file to the Recycle Bin). Answers `{"done": [3], "skipped": [{"id": 4, "why": "not running"}]}`; a running download must be paused before it is removed or deleted. Only while the API is on. |
 | `{"action": "start_queue", "queue": "Main download queue"}` | Starts (or with `"stop_queue"`, stops) the queue of that name (a name from the list's `queues`). Answers `{"done": [], "skipped": []}`, or `{"error": …, "code": "unknown-queue"}`. Only while the API is on. |
 | `{"api": true}` / `{"api": false}` | Turns the API on or off: `{"api": true}`. |
 | `{"url": "https://…", "dir": "D:\\Files", "name": "a.zip", "silent": true}` | Adds a download, as the command line's `/d /p /f /n` do (`"later": true` is `/a`); `ok`. `"category"` (a key from the list's `categories`) puts it in that category's folder instead of the one its type picks; `"queue"` (a queue's name) is the queue it waits in with `"later"`. Also with the API off, like the command line. |

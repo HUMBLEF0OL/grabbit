@@ -9,14 +9,14 @@ group: downloading
 order: 20
 since: 0.1.0
 shot: images/help/catch-file-info.webp
-shot_alt: Download File Info in Grabbit for a file clicked in the browser
+shot_alt: Download file info in Grabbit for a file clicked in the browser
 where: Options → General → Use advanced browser integration
 help: browser-integration.md
 ---
 
 ## The browser's downloads, in Grabbit
 
-Click a download link and **Download File Info** opens in Grabbit instead of the browser's own
+Click a download link and **Download file info** opens in Grabbit instead of the browser's own
 download bar. Grabbit gets the address together with the page it came from, your cookies for the
 site and the browser's User-Agent, so a download that needs you to be signed in still works.
 The browser's copy is cancelled and taken off its download list.
@@ -30,16 +30,17 @@ download stays with the browser, so nothing is lost.
 
 ## Right-click, or the button over a video
 
-Right-click a link, a picture, a video or a sound and choose **Download with Mister Download
-Manager**: Grabbit downloads it whatever its type.
+Right-click a link, a picture, a video or a sound and choose **Download with Grabbit**:
+Grabbit downloads it whatever its type.
 
 ![The Download video button over a YouTube video in Chrome](images/help/video-button.webp)
 *The button over a video. Drag it along the edge; it stays where you put it.*
 
-Point at a video and a small **Download video** button appears at its edge. It opens Grabbit's
-**Download video from a page** window with the qualities on offer (see
-[video downloads](/features/video.html)). You can hide it on one video or one site, or turn it
-off in **Options**.
+Point at a video and a small round button appears at its edge, opening to **Download video**. A
+click lists the qualities on offer, with their sizes, right over the video: the one you pick
+downloads at once, and **Open in Grabbit...** opens Grabbit's **Download video from a page**
+window instead (see [video downloads](/features/video.html)). You can hide it on one video or one
+site, or turn it off in **Options**.
 
 ## Added from Grabbit's folder
 

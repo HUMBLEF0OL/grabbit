@@ -140,8 +140,8 @@ impl Tray {
         add(&menu, crate::i18n::mark("Open Grabbit"), TrayCmd::Show);
         menu.append(&PredefinedMenuItem::separator()).ok();
         let mark = crate::i18n::mark;
-        add(&menu, mark("Add new download"), TrayCmd::AddUrl);
-        add(&menu, mark("Add batch download"), TrayCmd::Batch);
+        add(&menu, mark("Add new download..."), TrayCmd::AddUrl);
+        add(&menu, mark("Add batch download..."), TrayCmd::Batch);
         // i18n: tray menu: a submenu of the downloads now running; choosing one shows its progress window
         let downloads_label = mark("Downloads in progress");
         let downloads = Submenu::new(crate::i18n::t(downloads_label), false);

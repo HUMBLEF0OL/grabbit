@@ -6,8 +6,8 @@ A download manager can fill your whole connection. These steps cap Grabbit so th
 
 ## Cap Grabbit as a whole (recommended)
 
-1. Choose **Downloads → Speed Limiter → Settings...**.
-2. Tick **Limit all downloads together to** and type a speed in KBytes/sec. A good start is about two thirds of your connection's speed. (1 MByte/sec is about 1000 KBytes/sec.)
+1. Choose **Downloads → Speed Limiter → Settings**.
+2. Tick **Limit all downloads together to** and type a speed in KB/s. A good start is about two thirds of your connection's speed. (1 MB/s is about 1000 KB/s.)
 3. Tick **Only while I'm using the computer** if you want full speed when you're away. Grabbit goes back to full speed after a minute without mouse or keyboard input.
 4. Click **Save**. The settings open in the main window, in place of the download list; **← Downloads** goes back to it.
 
@@ -16,25 +16,25 @@ This cap is shared by every download, however many run at once. It works on its 
 To remove it, open the same settings and untick **Limit all downloads together to**.
 
 ![Speed Limiter settings: the maximum speed for one file, and a limit for all downloads together](images/help/speed-limiter.webp)
-*Downloads → Speed Limiter → Settings...: a speed for each file, or one for all downloads together.*
+*Downloads → Speed Limiter → Settings: a speed for each file, or one for all downloads together.*
 
 ## Cap each file instead
 
-1. In the same settings, set **Maximum download speed for one file**. It starts at 10 KBytes/sec, which is very slow, so set it first.
+1. In the same settings, set **Maximum download speed for one file**. It starts at 10 KB/s, which is very slow, so set it first.
 2. Click **Save**.
 3. Choose **Downloads → Speed Limiter → Turn on**.
 
-Each download is then held to that speed. **Downloads → Speed Limiter → Turn off** gives full speed again. Tick **Always turn on Speed Limiter on Grabbit startup** to have it on every time.
+Each download is then held to that speed. **Downloads → Speed Limiter → Turn off** gives full speed again. Tick **Turn on the Speed Limiter when Grabbit starts** to have it on every time.
 
 ## Slow down one download only
 
 1. Double-click the download to open its progress window.
-2. Open the **Speed Limiter** tab.
-3. Tick **Use Speed Limiter** and type the speed in **Maximum download speed**.
+2. Click **Show details**.
+3. In the **Limit** row, tick **Limit to** and type the speed in KB/s.
 
 The other downloads keep their speed.
 
-> Some servers drop the connection when the speed is very low. Don't set a tight limit for a server that can't resume (**Resume capability: No** in the progress window).
+> Some servers drop the connection when the speed is very low. Don't set a tight limit for a server that can't resume (**Can resume: No** in the progress window's details).
 
 ## Next steps
 

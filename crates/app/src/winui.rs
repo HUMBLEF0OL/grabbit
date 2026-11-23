@@ -334,6 +334,32 @@ pub fn text_font(
     paint_galley(p, left, baseline, g, color)
 }
 
+/// [`text_font`] for a caption: the text box or drop-down after it takes it as its name for
+/// screen readers, as after [`text`].
+pub fn caption_font(
+    p: &Painter,
+    font: FontId,
+    x: f32,
+    baseline: f32,
+    s: &str,
+    color: Color32,
+) -> Rect {
+    let drawn = text_font(p, font, x, baseline, s, color);
+    note_caption(p, s, drawn);
+    drawn
+}
+
+/// `tip` (translated) as the control's tooltip under the pointer, and while it has the keyboard
+/// focus too: a keyboard user reads what an icon-only button does. The focus tip goes when the
+/// window is no longer the active one.
+pub fn tip(resp: Response, tip: &str) -> Response {
+    let window_active = resp.ctx.input(|i| i.focused);
+    if window_active && resp.has_focus() && !resp.hovered() && keyboard_in_use(&resp.ctx) {
+        resp.show_tooltip_text(tip);
+    }
+    resp.on_hover_text(tip)
+}
+
 /// Like [`text_font`] with its start at screen x `start` (a widget's inside, measured from its
 /// leading edge): the text runs right from it, or left in RTL.
 pub fn text_start(
@@ -3120,22 +3146,6 @@ pub fn icon_label_button_width(p: &Painter, label: &str) -> f32 {
     (BUTTON_ICON + BUTTON_ICON_GAP + text_width(p, crate::i18n::t(label)) + 2.0 * 14.0).ceil()
 }
 
-/// A button's rect `rc` widened to the left (its right edge stays: a button against the right
-/// side, with room before it) to fit its translated `label` whole, with the room [`button`]
-/// keeps inside the border, at most to `max_width`. English labels fit IDM's buttons, so
-/// English never changes; a label that would still not fit ends in "..." and shows whole on
-/// hover, as on every button. (A row of buttons: [`buttons_to_right`].)
-pub fn button_rect_for(p: &Painter, rc: Rect, label: &str, max_width: f32) -> Rect {
-    let w = button_fit_width(p, label, rc.width(), max_width);
-    // Widened in English, where its right edge stays; on screen in RTL its left edge stays and
-    // it widens to the right, into the room before it (`rect` is its own inverse).
-    let english = rect(rc);
-    rect(Rect::from_min_max(
-        pos2(english.right() - w, english.top()),
-        english.max,
-    ))
-}
-
 /// How wide a [`button`] must be for its translated `label` to show whole, with the room it
 /// keeps inside its border: at least `min` (its English width: English labels fit it, so English
 /// never changes), at most `max` (past it the label ends in "..." and shows whole on hover, as on
@@ -3471,9 +3481,6 @@ crate::theme::themed! {
     /// Grid lines between a list's rows, and header dividers.
     pub GRID => grid;
     pub HEADER_LINE => header_line;
-    /// Etched separators: the shadow line and the highlight beside it.
-    pub ETCH_SHADOW => etch_shadow;
-    pub ETCH_LIGHT => etch_light;
     /// A selected row in a focused list ([`row_list`]; the download list's colours), white
     /// text on it.
     pub ROW_SELECTED => selection;
@@ -3903,8 +3910,6 @@ pub struct FooterButton<'a> {
     pub label: &'a str,
     pub kind: ButtonKind,
     pub side: Side,
-    /// Graphite's icon before the label (a need, as `gx-dots`).
-    pub icon: Option<&'a str>,
     /// The access letter's char index in the English label ([`button`]).
     pub mnemonic: Option<usize>,
     /// Enter presses it (no control took Enter first). A greyed button ignores it.
@@ -3913,6 +3918,8 @@ pub struct FooterButton<'a> {
     pub escape: bool,
     /// Its hover text (English, translated here): why it is greyed, …
     pub tip: Option<&'a str>,
+    /// `tip` is translated already, data in it ([`FooterButton::tip_text`]): shown as it is.
+    pub tip_translated: bool,
     /// The dialog's answer, put last: set by a `Default`, `Accent` or `Danger` kind, and kept by
     /// [`FooterButton::primary`] for one greyed for now, so the footer never reshuffles.
     pub primary: bool,
@@ -3926,11 +3933,11 @@ impl<'a> FooterButton<'a> {
             label,
             kind,
             side: Side::Trailing,
-            icon: None,
             mnemonic: None,
             enter: false,
             escape: false,
             tip: None,
+            tip_translated: false,
             primary: matches!(
                 kind,
                 ButtonKind::Default | ButtonKind::Accent | ButtonKind::Danger
@@ -3946,6 +3953,14 @@ impl<'a> FooterButton<'a> {
             ..self
         }
     }
+    /// A default that isn't the dialog's answer (Files already there's No, plan 12b C1): it
+    /// keeps its look and its Enter and Escape, and its declared place, not the last.
+    pub fn not_primary(self) -> Self {
+        Self {
+            primary: false,
+            ..self
+        }
+    }
     /// Its focus ring shows while no control has the keys, as the dialog's default did.
     pub fn ring(self, on: bool) -> Self {
         Self { ring: on, ..self }
@@ -3957,15 +3972,18 @@ impl<'a> FooterButton<'a> {
             ..self
         }
     }
-    pub fn leading(self) -> Self {
+    /// [`FooterButton::tip`] with a text translated already (one with data in it, as
+    /// `i18n::fmt` makes): it isn't translated again.
+    pub fn tip_text(self, on: bool, text: &'a str) -> Self {
         Self {
-            side: Side::Leading,
+            tip: on.then_some(text),
+            tip_translated: true,
             ..self
         }
     }
-    pub fn icon(self, need: &'a str) -> Self {
+    pub fn leading(self) -> Self {
         Self {
-            icon: Some(need),
+            side: Side::Leading,
             ..self
         }
     }
@@ -4100,11 +4118,7 @@ pub fn footer_items(
     let widths: Vec<(f32, Side, bool)> = items
         .iter()
         .map(|item| match item {
-            FooterItem::Button(b) => (
-                footer_button_width(&p, b.label, b.icon.is_some()),
-                b.side,
-                b.primary,
-            ),
+            FooterItem::Button(b) => (footer_button_width(&p, b.label, false), b.side, b.primary),
             FooterItem::Check(caption, _, _) => (
                 checkbox_caption_end(&p, 0.0, caption).ceil(),
                 Side::Leading,
@@ -4123,26 +4137,7 @@ pub fn footer_items(
         let (w, x) = (widths[i].0, xs[i]);
         match item {
             FooterItem::Button(b) => {
-                // The default is filled like an accent one in a footer.
-                let kind = if b.kind == ButtonKind::Default {
-                    ButtonKind::Accent
-                } else {
-                    b.kind
-                };
-                let label = with_mnemonic(b.label, b.mnemonic);
-                let resp = button_face(
-                    ui,
-                    r(o, x, top, w, CONTROL_H),
-                    &label,
-                    kind,
-                    b.ring,
-                    b.icon,
-                    PressFocus::Take,
-                );
-                let resp = match b.tip {
-                    Some(tip) => resp.on_hover_text(crate::i18n::t(tip)),
-                    None => resp,
-                };
+                let resp = footer_button(ui, r(o, x, top, w, CONTROL_H), b);
                 if resp.clicked() && clicked.is_none() {
                     clicked = Some(i);
                 }
@@ -4156,6 +4151,131 @@ pub fn footer_items(
         }
     }
     clicked.or_else(|| footer_key(&keys, enter, escape).map(|k| at_key[k]))
+}
+
+/// A [`footer`] button's face at `rc` on screen: its look (the default filled like an accent
+/// one), access letter and hover text, and an icon alone's name for screen readers.
+fn footer_button(ui: &mut Ui, rc: Rect, b: &FooterButton) -> Response {
+    // The default is filled like an accent one in a footer.
+    let kind = if b.kind == ButtonKind::Default {
+        ButtonKind::Accent
+    } else {
+        b.kind
+    };
+    let label = with_mnemonic(b.label, b.mnemonic);
+    let resp = button_face(ui, rc, &label, kind, b.ring, None, PressFocus::Take);
+    // No label (the Done window's ▾, its chevron drawn by `button_chevron`): its tip is its
+    // name for screen readers.
+    if b.label.is_empty()
+        && let Some(tip) = b.tip
+    {
+        let name = if b.tip_translated {
+            tip
+        } else {
+            crate::i18n::t(tip)
+        };
+        expose(
+            &resp,
+            egui::Role::Button,
+            name,
+            b.kind != ButtonKind::Disabled,
+            None,
+        );
+    }
+    match b.tip {
+        Some(tip) if b.tip_translated => resp.on_hover_text(tip),
+        Some(tip) => resp.on_hover_text(crate::i18n::t(tip)),
+        None => resp,
+    }
+}
+
+/// [`footer`] buttons at places of the dialog's own, on no band (the Done window's row, plan
+/// 13d): each pressed as in a footer, by a click, its access letter or a key it is marked for.
+/// The index pressed, and each one's response.
+pub fn buttons_at(ui: &mut Ui, buttons: &[(FooterButton, Rect)]) -> (Option<usize>, Vec<Response>) {
+    // Read before the buttons: a focused button takes Enter for itself (button_face).
+    let (enter, escape) = (enter_pressed(ui), escape_pressed(ui));
+    let mut clicked = None;
+    let mut keys = Vec::new();
+    let mut resps = Vec::new();
+    for (i, (b, rc)) in buttons.iter().enumerate() {
+        let resp = footer_button(ui, *rc, b);
+        if resp.clicked() && clicked.is_none() {
+            clicked = Some(i);
+        }
+        keys.push((b.kind != ButtonKind::Disabled, b.enter, b.escape));
+        resps.push(resp);
+    }
+    (clicked.or_else(|| footer_key(&keys, enter, escape)), resps)
+}
+
+/// A split button's ▾ part (board 5): a chevron 6 across, centred, in the part's own text colour
+/// (a down arrow icon read as "download"). After the part is drawn.
+pub fn button_chevron(ui: &Ui, resp: &Response, kind: ButtonKind) {
+    let kind = if kind == ButtonKind::Default {
+        ButtonKind::Accent
+    } else {
+        kind
+    };
+    let state = State::of(resp, kind != ButtonKind::Disabled);
+    let face = button_colors(kind, state, crate::theme::colors());
+    let c = resp.rect.center();
+    ui.painter().line(
+        vec![
+            c + vec2(-3.0, -1.5),
+            c + vec2(0.0, 1.5),
+            c + vec2(3.0, -1.5),
+        ],
+        Stroke::new(1.5, face.text),
+    );
+}
+
+/// Two buttons side by side (`left` ending where `right` starts) drawn as one control, a split
+/// button (the Done window's Open | ▾, plan 13d): square where they meet, a divider between
+/// them, each part in its own state with its own focus ring. After both are drawn.
+pub fn join_buttons(ui: &Ui, left: (&Response, ButtonKind), right: (&Response, ButtonKind)) {
+    let p = ui.painter();
+    let c = crate::theme::colors();
+    let filled = |kind| {
+        if kind == ButtonKind::Default {
+            ButtonKind::Accent
+        } else {
+            kind
+        }
+    };
+    let whole = left.0.rect.union(right.0.rect);
+    let seam = right.0.rect.left();
+    let radius = control_radius();
+    // Each part's face drawn as the whole control's, over its rounded corners at the seam only.
+    for (k, (resp, kind)) in [left, right].into_iter().enumerate() {
+        let kind = filled(kind);
+        let state = State::of(resp, kind != ButtonKind::Disabled);
+        let face = button_colors(kind, state, c);
+        let (x0, x1) = if k == 0 {
+            (seam - radius - 1.0, seam)
+        } else {
+            (seam, seam + radius + 1.0)
+        };
+        let band = Rect::from_min_max(pos2(x0, whole.top()), pos2(x1, whole.bottom()));
+        let clipped = p.with_clip_rect(band.intersect(p.clip_rect()));
+        paint_button(&clipped, whole, kind, state, &face, Shape::Push);
+        if resp.has_focus() {
+            focus_ring_round(p, resp.rect.shrink(2.0), (radius - 2.0).max(0.0));
+        }
+    }
+    // The divider: the face's border, or on a filled one its text faintly.
+    let kind = filled(left.1);
+    let face = button_colors(kind, State::Normal, c);
+    let divider = if kind == ButtonKind::Accent {
+        face.text.gamma_multiply(0.3)
+    } else {
+        face.border
+    };
+    solid(
+        p,
+        Rect::from_min_max(pos2(seam, whole.top()), pos2(seam + 1.0, whole.bottom())),
+        divider,
+    );
 }
 
 /// A form's label column, plan 07a: the English x its fields start at for labels drawn at
@@ -4192,6 +4312,22 @@ pub fn rule(p: &Painter, o: Pos2, x: f32, y: f32, w: f32) {
     fill_l(p, o.x + x, o.y + y, o.x + x + w - 1.0, o.y + y, line);
 }
 
+/// The one card frame (plan 12 G9), `rc` on screen: a hairline border on the theme's card
+/// corners (`radius.card`), on the `panel` colour when `filled` (else what is under it shows).
+pub fn card(p: &Painter, rc: Rect, filled: bool) {
+    let c = crate::theme::colors();
+    let radius = crate::theme::metrics().card_radius;
+    if filled {
+        p.rect_filled(rc, radius, c.panel);
+    }
+    p.rect_stroke(
+        rc,
+        radius,
+        Stroke::new(1.0, c.menubar_line),
+        StrokeKind::Inside,
+    );
+}
+
 /// A file's header (Download File Info, Download complete, File Properties, Verify checksum):
 /// a bordered card (`rc` on screen) with the file's icon on a 40-point tile, its `name` in bold
 /// (cut with "...", whole on hover) over its `sub` line (a size), and an optional `action`
@@ -4206,13 +4342,7 @@ pub fn file_card(
 ) -> (Option<Response>, Rect) {
     let c = crate::theme::colors();
     let p = ui.painter().clone();
-    p.rect_filled(rc, 8.0, c.panel);
-    p.rect_stroke(
-        rc,
-        8.0,
-        Stroke::new(1.0, c.menubar_line),
-        StrokeKind::Inside,
-    );
+    card(&p, rc, true);
     let tile = Rect::from_min_size(
         pos2(rc.left() + 12.0, (rc.center().y - 20.0).round()),
         vec2(40.0, 40.0),
@@ -5007,6 +5137,7 @@ pub fn check_box_glyph(p: &Painter, rc: Rect, checked: bool, state: State) {
                     pos2(rc.left() + 5.5, rc.top() + 9.5),
                     pos2(rc.left() + 10.5, rc.top() + 3.0),
                 ],
+                // The Square look's own weight, not `tick.width` (palette.rs says so).
                 Stroke::new(2.0, ink),
             );
         }
@@ -5024,7 +5155,7 @@ pub fn check_box_glyph(p: &Painter, rc: Rect, checked: bool, state: State) {
                 pos2(rc.left() + 5.5, rc.top() + 9.0),
                 pos2(rc.left() + 10.0, rc.top() + 3.5),
             ],
-            Stroke::new(1.4, fluent_mark()),
+            Stroke::new(crate::theme::metrics().tick_width, fluent_mark()),
         );
     } else {
         let (fill_c, border) = fluent_box(state);
@@ -5052,7 +5183,7 @@ pub fn check_box_mixed(p: &Painter, rc: Rect, state: State) {
     let y = rc.center().y.floor() + 0.5;
     p.line_segment(
         [pos2(rc.left() + 3.0, y), pos2(rc.right() - 3.0, y)],
-        Stroke::new(1.4, fluent_mark()),
+        Stroke::new(crate::theme::metrics().tick_width, fluent_mark()),
     );
 }
 
@@ -5583,32 +5714,21 @@ pub fn radio_keys(ui: &Ui, group: &[Response]) -> Option<usize> {
     Some(next)
 }
 
-/// Etched horizontal separator in English rect `x, y, w × 2`: `#a0a0a0` over `#ffffff`, the
-/// white line 1 px longer so it covers the far end.
+/// A separator across English `x`..`x + w` at `y` (absolute): the 1 px hairline [`rule`]
+/// draws (plan 12 G2; it was a 2 px etched line).
 pub fn etched_h(p: &Painter, x: f32, y: f32, w: f32) {
-    let x = rect(Rect::from_min_size(pos2(x, y), vec2(w, 2.0))).left();
-    hline(p, x, x + w - 2.0, y, ETCH_SHADOW());
-    px(p, x + w - 1.0, y, ETCH_LIGHT());
-    hline(p, x, x + w - 1.0, y + 1.0, ETCH_LIGHT());
+    fill_l(p, x, y, x + w - 1.0, y, crate::theme::colors().menubar_line);
 }
 
-/// Etched vertical separator in English rect `x, y, 2 × h`.
+/// A separator down English `y`..`y + h` at `x` (absolute): the 1 px hairline.
 pub fn etched_v(p: &Painter, x: f32, y: f32, h: f32) {
-    let x = rect(Rect::from_min_size(pos2(x, y), vec2(2.0, h))).left();
-    vline(p, x, y, y + h - 2.0, ETCH_SHADOW());
-    px(p, x, y + h - 1.0, ETCH_LIGHT());
-    vline(p, x + 1.0, y, y + h - 1.0, ETCH_LIGHT());
+    fill_l(p, x, y, x, y + h - 1.0, crate::theme::colors().menubar_line);
 }
 
 /// [`fill`] in English pixels (inclusive): on screen in a mirrored surface.
 pub fn fill_l(p: &Painter, x0: f32, y0: f32, x1: f32, y1: f32, c: Color32) {
     let (a, b) = (mcol(x0), mcol(x1));
     fill(p, a.min(b), y0, a.max(b), y1, c);
-}
-
-/// [`px`] at an English pixel.
-pub fn px_l(p: &Painter, x: f32, y: f32, c: Color32) {
-    px(p, mcol(x), y, c);
 }
 
 /// One tab of a light tab control: its x range (inclusive, from the client origin) when
@@ -5872,6 +5992,11 @@ pub fn dropdown_frame_light(p: &Painter, rc: Rect, state: State) {
 /// The accent (Windows' blue): borders of open and focused controls.
 pub fn accent() -> Color32 {
     crate::theme::colors().accent
+}
+
+/// The focus id of [`combo_light`] `id`'s button: a dialog that opens on it gives it the keys.
+pub fn combo_light_focus(ui: &Ui, id: &str) -> egui::Id {
+    widget_id(ui, ("combo-light", id)).with("button")
 }
 
 /// Light drop-down list (CBS_DROPDOWNLIST): the chosen item and a chevron; a click opens the
@@ -6795,10 +6920,23 @@ mod tests {
         ];
         let x = footer_slots(&items, 300.0);
         assert!(x[1] < x[0] && x[0] < x[2]);
-        // A default greyed for now keeps its place (Download File Info's Start).
-        let start = FooterButton::new("Start Download", ButtonKind::Disabled).primary();
+        // A default greyed for now keeps its place (Download file info's Download now).
+        let start = FooterButton::new("Download now", ButtonKind::Disabled).primary();
         assert!(start.primary && !FooterButton::new("Cancel", ButtonKind::Normal).primary);
         assert!(FooterButton::new("OK", ButtonKind::Default).primary);
+        // Plan 12b, C1: Files already there's No, a default that isn't moved last, keeps its
+        // Enter and Escape: "No, Yes" as declared.
+        let no = FooterButton::new("No", ButtonKind::Default)
+            .not_primary()
+            .enter(true)
+            .escape(true);
+        assert!(!no.primary && no.enter && no.escape && no.kind == ButtonKind::Default);
+        let items = [
+            (50.0, Side::Trailing, no.primary),
+            (50.0, Side::Trailing, false),
+        ];
+        let x = footer_slots(&items, 300.0);
+        assert!(x[0] < x[1], "No, then Yes");
         // A line before two trailing buttons ends a gap before them.
         assert_eq!(
             footer_trailing_left(400.0, &[60.0, 70.0]),
@@ -7183,23 +7321,6 @@ mod tests {
         // English 24..400 in a 600 px window, mirrored: on screen 200..576, read from 200.
         let _s = Surface::enter_if(true, 0.0, 600.0);
         assert_eq!(data_left(24.0, 400.0), 200.0);
-    }
-
-    #[test]
-    fn a_widened_button_grows_into_the_room_before_it_in_rtl_too() {
-        with_painter(|p| {
-            let long = "A label much longer than its English button";
-            let english = Rect::from_min_size(pos2(401.0, 135.0), vec2(96.0, 21.0));
-            let ltr = button_rect_for(p, english, long, 300.0);
-            assert_eq!(ltr.right(), 497.0);
-            assert!(ltr.left() < 401.0);
-            // Mirrored: the button is at the window's left, and grows to the right (inwards).
-            let _s = Surface::enter_if(true, 0.0, 600.0);
-            let shown = button_rect_for(p, rect(english), long, 300.0);
-            assert_eq!(shown.left(), 600.0 - 497.0);
-            assert_eq!(shown.width(), ltr.width());
-            assert_eq!(rect(shown), ltr);
-        });
     }
 
     #[test]
@@ -7847,7 +7968,7 @@ mod tests {
     #[test]
     fn english_lands_where_the_pieces_were() {
         let (texts, rects) = sentence_layout(
-            "Download no more than {mb} MBytes\nevery {hours} hours",
+            "Download no more than {mb} MB\nevery {hours} hours",
             &limits_lines(),
             &BOXES,
             w,
@@ -7858,7 +7979,7 @@ mod tests {
             texts,
             vec![
                 (170.0 - lead, 345.0, "Download no more than".to_owned()),
-                (222.0, 346.0, "MBytes".to_owned()),
+                (222.0, 346.0, "MB".to_owned()),
                 (170.0 - w("every"), 366.0, "every".to_owned()),
                 (225.0, 364.0, "hours".to_owned()),
             ]
@@ -7966,7 +8087,7 @@ mod tests {
         // Download limits as English places them, then mirrored: the lead text starts at the
         // right (its pen is mirrored by `text`), the boxes follow to its left.
         let (texts, rects) = sentence_layout(
-            "Download no more than {mb} MBytes\nevery {hours} hours",
+            "Download no more than {mb} MB\nevery {hours} hours",
             &limits_lines(),
             &BOXES,
             w,

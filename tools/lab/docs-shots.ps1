@@ -45,7 +45,7 @@ param(
   # Beside each picture, <name>.ui.json: its controls' names and places (ui-rects.ps1).
   [switch]$Ui,
   # More settings for the run, as JSON members added to downloads.json's settings
-  # ('"video_cookies":"firefox"': Options, Sites Logins, with a browser chosen).
+  # ('"video_cookies":"firefox"': Options, Site logins, with a browser chosen).
   [string]$Settings = ""
 )
 $ErrorActionPreference = "Stop"
@@ -281,7 +281,7 @@ try {
       Start-Sleep -Milliseconds 1200
       Shot $app.Id "" $name -All
       # The menu's windows are ours: closed like any other, with the window it opened over when
-      # that one came with it (progress:menu's progress window), so the next shot opens it anew.
+      # that one came with it, so the next shot opens it anew.
       Close-Ours $app.Id "grabbit menu*"
       @(Titles $app.Id | Where-Object { $before -notcontains $_ }) | ForEach-Object { Close-Ours $app.Id ([WildcardPattern]::Escape($_)) }
       Start-Sleep -Milliseconds 800
@@ -293,14 +293,15 @@ try {
       if (-not (Test-Path $copy)) { Copy-Item (Resolve-Path $Torrent).Path $copy }
       & $Exe $copy
     } elseif ($what -like "@complete:*") {
-      # A small download, silent: the shot is its Download complete window once it's done.
+      # A small download, silent: the shot is its Done window ("Done: <name>", plan 13d) once
+      # it's done.
       & $Exe /d "$base/$($what.Substring(10))" /p "$work\Downloads" /n
       $t = $null
       for ($i = 0; $i -lt 75 -and -not $t; $i++) {
         Start-Sleep -Milliseconds 200
-        $t = @(Titles $app.Id | Where-Object { $before -notcontains $_ -and $_ -like "Download complete*" })[0]
+        $t = @(Titles $app.Id | Where-Object { $before -notcontains $_ -and $_ -like "Done: *" })[0]
       }
-      if (-not $t) { Write-Warning "${name}: no Download complete window"; continue }
+      if (-not $t) { Write-Warning "${name}: no Done window"; continue }
       Start-Sleep -Milliseconds 1500
       Shot $app.Id $t $name
       @(Titles $app.Id | Where-Object { $before -notcontains $_ }) | ForEach-Object { Close-Ours $app.Id ([WildcardPattern]::Escape($_)) }

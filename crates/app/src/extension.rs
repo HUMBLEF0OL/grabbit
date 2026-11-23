@@ -333,22 +333,62 @@ impl Extension {
         // Where it stands, then the answer. Not set up at all (the setup's box unticked): no
         // extension could reach the app, so that comes first, with the fix.
         let y = h - 84.0;
-        if !self.registered {
-            // As wide as its label in this language (#192); the paragraph ends 10 px before it.
-            let (fix_x, fix_w) =
-                winui::buttons_to_right(&p, W - 18.0, 8.0, &[("Set it up", 110.0)], 180.0)[0];
+        // A copy Set it up can never register (the native host refuses it): why, and what to
+        // do, in place of a button that would do nothing.
+        let never = if !self.registered && mdm_ipc::portable_dir().is_some() {
+            // i18n: in the browser extension's window, a portable copy (it writes nothing outside its folder)
+            Some(
+                "This portable copy can't be connected to a browser: it writes nothing outside its folder. Install Grabbit to use the extension.",
+            )
+        } else if !self.registered && temporary_copy() {
+            // i18n: in the browser extension's window, Grabbit started from inside a zip (Windows deletes that folder once it quits)
+            Some(
+                "Grabbit runs from inside a zip, a folder Windows deletes once it quits. Extract it to a folder of its own and start it from there.",
+            )
+        } else {
+            None
+        };
+        if let Some(never) = never {
             winui::paragraph(
                 &p,
                 o.x + 18.0,
                 o.y + y,
+                crate::i18n::t(never),
+                winui::ERROR(),
+                o.x + W - 18.0,
+                crate::theme::metrics().line_paragraph,
+            );
+        } else if !self.registered {
+            // As wide as its label in this language (#192); the paragraph ends 10 px before it.
+            let (fix_x, fix_w) =
+                winui::buttons_to_right(&p, W - 18.0, 8.0, &[("Set it up", 110.0)], 180.0)[0];
+            // While it runs, then why it failed if it did (the full reason on the button's
+            // hover; Options → General → Test browser integration lists it too).
+            let failed = SET_UP_ERROR.lock().ok().and_then(|e| e.clone());
+            let said = if SETTING_UP.load(Ordering::Acquire) {
+                // i18n: in the browser extension's window, while Set it up runs
+                crate::i18n::t("Setting up browser integration...")
+            } else if failed.is_some() {
+                // i18n: in the browser extension's window, after Set it up failed; pointing at the button shows the reason
+                crate::i18n::t(
+                    "Set it up didn't work. Point at the button to see why, or try it again.",
+                )
+            } else {
+                // i18n: in the browser extension's window, beside Set it up: the native host isn't registered with the browsers
                 crate::i18n::t(
                     "Browser integration isn't set up on this computer, so no browser can reach Grabbit yet.",
-                ),
+                )
+            };
+            winui::paragraph(
+                &p,
+                o.x + 18.0,
+                o.y + y,
+                said,
                 winui::ERROR(),
                 o.x + fix_x - 10.0,
-                14.0,
+                crate::theme::metrics().line_paragraph,
             );
-            let fix = winui::button(
+            let mut fix = winui::button(
                 ui,
                 r(o, fix_x, y - 4.0, fix_w, 25.0),
                 // i18n: button in the browser extension's window: register MDM's helper with the browsers
@@ -357,6 +397,9 @@ impl Extension {
                 false,
                 None,
             );
+            if let Some(why) = failed {
+                fix = fix.on_hover_text(why);
+            }
             if fix.clicked() {
                 set_up(ui.ctx());
             }
@@ -387,7 +430,8 @@ impl Extension {
             )
         };
         if !line.is_empty() {
-            winui::paragraph(&p, o.x + 18.0, o.y + y, &line, color, o.x + W - 18.0, 14.0);
+            let lh = crate::theme::metrics().line_paragraph;
+            winui::paragraph(&p, o.x + 18.0, o.y + y, &line, color, o.x + W - 18.0, lh);
         }
         // The fallback, when a store can't be used (a managed browser, a store turned off): the
         // tutorial, which adds it by hand.
@@ -551,6 +595,9 @@ pub fn repair_at_start() {
 static SET_UP_DONE: AtomicU64 = AtomicU64::new(0);
 /// A Set it up is running (a second press waits for it).
 static SETTING_UP: AtomicBool = AtomicBool::new(false);
+/// Why the last Set it up failed (None: none failed). Its own: a start's `--repair` that failed
+/// isn't the button's failure (REGISTER_ERROR keeps either, for Test browser integration).
+static SET_UP_ERROR: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
 /// How long the native host's `--register` has (it writes a few files, or registry keys).
 pub(crate) const SET_UP_LIMIT: Duration = Duration::from_secs(20);
 
@@ -567,7 +614,11 @@ pub fn set_up(ctx: &egui::Context) {
     let started = std::thread::Builder::new()
         .name("set-up".into())
         .spawn(move || {
-            registered_as(&run_host("--register", SET_UP_LIMIT));
+            let result = run_host("--register", SET_UP_LIMIT);
+            registered_as(&result);
+            if let Ok(mut last) = SET_UP_ERROR.lock() {
+                *last = result.err();
+            }
             SETTING_UP.store(false, Ordering::Release);
             SET_UP_DONE.fetch_add(1, Ordering::AcqRel);
             ctx.request_repaint();
@@ -644,7 +695,12 @@ pub fn checks(settings: &crate::settings::Settings) -> Vec<Check> {
         }
         Registration::Gone(manifest) => {
             tracing::warn!("browser integration: {} is gone", manifest.display());
-            let folder = manifest.parent().unwrap_or(manifest);
+            // The copy's folder; the user's own manifest (in the data folder, no copy's) as it is.
+            let folder = if mdm_ipc::browsers::is_user_manifest(manifest) {
+                manifest
+            } else {
+                manifest.parent().unwrap_or(manifest)
+            };
             Check {
                 ok: false,
                 // i18n: a check of Test browser integration: the browsers are pointed at a copy of Grabbit that was deleted (often one started from inside a zip); that copy's folder shows on the line under it
@@ -661,7 +717,7 @@ pub fn checks(settings: &crate::settings::Settings) -> Vec<Check> {
             ok: false,
             text: crate::i18n::fmt(
                 // i18n: a check of Test browser integration: setting it up failed; {error} is the helper program's own message, in English
-                crate::i18n::t("Setting it up failed: {error}"),
+                crate::i18n::t("It could not be set up: {error}"),
                 &[("error", &crate::i18n::ltr(&error))],
             ),
             why: Some("not-installed"),

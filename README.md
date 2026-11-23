@@ -119,7 +119,7 @@ one:
     <td><img src="docs/images/add-torrent.webp" alt="Add torrent"><br><sub><b>Torrents and magnet links</b>: pick the files you want, skip the rest.</sub></td>
   </tr>
   <tr>
-    <td><img src="docs/images/progress-torrent.webp" alt="A torrent's progress window"><br><sub><b>A torrent's progress</b>: its files, peers, trackers and pieces, in tabs.</sub></td>
+    <td><img src="docs/images/progress-torrent.webp" alt="A torrent's progress window"><br><sub><b>A torrent's progress</b>: its pieces light up in the strip; Show details for its files, peers and trackers.</sub></td>
     <td><img src="docs/images/progress-video.webp" alt="A video's progress window"><br><sub><b>A video's progress</b>: speed and time left while yt-dlp brings it in.</sub></td>
   </tr>
   <tr>
@@ -211,7 +211,11 @@ working, not a copy of anyone's software.
 <details>
 <summary><b>Build from source</b></summary>
 
-Requires Rust stable 1.95 or later (the MSVC toolchain on Windows).
+Requires Rust stable 1.98 or later (the MSVC toolchain on Windows). Release builds
+(`tools/installer/build.ps1`) also build the engine's browser-like connection on BoringSSL from
+source, which needs CMake, NASM and LLVM's libclang (`winget install Kitware.CMake NASM.NASM
+LLVM.LLVM`); everyday builds and tests leave it out (`--features grabbit-app/browser-connection`
+adds it).
 
 ```
 cargo build --release
@@ -267,7 +271,7 @@ pieces fit.
 | `python tools/readme/social.py` | The repository's social preview card (`docs/images/social-preview.png`) |
 | `MDM_FIT_AUDIT=<file>` | Lists every text that doesn't fit its window or runs over another |
 | `MDM_OFFSCREEN=1` | Opens every window off the screen, without focus, tray icon or sound (screenshots and checks) |
-| `MDM_TEST_TRASH_DIR=<folder>` | Tests only: archives deleted after extracting go into this folder, never into the real Recycle Bin |
+| `MDM_TEST_TRASH_DIR=<folder>` | Tests only: archives deleted after extracting, and deleted downloads' finished files, go into this folder, never into the real Recycle Bin |
 | `MDM_TEST_7ZIP=<program>\|none` | Tests only: the 7-Zip program to use for 7z and RAR archives, or `none` to act as if 7-Zip weren't installed |
 
 </details>

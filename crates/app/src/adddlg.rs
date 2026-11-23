@@ -5,7 +5,7 @@
 //! download: `App::add_items`).
 //!
 //! Kept from Add URL: the clipboard's links filled in as it opens, "Use authorization" with its
-//! login and password (and Options → Sites Logins shown there, #511), and the addresses go into
+//! login and password (and Options → Site logins shown there, #511), and the addresses go into
 //! the Address history as before (the paste bar's drop list and Up / Down step through them).
 
 use std::path::Path;
@@ -51,7 +51,7 @@ pub struct AddWindow {
     pub password: String,
     /// "Ask where to save each one" (on as it opens).
     pub ask: bool,
-    /// The address Options → Sites Logins was last looked up for, and the login it gave
+    /// The address Options → Site logins was last looked up for, and the login it gave
     /// (#511): "Use authorization" shows it while the box is left as it was filled.
     looked_up: String,
     filled: Option<(String, String)>,
@@ -138,7 +138,7 @@ impl AddWindow {
         self.found.as_ref().map_or(&[], |(_, f)| f.as_slice())
     }
 
-    /// The first link's address (what Sites Logins is looked up for).
+    /// The first link's address (what Site logins is looked up for).
     fn first_link(&mut self) -> Option<Url> {
         self.found().iter().find_map(|f| match &f.kind {
             Ok(Kind::Link(u) | Kind::TorrentUrl(u)) => Some(u.clone()),
@@ -147,7 +147,7 @@ impl AddWindow {
         })
     }
 
-    /// "Use authorization" shows the Sites Logins entry the first link will use (#511):
+    /// "Use authorization" shows the Site logins entry the first link will use (#511):
     /// `site_login` is that same match (`Settings::site_login`). A login typed or changed in
     /// the box is left alone; one filled from Options follows the address.
     fn follow_site_login(&mut self, site_login: impl Fn(&Url) -> Option<(String, String)>) {
@@ -172,7 +172,7 @@ impl AddWindow {
         self.filled = found;
     }
 
-    /// The login Add hands on: none while the box shows the Sites Logins entry as it was
+    /// The login Add hands on: none while the box shows the Site logins entry as it was
     /// filled, so the download keeps following Options, as it does without one.
     pub(crate) fn typed_login(&self) -> Option<(String, String)> {
         let own = (self.login.clone(), self.password.clone());
@@ -275,12 +275,7 @@ impl AddWindow {
             W - 2.0 * winui::EDGE,
             ROW_H * ROWS as f32,
         );
-        p.rect_stroke(
-            list,
-            6.0,
-            egui::Stroke::new(1.0, c.menubar_line),
-            egui::StrokeKind::Inside,
-        );
+        winui::card(&p, list, false);
         if found.is_empty() {
             // i18n: Add: the empty list under the box
             let hint = crate::i18n::t("Type or paste addresses above, or drop them here.");
@@ -433,15 +428,15 @@ impl AddWindow {
             }
         }
 
-        // Footer: Ask where to save each one, Later, Add N.
+        // Footer: Ask where to save each one, Later, Cancel, Download N.
         let add_label = if valid > 0 {
-            // i18n: Add: its default button; {n} is how many items it adds
+            // i18n: Add: its default button, which starts them; {n} is how many items it adds
             crate::i18n::fmt(
-                crate::i18n::t("Add {n}"),
+                crate::i18n::t("Download {n}"),
                 &[("n", &crate::i18n::integer(valid as u64))],
             )
         } else {
-            crate::i18n::t("Add").to_owned()
+            crate::i18n::t("Download now").to_owned()
         };
         let kind = if valid > 0 {
             ButtonKind::Default
@@ -463,25 +458,41 @@ impl AddWindow {
                 FooterItem::Check("Ask where to save each one", &mut self.ask, true),
                 // i18n: Add: add without starting (links wait in a queue)
                 FooterItem::Button(FooterButton::new("Later", later_kind)),
+                // Cancel (Escape), as Add torrent and Download video have (plan 12b, DB1):
+                // Later, Cancel, Add as drawn and as Tab goes.
+                FooterItem::Button(FooterButton::new("Cancel", ButtonKind::Normal).escape(true)),
                 FooterItem::Button(FooterButton::new(&add_label, kind).enter(true).primary()),
             ],
         );
-        if winui::escape_pressed(ui) {
-            return Outcome::Closed;
-        }
-        let later = pressed == Some(1);
-        if (submit || pressed == Some(2) || later) && valid > 0 {
+        match footer_answer(pressed, winui::escape_pressed(ui), submit, valid > 0) {
+            Some(None) => Outcome::Closed,
             // Every line found, not only the rows shown.
-            let items = addkind::valid(self.found());
-            return Outcome::Done(AddOut {
-                items,
+            Some(Some(later)) => Outcome::Done(AddOut {
+                items: addkind::valid(self.found()),
                 login: self.typed_login(),
                 ask: self.ask,
                 later,
-            });
+            }),
+            None => Outcome::Open,
         }
-        Outcome::Open
     }
+}
+
+/// What Add's footer answers, by the item `pressed` (0 is the check box, then Later, Cancel,
+/// Add; plan 12b, DB1), Escape, Enter in the box (`submit`) and whether a line is valid:
+/// `Some(None)` closes with nothing added (Cancel, Escape), `Some(Some(later))` adds them,
+/// now or later; None stays open.
+fn footer_answer(
+    pressed: Option<usize>,
+    escape: bool,
+    submit: bool,
+    valid: bool,
+) -> Option<Option<bool>> {
+    if pressed == Some(2) || escape {
+        return Some(None);
+    }
+    let later = pressed == Some(1);
+    ((submit || pressed == Some(3) || later) && valid).then_some(Some(later))
 }
 
 /// The disk asked whether a .torrent file is there (a share isn't waited for: it shows as
@@ -609,6 +620,26 @@ mod tests {
     use super::*;
 
     const HASH: &str = "0123456789abcdef0123456789abcdef01234567";
+
+    /// Plan 12b, DB1: the footer is the check box, Later, Cancel, Add. Cancel (and Escape)
+    /// closes without adding; Add and Enter add now, Later later; nothing adds without a valid
+    /// line.
+    #[test]
+    fn cancel_closes_and_add_adds() {
+        let (later, cancel, add) = (Some(1), Some(2), Some(3));
+        assert_eq!(footer_answer(cancel, false, false, true), Some(None));
+        assert_eq!(footer_answer(None, true, false, true), Some(None));
+        assert_eq!(footer_answer(add, false, false, true), Some(Some(false)));
+        assert_eq!(footer_answer(None, false, true, true), Some(Some(false)));
+        assert_eq!(footer_answer(later, false, false, true), Some(Some(true)));
+        assert_eq!(footer_answer(add, false, false, false), None);
+        assert_eq!(
+            footer_answer(Some(0), false, false, true),
+            None,
+            "the check box"
+        );
+        assert_eq!(footer_answer(None, false, false, true), None);
+    }
 
     /// Frames of the window with `events` in the last one, as `App` handles its outcome.
     fn frames(dlg: &mut AddWindow, events: Vec<Vec<egui::Event>>) -> Option<Outcome<AddOut>> {
@@ -791,7 +822,7 @@ mod tests {
         assert_eq!(typed.address, "https://typed.example/b.zip", "typed: kept");
     }
 
-    /// #511, kept from Add URL: the first link's Sites Logins entry shows in "Use
+    /// #511, kept from Add URL: the first link's Site logins entry shows in "Use
     /// authorization", follows the address while left as filled, and a typed login stays.
     #[test]
     fn it_shows_the_sites_logins_entry_for_its_first_link() {
@@ -845,8 +876,10 @@ mod tests {
         }
         for want in [
             "Addresses, magnet links or video pages, one per line",
-            "Add 2",
+            "Download 2",
             "Later",
+            // Plan 12b, DB1.
+            "Cancel",
             "Open a .torrent file...",
             "Ask where to save each one",
             // Painted lines read too (PR 76's audit; the help's shot finds "Found" by name).

@@ -69,7 +69,7 @@ impl Properties {
         let outcome = window(
             ctx,
             &format!("properties-{}", self.id),
-            "File Properties",
+            "File properties",
             [WIDTH, BODY + winui::FOOTER_H],
             false,
             LIGHT_BG(),
@@ -135,7 +135,7 @@ impl Properties {
         winui::copyable(ui, type_at, "props-type", &kind, false);
         let size = item.size.map_or_else(String::new, |s| {
             crate::i18n::fmt(
-                crate::i18n::t("{size} ({bytes} Bytes)"),
+                crate::i18n::t("{size} ({bytes} bytes)"),
                 &[
                     ("size", &crate::dialogs::dialog_size(s)),
                     ("bytes", &crate::i18n::integer(s)),
@@ -147,7 +147,7 @@ impl Properties {
         let col = [
             "Status:",
             "Size:",
-            "Save To:",
+            "Save to:",
             "Address:",
             "Description:",
             "Referer:",
@@ -212,7 +212,7 @@ impl Properties {
             &p,
             o.x + 11.0,
             o.y + 155.0,
-            crate::i18n::t("Save To:"),
+            crate::i18n::t("Save to:"),
             LIGHT_TEXT(),
         );
         let dest = match &self.move_to {
@@ -421,7 +421,7 @@ impl Properties {
             }
         }
         // The footer (plan 07): Open and a torrent's Files... at the start, OK last; Enter
-        // presses OK, as before. Escape closes the window (it has no Cancel), as before. The
+        // presses OK, as before; Cancel and Escape close it without the edits. The
         // leading buttons keep their Tab order (Open, then Files...), so Open comes first on
         // screen too: the kit places them in Tab order (the plan's table notes it).
         let mut items = vec![winui::FooterItem::Button(
@@ -448,6 +448,11 @@ impl Properties {
             winui::FooterButton::new("OK", ButtonKind::Default).enter(true),
         ));
         let ok_at = items.len() - 1;
+        // Cancel (Escape) discards the edits, as every other editing dialog's (plan 12b, DC8).
+        items.push(winui::FooterItem::Button(
+            winui::FooterButton::new("Cancel", ButtonKind::Normal).escape(true),
+        ));
+        let cancel_at = items.len() - 1;
         let pressed = winui::footer(ui, o, WIDTH, BODY, &mut items);
         if pressed == Some(0) && complete {
             crate::dialogs::open_download(&item.dest, item.moved_away);
@@ -455,21 +460,32 @@ impl Properties {
         if item.torrent.is_some() && pressed == Some(1) {
             self.files_requested = true;
         }
-        let ok = pressed == Some(ok_at);
         let address_ok = self.address_ok(item);
-        if winui::escape_pressed(ui) {
-            Outcome::Closed
-        } else if ok {
-            if address_ok {
-                Outcome::Done(())
-            } else {
-                self.error =
-                    Some(crate::i18n::t("The address must be an http(s) or ftp(s) address").into());
-                Outcome::Open
-            }
-        } else {
-            Outcome::Open
+        let escape = winui::escape_pressed(ui);
+        if pressed == Some(ok_at) && !address_ok && !escape {
+            self.error =
+                Some(crate::i18n::t("The address must be an http(s) or ftp(s) address").into());
         }
+        answer(pressed, ok_at, cancel_at, escape, address_ok)
+    }
+}
+
+/// What Properties' footer answers: Closed on Cancel or Escape, the edits dropped (plan 12b,
+/// DC8); Done on OK with an address it takes; else it stays open (OK with a bad address says
+/// why).
+fn answer(
+    pressed: Option<usize>,
+    ok_at: usize,
+    cancel_at: usize,
+    escape: bool,
+    address_ok: bool,
+) -> Outcome<()> {
+    if pressed == Some(cancel_at) || escape {
+        Outcome::Closed
+    } else if pressed == Some(ok_at) && address_ok {
+        Outcome::Done(())
+    } else {
+        Outcome::Open
     }
 }
 
@@ -533,6 +549,7 @@ mod tests {
             hash: "0123456789abcdef0123456789abcdef01234567".into(),
             files: None,
             folder: PathBuf::from("f"),
+            owns_files: true,
             uploaded: 0,
             seeded_secs: 0,
             peers: 0,
@@ -563,5 +580,32 @@ mod tests {
         let mut done = item("https://example.com/file.iso");
         done.status = Status::Complete;
         assert!(!address_editable(&done));
+    }
+
+    /// Plan 12b, DC8: Cancel and Escape close Properties without its edits (Closed hands no
+    /// Changes on); OK takes them only with an address it can use.
+    #[test]
+    fn cancel_discards_and_ok_takes_the_edits() {
+        let (ok, cancel) = (1, 2);
+        assert!(matches!(
+            answer(Some(cancel), ok, cancel, false, true),
+            Outcome::Closed
+        ));
+        assert!(matches!(
+            answer(None, ok, cancel, true, true),
+            Outcome::Closed
+        ));
+        assert!(matches!(
+            answer(Some(ok), ok, cancel, false, true),
+            Outcome::Done(())
+        ));
+        assert!(matches!(
+            answer(Some(ok), ok, cancel, false, false),
+            Outcome::Open
+        ));
+        assert!(matches!(
+            answer(None, ok, cancel, false, true),
+            Outcome::Open
+        ));
     }
 }

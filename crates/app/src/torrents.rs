@@ -3,8 +3,9 @@
 //! torrent download is a [`Run`]: it starts the session if needed, adds or resumes its torrent,
 //! and reads its progress for the list and the progress window, as the engine's downloads do.
 //!
-//! The download list is the truth: on start, torrents the session restored but the list no
-//! longer has are forgotten (their files stay), and the rest wait paused until started.
+//! The download list is the truth: the session restores nothing when it starts (its engine
+//! opens only the files Grabbit checked, `torrent_ownership`); each torrent is added again when
+//! it starts or is shared again, once its files are checked.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -25,6 +26,10 @@ pub struct TorrentSpec {
     pub files: Option<Vec<usize>>,
     /// Where its files go (a multi-file torrent's own folder included).
     pub folder: PathBuf,
+    /// Added by a Grabbit that records which of its files it made (`torrent_ownership`): false
+    /// on a row saved before, whose files its own engine wrote, taken as Grabbit's once.
+    #[serde(default)]
+    pub owns_files: bool,
     /// Bytes sent to peers, in all its runs (librqbit counts only the current one: from 0
     /// again at each resume and each start of the app). Kept by [`Accountant`].
     #[serde(default)]
@@ -109,6 +114,18 @@ pub fn sharing_limit_reached(
         return Some(Reached::Time(spec.seeded_secs));
     }
     None
+}
+
+/// The torrents `set_sharing` acts on: turning sharing on leaves out the ones stopped sharing by
+/// hand (`excluded`, plan 13b); turning it off takes them all.
+pub fn shared_specs(specs: Vec<TorrentSpec>, on: bool, excluded: &[String]) -> Vec<TorrentSpec> {
+    if !on {
+        return specs;
+    }
+    specs
+        .into_iter()
+        .filter(|s| !excluded.contains(&s.hash))
+        .collect()
 }
 
 /// No session is running: nothing is connected and nothing is moving, whatever the list last
@@ -329,7 +346,7 @@ pub fn is_torrent_url(url: &url::Url, name: Option<&str>, mime: Option<&str>) ->
 }
 
 /// A .torrent on the web: its address and the request it goes with (`App::request_parts`: the
-/// browser's cookies and Referer, a site login, Proxy / Socks).
+/// browser's cookies and Referer, a site login, Proxy / SOCKS).
 #[derive(Clone)]
 pub struct Remote {
     pub url: url::Url,
@@ -418,7 +435,7 @@ pub fn blocklist_updated(url: &str) -> Option<std::time::SystemTime> {
 
 /// Fetch and convert the blocklist at `url` (#40) when it was never converted, comes from
 /// another address now, or is older than `BLOCKLIST_DAYS`; in the background, one at a time
-/// (`busy`), with MDM's own downloader (Proxy / Socks applies). A list that isn't one keeps the
+/// (`busy`), with MDM's own downloader (Proxy / SOCKS applies). A list that isn't one keeps the
 /// last good one. The torrent session reads it when it starts.
 pub fn refresh_blocklist(
     rt: &tokio::runtime::Handle,
@@ -552,7 +569,10 @@ impl Host {
     pub fn new() -> Self {
         Host {
             cell: Arc::new(tokio::sync::Mutex::new(None)),
-            wanted: Arc::new(Mutex::new(state_dir().map(Config::new))),
+            wanted: Arc::new(Mutex::new(state_dir().map(|dir| Config {
+                require_authorization: true,
+                ..Config::new(dir)
+            }))),
             running: Arc::new(Mutex::new(None)),
             cap: Arc::new(Mutex::new(None)),
             upload: Arc::new(Mutex::new(None)),
@@ -614,10 +634,16 @@ impl Host {
                 if t.has(hash) {
                     t.readd(hash, &bytes, true).await.map_err(err)?;
                 } else {
-                    // Not in the session: added paused, which checks what is there.
+                    // Not in the session: added paused, which checks what is there. The engine
+                    // opens (and sizes) every file at its paths, so they are checked and handed
+                    // over first, as at Start.
+                    prepare_storage(spec, &bytes).await?;
                     t.add(&bytes, &spec.folder, spec.files.clone(), Vec::new(), true)
                         .await
-                        .map_err(err)?;
+                        .map_err(|e| {
+                            revoke_grant(hash);
+                            err(e)
+                        })?;
                 }
                 Ok(Done::Rechecking)
             }
@@ -631,9 +657,13 @@ impl Host {
                 if let Some(t) = self.get() {
                     if !t.has(hash) {
                         let bytes = read_kept(hash).await?;
+                        prepare_storage(spec, &bytes).await?;
                         t.add(&bytes, &spec.folder, Some(files.clone()), Vec::new(), pause)
                             .await
-                            .map_err(err)?;
+                            .map_err(|e| {
+                                revoke_grant(hash);
+                                err(e)
+                            })?;
                         return Ok(Done::Chosen);
                     }
                     t.choose(hash, &files.into_iter().collect())
@@ -683,7 +713,11 @@ impl Host {
     }
 
     /// The settings for the next session (Torrent settings changed, or at start).
-    pub fn set_config(&self, cfg: Option<Config>) {
+    pub fn set_config(&self, mut cfg: Option<Config>) {
+        // The engine writes only into the files Grabbit checked (torrent_ownership).
+        if let Some(cfg) = &mut cfg {
+            cfg.require_authorization = true;
+        }
         *self.wanted.lock().unwrap() = cfg;
     }
 
@@ -709,9 +743,9 @@ impl Host {
         // Held to the adapter as it is now, not as it was when the settings were last read.
         let bind = route_bind(&crate::settings::own_route())?;
         let mut cfg = self.wanted.lock().unwrap().clone().ok_or_else(|| {
-            // i18n: an error: Torrent settings ask for the proxy, and Options → Proxy / Socks has no SOCKS5 one
+            // i18n: an error: Torrent settings ask for the proxy, and Options → Proxy / SOCKS has no SOCKS5 one
             crate::i18n::t(
-                "Torrent settings say to use the proxy, but Proxy / Socks has no SOCKS5 proxy",
+                "Torrent settings say to use the proxy, but Proxy / SOCKS has no SOCKS5 proxy",
             )
             .to_owned()
         })?;
@@ -761,16 +795,21 @@ impl Host {
         rt.spawn(async move { t.stop().await });
     }
 
-    /// Keep sharing (true) or stop sharing (false) finished torrents: `hashes` are the list's
-    /// complete ones. Sharing starts the session if needed.
+    /// Keep sharing (true) or stop sharing (false) finished torrents: `specs` are the list's
+    /// complete ones. Sharing starts the session if needed. The session restores nothing when it
+    /// starts (the engine opens only what Grabbit checked), so one not in it is checked and added
+    /// as at Start, asking nobody: one with a file Grabbit didn't make stays stopped. Turning it
+    /// on skips the torrents stopped sharing by hand (`excluded`, Settings' `torrent_unshared`).
     pub fn set_sharing(
         &self,
         rt: &tokio::runtime::Handle,
         known: HashSet<String>,
-        hashes: Vec<String>,
+        specs: Vec<TorrentSpec>,
         on: bool,
+        excluded: &[String],
     ) {
-        if hashes.is_empty() || (!on && self.get().is_none()) {
+        let specs = shared_specs(specs, on, excluded);
+        if specs.is_empty() || (!on && self.get().is_none()) {
             return;
         }
         let host = self.clone();
@@ -778,32 +817,183 @@ impl Host {
             let Ok(t) = host.session(known).await else {
                 return;
             };
-            for h in hashes {
-                let _ = if on {
-                    t.resume(&h).await
-                } else {
-                    t.remove(&h, false).await
-                };
+            for spec in specs {
+                let h = spec.hash.as_str();
+                if !on {
+                    let _ = t.remove(h, false).await;
+                } else if t.has(h) {
+                    let _ = t.resume(h).await;
+                } else if host.busy.lock().unwrap().insert(h.to_owned()) {
+                    // Held like an action: no other action on it meanwhile.
+                    let shared = share_again(&t, &spec).await;
+                    host.busy.lock().unwrap().remove(h);
+                    if let Err(e) = shared {
+                        tracing::info!("torrents: {h} is not shared again: {e}");
+                    }
+                }
             }
         });
     }
 
-    /// Forget a torrent the list no longer has; its files stay unless `files` (and the session
-    /// runs: it knows which files are the torrent's). The .torrent kept for it goes beside the
-    /// window ([`KeptFiles`], upstream issue 1230).
-    pub fn forget(&self, rt: &tokio::runtime::Handle, hash: &str, files: bool) {
-        if let Some(t) = self.get() {
-            let hash = hash.to_owned();
-            rt.spawn(async move {
-                let _ = t.remove(&hash, files).await;
-            });
-        }
-        let h = hash.to_owned();
-        kept_files().change(hash, move || {
-            if let Some(f) = torrent_file(&h) {
+    /// Forget a torrent the list no longer has; with `files`, the files Grabbit made for it go
+    /// too (`torrent_ownership::delete`), whether a session runs or not; the others stay, and are
+    /// said (`name`: the download's). This and the .torrent kept for it go beside the window
+    /// ([`KeptFiles`], upstream issue 1230), after the session has let go of it.
+    pub fn forget(&self, rt: &tokio::runtime::Handle, spec: &TorrentSpec, files: bool, name: &str) {
+        // Nothing of it may be opened by the engine from now on.
+        revoke_grant(&spec.hash);
+        let (session, rt) = (self.get(), rt.clone());
+        let (spec, name, hash) = (spec.clone(), name.to_owned(), spec.hash.clone());
+        kept_files().change(&hash, move || {
+            let h = spec.hash.as_str();
+            if let Some(t) = session {
+                // On the kept files' own thread, never a runtime's: it may wait.
+                let _ = rt.block_on(t.remove(h, false));
+            }
+            if let Some(dir) = owned_dir() {
+                if files {
+                    delete_files(&dir, &spec, &name);
+                } else {
+                    crate::torrent_ownership::forget(&dir, h);
+                }
+            }
+            if let Some(f) = torrent_file(h) {
                 let _ = std::fs::remove_file(f);
             }
         });
+    }
+}
+
+/// Where each torrent's record of its own files is (`torrent_ownership`).
+fn owned_dir() -> Option<PathBuf> {
+    state_dir().map(|d| d.join("owned"))
+}
+
+/// Delete with files: what Grabbit made for the torrent goes; what stays is said.
+fn delete_files(dir: &Path, spec: &TorrentSpec, name: &str) {
+    let list = torrent_file(&spec.hash)
+        .and_then(|f| mdm_torrent::read_file(&f).ok())
+        .and_then(|b| mdm_torrent::files_from_bytes(&b).ok());
+    let Some(list) = list else {
+        // Without its .torrent nothing tells which files are its: they all stay.
+        tracing::warn!("torrents: {}: no .torrent kept, its files stay", spec.hash);
+        crate::torrent_ownership::forget(dir, &spec.hash);
+        return;
+    };
+    match crate::torrent_ownership::delete(dir, &spec.hash, &spec.folder, &list, !spec.owns_files) {
+        Ok(kept) if !kept.is_empty() => crate::dialogs::tell(
+            crate::i18n::mark("Delete"),
+            crate::i18n::fmt(
+                // i18n: said after Delete with files when some of a torrent's files stayed on the disk; {file} is the download's name; the files' paths follow it
+                crate::i18n::t(
+                    "{file}: these files stayed on the disk, because Grabbit didn't create them:",
+                ),
+                &[("file", &crate::i18n::isolate(name))],
+            ) + "\n\n"
+                + &file_list(&kept),
+        ),
+        Ok(_) => {}
+        Err(e) => crate::dialogs::tell(
+            crate::i18n::mark("Delete"),
+            crate::i18n::fmt(
+                // i18n: error when a torrent's files could not be deleted; {file} is the download's name, {error} why
+                crate::i18n::t("{file} could not be deleted from the disk: {error}"),
+                &[
+                    ("file", &crate::i18n::isolate(name)),
+                    ("error", &e.to_string()),
+                ],
+            ),
+        ),
+    }
+}
+
+/// Up to eight paths, one to a line, then how many more.
+fn file_list(paths: &[PathBuf]) -> String {
+    let mut text = String::new();
+    for path in paths.iter().take(8) {
+        text.push_str(&crate::i18n::ltr(&path.display().to_string()));
+        text.push('\n');
+    }
+    if paths.len() > 8 {
+        let n = (paths.len() - 8) as u64;
+        text.push_str(&crate::i18n::fmt(
+            // i18n: number of additional files in a list of files
+            &crate::i18n::tn(n, "And {n} other file.", "And {n} other files."),
+            &[("n", &crate::i18n::integer(n))],
+        ));
+    }
+    text
+}
+
+/// The engine may no longer open a torrent's files on the grant it was given (it left the list,
+/// or an add failed and nothing will take the handles).
+pub fn revoke_grant(hash: &str) {
+    if let Some(data) = state_dir() {
+        mdm_torrent::authorized_storage::forget(&data.join("session"), hash);
+    }
+}
+
+/// Check what is at the torrent's paths and hand the engine its files (`torrent_ownership`),
+/// before each add: Start, Recheck, a file choice, sharing again. A later open of its files by
+/// the engine (a re-add) checks them again the same way.
+async fn prepare_storage(spec: &TorrentSpec, bytes: &[u8]) -> Result<(), String> {
+    let (Some(dir), Some(data)) = (owned_dir(), state_dir()) else {
+        return Err(crate::i18n::t("no data folder").to_owned());
+    };
+    let files = mdm_torrent::files_from_bytes(bytes).map_err(|e| crate::errors::torrent(&e))?;
+    let (hash, folder, adopt) = (spec.hash.clone(), spec.folder.clone(), !spec.owns_files);
+    tokio::task::spawn_blocking(move || {
+        let prepared = crate::torrent_ownership::prepare(&dir, &hash, &folder, &files, adopt)
+            .map_err(|e| e.describe())?;
+        let session = data.join("session");
+        let (dir2, hash2, folder2) = (dir.clone(), hash.clone(), folder.clone());
+        mdm_torrent::authorized_storage::authorize(
+            &session,
+            &hash,
+            &folder,
+            prepared,
+            Arc::new(move || {
+                crate::torrent_ownership::prepare(&dir2, &hash2, &folder2, &files, false).map_err(
+                    |e| match e {
+                        crate::torrent_ownership::PrepareError::Io(e) => e,
+                        other => std::io::Error::new(
+                            std::io::ErrorKind::PermissionDenied,
+                            other.describe(),
+                        ),
+                    },
+                )
+            }),
+        );
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// A finished torrent not in the session, shared again: checked and added as at Start.
+async fn share_again(t: &Torrents, spec: &TorrentSpec) -> Result<(), String> {
+    let bytes = read_kept(&spec.hash).await?;
+    prepare_storage(spec, &bytes).await?;
+    t.add(&bytes, &spec.folder, spec.files.clone(), Vec::new(), false)
+        .await
+        .map_err(|e| {
+            revoke_grant(&spec.hash);
+            crate::errors::torrent(&e)
+        })?;
+    Ok(())
+}
+
+/// The person agreed in Add torrent to use the torrent's files already in its folder: recorded,
+/// so the torrent may write into them and Delete never takes them.
+pub fn agree_existing(meta: &mdm_torrent::Meta, folder: &Path) {
+    let Some(dir) = owned_dir() else { return };
+    if let Err(e) =
+        crate::torrent_ownership::agree_existing(&dir, &meta.info_hash, folder, &meta.files)
+    {
+        tracing::warn!(
+            "torrents: {}: files agreed to not recorded: {e}",
+            meta.info_hash
+        );
     }
 }
 
@@ -912,6 +1102,8 @@ impl Run {
                         .map_err(|e| crate::errors::torrent(&e))?;
                 } else {
                     let bytes = read_kept(&spec2.hash).await?;
+                    // The engine opens only the files checked here (torrent_ownership).
+                    prepare_storage(&spec2, &bytes).await?;
                     t.add(
                         &bytes,
                         &spec2.folder,
@@ -920,7 +1112,11 @@ impl Run {
                         false,
                     )
                     .await
-                    .map_err(|e| crate::errors::torrent(&e))?;
+                    .map_err(|e| {
+                        // Not added: nothing will take the handles it was given.
+                        revoke_grant(&spec2.hash);
+                        crate::errors::torrent(&e)
+                    })?;
                 }
                 Ok::<_, String>(t)
             }
@@ -1126,9 +1322,10 @@ impl Run {
         t.seen(&self.hash).map(|s| s.fetched)
     }
 
-    pub fn details(&self) -> Details {
+    /// Its [`Details`] ([`details_of`]; `full`: with its files, peers and trackers).
+    pub fn details(&self, full: bool) -> Details {
         self.session()
-            .and_then(|t| details_of(&t, &self.hash))
+            .and_then(|t| details_of(&t, &self.hash, full))
             .unwrap_or(Details {
                 files: Vec::new(),
                 piece_length: 0,
@@ -1142,9 +1339,20 @@ impl Run {
 
 /// What the progress window's torrent tabs show for `hash`, from the session: a `Run`'s
 /// torrent, or a finished one still shared without a `Run` (None: not in the session). As last
-/// read: the window's thread never waits on librqbit (#693).
-pub fn details_of(t: &Torrents, hash: &str) -> Option<Details> {
+/// read: the window's thread never waits on librqbit (#693). Not `full` (the compact window):
+/// its pieces and numbers only, not a copy of its files, peers and trackers every frame.
+pub fn details_of(t: &Torrents, hash: &str, full: bool) -> Option<Details> {
     let stats = t.seen(hash)?;
+    if !full {
+        return Some(Details {
+            files: Vec::new(),
+            piece_length: 0,
+            peers: Vec::new(),
+            trackers: Vec::new(),
+            pieces: t.seen_pieces(hash),
+            stats: Some(stats),
+        });
+    }
     let done = stats.file_done.clone();
     let (entries, chosen, piece_length) = t.seen_files(hash).unwrap_or_default();
     let swarm = t.seen_swarm(hash);
@@ -1198,6 +1406,7 @@ mod tests {
             hash: "h".into(),
             files: None,
             folder: "f".into(),
+            owns_files: true,
             uploaded: 0,
             seeded_secs: 0,
             peers: 0,
@@ -1206,6 +1415,43 @@ mod tests {
             in_order: false,
             ends_first: true,
         }
+    }
+
+    /// Plan 13b: Stop sharing on one torrent keeps "Keep sharing" from sharing it again; turning
+    /// sharing off still reaches it.
+    #[test]
+    fn set_sharing_skips_a_torrent_stopped_by_hand() {
+        let other = TorrentSpec {
+            hash: "other".into(),
+            ..a_spec()
+        };
+        let excluded = vec!["h".to_owned()];
+        let on = shared_specs(vec![a_spec(), other.clone()], true, &excluded);
+        assert_eq!(
+            on.iter().map(|s| s.hash.as_str()).collect::<Vec<_>>(),
+            ["other"]
+        );
+        let off = shared_specs(vec![a_spec(), other], false, &excluded);
+        assert_eq!(off.len(), 2);
+    }
+
+    /// The app's session always has its engine write only into checked files, whatever
+    /// Torrent settings hand it; a row saved before says it owns no record.
+    #[test]
+    fn the_session_requires_checked_files_and_older_rows_are_told_apart() {
+        let host = Host::new();
+        host.set_config(Some(Config::new(PathBuf::from("state"))));
+        assert!(
+            host.wanted
+                .lock()
+                .unwrap()
+                .as_ref()
+                .is_some_and(|c| c.require_authorization)
+        );
+        let older: TorrentSpec =
+            serde_json::from_str(r#"{"hash":"h","files":null,"folder":"f"}"#).unwrap();
+        assert!(!older.owns_files);
+        assert!(a_spec().owns_files);
     }
 
     /// #357: the ratio the list and the General tab share, and the seeding limit's.
@@ -1311,6 +1557,7 @@ mod tests {
             hash: "h".into(),
             files: None,
             folder: "f".into(),
+            owns_files: true,
             uploaded,
             seeded_secs,
             peers: 0,

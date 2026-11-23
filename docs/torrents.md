@@ -6,22 +6,22 @@ Grabbit downloads BitTorrent files from magnet links and `.torrent` files. Torre
 
 ## Add a torrent
 
-1. Click **Add** on the toolbar and paste a magnet link (or drop a `.torrent` file on the window), then click **Add**. Or click the arrow next to **Add** and choose **Open a .torrent file...** (**Ctrl+O**). **Tasks** has **Open torrent file...** and **Add magnet link...** too.
+1. Click **Add** on the toolbar and paste a magnet link (or drop a `.torrent` file on the window), then click **Download 1**. Or click the arrow next to **Add** and choose **Open a .torrent file...** (**Ctrl+O**). **Tasks** has **Open a .torrent file...** and **Add magnet link...** too.
 2. **Add torrent** opens. Paste a magnet link into **Torrent**, or click **...** to choose a `.torrent` file, then click **Look up**.
 3. Grabbit reads the torrent and shows its files as a folder tree. A `.torrent` file is read at once. A magnet link first has to get the file list from other peers, usually within seconds. While it waits, **Add torrent** shows how many peers it found, from the trackers, the DHT or your local network, and how many answered. After 30 seconds without an answer, it says what may be in the way: a link with no trackers while the DHT is off, or a firewall, a VPN or a network that blocks BitTorrent.
 4. Untick the folders or files you don't want. **Select all** and **Select none** help with big torrents. **Selected** shows how many files and how much data you picked.
 5. Check **Save to**. **Files go to** shows the exact folder. Torrents have their own category, so by default this is `Downloads\Torrents`.
 6. To watch a video while it downloads, tick **Download in order** (see [Download in order](#download-in-order)).
-7. Click **Download Now**, or **Later** to add it to the list without starting.
+7. Click **Download now**, or **Later** to add it to the list without starting.
 
 <!-- steps -->
 
-1. ![Add torrent with a torrent's files as a folder tree, the folder they go to, and Download Now](images/help/torrent-add.webp)
-   *Untick what you don't want, then Download Now.*
-2. ![A torrent's progress window on its Files tab](images/help/torrent-files.webp)
-   *Its progress window: each file and how much of it is here.*
-3. ![The Pieces tab: a square for each piece, filled once it's here](images/help/torrent-pieces.webp)
-   *Pieces: the torrent's map, filling in.*
+1. ![Add torrent with a torrent's files as a folder tree, the folder they go to, and Download now](images/help/torrent-add.webp)
+   *Untick what you don't want, then Download now.*
+2. ![A torrent's progress window: how far it is, with its pieces lit in the strip](images/help/torrent-files.webp)
+   *Its progress window: the pieces it has light up in the strip.*
+3. ![A torrent's progress window with its details: its pieces, peers and limits, and its files](images/help/torrent-pieces.webp)
+   *Show details: the torrent's numbers, its files, peers and trackers.*
 
 You can also paste a magnet link into the paste bar (its button says **Add torrent**), drop a magnet link or a `.torrent` file on the main window, or drop a magnet link or a `.torrent` file on the drop target (**Tasks → Show drop target**). If a torrent is already in the list, Grabbit says so instead of adding it twice.
 
@@ -29,32 +29,35 @@ A `.torrent` file's web address works too: paste it into **Add**, the paste bar 
 
 If some of the torrent's files are already in the folder, Grabbit asks before using them. **Yes** keeps them for the torrent: Grabbit checks them, keeps what matches the torrent and downloads the rest, which is how you continue a download started elsewhere or share files you already have. **No** (the default) goes back, so you can choose another folder and nothing of yours is overwritten.
 
+Before a torrent starts, Grabbit makes each of its files itself, empty, unticked ones too (they can hold part of a piece a ticked file needs), and the torrent writes only into those files and the ones you agreed to use, however it starts: **Download now**, **Resume**, the Files tab, **Recheck**, or sharing again when Grabbit opens. If a file Grabbit didn't make is at one of its paths (saved there after the torrent was added, or put in a stopped torrent's place), the torrent doesn't start, the file isn't touched, and the download says which file: move or rename it, then start the torrent again. **Also delete the file from disk** removes only the files Grabbit made, each recognised as the very file it made (not by its name), and then the empty folders it made. Files that were already there, files you agreed to use and a file that took the name of one of its files later stay, and Grabbit lists them. A torrent added before this version takes the files in its place as its own once, the first time it starts, and is deleted as before until then.
+
 Grabbit refuses a torrent with file names your system can't write safely, says which name, and writes nothing. What others can see, the network switches in **Torrent settings**, blocklists and proxies: [Torrents and your security](torrent-security.md).
 
 ## While it downloads
 
-Double-click the torrent in the list to open its progress window. Besides the usual status, a torrent's window has five tabs:
+Double-click the torrent in the list to open its progress window. Its strip is the torrent's map of pieces, each place brighter the more of its pieces are in. **Show details** widens the window to the right. On the left are the folder it's saved in, **From** (the copy button copies its magnet link; point at **Magnet link**, or move to it with Tab, for its info hash), its peers (connected and known), what it sent and its **Ratio**, its pieces (how many are here, of how many, and their size: a torrent waiting on its last piece shows it there), **Limit** and **When done**. What was sent adds up over all of the torrent's runs: it doesn't start again at 0 after a pause or a restart of Grabbit. On the right are three tabs:
 
-- **Files** — each file, its size and how much of it is done. Files you unticked show **Skipped**. Tick or untick a file's box to change what is downloaded, even while the torrent runs. At least one file stays ticked. If you untick everything still missing, the torrent finishes. If a finished torrent that isn't running gets a file back, it waits as stopped until you resume it, so nothing downloads unseen.
+- **Files** — each file, its size and how much of it is done. Files you unticked show **Skipped**. Tick or untick a file's box to change what is downloaded, even while the torrent runs. At least one file stays ticked. If you untick everything still missing, the torrent finishes. If a finished torrent that isn't running gets a file back, it waits as stopped until you resume it, so nothing downloads unseen. Under the list: **Download in order** and **First and last pieces first**; **Recheck files** is at the end of the tabs' row (see [Torrent commands](#torrent-commands)).
 - **Peers** — the computers you are downloading from, with how much you received from and sent to each.
-- **Trackers** — the torrent's trackers. With none, peers come from the DHT and other peers.
-- **Pieces** — a map of the torrent's pieces: there, partly there, or missing.
-- **General** — the info hash, pieces, peers, how much was sent, the share ratio, how long it has been shared and the folder. What was sent and the time shared add up over all of the torrent's runs: they don't start again at 0 after a pause or a restart of Grabbit.
+- **Trackers** — the torrent's trackers. With none, Grabbit still finds peers without them (from the DHT and other peers). Under the list: **Add trackers...** and **Ask trackers again**.
 
-The tabs stay once the torrent has finished, for as long as it is shared.
+The details stay once the torrent has finished, for as long as it is shared.
 
-The **Speed Limiter** tab of a torrent's window has, besides its download limit, **Limit uploading** to a speed of your choice. That limit is kept with the torrent: it applies again whenever the torrent runs or shares. A torrent can't be held under 16 KBytes/sec either way.
+A torrent's **Limit** row has **Down**, its download limit, and **Up**, a limit on what it sends. The upload limit is kept with the torrent: it applies again whenever the torrent runs or shares. A torrent can't be held under 16 KB/s either way. Beside **Show the Done window** and **Do nothing**, **When done** says **Then keeps sharing** when **Keep sharing torrents after they finish** is on.
 
 ## Torrent commands
 
 Right-click a torrent in the list and open **Torrent**:
 
 - **Recheck files** — reads every piece of the torrent's files and checks it, for example after you moved files in or a disk had errors. A running torrent goes on afterwards and fetches what is missing. A stopped one stays stopped. Its event log says how much was found: a finished torrent with a damaged piece becomes stopped, and resuming it fetches the piece again.
-- **Reannounce** — asks the torrent's trackers for peers again now, instead of waiting for their next round. It works while the torrent runs or is shared.
-- **Add trackers...** — adds trackers, one address a line (`http`, `https` or `udp`). They are kept with the torrent, after the ones it has, and the **Trackers** tab shows them. A tracker on your computer or your local network is refused: Grabbit never contacts those ([why](torrent-security.md)).
+- **Ask trackers again** — asks the torrent's trackers for peers again now, instead of waiting for their next round. It works while the torrent runs or is shared.
+- **Add trackers...** — adds trackers, one address a line (`http`, `https` or `udp`). They are kept with the torrent, after the ones it has, and the **Trackers** tab shows them. A tracker on your computer or your local network is refused: Grabbit never contacts those ([why](torrent-security.md)). **OK** stays greyed until every line is a tracker it can add (point at it to see why); once you leave the box, the line that isn't is named under it.
 - **Download in order** — downloads the torrent's files from their start (see below). Click it again to go back to the rarest pieces first.
 - **First and last pieces first** — with **Download in order**, each file's first and last pieces come before the rest. It's on by default.
 - **Copy magnet link** — copies a magnet link for the torrent, with its trackers.
+- **Stop sharing** — on a finished torrent shared because **Keep sharing torrents after they finish** is on: it stops sending to other peers, and stays so after Grabbit restarts. **Start sharing** (in its place) shares it again; so does resuming it.
+
+The torrent's progress window has the same commands under its **Files** and **Trackers** tabs, and its **From** row's copy button copies the magnet link.
 
 Each command's outcome goes into the torrent's event log; hover its **Status** cell in the list to read it.
 
@@ -81,7 +84,7 @@ Many sites publish their new torrents as an RSS or Atom feed. Grabbit can watch 
 
 - Type a feed's address into **Feed address** and click **Add feed**. Grabbit fetches it at once, then every 30 minutes; change that under **Check feeds every ... minutes**, 5 at the least.
 - Pick a feed on the left to see its articles. An article with a torrent shows a torrent icon and its size when the feed gives it. Double-click one, or select it and click **Download...**, to open **Add torrent** with it, as for any magnet link or `.torrent` address.
-- **Refresh** fetches the selected feed now. **Remove** stops watching it. A feed that can't be read is shown in red, and its line at the bottom says why.
+- **Refresh** fetches the selected feed now. **Remove** (or the **Delete** key) stops watching it, after asking: a rule that watched only that feed is turned off. A feed that can't be read is shown in red, and its line at the bottom says why.
 
 **Download rules** tab: a rule adds the torrents of new articles whose titles it matches, without asking.
 
@@ -89,8 +92,10 @@ Many sites publish their new torrents as an RSS or Atom feed. Grabbit can watch 
 - **Must not contain**: words that make the rule skip an article, written the same way.
 - **Regular expressions**: the two boxes hold regular expressions instead.
 - **Episodes**: which episodes to take, read from `S01E05` or `1x05` in the title. `1x2` is season 1 episode 2, `1x5-8` episodes 5 to 8, `2x1-` everything from season 2 episode 1 on, and `3` all of season 3, separated by `;`. Empty: any article. A rule takes each episode once: a second release of an episode it already added is skipped.
-- **Save to**: the folder its torrents go to; empty, the Torrents category's folder. **Add them without starting them** adds them as **Download Later** would.
+- **Save to**: the folder its torrents go to; empty, the Torrents category's folder. **Add them without starting them** adds them as **Later** would.
 - **Feeds**: the feeds it watches; none ticked, all of them.
+
+**New rule** adds a rule; **Remove** (or the **Delete** key) removes the selected one at once.
 
 Rules only look at articles that are new since the feed was last fetched, and a feed's first fetch only lists what is there. So adding a feed or a rule never downloads a whole backlog. **Matches ... articles now** shows which of the articles the feeds hold now the rule matches, to check it; download those by hand. A torrent the list already has isn't added again, and neither is one whose files are already in the folder: Grabbit never writes into files it didn't make without asking. The bottom line of the tab says what the rules did last, and a torrent a rule added says so in its event log.
 
@@ -98,10 +103,10 @@ Feeds and rules are kept in `rss.json` in Grabbit's data folder. Grabbit reads a
 
 ## Torrent settings
 
-Choose **Tasks → Torrent settings...**. They open in the main window, as the **Torrents** section of [Options](options.md), listed under **Tools**; **Save** keeps your changes, **Discard** throws them away, and **← Downloads** goes back to the list:
+Choose **Downloads → Options**, then **Torrents** under **Tools** in the list down the side. They open in the main window, as that section of [Options](options.md); **Save** keeps your changes, **Discard** throws them away, and **← Downloads** goes back to the list:
 
 ![Torrent settings: sharing, limits and what others can see](images/help/torrent-settings.webp)
-*Tasks → Torrent settings...*
+*Downloads → Options → Torrents*
 
 - **Keep sharing torrents after they finish** — off by default: a finished torrent stops, like any download. Turn it on to keep uploading to other peers after your download is complete.
   - **Stop sharing at a share ratio of** — a finished torrent stops being shared once it has sent that many times what it has (2.00: twice). Off by default.

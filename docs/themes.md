@@ -33,7 +33,7 @@ it gives itself. After you edit a file, pick it again in **View → Theme** to s
 A theme can be one file (`harbour.toml`) or a folder of its own (`harbour/theme.toml`) when it
 brings icons.
 
-**View → Theme → Add a theme file…** does it for you: pick a file anywhere, and Grabbit copies it into
+**View → Theme → Add a theme file...** does it for you: pick a file anywhere, and Grabbit copies it into
 the themes folder and uses it at once. A file that isn't a theme stays out, and Grabbit says why.
 
 ## Base16 and pywal colour schemes
@@ -46,7 +46,7 @@ Colour schemes made for other programs are themes too, with nothing to convert:
   `palette:` block). A Base24 scheme reads as its first 16 colours.
 - **pywal's `colors.json`**, or any program's file in pywal's shape (wallust's pywal template).
 
-Add it with **View → Theme → Add a theme file…**, or put it in the themes folder yourself. It
+Add it with **View → Theme → Add a theme file...**, or put it in the themes folder yourself. It
 shows in **View → Theme** under the scheme's name (`name:` or `scheme:`; pywal's is named after
 the wallpaper).
 
@@ -55,7 +55,7 @@ pywal writes its colours: `~/.cache/wal/colors.json` (on Windows
 `%USERPROFILE%\.cache\wal\colors.json`, where winwal and pywal write it; `$PYWAL_CACHE_DIR` or
 `$XDG_CACHE_HOME/wal` when you set them). Pick it and Grabbit follows your wallpaper: each time `wal`
 writes new colours, Grabbit takes them within two seconds. It looks only at the file's date and size,
-every two seconds, and only while pywal is the theme. A copy added with **Add a theme file…**
+every two seconds, and only while pywal is the theme. A copy added with **Add a theme file...**
 keeps the colours it had.
 
 A scheme changes colours only, on Graphite: every window, button and menu stays where it
@@ -127,7 +127,7 @@ focus = "ring"
 - **`[seeds]`** — a handful of colours (`background`, `surface`, `header`, `text`, `accent`,
   `selection`, `error`, `warning`, `success`) that Grabbit spreads over every control.
   `[seeds.light]` and `[seeds.dark]` give each side its own.
-- **`[colors]`** — single colour roles (such as `window`, `accent` or `"segments.done"`) on both
+- **`[colors]`** — single colour roles (such as `window`, `accent` or `"progress.bar"`) on both
   sides; **`[light]`** and **`[dark]`** on one side only. A colour is `#rrggbb`, or `#rrggbbaa`
   with transparency. The roles a file sets win over its seeds.
 - **`[sizes]`** — corner radii, border widths, font sizes and row heights, in pixels.
@@ -138,7 +138,9 @@ focus = "ring"
   `menu.shortcut`, `toolbar.checked`, `button.danger`, `button.danger.text`, `banner.error`,
   `banner.info`, `banner.warning`, `glow`, `button.accent.top` and `progress.bar.end` (`glow`,
   `button.accent.top` and `progress.bar.end` are transparent unless a theme sets them: no glow,
-  a flat face).
+  a flat face). A download window's strip uses `strip.accent` (its track while a file is
+  checked or a video joined, and the stripes between the fill while a debrid service downloads
+  a torrent first), `strip.error` and `strip.error.hatch`.
 - **`font`** — a font Grabbit carries, for every text: `"geist"` (Geist, as the Graphite theme has it).
   Without it, or with a name Grabbit doesn't carry, the windows keep Windows' own fonts.
 - **`contrast = "high"`** — strengthens every edge and text colour on top of the rest.

@@ -38,12 +38,29 @@ struct Args {
     /// A folder of .torrent files for /rss/dir.xml (the RSS tests' downloads).
     #[arg(long)]
     rss_dir: Option<std::path::PathBuf>,
+    /// Serve HTTPS (as localhost, from a test CA made at start, written next to the log or
+    /// printed) instead of HTTP: `browser_only` then looks at the TLS handshake too.
+    #[arg(long)]
+    tls: bool,
+    /// With --tls, offer HTTP/2 too (ALPN h2), as most sites do.
+    #[arg(long, requires = "tls")]
+    http2: bool,
+    /// With --tls, a faulty certificate: "expired", "self-signed" or "wrong-name" (the
+    /// certificate errors' tests); "test-ca" (the default) is the good one.
+    #[arg(long, requires = "tls", default_value = "test-ca")]
+    tls_cert: String,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     let faults = Faults::parse(&args.faults).context("--faults")?;
+    let cert = mdm_labserver::Cert::parse(&args.tls_cert).with_context(|| {
+        format!(
+            "--tls-cert: {:?} (test-ca, expired, self-signed or wrong-name)",
+            args.tls_cert
+        )
+    })?;
     let file = match &args.log_file {
         Some(p) => Some(Mutex::new(
             std::fs::OpenOptions::new()
@@ -66,12 +83,21 @@ async fn main() -> anyhow::Result<()> {
         on_log: Some(on_log),
         files: args.files.clone(),
         rss_dir: args.rss_dir,
+        tls: args.tls,
+        http2: args.http2,
+        cert,
     })
     .await?;
     eprintln!(
-        "labserver listening on http://{}  (GET / for help)",
-        server.addr()
+        "labserver listening on {}  (GET / for help)",
+        server.url("")
     );
+    if let Some(ca) = server.ca_der() {
+        let path =
+            std::env::temp_dir().join(format!("mdm-labserver-ca-{}.der", server.addr().port()));
+        std::fs::write(&path, ca)?;
+        eprintln!("its test CA's certificate (DER): {}", path.display());
+    }
     let _ftp = match args.ftp {
         Some(bind) => {
             use mdm_labserver::ftp::{FtpConfig, FtpServer, FtpTls};

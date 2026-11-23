@@ -1,4 +1,4 @@
-//! Scheduler → Download limits: "Download no more than N MBytes every H hours". IDM "will
+//! Scheduler → Download limits: "Download no more than N MB every H hours". IDM "will
 //! download the maximum it can under the quota, and then resume automatically at a later
 //! time" [IDM-doc]. Bytes are counted from every download's progress over a sliding window.
 
@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 /// Download limits (`winui::sentence`; the `\n` is where the second box's line starts).
 pub const LIMITS_SENTENCE: &str =
     // i18n: {mb} and {hours} are input boxes, drawn where they stand in the translation; keep the one line break: the second line sits under the first box
-    crate::i18n::mark("Download no more than {mb} MBytes\nevery {hours} hours");
+    crate::i18n::mark("Download no more than {mb} MB\nevery {hours} hours");
 
 #[derive(Default)]
 pub struct Quota {
