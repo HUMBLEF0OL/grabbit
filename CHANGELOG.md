@@ -5,7 +5,7 @@ Each release's notes on GitHub come from its section here (`## [X.Y.Z]`, see
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-11-22
+## [1.1.0] - 2026-11-23
 
 ### Added
 

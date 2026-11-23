@@ -599,7 +599,7 @@ Released 2026-11-20: the maintainer's first findings with 1.0.0, and what came w
 
 ## Version 1.1.0
 
-Released 2026-11-22: the download window and the Done window redesigned (plan 13), the app made
+Released 2026-11-23: the download window and the Done window redesigned (plan 13), the app made
 consistent in its words, states and look (plan 12), deleted files to the Recycle Bin, and the
 upstream fixes and features of 2026-11-21.
 
