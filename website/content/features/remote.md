@@ -31,8 +31,8 @@ has it, and follows its light or dark mode.
 Turn it on in **Options → Remote**, then click **Pair a device...**. Scan the QR code with the
 phone's camera, or type the address and the 8-digit code. A code works once, for ten minutes.
 
-![Options: Remote, with the address to open, the certificate's fingerprint and the paired devices](images/options-remote.webp)
-*Options → Remote: the address, the certificate's fingerprint and the paired devices.*
+![Options: Remote, where the phone page is turned on; once on, it shows the address to open, the certificate's fingerprint and the paired devices](images/options-remote.webp)
+*Options → Remote: turn it on, and it shows the address, the certificate's fingerprint and the paired devices.*
 
 The first time, the phone's browser warns about the certificate. That is expected: Grabbit made it on
 your computer, and no public authority knows it. **Options → Remote** shows its fingerprint to
