@@ -81,7 +81,7 @@ Eight per download by default, and up to 32 if you choose in **Options → Conne
 
 ### Can it resume broken downloads? {#resume}
 
-Yes. Grabbit writes its progress as it goes, so after a lost connection, a crash or a restart it carries on where it stopped. Before resuming it checks that the file on the server hasn't changed. When a download address has expired, **Refresh download address** lets you give it a fresh one and keep the data. See [Resume a broken download](/help/guide-resume-broken-download.html).
+Yes. Grabbit writes its progress as it goes, so after a lost connection, a crash or a restart it carries on where it stopped. Before resuming it checks that the file on the server hasn't changed. When a download address has expired, **Refresh download address...** lets you give it a fresh one and keep the data. See [Resume a broken download](/help/guide-resume-broken-download.html).
 
 ### Can I limit the download speed? {#speed-limit}
 
@@ -115,7 +115,7 @@ No. Grabbit doesn't break copy protection (DRM), by design. Videos that are prot
 
 ### Does it download torrents? {#torrents}
 
-Yes, built in: open a `.torrent` file or paste a magnet link, tick the files you want in the folder tree, and the torrent downloads in the same list as everything else, with its peers, trackers and pieces one tab away. See [Torrents](/help/torrents.html).
+Yes, built in: open a `.torrent` file or paste a magnet link, tick the files you want in the folder tree, and the torrent downloads in the same list as everything else, with its peers, trackers and pieces one click away. See [Torrents](/help/torrents.html).
 
 ### Does it keep uploading after a torrent finishes? {#seeding}
 

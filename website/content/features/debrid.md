@@ -21,7 +21,7 @@ Paste a link from a file host your service supports, in **Add**, from the browse
 account, then downloads it with all its connections, pause and resume. When the direct link
 expires, Grabbit asks the service for a new one.
 
-**Download File Info** says which account a link goes through, such as **Download through
+**Download file info** says which account a link goes through, such as **Download through
 Real-Debrid (your account)**. Untick it to download that one link directly. The command line's
 `get` uses your accounts too, and `--direct` skips them.
 

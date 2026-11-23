@@ -44,7 +44,7 @@ From version 0.5.0, only if you choose them:
 - **A torrent IP blocklist**, if you give one: Grabbit fetches it from the address you entered, again every 7 days.
 - **Your own devices, for the remote control.** Off until you turn it on in **Options → Remote**: then Grabbit answers, over HTTPS on your local network, only the phones and computers you paired with its code.
 
-The server's country that **Download File Info** and the progress window show comes from a table inside Grabbit: no address is sent anywhere to look it up.
+The server's country that **Download file info** and the progress window show comes from a table inside Grabbit: no address is sent anywhere to look it up.
 
 Grabbit has **no analytics, no automatic crash reporting, no telemetry and no advertising** (a crash report goes only where you send it yourself). It never sends us your download list, the addresses you download, or anything else.
 

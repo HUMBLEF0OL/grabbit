@@ -1,6 +1,6 @@
 # Roadmap
 
-What's done for version 1.0.1, what's being built, and what's planned.
+What's done for version 1.1.0, what's being built, and what's planned.
 Each item links to its issue, where the details and the discussion are. Released changes are in
 [CHANGELOG.md](CHANGELOG.md). Ideas and bug reports are welcome in
 [Issues](https://github.com/HUMBLEF0OL/grabbit/issues).
@@ -597,9 +597,11 @@ Released 2026-11-20: the maintainer's first findings with 1.0.0, and what came w
   sections of it, under **Tools**; the help pages' pictures show the new page. The look's
   settings stay in the View menu.
 
-## Next version
+## Version 1.1.0
 
-Done since 1.0.1; ships in the next release.
+Released 2026-11-22: the download window and the Done window redesigned (plan 13), the app made
+consistent in its words, states and look (plan 12), deleted files to the Recycle Bin, and the
+upstream fixes and features of 2026-11-21.
 
 - ✅ The notification-area icon's menu, and the title bar's window menu, follow Grabbit's dark or
   light look instead of Windows' app mode (ported from upstream issue 682).

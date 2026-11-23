@@ -9,7 +9,7 @@ group: organising
 order: 130
 since: 0.1.0
 shot: /assets/screens/main-light.webp
-shot_alt: The main window: the Categories pane on the left with All Downloads, Unfinished, Finished and Queues, and the download list on the right
+shot_alt: The main window: the Categories pane on the left with All downloads, Unfinished, Finished and Queues, and the download list on the right
 where: The Categories pane; right-click a category
 help: download-list.md#categories
 ---
@@ -21,25 +21,25 @@ A download falls into a category by its file type: **General**, **Compressed**, 
 folder inside your Downloads folder, so a ZIP file lands in `Downloads\Compressed` and a film in
 `Downloads\Video` without you choosing.
 
-Pick another folder in **Download File Info** and, by default, it becomes the category's folder
+Pick another folder in **Download file info** and, by default, it becomes the category's folder
 from then on. **Options → Save to** shows each category's file types and folder in one place.
 
 ## Finished and unfinished, at a glance
 
-The pane on the left has four branches. **All Downloads** holds everything, **Unfinished** what
+The pane on the left has four branches. **All downloads** holds everything, **Unfinished** what
 isn't complete yet and **Finished** what is, each by category. **Queues** lists each queue. The
 top branches show how many downloads they hold, and right-click → **Browse** opens a category's
 folder.
 
-![The Categories pane: All Downloads with a category per file type, Unfinished, Finished and Queues](images/help/list-categories.webp)
-*All Downloads, Unfinished, Finished and Queues, each by category.*
+![The Categories pane: All downloads with a category per file type, Unfinished, Finished and Queues](images/help/list-categories.webp)
+*All downloads, Unfinished, Finished and Queues, each by category.*
 
 Grabbit opens where you left it, with the same branches open and the same category shown. **View →
 Hide categories** gives the list the whole window.
 
 ## Make your own
 
-Right-click → **Add category** makes one for what you collect, say **Books** for `EPUB MOBI`:
+Right-click → **Add category...** makes one for what you collect, say **Books** for `EPUB MOBI`:
 a name, the file types separated by spaces (`*` allowed) and a folder. Change it later with
 **Properties**, or remove it with **Delete**. The files stay where they are.
 

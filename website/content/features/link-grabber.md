@@ -31,7 +31,7 @@ package, the other links of a page another, and the rest go into **Various files
 package to take all its links. Each package has its own folder, an archive password, and
 **Extract when done**.
 
-**Start** adds the ticked links to the **Main download queue** and starts it; **Add to queue**
+**Download now** adds the ticked links to the **Main download queue** and starts it; **Later**
 adds them without starting.
 
 ## Checked before you download
